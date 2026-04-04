@@ -1,0 +1,19 @@
+{
+  "dictionaryDefinitions": [
+    {
+      "addWords": true,
+      "name": "project-terms",
+      "path": ".cspell/project-terms.txt"
+    }
+  ],
+  "dictionaries": ["project-terms"],
+  "ignorePaths": [
+    ".direnv",
+    ".git",
+    ".nvfetcher",
+    "locks",
+    "result"
+  ],
+  "language": "en",
+  "version": "0.2"
+}

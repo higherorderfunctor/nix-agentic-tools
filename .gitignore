@@ -1,0 +1,10 @@
+# Build artifacts
+result
+result-*
+.direnv/
+
+# nvfetcher generated
+.nvfetcher/
+
+# Editor / tool state
+.pre-commit-config.yaml
