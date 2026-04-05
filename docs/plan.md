@@ -152,6 +152,12 @@ hexagons with colored nodes). Dark mode (coal theme) default.
       skills still publishable for general consumption but overlays, HM modules,
       devenv modules are Nix-specific. Update GitHub repo name, flake description,
       README, all internal references, cachix name
+- [ ] Logo refinement — current is blurry and small; generate higher quality
+      SVG or larger PNG, ensure crisp at all sizes (favicon through hero)
+- [ ] Auto-display images in terminal — fragment/hook/plugin that auto-runs
+      `chafa --format=sixel` (or kitty/iTerm2 protocol) when AI reads/generates
+      images. Wire via ai.\* so all ecosystems get it. Claude: hook on Read of
+      image files. Copilot/Kiro: equivalent mechanism. Needs chafa in packages.
 - [ ] ChatGPT Codex CLI — package + HM/devenv module, same pattern as
       copilot-cli/kiro-cli; add to `ai.*` unified fanout as 4th ecosystem
 - [ ] cclsp — Claude Code LSP integration (passthru.withAdapters pattern)

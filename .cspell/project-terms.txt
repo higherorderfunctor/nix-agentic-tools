@@ -15,6 +15,7 @@ berberman
 Bitemporality
 Boehm
 cachix
+chafa
 cclsp
 clis
 contentPkgs
@@ -91,6 +92,7 @@ sdiehl
 sequentialthinking
 serena
 shellharden
+sixel
 smartlog
 statix
 stdenv
