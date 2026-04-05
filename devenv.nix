@@ -290,6 +290,23 @@ in {
   # NOTE: MCP servers are stdio-based, not HTTP daemons. Process management
   # applies when running as HTTP bridges. Uncomment when bridge mode is needed.
 
+  # ── Shell Init ──────────────────────────────────────────────────────────
+  # Clean stale skill symlinks pointing to old Nix store paths.
+  # devenv files.*.source creates symlinks to store paths; when the
+  # store hash changes, the old symlink target is a read-only directory
+  # and devenv tries to create inside it instead of replacing it.
+  enterShell = ''
+    for dir in .claude/skills .github/skills .kiro/skills; do
+      if [ -d "$dir" ]; then
+        find "$dir" -maxdepth 1 -type l | while read -r link; do
+          if [ ! -e "$link" ]; then
+            rm -f "$link"
+          fi
+        done
+      fi
+    done
+  '';
+
   # ── Validation ─────────────────────────────────────────────────────────
   enterTest = ''
     echo "Validating devenv configuration..."
