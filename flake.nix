@@ -10,15 +10,21 @@
     nixpkgs,
     ...
   } @ inputs: let
+    lib = nixpkgs.lib;
     supportedSystems = [
       "aarch64-darwin"
       "aarch64-linux"
       "x86_64-darwin"
       "x86_64-linux"
     ];
-    forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
+    forAllSystems = lib.genAttrs supportedSystems;
     pkgsFor = system: import nixpkgs {inherit system;};
+    fragments = import ./lib/fragments.nix {inherit lib;};
   in {
+    lib = {
+      inherit fragments;
+    };
+
     devShells = forAllSystems (system: let
       pkgs = pkgsFor system;
     in {
