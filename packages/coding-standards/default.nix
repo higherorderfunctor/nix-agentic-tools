@@ -16,12 +16,28 @@ in {
       cp ${./fragments}/*.md $out/fragments/
     ''
     // {
-      passthru.fragments = {
-        coding-standards = mkFrag "coding-standards";
-        commit-convention = mkFrag "commit-convention";
-        config-parity = mkFrag "config-parity";
-        tooling-preference = mkFrag "tooling-preference";
-        validation = mkFrag "validation";
+      passthru = let
+        fragments = {
+          coding-standards = mkFrag "coding-standards";
+          commit-convention = mkFrag "commit-convention";
+          config-parity = mkFrag "config-parity";
+          tooling-preference = mkFrag "tooling-preference";
+          validation = mkFrag "validation";
+        };
+      in {
+        inherit fragments;
+        presets = {
+          # All coding standards — full set for dev environments
+          all = fragmentsLib.compose {
+            fragments = builtins.attrValues fragments;
+            description = "All coding standards";
+          };
+          # Minimal — just coding style + commits (lightest useful set)
+          minimal = fragmentsLib.compose {
+            fragments = [fragments.coding-standards fragments.commit-convention];
+            description = "Minimal coding standards";
+          };
+        };
       };
     };
 }

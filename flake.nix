@@ -74,8 +74,23 @@
       aiCommon = import ./lib/ai-common.nix {inherit lib;};
       devshellLib = import ./lib/devshell.nix {inherit lib;};
       mcpLib = import ./lib/mcp.nix {inherit lib;};
+
+      # Cross-package presets (compose fragments from multiple packages).
+      # Individual packages expose their own presets in passthru.presets;
+      # these combine across package boundaries.
+      codingStdFragments = import ./packages/coding-standards/default.nix {} lib.id {};
+      swsFragments = import ./packages/stacked-workflows/default.nix {} lib.id {};
+      presets = {
+        # Full dev environment — all coding standards + skill routing
+        agentic-tools-dev = fragments.compose {
+          fragments =
+            builtins.attrValues codingStdFragments.coding-standards.passthru.fragments
+            ++ builtins.attrValues swsFragments.stacked-workflows-content.passthru.fragments;
+          description = "Full agentic-tools dev standards";
+        };
+      };
     in {
-      inherit fragments;
+      inherit fragments presets;
       inherit (aiCommon) mkClaudeRule mkCopilotInstruction mkKiroSteering;
       inherit (devshellLib) mkAgenticShell;
       inherit (fragments) compose mkEcosystemContent mkFragment mkFrontmatter;
