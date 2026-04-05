@@ -3,130 +3,148 @@
 Triaged from migration plan, source repo TODOs, and gap analysis.
 Items marked ✓ are resolved by the migration or devenv adoption.
 
-## Stack Restructure
+---
+
+## Implementation (Field Test Scope)
+
+Items needed to wire this flake as input to nixos-config and validate
+the final form. Do these first.
+
+### Consumer Integration Blockers
+
+- [ ] Verify `overlays.default` composes cleanly when consumed by nixos-config
+  (ai-clis + git-tools + mcp-servers — test with `inputs.agentic-tools.overlays.default`)
+- [ ] Verify all 8 interface contracts from nixos-config still hold:
+  - `pkgs.nix-mcp-servers.*` namespace
+  - `pkgs.git-absorb`, `pkgs.git-branchless`, `pkgs.git-revise` top-level
+  - `pkgs.github-copilot-cli`, `pkgs.kiro-cli`, `pkgs.kiro-gateway` top-level
+  - `lib.mkStdioEntry`, `lib.mkHttpEntry`, `lib.externalServers`
+  - `lib.mapTools`, `lib.gitConfig`, `lib.gitConfigFull`
+  - `homeManagerModules.default` imports all modules
+  - `stacked-workflows.integrations.*.enable`
+  - `services.mcp-servers.servers.*.enable`
+- [ ] Migrate nixos-config AI config to use `ai.*` unified module
+  (replace 3x duplicated MCP/skills/instructions across Claude/Copilot/Kiro)
+- [ ] Remove vendored copilot-cli, kiro-cli, kiro-gateway overlays from nixos-config
+- [ ] Remove `inputs.nix-mcp-servers` + `inputs.stacked-workflow-skills` from nixos-config
+- [ ] Add `inputs.agentic-tools` to nixos-config with follows (nixpkgs, nvfetcher, rust-overlay)
+- [ ] Verify `home-manager switch` works end-to-end
+
+### HM Module Gaps
+
+- [ ] Kiro openmemory MCP: migrate from raw npx to mkStdioEntry with
+  typed settings (currently hardcoded in nixos-config kiro/default.nix)
+- [ ] Verify copilot-cli module activation merge works (settings deep-merge
+  with mutable config.json)
+- [ ] Verify kiro-cli module steering file generation (YAML frontmatter)
+- [ ] Verify stacked-workflows integrations wire skills to all 3 ecosystems
+
+### packages/default.nix
+
+- [ ] Clean up overlay composition stub (commented out code, Phase 3 leftover)
+
+### Fragments
+
+- [ ] MCP server package-specific fragments (fragments/packages/mcp-servers/)
+  — needed for per-package scoped instruction files
+- [ ] AI CLI package fragments (fragments/packages/ai-clis/) — instructions
+  for working on AI CLI packages
+- [ ] Stacked-workflows dev profile fragments (commented out in fragments.nix)
+  — build-commands, development, operations, etc.
+
+### devenv Polish
+
+- [ ] CUDA config — verify packages build with cudaSupport on x86_64-linux
+- [ ] SecretSpec — declarative secrets for MCP credentials (GitHub, Kagi, etc.)
+  so `devenv shell` can wire cred-requiring MCP servers
+- [ ] devenv MCP segfault — file upstream issue (Boehm GC 8.2.12 crash
+  during nixpkgs enumeration); using mcp.devenv.sh workaround
+
+### Tooling Wiring
+
+- [ ] Wire linters to devenv shell (deadnix, statix in devShell packages)
+  with corresponding instruction file telling AI to run them
+- [ ] Wire LSPs to AI CLI modules (nixd, marksman, taplo via lspServers)
+- [ ] Add cspell to devShell with project dictionary wired
+
+---
+
+## Publish (Pre-Release Scope)
+
+Items for cleaning up, documenting, and shipping. Do these when
+implementation is validated via field test.
+
+### Stack Restructure
 
 - [ ] Restructure sentinel tip commits into clean atomic stack for PRs
 - [ ] Distribute devenv prototype commits into appropriate stack positions
 - [ ] Content-level audit of all intermediate file states (no forward refs)
 - [ ] Open PRs one at a time (Copilot reviews each)
 
-## Infrastructure / CI
+### Infrastructure / CI
 
 - [ ] CI workflow: `ci.yml` — `devenv test` + package build matrix + cachix
 - [ ] CI workflow: `update.yml` — daily nvfetcher update pipeline
 - [ ] CI workflow: `generate-routing.yml` — auto-regenerate on fragment changes
 - [ ] Binary cache: set up `hof-agentic-tools` cachix cache
 - [ ] Cachix badge in README
-- ✓ Pre-commit hooks — devenv git-hooks (treefmt, deadnix, statix, cspell, convco)
-- ✓ ~~agnix in CI~~ — agnix runs via devenv git-hooks PostToolUse
-- ✓ ~~node24 workaround~~ — resolved by nixpkgs update
 
-## Apps
+### Apps
 
 - [ ] `apps/update` — nvfetcher-based version update for all packages
 - [ ] `apps/check-drift` — MCP tool drift detection
 - [ ] `apps/check-health` — MCP server health checks
-- ✓ `apps/generate` — fragment → instruction file generation (exists but
-  superseded by devenv files.* for dev shell; keep for CI/non-devenv users)
 
-## Checks
+### Checks
 
 - [ ] Structural check: validate skill → reference symlinks resolve
 - [ ] Structural check: fragment profiles match filesystem
 - [ ] Structural check: nvfetcher.toml keys match overlay exports
 - [ ] Structural check: module imports match flake homeManagerModules
-- [ ] Formatting check: `treefmt --fail-on-change` (via `devenv test`)
-- [ ] Spelling check: cspell (via `devenv test`)
-- [ ] Agent config check: agnix --strict (via `devenv test`)
-- ✓ Module eval checks — copilot-cli, kiro-cli, mcp-servers, sws, ai
-- ✓ Devshell eval checks — minimal, mcp, skills
 
-## Tooling Wiring (Phase 3.8)
-
-- [ ] Wire linters to devenv shell (deadnix, statix in devShell packages)
-- [ ] Wire shell linters when shell scripts exist (shellcheck, shfmt)
-- [ ] Wire LSPs to AI CLI modules (nixd, marksman, taplo via lspServers)
-- [ ] Wire dprint LSP to each ecosystem
-- [ ] Add cspell to devShell when wired to instruction files
-- ✓ treefmt replaces dprint — devenv built-in treefmt module
-- ✓ git-hooks auto-wired to claude.code via PostToolUse
-
-## Packages
-
-- ✓ AI CLI packages — copilot-cli, kiro-cli, kiro-gateway
-- ✓ Git tool overlays — git-absorb, git-branchless, git-revise
-- ✓ MCP server packages — 12 servers
-- [ ] dprint plugin overlay/nvfetcher — pin plugin versions via Nix
-
-## HM Modules
-
-- ✓ programs.copilot-cli — full implementation
-- ✓ programs.kiro-cli — full implementation
-- ✓ services.mcp-servers — full with 12 server definitions
-- ✓ stacked-workflows — git config presets + AI tool integrations
-- ✓ ai — unified config across Claude/Copilot/Kiro
-- [ ] Kiro openmemory MCP: migrate from raw npx to mkStdioEntry with
-  typed settings (currently in nixos-config)
-
-## devenv
-
-- ✓ Standalone CLI mode with devenv.yaml inputs
-- ✓ File materialization from fragment pipeline
-- ✓ treefmt (alejandra, prettier, taplo, biome)
-- ✓ git-hooks (treefmt, deadnix, statix, cspell, convco, check-json, check-toml)
-- ✓ claude.code.* (settings, permissions, MCP servers)
-- ✓ Custom Kiro + Copilot devenv modules (modules/devenv/)
-- ✓ .envrc for direnv auto-activation
-- [ ] CUDA config — in flake.nix pkgsFor but not tested/verified
-- [ ] MCP processes — wire no-cred servers for `devenv up` when bridge
-  mode is needed
-- [ ] SecretSpec — declarative secrets for MCP credentials (GitHub, Kagi, etc.)
-- [ ] devenv MCP server — local `devenv mcp` crashes (Boehm GC 8.2.12 bug);
-  using public mcp.devenv.sh as workaround; file upstream issue
-
-## Fragments
-
-- [ ] MCP server package-specific fragments (fragments/packages/mcp-servers/)
-- [ ] Stacked-workflows dev profile fragments (commented out in fragments.nix)
-- [ ] AI CLI package fragments (fragments/packages/ai-clis/)
-- ✓ Common fragments — coding-standards, commit-convention, tooling-preference,
-  validation
-- ✓ Monorepo project-overview fragment
-- ✓ Stacked-workflows routing-table fragment
-
-## Documentation
+### Documentation
 
 - [ ] CONTRIBUTING.md — dev setup, code style, commit convention, testing,
-  skill development guidelines, fragment pipeline overview, stack workflow
-- [ ] Consumer migration guide — before/after flake input examples,
-  breaking changes
-- [ ] ADRs — monorepo structure, fragment pipeline, devshell module system,
-  devenv adoption
+  skill development, fragment pipeline, stack workflow
+- [ ] Consumer migration guide — before/after flake input examples
+- [ ] ADRs — monorepo structure, fragment pipeline, devshell, devenv adoption
 - [ ] README: overlay usage examples for consumer flakes
 - [ ] README: devenv setup instructions (direnv, devenv shell)
-- ✓ README — feature-forward, skills table, HM modules, devshell, MCP
-  servers, git tools, feature matrix
 
-## New Features (Backlog)
+### New Features (Backlog)
 
 - [ ] openmemory-mcp wiring — typed settings in MCP server module
 - [ ] cclsp — Claude Code LSP integration
-- [ ] filesystem-mcp — local filesystem MCP server
-- [ ] atlassian-mcp — Atlassian/Jira MCP server
-- [ ] gitlab-mcp — GitLab MCP server
-- [ ] slack-mcp — Slack MCP server
+- [ ] filesystem-mcp, atlassian-mcp, gitlab-mcp, slack-mcp
 - [ ] Rolling stack workflow skill
 - [ ] Ollama HM module — potential migration from nixos-config
-- [ ] flake-parts evaluation — modular per-package flake outputs
+- [ ] flake-parts — modular per-package flake outputs
+- [ ] dprint plugin overlay/nvfetcher — pin plugin versions via Nix
+- [ ] Wire shell linters when shell scripts exist (shellcheck, shfmt)
+- [ ] Wire dprint LSP to each ecosystem
+- [ ] MCP processes — wire no-cred servers for `devenv up`
 
-## Tech Debt
+---
 
-- [ ] packages/default.nix — overlay composition stub (commented out)
-- [ ] Stacked-workflows dev profile — remaining fragments not migrated
-- [ ] devenv MCP segfault — Boehm GC 8.2.12 crash during nixpkgs
-  enumeration in mcp-cache-init thread; file upstream issue
-- ✓ ~~agnix suppression rules~~ — handled in .agnix.toml
-- ✓ ~~PostToolUse limitations~~ — replaced by devenv git-hooks
-- ✓ ~~sources.nix re-evaluation~~ — per-package .nvfetcher dirs
-- ✓ ~~hardcoded lists (DRY)~~ — fragment pipeline + module system
-- ✓ ~~MCP-vs-Bash friction~~ — devenv claude.code.permissions handles this
+## Resolved ✓
+
+- ✓ Pre-commit hooks — devenv git-hooks
+- ✓ treefmt replaces dprint — devenv built-in treefmt module
+- ✓ git-hooks auto-wired to claude.code via PostToolUse
+- ✓ AI CLI packages — copilot-cli, kiro-cli, kiro-gateway
+- ✓ Git tool overlays — git-absorb, git-branchless, git-revise
+- ✓ MCP server packages — 12 servers
+- ✓ programs.copilot-cli, programs.kiro-cli — full implementation
+- ✓ services.mcp-servers — full with 12 server definitions
+- ✓ stacked-workflows — git config presets + AI tool integrations
+- ✓ ai — unified config across Claude/Copilot/Kiro
+- ✓ devenv standalone CLI mode
+- ✓ File materialization from fragment pipeline
+- ✓ claude.code.* (settings, permissions, MCP servers)
+- ✓ Custom Kiro + Copilot devenv modules
+- ✓ .envrc for direnv auto-activation
+- ✓ Module eval checks — all modules
+- ✓ Devshell eval checks — minimal, mcp, skills
+- ✓ apps/generate — fragment → instruction file generation
+- ✓ README — feature-forward, all sections
+- ✓ Common + monorepo + SWS routing-table fragments
