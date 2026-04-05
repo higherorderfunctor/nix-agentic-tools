@@ -1,0 +1,8 @@
+agentic
+agnix
+attrsOf
+dprint
+frontmatter
+monorepo
+nixpkgs
+submodule

@@ -1,10 +1,20 @@
 # CLAUDE.md
 
+@AGENTS.md
+
 ## Build & Validation Commands
 
 ```bash
 nix develop                   # Enter devShell with all tools
+nix run .#generate            # Regenerate instruction files from fragments
 nix fmt                       # Format all files (dprint: Nix + markdown)
+```
+
+## Architecture
+
+```
+lib/               Shared library: fragments
+fragments/         Instruction generation sources (common/ + packages/)
 ```
 
 ## Coding Standards
