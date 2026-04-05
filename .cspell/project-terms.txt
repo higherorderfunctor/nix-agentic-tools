@@ -6,3 +6,10 @@ frontmatter
 monorepo
 nixpkgs
 submodule
+branchless
+buildGoModule
+nvfetcher
+shfmt
+shellharden
+vendorHash
+writeShellApplication

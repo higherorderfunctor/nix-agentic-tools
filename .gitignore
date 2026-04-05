@@ -2,3 +2,6 @@
 result
 result-*
 .direnv/
+
+# nvfetcher workspace
+/.nvfetcher/

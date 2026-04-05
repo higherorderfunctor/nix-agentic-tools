@@ -23,9 +23,11 @@
   "permissions": {
     "allow": [
       "Bash(dprint:*)",
+      "Bash(git absorb*)",
       "Bash(git add*)",
       "Bash(git amend*)",
       "Bash(git branch*)",
+      "Bash(git branchless*)",
       "Bash(git diff*)",
       "Bash(git hide*)",
       "Bash(git log*)",
@@ -37,6 +39,7 @@
       "Bash(git reset HEAD*)",
       "Bash(git restack*)",
       "Bash(git restore --staged*)",
+      "Bash(git revise*)",
       "Bash(git reword*)",
       "Bash(git show*)",
       "Bash(git sl*)",

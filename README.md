@@ -85,6 +85,20 @@ devShells.default = inputs.agentic-tools.lib.mkAgenticShell pkgs {
 };
 ```
 
+## Git Tool Overlays
+
+Stacked workflow prerequisites packaged from latest release sources:
+
+- **git-absorb** — automatic fixup commit routing
+- **git-branchless** — anonymous branching, in-memory rebases, smartlog
+- **git-revise** — in-memory commit rewriting
+
+```bash
+nix build .#git-absorb
+nix build .#git-branchless
+nix build .#git-revise
+```
+
 ## License
 
 Released under the [Unlicense](LICENSE).

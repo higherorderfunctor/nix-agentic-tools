@@ -1,0 +1,86 @@
+{
+    "agnix": {
+        "cargoLock": null,
+        "date": null,
+        "extract": null,
+        "name": "agnix",
+        "passthru": null,
+        "pinned": false,
+        "src": {
+            "deepClone": false,
+            "fetchSubmodules": false,
+            "leaveDotGit": false,
+            "name": null,
+            "owner": "agent-sh",
+            "repo": "agnix",
+            "rev": "v0.16.5",
+            "sha256": "sha256-VUd+i1vogfLMkoJ/hzYR6besxlnKWSyH4LBYPfs1h0o=",
+            "sparseCheckout": [],
+            "type": "github"
+        },
+        "version": "v0.16.5"
+    },
+    "git-absorb": {
+        "cargoLock": null,
+        "date": null,
+        "extract": null,
+        "name": "git-absorb",
+        "passthru": null,
+        "pinned": false,
+        "src": {
+            "deepClone": false,
+            "fetchSubmodules": false,
+            "leaveDotGit": false,
+            "name": null,
+            "owner": "tummychow",
+            "repo": "git-absorb",
+            "rev": "0.9.0",
+            "sha256": "sha256-jAR+Vq6SZZXkseOxZVJSjsQOStIip8ThiaLroaJcIfc=",
+            "sparseCheckout": [],
+            "type": "github"
+        },
+        "version": "0.9.0"
+    },
+    "git-branchless": {
+        "cargoLock": null,
+        "date": null,
+        "extract": null,
+        "name": "git-branchless",
+        "passthru": null,
+        "pinned": false,
+        "src": {
+            "deepClone": false,
+            "fetchSubmodules": false,
+            "leaveDotGit": false,
+            "name": null,
+            "owner": "arxanas",
+            "repo": "git-branchless",
+            "rev": "v0.10.0",
+            "sha256": "sha256-8uv+sZRr06K42hmxgjrKk6FDEngUhN/9epixRYKwE3U=",
+            "sparseCheckout": [],
+            "type": "github"
+        },
+        "version": "v0.10.0"
+    },
+    "git-revise": {
+        "cargoLock": null,
+        "date": null,
+        "extract": null,
+        "name": "git-revise",
+        "passthru": null,
+        "pinned": false,
+        "src": {
+            "deepClone": false,
+            "fetchSubmodules": false,
+            "leaveDotGit": false,
+            "name": null,
+            "owner": "mystor",
+            "repo": "git-revise",
+            "rev": "v0.8.0",
+            "sha256": "sha256-OdkhYEq30RtDOeCQWl/L9FMgCttznzihbYgT8B6KYuY=",
+            "sparseCheckout": [],
+            "type": "github"
+        },
+        "version": "v0.8.0"
+    }
+}

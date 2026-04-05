@@ -6,6 +6,7 @@
 
 ```bash
 nix develop                   # Enter devShell with all tools
+nix build .#<package>         # Build a specific package
 nix flake check               # Linters + evaluation
 nix run .#generate            # Regenerate instruction files from fragments
 nix fmt                       # Format all files (dprint: Nix + markdown)
@@ -17,6 +18,7 @@ nix fmt                       # Format all files (dprint: Nix + markdown)
 lib/               Shared library: fragments
 devshell/          Standalone devshell modules (mkAgenticShell)
 modules/           Home-manager modules
+packages/          Overlays: git-tools, mcp-servers
 references/        Canonical tool reference docs
 skills/            Consumer-facing stacked workflow skills
 fragments/         Instruction generation sources (common/ + packages/)

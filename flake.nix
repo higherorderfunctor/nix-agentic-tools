@@ -3,6 +3,14 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nvfetcher = {
+      url = "github:berberman/nvfetcher";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
@@ -18,13 +26,22 @@
       "x86_64-linux"
     ];
     forAllSystems = lib.genAttrs supportedSystems;
-    pkgsFor = system: import nixpkgs {inherit system;};
+    pkgsFor = system:
+      import nixpkgs {
+        inherit system;
+        overlays = [self.overlays.default];
+      };
     fragments = import ./lib/fragments.nix {inherit lib;};
   in {
+    overlays = {
+      default = import ./packages/git-tools {inherit inputs;};
+      git-tools = import ./packages/git-tools {inherit inputs;};
+    };
+
     homeManagerModules = {
       copilot-cli = ./modules/copilot-cli;
-      kiro-cli = ./modules/kiro-cli;
       default = ./modules;
+      kiro-cli = ./modules/kiro-cli;
     };
 
     lib = let
@@ -90,6 +107,12 @@
       generate = {type = "app"; program = lib.getExe generateScript;};
     });
 
+    checks = forAllSystems (system: let
+      pkgs = pkgsFor system;
+      moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs self;};
+      devshellChecks = import ./checks/devshell-eval.nix {inherit lib pkgs self;};
+    in moduleChecks // devshellChecks);
+
     devShells = forAllSystems (system: let
       pkgs = pkgsFor system;
     in {
@@ -98,16 +121,18 @@
         packages = with pkgs; [
           alejandra
           dprint
+          nvfetcher
         ];
       };
     });
 
-    checks = forAllSystems (system: let
-      pkgs = pkgsFor system;
-      moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs self;};
-    devshellChecks = import ./checks/devshell-eval.nix {inherit lib pkgs self;};
-    in moduleChecks // devshellChecks);
-
     formatter = forAllSystems (system: (pkgsFor system).dprint);
+
+    packages = forAllSystems (system: let
+      pkgs = pkgsFor system;
+    in {
+      inherit (pkgs) git-absorb git-branchless git-revise;
+    });
   };
 }
+
