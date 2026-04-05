@@ -43,14 +43,15 @@ Each skill is self-contained with a `SKILL.md` and bundled reference docs.
 Stacked commit workflow skills using git-branchless, git-absorb, and git-revise.
 
 <!-- dprint-ignore -->
-| Skill | Description |
-|-------|-------------|
-| `/stack-fix` | Absorb fixes into correct stack commits |
-| `/stack-split` | Split a large commit into reviewable atomic commits |
-| `/stack-plan` | Plan and build a commit stack from description, uncommitted work, or existing commits |
-| `/stack-submit` | Sync, validate, push stack, and create stacked PRs |
-| `/stack-summary` | Analyze stack quality, flag violations, produce planner-ready summary |
-| `/stack-test` | Run tests or formatters across every commit in a stack |
+
+| Skill            | Description                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| `/stack-fix`     | Absorb fixes into correct stack commits                                               |
+| `/stack-split`   | Split a large commit into reviewable atomic commits                                   |
+| `/stack-plan`    | Plan and build a commit stack from description, uncommitted work, or existing commits |
+| `/stack-submit`  | Sync, validate, push stack, and create stacked PRs                                    |
+| `/stack-summary` | Analyze stack quality, flag violations, produce planner-ready summary                 |
+| `/stack-test`    | Run tests or formatters across every commit in a stack                                |
 
 ## Home-Manager Modules
 
@@ -108,14 +109,15 @@ services.mcp-servers.servers.github-mcp.enable = true;
 ## Feature Matrix
 
 <!-- dprint-ignore -->
-| Feature | Without Nix | With Nix |
-|---------|-------------|----------|
-| Stacked workflow skills | Copy `skills/` | Injected via HM module |
-| MCP server packages | Install manually | `nix build .#<server>` |
-| MCP server config | Manual JSON | Declarative HM module |
-| Git tool overlays | Install manually | `nix build .#git-absorb` |
-| Home-manager modules | N/A | Full declarative config |
-| DevShell integration | N/A | `mkAgenticShell` |
+
+| Feature                 | Without Nix      | With Nix                 |
+| ----------------------- | ---------------- | ------------------------ |
+| Stacked workflow skills | Copy `skills/`   | Injected via HM module   |
+| MCP server packages     | Install manually | `nix build .#<server>`   |
+| MCP server config       | Manual JSON      | Declarative HM module    |
+| Git tool overlays       | Install manually | `nix build .#git-absorb` |
+| Home-manager modules    | N/A              | Full declarative config  |
+| DevShell integration    | N/A              | `mkAgenticShell`         |
 
 ## DevShell Usage
 
@@ -137,21 +139,22 @@ nix build .#github-mcp
 ```
 
 <!-- dprint-ignore -->
-| Server | Description |
-|--------|-------------|
-| `aws-mcp` | AWS documentation and recommendations |
-| `context7-mcp` | Library documentation lookup |
-| `effect-mcp` | Effect-TS documentation |
-| `fetch-mcp` | HTTP fetch with HTML-to-markdown conversion |
-| `git-intel-mcp` | Git repository analytics and insights |
-| `git-mcp` | Git repository operations |
-| `github-mcp` | GitHub platform integration |
-| `kagi-mcp` | Kagi search and summarization |
-| `mcp-proxy` | MCP stdio-to-HTTP bridge proxy |
-| `nixos-mcp` | NixOS and Nix documentation |
-| `openmemory-mcp` | Persistent memory with vector search |
-| `sequential-thinking-mcp` | Step-by-step reasoning |
-| `sympy-mcp` | Symbolic mathematics via SymPy |
+
+| Server                    | Description                                 |
+| ------------------------- | ------------------------------------------- |
+| `aws-mcp`                 | AWS documentation and recommendations       |
+| `context7-mcp`            | Library documentation lookup                |
+| `effect-mcp`              | Effect-TS documentation                     |
+| `fetch-mcp`               | HTTP fetch with HTML-to-markdown conversion |
+| `git-intel-mcp`           | Git repository analytics and insights       |
+| `git-mcp`                 | Git repository operations                   |
+| `github-mcp`              | GitHub platform integration                 |
+| `kagi-mcp`                | Kagi search and summarization               |
+| `mcp-proxy`               | MCP stdio-to-HTTP bridge proxy              |
+| `nixos-mcp`               | NixOS and Nix documentation                 |
+| `openmemory-mcp`          | Persistent memory with vector search        |
+| `sequential-thinking-mcp` | Step-by-step reasoning                      |
+| `sympy-mcp`               | Symbolic mathematics via SymPy              |
 
 ## Git Tool Overlays
 

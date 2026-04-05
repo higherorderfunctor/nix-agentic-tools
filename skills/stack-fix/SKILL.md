@@ -22,14 +22,17 @@ absorb cannot help.
    proceeding.
 
 2. **Check branchless init**:
+
    ```bash
    if [ ! -d ".git/branchless" ]; then git branchless init; fi
    ```
 
 3. **Check for stale rebase state**:
+
    ```bash
    ls .git/rebase-merge .git/rebase-apply 2>/dev/null
    ```
+
    If present, run `git rebase --abort` before proceeding.
 
 4. **Snapshot current state** for post-fix verification:
@@ -44,14 +47,17 @@ Use this path when you have staged changes that fix lines an earlier commit
 introduced (typos, bug fixes, adjustments to existing code).
 
 1. **Check for staged changes**:
+
    ```bash
    git diff --cached --stat
    ```
+
    If nothing is staged, check for unstaged changes and ask the user what to
    stage. Suggest `git add -p` for selective staging.
 
 2. **Determine if the target commit is known** — if the fix is from review
    feedback or the user specified a commit, use `--base` to constrain absorb:
+
    ```bash
    # Target known (review feedback, specific commit):
    git absorb --dry-run --base <target-commit>^
@@ -59,6 +65,7 @@ introduced (typos, bug fixes, adjustments to existing code).
    # Target unknown (let absorb auto-discover):
    git absorb --dry-run
    ```
+
    **Always use `--base` when the target is known.** Without it, absorb
    searches the full stack by diff context matching and may route to a later
    commit that has more matching context — especially for files built
@@ -68,6 +75,7 @@ introduced (typos, bug fixes, adjustments to existing code).
    itself is excluded from candidates. To include commit X, use `--base <X>^`
    (its parent). If absorb reports "no available commit to fix up" with your
    target as the base, this is why.
+
 3. **Review the dry-run output.** Show the user which hunks will be absorbed
    into which commits. If any hunks can't be absorbed (they commute with all
    commits), warn that those will remain staged.
@@ -76,6 +84,7 @@ introduced (typos, bug fixes, adjustments to existing code).
    contains `--dry-run`, stop here.
 
 5. **Absorb and rebase**:
+
    ```bash
    # With known target:
    git absorb --and-rebase --base <target-commit>^
@@ -87,10 +96,12 @@ introduced (typos, bug fixes, adjustments to existing code).
 6. **Verify the result** with `git sl` to show the updated stack.
 
 7. **Check for leftover changes**:
+
    ```bash
    git diff --cached --stat
    git diff --stat
    ```
+
    If hunks remain (couldn't be absorbed), inform the user. Options:
    - Switch to **Path B** for the leftover changes
    - Create a new commit if the changes are genuinely new work
@@ -114,6 +125,7 @@ new file additions to earlier commits.
 ### Pre-analyze conflict risk
 
 2. **Check file overlap** between the target commit and its descendants:
+
    ```bash
    # Files the target commit touches
    git show --stat <target>
@@ -121,6 +133,7 @@ new file additions to earlier commits.
    # Files each descendant touches
    git log --stat <target>..HEAD
    ```
+
    If descendants modify the same files, warn the user:
    - **Same file, different regions** → restack will likely succeed in-memory
    - **Same file, overlapping regions** → expect per-commit conflicts at each
@@ -132,13 +145,17 @@ new file additions to earlier commits.
 ### Navigate and edit
 
 3. **Navigate to the target commit**:
+
    ```bash
    git prev <N>  # or git checkout <target>
    ```
+
    **Always verify you landed on the right commit before editing:**
+
    ```bash
    git log --oneline -1   # works in detached HEAD (git branch --show-current does not)
    ```
+
    If checkout fails (e.g. "local changes would be overwritten"), you are
    still on the PREVIOUS commit. Stash or commit changes first, then retry.
    Never proceed with `git add` + `git amend` after a failed checkout — the
@@ -156,12 +173,15 @@ new file additions to earlier commits.
 
 6. If amend reports conflicts ("To resolve merge conflicts, run:
    `git restack --merge`"), run:
+
    ```bash
    git restack --merge
    ```
+
    This starts an on-disk rebase that stops at each conflicting commit.
 
 7. **For each conflict**:
+
    ```bash
    # See what's conflicting
    git diff --name-only --diff-filter=U
@@ -170,6 +190,7 @@ new file additions to earlier commits.
    git add <resolved-files>
    git rebase --continue
    ```
+
    **Watch for orphaned additions**: when removing content from an earlier
    commit, conflict resolution may drop additions that later commits made to
    the same block. After each resolution, verify the resolved file contains
@@ -178,6 +199,7 @@ new file additions to earlier commits.
 ### Return and verify
 
 8. **Return to the stack tip**:
+
    ```bash
    git next -a
    ```
@@ -196,22 +218,27 @@ errors).
 changes, new file additions, or complex multi-hunk edits.
 
 1. **Stage the fix** at the current position (stack tip):
+
    ```bash
    git add -p   # or git add <files>
    ```
 
 2. **Apply in-memory** to the target commit:
+
    ```bash
    git revise <target-hash>
    ```
+
    If conflicts occur, git-revise opens an editor for resolution. If
    the conflict is too complex for editor-based resolution, abort and
    use Path B instead.
 
 3. **Fix branchless tracking**:
+
    ```bash
    git restack
    ```
+
    If restack reports conflicts, resolve with `git restack --merge`
    (same as Path B step 6-7).
 
@@ -222,6 +249,7 @@ changes, new file additions, or complex multi-hunk edits.
 Run after either path to confirm the stack is healthy.
 
 1. **Show the updated stack**:
+
    ```bash
    git sl
    ```
@@ -229,9 +257,11 @@ Run after either path to confirm the stack is healthy.
 2. **Verify no unintended changes** (the diff should show ONLY the intended
    fix — unexpected files or regions indicate content lost/duplicated during
    conflict resolution):
+
    ```bash
    git diff $BEFORE_SHA..HEAD --stat
    ```
+
    For commit message fixes (not content), use `git reword <hash>` directly
    — this skill handles content changes only.
 

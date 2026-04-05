@@ -2,24 +2,35 @@
   description = "Agentic tools — skills, MCP servers, and home-manager modules for AI coding CLIs";
 
   inputs = {
+    devenv.url = "github:cachix/devenv";
+    mcp-nixos = {
+      url = "github:utensils/mcp-nixos";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nvfetcher = {
       url = "github:berberman/nvfetcher";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    mcp-nixos = {
-      url = "github:utensils/mcp-nixos";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+
+  nixConfig = {
+    extra-trusted-public-keys = "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=";
+    extra-substituters = "https://devenv.cachix.org";
   };
 
   outputs = {
     self,
     nixpkgs,
+    treefmt-nix,
     ...
   } @ inputs: let
     lib = nixpkgs.lib;
@@ -62,8 +73,13 @@
       inherit (devshellLib) mkAgenticShell;
       inherit (mcpLib) loadServer mkStdioEntry mkHttpEntry mkStdioConfig;
       mkMcpConfig = entries: {mcpServers = entries;};
-      mapTools = f: lib.concatLists (lib.mapAttrsToList (server: tools: map (tool: f server tool) tools);
-      externalServers = { aws-mcp = { type = "http"; url = "https://knowledge-mcp.global.api.aws"; }; };
+      mapTools = f: lib.concatLists (lib.mapAttrsToList (server: tools: map (tool: f server tool) tools));
+      externalServers = {
+        aws-mcp = {
+          type = "http";
+          url = "https://knowledge-mcp.global.api.aws";
+        };
+      };
       gitConfig = import ./modules/stacked-workflows/git-config.nix;
       gitConfigFull = import ./modules/stacked-workflows/git-config-full.nix;
     };
@@ -74,17 +90,50 @@
       generateScript = pkgs.writeShellApplication {
         name = "generate";
         text = let
-          claudeCommon = fragments.mkInstructions {package = "monorepo"; profile = "dev"; ecosystem = "claude";};
-          kiroCommon = fragments.mkInstructions {package = "monorepo"; profile = "dev"; ecosystem = "kiro";};
-          copilotCommon = fragments.mkInstructions {package = "monorepo"; profile = "dev"; ecosystem = "copilot";};
-          agentsBase = fragments.mkInstructions {package = "monorepo"; profile = "dev"; ecosystem = "agentsmd";};
-          agentsPackageContent = builtins.concatStringsSep "\n" (lib.mapAttrsToList (pkg: _: fragments.mkPackageContent {package = pkg; profile = "dev";}) nonRootPackages);
+          claudeCommon = fragments.mkInstructions {
+            package = "monorepo";
+            profile = "dev";
+            ecosystem = "claude";
+          };
+          kiroCommon = fragments.mkInstructions {
+            package = "monorepo";
+            profile = "dev";
+            ecosystem = "kiro";
+          };
+          copilotCommon = fragments.mkInstructions {
+            package = "monorepo";
+            profile = "dev";
+            ecosystem = "copilot";
+          };
+          agentsBase = fragments.mkInstructions {
+            package = "monorepo";
+            profile = "dev";
+            ecosystem = "agentsmd";
+          };
+          agentsPackageContent = builtins.concatStringsSep "\n" (lib.mapAttrsToList (pkg: _:
+            fragments.mkPackageContent {
+              package = pkg;
+              profile = "dev";
+            })
+          nonRootPackages);
           agentsContent = agentsBase + lib.optionalString (agentsPackageContent != "") ("\n" + agentsPackageContent);
           nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") devPackages;
           perPackageOutputs = lib.concatMapStringsSep "\n" (pkg: let
-            claude = fragments.mkInstructions {package = pkg; profile = "dev"; ecosystem = "claude";};
-            kiro = fragments.mkInstructions {package = pkg; profile = "dev"; ecosystem = "kiro";};
-            copilot = fragments.mkInstructions {package = pkg; profile = "dev"; ecosystem = "copilot";};
+            claude = fragments.mkInstructions {
+              package = pkg;
+              profile = "dev";
+              ecosystem = "claude";
+            };
+            kiro = fragments.mkInstructions {
+              package = pkg;
+              profile = "dev";
+              ecosystem = "kiro";
+            };
+            copilot = fragments.mkInstructions {
+              package = pkg;
+              profile = "dev";
+              ecosystem = "copilot";
+            };
           in ''
             cat > "$REPO_ROOT/.claude/rules/${pkg}.md" << 'FRAGMENT_EOF'
             ${claude}
@@ -121,38 +170,54 @@
         '';
       };
     in {
-      generate = {type = "app"; program = lib.getExe generateScript;};
+      generate = {
+        type = "app";
+        program = lib.getExe generateScript;
+      };
     });
 
     checks = forAllSystems (system: let
       pkgs = pkgsFor system;
       moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs self;};
       devshellChecks = import ./checks/devshell-eval.nix {inherit lib pkgs self;};
-    in moduleChecks // devshellChecks);
+    in
+      moduleChecks // devshellChecks);
 
     devShells = forAllSystems (system: let
       pkgs = pkgsFor system;
     in {
-      default = pkgs.mkShell {
-        name = "agentic-tools";
-        packages = with pkgs; [
-          alejandra
-          dprint
-          nvfetcher
-        ];
+      default = inputs.devenv.lib.mkShell {
+        inherit inputs pkgs;
+        modules = [./devenv.nix];
       };
     });
 
-    formatter = forAllSystems (system: (pkgsFor system).dprint);
+    formatter = forAllSystems (
+      system:
+        (treefmt-nix.lib.evalModule (pkgsFor system) ./treefmt.nix)
+      .config
+      .build
+      .wrapper
+    );
 
     packages = forAllSystems (system: let
       pkgs = pkgsFor system;
     in {
       inherit (pkgs) git-absorb git-branchless git-revise;
-      inherit (pkgs.nix-mcp-servers)
-        context7-mcp effect-mcp fetch-mcp git-intel-mcp git-mcp
-        github-mcp kagi-mcp mcp-proxy nixos-mcp openmemory-mcp
-        sequential-thinking-mcp sympy-mcp
+      inherit
+        (pkgs.nix-mcp-servers)
+        context7-mcp
+        effect-mcp
+        fetch-mcp
+        git-intel-mcp
+        git-mcp
+        github-mcp
+        kagi-mcp
+        mcp-proxy
+        nixos-mcp
+        openmemory-mcp
+        sequential-thinking-mcp
+        sympy-mcp
         ;
     });
   };

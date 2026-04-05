@@ -19,14 +19,17 @@ as a revset to select which commits to submit. Default is the current stack.
    skill's directory) before proceeding.
 
 2. **Check branchless init**:
+
    ```bash
    if [ ! -d ".git/branchless" ]; then git branchless init; fi
    ```
 
 3. **Check for stale rebase state**:
+
    ```bash
    ls .git/rebase-merge .git/rebase-apply 2>/dev/null
    ```
+
    If present, run `git rebase --abort` before proceeding.
 
 4. **Check remote and pushDefault**:
@@ -46,6 +49,7 @@ as a revset to select which commits to submit. Default is the current stack.
 1. **Visualize the stack** with `git sl` to understand what will be submitted.
 
 2. **Determine the commit range** from `$ARGUMENTS`:
+
    ```bash
    # If $ARGUMENTS is a revset (use git sl or git branchless log, not git log):
    git sl
@@ -61,9 +65,11 @@ as a revset to select which commits to submit. Default is the current stack.
    ```
 
 3. **Sync with main** to ensure the stack is up to date:
+
    ```bash
    git sync --pull
    ```
+
    If this is the first push (remote main doesn't exist or has fewer commits),
    sync may be a no-op — that's fine.
 
@@ -73,9 +79,11 @@ as a revset to select which commits to submit. Default is the current stack.
    `git move -b <hash> -d main --merge`.
 
 4. **Run tests across the stack** to validate each commit independently:
+
    ```bash
    git test run -x '<test-command>' 'stack()'
    ```
+
    Determine the test command from the project (package.json scripts, Makefile,
    Cargo.toml, etc.). If no obvious test command exists, ask the user. If the
    project has no tests, skip this step.
@@ -89,6 +97,7 @@ as a revset to select which commits to submit. Default is the current stack.
 
 6. **Ensure branches exist** on each commit. For commits without branches,
    generate branch names from commit messages:
+
    ```bash
    # Pattern: type/scope or type/short-description
    # feat(flake): add minimal flake skeleton → feat/flake-skeleton
@@ -97,6 +106,7 @@ as a revset to select which commits to submit. Default is the current stack.
    ```
 
    Create branches:
+
    ```bash
    git branch <branch-name> <commit-hash>
    ```
@@ -104,19 +114,24 @@ as a revset to select which commits to submit. Default is the current stack.
    Present the branch list to the user for review before proceeding.
 
 7. **Confirm before pushing** — preview what will be pushed:
+
    ```bash
    git submit --dry-run    # or: git submit -c --dry-run (first push)
    ```
+
    Show the dry-run output to the user and ask for confirmation:
+
    ```
    Ready to push N branches and create N PRs. Proceed? (y/n)
    ```
+
    **Wait for explicit user approval.** Pushing creates remote branches
    and PRs — these are visible side effects that cannot be easily undone.
    This gate is especially important when the skill is auto-invoked via
    `disable-model-invocation: false`.
 
 8. **Push branches** with `git submit` or `git push`:
+
    ```bash
    git submit -c
    ```
@@ -125,9 +140,11 @@ as a revset to select which commits to submit. Default is the current stack.
    (public/non-draft). This happens when the entire history is being submitted
    for the first time on the main branch. In this case, fall back to manual
    push:
+
    ```bash
    git push -u origin <branch-1> <branch-2> ... <branch-N>
    ```
+
    The `-u` flag sets upstream tracking so tools like lazygit show branches
    as in-sync with remote.
 
@@ -136,6 +153,7 @@ as a revset to select which commits to submit. Default is the current stack.
 
    **Gotcha:** `git submit` requires `remote.pushDefault` to be set for
    `--create` mode:
+
    ```bash
    git config remote.pushDefault origin
    ```
@@ -255,11 +273,13 @@ When a reviewer (human, Copilot, etc.) comments on a specific PR in the stack:
    preview, conflict resolution, and restacking.
 
 3. **Force-push all downstream branches** (target + every branch after it):
+
    ```bash
    git push --force-with-lease origin <target-branch> <downstream-1> ... <downstream-N>
    ```
 
 4. **Return to the stack tip** after pushing:
+
    ```bash
    git checkout <tip-branch>   # e.g. todo/pre-publish or the last PR branch
    ```
@@ -303,6 +323,7 @@ When a reviewer (human, Copilot, etc.) comments on a specific PR in the stack:
   `sleep 1` between `gh pr create` calls to avoid GitHub rate limiting.
 
   Template for scripted stacked PR creation:
+
   ```bash
   #!/usr/bin/env bash
   set -euETo pipefail
@@ -325,6 +346,7 @@ When a reviewer (human, Copilot, etc.) comments on a specific PR in the stack:
     sleep 1
   done
   ```
+
 - If `git submit -c` fails with "no remote configured", set
   `git config remote.pushDefault origin`.
 - If `git submit -c` produces no output, commits are likely public (on main).

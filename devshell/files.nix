@@ -62,24 +62,25 @@
 
   # Generate the shell hook that materializes files
   materializeHook = lib.concatStringsSep "\n" (lib.mapAttrsToList (name: file: ''
-    # Materialize: ${name}
-    _target="${name}"
-    _store="${file.file}"
-    _dir="$(dirname "$_target")"
-    [ -d "$_dir" ] || mkdir -p "$_dir"
-    if [ -L "$_target" ]; then
-      _current="$(readlink "$_target")"
-      if [ "$_current" != "$_store" ]; then
-        ln -sf "$_store" "$_target"
+      # Materialize: ${name}
+      _target="${name}"
+      _store="${file.file}"
+      _dir="$(dirname "$_target")"
+      [ -d "$_dir" ] || mkdir -p "$_dir"
+      if [ -L "$_target" ]; then
+        _current="$(readlink "$_target")"
+        if [ "$_current" != "$_store" ]; then
+          ln -sf "$_store" "$_target"
+          ${file.onChange}
+        fi
+      elif [ ! -e "$_target" ]; then
+        ln -s "$_store" "$_target"
         ${file.onChange}
+      else
+        echo "agentic-shell: WARNING: ${name} exists and is not a symlink, skipping" >&2
       fi
-    elif [ ! -e "$_target" ]; then
-      ln -s "$_store" "$_target"
-      ${file.onChange}
-    else
-      echo "agentic-shell: WARNING: ${name} exists and is not a symlink, skipping" >&2
-    fi
-  '') enabledFiles);
+    '')
+    enabledFiles);
 
   # Clean up orphaned symlinks (pointing to /nix/store but not in our set)
   cleanupHook = let

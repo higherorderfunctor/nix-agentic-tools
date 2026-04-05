@@ -1,7 +1,18 @@
 # Build artifacts
 result
 result-*
+
+# devenv state
+.devenv/
 .direnv/
+
+# Generated ecosystem files (materialized by devenv from fragments)
+.claude/rules/
+.claude/settings.json
+.github/copilot-instructions.md
+.github/instructions/
+.kiro/steering/
+AGENTS.md
 
 # nvfetcher workspace
 /.nvfetcher/

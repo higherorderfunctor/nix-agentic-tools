@@ -208,12 +208,12 @@ agentic-tools/
 Each ecosystem has native path-scoping. The fragment pipeline generates all
 outputs — one source, four targets:
 
-| Ecosystem | Root (always loaded) | Per-package scoping mechanism |
-|---|---|---|
-| Claude Code | `CLAUDE.md` (hand-authored, `@`-imports) | `.claude/rules/<pkg>.md` with `paths:` frontmatter |
-| Kiro | `.kiro/steering/common.md` (`inclusion: always`) | `.kiro/steering/<pkg>.md` (`inclusion: fileMatch`, `fileMatchPattern`) |
-| Copilot | `.github/copilot-instructions.md` (repo-wide) | `.github/instructions/<pkg>.instructions.md` (`applyTo:` glob) |
-| AGENTS.md | Root `AGENTS.md` (generated, all packages) | `packages/<pkg>/AGENTS.md` (nearest-wins) |
+| Ecosystem   | Root (always loaded)                             | Per-package scoping mechanism                                          |
+| ----------- | ------------------------------------------------ | ---------------------------------------------------------------------- |
+| Claude Code | `CLAUDE.md` (hand-authored, `@`-imports)         | `.claude/rules/<pkg>.md` with `paths:` frontmatter                     |
+| Kiro        | `.kiro/steering/common.md` (`inclusion: always`) | `.kiro/steering/<pkg>.md` (`inclusion: fileMatch`, `fileMatchPattern`) |
+| Copilot     | `.github/copilot-instructions.md` (repo-wide)    | `.github/instructions/<pkg>.instructions.md` (`applyTo:` glob)         |
+| AGENTS.md   | Root `AGENTS.md` (generated, all packages)       | `packages/<pkg>/AGENTS.md` (nearest-wins)                              |
 
 **Fragment pipeline extension:**
 
@@ -227,6 +227,7 @@ Each package declares a profile: `common/*` fragments + its own
 ecosystem-appropriate frontmatter.
 
 **Claude Code specifics:**
+
 - Root `CLAUDE.md` is hand-authored with `@AGENTS.md` import and shared
   coding standards
 - `.claude/rules/` files are generated with `paths:` frontmatter for
@@ -454,6 +455,7 @@ programs.ai = {
 ```
 
 Design decisions:
+
 - Instructions use shared semantic fields (`text`, `paths`, `description`),
   module translates to ecosystem-specific frontmatter
 - Skills are `attrsOf path` (identical format across ecosystems)
@@ -489,6 +491,7 @@ Must be complete before mkAgenticShell PR merge.
 - Eval checks for MCP + SWS modules ✓
 
 **Remaining:**
+
 - Checkpoint 3.6: AI CLI packages (copilot-cli, kiro-cli, kiro-gateway)
 - Checkpoint 3.7: unified checks, CI config, pre-commit hook, devShell
 - Checkpoint 3.8: tooling wiring — add linters (deadnix, statix,
@@ -505,16 +508,19 @@ Must be complete before mkAgenticShell PR merge.
 ### Phase 4: Apps and CI
 
 **Checkpoint 4.1: Update pipeline**
+
 - Migrate `apps/update.sh` from MCP
 - Extend for git-tools and AI CLI updates
 - Single `nix run .#update` covers all packages
 
 **Checkpoint 4.2: Drift detection**
+
 - Migrate `apps/check-drift.sh` from MCP
 - Extend structural checks for cross-reference validation
 - CI integration
 
 **Checkpoint 4.3: CI workflows**
+
 - `ci.yml`: flake check + build matrix + cachix
 - `update.yml`: daily update pipeline
 - `generate-routing.yml`: auto-regenerate on fragment changes
@@ -528,6 +534,7 @@ detection creates issues.
 ### Phase 5: Documentation and Polish
 
 **Checkpoint 5.1: README**
+
 - Feature-forward structure:
   1. What this provides (skills, MCP servers, HM modules, devshell)
   2. Quick start (non-Nix: copy skills; Nix: flake input)
@@ -541,17 +548,20 @@ detection creates issues.
   "Claude Code skills", "MCP servers", "home-manager"
 
 **Checkpoint 5.2: Migrate TODOs**
+
 - Consolidate 70 items from SWS (52) and MCP (14) and shared (4)
 - Triage: resolved by migration vs. still open
 - Create TODO.md or GitHub issues
 
 **Checkpoint 5.3: ADRs**
+
 - Migrate existing ADRs from SWS
 - New ADR: monorepo structure decision
 - New ADR: fragment pipeline extension
 - New ADR: devshell module system
 
 **Checkpoint 5.4: Consumer migration guide**
+
 - Document consumer flake update path
 - Before/after flake input examples
 - Breaking changes (if any)
@@ -564,14 +574,17 @@ migration guide ready.
 ### Phase 6: Stack and Ship
 
 **Checkpoint 6.1: Split sentinel into stack**
+
 - Use `/stack-plan` to split sentinel into logical commits
 - One commit per checkpoint where practical
 
 **Checkpoint 6.2: Submit**
+
 - Use `/stack-submit` to create PRs
 - Review, iterate, merge
 
 **Checkpoint 6.3: Consumer update**
+
 - Update consumer flake inputs
 - Verify `home-manager switch` works
 - Remove old repo inputs from consumer flake
@@ -681,6 +694,7 @@ shared linting, DRY). Remaining items carry forward as monorepo TODOs.
 Current: flat `fragments/` directory, two profiles (package, dev).
 
 Extended:
+
 ```
 fragments/
 ├── common/           # Shared (coding standards, commit convention, etc.)
@@ -691,6 +705,7 @@ fragments/
 ```
 
 `lib/fragments.nix` changes:
+
 - `readFragment` gains package-aware lookup:
   `readFragment "common" "coding-standards"` and
   `readFragment "mcp-servers" "server-config"`
@@ -707,6 +722,7 @@ Uses `lib.evalModules` standalone (same pattern as devenv). No
 home-manager or devenv dependency required.
 
 Key modules:
+
 - `top-level.nix` — packages, shellHook, shell derivation
 - `files.nix` — file materialization (Nix store paths symlinked via
   shellHook, adapted from devenv's `files.nix`)

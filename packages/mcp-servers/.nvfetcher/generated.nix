@@ -4,8 +4,7 @@
   fetchurl,
   fetchFromGitHub,
   dockerTools,
-}:
-{
+}: {
   context7-mcp = {
     pname = "context7-mcp";
     version = "2.1.6";
@@ -31,7 +30,7 @@
       fetchSubmodules = false;
       deepClone = false;
       leaveDotGit = false;
-      sparseCheckout = [ ];
+      sparseCheckout = [];
       sha256 = "sha256-UCIUmU6slN9EjL8Bf2JKfvyoVKE0jgUsfLd8OocdwNc=";
     };
     date = "2026-03-18";

@@ -27,6 +27,7 @@ Plan and execute a commit stack. Determines mode automatically based on input:
    proceeding.
 
 2. **Check branchless init**:
+
    ```bash
    if [ ! -d ".git/branchless" ]; then git branchless init; fi
    ```
@@ -80,6 +81,7 @@ The user describes work to be done. Build the stack from scratch.
    uses them.
 
 4. **Present the plan** to the user:
+
    ```
    Proposed stack (N commits):
 
@@ -88,9 +90,11 @@ The user describes work to be done. Build the stack from scratch.
    3. type(scope): description — files C, D, E (~150 lines)
    ...
    ```
+
    **Wait for user approval.** Adjust if they have feedback.
 
 5. **Execute the plan** — implement each commit in order:
+
    ```bash
    # Write the code for commit 1
    git add <files>
@@ -100,6 +104,7 @@ The user describes work to be done. Build the stack from scratch.
    git add <files>
    git commit -m "type(scope): description"
    ```
+
    After each commit, verify the codebase is in a working state.
 
 ## Working Tree Mode
@@ -107,11 +112,13 @@ The user describes work to be done. Build the stack from scratch.
 Uncommitted changes exist. Classify and commit them as a stack.
 
 1. **Survey the changes**:
+
    ```bash
    git status --short
    git diff --stat
    git diff
    ```
+
    Read the full diff. Count total lines changed.
 
 2. **Classify every change** into logical groups following the ordering in
@@ -127,6 +134,7 @@ Uncommitted changes exist. Classify and commit them as a stack.
    **Wait for user approval.**
 
 4. **Commit each group** in plan order:
+
    ```bash
    # For file-level grouping:
    git add <file1> <file2>
@@ -138,6 +146,7 @@ Uncommitted changes exist. Classify and commit them as a stack.
    ```
 
    After each commit, verify nothing was missed or double-counted:
+
    ```bash
    git diff --stat   # remaining uncommitted changes
    ```
@@ -147,6 +156,7 @@ Uncommitted changes exist. Classify and commit them as a stack.
 Existing commits need to be reorganized into a clean atomic stack.
 
 1. **Parse the range** from `$ARGUMENTS`. Resolve to a `<base>` and `<tip>`:
+
    ```bash
    # For range syntax (base..tip):
    BASE=<resolved base>
@@ -162,6 +172,7 @@ Existing commits need to be reorganized into a clean atomic stack.
    ```
 
 2. **Understand the current state**:
+
    ```bash
    git sl
    git log --oneline --reverse $BASE..$TIP   # or --root for from-root
@@ -173,6 +184,7 @@ Existing commits need to be reorganized into a clean atomic stack.
    git log --reverse --stat --format="=== %h %s ===" --root
    git diff --stat $(git hash-object -t tree /dev/null) HEAD
    ```
+
    Read the full diff and per-commit stats. Count total lines changed.
 
 3. **Classify every change** into logical groups (same as Working Tree mode
@@ -190,20 +202,25 @@ Existing commits need to be reorganized into a clean atomic stack.
    **Wait for user approval.**
 
 6. **Check for uncommitted work** before flattening:
+
    ```bash
    git status --short
    ```
+
    If there are uncommitted changes, warn the user and ask whether to stash
    or commit them first.
 
 7. **Create a backup branch**:
+
    ```bash
    git branch backup-before-restructure
    ```
+
    If a branch with this name already exists, delete it first or use a unique
    name (e.g., `backup-restructure-$(date +%s)`).
 
 8. **Save the tree hash** for post-verification:
+
    ```bash
    FINAL_TREE=$(git rev-parse HEAD^{tree})
    ```
@@ -212,37 +229,42 @@ Existing commits need to be reorganized into a clean atomic stack.
    identified in step 4 as having multiple states, save each version to a
    temp directory using `git show`. After flattening, the working tree only
    contains the final state — earlier versions are gone.
+
    ```bash
    STATES_DIR=$(mktemp -d /tmp/restructure-states.XXXXXX)
    # For each (file, commit) pair from step 4:
    git show "${HASH}":path/to/file > "${STATES_DIR}/filename.${HASH}"
    ```
+
    Include stub files (placeholder modules, `.gitkeep` files) that scaffold
    commits create before later commits replace them with real content.
    Restore these with `cp` or `touch` before staging each intermediate
    commit.
 
 10. **Flatten the range** into the working tree:
-   ```bash
-   # Standard range (has a base commit):
-   git reset --soft $BASE
-   git restore --staged .
 
-   # From-root (no base commit):
-   git checkout --orphan restructure-wip
-   git reset
-   # Note: git-branchless hook will panic on orphan branches — this is
-   # harmless. The checkout succeeds. Suppress noise with:
-   #   2>&1 | grep -v "^branchless:"
-   ```
-   Verify the working tree matches the original diff:
-   ```bash
-   # Standard range (files are unstaged):
-   git diff --stat   # should match step 2's total diff
+```bash
+# Standard range (has a base commit):
+git reset --soft $BASE
+git restore --staged .
 
-   # From-root (all files are untracked after orphan+reset):
-   git status --short | wc -l   # should match step 2's file count
-   ```
+# From-root (no base commit):
+git checkout --orphan restructure-wip
+git reset
+# Note: git-branchless hook will panic on orphan branches — this is
+# harmless. The checkout succeeds. Suppress noise with:
+#   2>&1 | grep -v "^branchless:"
+```
+
+Verify the working tree matches the original diff:
+
+```bash
+# Standard range (files are unstaged):
+git diff --stat   # should match step 2's total diff
+
+# From-root (all files are untracked after orphan+reset):
+git status --short | wc -l   # should match step 2's file count
+```
 
 11. **Commit each group** in plan order (same as Working Tree mode step 4).
     For files with intermediate states (identified in step 4), restore the
@@ -263,19 +285,23 @@ Existing commits need to be reorganized into a clean atomic stack.
 ## Post-execution
 
 1. **Move branch pointer** (from-root only):
+
    ```bash
    # If on orphan branch, move main to the new history:
    git checkout -B main
    ```
 
 2. **Verify the result**:
+
    ```bash
    git sl
    git log --oneline --reverse
    ```
+
    Show the user the new stack.
 
 3. **REQUIRED: Confirm total diff is identical** (Restructure mode only):
+
    ```bash
    # Tree hash comparison (catches ALL content differences):
    test "$(git rev-parse HEAD^{tree})" = "$FINAL_TREE" && echo "trees match"
@@ -286,6 +312,7 @@ Existing commits need to be reorganized into a clean atomic stack.
    # Then inspect each differing file:
    git diff backup-before-restructure HEAD -- <file>
    ```
+
    Do NOT proceed if trees don't match. Fix the diverging files first
    using fixup commits (`git commit --fixup <hash>` + autosquash rebase).
    Common causes: intermediate file state written incorrectly, orphaned
@@ -293,9 +320,11 @@ Existing commits need to be reorganized into a clean atomic stack.
 
 4. **Clean up stale artifacts**: check for self-referencing symlinks or
    other working tree debris:
+
    ```bash
    git status --short   # should be clean
    ```
+
    Remove any untracked artifacts that weren't in the original tree.
 
 5. **Run tests** if a test command is identifiable:

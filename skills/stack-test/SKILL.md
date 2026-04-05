@@ -46,9 +46,11 @@ Run a test command or formatter across commits in the current stack.
 ### Run Mode (testing)
 
 4. **Run tests across the stack**:
+
    ```bash
    git test run -x '<command>' '<revset>'
    ```
+
    Add `--jobs <N>` if specified (uses worktree strategy automatically).
    Default to `--jobs 0` for parallel when the project supports it.
 
@@ -61,9 +63,11 @@ Run a test command or formatter across commits in the current stack.
 ### Fix Mode (formatting)
 
 4. **Apply formatter across the stack**:
+
    ```bash
    git test fix -x '<command>' '<revset>'
    ```
+
    Add `--jobs 0` for parallel execution. Fix mode replaces tree OIDs directly
    and never produces merge conflicts.
 

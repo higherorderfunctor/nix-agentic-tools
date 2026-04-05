@@ -75,7 +75,8 @@ in {
       mcpServers = mcpConfig;
     };
 
-    packages = lib.filter (p: p != null)
+    packages =
+      lib.filter (p: p != null)
       (lib.mapAttrsToList (_: srv: srv.package) enabledServers);
   };
 }

@@ -22,6 +22,7 @@ purposes:
    skill's directory).
 
 2. **Check branchless init**:
+
    ```bash
    if [ ! -d ".git/branchless" ]; then git branchless init; fi
    ```

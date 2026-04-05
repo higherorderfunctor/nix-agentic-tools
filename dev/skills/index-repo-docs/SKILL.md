@@ -45,11 +45,11 @@ repo-head: <commit-sha>
 repo-indexed: 2026-03-21
 wiki-head: <commit-sha or null>
 wiki-indexed: 2026-03-21
-issues-indexed: 2026-03-21      # null if never fetched
-discussions-indexed: 2026-03-21  # null if repo has no Discussions or never fetched
+issues-indexed: 2026-03-21 # null if never fetched
+discussions-indexed: 2026-03-21 # null if repo has no Discussions or never fetched
 labels-indexed: 2026-03-21
 label-head: <sha256 of sorted label name list>
-doc-sources:                     # discovered doc files and external links
+doc-sources: # discovered doc files and external links
   - path: "Documentation/git-absorb.adoc"
     type: repo-file
     relevance: "man page with authoritative flag/option reference"
@@ -168,6 +168,7 @@ changed, re-assess and update the cache.
 2. **Check for incremental update** as described above. If up to date, skip.
 
 3. **Fetch the wiki** (if it exists):
+
    ```bash
    tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/claude-repo-index.XXXXXX")
    git clone --depth 1 "https://github.com/${owner}/${repo}.wiki.git" "$tmp_dir/wiki" 2>/dev/null || true
@@ -179,14 +180,17 @@ changed, re-assess and update the cache.
    discovery approach and track what was found in `doc-sources` frontmatter.
 
    #### 4a. Fetch README (always)
+
    ```bash
    gh api "repos/${owner}/${repo}/readme" --jq '.content | @base64d' > "$tmp_dir/README.md"
    ```
 
    #### 4b. Scan repo tree for doc-like files
+
    Fetch the repo tree and filter for documentation files. Don't hardcode
    directory names — search broadly:
    First, get the default branch:
+
    ```bash
    default_branch=$(gh api "repos/${owner}/${repo}" --jq '.default_branch')
    ```
@@ -198,14 +202,18 @@ changed, re-assess and update the cache.
      | grep -iE '^(docs?/|documentation/|man/|guide|readme|contributing|changelog|faq|usage|tutorial)' \
      > "$tmp_dir/doc-paths.txt"
    ```
+
    Also catch top-level doc files that aren't README:
+
    ```bash
    gh api "repos/${owner}/${repo}/git/trees/${default_branch}?recursive=1" \
      --jq '.tree[] | select(.type=="blob") | .path' \
      | grep -iE '^[^/]*\.(adoc|rst)$' \
      >> "$tmp_dir/doc-paths.txt"
    ```
+
    Fetch each discovered file:
+
    ```bash
    while read -r doc_path; do
      encoded=$(printf '%s' "$doc_path" | jq -sRr @uri)
@@ -215,18 +223,22 @@ changed, re-assess and update the cache.
    ```
 
    #### 4c. Follow external documentation links
+
    Scan the README and any fetched docs for links to external documentation
    sites (readthedocs, GitHub Pages, gitbook, wiki URLs, etc.):
+
    ```bash
    grep -ohE 'https?://[^ )">]+' "$tmp_dir"/*.md "$tmp_dir"/*.adoc 2>/dev/null \
      | grep -iE '(readthedocs|gitbook|github\.io|wiki|docs\.)' \
      | sort -u > "$tmp_dir/external-links.txt"
    ```
+
    For each external link, fetch the page content if it's reachable and
    appears to be documentation (HTML or markdown). Use `WebFetch` for
    HTML pages. Record each in `doc-sources` with `type: external`.
 
    #### 4d. Reconcile with previous doc-sources
+
    If the existing frontmatter has `doc-sources`, compare:
    - **New paths not in previous run** → fetch and flag as new discovery
    - **Previous paths missing from tree** → mark `reachable: false`, keep
@@ -241,14 +253,14 @@ changed, re-assess and update the cache.
 
 5. **Discover and fetch issues/discussions** using multiple search signals.
 
-   The goal is a thorough sample of usage-relevant content — not just the top
-   10. Fetch greedily, deduplicate, and only prompt the user if volume is
+   The goal is a thorough sample of usage-relevant content — not just the top 10. Fetch greedily, deduplicate, and only prompt the user if volume is
    unmanageable.
 
    #### 5a. Count total issues to determine strategy
 
    Use the search API to get accurate issue counts (the REST issues endpoint
    and `open_issues_count` both include pull requests):
+
    ```bash
    total_open=$(gh api "search/issues?q=repo:${owner}/${repo}+type:issue+state:open&per_page=1" \
      --jq '.total_count')
@@ -270,6 +282,7 @@ changed, re-assess and update the cache.
    #### 5b. Label-based fetches
 
    For each label in the cached `value-labels` list, fetch all matching issues:
+
    ```bash
    # Paginate to get all issues with this label, filtering out PRs
    encoded_label=$(printf '%s' "$label_name" | jq -sRr @uri)
@@ -298,6 +311,7 @@ changed, re-assess and update the cache.
    ```
 
    For repos with Discussions enabled, also search discussions:
+
    ```bash
    for kw in "${keywords[@]}"; do
      gh api graphql -f query='
@@ -320,6 +334,7 @@ changed, re-assess and update the cache.
 
    Also fetch top most-reacted issues as a catch-all for popular content that
    keyword and label searches might miss:
+
    ```bash
    gh search issues --repo "${owner}/${repo}" --sort reactions --order desc --state all \
      --limit 100 --json number,title,body,labels,reactions \
@@ -430,13 +445,13 @@ changed, re-assess and update the cache.
    ```
 
 8. **Write the draft to a temp file** — never directly to the reference doc.
+
    ```bash
    # e.g. ${tmp_dir}/draft.md
    ```
 
 9. **Present a change summary for user review.** Do NOT write the final doc
    until the user approves. Show, in this order:
-
    1. **Additions** — new sections, recipes, gotchas, anti-patterns
    2. **Changes** — modified sections (briefly describe what changed)
    3. **Removals** — any sections, recipes, or gotchas from the old doc that
@@ -452,6 +467,7 @@ changed, re-assess and update the cache.
 10. **Write the approved doc** to the reference file path.
 
 11. **Clean up**:
+
     ```bash
     rm -rf "$tmp_dir"
     ```

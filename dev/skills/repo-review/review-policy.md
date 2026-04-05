@@ -7,11 +7,12 @@ confidence model.
 ## Severity Levels
 
 <!-- dprint-ignore -->
-| Severity | Meaning | Action required |
-|----------|---------|-----------------|
-| `high` | Incorrect command, broken install path, security issue, contradiction that would cause user failure | Must fix |
-| `medium` | Non-idiomatic pattern, unclear docs, missing edge case, stale reference | Should fix |
-| `low` | Style preference, minor clarity improvement, nice-to-have | Observation only |
+
+| Severity | Meaning                                                                                             | Action required  |
+| -------- | --------------------------------------------------------------------------------------------------- | ---------------- |
+| `high`   | Incorrect command, broken install path, security issue, contradiction that would cause user failure | Must fix         |
+| `medium` | Non-idiomatic pattern, unclear docs, missing edge case, stale reference                             | Should fix       |
+| `low`    | Style preference, minor clarity improvement, nice-to-have                                           | Observation only |
 
 ## Change Threshold
 

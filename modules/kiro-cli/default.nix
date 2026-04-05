@@ -194,7 +194,8 @@ in {
       ];
 
     home = {
-      activation.kiroCliSettings = lib.mkIf (cfg.settings != {})
+      activation.kiroCliSettings =
+        lib.mkIf (cfg.settings != {})
         (lib.hm.dag.entryAfter ["writeBoundary"] settingsActivationScript);
 
       file =
@@ -245,7 +246,8 @@ in {
               name = "kiro-cli-wrapped";
               paths = [cfg.package];
               postBuild = let
-                envExports = lib.concatStringsSep "\n"
+                envExports =
+                  lib.concatStringsSep "\n"
                   (lib.mapAttrsToList (k: v: "export ${k}=${lib.escapeShellArg v}")
                     cfg.environmentVariables);
               in ''

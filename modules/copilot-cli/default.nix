@@ -65,11 +65,10 @@
   allMcpServers = transformedMcpServers // cfg.mcpServers;
 
   # Wrapper args for MCP injection
-  wrapperArgs =
-    lib.optionals (allMcpServers != {}) [
-      "--additional-mcp-config"
-      "${jsonFormat.generate "copilot-mcp-config.json" {mcpServers = allMcpServers;}}"
-    ];
+  wrapperArgs = lib.optionals (allMcpServers != {}) [
+    "--additional-mcp-config"
+    "${jsonFormat.generate "copilot-mcp-config.json" {mcpServers = allMcpServers;}}"
+  ];
 
   # File generation
   mkMarkdownEntries = subdir: attrs:
@@ -190,14 +189,16 @@ in {
       (map mkExclusiveAssertion exclusiveInlineDirNames)
       ++ [
         {
-          assertion = (allMcpServers == {} && cfg.lspServers == {})
+          assertion =
+            (allMcpServers == {} && cfg.lspServers == {})
             || cfg.package != null;
           message = "`programs.copilot-cli.package` cannot be null when `mcpServers`, `lspServers`, or `enableMcpIntegration` is configured.";
         }
       ];
 
     home = {
-      activation.copilotCliSettings = lib.mkIf (cfg.settings != {})
+      activation.copilotCliSettings =
+        lib.mkIf (cfg.settings != {})
         (lib.hm.dag.entryAfter ["writeBoundary"] settingsActivationScript);
 
       file =
@@ -240,7 +241,8 @@ in {
               name = "copilot-cli-wrapped";
               paths = [cfg.package];
               postBuild = let
-                envExports = lib.concatStringsSep "\n"
+                envExports =
+                  lib.concatStringsSep "\n"
                   (lib.mapAttrsToList (k: v: "export ${k}=${lib.escapeShellArg v}")
                     cfg.environmentVariables);
               in ''

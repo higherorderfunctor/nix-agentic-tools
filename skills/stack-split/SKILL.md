@@ -20,6 +20,7 @@ defaults to HEAD if not specified.
    proceeding.
 
 2. **Check branchless init**:
+
    ```bash
    if [ ! -d ".git/branchless" ]; then git branchless init; fi
    ```
@@ -36,10 +37,12 @@ defaults to HEAD if not specified.
    Otherwise default to HEAD.
 
 2. **Analyze the commit** to understand what it contains:
+
    ```bash
    git show --stat <commit>
    git show <commit>
    ```
+
    Read the full diff. Identify logical groups following the ordering in
    `references/philosophy.md`:
    - Refactoring / cleanup (should be first)
@@ -59,31 +62,39 @@ defaults to HEAD if not specified.
    Wait for user approval before proceeding.
 
 4. **Perform the split** using interactive rebase:
+
    ```bash
    git rebase -i <commit>^
    ```
+
    Mark the target commit as `edit`, then:
+
    ```bash
    git reset HEAD^
    ```
+
    This unwinds the commit but keeps all changes in the working tree.
 
 5. **Stage and commit each group** in the agreed order:
+
    ```bash
    git add -p  # or git add <specific-files>
    git commit -m "descriptive message for this group"
    ```
+
    Repeat for each logical group. Each commit must:
    - Be describable in one sentence
    - Leave the codebase in a working state
    - Target 50-200 lines
 
 6. **Complete the rebase**:
+
    ```bash
    git rebase --continue
    ```
 
 7. **Restack** if there are downstream commits:
+
    ```bash
    git restack
    ```
