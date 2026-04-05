@@ -31,11 +31,11 @@ nix build  # works
 Enter the development environment:
 
 ```bash
-nix develop
+devenv shell    # or: direnv allow (auto-activates on cd)
 ```
 
 This provides all tools: git-branchless, git-absorb, git-revise, agnix,
-alejandra, dprint, cspell, nvfetcher.
+treefmt (alejandra, prettier, taplo, biome), cspell, nvfetcher.
 
 ## Adding a Package
 
@@ -57,14 +57,14 @@ alejandra, dprint, cspell, nvfetcher.
 ## Formatting
 
 ```bash
-dprint fmt          # format all files (markdown, JSON, Nix via alejandra)
-dprint check        # check without modifying
-nix fmt             # same as dprint fmt (nix fmt wraps dprint)
+treefmt             # format all files (Nix, markdown, JSON, TOML)
+treefmt --fail-on-change  # check without modifying (CI mode)
 ```
 
-dprint handles markdown, JSON, and Nix files. Nix formatting uses
-alejandra as a dprint exec plugin (`dprint.json`). The
-`overlays/.nvfetcher/` directory is excluded via dprint config.
+treefmt orchestrates per-language formatters: alejandra (Nix), prettier
+(markdown), biome (JSON), taplo (TOML). Config is in `treefmt.nix`,
+consumed by devenv's built-in treefmt module. Generated dirs
+(`.nvfetcher/`, `locks/`) are excluded.
 
 ## Linting
 
@@ -78,7 +78,7 @@ cspell lint '**/*.md' --no-progress  # spellcheck markdown
 ```bash
 nix flake check     # runs all checks:
                     #   agent-configs (agnix --strict)
-                    #   formatting (dprint check)
+                    #   formatting (treefmt --fail-on-change)
                     #   spelling (cspell)
                     #   structural (symlinks, frontmatter, freshness)
 ```

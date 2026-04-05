@@ -93,7 +93,7 @@ For every commit, determine:
    - `identity` — LICENSE, README intro, project setup
    - `instructions` — CLAUDE.md, coding standards, conventions
    - `build` — flake, dependencies, devShell, overlays, lock files
-   - `format` — formatters, linters, dprint, alejandra
+   - `format` — formatters, linters, treefmt, alejandra
    - `ci` — GitHub Actions, CI workflows
    - `tooling` — editor config, Claude Code settings, steering files
    - `reference` — reference docs (philosophy, tool docs)

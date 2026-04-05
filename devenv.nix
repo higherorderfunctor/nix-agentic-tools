@@ -121,7 +121,6 @@ in {
       Bash = {
         allow = [
           "devenv *"
-          "dprint:*"
           "git absorb*"
           "git add*"
           "git amend*"

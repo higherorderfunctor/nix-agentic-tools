@@ -16,13 +16,14 @@ approves all changes. Implementation uses this repo's own skills.
 This skill uses three model tiers. Express these as intent — the tool
 runtime maps them to available models.
 
-| Tier | Intent | Examples |
-|------|--------|----------|
-| **TRIAGE** | Fast, cheap. Filtering, classification, scoring. | Pre-flight checks, confidence scoring, eligibility |
-| **REVIEW** | Standard depth. Read code, find issues, research. | The 6 reviewer personalities |
-| **CRITICAL** | Deepest analysis. Synthesis, debate, judgment. | Aggregation, debate resolution, finding validation |
+| Tier         | Intent                                            | Examples                                           |
+| ------------ | ------------------------------------------------- | -------------------------------------------------- |
+| **TRIAGE**   | Fast, cheap. Filtering, classification, scoring.  | Pre-flight checks, confidence scoring, eligibility |
+| **REVIEW**   | Standard depth. Read code, find issues, research. | The 6 reviewer personalities                       |
+| **CRITICAL** | Deepest analysis. Synthesis, debate, judgment.    | Aggregation, debate resolution, finding validation |
 
 When spawning agents, include the tier in the description:
+
 - `[TRIAGE]` agents: use `model: "haiku"` if available
 - `[REVIEW]` agents: use default model (sonnet-class)
 - `[CRITICAL]` agents: use `model: "opus"` if available
@@ -117,6 +118,7 @@ The scoring agent returns a confidence score 0–100:
 **False positive rubric** (give to scoring agents verbatim):
 
 These are NOT real findings:
+
 - Pre-existing issues not introduced in recent work
 - Something that looks wrong but is intentional (check git blame)
 - Pedantic nitpicks a senior engineer wouldn't flag

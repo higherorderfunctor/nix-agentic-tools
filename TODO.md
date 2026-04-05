@@ -50,9 +50,9 @@ the final form. Do these first.
 ### Skill Wiring
 
 - [ ] Wire dev skills (repo-review, index-repo-docs) into each ecosystem
-      via devenv files.* — .claude/skills/, .kiro/skills/, .github/skills/
-- [ ] Wire consumer skills (stack-*) via devenv files.* instead of
-      committed symlinks — move .claude/skills/sws-* to devenv generation
+      via devenv files.\* — .claude/skills/, .kiro/skills/, .github/skills/
+- [ ] Wire consumer skills (stack-_) via devenv files._ instead of
+      committed symlinks — move .claude/skills/sws-\* to devenv generation
 - [ ] Register dev skills as invocable (currently in dev/skills/ but not
       in .claude/skills/ or any ecosystem skill path)
 

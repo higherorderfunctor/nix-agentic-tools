@@ -352,7 +352,7 @@ git status --short | wc -l   # should match step 2's file count
   full rewrite at the appropriate commit is often cleaner than incremental
   Edit operations that can cause structural nesting errors.
 - **Expect hook failures during restructure.** PostToolUse hooks (agnix
-  linting, dprint formatting, etc.) fire when using Write/Edit during a
+  linting, treefmt formatting, etc.) fire when using Write/Edit during a
   restructure. The working tree is intentionally inconsistent between
   commits — hook errors are harmless and will pass once all files are
   committed. Use `--no-verify` on intermediate commits if needed.

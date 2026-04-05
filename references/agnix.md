@@ -54,7 +54,7 @@ disabled_rules = ["XML-001", "AS-014", "XP-003", "CC-MEM-008", "PE-001", "CDX-AG
 | CC-MEM-008 | MANDATORY keyword placement is deliberate                       |
 | PE-001     | Critical keyword position warnings — placement is intentional   |
 | CDX-AG-005 | agnix bug — rule message not interpolated (empty warning)       |
-| CC-HK-009  | `                                                               |     | true` on dprint format hook is intentional (best-effort) |
+| CC-HK-009  | `                                                               |     | true` on treefmt format hook is intentional (best-effort) |
 
 ## Rule Categories
 

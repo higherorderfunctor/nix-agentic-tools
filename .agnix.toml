@@ -9,7 +9,7 @@ kiro = true
 [rules]
 # Suppress false positives:
 # - AS-014: shell quoting in code blocks mistaken for Windows paths
-# - CC-HK-009: || true on dprint format hook is intentional (best-effort)
+# - CC-HK-009: || true on treefmt format hook is intentional (best-effort)
 # - CC-MEM-008: MANDATORY keyword placement is deliberate
 # - CDX-AG-005: agnix bug — rule message not interpolated (review on upgrade)
 # - PE-001: placeholder entries in stub files during scaffold phase

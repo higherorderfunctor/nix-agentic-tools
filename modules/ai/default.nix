@@ -186,7 +186,10 @@ in {
         }
         {
           assertion =
-            cfg.skills != {} || cfg.instructions != {} || cfg.environmentVariables != {}
+            cfg.skills
+            != {}
+            || cfg.instructions != {}
+            || cfg.environmentVariables != {}
             -> cfg.enableClaude || cfg.enableCopilot || cfg.enableKiro;
           message = "ai has shared config but no CLIs enabled. Set at least one of enableClaude, enableCopilot, enableKiro.";
         }
@@ -221,10 +224,9 @@ in {
     (mkIf cfg.enableCopilot {
       programs.copilot-cli = {
         skills = lib.mapAttrs (_: mkDefault) cfg.skills;
-        instructions =
-          lib.mapAttrs (name: instr:
-            mkDefault (mkCopilotInstruction name instr))
-          cfg.instructions;
+        instructions = lib.mapAttrs (name: instr:
+          mkDefault (mkCopilotInstruction name instr))
+        cfg.instructions;
         environmentVariables =
           lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
       };
@@ -233,10 +235,9 @@ in {
     # Kiro CLI
     (mkIf cfg.enableKiro {
       programs.kiro-cli = {
-        steering =
-          lib.mapAttrs (name: instr:
-            mkDefault (mkKiroSteering name instr))
-          cfg.instructions;
+        steering = lib.mapAttrs (name: instr:
+          mkDefault (mkKiroSteering name instr))
+        cfg.instructions;
         skills = lib.mapAttrs (_: mkDefault) cfg.skills;
         environmentVariables =
           lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
