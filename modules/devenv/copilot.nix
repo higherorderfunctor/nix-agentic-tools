@@ -5,8 +5,9 @@
 #   .github/copilot-instructions.md — repo-wide instructions (via files.*)
 #   .github/instructions/*.instructions.md — per-package scoped instructions
 #   .github/skills/{name} — skill directories (symlinked)
-#   .vscode/mcp.json — MCP server config
+#   .copilot/agents/{name}.md — agent files
 #   .copilot/config.json — settings
+#   .vscode/mcp.json — MCP server config
 {
   pkgs,
   lib,
@@ -22,6 +23,12 @@
 in {
   options.copilot = {
     enable = lib.mkEnableOption "GitHub Copilot integration";
+
+    agents = lib.mkOption {
+      type = lib.types.attrsOf lib.types.lines;
+      default = {};
+      description = "Agent .md files (written to .copilot/agents/{name}.md).";
+    };
 
     instructions = lib.mkOption {
       type = lib.types.attrsOf lib.types.lines;
@@ -80,8 +87,13 @@ in {
     files = let
       mcpServers = lib.mapAttrs (_: mcpCommon.transformMcpServer) cfg.mcpServers;
     in
-      # Instructions
+      # Agents
       lib.concatMapAttrs (name: content: {
+        ".copilot/agents/${name}.md".text = content;
+      })
+      cfg.agents
+      # Instructions
+      // lib.concatMapAttrs (name: content: {
         ".github/instructions/${name}.instructions.md".text = content;
       })
       cfg.instructions

@@ -19,7 +19,7 @@
   # Merge Nix-declared settings into existing mutable config.json on activation.
   # Preserves runtime-mutated keys (trusted_folders, etc.).
   settingsActivationScript = hmHelpers.mkSettingsActivationScript {
-    configDir = cfg.configDir;
+    inherit (cfg) configDir;
     configFile = "${cfg.configDir}/config.json";
     nixSettingsPath = jsonFormat.generate "copilot-cli-settings.json" filteredSettings;
     jq = "${pkgs.jq}/bin/jq";

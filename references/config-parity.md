@@ -15,19 +15,46 @@ configuration methods.
 ## Parity Matrix
 
 Each row is a configuration surface. All three methods should support
-it. Gaps are bugs.
+it. Gaps are bugs unless marked N/A with rationale.
 
-| Surface               | lib                           | HM                                             | devenv                                                      |
-| --------------------- | ----------------------------- | ---------------------------------------------- | ----------------------------------------------------------- |
-| Agents                | N/A                           | per-CLI `.agents`                              | `claude.code.agents`, `kiro.agents`                         |
-| Environment vars      | N/A                           | `ai.environmentVariables`, per-CLI             | `ai.environmentVariables`, per-CLI `.environmentVariables`  |
-| Hooks                 | N/A                           | N/A (per-CLI runtime)                          | `claude.code.hooks`, `kiro.hooks`, git-hooks                |
-| Instructions/steering | N/A                           | `ai.instructions`, per-CLI                     | `ai.instructions`, per-CLI                                  |
-| LSP servers           | N/A                           | `ai.lspServers`, per-CLI `.lspServers`         | `ai.lspServers`, `copilot.lspServers`, `kiro.lspServers`    |
-| MCP servers           | `mkStdioEntry`, `mkHttpEntry` | `services.mcp-servers`, `enableMcpIntegration` | `claude.code.mcpServers`, per-CLI `.mcpServers`             |
-| Permissions           | N/A                           | N/A (per-CLI runtime)                          | `claude.code.permissions`                                   |
-| Settings              | N/A                           | per-CLI `.settings` (typed with freeformType)  | `ai.settings`, `claude.code.*`, per-CLI `.settings` (typed) |
-| Skills                | N/A (consumer copies)         | `ai.skills`, per-CLI `.skills`                 | `ai.skills`, per-CLI `.skills`                              |
+| Surface               | lib                           | HM                                                     | devenv                                                 |
+| --------------------- | ----------------------------- | ------------------------------------------------------ | ------------------------------------------------------ |
+| Agents                | N/A                           | per-CLI `.agents` (copilot: md, kiro: json)            | per-CLI `.agents` (copilot: md, kiro: json)            |
+| Environment vars      | N/A                           | `ai.environmentVariables`, per-CLI `.environmentVars`  | `ai.environmentVariables`, per-CLI, shared `env`       |
+| Hooks                 | N/A                           | kiro `.hooks`; Claude upstream; copilot N/A (no hooks) | kiro `.hooks`; Claude upstream; copilot N/A (no hooks) |
+| Instructions/steering | N/A                           | `ai.instructions`, per-CLI                             | `ai.instructions`, per-CLI                             |
+| LSP servers           | N/A                           | `ai.lspServers`, copilot + kiro `.lspServers`          | `ai.lspServers`, copilot + kiro `.lspServers`          |
+| MCP servers           | `mkStdioEntry`, `mkHttpEntry` | per-CLI `.mcpServers` + `.enableMcpIntegration`        | per-CLI `.mcpServers` (typed submodule)                |
+| Permissions           | N/A                           | Claude upstream only; copilot/kiro N/A                 | Claude upstream only; copilot/kiro N/A                 |
+| Settings              | N/A                           | `ai.settings`, per-CLI `.settings` (typed + freeform)  | `ai.settings`, per-CLI `.settings` (typed + freeform)  |
+| Skills                | N/A                           | `ai.skills`, per-CLI `.skills`                         | `ai.skills`, per-CLI `.skills`                         |
+
+### Per-Surface Notes
+
+**Agents** -- Not fanned out from `ai.*` because each ecosystem uses
+different agent formats (Copilot: markdown, Kiro: JSON, Claude:
+upstream YAML). Configure per-CLI directly.
+
+**Environment vars** -- HM `ai.environmentVariables` fans to Copilot
+and Kiro (wrapper scripts). Claude Code's upstream HM module does not
+expose an `environmentVariables` option, so HM ai cannot fan to it.
+In devenv, `ai.environmentVariables` sets shared `env` (covers all
+processes including Claude) plus per-CLI options.
+
+**Hooks** -- Only Kiro has a hooks concept in our modules. Claude
+hooks are managed by the upstream `claude.code.hooks` option. Copilot
+CLI has no hooks support.
+
+**LSP servers** -- Claude Code does not have an LSP config option, so
+`ai.lspServers` fans to Copilot and Kiro only.
+
+**MCP servers** -- HM uses `enableMcpIntegration` to bridge
+`programs.mcp.servers` into each CLI. devenv uses typed submodules
+per CLI. The `ai.*` module does not have its own `mcpServers` to avoid
+double-injection.
+
+**Permissions** -- Only Claude Code has a permissions concept. Managed
+by the upstream module in both HM and devenv contexts.
 
 ### Settings Type Coverage
 
@@ -39,15 +66,15 @@ Typed options with `freeformType` fallback for unknown keys:
 | Copilot | `model`, `theme`                                                | `model`, `theme`                                                |
 | Kiro    | `chat.defaultModel`, `chat.enableThinking`, `telemetry.enabled` | `chat.defaultModel`, `chat.enableThinking`, `telemetry.enabled` |
 
-### Normalized Settings (devenv ai.settings)
+### Normalized Settings (ai.settings)
 
 The `ai.settings` submodule provides ecosystem-agnostic keys that fan
-out per CLI at `mkDefault` priority:
+out per CLI at `mkDefault` priority (both HM and devenv):
 
-| ai.settings key | Claude              | Copilot                  | Kiro                              |
-| --------------- | ------------------- | ------------------------ | --------------------------------- |
-| `model`         | `claude.code.model` | `copilot.settings.model` | `kiro.settings.chat.defaultModel` |
-| `telemetry`     | N/A                 | N/A                      | `kiro.settings.telemetry.enabled` |
+| ai.settings key | Claude                                        | Copilot                  | Kiro                              |
+| --------------- | --------------------------------------------- | ------------------------ | --------------------------------- |
+| `model`         | `programs.claude-code.settings.model` (if HM) | `copilot.settings.model` | `kiro.settings.chat.defaultModel` |
+| `telemetry`     | N/A (no upstream option)                      | N/A (no upstream option) | `kiro.settings.telemetry.enabled` |
 
 ## Audit Checklist (for repo-review)
 

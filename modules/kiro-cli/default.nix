@@ -19,7 +19,7 @@
   # Merge Nix-declared settings into existing mutable cli.json on activation.
   # Preserves runtime-mutated keys.
   settingsActivationScript = hmHelpers.mkSettingsActivationScript {
-    configDir = cfg.configDir;
+    inherit (cfg) configDir;
     configFile = "${cfg.configDir}/settings/cli.json";
     nixSettingsPath = jsonFormat.generate "kiro-cli-settings.json" filteredSettings;
     jq = "${pkgs.jq}/bin/jq";

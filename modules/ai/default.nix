@@ -105,6 +105,25 @@ in {
       default = {};
       description = "Shared environment variables for all enabled CLIs.";
     };
+
+    settings = mkOption {
+      type = types.submodule {
+        options = {
+          model = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = "Default model -- translated per ecosystem.";
+          };
+          telemetry = mkOption {
+            type = types.nullOr types.bool;
+            default = null;
+            description = "Enable/disable telemetry -- translated per ecosystem.";
+          };
+        };
+      };
+      default = {};
+      description = "Normalized settings translated to ecosystem-specific keys.";
+    };
   };
 
   config = mkIf cfg.enable (mkMerge [
@@ -140,47 +159,64 @@ in {
 
     # Claude Code — uses home.file for both rules and skills to avoid
     # depending on the upstream programs.claude-code module being imported.
-    (mkIf cfg.enableClaude {
-      home.file =
-        # Instructions as Claude rules with frontmatter
-        (concatMapAttrs (name: instr: {
-            ".claude/rules/${name}.md" = {
-              text = mkDefault (mkClaudeRule name instr);
-            };
-          })
-          cfg.instructions)
-        # Skills as directory symlinks
-        // (concatMapAttrs (name: path: {
-            ".claude/skills/${name}" = {
-              source = mkDefault path;
-            };
-          })
-          cfg.skills);
-    })
+    (mkIf cfg.enableClaude (mkMerge [
+      {
+        home.file =
+          # Instructions as Claude rules with frontmatter
+          (concatMapAttrs (name: instr: {
+              ".claude/rules/${name}.md" = {
+                text = mkDefault (mkClaudeRule name instr);
+              };
+            })
+            cfg.instructions)
+          # Skills as directory symlinks
+          // (concatMapAttrs (name: path: {
+              ".claude/skills/${name}" = {
+                source = mkDefault path;
+              };
+            })
+            cfg.skills);
+      }
+      # Normalized model setting (only if upstream module is available)
+      (mkIf (cfg.settings.model != null && hasModule ["programs" "claude-code" "settings"]) {
+        programs.claude-code.settings.model = mkDefault cfg.settings.model;
+      })
+    ]))
 
     # Copilot CLI
     (mkIf cfg.enableCopilot {
       programs.copilot-cli = {
-        skills = lib.mapAttrs (_: mkDefault) cfg.skills;
+        environmentVariables =
+          lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
         instructions = lib.mapAttrs (name: instr:
           mkDefault (mkCopilotInstruction name instr))
         cfg.instructions;
         lspServers = lib.mapAttrs (_: mkDefault) cfg.lspServers;
-        environmentVariables =
-          lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
+        settings = lib.optionalAttrs (cfg.settings.model != null) {
+          model = mkDefault cfg.settings.model;
+        };
+        skills = lib.mapAttrs (_: mkDefault) cfg.skills;
       };
     })
 
     # Kiro CLI
     (mkIf cfg.enableKiro {
       programs.kiro-cli = {
+        environmentVariables =
+          lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
+        lspServers = lib.mapAttrs (_: mkDefault) cfg.lspServers;
+        settings = mkMerge [
+          (lib.optionalAttrs (cfg.settings.model != null) {
+            chat.defaultModel = mkDefault cfg.settings.model;
+          })
+          (lib.optionalAttrs (cfg.settings.telemetry != null) {
+            telemetry.enabled = mkDefault cfg.settings.telemetry;
+          })
+        ];
+        skills = lib.mapAttrs (_: mkDefault) cfg.skills;
         steering = lib.mapAttrs (name: instr:
           mkDefault (mkKiroSteering name instr))
         cfg.instructions;
-        skills = lib.mapAttrs (_: mkDefault) cfg.skills;
-        lspServers = lib.mapAttrs (_: mkDefault) cfg.lspServers;
-        environmentVariables =
-          lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
       };
     })
   ]);

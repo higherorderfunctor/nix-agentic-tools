@@ -54,6 +54,16 @@
               # Stub programs.claude-code (upstream HM module, not in this repo)
               programs.claude-code = {
                 enable = lib.mkEnableOption "claude-code";
+                settings = lib.mkOption {
+                  type = lib.types.submodule {
+                    freeformType = (pkgs.formats.json {}).type;
+                    options.model = lib.mkOption {
+                      type = lib.types.nullOr lib.types.str;
+                      default = null;
+                    };
+                  };
+                  default = {};
+                };
                 skills = lib.mkOption {
                   type = lib.types.attrsOf lib.types.anything;
                   default = {};
@@ -121,6 +131,27 @@
       };
     }
   ];
+
+  # Test: ai module settings fanout to all three ecosystems
+  aiWithSettings = evalModule [
+    self.homeManagerModules.default
+    {
+      config = {
+        ai = {
+          enable = true;
+          enableClaude = true;
+          enableCopilot = true;
+          enableKiro = true;
+          settings = {
+            model = "claude-sonnet-4";
+            telemetry = false;
+          };
+        };
+        programs.copilot-cli.enable = true;
+        programs.kiro-cli.enable = true;
+      };
+    }
+  ];
 in {
   copilot-cli-eval = pkgs.runCommand "copilot-cli-eval" {} ''
     echo "copilot-cli module evaluation: ${
@@ -167,6 +198,14 @@ in {
       if aiWithClis.config.ai.enable
       then "enabled"
       else "disabled"
+    }" > $out
+  '';
+
+  ai-with-settings-eval = pkgs.runCommand "ai-with-settings-eval" {} ''
+    echo "ai settings fanout: ${
+      if aiWithSettings.config.programs.copilot-cli.settings.model == "claude-sonnet-4"
+      then "model propagated"
+      else "model missing"
     }" > $out
   '';
 }
