@@ -163,9 +163,8 @@ in {
 
     mcpServers = {
       devenv = {
-        type = "stdio";
-        command = "devenv";
-        args = ["mcp"];
+        type = "http";
+        url = "https://mcp.devenv.sh/mcp";
       };
     };
   };
