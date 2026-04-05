@@ -21,6 +21,33 @@ Import home-manager modules:
 imports = [inputs.agentic-tools.homeManagerModules.default];
 ```
 
+## Quick Start (Non-Nix)
+
+Copy the skills you need into your project:
+
+```bash
+# Claude Code
+cp -r skills/stack-* .claude/skills/
+
+# Kiro
+cp -r skills/stack-* .kiro/skills/
+
+# GitHub Copilot
+cp -r skills/stack-* .github/skills/
+```
+
+Each skill is self-contained with a `SKILL.md` and bundled reference docs.
+
+## Skills
+
+Stacked commit workflow skills using git-branchless, git-absorb, and git-revise.
+
+<!-- dprint-ignore -->
+| Skill | Description |
+|-------|-------------|
+| `/stack-fix` | Absorb fixes into correct stack commits |
+| `/stack-split` | Split a large commit into reviewable atomic commits |
+
 ## Home-Manager Modules
 
 Declarative configuration for AI coding CLIs. All modules are no-ops when

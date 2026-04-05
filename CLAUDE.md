@@ -17,6 +17,8 @@ nix fmt                       # Format all files (dprint: Nix + markdown)
 lib/               Shared library: fragments
 devshell/          Standalone devshell modules (mkAgenticShell)
 modules/           Home-manager modules
+references/        Canonical tool reference docs
+skills/            Consumer-facing stacked workflow skills
 fragments/         Instruction generation sources (common/ + packages/)
 ```
 
