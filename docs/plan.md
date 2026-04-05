@@ -97,6 +97,15 @@ hexagons with colored nodes). Dark mode (coal theme) default.
 
 ---
 
+## Next Session
+
+- [ ] Review docs site (`devenv up docs` — opens browser automatically)
+- [ ] Wire agentic-tools into nixos-config: HM global + devshell per-repo
+- [ ] Review docs accuracy against actual consumer experience
+- [ ] Fix any doc gaps found during integration testing
+
+---
+
 ## HITL (requires nixos-config or interactive testing)
 
 ### Consumer Integration

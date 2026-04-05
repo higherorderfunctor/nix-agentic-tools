@@ -276,7 +276,7 @@ in {
   };
 
   # ── Processes (`devenv up`) ────────────────────────────────────────────
-  processes.docs.exec = "${pkgs.mdbook}/bin/mdbook serve docs/";
+  processes.docs.exec = "${pkgs.mdbook}/bin/mdbook serve docs/ --open";
 
   # ── Shell Init ──────────────────────────────────────────────────────────
   # Clean stale skill symlinks pointing to old Nix store paths.

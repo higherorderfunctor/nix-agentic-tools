@@ -1,4 +1,9 @@
+<div align="center">
+<img src="assets/logo.png" alt="agentic-tools" width="128">
+
 # agentic-tools
+
+</div>
 
 Stacked commit workflows, MCP servers, and declarative configuration for
 AI coding CLIs. Works without Nix; Nix unlocks overlays, home-manager
