@@ -103,18 +103,20 @@
   aiWithClis = evalModule [
     self.homeManagerModules.default
     {
-      config.ai = {
-        enable = true;
-        enableCopilot = true;
-        enableKiro = true;
-        skills = {};
-        instructions.test-rule = {
-          text = "Test instruction";
-          description = "Test";
+      config = {
+        ai = {
+          enable = true;
+          enableCopilot = true;
+          enableKiro = true;
+          skills = {};
+          instructions.test-rule = {
+            text = "Test instruction";
+            description = "Test";
+          };
         };
+        programs.copilot-cli.enable = true;
+        programs.kiro-cli.enable = true;
       };
-      config.programs.copilot-cli.enable = true;
-      config.programs.kiro-cli.enable = true;
     }
   ];
 in {

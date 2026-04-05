@@ -13,7 +13,7 @@ the final form. Do these first.
 ### Consumer Integration Blockers
 
 - [ ] Verify `overlays.default` composes cleanly when consumed by nixos-config
-  (ai-clis + git-tools + mcp-servers — test with `inputs.agentic-tools.overlays.default`)
+      (ai-clis + git-tools + mcp-servers — test with `inputs.agentic-tools.overlays.default`)
 - [ ] Verify all 8 interface contracts from nixos-config still hold:
   - `pkgs.nix-mcp-servers.*` namespace
   - `pkgs.git-absorb`, `pkgs.git-branchless`, `pkgs.git-revise` top-level
@@ -24,7 +24,7 @@ the final form. Do these first.
   - `stacked-workflows.integrations.*.enable`
   - `services.mcp-servers.servers.*.enable`
 - [ ] Migrate nixos-config AI config to use `ai.*` unified module
-  (replace 3x duplicated MCP/skills/instructions across Claude/Copilot/Kiro)
+      (replace 3x duplicated MCP/skills/instructions across Claude/Copilot/Kiro)
 - [ ] Remove vendored copilot-cli, kiro-cli, kiro-gateway overlays from nixos-config
 - [ ] Remove `inputs.nix-mcp-servers` + `inputs.stacked-workflow-skills` from nixos-config
 - [ ] Add `inputs.agentic-tools` to nixos-config with follows (nixpkgs, nvfetcher, rust-overlay)
@@ -33,39 +33,23 @@ the final form. Do these first.
 ### HM Module Gaps
 
 - [ ] Kiro openmemory MCP: migrate from raw npx to mkStdioEntry with
-  typed settings (currently hardcoded in nixos-config kiro/default.nix)
+      typed settings (currently hardcoded in nixos-config kiro/default.nix)
 - [ ] Verify copilot-cli module activation merge works (settings deep-merge
-  with mutable config.json)
+      with mutable config.json)
 - [ ] Verify kiro-cli module steering file generation (YAML frontmatter)
 - [ ] Verify stacked-workflows integrations wire skills to all 3 ecosystems
-
-### packages/default.nix
-
-- [ ] Clean up overlay composition stub (commented out code, Phase 3 leftover)
-
-### Fragments
-
-- [ ] MCP server package-specific fragments (fragments/packages/mcp-servers/)
-  — needed for per-package scoped instruction files
-- [ ] AI CLI package fragments (fragments/packages/ai-clis/) — instructions
-  for working on AI CLI packages
-- [ ] Stacked-workflows dev profile fragments (commented out in fragments.nix)
-  — build-commands, development, operations, etc.
 
 ### devenv Polish
 
 - [ ] CUDA config — verify packages build with cudaSupport on x86_64-linux
 - [ ] SecretSpec — declarative secrets for MCP credentials (GitHub, Kagi, etc.)
-  so `devenv shell` can wire cred-requiring MCP servers
+      so `devenv shell` can wire cred-requiring MCP servers
 - [ ] devenv MCP segfault — file upstream issue (Boehm GC 8.2.12 crash
-  during nixpkgs enumeration); using mcp.devenv.sh workaround
+      during nixpkgs enumeration); using mcp.devenv.sh workaround
 
 ### Tooling Wiring
 
-- [ ] Wire linters to devenv shell (deadnix, statix in devShell packages)
-  with corresponding instruction file telling AI to run them
 - [ ] Wire LSPs to AI CLI modules (nixd, marksman, taplo via lspServers)
-- [ ] Add cspell to devShell with project dictionary wired
 
 ---
 
@@ -105,7 +89,7 @@ implementation is validated via field test.
 ### Documentation
 
 - [ ] CONTRIBUTING.md — dev setup, code style, commit convention, testing,
-  skill development, fragment pipeline, stack workflow
+      skill development, fragment pipeline, stack workflow
 - [ ] Consumer migration guide — before/after flake input examples
 - [ ] ADRs — monorepo structure, fragment pipeline, devshell, devenv adoption
 - [ ] README: overlay usage examples for consumer flakes
@@ -140,11 +124,14 @@ implementation is validated via field test.
 - ✓ ai — unified config across Claude/Copilot/Kiro
 - ✓ devenv standalone CLI mode
 - ✓ File materialization from fragment pipeline
-- ✓ claude.code.* (settings, permissions, MCP servers)
+- ✓ claude.code.\* (settings, permissions, MCP servers)
 - ✓ Custom Kiro + Copilot devenv modules
 - ✓ .envrc for direnv auto-activation
 - ✓ Module eval checks — all modules
 - ✓ Devshell eval checks — minimal, mcp, skills
 - ✓ apps/generate — fragment → instruction file generation
+- ✓ Linter + cspell wiring — deadnix, statix, cspell in devShell packages
+- ✓ packages/default.nix — removed scaffold-era stub (composition lives in flake.nix)
 - ✓ README — feature-forward, all sections
 - ✓ Common + monorepo + SWS routing-table fragments
+- ✓ Fragment profiles — ai-clis, mcp-servers, stacked-workflows dev profiles wired

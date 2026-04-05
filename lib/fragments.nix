@@ -27,6 +27,20 @@
   # "common" lists reference fragments/common/*.md.
   # "package" lists reference fragments/packages/<pkg>/*.md.
   packageProfiles = {
+    ai-clis = {
+      dev = {
+        common = [
+          "coding-standards"
+          "commit-convention"
+          "tooling-preference"
+          "validation"
+        ];
+        package = [
+          "packaging-guide"
+        ];
+      };
+    };
+
     monorepo = {
       dev = {
         common = [
@@ -49,8 +63,9 @@
           "tooling-preference"
           "validation"
         ];
-        # Package-specific fragments added in Phase 3
-        package = [];
+        package = [
+          "overlay-guide"
+        ];
       };
     };
 
@@ -62,12 +77,18 @@
           "routing-table"
         ];
       };
-      # Dev profile — populated when remaining fragments migrate
-      # dev = {
-      #   common = ["coding-standards" "commit-convention" "tooling-preference" "validation"];
-      #   package = ["build-commands" "continuous-improvement" "dev-skills" "development"
-      #              "flake-structure" "operations" "project-overview" "routing-table"];
-      # };
+      dev = {
+        common = [
+          "coding-standards"
+          "commit-convention"
+          "tooling-preference"
+          "validation"
+        ];
+        package = [
+          "development"
+          "routing-table"
+        ];
+      };
     };
   };
 
@@ -75,6 +96,7 @@
 
   # Maps package names to the file paths they govern (for ecosystem frontmatter).
   packagePaths = {
+    ai-clis = ''"modules/copilot-cli/**,modules/kiro-cli/**,packages/ai-clis/**"'';
     mcp-servers = ''"modules/mcp-servers/**,packages/mcp-servers/**"'';
     monorepo = null; # root — no path restriction
     stacked-workflows = ''"skills/**,references/**,fragments/packages/stacked-workflows/**"'';

@@ -1,8 +1,6 @@
 {
   pkgs,
   lib,
-  config,
-  inputs,
   ...
 }: let
   fragments = import ./lib/fragments.nix {inherit lib;};
@@ -70,7 +68,10 @@ in {
 
   # ── Packages ──────────────────────────────────────────────────────────
   packages = with pkgs; [
+    cspell
+    deadnix
     nvfetcher
+    statix
   ];
 
   # ── File Generation (from fragments) ─────────────────────────────────
