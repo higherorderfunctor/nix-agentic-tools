@@ -179,7 +179,8 @@ in {
       };
       serena = {
         type = "stdio";
-        command = "${serena}/bin/serena-mcp-server";
+        command = "${serena}/bin/serena";
+        args = ["start-mcp-server"];
       };
     };
   };
@@ -194,7 +195,8 @@ in {
       };
       serena = {
         type = "stdio";
-        command = "${serena}/bin/serena-mcp-server";
+        command = "${serena}/bin/serena";
+        args = ["start-mcp-server"];
       };
     };
   };
@@ -256,7 +258,8 @@ in {
       };
       serena = {
         type = "stdio";
-        command = "${serena}/bin/serena-mcp-server";
+        command = "${serena}/bin/serena";
+        args = ["start-mcp-server"];
       };
       devenv = {
         type = "http";
