@@ -54,9 +54,14 @@
 
     lib = let
       devshellLib = import ./lib/devshell.nix {inherit lib;};
+      mcpLib = import ./lib/mcp.nix {inherit lib;};
     in {
       inherit fragments;
       inherit (devshellLib) mkAgenticShell;
+      inherit (mcpLib) loadServer mkStdioEntry mkHttpEntry mkStdioConfig;
+      mkMcpConfig = entries: {mcpServers = entries;};
+      mapTools = f: lib.concatLists (lib.mapAttrsToList (server: tools: map (tool: f server tool) tools);
+      externalServers = { aws-mcp = { type = "http"; url = "https://knowledge-mcp.global.api.aws"; }; };
     };
 
     apps = forAllSystems (system: let
