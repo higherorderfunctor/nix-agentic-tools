@@ -6,7 +6,17 @@
       "path": ".cspell/project-terms.txt"
     }
   ],
-  "dictionaries": ["project-terms"],
+  "dictionaries": [
+    "bash",
+    "fullstack",
+    "git",
+    "node",
+    "npm",
+    "project-terms",
+    "python",
+    "shellscript",
+    "typescript"
+  ],
   "ignorePaths": [".direnv", ".git", ".nvfetcher", "locks", "result"],
   "language": "en",
   "version": "0.2"
