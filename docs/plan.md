@@ -19,20 +19,21 @@
 
 ### Composable Fragment Library
 
-Refactor the static fragment pipeline into a composable library.
-Design in memory: `project_fragment_system.md`.
+Infrastructure landed. Design in memory: `project_fragment_system.md`.
 
-- [ ] Define fragment schema (`lib/fragments-schema.nix`) — typed attrset
-      with text, description, paths, scope, kind, level, priority
-- [ ] Migrate `fragments/*.md` to Nix data (`lib/fragments-data.nix`) —
-      wrap existing markdown in typed attrsets, keep files as backing store
-- [ ] Implement `lib.fragments.compose` — topological sort, dedup, concat
+- [x] `lib.fragments.compose` — priority sort, dedup, concat with optional
+      metadata overrides (description, paths, priority)
+- [x] `mkFragment` constructor — canonical typed fragment attrset
+- [x] `readCommonFragment` / `readPackageFragment` — typed wrappers
+- [x] `packages/fragments/` — overlay exposing `pkgs.agentic-fragments`
+      with common fragments + compose + mkFragment
+- [x] Frontmatter generators exposed in `flake.nix` lib
+- [x] Self-cook: devenv.nix uses compose + mkEcosystemFile
+- [x] Self-cook: apps.generate uses compose + mkEcosystemFile
+- [x] stacked-workflows HM module uses compose + aiCommon frontmatter
 - [ ] Create preset compositions (agentic-tools-dev, minimal-coding, etc.)
-- [ ] Expose `lib.fragments.*` in `flake.nix` for consumers
-- [ ] Expose frontmatter generators (`mkClaudeRule`, `mkKiroSteering`,
-      `mkCopilotInstruction`) in `flake.nix` lib
-- [ ] Self-cook: refactor devenv.nix + apps.generate to use fragment library
-- [ ] Add module fragment exposure interface (MCP servers, stacked-workflows)
+- [ ] Module fragment exposure (MCP servers contributing own fragments)
+- [ ] Fragment content expansion (code review, security, testing presets)
 
 ### README & Documentation
 
@@ -44,6 +45,9 @@ Single rich README with collapsible sections (nixvim pattern).
 - [ ] Configuration section: collapsible per-module (HM + devenv + lib)
 - [ ] Consumer guide: flake input, overlay, HM integration, devenv example
 - [ ] Config parity matrix, architecture tree, fragment pipeline explanation
+- [ ] `ai.*` mapping table — how each `ai.*` option maps to underlying
+      ecosystem primitives (claude.code._, copilot._, kiro.\*), known gaps,
+      missing support, translation quirks (e.g. model name differences)
 
 ### New MCP Server Packages
 
@@ -110,9 +114,17 @@ Single rich README with collapsible sections (nixvim pattern).
 
 ## Backlog
 
+- [ ] Rename repo to `nix-agentic-tools` — too Nix-heavy for `agentic-tools`;
+      skills still publishable for general consumption but overlays, HM modules,
+      devenv modules are Nix-specific. Update GitHub repo name, flake description,
+      README, all internal references, cachix name
+- [ ] ChatGPT Codex CLI — package + HM/devenv module, same pattern as
+      copilot-cli/kiro-cli; add to `ai.*` unified fanout as 4th ecosystem
 - [ ] cclsp — Claude Code LSP integration (passthru.withAdapters pattern)
 - [ ] filesystem-mcp, atlassian-mcp, gitlab-mcp, slack-mcp
 - [ ] flake-parts — modular per-package flake outputs
+- [ ] HM/devenv modules as packages — research NixOS module packaging
+      patterns; would allow `pkgs.agentic-modules.ai` etc. for FP composition
 - [ ] MCP processes — no-cred servers for `devenv up`
 - [ ] Ollama HM module
 - [ ] openmemory-mcp typed settings
