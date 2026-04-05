@@ -44,8 +44,8 @@ the final form. Do these first.
 - [ ] CUDA config — verify packages build with cudaSupport on x86_64-linux
 - [ ] SecretSpec — declarative secrets for MCP credentials (GitHub, Kagi, etc.)
       so `devenv shell` can wire cred-requiring MCP servers
-- [ ] devenv MCP segfault — file upstream issue (Boehm GC 8.2.12 crash
-      during nixpkgs enumeration); using mcp.devenv.sh workaround
+- [ ] devenv MCP segfault — Boehm GC 8.2.12 crash during nixpkgs
+      enumeration; using mcp.devenv.sh workaround; upstream aware
 
 ### Tooling Wiring
 
