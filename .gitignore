@@ -1,0 +1,4 @@
+# Build artifacts
+result
+result-*
+.direnv/
