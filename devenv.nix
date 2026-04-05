@@ -28,60 +28,61 @@
   mcpLib = import ./lib/mcp.nix {inherit lib;};
   inherit (mcpLib) mkPackageEntry;
 
-  # Build AGENTS.md content from all packages
+  # Build instruction content from composed fragments
   devPackages = fragments.packagesWithProfile "dev";
   nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") devPackages;
-  agentsBase = fragments.mkInstructions {
-    package = "monorepo";
-    profile = "dev";
-    ecosystem = "agentsmd";
-  };
-  agentsPackageContent =
-    builtins.concatStringsSep "\n"
-    (lib.mapAttrsToList
-      (pkg: _:
-        fragments.mkPackageContent {
-          package = pkg;
-          profile = "dev";
-        })
-      nonRootPackages);
-  agentsContent =
-    agentsBase
-    + lib.optionalString (agentsPackageContent != "") ("\n" + agentsPackageContent);
+
+  # Helper: compose fragments for a package profile
+  mkComposed = package: profile: let
+    prof = fragments.packageProfiles.${package}.${profile};
+  in
+    fragments.compose {
+      fragments =
+        map fragments.readCommonFragment prof.common
+        ++ map (fragments.readPackageFragment package) prof.package;
+    };
+
+  # AGENTS.md content (agentsmd ecosystem = no frontmatter)
+  agentsContent = let
+    rootComposed = mkComposed "monorepo" "dev";
+    packageContents = lib.mapAttrsToList (pkg: _: let
+      prof = fragments.packageProfiles.${pkg}."dev";
+      pkgOnly = fragments.compose {
+        fragments = map (fragments.readPackageFragment pkg) prof.package;
+      };
+    in
+      pkgOnly.text)
+    nonRootPackages;
+  in
+    rootComposed.text
+    + lib.optionalString (packageContents != [])
+    ("\n" + builtins.concatStringsSep "\n" packageContents);
 
   # Helper: generate files for all ecosystems × packages
   mkEcosystemFiles = let
-    mkFiles = package: {
-      claude = fragments.mkInstructions {
-        inherit package;
-        profile = "dev";
-        ecosystem = "claude";
-      };
-      kiro = fragments.mkInstructions {
-        inherit package;
-        profile = "dev";
-        ecosystem = "kiro";
-      };
-      copilot = fragments.mkInstructions {
-        inherit package;
-        profile = "dev";
-        ecosystem = "copilot";
-      };
-    };
+    # Generate per-ecosystem file from a composed fragment
+    mkEcosystemFile = ecosystem: package: composed: let
+      fm = fragments.ecosystems.${ecosystem}.mkFrontmatter package;
+      fmStr =
+        if fm == null
+        then ""
+        else fragments.mkFrontmatter fm + "\n";
+    in
+      fmStr + composed.text;
 
-    root = mkFiles "monorepo";
+    rootComposed = mkComposed "monorepo" "dev";
   in
     {
-      ".claude/rules/common.md".text = root.claude;
-      ".kiro/steering/common.md".text = root.kiro;
-      ".github/copilot-instructions.md".text = root.copilot;
+      ".claude/rules/common.md".text = mkEcosystemFile "claude" "monorepo" rootComposed;
+      ".kiro/steering/common.md".text = mkEcosystemFile "kiro" "monorepo" rootComposed;
+      ".github/copilot-instructions.md".text = mkEcosystemFile "copilot" "monorepo" rootComposed;
     }
     // (lib.concatMapAttrs (pkg: _: let
-        f = mkFiles pkg;
+        composed = mkComposed pkg "dev";
       in {
-        ".claude/rules/${pkg}.md".text = f.claude;
-        ".kiro/steering/${pkg}.md".text = f.kiro;
-        ".github/instructions/${pkg}.instructions.md".text = f.copilot;
+        ".claude/rules/${pkg}.md".text = mkEcosystemFile "claude" pkg composed;
+        ".kiro/steering/${pkg}.md".text = mkEcosystemFile "kiro" pkg composed;
+        ".github/instructions/${pkg}.instructions.md".text = mkEcosystemFile "copilot" pkg composed;
       })
       nonRootPackages);
 in {
