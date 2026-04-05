@@ -38,8 +38,6 @@ Wire this flake as input to nixos-config. Validate the final form.
 ### Remaining Cleanup
 
 - [ ] CUDA — verify packages build with cudaSupport on x86_64-linux (HITL)
-- [ ] cspell: load built-in dictionaries to reduce project-terms.txt
-- [ ] Config parity gap audit against actual implementations
 
 ---
 
