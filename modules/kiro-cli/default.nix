@@ -14,12 +14,14 @@
   jsonFormat = pkgs.formats.json {};
   hmHelpers = import ../../lib/hm-helpers.nix {inherit lib;};
 
+  filteredSettings = hmHelpers.filterNulls cfg.settings;
+
   # Merge Nix-declared settings into existing mutable cli.json on activation.
   # Preserves runtime-mutated keys.
   settingsActivationScript = hmHelpers.mkSettingsActivationScript {
     configDir = cfg.configDir;
     configFile = "${cfg.configDir}/settings/cli.json";
-    nixSettingsPath = jsonFormat.generate "kiro-cli-settings.json" cfg.settings;
+    nixSettingsPath = jsonFormat.generate "kiro-cli-settings.json" filteredSettings;
     jq = "${pkgs.jq}/bin/jq";
   };
 
@@ -59,17 +61,57 @@ in {
 
     # --- Settings (activation merge into settings/cli.json) ---
     settings = lib.mkOption {
-      inherit (jsonFormat) type;
+      type = lib.types.submodule {
+        freeformType = jsonFormat.type;
+        options = {
+          chat = lib.mkOption {
+            type = lib.types.submodule {
+              freeformType = jsonFormat.type;
+              options = {
+                defaultModel = lib.mkOption {
+                  type = lib.types.nullOr lib.types.str;
+                  default = null;
+                  description = "Default chat model.";
+                };
+                enableThinking = lib.mkOption {
+                  type = lib.types.nullOr lib.types.bool;
+                  default = null;
+                  description = "Enable thinking/reasoning mode.";
+                };
+              };
+            };
+            default = {};
+            description = "Chat-related settings.";
+          };
+          telemetry = lib.mkOption {
+            type = lib.types.submodule {
+              freeformType = jsonFormat.type;
+              options = {
+                enabled = lib.mkOption {
+                  type = lib.types.nullOr lib.types.bool;
+                  default = null;
+                  description = "Enable telemetry reporting.";
+                };
+              };
+            };
+            default = {};
+            description = "Telemetry settings.";
+          };
+        };
+      };
       default = {};
       description = ''
         JSON settings merged into ~/.kiro/settings/cli.json on activation.
         Runtime-mutated keys are preserved.
+        Known keys are typed; unknown keys are accepted via freeformType.
       '';
       example = lib.literalExpression ''
         {
-          "chat.defaultModel" = "claude-sonnet-4";
-          "chat.enableThinking" = true;
-          "telemetry.enabled" = false;
+          chat = {
+            defaultModel = "claude-sonnet-4";
+            enableThinking = true;
+          };
+          telemetry.enabled = false;
         }
       '';
     };
@@ -152,7 +194,7 @@ in {
 
     home = {
       activation.kiroCliSettings =
-        lib.mkIf (cfg.settings != {})
+        lib.mkIf (filteredSettings != {})
         (lib.hm.dag.entryAfter ["writeBoundary"] settingsActivationScript);
 
       file =

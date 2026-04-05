@@ -13,7 +13,11 @@
   ...
 }: let
   cfg = config.kiro;
+  jsonFormat = pkgs.formats.json {};
+  helpers = import ../../lib/hm-helpers.nix {inherit lib;};
   mcpCommon = import ./mcp-common.nix {inherit lib;};
+
+  filteredSettings = helpers.filterNulls cfg.settings;
 
   # Build MCP config
   mcpServers = lib.mapAttrs (_: mcpCommon.transformMcpServer) cfg.mcpServers;
@@ -26,6 +30,30 @@ in {
   options.kiro = {
     enable = lib.mkEnableOption "Kiro CLI integration";
 
+    agents = lib.mkOption {
+      type = lib.types.attrsOf lib.types.lines;
+      default = {};
+      description = "Agent JSON definitions (written to .kiro/agents/{name}.json).";
+    };
+
+    environmentVariables = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = {};
+      description = "Environment variables for Kiro (merged into devenv env).";
+    };
+
+    hooks = lib.mkOption {
+      type = lib.types.attrsOf lib.types.lines;
+      default = {};
+      description = "Hook JSON definitions (written to .kiro/hooks/{name}.json).";
+    };
+
+    lspServers = lib.mkOption {
+      type = lib.types.attrsOf jsonFormat.type;
+      default = {};
+      description = "LSP server definitions (written to .kiro/settings/lsp.json).";
+    };
+
     mcpServers = lib.mkOption {
       type = mcpCommon.mcpServerType;
       default = {};
@@ -33,7 +61,44 @@ in {
     };
 
     settings = lib.mkOption {
-      type = lib.types.attrs;
+      type = lib.types.submodule {
+        freeformType = jsonFormat.type;
+        options = {
+          chat = lib.mkOption {
+            type = lib.types.submodule {
+              freeformType = jsonFormat.type;
+              options = {
+                defaultModel = lib.mkOption {
+                  type = lib.types.nullOr lib.types.str;
+                  default = null;
+                  description = "Default chat model.";
+                };
+                enableThinking = lib.mkOption {
+                  type = lib.types.nullOr lib.types.bool;
+                  default = null;
+                  description = "Enable thinking/reasoning mode.";
+                };
+              };
+            };
+            default = {};
+            description = "Chat-related settings.";
+          };
+          telemetry = lib.mkOption {
+            type = lib.types.submodule {
+              freeformType = jsonFormat.type;
+              options = {
+                enabled = lib.mkOption {
+                  type = lib.types.nullOr lib.types.bool;
+                  default = null;
+                  description = "Enable telemetry reporting.";
+                };
+              };
+            };
+            default = {};
+            description = "Telemetry settings.";
+          };
+        };
+      };
       default = {};
       description = "Kiro CLI settings (written to .kiro/settings/cli.json).";
     };
@@ -52,14 +117,30 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
+    env = lib.mapAttrs (_: lib.mkDefault) cfg.environmentVariables;
+
     files =
+      # Agents
+      lib.concatMapAttrs (name: content: {
+        ".kiro/agents/${name}.json".text = content;
+      })
+      cfg.agents
+      # Hooks
+      // lib.concatMapAttrs (name: content: {
+        ".kiro/hooks/${name}.json".text = content;
+      })
+      cfg.hooks
+      # LSP servers
+      // lib.optionalAttrs (cfg.lspServers != {}) {
+        ".kiro/settings/lsp.json".json = cfg.lspServers;
+      }
       # MCP servers
-      lib.optionalAttrs (mcpContent != null) {
+      // lib.optionalAttrs (mcpContent != null) {
         ".kiro/settings/mcp.json".json = mcpContent;
       }
       # Settings
-      // lib.optionalAttrs (cfg.settings != {}) {
-        ".kiro/settings/cli.json".json = cfg.settings;
+      // lib.optionalAttrs (filteredSettings != {}) {
+        ".kiro/settings/cli.json".json = filteredSettings;
       }
       # Skills (directory symlinks)
       // lib.concatMapAttrs (name: path: {

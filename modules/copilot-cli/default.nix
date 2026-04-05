@@ -14,12 +14,14 @@
   jsonFormat = pkgs.formats.json {};
   hmHelpers = import ../../lib/hm-helpers.nix {inherit lib;};
 
+  filteredSettings = hmHelpers.filterNulls cfg.settings;
+
   # Merge Nix-declared settings into existing mutable config.json on activation.
   # Preserves runtime-mutated keys (trusted_folders, etc.).
   settingsActivationScript = hmHelpers.mkSettingsActivationScript {
     configDir = cfg.configDir;
     configFile = "${cfg.configDir}/config.json";
-    nixSettingsPath = jsonFormat.generate "copilot-cli-settings.json" cfg.settings;
+    nixSettingsPath = jsonFormat.generate "copilot-cli-settings.json" filteredSettings;
     jq = "${pkgs.jq}/bin/jq";
   };
 
@@ -58,11 +60,26 @@ in {
 
     # --- Settings (activation merge into config.json) ---
     settings = lib.mkOption {
-      inherit (jsonFormat) type;
+      type = lib.types.submodule {
+        freeformType = jsonFormat.type;
+        options = {
+          model = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            description = "Default model for Copilot CLI.";
+          };
+          theme = lib.mkOption {
+            type = lib.types.nullOr (lib.types.enum ["dark" "light" "auto"]);
+            default = null;
+            description = "Color theme.";
+          };
+        };
+      };
       default = {};
       description = ''
         JSON settings merged into ~/.copilot/config.json on activation.
         Runtime-mutated keys (trusted_folders, etc.) are preserved.
+        Known keys are typed; unknown keys are accepted via freeformType.
       '';
       example = lib.literalExpression ''
         {
@@ -140,7 +157,7 @@ in {
 
     home = {
       activation.copilotCliSettings =
-        lib.mkIf (cfg.settings != {})
+        lib.mkIf (filteredSettings != {})
         (lib.hm.dag.entryAfter ["writeBoundary"] settingsActivationScript);
 
       file =

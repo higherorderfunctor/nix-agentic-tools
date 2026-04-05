@@ -14,7 +14,11 @@
   ...
 }: let
   cfg = config.copilot;
+  jsonFormat = pkgs.formats.json {};
+  helpers = import ../../lib/hm-helpers.nix {inherit lib;};
   mcpCommon = import ./mcp-common.nix {inherit lib;};
+
+  filteredSettings = helpers.filterNulls cfg.settings;
 in {
   options.copilot = {
     enable = lib.mkEnableOption "GitHub Copilot integration";
@@ -25,12 +29,16 @@ in {
       description = "Instruction files for Copilot (.github/instructions/).";
     };
 
-    # TODO: lspServers — unclear what format Copilot uses in devenv context.
-    # Placeholder option; config block does not generate files yet.
-    lspServers = lib.mkOption {
-      type = lib.types.attrs;
+    environmentVariables = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
       default = {};
-      description = "LSP server config (written to .vscode/settings.json or similar).";
+      description = "Environment variables for Copilot (merged into devenv env).";
+    };
+
+    lspServers = lib.mkOption {
+      type = lib.types.attrsOf jsonFormat.type;
+      default = {};
+      description = "LSP server definitions (written to .copilot/lsp-config.json).";
     };
 
     mcpServers = lib.mkOption {
@@ -40,7 +48,21 @@ in {
     };
 
     settings = lib.mkOption {
-      type = lib.types.attrs;
+      type = lib.types.submodule {
+        freeformType = jsonFormat.type;
+        options = {
+          model = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            description = "Default model for Copilot.";
+          };
+          theme = lib.mkOption {
+            type = lib.types.nullOr (lib.types.enum ["dark" "light" "auto"]);
+            default = null;
+            description = "Color theme.";
+          };
+        };
+      };
       default = {};
       description = "Copilot settings (written to .copilot/config.json).";
     };
@@ -53,26 +75,32 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
+    env = lib.mapAttrs (_: lib.mkDefault) cfg.environmentVariables;
+
     files = let
       mcpServers = lib.mapAttrs (_: mcpCommon.transformMcpServer) cfg.mcpServers;
     in
+      # Instructions
+      lib.concatMapAttrs (name: content: {
+        ".github/instructions/${name}.instructions.md".text = content;
+      })
+      cfg.instructions
+      # LSP servers
+      // lib.optionalAttrs (cfg.lspServers != {}) {
+        ".copilot/lsp-config.json".json = cfg.lspServers;
+      }
       # MCP servers
-      lib.optionalAttrs (cfg.mcpServers != {}) {
+      // lib.optionalAttrs (cfg.mcpServers != {}) {
         ".vscode/mcp.json".json = {inherit mcpServers;};
       }
       # Settings
-      // lib.optionalAttrs (cfg.settings != {}) {
-        ".copilot/config.json".json = cfg.settings;
+      // lib.optionalAttrs (filteredSettings != {}) {
+        ".copilot/config.json".json = filteredSettings;
       }
       # Skills (directory symlinks)
       // lib.concatMapAttrs (name: path: {
         ".github/skills/${name}".source = path;
       })
-      cfg.skills
-      # Instructions
-      // lib.concatMapAttrs (name: content: {
-        ".github/instructions/${name}.instructions.md".text = content;
-      })
-      cfg.instructions;
+      cfg.skills;
   };
 }

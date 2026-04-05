@@ -1,8 +1,22 @@
-# Shared helpers for home-manager AI CLI modules (copilot-cli, kiro-cli).
+# Shared helpers for AI CLI modules (copilot-cli, kiro-cli, devenv).
 #
-# Provides content option builders, MCP server transformation, and file
-# generation helpers parameterized by module name and config directory.
+# Provides content option builders, MCP server transformation, settings
+# utilities, and file generation helpers.
 {lib}: rec {
+  # ── Settings utilities ──────────────────────────────────────────────
+
+  # Recursively filter null values from an attrset (for typed settings
+  # with freeformType where defaults are null). Also removes empty
+  # sub-attrsets left after filtering.
+  filterNulls = attrs: let
+    mapped = lib.mapAttrs (_: v:
+      if lib.isAttrs v
+      then filterNulls v
+      else v)
+    attrs;
+  in
+    lib.filterAttrs (_: v: v != null && v != {}) mapped;
+
   # ── Option builders ──────────────────────────────────────────────────
 
   mkContentOption = description:

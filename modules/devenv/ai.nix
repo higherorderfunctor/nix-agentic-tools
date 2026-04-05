@@ -38,6 +38,9 @@
 
   cfg = config.ai;
 
+  # Check if an option path exists (returns true if defined, even if not set).
+  hasOpt = path: lib.hasAttrByPath path config;
+
   # Instruction submodule: shared semantic fields, translated per ecosystem.
   instructionModule = types.submodule {
     options = {
@@ -139,6 +142,12 @@ in {
       description = "Fan out shared config to kiro.*.";
     };
 
+    environmentVariables = mkOption {
+      type = types.attrsOf types.str;
+      default = {};
+      description = "Shared environment variables for all enabled CLIs.";
+    };
+
     instructions = mkOption {
       type = types.attrsOf instructionModule;
       default = {};
@@ -146,6 +155,31 @@ in {
         Shared instructions with optional path scoping. Body is shared;
         frontmatter is generated per ecosystem.
       '';
+    };
+
+    lspServers = mkOption {
+      type = types.attrsOf types.anything;
+      default = {};
+      description = "Shared LSP server definitions across all ecosystems.";
+    };
+
+    settings = mkOption {
+      type = types.submodule {
+        options = {
+          model = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = "Default model -- translated per ecosystem.";
+          };
+          telemetry = mkOption {
+            type = types.nullOr types.bool;
+            default = null;
+            description = "Enable/disable telemetry -- translated per ecosystem.";
+          };
+        };
+      };
+      default = {};
+      description = "Normalized settings translated to ecosystem-specific keys.";
     };
 
     skills = mkOption {
@@ -159,27 +193,43 @@ in {
   };
 
   config = mkIf cfg.enable (mkMerge [
-    # Claude Code — uses files.* for both rules and skills
-    (mkIf cfg.enableClaude {
-      files =
-        # Instructions as Claude rules with frontmatter
-        concatMapAttrs (name: instr: {
-          ".claude/rules/${name}.md".text = mkDefault (mkClaudeRule name instr);
-        })
-        cfg.instructions
-        # Skills as directory symlinks
-        // concatMapAttrs (name: path: {
-          ".claude/skills/${name}".source = mkDefault path;
-        })
-        cfg.skills;
+    # Shared environment variables — merge into devenv env for all ecosystems
+    (mkIf (cfg.environmentVariables != {}) {
+      env = lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
     })
+
+    # Claude Code — uses files.* for both rules and skills
+    (mkIf cfg.enableClaude (mkMerge [
+      {
+        files =
+          # Instructions as Claude rules with frontmatter
+          concatMapAttrs (name: instr: {
+            ".claude/rules/${name}.md".text = mkDefault (mkClaudeRule name instr);
+          })
+          cfg.instructions
+          # Skills as directory symlinks
+          // concatMapAttrs (name: path: {
+            ".claude/skills/${name}".source = mkDefault path;
+          })
+          cfg.skills;
+      }
+      # Normalized model setting
+      (mkIf (cfg.settings.model != null && hasOpt ["claude" "code" "model"]) {
+        claude.code.model = mkDefault cfg.settings.model;
+      })
+    ]))
 
     # Copilot — uses copilot.* options
     (mkIf cfg.enableCopilot {
       copilot = {
+        environmentVariables = lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
         instructions = lib.mapAttrs (name: instr:
           mkDefault (mkCopilotInstruction name instr))
         cfg.instructions;
+        lspServers = lib.mapAttrs (_: mkDefault) cfg.lspServers;
+        settings = lib.optionalAttrs (cfg.settings.model != null) {
+          model = mkDefault cfg.settings.model;
+        };
         skills = lib.mapAttrs (_: mkDefault) cfg.skills;
       };
     })
@@ -187,6 +237,16 @@ in {
     # Kiro — uses kiro.* options
     (mkIf cfg.enableKiro {
       kiro = {
+        environmentVariables = lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
+        lspServers = lib.mapAttrs (_: mkDefault) cfg.lspServers;
+        settings = mkMerge [
+          (lib.optionalAttrs (cfg.settings.model != null) {
+            chat.defaultModel = mkDefault cfg.settings.model;
+          })
+          (lib.optionalAttrs (cfg.settings.telemetry != null) {
+            telemetry.enabled = mkDefault cfg.settings.telemetry;
+          })
+        ];
         skills = lib.mapAttrs (_: mkDefault) cfg.skills;
         steering = lib.mapAttrs (name: instr:
           mkDefault (mkKiroSteering name instr))
