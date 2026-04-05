@@ -49,7 +49,7 @@
     homeManagerModules = {
       copilot-cli = ./modules/copilot-cli;
       default = ./modules;
-      kiro-cli = ./modules/kiro-cli;
+      kiro-cli = ./modules/kiro-cli;\n      mcp-servers = ./modules/mcp-servers;
     };
 
     lib = let
