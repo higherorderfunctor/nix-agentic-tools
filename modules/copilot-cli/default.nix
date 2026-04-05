@@ -12,55 +12,22 @@
 }: let
   cfg = config.programs.copilot-cli;
   jsonFormat = pkgs.formats.json {};
+  hmHelpers = import ../../lib/hm-helpers.nix {inherit lib;};
 
   # Merge Nix-declared settings into existing mutable config.json on activation.
   # Preserves runtime-mutated keys (trusted_folders, etc.).
-  settingsActivationScript = let
-    nixSettings = jsonFormat.generate "copilot-cli-settings.json" cfg.settings;
-  in ''
-    COPILOT_DIR="$HOME/${cfg.configDir}"
-    CONFIG_FILE="$COPILOT_DIR/config.json"
-    mkdir -p "$COPILOT_DIR"
-    if [ -f "$CONFIG_FILE" ]; then
-      ${pkgs.jq}/bin/jq -s '.[0] * .[1]' "$CONFIG_FILE" "${nixSettings}" > "$CONFIG_FILE.tmp"
-      mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
-    else
-      cp "${nixSettings}" "$CONFIG_FILE"
-      chmod 644 "$CONFIG_FILE"
-    fi
-  '';
-
-  # Content option helpers (matching upstream claude-code patterns)
-  mkContentOption = description:
-    lib.mkOption {
-      type = lib.types.attrsOf (lib.types.either lib.types.lines lib.types.path);
-      default = {};
-      inherit description;
-    };
-
-  mkDirOption = description:
-    lib.mkOption {
-      type = lib.types.nullOr lib.types.path;
-      default = null;
-      inherit description;
-    };
-
-  mkSourceEntry = content:
-    if lib.isPath content
-    then {source = content;}
-    else {text = content;};
+  settingsActivationScript = hmHelpers.mkSettingsActivationScript {
+    configDir = cfg.configDir;
+    configFile = "${cfg.configDir}/config.json";
+    nixSettingsPath = jsonFormat.generate "copilot-cli-settings.json" cfg.settings;
+    jq = "${pkgs.jq}/bin/jq";
+  };
 
   # MCP server transformation (from programs.mcp.servers)
-  mkMcpServer = server:
-    (removeAttrs server ["disabled"])
-    // (lib.optionalAttrs (server ? url) {type = "http";})
-    // (lib.optionalAttrs (server ? command) {type = "stdio";})
-    // {enabled = !(server.disabled or false);};
-
   transformedMcpServers =
     lib.optionalAttrs
     (cfg.enableMcpIntegration && config.programs.mcp.enable or false)
-    (lib.mapAttrs (_: mkMcpServer) config.programs.mcp.servers);
+    (lib.mapAttrs (_: hmHelpers.mkMcpServer) config.programs.mcp.servers);
 
   allMcpServers = transformedMcpServers // cfg.mcpServers;
 
@@ -70,32 +37,7 @@
     "${jsonFormat.generate "copilot-mcp-config.json" {mcpServers = allMcpServers;}}"
   ];
 
-  # File generation
-  mkMarkdownEntries = subdir: attrs:
-    lib.mapAttrs' (name: content:
-      lib.nameValuePair "${cfg.configDir}/${subdir}/${name}.md"
-      (mkSourceEntry content))
-    attrs;
-
-  mkSkillEntries = attrs:
-    lib.mapAttrs' (name: content:
-      if lib.isPath content && lib.pathIsDirectory content
-      then
-        lib.nameValuePair "${cfg.configDir}/skills/${name}" {
-          source = content;
-          recursive = true;
-        }
-      else
-        lib.nameValuePair "${cfg.configDir}/skills/${name}/SKILL.md"
-        (mkSourceEntry content))
-    attrs;
-
   exclusiveInlineDirNames = ["agents" "instructions" "skills"];
-
-  mkExclusiveAssertion = name: {
-    assertion = !(cfg.${name} != {} && cfg.${name + "Dir"} != null);
-    message = "Cannot specify both `programs.copilot-cli.${name}` and `programs.copilot-cli.${name}Dir`.";
-  };
 in {
   options.programs.copilot-cli = {
     # --- Core ---
@@ -157,16 +99,16 @@ in {
     };
 
     # --- Agents ---
-    agents = mkContentOption "Custom agent .md files for ~/.copilot/agents/.";
-    agentsDir = mkDirOption "Directory of agent .md files.";
+    agents = hmHelpers.mkContentOption "Custom agent .md files for ~/.copilot/agents/.";
+    agentsDir = hmHelpers.mkDirOption "Directory of agent .md files.";
 
     # --- Skills ---
-    skills = mkContentOption "Skill directories (SKILL.md) for ~/.copilot/skills/.";
-    skillsDir = mkDirOption "Directory of skill subdirectories.";
+    skills = hmHelpers.mkContentOption "Skill directories (SKILL.md) for ~/.copilot/skills/.";
+    skillsDir = hmHelpers.mkDirOption "Directory of skill subdirectories.";
 
     # --- Instructions ---
-    instructions = mkContentOption "Instruction .md files for ~/.copilot/instructions/.";
-    instructionsDir = mkDirOption "Directory of instruction .md files.";
+    instructions = hmHelpers.mkContentOption "Instruction .md files for ~/.copilot/instructions/.";
+    instructionsDir = hmHelpers.mkDirOption "Directory of instruction .md files.";
 
     # --- Environment variables ---
     environmentVariables = lib.mkOption {
@@ -186,7 +128,7 @@ in {
 
   config = lib.mkIf cfg.enable {
     assertions =
-      (map mkExclusiveAssertion exclusiveInlineDirNames)
+      (map (hmHelpers.mkExclusiveAssertion "copilot-cli" cfg) exclusiveInlineDirNames)
       ++ [
         {
           assertion =
@@ -208,7 +150,7 @@ in {
             jsonFormat.generate "copilot-lsp-config.json" cfg.lspServers;
         }
         # Inline agents
-        // mkMarkdownEntries "agents" cfg.agents
+        // hmHelpers.mkMarkdownEntries cfg.configDir "agents" cfg.agents
         // lib.optionalAttrs (cfg.agentsDir != null) {
           "${cfg.configDir}/agents" = {
             source = cfg.agentsDir;
@@ -216,7 +158,7 @@ in {
           };
         }
         # Inline skills
-        // mkSkillEntries cfg.skills
+        // hmHelpers.mkSkillEntries cfg.configDir cfg.skills
         // lib.optionalAttrs (cfg.skillsDir != null) {
           "${cfg.configDir}/skills" = {
             source = cfg.skillsDir;
@@ -224,7 +166,7 @@ in {
           };
         }
         # Inline instructions
-        // mkMarkdownEntries "instructions" cfg.instructions
+        // hmHelpers.mkMarkdownEntries cfg.configDir "instructions" cfg.instructions
         // lib.optionalAttrs (cfg.instructionsDir != null) {
           "${cfg.configDir}/instructions" = {
             source = cfg.instructionsDir;

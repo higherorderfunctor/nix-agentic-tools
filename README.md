@@ -54,8 +54,7 @@ Each skill is self-contained with a `SKILL.md` and bundled reference docs.
 
 Stacked commit workflow skills using git-branchless, git-absorb, and git-revise.
 
-<!-- dprint-ignore -->
-
+<!-- prettier-ignore -->
 | Skill            | Description                                                                           |
 | ---------------- | ------------------------------------------------------------------------------------- |
 | `/stack-fix`     | Absorb fixes into correct stack commits                                               |
@@ -130,8 +129,7 @@ services.mcp-servers.servers.github-mcp.enable = true;
 
 ## Feature Matrix
 
-<!-- dprint-ignore -->
-
+<!-- prettier-ignore -->
 | Feature                 | Without Nix      | With Nix                 |
 | ----------------------- | ---------------- | ------------------------ |
 | Stacked workflow skills | Copy `skills/`   | Injected via HM module   |
@@ -166,8 +164,7 @@ devShells.default = inputs.agentic-tools.lib.mkAgenticShell pkgs {
 nix build .#github-mcp
 ```
 
-<!-- dprint-ignore -->
-
+<!-- prettier-ignore -->
 | Server                    | Description                                 |
 | ------------------------- | ------------------------------------------- |
 | `aws-mcp`                 | AWS documentation and recommendations       |

@@ -87,6 +87,20 @@ in {
 
         ${agentsContent}
       '';
+    }
+    # ── Consumer skills (stacked workflows) ──────────────────────────
+    // {
+      ".claude/skills/sws-stack-fix".source = ./skills/stack-fix;
+      ".claude/skills/sws-stack-plan".source = ./skills/stack-plan;
+      ".claude/skills/sws-stack-split".source = ./skills/stack-split;
+      ".claude/skills/sws-stack-submit".source = ./skills/stack-submit;
+      ".claude/skills/sws-stack-summary".source = ./skills/stack-summary;
+      ".claude/skills/sws-stack-test".source = ./skills/stack-test;
+    }
+    # ── Dev skills ───────────────────────────────────────────────────
+    // {
+      ".claude/skills/index-repo-docs".source = ./dev/skills/index-repo-docs;
+      ".claude/skills/repo-review".source = ./dev/skills/repo-review;
     };
 
   # ── treefmt ────────────────────────────────────────────────────────────

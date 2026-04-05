@@ -10,6 +10,7 @@ result-*
 .claude/rules/
 .claude/settings.json
 .claude/settings.local.json
+.claude/skills/
 .github/copilot-instructions.md
 .github/instructions/
 .kiro/steering/

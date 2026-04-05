@@ -36,15 +36,15 @@ Wire this flake as input to nixos-config. Validate the final form.
 
 ### Skill Wiring
 
-- [ ] Wire dev + consumer skills into each ecosystem via devenv files.*
-- [ ] Register dev skills as invocable
+- [x] Wire dev + consumer skills into each ecosystem via devenv files.\*
+- [x] Register dev skills as invocable
 
 ### Cleanup
 
-- [ ] Replace `<!-- dprint-ignore -->` with `<!-- prettier-ignore -->`
-- [ ] DRY: extract shared copilot-cli + kiro-cli helpers into lib/
-- [ ] DRY: extract shared MCP submodule from devenv copilot/kiro
-- [ ] aws-mcp.nix orphaned server definition — wire or remove
+- [x] Replace `<!-- dprint-ignore -->` with `<!-- prettier-ignore -->`
+- [x] DRY: extract shared copilot-cli + kiro-cli helpers into lib/
+- [x] DRY: extract shared MCP submodule from devenv copilot/kiro
+- [x] aws-mcp.nix orphaned server definition — wire or remove
 - [ ] CUDA — verify packages build with cudaSupport on x86_64-linux
 - [ ] Wire LSPs to AI CLI modules (nixd, marksman, taplo)
 

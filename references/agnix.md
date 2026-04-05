@@ -44,8 +44,7 @@ disabled_rules = ["XML-001", "AS-014", "XP-003", "CC-MEM-008", "PE-001", "CDX-AG
 
 ### Suppressed rules in this repo
 
-<!-- dprint-ignore -->
-
+<!-- prettier-ignore -->
 | Rule       | Why suppressed                                                  |
 | ---------- | --------------------------------------------------------------- | --- | -------------------------------------------------------- |
 | XML-001    | Angle brackets in git placeholder syntax (`<hash>`, `<commit>`) |
@@ -60,8 +59,7 @@ disabled_rules = ["XML-001", "AS-014", "XP-003", "CC-MEM-008", "PE-001", "CDX-AG
 
 Rules are prefixed by category:
 
-<!-- dprint-ignore -->
-
+<!-- prettier-ignore -->
 | Prefix | Scope                                    |
 | ------ | ---------------------------------------- |
 | AS-\*  | Agent Skills spec (SKILL.md)             |

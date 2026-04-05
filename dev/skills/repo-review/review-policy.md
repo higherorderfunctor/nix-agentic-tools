@@ -6,8 +6,7 @@ confidence model.
 
 ## Severity Levels
 
-<!-- dprint-ignore -->
-
+<!-- prettier-ignore -->
 | Severity | Meaning                                                                                             | Action required  |
 | -------- | --------------------------------------------------------------------------------------------------- | ---------------- |
 | `high`   | Incorrect command, broken install path, security issue, contradiction that would cause user failure | Must fix         |
