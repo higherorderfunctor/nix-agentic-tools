@@ -1,7 +1,9 @@
 agentic
+agentsmd
 agnix
 attrset
 attrsOf
+berberman
 branchless
 buildGoModule
 buildNpmPackage
@@ -9,6 +11,7 @@ buildPythonApplication
 cachix
 copilot
 cspell
+cuda
 deadnix
 devenv
 devshell
@@ -16,6 +19,7 @@ dprint
 frontmatter
 gitconfig
 homeManagerModules
+kagi
 kiro
 mcpConfig
 mcpServers
@@ -30,15 +34,20 @@ monorepo
 nixos
 nixpkgs
 npmDepsHash
+numtide
 nvfetcher
 openmemory
+oxalica
+pkgs
 restack
 shfmt
 shellharden
 statix
 stdio
 submodule
+substituters
 sympy
 taplo
+treefmt
 vendorHash
 writeShellApplication

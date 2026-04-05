@@ -18,14 +18,14 @@
     then
       {
         type = "stdio";
-        command = server.command;
+        inherit (server) command;
       }
-      // lib.optionalAttrs (server.args != []) {args = server.args;}
-      // lib.optionalAttrs (server.env != {}) {env = server.env;}
+      // lib.optionalAttrs (server.args != []) {inherit (server) args;}
+      // lib.optionalAttrs (server.env != {}) {inherit (server) env;}
     else if server.type == "http"
     then {
       type = "http";
-      url = server.url;
+      inherit (server) url;
     }
     else throw "Invalid MCP server type: ${server.type}")
   cfg.mcpServers;

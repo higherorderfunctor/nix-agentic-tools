@@ -47,24 +47,22 @@
         ecosystem = "copilot";
       };
     };
+
+    root = mkFiles "monorepo";
   in
-    # Root (monorepo) files
-    let
-      root = mkFiles "monorepo";
-    in
-      {
-        ".claude/rules/common.md".text = root.claude;
-        ".kiro/steering/common.md".text = root.kiro;
-        ".github/copilot-instructions.md".text = root.copilot;
-      }
-      // (lib.concatMapAttrs (pkg: _: let
-          f = mkFiles pkg;
-        in {
-          ".claude/rules/${pkg}.md".text = f.claude;
-          ".kiro/steering/${pkg}.md".text = f.kiro;
-          ".github/instructions/${pkg}.instructions.md".text = f.copilot;
-        })
-        nonRootPackages);
+    {
+      ".claude/rules/common.md".text = root.claude;
+      ".kiro/steering/common.md".text = root.kiro;
+      ".github/copilot-instructions.md".text = root.copilot;
+    }
+    // (lib.concatMapAttrs (pkg: _: let
+        f = mkFiles pkg;
+      in {
+        ".claude/rules/${pkg}.md".text = f.claude;
+        ".kiro/steering/${pkg}.md".text = f.kiro;
+        ".github/instructions/${pkg}.instructions.md".text = f.copilot;
+      })
+      nonRootPackages);
 in {
   imports = [
     ./modules/devenv
@@ -90,11 +88,15 @@ in {
       '';
     };
 
-  # ── Git Hooks ─────────────────────────────────────────────────────────
-  git-hooks.hooks = {
-    # Formatting (via treefmt)
-    treefmt.enable = true;
+  # ── treefmt ────────────────────────────────────────────────────────────
+  treefmt = {
+    enable = true;
+    config = import ./treefmt.nix;
+  };
 
+  # ── Git Hooks ─────────────────────────────────────────────────────────
+  # treefmt hook is auto-wired by treefmt.enable above
+  git-hooks.hooks = {
     # Nix linting
     deadnix.enable = true;
     statix.enable = true;

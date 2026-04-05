@@ -1,24 +1,16 @@
-{pkgs, ...}: {
-  projectRootFile = "flake.nix";
-
+# Shared treefmt config — consumed by devenv.nix treefmt module.
+{
   programs = {
-    # Nix
     alejandra.enable = true;
-
-    # JSON
     biome = {
       enable = true;
       settings.formatter.indentStyle = "space";
       settings.formatter.indentWidth = 2;
     };
-
-    # Markdown
     prettier = {
       enable = true;
       settings.proseWrap = "preserve";
     };
-
-    # TOML
     taplo.enable = true;
   };
 

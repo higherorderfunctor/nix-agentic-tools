@@ -118,7 +118,7 @@
     isBridge = (serverDef.meta.modes.http or "") == "bridge";
     baseEntry = mcpLib.mkHttpEntry ({
         inherit name;
-        settings = srv.settings;
+        inherit (srv) settings;
       }
       // optionalAttrs (!(isExternal serverDef)) {
         inherit (srv.service) port host;
@@ -135,7 +135,7 @@
   # Uses writeShellApplication with runtimeInputs for isolated PATH.
   mkExecStart = name: srv: let
     serverDef = serverFiles.${name};
-    modes = serverDef.meta.modes;
+    inherit (serverDef.meta) modes;
     httpCmd = modes.http;
     stdioCmdForBridge = modes.stdio;
 

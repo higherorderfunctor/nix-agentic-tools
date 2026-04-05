@@ -5,7 +5,7 @@
   pkgs,
   self,
 }: let
-  mkAgenticShell = self.lib.mkAgenticShell;
+  inherit (self.lib) mkAgenticShell;
 
   # Test: minimal shell (no options)
   minimalShell = mkAgenticShell pkgs {

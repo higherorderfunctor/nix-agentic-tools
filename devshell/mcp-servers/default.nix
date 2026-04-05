@@ -18,12 +18,12 @@
       if srv.url != null
       then {
         type = "http";
-        url = srv.url;
+        inherit (srv) url;
       }
       else {
         type = "stdio";
-        command = srv.command;
-        args = srv.args;
+        inherit (srv) command;
+        inherit (srv) args;
       };
   in
     base

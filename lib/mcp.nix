@@ -97,7 +97,7 @@
   mkCredentialsSnippet = credentialVars: settings:
     concatStringsSep "\n" (mapAttrsToList (optName: spec: let
       cred = settings.${optName};
-      envVar = spec.envVar;
+      inherit (spec) envVar;
     in
       if cred.helper or null != null
       then ''
@@ -182,7 +182,7 @@
     if isExternal serverDef
     then {
       type = "http";
-      url = evaluatedSettings.url;
+      inherit (evaluatedSettings) url;
     }
     else {
       type = "http";

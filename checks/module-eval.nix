@@ -19,40 +19,42 @@
             };
           }
           ({lib, ...}: {
-            options.assertions = lib.mkOption {
-              type = lib.types.listOf lib.types.anything;
-              default = [];
-            };
-            options.home = {
-              activation = lib.mkOption {
-                type = lib.types.attrsOf lib.types.anything;
-                default = {};
-              };
-              file = lib.mkOption {
-                type = lib.types.attrsOf lib.types.anything;
-                default = {};
-              };
-              packages = lib.mkOption {
-                type = lib.types.listOf lib.types.package;
+            options = {
+              assertions = lib.mkOption {
+                type = lib.types.listOf lib.types.anything;
                 default = [];
               };
-            };
-            options.programs.git = {
-              settings = lib.mkOption {
+              home = {
+                activation = lib.mkOption {
+                  type = lib.types.attrsOf lib.types.anything;
+                  default = {};
+                };
+                file = lib.mkOption {
+                  type = lib.types.attrsOf lib.types.anything;
+                  default = {};
+                };
+                packages = lib.mkOption {
+                  type = lib.types.listOf lib.types.package;
+                  default = [];
+                };
+              };
+              programs = {
+                git.settings = lib.mkOption {
+                  type = lib.types.attrsOf lib.types.anything;
+                  default = {};
+                };
+                mcp = {
+                  enable = lib.mkEnableOption "mcp";
+                  servers = lib.mkOption {
+                    type = lib.types.attrsOf lib.types.anything;
+                    default = {};
+                  };
+                };
+              };
+              services.mcp-servers = lib.mkOption {
                 type = lib.types.attrsOf lib.types.anything;
                 default = {};
               };
-            };
-            options.programs.mcp = {
-              enable = lib.mkEnableOption "mcp";
-              servers = lib.mkOption {
-                type = lib.types.attrsOf lib.types.anything;
-                default = {};
-              };
-            };
-            options.services.mcp-servers = lib.mkOption {
-              type = lib.types.attrsOf lib.types.anything;
-              default = {};
             };
           })
         ];

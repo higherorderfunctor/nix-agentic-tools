@@ -24,6 +24,8 @@
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # NOTE: treefmt-nix is consumed by devenv's treefmt module, not directly.
+    # CI uses `devenv test` which runs treefmt via git-hooks.
   };
 
   nixConfig = {
@@ -40,10 +42,9 @@
   outputs = {
     self,
     nixpkgs,
-    treefmt-nix,
     ...
   } @ inputs: let
-    lib = nixpkgs.lib;
+    inherit (nixpkgs) lib;
     supportedSystems = [
       "aarch64-darwin"
       "aarch64-linux"
@@ -54,12 +55,11 @@
     pkgsFor = system:
       import nixpkgs {
         inherit system;
-        config =
-          lib.optionalAttrs (system == "x86_64-linux") {
-            allowUnfree = true;
-            cudaSupport = true;
-            cudaCapabilities = ["7.5" "8.6" "8.9"];
-          };
+        config = lib.optionalAttrs (system == "x86_64-linux") {
+          allowUnfree = true;
+          cudaSupport = true;
+          cudaCapabilities = ["7.5" "8.6" "8.9"];
+        };
         overlays = [self.overlays.default];
       };
     fragments = import ./lib/fragments.nix {inherit lib;};
@@ -207,14 +207,6 @@
         modules = [./devenv.nix];
       };
     });
-
-    formatter = forAllSystems (
-      system:
-        (treefmt-nix.lib.evalModule (pkgsFor system) ./treefmt.nix)
-      .config
-      .build
-      .wrapper
-    );
 
     packages = forAllSystems (system: let
       pkgs = pkgsFor system;

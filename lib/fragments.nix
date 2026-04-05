@@ -96,7 +96,7 @@
         then null
         else {
           description = "Instructions for the ${package} package";
-          paths = paths;
+          inherit paths;
         };
     };
     copilot = {

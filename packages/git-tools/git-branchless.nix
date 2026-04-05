@@ -18,7 +18,7 @@ in {
         a
         // {
           inherit (nv) version src;
-          cargoHash = nv.cargoHash;
+          inherit (nv) cargoHash;
           postPatch = null;
         });
   });

@@ -4,7 +4,7 @@
   sourcesOverlay = import ./sources.nix {} final prev;
 
   # Make nv-sources available for package files
-  nv-sources = sourcesOverlay.nv-sources;
+  inherit (sourcesOverlay) nv-sources;
 
   # ── Package builder ──────────────────────────────────────────────────
   # Each file is a plain function: final -> derivation
