@@ -3,6 +3,10 @@
 
   inputs = {
     devenv.url = "github:cachix/devenv";
+    git-hooks = {
+      url = "github:cachix/git-hooks.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     mcp-nixos = {
       url = "github:utensils/mcp-nixos";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -23,8 +27,14 @@
   };
 
   nixConfig = {
-    extra-trusted-public-keys = "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=";
-    extra-substituters = "https://devenv.cachix.org";
+    extra-trusted-public-keys = [
+      "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw="
+      "pre-commit-hooks.cachix.org-1:Pkk3Panw5AW24TOv6kz3PvLhlH8puAsJTBbOPmBo7Rc="
+    ];
+    extra-substituters = [
+      "https://devenv.cachix.org"
+      "https://pre-commit-hooks.cachix.org"
+    ];
   };
 
   outputs = {
