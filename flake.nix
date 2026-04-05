@@ -49,7 +49,9 @@
     homeManagerModules = {
       copilot-cli = ./modules/copilot-cli;
       default = ./modules;
-      kiro-cli = ./modules/kiro-cli;\n      mcp-servers = ./modules/mcp-servers;
+      kiro-cli = ./modules/kiro-cli;
+      mcp-servers = ./modules/mcp-servers;
+      stacked-workflows = ./modules/stacked-workflows;
     };
 
     lib = let
@@ -62,6 +64,8 @@
       mkMcpConfig = entries: {mcpServers = entries;};
       mapTools = f: lib.concatLists (lib.mapAttrsToList (server: tools: map (tool: f server tool) tools);
       externalServers = { aws-mcp = { type = "http"; url = "https://knowledge-mcp.global.api.aws"; }; };
+      gitConfig = import ./modules/stacked-workflows/git-config.nix;
+      gitConfigFull = import ./modules/stacked-workflows/git-config-full.nix;
     };
 
     apps = forAllSystems (system: let
@@ -153,4 +157,3 @@
     });
   };
 }
-

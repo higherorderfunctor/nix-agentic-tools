@@ -75,15 +75,83 @@ skills, agents, and hooks.
 programs.kiro-cli.enable = true;
 ```
 
+### stacked-workflows
+
+Git config presets and AI tool integrations for stacked commit workflows.
+
+```nix
+stacked-workflows = {
+  enable = true;
+  gitPreset = "full";
+};
+```
+
+### stacked-workflows
+
+Git config presets and AI tool integrations for stacked commit workflows.
+
+```nix
+stacked-workflows = {
+  enable = true;
+  gitPreset = "full";
+};
+```
+
+### mcp-servers
+
+Declarative MCP server management with typed settings and credentials.
+
+```nix
+services.mcp-servers.servers.github-mcp.enable = true;
+```
+
+## Feature Matrix
+
+<!-- dprint-ignore -->
+| Feature | Without Nix | With Nix |
+|---------|-------------|----------|
+| Stacked workflow skills | Copy `skills/` | Injected via HM module |
+| MCP server packages | Install manually | `nix build .#<server>` |
+| MCP server config | Manual JSON | Declarative HM module |
+| Git tool overlays | Install manually | `nix build .#git-absorb` |
+| Home-manager modules | N/A | Full declarative config |
+| DevShell integration | N/A | `mkAgenticShell` |
+
 ## DevShell Usage
 
 Per-project AI tool configuration without home-manager.
 
 ```nix
 devShells.default = inputs.agentic-tools.lib.mkAgenticShell pkgs {
-  name = "my-project";
+  mcpServers.github-mcp.enable = true;
+  skills.stacked-workflows.enable = true;
 };
 ```
+
+## MCP Servers Reference
+
+12 MCP servers packaged as Nix derivations.
+
+```bash
+nix build .#github-mcp
+```
+
+<!-- dprint-ignore -->
+| Server | Description |
+|--------|-------------|
+| `aws-mcp` | AWS documentation and recommendations |
+| `context7-mcp` | Library documentation lookup |
+| `effect-mcp` | Effect-TS documentation |
+| `fetch-mcp` | HTTP fetch with HTML-to-markdown conversion |
+| `git-intel-mcp` | Git repository analytics and insights |
+| `git-mcp` | Git repository operations |
+| `github-mcp` | GitHub platform integration |
+| `kagi-mcp` | Kagi search and summarization |
+| `mcp-proxy` | MCP stdio-to-HTTP bridge proxy |
+| `nixos-mcp` | NixOS and Nix documentation |
+| `openmemory-mcp` | Persistent memory with vector search |
+| `sequential-thinking-mcp` | Step-by-step reasoning |
+| `sympy-mcp` | Symbolic mathematics via SymPy |
 
 ## Git Tool Overlays
 

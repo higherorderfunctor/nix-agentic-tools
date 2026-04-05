@@ -9,6 +9,7 @@
 #
 # Usage:
 #   lib.mkInstructions { package = "monorepo"; profile = "dev"; ecosystem = "claude"; }
+#   lib.mkInstructions { package = "stacked-workflows"; profile = "package"; ecosystem = "kiro"; }
 {lib}: let
   fragmentsDir = ../fragments;
 
@@ -40,14 +41,43 @@
       };
     };
 
+    mcp-servers = {
+      dev = {
+        common = [
+          "coding-standards"
+          "commit-convention"
+          "tooling-preference"
+          "validation"
+        ];
+        # Package-specific fragments added in Phase 3
+        package = [];
+      };
+    };
 
+    stacked-workflows = {
+      # Consumer install — what users need to USE the skills
+      package = {
+        common = [];
+        package = [
+          "routing-table"
+        ];
+      };
+      # Dev profile — populated when remaining fragments migrate
+      # dev = {
+      #   common = ["coding-standards" "commit-convention" "tooling-preference" "validation"];
+      #   package = ["build-commands" "continuous-improvement" "dev-skills" "development"
+      #              "flake-structure" "operations" "project-overview" "routing-table"];
+      # };
+    };
   };
 
   # -- Path scoping per package ------------------------------------------------
 
   # Maps package names to the file paths they govern (for ecosystem frontmatter).
   packagePaths = {
+    mcp-servers = ''"modules/mcp-servers/**,packages/mcp-servers/**"'';
     monorepo = null; # root — no path restriction
+    stacked-workflows = ''"skills/**,references/**,fragments/packages/stacked-workflows/**"'';
   };
 
   # -- Ecosystems --------------------------------------------------------------
