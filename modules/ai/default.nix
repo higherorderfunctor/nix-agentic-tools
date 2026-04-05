@@ -162,6 +162,23 @@ in {
       '';
     };
 
+    lspServers = mkOption {
+      type = types.attrsOf types.anything;
+      default = {};
+      description = ''
+        Shared LSP server definitions. Injected into each enabled CLI's
+        lspServers option at mkDefault priority. Format is ecosystem-agnostic
+        (JSON attrset with command/args); each CLI writes it to its own
+        config path.
+      '';
+      example = lib.literalExpression ''
+        {
+          nix = { command = "nixd"; args = []; };
+          markdown = { command = "marksman"; args = []; };
+        }
+      '';
+    };
+
     environmentVariables = mkOption {
       type = types.attrsOf types.str;
       default = {};
@@ -227,6 +244,7 @@ in {
         instructions = lib.mapAttrs (name: instr:
           mkDefault (mkCopilotInstruction name instr))
         cfg.instructions;
+        lspServers = lib.mapAttrs (_: mkDefault) cfg.lspServers;
         environmentVariables =
           lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
       };
@@ -239,6 +257,7 @@ in {
           mkDefault (mkKiroSteering name instr))
         cfg.instructions;
         skills = lib.mapAttrs (_: mkDefault) cfg.skills;
+        lspServers = lib.mapAttrs (_: mkDefault) cfg.lspServers;
         environmentVariables =
           lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
       };

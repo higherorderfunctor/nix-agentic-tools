@@ -102,6 +102,21 @@ in {
     };
     agentsDir = hmHelpers.mkDirOption "Directory of global agent .json files.";
 
+    # --- LSP servers ---
+    lspServers = lib.mkOption {
+      type = lib.types.attrsOf jsonFormat.type;
+      default = {};
+      description = "LSP server definitions for ~/.kiro/settings/lsp.json.";
+      example = lib.literalExpression ''
+        {
+          nix = {
+            command = "nixd";
+            args = [];
+          };
+        }
+      '';
+    };
+
     # --- Hooks (JSON) ---
     hooks = lib.mkOption {
       type = lib.types.attrsOf (lib.types.either lib.types.lines lib.types.path);
@@ -145,6 +160,11 @@ in {
         lib.optionalAttrs (allMcpServers != {}) {
           "${cfg.configDir}/settings/mcp.json".source =
             jsonFormat.generate "kiro-mcp-config.json" {mcpServers = allMcpServers;};
+        }
+        # LSP config
+        // lib.optionalAttrs (cfg.lspServers != {}) {
+          "${cfg.configDir}/settings/lsp.json".source =
+            jsonFormat.generate "kiro-lsp-config.json" cfg.lspServers;
         }
         # Inline steering
         // hmHelpers.mkMarkdownEntries cfg.configDir "steering" cfg.steering

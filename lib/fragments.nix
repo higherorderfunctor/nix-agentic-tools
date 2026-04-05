@@ -31,6 +31,7 @@
   devCommonFragments = [
     "coding-standards"
     "commit-convention"
+    "config-parity"
     "tooling-preference"
     "validation"
   ];
