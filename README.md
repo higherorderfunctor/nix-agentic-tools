@@ -49,6 +49,8 @@ Stacked commit workflow skills using git-branchless, git-absorb, and git-revise.
 | `/stack-split` | Split a large commit into reviewable atomic commits |
 | `/stack-plan` | Plan and build a commit stack from description, uncommitted work, or existing commits |
 | `/stack-submit` | Sync, validate, push stack, and create stacked PRs |
+| `/stack-summary` | Analyze stack quality, flag violations, produce planner-ready summary |
+| `/stack-test` | Run tests or formatters across every commit in a stack |
 
 ## Home-Manager Modules
 
