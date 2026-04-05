@@ -142,15 +142,3 @@ to (reinforcing or contradicting).
   is not a finding unless it causes concrete problems.
 - **Be specific.** "This could be better" is not a finding. "Line 42 says
   `--flag` but upstream removed it in v0.11" is.
-- **Read TODO.md first.** Known gaps are tracked there. Do not flag items
-  that are already in TODO.md as findings. Instead, provide additional
-  detail or definition for those items if you have something concrete to
-  add (file as an observation, not a recommended change).
-- **Review from the consumer perspective.** The primary lens is: can
-  someone add `inputs.agentic-tools` to their flake and use the overlays,
-  homeManagerModules, and lib exports successfully? Focus on interface
-  contracts, option types, documentation for consumers, and anything that
-  would break `home-manager switch`.
-- **Ignore stack history.** Review the current state of files at HEAD, not
-  the commit history or stack structure. Stack cleanup is a separate
-  concern tracked in TODO.md.
