@@ -35,20 +35,11 @@ Wire this flake as input to nixos-config. Validate the final form.
 - [ ] Verify kiro-cli steering file generation (YAML frontmatter)
 - [ ] Verify stacked-workflows integrations wire all 3 ecosystems
 
-### devenv ai.\* Settings Normalization
-
-- [ ] Add normalized `ai.settings` to devenv ai module (model, telemetry)
-      that translates to ecosystem-specific settings per CLI
-- [ ] Expand devenv copilot/kiro modules with richer settings options
-      matching claude.code depth (hooks, permissions where applicable)
-
 ### Remaining Cleanup
 
-- [ ] CUDA — verify packages build with cudaSupport on x86_64-linux
-- [ ] cspell: research built-in dictionaries (nix, typescript, etc.) to
-      reduce custom project-terms.txt — load via cspell.json `dictionaries`
-- [ ] Review config parity matrix in references/config-parity.md against
-      actual module implementations — close any remaining gaps
+- [ ] CUDA — verify packages build with cudaSupport on x86_64-linux (HITL)
+- [ ] cspell: load built-in dictionaries to reduce project-terms.txt
+- [ ] Config parity gap audit against actual implementations
 
 ---
 
