@@ -24,8 +24,8 @@
     };
 
   self = {
-    skillsDir = ../../skills;
-    referencesDir = ../../references;
+    skillsDir = ../../packages/stacked-workflows/skills;
+    referencesDir = ../../packages/stacked-workflows/references;
     instructionsClaude = aiCommon.mkClaudeRule "stacked-workflows" composed;
     instructionsCopilot = aiCommon.mkCopilotInstruction "stacked-workflows" composed;
     instructionsKiro = aiCommon.mkKiroSteering "stacked-workflows" composed;

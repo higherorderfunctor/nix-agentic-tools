@@ -67,6 +67,7 @@ DELETED:
 ### Task 1: Create packages/stacked-workflows/ content package
 
 **Files:**
+
 - Create: `packages/stacked-workflows/default.nix`
 - Move: `skills/*` → `packages/stacked-workflows/skills/`
 - Move: `references/{git-absorb,git-branchless,git-revise,nix-workflow,philosophy,recommended-config}.md` → `packages/stacked-workflows/references/`
@@ -147,6 +148,7 @@ overlays = {
 ```
 
 Export in packages:
+
 ```nix
 inherit (pkgs) stacked-workflows-content;
 ```
@@ -171,6 +173,7 @@ git commit -m "feat(stacked-workflows): create content package with skills, refe
 ### Task 2: Create packages/coding-standards/ content package
 
 **Files:**
+
 - Create: `packages/coding-standards/default.nix`
 - Move: `fragments/common/*.md` → `packages/coding-standards/fragments/`
 - Remove: `packages/fragments/` (replaced by this)
@@ -240,6 +243,7 @@ git commit -m "feat(coding-standards): create content package, replace packages/
 ### Task 3: Move dev-only content to dev/
 
 **Files:**
+
 - Create: `dev/fragments/` structure
 - Create: `dev/references/`
 - Move: remaining dev-only fragments and references
@@ -292,6 +296,7 @@ git commit -m "refactor: move dev-only fragments and references to dev/"
 ### Task 4: Refactor lib/fragments.nix to pure functions
 
 **Files:**
+
 - Modify: `lib/fragments.nix`
 
 Remove all file-reading code and hardcoded paths. Keep only pure functions.
@@ -300,12 +305,14 @@ Remove all file-reading code and hardcoded paths. Keep only pure functions.
 - [ ] **Step 1: Extract what stays vs what goes**
 
 **Stays (pure functions):**
+
 - `compose`
 - `mkFragment`
 - `mkFrontmatter`
 - `ecosystems` (frontmatter generators per ecosystem)
 
 **Goes (file I/O, hardcoded data):**
+
 - `fragmentsDir`
 - `readCommon`, `readPackage`
 - `readCommonFragment`, `readPackageFragment` (these read files)
@@ -315,6 +322,7 @@ Remove all file-reading code and hardcoded paths. Keep only pure functions.
 - `packagesWithProfile` (operates on removed data)
 
 **Moves to callers:**
+
 - devenv.nix builds its own profile data from packages
 - apps.generate builds its own profile data from packages
 - stacked-workflows module reads from its package
@@ -371,6 +379,7 @@ git commit -m "refactor(fragments): pure functions only, remove file I/O and har
 ### Task 5: Update devenv.nix to consume from packages
 
 **Files:**
+
 - Modify: `devenv.nix`
 
 Replace root path references with package references. Apply stacked-workflows
@@ -385,6 +394,7 @@ codingStdPkgs = pkgs.extend (import ./packages/coding-standards {});
 ```
 
 Or compose all content overlays once:
+
 ```nix
 contentPkgs = pkgs.extend (final.lib.composeManyExtensions [
   (import ./packages/coding-standards {})
@@ -405,6 +415,7 @@ sws-stack-fix = "${contentPkgs.stacked-workflows-content.passthru.skillsDir}/sta
 
 Actually, passthru.skillsDir = ./skills (relative path in the source). For
 consumers, the derivation store path is better:
+
 ```nix
 sws-stack-fix = "${contentPkgs.stacked-workflows-content}/skills/stack-fix";
 ```
@@ -426,6 +437,7 @@ swsFragments = builtins.attrValues contentPkgs.stacked-workflows-content.passthr
 ```
 
 For the dev profile, dev-only fragments are read from `dev/fragments/`:
+
 ```nix
 devFragment = name: pkg:
   fragments.mkFragment {
@@ -445,6 +457,7 @@ Read.allow = ["dev/references/*"];
 ```
 
 Or if references are in the package:
+
 ```nix
 Read.allow = ["${contentPkgs.stacked-workflows-content}/references/*"];
 ```
@@ -462,6 +475,7 @@ git commit -m "refactor(devenv): consume skills and fragments from packages"
 ### Task 6: Update modules/stacked-workflows/ to consume from package
 
 **Files:**
+
 - Modify: `modules/stacked-workflows/default.nix`
 
 The HM module currently has `skillsDir = ../../skills;` and
@@ -485,6 +499,7 @@ receive `pkgs` in their args:
 ```
 
 The `composed` binding uses passthru fragments:
+
 ```nix
 composed = fragments.compose {
   fragments = builtins.attrValues swsContent.passthru.fragments;
@@ -504,6 +519,7 @@ git commit -m "refactor(stacked-workflows): consume from content package"
 ### Task 7: Update apps.generate to consume from packages
 
 **Files:**
+
 - Modify: `flake.nix` (apps section)
 
 Same pattern as devenv.nix — reference package passthru instead of
@@ -530,6 +546,7 @@ git commit -m "refactor(generate): consume from content packages"
 ### Task 8: Update CLAUDE.md, AGENTS.md, checks, cspell
 
 **Files:**
+
 - Modify: `CLAUDE.md` — update Architecture directory tree
 - Modify: `.cspell/project-terms.txt` — add new terms if needed
 - Modify: checks if any reference old paths
@@ -538,6 +555,7 @@ git commit -m "refactor(generate): consume from content packages"
 - [ ] **Step 1: Update CLAUDE.md architecture tree**
 
 Replace:
+
 ```
 skills/       Consumer-facing stacked workflow skills
 references/   Canonical tool reference docs
@@ -545,6 +563,7 @@ fragments/    Instruction generation sources (common/ + packages/)
 ```
 
 With:
+
 ```
 packages/
   stacked-workflows/  Content package: skills, references, routing-table fragment

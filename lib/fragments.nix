@@ -4,28 +4,29 @@
 # and how each ecosystem wraps the output (frontmatter, paths).
 #
 # Directory layout:
-#   fragments/common/*.md          — shared across all packages
-#   fragments/packages/<pkg>/*.md  — package-specific
+#   packages/coding-standards/fragments/*.md  — shared across all packages
+#   dev/fragments/<pkg>/*.md                  — package-specific dev fragments
 #
 # Usage:
 #   lib.mkInstructions { package = "monorepo"; profile = "dev"; ecosystem = "claude"; }
 #   lib.mkInstructions { package = "stacked-workflows"; profile = "package"; ecosystem = "kiro"; }
 {lib}: let
-  fragmentsDir = ../fragments;
+  commonFragmentsDir = ../packages/coding-standards/fragments;
+  devFragmentsDir = ../dev/fragments;
 
   # -- Fragment reading --------------------------------------------------------
 
   readCommon = name:
-    builtins.readFile "${fragmentsDir}/common/${name}.md";
+    builtins.readFile "${commonFragmentsDir}/${name}.md";
 
   readPackage = package: name:
-    builtins.readFile "${fragmentsDir}/packages/${package}/${name}.md";
+    builtins.readFile "${devFragmentsDir}/${package}/${name}.md";
 
   # -- Package profiles --------------------------------------------------------
 
   # Each package declares which fragments compose each profile.
-  # "common" lists reference fragments/common/*.md.
-  # "package" lists reference fragments/packages/<pkg>/*.md.
+  # "common" lists reference packages/coding-standards/fragments/*.md.
+  # "package" lists reference dev/fragments/<pkg>/*.md.
 
   # Shared common fragments for all dev profiles (DRY extraction).
   devCommonFragments = [
@@ -89,7 +90,7 @@
     ai-clis = ''"modules/copilot-cli/**,modules/kiro-cli/**,packages/ai-clis/**"'';
     mcp-servers = ''"modules/mcp-servers/**,packages/mcp-servers/**"'';
     monorepo = null; # root — no path restriction
-    stacked-workflows = ''"skills/**,references/**,fragments/packages/stacked-workflows/**"'';
+    stacked-workflows = ''"packages/stacked-workflows/**"'';
   };
 
   # -- Ecosystems --------------------------------------------------------------

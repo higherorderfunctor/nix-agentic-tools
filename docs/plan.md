@@ -123,7 +123,9 @@ Single rich README with collapsible sections (nixvim pattern).
 - [ ] ChatGPT Codex CLI — package + HM/devenv module, same pattern as
       copilot-cli/kiro-cli; add to `ai.*` unified fanout as 4th ecosystem
 - [ ] cclsp — Claude Code LSP integration (passthru.withAdapters pattern)
-- [ ] filesystem-mcp, atlassian-mcp, gitlab-mcp, slack-mcp
+- [ ] filesystem-mcp — package + wire to devenv; may reduce tool approval
+      friction for file operations
+- [ ] atlassian-mcp, gitlab-mcp, slack-mcp
 - [ ] flake-parts — modular per-package flake outputs
 - [ ] HM/devenv modules as packages — research NixOS module packaging
       patterns; would allow `pkgs.agentic-modules.ai` etc. for FP composition

@@ -118,12 +118,12 @@ in {
 
     # Consumer skills (stacked workflows)
     skills = {
-      sws-stack-fix = ./skills/stack-fix;
-      sws-stack-plan = ./skills/stack-plan;
-      sws-stack-split = ./skills/stack-split;
-      sws-stack-submit = ./skills/stack-submit;
-      sws-stack-summary = ./skills/stack-summary;
-      sws-stack-test = ./skills/stack-test;
+      sws-stack-fix = ./packages/stacked-workflows/skills/stack-fix;
+      sws-stack-plan = ./packages/stacked-workflows/skills/stack-plan;
+      sws-stack-split = ./packages/stacked-workflows/skills/stack-split;
+      sws-stack-submit = ./packages/stacked-workflows/skills/stack-submit;
+      sws-stack-summary = ./packages/stacked-workflows/skills/stack-summary;
+      sws-stack-test = ./packages/stacked-workflows/skills/stack-test;
 
       # Dev skills
       index-repo-docs = ./dev/skills/index-repo-docs;
@@ -242,7 +242,7 @@ in {
           "wc *"
         ];
       };
-      Read.allow = ["references/*"];
+      Read.allow = ["dev/references/*"];
     };
 
     env.ENABLE_LSP_TOOL = "1";
