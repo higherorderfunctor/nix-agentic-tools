@@ -56,7 +56,16 @@ Wire this flake as input to nixos-config. Validate the final form.
 
 Do after field test validates.
 
-- [ ] Restructure sentinel commits into clean atomic stack
+- [ ] Stack redistribution — use `/stack-plan` on the TIP state only:
+  - Run `/stack-summary --root` to understand the final tree at HEAD
+  - Ignore the commit history (failed paths, pivots, restacks are noise)
+  - Plan new commits from scratch based on what FILES exist at tip
+  - Only main's merged content is the base — everything else is new
+  - Think through end-to-end: what order lets a reviewer understand
+    the architecture incrementally? Consider dependency timing + the
+    content-level audit rules from the skill
+  - Don't preserve intermediate implementations that were replaced
+    (e.g., flake-based devenv commits are gone, dprint config is gone)
 - [ ] Content-level audit (no forward references)
 - [ ] Open PRs one at a time (Copilot reviews each)
 - [ ] `ci.yml` — `devenv test` + package build matrix + cachix
