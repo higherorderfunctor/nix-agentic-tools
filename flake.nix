@@ -237,6 +237,17 @@
     packages = forAllSystems (system: let
       pkgs = pkgsFor system;
     in {
+      # Documentation
+      docs =
+        pkgs.runCommand "agentic-tools-docs" {
+          nativeBuildInputs = [pkgs.mdbook];
+          src = ./docs;
+        } ''
+          cp -r $src docs
+          mdbook build docs
+          mv docs/../result-docs $out
+        '';
+
       # AI CLIs
       inherit (pkgs) github-copilot-cli kiro-cli kiro-gateway;
       # Content packages
