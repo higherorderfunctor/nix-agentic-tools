@@ -6,6 +6,7 @@
 
 ```bash
 nix develop                   # Enter devShell with all tools
+nix flake check               # Linters + evaluation
 nix run .#generate            # Regenerate instruction files from fragments
 nix fmt                       # Format all files (dprint: Nix + markdown)
 ```
@@ -14,6 +15,7 @@ nix fmt                       # Format all files (dprint: Nix + markdown)
 
 ```
 lib/               Shared library: fragments
+modules/           Home-manager modules
 fragments/         Instruction generation sources (common/ + packages/)
 ```
 

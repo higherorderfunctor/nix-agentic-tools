@@ -21,6 +21,11 @@
     pkgsFor = system: import nixpkgs {inherit system;};
     fragments = import ./lib/fragments.nix {inherit lib;};
   in {
+    homeManagerModules = {
+      copilot-cli = ./modules/copilot-cli;
+      default = ./modules;
+    };
+
     lib = {
       inherit fragments;
     };
@@ -92,6 +97,11 @@
         ];
       };
     });
+
+    checks = forAllSystems (system: let
+      pkgs = pkgsFor system;
+      moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs self;};
+    in moduleChecks);
 
     formatter = forAllSystems (system: (pkgsFor system).dprint);
   };
