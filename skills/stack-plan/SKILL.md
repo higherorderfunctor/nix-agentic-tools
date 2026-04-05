@@ -42,6 +42,8 @@ Plan and execute a commit stack. Determines mode automatically based on input:
 
 Examine `$ARGUMENTS` and repo state to select the mode:
 
+- If `$ARGUMENTS` contains `--tip-only` or requests tip-only redistribution →
+  **Restructure mode (tip-only redistribution)**
 - If `$ARGUMENTS` contains `--root` or requests a from-root restructure →
   **Restructure mode (from-root)**
 - If `$ARGUMENTS` looks like a commit range (`main..HEAD`, `hash1..hash2`,
@@ -281,6 +283,62 @@ git status --short | wc -l   # should match step 2's file count
       explicit `git add <file>` paths.
     - **Verify staged content**: run `git diff --cached --stat` to
       confirm only intended files are staged.
+
+### Tip-Only Redistribution
+
+A variant of restructure mode for branches where the commit history is noise
+and only the final tree state matters.
+
+**When to use:**
+
+- More than 50% of commits are pivots, experiments, or failed approaches
+- The stack has been restacked 3+ times
+- Failed approaches were tried and abandoned in the history
+- Commit messages are mostly "fix", "WIP", "try again", or no longer match
+  their diffs
+
+**Approach:**
+
+1. **Analyze the final tree, not the history.** Run `/stack-summary --root` or
+   diff the tip against the base to understand what FILES exist at HEAD:
+
+   ```bash
+   git diff --stat $BASE..HEAD
+   git diff $BASE..HEAD
+   ```
+
+   Ignore the commit log entirely — don't try to preserve or reorder existing
+   commits. The history is discarded.
+
+2. **Classify every file in the total diff** into logical groups following the
+   ordering in `references/philosophy.md`. For each group, note:
+   - Which files belong to it
+   - A one-sentence commit message
+   - Estimated line count (target 50-200 per commit)
+
+3. **Apply dependency timing audit** to determine ordering. Each planned
+   commit must only reference files, imports, and config that exist in it or
+   earlier commits. Documentation goes WITH the feature it documents.
+
+4. **Present the plan** to the user (same format as Plan mode step 4).
+   **Wait for user approval.**
+
+5. **Flatten to base and recommit from scratch** using Restructure mode
+   steps 6-11 (check for uncommitted work, create backup, save tree hash,
+   flatten, commit each group).
+
+6. The resulting stack should tell a clean incremental story for reviewers —
+   not the story of how development actually happened.
+
+**Key differences from standard restructure:**
+
+- Standard restructure preserves and reorders existing commits
+- Tip-only redistribution ignores history and plans from the final tree
+- No need to identify intermediate file states (step 4 of standard
+  restructure) because the history is not a meaningful input — only the
+  final diff against the base matters
+- No need to extract intermediate file states (step 9 of standard
+  restructure) — intermediate content is authored fresh from the plan
 
 ## Post-execution
 

@@ -266,3 +266,12 @@ Stack is clean. No restructuring needed.
   `/stack-plan` for restructuring.
 - When unsure if content is "batched docs" vs. legitimate cross-cutting
   packaging docs, note the ambiguity rather than hard-flagging.
+- **`--root` mode for tip-only redistribution:** when a branch has
+  accumulated experimental commits, pivots, and failed approaches,
+  `--root` mode produces the total diff against the empty tree (or use a
+  range like `main..HEAD` for the total diff against a base). This output
+  shows the FINAL file state, which is the input for
+  `/stack-plan --tip-only` redistribution. When the majority of commits
+  are flagged with `HYGIENE`, `MIXED-CONCERNS`, or `OFF-TOPIC`, suggest
+  tip-only redistribution in the planner handoff instead of standard
+  restructure.

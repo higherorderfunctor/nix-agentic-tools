@@ -3,6 +3,7 @@ agentsmd
 agnix
 attrset
 attrsOf
+autosquash
 berberman
 Boehm
 branchless
@@ -31,6 +32,7 @@ kiro
 mcpConfig
 mcpServers
 mkCredentialsOption
+mktemp
 mkCredentialsSnippet
 mkHttpEntry
 mkSecretsWrapper
@@ -39,6 +41,7 @@ mkStdioConfig
 mkStdioEntry
 monorepo
 nixd
+oneline
 nixos
 nixpkgs
 npmDepsHash
@@ -48,10 +51,12 @@ Ollama
 openmemory
 overrideAttrs
 oxalica
+pasteable
 pkgs
 pname
 pyproject
 restack
+revertibility
 setuptools
 shellcheck
 shellharden
