@@ -35,6 +35,15 @@ skills, and instructions. Mirrors upstream `programs.claude-code` patterns.
 programs.copilot-cli.enable = true;
 ```
 
+### kiro-cli
+
+Declarative Kiro CLI configuration: settings, MCP servers, steering files,
+skills, agents, and hooks.
+
+```nix
+programs.kiro-cli.enable = true;
+```
+
 ## License
 
 Released under the [Unlicense](LICENSE).

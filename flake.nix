@@ -23,6 +23,7 @@
   in {
     homeManagerModules = {
       copilot-cli = ./modules/copilot-cli;
+      kiro-cli = ./modules/kiro-cli;
       default = ./modules;
     };
 
