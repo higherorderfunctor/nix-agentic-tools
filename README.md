@@ -87,17 +87,6 @@ stacked-workflows = {
 };
 ```
 
-### stacked-workflows
-
-Git config presets and AI tool integrations for stacked commit workflows.
-
-```nix
-stacked-workflows = {
-  enable = true;
-  gitPreset = "full";
-};
-```
-
 ### mcp-servers
 
 Declarative MCP server management with typed settings and credentials.
