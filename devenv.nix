@@ -16,6 +16,9 @@
   });
   inherit (gitToolsPkgs) agnix;
 
+  # Serena MCP — flake input, not overlay (complex Python deps)
+  serena = inputs.serena.packages.${pkgs.stdenv.hostPlatform.system}.default;
+
   # Build AGENTS.md content from all packages
   devPackages = fragments.packagesWithProfile "dev";
   nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") devPackages;
@@ -169,18 +172,30 @@ in {
   # ── Copilot ────────────────────────────────────────────────────────────
   copilot = {
     enable = true;
-    mcpServers.agnix = {
-      type = "stdio";
-      command = "${agnix}/bin/agnix-mcp";
+    mcpServers = {
+      agnix = {
+        type = "stdio";
+        command = "${agnix}/bin/agnix-mcp";
+      };
+      serena = {
+        type = "stdio";
+        command = "${serena}/bin/serena-mcp-server";
+      };
     };
   };
 
   # ── Kiro ──────────────────────────────────────────────────────────────
   kiro = {
     enable = true;
-    mcpServers.agnix = {
-      type = "stdio";
-      command = "${agnix}/bin/agnix-mcp";
+    mcpServers = {
+      agnix = {
+        type = "stdio";
+        command = "${agnix}/bin/agnix-mcp";
+      };
+      serena = {
+        type = "stdio";
+        command = "${serena}/bin/serena-mcp-server";
+      };
     };
   };
 
@@ -238,6 +253,10 @@ in {
       agnix = {
         type = "stdio";
         command = "${agnix}/bin/agnix-mcp";
+      };
+      serena = {
+        type = "stdio";
+        command = "${serena}/bin/serena-mcp-server";
       };
       devenv = {
         type = "http";

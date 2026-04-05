@@ -47,10 +47,8 @@ Single rich README with collapsible sections (nixvim pattern).
 
 ### New MCP Server Packages
 
-- [ ] Serena MCP — Python (`buildPythonApplication` from PyPI `serena-agent`),
-      codebase-aware semantic code tools (find_symbol, references, edits),
-      no account required, optional API keys for enhanced features
-- [ ] Add nvfetcher entry, hashes.json, wire in overlay + flake.nix
+- [x] Serena MCP — flake input (oraios/serena), codebase-aware semantic
+      code tools (find_symbol, references, edits), wired to all 3 ecosystems
 
 ### CI & Automation
 

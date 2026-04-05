@@ -7,6 +7,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    serena = {
+      url = "github:oraios/serena";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     nvfetcher = {
       url = "github:berberman/nvfetcher";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -204,6 +208,7 @@
         nixos-mcp
         openmemory-mcp
         sequential-thinking-mcp
+        serena-mcp
         sympy-mcp
         ;
     });

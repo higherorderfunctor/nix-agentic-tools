@@ -17,7 +17,7 @@
     "shellscript",
     "typescript"
   ],
-  "ignorePaths": [".direnv", ".git", ".nvfetcher", "locks", "result"],
+  "ignorePaths": [".direnv", ".git", ".nvfetcher", "*.lock", "locks", "result"],
   "language": "en",
   "version": "0.2"
 }

@@ -30,6 +30,7 @@
   nixos-mcp = callPkg ./nixos-mcp.nix;
   openmemory-mcp = callPkg ./openmemory-mcp.nix;
   sequential-thinking-mcp = callPkg ./sequential-thinking-mcp.nix;
+  serena-mcp = callPkg ./serena-mcp.nix;
   sympy-mcp = callPkg ./sympy-mcp.nix;
 in {
   inherit nv-sources;
@@ -49,6 +50,7 @@ in {
       nixos-mcp
       openmemory-mcp
       sequential-thinking-mcp
+      serena-mcp
       sympy-mcp
       ;
   };
