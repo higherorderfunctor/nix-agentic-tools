@@ -50,9 +50,11 @@
       ai-clis = import ./packages/ai-clis {inherit inputs;};
       default = lib.composeManyExtensions [
         (import ./packages/ai-clis {inherit inputs;})
+        (import ./packages/fragments {})
         (import ./packages/git-tools {inherit inputs;})
         (import ./packages/mcp-servers {inherit inputs;})
       ];
+      fragments = import ./packages/fragments {};
       git-tools = import ./packages/git-tools {inherit inputs;};
       mcp-servers = import ./packages/mcp-servers {inherit inputs;};
     };
@@ -67,11 +69,14 @@
     };
 
     lib = let
+      aiCommon = import ./lib/ai-common.nix {inherit lib;};
       devshellLib = import ./lib/devshell.nix {inherit lib;};
       mcpLib = import ./lib/mcp.nix {inherit lib;};
     in {
       inherit fragments;
+      inherit (aiCommon) mkClaudeRule mkCopilotInstruction mkKiroSteering;
       inherit (devshellLib) mkAgenticShell;
+      inherit (fragments) compose mkFragment;
       inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig;
       mkMcpConfig = entries: {mcpServers = entries;};
       mapTools = f: lib.concatLists (lib.mapAttrsToList (server: tools: map (tool: f server tool) tools));
