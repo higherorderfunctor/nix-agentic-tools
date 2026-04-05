@@ -5,14 +5,14 @@ your nixpkgs, and the packages become available in `pkgs`.
 
 ## Overlays
 
-| Overlay | What it adds |
-|---------|-------------|
-| `overlays.default` | All overlays composed |
-| `overlays.ai-clis` | `github-copilot-cli`, `kiro-cli`, `kiro-gateway` |
-| `overlays.coding-standards` | `coding-standards` |
-| `overlays.git-tools` | `agnix`, `git-absorb`, `git-branchless`, `git-revise` |
-| `overlays.mcp-servers` | `nix-mcp-servers.*` |
-| `overlays.stacked-workflows` | `stacked-workflows-content` |
+| Overlay                      | What it adds                                          |
+| ---------------------------- | ----------------------------------------------------- |
+| `overlays.default`           | All overlays composed                                 |
+| `overlays.ai-clis`           | `github-copilot-cli`, `kiro-cli`, `kiro-gateway`      |
+| `overlays.coding-standards`  | `coding-standards`                                    |
+| `overlays.git-tools`         | `agnix`, `git-absorb`, `git-branchless`, `git-revise` |
+| `overlays.mcp-servers`       | `nix-mcp-servers.*`                                   |
+| `overlays.stacked-workflows` | `stacked-workflows-content`                           |
 
 Most users should apply `overlays.default`:
 
@@ -24,48 +24,48 @@ nixpkgs.overlays = [inputs.agentic-tools.overlays.default];
 
 ### AI CLIs
 
-| Package | Description |
-|---------|-------------|
-| `github-copilot-cli` | GitHub Copilot CLI |
-| `kiro-cli` | Kiro CLI |
-| `kiro-gateway` | Python proxy API for Kiro |
+| Package              | Description               |
+| -------------------- | ------------------------- |
+| `github-copilot-cli` | GitHub Copilot CLI        |
+| `kiro-cli`           | Kiro CLI                  |
+| `kiro-gateway`       | Python proxy API for Kiro |
 
 ### Git Tools
 
-| Package | Description |
-|---------|-------------|
-| `agnix` | Linter, LSP, and MCP for AI config files |
-| `git-absorb` | Automatic fixup commit routing |
-| `git-branchless` | Anonymous branching, in-memory rebases |
-| `git-revise` | In-memory commit rewriting |
+| Package          | Description                              |
+| ---------------- | ---------------------------------------- |
+| `agnix`          | Linter, LSP, and MCP for AI config files |
+| `git-absorb`     | Automatic fixup commit routing           |
+| `git-branchless` | Anonymous branching, in-memory rebases   |
+| `git-revise`     | In-memory commit rewriting               |
 
 ### MCP Servers
 
 Available under `pkgs.nix-mcp-servers.*`:
 
-| Package | Description | Credentials |
-|---------|-------------|-------------|
-| `context7-mcp` | Library documentation lookup | None |
-| `effect-mcp` | Effect-TS documentation | None |
-| `fetch-mcp` | HTTP fetch + HTML-to-markdown | None |
-| `git-intel-mcp` | Git repository analytics | None |
-| `git-mcp` | Git operations | None |
-| `github-mcp` | GitHub platform | `GITHUB_PERSONAL_ACCESS_TOKEN` |
-| `kagi-mcp` | Kagi search and summarization | `KAGI_API_KEY` |
-| `mcp-language-server` | LSP-to-MCP bridge | None |
-| `mcp-proxy` | stdio-to-HTTP bridge | None |
-| `nixos-mcp` | NixOS/Nix documentation | None |
-| `openmemory-mcp` | Persistent memory + vector search | None |
-| `sequential-thinking-mcp` | Step-by-step reasoning | None |
-| `serena-mcp` | Codebase-aware semantic tools | None (optional API keys) |
-| `sympy-mcp` | Symbolic mathematics | None |
+| Package                   | Description                       | Credentials                    |
+| ------------------------- | --------------------------------- | ------------------------------ |
+| `context7-mcp`            | Library documentation lookup      | None                           |
+| `effect-mcp`              | Effect-TS documentation           | None                           |
+| `fetch-mcp`               | HTTP fetch + HTML-to-markdown     | None                           |
+| `git-intel-mcp`           | Git repository analytics          | None                           |
+| `git-mcp`                 | Git operations                    | None                           |
+| `github-mcp`              | GitHub platform                   | `GITHUB_PERSONAL_ACCESS_TOKEN` |
+| `kagi-mcp`                | Kagi search and summarization     | `KAGI_API_KEY`                 |
+| `mcp-language-server`     | LSP-to-MCP bridge                 | None                           |
+| `mcp-proxy`               | stdio-to-HTTP bridge              | None                           |
+| `nixos-mcp`               | NixOS/Nix documentation           | None                           |
+| `openmemory-mcp`          | Persistent memory + vector search | None                           |
+| `sequential-thinking-mcp` | Step-by-step reasoning            | None                           |
+| `serena-mcp`              | Codebase-aware semantic tools     | None (optional API keys)       |
+| `sympy-mcp`               | Symbolic mathematics              | None                           |
 
 ### Content Packages
 
-| Package | Description | passthru |
-|---------|-------------|----------|
-| `coding-standards` | Reusable coding standard fragments | `.fragments.*`, `.presets.all`, `.presets.minimal` |
-| `stacked-workflows-content` | Skills, references, routing-table | `.fragments.*`, `.skillsDir`, `.referencesDir` |
+| Package                     | Description                        | passthru                                           |
+| --------------------------- | ---------------------------------- | -------------------------------------------------- |
+| `coding-standards`          | Reusable coding standard fragments | `.fragments.*`, `.presets.all`, `.presets.minimal` |
+| `stacked-workflows-content` | Skills, references, routing-table  | `.fragments.*`, `.skillsDir`, `.referencesDir`     |
 
 ## Content Package passthru
 

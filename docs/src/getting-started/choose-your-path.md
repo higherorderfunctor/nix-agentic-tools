@@ -5,12 +5,12 @@ fits your workflow.
 
 ## Decision Tree
 
-| Question | Answer | Path |
-|----------|--------|------|
-| Want system-wide AI CLI config? | Yes | [Home-Manager](#home-manager) |
-| Want per-project config only? | Yes | [DevEnv](#devenv) |
-| Just want the skills, no Nix? | Yes | [Copy skills](#no-nix) |
-| Building custom tooling? | Yes | [lib functions](#manual-lib) |
+| Question                        | Answer | Path                          |
+| ------------------------------- | ------ | ----------------------------- |
+| Want system-wide AI CLI config? | Yes    | [Home-Manager](#home-manager) |
+| Want per-project config only?   | Yes    | [DevEnv](#devenv)             |
+| Just want the skills, no Nix?   | Yes    | [Copy skills](#no-nix)        |
+| Building custom tooling?        | Yes    | [lib functions](#manual-lib)  |
 
 ## Home-Manager
 

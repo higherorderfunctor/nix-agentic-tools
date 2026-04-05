@@ -22,13 +22,6 @@
     (import ./packages/stacked-workflows {})
   ]);
 
-  # Serena MCP — flake input, not overlay (complex Python deps).
-  # Override passthru to carry mcpArgs so mkPackageEntry works.
-  serena = let
-    upstream = inputs.serena.packages.${pkgs.stdenv.hostPlatform.system}.default;
-  in
-    upstream.overrideAttrs {passthru.mcpArgs = ["start-mcp-server"];};
-
   # ── MCP entry helper ─────────────────────────────────────────────────
   # Derive stdio MCP entry from package passthru (single source of truth).
   mcpLib = import ./lib/mcp.nix {inherit lib;};
@@ -211,7 +204,6 @@ in {
     enable = true;
     mcpServers = {
       agnix = mkPackageEntry agnix;
-      serena = mkPackageEntry serena;
     };
   };
 
@@ -220,7 +212,6 @@ in {
     enable = true;
     mcpServers = {
       agnix = mkPackageEntry agnix;
-      serena = mkPackageEntry serena;
     };
   };
 
@@ -276,7 +267,7 @@ in {
 
     mcpServers = {
       agnix = mkPackageEntry agnix;
-      serena = mkPackageEntry serena;
+
       devenv = {
         type = "http";
         url = "https://mcp.devenv.sh/mcp";
@@ -284,13 +275,8 @@ in {
     };
   };
 
-  # ── MCP Processes (no-cred servers, `devenv up`) ───────────────────────
-  # processes = {
-  #   nixos-mcp.exec = "${pkgs.nix-mcp-servers.nixos-mcp}/bin/mcp-nixos";
-  #   sequential-thinking-mcp.exec = "${pkgs.nix-mcp-servers.sequential-thinking-mcp}/bin/sequential-thinking-mcp";
-  # };
-  # NOTE: MCP servers are stdio-based, not HTTP daemons. Process management
-  # applies when running as HTTP bridges. Uncomment when bridge mode is needed.
+  # ── Processes (`devenv up`) ────────────────────────────────────────────
+  processes.docs.exec = "${pkgs.mdbook}/bin/mdbook serve docs/";
 
   # ── Shell Init ──────────────────────────────────────────────────────────
   # Clean stale skill symlinks pointing to old Nix store paths.

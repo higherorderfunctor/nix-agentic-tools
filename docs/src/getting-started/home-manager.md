@@ -30,13 +30,13 @@ nixpkgs.overlays = [
 
 This adds to your `pkgs`:
 
-| Overlay | Packages |
-|---------|----------|
-| `ai-clis` | `github-copilot-cli`, `kiro-cli`, `kiro-gateway` |
-| `coding-standards` | `coding-standards` (fragment content) |
-| `git-tools` | `agnix`, `git-absorb`, `git-branchless`, `git-revise` |
-| `mcp-servers` | `nix-mcp-servers.*` (14 servers) |
-| `stacked-workflows` | `stacked-workflows-content` (skills, references) |
+| Overlay             | Packages                                              |
+| ------------------- | ----------------------------------------------------- |
+| `ai-clis`           | `github-copilot-cli`, `kiro-cli`, `kiro-gateway`      |
+| `coding-standards`  | `coding-standards` (fragment content)                 |
+| `git-tools`         | `agnix`, `git-absorb`, `git-branchless`, `git-revise` |
+| `mcp-servers`       | `nix-mcp-servers.*` (14 servers)                      |
+| `stacked-workflows` | `stacked-workflows-content` (skills, references)      |
 
 You can also apply individual overlays:
 `overlays.ai-clis`, `overlays.git-tools`, `overlays.mcp-servers`, etc.
@@ -166,18 +166,18 @@ cat ~/.claude/settings.json  # Claude settings (merged)
 
 ## What gets generated
 
-| ai.* option | Claude | Copilot | Kiro |
-|-------------|--------|---------|------|
-| `skills` | `~/.claude/skills/{name}` | `~/.copilot/skills/{name}` | `~/.kiro/skills/{name}` |
-| `instructions` | `~/.claude/rules/{name}.md` | `~/.copilot/instructions/{name}.md` | `~/.kiro/steering/{name}.md` |
-| `lspServers` | `ENABLE_LSP_TOOL=1` | `lsp-config.json` | `lsp.json` |
-| `settings.model` | `settings.model` | `settings.model` | `chat.defaultModel` |
-| `settings.telemetry` | — | — | `telemetry.enabled` |
-| `environmentVariables` | — | wrapped in binary | wrapped in binary |
+| ai.\* option           | Claude                      | Copilot                             | Kiro                         |
+| ---------------------- | --------------------------- | ----------------------------------- | ---------------------------- |
+| `skills`               | `~/.claude/skills/{name}`   | `~/.copilot/skills/{name}`          | `~/.kiro/skills/{name}`      |
+| `instructions`         | `~/.claude/rules/{name}.md` | `~/.copilot/instructions/{name}.md` | `~/.kiro/steering/{name}.md` |
+| `lspServers`           | `ENABLE_LSP_TOOL=1`         | `lsp-config.json`                   | `lsp.json`                   |
+| `settings.model`       | `settings.model`            | `settings.model`                    | `chat.defaultModel`          |
+| `settings.telemetry`   | —                           | —                                   | `telemetry.enabled`          |
+| `environmentVariables` | —                           | wrapped in binary                   | wrapped in binary            |
 
 ## Next steps
 
-- [The Unified ai.* Module](../concepts/unified-ai-module.md) — how
+- [The Unified ai.\* Module](../concepts/unified-ai-module.md) — how
   fanout works, mkDefault priority, per-CLI overrides
 - [Credentials & Secrets](../concepts/credentials.md) — sops-nix and
   agenix integration patterns

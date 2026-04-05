@@ -119,29 +119,29 @@ ls .kiro/                 # Kiro config
 
 DevEnv writes config to project-local dotfiles via `files.*`:
 
-| ai.* option | Claude | Copilot | Kiro |
-|-------------|--------|---------|------|
-| `skills` | `.claude/skills/` | `.github/skills/` | `.kiro/skills/` |
-| `instructions` | `.claude/rules/` | `.github/instructions/` | `.kiro/steering/` |
-| `settings` | `.claude/settings.json` | `.copilot/config.json` | `.kiro/settings/cli.json` |
-| `mcpServers` | `.claude/settings.json` | `.copilot/mcp.json` | `.kiro/settings/mcp.json` |
+| ai.\* option   | Claude                  | Copilot                 | Kiro                      |
+| -------------- | ----------------------- | ----------------------- | ------------------------- |
+| `skills`       | `.claude/skills/`       | `.github/skills/`       | `.kiro/skills/`           |
+| `instructions` | `.claude/rules/`        | `.github/instructions/` | `.kiro/steering/`         |
+| `settings`     | `.claude/settings.json` | `.copilot/config.json`  | `.kiro/settings/cli.json` |
+| `mcpServers`   | `.claude/settings.json` | `.copilot/mcp.json`     | `.kiro/settings/mcp.json` |
 
 > **Note:** Generated files are `.gitignore`'d. They're recreated on
 > every `devenv shell` entry.
 
 ## Differences from Home-Manager
 
-| Aspect | Home-Manager | DevEnv |
-|--------|-------------|--------|
-| Scope | System-wide (`~/.claude/`) | Project-local (`.claude/`) |
-| Persistence | Survives shell exit | Recreated on shell entry |
-| MCP servers | `services.mcp-servers` (systemd) | Inline per-CLI config |
-| Stacked workflows | Module with git presets | Manual skill wiring |
-| Fragment pipeline | N/A | `files.*` materialization |
+| Aspect            | Home-Manager                     | DevEnv                     |
+| ----------------- | -------------------------------- | -------------------------- |
+| Scope             | System-wide (`~/.claude/`)       | Project-local (`.claude/`) |
+| Persistence       | Survives shell exit              | Recreated on shell entry   |
+| MCP servers       | `services.mcp-servers` (systemd) | Inline per-CLI config      |
+| Stacked workflows | Module with git presets          | Manual skill wiring        |
+| Fragment pipeline | N/A                              | `files.*` materialization  |
 
 ## Next steps
 
-- [The Unified ai.* Module](../concepts/unified-ai-module.md) — same
+- [The Unified ai.\* Module](../concepts/unified-ai-module.md) — same
   module, both HM and devenv
 - [Overlays & Packages](../concepts/overlays-packages.md) — what the
   overlay provides

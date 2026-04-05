@@ -15,7 +15,7 @@
 
 # Core Concepts
 
-- [The Unified ai.* Module](./concepts/unified-ai-module.md)
+- [The Unified ai.\* Module](./concepts/unified-ai-module.md)
 - [Overlays & Packages](./concepts/overlays-packages.md)
 - [Fragments & Composition](./concepts/fragments.md)
 - [Credentials & Secrets](./concepts/credentials.md)
@@ -36,7 +36,7 @@
 
 - [lib API](./reference/lib-api.md)
 - [Types](./reference/types.md)
-- [ai.* Mapping Table](./reference/ai-mapping.md)
+- [ai.\* Mapping Table](./reference/ai-mapping.md)
 
 ---
 
