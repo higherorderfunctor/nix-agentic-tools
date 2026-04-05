@@ -49,9 +49,8 @@
 
 ### Fragment Presets (refactor of existing content)
 
-- [ ] Named preset compositions from existing fragments — e.g.
-      `agentic-tools-dev` = all coding-standards + routing-table,
-      `minimal-coding` = coding-standards + commit-convention only
+- [x] Named preset compositions: `coding-standards.presets.all`,
+      `coding-standards.presets.minimal`, `lib.presets.agentic-tools-dev`
 
 ### README & Documentation
 
