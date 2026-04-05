@@ -93,53 +93,52 @@
     apps = forAllSystems (system: let
       pkgs = pkgsFor system;
       devPackages = fragments.packagesWithProfile "dev";
+      nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") devPackages;
       generateScript = pkgs.writeShellApplication {
         name = "generate";
         text = let
-          claudeCommon = fragments.mkInstructions {
-            package = "monorepo";
-            profile = "dev";
-            ecosystem = "claude";
-          };
-          kiroCommon = fragments.mkInstructions {
-            package = "monorepo";
-            profile = "dev";
-            ecosystem = "kiro";
-          };
-          copilotCommon = fragments.mkInstructions {
-            package = "monorepo";
-            profile = "dev";
-            ecosystem = "copilot";
-          };
-          agentsBase = fragments.mkInstructions {
-            package = "monorepo";
-            profile = "dev";
-            ecosystem = "agentsmd";
-          };
-          agentsPackageContent = builtins.concatStringsSep "\n" (lib.mapAttrsToList (pkg: _:
-            fragments.mkPackageContent {
-              package = pkg;
-              profile = "dev";
-            })
-          nonRootPackages);
-          agentsContent = agentsBase + lib.optionalString (agentsPackageContent != "") ("\n" + agentsPackageContent);
-          nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") devPackages;
+          # Helper: compose fragments for a package profile
+          mkComposed = package: profile: let
+            prof = fragments.packageProfiles.${package}.${profile};
+          in
+            fragments.compose {
+              fragments =
+                map fragments.readCommonFragment prof.common
+                ++ map (fragments.readPackageFragment package) prof.package;
+            };
+
+          # Helper: generate per-ecosystem file from a composed fragment
+          mkEcosystemFile = ecosystem: package: composed: let
+            fm = fragments.ecosystems.${ecosystem}.mkFrontmatter package;
+            fmStr =
+              if fm == null
+              then ""
+              else fragments.mkFrontmatter fm + "\n";
+          in
+            fmStr + composed.text;
+
+          rootComposed = mkComposed "monorepo" "dev";
+          claudeCommon = mkEcosystemFile "claude" "monorepo" rootComposed;
+          kiroCommon = mkEcosystemFile "kiro" "monorepo" rootComposed;
+          copilotCommon = mkEcosystemFile "copilot" "monorepo" rootComposed;
+          agentsContent = let
+            packageContents = lib.mapAttrsToList (pkg: _: let
+              prof = fragments.packageProfiles.${pkg}."dev";
+              pkgOnly = fragments.compose {
+                fragments = map (fragments.readPackageFragment pkg) prof.package;
+              };
+            in
+              pkgOnly.text)
+            nonRootPackages;
+          in
+            rootComposed.text
+            + lib.optionalString (packageContents != [])
+            ("\n" + builtins.concatStringsSep "\n" packageContents);
           perPackageOutputs = lib.concatMapStringsSep "\n" (pkg: let
-            claude = fragments.mkInstructions {
-              package = pkg;
-              profile = "dev";
-              ecosystem = "claude";
-            };
-            kiro = fragments.mkInstructions {
-              package = pkg;
-              profile = "dev";
-              ecosystem = "kiro";
-            };
-            copilot = fragments.mkInstructions {
-              package = pkg;
-              profile = "dev";
-              ecosystem = "copilot";
-            };
+            composed = mkComposed pkg "dev";
+            claude = mkEcosystemFile "claude" pkg composed;
+            kiro = mkEcosystemFile "kiro" pkg composed;
+            copilot = mkEcosystemFile "copilot" pkg composed;
           in ''
             cat > "$REPO_ROOT/.claude/rules/${pkg}.md" << 'FRAGMENT_EOF'
             ${claude}
