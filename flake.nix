@@ -72,7 +72,7 @@
     in {
       inherit fragments;
       inherit (devshellLib) mkAgenticShell;
-      inherit (mcpLib) loadServer mkStdioEntry mkHttpEntry mkStdioConfig;
+      inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig;
       mkMcpConfig = entries: {mcpServers = entries;};
       mapTools = f: lib.concatLists (lib.mapAttrsToList (server: tools: map (tool: f server tool) tools));
       externalServers = {

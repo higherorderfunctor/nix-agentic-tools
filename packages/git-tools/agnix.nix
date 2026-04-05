@@ -26,6 +26,8 @@ in {
     # Telemetry test fails in Nix sandbox (no $HOME / no network)
     checkFlags = ["--skip" "test_telemetry_enable_disable_roundtrip"];
 
+    passthru.mcpBinary = "agnix-mcp";
+
     meta = {
       description = "Linter, LSP, and MCP server for AI coding assistant config files";
       homepage = "https://github.com/agent-sh/agnix";

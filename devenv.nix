@@ -16,8 +16,17 @@
   });
   inherit (gitToolsPkgs) agnix;
 
-  # Serena MCP — flake input, not overlay (complex Python deps)
-  serena = inputs.serena.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  # Serena MCP — flake input, not overlay (complex Python deps).
+  # Override passthru to carry mcpArgs so mkPackageEntry works.
+  serena = let
+    upstream = inputs.serena.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  in
+    upstream.overrideAttrs {passthru.mcpArgs = ["start-mcp-server"];};
+
+  # ── MCP entry helper ─────────────────────────────────────────────────
+  # Derive stdio MCP entry from package passthru (single source of truth).
+  mcpLib = import ./lib/mcp.nix {inherit lib;};
+  inherit (mcpLib) mkPackageEntry;
 
   # Build AGENTS.md content from all packages
   devPackages = fragments.packagesWithProfile "dev";
@@ -173,15 +182,8 @@ in {
   copilot = {
     enable = true;
     mcpServers = {
-      agnix = {
-        type = "stdio";
-        command = "${agnix}/bin/agnix-mcp";
-      };
-      serena = {
-        type = "stdio";
-        command = "${serena}/bin/serena";
-        args = ["start-mcp-server"];
-      };
+      agnix = mkPackageEntry agnix;
+      serena = mkPackageEntry serena;
     };
   };
 
@@ -189,15 +191,8 @@ in {
   kiro = {
     enable = true;
     mcpServers = {
-      agnix = {
-        type = "stdio";
-        command = "${agnix}/bin/agnix-mcp";
-      };
-      serena = {
-        type = "stdio";
-        command = "${serena}/bin/serena";
-        args = ["start-mcp-server"];
-      };
+      agnix = mkPackageEntry agnix;
+      serena = mkPackageEntry serena;
     };
   };
 
@@ -252,15 +247,8 @@ in {
     env.ENABLE_LSP_TOOL = "1";
 
     mcpServers = {
-      agnix = {
-        type = "stdio";
-        command = "${agnix}/bin/agnix-mcp";
-      };
-      serena = {
-        type = "stdio";
-        command = "${serena}/bin/serena";
-        args = ["start-mcp-server"];
-      };
+      agnix = mkPackageEntry agnix;
+      serena = mkPackageEntry serena;
       devenv = {
         type = "http";
         url = "https://mcp.devenv.sh/mcp";

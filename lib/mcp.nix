@@ -194,6 +194,22 @@
         + (evaluatedSettings.path or "");
     };
 
+  # ── Derive MCP entry from package passthru ─────────────────────────
+  # Packages carry mcpBinary/mcpArgs in passthru; this function derives
+  # a stdio entry without requiring a server module. Used by devenv and
+  # consumers who wire MCP servers directly from overlay packages.
+  #
+  # passthru.mcpBinary — binary name when it differs from mainProgram
+  # passthru.mcpArgs   — subcommand/flags (e.g. ["start-mcp-server"])
+  mkPackageEntry = package: {
+    type = "stdio";
+    command =
+      if package ? mcpBinary
+      then "${package}/bin/${package.mcpBinary}"
+      else getExe package;
+    args = package.mcpArgs or [];
+  };
+
   # ── Convenience: multiple servers at once ──────────────────────────
   mkStdioConfig = pkgs: serverConfigs: {
     mcpServers = mapAttrs (name: cfg:
@@ -212,6 +228,7 @@ in {
     mkCredentialsOption
     mkCredentialsSnippet
     mkHttpEntry
+    mkPackageEntry
     mkSecretsWrapper
     mkStdioConfig
     mkStdioEntry
