@@ -6,7 +6,8 @@
 ## Architecture
 
 - **Standalone devenv CLI** for dev shell (not flake-based)
-- **Top-level `ai`** HM namespace for unified Claude/Copilot/Kiro config
+- **Top-level `ai`** namespace for unified config (HM and devenv)
+- **Config parity** — lib, HM, and devenv must align in capability
 - **MCP bridging** via `programs.mcp.servers`
 - **treefmt** via devenv built-in module (replaced dprint)
 - **Fragment pipeline** materializes ecosystem files via devenv `files.*`
@@ -18,7 +19,7 @@
 
 Wire this flake as input to nixos-config. Validate the final form.
 
-### Consumer Integration
+### Consumer Integration (HITL — requires nixos-config)
 
 - [ ] Add `inputs.agentic-tools` to nixos-config with follows
 - [ ] Verify overlays + 8 interface contracts hold
@@ -27,26 +28,25 @@ Wire this flake as input to nixos-config. Validate the final form.
 - [ ] Remove `inputs.nix-mcp-servers` + `inputs.stacked-workflow-skills`
 - [ ] Verify `home-manager switch` end-to-end
 
-### HM Module Verification
+### HM Module Verification (HITL — requires system test)
 
 - [ ] Kiro openmemory MCP: migrate from raw npx to mkStdioEntry
 - [ ] Verify copilot-cli activation merge (settings deep-merge)
 - [ ] Verify kiro-cli steering file generation (YAML frontmatter)
 - [ ] Verify stacked-workflows integrations wire all 3 ecosystems
 
-### Skill Wiring
+### devenv ai.* Settings Normalization
 
-- [x] Wire dev + consumer skills into each ecosystem via devenv files.\*
-- [x] Register dev skills as invocable
+- [ ] Add normalized `ai.settings` to devenv ai module (model, telemetry)
+  that translates to ecosystem-specific settings per CLI
+- [ ] Expand devenv copilot/kiro modules with richer settings options
+  matching claude.code depth (hooks, permissions where applicable)
 
-### Cleanup
+### Remaining Cleanup
 
-- [x] Replace `<!-- dprint-ignore -->` with `<!-- prettier-ignore -->`
-- [x] DRY: extract shared copilot-cli + kiro-cli helpers into lib/
-- [x] DRY: extract shared MCP submodule from devenv copilot/kiro
-- [x] aws-mcp.nix orphaned server definition — wire or remove
 - [ ] CUDA — verify packages build with cudaSupport on x86_64-linux
-- [ ] Wire LSPs to AI CLI modules (nixd, marksman, taplo)
+- [ ] Review config parity matrix in references/config-parity.md against
+  actual module implementations — close any remaining gaps
 
 ---
 
