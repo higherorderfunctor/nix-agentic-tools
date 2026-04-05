@@ -2,11 +2,6 @@
   description = "Agentic tools — skills, MCP servers, and home-manager modules for AI coding CLIs";
 
   inputs = {
-    devenv.url = "github:cachix/devenv";
-    git-hooks = {
-      url = "github:cachix/git-hooks.nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     mcp-nixos = {
       url = "github:utensils/mcp-nixos";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -20,23 +15,6 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    treefmt-nix = {
-      url = "github:numtide/treefmt-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    # NOTE: treefmt-nix is consumed by devenv's treefmt module, not directly.
-    # CI uses `devenv test` which runs treefmt via git-hooks.
-  };
-
-  nixConfig = {
-    extra-trusted-public-keys = [
-      "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw="
-      "pre-commit-hooks.cachix.org-1:Pkk3Panw5AW24TOv6kz3PvLhlH8puAsJTBbOPmBo7Rc="
-    ];
-    extra-substituters = [
-      "https://devenv.cachix.org"
-      "https://pre-commit-hooks.cachix.org"
-    ];
   };
 
   outputs = {
@@ -199,14 +177,8 @@
     in
       moduleChecks // devshellChecks);
 
-    devShells = forAllSystems (system: let
-      pkgs = pkgsFor system;
-    in {
-      default = inputs.devenv.lib.mkShell {
-        inherit inputs pkgs;
-        modules = [./devenv.nix];
-      };
-    });
+    # devShell provided by devenv CLI (devenv shell / devenv test)
+    # See devenv.nix for shell configuration.
 
     packages = forAllSystems (system: let
       pkgs = pkgsFor system;
