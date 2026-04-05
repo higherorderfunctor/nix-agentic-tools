@@ -7,6 +7,10 @@
       url = "github:berberman/nvfetcher";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    mcp-nixos = {
+      url = "github:utensils/mcp-nixos";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -34,8 +38,12 @@
     fragments = import ./lib/fragments.nix {inherit lib;};
   in {
     overlays = {
-      default = import ./packages/git-tools {inherit inputs;};
+      default = lib.composeManyExtensions [
+        (import ./packages/git-tools {inherit inputs;})
+        (import ./packages/mcp-servers {inherit inputs;})
+      ];
       git-tools = import ./packages/git-tools {inherit inputs;};
+      mcp-servers = import ./packages/mcp-servers {inherit inputs;};
     };
 
     homeManagerModules = {
@@ -132,6 +140,11 @@
       pkgs = pkgsFor system;
     in {
       inherit (pkgs) git-absorb git-branchless git-revise;
+      inherit (pkgs.nix-mcp-servers)
+        context7-mcp effect-mcp fetch-mcp git-intel-mcp git-mcp
+        github-mcp kagi-mcp mcp-proxy nixos-mcp openmemory-mcp
+        sequential-thinking-mcp sympy-mcp
+        ;
     });
   };
 }
