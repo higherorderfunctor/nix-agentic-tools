@@ -187,10 +187,77 @@
   packagesWithProfile = profile:
     lib.filterAttrs (_: profiles: profiles ? ${profile})
     packageProfiles;
+
+  # -- Typed fragment constructors and composition -----------------------------
+
+  # Compose a list of fragments into a single fragment.
+  # Sorts by priority descending (higher = earlier), deduplicates by text
+  # content hash, then concatenates into a single mkFragment.
+  # Optional overrides (description, paths, priority) name the output fragment.
+  compose = {
+    fragments,
+    description ? null,
+    paths ? null,
+    priority ? 0,
+  }: let
+    sorted = lib.sort (a: b: a.priority > b.priority) fragments;
+    deduped =
+      builtins.foldl' (
+        acc: frag: let
+          key = builtins.hashString "sha256" frag.text;
+          inherit (acc) seen;
+        in
+          if seen ? ${key}
+          then acc
+          else {
+            seen = seen // {"${key}" = true;};
+            result = acc.result ++ [frag];
+          }
+      ) {
+        seen = {};
+        result = [];
+      }
+      sorted;
+    combined = builtins.concatStringsSep "\n" (map (f: f.text) deduped.result);
+  in
+    mkFragment {
+      inherit description paths priority;
+      text = combined;
+    };
+
+  # Canonical fragment constructor.
+  # Returns a normalized attrset with all fields defaulted:
+  #   { text, description, paths, priority }
+  mkFragment = {
+    text,
+    description ? null,
+    paths ? null,
+    priority ? 0,
+  }: {
+    inherit description paths priority text;
+  };
+
+  # Typed wrapper around readCommon — returns a fragment with priority 10.
+  readCommonFragment = name:
+    mkFragment {
+      text = readCommon name;
+      description = "common/${name}";
+      priority = 10;
+    };
+
+  # Typed wrapper around readPackage — returns a fragment with priority 5.
+  readPackageFragment = package: name:
+    mkFragment {
+      text = readPackage package name;
+      description = "packages/${package}/${name}";
+      priority = 5;
+    };
 in {
   inherit
+    compose
     ecosystems
     mkContent
+    mkFragment
     mkFrontmatter
     mkInstructions
     mkPackageContent
@@ -198,6 +265,8 @@ in {
     packageProfiles
     packagesWithProfile
     readCommon
+    readCommonFragment
     readPackage
+    readPackageFragment
     ;
 }
