@@ -7,7 +7,7 @@
 #   .github/skills/{name} — skill directories (symlinked)
 #   .copilot/agents/{name}.md — agent files
 #   .copilot/config.json — settings
-#   .vscode/mcp.json — MCP server config
+#   .copilot/mcp.json — MCP server config
 {
   pkgs,
   lib,
@@ -103,7 +103,7 @@ in {
       }
       # MCP servers
       // lib.optionalAttrs (cfg.mcpServers != {}) {
-        ".vscode/mcp.json".json = {inherit mcpServers;};
+        ".copilot/mcp.json".json = {inherit mcpServers;};
       }
       # Settings
       // lib.optionalAttrs (filteredSettings != {}) {

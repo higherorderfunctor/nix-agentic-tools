@@ -36,7 +36,7 @@
     ;
 
   aiCommon = import ../../lib/ai-common.nix {inherit lib;};
-  inherit (aiCommon) instructionModule mkClaudeRule mkCopilotInstruction mkKiroSteering;
+  inherit (aiCommon) instructionModule lspServerModule mkClaudeRule mkCopilotInstruction mkCopilotLspConfig mkKiroSteering mkLspConfig;
 
   cfg = config.ai;
 
@@ -84,18 +84,17 @@ in {
     };
 
     lspServers = mkOption {
-      type = types.attrsOf types.anything;
+      type = types.attrsOf lspServerModule;
       default = {};
       description = ''
-        Shared LSP server definitions. Injected into each enabled CLI's
-        lspServers option at mkDefault priority. Format is ecosystem-agnostic
-        (JSON attrset with command/args); each CLI writes it to its own
-        config path.
+        Typed LSP server definitions with explicit packages. Transformed
+        to per-ecosystem JSON (with full store paths) during fanout.
+        Each CLI writes the result to its own config path.
       '';
       example = lib.literalExpression ''
         {
-          nix = { command = "nixd"; args = []; };
-          markdown = { command = "marksman"; args = []; };
+          nixd = { package = pkgs.nixd; extensions = ["nix"]; };
+          marksman = { package = pkgs.marksman; extensions = ["md"]; };
         }
       '';
     };
@@ -177,6 +176,10 @@ in {
             })
             cfg.skills);
       }
+      # Auto-set ENABLE_LSP_TOOL=1 when LSP servers are configured
+      (mkIf (cfg.lspServers != {} && hasModule ["programs" "claude-code" "settings"]) {
+        programs.claude-code.settings.env.ENABLE_LSP_TOOL = mkDefault "1";
+      })
       # Normalized model setting (only if upstream module is available)
       (mkIf (cfg.settings.model != null && hasModule ["programs" "claude-code" "settings"]) {
         programs.claude-code.settings.model = mkDefault cfg.settings.model;
@@ -191,7 +194,9 @@ in {
         instructions = lib.mapAttrs (name: instr:
           mkDefault (mkCopilotInstruction name instr))
         cfg.instructions;
-        lspServers = lib.mapAttrs (_: mkDefault) cfg.lspServers;
+        lspServers = lib.mapAttrs (name: server:
+          mkDefault (mkCopilotLspConfig name server))
+        cfg.lspServers;
         settings = lib.optionalAttrs (cfg.settings.model != null) {
           model = mkDefault cfg.settings.model;
         };
@@ -204,7 +209,9 @@ in {
       programs.kiro-cli = {
         environmentVariables =
           lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
-        lspServers = lib.mapAttrs (_: mkDefault) cfg.lspServers;
+        lspServers = lib.mapAttrs (name: server:
+          mkDefault (mkLspConfig name server))
+        cfg.lspServers;
         settings = mkMerge [
           (lib.optionalAttrs (cfg.settings.model != null) {
             chat.defaultModel = mkDefault cfg.settings.model;

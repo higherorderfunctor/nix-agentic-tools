@@ -1,9 +1,9 @@
 # DevShell module evaluation tests.
 # Verifies mkAgenticShell produces valid shells for representative configs.
 {
-  lib,
   pkgs,
   self,
+  ...
 }: let
   inherit (self.lib) mkAgenticShell;
 

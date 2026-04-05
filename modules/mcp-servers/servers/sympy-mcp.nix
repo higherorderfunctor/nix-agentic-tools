@@ -1,4 +1,4 @@
-{lib, ...}: {
+_: {
   meta = {
     modes = {
       stdio = "sympy-mcp";

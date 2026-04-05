@@ -1,4 +1,4 @@
-{lib, ...}: {
+_: {
   meta = {
     modes = {
       stdio = "sequential-thinking-mcp";

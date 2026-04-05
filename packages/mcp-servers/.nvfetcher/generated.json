@@ -100,6 +100,27 @@
     },
     "version": "0.1.4"
   },
+  "mcp-language-server": {
+    "cargoLock": null,
+    "date": null,
+    "extract": null,
+    "name": "mcp-language-server",
+    "passthru": null,
+    "pinned": false,
+    "src": {
+      "deepClone": false,
+      "fetchSubmodules": false,
+      "leaveDotGit": false,
+      "name": null,
+      "owner": "isaacphi",
+      "repo": "mcp-language-server",
+      "rev": "v0.1.1",
+      "sha256": "sha256-T0wuPSShJqVW+CcQHQuZnh3JOwqUxAKv1OCHwZMr7KM=",
+      "sparseCheckout": [],
+      "type": "github"
+    },
+    "version": "v0.1.1"
+  },
   "mcp-proxy": {
     "cargoLock": null,
     "date": null,

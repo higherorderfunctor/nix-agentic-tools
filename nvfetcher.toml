@@ -63,6 +63,11 @@ src.use_commit = true
 src.branch = "master"
 fetch.git = "https://github.com/hoangsonww/GitIntel-MCP-Server.git"
 
+# Upstream: https://github.com/isaacphi/mcp-language-server (tagged releases)
+[mcp-language-server]
+src.github = "isaacphi/mcp-language-server"
+fetch.github = "isaacphi/mcp-language-server"
+
 # Upstream: https://github.com/sdiehl/sympy-mcp (no releases)
 [sympy-mcp]
 src.git = "https://github.com/sdiehl/sympy-mcp.git"

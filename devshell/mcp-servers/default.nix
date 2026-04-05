@@ -5,7 +5,6 @@
 {
   config,
   lib,
-  pkgs,
   ...
 }: let
   cfg = config.mcpServers;
@@ -13,7 +12,7 @@
   enabledServers = lib.filterAttrs (_: srv: srv.enable) cfg;
 
   # Build the mcpServers JSON for .mcp.json
-  mcpConfig = lib.mapAttrs (name: srv: let
+  mcpConfig = lib.mapAttrs (_: srv: let
     base =
       if srv.url != null
       then {

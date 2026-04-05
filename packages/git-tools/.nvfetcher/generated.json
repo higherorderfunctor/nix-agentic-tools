@@ -13,12 +13,12 @@
       "name": null,
       "owner": "agent-sh",
       "repo": "agnix",
-      "rev": "v0.16.5",
-      "sha256": "sha256-VUd+i1vogfLMkoJ/hzYR6besxlnKWSyH4LBYPfs1h0o=",
+      "rev": "v0.18.0",
+      "sha256": "sha256-R7luTBydtj8H8L/rRXYvWEy45Krg+lL9gTeJL4j/0uA=",
       "sparseCheckout": [],
       "type": "github"
     },
-    "version": "v0.16.5"
+    "version": "v0.18.0"
   },
   "git-absorb": {
     "cargoLock": null,

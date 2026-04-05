@@ -9,7 +9,6 @@
 {
   config,
   lib,
-  options,
   ...
 }: let
   cfg = config.stacked-workflows;

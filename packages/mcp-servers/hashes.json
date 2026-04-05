@@ -8,6 +8,9 @@
   "github-mcp-server": {
     "vendorHash": "sha256-q21hnMnWOzfg7BGDl4KM1I3v0wwS5sSxzLA++L6jO4s="
   },
+  "mcp-language-server": {
+    "vendorHash": "sha256-3NEG9o5AF2ZEFWkA9Gub8vn6DNptN6DwVcn/oR8ujW0="
+  },
   "openmemory-mcp": {
     "npmDepsHash": "sha256-D5pw9g8sxk8+9GaC9g/WwxK3XkLDXdrqxBFj3dhU2Io="
   },

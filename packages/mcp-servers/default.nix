@@ -25,6 +25,7 @@
   git-mcp = callPkg ./git-mcp.nix;
   github-mcp = callPkg ./github-mcp.nix;
   kagi-mcp = callPkg ./kagi-mcp.nix;
+  mcp-language-server = callPkg ./mcp-language-server.nix;
   mcp-proxy = callPkg ./mcp-proxy.nix;
   nixos-mcp = callPkg ./nixos-mcp.nix;
   openmemory-mcp = callPkg ./openmemory-mcp.nix;
@@ -43,6 +44,7 @@ in {
       git-mcp
       github-mcp
       kagi-mcp
+      mcp-language-server
       mcp-proxy
       nixos-mcp
       openmemory-mcp

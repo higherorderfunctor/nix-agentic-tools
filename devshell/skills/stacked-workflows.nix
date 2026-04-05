@@ -5,7 +5,6 @@
 {
   config,
   lib,
-  pkgs,
   ...
 }: let
   cfg = config.skills.stacked-workflows;

@@ -8,6 +8,67 @@
 # - modules/devenv/copilot.nix (filterNulls via hm-helpers)
 # - modules/devenv/kiro.nix (filterNulls via hm-helpers)
 {lib}: {
+  # ── LSP server submodule type ──────────────────────────────────────
+  # Typed LSP server definition. The ai.* module holds these; fanout
+  # transforms to per-ecosystem JSON via mkLspConfig / mkCopilotLspConfig.
+  lspServerModule = lib.types.submodule ({name, ...}: {
+    options = {
+      args = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = ["--stdio"];
+        description = "Arguments to pass to the LSP binary.";
+      };
+      binary = lib.mkOption {
+        type = lib.types.str;
+        default = name;
+        description = "Binary name within the package (defaults to the attribute name).";
+      };
+      extensions = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        description = "File extensions this server handles (without leading dots).";
+        example = ["nix"];
+      };
+      initializationOptions = lib.mkOption {
+        type = lib.types.attrs;
+        default = {};
+        description = "LSP initialization options passed during handshake.";
+      };
+      package = lib.mkOption {
+        type = lib.types.package;
+        description = "The LSP server package.";
+      };
+    };
+  });
+
+  # ── LSP config transforms ─────────────────────────────────────────
+  # Transform a typed LSP server to the JSON format expected by CLIs.
+  # Base format (Kiro): { command, args, ?initializationOptions }
+  mkLspConfig = _name: server:
+    {
+      command = "${server.package}/bin/${server.binary}";
+      inherit (server) args;
+    }
+    // lib.optionalAttrs (server.initializationOptions != {}) {
+      inherit (server) initializationOptions;
+    };
+
+  # Copilot adds fileExtensions mapping: { ".ext" = "serverName"; }
+  mkCopilotLspConfig = name: server:
+    {
+      command = "${server.package}/bin/${server.binary}";
+      inherit (server) args;
+    }
+    // lib.optionalAttrs (server.extensions != []) {
+      fileExtensions = lib.listToAttrs (map (ext: {
+          name = ".${ext}";
+          value = name;
+        })
+        server.extensions);
+    }
+    // lib.optionalAttrs (server.initializationOptions != {}) {
+      inherit (server) initializationOptions;
+    };
+
   # ── Instruction submodule type ──────────────────────────────────────
   # Shared semantic fields, translated per ecosystem by frontmatter generators.
   instructionModule = lib.types.submodule {

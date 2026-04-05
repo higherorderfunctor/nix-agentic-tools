@@ -3,14 +3,7 @@
 #
 # Uses the same fragment pipeline as the monorepo but scoped to
 # what the consumer project needs.
-{
-  config,
-  lib,
-  pkgs,
-  ...
-}: let
-  cfg = config.instructions;
-in {
+{lib, ...}: {
   options.instructions = {
     enable = lib.mkEnableOption "instruction file generation in the devshell";
 

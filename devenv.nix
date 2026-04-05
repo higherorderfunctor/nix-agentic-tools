@@ -1,9 +1,20 @@
 {
   pkgs,
   lib,
+  inputs,
   ...
 }: let
   fragments = import ./lib/fragments.nix {inherit lib;};
+
+  # ── Overlay packages ─────────────────────────────────────────────────
+  # devenv's pkgs lacks the flake overlay. Apply git-tools overlay to get
+  # agnix (reuses packages/git-tools/ definition, no build duplication).
+  gitToolsPkgs = pkgs.extend (import ./packages/git-tools {
+    inputs = {
+      inherit (inputs) nixpkgs rust-overlay;
+    };
+  });
+  inherit (gitToolsPkgs) agnix;
 
   # Build AGENTS.md content from all packages
   devPackages = fragments.packagesWithProfile "dev";
@@ -67,12 +78,23 @@ in {
   ];
 
   # ── Packages ──────────────────────────────────────────────────────────
-  packages = with pkgs; [
-    cspell
-    deadnix
-    nvfetcher
-    statix
-  ];
+  packages =
+    (with pkgs; [
+      # Dev tools
+      cspell
+      deadnix
+      nvfetcher
+      statix
+
+      # LSP servers (in PATH for ENABLE_LSP_TOOL and MCP bridging)
+      marksman
+      nixd
+      taplo
+    ])
+    ++ [
+      # Overlay packages (built from repo sources, not in devenv's pkgs)
+      agnix
+    ];
 
   # ── Unified AI Config ─────────────────────────────────────────────────
   ai = {
@@ -123,9 +145,15 @@ in {
   # ── Git Hooks ─────────────────────────────────────────────────────────
   # treefmt hook is auto-wired by treefmt.enable above
   git-hooks.hooks = {
-    # Nix linting
-    deadnix.enable = true;
-    statix.enable = true;
+    # Nix linting (exclude auto-generated nvfetcher files)
+    deadnix = {
+      enable = true;
+      excludes = [".*\\.nvfetcher/.*"];
+    };
+    statix = {
+      enable = true;
+      excludes = [".*\\.nvfetcher/.*"];
+    };
 
     # Spelling
     cspell.enable = true;
@@ -139,10 +167,22 @@ in {
   };
 
   # ── Copilot ────────────────────────────────────────────────────────────
-  copilot.enable = true;
+  copilot = {
+    enable = true;
+    mcpServers.agnix = {
+      type = "stdio";
+      command = "${agnix}/bin/agnix-mcp";
+    };
+  };
 
   # ── Kiro ──────────────────────────────────────────────────────────────
-  kiro.enable = true;
+  kiro = {
+    enable = true;
+    mcpServers.agnix = {
+      type = "stdio";
+      command = "${agnix}/bin/agnix-mcp";
+    };
+  };
 
   # ── Claude Code ───────────────────────────────────────────────────────
   claude.code = {
@@ -192,7 +232,13 @@ in {
       Read.allow = ["references/*"];
     };
 
+    env.ENABLE_LSP_TOOL = "1";
+
     mcpServers = {
+      agnix = {
+        type = "stdio";
+        command = "${agnix}/bin/agnix-mcp";
+      };
       devenv = {
         type = "http";
         url = "https://mcp.devenv.sh/mcp";

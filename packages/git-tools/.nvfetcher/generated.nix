@@ -7,13 +7,13 @@
 }: {
   agnix = {
     pname = "agnix";
-    version = "v0.16.5";
+    version = "v0.18.0";
     src = fetchFromGitHub {
       owner = "agent-sh";
       repo = "agnix";
-      rev = "v0.16.5";
+      rev = "v0.18.0";
       fetchSubmodules = false;
-      sha256 = "sha256-VUd+i1vogfLMkoJ/hzYR6besxlnKWSyH4LBYPfs1h0o=";
+      sha256 = "sha256-R7luTBydtj8H8L/rRXYvWEy45Krg+lL9gTeJL4j/0uA=";
     };
   };
   git-absorb = {

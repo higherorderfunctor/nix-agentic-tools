@@ -77,10 +77,10 @@ in rec {
   # nixSettingsPath: Nix store path to the generated settings JSON
   # jq: path to jq binary
   mkSettingsActivationScript = {
-    configDir,
     configFile,
     nixSettingsPath,
     jq,
+    ...
   }: let
     parentDir = builtins.dirOf configFile;
   in ''

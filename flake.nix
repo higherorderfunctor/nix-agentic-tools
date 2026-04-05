@@ -189,7 +189,7 @@
       # AI CLIs
       inherit (pkgs) github-copilot-cli kiro-cli kiro-gateway;
       # Git tools
-      inherit (pkgs) git-absorb git-branchless git-revise;
+      inherit (pkgs) agnix git-absorb git-branchless git-revise;
       inherit
         (pkgs.nix-mcp-servers)
         context7-mcp
@@ -199,6 +199,7 @@
         git-mcp
         github-mcp
         kagi-mcp
+        mcp-language-server
         mcp-proxy
         nixos-mcp
         openmemory-mcp

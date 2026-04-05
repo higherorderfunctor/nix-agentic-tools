@@ -15,6 +15,7 @@
     lib.foldl' lib.recursiveUpdate {} (map applyOverlay overlayPaths);
 
   localOverlays = [
+    ./agnix.nix
     ./git-absorb.nix
     ./git-branchless.nix
     ./git-revise.nix

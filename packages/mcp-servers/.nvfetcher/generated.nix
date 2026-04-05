@@ -62,6 +62,17 @@
       sha256 = "sha256-fCFmd6BKyyeggekFsJtno394ZeswTYSRELryHQQAcyY=";
     };
   };
+  mcp-language-server = {
+    pname = "mcp-language-server";
+    version = "v0.1.1";
+    src = fetchFromGitHub {
+      owner = "isaacphi";
+      repo = "mcp-language-server";
+      rev = "v0.1.1";
+      fetchSubmodules = false;
+      sha256 = "sha256-T0wuPSShJqVW+CcQHQuZnh3JOwqUxAKv1OCHwZMr7KM=";
+    };
+  };
   mcp-proxy = {
     pname = "mcp-proxy";
     version = "0.11.0";
