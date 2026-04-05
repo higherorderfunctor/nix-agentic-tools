@@ -27,97 +27,18 @@
     (lib)
     attrByPath
     concatMapAttrs
-    filterAttrs
     mkDefault
     mkEnableOption
     mkIf
     mkMerge
     mkOption
-    optionalAttrs
     types
     ;
 
+  aiCommon = import ../../lib/ai-common.nix {inherit lib;};
+  inherit (aiCommon) instructionModule mkClaudeRule mkCopilotInstruction mkKiroSteering;
+
   cfg = config.ai;
-
-  # Instruction submodule: shared semantic fields, translated per ecosystem.
-  instructionModule = types.submodule {
-    options = {
-      text = mkOption {
-        type = types.lines;
-        description = "Instruction body (markdown).";
-      };
-      paths = mkOption {
-        type = types.nullOr (types.listOf types.str);
-        default = null;
-        description = ''
-          File path globs this instruction applies to. null = always loaded.
-          Translated per ecosystem:
-          - Claude: paths: frontmatter
-          - Kiro: inclusion: fileMatch + fileMatchPattern:
-          - Copilot: applyTo: glob
-        '';
-      };
-      description = mkOption {
-        type = types.str;
-        default = "";
-        description = "Short description (used by Claude and Kiro frontmatter).";
-      };
-    };
-  };
-
-  # Generate Claude rules frontmatter
-  mkClaudeRule = name: instr: let
-    pathsYaml =
-      if instr.paths != null
-      then "\npaths:\n${lib.concatMapStringsSep "\n" (p: "  - \"${p}\"") instr.paths}"
-      else "";
-    descYaml =
-      if instr.description != ""
-      then "\ndescription: ${instr.description}"
-      else "";
-    frontmatter =
-      if pathsYaml != "" || descYaml != ""
-      then "---${descYaml}${pathsYaml}\n---\n\n"
-      else "";
-  in
-    frontmatter + instr.text;
-
-  # Generate Kiro steering frontmatter
-  mkKiroSteering = name: instr: let
-    inclusion =
-      if instr.paths != null
-      then "fileMatch"
-      else "always";
-    patternYaml =
-      if instr.paths != null
-      then "\nfileMatchPattern: \"${lib.concatStringsSep "," instr.paths}\""
-      else "";
-    descYaml =
-      if instr.description != ""
-      then "\ndescription: ${instr.description}"
-      else "";
-  in ''
-    ---
-    name: ${name}${descYaml}
-    inclusion: ${inclusion}${patternYaml}
-    ---
-
-    ${instr.text}
-  '';
-
-  # Generate Copilot instruction frontmatter
-  mkCopilotInstruction = name: instr: let
-    applyTo =
-      if instr.paths != null
-      then lib.concatStringsSep "," instr.paths
-      else "**";
-  in ''
-    ---
-    applyTo: "${applyTo}"
-    ---
-
-    ${instr.text}
-  '';
 
   # Check if a module option path exists (use options, not config)
   hasModule = path:

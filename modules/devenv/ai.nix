@@ -36,90 +36,13 @@
     types
     ;
 
+  aiCommon = import ../../lib/ai-common.nix {inherit lib;};
+  inherit (aiCommon) instructionModule mkClaudeRule mkCopilotInstruction mkKiroSteering;
+
   cfg = config.ai;
 
   # Check if an option path exists (returns true if defined, even if not set).
   hasOpt = path: lib.hasAttrByPath path config;
-
-  # Instruction submodule: shared semantic fields, translated per ecosystem.
-  instructionModule = types.submodule {
-    options = {
-      description = mkOption {
-        type = types.str;
-        default = "";
-        description = "Short description (used by Claude and Kiro frontmatter).";
-      };
-      paths = mkOption {
-        type = types.nullOr (types.listOf types.str);
-        default = null;
-        description = ''
-          File path globs this instruction applies to. null = always loaded.
-          Translated per ecosystem:
-          - Claude: paths: frontmatter
-          - Kiro: inclusion: fileMatch + fileMatchPattern:
-          - Copilot: applyTo: glob
-        '';
-      };
-      text = mkOption {
-        type = types.lines;
-        description = "Instruction body (markdown).";
-      };
-    };
-  };
-
-  # Generate Claude rules frontmatter
-  mkClaudeRule = name: instr: let
-    descYaml =
-      if instr.description != ""
-      then "\ndescription: ${instr.description}"
-      else "";
-    pathsYaml =
-      if instr.paths != null
-      then "\npaths:\n${lib.concatMapStringsSep "\n" (p: "  - \"${p}\"") instr.paths}"
-      else "";
-    frontmatter =
-      if pathsYaml != "" || descYaml != ""
-      then "---${descYaml}${pathsYaml}\n---\n\n"
-      else "";
-  in
-    frontmatter + instr.text;
-
-  # Generate Kiro steering frontmatter
-  mkKiroSteering = name: instr: let
-    inclusion =
-      if instr.paths != null
-      then "fileMatch"
-      else "always";
-    descYaml =
-      if instr.description != ""
-      then "\ndescription: ${instr.description}"
-      else "";
-    patternYaml =
-      if instr.paths != null
-      then "\nfileMatchPattern: \"${lib.concatStringsSep "," instr.paths}\""
-      else "";
-  in ''
-    ---
-    name: ${name}${descYaml}
-    inclusion: ${inclusion}${patternYaml}
-    ---
-
-    ${instr.text}
-  '';
-
-  # Generate Copilot instruction frontmatter
-  mkCopilotInstruction = _name: instr: let
-    applyTo =
-      if instr.paths != null
-      then lib.concatStringsSep "," instr.paths
-      else "**";
-  in ''
-    ---
-    applyTo: "${applyTo}"
-    ---
-
-    ${instr.text}
-  '';
 in {
   options.ai = {
     enable = mkEnableOption "unified AI configuration across Claude, Copilot, and Kiro";

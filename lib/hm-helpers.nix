@@ -2,20 +2,13 @@
 #
 # Provides content option builders, MCP server transformation, settings
 # utilities, and file generation helpers.
-{lib}: rec {
+{lib}: let
+  aiCommon = import ./ai-common.nix {inherit lib;};
+in rec {
   # ── Settings utilities ──────────────────────────────────────────────
 
-  # Recursively filter null values from an attrset (for typed settings
-  # with freeformType where defaults are null). Also removes empty
-  # sub-attrsets left after filtering.
-  filterNulls = attrs: let
-    mapped = lib.mapAttrs (_: v:
-      if lib.isAttrs v
-      then filterNulls v
-      else v)
-    attrs;
-  in
-    lib.filterAttrs (_: v: v != null && v != {}) mapped;
+  # Delegated to lib/ai-common.nix (single source of truth).
+  inherit (aiCommon) filterNulls;
 
   # ── Option builders ──────────────────────────────────────────────────
 
