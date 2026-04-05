@@ -48,14 +48,14 @@
   in {
     overlays = {
       ai-clis = import ./packages/ai-clis {inherit inputs;};
+      coding-standards = import ./packages/coding-standards {};
       default = lib.composeManyExtensions [
         (import ./packages/ai-clis {inherit inputs;})
-        (import ./packages/fragments {})
+        (import ./packages/coding-standards {})
         (import ./packages/git-tools {inherit inputs;})
         (import ./packages/mcp-servers {inherit inputs;})
         (import ./packages/stacked-workflows {})
       ];
-      fragments = import ./packages/fragments {};
       git-tools = import ./packages/git-tools {inherit inputs;};
       mcp-servers = import ./packages/mcp-servers {inherit inputs;};
       stacked-workflows = import ./packages/stacked-workflows {};
@@ -198,6 +198,8 @@
     in {
       # AI CLIs
       inherit (pkgs) github-copilot-cli kiro-cli kiro-gateway;
+      # Content packages
+      inherit (pkgs) coding-standards stacked-workflows-content;
       # Git tools
       inherit (pkgs) agnix git-absorb git-branchless git-revise;
       inherit
@@ -217,8 +219,6 @@
         serena-mcp
         sympy-mcp
         ;
-      # Stacked workflows
-      inherit (pkgs) stacked-workflows-content;
     });
   };
 }
