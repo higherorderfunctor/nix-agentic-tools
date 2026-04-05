@@ -44,6 +44,16 @@ skills, agents, and hooks.
 programs.kiro-cli.enable = true;
 ```
 
+## DevShell Usage
+
+Per-project AI tool configuration without home-manager.
+
+```nix
+devShells.default = inputs.agentic-tools.lib.mkAgenticShell pkgs {
+  name = "my-project";
+};
+```
+
 ## License
 
 Released under the [Unlicense](LICENSE).

@@ -27,8 +27,11 @@
       default = ./modules;
     };
 
-    lib = {
+    lib = let
+      devshellLib = import ./lib/devshell.nix {inherit lib;};
+    in {
       inherit fragments;
+      inherit (devshellLib) mkAgenticShell;
     };
 
     apps = forAllSystems (system: let
@@ -102,7 +105,8 @@
     checks = forAllSystems (system: let
       pkgs = pkgsFor system;
       moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs self;};
-    in moduleChecks);
+    devshellChecks = import ./checks/devshell-eval.nix {inherit lib pkgs self;};
+    in moduleChecks // devshellChecks);
 
     formatter = forAllSystems (system: (pkgsFor system).dprint);
   };

@@ -15,6 +15,7 @@ nix fmt                       # Format all files (dprint: Nix + markdown)
 
 ```
 lib/               Shared library: fragments
+devshell/          Standalone devshell modules (mkAgenticShell)
 modules/           Home-manager modules
 fragments/         Instruction generation sources (common/ + packages/)
 ```
