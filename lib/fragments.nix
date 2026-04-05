@@ -26,15 +26,19 @@
   # Each package declares which fragments compose each profile.
   # "common" lists reference fragments/common/*.md.
   # "package" lists reference fragments/packages/<pkg>/*.md.
+
+  # Shared common fragments for all dev profiles (DRY extraction).
+  devCommonFragments = [
+    "coding-standards"
+    "commit-convention"
+    "tooling-preference"
+    "validation"
+  ];
+
   packageProfiles = {
     ai-clis = {
       dev = {
-        common = [
-          "coding-standards"
-          "commit-convention"
-          "tooling-preference"
-          "validation"
-        ];
+        common = devCommonFragments;
         package = [
           "packaging-guide"
         ];
@@ -43,12 +47,7 @@
 
     monorepo = {
       dev = {
-        common = [
-          "coding-standards"
-          "commit-convention"
-          "tooling-preference"
-          "validation"
-        ];
+        common = devCommonFragments;
         package = [
           "project-overview"
         ];
@@ -57,12 +56,7 @@
 
     mcp-servers = {
       dev = {
-        common = [
-          "coding-standards"
-          "commit-convention"
-          "tooling-preference"
-          "validation"
-        ];
+        common = devCommonFragments;
         package = [
           "overlay-guide"
         ];
@@ -78,12 +72,7 @@
         ];
       };
       dev = {
-        common = [
-          "coding-standards"
-          "commit-convention"
-          "tooling-preference"
-          "validation"
-        ];
+        common = devCommonFragments;
         package = [
           "development"
           "routing-table"

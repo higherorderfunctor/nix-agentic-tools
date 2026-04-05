@@ -166,7 +166,7 @@ in {
         ".copilot/skills/stack-submit".source = "${self.skillsDir}/stack-submit";
         ".copilot/skills/stack-summary".source = "${self.skillsDir}/stack-summary";
         ".copilot/skills/stack-test".source = "${self.skillsDir}/stack-test";
-        ".copilot/copilot-instructions.md".text = self.instructionsCopilot;
+        ".copilot/instructions/stacked-workflow.md".text = self.instructionsCopilot;
       };
     })
 

@@ -29,7 +29,8 @@ in
       mkdir -p $out/bin
       cat > $out/bin/kiro-gateway <<EOF
       #!${final.bash}/bin/bash
-      set -euo pipefail
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       exec ${pythonEnv}/bin/python "$out/share/kiro-gateway/main.py" "\$@"
       EOF
       chmod +x $out/bin/kiro-gateway

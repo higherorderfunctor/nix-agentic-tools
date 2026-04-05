@@ -251,13 +251,13 @@ in {
                   (lib.mapAttrsToList (k: v: "export ${k}=${lib.escapeShellArg v}")
                     cfg.environmentVariables);
               in ''
-                mv $out/bin/kiro $out/bin/.kiro-wrapped
-                cat > $out/bin/kiro << 'WRAPPER'
+                mv $out/bin/kiro-cli $out/bin/.kiro-cli-wrapped
+                cat > $out/bin/kiro-cli << 'WRAPPER'
                 #!${pkgs.bash}/bin/bash
                 ${envExports}
-                exec -a "$0" "$out/bin/.kiro-wrapped" "$@"
+                exec -a "$0" "$out/bin/.kiro-cli-wrapped" "$@"
                 WRAPPER
-                chmod +x $out/bin/kiro
+                chmod +x $out/bin/kiro-cli
               '';
             }
           else cfg.package

@@ -1,6 +1,8 @@
 # agentic-tools
 
-A Nix flake monorepo for AI coding CLI tools.
+Stacked commit workflows, MCP servers, and declarative configuration for
+AI coding CLIs (Claude Code, Copilot, Kiro). Works without Nix; Nix
+unlocks overlays, home-manager modules, and devshell integration.
 
 ## Quick Start (Nix)
 
@@ -22,6 +24,16 @@ imports = [inputs.agentic-tools.homeManagerModules.default];
 ```
 
 ## Quick Start (Non-Nix)
+
+### Prerequisites
+
+Stacked workflow skills require the following tools installed:
+
+- [git-branchless](https://github.com/arxanas/git-branchless) -- anonymous branching, in-memory rebases, smartlog
+- [git-absorb](https://github.com/tummychow/git-absorb) -- automatic fixup commit routing
+- [git-revise](https://github.com/mystor/git-revise) -- in-memory commit rewriting
+
+### Installation
 
 Copy the skills you need into your project:
 
@@ -87,6 +99,27 @@ stacked-workflows = {
 };
 ```
 
+### ai
+
+Unified configuration across Claude Code, Copilot CLI, and Kiro CLI.
+Shared skills, instructions, and environment variables fan out to each
+enabled CLI at `mkDefault` priority.
+
+```nix
+ai = {
+  enable = true;
+  enableClaude = true;
+  enableCopilot = true;
+  enableKiro = true;
+  skills = { stack-fix = ./skills/stack-fix; };
+  instructions.coding-standards = {
+    text = "Always use strict mode...";
+    paths = [ "src/**" ];
+    description = "Project coding standards";
+  };
+};
+```
+
 ### mcp-servers
 
 Declarative MCP server management with typed settings and credentials.
@@ -110,18 +143,24 @@ services.mcp-servers.servers.github-mcp.enable = true;
 
 ## DevShell Usage
 
-Per-project AI tool configuration without home-manager.
+Per-project AI tool configuration without home-manager. The repo includes
+a `.envrc` for [direnv](https://direnv.net/) integration (requires
+[devenv](https://devenv.sh/getting-started/)).
 
 ```nix
 devShells.default = inputs.agentic-tools.lib.mkAgenticShell pkgs {
-  mcpServers.github-mcp.enable = true;
+  mcpServers.github-mcp = {
+    enable = true;
+    command = "github-mcp-server";
+    args = ["--stdio"];
+  };
   skills.stacked-workflows.enable = true;
 };
 ```
 
 ## MCP Servers Reference
 
-12 MCP servers packaged as Nix derivations.
+13 MCP servers packaged as Nix derivations (aws-mcp is external/HTTP-only).
 
 ```bash
 nix build .#github-mcp

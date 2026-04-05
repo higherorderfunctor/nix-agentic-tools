@@ -15,11 +15,9 @@ overlays, home-manager modules, and devshell integration.
 nix flake show                # List all outputs
 nix flake check               # Linters + evaluation (does NOT build packages)
 nix build .#<package>         # Build a specific package
-nix develop                   # Enter devShell with all tools
+devenv shell                  # Enter devShell with all tools
 nix run .#generate            # Regenerate instruction files from fragments
-nix run .#update              # Update all package versions
-nix fmt                       # Format Nix files with alejandra
-dprint fmt                    # Format markdown, JSON, TOML, Nix, shell
+treefmt                       # Format all files (Nix, markdown, JSON, TOML, shell)
 ```
 
 ## Architecture
@@ -32,7 +30,7 @@ devshell/          Standalone devshell modules (mkAgenticShell, no HM required)
 skills/            Consumer-facing stacked workflow skills
 references/        Canonical tool reference docs
 fragments/         Instruction generation sources (common/ + packages/)
-apps/              Nix apps: generate, update, check-drift, check-health
+apps/              Nix apps: generate
 checks/            Flake checks: formatting, linting, spelling, structural, module-eval
 ```
 
@@ -115,15 +113,18 @@ for it across the repo before committing.
 - Server modules: `modules/mcp-servers/servers/<name>.nix`
 - Skills: `skills/<name>/SKILL.md`
 - Fragments: `fragments/{common,packages/<pkg>}/<name>.md`
-- nvfetcher keys match exported package names
+- nvfetcher keys use upstream project names (may differ from exported package names)
 - Exported packages: lowercase with hyphens
 
 ## Linting
 
 All code must pass linters before committing:
 
+- **Meta-formatter:** treefmt (orchestrates all formatters below)
 - **Nix:** alejandra (format), deadnix (dead code), statix (anti-patterns)
 - **Shell:** shellcheck, shellharden, shfmt
-- **Markdown/JSON/TOML:** dprint
+- **Markdown:** prettier (via treefmt)
+- **JSON:** biome (via treefmt)
+- **TOML:** taplo (via treefmt)
 - **Spelling:** cspell
 - **Agent configs:** agnix

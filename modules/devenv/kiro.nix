@@ -73,7 +73,7 @@ in {
     };
 
     settings = lib.mkOption {
-      type = lib.types.attrsOf lib.types.anything;
+      type = lib.types.attrs;
       default = {};
       description = "Kiro CLI settings (written to .kiro/settings/cli.json).";
     };

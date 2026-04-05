@@ -59,7 +59,9 @@
                   default = {};
                 };
               };
-              # Stub systemd (needed by mcp-servers module for services)
+              # Stub systemd (needed by mcp-servers module for services).
+              # The real Darwin guard is in modules/mcp-servers/default.nix
+              # (lib.mkIf pkgs.stdenv.isLinux); this stub satisfies evaluation.
               systemd.user.services = lib.mkOption {
                 type = lib.types.attrsOf lib.types.anything;
                 default = {};

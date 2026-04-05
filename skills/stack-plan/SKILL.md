@@ -361,6 +361,7 @@ git status --short | wc -l   # should match step 2's file count
   to create a fixup commit, then squash it with
   `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <hash>~1`
   (the no-op editor `:` lets `--autosquash` do the work).
+  Follow with `git restack` to update branchless tracking.
   This is faster than checking out each commit to amend.
 - **Avoid scripted `GIT_SEQUENCE_EDITOR` reorders when files are built
   incrementally.** Use `git move -x <hash> -d <dest>` for individual

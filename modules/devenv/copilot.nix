@@ -50,7 +50,7 @@ in {
     };
 
     settings = lib.mkOption {
-      type = lib.types.attrsOf lib.types.anything;
+      type = lib.types.attrs;
       default = {};
       description = "Copilot settings (written to .copilot/config.json).";
     };
@@ -76,7 +76,7 @@ in {
       cfg.mcpServers;
     in
       lib.optionalAttrs (cfg.mcpServers != {}) {
-        ".copilot/mcp.json".json = {inherit mcpServers;};
+        ".vscode/mcp.json".json = {inherit mcpServers;};
       }
       // lib.optionalAttrs (cfg.settings != {}) {
         ".copilot/config.json".json = cfg.settings;

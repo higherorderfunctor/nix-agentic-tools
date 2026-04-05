@@ -18,7 +18,7 @@
   settingsActivationScript = let
     nixSettings = jsonFormat.generate "copilot-cli-settings.json" cfg.settings;
   in ''
-    COPILOT_DIR="${cfg.configDir}"
+    COPILOT_DIR="$HOME/${cfg.configDir}"
     CONFIG_FILE="$COPILOT_DIR/config.json"
     mkdir -p "$COPILOT_DIR"
     if [ -f "$CONFIG_FILE" ]; then
@@ -103,8 +103,8 @@ in {
 
     package = lib.mkOption {
       type = lib.types.nullOr lib.types.package;
-      default = pkgs.copilot-cli or null;
-      defaultText = lib.literalExpression "pkgs.copilot-cli";
+      default = pkgs.github-copilot-cli or null;
+      defaultText = lib.literalExpression "pkgs.github-copilot-cli";
       description = "The copilot-cli package to install.";
     };
 

@@ -250,7 +250,7 @@ in {
     in
       credAssertions;
 
-    systemd.user.services = mapAttrs' (name: srv: let
+    systemd.user.services = lib.mkIf pkgs.stdenv.isLinux (mapAttrs' (name: srv: let
       srvEnv = effectiveEnv name srv "http";
     in
       nameValuePair ("mcp-" + name) {
@@ -271,6 +271,6 @@ in {
           WantedBy = ["default.target"];
         };
       })
-    serviceServers;
+    serviceServers);
   };
 }
