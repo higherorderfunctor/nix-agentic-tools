@@ -78,7 +78,7 @@
       inherit fragments;
       inherit (aiCommon) mkClaudeRule mkCopilotInstruction mkKiroSteering;
       inherit (devshellLib) mkAgenticShell;
-      inherit (fragments) compose mkFragment;
+      inherit (fragments) compose mkEcosystemContent mkFragment mkFrontmatter;
       inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig;
       mkMcpConfig = entries: {mcpServers = entries;};
       mapTools = f: lib.concatLists (lib.mapAttrsToList (server: tools: map (tool: f server tool) tools));
@@ -94,40 +94,59 @@
 
     apps = forAllSystems (system: let
       pkgs = pkgsFor system;
-      devPackages = fragments.packagesWithProfile "dev";
-      nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") devPackages;
+
+      # Fragments from content packages (via overlay)
+      commonFragments = builtins.attrValues pkgs.coding-standards.passthru.fragments;
+
+      # Dev-only fragment reader
+      mkDevFragment = pkg: name:
+        fragments.mkFragment {
+          text = builtins.readFile ./dev/fragments/${pkg}/${name}.md;
+          description = "dev/${pkg}/${name}";
+          priority = 5;
+        };
+
+      # Package path scoping (for ecosystem frontmatter)
+      packagePaths = {
+        ai-clis = ''"modules/copilot-cli/**,modules/kiro-cli/**,packages/ai-clis/**"'';
+        mcp-servers = ''"modules/mcp-servers/**,packages/mcp-servers/**"'';
+        monorepo = null;
+        stacked-workflows = ''"packages/stacked-workflows/**"'';
+      };
+
+      # Dev fragment names per package
+      devFragmentNames = {
+        ai-clis = ["packaging-guide"];
+        monorepo = ["project-overview"];
+        mcp-servers = ["overlay-guide"];
+        stacked-workflows = ["development" "routing-table"];
+      };
+      nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") devFragmentNames;
+
+      # Compose fragments for a dev package profile
+      mkDevComposed = package: let
+        devFrags = map (mkDevFragment package) (devFragmentNames.${package} or []);
+      in
+        fragments.compose {fragments = commonFragments ++ devFrags;};
+
+      # Generate ecosystem file content
+      mkEcosystemFile = ecosystem: package: composed:
+        fragments.mkEcosystemContent {
+          inherit ecosystem package composed;
+          paths = packagePaths.${package} or null;
+        };
+
       generateScript = pkgs.writeShellApplication {
         name = "generate";
         text = let
-          # Helper: compose fragments for a package profile
-          mkComposed = package: profile: let
-            prof = fragments.packageProfiles.${package}.${profile};
-          in
-            fragments.compose {
-              fragments =
-                map fragments.readCommonFragment prof.common
-                ++ map (fragments.readPackageFragment package) prof.package;
-            };
-
-          # Helper: generate per-ecosystem file from a composed fragment
-          mkEcosystemFile = ecosystem: package: composed: let
-            fm = fragments.ecosystems.${ecosystem}.mkFrontmatter package;
-            fmStr =
-              if fm == null
-              then ""
-              else fragments.mkFrontmatter fm + "\n";
-          in
-            fmStr + composed.text;
-
-          rootComposed = mkComposed "monorepo" "dev";
+          rootComposed = mkDevComposed "monorepo";
           claudeCommon = mkEcosystemFile "claude" "monorepo" rootComposed;
           kiroCommon = mkEcosystemFile "kiro" "monorepo" rootComposed;
           copilotCommon = mkEcosystemFile "copilot" "monorepo" rootComposed;
           agentsContent = let
             packageContents = lib.mapAttrsToList (pkg: _: let
-              prof = fragments.packageProfiles.${pkg}."dev";
               pkgOnly = fragments.compose {
-                fragments = map (fragments.readPackageFragment pkg) prof.package;
+                fragments = map (mkDevFragment pkg) (devFragmentNames.${pkg} or []);
               };
             in
               pkgOnly.text)
@@ -137,7 +156,7 @@
             + lib.optionalString (packageContents != [])
             ("\n" + builtins.concatStringsSep "\n" packageContents);
           perPackageOutputs = lib.concatMapStringsSep "\n" (pkg: let
-            composed = mkComposed pkg "dev";
+            composed = mkDevComposed pkg;
             claude = mkEcosystemFile "claude" pkg composed;
             kiro = mkEcosystemFile "kiro" pkg composed;
             copilot = mkEcosystemFile "copilot" pkg composed;

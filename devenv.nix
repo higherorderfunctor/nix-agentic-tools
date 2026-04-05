@@ -16,6 +16,12 @@
   });
   inherit (gitToolsPkgs) agnix;
 
+  # Content packages — apply overlays to get passthru fragments.
+  contentPkgs = pkgs.extend (lib.composeManyExtensions [
+    (import ./packages/coding-standards {})
+    (import ./packages/stacked-workflows {})
+  ]);
+
   # Serena MCP — flake input, not overlay (complex Python deps).
   # Override passthru to carry mcpArgs so mkPackageEntry works.
   serena = let
@@ -28,27 +34,56 @@
   mcpLib = import ./lib/mcp.nix {inherit lib;};
   inherit (mcpLib) mkPackageEntry;
 
-  # Build instruction content from composed fragments
-  devPackages = fragments.packagesWithProfile "dev";
-  nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") devPackages;
+  # ── Fragment composition ─────────────────────────────────────────────
+  # Fragments from packages (published content)
+  commonFragments = builtins.attrValues contentPkgs.coding-standards.passthru.fragments;
 
-  # Helper: compose fragments for a package profile
-  mkComposed = package: profile: let
-    prof = fragments.packageProfiles.${package}.${profile};
-  in
-    fragments.compose {
-      fragments =
-        map fragments.readCommonFragment prof.common
-        ++ map (fragments.readPackageFragment package) prof.package;
+  # Dev-only fragment reader (for this repo's dev instructions)
+  mkDevFragment = pkg: name:
+    fragments.mkFragment {
+      text = builtins.readFile ./dev/fragments/${pkg}/${name}.md;
+      description = "dev/${pkg}/${name}";
+      priority = 5;
     };
+
+  # Package path scoping (for ecosystem frontmatter)
+  packagePaths = {
+    ai-clis = ''"modules/copilot-cli/**,modules/kiro-cli/**,packages/ai-clis/**"'';
+    mcp-servers = ''"modules/mcp-servers/**,packages/mcp-servers/**"'';
+    monorepo = null;
+    stacked-workflows = ''"packages/stacked-workflows/**"'';
+  };
+
+  # Dev fragment names per package
+  devFragmentNames = {
+    ai-clis = ["packaging-guide"];
+    monorepo = ["project-overview"];
+    mcp-servers = ["overlay-guide"];
+    stacked-workflows = ["development" "routing-table"];
+  };
+
+  # Compose fragments for a dev package profile
+  mkDevComposed = package: let
+    devFrags = map (mkDevFragment package) (devFragmentNames.${package} or []);
+  in
+    fragments.compose {fragments = commonFragments ++ devFrags;};
+
+  # Generate ecosystem file content
+  mkEcosystemFile = ecosystem: package: composed:
+    fragments.mkEcosystemContent {
+      inherit ecosystem package composed;
+      paths = packagePaths.${package} or null;
+    };
+
+  # ── Instruction file generation ──────────────────────────────────────
+  nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") devFragmentNames;
 
   # AGENTS.md content (agentsmd ecosystem = no frontmatter)
   agentsContent = let
-    rootComposed = mkComposed "monorepo" "dev";
+    rootComposed = mkDevComposed "monorepo";
     packageContents = lib.mapAttrsToList (pkg: _: let
-      prof = fragments.packageProfiles.${pkg}."dev";
       pkgOnly = fragments.compose {
-        fragments = map (fragments.readPackageFragment pkg) prof.package;
+        fragments = map (mkDevFragment pkg) (devFragmentNames.${pkg} or []);
       };
     in
       pkgOnly.text)
@@ -58,31 +93,21 @@
     + lib.optionalString (packageContents != [])
     ("\n" + builtins.concatStringsSep "\n" packageContents);
 
-  # Helper: generate files for all ecosystems × packages
+  # Generate files for all ecosystems x packages
   mkEcosystemFiles = let
-    # Generate per-ecosystem file from a composed fragment
-    mkEcosystemFile = ecosystem: package: composed: let
-      fm = fragments.ecosystems.${ecosystem}.mkFrontmatter package;
-      fmStr =
-        if fm == null
-        then ""
-        else fragments.mkFrontmatter fm + "\n";
-    in
-      fmStr + composed.text;
-
-    rootComposed = mkComposed "monorepo" "dev";
+    rootComposed = mkDevComposed "monorepo";
   in
     {
       ".claude/rules/common.md".text = mkEcosystemFile "claude" "monorepo" rootComposed;
-      ".kiro/steering/common.md".text = mkEcosystemFile "kiro" "monorepo" rootComposed;
       ".github/copilot-instructions.md".text = mkEcosystemFile "copilot" "monorepo" rootComposed;
+      ".kiro/steering/common.md".text = mkEcosystemFile "kiro" "monorepo" rootComposed;
     }
     // (lib.concatMapAttrs (pkg: _: let
-        composed = mkComposed pkg "dev";
+        composed = mkDevComposed pkg;
       in {
         ".claude/rules/${pkg}.md".text = mkEcosystemFile "claude" pkg composed;
-        ".kiro/steering/${pkg}.md".text = mkEcosystemFile "kiro" pkg composed;
         ".github/instructions/${pkg}.instructions.md".text = mkEcosystemFile "copilot" pkg composed;
+        ".kiro/steering/${pkg}.md".text = mkEcosystemFile "kiro" pkg composed;
       })
       nonRootPackages);
 in {
@@ -118,12 +143,12 @@ in {
 
     # Consumer skills (stacked workflows)
     skills = {
-      sws-stack-fix = ./packages/stacked-workflows/skills/stack-fix;
-      sws-stack-plan = ./packages/stacked-workflows/skills/stack-plan;
-      sws-stack-split = ./packages/stacked-workflows/skills/stack-split;
-      sws-stack-submit = ./packages/stacked-workflows/skills/stack-submit;
-      sws-stack-summary = ./packages/stacked-workflows/skills/stack-summary;
-      sws-stack-test = ./packages/stacked-workflows/skills/stack-test;
+      sws-stack-fix = "${contentPkgs.stacked-workflows-content.passthru.skillsDir}/stack-fix";
+      sws-stack-plan = "${contentPkgs.stacked-workflows-content.passthru.skillsDir}/stack-plan";
+      sws-stack-split = "${contentPkgs.stacked-workflows-content.passthru.skillsDir}/stack-split";
+      sws-stack-submit = "${contentPkgs.stacked-workflows-content.passthru.skillsDir}/stack-submit";
+      sws-stack-summary = "${contentPkgs.stacked-workflows-content.passthru.skillsDir}/stack-summary";
+      sws-stack-test = "${contentPkgs.stacked-workflows-content.passthru.skillsDir}/stack-test";
 
       # Dev skills
       index-repo-docs = ./dev/skills/index-repo-docs;

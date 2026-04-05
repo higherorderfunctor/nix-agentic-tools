@@ -9,6 +9,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   cfg = config.stacked-workflows;
@@ -16,16 +17,14 @@
   fragments = import ../../lib/fragments.nix {inherit lib;};
   aiCommon = import ../../lib/ai-common.nix {inherit lib;};
 
-  composed = let
-    prof = fragments.packageProfiles.stacked-workflows.package;
-  in
-    fragments.compose {
-      fragments = map (fragments.readPackageFragment "stacked-workflows") prof.package;
-    };
+  swsContent = pkgs.stacked-workflows-content;
+
+  composed = fragments.compose {
+    fragments = builtins.attrValues swsContent.passthru.fragments;
+  };
 
   self = {
-    skillsDir = ../../packages/stacked-workflows/skills;
-    referencesDir = ../../packages/stacked-workflows/references;
+    inherit (swsContent.passthru) referencesDir skillsDir;
     instructionsClaude = aiCommon.mkClaudeRule "stacked-workflows" composed;
     instructionsCopilot = aiCommon.mkCopilotInstruction "stacked-workflows" composed;
     instructionsKiro = aiCommon.mkKiroSteering "stacked-workflows" composed;
