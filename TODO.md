@@ -47,6 +47,15 @@ the final form. Do these first.
 - [ ] devenv MCP segfault — Boehm GC 8.2.12 crash during nixpkgs
       enumeration; using mcp.devenv.sh workaround; upstream aware
 
+### Skill Wiring
+
+- [ ] Wire dev skills (repo-review, index-repo-docs) into each ecosystem
+      via devenv files.* — .claude/skills/, .kiro/skills/, .github/skills/
+- [ ] Wire consumer skills (stack-*) via devenv files.* instead of
+      committed symlinks — move .claude/skills/sws-* to devenv generation
+- [ ] Register dev skills as invocable (currently in dev/skills/ but not
+      in .claude/skills/ or any ecosystem skill path)
+
 ### Tooling Wiring
 
 - [ ] Wire LSPs to AI CLI modules (nixd, marksman, taplo via lspServers)
