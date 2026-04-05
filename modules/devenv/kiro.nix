@@ -4,6 +4,8 @@
 # Generates:
 #   .kiro/settings/mcp.json — MCP server config
 #   .kiro/settings/cli.json — CLI settings (if configured)
+#   .kiro/skills/{name} — skill directories (symlinked)
+#   .kiro/steering/{name}.md — steering files
 {
   pkgs,
   lib,
@@ -35,15 +37,39 @@ in {
       default = {};
       description = "Kiro CLI settings (written to .kiro/settings/cli.json).";
     };
+
+    skills = lib.mkOption {
+      type = lib.types.attrsOf lib.types.path;
+      default = {};
+      description = "Skill directories to install for Kiro.";
+    };
+
+    steering = lib.mkOption {
+      type = lib.types.attrsOf lib.types.lines;
+      default = {};
+      description = "Steering files for Kiro (.kiro/steering/).";
+    };
   };
 
   config = lib.mkIf cfg.enable {
     files =
+      # MCP servers
       lib.optionalAttrs (mcpContent != null) {
         ".kiro/settings/mcp.json".json = mcpContent;
       }
+      # Settings
       // lib.optionalAttrs (cfg.settings != {}) {
         ".kiro/settings/cli.json".json = cfg.settings;
-      };
+      }
+      # Skills (directory symlinks)
+      // lib.concatMapAttrs (name: path: {
+        ".kiro/skills/${name}".source = path;
+      })
+      cfg.skills
+      # Steering
+      // lib.concatMapAttrs (name: content: {
+        ".kiro/steering/${name}.md".text = content;
+      })
+      cfg.steering;
   };
 }

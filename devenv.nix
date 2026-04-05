@@ -74,7 +74,32 @@ in {
     statix
   ];
 
+  # ── Unified AI Config ─────────────────────────────────────────────────
+  ai = {
+    enable = true;
+    enableClaude = true;
+    enableCopilot = true;
+    enableKiro = true;
+
+    # Consumer skills (stacked workflows)
+    skills = {
+      sws-stack-fix = ./skills/stack-fix;
+      sws-stack-plan = ./skills/stack-plan;
+      sws-stack-split = ./skills/stack-split;
+      sws-stack-submit = ./skills/stack-submit;
+      sws-stack-summary = ./skills/stack-summary;
+      sws-stack-test = ./skills/stack-test;
+
+      # Dev skills
+      index-repo-docs = ./dev/skills/index-repo-docs;
+      repo-review = ./dev/skills/repo-review;
+    };
+  };
+
   # ── File Generation (from fragments) ─────────────────────────────────
+  # Fragment-generated instruction files are ecosystem-specific and stay
+  # in files.* directly. The ai.* module handles ecosystem-agnostic shared
+  # skills; fragments handle per-ecosystem instruction content.
   files =
     mkEcosystemFiles
     // {
@@ -87,20 +112,6 @@ in {
 
         ${agentsContent}
       '';
-    }
-    # ── Consumer skills (stacked workflows) ──────────────────────────
-    // {
-      ".claude/skills/sws-stack-fix".source = ./skills/stack-fix;
-      ".claude/skills/sws-stack-plan".source = ./skills/stack-plan;
-      ".claude/skills/sws-stack-split".source = ./skills/stack-split;
-      ".claude/skills/sws-stack-submit".source = ./skills/stack-submit;
-      ".claude/skills/sws-stack-summary".source = ./skills/stack-summary;
-      ".claude/skills/sws-stack-test".source = ./skills/stack-test;
-    }
-    # ── Dev skills ───────────────────────────────────────────────────
-    // {
-      ".claude/skills/index-repo-docs".source = ./dev/skills/index-repo-docs;
-      ".claude/skills/repo-review".source = ./dev/skills/repo-review;
     };
 
   # ── treefmt ────────────────────────────────────────────────────────────
@@ -126,6 +137,12 @@ in {
     check-json.enable = true;
     check-toml.enable = true;
   };
+
+  # ── Copilot ────────────────────────────────────────────────────────────
+  copilot.enable = true;
+
+  # ── Kiro ──────────────────────────────────────────────────────────────
+  kiro.enable = true;
 
   # ── Claude Code ───────────────────────────────────────────────────────
   claude.code = {
@@ -190,6 +207,28 @@ in {
   # };
   # NOTE: MCP servers are stdio-based, not HTTP daemons. Process management
   # applies when running as HTTP bridges. Uncomment when bridge mode is needed.
+
+  # ── Validation ─────────────────────────────────────────────────────────
+  enterTest = ''
+    echo "Validating devenv configuration..."
+
+    # Check ecosystem instruction files exist
+    test -L .claude/rules/common.md || { echo "FAIL: .claude/rules/common.md missing"; exit 1; }
+    test -L .kiro/steering/common.md || { echo "FAIL: .kiro/steering/common.md missing"; exit 1; }
+    test -L .github/copilot-instructions.md || { echo "FAIL: .github/copilot-instructions.md missing"; exit 1; }
+    test -L AGENTS.md || { echo "FAIL: AGENTS.md missing"; exit 1; }
+
+    # Check skills are wired (Claude + Copilot + Kiro)
+    test -L .claude/skills/sws-stack-fix || { echo "FAIL: .claude/skills/sws-stack-fix missing"; exit 1; }
+    test -L .claude/skills/repo-review || { echo "FAIL: .claude/skills/repo-review missing"; exit 1; }
+    test -L .github/skills/sws-stack-fix || { echo "FAIL: .github/skills/sws-stack-fix missing"; exit 1; }
+    test -L .kiro/skills/sws-stack-fix || { echo "FAIL: .kiro/skills/sws-stack-fix missing"; exit 1; }
+
+    # Check Claude settings generated
+    test -L .claude/settings.json || { echo "FAIL: .claude/settings.json missing"; exit 1; }
+
+    echo "All checks passed"
+  '';
 
   # ── Tasks ─────────────────────────────────────────────────────────────
   tasks = {
