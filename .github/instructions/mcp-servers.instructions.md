@@ -1,1 +1,0 @@
-/nix/store/mrhfxzyahq1wsvlnlx476cdxzsff07xs-github-instructions-mcp-servers.instructions.md

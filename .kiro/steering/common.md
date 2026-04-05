@@ -1,1 +1,0 @@
-/nix/store/rb0wf8s64q6y8kxkcpqdv3k8ws09iiwm-kiro-steering-common.md

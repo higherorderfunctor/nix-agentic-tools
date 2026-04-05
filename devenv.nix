@@ -168,15 +168,13 @@ in {
     };
   };
 
-  # ── MCP Processes (no-cred servers) ───────────────────────────────────
-  processes = {
-    # nixos-mcp = {
-    #   exec = "${pkgs.nix-mcp-servers.nixos-mcp}/bin/mcp-nixos";
-    # };
-    # sequential-thinking-mcp = {
-    #   exec = "${pkgs.nix-mcp-servers.sequential-thinking-mcp}/bin/sequential-thinking-mcp";
-    # };
-  };
+  # ── MCP Processes (no-cred servers, `devenv up`) ───────────────────────
+  # processes = {
+  #   nixos-mcp.exec = "${pkgs.nix-mcp-servers.nixos-mcp}/bin/mcp-nixos";
+  #   sequential-thinking-mcp.exec = "${pkgs.nix-mcp-servers.sequential-thinking-mcp}/bin/sequential-thinking-mcp";
+  # };
+  # NOTE: MCP servers are stdio-based, not HTTP daemons. Process management
+  # applies when running as HTTP bridges. Uncomment when bridge mode is needed.
 
   # ── Tasks ─────────────────────────────────────────────────────────────
   tasks = {

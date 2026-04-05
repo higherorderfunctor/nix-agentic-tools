@@ -1,1 +1,0 @@
-/nix/store/ny2ngx0k063whsmx395qxxckfkswh1xf-claude-rules-common.md

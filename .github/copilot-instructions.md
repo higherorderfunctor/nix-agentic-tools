@@ -1,1 +1,0 @@
-/nix/store/2k6lm3m860jkcnnhs0qfh27rx849kq50-github-copilot-instructions.md

@@ -1,1 +1,0 @@
-/nix/store/i34cp8mkrpja5csd5m31k8gfnswjxxls-claude-rules-mcp-servers.md

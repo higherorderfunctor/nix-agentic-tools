@@ -1,1 +1,0 @@
-/nix/store/s756ai4smwh017mf65ri68g591npfs2y-AGENTS.md

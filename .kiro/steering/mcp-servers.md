@@ -1,1 +1,0 @@
-/nix/store/nbdkflwnq4dhk1y8z2hj3vib091xm9g0-kiro-steering-mcp-servers.md
