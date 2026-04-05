@@ -68,9 +68,11 @@ hexagons with colored nodes). Dark mode (coal theme) default.
 - [x] Reference: lib API, types, ai.\* mapping table
 - [x] Troubleshooting page (6 categories)
 - [x] mdBook builds clean (`mdbook build docs/`)
+- [x] README rewrite: collapsible sections, self-contained basics, docs links
+- [x] `devenv up` serves docs (mdbook serve process)
+- [x] Serena MCP removed from devshell (no nvim integration)
 - [ ] `nix build .#docs` derivation (mdbook build + pagefind)
-- [ ] GitHub Pages deploy workflow
-- [ ] README rewrite: slim landing page linking to docs site
+- [ ] GitHub Pages deploy workflow (deferred)
 
 ### CI & Automation
 
@@ -87,7 +89,8 @@ hexagons with colored nodes). Dark mode (coal theme) default.
 
 ### Documentation & Guides
 
-- [ ] CONTRIBUTING.md — dev workflow, package patterns, module patterns
+- [ ] CONTRIBUTING.md — dev workflow, package patterns, module patterns,
+      `devenv up docs` for docs preview, `devenv up` process naming
 - [ ] Consumer migration guide — replace vendored packages + nix-mcp-servers
 - [ ] ADRs for key decisions (standalone devenv, fragment pipeline, config parity)
 - [ ] SecretSpec — declarative secrets for MCP credentials
