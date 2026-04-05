@@ -94,6 +94,8 @@ Single rich README with collapsible sections (nixvim pattern).
 - [ ] Verify kiro-cli steering file generation (YAML frontmatter)
 - [ ] Verify stacked-workflows integrations wire all 3 ecosystems
 - [ ] CUDA — verify packages build with cudaSupport on x86_64-linux
+- [ ] Fresh clone test — clone to /tmp, `devenv test`, verify no rogue
+      .gitignore files making dev workflow work but fresh clone fail
 
 ### Publish (Pre-Release)
 

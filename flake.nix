@@ -53,10 +53,12 @@
         (import ./packages/fragments {})
         (import ./packages/git-tools {inherit inputs;})
         (import ./packages/mcp-servers {inherit inputs;})
+        (import ./packages/stacked-workflows {})
       ];
       fragments = import ./packages/fragments {};
       git-tools = import ./packages/git-tools {inherit inputs;};
       mcp-servers = import ./packages/mcp-servers {inherit inputs;};
+      stacked-workflows = import ./packages/stacked-workflows {};
     };
 
     homeManagerModules = {
@@ -215,6 +217,8 @@
         serena-mcp
         sympy-mcp
         ;
+      # Stacked workflows
+      inherit (pkgs) stacked-workflows-content;
     });
   };
 }
