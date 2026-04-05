@@ -7,7 +7,7 @@ git-branchless, git-absorb, and git-revise.
 
 ### Command Correctness
 
-- Every git command in skills/ and references/ must be syntactically valid
+- Every git command in packages/stacked-workflows/skills/ and packages/stacked-workflows/references/ must be syntactically valid
 - Flag arguments, options exist in the tool's current release
 - No contradictions between different docs (e.g., a skill says `--flag` but
   the reference says `--other-flag` for the same operation)

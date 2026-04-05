@@ -39,7 +39,7 @@ tools might fail to use these skills and fix the root causes.
 
 - Do skills work identically across Claude Code, Kiro, and Copilot?
 - Are there platform-specific features that break portability?
-- Is the skill directory structure (`skills/<name>/SKILL.md`) the standard
+- Is the skill directory structure (`packages/stacked-workflows/skills/<name>/SKILL.md`) the standard
   expected by all platforms?
 
 ### Instruction File Size

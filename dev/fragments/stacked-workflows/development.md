@@ -2,12 +2,13 @@
 
 ### Package Structure
 
-Stacked workflow skills live in `skills/`, with canonical tool
-reference docs in `references/`. The home-manager module is in
+Stacked workflow content lives in `packages/stacked-workflows/` as a
+published content package. The home-manager module is in
 `modules/stacked-workflows/`.
 
-- `skills/<name>/SKILL.md` — consumer-facing skill definitions
-- `references/*.md` — tool reference docs shared by all skills
+- `packages/stacked-workflows/skills/<name>/SKILL.md` — consumer-facing skill definitions
+- `packages/stacked-workflows/references/*.md` — tool reference docs shared by all skills
+- `dev/fragments/stacked-workflows/` — dev-only routing table and development guide
 - `modules/stacked-workflows/` — HM module with git config presets
   and AI tool integrations
 - `packages/git-tools/` — overlay for git-absorb, git-branchless,

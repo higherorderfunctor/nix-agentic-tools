@@ -6,7 +6,7 @@
 # Or via the home-manager module (applies mkDefault to each leaf):
 #   stacked-workflows = { enable = true; gitPreset = "minimal"; };
 #
-# See references/recommended-config.md for explanations of each setting.
+# See packages/stacked-workflows/references/recommended-config.md for explanations of each setting.
 {
   # ── Required ──────────────────────────────────────────────────────
 

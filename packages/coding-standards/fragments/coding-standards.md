@@ -18,5 +18,5 @@ headers for readability, sort entries within each group.
 ### DRY Principle
 
 Never duplicate logic, configuration, or patterns. When the same thing appears
-twice, extract it. Skills reference shared docs in `references/` rather than
-duplicating content.
+twice, extract it. Skills reference shared docs in
+`packages/stacked-workflows/references/` rather than duplicating content.

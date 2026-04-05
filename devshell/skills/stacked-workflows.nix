@@ -28,6 +28,6 @@ in {
     ];
 
     # Skill files and references will be materialized via config.files
-    # once skills/ and references/ are populated in Phase 3.1.
+    # once packages/stacked-workflows content is wired to this module.
   };
 }

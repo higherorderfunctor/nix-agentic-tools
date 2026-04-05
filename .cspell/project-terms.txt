@@ -16,6 +16,7 @@ Boehm
 cachix
 cclsp
 clis
+contentPkgs
 convco
 Creds
 cuda

@@ -23,13 +23,19 @@ treefmt                       # Format all files (Nix, markdown, JSON, TOML, she
 ## Architecture
 
 ```
-packages/          Overlays: git-tools, mcp-servers, ai-clis
+packages/
+  stacked-workflows/  Content package: skills, references, routing-table fragment
+  coding-standards/   Content package: reusable coding standard fragments
+  ai-clis/            Overlay: AI CLI packages
+  git-tools/          Overlay: git tools (agnix, git-absorb, etc.)
+  mcp-servers/        Overlay: MCP server packages
 modules/           Home-manager modules: stacked-workflows, mcp-servers, copilot-cli, kiro-cli
 lib/               Shared library: fragments, MCP helpers, credentials, devshell
 devshell/          Standalone devshell modules (mkAgenticShell, no HM required)
-skills/            Consumer-facing stacked workflow skills
-references/        Canonical tool reference docs
-fragments/         Instruction generation sources (common/ + packages/)
+dev/
+  fragments/          Dev-only instruction fragments (not exported)
+  references/         Dev-only reference docs (not exported)
+  skills/             Dev-only skills (index-repo-docs, repo-review)
 apps/              Nix apps: generate
 checks/            Flake checks: formatting, linting, spelling, structural, module-eval
 ```
@@ -128,8 +134,9 @@ for it across the repo before committing.
 
 - Package overlays: `packages/<group>/<name>.nix`
 - Server modules: `modules/mcp-servers/servers/<name>.nix`
-- Skills: `skills/<name>/SKILL.md`
-- Fragments: `fragments/{common,packages/<pkg>}/<name>.md`
+- Skills: `packages/stacked-workflows/skills/<name>/SKILL.md`
+- Published fragments: `packages/<pkg>/fragments/<name>.md`
+- Dev fragments: `dev/fragments/<pkg>/<name>.md`
 - nvfetcher keys use upstream project names (may differ from exported package names)
 - Exported packages: lowercase with hyphens
 

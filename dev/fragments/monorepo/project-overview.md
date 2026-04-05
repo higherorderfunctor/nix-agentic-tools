@@ -18,13 +18,19 @@ devshell integration.
 ### Key Directories
 
 ```
-packages/     Overlays: git-tools, mcp-servers, ai-clis
+packages/
+  stacked-workflows/  Content package: skills, references, routing-table fragment
+  coding-standards/   Content package: reusable coding standard fragments
+  ai-clis/            Overlay: AI CLI packages
+  git-tools/          Overlay: git tools (agnix, git-absorb, etc.)
+  mcp-servers/        Overlay: MCP server packages
 modules/      Home-manager modules
 lib/          Shared library: fragments, MCP helpers, credentials, devshell
 devshell/     Standalone devshell modules (mkAgenticShell)
-skills/       Consumer-facing stacked workflow skills
-references/   Canonical tool reference docs
-fragments/    Instruction generation sources (common/ + packages/)
+dev/
+  fragments/    Dev-only instruction fragments (not exported)
+  references/   Dev-only reference docs (not exported)
+  skills/       Dev-only skills (index-repo-docs, repo-review)
 apps/         Nix apps: generate, update, check-drift, check-health
 checks/       Flake checks
 ```

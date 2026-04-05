@@ -39,13 +39,13 @@ Copy the skills you need into your project:
 
 ```bash
 # Claude Code
-cp -r skills/stack-* .claude/skills/
+cp -r packages/stacked-workflows/skills/stack-* .claude/skills/
 
 # Kiro
-cp -r skills/stack-* .kiro/skills/
+cp -r packages/stacked-workflows/skills/stack-* .kiro/skills/
 
 # GitHub Copilot
-cp -r skills/stack-* .github/skills/
+cp -r packages/stacked-workflows/skills/stack-* .github/skills/
 ```
 
 Each skill is self-contained with a `SKILL.md` and bundled reference docs.
@@ -132,7 +132,7 @@ services.mcp-servers.servers.github-mcp.enable = true;
 <!-- prettier-ignore -->
 | Feature                 | Without Nix      | With Nix                 |
 | ----------------------- | ---------------- | ------------------------ |
-| Stacked workflow skills | Copy `skills/`   | Injected via HM module   |
+| Stacked workflow skills | Copy `packages/stacked-workflows/skills/` | Injected via HM module   |
 | MCP server packages     | Install manually | `nix build .#<server>`   |
 | MCP server config       | Manual JSON      | Declarative HM module    |
 | Git tool overlays       | Install manually | `nix build .#git-absorb` |
