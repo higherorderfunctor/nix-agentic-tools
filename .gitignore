@@ -1,6 +1,7 @@
 # Build artifacts
 result
 result-*
+result-docs
 
 # Claude Code plugin state
 .remember/
