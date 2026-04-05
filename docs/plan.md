@@ -8,32 +8,50 @@
 - **Standalone devenv CLI** for dev shell (not flake-based)
 - **Top-level `ai`** namespace for unified config (HM and devenv)
 - **Config parity** — lib, HM, and devenv must align in capability
-- **MCP bridging** via `programs.mcp.servers`
+- **Content packages** — published content (skills, fragments) lives in
+  `packages/` as derivations with passthru for eval-time composition
+- **Pure fragment lib** — compose, mkFragment, mkEcosystemContent;
+  no file I/O, no hardcoded data
 - **treefmt** via devenv built-in module (replaced dprint)
-- **Fragment pipeline** materializes ecosystem files via devenv `files.*`
 - **devenv MCP** uses public `mcp.devenv.sh` (local Boehm GC bug)
+
+---
+
+## Done (this session)
+
+### Package-Focused Restructure
+
+- [x] `packages/stacked-workflows/` — content package with skills (6),
+      references (6), routing-table fragment; derivation + passthru
+- [x] `packages/coding-standards/` — 5 common fragments as derivation + passthru.fragments (priority=10)
+- [x] Dev-only content moved to `dev/` (fragments, references)
+- [x] Root `skills/`, `references/`, `fragments/` removed
+- [x] `lib/fragments.nix` — pure functions only (compose, mkFragment,
+      mkFrontmatter, ecosystems, mkEcosystemContent). 65 lines, was 273.
+- [x] devenv.nix consumes from package passthru via content overlays
+- [x] apps.generate consumes from package passthru
+- [x] stacked-workflows HM module consumes from pkgs.stacked-workflows-content
+- [x] All docs updated (CLAUDE.md, README, dev fragments, .gitignore)
+
+### Earlier Work
+
+- [x] agnix + mcp-language-server packaged
+- [x] Serena MCP — flake input, wired to all 3 ecosystems
+- [x] `ai.lspServers` typed submodule with mkLspConfig/mkCopilotLspConfig
+- [x] `ENABLE_LSP_TOOL=1` auto-set when ai.lspServers non-empty
+- [x] `lib.mkPackageEntry` — DRY MCP entry from package passthru
+- [x] Frontmatter generators exposed in flake.nix lib
+- [x] Deadnix/statix/cspell cleanup across entire repo
 
 ---
 
 ## Solo (no external deps — can run autonomously)
 
-### Composable Fragment Library
+### Fragment Presets (refactor of existing content)
 
-Infrastructure landed. Design in memory: `project_fragment_system.md`.
-
-- [x] `lib.fragments.compose` — priority sort, dedup, concat with optional
-      metadata overrides (description, paths, priority)
-- [x] `mkFragment` constructor — canonical typed fragment attrset
-- [x] `readCommonFragment` / `readPackageFragment` — typed wrappers
-- [x] `packages/fragments/` — overlay exposing `pkgs.agentic-fragments`
-      with common fragments + compose + mkFragment
-- [x] Frontmatter generators exposed in `flake.nix` lib
-- [x] Self-cook: devenv.nix uses compose + mkEcosystemFile
-- [x] Self-cook: apps.generate uses compose + mkEcosystemFile
-- [x] stacked-workflows HM module uses compose + aiCommon frontmatter
-- [ ] Create preset compositions (agentic-tools-dev, minimal-coding, etc.)
-- [ ] Module fragment exposure (MCP servers contributing own fragments)
-- [ ] Fragment content expansion (code review, security, testing presets)
+- [ ] Named preset compositions from existing fragments — e.g.
+      `agentic-tools-dev` = all coding-standards + routing-table,
+      `minimal-coding` = coding-standards + commit-convention only
 
 ### README & Documentation
 
@@ -46,13 +64,8 @@ Single rich README with collapsible sections (nixvim pattern).
 - [ ] Consumer guide: flake input, overlay, HM integration, devenv example
 - [ ] Config parity matrix, architecture tree, fragment pipeline explanation
 - [ ] `ai.*` mapping table — how each `ai.*` option maps to underlying
-      ecosystem primitives (claude.code._, copilot._, kiro.\*), known gaps,
+      ecosystem primitives (claude.code.\*, copilot.\*, kiro.\*), known gaps,
       missing support, translation quirks (e.g. model name differences)
-
-### New MCP Server Packages
-
-- [x] Serena MCP — flake input (oraios/serena), codebase-aware semantic
-      code tools (find_symbol, references, edits), wired to all 3 ecosystems
 
 ### CI & Automation
 
@@ -116,6 +129,8 @@ Single rich README with collapsible sections (nixvim pattern).
 
 ## Backlog
 
+- [ ] Fragment content expansion — new presets (code review, security, testing)
+- [ ] Module fragment exposure — MCP servers contributing own fragments
 - [ ] Rename repo to `nix-agentic-tools` — too Nix-heavy for `agentic-tools`;
       skills still publishable for general consumption but overlays, HM modules,
       devenv modules are Nix-specific. Update GitHub repo name, flake description,
