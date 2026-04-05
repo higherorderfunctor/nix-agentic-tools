@@ -11,23 +11,50 @@ argument-hint: "[full | scope:<path> | decisions-only]"
 Multi-perspective repo review with parallel specialized reviewers. Human
 approves all changes. Implementation uses this repo's own skills.
 
-## Pre-flight
+## Model Tiers
 
-1. **Load review policy** — read `review-policy.md` from this skill's
+This skill uses three model tiers. Express these as intent — the tool
+runtime maps them to available models.
+
+| Tier | Intent | Examples |
+|------|--------|----------|
+| **TRIAGE** | Fast, cheap. Filtering, classification, scoring. | Pre-flight checks, confidence scoring, eligibility |
+| **REVIEW** | Standard depth. Read code, find issues, research. | The 6 reviewer personalities |
+| **CRITICAL** | Deepest analysis. Synthesis, debate, judgment. | Aggregation, debate resolution, finding validation |
+
+When spawning agents, include the tier in the description:
+- `[TRIAGE]` agents: use `model: "haiku"` if available
+- `[REVIEW]` agents: use default model (sonnet-class)
+- `[CRITICAL]` agents: use `model: "opus"` if available
+
+Tools that don't support model selection use their default for all tiers.
+
+## Pre-flight [TRIAGE]
+
+Spawn a **[TRIAGE] pre-flight agent** that:
+
+1. **Loads review policy** — reads `review-policy.md` from this skill's
    directory.
 
-2. **Load existing decisions** — read all files in `docs/decisions/` at the
-   repo root. These are accepted decisions that reviewers must respect. Pass
-   the full decision content to each reviewer subagent.
+2. **Loads existing decisions** — reads all files in `docs/decisions/` at
+   the repo root.
 
-3. **Determine scope** from `$ARGUMENTS`:
+3. **Determines scope** from `$ARGUMENTS`:
    - `full` or empty — review entire repo
    - `scope:<path>` — review only files under the given path
    - `decisions-only` — skip review, only run decision reinforcement/decay
 
-## Phase 1: Fan-Out (Parallel Review)
+4. **Gathers context**:
+   - List of files in scope (with line counts)
+   - Recent git log (last 20 commits) for historical context
+   - Any TODO.md or known issues
 
-Spawn **6 reviewer subagents in parallel** using the Agent tool. Each gets:
+5. Returns: scope, decision log, file list, context summary.
+
+## Phase 1: Fan-Out (Parallel Review) [REVIEW]
+
+Spawn **6 [REVIEW] reviewer subagents in parallel** using the Agent tool.
+Each gets:
 
 - Their personality prompt (from `personalities/` in this skill's directory)
 - The review policy
@@ -39,15 +66,20 @@ Spawn **6 reviewer subagents in parallel** using the Agent tool. Each gets:
   read them BEFORE doing external research to avoid re-discovering what's
   already documented.
 - Read-only access to the repo
+- **Git blame/history context**: tell each reviewer to run `git log` and
+  `git blame` on files they're reviewing to understand change context.
+  Flag issues that were introduced recently vs pre-existing.
 
 Each reviewer:
 
 1. Reads the files in scope
-2. Does web research for current best practices in their domain
-3. Checks findings against the decision log (skip accepted decisions with
+2. Runs `git blame` on files with findings to confirm whether issues are
+   new (introduced in recent commits) or pre-existing
+3. Does web research for current best practices in their domain
+4. Checks findings against the decision log (skip accepted decisions with
    confidence >= 0.5 unless new contradicting evidence is found)
-4. Searches for new evidence that reinforces or weakens existing decisions
-5. Returns structured JSON findings per the output schema in review-policy.md
+5. Searches for new evidence that reinforces or weakens existing decisions
+6. Returns structured JSON findings per the output schema in review-policy.md
 
 **IMPORTANT:** Tell each subagent to return findings as a JSON array in a
 fenced code block tagged `json`. Findings that match an accepted decision
@@ -58,36 +90,79 @@ that contradict accepted decisions with new evidence). Do NOT report
 reinforcements or slow-decay — the orchestrator handles confidence
 maintenance silently.
 
-## Phase 2: Aggregate
+## Phase 2: Confidence Scoring [TRIAGE]
 
-After all 6 reviewers complete:
+For each finding from Phase 1, spawn a **[TRIAGE] scoring agent** that
+receives:
 
-1. **Parse findings** from each reviewer's output.
+- The finding (description, file, evidence)
+- The decision log
+- The review policy's false positive rubric (below)
 
-2. **Deduplicate** by `(file, line_range)`:
+The scoring agent returns a confidence score 0–100:
+
+- **0**: Not confident. False positive, doesn't survive scrutiny, or is
+  pre-existing (introduced before recent work).
+- **25**: Somewhat confident. Might be real, might be false positive.
+  Stylistic issue not explicitly called out in CLAUDE.md or coding
+  standards.
+- **50**: Moderately confident. Real issue but minor or infrequent.
+  Not important relative to the rest of the repo.
+- **75**: Highly confident. Verified real issue, will impact functionality,
+  or directly mentioned in coding standards. Existing approach is
+  insufficient.
+- **100**: Absolutely certain. Confirmed, will happen frequently, evidence
+  directly proves it.
+
+**False positive rubric** (give to scoring agents verbatim):
+
+These are NOT real findings:
+- Pre-existing issues not introduced in recent work
+- Something that looks wrong but is intentional (check git blame)
+- Pedantic nitpicks a senior engineer wouldn't flag
+- Issues a linter, typechecker, or formatter would catch (treefmt,
+  deadnix, statix, cspell handle these)
+- General quality concerns not in CLAUDE.md or coding standards
+- Issues with explicit suppression comments (lint ignore, etc.)
+- Functionality changes that are clearly intentional
+- Issues on lines not modified in recent work
+
+Score each finding independently. Run scoring agents in parallel.
+
+**Filter**: Drop findings with confidence < 80.
+
+## Phase 3: Aggregate [CRITICAL]
+
+Spawn a **[CRITICAL] aggregation agent** that receives all findings
+that survived the confidence filter. This agent:
+
+1. **Deduplicates** by `(file, line_range)`:
    - If 2+ reviewers flag the same area, merge into one finding
    - Keep the best description (most specific, best evidence)
-   - Note agreement count
+   - Note agreement count and which reviewers agreed
 
-3. **Apply change threshold** (from review-policy.md):
+2. **Applies change threshold** (from review-policy.md):
    - `high` severity → recommended change
    - 3+ reviewer agreement → recommended change
    - Contradicts decision with confidence < 0.5 → recommended change
    - Everything else → observation
 
-4. **Check decision contradictions**:
+3. **Checks decision contradictions**:
    - If a finding contradicts an accepted decision with confidence >= 0.5,
-     DO NOT mark it as a recommended change. Instead flag it for Phase 3.
+     DO NOT mark it as a recommended change. Flag for Phase 4.
 
-5. **Process decision updates**:
+4. **Processes decision updates**:
    - Merge reinforcement/decay observations across reviewers
    - Apply confidence adjustments per the formulas in review-policy.md
 
-## Phase 3: Debate (Only If Needed)
+5. **Validates findings**: For each recommended change, verify the evidence
+   is concrete and actionable. Demote to observation if evidence is vague.
+
+## Phase 4: Debate (Only If Needed) [CRITICAL]
 
 If any findings contradict accepted decisions (confidence >= 0.5):
 
-Spawn a **debate subagent** that receives:
+Spawn a **[CRITICAL] debate agent** that receives:
 
 - The contradicting finding(s) with evidence
 - The original decision with its evidence log
@@ -102,7 +177,7 @@ The debate agent evaluates both sides and returns a recommendation:
 - **Supersede**: Strong evidence warrants a new decision. Draft the
   replacement for human approval.
 
-## Phase 4: Report
+## Phase 5: Report
 
 Present the aggregated report to the user. Format:
 
@@ -111,7 +186,7 @@ Present the aggregated report to the user. Format:
 
 ### Recommended Changes (N findings)
 
-1. **[HIGH]** file.md:42 — description
+1. **[HIGH]** file.md:42 — description (confidence: 92)
    Evidence: ...
    Suggestion: ...
    Reviewers: git-expert, consistency-auditor (2/6 agree)
@@ -120,7 +195,7 @@ Present the aggregated report to the user. Format:
 
 ### Observations (N findings)
 
-1. **[LOW]** file.md:10 — description
+1. **[LOW]** file.md:10 — description (confidence: 85)
    ...
 
 ### Decision Challenges (requires consensus)
@@ -147,12 +222,13 @@ changes, M observations".
 - Decision reinforcements (confidence bumps with no action needed)
 - Decision slow-decay (no action until challenge threshold)
 - Findings that match accepted decisions (already decided, skip silently)
+- Findings filtered by confidence scoring (< 80)
 
 The goal is convergence: each run should produce fewer findings. If findings
 persist across runs, either the fix wasn't applied or the decision log is
 missing an entry. A clean report means the review system is working.
 
-## Phase 5: Human Approval and Implementation
+## Phase 6: Human Approval and Implementation
 
 **ALL changes require human approval.** Do not modify any files without
 explicit confirmation.
@@ -210,3 +286,7 @@ flow is:
   severity observations are informational only.
 - Decision files in `docs/decisions/` are part of the repo and go through
   normal PR review. They are not auto-committed.
+- The confidence scoring pass dramatically reduces false positives. If too
+  many findings are filtered, lower the threshold from 80 to 60.
+- [CRITICAL] tier agents cost more but catch synthesis errors that cheaper
+  models miss. Don't skip the aggregation/debate phases.
