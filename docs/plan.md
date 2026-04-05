@@ -63,10 +63,11 @@ hexagons with colored nodes). Dark mode (coal theme) default.
 - [x] Scaffold: book.toml, SUMMARY.md, directory structure
 - [x] Getting Started: choose-your-path, home-manager, devenv quickstarts
 - [x] Concepts: overlays & packages reference
-- [ ] Concepts: unified ai module, fragments, credentials, config parity
-- [ ] Guides: HM deep dive, devenv deep dive, MCP servers, stacked workflows
-- [ ] Reference: lib API, types, ai.\* mapping table
-- [ ] Troubleshooting page
+- [x] Concepts: unified ai module, fragments, credentials, config parity
+- [x] Guides: HM deep dive, devenv deep dive, MCP servers, stacked workflows
+- [x] Reference: lib API, types, ai.\* mapping table
+- [x] Troubleshooting page (6 categories)
+- [x] mdBook builds clean (`mdbook build docs/`)
 - [ ] `nix build .#docs` derivation (mdbook build + pagefind)
 - [ ] GitHub Pages deploy workflow
 - [ ] README rewrite: slim landing page linking to docs site
