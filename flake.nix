@@ -43,7 +43,9 @@
     fragments = import ./lib/fragments.nix {inherit lib;};
   in {
     overlays = {
+      ai-clis = import ./packages/ai-clis {inherit inputs;};
       default = lib.composeManyExtensions [
+        (import ./packages/ai-clis {inherit inputs;})
         (import ./packages/git-tools {inherit inputs;})
         (import ./packages/mcp-servers {inherit inputs;})
       ];
@@ -184,6 +186,9 @@
     packages = forAllSystems (system: let
       pkgs = pkgsFor system;
     in {
+      # AI CLIs
+      inherit (pkgs) github-copilot-cli kiro-cli kiro-gateway;
+      # Git tools
       inherit (pkgs) git-absorb git-branchless git-revise;
       inherit
         (pkgs.nix-mcp-servers)
