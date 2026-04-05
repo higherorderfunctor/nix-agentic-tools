@@ -61,6 +61,13 @@
       stacked-workflows = import ./packages/stacked-workflows {};
     };
 
+    devenvModules = {
+      ai = ./modules/devenv/ai.nix;
+      copilot = ./modules/devenv/copilot.nix;
+      default = ./modules/devenv;
+      kiro = ./modules/devenv/kiro.nix;
+    };
+
     homeManagerModules = {
       ai = ./modules/ai;
       copilot-cli = ./modules/copilot-cli;

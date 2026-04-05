@@ -52,19 +52,24 @@
 - [x] Named preset compositions: `coding-standards.presets.all`,
       `coding-standards.presets.minimal`, `lib.presets.agentic-tools-dev`
 
-### README & Documentation
+### Documentation
 
-Research done — structure in memory: `project_readme_strategy.md`.
-Single rich README with collapsible sections (nixvim pattern).
+mdBook + Pagefind docs site at `docs/`. Logo chosen (#4, OLED black + grey
+hexagons with colored nodes). Dark mode (coal theme) default.
 
-- [ ] README rewrite: hero block, badges, 3 collapsible quick starts
-- [ ] Features matrix table (feature × non-Nix/HM/devenv)
-- [ ] Configuration section: collapsible per-module (HM + devenv + lib)
-- [ ] Consumer guide: flake input, overlay, HM integration, devenv example
-- [ ] Config parity matrix, architecture tree, fragment pipeline explanation
-- [ ] `ai.*` mapping table — how each `ai.*` option maps to underlying
-      ecosystem primitives (claude.code.\*, copilot.\*, kiro.\*), known gaps,
-      missing support, translation quirks (e.g. model name differences)
+- [x] Fix devenv module export gap (devenvModules in flake.nix)
+- [x] Choose framework: mdBook + Pagefind (both in nixpkgs, dark mode)
+- [x] Logo generated and optimized (docs/src/assets/)
+- [x] Scaffold: book.toml, SUMMARY.md, directory structure
+- [x] Getting Started: choose-your-path, home-manager, devenv quickstarts
+- [x] Concepts: overlays & packages reference
+- [ ] Concepts: unified ai module, fragments, credentials, config parity
+- [ ] Guides: HM deep dive, devenv deep dive, MCP servers, stacked workflows
+- [ ] Reference: lib API, types, ai.\* mapping table
+- [ ] Troubleshooting page
+- [ ] `nix build .#docs` derivation (mdbook build + pagefind)
+- [ ] GitHub Pages deploy workflow
+- [ ] README rewrite: slim landing page linking to docs site
 
 ### CI & Automation
 

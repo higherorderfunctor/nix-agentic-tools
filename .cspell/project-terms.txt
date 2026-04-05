@@ -1,5 +1,6 @@
 adoc
 agentic
+Aubut
 agenix
 agentskills
 agentsmd
@@ -52,6 +53,7 @@ ldflags
 libgit
 lockdown
 markdownify
+mdbook
 mergetool
 mystor
 nixd
@@ -61,15 +63,18 @@ nixvim
 nomic
 numtide
 nvfetcher
+OLED
 Ollama
 openmemory
 oraios
 oxalica
 partialclone
+pagefind
 passthru
 pasteable
 pdsolve
 PYTHONNOUSERSITE
+quickstarts
 readabilipy
 reauthor
 reflog

@@ -121,7 +121,9 @@ in {
       # Dev tools
       cspell
       deadnix
+      mdbook
       nvfetcher
+      pagefind
       statix
 
       # LSP servers (in PATH for ENABLE_LSP_TOOL and MCP bridging)
