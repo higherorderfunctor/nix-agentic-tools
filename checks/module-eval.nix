@@ -51,7 +51,16 @@
                   };
                 };
               };
-              services.mcp-servers = lib.mkOption {
+              # Stub programs.claude-code (upstream HM module, not in this repo)
+              programs.claude-code = {
+                enable = lib.mkEnableOption "claude-code";
+                skills = lib.mkOption {
+                  type = lib.types.attrsOf lib.types.anything;
+                  default = {};
+                };
+              };
+              # Stub systemd (needed by mcp-servers module for services)
+              systemd.user.services = lib.mkOption {
                 type = lib.types.attrsOf lib.types.anything;
                 default = {};
               };
@@ -81,6 +90,32 @@
   swsDisabled = evalModule [
     self.homeManagerModules.stacked-workflows
     {config.stacked-workflows.enable = false;}
+  ];
+
+  # Test: ai module evaluates with enable = false (no-op)
+  # Must import full module set since ai references programs.copilot-cli, etc.
+  aiDisabled = evalModule [
+    self.homeManagerModules.default
+    {config.ai.enable = false;}
+  ];
+
+  # Test: ai module evaluates with copilot + kiro enabled
+  aiWithClis = evalModule [
+    self.homeManagerModules.default
+    {
+      config.ai = {
+        enable = true;
+        enableCopilot = true;
+        enableKiro = true;
+        skills = {};
+        instructions.test-rule = {
+          text = "Test instruction";
+          description = "Test";
+        };
+      };
+      config.programs.copilot-cli.enable = true;
+      config.programs.kiro-cli.enable = true;
+    }
   ];
 in {
   copilot-cli-eval = pkgs.runCommand "copilot-cli-eval" {} ''
@@ -112,6 +147,22 @@ in {
       if swsDisabled.config.stacked-workflows.enable
       then "enabled"
       else "disabled (no-op)"
+    }" > $out
+  '';
+
+  ai-eval = pkgs.runCommand "ai-eval" {} ''
+    echo "ai module evaluation: ${
+      if aiDisabled.config.ai.enable
+      then "enabled"
+      else "disabled (no-op)"
+    }" > $out
+  '';
+
+  ai-with-clis-eval = pkgs.runCommand "ai-with-clis-eval" {} ''
+    echo "ai with copilot+kiro: ${
+      if aiWithClis.config.ai.enable
+      then "enabled"
+      else "disabled"
     }" > $out
   '';
 }

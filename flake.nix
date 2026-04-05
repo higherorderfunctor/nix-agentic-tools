@@ -52,6 +52,7 @@
     };
 
     homeManagerModules = {
+      ai = ./modules/ai;
       copilot-cli = ./modules/copilot-cli;
       default = ./modules;
       kiro-cli = ./modules/kiro-cli;
