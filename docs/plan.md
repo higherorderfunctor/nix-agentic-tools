@@ -125,14 +125,13 @@ Generated file policy:
       `devenv up docs` for docs preview, `devenv up` process naming
 - [ ] Consumer migration guide — replace vendored packages + nix-mcp-servers
 - [ ] ADRs for key decisions (standalone devenv, fragment pipeline, config parity)
-- [ ] Docs favicon — not loading or never configured in book.toml
-- [ ] GitHub Pages deploy workflow
+- [x] Docs favicon — configured in book.toml
+- [x] GitHub Pages deploy workflow (docs.yml with per-branch previews)
 - [ ] SecretSpec — declarative secrets for MCP credentials
 - [ ] Declutter root dotfiles — move `.cspell/`, `.nvfetcher/`,
       `.agnix.toml` to `config/` or `dev/` using tool config path
       overrides (all three support custom paths)
-- [ ] Document binary cache for consumers — cache URL, public key,
-      nixConfig/nix.settings/cachix.pull snippets (in docs site)
+- [x] Document binary cache for consumers — in getting-started guides
 
 ---
 
@@ -182,6 +181,15 @@ Generated file policy:
 - [ ] ChatGPT Codex CLI — package + HM/devenv module, same pattern as
       copilot-cli/kiro-cli; add to `ai.*` unified fanout as 4th ecosystem
 - [ ] cclsp — Claude Code LSP integration (passthru.withAdapters pattern)
+- [ ] claude-code-nix review — audit github.com/sadjow/claude-code-nix for
+      features to adopt. Bun runtime interesting if faster than native Node
+- [ ] claude-code.withBuddy — passthru function on claude-code package
+      that binary-patches the buddy salt at build time. Options via Nix:
+      `claude-code.withBuddy { species = "dragon"; rarity = "legendary"; }`
+      Needs: vendor any-buddy's salt-search logic or add bun as nativeBuildInput,
+      run patching in derivation, output patched binary. Separate from
+      withPlugins (which would handle the real plugin system via symlinks).
+      Ref: github.com/cpaczek/any-buddy
 - [ ] CONTRIBUTING.md refinement — review with maintainer, expand sections
 - [ ] copilot-cli/kiro-cli DRY — 7 helpers copy-pasted between modules
 - [ ] cspell permissions — wire via `ai.*` permissions so all ecosystems
@@ -205,7 +213,7 @@ Generated file policy:
       hashes.json, match to package names). Eliminates hardcoded package
       lists in the script. Could also use a fragment/instruction so adding
       a new overlay package automatically updates the update script.
-- [ ] Shell linters (shellcheck, shfmt) when shell scripts exist
+- [x] Shell linters (shellcheck, shfmt) — added to devenv git hooks
 - [ ] atlassian-mcp, gitlab-mcp, slack-mcp
 - [ ] openmemory-mcp typed settings + missing option descriptions (11 attrTag variants)
 - [ ] stack-plan: missing git restack after autosquash fixup pattern
@@ -217,3 +225,6 @@ Generated file policy:
       authoring, generation task structure. Ensure dev fragments capture
       all patterns so new sessions have full context.
 - [ ] Rolling stack workflow skill
+- [ ] Secret scanning — integrate gitleaks into pre-commit hook or CI.
+      Currently clean (406 commits verified 2026-04-06). Wire via
+      git-hooks.hooks in devenv or as a CI step in ci.yml

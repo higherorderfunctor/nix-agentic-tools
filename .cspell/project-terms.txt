@@ -20,6 +20,7 @@ chafa
 cclsp
 clis
 contentPkgs
+cpaczek
 convco
 Creds
 cuda
@@ -93,6 +94,7 @@ Revset
 revsets
 revwalk
 rustc
+sadjow
 sarif
 scriptable
 sdiehl
