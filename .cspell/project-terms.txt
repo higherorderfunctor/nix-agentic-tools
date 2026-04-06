@@ -15,6 +15,7 @@ berberman
 Bitemporality
 Boehm
 cachix
+codepaths
 chafa
 cclsp
 clis
@@ -64,6 +65,8 @@ nixpkgs
 nixvim
 nomic
 numtide
+Nuscht
+NuschtOS
 nvfetcher
 OLED
 Ollama

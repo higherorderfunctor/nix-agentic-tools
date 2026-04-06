@@ -10,8 +10,13 @@
 - **Config parity** — lib, HM, and devenv must align in capability
 - **Content packages** — published content (skills, fragments) lives in
   `packages/` as derivations with passthru for eval-time composition
-- **Pure fragment lib** — compose, mkFragment, mkEcosystemContent;
-  no file I/O, no hardcoded data
+- **Topic packages** — each topic bundles content (derivation) + API
+  (passthru transforms/functions). Core fragment lib stays in `lib/`
+  (pure functions, no content). Topic packages (`fragments-ai`,
+  `fragments-docs`) carry templates + transforms together
+- **Pure fragment lib** — `lib/fragments.nix` provides compose,
+  mkFragment, render; target-agnostic core. `render` takes a
+  transform lambda (`fragment -> string`) supplied by topic packages
 - **treefmt** via devenv built-in module (replaced dprint)
 - **devenv MCP** uses public `mcp.devenv.sh` (local Boehm GC bug)
 
@@ -44,12 +49,59 @@
 - [ ] `apps/check-health` — validate cross-references
 - [ ] Structural checks (symlinks, fragments, nvfetcher keys, module imports)
 
+### Generated Docs & Fragment Refactor
+
+Phase 1 — Fragment core FP refactor:
+- [ ] Refactor `lib/fragments.nix`: replace `mkEcosystemContent` with
+      generic `render { composed, transform }`. `transform` is a lambda
+      `fragment -> string`. Core becomes target-agnostic markdown
+      composition. Remove `ecosystems` map from core
+- [ ] Add `transforms.identity` and `transforms.withHeader` to core
+      (generic, topic-independent utilities)
+- [ ] Migrate existing callers (flake.nix, devenv.nix) to new API
+- [ ] Verify all instruction file outputs are byte-identical after refactor
+
+Phase 2 — Topic packages:
+- [ ] `packages/fragments-ai/` — AI ecosystem topic package
+      derivation: default instruction templates, example outputs
+      passthru.transforms: `{ claude, copilot, kiro, agentsmd }`
+      (extracted from current `ecosystems` map in fragments.nix)
+      Consumers: HM `ai.*` module, devenv `ai.*` module, `apps/generate`
+- [ ] `packages/fragments-docs/` — Doc site topic package
+      derivation: doc page templates, mdbook snippets, table layouts
+      passthru.transforms: `{ page, section, table, withOptions }`
+      passthru.generators: `{ optionsPage, packageTable, serverList }`
+      Consumers: `generate-docs` app, `devenv up docs`
+- [ ] Migrate `coding-standards` passthru to use core `render` +
+      `fragments-ai` transforms (currently uses `mkEcosystemContent`)
+- [ ] Migrate `stacked-workflows` similarly
+
+Phase 3 — Nix-evaluated doc generation:
+- [ ] `nix run .#generate-docs` app that renders fragments with
+      `fragments-docs` transforms to `docs/src/generated/` (gitignored)
+- [ ] Inject nix-evaluated data via transform closures: overlay package
+      tables, MCP server lists, supported CLIs — derived from actual
+      attrsets, not hand-maintained
+- [ ] Wire into `devenv up docs` as pre-step before `mdbook serve`
+- [ ] Shared fragments for content that appears in both HM and devenv
+      guide pages (MCP config, skills, instructions) — write once,
+      render with `fragments-ai` or `fragments-docs` transforms per target
+
+Phase 4 — Options browser & heavy content:
+- [ ] `nixosOptionsDoc` for HM and devenv modules → generated markdown
+      (279 options, ~2-4s build, must be pre-generated not inline)
+- [ ] Add NuschtOS/search as static client-side options browser
+      (no backend, scopes for HM/devenv/MCP options)
+- [ ] Pagefind post-build indexing for enhanced full-text search
+      (already in devenv packages)
+
 ### Documentation & Guides
 
 - [ ] CONTRIBUTING.md — dev workflow, package patterns, module patterns,
       `devenv up docs` for docs preview, `devenv up` process naming
 - [ ] Consumer migration guide — replace vendored packages + nix-mcp-servers
 - [ ] ADRs for key decisions (standalone devenv, fragment pipeline, config parity)
+- [ ] Docs favicon — not loading or never configured in book.toml
 - [ ] GitHub Pages deploy workflow
 - [ ] SecretSpec — declarative secrets for MCP credentials
 
@@ -101,6 +153,9 @@
 - [ ] ChatGPT Codex CLI — package + HM/devenv module, same pattern as
       copilot-cli/kiro-cli; add to `ai.*` unified fanout as 4th ecosystem
 - [ ] cclsp — Claude Code LSP integration (passthru.withAdapters pattern)
+- [ ] devenv feature audit — explore underused devenv features (tasks,
+      services, process dependencies, readiness probes, env vars, containers,
+      `devenv up` process naming) for potential adoption
 - [ ] filesystem-mcp — package + wire to devenv; may reduce tool approval
       friction for file operations
 - [ ] flake-parts — modular per-package flake outputs
