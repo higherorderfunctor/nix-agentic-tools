@@ -71,8 +71,7 @@ hexagons with colored nodes). Dark mode (coal theme) default.
 - [x] README rewrite: collapsible sections, self-contained basics, docs links
 - [x] `devenv up` serves docs (mdbook serve process)
 - [x] Serena MCP removed from devshell (no nvim integration)
-- [ ] `nix build .#docs` derivation (mdbook build + pagefind)
-- [ ] GitHub Pages deploy workflow (deferred)
+- [x] `nix build .#docs` derivation (mdbook built-in search sufficient)
 
 ### CI & Automation
 
@@ -93,6 +92,7 @@ hexagons with colored nodes). Dark mode (coal theme) default.
       `devenv up docs` for docs preview, `devenv up` process naming
 - [ ] Consumer migration guide — replace vendored packages + nix-mcp-servers
 - [ ] ADRs for key decisions (standalone devenv, fragment pipeline, config parity)
+- [ ] GitHub Pages deploy workflow
 - [ ] SecretSpec — declarative secrets for MCP credentials
 
 ---
