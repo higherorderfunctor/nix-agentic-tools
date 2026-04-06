@@ -101,11 +101,12 @@ ai.instructions.coding-standards = {
 };
 ```
 
-The module calls per-ecosystem frontmatter generators:
+The module applies per-ecosystem transforms via
+`pkgs.fragments-ai.passthru.transforms`:
 
-- **Claude** (`mkClaudeRule`): `---\ndescription: ...\npaths:\n  - "*.sh"\n---`
-- **Copilot** (`mkCopilotInstruction`): `---\napplyTo: "*.sh"\n---`
-- **Kiro** (`mkKiroSteering`): `---\nname: coding-standards\ninclusion: fileMatch\nfileMatchPattern: "*.sh"\n---`
+- **Claude** (`transforms.claude`): `---\ndescription: ...\npaths:\n  - "*.sh"\n---`
+- **Copilot** (`transforms.copilot`): `---\napplyTo: "*.sh"\n---`
+- **Kiro** (`transforms.kiro`): `---\nname: coding-standards\ninclusion: fileMatch\nfileMatchPattern: "*.sh"\n---`
 
 When `paths` is null, Claude omits the paths frontmatter (always loaded),
 Copilot uses `applyTo: "**"`, and Kiro uses `inclusion: always`.

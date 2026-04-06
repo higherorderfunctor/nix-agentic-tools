@@ -139,7 +139,7 @@ Not a NixOS module type -- a plain attrset convention used by
 ```
 
 Created by `mkFragment`, consumed by `compose` and
-`mkEcosystemContent`.
+`render`.
 
 ## McpEntry
 

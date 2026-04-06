@@ -84,43 +84,36 @@ pkgs.stacked-workflows-content.passthru.skillsDir
 # => source path to skills/ directory
 ```
 
-## Ecosystem Content
+## Rendering to Ecosystem Format
 
-`mkEcosystemContent` applies per-ecosystem YAML frontmatter to a
-composed fragment. Each ecosystem has different frontmatter conventions:
+`render` applies a transform function to a composed fragment to produce
+the final string for a given ecosystem. Transforms live on
+`pkgs.fragments-ai.passthru.transforms` and encapsulate all frontmatter
+conventions:
 
 ```nix
-fragments.mkEcosystemContent {
-  ecosystem = "claude";
-  package = "my-project";
-  composed = myComposedFragment;
-  paths = ["src/**"];
-}
+let
+  t = pkgs.fragments-ai.passthru.transforms;
+in
+  fragments.render {
+    composed = myComposedFragment;
+    transform = t.claude { package = "my-project"; };
+  }
 ```
 
-| Ecosystem  | Frontmatter fields                                     |
-| ---------- | ------------------------------------------------------ |
-| `claude`   | `description`, `paths` (list)                          |
-| `copilot`  | `applyTo` (glob string)                                |
-| `kiro`     | `name`, `description`, `inclusion`, `fileMatchPattern` |
-| `agentsmd` | None (no frontmatter)                                  |
+| Transform             | Ecosystem | Frontmatter fields                                     |
+| --------------------- | --------- | ------------------------------------------------------ |
+| `transforms.claude`   | Claude    | `description`, `paths` (list)                          |
+| `transforms.copilot`  | Copilot   | `applyTo` (glob string)                                |
+| `transforms.kiro`     | Kiro      | `name`, `description`, `inclusion`, `fileMatchPattern` |
+| `transforms.agentsmd` | AGENTS.md | None (no frontmatter)                                  |
 
 When `paths` is null: Claude emits no frontmatter, Copilot uses
 `applyTo: "**"`, and Kiro uses `inclusion: always`.
 
-## Shorthand Generators
-
-The `ai-common` library provides per-ecosystem shorthand that wraps
-`mkEcosystemContent` logic for the module system:
-
-| Function               | Ecosystem | Output                                                              |
-| ---------------------- | --------- | ------------------------------------------------------------------- |
-| `mkClaudeRule`         | Claude    | Frontmatter with `description` + `paths`, then body                 |
-| `mkCopilotInstruction` | Copilot   | Frontmatter with `applyTo`, then body                               |
-| `mkKiroSteering`       | Kiro      | Frontmatter with `name`, `inclusion`, `fileMatchPattern`, then body |
-
-These are used internally by the `ai.*` module during fanout. You
-typically don't call them directly unless building custom tooling.
+The `claude` and `kiro` transforms are curried factories — call them
+with a context attrset to get the actual `fragment -> string` function.
+`copilot` and `agentsmd` are plain functions (no context needed).
 
 ## Using Fragments in Practice
 
@@ -153,11 +146,9 @@ let
   composed = fragments.compose {
     fragments = builtins.attrValues pkgs.coding-standards.passthru.fragments;
   };
-  content = fragments.mkEcosystemContent {
-    ecosystem = "claude";
-    package = "my-project";
+  content = fragments.render {
     composed = composed;
-    paths = ["src/**"];
+    transform = pkgs.fragments-ai.passthru.transforms.claude { package = "my-project"; };
   };
 in
   builtins.toFile "rules.md" content

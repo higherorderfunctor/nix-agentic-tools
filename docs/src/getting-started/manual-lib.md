@@ -109,18 +109,29 @@ fragments.compose {
 # => mkFragment { text = "Rule B\nRule A"; description = "combined rules"; ... }
 ```
 
-### mkEcosystemContent
+### render
 
-Apply per-ecosystem frontmatter to a composed fragment:
+Apply a transform to a composed fragment to produce the final ecosystem
+string:
 
 ```nix
-fragments.mkEcosystemContent {
-  ecosystem = "claude";
-  package = "my-project";
-  composed = myComposedFragment;
-  paths = ["src/**"];
-}
+let
+  t = pkgs.fragments-ai.passthru.transforms;
+in
+  fragments.render {
+    composed = myComposedFragment;
+    transform = t.claude { package = "my-project"; };
+  }
 # => "---\ndescription: Instructions for the my-project package\npaths: src/**\n---\n\n<composed text>"
+
+# Copilot (no context needed):
+fragments.render { composed = myComposedFragment; transform = t.copilot; }
+
+# Kiro:
+fragments.render { composed = myComposedFragment; transform = t.kiro { name = "coding-standards"; }; }
+
+# AGENTS.md (identity, no frontmatter):
+fragments.render { composed = myComposedFragment; transform = t.agentsmd; }
 ```
 
 ## Credential Helpers
@@ -144,10 +155,10 @@ mcp.mkSecretsWrapper {
 
 ## What to Use When
 
-| Goal                                        | Function                         |
-| ------------------------------------------- | -------------------------------- |
-| Quick MCP entry from a package              | `mkPackageEntry`                 |
-| MCP entry with typed settings + credentials | `mkStdioEntry`                   |
-| Multiple servers at once                    | `mkStdioConfig`                  |
-| Build instruction content from fragments    | `compose` + `mkEcosystemContent` |
-| Runtime credential injection                | `mkSecretsWrapper`               |
+| Goal                                        | Function             |
+| ------------------------------------------- | -------------------- |
+| Quick MCP entry from a package              | `mkPackageEntry`     |
+| MCP entry with typed settings + credentials | `mkStdioEntry`       |
+| Multiple servers at once                    | `mkStdioConfig`      |
+| Build instruction content from fragments    | `compose` + `render` |
+| Runtime credential injection                | `mkSecretsWrapper`   |

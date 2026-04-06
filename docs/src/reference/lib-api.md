@@ -38,20 +38,32 @@ deduplicates by SHA-256 hash of text, concatenates with newlines.
 | `paths`       | nullOr (listOf string) | `null`  | Scoping for result              |
 | `priority`    | int                    | `0`     | Priority of result              |
 
-### mkEcosystemContent
+### render
 
 ```nix
-mkEcosystemContent :: { ecosystem, package, composed, paths? } -> string
+render :: { composed, transform } -> string
 ```
 
-Apply ecosystem-specific YAML frontmatter to a composed fragment.
+Apply a transform function to a composed fragment to produce the final
+string for a target ecosystem.
 
-| Parameter   | Type                                        | Description                           |
-| ----------- | ------------------------------------------- | ------------------------------------- |
-| `ecosystem` | enum ["agentsmd" "claude" "copilot" "kiro"] | Target ecosystem                      |
-| `package`   | string                                      | Package name (for frontmatter labels) |
-| `composed`  | Fragment                                    | Composed fragment to wrap             |
-| `paths`     | nullOr (listOf string)                      | Path scoping for frontmatter          |
+| Parameter   | Type               | Description                            |
+| ----------- | ------------------ | -------------------------------------- |
+| `composed`  | Fragment           | Composed fragment to render            |
+| `transform` | Fragment -> string | Transform function from `transforms.*` |
+
+Transforms are provided by `pkgs.fragments-ai.passthru.transforms`:
+
+```nix
+let
+  t = pkgs.fragments-ai.passthru.transforms;
+in {
+  claude  = t.claude  { package = "name"; };  # curried factory
+  copilot = t.copilot;                         # plain function
+  kiro    = t.kiro    { name = "rule-name"; }; # curried factory
+  agents  = t.agentsmd;                        # plain function (identity)
+}
+```
 
 ### mkFrontmatter
 
@@ -169,31 +181,6 @@ and `paths` fields. Used by `ai.instructions`.
 NixOS module type for LSP server definitions with `package`, `binary`,
 `args`, `extensions`, and `initializationOptions`. Used by
 `ai.lspServers`.
-
-### mkClaudeRule
-
-```nix
-mkClaudeRule :: name -> instruction -> string
-```
-
-Generate Claude rules file content with YAML frontmatter.
-
-### mkCopilotInstruction
-
-```nix
-mkCopilotInstruction :: name -> instruction -> string
-```
-
-Generate Copilot instruction file content with `applyTo` frontmatter.
-
-### mkKiroSteering
-
-```nix
-mkKiroSteering :: name -> instruction -> string
-```
-
-Generate Kiro steering file content with `name`, `inclusion`, and
-`fileMatchPattern` frontmatter.
 
 ### mkLspConfig
 

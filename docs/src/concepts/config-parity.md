@@ -15,18 +15,18 @@ support the same features. Gaps between methods are bugs.
 
 Every configurable surface must be available in all three methods:
 
-| Surface                 | HM Module                 | DevEnv Module                   | lib                                                      |
-| ----------------------- | ------------------------- | ------------------------------- | -------------------------------------------------------- |
-| Skills                  | `ai.skills`               | `ai.skills`                     | Manual file placement                                    |
-| Instructions / steering | `ai.instructions`         | `ai.instructions`               | `mkClaudeRule`, `mkKiroSteering`, `mkCopilotInstruction` |
-| MCP servers             | `services.mcp-servers`    | `claude.code.mcpServers`        | `mkStdioEntry`, `mkStdioConfig`                          |
-| LSP servers             | `ai.lspServers`           | `ai.lspServers`                 | `mkLspConfig`, `mkCopilotLspConfig`                      |
-| Settings                | `ai.settings`             | `ai.settings`                   | Per-CLI JSON generation                                  |
-| Environment variables   | `ai.environmentVariables` | `ai.environmentVariables`       | Manual wiring                                            |
-| Credentials             | `settings.credentials.*`  | `mkStdioEntry` with credentials | `mkSecretsWrapper`                                       |
-| Hooks                   | Per-CLI module            | Per-CLI module                  | Manual                                                   |
-| Agents                  | Per-CLI module            | Per-CLI module                  | Manual                                                   |
-| Permissions             | Per-CLI module            | Per-CLI module                  | Manual                                                   |
+| Surface                 | HM Module                 | DevEnv Module                   | lib                                           |
+| ----------------------- | ------------------------- | ------------------------------- | --------------------------------------------- |
+| Skills                  | `ai.skills`               | `ai.skills`                     | Manual file placement                         |
+| Instructions / steering | `ai.instructions`         | `ai.instructions`               | `render` + `transforms.{claude,copilot,kiro}` |
+| MCP servers             | `services.mcp-servers`    | `claude.code.mcpServers`        | `mkStdioEntry`, `mkStdioConfig`               |
+| LSP servers             | `ai.lspServers`           | `ai.lspServers`                 | `mkLspConfig`, `mkCopilotLspConfig`           |
+| Settings                | `ai.settings`             | `ai.settings`                   | Per-CLI JSON generation                       |
+| Environment variables   | `ai.environmentVariables` | `ai.environmentVariables`       | Manual wiring                                 |
+| Credentials             | `settings.credentials.*`  | `mkStdioEntry` with credentials | `mkSecretsWrapper`                            |
+| Hooks                   | Per-CLI module            | Per-CLI module                  | Manual                                        |
+| Agents                  | Per-CLI module            | Per-CLI module                  | Manual                                        |
+| Permissions             | Per-CLI module            | Per-CLI module                  | Manual                                        |
 
 ## Why Parity Matters
 
@@ -45,8 +45,8 @@ Both HM and devenv `ai.*` modules import from the same source:
   by standalone lib consumers)
 - `lib/mcp.nix` -- MCP entry builders, credential helpers
 
-This means adding a new translation to `mkClaudeRule` automatically
-benefits all three methods.
+This means a new transform in `pkgs.fragments-ai.passthru.transforms`
+automatically benefits all three methods.
 
 ## How to Report Parity Issues
 
