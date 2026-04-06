@@ -123,8 +123,6 @@ Generated file policy:
       `devenv up docs` for docs preview, `devenv up` process naming
 - [ ] Consumer migration guide — replace vendored packages + nix-mcp-servers
 - [ ] ADRs for key decisions (standalone devenv, fragment pipeline, config parity)
-- [ ] cspell permissions — add cspell to generated Claude Code permissions
-      (Bash allow rules are generated, need to include cspell commands)
 - [ ] Docs favicon — not loading or never configured in book.toml
 - [ ] GitHub Pages deploy workflow
 - [ ] SecretSpec — declarative secrets for MCP credentials
@@ -177,6 +175,9 @@ Generated file policy:
 - [ ] ChatGPT Codex CLI — package + HM/devenv module, same pattern as
       copilot-cli/kiro-cli; add to `ai.*` unified fanout as 4th ecosystem
 - [ ] cclsp — Claude Code LSP integration (passthru.withAdapters pattern)
+- [ ] CONTRIBUTING.md refinement — review with maintainer, expand sections
+- [ ] cspell permissions — wire via `ai.*` permissions so all ecosystems
+      get cspell in Bash allow rules (not Claude-specific)
 - [ ] devenv feature audit — explore underused devenv features (tasks,
       services, process dependencies, readiness probes, env vars, containers,
       `devenv up` process naming) for potential adoption
@@ -190,8 +191,6 @@ Generated file policy:
 - [ ] MCP processes — no-cred servers for `devenv up`
 - [ ] Module fragment exposure — MCP servers contributing own fragments
 - [ ] Ollama HM module
-- [ ] scripts/update → devenv task or script — integrate into devenv so
-      `devenv run update` works; remove standalone bash script
 - [ ] scripts/update auto-discovery — derive which hashes to update from
       the nix files themselves (scan for npmDepsHash/vendorHash/cargoHash in
       hashes.json, match to package names). Eliminates hardcoded package
