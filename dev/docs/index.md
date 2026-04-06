@@ -29,11 +29,7 @@ content as composable Nix derivations.
 
 ## Supported CLIs
 
-| CLI            | HM Module              | DevEnv Module      | Ecosystem Key |
-| -------------- | ---------------------- | ------------------ | ------------- |
-| Claude Code    | `ai.claude.enable`     | `ai.claude.enable` | `claude`      |
-| GitHub Copilot | `programs.copilot-cli` | `copilot.*`        | `copilot`     |
-| Kiro           | `programs.kiro-cli`    | `kiro.*`           | `kiro`        |
+{{#include ./generated/snippets/cli-table.md}}
 
 ## Quick Links
 

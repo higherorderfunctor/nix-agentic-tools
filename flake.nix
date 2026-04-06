@@ -46,14 +46,7 @@
     pkgsFor = system:
       import nixpkgs {
         inherit system;
-        config =
-          {
-            allowUnfree = true;
-          }
-          // lib.optionalAttrs (system == "x86_64-linux") {
-            cudaSupport = true;
-            cudaCapabilities = ["7.5" "8.6" "8.9"];
-          };
+        config.allowUnfree = true;
         overlays = [self.overlays.default];
       };
     fragments = import ./lib/fragments.nix {inherit lib;};
@@ -141,6 +134,7 @@
     packages = forAllSystems (system: let
       pkgs = pkgsFor system;
       docGen = pkgs.fragments-docs.passthru.generators;
+      docData = import ./dev/data.nix {inherit lib;};
 
       # Doc site components — local bindings for cross-referencing
       siteProse = pkgs.runCommand "docs-site-prose" {} ''
@@ -150,7 +144,7 @@
 
       siteSnippets =
         pkgs.runCommand "docs-site-snippets" {
-          overlayTable = pkgs.writeText "overlay-table.md" (docGen.snippets.overlayTable {});
+          overlayTable = pkgs.writeText "overlay-table.md" (docGen.snippets.overlayTable {data = docData;});
           cliTable = pkgs.writeText "cli-table.md" (docGen.snippets.cliTable {});
           aiMappingTable = pkgs.writeText "ai-mapping-table.md" (docGen.snippets.aiMappingTable {});
         } ''
@@ -162,7 +156,7 @@
 
       siteReference =
         pkgs.runCommand "docs-site-reference" {
-          overlayPackages = pkgs.writeText "overlays-packages.md" (docGen.overlayPackages {});
+          overlayPackages = pkgs.writeText "overlays-packages.md" (docGen.overlayPackages {data = docData;});
           hmOptions = pkgs.writeText "home-manager.md" (docGen.hmOptions {});
           devenvOptions = pkgs.writeText "devenv.md" (docGen.devenvOptions {});
           mcpServers = pkgs.writeText "mcp-servers.md" (docGen.mcpServers {});

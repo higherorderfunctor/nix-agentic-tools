@@ -30,13 +30,7 @@ nixpkgs.overlays = [
 
 This adds to your `pkgs`:
 
-| Overlay             | Packages                                              |
-| ------------------- | ----------------------------------------------------- |
-| `ai-clis`           | `github-copilot-cli`, `kiro-cli`, `kiro-gateway`      |
-| `coding-standards`  | `coding-standards` (fragment content)                 |
-| `git-tools`         | `agnix`, `git-absorb`, `git-branchless`, `git-revise` |
-| `mcp-servers`       | `nix-mcp-servers.*` (14 servers)                      |
-| `stacked-workflows` | `stacked-workflows-content` (skills, references)      |
+{{#include ../generated/snippets/overlay-table.md}}
 
 You can also apply individual overlays:
 `overlays.ai-clis`, `overlays.git-tools`, `overlays.mcp-servers`, etc.

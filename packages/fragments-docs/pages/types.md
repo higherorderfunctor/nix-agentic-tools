@@ -32,12 +32,12 @@ instructionModule = types.submodule {
 
 ### Field Mapping
 
-| Field          | Claude                     | Copilot                | Kiro                                         |
-| -------------- | -------------------------- | ---------------------- | -------------------------------------------- |
-| `text`         | Rule body                  | Instruction body       | Steering body                                |
-| `description`  | `description:` frontmatter | --                     | `description:` frontmatter                   |
-| `paths` (set)  | `paths:` list in frontmatter  | `applyTo:` comma-joined | `fileMatchPattern:` + `inclusion: fileMatch` |
-| `paths` (null) | No frontmatter             | `applyTo: "**"`        | `inclusion: always`                          |
+| Field          | Claude                       | Copilot                 | Kiro                                         |
+| -------------- | ---------------------------- | ----------------------- | -------------------------------------------- |
+| `text`         | Rule body                    | Instruction body        | Steering body                                |
+| `description`  | `description:` frontmatter   | --                      | `description:` frontmatter                   |
+| `paths` (set)  | `paths:` list in frontmatter | `applyTo:` comma-joined | `fileMatchPattern:` + `inclusion: fileMatch` |
+| `paths` (null) | No frontmatter               | `applyTo: "**"`         | `inclusion: always`                          |
 
 ## lspServerModule
 

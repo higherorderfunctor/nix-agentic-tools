@@ -160,95 +160,13 @@
   '';
   # ── README.md generation ─────────────────────────────────────────────
 
-  # ── Static description mappings ──────────────────────────────────────
-  # Using explicit descriptions rather than meta.description because
-  # README wording may differ from upstream/nixpkgs descriptions.
-
-  mcpServerMeta = {
-    context7-mcp = {
-      description = "Library documentation lookup";
-      credentials = "None";
-    };
-    effect-mcp = {
-      description = "Effect-TS documentation";
-      credentials = "None";
-    };
-    fetch-mcp = {
-      description = "HTTP fetch + HTML-to-markdown";
-      credentials = "None";
-    };
-    git-intel-mcp = {
-      description = "Git repository analytics";
-      credentials = "None";
-    };
-    git-mcp = {
-      description = "Git operations";
-      credentials = "None";
-    };
-    github-mcp = {
-      description = "GitHub platform integration";
-      credentials = "Required";
-    };
-    kagi-mcp = {
-      description = "Kagi search and summarization";
-      credentials = "Required";
-    };
-    mcp-language-server = {
-      description = "LSP-to-MCP bridge";
-      credentials = "None";
-    };
-    mcp-proxy = {
-      description = "stdio-to-HTTP bridge proxy";
-      credentials = "None";
-    };
-    nixos-mcp = {
-      description = "NixOS and Nix documentation";
-      credentials = "None";
-    };
-    openmemory-mcp = {
-      description = "Persistent memory + vector search";
-      credentials = "None";
-    };
-    sequential-thinking-mcp = {
-      description = "Step-by-step reasoning";
-      credentials = "None";
-    };
-    serena-mcp = {
-      description = "Codebase-aware semantic tools";
-      credentials = "Optional";
-    };
-    sympy-mcp = {
-      description = "Symbolic mathematics";
-      credentials = "None";
-    };
-  };
-
-  gitToolDescriptions = {
-    agnix = "Linter, LSP, and MCP for AI config files";
-    git-absorb = "Automatic fixup commit routing";
-    git-branchless = "Anonymous branching, in-memory rebases";
-    git-revise = "In-memory commit rewriting";
-  };
-
-  aiCliDescriptions = {
-    claude-code = "Claude Code CLI";
-    github-copilot-cli = "GitHub Copilot CLI";
-    kiro-cli = "Kiro CLI";
-    kiro-gateway = "Python proxy API for Kiro";
-  };
-
-  skillDescriptions = {
-    stack-fix = "Absorb fixes into correct stack commits";
-    stack-plan = "Plan and build a commit stack from description or existing commits";
-    stack-split = "Split a large commit into reviewable atomic commits";
-    stack-submit = "Sync, validate, push stack, and create stacked PRs";
-    stack-summary = "Analyze stack quality, flag violations, produce planner-ready summary";
-    stack-test = "Run tests or formatters across every commit in a stack";
-  };
+  # ── Shared description mappings (from dev/data.nix) ──────────────────
+  data = import ./data.nix {inherit lib;};
+  inherit (data) aiCliDescriptions gitToolDescriptions mcpServerMeta skillDescriptions;
+  inherit (data) mcpServerCount;
 
   # ── Table generators ─────────────────────────────────────────────────
   mcpServerNames = lib.sort lib.lessThan (builtins.attrNames mcpServerMeta);
-  mcpServerCount = builtins.length mcpServerNames;
   mcpServerRows = lib.concatMapStringsSep "\n" (name: let
     meta = mcpServerMeta.${name};
   in "| `${name}` | ${meta.description} | ${meta.credentials} |")
