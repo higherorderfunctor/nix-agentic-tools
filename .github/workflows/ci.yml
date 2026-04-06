@@ -43,11 +43,18 @@ jobs:
       - name: Check flake evaluation
         run: nix flake check --no-build
 
+      - name: Install nix-fast-build
+        run: nix profile install nixpkgs#nix-fast-build
+
       - name: Build all packages
         run: |
-          nix flake show --json \
-            | jq -r '.packages."${{ matrix.system }}" // {} | keys[]' \
-            | xargs -I{} nix build .#{} --no-link
+          nix-fast-build \
+            --flake ".#packages" \
+            --systems "${{ matrix.system }}" \
+            --skip-cached \
+            --cachix-cache nix-agentic-tools \
+            --no-nom \
+            --no-link
 
   test:
     runs-on: ubuntu-latest
