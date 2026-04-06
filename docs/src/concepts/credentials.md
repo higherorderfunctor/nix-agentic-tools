@@ -1,7 +1,7 @@
 # Credentials & Secrets
 
 MCP servers that access external services need API tokens or access
-keys. agentic-tools provides a typed credential system that keeps
+keys. nix-agentic-tools provides a typed credential system that keeps
 secrets out of the Nix store and supports multiple secret management
 backends.
 
@@ -122,7 +122,7 @@ In devenv, MCP servers are configured inline per-CLI. Use
 
 ```nix
 claude.code.mcpServers.github-mcp =
-  inputs.agentic-tools.lib.mcp.mkStdioEntry pkgs {
+  inputs.nix-agentic-tools.lib.mcp.mkStdioEntry pkgs {
     package = pkgs.nix-mcp-servers.github-mcp;
     settings.credentials.file = "/run/secrets/github-token";
   };

@@ -89,11 +89,11 @@
       swsFragments = import ./packages/stacked-workflows/default.nix {} lib.id {};
       presets = {
         # Full dev environment — all coding standards + skill routing
-        agentic-tools-dev = fragments.compose {
+        nix-agentic-tools-dev = fragments.compose {
           fragments =
             builtins.attrValues codingStdFragments.coding-standards.passthru.fragments
             ++ builtins.attrValues swsFragments.stacked-workflows-content.passthru.fragments;
-          description = "Full agentic-tools dev standards";
+          description = "Full nix-agentic-tools dev standards";
         };
       };
     in {
@@ -239,7 +239,7 @@
     in {
       # Documentation
       docs =
-        pkgs.runCommand "agentic-tools-docs" {
+        pkgs.runCommand "nix-agentic-tools-docs" {
           nativeBuildInputs = [pkgs.mdbook];
           src = ./docs;
         } ''

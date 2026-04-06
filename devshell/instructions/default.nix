@@ -21,8 +21,8 @@
   # integrated. The pattern will be:
   #
   # config = lib.mkIf cfg.enable {
-  #   files.".claude/rules/agentic-tools.md".text = ...;
-  #   files.".kiro/steering/agentic-tools.md".text = ...;
-  #   files.".github/instructions/agentic-tools.instructions.md".text = ...;
+  #   files.".claude/rules/nix-agentic-tools.md".text = ...;
+  #   files.".kiro/steering/nix-agentic-tools.md".text = ...;
+  #   files.".github/instructions/nix-agentic-tools.instructions.md".text = ...;
   # };
 }

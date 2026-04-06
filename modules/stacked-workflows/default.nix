@@ -4,7 +4,7 @@
 # presets and wires AI tool integrations (Claude Code, Kiro, Copilot).
 #
 # Usage:
-#   imports = [ inputs.agentic-tools.homeManagerModules.stacked-workflows ];
+#   imports = [ inputs.nix-agentic-tools.homeManagerModules.stacked-workflows ];
 #   stacked-workflows.enable = true;
 {
   config,

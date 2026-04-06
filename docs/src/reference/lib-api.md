@@ -1,6 +1,6 @@
 # lib API
 
-All public functions exported by `inputs.agentic-tools.lib`. Organized
+All public functions exported by `inputs.nix-agentic-tools.lib`. Organized
 by source module.
 
 ## lib/fragments.nix

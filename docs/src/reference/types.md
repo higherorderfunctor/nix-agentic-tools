@@ -1,6 +1,6 @@
 # Types
 
-Custom NixOS module types used across agentic-tools modules.
+Custom NixOS module types used across nix-agentic-tools modules.
 
 ## instructionModule
 

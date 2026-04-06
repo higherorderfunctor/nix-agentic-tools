@@ -9,8 +9,8 @@ skills, and MCP servers.
 ```nix
 # flake.nix
 {
-  inputs.agentic-tools = {
-    url = "github:higherorderfunctor/agentic-tools";
+  inputs.nix-agentic-tools = {
+    url = "github:higherorderfunctor/nix-agentic-tools";
     inputs.nixpkgs.follows = "nixpkgs";
   };
 }
@@ -24,7 +24,7 @@ content packages.
 ```nix
 # In your nixpkgs configuration:
 nixpkgs.overlays = [
-  inputs.agentic-tools.overlays.default
+  inputs.nix-agentic-tools.overlays.default
 ];
 ```
 
@@ -46,7 +46,7 @@ You can also apply individual overlays:
 ```nix
 # In your home-manager configuration:
 imports = [
-  inputs.agentic-tools.homeManagerModules.default
+  inputs.nix-agentic-tools.homeManagerModules.default
 ];
 ```
 
@@ -55,8 +55,8 @@ This imports all modules: `ai`, `copilot-cli`, `kiro-cli`, `mcp-servers`,
 
 ```nix
 imports = [
-  inputs.agentic-tools.homeManagerModules.ai
-  inputs.agentic-tools.homeManagerModules.stacked-workflows
+  inputs.nix-agentic-tools.homeManagerModules.ai
+  inputs.nix-agentic-tools.homeManagerModules.stacked-workflows
 ];
 ```
 

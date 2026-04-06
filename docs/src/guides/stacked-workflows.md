@@ -1,7 +1,7 @@
 # Stacked Workflows
 
 Stacked workflows organize work as sequences of small, atomic commits
-rather than one large change. agentic-tools provides git configuration
+rather than one large change. nix-agentic-tools provides git configuration
 presets, 6 skills for AI coding CLIs, and integrations that wire
 everything together.
 
@@ -18,7 +18,7 @@ Three git tools power the stacked workflow:
 Install via the overlay:
 
 ```nix
-nixpkgs.overlays = [inputs.agentic-tools.overlays.git-tools];
+nixpkgs.overlays = [inputs.nix-agentic-tools.overlays.git-tools];
 # Adds: pkgs.git-absorb, pkgs.git-branchless, pkgs.git-revise
 ```
 

@@ -19,7 +19,7 @@ services.mcp-servers.servers = {
 
 # DevEnv (inline per-CLI)
 claude.code.mcpServers.github-mcp =
-  inputs.agentic-tools.lib.mcp.mkStdioEntry pkgs {
+  inputs.nix-agentic-tools.lib.mcp.mkStdioEntry pkgs {
     package = pkgs.nix-mcp-servers.github-mcp;
     settings.credentials.file = "/run/secrets/github-token";
   };

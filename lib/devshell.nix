@@ -4,7 +4,7 @@
 # and produce a mkShell derivation. No home-manager or devenv dependency.
 #
 # Usage:
-#   devShells.default = inputs.agentic-tools.lib.mkAgenticShell pkgs {
+#   devShells.default = inputs.nix-agentic-tools.lib.mkAgenticShell pkgs {
 #     mcpServers.github-mcp = {
 #       enable = true;
 #       command = "github-mcp-server";

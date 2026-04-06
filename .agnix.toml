@@ -1,4 +1,4 @@
-# agnix configuration for agentic-tools
+# agnix configuration for nix-agentic-tools
 # See: https://github.com/agent-sh/agnix
 
 [targets]

@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-agentic-tools is a Nix flake monorepo providing stacked workflow skills,
+nix-agentic-tools is a Nix flake monorepo providing stacked workflow skills,
 MCP server packages, and home-manager modules for AI coding CLIs (Claude
 Code, Copilot CLI, Kiro CLI). Skills work without Nix; Nix unlocks
 overlays, home-manager modules, and devshell integration.

@@ -1,6 +1,6 @@
 # Config Parity Reference
 
-Architectural principle for the agentic-tools monorepo. Used by
+Architectural principle for the nix-agentic-tools monorepo. Used by
 repo-review's consistency-auditor to detect feature gaps across
 configuration methods.
 

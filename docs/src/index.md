@@ -1,7 +1,7 @@
 <div align="center">
-<img src="assets/logo.png" alt="agentic-tools" width="128">
+<img src="assets/logo.png" alt="nix-agentic-tools" width="128">
 
-# agentic-tools
+# nix-agentic-tools
 
 </div>
 

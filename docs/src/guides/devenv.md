@@ -93,8 +93,8 @@ or MCP servers, compose the overlays manually:
 ```nix
 {inputs, pkgs, lib, ...}: let
   contentPkgs = pkgs.extend (lib.composeManyExtensions [
-    (import "${inputs.agentic-tools}/packages/coding-standards" {})
-    (import "${inputs.agentic-tools}/packages/stacked-workflows" {})
+    (import "${inputs.nix-agentic-tools}/packages/coding-standards" {})
+    (import "${inputs.nix-agentic-tools}/packages/stacked-workflows" {})
   ]);
 in {
   # Now use contentPkgs.coding-standards, contentPkgs.stacked-workflows-content
@@ -104,7 +104,7 @@ in {
 For MCP server packages, apply the mcp-servers overlay:
 
 ```nix
-mcpPkgs = pkgs.extend (import "${inputs.agentic-tools}/packages/mcp-servers" {
+mcpPkgs = pkgs.extend (import "${inputs.nix-agentic-tools}/packages/mcp-servers" {
   inherit inputs;
 });
 # mcpPkgs.nix-mcp-servers.github-mcp, etc.

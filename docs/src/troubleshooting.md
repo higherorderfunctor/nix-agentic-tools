@@ -117,20 +117,20 @@ available.
    nixpkgs configuration:
 
    ```nix
-   nixpkgs.overlays = [inputs.agentic-tools.overlays.default];
+   nixpkgs.overlays = [inputs.nix-agentic-tools.overlays.default];
    ```
 
 2. **DevEnv overlay access.** DevEnv does not auto-apply overlays.
    Compose them manually:
 
    ```nix
-   mcpPkgs = pkgs.extend (import "${inputs.agentic-tools}/packages/mcp-servers" {
+   mcpPkgs = pkgs.extend (import "${inputs.nix-agentic-tools}/packages/mcp-servers" {
      inherit inputs;
    });
    ```
 
 3. **Follows mismatch.** If your flake uses `inputs.nixpkgs.follows`
-   and the nixpkgs version is very different from what agentic-tools
+   and the nixpkgs version is very different from what nix-agentic-tools
    expects, some packages may fail to evaluate. Pin to a compatible
    nixpkgs version.
 

@@ -1,6 +1,6 @@
 # Configuration Parity
 
-agentic-tools provides three configuration methods. All three must
+nix-agentic-tools provides three configuration methods. All three must
 support the same features. Gaps between methods are bugs.
 
 ## The Three Methods

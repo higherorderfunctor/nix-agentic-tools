@@ -191,13 +191,13 @@ their home-manager git config:
 
 ```nix
 {
-  inputs.agentic-tools.url = "github:higherorderfunctor/agentic-tools";
+  inputs.nix-agentic-tools.url = "github:higherorderfunctor/nix-agentic-tools";
 }
 
 # In home-manager configuration:
 { inputs, ... }: {
   programs.git.settings =
-    inputs.agentic-tools.lib.gitConfig;
+    inputs.nix-agentic-tools.lib.gitConfig;
 }
 ```
 
@@ -208,7 +208,7 @@ a shallow merge and would drop other keys in the same attrset):
 
 ```nix
 lib.recursiveUpdate
-  inputs.agentic-tools.lib.gitConfig
+  inputs.nix-agentic-tools.lib.gitConfig
   { absorb.maxStack = 100; };
 ```
 
@@ -216,7 +216,7 @@ For the full Recommended set, use `lib.gitConfigFull`:
 
 ```nix
 programs.git.settings =
-  inputs.agentic-tools.lib.gitConfigFull;
+  inputs.nix-agentic-tools.lib.gitConfigFull;
 ```
 
 ## Tool Interoperability Notes

@@ -1,4 +1,4 @@
-# agentic-tools
+# nix-agentic-tools
 
 Stacked commit workflows, MCP servers, and declarative configuration for
 AI coding CLIs (Claude Code, Copilot, Kiro). Works without Nix; Nix
@@ -33,16 +33,16 @@ Each skill is self-contained with a `SKILL.md` and bundled reference docs.
 
 ```nix
 # flake.nix
-inputs.agentic-tools = {
-  url = "github:higherorderfunctor/agentic-tools";
+inputs.nix-agentic-tools = {
+  url = "github:higherorderfunctor/nix-agentic-tools";
   inputs.nixpkgs.follows = "nixpkgs";
 };
 
 # Apply overlay
-nixpkgs.overlays = [inputs.agentic-tools.overlays.default];
+nixpkgs.overlays = [inputs.nix-agentic-tools.overlays.default];
 
 # Home-manager config
-imports = [inputs.agentic-tools.homeManagerModules.default];
+imports = [inputs.nix-agentic-tools.homeManagerModules.default];
 
 ai = {
   enable = true;
@@ -74,8 +74,8 @@ the full guide.
 ```yaml
 # devenv.yaml
 inputs:
-  agentic-tools:
-    url: github:higherorderfunctor/agentic-tools
+  nix-agentic-tools:
+    url: github:higherorderfunctor/nix-agentic-tools
     inputs:
       nixpkgs:
         follows: nixpkgs
@@ -84,7 +84,7 @@ inputs:
 ```nix
 # devenv.nix
 {inputs, ...}: {
-  imports = [inputs.agentic-tools.devenvModules.default];
+  imports = [inputs.nix-agentic-tools.devenvModules.default];
 
   ai = {
     enable = true;

@@ -8,8 +8,8 @@ project and activates on shell entry.
 ```yaml
 # devenv.yaml
 inputs:
-  agentic-tools:
-    url: github:higherorderfunctor/agentic-tools
+  nix-agentic-tools:
+    url: github:higherorderfunctor/nix-agentic-tools
     inputs:
       nixpkgs:
         follows: nixpkgs
@@ -21,7 +21,7 @@ inputs:
 # devenv.nix
 {inputs, ...}: {
   imports = [
-    inputs.agentic-tools.devenvModules.default
+    inputs.nix-agentic-tools.devenvModules.default
   ];
 }
 ```
@@ -30,14 +30,14 @@ This imports `ai`, `copilot`, and `kiro` devenv modules. Import
 individually if preferred:
 
 ```nix
-imports = [inputs.agentic-tools.devenvModules.ai];
+imports = [inputs.nix-agentic-tools.devenvModules.ai];
 ```
 
 ## 3. Minimal configuration
 
 ```nix
 {inputs, pkgs, ...}: {
-  imports = [inputs.agentic-tools.devenvModules.default];
+  imports = [inputs.nix-agentic-tools.devenvModules.default];
 
   ai = {
     enable = true;
@@ -54,11 +54,11 @@ imports = [inputs.agentic-tools.devenvModules.ai];
 {inputs, pkgs, lib, ...}: let
   # Apply overlays to get content packages
   contentPkgs = pkgs.extend (lib.composeManyExtensions [
-    (import "${inputs.agentic-tools}/packages/coding-standards" {})
-    (import "${inputs.agentic-tools}/packages/stacked-workflows" {})
+    (import "${inputs.nix-agentic-tools}/packages/coding-standards" {})
+    (import "${inputs.nix-agentic-tools}/packages/stacked-workflows" {})
   ]);
 in {
-  imports = [inputs.agentic-tools.devenvModules.default];
+  imports = [inputs.nix-agentic-tools.devenvModules.default];
 
   # ── Packages ──────────────────────────────────────────────────────
   packages = with pkgs; [nixd marksman taplo];

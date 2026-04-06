@@ -1,6 +1,6 @@
 # Overlays & Packages
 
-agentic-tools exports packages via Nix overlays. Apply the overlay to
+nix-agentic-tools exports packages via Nix overlays. Apply the overlay to
 your nixpkgs, and the packages become available in `pkgs`.
 
 ## Overlays
@@ -17,7 +17,7 @@ your nixpkgs, and the packages become available in `pkgs`.
 Most users should apply `overlays.default`:
 
 ```nix
-nixpkgs.overlays = [inputs.agentic-tools.overlays.default];
+nixpkgs.overlays = [inputs.nix-agentic-tools.overlays.default];
 ```
 
 ## Package Reference

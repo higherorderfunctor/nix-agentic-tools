@@ -1,4 +1,4 @@
-# agentic-tools Plan
+# nix-agentic-tools Plan
 
 > Living document. Single source of truth for remaining work.
 > Branch: `sentinel/monorepo-plan`
@@ -22,7 +22,7 @@
 ### Test
 
 - [ ] Review docs site (`devenv up docs` — opens browser automatically)
-- [ ] Wire agentic-tools into nixos-config: HM global + devshell per-repo
+- [ ] Wire nix-agentic-tools into nixos-config: HM global + devshell per-repo
 - [ ] Review docs accuracy against actual consumer experience
 - [ ] Fix any doc gaps found during integration testing
 
@@ -34,7 +34,7 @@
 
 - [ ] `ci.yml` — `devenv test` + package build matrix + cachix push
 - [ ] `update.yml` — daily nvfetcher update pipeline
-- [ ] Binary cache: `hof-agentic-tools` cachix setup
+- [ ] Binary cache: `hof-nix-agentic-tools` cachix setup
 - [ ] After cachix: remove flake input overrides in nixos-config
       (currently needed because no binary cache — builds from source)
 
@@ -59,7 +59,7 @@
 
 ### Consumer Integration
 
-- [ ] Add `inputs.agentic-tools` to nixos-config with follows
+- [ ] Add `inputs.nix-agentic-tools` to nixos-config with follows
 - [ ] Verify overlays + 8 interface contracts hold
 - [ ] Migrate nixos-config AI config to `ai.*` unified module
 - [ ] Remove vendored copilot-cli, kiro-cli, kiro-gateway from nixos-config
@@ -111,7 +111,6 @@
 - [ ] MCP processes — no-cred servers for `devenv up`
 - [ ] Module fragment exposure — MCP servers contributing own fragments
 - [ ] Ollama HM module
-- [ ] Rename repo to `nix-agentic-tools`
 - [ ] scripts/update auto-discovery — derive which hashes to update from
       the nix files themselves (scan for npmDepsHash/vendorHash/cargoHash in
       hashes.json, match to package names). Eliminates hardcoded package

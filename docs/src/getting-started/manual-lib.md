@@ -8,7 +8,7 @@ system. All functions are pure -- no side effects, no file I/O.
 
 ```nix
 let
-  at = inputs.agentic-tools;
+  at = inputs.nix-agentic-tools;
   inherit (at.lib) fragments mcp;
 in {
   # ...

@@ -1,6 +1,6 @@
 # Choose Your Path
 
-agentic-tools supports three configuration methods. Pick the one that
+nix-agentic-tools supports three configuration methods. Pick the one that
 fits your workflow.
 
 ## Decision Tree
@@ -21,7 +21,7 @@ systemd services, stacked workflow git presets, per-CLI modules
 (copilot-cli, kiro-cli).
 
 ```nix
-imports = [inputs.agentic-tools.homeManagerModules.default];
+imports = [inputs.nix-agentic-tools.homeManagerModules.default];
 
 ai = {
   enable = true;
@@ -44,14 +44,14 @@ instruction files, treefmt + git-hooks integration.
 ```nix
 # devenv.yaml
 inputs:
-  agentic-tools:
-    url: github:higherorderfunctor/agentic-tools
+  nix-agentic-tools:
+    url: github:higherorderfunctor/nix-agentic-tools
     inputs:
       nixpkgs:
         follows: nixpkgs
 
 # devenv.nix
-imports = [inputs.agentic-tools.devenvModules.default];
+imports = [inputs.nix-agentic-tools.devenvModules.default];
 
 ai = {
   enable = true;
@@ -72,7 +72,7 @@ and instruction files.
 
 ```nix
 let
-  at = inputs.agentic-tools;
+  at = inputs.nix-agentic-tools;
   entry = at.lib.mkPackageEntry pkgs.nix-mcp-servers.github-mcp;
 in
   # entry = { type = "stdio"; command = "/nix/store/.../github-mcp-server"; args = [...]; }

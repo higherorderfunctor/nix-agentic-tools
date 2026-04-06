@@ -1,6 +1,6 @@
 ## Project Overview
 
-agentic-tools is a Nix flake monorepo providing:
+nix-agentic-tools is a Nix flake monorepo providing:
 
 - **Stacked workflow skills** — SKILL.md files for stacked commit workflows
   using git-branchless, git-absorb, and git-revise
