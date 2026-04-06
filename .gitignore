@@ -30,5 +30,8 @@ packages/stacked-workflows/skills/*/[0-9a-z]*-*
 AGENTS.md
 CLAUDE.md
 
+# Generated doc site (mdbook source, built from dev/docs/ + nix eval)
+docs/src/
+
 # nvfetcher shake database (not the generated output)
 /.nvfetcher/.shake.*
