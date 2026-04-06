@@ -99,6 +99,31 @@ hexagons with colored nodes). Dark mode (coal theme) default.
 
 ## Next Session
 
+### ai.\* API restructure + Claude Code packaging (do before HITL testing)
+
+Restructure `enableClaude/enableCopilot/enableKiro` into submodules with
+package overrides. Package Claude Code via nvfetcher (replace hardcoded
+hashes in nixos-config overlay). Create `scripts/update` for automated
+hash updates.
+
+- [ ] Restructure ai.\* module API (HM + devenv):
+      `enableClaude = true` → `claude = { enable = true; package = ...; }`
+      Same for copilot and kiro. Package defaults to overlay package
+      (not nixpkgs upstream).
+- [ ] Package Claude Code in ai-clis overlay via nvfetcher — npm registry
+      fetch, `prev.claude-code.override` pattern (from nixos-config
+      overlays/claude-code-overlay.nix), hashes in hashes.json sidecar
+- [ ] Create `scripts/update` — nvfetcher + hash regeneration + lock
+      regeneration. Based on nix-mcp-servers/apps/update.sh pattern. No file
+      extension. Strict bash mode.
+- [ ] Update all consumers: devenv.nix, modules/stacked-workflows/,
+      flake.nix apps.generate
+- [ ] Update all docs: getting-started/home-manager.md, devenv.md,
+      concepts/unified-ai-module.md, reference/ai-mapping.md, README.md
+- [ ] Update CLAUDE.md, AGENTS.md, dev fragments
+
+### Then test
+
 - [ ] Review docs site (`devenv up docs` — opens browser automatically)
 - [ ] Wire agentic-tools into nixos-config: HM global + devshell per-repo
 - [ ] Review docs accuracy against actual consumer experience
