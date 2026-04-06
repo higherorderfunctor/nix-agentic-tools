@@ -15,6 +15,14 @@ inputs:
         follows: nixpkgs
 ```
 
+### Binary cache (recommended)
+
+Add to your `devenv.nix` to pull pre-built packages from Cachix:
+
+```nix
+cachix.pull = ["nix-agentic-tools"];
+```
+
 ## 2. Import the modules
 
 ```nix

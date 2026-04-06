@@ -16,6 +16,37 @@ skills, and MCP servers.
 }
 ```
 
+### Binary cache (recommended)
+
+Pre-built packages are available via Cachix. Add to your `flake.nix`
+or `nix.settings` to avoid building from source:
+
+<details>
+<summary><code>flake.nix</code> nixConfig (simplest)</summary>
+
+```nix
+{
+  nixConfig = {
+    extra-substituters = ["https://nix-agentic-tools.cachix.org"];
+    extra-trusted-public-keys = ["nix-agentic-tools.cachix.org-1:0jFprh5fkDez9mk6prYisYxzalr0hn78kyywGPXvOn0="];
+  };
+}
+```
+
+</details>
+
+<details>
+<summary>NixOS / home-manager <code>nix.settings</code></summary>
+
+```nix
+nix.settings = {
+  substituters = ["https://nix-agentic-tools.cachix.org"];
+  trusted-public-keys = ["nix-agentic-tools.cachix.org-1:0jFprh5fkDez9mk6prYisYxzalr0hn78kyywGPXvOn0="];
+};
+```
+
+</details>
+
 ## 2. Apply the overlay
 
 The overlay provides all packages: AI CLIs, git tools, MCP servers, and
