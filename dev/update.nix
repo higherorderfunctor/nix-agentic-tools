@@ -259,6 +259,14 @@ in {
         log "Verifying all packages evaluate"
         nix flake check --no-build 2>&1 | tail -3 || true
 
+        log "Checking lock files for biome formatting"
+        if grep -r '"cpu": \["' packages/*/locks/ 2>/dev/null \
+          || grep -r '"os": \["' packages/*/locks/ 2>/dev/null; then
+          log "ERROR: lock files contain biome-style compact arrays"
+          log "Regenerate with: devenv tasks run update:locks"
+          exit 1
+        fi
+
         log "Done — review changes with: git diff --cached"
       '';
     };
