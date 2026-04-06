@@ -119,14 +119,14 @@ mapping override can be added to `hashes.json` (e.g.,
 
 Six devenv tasks with DAG ordering:
 
-| Task               | `after`            | Runtime deps                                         | What it does                                                          |
-| ------------------ | ------------------ | ---------------------------------------------------- | --------------------------------------------------------------------- |
-| `update:flake`     | —                  | `nix`                                                | `nix flake update`                                                    |
-| `update:nvfetcher` | `update:flake`     | `nvfetcher`, `treefmt`                               | Runs nvfetcher, formats output                                        |
+| Task               | `after`            | Runtime deps                                         | What it does                                                           |
+| ------------------ | ------------------ | ---------------------------------------------------- | ---------------------------------------------------------------------- |
+| `update:flake`     | —                  | `nix`                                                | `nix flake update`                                                     |
+| `update:nvfetcher` | `update:flake`     | `nvfetcher`, `treefmt`                               | Runs nvfetcher, formats output                                         |
 | `update:locks`     | `update:nvfetcher` | `curl`, `git`, `nodejs`                              | Regenerates npm lock files (tarball or git clone based on source type) |
-| `update:hashes`    | `update:locks`     | `prefetch-npm-deps`, `nix`, `jq`, `nix-prefetch-url` | Computes all hash types for all discovered packages                   |
-| `update:verify`    | `update:hashes`    | `nix`, `git`                                         | `nix flake check --no-build`, stages changes                          |
-| `update`           | all above          | —                                                    | Meta task, no exec                                                    |
+| `update:hashes`    | `update:locks`     | `prefetch-npm-deps`, `nix`, `jq`, `nix-prefetch-url` | Computes all hash types for all discovered packages                    |
+| `update:verify`    | `update:hashes`    | `nix`, `git`                                         | `nix flake check --no-build`, stages changes                           |
+| `update`           | all above          | —                                                    | Meta task, no exec                                                     |
 
 ### Hash computation strategies (within `update:hashes`)
 

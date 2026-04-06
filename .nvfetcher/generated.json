@@ -44,11 +44,11 @@
         "pinned": false,
         "src": {
             "name": null,
-            "sha256": "sha256-alZkQhVf/mifYwWafZPcOxnXLqbgiyYRw+JvWu767MM=",
+            "sha256": "sha256-IEgTf9uutHqXn9KBm8uVWN4YkFSkRj5/OhSaydRg7IQ=",
             "type": "url",
-            "url": "https://registry.npmjs.org/@upstash/context7-mcp/-/context7-mcp-2.1.6.tgz"
+            "url": "https://registry.npmjs.org/@upstash/context7-mcp/-/context7-mcp-2.1.7.tgz"
         },
-        "version": "2.1.6"
+        "version": "2.1.7"
     },
     "effect-mcp": {
         "cargoLock": null,

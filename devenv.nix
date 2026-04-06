@@ -365,6 +365,10 @@ in {
       # Meta task: runs entire update pipeline
       "update:all" = {
         description = "Run full update pipeline";
+        after = ["update:verify"];
+        exec = ''
+          echo "Update pipeline complete"
+        '';
       };
     };
 }

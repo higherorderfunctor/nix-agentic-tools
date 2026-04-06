@@ -27,10 +27,10 @@
   };
   context7-mcp = {
     pname = "context7-mcp";
-    version = "2.1.6";
+    version = "2.1.7";
     src = fetchurl {
-      url = "https://registry.npmjs.org/@upstash/context7-mcp/-/context7-mcp-2.1.6.tgz";
-      sha256 = "sha256-alZkQhVf/mifYwWafZPcOxnXLqbgiyYRw+JvWu767MM=";
+      url = "https://registry.npmjs.org/@upstash/context7-mcp/-/context7-mcp-2.1.7.tgz";
+      sha256 = "sha256-IEgTf9uutHqXn9KBm8uVWN4YkFSkRj5/OhSaydRg7IQ=";
     };
   };
   effect-mcp = {
