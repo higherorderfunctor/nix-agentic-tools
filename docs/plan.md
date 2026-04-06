@@ -17,107 +17,17 @@
 
 ---
 
-## Done (this session)
-
-### Package-Focused Restructure
-
-- [x] `packages/stacked-workflows/` — content package with skills (6),
-      references (6), routing-table fragment; derivation + passthru
-- [x] `packages/coding-standards/` — 5 common fragments as derivation + passthru.fragments (priority=10)
-- [x] Dev-only content moved to `dev/` (fragments, references)
-- [x] Root `skills/`, `references/`, `fragments/` removed
-- [x] `lib/fragments.nix` — pure functions only (compose, mkFragment,
-      mkFrontmatter, ecosystems, mkEcosystemContent). 65 lines, was 273.
-- [x] devenv.nix consumes from package passthru via content overlays
-- [x] apps.generate consumes from package passthru
-- [x] stacked-workflows HM module consumes from pkgs.stacked-workflows-content
-- [x] All docs updated (CLAUDE.md, README, dev fragments, .gitignore)
-
-### Earlier Work
-
-- [x] agnix + mcp-language-server packaged
-- [x] Serena MCP — flake input, wired to all 3 ecosystems
-- [x] `ai.lspServers` typed submodule with mkLspConfig/mkCopilotLspConfig
-- [x] `ENABLE_LSP_TOOL=1` auto-set when ai.lspServers non-empty
-- [x] `lib.mkPackageEntry` — DRY MCP entry from package passthru
-- [x] Frontmatter generators exposed in flake.nix lib
-- [x] Deadnix/statix/cspell cleanup across entire repo
-
----
-
-## Solo (no external deps — can run autonomously)
-
-### Fragment Presets (refactor of existing content)
-
-- [x] Named preset compositions: `coding-standards.presets.all`,
-      `coding-standards.presets.minimal`, `lib.presets.agentic-tools-dev`
-
-### Documentation
-
-mdBook + Pagefind docs site at `docs/`. Logo chosen (#4, OLED black + grey
-hexagons with colored nodes). Dark mode (coal theme) default.
-
-- [x] Fix devenv module export gap (devenvModules in flake.nix)
-- [x] Choose framework: mdBook + Pagefind (both in nixpkgs, dark mode)
-- [x] Logo generated and optimized (docs/src/assets/)
-- [x] Scaffold: book.toml, SUMMARY.md, directory structure
-- [x] Getting Started: choose-your-path, home-manager, devenv quickstarts
-- [x] Concepts: overlays & packages reference
-- [x] Concepts: unified ai module, fragments, credentials, config parity
-- [x] Guides: HM deep dive, devenv deep dive, MCP servers, stacked workflows
-- [x] Reference: lib API, types, ai.\* mapping table
-- [x] Troubleshooting page (6 categories)
-- [x] mdBook builds clean (`mdbook build docs/`)
-- [x] README rewrite: collapsible sections, self-contained basics, docs links
-- [x] `devenv up` serves docs (mdbook serve process)
-- [x] Serena MCP removed from devshell (no nvim integration)
-- [x] `nix build .#docs` derivation (mdbook built-in search sufficient)
-
-### CI & Automation
-
-- [ ] `ci.yml` — `devenv test` + package build matrix + cachix push
-- [ ] `update.yml` — daily nvfetcher update pipeline
-- [ ] Binary cache: `hof-agentic-tools` cachix setup
-- [ ] After cachix: remove flake input overrides in nixos-config
-      (currently needed because no binary cache — builds from source)
-
-### Apps & Structural Checks
-
-- [ ] `apps/update` — run nvfetcher + rebuild hashes
-- [ ] `apps/check-drift` — detect config parity gaps
-- [ ] `apps/check-health` — validate cross-references
-- [ ] Structural checks (symlinks, fragments, nvfetcher keys, module imports)
-
-### Documentation & Guides
-
-- [ ] CONTRIBUTING.md — dev workflow, package patterns, module patterns,
-      `devenv up docs` for docs preview, `devenv up` process naming
-- [ ] Consumer migration guide — replace vendored packages + nix-mcp-servers
-- [ ] ADRs for key decisions (standalone devenv, fragment pipeline, config parity)
-- [ ] GitHub Pages deploy workflow
-- [ ] SecretSpec — declarative secrets for MCP credentials
-
----
-
 ## Next Session
 
-### ai.\* API restructure + Claude Code packaging (do before HITL testing)
+### ai.\* API restructure (do before HITL testing)
 
 Restructure `enableClaude/enableCopilot/enableKiro` into submodules with
-package overrides. Package Claude Code via nvfetcher (replace hardcoded
-hashes in nixos-config overlay). Create `scripts/update` for automated
-hash updates.
+package overrides. Package defaults to overlay package.
 
 - [ ] Restructure ai.\* module API (HM + devenv):
       `enableClaude = true` → `claude = { enable = true; package = ...; }`
       Same for copilot and kiro. Package defaults to overlay package
       (not nixpkgs upstream).
-- [ ] Package Claude Code in ai-clis overlay via nvfetcher — npm registry
-      fetch, `prev.claude-code.override` pattern (from nixos-config
-      overlays/claude-code-overlay.nix), hashes in hashes.json sidecar
-- [ ] Create `scripts/update` — nvfetcher + hash regeneration + lock
-      regeneration. Based on nix-mcp-servers/apps/update.sh pattern. No file
-      extension. Strict bash mode.
 - [ ] Update all consumers: devenv.nix, modules/stacked-workflows/,
       flake.nix apps.generate
 - [ ] Update all docs: getting-started/home-manager.md, devenv.md,
@@ -130,6 +40,33 @@ hash updates.
 - [ ] Wire agentic-tools into nixos-config: HM global + devshell per-repo
 - [ ] Review docs accuracy against actual consumer experience
 - [ ] Fix any doc gaps found during integration testing
+
+---
+
+## Solo (no external deps — can run autonomously)
+
+### CI & Automation
+
+- [ ] `ci.yml` — `devenv test` + package build matrix + cachix push
+- [ ] `update.yml` — daily nvfetcher update pipeline
+- [ ] Binary cache: `hof-agentic-tools` cachix setup
+- [ ] After cachix: remove flake input overrides in nixos-config
+      (currently needed because no binary cache — builds from source)
+
+### Apps & Structural Checks
+
+- [ ] `apps/check-drift` — detect config parity gaps
+- [ ] `apps/check-health` — validate cross-references
+- [ ] Structural checks (symlinks, fragments, nvfetcher keys, module imports)
+
+### Documentation & Guides
+
+- [ ] CONTRIBUTING.md — dev workflow, package patterns, module patterns,
+      `devenv up docs` for docs preview, `devenv up` process naming
+- [ ] Consumer migration guide — replace vendored packages + nix-mcp-servers
+- [ ] ADRs for key decisions (standalone devenv, fragment pipeline, config parity)
+- [ ] GitHub Pages deploy workflow
+- [ ] SecretSpec — declarative secrets for MCP credentials
 
 ---
 
@@ -173,29 +110,24 @@ hash updates.
 
 ## Backlog
 
-- [ ] Fragment content expansion — new presets (code review, security, testing)
-- [ ] Module fragment exposure — MCP servers contributing own fragments
-- [ ] Rename repo to `nix-agentic-tools` — too Nix-heavy for `agentic-tools`;
-      skills still publishable for general consumption but overlays, HM modules,
-      devenv modules are Nix-specific. Update GitHub repo name, flake description,
-      README, all internal references, cachix name
-- [ ] Logo refinement — current is blurry and small; generate higher quality
-      SVG or larger PNG, ensure crisp at all sizes (favicon through hero)
 - [ ] Auto-display images in terminal — fragment/hook/plugin that auto-runs
-      `chafa --format=sixel` (or kitty/iTerm2 protocol) when AI reads/generates
-      images. Wire via ai.\* so all ecosystems get it. Claude: hook on Read of
-      image files. Copilot/Kiro: equivalent mechanism. Needs chafa in packages.
+      `chafa --format=sixel` when AI reads/generates images. Wire via ai.\*
+      so all ecosystems get it. Needs chafa in packages.
 - [ ] ChatGPT Codex CLI — package + HM/devenv module, same pattern as
       copilot-cli/kiro-cli; add to `ai.*` unified fanout as 4th ecosystem
 - [ ] cclsp — Claude Code LSP integration (passthru.withAdapters pattern)
 - [ ] filesystem-mcp — package + wire to devenv; may reduce tool approval
       friction for file operations
-- [ ] atlassian-mcp, gitlab-mcp, slack-mcp
 - [ ] flake-parts — modular per-package flake outputs
+- [ ] Fragment content expansion — new presets (code review, security, testing)
 - [ ] HM/devenv modules as packages — research NixOS module packaging
       patterns; would allow `pkgs.agentic-modules.ai` etc. for FP composition
+- [ ] Logo refinement — higher quality SVG or larger PNG, crisp at all sizes
 - [ ] MCP processes — no-cred servers for `devenv up`
+- [ ] Module fragment exposure — MCP servers contributing own fragments
 - [ ] Ollama HM module
+- [ ] Rename repo to `nix-agentic-tools`
+- [ ] Shell linters (shellcheck, shfmt) when shell scripts exist
+- [ ] atlassian-mcp, gitlab-mcp, slack-mcp
 - [ ] openmemory-mcp typed settings
 - [ ] Rolling stack workflow skill
-- [ ] Shell linters (shellcheck, shfmt) when shell scripts exist
