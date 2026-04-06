@@ -1,48 +1,16 @@
 # Pure fragment composition library.
 #
 # Provides typed fragment constructors, composition (sort + dedup),
-# YAML frontmatter generation, and per-ecosystem content wrappers.
+# YAML frontmatter generation, and a render hook for transforms.
 #
 # All functions are pure — no file I/O, no hardcoded paths, no data.
 # Callers supply fragments from package passthru or builtins.readFile.
 #
 # Usage:
 #   fragments.compose { fragments = [...]; }
-#   fragments.mkEcosystemContent { ecosystem = "claude"; package = "foo"; composed = ...; paths = ...; }
+#   fragments.render { composed = ...; transform = ...; }
 {lib}: let
-  # -- Ecosystems --------------------------------------------------------------
-  # Frontmatter generators per ecosystem. Each takes (paths, package) and
-  # returns an attrset for mkFrontmatter, or null for no frontmatter.
-  ecosystems = {
-    agentsmd.mkFrontmatter = _paths: _package: null;
-    claude.mkFrontmatter = paths: package:
-      if paths == null
-      then null
-      else {
-        description = "Instructions for the ${package} package";
-        inherit paths;
-      };
-    copilot.mkFrontmatter = paths: _package:
-      if paths == null
-      then {applyTo = ''"**"'';}
-      else {applyTo = paths;};
-    kiro.mkFrontmatter = paths: package:
-      if paths == null
-      then {
-        description = "Shared coding standards and conventions";
-        inclusion = "always";
-        name = "common";
-      }
-      else {
-        description = "Instructions for the ${package} package";
-        fileMatchPattern = paths;
-        inclusion = "fileMatch";
-        name = package;
-      };
-  };
-
   # -- Builders ----------------------------------------------------------------
-
   # Build YAML frontmatter block from an attrset.
   mkFrontmatter = attrs:
     "---\n"
@@ -97,21 +65,13 @@
       text = combined;
     };
 
-  # Apply ecosystem frontmatter to a composed fragment.
-  # Extracts the pattern duplicated across devenv.nix and flake.nix.
-  mkEcosystemContent = {
-    ecosystem,
-    package,
+  # Apply a transform to a composed fragment.
+  # transform is a curried function: fragment -> string
+  render = {
     composed,
-    paths ? null,
-  }: let
-    fm = ecosystems.${ecosystem}.mkFrontmatter paths package;
-    fmStr =
-      if fm == null
-      then ""
-      else mkFrontmatter fm + "\n";
-  in
-    fmStr + composed.text;
+    transform,
+  }:
+    transform composed;
 in {
-  inherit compose ecosystems mkEcosystemContent mkFragment mkFrontmatter;
+  inherit compose mkFragment mkFrontmatter render;
 }
