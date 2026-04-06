@@ -42,6 +42,68 @@
 
   cfg = config.ai;
 
+  buddySubmodule = types.submodule {
+    options = {
+      userId = mkOption {
+        type = types.str;
+        description = "Claude account UUID (oauthAccount.accountUuid from ~/.claude.json).";
+      };
+      species = mkOption {
+        type = types.enum [
+          "axolotl"
+          "blob"
+          "cactus"
+          "capybara"
+          "cat"
+          "chonk"
+          "dragon"
+          "duck"
+          "ghost"
+          "goose"
+          "mushroom"
+          "octopus"
+          "owl"
+          "penguin"
+          "rabbit"
+          "robot"
+          "snail"
+          "turtle"
+        ];
+        description = "Buddy species.";
+      };
+      rarity = mkOption {
+        type = types.enum ["common" "uncommon" "rare" "epic" "legendary"];
+        default = "common";
+        description = "Rarity tier. Higher rarities take longer to compute.";
+      };
+      eyes = mkOption {
+        type = types.enum ["·" "✦" "×" "◉" "@" "°"];
+        default = "·";
+        description = "Eye character.";
+      };
+      hat = mkOption {
+        type = types.enum ["none" "beanie" "crown" "halo" "propeller" "tinyduck" "tophat" "wizard"];
+        default = "none";
+        description = "Hat accessory. Must be none for common rarity.";
+      };
+      shiny = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Rainbow shimmer variant.";
+      };
+      peak = mkOption {
+        type = types.nullOr (types.enum ["CHAOS" "DEBUGGING" "PATIENCE" "SNARK" "WISDOM"]);
+        default = null;
+        description = "Preferred highest stat.";
+      };
+      dump = mkOption {
+        type = types.nullOr (types.enum ["CHAOS" "DEBUGGING" "PATIENCE" "SNARK" "WISDOM"]);
+        default = null;
+        description = "Preferred lowest stat. Must differ from peak.";
+      };
+    };
+  };
+
   # Check if a module option path exists (use options, not config)
   hasModule = path:
     (attrByPath path null options) != null;
@@ -50,7 +112,7 @@ in {
     enable = mkEnableOption "unified AI configuration across Claude, Copilot, and Kiro";
 
     claude = mkOption {
-      type = types.submodule {
+      type = types.submodule ({config, ...}: {
         options = {
           enable = mkEnableOption "Fan out shared config to Claude Code";
           package = mkOption {
@@ -62,8 +124,13 @@ in {
             defaultText = lib.literalExpression "pkgs.claude-code";
             description = "Claude Code package. Automatically patched when buddy is set.";
           };
+          buddy = mkOption {
+            type = types.nullOr buddySubmodule;
+            default = null;
+            description = "Buddy companion customization. Patches claude-code at build time.";
+          };
         };
-      };
+      });
       default = {};
       description = "Claude Code ecosystem configuration.";
     };
@@ -163,28 +230,39 @@ in {
   config = mkIf cfg.enable (mkMerge [
     # Assertions
     {
-      assertions = [
-        # Claude Code uses home.file directly, no upstream module dependency.
-        # If programs.claude-code IS available, users can still configure it
-        # directly for Claude-specific settings (model, permissions, etc.).
-        {
-          assertion = cfg.copilot.enable -> hasModule ["programs" "copilot-cli" "enable"];
-          message = "ai.copilot.enable requires programs.copilot-cli to be available.";
-        }
-        {
-          assertion = cfg.kiro.enable -> hasModule ["programs" "kiro-cli" "enable"];
-          message = "ai.kiro.enable requires programs.kiro-cli to be available.";
-        }
-        {
-          assertion =
-            cfg.skills
-            != {}
-            || cfg.instructions != {}
-            || cfg.environmentVariables != {}
-            -> cfg.claude.enable || cfg.copilot.enable || cfg.kiro.enable;
-          message = "ai has shared config but no CLIs enabled. Set at least one of claude.enable, copilot.enable, kiro.enable.";
-        }
-      ];
+      assertions =
+        [
+          # Claude Code uses home.file directly, no upstream module dependency.
+          # If programs.claude-code IS available, users can still configure it
+          # directly for Claude-specific settings (model, permissions, etc.).
+          {
+            assertion = cfg.copilot.enable -> hasModule ["programs" "copilot-cli" "enable"];
+            message = "ai.copilot.enable requires programs.copilot-cli to be available.";
+          }
+          {
+            assertion = cfg.kiro.enable -> hasModule ["programs" "kiro-cli" "enable"];
+            message = "ai.kiro.enable requires programs.kiro-cli to be available.";
+          }
+          {
+            assertion =
+              cfg.skills
+              != {}
+              || cfg.instructions != {}
+              || cfg.environmentVariables != {}
+              -> cfg.claude.enable || cfg.copilot.enable || cfg.kiro.enable;
+            message = "ai has shared config but no CLIs enabled. Set at least one of claude.enable, copilot.enable, kiro.enable.";
+          }
+        ]
+        ++ (lib.optionals (cfg.claude.buddy != null) [
+          {
+            assertion = cfg.claude.buddy.peak != cfg.claude.buddy.dump || cfg.claude.buddy.peak == null;
+            message = "ai.claude.buddy: peak and dump stats must differ";
+          }
+          {
+            assertion = cfg.claude.buddy.rarity == "common" -> cfg.claude.buddy.hat == "none";
+            message = "ai.claude.buddy: common rarity forces hat = \"none\"";
+          }
+        ]);
     }
 
     # MCP bridging: ai doesn't have its own mcpServers option.

@@ -19,6 +19,7 @@ codepaths
 codesign
 chafa
 cclsp
+chonk
 clis
 contentPkgs
 cpaczek
@@ -109,7 +110,9 @@ statix
 stdenv
 substituters
 taplo
+tinyduck
 toolsets
+tophat
 treefmt
 tummychow
 unskipped
