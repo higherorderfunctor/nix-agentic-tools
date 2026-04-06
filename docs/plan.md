@@ -112,6 +112,11 @@
 - [ ] Module fragment exposure — MCP servers contributing own fragments
 - [ ] Ollama HM module
 - [ ] Rename repo to `nix-agentic-tools`
+- [ ] scripts/update auto-discovery — derive which hashes to update from
+      the nix files themselves (scan for npmDepsHash/vendorHash/cargoHash in
+      hashes.json, match to package names). Eliminates hardcoded package
+      lists in the script. Could also use a fragment/instruction so adding
+      a new overlay package automatically updates the update script.
 - [ ] Shell linters (shellcheck, shfmt) when shell scripts exist
 - [ ] atlassian-mcp, gitlab-mcp, slack-mcp
 - [ ] openmemory-mcp typed settings
