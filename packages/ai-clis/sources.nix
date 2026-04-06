@@ -1,6 +1,6 @@
 # nvfetcher sources for AI CLI packages.
 {final}: let
-  generated = (import ./.nvfetcher/generated.nix) {
+  generated = (import ../../.nvfetcher/generated.nix) {
     inherit (final) fetchgit fetchurl fetchFromGitHub dockerTools;
   };
 in {

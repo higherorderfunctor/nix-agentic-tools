@@ -117,6 +117,7 @@ in {
       mdbook
       nvfetcher
       pagefind
+      prefetch-npm-deps
       statix
 
       # LSP servers (in PATH for ENABLE_LSP_TOOL and MCP bridging)

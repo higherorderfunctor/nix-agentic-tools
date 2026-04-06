@@ -78,6 +78,8 @@ hexagons with colored nodes). Dark mode (coal theme) default.
 - [ ] `ci.yml` — `devenv test` + package build matrix + cachix push
 - [ ] `update.yml` — daily nvfetcher update pipeline
 - [ ] Binary cache: `hof-agentic-tools` cachix setup
+- [ ] After cachix: remove flake input overrides in nixos-config
+      (currently needed because no binary cache — builds from source)
 
 ### Apps & Structural Checks
 

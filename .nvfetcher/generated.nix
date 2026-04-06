@@ -4,7 +4,19 @@
   fetchurl,
   fetchFromGitHub,
   dockerTools,
-}: {
+}:
+{
+  agnix = {
+    pname = "agnix";
+    version = "v0.18.0";
+    src = fetchFromGitHub {
+      owner = "agent-sh";
+      repo = "agnix";
+      rev = "v0.18.0";
+      fetchSubmodules = false;
+      sha256 = "sha256-R7luTBydtj8H8L/rRXYvWEy45Krg+lL9gTeJL4j/0uA=";
+    };
+  };
   context7-mcp = {
     pname = "context7-mcp";
     version = "2.1.6";
@@ -21,6 +33,28 @@
       sha256 = "sha256-k36Ucri8CAw+xwVVKt58jwkjNlBF79KgHYr9v2lRvk8=";
     };
   };
+  git-absorb = {
+    pname = "git-absorb";
+    version = "0.9.0";
+    src = fetchFromGitHub {
+      owner = "tummychow";
+      repo = "git-absorb";
+      rev = "0.9.0";
+      fetchSubmodules = false;
+      sha256 = "sha256-jAR+Vq6SZZXkseOxZVJSjsQOStIip8ThiaLroaJcIfc=";
+    };
+  };
+  git-branchless = {
+    pname = "git-branchless";
+    version = "v0.10.0";
+    src = fetchFromGitHub {
+      owner = "arxanas";
+      repo = "git-branchless";
+      rev = "v0.10.0";
+      fetchSubmodules = false;
+      sha256 = "sha256-8uv+sZRr06K42hmxgjrKk6FDEngUhN/9epixRYKwE3U=";
+    };
+  };
   git-intel-mcp = {
     pname = "git-intel-mcp";
     version = "9f216bab8d6bc3a3b850ad77f27d02d63a71e10d";
@@ -30,10 +64,29 @@
       fetchSubmodules = false;
       deepClone = false;
       leaveDotGit = false;
-      sparseCheckout = [];
+      sparseCheckout = [ ];
       sha256 = "sha256-UCIUmU6slN9EjL8Bf2JKfvyoVKE0jgUsfLd8OocdwNc=";
     };
     date = "2026-03-18";
+  };
+  git-revise = {
+    pname = "git-revise";
+    version = "v0.8.0";
+    src = fetchFromGitHub {
+      owner = "mystor";
+      repo = "git-revise";
+      rev = "v0.8.0";
+      fetchSubmodules = false;
+      sha256 = "sha256-OdkhYEq30RtDOeCQWl/L9FMgCttznzihbYgT8B6KYuY=";
+    };
+  };
+  github-copilot-cli = {
+    pname = "github-copilot-cli";
+    version = "1.0.18";
+    src = fetchurl {
+      url = "https://github.com/github/copilot-cli/releases/download/v1.0.18/copilot-linux-x64.tar.gz";
+      sha256 = "sha256-fso7uwOj20/vklD4gFLMxaowypX65xrdcOHmb8sDeRM=";
+    };
   };
   github-mcp-server = {
     pname = "github-mcp-server";
@@ -61,6 +114,28 @@
       url = "https://pypi.org/packages/source/k/kagimcp/kagimcp-0.1.4.tar.gz";
       sha256 = "sha256-fCFmd6BKyyeggekFsJtno394ZeswTYSRELryHQQAcyY=";
     };
+  };
+  kiro-cli = {
+    pname = "kiro-cli";
+    version = "1.29.3";
+    src = fetchurl {
+      url = "https://desktop-release.q.us-east-1.amazonaws.com/1.29.3/kirocli-x86_64-linux.tar.gz";
+      sha256 = "sha256-DD3eQ9lpV+M0d40AxnLP6dOw/fvdeuAcPWwpUMonuNk=";
+    };
+  };
+  kiro-gateway = {
+    pname = "kiro-gateway";
+    version = "e6f23c22fc5e9aa7a22e4c31af56cdc6f859afbd";
+    src = fetchgit {
+      url = "https://github.com/jwadow/kiro-gateway.git";
+      rev = "e6f23c22fc5e9aa7a22e4c31af56cdc6f859afbd";
+      fetchSubmodules = false;
+      deepClone = false;
+      leaveDotGit = false;
+      sparseCheckout = [ ];
+      sha256 = "sha256-V9sS82Jwx5y03ojNueHr+0qfp87fkACrdr7iP78Yxeo=";
+    };
+    date = "2026-02-12";
   };
   mcp-language-server = {
     pname = "mcp-language-server";

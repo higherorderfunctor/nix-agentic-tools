@@ -29,5 +29,5 @@ packages/stacked-workflows/skills/*/[0-9a-z]*-*
 .pre-commit-config.yaml
 AGENTS.md
 
-# nvfetcher workspace
-/.nvfetcher/
+# nvfetcher shake database (not the generated output)
+/.nvfetcher/.shake.*
