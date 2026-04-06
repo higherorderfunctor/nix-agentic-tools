@@ -52,10 +52,12 @@
       default = lib.composeManyExtensions [
         (import ./packages/ai-clis {inherit inputs;})
         (import ./packages/coding-standards {})
+        (import ./packages/fragments-ai {})
         (import ./packages/git-tools {inherit inputs;})
         (import ./packages/mcp-servers {inherit inputs;})
         (import ./packages/stacked-workflows {})
       ];
+      fragments-ai = import ./packages/fragments-ai {};
       git-tools = import ./packages/git-tools {inherit inputs;};
       mcp-servers = import ./packages/mcp-servers {inherit inputs;};
       stacked-workflows = import ./packages/stacked-workflows {};
@@ -251,7 +253,7 @@
       # AI CLIs
       inherit (pkgs) claude-code github-copilot-cli kiro-cli kiro-gateway;
       # Content packages
-      inherit (pkgs) coding-standards stacked-workflows-content;
+      inherit (pkgs) coding-standards fragments-ai stacked-workflows-content;
       # Git tools
       inherit (pkgs) agnix git-absorb git-branchless git-revise;
       inherit
