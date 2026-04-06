@@ -123,6 +123,11 @@ Generated file policy:
 - [ ] Docs favicon — not loading or never configured in book.toml
 - [ ] GitHub Pages deploy workflow
 - [ ] SecretSpec — declarative secrets for MCP credentials
+- [ ] Declutter root dotfiles — move `.cspell/`, `.nvfetcher/`,
+      `.agnix.toml` to `config/` or `dev/` using tool config path
+      overrides (all three support custom paths)
+- [ ] Document binary cache for consumers — cache URL, public key,
+      nixConfig/nix.settings/cachix.pull snippets (in docs site)
 
 ---
 
