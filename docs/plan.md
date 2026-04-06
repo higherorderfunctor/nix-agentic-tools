@@ -19,21 +19,7 @@
 
 ## Next Session
 
-### ai.\* API restructure (do before HITL testing)
-
-Restructure `enableClaude/enableCopilot/enableKiro` into submodules with
-package overrides. Package defaults to overlay package.
-
-- [x] Restructure ai.\* module API (HM + devenv):
-      `enableClaude = true` → `claude = { enable = true; package = ...; }`
-      Same for copilot and kiro. Package defaults to overlay package
-      (not nixpkgs upstream).
-- [x] Update all consumers: devenv.nix, checks/module-eval.nix
-- [x] Update all docs: getting-started/home-manager.md, devenv.md,
-      concepts/unified-ai-module.md, guides, README.md
-- [ ] Update CLAUDE.md, AGENTS.md, dev fragments
-
-### Then test
+### Test
 
 - [ ] Review docs site (`devenv up docs` — opens browser automatically)
 - [ ] Wire agentic-tools into nixos-config: HM global + devshell per-repo
