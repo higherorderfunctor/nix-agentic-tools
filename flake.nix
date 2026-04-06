@@ -136,6 +136,36 @@
       docGen = pkgs.fragments-docs.passthru.generators;
       docData = import ./dev/data.nix {inherit lib;};
 
+      # Options documentation generated from actual module definitions
+      optionsDocs = import ./lib/options-doc.nix {inherit lib pkgs self;};
+
+      # Assembled options pages: header + generated options + footer
+      docsOptionsHm =
+        pkgs.runCommand "docs-options-hm" {
+          header = ./packages/fragments-docs/pages/home-manager-header.md;
+          optionsMd = optionsDocs.hmOptionsDoc.optionsCommonMark;
+          footer = ./packages/fragments-docs/pages/home-manager-footer.md;
+        } ''
+          cat $header > $out
+          printf '\n' >> $out
+          cat $optionsMd >> $out
+          printf '\n' >> $out
+          cat $footer >> $out
+        '';
+
+      docsOptionsDevenv =
+        pkgs.runCommand "docs-options-devenv" {
+          header = ./packages/fragments-docs/pages/devenv-header.md;
+          optionsMd = optionsDocs.devenvOptionsDoc.optionsCommonMark;
+          footer = ./packages/fragments-docs/pages/devenv-footer.md;
+        } ''
+          cat $header > $out
+          printf '\n' >> $out
+          cat $optionsMd >> $out
+          printf '\n' >> $out
+          cat $footer >> $out
+        '';
+
       # Doc site components — local bindings for cross-referencing
       siteProse = pkgs.runCommand "docs-site-prose" {} ''
         cp -r ${./dev/docs} $out
@@ -157,8 +187,7 @@
       siteReference =
         pkgs.runCommand "docs-site-reference" {
           overlayPackages = pkgs.writeText "overlays-packages.md" (docGen.overlayPackages {data = docData;});
-          hmOptions = pkgs.writeText "home-manager.md" (docGen.hmOptions {});
-          devenvOptions = pkgs.writeText "devenv.md" (docGen.devenvOptions {});
+          inherit docsOptionsHm docsOptionsDevenv;
           mcpServers = pkgs.writeText "mcp-servers.md" (docGen.mcpServers {});
           libApi = pkgs.writeText "lib-api.md" (docGen.libApi {});
           typesRef = pkgs.writeText "types.md" (docGen.typesRef {});
@@ -166,8 +195,8 @@
         } ''
           mkdir -p $out/{concepts,guides,reference}
           cp $overlayPackages $out/concepts/overlays-packages.md
-          cp $hmOptions $out/guides/home-manager.md
-          cp $devenvOptions $out/guides/devenv.md
+          cp $docsOptionsHm $out/guides/home-manager.md
+          cp $docsOptionsDevenv $out/guides/devenv.md
           cp $mcpServers $out/guides/mcp-servers.md
           cp $libApi $out/reference/lib-api.md
           cp $typesRef $out/reference/types.md
@@ -186,9 +215,11 @@
       '';
     in {
       # Documentation — generated doc site components
+      docs-options-devenv = docsOptionsDevenv;
+      docs-options-hm = docsOptionsHm;
       docs-site-prose = siteProse;
-      docs-site-snippets = siteSnippets;
       docs-site-reference = siteReference;
+      docs-site-snippets = siteSnippets;
       docs-site = siteCombined;
 
       # Documentation — built book

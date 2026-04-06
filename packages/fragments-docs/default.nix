@@ -190,7 +190,10 @@ _: final: _prev: let
     ```
   '';
 
-  # Static pages — kept as readFile for now; Phase 4 makes these dynamic
+  # Options reference — static fallback pages for eval-time use.
+  # The doc site uses nixosOptionsDoc-generated pages instead (see
+  # lib/options-doc.nix), assembled in flake.nix as docs-options-hm
+  # and docs-options-devenv.
   hmOptions = _:
     builtins.readFile ./pages/home-manager.md;
 

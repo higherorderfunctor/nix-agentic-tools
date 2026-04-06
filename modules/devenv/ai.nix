@@ -55,12 +55,24 @@ in {
           enable = mkEnableOption "Fan out shared config to Claude Code";
           package = mkOption {
             type = types.package;
-            default = pkgs.claude-code;
-            description = "Claude Code package.";
+            default =
+              if config.buddy != null
+              then
+                assert lib.assertMsg
+                (config.buddy.peak != config.buddy.dump || config.buddy.peak == null)
+                "ai.claude.buddy: peak and dump stats must differ";
+                assert lib.assertMsg
+                (config.buddy.rarity == "common" -> config.buddy.hat == "none")
+                "ai.claude.buddy: common rarity forces hat = \"none\"";
+                  pkgs.claude-code.withBuddy config.buddy
+              else pkgs.claude-code;
+            defaultText = lib.literalExpression "pkgs.claude-code";
+            description = "Claude Code package. Automatically patched when buddy is set.";
           };
         };
       };
       default = {};
+      description = "Claude Code ecosystem configuration.";
     };
 
     copilot = mkOption {
@@ -70,11 +82,13 @@ in {
           package = mkOption {
             type = types.package;
             default = pkgs.github-copilot-cli;
+            defaultText = lib.literalExpression "pkgs.github-copilot-cli";
             description = "Copilot CLI package.";
           };
         };
       };
       default = {};
+      description = "Copilot CLI ecosystem configuration.";
     };
 
     kiro = mkOption {
@@ -84,11 +98,13 @@ in {
           package = mkOption {
             type = types.package;
             default = pkgs.kiro-cli;
+            defaultText = lib.literalExpression "pkgs.kiro-cli";
             description = "Kiro CLI package.";
           };
         };
       };
       default = {};
+      description = "Kiro CLI ecosystem configuration.";
     };
 
     environmentVariables = mkOption {
