@@ -78,29 +78,13 @@ Skills are SKILL.md files that teach AI coding CLIs how to perform
 stacked workflow operations. Each skill includes pre-flight checks,
 dry-run previews, conflict guidance, and post-operation verification.
 
-| Skill           | Operation                                                          |
-| --------------- | ------------------------------------------------------------------ |
-| `stack-fix`     | Fix lines in or edit earlier commits (absorb, fixup)               |
-| `stack-plan`    | Plan and build a commit stack from description or uncommitted work |
-| `stack-split`   | Split a large commit into smaller atomic commits                   |
-| `stack-submit`  | Push stack for review (sync, submit, PR creation)                  |
-| `stack-summary` | Audit stack quality before restructure                             |
-| `stack-test`    | Run tests/formatters across every commit in the stack              |
+{{#include ../generated/snippets/skill-table.md}}
 
 ### Routing Table
 
 The routing table maps operations to skills:
 
-| Operation                                  | Skill           |
-| ------------------------------------------ | --------------- |
-| Commit uncommitted work as an atomic stack | `stack-plan`    |
-| Restructure/reorder existing commits       | `stack-plan`    |
-| Fix lines in earlier commit                | `stack-fix`     |
-| Edit earlier commit (content moves)        | `stack-fix`     |
-| Split a large commit                       | `stack-split`   |
-| Push stack for review                      | `stack-submit`  |
-| Audit stack quality                        | `stack-summary` |
-| Test across stack                          | `stack-test`    |
+{{#include ../generated/snippets/routing-table.md}}
 
 ## CLI Integrations
 

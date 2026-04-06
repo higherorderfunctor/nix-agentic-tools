@@ -178,21 +178,27 @@
 
       siteSnippets =
         pkgs.runCommand "docs-site-snippets" {
-          overlayTable = pkgs.writeText "overlay-table.md" (docGen.snippets.overlayTable {data = docData;});
-          cliTable = pkgs.writeText "cli-table.md" (docGen.snippets.cliTable {});
           aiMappingTable = pkgs.writeText "ai-mapping-table.md" (docGen.snippets.aiMappingTable {});
+          cliTable = pkgs.writeText "cli-table.md" (docGen.snippets.cliTable {});
+          credentialsTable = pkgs.writeText "credentials-table.md" (docGen.snippets.credentialsTable {data = docData;});
+          overlayTable = pkgs.writeText "overlay-table.md" (docGen.snippets.overlayTable {data = docData;});
+          routingTable = pkgs.writeText "routing-table.md" (docGen.snippets.routingTable {});
+          skillTable = pkgs.writeText "skill-table.md" (docGen.snippets.skillTable {data = docData;});
         } ''
           mkdir -p $out/snippets
-          cp $overlayTable $out/snippets/overlay-table.md
-          cp $cliTable $out/snippets/cli-table.md
           cp $aiMappingTable $out/snippets/ai-mapping-table.md
+          cp $cliTable $out/snippets/cli-table.md
+          cp $credentialsTable $out/snippets/credentials-table.md
+          cp $overlayTable $out/snippets/overlay-table.md
+          cp $routingTable $out/snippets/routing-table.md
+          cp $skillTable $out/snippets/skill-table.md
         '';
 
       siteReference =
         pkgs.runCommand "docs-site-reference" {
           overlayPackages = pkgs.writeText "overlays-packages.md" (docGen.overlayPackages {data = docData;});
           inherit docsOptionsHm docsOptionsDevenv;
-          mcpServers = pkgs.writeText "mcp-servers.md" (docGen.mcpServers {});
+          mcpServers = pkgs.writeText "mcp-servers.md" (docGen.mcpServers {data = docData;});
           libApi = pkgs.writeText "lib-api.md" (docGen.libApi {});
           typesRef = pkgs.writeText "types.md" (docGen.typesRef {});
           aiMapping = pkgs.writeText "ai-mapping.md" (docGen.aiMapping {});

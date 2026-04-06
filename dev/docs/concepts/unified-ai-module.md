@@ -64,12 +64,7 @@ The priority chain:
 
 Normalized settings are translated to ecosystem-specific keys:
 
-| `ai.*` option          | Claude Code         | Copilot CLI       | Kiro CLI                     |
-| ---------------------- | ------------------- | ----------------- | ---------------------------- |
-| `settings.model`       | `settings.model`    | `settings.model`  | `settings.chat.defaultModel` |
-| `settings.telemetry`   | --                  | --                | `settings.telemetry.enabled` |
-| `environmentVariables` | --                  | wrapped in binary | wrapped in binary            |
-| `lspServers`           | `ENABLE_LSP_TOOL=1` | `lsp-config.json` | `lsp.json`                   |
+{{#include ../generated/snippets/ai-mapping-table.md}}
 
 ## Skills
 

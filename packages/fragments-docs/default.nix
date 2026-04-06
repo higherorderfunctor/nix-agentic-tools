@@ -2,9 +2,9 @@
 # Derivation: pkgs.fragments-docs
 # passthru.generators provides eval-time access to content generators.
 #
-# Snippets and the overlays-packages page are data-driven: they take
-# description mappings from dev/data.nix (passed through flake.nix)
-# so the same data feeds both the README and the doc site.
+# Snippets and pages are data-driven: they take description mappings
+# from dev/data.nix (passed through flake.nix) so the same data feeds
+# both the README and the doc site.
 _: final: _prev: let
   inherit (final) lib;
 
@@ -30,14 +30,13 @@ _: final: _prev: let
   # Small tables embedded in mixed pages via {{#include ../generated/X.md}}
   # Each takes { data } with the relevant description mappings.
   snippets = {
-    # Overlay summary table for getting-started/home-manager.md
-    overlayTable = {data}: let
-      overlayNames = lib.sort lib.lessThan (builtins.attrNames data.overlayPackages);
-      mkRow = name: "| `${name}` | ${mkOverlayDisplay data.overlayPackages.${name}} |";
-    in ''
-      | Overlay | Packages |
-      | ------- | -------- |
-      ${lib.concatMapStringsSep "\n" mkRow overlayNames}'';
+    # ai.* settings mapping table for reference/ai-mapping.md and mixed pages
+    aiMappingTable = _: ''
+      | `ai.*` option          | Claude Code                           | Copilot CLI                                 | Kiro CLI                                       |
+      | ---------------------- | ------------------------------------- | ------------------------------------------- | ---------------------------------------------- |
+      | `settings.model`       | `programs.claude-code.settings.model` | `programs.copilot-cli.settings.model`       | `programs.kiro-cli.settings.chat.defaultModel` |
+      | `settings.telemetry`   | --                                    | --                                          | `programs.kiro-cli.settings.telemetry.enabled` |
+      | `environmentVariables` | --                                    | `programs.copilot-cli.environmentVariables` | `programs.kiro-cli.environmentVariables`       |'';
 
     # Supported CLIs table for index.md
     cliTable = _: ''
@@ -47,13 +46,47 @@ _: final: _prev: let
       | GitHub Copilot | `programs.copilot-cli` | `copilot.*`        | `copilot`     |
       | Kiro           | `programs.kiro-cli`    | `kiro.*`           | `kiro`        |'';
 
-    # ai.* settings mapping table for reference/ai-mapping.md and mixed pages
-    aiMappingTable = _: ''
-      | `ai.*` option          | Claude Code                           | Copilot CLI                                 | Kiro CLI                                       |
-      | ---------------------- | ------------------------------------- | ------------------------------------------- | ---------------------------------------------- |
-      | `settings.model`       | `programs.claude-code.settings.model` | `programs.copilot-cli.settings.model`       | `programs.kiro-cli.settings.chat.defaultModel` |
-      | `settings.telemetry`   | --                                    | --                                          | `programs.kiro-cli.settings.telemetry.enabled` |
-      | `environmentVariables` | --                                    | `programs.copilot-cli.environmentVariables` | `programs.kiro-cli.environmentVariables`       |'';
+    # Credentials server table for concepts/credentials.md
+    credentialsTable = {data}: let
+      # Only include servers with non-"None" credentials
+      mcpNames = builtins.attrNames data.mcpServerMeta;
+      hasCredentials = name: data.mcpServerMeta.${name}.credentials != "None";
+      withCreds = builtins.filter hasCredentials (lib.sort lib.lessThan mcpNames);
+      withoutCreds = builtins.filter (n: !hasCredentials n) (lib.sort lib.lessThan mcpNames);
+      mkCredRow = name: let
+        meta = data.mcpServerMeta.${name};
+      in "| `${name}` | ${meta.credentials} |";
+    in ''
+      | Server | Credentials |
+      | ------ | ----------- |
+      ${lib.concatMapStringsSep "\n" mkCredRow withCreds}
+
+      All other servers (${lib.concatMapStringsSep ", " (n: n) withoutCreds}) need no
+      credentials.'';
+
+    # Overlay summary table for getting-started/home-manager.md
+    overlayTable = {data}: let
+      overlayNames = lib.sort lib.lessThan (builtins.attrNames data.overlayPackages);
+      mkRow = name: "| `${name}` | ${mkOverlayDisplay data.overlayPackages.${name}} |";
+    in ''
+      | Overlay | Packages |
+      | ------- | -------- |
+      ${lib.concatMapStringsSep "\n" mkRow overlayNames}'';
+
+    # Routing table for guides/stacked-workflows.md
+    routingTable = _: let
+      content = builtins.readFile ../../packages/stacked-workflows/fragments/routing-table.md;
+    in
+      lib.strings.trim content;
+
+    # Skill operations table for guides/stacked-workflows.md
+    skillTable = {data}: let
+      skillNames = lib.sort lib.lessThan (builtins.attrNames data.skillDescriptions);
+      mkRow = name: "| `${name}` | ${data.skillDescriptions.${name}} |";
+    in ''
+      | Skill | Operation |
+      | ----- | --------- |
+      ${lib.concatMapStringsSep "\n" mkRow skillNames}'';
   };
 
   # ── Full-page generators ────────────────────────────────────────────
@@ -190,19 +223,78 @@ _: final: _prev: let
     ```
   '';
 
-  # Options reference — static fallback pages for eval-time use.
-  # The doc site uses nixosOptionsDoc-generated pages instead (see
-  # lib/options-doc.nix), assembled in flake.nix as docs-options-hm
-  # and docs-options-devenv.
-  hmOptions = _:
-    builtins.readFile ./pages/home-manager.md;
+  # Dynamic: generated from mcpServerMeta data
+  # NOTE: Per-server settings tables and tools lists will come from module
+  # introspection in a future pass. Currently generates basic reference
+  # with descriptions and credentials.
+  mcpServers = {data}: let
+    mcpNames = lib.sort lib.lessThan (builtins.attrNames data.mcpServerMeta);
+    serverCount = toString (builtins.length mcpNames);
+    mkServerSection = name: let
+      meta = data.mcpServerMeta.${name};
+      credLine =
+        if meta.credentials == "None"
+        then "No credentials required."
+        else if meta.credentials == "Required"
+        then "**Credentials required.**"
+        else "Credentials optional.";
+    in ''
+      ### ${name}
 
-  devenvOptions = _:
-    builtins.readFile ./pages/devenv.md;
+      ${meta.description}.
 
-  mcpServers = _:
-    builtins.readFile ./pages/mcp-servers.md;
+      ${credLine}
 
+      ```nix
+      services.mcp-servers.servers.${name}.enable = true;
+      ```'';
+  in ''
+    # MCP Server Configuration
+
+    ${serverCount} Model Context Protocol servers are packaged and ready to use. Each
+    has typed settings, optional credentials, and works in both stdio and
+    HTTP modes.
+
+    ## Quick Start
+
+    ```nix
+    # Home-manager
+    services.mcp-servers.servers = {
+      github-mcp = {
+        enable = true;
+        settings.credentials.file = "/run/secrets/github-token";
+      };
+      nixos-mcp.enable = true;
+      context7-mcp.enable = true;
+    };
+
+    # DevEnv (inline per-CLI)
+    claude.code.mcpServers.github-mcp =
+      inputs.nix-agentic-tools.lib.mcp.mkStdioEntry pkgs {
+        package = pkgs.nix-mcp-servers.github-mcp;
+        settings.credentials.file = "/run/secrets/github-token";
+      };
+    ```
+
+    ## Server Reference
+
+    ${lib.concatMapStringsSep "\n\n" mkServerSection mcpNames}
+
+    ## Build Patterns
+
+    Servers are packaged using the appropriate Nix builder for their
+    upstream language:
+
+    | Builder                  | Servers                                                                          |
+    | ------------------------ | -------------------------------------------------------------------------------- |
+    | `buildNpmPackage`        | context7-mcp, effect-mcp, git-intel-mcp, openmemory-mcp, sequential-thinking-mcp |
+    | `buildPythonApplication` | fetch-mcp, git-mcp, kagi-mcp, sympy-mcp                                          |
+    | `buildGoModule`          | github-mcp                                                                       |
+
+    Serena-mcp and nixos-mcp use their own build patterns.
+  '';
+
+  # Static: read from pages/ directory
   libApi = _:
     builtins.readFile ./pages/lib-api.md;
 
@@ -219,7 +311,7 @@ in {
     // {
       passthru.generators = {
         inherit snippets;
-        inherit aiMapping devenvOptions hmOptions libApi mcpServers overlayPackages typesRef;
+        inherit aiMapping libApi mcpServers overlayPackages typesRef;
       };
     };
 }

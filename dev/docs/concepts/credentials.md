@@ -59,17 +59,7 @@ in the store -- it's read at runtime from the file or helper output.
 
 ## Servers Requiring Credentials
 
-| Server           | Environment Variable           | Required                   |
-| ---------------- | ------------------------------ | -------------------------- |
-| `github-mcp`     | `GITHUB_PERSONAL_ACCESS_TOKEN` | Yes                        |
-| `kagi-mcp`       | `KAGI_API_KEY`                 | Yes                        |
-| `context7-mcp`   | `CONTEXT7_API_KEY`             | No (optional)              |
-| `openmemory-mcp` | `OM_API_KEY`                   | No (optional)              |
-| `openmemory-mcp` | `OPENAI_API_KEY`               | No (for OpenAI embeddings) |
-
-All other servers (effect-mcp, fetch-mcp, git-mcp, git-intel-mcp,
-nixos-mcp, sequential-thinking-mcp, serena-mcp, sympy-mcp) need no
-credentials.
+{{#include ../generated/snippets/credentials-table.md}}
 
 ## sops-nix Integration
 
