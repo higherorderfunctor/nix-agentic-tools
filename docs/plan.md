@@ -111,6 +111,8 @@
 - [ ] MCP processes — no-cred servers for `devenv up`
 - [ ] Module fragment exposure — MCP servers contributing own fragments
 - [ ] Ollama HM module
+- [ ] scripts/update → devenv task or script — integrate into devenv so
+      `devenv run update` works; remove standalone bash script
 - [ ] scripts/update auto-discovery — derive which hashes to update from
       the nix files themselves (scan for npmDepsHash/vendorHash/cargoHash in
       hashes.json, match to package names). Eliminates hardcoded package
