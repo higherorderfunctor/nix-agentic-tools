@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-0e8c2b89.js";
+            window.path_to_searchindex_js = "searchindex-c1695867.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-f3c022ed.js"></script>
+        <script src="toc-903d4130.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -1350,10 +1350,90 @@ expected to work</li>
 <p>The structural check (<code>nix flake check</code>) validates some cross-references
 automatically, but not all parity guarantees can be checked statically.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="home-manager-options-reference"><a class="header" href="#home-manager-options-reference">Home-Manager Options Reference</a></h1>
+<h1 id="buddy-customization"><a class="header" href="#buddy-customization">Buddy Customization</a></h1>
+<p>Customize your Claude Code terminal companion (buddy) via Nix.
+The buddy is patched into the binary at build time — no runtime
+modification needed.</p>
+<h2 id="quick-start"><a class="header" href="#quick-start">Quick Start</a></h2>
+<pre><code class="language-nix"># In your home-manager config:
+ai.claude = {
+  enable = true;
+  buddy = {
+    userId = "your-account-uuid-here";
+    species = "dragon";
+    rarity = "legendary";
+    hat = "wizard";
+    eyes = "✦";
+  };
+};
+</code></pre>
+<p>Your account UUID is in <code>~/.claude.json</code> under
+<code>oauthAccount.accountUuid</code>. Treat it as a secret — use sops,
+agenix, or a similar tool.</p>
+<h2 id="direct-package-usage"><a class="header" href="#direct-package-usage">Direct Package Usage</a></h2>
+<p>Without the module system:</p>
+<pre><code class="language-nix">pkgs.claude-code.withBuddy {
+  userId = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
+  species = "capybara";
+  rarity = "rare";
+  shiny = true;
+  peak = "WISDOM";
+  dump = "CHAOS";
+}
+</code></pre>
+<h2 id="available-options"><a class="header" href="#available-options">Available Options</a></h2>
+<h3 id="species-18"><a class="header" href="#species-18">Species (18)</a></h3>
+<p>axolotl, blob, cactus, capybara, cat, chonk, dragon, duck,
+ghost, goose, mushroom, octopus, owl, penguin, rabbit, robot,
+snail, turtle</p>
+<h3 id="rarity"><a class="header" href="#rarity">Rarity</a></h3>
+<p>common (default), uncommon, rare, epic, legendary</p>
+<h3 id="eyes"><a class="header" href="#eyes">Eyes</a></h3>
+<p><code>·</code> (default), <code>✦</code>, <code>×</code>, <code>◉</code>, <code>@</code>, <code>°</code></p>
+<h3 id="hat"><a class="header" href="#hat">Hat</a></h3>
+<p>none (default), beanie, crown, halo, propeller, tinyduck,
+tophat, wizard</p>
+<p>Note: common rarity forces <code>hat = "none"</code>.</p>
+<h3 id="stats-peakdump"><a class="header" href="#stats-peakdump">Stats (peak/dump)</a></h3>
+<p>CHAOS, DEBUGGING, PATIENCE, SNARK, WISDOM</p>
+<p>Both are optional. When set, the salt search constrains which
+stat is highest (peak) and lowest (dump). They must differ.</p>
+<h2 id="build-time"><a class="header" href="#build-time">Build Time</a></h2>
+<p>The salt search runs once and is cached. It only re-runs when
+your buddy options change — not on claude-code version updates.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Target</th><th>Time</th></tr>
+</thead>
+<tbody>
+<tr><td>Common + species</td><td>instant</td></tr>
+<tr><td>Rare + species + hat</td><td>&lt;1s</td></tr>
+<tr><td>Legendary + species</td><td>~1s</td></tr>
+<tr><td>Legendary + shiny</td><td>~30s</td></tr>
+<tr><td>Legendary + shiny + peak + dump</td><td>minutes</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h2>
+<p>Under the hood, <code>withBuddy</code> creates two Nix derivations:</p>
+<ol>
+<li><strong>Salt search</strong> — brute-forces a 15-character salt string
+that, when hashed with your account UUID, produces the
+desired buddy traits. Uses any-buddy’s worker script via Bun.</li>
+<li><strong>Binary patching</strong> — replaces the default salt in the
+claude-code binary with your computed salt. Uses python3 for
+binary-safe replacement.</li>
+</ol>
+<p>The salt search derivation depends only on your buddy options
+and UUID. The patching derivation depends on the claude-code
+package. This means version updates only trigger the cheap
+patching step, not the expensive salt search.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="devenv-options-reference"><a class="header" href="#devenv-options-reference">DevEnv Options Reference</a></h1>
 <p>Auto-generated from module definitions via <code>nixosOptionsDoc</code>. See
-<a href="#home-manager-setup">Home-Manager Setup</a> for
-installation and quickstart.</p>
+<a href="#devenv-setup">DevEnv Setup</a> for installation and
+quickstart.</p>
 <h2 id="module-index"><a class="header" href="#module-index">Module Index</a></h2>
 <div class="table-wrapper">
 <table>
@@ -1361,12 +1441,10 @@ installation and quickstart.</p>
 <tr><th>Module</th><th>Import path</th><th>Purpose</th></tr>
 </thead>
 <tbody>
-<tr><td><code>ai</code></td><td><code>homeManagerModules.ai</code></td><td>Unified config fanout</td></tr>
-<tr><td><code>copilot-cli</code></td><td><code>homeManagerModules.copilot-cli</code></td><td>Copilot CLI config</td></tr>
-<tr><td><code>kiro-cli</code></td><td><code>homeManagerModules.kiro-cli</code></td><td>Kiro CLI config</td></tr>
-<tr><td><code>mcp-servers</code></td><td><code>homeManagerModules.mcp-servers</code></td><td>MCP server management</td></tr>
-<tr><td><code>stacked-workflows</code></td><td><code>homeManagerModules.stacked-workflows</code></td><td>Git presets + skills</td></tr>
-<tr><td><code>default</code></td><td><code>homeManagerModules.default</code></td><td>All of the above</td></tr>
+<tr><td><code>ai</code></td><td><code>devenvModules.ai</code></td><td>Unified config fanout</td></tr>
+<tr><td><code>copilot</code></td><td><code>devenvModules.copilot</code></td><td>Copilot config</td></tr>
+<tr><td><code>kiro</code></td><td><code>devenvModules.kiro</code></td><td>Kiro config</td></tr>
+<tr><td><code>default</code></td><td><code>devenvModules.default</code></td><td>All of the above</td></tr>
 </tbody>
 </table>
 </div>
@@ -1383,7 +1461,7 @@ boolean</p>
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aiclaude"><a class="header" href="#aiclaude">ai.claude</a></h2>
 <p>Claude Code ecosystem configuration.</p>
@@ -1394,7 +1472,7 @@ submodule</p>
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aiclaudeenable"><a class="header" href="#aiclaudeenable">ai.claude.enable</a></h2>
 <p>Whether to enable Fan out shared config to Claude Code.</p>
@@ -1408,7 +1486,7 @@ boolean</p>
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aiclaudepackage"><a class="header" href="#aiclaudepackage">ai.claude.package</a></h2>
 <p>Claude Code package. Automatically patched when buddy is set.</p>
@@ -1419,7 +1497,7 @@ package</p>
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aiclaudebuddy"><a class="header" href="#aiclaudebuddy">ai.claude.buddy</a></h2>
 <p>Buddy companion customization. Patches claude-code at build time.</p>
@@ -1430,7 +1508,7 @@ null or (submodule)</p>
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aiclaudebuddydump"><a class="header" href="#aiclaudebuddydump">ai.claude.buddy.dump</a></h2>
 <p>Preferred lowest stat. Must differ from peak.</p>
@@ -1441,7 +1519,7 @@ null or one of “CHAOS”, “DEBUGGING”, “PATIENCE”, “SNARK”, “WIS
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aiclaudebuddyeyes"><a class="header" href="#aiclaudebuddyeyes">ai.claude.buddy.eyes</a></h2>
 <p>Eye character.</p>
@@ -1452,7 +1530,7 @@ one of “·”, “✦”, “×”, “◉”, “@”, “°”</p>
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aiclaudebuddyhat"><a class="header" href="#aiclaudebuddyhat">ai.claude.buddy.hat</a></h2>
 <p>Hat accessory. Must be none for common rarity.</p>
@@ -1463,7 +1541,7 @@ one of “none”, “beanie”, “crown”, “halo”, “propeller”, “ti
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aiclaudebuddypeak"><a class="header" href="#aiclaudebuddypeak">ai.claude.buddy.peak</a></h2>
 <p>Preferred highest stat.</p>
@@ -1474,7 +1552,7 @@ null or one of “CHAOS”, “DEBUGGING”, “PATIENCE”, “SNARK”, “WIS
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aiclaudebuddyrarity"><a class="header" href="#aiclaudebuddyrarity">ai.claude.buddy.rarity</a></h2>
 <p>Rarity tier. Higher rarities take longer to compute.</p>
@@ -1485,7 +1563,7 @@ one of “common”, “uncommon”, “rare”, “epic”, “legendary”</p>
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aiclaudebuddyshiny"><a class="header" href="#aiclaudebuddyshiny">ai.claude.buddy.shiny</a></h2>
 <p>Rainbow shimmer variant.</p>
@@ -1496,7 +1574,7 @@ boolean</p>
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aiclaudebuddyspecies"><a class="header" href="#aiclaudebuddyspecies">ai.claude.buddy.species</a></h2>
 <p>Buddy species.</p>
@@ -1504,7 +1582,7 @@ boolean</p>
 one of “axolotl”, “blob”, “cactus”, “capybara”, “cat”, “chonk”, “dragon”, “duck”, “ghost”, “goose”, “mushroom”, “octopus”, “owl”, “penguin”, “rabbit”, “robot”, “snail”, “turtle”</p>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aiclaudebuddyuserid"><a class="header" href="#aiclaudebuddyuserid">ai.claude.buddy.userId</a></h2>
 <p>Claude account UUID (oauthAccount.accountUuid from ~/.claude.json).</p>
@@ -1512,7 +1590,7 @@ one of “axolotl”, “blob”, “cactus”, “capybara”, “cat”, “ch
 string</p>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aicopilot"><a class="header" href="#aicopilot">ai.copilot</a></h2>
 <p>Copilot CLI ecosystem configuration.</p>
@@ -1523,7 +1601,7 @@ submodule</p>
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aicopilotenable"><a class="header" href="#aicopilotenable">ai.copilot.enable</a></h2>
 <p>Whether to enable Fan out shared config to Copilot CLI.</p>
@@ -1537,7 +1615,7 @@ boolean</p>
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aicopilotpackage"><a class="header" href="#aicopilotpackage">ai.copilot.package</a></h2>
 <p>Copilot CLI package.</p>
@@ -1548,7 +1626,7 @@ package</p>
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aienvironmentvariables"><a class="header" href="#aienvironmentvariables">ai.environmentVariables</a></h2>
 <p>Shared environment variables for all enabled CLIs.</p>
@@ -1559,7 +1637,7 @@ attribute set of string</p>
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aiinstructions"><a class="header" href="#aiinstructions">ai.instructions</a></h2>
 <p>Shared instructions with optional path scoping. Body is shared;
@@ -1571,7 +1649,7 @@ attribute set of (submodule)</p>
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aiinstructionsnamedescription"><a class="header" href="#aiinstructionsnamedescription">ai.instructions.&lt;name&gt;.description</a></h2>
 <p>Short description (used by Claude and Kiro frontmatter).</p>
@@ -1582,7 +1660,7 @@ string</p>
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aiinstructionsnamepaths"><a class="header" href="#aiinstructionsnamepaths">ai.instructions.&lt;name&gt;.paths</a></h2>
 <p>File path globs this instruction applies to. null = always loaded.
@@ -1599,7 +1677,7 @@ null or (list of string)</p>
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aiinstructionsnametext"><a class="header" href="#aiinstructionsnametext">ai.instructions.&lt;name&gt;.text</a></h2>
 <p>Instruction body (markdown).</p>
@@ -1607,7 +1685,7 @@ null or (list of string)</p>
 strings concatenated with “\n”</p>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aikiro"><a class="header" href="#aikiro">ai.kiro</a></h2>
 <p>Kiro CLI ecosystem configuration.</p>
@@ -1618,7 +1696,7 @@ submodule</p>
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aikiroenable"><a class="header" href="#aikiroenable">ai.kiro.enable</a></h2>
 <p>Whether to enable Fan out shared config to Kiro CLI.</p>
@@ -1632,7 +1710,7 @@ boolean</p>
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aikiropackage"><a class="header" href="#aikiropackage">ai.kiro.package</a></h2>
 <p>Kiro CLI package.</p>
@@ -1643,9 +1721,850 @@ package</p>
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="ailspservers"><a class="header" href="#ailspservers">ai.lspServers</a></h2>
+<p>Typed LSP server definitions with explicit packages. Transformed
+to per-ecosystem JSON (with full store paths) during fanout.</p>
+<p><em>Type:</em>
+attribute set of (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">{
+  nixd = { package = pkgs.nixd; extensions = ["nix"]; };
+  marksman = { package = pkgs.marksman; extensions = ["md"]; };
+}
+
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
+</ul>
+<h2 id="ailspserversnamepackage"><a class="header" href="#ailspserversnamepackage">ai.lspServers.&lt;name&gt;.package</a></h2>
+<p>The LSP server package.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
+</ul>
+<h2 id="ailspserversnameargs"><a class="header" href="#ailspserversnameargs">ai.lspServers.&lt;name&gt;.args</a></h2>
+<p>Arguments to pass to the LSP binary.</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[
+  "--stdio"
+]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
+</ul>
+<h2 id="ailspserversnamebinary"><a class="header" href="#ailspserversnamebinary">ai.lspServers.&lt;name&gt;.binary</a></h2>
+<p>Binary name within the package (defaults to the attribute name).</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"‹name›"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
+</ul>
+<h2 id="ailspserversnameextensions"><a class="header" href="#ailspserversnameextensions">ai.lspServers.&lt;name&gt;.extensions</a></h2>
+<p>File extensions this server handles (without leading dots).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">[
+  "nix"
+]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
+</ul>
+<h2 id="ailspserversnameinitializationoptions"><a class="header" href="#ailspserversnameinitializationoptions">ai.lspServers.&lt;name&gt;.initializationOptions</a></h2>
+<p>LSP initialization options passed during handshake.</p>
+<p><em>Type:</em>
+attribute set</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
+</ul>
+<h2 id="aisettings"><a class="header" href="#aisettings">ai.settings</a></h2>
+<p>Normalized settings translated to ecosystem-specific keys.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
+</ul>
+<h2 id="aisettingsmodel"><a class="header" href="#aisettingsmodel">ai.settings.model</a></h2>
+<p>Default model – translated per ecosystem.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
+</ul>
+<h2 id="aisettingstelemetry"><a class="header" href="#aisettingstelemetry">ai.settings.telemetry</a></h2>
+<p>Enable/disable telemetry – translated per ecosystem.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
+</ul>
+<h2 id="aiskills"><a class="header" href="#aiskills">ai.skills</a></h2>
+<p>Shared skills (directory paths). Identical format across ecosystems.
+Injected at mkDefault priority so per-ecosystem config wins.</p>
+<p><em>Type:</em>
+attribute set of absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
+</ul>
+<h2 id="copilotenable"><a class="header" href="#copilotenable">copilot.enable</a></h2>
+<p>Whether to enable GitHub Copilot integration.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
+</ul>
+<h2 id="copilotagents"><a class="header" href="#copilotagents">copilot.agents</a></h2>
+<p>Agent .md files (written to .copilot/agents/{name}.md).</p>
+<p><em>Type:</em>
+attribute set of strings concatenated with “\n”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
+</ul>
+<h2 id="copilotenvironmentvariables"><a class="header" href="#copilotenvironmentvariables">copilot.environmentVariables</a></h2>
+<p>Environment variables for Copilot (merged into devenv env).</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
+</ul>
+<h2 id="copilotinstructions"><a class="header" href="#copilotinstructions">copilot.instructions</a></h2>
+<p>Instruction files for Copilot (.github/instructions/).</p>
+<p><em>Type:</em>
+attribute set of strings concatenated with “\n”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
+</ul>
+<h2 id="copilotlspservers"><a class="header" href="#copilotlspservers">copilot.lspServers</a></h2>
+<p>LSP server definitions (written to .copilot/lsp-config.json).</p>
+<p><em>Type:</em>
+attribute set of (JSON value)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
+</ul>
+<h2 id="copilotmcpservers"><a class="header" href="#copilotmcpservers">copilot.mcpServers</a></h2>
+<p>MCP servers to configure for Copilot.</p>
+<p><em>Type:</em>
+attribute set of (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
+</ul>
+<h2 id="copilotmcpserversnameargs"><a class="header" href="#copilotmcpserversnameargs">copilot.mcpServers.&lt;name&gt;.args</a></h2>
+<p>Arguments for stdio servers.</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
+</ul>
+<h2 id="copilotmcpserversnamecommand"><a class="header" href="#copilotmcpserversnamecommand">copilot.mcpServers.&lt;name&gt;.command</a></h2>
+<p>Command for stdio servers.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
+</ul>
+<h2 id="copilotmcpserversnameenv"><a class="header" href="#copilotmcpserversnameenv">copilot.mcpServers.&lt;name&gt;.env</a></h2>
+<p>Environment variables for stdio servers.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
+</ul>
+<h2 id="copilotmcpserversnametype"><a class="header" href="#copilotmcpserversnametype">copilot.mcpServers.&lt;name&gt;.type</a></h2>
+<p>Type of MCP server connection.</p>
+<p><em>Type:</em>
+one of “stdio”, “http”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"stdio"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
+</ul>
+<h2 id="copilotmcpserversnameurl"><a class="header" href="#copilotmcpserversnameurl">copilot.mcpServers.&lt;name&gt;.url</a></h2>
+<p>URL for HTTP servers.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
+</ul>
+<h2 id="copilotsettings"><a class="header" href="#copilotsettings">copilot.settings</a></h2>
+<p>Copilot settings (written to .copilot/config.json).</p>
+<p><em>Type:</em>
+open submodule of (JSON value)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
+</ul>
+<h2 id="copilotsettingsmodel"><a class="header" href="#copilotsettingsmodel">copilot.settings.model</a></h2>
+<p>Default model for Copilot.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
+</ul>
+<h2 id="copilotsettingstheme"><a class="header" href="#copilotsettingstheme">copilot.settings.theme</a></h2>
+<p>Color theme.</p>
+<p><em>Type:</em>
+null or one of “dark”, “light”, “auto”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
+</ul>
+<h2 id="copilotskills"><a class="header" href="#copilotskills">copilot.skills</a></h2>
+<p>Skill directories to install for Copilot.</p>
+<p><em>Type:</em>
+attribute set of absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
+</ul>
+<h2 id="kiroenable"><a class="header" href="#kiroenable">kiro.enable</a></h2>
+<p>Whether to enable Kiro CLI integration.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="kiroagents"><a class="header" href="#kiroagents">kiro.agents</a></h2>
+<p>Agent JSON definitions (written to .kiro/agents/{name}.json).</p>
+<p><em>Type:</em>
+attribute set of strings concatenated with “\n”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="kiroenvironmentvariables"><a class="header" href="#kiroenvironmentvariables">kiro.environmentVariables</a></h2>
+<p>Environment variables for Kiro (merged into devenv env).</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="kirohooks"><a class="header" href="#kirohooks">kiro.hooks</a></h2>
+<p>Hook JSON definitions (written to .kiro/hooks/{name}.json).</p>
+<p><em>Type:</em>
+attribute set of strings concatenated with “\n”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="kirolspservers"><a class="header" href="#kirolspservers">kiro.lspServers</a></h2>
+<p>LSP server definitions (written to .kiro/settings/lsp.json).</p>
+<p><em>Type:</em>
+attribute set of (JSON value)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="kiromcpservers"><a class="header" href="#kiromcpservers">kiro.mcpServers</a></h2>
+<p>MCP servers to configure for Kiro.</p>
+<p><em>Type:</em>
+attribute set of (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="kiromcpserversnameargs"><a class="header" href="#kiromcpserversnameargs">kiro.mcpServers.&lt;name&gt;.args</a></h2>
+<p>Arguments for stdio servers.</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="kiromcpserversnamecommand"><a class="header" href="#kiromcpserversnamecommand">kiro.mcpServers.&lt;name&gt;.command</a></h2>
+<p>Command for stdio servers.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="kiromcpserversnameenv"><a class="header" href="#kiromcpserversnameenv">kiro.mcpServers.&lt;name&gt;.env</a></h2>
+<p>Environment variables for stdio servers.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="kiromcpserversnametype"><a class="header" href="#kiromcpserversnametype">kiro.mcpServers.&lt;name&gt;.type</a></h2>
+<p>Type of MCP server connection.</p>
+<p><em>Type:</em>
+one of “stdio”, “http”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"stdio"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="kiromcpserversnameurl"><a class="header" href="#kiromcpserversnameurl">kiro.mcpServers.&lt;name&gt;.url</a></h2>
+<p>URL for HTTP servers.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="kirosettings"><a class="header" href="#kirosettings">kiro.settings</a></h2>
+<p>Kiro CLI settings (written to .kiro/settings/cli.json).</p>
+<p><em>Type:</em>
+open submodule of (JSON value)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="kirosettingschat"><a class="header" href="#kirosettingschat">kiro.settings.chat</a></h2>
+<p>Chat-related settings.</p>
+<p><em>Type:</em>
+open submodule of (JSON value)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="kirosettingschatenablethinking"><a class="header" href="#kirosettingschatenablethinking">kiro.settings.chat.enableThinking</a></h2>
+<p>Enable thinking/reasoning mode.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="kirosettingschatdefaultmodel"><a class="header" href="#kirosettingschatdefaultmodel">kiro.settings.chat.defaultModel</a></h2>
+<p>Default chat model.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="kirosettingstelemetry"><a class="header" href="#kirosettingstelemetry">kiro.settings.telemetry</a></h2>
+<p>Telemetry settings.</p>
+<p><em>Type:</em>
+open submodule of (JSON value)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="kirosettingstelemetryenabled"><a class="header" href="#kirosettingstelemetryenabled">kiro.settings.telemetry.enabled</a></h2>
+<p>Enable telemetry reporting.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="kiroskills"><a class="header" href="#kiroskills">kiro.skills</a></h2>
+<p>Skill directories to install for Kiro.</p>
+<p><em>Type:</em>
+attribute set of absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="kirosteering"><a class="header" href="#kirosteering">kiro.steering</a></h2>
+<p>Steering files for Kiro (.kiro/steering/).</p>
+<p><em>Type:</em>
+attribute set of strings concatenated with “\n”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
+</ul>
+<h2 id="differences-from-home-manager-1"><a class="header" href="#differences-from-home-manager-1">Differences from Home-Manager</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Aspect</th><th>Home-Manager</th><th>DevEnv</th></tr>
+</thead>
+<tbody>
+<tr><td>Config location</td><td><code>~/.claude/</code>, <code>~/.copilot/</code>, <code>~/.kiro/</code></td><td><code>.claude/</code>, <code>.copilot/</code>, <code>.kiro/</code></td></tr>
+<tr><td>Persistence</td><td>Survives shell exit</td><td>Recreated on <code>devenv shell</code> entry</td></tr>
+<tr><td>MCP servers</td><td><code>services.mcp-servers</code> (systemd)</td><td>Inline per-CLI (<code>claude.code.mcpServers</code>)</td></tr>
+<tr><td>Stacked workflows</td><td>Module with git presets</td><td>Manual skill wiring via <code>ai.skills</code></td></tr>
+<tr><td>Fragment pipeline</td><td>N/A</td><td><code>files.*</code> materialization</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="generated-files"><a class="header" href="#generated-files">Generated Files</a></h2>
+<p>DevEnv writes config to project-local dotfiles. These are recreated on
+every shell entry and should be in <code>.gitignore</code>:</p>
+<pre><code class="language-gitignore">.claude/rules/
+.claude/skills/
+.claude/settings.json
+.copilot/
+.kiro/
+</code></pre>
+<h2 id="overlay-access-in-devenv"><a class="header" href="#overlay-access-in-devenv">Overlay Access in DevEnv</a></h2>
+<p>DevEnv does not automatically apply overlays. To access content packages
+or MCP servers, compose the overlays manually:</p>
+<pre><code class="language-nix">{inputs, pkgs, lib, ...}: let
+  contentPkgs = pkgs.extend (lib.composeManyExtensions [
+    (import "${inputs.nix-agentic-tools}/packages/coding-standards" {})
+    (import "${inputs.nix-agentic-tools}/packages/stacked-workflows" {})
+  ]);
+in {
+  # Now use contentPkgs.coding-standards, contentPkgs.stacked-workflows-content
+}
+</code></pre>
+<p>For MCP server packages, apply the mcp-servers overlay:</p>
+<pre><code class="language-nix">mcpPkgs = pkgs.extend (import "${inputs.nix-agentic-tools}/packages/mcp-servers" {
+  inherit inputs;
+});
+# mcpPkgs.nix-mcp-servers.github-mcp, etc.
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="home-manager-options-reference"><a class="header" href="#home-manager-options-reference">Home-Manager Options Reference</a></h1>
+<p>Auto-generated from module definitions via <code>nixosOptionsDoc</code>. See
+<a href="#home-manager-setup">Home-Manager Setup</a> for
+installation and quickstart.</p>
+<h2 id="module-index-1"><a class="header" href="#module-index-1">Module Index</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Module</th><th>Import path</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>ai</code></td><td><code>homeManagerModules.ai</code></td><td>Unified config fanout</td></tr>
+<tr><td><code>copilot-cli</code></td><td><code>homeManagerModules.copilot-cli</code></td><td>Copilot CLI config</td></tr>
+<tr><td><code>kiro-cli</code></td><td><code>homeManagerModules.kiro-cli</code></td><td>Kiro CLI config</td></tr>
+<tr><td><code>mcp-servers</code></td><td><code>homeManagerModules.mcp-servers</code></td><td>MCP server management</td></tr>
+<tr><td><code>stacked-workflows</code></td><td><code>homeManagerModules.stacked-workflows</code></td><td>Git presets + skills</td></tr>
+<tr><td><code>default</code></td><td><code>homeManagerModules.default</code></td><td>All of the above</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="options-1"><a class="header" href="#options-1">Options</a></h2>
+<h2 id="aienable-1"><a class="header" href="#aienable-1">ai.enable</a></h2>
+<p>Whether to enable unified AI configuration across Claude, Copilot, and Kiro.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaude-1"><a class="header" href="#aiclaude-1">ai.claude</a></h2>
+<p>Claude Code ecosystem configuration.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudeenable-1"><a class="header" href="#aiclaudeenable-1">ai.claude.enable</a></h2>
+<p>Whether to enable Fan out shared config to Claude Code.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudepackage-1"><a class="header" href="#aiclaudepackage-1">ai.claude.package</a></h2>
+<p>Claude Code package. Automatically patched when buddy is set.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.claude-code
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddy-1"><a class="header" href="#aiclaudebuddy-1">ai.claude.buddy</a></h2>
+<p>Buddy companion customization. Patches claude-code at build time.</p>
+<p><em>Type:</em>
+null or (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddydump-1"><a class="header" href="#aiclaudebuddydump-1">ai.claude.buddy.dump</a></h2>
+<p>Preferred lowest stat. Must differ from peak.</p>
+<p><em>Type:</em>
+null or one of “CHAOS”, “DEBUGGING”, “PATIENCE”, “SNARK”, “WISDOM”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyeyes-1"><a class="header" href="#aiclaudebuddyeyes-1">ai.claude.buddy.eyes</a></h2>
+<p>Eye character.</p>
+<p><em>Type:</em>
+one of “·”, “✦”, “×”, “◉”, “@”, “°”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"·"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyhat-1"><a class="header" href="#aiclaudebuddyhat-1">ai.claude.buddy.hat</a></h2>
+<p>Hat accessory. Must be none for common rarity.</p>
+<p><em>Type:</em>
+one of “none”, “beanie”, “crown”, “halo”, “propeller”, “tinyduck”, “tophat”, “wizard”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"none"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddypeak-1"><a class="header" href="#aiclaudebuddypeak-1">ai.claude.buddy.peak</a></h2>
+<p>Preferred highest stat.</p>
+<p><em>Type:</em>
+null or one of “CHAOS”, “DEBUGGING”, “PATIENCE”, “SNARK”, “WISDOM”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyrarity-1"><a class="header" href="#aiclaudebuddyrarity-1">ai.claude.buddy.rarity</a></h2>
+<p>Rarity tier. Higher rarities take longer to compute.</p>
+<p><em>Type:</em>
+one of “common”, “uncommon”, “rare”, “epic”, “legendary”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"common"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyshiny-1"><a class="header" href="#aiclaudebuddyshiny-1">ai.claude.buddy.shiny</a></h2>
+<p>Rainbow shimmer variant.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyspecies-1"><a class="header" href="#aiclaudebuddyspecies-1">ai.claude.buddy.species</a></h2>
+<p>Buddy species.</p>
+<p><em>Type:</em>
+one of “axolotl”, “blob”, “cactus”, “capybara”, “cat”, “chonk”, “dragon”, “duck”, “ghost”, “goose”, “mushroom”, “octopus”, “owl”, “penguin”, “rabbit”, “robot”, “snail”, “turtle”</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyuserid-1"><a class="header" href="#aiclaudebuddyuserid-1">ai.claude.buddy.userId</a></h2>
+<p>Claude account UUID (oauthAccount.accountUuid from ~/.claude.json).</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aicopilot-1"><a class="header" href="#aicopilot-1">ai.copilot</a></h2>
+<p>Copilot CLI ecosystem configuration.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aicopilotenable-1"><a class="header" href="#aicopilotenable-1">ai.copilot.enable</a></h2>
+<p>Whether to enable Fan out shared config to Copilot CLI.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aicopilotpackage-1"><a class="header" href="#aicopilotpackage-1">ai.copilot.package</a></h2>
+<p>Copilot CLI package.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.github-copilot-cli
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aienvironmentvariables-1"><a class="header" href="#aienvironmentvariables-1">ai.environmentVariables</a></h2>
+<p>Shared environment variables for all enabled CLIs.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiinstructions-1"><a class="header" href="#aiinstructions-1">ai.instructions</a></h2>
+<p>Shared instructions with optional path scoping. Body is shared;
+frontmatter is generated per ecosystem.</p>
+<p><em>Type:</em>
+attribute set of (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiinstructionsnamedescription-1"><a class="header" href="#aiinstructionsnamedescription-1">ai.instructions.&lt;name&gt;.description</a></h2>
+<p>Short description (used by Claude and Kiro frontmatter).</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">""
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiinstructionsnamepaths-1"><a class="header" href="#aiinstructionsnamepaths-1">ai.instructions.&lt;name&gt;.paths</a></h2>
+<p>File path globs this instruction applies to. null = always loaded.
+Translated per ecosystem:</p>
+<ul>
+<li>Claude: paths: frontmatter</li>
+<li>Kiro: inclusion: fileMatch + fileMatchPattern:</li>
+<li>Copilot: applyTo: glob</li>
+</ul>
+<p><em>Type:</em>
+null or (list of string)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiinstructionsnametext-1"><a class="header" href="#aiinstructionsnametext-1">ai.instructions.&lt;name&gt;.text</a></h2>
+<p>Instruction body (markdown).</p>
+<p><em>Type:</em>
+strings concatenated with “\n”</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aikiro-1"><a class="header" href="#aikiro-1">ai.kiro</a></h2>
+<p>Kiro CLI ecosystem configuration.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aikiroenable-1"><a class="header" href="#aikiroenable-1">ai.kiro.enable</a></h2>
+<p>Whether to enable Fan out shared config to Kiro CLI.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aikiropackage-1"><a class="header" href="#aikiropackage-1">ai.kiro.package</a></h2>
+<p>Kiro CLI package.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.kiro-cli
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="ailspservers-1"><a class="header" href="#ailspservers-1">ai.lspServers</a></h2>
 <p>Typed LSP server definitions with explicit packages. Transformed
 to per-ecosystem JSON (with full store paths) during fanout.
 Each CLI writes the result to its own config path.</p>
@@ -1665,7 +2584,7 @@ attribute set of (submodule)</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
-<h2 id="ailspserversnamepackage"><a class="header" href="#ailspserversnamepackage">ai.lspServers.&lt;name&gt;.package</a></h2>
+<h2 id="ailspserversnamepackage-1"><a class="header" href="#ailspserversnamepackage-1">ai.lspServers.&lt;name&gt;.package</a></h2>
 <p>The LSP server package.</p>
 <p><em>Type:</em>
 package</p>
@@ -1673,7 +2592,7 @@ package</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
-<h2 id="ailspserversnameargs"><a class="header" href="#ailspserversnameargs">ai.lspServers.&lt;name&gt;.args</a></h2>
+<h2 id="ailspserversnameargs-1"><a class="header" href="#ailspserversnameargs-1">ai.lspServers.&lt;name&gt;.args</a></h2>
 <p>Arguments to pass to the LSP binary.</p>
 <p><em>Type:</em>
 list of string</p>
@@ -1686,7 +2605,7 @@ list of string</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
-<h2 id="ailspserversnamebinary"><a class="header" href="#ailspserversnamebinary">ai.lspServers.&lt;name&gt;.binary</a></h2>
+<h2 id="ailspserversnamebinary-1"><a class="header" href="#ailspserversnamebinary-1">ai.lspServers.&lt;name&gt;.binary</a></h2>
 <p>Binary name within the package (defaults to the attribute name).</p>
 <p><em>Type:</em>
 string</p>
@@ -1697,7 +2616,7 @@ string</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
-<h2 id="ailspserversnameextensions"><a class="header" href="#ailspserversnameextensions">ai.lspServers.&lt;name&gt;.extensions</a></h2>
+<h2 id="ailspserversnameextensions-1"><a class="header" href="#ailspserversnameextensions-1">ai.lspServers.&lt;name&gt;.extensions</a></h2>
 <p>File extensions this server handles (without leading dots).</p>
 <p><em>Type:</em>
 list of string</p>
@@ -1713,7 +2632,7 @@ list of string</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
-<h2 id="ailspserversnameinitializationoptions"><a class="header" href="#ailspserversnameinitializationoptions">ai.lspServers.&lt;name&gt;.initializationOptions</a></h2>
+<h2 id="ailspserversnameinitializationoptions-1"><a class="header" href="#ailspserversnameinitializationoptions-1">ai.lspServers.&lt;name&gt;.initializationOptions</a></h2>
 <p>LSP initialization options passed during handshake.</p>
 <p><em>Type:</em>
 attribute set</p>
@@ -1724,7 +2643,7 @@ attribute set</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
-<h2 id="aisettings"><a class="header" href="#aisettings">ai.settings</a></h2>
+<h2 id="aisettings-1"><a class="header" href="#aisettings-1">ai.settings</a></h2>
 <p>Normalized settings translated to ecosystem-specific keys.</p>
 <p><em>Type:</em>
 submodule</p>
@@ -1735,7 +2654,7 @@ submodule</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
-<h2 id="aisettingsmodel"><a class="header" href="#aisettingsmodel">ai.settings.model</a></h2>
+<h2 id="aisettingsmodel-1"><a class="header" href="#aisettingsmodel-1">ai.settings.model</a></h2>
 <p>Default model – translated per ecosystem.</p>
 <p><em>Type:</em>
 null or string</p>
@@ -1746,7 +2665,7 @@ null or string</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
-<h2 id="aisettingstelemetry"><a class="header" href="#aisettingstelemetry">ai.settings.telemetry</a></h2>
+<h2 id="aisettingstelemetry-1"><a class="header" href="#aisettingstelemetry-1">ai.settings.telemetry</a></h2>
 <p>Enable/disable telemetry – translated per ecosystem.</p>
 <p><em>Type:</em>
 null or boolean</p>
@@ -1757,7 +2676,7 @@ null or boolean</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
-<h2 id="aiskills"><a class="header" href="#aiskills">ai.skills</a></h2>
+<h2 id="aiskills-1"><a class="header" href="#aiskills-1">ai.skills</a></h2>
 <p>Shared skills (directory paths). Identical format across ecosystems.
 Injected at mkDefault priority so per-CLI skills win.</p>
 <p><em>Type:</em>
@@ -4606,850 +5525,11 @@ programs.copilot-cli.settings.model = "gpt-4o";
 every leaf, so you can override individual git settings at normal
 priority in <code>programs.git.settings</code>.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="devenv-options-reference"><a class="header" href="#devenv-options-reference">DevEnv Options Reference</a></h1>
-<p>Auto-generated from module definitions via <code>nixosOptionsDoc</code>. See
-<a href="#devenv-setup">DevEnv Setup</a> for installation and
-quickstart.</p>
-<h2 id="module-index-1"><a class="header" href="#module-index-1">Module Index</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Module</th><th>Import path</th><th>Purpose</th></tr>
-</thead>
-<tbody>
-<tr><td><code>ai</code></td><td><code>devenvModules.ai</code></td><td>Unified config fanout</td></tr>
-<tr><td><code>copilot</code></td><td><code>devenvModules.copilot</code></td><td>Copilot config</td></tr>
-<tr><td><code>kiro</code></td><td><code>devenvModules.kiro</code></td><td>Kiro config</td></tr>
-<tr><td><code>default</code></td><td><code>devenvModules.default</code></td><td>All of the above</td></tr>
-</tbody>
-</table>
-</div>
-<h2 id="options-1"><a class="header" href="#options-1">Options</a></h2>
-<h2 id="aienable-1"><a class="header" href="#aienable-1">ai.enable</a></h2>
-<p>Whether to enable unified AI configuration across Claude, Copilot, and Kiro.</p>
-<p><em>Type:</em>
-boolean</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">false
-</code></pre>
-<p><em>Example:</em></p>
-<pre><code class="language-nix">true
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaude-1"><a class="header" href="#aiclaude-1">ai.claude</a></h2>
-<p>Claude Code ecosystem configuration.</p>
-<p><em>Type:</em>
-submodule</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudeenable-1"><a class="header" href="#aiclaudeenable-1">ai.claude.enable</a></h2>
-<p>Whether to enable Fan out shared config to Claude Code.</p>
-<p><em>Type:</em>
-boolean</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">false
-</code></pre>
-<p><em>Example:</em></p>
-<pre><code class="language-nix">true
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudepackage-1"><a class="header" href="#aiclaudepackage-1">ai.claude.package</a></h2>
-<p>Claude Code package. Automatically patched when buddy is set.</p>
-<p><em>Type:</em>
-package</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">pkgs.claude-code
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudebuddy-1"><a class="header" href="#aiclaudebuddy-1">ai.claude.buddy</a></h2>
-<p>Buddy companion customization. Patches claude-code at build time.</p>
-<p><em>Type:</em>
-null or (submodule)</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudebuddydump-1"><a class="header" href="#aiclaudebuddydump-1">ai.claude.buddy.dump</a></h2>
-<p>Preferred lowest stat. Must differ from peak.</p>
-<p><em>Type:</em>
-null or one of “CHAOS”, “DEBUGGING”, “PATIENCE”, “SNARK”, “WISDOM”</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudebuddyeyes-1"><a class="header" href="#aiclaudebuddyeyes-1">ai.claude.buddy.eyes</a></h2>
-<p>Eye character.</p>
-<p><em>Type:</em>
-one of “·”, “✦”, “×”, “◉”, “@”, “°”</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">"·"
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudebuddyhat-1"><a class="header" href="#aiclaudebuddyhat-1">ai.claude.buddy.hat</a></h2>
-<p>Hat accessory. Must be none for common rarity.</p>
-<p><em>Type:</em>
-one of “none”, “beanie”, “crown”, “halo”, “propeller”, “tinyduck”, “tophat”, “wizard”</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">"none"
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudebuddypeak-1"><a class="header" href="#aiclaudebuddypeak-1">ai.claude.buddy.peak</a></h2>
-<p>Preferred highest stat.</p>
-<p><em>Type:</em>
-null or one of “CHAOS”, “DEBUGGING”, “PATIENCE”, “SNARK”, “WISDOM”</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudebuddyrarity-1"><a class="header" href="#aiclaudebuddyrarity-1">ai.claude.buddy.rarity</a></h2>
-<p>Rarity tier. Higher rarities take longer to compute.</p>
-<p><em>Type:</em>
-one of “common”, “uncommon”, “rare”, “epic”, “legendary”</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">"common"
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudebuddyshiny-1"><a class="header" href="#aiclaudebuddyshiny-1">ai.claude.buddy.shiny</a></h2>
-<p>Rainbow shimmer variant.</p>
-<p><em>Type:</em>
-boolean</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">false
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudebuddyspecies-1"><a class="header" href="#aiclaudebuddyspecies-1">ai.claude.buddy.species</a></h2>
-<p>Buddy species.</p>
-<p><em>Type:</em>
-one of “axolotl”, “blob”, “cactus”, “capybara”, “cat”, “chonk”, “dragon”, “duck”, “ghost”, “goose”, “mushroom”, “octopus”, “owl”, “penguin”, “rabbit”, “robot”, “snail”, “turtle”</p>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudebuddyuserid-1"><a class="header" href="#aiclaudebuddyuserid-1">ai.claude.buddy.userId</a></h2>
-<p>Claude account UUID (oauthAccount.accountUuid from ~/.claude.json).</p>
-<p><em>Type:</em>
-string</p>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aicopilot-1"><a class="header" href="#aicopilot-1">ai.copilot</a></h2>
-<p>Copilot CLI ecosystem configuration.</p>
-<p><em>Type:</em>
-submodule</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aicopilotenable-1"><a class="header" href="#aicopilotenable-1">ai.copilot.enable</a></h2>
-<p>Whether to enable Fan out shared config to Copilot CLI.</p>
-<p><em>Type:</em>
-boolean</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">false
-</code></pre>
-<p><em>Example:</em></p>
-<pre><code class="language-nix">true
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aicopilotpackage-1"><a class="header" href="#aicopilotpackage-1">ai.copilot.package</a></h2>
-<p>Copilot CLI package.</p>
-<p><em>Type:</em>
-package</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">pkgs.github-copilot-cli
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aienvironmentvariables-1"><a class="header" href="#aienvironmentvariables-1">ai.environmentVariables</a></h2>
-<p>Shared environment variables for all enabled CLIs.</p>
-<p><em>Type:</em>
-attribute set of string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiinstructions-1"><a class="header" href="#aiinstructions-1">ai.instructions</a></h2>
-<p>Shared instructions with optional path scoping. Body is shared;
-frontmatter is generated per ecosystem.</p>
-<p><em>Type:</em>
-attribute set of (submodule)</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiinstructionsnamedescription-1"><a class="header" href="#aiinstructionsnamedescription-1">ai.instructions.&lt;name&gt;.description</a></h2>
-<p>Short description (used by Claude and Kiro frontmatter).</p>
-<p><em>Type:</em>
-string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">""
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiinstructionsnamepaths-1"><a class="header" href="#aiinstructionsnamepaths-1">ai.instructions.&lt;name&gt;.paths</a></h2>
-<p>File path globs this instruction applies to. null = always loaded.
-Translated per ecosystem:</p>
-<ul>
-<li>Claude: paths: frontmatter</li>
-<li>Kiro: inclusion: fileMatch + fileMatchPattern:</li>
-<li>Copilot: applyTo: glob</li>
-</ul>
-<p><em>Type:</em>
-null or (list of string)</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiinstructionsnametext-1"><a class="header" href="#aiinstructionsnametext-1">ai.instructions.&lt;name&gt;.text</a></h2>
-<p>Instruction body (markdown).</p>
-<p><em>Type:</em>
-strings concatenated with “\n”</p>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aikiro-1"><a class="header" href="#aikiro-1">ai.kiro</a></h2>
-<p>Kiro CLI ecosystem configuration.</p>
-<p><em>Type:</em>
-submodule</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aikiroenable-1"><a class="header" href="#aikiroenable-1">ai.kiro.enable</a></h2>
-<p>Whether to enable Fan out shared config to Kiro CLI.</p>
-<p><em>Type:</em>
-boolean</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">false
-</code></pre>
-<p><em>Example:</em></p>
-<pre><code class="language-nix">true
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aikiropackage-1"><a class="header" href="#aikiropackage-1">ai.kiro.package</a></h2>
-<p>Kiro CLI package.</p>
-<p><em>Type:</em>
-package</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">pkgs.kiro-cli
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="ailspservers-1"><a class="header" href="#ailspservers-1">ai.lspServers</a></h2>
-<p>Typed LSP server definitions with explicit packages. Transformed
-to per-ecosystem JSON (with full store paths) during fanout.</p>
-<p><em>Type:</em>
-attribute set of (submodule)</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Example:</em></p>
-<pre><code class="language-nix">{
-  nixd = { package = pkgs.nixd; extensions = ["nix"]; };
-  marksman = { package = pkgs.marksman; extensions = ["md"]; };
-}
-
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="ailspserversnamepackage-1"><a class="header" href="#ailspserversnamepackage-1">ai.lspServers.&lt;name&gt;.package</a></h2>
-<p>The LSP server package.</p>
-<p><em>Type:</em>
-package</p>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="ailspserversnameargs-1"><a class="header" href="#ailspserversnameargs-1">ai.lspServers.&lt;name&gt;.args</a></h2>
-<p>Arguments to pass to the LSP binary.</p>
-<p><em>Type:</em>
-list of string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">[
-  "--stdio"
-]
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="ailspserversnamebinary-1"><a class="header" href="#ailspserversnamebinary-1">ai.lspServers.&lt;name&gt;.binary</a></h2>
-<p>Binary name within the package (defaults to the attribute name).</p>
-<p><em>Type:</em>
-string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">"‹name›"
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="ailspserversnameextensions-1"><a class="header" href="#ailspserversnameextensions-1">ai.lspServers.&lt;name&gt;.extensions</a></h2>
-<p>File extensions this server handles (without leading dots).</p>
-<p><em>Type:</em>
-list of string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">[ ]
-</code></pre>
-<p><em>Example:</em></p>
-<pre><code class="language-nix">[
-  "nix"
-]
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="ailspserversnameinitializationoptions-1"><a class="header" href="#ailspserversnameinitializationoptions-1">ai.lspServers.&lt;name&gt;.initializationOptions</a></h2>
-<p>LSP initialization options passed during handshake.</p>
-<p><em>Type:</em>
-attribute set</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aisettings-1"><a class="header" href="#aisettings-1">ai.settings</a></h2>
-<p>Normalized settings translated to ecosystem-specific keys.</p>
-<p><em>Type:</em>
-submodule</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aisettingsmodel-1"><a class="header" href="#aisettingsmodel-1">ai.settings.model</a></h2>
-<p>Default model – translated per ecosystem.</p>
-<p><em>Type:</em>
-null or string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aisettingstelemetry-1"><a class="header" href="#aisettingstelemetry-1">ai.settings.telemetry</a></h2>
-<p>Enable/disable telemetry – translated per ecosystem.</p>
-<p><em>Type:</em>
-null or boolean</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiskills-1"><a class="header" href="#aiskills-1">ai.skills</a></h2>
-<p>Shared skills (directory paths). Identical format across ecosystems.
-Injected at mkDefault priority so per-ecosystem config wins.</p>
-<p><em>Type:</em>
-attribute set of absolute path</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="copilotenable"><a class="header" href="#copilotenable">copilot.enable</a></h2>
-<p>Whether to enable GitHub Copilot integration.</p>
-<p><em>Type:</em>
-boolean</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">false
-</code></pre>
-<p><em>Example:</em></p>
-<pre><code class="language-nix">true
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
-</ul>
-<h2 id="copilotagents"><a class="header" href="#copilotagents">copilot.agents</a></h2>
-<p>Agent .md files (written to .copilot/agents/{name}.md).</p>
-<p><em>Type:</em>
-attribute set of strings concatenated with “\n”</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
-</ul>
-<h2 id="copilotenvironmentvariables"><a class="header" href="#copilotenvironmentvariables">copilot.environmentVariables</a></h2>
-<p>Environment variables for Copilot (merged into devenv env).</p>
-<p><em>Type:</em>
-attribute set of string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
-</ul>
-<h2 id="copilotinstructions"><a class="header" href="#copilotinstructions">copilot.instructions</a></h2>
-<p>Instruction files for Copilot (.github/instructions/).</p>
-<p><em>Type:</em>
-attribute set of strings concatenated with “\n”</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
-</ul>
-<h2 id="copilotlspservers"><a class="header" href="#copilotlspservers">copilot.lspServers</a></h2>
-<p>LSP server definitions (written to .copilot/lsp-config.json).</p>
-<p><em>Type:</em>
-attribute set of (JSON value)</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
-</ul>
-<h2 id="copilotmcpservers"><a class="header" href="#copilotmcpservers">copilot.mcpServers</a></h2>
-<p>MCP servers to configure for Copilot.</p>
-<p><em>Type:</em>
-attribute set of (submodule)</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
-</ul>
-<h2 id="copilotmcpserversnameargs"><a class="header" href="#copilotmcpserversnameargs">copilot.mcpServers.&lt;name&gt;.args</a></h2>
-<p>Arguments for stdio servers.</p>
-<p><em>Type:</em>
-list of string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">[ ]
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
-</ul>
-<h2 id="copilotmcpserversnamecommand"><a class="header" href="#copilotmcpserversnamecommand">copilot.mcpServers.&lt;name&gt;.command</a></h2>
-<p>Command for stdio servers.</p>
-<p><em>Type:</em>
-null or string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
-</ul>
-<h2 id="copilotmcpserversnameenv"><a class="header" href="#copilotmcpserversnameenv">copilot.mcpServers.&lt;name&gt;.env</a></h2>
-<p>Environment variables for stdio servers.</p>
-<p><em>Type:</em>
-attribute set of string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
-</ul>
-<h2 id="copilotmcpserversnametype"><a class="header" href="#copilotmcpserversnametype">copilot.mcpServers.&lt;name&gt;.type</a></h2>
-<p>Type of MCP server connection.</p>
-<p><em>Type:</em>
-one of “stdio”, “http”</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">"stdio"
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
-</ul>
-<h2 id="copilotmcpserversnameurl"><a class="header" href="#copilotmcpserversnameurl">copilot.mcpServers.&lt;name&gt;.url</a></h2>
-<p>URL for HTTP servers.</p>
-<p><em>Type:</em>
-null or string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
-</ul>
-<h2 id="copilotsettings"><a class="header" href="#copilotsettings">copilot.settings</a></h2>
-<p>Copilot settings (written to .copilot/config.json).</p>
-<p><em>Type:</em>
-open submodule of (JSON value)</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
-</ul>
-<h2 id="copilotsettingsmodel"><a class="header" href="#copilotsettingsmodel">copilot.settings.model</a></h2>
-<p>Default model for Copilot.</p>
-<p><em>Type:</em>
-null or string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
-</ul>
-<h2 id="copilotsettingstheme"><a class="header" href="#copilotsettingstheme">copilot.settings.theme</a></h2>
-<p>Color theme.</p>
-<p><em>Type:</em>
-null or one of “dark”, “light”, “auto”</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
-</ul>
-<h2 id="copilotskills"><a class="header" href="#copilotskills">copilot.skills</a></h2>
-<p>Skill directories to install for Copilot.</p>
-<p><em>Type:</em>
-attribute set of absolute path</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/copilot.nix">modules/devenv/copilot.nix</a></li>
-</ul>
-<h2 id="kiroenable"><a class="header" href="#kiroenable">kiro.enable</a></h2>
-<p>Whether to enable Kiro CLI integration.</p>
-<p><em>Type:</em>
-boolean</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">false
-</code></pre>
-<p><em>Example:</em></p>
-<pre><code class="language-nix">true
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="kiroagents"><a class="header" href="#kiroagents">kiro.agents</a></h2>
-<p>Agent JSON definitions (written to .kiro/agents/{name}.json).</p>
-<p><em>Type:</em>
-attribute set of strings concatenated with “\n”</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="kiroenvironmentvariables"><a class="header" href="#kiroenvironmentvariables">kiro.environmentVariables</a></h2>
-<p>Environment variables for Kiro (merged into devenv env).</p>
-<p><em>Type:</em>
-attribute set of string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="kirohooks"><a class="header" href="#kirohooks">kiro.hooks</a></h2>
-<p>Hook JSON definitions (written to .kiro/hooks/{name}.json).</p>
-<p><em>Type:</em>
-attribute set of strings concatenated with “\n”</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="kirolspservers"><a class="header" href="#kirolspservers">kiro.lspServers</a></h2>
-<p>LSP server definitions (written to .kiro/settings/lsp.json).</p>
-<p><em>Type:</em>
-attribute set of (JSON value)</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="kiromcpservers"><a class="header" href="#kiromcpservers">kiro.mcpServers</a></h2>
-<p>MCP servers to configure for Kiro.</p>
-<p><em>Type:</em>
-attribute set of (submodule)</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="kiromcpserversnameargs"><a class="header" href="#kiromcpserversnameargs">kiro.mcpServers.&lt;name&gt;.args</a></h2>
-<p>Arguments for stdio servers.</p>
-<p><em>Type:</em>
-list of string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">[ ]
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="kiromcpserversnamecommand"><a class="header" href="#kiromcpserversnamecommand">kiro.mcpServers.&lt;name&gt;.command</a></h2>
-<p>Command for stdio servers.</p>
-<p><em>Type:</em>
-null or string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="kiromcpserversnameenv"><a class="header" href="#kiromcpserversnameenv">kiro.mcpServers.&lt;name&gt;.env</a></h2>
-<p>Environment variables for stdio servers.</p>
-<p><em>Type:</em>
-attribute set of string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="kiromcpserversnametype"><a class="header" href="#kiromcpserversnametype">kiro.mcpServers.&lt;name&gt;.type</a></h2>
-<p>Type of MCP server connection.</p>
-<p><em>Type:</em>
-one of “stdio”, “http”</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">"stdio"
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="kiromcpserversnameurl"><a class="header" href="#kiromcpserversnameurl">kiro.mcpServers.&lt;name&gt;.url</a></h2>
-<p>URL for HTTP servers.</p>
-<p><em>Type:</em>
-null or string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="kirosettings"><a class="header" href="#kirosettings">kiro.settings</a></h2>
-<p>Kiro CLI settings (written to .kiro/settings/cli.json).</p>
-<p><em>Type:</em>
-open submodule of (JSON value)</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="kirosettingschat"><a class="header" href="#kirosettingschat">kiro.settings.chat</a></h2>
-<p>Chat-related settings.</p>
-<p><em>Type:</em>
-open submodule of (JSON value)</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="kirosettingschatenablethinking"><a class="header" href="#kirosettingschatenablethinking">kiro.settings.chat.enableThinking</a></h2>
-<p>Enable thinking/reasoning mode.</p>
-<p><em>Type:</em>
-null or boolean</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="kirosettingschatdefaultmodel"><a class="header" href="#kirosettingschatdefaultmodel">kiro.settings.chat.defaultModel</a></h2>
-<p>Default chat model.</p>
-<p><em>Type:</em>
-null or string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="kirosettingstelemetry"><a class="header" href="#kirosettingstelemetry">kiro.settings.telemetry</a></h2>
-<p>Telemetry settings.</p>
-<p><em>Type:</em>
-open submodule of (JSON value)</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="kirosettingstelemetryenabled"><a class="header" href="#kirosettingstelemetryenabled">kiro.settings.telemetry.enabled</a></h2>
-<p>Enable telemetry reporting.</p>
-<p><em>Type:</em>
-null or boolean</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="kiroskills"><a class="header" href="#kiroskills">kiro.skills</a></h2>
-<p>Skill directories to install for Kiro.</p>
-<p><em>Type:</em>
-attribute set of absolute path</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="kirosteering"><a class="header" href="#kirosteering">kiro.steering</a></h2>
-<p>Steering files for Kiro (.kiro/steering/).</p>
-<p><em>Type:</em>
-attribute set of strings concatenated with “\n”</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{ }
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/kiro.nix">modules/devenv/kiro.nix</a></li>
-</ul>
-<h2 id="differences-from-home-manager-1"><a class="header" href="#differences-from-home-manager-1">Differences from Home-Manager</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Aspect</th><th>Home-Manager</th><th>DevEnv</th></tr>
-</thead>
-<tbody>
-<tr><td>Config location</td><td><code>~/.claude/</code>, <code>~/.copilot/</code>, <code>~/.kiro/</code></td><td><code>.claude/</code>, <code>.copilot/</code>, <code>.kiro/</code></td></tr>
-<tr><td>Persistence</td><td>Survives shell exit</td><td>Recreated on <code>devenv shell</code> entry</td></tr>
-<tr><td>MCP servers</td><td><code>services.mcp-servers</code> (systemd)</td><td>Inline per-CLI (<code>claude.code.mcpServers</code>)</td></tr>
-<tr><td>Stacked workflows</td><td>Module with git presets</td><td>Manual skill wiring via <code>ai.skills</code></td></tr>
-<tr><td>Fragment pipeline</td><td>N/A</td><td><code>files.*</code> materialization</td></tr>
-</tbody>
-</table>
-</div>
-<h2 id="generated-files"><a class="header" href="#generated-files">Generated Files</a></h2>
-<p>DevEnv writes config to project-local dotfiles. These are recreated on
-every shell entry and should be in <code>.gitignore</code>:</p>
-<pre><code class="language-gitignore">.claude/rules/
-.claude/skills/
-.claude/settings.json
-.copilot/
-.kiro/
-</code></pre>
-<h2 id="overlay-access-in-devenv"><a class="header" href="#overlay-access-in-devenv">Overlay Access in DevEnv</a></h2>
-<p>DevEnv does not automatically apply overlays. To access content packages
-or MCP servers, compose the overlays manually:</p>
-<pre><code class="language-nix">{inputs, pkgs, lib, ...}: let
-  contentPkgs = pkgs.extend (lib.composeManyExtensions [
-    (import "${inputs.nix-agentic-tools}/packages/coding-standards" {})
-    (import "${inputs.nix-agentic-tools}/packages/stacked-workflows" {})
-  ]);
-in {
-  # Now use contentPkgs.coding-standards, contentPkgs.stacked-workflows-content
-}
-</code></pre>
-<p>For MCP server packages, apply the mcp-servers overlay:</p>
-<pre><code class="language-nix">mcpPkgs = pkgs.extend (import "${inputs.nix-agentic-tools}/packages/mcp-servers" {
-  inherit inputs;
-});
-# mcpPkgs.nix-mcp-servers.github-mcp, etc.
-</code></pre>
-<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="mcp-server-configuration"><a class="header" href="#mcp-server-configuration">MCP Server Configuration</a></h1>
 <p>14 Model Context Protocol servers are packaged and ready to use. Each
 has typed settings, optional credentials, and works in both stdio and
 HTTP modes.</p>
-<h2 id="quick-start"><a class="header" href="#quick-start">Quick Start</a></h2>
+<h2 id="quick-start-1"><a class="header" href="#quick-start-1">Quick Start</a></h2>
 <pre><code class="language-nix"># Home-manager
 services.mcp-servers.servers = {
   github-mcp = {
