@@ -34,7 +34,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-c1695867.js";
+            window.path_to_searchindex_js = "../searchindex-eb351d5f.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-903d4130.js"></script>
@@ -197,8 +197,37 @@ ai.claude = {
 };
 </code></pre>
 <p>Your account UUID is in <code>~/.claude.json</code> under
-<code>oauthAccount.accountUuid</code>. Treat it as a secret — use sops,
-agenix, or a similar tool.</p>
+<code>oauthAccount.accountUuid</code>.</p>
+<blockquote>
+<p><strong>Note on secrets:</strong> The UUID is read at <strong>build time</strong> by Nix
+evaluation. Runtime secret managers (sops-nix, agenix) cannot
+provide it — their secret paths don’t exist during evaluation,
+and <code>builtins.readFile</code> on a sops path would either fail or
+import the secret into the nix store anyway.</p>
+<p><strong>Practical patterns:</strong></p>
+<ol>
+<li>
+<p><strong>Inline literal</strong> — paste the UUID directly into your
+config. The UUID ends up in the derivation hash and the
+patched binary either way; treating it as a secret in your
+config repo is the only meaningful protection.</p>
+</li>
+<li>
+<p><strong>Plaintext file outside the repo</strong> — read with
+<code>builtins.readFile</code> from a path Nix can access at eval time:</p>
+<pre><code class="language-nix">userId = lib.removeSuffix "\n"
+  (builtins.readFile /home/you/.config/nix-secrets/claude-uuid);
+</code></pre>
+<p>The file must exist when <code>home-manager switch</code> runs. If you
+use sops to manage it, decrypt to this path <strong>before</strong>
+activation (e.g., via a separate script or systemd unit
+that runs before <code>home-manager-&lt;user&gt;.service</code>).</p>
+</li>
+</ol>
+<p>The UUID is not cryptographically secret — it’s a stable
+identifier Anthropic uses to derive your buddy. The patched
+binary contains only the computed salt, not the UUID itself.</p>
+</blockquote>
 <h2 id="direct-package-usage"><a class="header" href="#direct-package-usage">Direct Package Usage</a></h2>
 <p>Without the module system:</p>
 <pre><code class="language-nix">pkgs.claude-code.withBuddy {
