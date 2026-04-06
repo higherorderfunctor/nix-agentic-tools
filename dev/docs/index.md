@@ -37,3 +37,4 @@ content as composable Nix derivations.
 - **Have Nix + home-manager?** Jump to [Home-Manager Setup](./getting-started/home-manager.md)
 - **Want per-project config?** See [DevEnv Setup](./getting-started/devenv.md)
 - **Just want the skills?** Copy `packages/stacked-workflows/skills/stack-*` into your project
+- **Browse all options?** Use the [interactive options search](./options/)

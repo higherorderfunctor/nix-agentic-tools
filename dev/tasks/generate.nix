@@ -176,11 +176,27 @@ in {
       '';
     };
 
+    "generate:site:search" = {
+      description = "Build Pagefind search index for doc site";
+      after = ["generate:site:prose" "generate:site:reference" "generate:site:snippets"];
+      before = ["generate:site"];
+      exec = ''
+        ${bashPreamble}
+        ${log}
+        log "Building mdbook site for indexing"
+        mdbook build docs/
+        log "Indexing with Pagefind"
+        pagefind --site result-docs
+        log "Search index built"
+      '';
+    };
+
     "generate:site" = {
       description = "Generate complete doc site";
       after = [
         "generate:site:prose"
         "generate:site:reference"
+        "generate:site:search"
         "generate:site:snippets"
       ];
       exec = ''

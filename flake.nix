@@ -16,8 +16,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    serena = {
-      url = "github:oraios/serena";
+    nuscht-search = {
+      url = "github:NuschtOS/search";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nvfetcher = {
@@ -26,6 +26,10 @@
     };
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    serena = {
+      url = "github:oraios/serena";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -213,21 +217,42 @@
         mkdir -p $out/reference
         cp -r ${siteReference}/reference/* $out/reference/
       '';
+
+      # NuschtOS options search — static client-side options browser.
+      # Use default baseHref="/"; served under /options/ by copying into
+      # the built doc site output directory.
+      optionsSearch = inputs.nuscht-search.packages.${system}.mkMultiSearch {
+        title = "nix-agentic-tools Options";
+        scopes = [
+          {
+            name = "DevEnv";
+            optionsJSON = optionsDocs.devenvOptionsDoc.optionsJSON + /share/doc/nixos/options.json;
+            urlPrefix = "https://github.com/higherorderfunctor/nix-agentic-tools/tree/main/";
+          }
+          {
+            name = "Home-Manager";
+            optionsJSON = optionsDocs.hmOptionsDoc.optionsJSON + /share/doc/nixos/options.json;
+            urlPrefix = "https://github.com/higherorderfunctor/nix-agentic-tools/tree/main/";
+          }
+        ];
+      };
     in {
       # Documentation — generated doc site components
       docs-options-devenv = docsOptionsDevenv;
       docs-options-hm = docsOptionsHm;
+      docs-options-search = optionsSearch;
       docs-site-prose = siteProse;
       docs-site-reference = siteReference;
       docs-site-snippets = siteSnippets;
       docs-site = siteCombined;
 
-      # Documentation — built book
+      # Documentation — built book with Pagefind and NuschtOS options search
       docs =
         pkgs.runCommand "nix-agentic-tools-docs" {
-          nativeBuildInputs = [pkgs.mdbook];
+          nativeBuildInputs = [pkgs.gnused pkgs.mdbook pkgs.pagefind];
           src = ./docs;
           site = siteCombined;
+          inherit optionsSearch;
         } ''
           cp -r $src docs
           chmod -R u+w docs
@@ -235,7 +260,15 @@
           cp -r $site docs/src
           chmod -R u+w docs/src
           mdbook build docs
-          mv docs/../result-docs $out
+          # Embed NuschtOS options search at /options/
+          cp -rL $optionsSearch result-docs/options
+          chmod -R u+w result-docs/options
+          sed -i 's|<base href="/">|<base href="/options/">|g' \
+            result-docs/options/index.html \
+            result-docs/options/index.csr.html
+          # Build Pagefind full-text search index
+          pagefind --site result-docs
+          mv result-docs $out
         '';
 
       # AI CLIs
