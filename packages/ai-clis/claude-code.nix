@@ -9,26 +9,34 @@
   prev,
   nv,
   lockFile,
-}:
-prev.claude-code.override (_: {
-  buildNpmPackage = args:
-    final.buildNpmPackage (finalAttrs: let
-      a = (final.lib.toFunction args) finalAttrs;
-    in
-      a
-      // {
-        inherit (nv) version;
-        src = final.fetchzip {
-          url = "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-${nv.version}.tgz";
-          hash = nv.srcHash;
-        };
-        inherit (nv) npmDepsHash;
-        postPatch = ''
-          cp ${lockFile} package-lock.json
+  withBuddyFn,
+}: let
+  package = prev.claude-code.override (_: {
+    buildNpmPackage = args:
+      final.buildNpmPackage (finalAttrs: let
+        a = (final.lib.toFunction args) finalAttrs;
+      in
+        a
+        // {
+          inherit (nv) version;
+          src = final.fetchzip {
+            url = "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-${nv.version}.tgz";
+            hash = nv.srcHash;
+          };
+          inherit (nv) npmDepsHash;
+          postPatch = ''
+            cp ${lockFile} package-lock.json
 
-          # https://github.com/anthropics/claude-code/issues/15195
-          substituteInPlace cli.js \
-                --replace-fail '#!/bin/sh' '#!/usr/bin/env sh'
-        '';
-      });
-})
+            # https://github.com/anthropics/claude-code/issues/15195
+            substituteInPlace cli.js \
+                  --replace-fail '#!/bin/sh' '#!/usr/bin/env sh'
+          '';
+          passthru =
+            (a.passthru or {})
+            // {
+              withBuddy = withBuddyFn package;
+            };
+        });
+  });
+in
+  package

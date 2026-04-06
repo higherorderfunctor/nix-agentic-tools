@@ -16,6 +16,7 @@ Bitemporality
 Boehm
 cachix
 codepaths
+codesign
 chafa
 cclsp
 clis
@@ -101,6 +102,7 @@ sdiehl
 sequentialthinking
 serena
 shellharden
+sigtool
 sixel
 smartlog
 statix

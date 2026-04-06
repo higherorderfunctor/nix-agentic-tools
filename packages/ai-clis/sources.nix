@@ -7,6 +7,7 @@
   merge = name: attrs:
     attrs // (hashes.${name} or {});
 in {
+  any-buddy = generated."any-buddy";
   claude-code = merge "claude-code" generated."claude-code";
   copilot-cli = merge "github-copilot-cli" generated."github-copilot-cli";
   kiro-cli = generated."kiro-cli";
