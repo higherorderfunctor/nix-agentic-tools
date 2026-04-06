@@ -21,8 +21,36 @@ ai.claude = {
 ```
 
 Your account UUID is in `~/.claude.json` under
-`oauthAccount.accountUuid`. Treat it as a secret — use sops,
-agenix, or a similar tool.
+`oauthAccount.accountUuid`.
+
+> **Note on secrets:** The UUID is read at **build time** by Nix
+> evaluation. Runtime secret managers (sops-nix, agenix) cannot
+> provide it — their secret paths don't exist during evaluation,
+> and `builtins.readFile` on a sops path would either fail or
+> import the secret into the nix store anyway.
+>
+> **Practical patterns:**
+>
+> 1. **Inline literal** — paste the UUID directly into your
+>    config. The UUID ends up in the derivation hash and the
+>    patched binary either way; treating it as a secret in your
+>    config repo is the only meaningful protection.
+> 2. **Plaintext file outside the repo** — read with
+>    `builtins.readFile` from a path Nix can access at eval time:
+>
+>    ```nix
+>    userId = lib.removeSuffix "\n"
+>      (builtins.readFile /home/you/.config/nix-secrets/claude-uuid);
+>    ```
+>
+>    The file must exist when `home-manager switch` runs. If you
+>    use sops to manage it, decrypt to this path **before**
+>    activation (e.g., via a separate script or systemd unit
+>    that runs before `home-manager-<user>.service`).
+>
+> The UUID is not cryptographically secret — it's a stable
+> identifier Anthropic uses to derive your buddy. The patched
+> binary contains only the computed salt, not the UUID itself.
 
 ## Direct Package Usage
 
