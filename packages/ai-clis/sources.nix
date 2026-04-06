@@ -8,7 +8,8 @@
     attrs // (hashes.${name} or {});
 in {
   claude-code = merge "claude-code" generated."claude-code";
-  copilot-cli = generated."github-copilot-cli";
+  copilot-cli = merge "github-copilot-cli" generated."github-copilot-cli";
   kiro-cli = generated."kiro-cli";
+  kiro-cli-darwin = generated."kiro-cli-darwin";
   kiro-gateway = generated."kiro-gateway";
 }
