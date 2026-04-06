@@ -110,6 +110,7 @@ treefmt
 tummychow
 unskipped
 unstages
+undmg
 unstash
 valkey
 worktree

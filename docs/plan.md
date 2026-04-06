@@ -183,6 +183,7 @@ Generated file policy:
       copilot-cli/kiro-cli; add to `ai.*` unified fanout as 4th ecosystem
 - [ ] cclsp — Claude Code LSP integration (passthru.withAdapters pattern)
 - [ ] CONTRIBUTING.md refinement — review with maintainer, expand sections
+- [ ] copilot-cli/kiro-cli DRY — 7 helpers copy-pasted between modules
 - [ ] cspell permissions — wire via `ai.*` permissions so all ecosystems
       get cspell in Bash allow rules (not Claude-specific)
 - [ ] devenv feature audit — explore underused devenv features (tasks,
@@ -196,6 +197,7 @@ Generated file policy:
       patterns; would allow `pkgs.agentic-modules.ai` etc. for FP composition
 - [ ] Logo refinement — higher quality SVG or larger PNG, crisp at all sizes
 - [ ] MCP processes — no-cred servers for `devenv up`
+- [ ] MCP server submodule DRY — duplicated in devenv copilot/kiro modules
 - [ ] Module fragment exposure — MCP servers contributing own fragments
 - [ ] Ollama HM module
 - [ ] scripts/update auto-discovery — derive which hashes to update from
@@ -205,5 +207,13 @@ Generated file policy:
       a new overlay package automatically updates the update script.
 - [ ] Shell linters (shellcheck, shfmt) when shell scripts exist
 - [ ] atlassian-mcp, gitlab-mcp, slack-mcp
-- [ ] openmemory-mcp typed settings
+- [ ] openmemory-mcp typed settings + missing option descriptions (11 attrTag variants)
+- [ ] stack-plan: missing git restack after autosquash fixup pattern
+- [ ] Repo review re-run — DRY + FP composition audit of fragment system,
+      generation pipeline, and doc site. Verify no duplication crept back
+      in during rapid iteration. Use /repo-review with fragment focus.
+      Also codify patterns for local agentic development: nightly packaging
+      via nvfetcher, split-platform sources, overlay composition, fragment
+      authoring, generation task structure. Ensure dev fragments capture
+      all patterns so new sessions have full context.
 - [ ] Rolling stack workflow skill
