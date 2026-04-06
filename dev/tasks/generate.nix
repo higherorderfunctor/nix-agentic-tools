@@ -8,6 +8,29 @@ _: let
   log = ''log() { echo "==> $*" >&2; }'';
 in {
   tasks = {
+    "generate:repo:readme" = {
+      description = "Generate README.md from fragments and nix data";
+      before = ["generate:repo"];
+      exec = ''
+        ${bashPreamble}
+        ${log}
+        log "Building README.md"
+        src=$(nix build .#repo-readme --no-link --print-out-paths)
+        cp -f "$src" README.md
+        log "README.md updated"
+      '';
+    };
+
+    "generate:repo" = {
+      description = "Generate all repo front-door files";
+      after = ["generate:repo:readme"];
+      exec = ''
+        ${bashPreamble}
+        ${log}
+        log "All repo docs generated"
+      '';
+    };
+
     "generate:instructions:agents" = {
       description = "Generate AGENTS.md from fragments";
       before = ["generate:instructions"];

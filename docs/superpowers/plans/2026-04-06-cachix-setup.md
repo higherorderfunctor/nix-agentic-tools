@@ -99,7 +99,71 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 3: Create CI build workflow
+### Task 3: Configure binary cache for flake and devenv
+
+**Files:**
+
+- Modify: `flake.nix`
+- Modify: `devenv.nix`
+
+Two configurations needed — `flake.nix` for `nix build`/`nix flake
+check` consumers, `devenv.nix` for `devenv shell`/`devenv tasks run`.
+
+Only our own cache is needed. All inputs follow `nixpkgs`, so
+upstream input caches (nix-community, numtide, etc.) won't have hits
+— their artifacts were built against a different nixpkgs pin. Our
+cache compensates after first build.
+
+**Public key:** `nix-agentic-tools.cachix.org-1:0jFprh5fkDez9mk6prYisYxzalr0hn78kyywGPXvOn0=`
+
+- [ ] **Step 1: Add nixConfig to flake.nix**
+
+Add at the top level of the flake (after `description`):
+
+```nix
+nixConfig = {
+  extra-substituters = [
+    "https://nix-agentic-tools.cachix.org"
+  ];
+  extra-trusted-public-keys = [
+    "nix-agentic-tools.cachix.org-1:0jFprh5fkDez9mk6prYisYxzalr0hn78kyywGPXvOn0="
+  ];
+};
+```
+
+- [ ] **Step 2: Add cachix.pull to devenv.nix**
+
+Add in the top-level config section of `devenv.nix`:
+
+```nix
+cachix.pull = ["nix-agentic-tools"];
+```
+
+- [ ] **Step 3: Audit follows — verify no rogue overrides**
+
+```bash
+grep -n "follows" flake.nix devenv.yaml
+```
+
+All follows should be `inputs.nixpkgs.follows = "nixpkgs"`. Flag
+any input following something other than nixpkgs.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add flake.nix devenv.nix
+git commit -m "feat: configure upstream binary caches for flake and devenv
+
+Adds nix-agentic-tools, nix-community, and numtide caches to both
+flake.nix nixConfig (for nix build consumers) and devenv.nix
+cachix.pull (for devenv shell/tasks).
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
+### Task 4: Create CI build workflow
 
 **Files:**
 
@@ -191,9 +255,9 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 4: Verify end-to-end (human-in-the-loop)
+### Task 5: Verify end-to-end (human-in-the-loop)
 
-After Tasks 1-3 are committed and pushed:
+After Tasks 1-4 are committed and pushed:
 
 - [ ] **Step 1: Push branch and create PR**
 
@@ -227,7 +291,7 @@ https://nix-agentic-tools.cachix.org", the cache is working.
 
 ---
 
-### Task 5: Document cache for consumers
+### Task 6: Document cache for consumers
 
 **Files:**
 
@@ -298,11 +362,14 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 6: Update plan.md
+### Task 7: Update plan.md and agent instructions
 
 **Files:**
 
 - Modify: `docs/plan.md`
+- Modify: agent instruction fragments (find current location at
+  execution time — may be `dev/fragments/` or CLAUDE.md depending on
+  docs rewrite status)
 
 - [ ] **Step 1: Mark completed items**
 
@@ -312,11 +379,33 @@ Mark these items as done in `docs/plan.md`:
 - `update.yml` — daily nvfetcher update pipeline
 - Binary cache: cachix setup
 
-- [ ] **Step 2: Commit**
+- [ ] **Step 2: Add cache maintenance to agent instructions**
+
+Find where repo-level agent instructions live (check
+`dev/fragments/monorepo/`, CLAUDE.md, AGENTS.md). Add a section to
+the change propagation or config parity instructions:
+
+```markdown
+## Binary Cache Maintenance
+
+When adding or removing flake inputs, check whether the input has a
+public Cachix cache. If so, add it to:
+
+- `flake.nix` `nixConfig.extra-substituters` and
+  `nixConfig.extra-trusted-public-keys`
+- `devenv.nix` `cachix.pull`
+
+Current upstream caches: `nix-agentic-tools`, `nix-community`,
+`numtide`. The `follows` pattern for nixpkgs is intentional — do not
+remove it to chase upstream cache hits unless the input provides
+pre-built binaries independent of nixpkgs.
+```
+
+- [ ] **Step 3: Commit**
 
 ```bash
-git add docs/plan.md
-git commit -m "docs: mark ci.yml, update.yml, and cachix setup as done
+git add docs/plan.md <instruction-files>
+git commit -m "docs: mark cachix items done, add cache maintenance to agent instructions
 
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
 ```

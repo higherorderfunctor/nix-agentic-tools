@@ -145,6 +145,12 @@
       # Git tools
       inherit (pkgs) agnix git-absorb git-branchless git-revise;
 
+      # README derivation (from dev/generate.nix)
+      repo-readme = let
+        gen = import ./dev/generate.nix {inherit lib pkgs;};
+      in
+        pkgs.writeText "README.md" gen.readmeMd;
+
       # Instruction derivations (from dev/generate.nix)
       instructions-agents = let
         gen = import ./dev/generate.nix {inherit lib pkgs;};
