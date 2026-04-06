@@ -20,6 +20,27 @@
         },
         "version": "v0.18.0"
     },
+    "any-buddy": {
+        "cargoLock": null,
+        "date": null,
+        "extract": null,
+        "name": "any-buddy",
+        "passthru": null,
+        "pinned": false,
+        "src": {
+            "deepClone": false,
+            "fetchSubmodules": false,
+            "leaveDotGit": false,
+            "name": null,
+            "owner": "cpaczek",
+            "repo": "any-buddy",
+            "rev": "v2.2.0",
+            "sha256": "sha256-nkAeA2MuBmiDcBjIGzIbfxt0nvkHC++OSD+OWWwQ/e0=",
+            "sparseCheckout": [],
+            "type": "github"
+        },
+        "version": "v2.2.0"
+    },
     "claude-code": {
         "cargoLock": null,
         "date": null,
@@ -223,11 +244,11 @@
         "pinned": false,
         "src": {
             "name": null,
-            "sha256": "sha256-DD3eQ9lpV+M0d40AxnLP6dOw/fvdeuAcPWwpUMonuNk=",
+            "sha256": "sha256-UH6uVmDS7FKWUGotH4yPVoVnzSHBMfz5rTaMkXl4ztM=",
             "type": "url",
-            "url": "https://desktop-release.q.us-east-1.amazonaws.com/1.29.3/kirocli-x86_64-linux.tar.gz"
+            "url": "https://desktop-release.q.us-east-1.amazonaws.com/1.29.4/kirocli-x86_64-linux.tar.gz"
         },
-        "version": "1.29.3"
+        "version": "1.29.4"
     },
     "kiro-cli-darwin": {
         "cargoLock": null,
@@ -238,11 +259,11 @@
         "pinned": false,
         "src": {
             "name": "kiro-cli.dmg",
-            "sha256": "sha256-JjdZfkcWZhnGaVvTwgm1GdenM3OLhfVRYpuZ9Y/t/+E=",
+            "sha256": "sha256-qFd2TRIknjMgg+Dpf3MwWzoCtkjEcaJulo2n+B+T4zY=",
             "type": "url",
-            "url": "https://desktop-release.q.us-east-1.amazonaws.com/1.29.3/Kiro%20CLI.dmg"
+            "url": "https://desktop-release.q.us-east-1.amazonaws.com/1.29.4/Kiro%20CLI.dmg"
         },
-        "version": "1.29.3"
+        "version": "1.29.4"
     },
     "kiro-gateway": {
         "cargoLock": null,

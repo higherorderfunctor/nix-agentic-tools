@@ -17,6 +17,17 @@
       sha256 = "sha256-R7luTBydtj8H8L/rRXYvWEy45Krg+lL9gTeJL4j/0uA=";
     };
   };
+  any-buddy = {
+    pname = "any-buddy";
+    version = "v2.2.0";
+    src = fetchFromGitHub {
+      owner = "cpaczek";
+      repo = "any-buddy";
+      rev = "v2.2.0";
+      fetchSubmodules = false;
+      sha256 = "sha256-nkAeA2MuBmiDcBjIGzIbfxt0nvkHC++OSD+OWWwQ/e0=";
+    };
+  };
   claude-code = {
     pname = "claude-code";
     version = "2.1.92";
@@ -125,19 +136,19 @@
   };
   kiro-cli = {
     pname = "kiro-cli";
-    version = "1.29.3";
+    version = "1.29.4";
     src = fetchurl {
-      url = "https://desktop-release.q.us-east-1.amazonaws.com/1.29.3/kirocli-x86_64-linux.tar.gz";
-      sha256 = "sha256-DD3eQ9lpV+M0d40AxnLP6dOw/fvdeuAcPWwpUMonuNk=";
+      url = "https://desktop-release.q.us-east-1.amazonaws.com/1.29.4/kirocli-x86_64-linux.tar.gz";
+      sha256 = "sha256-UH6uVmDS7FKWUGotH4yPVoVnzSHBMfz5rTaMkXl4ztM=";
     };
   };
   kiro-cli-darwin = {
     pname = "kiro-cli-darwin";
-    version = "1.29.3";
+    version = "1.29.4";
     src = fetchurl {
-      url = "https://desktop-release.q.us-east-1.amazonaws.com/1.29.3/Kiro%20CLI.dmg";
+      url = "https://desktop-release.q.us-east-1.amazonaws.com/1.29.4/Kiro%20CLI.dmg";
       name = "kiro-cli.dmg";
-      sha256 = "sha256-JjdZfkcWZhnGaVvTwgm1GdenM3OLhfVRYpuZ9Y/t/+E=";
+      sha256 = "sha256-qFd2TRIknjMgg+Dpf3MwWzoCtkjEcaJulo2n+B+T4zY=";
     };
   };
   kiro-gateway = {

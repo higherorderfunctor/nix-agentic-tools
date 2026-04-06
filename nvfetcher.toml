@@ -14,6 +14,10 @@ fetch.github = "agent-sh/agnix"
 
 # ── AI CLIs ──────────────────────────────────────────────────────
 
+[any-buddy]
+src.github = "cpaczek/any-buddy"
+fetch.github = "cpaczek/any-buddy"
+
 [claude-code]
 src.cmd = "curl -s https://registry.npmjs.org/@anthropic-ai/claude-code/latest | jq -r .version"
 fetch.url = "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-$ver.tgz"
