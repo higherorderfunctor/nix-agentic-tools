@@ -8,6 +8,17 @@ _: let
   log = ''log() { echo "==> $*" >&2; }'';
 in {
   tasks = {
+    "build:all" = {
+      description = "Build all packages with nix-fast-build";
+      exec = ''
+        ${bashPreamble}
+        ${log}
+        log "Building all packages"
+        nix-fast-build --flake ".#packages" --skip-cached --no-link
+        log "All packages built"
+      '';
+    };
+
     "generate:repo:contributing" = {
       description = "Generate CONTRIBUTING.md from fragments and nix data";
       before = ["generate:repo"];
