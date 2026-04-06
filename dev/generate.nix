@@ -49,6 +49,7 @@
       "linting"
       "naming-conventions"
       "nix-standards"
+      "platforms"
       "project-overview"
     ];
     mcp-servers = ["overlay-guide"];

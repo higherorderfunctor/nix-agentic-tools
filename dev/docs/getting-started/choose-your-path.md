@@ -3,6 +3,8 @@
 nix-agentic-tools supports three configuration methods. Pick the one that
 fits your workflow.
 
+> **Supported platforms:** x86_64-linux and aarch64-darwin (macOS Apple Silicon).
+
 ## Decision Tree
 
 | Question                        | Answer | Path                          |
