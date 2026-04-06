@@ -561,6 +561,129 @@
 
     Released under the [Unlicense](LICENSE).
   '';
+  # ── CONTRIBUTING.md content ─────────────────────────────────────────
+  contributingMd = let
+    buildCommands = builtins.readFile ./fragments/monorepo/build-commands.md;
+    generationArch = builtins.readFile ./fragments/monorepo/generation-architecture.md;
+    commitConvention = builtins.readFile ../packages/coding-standards/fragments/commit-convention.md;
+  in ''
+    # Contributing to nix-agentic-tools
+
+    <!-- TODO: refine with maintainer input -->
+
+    ## Development Setup
+
+    All tools are provided by the devenv shell. No global installs required.
+
+    ```bash
+    devenv shell          # enter dev shell with all tools
+    devenv up docs        # start doc preview at localhost:3000
+    ```
+
+    ${buildCommands}
+
+    ## Tests
+
+    ```bash
+    devenv test           # run all devenv checks
+    nix flake check       # linters + evaluation (does NOT build packages)
+    ```
+
+    ${generationArch}
+
+    ## Updating Dependencies
+
+    ```bash
+    devenv tasks run update:all   # update all nvfetcher sources and lock files
+    ```
+
+    After updating, rebuild affected packages to verify hashes:
+
+    ```bash
+    nix build .#<package>
+    ```
+
+    If a hash mismatch occurs, copy the expected hash from the error and
+    update `packages/mcp-servers/hashes.json` (or the relevant sidecar).
+
+    ## Code Standards
+
+    Coding standards, ordering rules, DRY principle, and Bash strict mode
+    are documented in [CLAUDE.md](CLAUDE.md) and [AGENTS.md](AGENTS.md).
+    Do not duplicate — read those files first.
+
+    ## Linting
+
+    Run the meta-formatter before committing:
+
+    ```bash
+    treefmt              # format and lint everything
+    treefmt <file>       # format a single file after editing
+    ```
+
+    All commits must pass `nix flake check` (includes formatting, linting,
+    spelling, structural checks, and module evaluation).
+
+    ${commitConvention}
+
+    ## Adding a Package
+
+    ### AI CLI or MCP Server
+
+    See the **AI CLI Packages** and **MCP Server Packages** sections in
+    [AGENTS.md](AGENTS.md) for the full overlay pattern, nvfetcher
+    integration, and step-by-step instructions.
+
+    ### General pattern
+
+    1. Add an nvfetcher entry in `nvfetcher.toml`
+    2. Run `nvfetcher` to update the generated sources
+    3. Create `packages/<group>/<name>.nix` using the appropriate builder
+    4. Register in `packages/<group>/default.nix`
+    5. Export in `flake.nix` under `packages`
+    6. Add a module under `modules/` (HM) and `modules/devenv/` (devenv)
+    7. Run `nix flake check` to verify
+
+    See [Change Propagation](AGENTS.md#change-propagation) — when removing
+    or renaming a concept, all surfaces must be updated in the same commit.
+
+    ## Adding a Fragment
+
+    Fragments are composable instruction blocks used to build AI instruction
+    files (CLAUDE.md, AGENTS.md, Copilot, Kiro) and CONTRIBUTING.md.
+
+    <!-- TODO: refine with maintainer input -->
+
+    | Fragment type | Location | Exported? |
+    |---------------|----------|-----------|
+    | Dev-only (monorepo/tooling) | `dev/fragments/<pkg>/<name>.md` | No |
+    | Published coding standards | `packages/coding-standards/fragments/<name>.md` | Yes |
+    | Published SWS routing table | `packages/stacked-workflows/fragments/<name>.md` | Yes |
+
+    To add a dev-only fragment:
+
+    1. Create `dev/fragments/<pkg>/<name>.md`
+    2. Add the name to `devFragmentNames.<pkg>` in `dev/generate.nix`
+    3. Run `devenv tasks run generate:instructions` to regenerate
+
+    To add a published fragment (consumed by external users):
+
+    1. Create `packages/<pkg>/fragments/<name>.md`
+    2. Register it in `packages/<pkg>/default.nix` under `passthru.fragments`
+    3. Run `devenv tasks run generate:all` to regenerate everything
+
+    ## Pull Requests
+
+    <!-- TODO: refine with maintainer input -->
+
+    - One logical change per PR
+    - CI must pass (formatting, linting, spelling, module evaluation)
+    - Generated files (CLAUDE.md, AGENTS.md, README.md, CONTRIBUTING.md,
+      Copilot and Kiro instruction files) must be regenerated if their
+      source fragments changed: run `devenv tasks run generate:all`
+    - Keep commits atomic using the stacked workflow skills
+      (`/stack-plan`, `/stack-fix`, `/stack-submit`)
+  '';
 in {
-  inherit agentsMd claudeFiles claudeMd copilotFiles kiroFiles readmeMd;
+  inherit agentsMd claudeFiles claudeMd contributingMd copilotFiles kiroFiles readmeMd;
 }

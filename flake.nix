@@ -223,6 +223,12 @@
       in
         pkgs.writeText "README.md" gen.readmeMd;
 
+      # CONTRIBUTING.md derivation (from dev/generate.nix)
+      repo-contributing = let
+        gen = import ./dev/generate.nix {inherit lib pkgs;};
+      in
+        pkgs.writeText "CONTRIBUTING.md" gen.contributingMd;
+
       # Instruction derivations (from dev/generate.nix)
       instructions-agents = let
         gen = import ./dev/generate.nix {inherit lib pkgs;};
