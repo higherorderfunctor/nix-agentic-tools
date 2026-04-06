@@ -27,7 +27,7 @@ jobs:
       - uses: cachix/install-nix-action@v31
       - uses: cachix/cachix-action@v17
         with:
-          name: nix-agentic-tools # TODO: create Cachix cache
+          name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Install devenv
