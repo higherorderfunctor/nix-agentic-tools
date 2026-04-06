@@ -15,8 +15,7 @@ in {
 
     nativeBuildInputs = [final.pkg-config];
     buildInputs = final.lib.optionals final.stdenv.hostPlatform.isDarwin [
-      final.darwin.apple_sdk.frameworks.Security
-      final.darwin.apple_sdk.frameworks.SystemConfiguration
+      final.apple-sdk_15
     ];
 
     # Build all binary crates: agnix (CLI), agnix-lsp, agnix-mcp
