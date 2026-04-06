@@ -89,14 +89,15 @@ Phase 3b — Repo doc generation: **DONE**
 
 Phase 3c — Doc site generation: **DONE**
 
-- [x] `packages/fragments-docs/` with generators (scaffolded from
-      deleted pages, will be made dynamic in Phase 4)
+- [x] `packages/fragments-docs/` with dynamic generators
 - [x] Prose moved to `dev/docs/`, `docs/src/` gitignored
 - [x] `docs-site-{prose,snippets,reference}` derivations
 - [x] `generate:site:*` devenv tasks + `generate:all` meta
 - [x] `devenv up docs` generates before serving
-- [ ] Replace inline data tables in mixed pages with `{{#include}}`
-      snippets (deferred — inline tables work, optimization for later)
+- [x] `{{#include}}` snippets: credentials, AI mapping, skill table,
+      routing table, overlay table, CLI table
+- [x] Dynamic generators: overlay packages, MCP servers from nix data
+- [x] Removed static fallback pages (home-manager, devenv, mcp-servers)
 
 Phase 4 — Options browser & heavy content: **DONE**
 
