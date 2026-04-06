@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-eb351d5f.js";
+            window.path_to_searchindex_js = "searchindex-48d640cb.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-903d4130.js"></script>
@@ -1371,33 +1371,30 @@ ai.claude = {
 <code>oauthAccount.accountUuid</code>.</p>
 <blockquote>
 <p><strong>Note on secrets:</strong> The UUID is read at <strong>build time</strong> by Nix
-evaluation. Runtime secret managers (sops-nix, agenix) cannot
-provide it — their secret paths don’t exist during evaluation,
-and <code>builtins.readFile</code> on a sops path would either fail or
-import the secret into the nix store anyway.</p>
-<p><strong>Practical patterns:</strong></p>
-<ol>
-<li>
-<p><strong>Inline literal</strong> — paste the UUID directly into your
-config. The UUID ends up in the derivation hash and the
-patched binary either way; treating it as a secret in your
-config repo is the only meaningful protection.</p>
-</li>
-<li>
-<p><strong>Plaintext file outside the repo</strong> — read with
-<code>builtins.readFile</code> from a path Nix can access at eval time:</p>
+evaluation, before any runtime secret manager has mounted its
+secrets. sops-nix and agenix decrypt to paths like
+<code>/run/user/&lt;uid&gt;/secrets/</code> during activation — those paths
+don’t exist when Nix evaluates your config, so they cannot
+provide the userId.</p>
+<p><strong>The UUID is not cryptographically secret.</strong> It’s a stable
+identifier Anthropic uses to associate data with your account
+(closer to an email address than a password). It can’t
+authenticate as you, make API calls, or access conversations.
+The actual auth secrets are the OAuth tokens in <code>~/.claude.json</code>
+(<code>sessionToken</code>, <code>refreshToken</code>) — those should still be
+protected, but the UUID does not need the same treatment.</p>
+<p><strong>Recommended:</strong> Paste the UUID directly into your config as a
+literal string. It ends up in the nix store (in the derivation
+hash), but that’s the same machine that already has your auth
+tokens, so the threat model doesn’t change.</p>
+<p>If you want to keep the UUID out of your config repo without an
+activation script, read from a plaintext file outside the repo
+at eval time:</p>
 <pre><code class="language-nix">userId = lib.removeSuffix "\n"
   (builtins.readFile /home/you/.config/nix-secrets/claude-uuid);
 </code></pre>
-<p>The file must exist when <code>home-manager switch</code> runs. If you
-use sops to manage it, decrypt to this path <strong>before</strong>
-activation (e.g., via a separate script or systemd unit
-that runs before <code>home-manager-&lt;user&gt;.service</code>).</p>
-</li>
-</ol>
-<p>The UUID is not cryptographically secret — it’s a stable
-identifier Anthropic uses to derive your buddy. The patched
-binary contains only the computed salt, not the UUID itself.</p>
+<p>The path must be a Nix path literal (no quotes, no <code>~</code>) and the
+file must exist before <code>home-manager switch</code> runs.</p>
 </blockquote>
 <h2 id="direct-package-usage"><a class="header" href="#direct-package-usage">Direct Package Usage</a></h2>
 <p>Without the module system:</p>
