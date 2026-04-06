@@ -25,8 +25,9 @@
 
 # Guides
 
-- [Home-Manager Deep Dive](./guides/home-manager.md)
+- [Buddy Customization](./guides/buddy-customization.md)
 - [DevEnv Deep Dive](./guides/devenv.md)
+- [Home-Manager Deep Dive](./guides/home-manager.md)
 - [MCP Server Configuration](./guides/mcp-servers.md)
 - [Stacked Workflows](./guides/stacked-workflows.md)
 

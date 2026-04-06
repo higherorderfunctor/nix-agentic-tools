@@ -182,13 +182,11 @@ Generated file policy:
 - [ ] cclsp — Claude Code LSP integration (passthru.withAdapters pattern)
 - [ ] claude-code-nix review — audit github.com/sadjow/claude-code-nix for
       features to adopt. Bun runtime interesting if faster than native Node
-- [ ] claude-code.withBuddy — passthru function on claude-code package
-      that binary-patches the buddy salt at build time. Options via Nix:
-      `claude-code.withBuddy { species = "dragon"; rarity = "legendary"; }`
-      Needs: vendor any-buddy's salt-search logic or add bun as nativeBuildInput,
-      run patching in derivation, output patched binary. Separate from
-      withPlugins (which would handle the real plugin system via symlinks).
-      Ref: github.com/cpaczek/any-buddy
+- [x] claude-code.withBuddy — passthru function on claude-code package
+      that binary-patches the buddy salt at build time. Two-derivation
+      split: mkBuddySalt (cached, expensive) + withBuddy (cheap byte
+      replacement). HM + devenv `ai.claude.buddy` option with full
+      enum types. Ref: github.com/cpaczek/any-buddy
 - [ ] CONTRIBUTING.md refinement — review with maintainer, expand sections
 - [ ] copilot-cli/kiro-cli DRY — 7 helpers copy-pasted between modules
 - [ ] cspell permissions — wire via `ai.*` permissions so all ecosystems
