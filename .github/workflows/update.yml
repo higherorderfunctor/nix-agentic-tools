@@ -1,0 +1,60 @@
+name: Update
+
+on:
+  push:
+    paths:
+      - .github/workflows/update.yml
+      - dev/update.nix
+  schedule:
+    - cron: "0 6 * * *" # daily at 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# TODO: remove once DeterminateSystems/nix-installer-action ships node24
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      DRY_RUN: ${{ github.ref_name != github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v17
+        with:
+          name: nix-agentic-tools # TODO: create Cachix cache
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Install devenv
+        run: nix profile install nixpkgs#devenv
+
+      - name: Run update
+        run: devenv tasks run --mode before update:all
+
+      - name: Dry run summary
+        if: env.DRY_RUN == 'true'
+        run: |
+          echo "::notice::Dry run on branch ${{ github.ref_name }} — skipping PR creation"
+          git diff --stat || echo "No changes"
+
+      - name: Create or update PR
+        if: env.DRY_RUN == 'false'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: auto/update
+          commit-message: "chore: update flake inputs and upstream versions"
+          title: "chore: update flake inputs and upstream versions"
+          body: |
+            Automated update via `devenv tasks run update`:
+            - Flake inputs updated
+            - nvfetcher sources refreshed
+            - Lock files regenerated
+            - Hashes prefetched
+
+            Verified with `nix flake check` for all packages.
+          labels: automated
