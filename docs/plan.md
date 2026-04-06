@@ -67,39 +67,36 @@ Phase 1 — Fragment core FP refactor: **DONE**
 - [x] Migrate all callers (flake.nix, devenv.nix, 3 modules, ai-common)
 - [x] Verify byte-identical instruction file output
 
-Phase 2 — DRY audit fixes + fragment consolidation:
+Phase 2 — DRY audit fixes + fragment consolidation: **DONE**
 
-- [ ] Generate CLAUDE.md from fragments (gitignore, stop hand-maintaining)
-      Currently 71% duplicated from fragments. Compose all fragments +
-      append CLAUDE-specific sections (Nix standards, Change Propagation,
-      Naming Conventions, Linting) as additional fragments or local text
-- [ ] Add missing `tooling-preference` fragment to CLAUDE.md generation
-      (MCP > CLI > web, treefmt after edits — in AGENTS.md but not CLAUDE)
-- [ ] Consolidate routing-table fragment duplication:
-      `dev/fragments/stacked-workflows/routing-table.md` and
-      `packages/stacked-workflows/fragments/routing-table.md` are
-      byte-identical — single source + symlink or build copy
-- [ ] Extract CLAUDE-specific sections as new fragments:
-      `nix-coding-standards`, `change-propagation`, `naming-conventions`,
-      `linting` — so they can be composed into CLAUDE.md and potentially
-      shared with other targets
+- [x] Generate CLAUDE.md from fragments (gitignored)
+- [x] Consolidate routing-table fragment duplication
+- [x] Extract CLAUDE-specific sections as new dev fragments
 
-Phase 3 — `packages/fragments-docs/` + generated doc site:
+Phase 3a — Instruction task migration: **DONE**
 
-- [ ] `packages/fragments-docs/` — doc site topic package
-      passthru.transforms: `{ page, section, table, withOptions }`
-      passthru.generators: `{ optionsPage, packageTable, serverList }`
-- [ ] Generate `docs/src/**` from fragments (gitignore entire dir)
-      Shared fragments render to both instruction files AND doc pages
-      via different transforms. Same source of truth, multiple targets.
-- [ ] Generate README.md from fragments + nix-evaluated data
-      (committed — front door file; re-generated on `nix run .#generate`)
-      Package tables, server lists, skill matrices derived from overlays
+- [x] Extract composition to `dev/generate.nix` (single source of truth)
+- [x] Instruction derivations in flake.nix (nix store cached)
+- [x] `generate:instructions:*` devenv tasks
+- [x] Remove `files.*` instruction generation + `apps.generate`
+- [x] Byte-identical output verified
+- [x] Architecture steering fragment added
+
+Phase 3b — Repo doc generation: **DONE**
+
+- [x] README.md generated from fragments + nix data (committed)
 - [ ] Generate CONTRIBUTING.md from fragments (committed — front door)
-- [ ] Wire `devenv up docs` to: generate source → mdbook serve watches it
-- [ ] Inject nix-evaluated data via transform closures: overlay package
-      tables, MCP server lists, supported CLIs — derived from actual
-      attrsets, not hand-maintained
+
+Phase 3c — Doc site generation: **DONE**
+
+- [x] `packages/fragments-docs/` with generators (scaffolded from
+      deleted pages, will be made dynamic in Phase 4)
+- [x] Prose moved to `dev/docs/`, `docs/src/` gitignored
+- [x] `docs-site-{prose,snippets,reference}` derivations
+- [x] `generate:site:*` devenv tasks + `generate:all` meta
+- [x] `devenv up docs` generates before serving
+- [ ] Replace inline data tables in mixed pages with `{{#include}}`
+      snippets (deferred — inline tables work, optimization for later)
 
 Phase 4 — Options browser & heavy content:
 
