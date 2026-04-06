@@ -1,10 +1,14 @@
 # Claude Code — override nixpkgs' claude-code with nvfetcher-tracked version.
 # Uses the same buildNpmPackage override pattern as nixos-config but with
 # hashes tracked in the sidecar (not hardcoded).
+#
+# nixpkgs' postPatch copies its own lockfile into src. We must override
+# postPatch to use our lockfile so npmDepsHash stays consistent.
 {
   final,
   prev,
   nv,
+  lockFile,
 }:
 prev.claude-code.override (_: {
   buildNpmPackage = args:
@@ -19,5 +23,12 @@ prev.claude-code.override (_: {
           hash = nv.srcHash;
         };
         inherit (nv) npmDepsHash;
+        postPatch = ''
+          cp ${lockFile} package-lock.json
+
+          # https://github.com/anthropics/claude-code/issues/15195
+          substituteInPlace cli.js \
+                --replace-fail '#!/bin/sh' '#!/usr/bin/env sh'
+        '';
       });
 })

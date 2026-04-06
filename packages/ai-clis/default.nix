@@ -6,6 +6,7 @@ in {
   claude-code = import ./claude-code.nix {
     inherit final prev;
     nv = sources.claude-code;
+    lockFile = ./locks/claude-code-package-lock.json;
   };
   github-copilot-cli = import ./copilot-cli.nix {
     inherit final prev;
