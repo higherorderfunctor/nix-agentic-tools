@@ -98,14 +98,11 @@ Phase 3c — Doc site generation: **DONE**
 - [ ] Replace inline data tables in mixed pages with `{{#include}}`
       snippets (deferred — inline tables work, optimization for later)
 
-Phase 4 — Options browser & heavy content:
+Phase 4 — Options browser & heavy content: **DONE**
 
-- [ ] `nixosOptionsDoc` for HM and devenv modules → generated markdown
-      (279 options, ~2-4s build, must be pre-generated not inline)
-- [ ] Add NuschtOS/search as static client-side options browser
-      (no backend, scopes for HM/devenv/MCP options)
-- [ ] Pagefind post-build indexing for enhanced full-text search
-      (already in devenv packages)
+- [x] `nixosOptionsDoc` for HM (281 options) and devenv (64 options)
+- [x] NuschtOS/search static client-side options browser (HM + devenv scopes)
+- [x] Pagefind post-build full-text search indexing
 
 Generated file policy:
 
@@ -126,6 +123,8 @@ Generated file policy:
       `devenv up docs` for docs preview, `devenv up` process naming
 - [ ] Consumer migration guide — replace vendored packages + nix-mcp-servers
 - [ ] ADRs for key decisions (standalone devenv, fragment pipeline, config parity)
+- [ ] cspell permissions — add cspell to generated Claude Code permissions
+      (Bash allow rules are generated, need to include cspell commands)
 - [ ] Docs favicon — not loading or never configured in book.toml
 - [ ] GitHub Pages deploy workflow
 - [ ] SecretSpec — declarative secrets for MCP credentials
