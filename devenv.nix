@@ -190,7 +190,10 @@ in {
     };
 
     # Spelling
-    cspell.enable = true;
+    cspell = {
+      enable = true;
+      excludes = [".*-package-lock\\.json$" ".*\\.lock$"];
+    };
 
     # Commit message convention
     convco.enable = true;
