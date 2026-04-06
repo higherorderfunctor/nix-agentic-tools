@@ -28,6 +28,7 @@ packages/stacked-workflows/skills/*/[0-9a-z]*-*
 .mcp.json
 .pre-commit-config.yaml
 AGENTS.md
+CLAUDE.md
 
 # nvfetcher shake database (not the generated output)
 /.nvfetcher/.shake.*

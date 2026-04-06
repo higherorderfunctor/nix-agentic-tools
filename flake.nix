@@ -119,6 +119,7 @@
 
       # Fragments from content packages (via overlay)
       commonFragments = builtins.attrValues pkgs.coding-standards.passthru.fragments;
+      swsFragments = builtins.attrValues pkgs.stacked-workflows-content.passthru.fragments;
 
       # Dev-only fragment reader
       mkDevFragment = pkg: name:
@@ -139,17 +140,31 @@
       # Dev fragment names per package
       devFragmentNames = {
         ai-clis = ["packaging-guide"];
-        monorepo = ["project-overview"];
+        monorepo = [
+          "build-commands"
+          "change-propagation"
+          "linting"
+          "naming-conventions"
+          "nix-standards"
+          "project-overview"
+        ];
         mcp-servers = ["overlay-guide"];
-        stacked-workflows = ["development" "routing-table"];
+        stacked-workflows = ["development"];
       };
       nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") devFragmentNames;
+
+      # Extra published fragments per package (beyond commonFragments)
+      extraPublishedFragments = {
+        monorepo = swsFragments;
+        stacked-workflows = swsFragments;
+      };
 
       # Compose fragments for a dev package profile
       mkDevComposed = package: let
         devFrags = map (mkDevFragment package) (devFragmentNames.${package} or []);
+        extraFrags = extraPublishedFragments.${package} or [];
       in
-        fragments.compose {fragments = commonFragments ++ devFrags;};
+        fragments.compose {fragments = commonFragments ++ extraFrags ++ devFrags;};
 
       # Generate ecosystem file content via fragments-ai transforms
       aiTransforms = pkgs.fragments-ai.passthru.transforms;
@@ -222,6 +237,13 @@
           support the [AGENTS.md standard](https://agents.md).
 
           ${agentsContent}
+          FRAGMENT_EOF
+          cat > "$REPO_ROOT/CLAUDE.md" << 'FRAGMENT_EOF'
+          # CLAUDE.md
+
+          @AGENTS.md
+
+          ${rootComposed.text}
           FRAGMENT_EOF
           ${perPackageOutputs}
           echo "Generated instruction files from fragments."

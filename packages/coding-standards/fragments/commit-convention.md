@@ -10,8 +10,8 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 [optional footer(s)]
 ```
 
-**Types:** `feat`, `fix`, `refactor`, `docs`, `chore`, `build`, `ci`, `style`,
-`perf`, `test`
+**Types:** `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`,
+`refactor`, `style`, `test`
 
 **Scopes** (optional but encouraged): package or module name (e.g.,
 `context7-mcp`, `copilot-cli`, `fragments`), directory name (`overlay`,

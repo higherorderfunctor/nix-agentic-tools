@@ -31,6 +31,7 @@
   # ── Fragment composition ─────────────────────────────────────────────
   # Fragments from packages (published content)
   commonFragments = builtins.attrValues contentPkgs.coding-standards.passthru.fragments;
+  swsFragments = builtins.attrValues contentPkgs.stacked-workflows-content.passthru.fragments;
 
   # Dev-only fragment reader (for this repo's dev instructions)
   mkDevFragment = pkg: name:
@@ -51,16 +52,30 @@
   # Dev fragment names per package
   devFragmentNames = {
     ai-clis = ["packaging-guide"];
-    monorepo = ["project-overview"];
+    monorepo = [
+      "build-commands"
+      "change-propagation"
+      "linting"
+      "naming-conventions"
+      "nix-standards"
+      "project-overview"
+    ];
     mcp-servers = ["overlay-guide"];
-    stacked-workflows = ["development" "routing-table"];
+    stacked-workflows = ["development"];
+  };
+
+  # Extra published fragments per package (beyond commonFragments)
+  extraPublishedFragments = {
+    monorepo = swsFragments;
+    stacked-workflows = swsFragments;
   };
 
   # Compose fragments for a dev package profile
   mkDevComposed = package: let
     devFrags = map (mkDevFragment package) (devFragmentNames.${package} or []);
+    extraFrags = extraPublishedFragments.${package} or [];
   in
-    fragments.compose {fragments = commonFragments ++ devFrags;};
+    fragments.compose {fragments = commonFragments ++ extraFrags ++ devFrags;};
 
   # Generate ecosystem file content via fragments-ai transforms
   aiTransforms = contentPkgs.fragments-ai.passthru.transforms;
@@ -177,6 +192,15 @@ in {
         support the [AGENTS.md standard](https://agents.md).
 
         ${agentsContent}
+      '';
+      "CLAUDE.md".text = let
+        rootComposed = mkDevComposed "monorepo";
+      in ''
+        # CLAUDE.md
+
+        @AGENTS.md
+
+        ${rootComposed.text}
       '';
     };
 
@@ -318,6 +342,7 @@ in {
     test -L .kiro/steering/common.md || { echo "FAIL: .kiro/steering/common.md missing"; exit 1; }
     test -L .github/copilot-instructions.md || { echo "FAIL: .github/copilot-instructions.md missing"; exit 1; }
     test -L AGENTS.md || { echo "FAIL: AGENTS.md missing"; exit 1; }
+    test -L CLAUDE.md || { echo "FAIL: CLAUDE.md missing"; exit 1; }
 
     # Check skills are wired (Claude + Copilot + Kiro)
     test -L .claude/skills/sws-stack-fix || { echo "FAIL: .claude/skills/sws-stack-fix missing"; exit 1; }
