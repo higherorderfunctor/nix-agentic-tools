@@ -51,49 +51,69 @@
 
 ### Generated Docs & Fragment Refactor
 
-Phase 1 — Fragment core FP refactor:
-- [ ] Refactor `lib/fragments.nix`: replace `mkEcosystemContent` with
-      generic `render { composed, transform }`. `transform` is a lambda
-      `fragment -> string`. Core becomes target-agnostic markdown
-      composition. Remove `ecosystems` map from core
-- [ ] Add `transforms.identity` and `transforms.withHeader` to core
-      (generic, topic-independent utilities)
-- [ ] Migrate existing callers (flake.nix, devenv.nix) to new API
-- [ ] Verify all instruction file outputs are byte-identical after refactor
+Phase 1 — Fragment core FP refactor: **DONE**
 
-Phase 2 — Topic packages:
-- [ ] `packages/fragments-ai/` — AI ecosystem topic package
-      derivation: default instruction templates, example outputs
-      passthru.transforms: `{ claude, copilot, kiro, agentsmd }`
-      (extracted from current `ecosystems` map in fragments.nix)
-      Consumers: HM `ai.*` module, devenv `ai.*` module, `apps/generate`
-- [ ] `packages/fragments-docs/` — Doc site topic package
-      derivation: doc page templates, mdbook snippets, table layouts
+- [x] Refactor `lib/fragments.nix`: replace `mkEcosystemContent` with
+      generic `render { composed, transform }`
+- [x] Create `packages/fragments-ai/` with curried transforms
+- [x] Migrate all callers (flake.nix, devenv.nix, 3 modules, ai-common)
+- [x] Verify byte-identical instruction file output
+
+Phase 2 — DRY audit fixes + fragment consolidation:
+
+- [ ] Generate CLAUDE.md from fragments (gitignore, stop hand-maintaining)
+      Currently 71% duplicated from fragments. Compose all fragments +
+      append CLAUDE-specific sections (Nix standards, Change Propagation,
+      Naming Conventions, Linting) as additional fragments or local text
+- [ ] Add missing `tooling-preference` fragment to CLAUDE.md generation
+      (MCP > CLI > web, treefmt after edits — in AGENTS.md but not CLAUDE)
+- [ ] Consolidate routing-table fragment duplication:
+      `dev/fragments/stacked-workflows/routing-table.md` and
+      `packages/stacked-workflows/fragments/routing-table.md` are
+      byte-identical — single source + symlink or build copy
+- [ ] Extract CLAUDE-specific sections as new fragments:
+      `nix-coding-standards`, `change-propagation`, `naming-conventions`,
+      `linting` — so they can be composed into CLAUDE.md and potentially
+      shared with other targets
+
+Phase 3 — `packages/fragments-docs/` + generated doc site:
+
+- [ ] `packages/fragments-docs/` — doc site topic package
       passthru.transforms: `{ page, section, table, withOptions }`
       passthru.generators: `{ optionsPage, packageTable, serverList }`
-      Consumers: `generate-docs` app, `devenv up docs`
-- [ ] Migrate `coding-standards` passthru to use core `render` +
-      `fragments-ai` transforms (currently uses `mkEcosystemContent`)
-- [ ] Migrate `stacked-workflows` similarly
-
-Phase 3 — Nix-evaluated doc generation:
-- [ ] `nix run .#generate-docs` app that renders fragments with
-      `fragments-docs` transforms to `docs/src/generated/` (gitignored)
+- [ ] Generate `docs/src/**` from fragments (gitignore entire dir)
+      Shared fragments render to both instruction files AND doc pages
+      via different transforms. Same source of truth, multiple targets.
+- [ ] Generate README.md from fragments + nix-evaluated data
+      (committed — front door file; re-generated on `nix run .#generate`)
+      Package tables, server lists, skill matrices derived from overlays
+- [ ] Generate CONTRIBUTING.md from fragments (committed — front door)
+- [ ] Wire `devenv up docs` to: generate source → mdbook serve watches it
 - [ ] Inject nix-evaluated data via transform closures: overlay package
       tables, MCP server lists, supported CLIs — derived from actual
       attrsets, not hand-maintained
-- [ ] Wire into `devenv up docs` as pre-step before `mdbook serve`
-- [ ] Shared fragments for content that appears in both HM and devenv
-      guide pages (MCP config, skills, instructions) — write once,
-      render with `fragments-ai` or `fragments-docs` transforms per target
 
 Phase 4 — Options browser & heavy content:
+
 - [ ] `nixosOptionsDoc` for HM and devenv modules → generated markdown
       (279 options, ~2-4s build, must be pre-generated not inline)
 - [ ] Add NuschtOS/search as static client-side options browser
       (no backend, scopes for HM/devenv/MCP options)
 - [ ] Pagefind post-build indexing for enhanced full-text search
       (already in devenv packages)
+
+Generated file policy:
+
+| File              | Generated       | Committed     | Reason                          |
+| ----------------- | --------------- | ------------- | ------------------------------- |
+| CLAUDE.md         | fragments       | gitignored    | devenv generates on shell entry |
+| AGENTS.md         | fragments       | gitignored    | devenv generates on shell entry |
+| README.md         | fragments + nix | **committed** | front door for repo visitors    |
+| CONTRIBUTING.md   | fragments       | **committed** | front door                      |
+| docs/src/\*\*     | fragments + nix | gitignored    | built artifact, GH Pages        |
+| .claude/rules/\*  | fragments       | gitignored    | devenv generates                |
+| .github/\*        | fragments       | gitignored    | devenv generates                |
+| .kiro/steering/\* | fragments       | gitignored    | devenv generates                |
 
 ### Documentation & Guides
 
