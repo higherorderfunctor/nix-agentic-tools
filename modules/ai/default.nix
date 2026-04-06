@@ -7,9 +7,9 @@
 # Usage:
 #   ai = {
 #     enable = true;
-#     enableClaude = true;
-#     enableCopilot = true;
-#     enableKiro = true;
+#     claude.enable = true;
+#     copilot.enable = true;
+#     kiro.enable = true;
 #     skills = { stack-fix = ./skills/stack-fix; };
 #     instructions.coding-standards = {
 #       text = "Always use strict mode...";
@@ -21,6 +21,7 @@
   config,
   lib,
   options,
+  pkgs,
   ...
 }: let
   inherit
@@ -47,22 +48,46 @@ in {
   options.ai = {
     enable = mkEnableOption "unified AI configuration across Claude, Copilot, and Kiro";
 
-    enableClaude = mkOption {
-      type = types.bool;
-      default = false;
-      description = "Fan out shared config to programs.claude-code.";
+    claude = mkOption {
+      type = types.submodule {
+        options = {
+          enable = mkEnableOption "Fan out shared config to Claude Code";
+          package = mkOption {
+            type = types.package;
+            default = pkgs.claude-code;
+            description = "Claude Code package.";
+          };
+        };
+      };
+      default = {};
     };
 
-    enableCopilot = mkOption {
-      type = types.bool;
-      default = false;
-      description = "Fan out shared config to programs.copilot-cli.";
+    copilot = mkOption {
+      type = types.submodule {
+        options = {
+          enable = mkEnableOption "Fan out shared config to Copilot CLI";
+          package = mkOption {
+            type = types.package;
+            default = pkgs.github-copilot-cli;
+            description = "Copilot CLI package.";
+          };
+        };
+      };
+      default = {};
     };
 
-    enableKiro = mkOption {
-      type = types.bool;
-      default = false;
-      description = "Fan out shared config to programs.kiro-cli.";
+    kiro = mkOption {
+      type = types.submodule {
+        options = {
+          enable = mkEnableOption "Fan out shared config to Kiro CLI";
+          package = mkOption {
+            type = types.package;
+            default = pkgs.kiro-cli;
+            description = "Kiro CLI package.";
+          };
+        };
+      };
+      default = {};
     };
 
     skills = mkOption {
@@ -133,12 +158,12 @@ in {
         # If programs.claude-code IS available, users can still configure it
         # directly for Claude-specific settings (model, permissions, etc.).
         {
-          assertion = cfg.enableCopilot -> hasModule ["programs" "copilot-cli" "enable"];
-          message = "ai.enableCopilot requires programs.copilot-cli to be available.";
+          assertion = cfg.copilot.enable -> hasModule ["programs" "copilot-cli" "enable"];
+          message = "ai.copilot.enable requires programs.copilot-cli to be available.";
         }
         {
-          assertion = cfg.enableKiro -> hasModule ["programs" "kiro-cli" "enable"];
-          message = "ai.enableKiro requires programs.kiro-cli to be available.";
+          assertion = cfg.kiro.enable -> hasModule ["programs" "kiro-cli" "enable"];
+          message = "ai.kiro.enable requires programs.kiro-cli to be available.";
         }
         {
           assertion =
@@ -146,8 +171,8 @@ in {
             != {}
             || cfg.instructions != {}
             || cfg.environmentVariables != {}
-            -> cfg.enableClaude || cfg.enableCopilot || cfg.enableKiro;
-          message = "ai has shared config but no CLIs enabled. Set at least one of enableClaude, enableCopilot, enableKiro.";
+            -> cfg.claude.enable || cfg.copilot.enable || cfg.kiro.enable;
+          message = "ai has shared config but no CLIs enabled. Set at least one of claude.enable, copilot.enable, kiro.enable.";
         }
       ];
     }
@@ -158,7 +183,7 @@ in {
 
     # Claude Code — uses home.file for both rules and skills to avoid
     # depending on the upstream programs.claude-code module being imported.
-    (mkIf cfg.enableClaude (mkMerge [
+    (mkIf cfg.claude.enable (mkMerge [
       {
         home.file =
           # Instructions as Claude rules with frontmatter
@@ -187,7 +212,7 @@ in {
     ]))
 
     # Copilot CLI
-    (mkIf cfg.enableCopilot {
+    (mkIf cfg.copilot.enable {
       programs.copilot-cli = {
         environmentVariables =
           lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
@@ -205,7 +230,7 @@ in {
     })
 
     # Kiro CLI
-    (mkIf cfg.enableKiro {
+    (mkIf cfg.kiro.enable {
       programs.kiro-cli = {
         environmentVariables =
           lib.mapAttrs (_: mkDefault) cfg.environmentVariables;

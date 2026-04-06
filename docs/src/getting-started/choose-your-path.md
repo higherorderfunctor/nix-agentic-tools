@@ -25,7 +25,7 @@ imports = [inputs.agentic-tools.homeManagerModules.default];
 
 ai = {
   enable = true;
-  enableClaude = true;
+  claude.enable = true;
 };
 
 stacked-workflows.enable = true;
@@ -55,7 +55,7 @@ imports = [inputs.agentic-tools.devenvModules.default];
 
 ai = {
   enable = true;
-  enableClaude = true;
+  claude.enable = true;
 };
 ```
 

@@ -66,7 +66,7 @@ imports = [
 # Enable the unified AI module for Claude Code
 ai = {
   enable = true;
-  enableClaude = true;
+  claude.enable = true;
 };
 
 # Enable stacked workflows (git presets + skills)
@@ -84,9 +84,9 @@ stacked-workflows = {
   # ── Unified AI config ──────────────────────────────────────────────
   ai = {
     enable = true;
-    enableClaude = true;
-    enableCopilot = true;
-    enableKiro = true;
+    claude.enable = true;
+    copilot.enable = true;
+    kiro.enable = true;
 
     # Shared skills (fan out to all enabled CLIs)
     skills = {

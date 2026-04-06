@@ -133,9 +133,9 @@ in {
   # ── Unified AI Config ─────────────────────────────────────────────────
   ai = {
     enable = true;
-    enableClaude = true;
-    enableCopilot = true;
-    enableKiro = true;
+    claude.enable = true;
+    copilot.enable = true;
+    kiro.enable = true;
 
     # Consumer skills (stacked workflows)
     skills = {

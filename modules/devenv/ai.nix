@@ -10,9 +10,9 @@
 # Usage:
 #   ai = {
 #     enable = true;
-#     enableClaude = true;
-#     enableCopilot = true;
-#     enableKiro = true;
+#     claude.enable = true;
+#     copilot.enable = true;
+#     kiro.enable = true;
 #     skills = { stack-fix = ./skills/stack-fix; };
 #     instructions.coding-standards = {
 #       text = "Always use strict mode...";
@@ -23,6 +23,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   inherit
@@ -47,22 +48,46 @@ in {
   options.ai = {
     enable = mkEnableOption "unified AI configuration across Claude, Copilot, and Kiro";
 
-    enableClaude = mkOption {
-      type = types.bool;
-      default = false;
-      description = "Fan out shared config to claude.code and files.*.";
+    claude = mkOption {
+      type = types.submodule {
+        options = {
+          enable = mkEnableOption "Fan out shared config to Claude Code";
+          package = mkOption {
+            type = types.package;
+            default = pkgs.claude-code;
+            description = "Claude Code package.";
+          };
+        };
+      };
+      default = {};
     };
 
-    enableCopilot = mkOption {
-      type = types.bool;
-      default = false;
-      description = "Fan out shared config to copilot.*.";
+    copilot = mkOption {
+      type = types.submodule {
+        options = {
+          enable = mkEnableOption "Fan out shared config to Copilot CLI";
+          package = mkOption {
+            type = types.package;
+            default = pkgs.github-copilot-cli;
+            description = "Copilot CLI package.";
+          };
+        };
+      };
+      default = {};
     };
 
-    enableKiro = mkOption {
-      type = types.bool;
-      default = false;
-      description = "Fan out shared config to kiro.*.";
+    kiro = mkOption {
+      type = types.submodule {
+        options = {
+          enable = mkEnableOption "Fan out shared config to Kiro CLI";
+          package = mkOption {
+            type = types.package;
+            default = pkgs.kiro-cli;
+            description = "Kiro CLI package.";
+          };
+        };
+      };
+      default = {};
     };
 
     environmentVariables = mkOption {
@@ -131,7 +156,7 @@ in {
     })
 
     # Claude Code — uses files.* for both rules and skills
-    (mkIf cfg.enableClaude (mkMerge [
+    (mkIf cfg.claude.enable (mkMerge [
       {
         files =
           # Instructions as Claude rules with frontmatter
@@ -156,7 +181,7 @@ in {
     ]))
 
     # Copilot — uses copilot.* options
-    (mkIf cfg.enableCopilot {
+    (mkIf cfg.copilot.enable {
       copilot = {
         environmentVariables = lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
         instructions = lib.mapAttrs (name: instr:
@@ -173,7 +198,7 @@ in {
     })
 
     # Kiro — uses kiro.* options
-    (mkIf cfg.enableKiro {
+    (mkIf cfg.kiro.enable {
       kiro = {
         environmentVariables = lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
         lspServers = lib.mapAttrs (name: server:

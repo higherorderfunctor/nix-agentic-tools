@@ -163,16 +163,16 @@ available.
 
 **Common assertions:**
 
-- **"ai.enableCopilot requires programs.copilot-cli"** -- Import the
+- **"ai.copilot.enable requires programs.copilot-cli"** -- Import the
   copilot-cli module or use `homeManagerModules.default` which
   includes all modules.
 
-- **"ai.enableKiro requires programs.kiro-cli"** -- Same: import the
+- **"ai.kiro.enable requires programs.kiro-cli"** -- Same: import the
   kiro-cli module.
 
 - **"ai has shared config but no CLIs enabled"** -- You set
   `ai.skills` or `ai.instructions` but didn't enable any CLI. Set at
-  least one of `enableClaude`, `enableCopilot`, `enableKiro`.
+  least one of `claude.enable`, `copilot.enable`, `kiro.enable`.
 
 - **"programs.git.settings.pull.ff conflicts with
   stacked-workflows.gitPreset"** -- Remove `pull.ff` from your git

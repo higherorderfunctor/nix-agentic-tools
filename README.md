@@ -46,9 +46,9 @@ imports = [inputs.agentic-tools.homeManagerModules.default];
 
 ai = {
   enable = true;
-  enableClaude = true;
-  enableCopilot = true;
-  enableKiro = true;
+  claude.enable = true;
+  copilot.enable = true;
+  kiro.enable = true;
 };
 
 stacked-workflows = {
@@ -88,7 +88,7 @@ inputs:
 
   ai = {
     enable = true;
-    enableClaude = true;
+    claude.enable = true;
   };
 
   claude.code = {
@@ -222,8 +222,8 @@ always win.
 ```nix
 ai = {
   enable = true;
-  enableClaude = true;
-  enableCopilot = true;
+  claude.enable = true;
+  copilot.enable = true;
 
   skills.my-skill = ./skills/my-skill;
 

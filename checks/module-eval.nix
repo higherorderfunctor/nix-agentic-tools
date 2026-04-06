@@ -118,8 +118,8 @@
       config = {
         ai = {
           enable = true;
-          enableCopilot = true;
-          enableKiro = true;
+          copilot.enable = true;
+          kiro.enable = true;
           skills = {};
           instructions.test-rule = {
             text = "Test instruction";
@@ -139,9 +139,9 @@
       config = {
         ai = {
           enable = true;
-          enableClaude = true;
-          enableCopilot = true;
-          enableKiro = true;
+          claude.enable = true;
+          copilot.enable = true;
+          kiro.enable = true;
           settings = {
             model = "claude-sonnet-4";
             telemetry = false;

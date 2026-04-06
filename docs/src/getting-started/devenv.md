@@ -41,7 +41,7 @@ imports = [inputs.agentic-tools.devenvModules.ai];
 
   ai = {
     enable = true;
-    enableClaude = true;
+    claude.enable = true;
   };
 
   claude.code.enable = true;
@@ -66,9 +66,9 @@ in {
   # ── Unified AI config ─────────────────────────────────────────────
   ai = {
     enable = true;
-    enableClaude = true;
-    enableCopilot = true;
-    enableKiro = true;
+    claude.enable = true;
+    copilot.enable = true;
+    kiro.enable = true;
 
     skills = {
       stack-fix = "${contentPkgs.stacked-workflows-content.passthru.skillsDir}/stack-fix";

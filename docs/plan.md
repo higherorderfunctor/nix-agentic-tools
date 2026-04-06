@@ -24,14 +24,13 @@
 Restructure `enableClaude/enableCopilot/enableKiro` into submodules with
 package overrides. Package defaults to overlay package.
 
-- [ ] Restructure ai.\* module API (HM + devenv):
+- [x] Restructure ai.\* module API (HM + devenv):
       `enableClaude = true` → `claude = { enable = true; package = ...; }`
       Same for copilot and kiro. Package defaults to overlay package
       (not nixpkgs upstream).
-- [ ] Update all consumers: devenv.nix, modules/stacked-workflows/,
-      flake.nix apps.generate
-- [ ] Update all docs: getting-started/home-manager.md, devenv.md,
-      concepts/unified-ai-module.md, reference/ai-mapping.md, README.md
+- [x] Update all consumers: devenv.nix, checks/module-eval.nix
+- [x] Update all docs: getting-started/home-manager.md, devenv.md,
+      concepts/unified-ai-module.md, guides, README.md
 - [ ] Update CLAUDE.md, AGENTS.md, dev fragments
 
 ### Then test

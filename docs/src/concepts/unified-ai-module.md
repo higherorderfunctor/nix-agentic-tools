@@ -11,15 +11,23 @@ Both home-manager and devenv expose the same `ai.*` interface.
 
 ```nix
 ai = {
-  enable = true;        # master switch
-  enableClaude = true;  # fan out to Claude Code
-  enableCopilot = true; # fan out to Copilot CLI
-  enableKiro = true;    # fan out to Kiro CLI
+  enable = true;          # master switch
+  claude.enable = true;   # fan out to Claude Code
+  copilot.enable = true;  # fan out to Copilot CLI
+  kiro.enable = true;     # fan out to Kiro CLI
 };
 ```
 
-Each `enable*` flag controls whether shared config is written to that
-CLI's config paths. You can enable any combination.
+Each ecosystem submodule controls whether shared config is written to
+that CLI's config paths. You can enable any combination. Each also
+exposes a `package` option for overriding the default package:
+
+```nix
+ai.claude = {
+  enable = true;
+  package = pkgs.claude-code;  # override with custom build
+};
+```
 
 ### Module Dependencies
 
@@ -27,7 +35,7 @@ CLI's config paths. You can enable any combination.
   (devenv). No upstream module dependency -- the `ai` module writes
   rules and skills without importing `programs.claude-code`.
 - **Copilot CLI** requires `programs.copilot-cli` to be imported.
-  The assertion `ai.enableCopilot -> programs.copilot-cli exists`
+  The assertion `ai.copilot.enable -> programs.copilot-cli exists`
   catches misconfigurations at eval time.
 - **Kiro CLI** requires `programs.kiro-cli` to be imported, with
   the same assertion pattern.
@@ -126,6 +134,6 @@ Fanout per ecosystem:
 The module includes safety assertions:
 
 - At least one CLI must be enabled when shared config exists
-- `enableCopilot` requires `programs.copilot-cli` to be available
-- `enableKiro` requires `programs.kiro-cli` to be available
+- `copilot.enable` requires `programs.copilot-cli` to be available
+- `kiro.enable` requires `programs.kiro-cli` to be available
 - Claude has no assertion -- it uses `home.file` directly

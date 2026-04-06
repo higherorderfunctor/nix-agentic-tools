@@ -20,18 +20,21 @@ installation and quickstart.
 The unified module. See [The Unified ai.\* Module](../concepts/unified-ai-module.md)
 for architecture details.
 
-| Option                    | Type                      | Default | Description                     |
-| ------------------------- | ------------------------- | ------- | ------------------------------- |
-| `ai.enable`               | bool                      | `false` | Master switch                   |
-| `ai.enableClaude`         | bool                      | `false` | Fan out to Claude Code          |
-| `ai.enableCopilot`        | bool                      | `false` | Fan out to Copilot CLI          |
-| `ai.enableKiro`           | bool                      | `false` | Fan out to Kiro CLI             |
-| `ai.skills`               | attrsOf path              | `{}`    | Shared skill directories        |
-| `ai.instructions`         | attrsOf instructionModule | `{}`    | Shared instructions (see below) |
-| `ai.lspServers`           | attrsOf lspServerModule   | `{}`    | Typed LSP server defs           |
-| `ai.settings.model`       | nullOr str                | `null`  | Default model                   |
-| `ai.settings.telemetry`   | nullOr bool               | `null`  | Telemetry toggle                |
-| `ai.environmentVariables` | attrsOf str               | `{}`    | Shared env vars                 |
+| Option                    | Type                      | Default                   | Description                     |
+| ------------------------- | ------------------------- | ------------------------- | ------------------------------- |
+| `ai.enable`               | bool                      | `false`                   | Master switch                   |
+| `ai.claude.enable`        | bool                      | `false`                   | Fan out to Claude Code          |
+| `ai.claude.package`       | package                   | `pkgs.claude-code`        | Claude Code package             |
+| `ai.copilot.enable`       | bool                      | `false`                   | Fan out to Copilot CLI          |
+| `ai.copilot.package`      | package                   | `pkgs.github-copilot-cli` | Copilot CLI package             |
+| `ai.kiro.enable`          | bool                      | `false`                   | Fan out to Kiro CLI             |
+| `ai.kiro.package`         | package                   | `pkgs.kiro-cli`           | Kiro CLI package                |
+| `ai.skills`               | attrsOf path              | `{}`                      | Shared skill directories        |
+| `ai.instructions`         | attrsOf instructionModule | `{}`                      | Shared instructions (see below) |
+| `ai.lspServers`           | attrsOf lspServerModule   | `{}`                      | Typed LSP server defs           |
+| `ai.settings.model`       | nullOr str                | `null`                    | Default model                   |
+| `ai.settings.telemetry`   | nullOr bool               | `null`                    | Telemetry toggle                |
+| `ai.environmentVariables` | attrsOf str               | `{}`                      | Shared env vars                 |
 
 ## services.mcp-servers Options
 
