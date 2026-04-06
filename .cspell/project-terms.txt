@@ -53,6 +53,7 @@ kagi
 kagiapi
 kagimcp
 kiro
+kirocli
 ldflags
 libgit
 lockdown

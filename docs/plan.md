@@ -43,6 +43,11 @@
 - [x] `update.yml` — daily nvfetcher update pipeline (devenv tasks)
 - [x] Binary cache: `nix-agentic-tools` cachix setup (50G plan)
 - [ ] Revert `ci.yml` branch trigger to `[main]` only (after sentinel merge)
+- [ ] Review CI cachix push strategy — currently pushes on every build
+      which speeds up subsequent runs via cache hits. May be fine as-is
+      since upstream dedup avoids storage waste. Re-evaluate if cache
+      size becomes a concern
+- [ ] Remove `update.yml` push trigger, keep schedule + workflow_dispatch only
 - [ ] Document binary cache for consumers (blocked on docs rewrite)
 - [ ] After cachix: remove flake input overrides in nixos-config
       (currently needed because no binary cache — builds from source)
