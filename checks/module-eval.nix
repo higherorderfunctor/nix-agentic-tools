@@ -132,6 +132,26 @@
     }
   ];
 
+  # Test: ai module evaluates with buddy configured
+  aiBuddy = evalModule [
+    self.homeManagerModules.default
+    {
+      config = {
+        ai = {
+          enable = true;
+          claude = {
+            enable = true;
+            buddy = {
+              userId = "test-00000000-0000-0000-0000-000000000000";
+              species = "duck";
+              rarity = "common";
+            };
+          };
+        };
+      };
+    }
+  ];
+
   # Test: ai module settings fanout to all three ecosystems
   aiWithSettings = evalModule [
     self.homeManagerModules.default
@@ -198,6 +218,14 @@ in {
       if aiWithClis.config.ai.enable
       then "enabled"
       else "disabled"
+    }" > $out
+  '';
+
+  ai-buddy-eval = pkgs.runCommand "ai-buddy-eval" {} ''
+    echo "ai buddy evaluation: ${
+      if aiBuddy.config.ai.claude.buddy != null
+      then "buddy configured"
+      else "buddy missing"
     }" > $out
   '';
 
