@@ -34,7 +34,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-56acc76e.js";
+            window.path_to_searchindex_js = "../searchindex-0e8c2b89.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-f3c022ed.js"></script>
@@ -240,12 +240,105 @@ boolean</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
 <h2 id="aiclaudepackage"><a class="header" href="#aiclaudepackage">ai.claude.package</a></h2>
-<p>Claude Code package.</p>
+<p>Claude Code package. Automatically patched when buddy is set.</p>
 <p><em>Type:</em>
 package</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">pkgs.claude-code
 </code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddy"><a class="header" href="#aiclaudebuddy">ai.claude.buddy</a></h2>
+<p>Buddy companion customization. Patches claude-code at build time.</p>
+<p><em>Type:</em>
+null or (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddydump"><a class="header" href="#aiclaudebuddydump">ai.claude.buddy.dump</a></h2>
+<p>Preferred lowest stat. Must differ from peak.</p>
+<p><em>Type:</em>
+null or one of “CHAOS”, “DEBUGGING”, “PATIENCE”, “SNARK”, “WISDOM”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyeyes"><a class="header" href="#aiclaudebuddyeyes">ai.claude.buddy.eyes</a></h2>
+<p>Eye character.</p>
+<p><em>Type:</em>
+one of “·”, “✦”, “×”, “◉”, “@”, “°”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"·"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyhat"><a class="header" href="#aiclaudebuddyhat">ai.claude.buddy.hat</a></h2>
+<p>Hat accessory. Must be none for common rarity.</p>
+<p><em>Type:</em>
+one of “none”, “beanie”, “crown”, “halo”, “propeller”, “tinyduck”, “tophat”, “wizard”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"none"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddypeak"><a class="header" href="#aiclaudebuddypeak">ai.claude.buddy.peak</a></h2>
+<p>Preferred highest stat.</p>
+<p><em>Type:</em>
+null or one of “CHAOS”, “DEBUGGING”, “PATIENCE”, “SNARK”, “WISDOM”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyrarity"><a class="header" href="#aiclaudebuddyrarity">ai.claude.buddy.rarity</a></h2>
+<p>Rarity tier. Higher rarities take longer to compute.</p>
+<p><em>Type:</em>
+one of “common”, “uncommon”, “rare”, “epic”, “legendary”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"common"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyshiny"><a class="header" href="#aiclaudebuddyshiny">ai.claude.buddy.shiny</a></h2>
+<p>Rainbow shimmer variant.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyspecies"><a class="header" href="#aiclaudebuddyspecies">ai.claude.buddy.species</a></h2>
+<p>Buddy species.</p>
+<p><em>Type:</em>
+one of “axolotl”, “blob”, “cactus”, “capybara”, “cat”, “chonk”, “dragon”, “duck”, “ghost”, “goose”, “mushroom”, “octopus”, “owl”, “penguin”, “rabbit”, “robot”, “snail”, “turtle”</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyuserid"><a class="header" href="#aiclaudebuddyuserid">ai.claude.buddy.userId</a></h2>
+<p>Claude account UUID (oauthAccount.accountUuid from ~/.claude.json).</p>
+<p><em>Type:</em>
+string</p>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
