@@ -357,10 +357,14 @@ in {
   '';
 
   # ── Tasks ─────────────────────────────────────────────────────────────
-  tasks = {
-    "update:packages" = {
-      exec = "nvfetcher";
-      before = [];
+  tasks = let
+    updateTasks = (import ./dev/update.nix {inherit lib pkgs;}).tasks;
+  in
+    updateTasks
+    // {
+      # Meta task: runs entire update pipeline
+      "update:all" = {
+        description = "Run full update pipeline";
+      };
     };
-  };
 }
