@@ -46,11 +46,14 @@
     pkgsFor = system:
       import nixpkgs {
         inherit system;
-        config = lib.optionalAttrs (system == "x86_64-linux") {
-          allowUnfree = true;
-          cudaSupport = true;
-          cudaCapabilities = ["7.5" "8.6" "8.9"];
-        };
+        config =
+          {
+            allowUnfree = true;
+          }
+          // lib.optionalAttrs (system == "x86_64-linux") {
+            cudaSupport = true;
+            cudaCapabilities = ["7.5" "8.6" "8.9"];
+          };
         overlays = [self.overlays.default];
       };
     fragments = import ./lib/fragments.nix {inherit lib;};
