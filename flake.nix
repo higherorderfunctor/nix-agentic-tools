@@ -263,6 +263,9 @@
           rm -rf docs/src
           cp -r $site docs/src
           chmod -R u+w docs/src
+          # Favicon goes in theme/ for mdbook to pick up
+          mkdir -p docs/theme
+          cp docs/src/assets/favicon.png docs/theme/favicon.png
           mdbook build docs
           # Embed NuschtOS options search at /options/
           cp -rL $optionsSearch result-docs/options
