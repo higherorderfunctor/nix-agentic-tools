@@ -122,4 +122,5 @@ unstash
 valkey
 worktree
 worktrees
+wyhash
 zdiff
