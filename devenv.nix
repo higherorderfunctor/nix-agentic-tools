@@ -4,8 +4,6 @@
   inputs,
   ...
 }: let
-  fragments = import ./lib/fragments.nix {inherit lib;};
-
   # ── Overlay packages ─────────────────────────────────────────────────
   # devenv's pkgs lacks the flake overlay. Apply git-tools overlay to get
   # agnix (reuses packages/git-tools/ definition, no build duplication).
@@ -16,118 +14,13 @@
   });
   inherit (gitToolsPkgs) agnix;
 
-  # Content packages — apply overlays to get passthru fragments.
-  contentPkgs = pkgs.extend (lib.composeManyExtensions [
-    (import ./packages/coding-standards {})
-    (import ./packages/fragments-ai {})
-    (import ./packages/stacked-workflows {})
-  ]);
+  # Content packages — apply stacked-workflows overlay for skills passthru.
+  contentPkgs = pkgs.extend (import ./packages/stacked-workflows {});
 
   # ── MCP entry helper ─────────────────────────────────────────────────
   # Derive stdio MCP entry from package passthru (single source of truth).
   mcpLib = import ./lib/mcp.nix {inherit lib;};
   inherit (mcpLib) mkPackageEntry;
-
-  # ── Fragment composition ─────────────────────────────────────────────
-  # Fragments from packages (published content)
-  commonFragments = builtins.attrValues contentPkgs.coding-standards.passthru.fragments;
-  swsFragments = builtins.attrValues contentPkgs.stacked-workflows-content.passthru.fragments;
-
-  # Dev-only fragment reader (for this repo's dev instructions)
-  mkDevFragment = pkg: name:
-    fragments.mkFragment {
-      text = builtins.readFile ./dev/fragments/${pkg}/${name}.md;
-      description = "dev/${pkg}/${name}";
-      priority = 5;
-    };
-
-  # Package path scoping (for ecosystem frontmatter)
-  packagePaths = {
-    ai-clis = ''"modules/copilot-cli/**,modules/kiro-cli/**,packages/ai-clis/**"'';
-    mcp-servers = ''"modules/mcp-servers/**,packages/mcp-servers/**"'';
-    monorepo = null;
-    stacked-workflows = ''"packages/stacked-workflows/**"'';
-  };
-
-  # Dev fragment names per package
-  devFragmentNames = {
-    ai-clis = ["packaging-guide"];
-    monorepo = [
-      "build-commands"
-      "change-propagation"
-      "linting"
-      "naming-conventions"
-      "nix-standards"
-      "project-overview"
-    ];
-    mcp-servers = ["overlay-guide"];
-    stacked-workflows = ["development"];
-  };
-
-  # Extra published fragments per package (beyond commonFragments)
-  extraPublishedFragments = {
-    monorepo = swsFragments;
-    stacked-workflows = swsFragments;
-  };
-
-  # Compose fragments for a dev package profile
-  mkDevComposed = package: let
-    devFrags = map (mkDevFragment package) (devFragmentNames.${package} or []);
-    extraFrags = extraPublishedFragments.${package} or [];
-  in
-    fragments.compose {fragments = commonFragments ++ extraFrags ++ devFrags;};
-
-  # Generate ecosystem file content via fragments-ai transforms
-  aiTransforms = contentPkgs.fragments-ai.passthru.transforms;
-  mkEcosystemFile = package: let
-    paths = packagePaths.${package} or null;
-    withPaths = composed:
-      if paths != null
-      then composed // {inherit paths;}
-      else composed;
-  in {
-    claude = composed: aiTransforms.claude {inherit package;} (withPaths composed);
-    copilot = composed: aiTransforms.copilot (withPaths composed);
-    kiro = composed: aiTransforms.kiro {name = package;} (withPaths composed);
-  };
-
-  # ── Instruction file generation ──────────────────────────────────────
-  nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") devFragmentNames;
-
-  # AGENTS.md content (agentsmd ecosystem = no frontmatter)
-  agentsContent = let
-    rootComposed = mkDevComposed "monorepo";
-    packageContents = lib.mapAttrsToList (pkg: _: let
-      pkgOnly = fragments.compose {
-        fragments = map (mkDevFragment pkg) (devFragmentNames.${pkg} or []);
-      };
-    in
-      pkgOnly.text)
-    nonRootPackages;
-  in
-    rootComposed.text
-    + lib.optionalString (packageContents != [])
-    ("\n" + builtins.concatStringsSep "\n" packageContents);
-
-  # Generate files for all ecosystems x packages
-  mkEcosystemFiles = let
-    rootComposed = mkDevComposed "monorepo";
-    monorepoEco = mkEcosystemFile "monorepo";
-  in
-    {
-      ".claude/rules/common.md".text = monorepoEco.claude rootComposed;
-      ".github/copilot-instructions.md".text = monorepoEco.copilot rootComposed;
-      ".kiro/steering/common.md".text = aiTransforms.kiro {name = "common";} rootComposed;
-    }
-    // (lib.concatMapAttrs (pkg: _: let
-        composed = mkDevComposed pkg;
-        pkgEco = mkEcosystemFile pkg;
-      in {
-        ".claude/rules/${pkg}.md".text = pkgEco.claude composed;
-        ".github/instructions/${pkg}.instructions.md".text = pkgEco.copilot composed;
-        ".kiro/steering/${pkg}.md".text = pkgEco.kiro composed;
-      })
-      nonRootPackages);
 in {
   imports = [
     ./modules/devenv
@@ -176,33 +69,6 @@ in {
       repo-review = ./dev/skills/repo-review;
     };
   };
-
-  # ── File Generation (from fragments) ─────────────────────────────────
-  # Fragment-generated instruction files are ecosystem-specific and stay
-  # in files.* directly. The ai.* module handles ecosystem-agnostic shared
-  # skills; fragments handle per-ecosystem instruction content.
-  files =
-    mkEcosystemFiles
-    // {
-      "AGENTS.md".text = ''
-        # AGENTS.md
-
-        Project instructions for AI coding assistants working in this repository.
-        Read by Claude Code, Kiro, GitHub Copilot, Codex, and other tools that
-        support the [AGENTS.md standard](https://agents.md).
-
-        ${agentsContent}
-      '';
-      "CLAUDE.md".text = let
-        rootComposed = mkDevComposed "monorepo";
-      in ''
-        # CLAUDE.md
-
-        @AGENTS.md
-
-        ${rootComposed.text}
-      '';
-    };
 
   # ── treefmt ────────────────────────────────────────────────────────────
   treefmt = {
@@ -337,13 +203,6 @@ in {
   enterTest = ''
     echo "Validating devenv configuration..."
 
-    # Check ecosystem instruction files exist
-    test -L .claude/rules/common.md || { echo "FAIL: .claude/rules/common.md missing"; exit 1; }
-    test -L .kiro/steering/common.md || { echo "FAIL: .kiro/steering/common.md missing"; exit 1; }
-    test -L .github/copilot-instructions.md || { echo "FAIL: .github/copilot-instructions.md missing"; exit 1; }
-    test -L AGENTS.md || { echo "FAIL: AGENTS.md missing"; exit 1; }
-    test -L CLAUDE.md || { echo "FAIL: CLAUDE.md missing"; exit 1; }
-
     # Check skills are wired (Claude + Copilot + Kiro)
     test -L .claude/skills/sws-stack-fix || { echo "FAIL: .claude/skills/sws-stack-fix missing"; exit 1; }
     test -L .claude/skills/repo-review || { echo "FAIL: .claude/skills/repo-review missing"; exit 1; }
@@ -359,8 +218,10 @@ in {
   # ── Tasks ─────────────────────────────────────────────────────────────
   tasks = let
     updateTasks = (import ./dev/update.nix {inherit lib pkgs;}).tasks;
+    generateTasks = (import ./dev/tasks/generate.nix {inherit lib;}).tasks;
   in
     updateTasks
+    // generateTasks
     // {
       # Meta task: runs entire update pipeline
       "update:all" = {

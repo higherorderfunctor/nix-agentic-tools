@@ -114,148 +114,6 @@
       gitConfigFull = import ./modules/stacked-workflows/git-config-full.nix;
     };
 
-    apps = forAllSystems (system: let
-      pkgs = pkgsFor system;
-
-      # Fragments from content packages (via overlay)
-      commonFragments = builtins.attrValues pkgs.coding-standards.passthru.fragments;
-      swsFragments = builtins.attrValues pkgs.stacked-workflows-content.passthru.fragments;
-
-      # Dev-only fragment reader
-      mkDevFragment = pkg: name:
-        fragments.mkFragment {
-          text = builtins.readFile ./dev/fragments/${pkg}/${name}.md;
-          description = "dev/${pkg}/${name}";
-          priority = 5;
-        };
-
-      # Package path scoping (for ecosystem frontmatter)
-      packagePaths = {
-        ai-clis = ''"modules/copilot-cli/**,modules/kiro-cli/**,packages/ai-clis/**"'';
-        mcp-servers = ''"modules/mcp-servers/**,packages/mcp-servers/**"'';
-        monorepo = null;
-        stacked-workflows = ''"packages/stacked-workflows/**"'';
-      };
-
-      # Dev fragment names per package
-      devFragmentNames = {
-        ai-clis = ["packaging-guide"];
-        monorepo = [
-          "build-commands"
-          "change-propagation"
-          "linting"
-          "naming-conventions"
-          "nix-standards"
-          "project-overview"
-        ];
-        mcp-servers = ["overlay-guide"];
-        stacked-workflows = ["development"];
-      };
-      nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") devFragmentNames;
-
-      # Extra published fragments per package (beyond commonFragments)
-      extraPublishedFragments = {
-        monorepo = swsFragments;
-        stacked-workflows = swsFragments;
-      };
-
-      # Compose fragments for a dev package profile
-      mkDevComposed = package: let
-        devFrags = map (mkDevFragment package) (devFragmentNames.${package} or []);
-        extraFrags = extraPublishedFragments.${package} or [];
-      in
-        fragments.compose {fragments = commonFragments ++ extraFrags ++ devFrags;};
-
-      # Generate ecosystem file content via fragments-ai transforms
-      aiTransforms = pkgs.fragments-ai.passthru.transforms;
-      mkEcosystemFile = package: let
-        paths = packagePaths.${package} or null;
-        withPaths = composed:
-          if paths != null
-          then composed // {inherit paths;}
-          else composed;
-      in {
-        agentsmd = composed: aiTransforms.agentsmd (withPaths composed);
-        claude = composed: aiTransforms.claude {inherit package;} (withPaths composed);
-        copilot = composed: aiTransforms.copilot (withPaths composed);
-        kiro = composed: aiTransforms.kiro {name = package;} (withPaths composed);
-      };
-
-      generateScript = pkgs.writeShellApplication {
-        name = "generate";
-        text = let
-          rootComposed = mkDevComposed "monorepo";
-          monorepoEco = mkEcosystemFile "monorepo";
-          claudeCommon = monorepoEco.claude rootComposed;
-          kiroCommon = aiTransforms.kiro {name = "common";} rootComposed;
-          copilotCommon = monorepoEco.copilot rootComposed;
-          agentsContent = let
-            packageContents = lib.mapAttrsToList (pkg: _: let
-              pkgOnly = fragments.compose {
-                fragments = map (mkDevFragment pkg) (devFragmentNames.${pkg} or []);
-              };
-            in
-              pkgOnly.text)
-            nonRootPackages;
-          in
-            rootComposed.text
-            + lib.optionalString (packageContents != [])
-            ("\n" + builtins.concatStringsSep "\n" packageContents);
-          perPackageOutputs = lib.concatMapStringsSep "\n" (pkg: let
-            composed = mkDevComposed pkg;
-            pkgEco = mkEcosystemFile pkg;
-            claude = pkgEco.claude composed;
-            kiro = pkgEco.kiro composed;
-            copilot = pkgEco.copilot composed;
-          in ''
-            cat > "$REPO_ROOT/.claude/rules/${pkg}.md" << 'FRAGMENT_EOF'
-            ${claude}
-            FRAGMENT_EOF
-            cat > "$REPO_ROOT/.kiro/steering/${pkg}.md" << 'FRAGMENT_EOF'
-            ${kiro}
-            FRAGMENT_EOF
-            cat > "$REPO_ROOT/.github/instructions/${pkg}.instructions.md" << 'FRAGMENT_EOF'
-            ${copilot}
-            FRAGMENT_EOF
-          '') (builtins.attrNames nonRootPackages);
-        in ''
-          REPO_ROOT="$(pwd)"
-          cat > "$REPO_ROOT/.claude/rules/common.md" << 'FRAGMENT_EOF'
-          ${claudeCommon}
-          FRAGMENT_EOF
-          cat > "$REPO_ROOT/.kiro/steering/common.md" << 'FRAGMENT_EOF'
-          ${kiroCommon}
-          FRAGMENT_EOF
-          cat > "$REPO_ROOT/.github/copilot-instructions.md" << 'FRAGMENT_EOF'
-          ${copilotCommon}
-          FRAGMENT_EOF
-          cat > "$REPO_ROOT/AGENTS.md" << 'FRAGMENT_EOF'
-          # AGENTS.md
-
-          Project instructions for AI coding assistants working in this repository.
-          Read by Claude Code, Kiro, GitHub Copilot, Codex, and other tools that
-          support the [AGENTS.md standard](https://agents.md).
-
-          ${agentsContent}
-          FRAGMENT_EOF
-          cat > "$REPO_ROOT/CLAUDE.md" << 'FRAGMENT_EOF'
-          # CLAUDE.md
-
-          @AGENTS.md
-
-          ${rootComposed.text}
-          FRAGMENT_EOF
-          ${perPackageOutputs}
-          echo "Generated instruction files from fragments."
-        '';
-      };
-    in {
-      generate = {
-        type = "app";
-        program = lib.getExe generateScript;
-      };
-    });
-
     checks = forAllSystems (system: let
       pkgs = pkgsFor system;
       moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs self;};
@@ -286,6 +144,47 @@
       inherit (pkgs) coding-standards fragments-ai stacked-workflows-content;
       # Git tools
       inherit (pkgs) agnix git-absorb git-branchless git-revise;
+
+      # Instruction derivations (from dev/generate.nix)
+      instructions-agents = let
+        gen = import ./dev/generate.nix {inherit lib pkgs;};
+      in
+        pkgs.writeText "AGENTS.md" gen.agentsMd;
+
+      instructions-claude = let
+        gen = import ./dev/generate.nix {inherit lib pkgs;};
+      in
+        pkgs.writeText "CLAUDE.md" gen.claudeMd;
+
+      instructions-copilot = let
+        gen = import ./dev/generate.nix {inherit lib pkgs;};
+      in
+        pkgs.runCommand "instructions-copilot" {} (
+          "mkdir -p $out/instructions\n"
+          + lib.concatStringsSep "\n" (lib.mapAttrsToList (name: content: ''
+              cat > $out/${
+                if name == "copilot-instructions.md"
+                then name
+                else "instructions/${name}"
+              } << 'FRAGMENT_EOF'
+              ${content}
+              FRAGMENT_EOF
+            '')
+            gen.copilotFiles)
+        );
+
+      instructions-kiro = let
+        gen = import ./dev/generate.nix {inherit lib pkgs;};
+      in
+        pkgs.runCommand "instructions-kiro" {} (
+          "mkdir -p $out\n"
+          + lib.concatStringsSep "\n" (lib.mapAttrsToList (name: content: ''
+              cat > $out/${name} << 'FRAGMENT_EOF'
+              ${content}
+              FRAGMENT_EOF
+            '')
+            gen.kiroFiles)
+        );
       inherit
         (pkgs.nix-mcp-servers)
         context7-mcp
