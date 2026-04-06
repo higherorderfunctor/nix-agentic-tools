@@ -3,13 +3,14 @@
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-NVFETCHER_OUT="$ROOT/.nvfetcher"
-LOCKS_AI="$ROOT/packages/ai-clis/locks"
-LOCKS_MCP="$ROOT/packages/mcp-servers/locks"
-HASHES_AI="$ROOT/packages/ai-clis/hashes.json"
-HASHES_GIT="$ROOT/packages/git-tools/hashes.json"
-HASHES_MCP="$ROOT/packages/mcp-servers/hashes.json"
+cd "$(dirname "$0")/.."
+
+NVFETCHER_OUT=".nvfetcher"
+LOCKS_AI="packages/ai-clis/locks"
+LOCKS_MCP="packages/mcp-servers/locks"
+HASHES_AI="packages/ai-clis/hashes.json"
+HASHES_GIT="packages/git-tools/hashes.json"
+HASHES_MCP="packages/mcp-servers/hashes.json"
 
 log() { echo "==> $*" >&2; }
 
@@ -21,17 +22,22 @@ inject_hash() {
     '.[$key][$field] = $val' "$file" >"$tmp" && mv "$tmp" "$file"
 }
 
-# ── 1. nvfetcher (single run, single output) ────────────────────
+# ── 1. Flake inputs ─────────────────────────────────────────────
+log "Updating flake inputs"
+nix flake update
+git add flake.lock
+
+# ── 2. nvfetcher (single run, single output) ────────────────────
 log "Running nvfetcher"
-nvfetcher -c "$ROOT/nvfetcher.toml" -o "$NVFETCHER_OUT"
+nvfetcher -c nvfetcher.toml -o "$NVFETCHER_OUT"
 
 log "Formatting generated files"
 treefmt "$NVFETCHER_OUT/generated.nix"
 
 # Stage generated output so nix build can see it
-git -C "$ROOT" add "$NVFETCHER_OUT"
+git add "$NVFETCHER_OUT"
 
-# ── 2. Refresh npm lock files ────────────────────────────────────
+# ── 3. Refresh npm lock files ────────────────────────────────────
 refresh_lock_tarball() {
   local locks_dir=$1 name=$2 nv_key=$3
   local url
@@ -70,7 +76,7 @@ refresh_lock_tarball "$LOCKS_MCP" openmemory-mcp openmemory-mcp
 refresh_lock_tarball "$LOCKS_MCP" sequential-thinking-mcp sequential-thinking-mcp
 refresh_lock_git "$LOCKS_MCP" git-intel-mcp git-intel-mcp
 
-# ── 3. Inject npmDepsHash ────────────────────────────────────────
+# ── 4. Inject npmDepsHash ────────────────────────────────────────
 update_npm_hash() {
   local hashes_file=$1 locks_dir=$2 name=$3 nv_key=$4
   local lock="$locks_dir/${name}-package-lock.json"
@@ -90,14 +96,14 @@ update_npm_hash "$HASHES_MCP" "$LOCKS_MCP" git-intel-mcp git-intel-mcp
 update_npm_hash "$HASHES_MCP" "$LOCKS_MCP" openmemory-mcp openmemory-mcp
 update_npm_hash "$HASHES_MCP" "$LOCKS_MCP" sequential-thinking-mcp sequential-thinking-mcp
 
-# ── 4. Inject Go vendorHash (only if version changed) ───────────
+# ── 5. Inject Go vendorHash (only if version changed) ───────────
 update_vendor_hash() {
   local hashes_file=$1 nv_key=$2 pkg=$3
   local old_hash
   old_hash=$(jq -r ".\"$nv_key\".vendorHash // empty" "$hashes_file")
 
   # Try building with current hash first — skip if it works
-  if [[ -n "$old_hash" ]] && nix build "$ROOT#$pkg" --no-link 2>/dev/null; then
+  if [[ -n "$old_hash" ]] && nix build ".#$pkg" --no-link 2>/dev/null; then
     log "vendorHash for $nv_key is current, skipping"
     return
   fi
@@ -105,11 +111,11 @@ update_vendor_hash() {
   log "Prefetching vendorHash for $nv_key"
   inject_hash "$hashes_file" "$nv_key" "vendorHash" \
     "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-  git -C "$ROOT" add "$hashes_file"
+  git add "$hashes_file"
 
   local hash
   hash=$(
-    nix build "$ROOT#$pkg" 2>&1 |
+    nix build ".#$pkg" 2>&1 |
       grep -oP 'got:\s+\Ksha256-[A-Za-z0-9+/=]+' |
       head -1
   ) || true
@@ -125,14 +131,14 @@ update_vendor_hash() {
 update_vendor_hash "$HASHES_MCP" "github-mcp-server" "github-mcp"
 update_vendor_hash "$HASHES_MCP" "mcp-language-server" "mcp-language-server"
 
-# ── 5. Inject Rust cargoHash (only if version changed) ──────────
+# ── 6. Inject Rust cargoHash (only if version changed) ──────────
 update_cargo_hash() {
   local hashes_file=$1 nv_key=$2 pkg=$3
   local old_hash
   old_hash=$(jq -r ".\"$nv_key\".cargoHash // empty" "$hashes_file")
 
   # Try building with current hash first — skip if it works
-  if [[ -n "$old_hash" ]] && nix build "$ROOT#$pkg" --no-link 2>/dev/null; then
+  if [[ -n "$old_hash" ]] && nix build ".#$pkg" --no-link 2>/dev/null; then
     log "cargoHash for $nv_key is current, skipping"
     return
   fi
@@ -140,11 +146,11 @@ update_cargo_hash() {
   log "Prefetching cargoHash for $nv_key"
   inject_hash "$hashes_file" "$nv_key" "cargoHash" \
     "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-  git -C "$ROOT" add "$hashes_file"
+  git add "$hashes_file"
 
   local hash
   hash=$(
-    nix build "$ROOT#$pkg" 2>&1 |
+    nix build ".#$pkg" 2>&1 |
       grep -oP 'got:\s+\Ksha256-[A-Za-z0-9+/=]+' |
       head -1
   ) || true
@@ -161,11 +167,11 @@ update_cargo_hash "$HASHES_GIT" "agnix" "agnix"
 update_cargo_hash "$HASHES_GIT" "git-absorb" "git-absorb"
 update_cargo_hash "$HASHES_GIT" "git-branchless" "git-branchless"
 
-# ── 6. Verify ──────────────────────────────────────────────────
+# ── 7. Verify ──────────────────────────────────────────────────
 log "Staging changes"
-git -C "$ROOT" add -A
+git add -A
 
 log "Verifying all packages evaluate"
-nix flake check "$ROOT" --no-build 2>&1 | tail -3 || true
+nix flake check --no-build 2>&1 | tail -3 || true
 
 log "Done — review changes with: git diff --cached"

@@ -1,6 +1,6 @@
 {
   "context7-mcp": {
-    "npmDepsHash": "sha256-StUfXc5uQ3i+yCGI+3DP5lsnukfWjKFciUoPCNcs3mU="
+    "npmDepsHash": "sha256-+vXV/6NQfRMnY2qBCGwphnZEiLhFmC0eVPywLAfN3eo="
   },
   "git-intel-mcp": {
     "npmDepsHash": "sha256-/HN6Ylrow/v7ssWb0oIYJD5cTV8RWH8ipmDtfAUY9zc="
@@ -12,9 +12,9 @@
     "vendorHash": "sha256-3NEG9o5AF2ZEFWkA9Gub8vn6DNptN6DwVcn/oR8ujW0="
   },
   "openmemory-mcp": {
-    "npmDepsHash": "sha256-A76V9hFCablIbiazsXlNl13+GAVWoSLoJK2mCij5L/w="
+    "npmDepsHash": "sha256-iJ8wSXzDeXJ28nloojgokA9s4vUr7vlAMXG0/5JoyqA="
   },
   "sequential-thinking-mcp": {
-    "npmDepsHash": "sha256-fVS+7tpQe5dsFy12kdUuL1whDsDVQLgB35A+xIDVlME="
+    "npmDepsHash": "sha256-CnPjLNC893jVRYWNJzm14jaJx8/U1oDftyFSrpvkDZQ="
   }
 }
