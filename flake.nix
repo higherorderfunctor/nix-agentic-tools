@@ -269,7 +269,7 @@
           # Embed NuschtOS options search at /options/
           cp -rL $optionsSearch result-docs/options
           chmod -R u+w result-docs/options
-          sed -i 's|<base href="/">|<base href="/options/">|g' \
+          sed -i 's|<base href="/">|<base href="/nix-agentic-tools/options/">|g' \
             result-docs/options/index.html \
             result-docs/options/index.csr.html
           # Build Pagefind full-text search index

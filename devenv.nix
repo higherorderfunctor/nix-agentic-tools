@@ -101,6 +101,10 @@ in {
     # Commit message convention
     convco.enable = true;
 
+    # Shell linting
+    shellcheck.enable = true;
+    shfmt.enable = true;
+
     # Syntax validation
     check-json.enable = true;
     check-toml.enable = true;
