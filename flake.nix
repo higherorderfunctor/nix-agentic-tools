@@ -153,24 +153,33 @@
 
       instructions-claude = let
         gen = import ./dev/generate.nix {inherit lib pkgs;};
+        files =
+          {"CLAUDE.md" = gen.claudeMd;}
+          // lib.mapAttrs' (name: content:
+            lib.nameValuePair "rules/${name}" content)
+          gen.claudeFiles;
       in
-        pkgs.writeText "CLAUDE.md" gen.claudeMd;
+        pkgs.runCommand "instructions-claude" {} (
+          "mkdir -p $out/rules\n"
+          + lib.concatStringsSep "\n" (lib.mapAttrsToList (name: content: "cp ${pkgs.writeText (baseNameOf name) content} $out/${name}")
+            files)
+        );
 
       instructions-copilot = let
         gen = import ./dev/generate.nix {inherit lib pkgs;};
+        files = lib.mapAttrs' (name: content:
+          lib.nameValuePair (
+            if name == "copilot-instructions.md"
+            then name
+            else "instructions/${name}"
+          )
+          content)
+        gen.copilotFiles;
       in
         pkgs.runCommand "instructions-copilot" {} (
           "mkdir -p $out/instructions\n"
-          + lib.concatStringsSep "\n" (lib.mapAttrsToList (name: content: ''
-              cat > $out/${
-                if name == "copilot-instructions.md"
-                then name
-                else "instructions/${name}"
-              } << 'FRAGMENT_EOF'
-              ${content}
-              FRAGMENT_EOF
-            '')
-            gen.copilotFiles)
+          + lib.concatStringsSep "\n" (lib.mapAttrsToList (name: content: "cp ${pkgs.writeText (baseNameOf name) content} $out/${name}")
+            files)
         );
 
       instructions-kiro = let
@@ -178,11 +187,7 @@
       in
         pkgs.runCommand "instructions-kiro" {} (
           "mkdir -p $out\n"
-          + lib.concatStringsSep "\n" (lib.mapAttrsToList (name: content: ''
-              cat > $out/${name} << 'FRAGMENT_EOF'
-              ${content}
-              FRAGMENT_EOF
-            '')
+          + lib.concatStringsSep "\n" (lib.mapAttrsToList (name: content: "cp ${pkgs.writeText name content} $out/${name}")
             gen.kiroFiles)
         );
       inherit

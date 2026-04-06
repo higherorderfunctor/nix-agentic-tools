@@ -22,15 +22,19 @@ in {
     };
 
     "generate:instructions:claude" = {
-      description = "Generate CLAUDE.md from fragments";
+      description = "Generate CLAUDE.md and Claude rule files from fragments";
       before = ["generate:instructions"];
       exec = ''
         ${bashPreamble}
         ${log}
-        log "Building CLAUDE.md"
+        log "Building CLAUDE.md + Claude rules"
         src=$(nix build .#instructions-claude --no-link --print-out-paths)
-        cp -f "$src" CLAUDE.md
-        log "CLAUDE.md updated"
+        cp -f "$src/CLAUDE.md" CLAUDE.md
+        mkdir -p .claude/rules
+        for f in "$src"/rules/*.md; do
+          [ -f "$f" ] && cp -f "$f" ".claude/rules/$(basename "$f")"
+        done
+        log "CLAUDE.md + rules updated"
       '';
     };
 
