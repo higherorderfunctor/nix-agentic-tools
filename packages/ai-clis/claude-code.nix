@@ -16,7 +16,7 @@ prev.claude-code.override (_: {
         inherit (nv) version;
         src = final.fetchzip {
           url = "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-${nv.version}.tgz";
-          hash = nv.src.outputHash;
+          hash = nv.srcHash;
         };
         inherit (nv) npmDepsHash;
       });

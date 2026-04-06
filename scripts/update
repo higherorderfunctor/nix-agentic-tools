@@ -96,6 +96,23 @@ update_npm_hash "$HASHES_MCP" "$LOCKS_MCP" git-intel-mcp git-intel-mcp
 update_npm_hash "$HASHES_MCP" "$LOCKS_MCP" openmemory-mcp openmemory-mcp
 update_npm_hash "$HASHES_MCP" "$LOCKS_MCP" sequential-thinking-mcp sequential-thinking-mcp
 
+# ── 4b. Inject fetchzip srcHash (tarball→unpacked) ───────────────
+update_src_hash() {
+  local hashes_file=$1 nv_key=$2
+  local url
+  url=$(jq -r ".\"$nv_key\".src.url" "$NVFETCHER_OUT/generated.json")
+
+  log "Prefetching srcHash for $nv_key"
+  local base32
+  base32=$(nix-prefetch-url --unpack --type sha256 "$url" 2>/dev/null)
+  local hash
+  hash=$(nix hash convert --hash-algo sha256 --to sri "$base32")
+  inject_hash "$hashes_file" "$nv_key" "srcHash" "$hash"
+}
+
+# AI CLIs (fetchzip needs unpacked hash, not fetchurl hash)
+update_src_hash "$HASHES_AI" claude-code
+
 # ── 5. Inject Go vendorHash (only if version changed) ───────────
 update_vendor_hash() {
   local hashes_file=$1 nv_key=$2 pkg=$3
