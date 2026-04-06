@@ -183,7 +183,16 @@ in {
   };
 
   # ── Processes (`devenv up`) ────────────────────────────────────────────
-  processes.docs.exec = "${pkgs.mdbook}/bin/mdbook serve docs/ --open";
+  processes.docs.exec = ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    # Generate site content before serving
+    src=$(nix build .#docs-site --no-link --print-out-paths)
+    rm -rf docs/src
+    cp -rL "$src" docs/src
+    chmod -R u+w docs/src
+    ${pkgs.mdbook}/bin/mdbook serve docs/ --open
+  '';
 
   # ── Shell Init ──────────────────────────────────────────────────────────
   # Clean stale skill symlinks pointing to old Nix store paths.

@@ -62,11 +62,13 @@
         (import ./packages/ai-clis {inherit inputs;})
         (import ./packages/coding-standards {})
         (import ./packages/fragments-ai {})
+        (import ./packages/fragments-docs {})
         (import ./packages/git-tools {inherit inputs;})
         (import ./packages/mcp-servers {inherit inputs;})
         (import ./packages/stacked-workflows {})
       ];
       fragments-ai = import ./packages/fragments-ai {};
+      fragments-docs = import ./packages/fragments-docs {};
       git-tools = import ./packages/git-tools {inherit inputs;};
       mcp-servers = import ./packages/mcp-servers {inherit inputs;};
       stacked-workflows = import ./packages/stacked-workflows {};
@@ -135,14 +137,75 @@
 
     packages = forAllSystems (system: let
       pkgs = pkgsFor system;
+      docGen = pkgs.fragments-docs.passthru.generators;
+
+      # Doc site components — local bindings for cross-referencing
+      siteProse = pkgs.runCommand "docs-site-prose" {} ''
+        cp -r ${./dev/docs} $out
+        chmod -R u+w $out
+      '';
+
+      siteSnippets =
+        pkgs.runCommand "docs-site-snippets" {
+          overlayTable = pkgs.writeText "overlay-table.md" (docGen.snippets.overlayTable {});
+          cliTable = pkgs.writeText "cli-table.md" (docGen.snippets.cliTable {});
+          aiMappingTable = pkgs.writeText "ai-mapping-table.md" (docGen.snippets.aiMappingTable {});
+        } ''
+          mkdir -p $out/snippets
+          cp $overlayTable $out/snippets/overlay-table.md
+          cp $cliTable $out/snippets/cli-table.md
+          cp $aiMappingTable $out/snippets/ai-mapping-table.md
+        '';
+
+      siteReference =
+        pkgs.runCommand "docs-site-reference" {
+          overlayPackages = pkgs.writeText "overlays-packages.md" (docGen.overlayPackages {});
+          hmOptions = pkgs.writeText "home-manager.md" (docGen.hmOptions {});
+          devenvOptions = pkgs.writeText "devenv.md" (docGen.devenvOptions {});
+          mcpServers = pkgs.writeText "mcp-servers.md" (docGen.mcpServers {});
+          libApi = pkgs.writeText "lib-api.md" (docGen.libApi {});
+          typesRef = pkgs.writeText "types.md" (docGen.typesRef {});
+          aiMapping = pkgs.writeText "ai-mapping.md" (docGen.aiMapping {});
+        } ''
+          mkdir -p $out/{concepts,guides,reference}
+          cp $overlayPackages $out/concepts/overlays-packages.md
+          cp $hmOptions $out/guides/home-manager.md
+          cp $devenvOptions $out/guides/devenv.md
+          cp $mcpServers $out/guides/mcp-servers.md
+          cp $libApi $out/reference/lib-api.md
+          cp $typesRef $out/reference/types.md
+          cp $aiMapping $out/reference/ai-mapping.md
+        '';
+
+      siteCombined = pkgs.runCommand "docs-site" {} ''
+        cp -r ${siteProse} $out
+        chmod -R u+w $out
+        mkdir -p $out/generated
+        cp -r ${siteSnippets}/* $out/generated/
+        cp -r ${siteReference}/concepts/* $out/concepts/
+        cp -r ${siteReference}/guides/* $out/guides/
+        mkdir -p $out/reference
+        cp -r ${siteReference}/reference/* $out/reference/
+      '';
     in {
-      # Documentation
+      # Documentation — generated doc site components
+      docs-site-prose = siteProse;
+      docs-site-snippets = siteSnippets;
+      docs-site-reference = siteReference;
+      docs-site = siteCombined;
+
+      # Documentation — built book
       docs =
         pkgs.runCommand "nix-agentic-tools-docs" {
           nativeBuildInputs = [pkgs.mdbook];
           src = ./docs;
+          site = siteCombined;
         } ''
           cp -r $src docs
+          chmod -R u+w docs
+          rm -rf docs/src
+          cp -r $site docs/src
+          chmod -R u+w docs/src
           mdbook build docs
           mv docs/../result-docs $out
         '';
@@ -150,7 +213,7 @@
       # AI CLIs
       inherit (pkgs) claude-code github-copilot-cli kiro-cli kiro-gateway;
       # Content packages
-      inherit (pkgs) coding-standards fragments-ai stacked-workflows-content;
+      inherit (pkgs) coding-standards fragments-ai fragments-docs stacked-workflows-content;
       # Git tools
       inherit (pkgs) agnix git-absorb git-branchless git-revise;
 
