@@ -108,5 +108,159 @@ in {
       '';
       before = ["update:all"];
     };
+
+    "update:hashes" = {
+      description = "Compute all dependency hashes for discovered packages";
+      after = ["update:locks"];
+      before = ["update:all"];
+      exec = let
+        npmCommands = lib.concatStringsSep "\n" (lib.mapAttrsToList (name: entry: ''
+            log "Prefetching npmDepsHash for ${name}"
+            hash=$(prefetch-npm-deps "${entry.lockDir}/${name}-package-lock.json" 2>/dev/null)
+            inject_hash "${entry.hashFile}" "${name}" "npmDepsHash" "$hash"
+          '')
+          npmWithSource);
+
+        srcHashCommands = lib.concatStringsSep "\n" (lib.mapAttrsToList (name: entry: ''
+            log "Prefetching srcHash for ${name}"
+            base32=$(nix-prefetch-url --unpack --type sha256 "${entry.sourceUrl}" 2>/dev/null)
+            hash=$(nix hash convert --hash-algo sha256 --to sri "$base32")
+            inject_hash "${entry.hashFile}" "${name}" "srcHash" "$hash"
+          '')
+          srcHashWithUrl);
+
+        cargoCommands = lib.concatStringsSep "\n" (lib.mapAttrsToList (name: entry: let
+            output = flakeOutput entry.group name;
+          in ''
+            old_hash=$(jq -r '."${name}".cargoHash // empty' "${entry.hashFile}")
+            if [[ -n "$old_hash" ]] && nix build ".#${output}" --no-link 2>/dev/null; then
+              log "cargoHash for ${name} is current, skipping"
+            else
+              log "Prefetching cargoHash for ${name}"
+              inject_hash "${entry.hashFile}" "${name}" "cargoHash" \
+                "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+              git add "${entry.hashFile}"
+
+              hash=$(
+                nix build ".#${output}" 2>&1 |
+                  grep -oP 'got:\s+\Ksha256-[A-Za-z0-9+/=]+' |
+                  head -1
+              ) || true
+
+              if [[ -n "$hash" ]]; then
+                inject_hash "${entry.hashFile}" "${name}" "cargoHash" "$hash"
+              else
+                log "WARNING: could not determine cargoHash for ${name}"
+                inject_hash "${entry.hashFile}" "${name}" "cargoHash" "$old_hash"
+              fi
+            fi
+          '')
+          cargoEntries);
+
+        vendorCommands = lib.concatStringsSep "\n" (lib.mapAttrsToList (name: entry: let
+            output = flakeOutput entry.group name;
+          in ''
+            old_hash=$(jq -r '."${name}".vendorHash // empty' "${entry.hashFile}")
+            if [[ -n "$old_hash" ]] && nix build ".#${output}" --no-link 2>/dev/null; then
+              log "vendorHash for ${name} is current, skipping"
+            else
+              log "Prefetching vendorHash for ${name}"
+              inject_hash "${entry.hashFile}" "${name}" "vendorHash" \
+                "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+              git add "${entry.hashFile}"
+
+              hash=$(
+                nix build ".#${output}" 2>&1 |
+                  grep -oP 'got:\s+\Ksha256-[A-Za-z0-9+/=]+' |
+                  head -1
+              ) || true
+
+              if [[ -n "$hash" ]]; then
+                inject_hash "${entry.hashFile}" "${name}" "vendorHash" "$hash"
+              else
+                log "WARNING: could not determine vendorHash for ${name}"
+                inject_hash "${entry.hashFile}" "${name}" "vendorHash" "$old_hash"
+              fi
+            fi
+          '')
+          vendorEntries);
+      in ''
+        ${bashPreamble}
+        ${bashHelpers}
+        ${npmCommands}
+        ${srcHashCommands}
+        ${cargoCommands}
+        ${vendorCommands}
+      '';
+    };
+
+    "update:locks" = {
+      description = "Regenerate npm lock files from upstream sources";
+      after = ["update:nvfetcher"];
+      before = ["update:all"];
+      exec = let
+        lockCommands = lib.concatStringsSep "\n" (lib.mapAttrsToList (name: entry: let
+          refreshCmd =
+            if entry.sourceType == "git"
+            then ''
+              log "Refreshing lock for ${name} (git)"
+              tmp=$(mktemp -d)
+              git clone --depth 1 "${entry.sourceUrl}" "$tmp/repo" 2>/dev/null
+              (cd "$tmp/repo" && npm install --package-lock-only --ignore-scripts --silent 2>/dev/null)
+              cp "$tmp/repo/package-lock.json" "${entry.lockDir}/${name}-package-lock.json"
+              rm -rf "$tmp"
+            ''
+            else ''
+              log "Refreshing lock for ${name} (tarball)"
+              tmp=$(mktemp -d)
+              curl -sL "${entry.sourceUrl}" | tar xz -C "$tmp"
+              (cd "$tmp/package" && npm install --package-lock-only --ignore-scripts --silent 2>/dev/null)
+              cp "$tmp/package/package-lock.json" "${entry.lockDir}/${name}-package-lock.json"
+              rm -rf "$tmp"
+            '';
+        in
+          refreshCmd)
+        npmWithSource);
+      in ''
+        ${bashPreamble}
+        ${bashHelpers}
+        ${lockCommands}
+      '';
+    };
+
+    "update:nvfetcher" = {
+      description = "Run nvfetcher to refresh source versions";
+      after = ["update:flake"];
+      before = ["update:all"];
+      exec = ''
+        ${bashPreamble}
+        ${bashHelpers}
+        log "Running nvfetcher"
+        nvfetcher -c nvfetcher.toml -o .nvfetcher
+
+        log "Formatting generated files"
+        treefmt .nvfetcher/generated.nix
+
+        log "Staging nvfetcher output"
+        git add .nvfetcher
+      '';
+    };
+
+    "update:verify" = {
+      description = "Stage changes and verify all packages evaluate";
+      after = ["update:hashes"];
+      before = ["update:all"];
+      exec = ''
+        ${bashPreamble}
+        ${bashHelpers}
+        log "Staging changes"
+        git add -A
+
+        log "Verifying all packages evaluate"
+        nix flake check --no-build 2>&1 | tail -3 || true
+
+        log "Done — review changes with: git diff --cached"
+      '';
+    };
   };
 }

@@ -6,6 +6,7 @@
     "npmDepsHash": "sha256-/HN6Ylrow/v7ssWb0oIYJD5cTV8RWH8ipmDtfAUY9zc="
   },
   "github-mcp-server": {
+    "flakeOutput": "github-mcp",
     "vendorHash": "sha256-q21hnMnWOzfg7BGDl4KM1I3v0wwS5sSxzLA++L6jO4s="
   },
   "mcp-language-server": {
