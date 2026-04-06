@@ -17,7 +17,10 @@ in {
       in
         a
         // {
-          inherit (nv) version src;
+          # Strip "v" prefix — nvfetcher gives "v0.10.0" from the tag
+          # but the binary prints "0.10.0" in --version output.
+          version = final.lib.removePrefix "v" nv.version;
+          inherit (nv) src;
           inherit (nv) cargoHash;
           postPatch = null;
         });
