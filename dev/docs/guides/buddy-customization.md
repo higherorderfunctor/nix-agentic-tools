@@ -24,33 +24,36 @@ Your account UUID is in `~/.claude.json` under
 `oauthAccount.accountUuid`.
 
 > **Note on secrets:** The UUID is read at **build time** by Nix
-> evaluation. Runtime secret managers (sops-nix, agenix) cannot
-> provide it — their secret paths don't exist during evaluation,
-> and `builtins.readFile` on a sops path would either fail or
-> import the secret into the nix store anyway.
+> evaluation, before any runtime secret manager has mounted its
+> secrets. sops-nix and agenix decrypt to paths like
+> `/run/user/<uid>/secrets/` during activation — those paths
+> don't exist when Nix evaluates your config, so they cannot
+> provide the userId.
 >
-> **Practical patterns:**
+> **The UUID is not cryptographically secret.** It's a stable
+> identifier Anthropic uses to associate data with your account
+> (closer to an email address than a password). It can't
+> authenticate as you, make API calls, or access conversations.
+> The actual auth secrets are the OAuth tokens in `~/.claude.json`
+> (`sessionToken`, `refreshToken`) — those should still be
+> protected, but the UUID does not need the same treatment.
 >
-> 1. **Inline literal** — paste the UUID directly into your
->    config. The UUID ends up in the derivation hash and the
->    patched binary either way; treating it as a secret in your
->    config repo is the only meaningful protection.
-> 2. **Plaintext file outside the repo** — read with
->    `builtins.readFile` from a path Nix can access at eval time:
+> **Recommended:** Paste the UUID directly into your config as a
+> literal string. It ends up in the nix store (in the derivation
+> hash), but that's the same machine that already has your auth
+> tokens, so the threat model doesn't change.
 >
->    ```nix
->    userId = lib.removeSuffix "\n"
->      (builtins.readFile /home/you/.config/nix-secrets/claude-uuid);
->    ```
+> If you want to keep the UUID out of your config repo without an
+> activation script, read from a plaintext file outside the repo
+> at eval time:
 >
->    The file must exist when `home-manager switch` runs. If you
->    use sops to manage it, decrypt to this path **before**
->    activation (e.g., via a separate script or systemd unit
->    that runs before `home-manager-<user>.service`).
+> ```nix
+> userId = lib.removeSuffix "\n"
+>   (builtins.readFile /home/you/.config/nix-secrets/claude-uuid);
+> ```
 >
-> The UUID is not cryptographically secret — it's a stable
-> identifier Anthropic uses to derive your buddy. The patched
-> binary contains only the computed salt, not the UUID itself.
+> The path must be a Nix path literal (no quotes, no `~`) and the
+> file must exist before `home-manager switch` runs.
 
 ## Direct Package Usage
 
