@@ -24,9 +24,8 @@
 
 ## Next Session
 
-### Test
+### HITL Integration
 
-- [ ] Review docs site (`devenv up docs` — opens browser automatically)
 - [ ] Wire nix-agentic-tools into nixos-config: HM global + devshell per-repo
 - [ ] Review docs accuracy against actual consumer experience
 - [ ] Fix any doc gaps found during integration testing
