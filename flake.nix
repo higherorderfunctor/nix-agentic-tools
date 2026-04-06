@@ -80,7 +80,6 @@
     };
 
     lib = let
-      aiCommon = import ./lib/ai-common.nix {inherit lib;};
       devshellLib = import ./lib/devshell.nix {inherit lib;};
       mcpLib = import ./lib/mcp.nix {inherit lib;};
 
@@ -100,9 +99,8 @@
       };
     in {
       inherit fragments presets;
-      inherit (aiCommon) mkClaudeRule mkCopilotInstruction mkKiroSteering;
       inherit (devshellLib) mkAgenticShell;
-      inherit (fragments) compose mkEcosystemContent mkFragment mkFrontmatter;
+      inherit (fragments) compose mkFragment mkFrontmatter render;
       inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig;
       mkMcpConfig = entries: {mcpServers = entries;};
       mapTools = f: lib.concatLists (lib.mapAttrsToList (server: tools: map (tool: f server tool) tools));
@@ -153,20 +151,29 @@
       in
         fragments.compose {fragments = commonFragments ++ devFrags;};
 
-      # Generate ecosystem file content
-      mkEcosystemFile = ecosystem: package: composed:
-        fragments.mkEcosystemContent {
-          inherit ecosystem package composed;
-          paths = packagePaths.${package} or null;
-        };
+      # Generate ecosystem file content via fragments-ai transforms
+      aiTransforms = pkgs.fragments-ai.passthru.transforms;
+      mkEcosystemFile = package: let
+        paths = packagePaths.${package} or null;
+        withPaths = composed:
+          if paths != null
+          then composed // {inherit paths;}
+          else composed;
+      in {
+        agentsmd = composed: aiTransforms.agentsmd (withPaths composed);
+        claude = composed: aiTransforms.claude {inherit package;} (withPaths composed);
+        copilot = composed: aiTransforms.copilot (withPaths composed);
+        kiro = composed: aiTransforms.kiro {name = package;} (withPaths composed);
+      };
 
       generateScript = pkgs.writeShellApplication {
         name = "generate";
         text = let
           rootComposed = mkDevComposed "monorepo";
-          claudeCommon = mkEcosystemFile "claude" "monorepo" rootComposed;
-          kiroCommon = mkEcosystemFile "kiro" "monorepo" rootComposed;
-          copilotCommon = mkEcosystemFile "copilot" "monorepo" rootComposed;
+          monorepoEco = mkEcosystemFile "monorepo";
+          claudeCommon = monorepoEco.claude rootComposed;
+          kiroCommon = monorepoEco.kiro rootComposed;
+          copilotCommon = monorepoEco.copilot rootComposed;
           agentsContent = let
             packageContents = lib.mapAttrsToList (pkg: _: let
               pkgOnly = fragments.compose {
@@ -181,9 +188,10 @@
             ("\n" + builtins.concatStringsSep "\n" packageContents);
           perPackageOutputs = lib.concatMapStringsSep "\n" (pkg: let
             composed = mkDevComposed pkg;
-            claude = mkEcosystemFile "claude" pkg composed;
-            kiro = mkEcosystemFile "kiro" pkg composed;
-            copilot = mkEcosystemFile "copilot" pkg composed;
+            pkgEco = mkEcosystemFile pkg;
+            claude = pkgEco.claude composed;
+            kiro = pkgEco.kiro composed;
+            copilot = pkgEco.copilot composed;
           in ''
             cat > "$REPO_ROOT/.claude/rules/${pkg}.md" << 'FRAGMENT_EOF'
             ${claude}

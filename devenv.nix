@@ -19,6 +19,7 @@
   # Content packages — apply overlays to get passthru fragments.
   contentPkgs = pkgs.extend (lib.composeManyExtensions [
     (import ./packages/coding-standards {})
+    (import ./packages/fragments-ai {})
     (import ./packages/stacked-workflows {})
   ]);
 
@@ -61,12 +62,19 @@
   in
     fragments.compose {fragments = commonFragments ++ devFrags;};
 
-  # Generate ecosystem file content
-  mkEcosystemFile = ecosystem: package: composed:
-    fragments.mkEcosystemContent {
-      inherit ecosystem package composed;
-      paths = packagePaths.${package} or null;
-    };
+  # Generate ecosystem file content via fragments-ai transforms
+  aiTransforms = contentPkgs.fragments-ai.passthru.transforms;
+  mkEcosystemFile = package: let
+    paths = packagePaths.${package} or null;
+    withPaths = composed:
+      if paths != null
+      then composed // {inherit paths;}
+      else composed;
+  in {
+    claude = composed: aiTransforms.claude {inherit package;} (withPaths composed);
+    copilot = composed: aiTransforms.copilot (withPaths composed);
+    kiro = composed: aiTransforms.kiro {name = package;} (withPaths composed);
+  };
 
   # ── Instruction file generation ──────────────────────────────────────
   nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") devFragmentNames;
@@ -89,18 +97,20 @@
   # Generate files for all ecosystems x packages
   mkEcosystemFiles = let
     rootComposed = mkDevComposed "monorepo";
+    monorepoEco = mkEcosystemFile "monorepo";
   in
     {
-      ".claude/rules/common.md".text = mkEcosystemFile "claude" "monorepo" rootComposed;
-      ".github/copilot-instructions.md".text = mkEcosystemFile "copilot" "monorepo" rootComposed;
-      ".kiro/steering/common.md".text = mkEcosystemFile "kiro" "monorepo" rootComposed;
+      ".claude/rules/common.md".text = monorepoEco.claude rootComposed;
+      ".github/copilot-instructions.md".text = monorepoEco.copilot rootComposed;
+      ".kiro/steering/common.md".text = monorepoEco.kiro rootComposed;
     }
     // (lib.concatMapAttrs (pkg: _: let
         composed = mkDevComposed pkg;
+        pkgEco = mkEcosystemFile pkg;
       in {
-        ".claude/rules/${pkg}.md".text = mkEcosystemFile "claude" pkg composed;
-        ".github/instructions/${pkg}.instructions.md".text = mkEcosystemFile "copilot" pkg composed;
-        ".kiro/steering/${pkg}.md".text = mkEcosystemFile "kiro" pkg composed;
+        ".claude/rules/${pkg}.md".text = pkgEco.claude composed;
+        ".github/instructions/${pkg}.instructions.md".text = pkgEco.copilot composed;
+        ".kiro/steering/${pkg}.md".text = pkgEco.kiro composed;
       })
       nonRootPackages);
 in {

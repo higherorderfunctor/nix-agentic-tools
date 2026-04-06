@@ -96,62 +96,6 @@
     };
   };
 
-  # ── Frontmatter generators ─────────────────────────────────────────
-
-  # Generate Claude rules frontmatter
-  mkClaudeRule = _name: instr: let
-    descYaml =
-      if instr.description != ""
-      then "\ndescription: ${instr.description}"
-      else "";
-    pathsYaml =
-      if instr.paths != null
-      then "\npaths:\n${lib.concatMapStringsSep "\n" (p: "  - \"${p}\"") instr.paths}"
-      else "";
-    frontmatter =
-      if pathsYaml != "" || descYaml != ""
-      then "---${descYaml}${pathsYaml}\n---\n\n"
-      else "";
-  in
-    frontmatter + instr.text;
-
-  # Generate Kiro steering frontmatter
-  mkKiroSteering = name: instr: let
-    inclusion =
-      if instr.paths != null
-      then "fileMatch"
-      else "always";
-    descYaml =
-      if instr.description != ""
-      then "\ndescription: ${instr.description}"
-      else "";
-    patternYaml =
-      if instr.paths != null
-      then "\nfileMatchPattern: \"${lib.concatStringsSep "," instr.paths}\""
-      else "";
-  in ''
-    ---
-    name: ${name}${descYaml}
-    inclusion: ${inclusion}${patternYaml}
-    ---
-
-    ${instr.text}
-  '';
-
-  # Generate Copilot instruction frontmatter
-  mkCopilotInstruction = _name: instr: let
-    applyTo =
-      if instr.paths != null
-      then lib.concatStringsSep "," instr.paths
-      else "**";
-  in ''
-    ---
-    applyTo: "${applyTo}"
-    ---
-
-    ${instr.text}
-  '';
-
   # ── MCP server transform ───────────────────────────────────────────
   # Transform a typed MCP server submodule value into the JSON structure
   # expected by target ecosystems (VS Code mcp.json / Kiro mcp.json).

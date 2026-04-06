@@ -15,7 +15,7 @@
   cfg = config.stacked-workflows;
 
   fragments = import ../../lib/fragments.nix {inherit lib;};
-  aiCommon = import ../../lib/ai-common.nix {inherit lib;};
+  aiTransforms = pkgs.fragments-ai.passthru.transforms;
 
   swsContent = pkgs.stacked-workflows-content;
 
@@ -25,9 +25,9 @@
 
   self = {
     inherit (swsContent.passthru) referencesDir skillsDir;
-    instructionsClaude = aiCommon.mkClaudeRule "stacked-workflows" composed;
-    instructionsCopilot = aiCommon.mkCopilotInstruction "stacked-workflows" composed;
-    instructionsKiro = aiCommon.mkKiroSteering "stacked-workflows" composed;
+    instructionsClaude = aiTransforms.claude {package = "stacked-workflows";} composed;
+    instructionsCopilot = aiTransforms.copilot composed;
+    instructionsKiro = aiTransforms.kiro {name = "stacked-workflows";} composed;
     gitConfig = import ./git-config.nix;
     gitConfigFull = import ./git-config-full.nix;
   };

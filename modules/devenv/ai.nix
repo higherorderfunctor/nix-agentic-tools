@@ -38,7 +38,8 @@
     ;
 
   aiCommon = import ../../lib/ai-common.nix {inherit lib;};
-  inherit (aiCommon) instructionModule lspServerModule mkClaudeRule mkCopilotInstruction mkCopilotLspConfig mkKiroSteering mkLspConfig;
+  inherit (aiCommon) instructionModule lspServerModule mkCopilotLspConfig mkLspConfig;
+  aiTransforms = pkgs.fragments-ai.passthru.transforms;
 
   cfg = config.ai;
 
@@ -161,7 +162,7 @@ in {
         files =
           # Instructions as Claude rules with frontmatter
           concatMapAttrs (name: instr: {
-            ".claude/rules/${name}.md".text = mkDefault (mkClaudeRule name instr);
+            ".claude/rules/${name}.md".text = mkDefault (aiTransforms.claude {package = name;} instr);
           })
           cfg.instructions
           # Skills as directory symlinks
@@ -184,8 +185,8 @@ in {
     (mkIf cfg.copilot.enable {
       copilot = {
         environmentVariables = lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
-        instructions = lib.mapAttrs (name: instr:
-          mkDefault (mkCopilotInstruction name instr))
+        instructions = lib.mapAttrs (_name: instr:
+          mkDefault (aiTransforms.copilot instr))
         cfg.instructions;
         lspServers = lib.mapAttrs (name: server:
           mkDefault (mkCopilotLspConfig name server))
@@ -214,7 +215,7 @@ in {
         ];
         skills = lib.mapAttrs (_: mkDefault) cfg.skills;
         steering = lib.mapAttrs (name: instr:
-          mkDefault (mkKiroSteering name instr))
+          mkDefault (aiTransforms.kiro {inherit name;} instr))
         cfg.instructions;
       };
     })
