@@ -35,6 +35,7 @@ envrc
 fanout
 fetchgit
 fetchurl
+fetchzip
 foldl
 frontloaded
 gitbook

@@ -17,6 +17,14 @@
       sha256 = "sha256-R7luTBydtj8H8L/rRXYvWEy45Krg+lL9gTeJL4j/0uA=";
     };
   };
+  claude-code = {
+    pname = "claude-code";
+    version = "2.1.92";
+    src = fetchurl {
+      url = "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.92.tgz";
+      sha256 = "sha256-//iF+Rbms6cYU1WWAa8Sq7G2RxTPwvBjWiVhO5Z0k0c=";
+    };
+  };
   context7-mcp = {
     pname = "context7-mcp";
     version = "2.1.6";

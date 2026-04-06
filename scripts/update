@@ -5,9 +5,11 @@ shopt -s inherit_errexit 2>/dev/null || :
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 NVFETCHER_OUT="$ROOT/.nvfetcher"
-LOCKS="$ROOT/packages/mcp-servers/locks"
-HASHES_MCP="$ROOT/packages/mcp-servers/hashes.json"
+LOCKS_AI="$ROOT/packages/ai-clis/locks"
+LOCKS_MCP="$ROOT/packages/mcp-servers/locks"
+HASHES_AI="$ROOT/packages/ai-clis/hashes.json"
 HASHES_GIT="$ROOT/packages/git-tools/hashes.json"
+HASHES_MCP="$ROOT/packages/mcp-servers/hashes.json"
 
 log() { echo "==> $*" >&2; }
 
@@ -31,7 +33,7 @@ git -C "$ROOT" add "$NVFETCHER_OUT"
 
 # ── 2. Refresh npm lock files ────────────────────────────────────
 refresh_lock_tarball() {
-  local name=$1 nv_key=$2
+  local locks_dir=$1 name=$2 nv_key=$3
   local url
   url=$(jq -r ".\"$nv_key\".src.url" "$NVFETCHER_OUT/generated.json")
   local tmp
@@ -40,12 +42,12 @@ refresh_lock_tarball() {
   log "Refreshing lock for $name"
   curl -sL "$url" | tar xz -C "$tmp"
   (cd "$tmp/package" && npm install --package-lock-only --ignore-scripts --silent 2>/dev/null)
-  cp "$tmp/package/package-lock.json" "$LOCKS/${name}-package-lock.json"
+  cp "$tmp/package/package-lock.json" "$locks_dir/${name}-package-lock.json"
   rm -rf "$tmp"
 }
 
 refresh_lock_git() {
-  local name=$1 nv_key=$2
+  local locks_dir=$1 name=$2 nv_key=$3
   local url rev
   url=$(jq -r ".\"$nv_key\".src.url" "$NVFETCHER_OUT/generated.json")
   rev=$(jq -r ".\"$nv_key\".src.rev" "$NVFETCHER_OUT/generated.json")
@@ -55,30 +57,38 @@ refresh_lock_git() {
   log "Refreshing lock for $name (${rev:0:12})"
   git clone --depth 1 "$url" "$tmp/repo" 2>/dev/null
   (cd "$tmp/repo" && npm install --package-lock-only --ignore-scripts --silent 2>/dev/null)
-  cp "$tmp/repo/package-lock.json" "$LOCKS/${name}-package-lock.json"
+  cp "$tmp/repo/package-lock.json" "$locks_dir/${name}-package-lock.json"
   rm -rf "$tmp"
 }
 
-refresh_lock_tarball context7-mcp context7-mcp
-refresh_lock_tarball openmemory-mcp openmemory-mcp
-refresh_lock_tarball sequential-thinking-mcp sequential-thinking-mcp
-refresh_lock_git git-intel-mcp git-intel-mcp
+# AI CLIs
+refresh_lock_tarball "$LOCKS_AI" claude-code claude-code
+
+# MCP servers
+refresh_lock_tarball "$LOCKS_MCP" context7-mcp context7-mcp
+refresh_lock_tarball "$LOCKS_MCP" openmemory-mcp openmemory-mcp
+refresh_lock_tarball "$LOCKS_MCP" sequential-thinking-mcp sequential-thinking-mcp
+refresh_lock_git "$LOCKS_MCP" git-intel-mcp git-intel-mcp
 
 # ── 3. Inject npmDepsHash ────────────────────────────────────────
 update_npm_hash() {
-  local name=$1 nv_key=$2
-  local lock="$LOCKS/${name}-package-lock.json"
+  local hashes_file=$1 locks_dir=$2 name=$3 nv_key=$4
+  local lock="$locks_dir/${name}-package-lock.json"
 
   log "Prefetching npmDepsHash for $name"
   local hash
   hash=$(prefetch-npm-deps "$lock" 2>/dev/null)
-  inject_hash "$HASHES_MCP" "$nv_key" "npmDepsHash" "$hash"
+  inject_hash "$hashes_file" "$nv_key" "npmDepsHash" "$hash"
 }
 
-update_npm_hash context7-mcp context7-mcp
-update_npm_hash git-intel-mcp git-intel-mcp
-update_npm_hash openmemory-mcp openmemory-mcp
-update_npm_hash sequential-thinking-mcp sequential-thinking-mcp
+# AI CLIs
+update_npm_hash "$HASHES_AI" "$LOCKS_AI" claude-code claude-code
+
+# MCP servers
+update_npm_hash "$HASHES_MCP" "$LOCKS_MCP" context7-mcp context7-mcp
+update_npm_hash "$HASHES_MCP" "$LOCKS_MCP" git-intel-mcp git-intel-mcp
+update_npm_hash "$HASHES_MCP" "$LOCKS_MCP" openmemory-mcp openmemory-mcp
+update_npm_hash "$HASHES_MCP" "$LOCKS_MCP" sequential-thinking-mcp sequential-thinking-mcp
 
 # ── 4. Inject Go vendorHash (only if version changed) ───────────
 update_vendor_hash() {

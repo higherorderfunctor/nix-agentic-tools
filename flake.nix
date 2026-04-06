@@ -249,7 +249,7 @@
         '';
 
       # AI CLIs
-      inherit (pkgs) github-copilot-cli kiro-cli kiro-gateway;
+      inherit (pkgs) claude-code github-copilot-cli kiro-cli kiro-gateway;
       # Content packages
       inherit (pkgs) coding-standards stacked-workflows-content;
       # Git tools

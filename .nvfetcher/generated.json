@@ -20,6 +20,21 @@
         },
         "version": "v0.18.0"
     },
+    "claude-code": {
+        "cargoLock": null,
+        "date": null,
+        "extract": null,
+        "name": "claude-code",
+        "passthru": null,
+        "pinned": false,
+        "src": {
+            "name": null,
+            "sha256": "sha256-//iF+Rbms6cYU1WWAa8Sq7G2RxTPwvBjWiVhO5Z0k0c=",
+            "type": "url",
+            "url": "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.92.tgz"
+        },
+        "version": "2.1.92"
+    },
     "context7-mcp": {
         "cargoLock": null,
         "date": null,

@@ -3,6 +3,10 @@
 _: final: prev: let
   sources = import ./sources.nix {inherit final;};
 in {
+  claude-code = import ./claude-code.nix {
+    inherit final prev;
+    nv = sources.claude-code;
+  };
   github-copilot-cli = import ./copilot-cli.nix {
     inherit final prev;
     nv = sources.copilot-cli;
