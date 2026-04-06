@@ -37,17 +37,13 @@
 
 ### CI & Automation
 
-- [ ] `ci.yml` — `devenv test` + package build matrix + cachix push
-      <!-- memory: project_cachix_setup.md -->
-      Single cache, 4-arch matrix (ubuntu-latest, ubuntu-24.04-arm,
-      macos-13, macos-latest), free unlimited minutes for public repos.
-      Actions: install-nix-action@v31, cachix-action@v17.
-      Optional: nix-github-actions for auto matrix from flake outputs.
-- [ ] `update.yml` — daily nvfetcher update pipeline
-- [ ] Binary cache: `hof-nix-agentic-tools` cachix setup
-      <!-- memory: project_cachix_setup.md -->
-      5GB shared across entire account (not per-cache). Upstream dedup
-      skips paths in cache.nixos.org. LRU GC at capacity.
+- [x] `ci.yml` — `devenv test` + package build matrix + cachix push
+      2-arch matrix (x86_64-linux, aarch64-darwin). Cachix upstream
+      dedup handles nixpkgs paths automatically.
+- [x] `update.yml` — daily nvfetcher update pipeline (devenv tasks)
+- [x] Binary cache: `nix-agentic-tools` cachix setup (50G plan)
+- [ ] Revert `ci.yml` branch trigger to `[main]` only (after sentinel merge)
+- [ ] Document binary cache for consumers (blocked on docs rewrite)
 - [ ] After cachix: remove flake input overrides in nixos-config
       (currently needed because no binary cache — builds from source)
 
