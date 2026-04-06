@@ -1,6 +1,15 @@
 {
   description = "Agentic tools — skills, MCP servers, and home-manager modules for AI coding CLIs";
 
+  nixConfig = {
+    extra-substituters = [
+      "https://nix-agentic-tools.cachix.org"
+    ];
+    extra-trusted-public-keys = [
+      "nix-agentic-tools.cachix.org-1:0jFprh5fkDez9mk6prYisYxzalr0hn78kyywGPXvOn0="
+    ];
+  };
+
   inputs = {
     mcp-nixos = {
       url = "github:utensils/mcp-nixos";

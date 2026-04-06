@@ -26,6 +26,9 @@ in {
     ./modules/devenv
   ];
 
+  # ── Binary Cache ──────────────────────────────────────────────────────
+  cachix.pull = ["nix-agentic-tools"];
+
   # ── Packages ──────────────────────────────────────────────────────────
   packages =
     (with pkgs; [
