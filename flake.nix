@@ -172,7 +172,7 @@
           rootComposed = mkDevComposed "monorepo";
           monorepoEco = mkEcosystemFile "monorepo";
           claudeCommon = monorepoEco.claude rootComposed;
-          kiroCommon = monorepoEco.kiro rootComposed;
+          kiroCommon = aiTransforms.kiro {name = "common";} rootComposed;
           copilotCommon = monorepoEco.copilot rootComposed;
           agentsContent = let
             packageContents = lib.mapAttrsToList (pkg: _: let

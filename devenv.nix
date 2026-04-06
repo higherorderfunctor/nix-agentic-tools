@@ -102,7 +102,7 @@
     {
       ".claude/rules/common.md".text = monorepoEco.claude rootComposed;
       ".github/copilot-instructions.md".text = monorepoEco.copilot rootComposed;
-      ".kiro/steering/common.md".text = monorepoEco.kiro rootComposed;
+      ".kiro/steering/common.md".text = aiTransforms.kiro {name = "common";} rootComposed;
     }
     // (lib.concatMapAttrs (pkg: _: let
         composed = mkDevComposed pkg;
