@@ -15,6 +15,7 @@ in {
   kiro-cli = import ./kiro-cli.nix {
     inherit final prev;
     nv = sources.kiro-cli;
+    nv-darwin = sources.kiro-cli-darwin;
   };
   kiro-gateway = import ./kiro-gateway.nix {
     inherit final;

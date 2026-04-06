@@ -90,10 +90,10 @@
   };
   github-copilot-cli = {
     pname = "github-copilot-cli";
-    version = "1.0.18";
+    version = "1.0.19";
     src = fetchurl {
-      url = "https://github.com/github/copilot-cli/releases/download/v1.0.18/copilot-linux-x64.tar.gz";
-      sha256 = "sha256-fso7uwOj20/vklD4gFLMxaowypX65xrdcOHmb8sDeRM=";
+      url = "https://github.com/github/copilot-cli/releases/download/v1.0.19/copilot-linux-x64.tar.gz";
+      sha256 = "sha256-8ZlmXw8lIuTDFf59nl65g+Yg7CvJeyJJ1pGMaARz+bg=";
     };
   };
   github-mcp-server = {
@@ -129,6 +129,15 @@
     src = fetchurl {
       url = "https://desktop-release.q.us-east-1.amazonaws.com/1.29.3/kirocli-x86_64-linux.tar.gz";
       sha256 = "sha256-DD3eQ9lpV+M0d40AxnLP6dOw/fvdeuAcPWwpUMonuNk=";
+    };
+  };
+  kiro-cli-darwin = {
+    pname = "kiro-cli-darwin";
+    version = "1.29.3";
+    src = fetchurl {
+      url = "https://desktop-release.q.us-east-1.amazonaws.com/1.29.3/Kiro%20CLI.dmg";
+      name = "kiro-cli.dmg";
+      sha256 = "sha256-JjdZfkcWZhnGaVvTwgm1GdenM3OLhfVRYpuZ9Y/t/+E=";
     };
   };
   kiro-gateway = {
