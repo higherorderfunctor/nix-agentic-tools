@@ -24,7 +24,7 @@
     ".devenv/**"
     ".direnv/**"
     ".nvfetcher/**"
-    "locks/**"
+    "**/locks/**"
     "node_modules/**"
     "result/**"
     "result-*/**"
