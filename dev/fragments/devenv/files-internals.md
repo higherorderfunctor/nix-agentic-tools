@@ -1,6 +1,6 @@
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-04-07 (commit 781ab3e). devenv internals
+> **Last verified:** 2026-04-08 (commit 03af9d3 — feat(lib): add `mkDevenvSkillEntries` walker for devenv `files.*` parity). devenv internals
 > are pinned to whatever version is in flake.lock; if you touch
 > `modules/devenv/**`, `lib/hm-helpers.nix:mkDevenvSkillEntries`,
 > or anywhere that uses `files.*.source` and this fragment isn't

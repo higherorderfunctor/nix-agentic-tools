@@ -1,6 +1,6 @@
 ## ai.skills Fanout Delegation Pattern
 
-> **Last verified:** 2026-04-08 (commit pending). If you touch
+> **Last verified:** 2026-04-08 (commit 97ac174 — refactor(devenv): ai.skills branches delegate through ecosystem options). If you touch
 > the Claude/Copilot/Kiro skills fanout in `modules/ai/default.nix`
 > (or the devenv equivalent), `lib/hm-helpers.nix:mkSkillEntries`,
 > or upstream `programs.<cli>.skills` references, and this
