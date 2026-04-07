@@ -142,11 +142,8 @@ in {
       // lib.optionalAttrs (filteredSettings != {}) {
         ".kiro/settings/cli.json".json = filteredSettings;
       }
-      # Skills (directory symlinks)
-      // lib.concatMapAttrs (name: path: {
-        ".kiro/skills/${name}".source = path;
-      })
-      cfg.skills
+      # Skills (walked per-file for Layout B parity with HM)
+      // helpers.mkDevenvSkillEntries ".kiro" cfg.skills
       # Steering
       // lib.concatMapAttrs (name: content: {
         ".kiro/steering/${name}.md".text = content;
