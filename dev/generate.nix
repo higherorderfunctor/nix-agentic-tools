@@ -298,12 +298,15 @@
     ${agentsContent}
   '';
 
+  # CLAUDE.md is a one-liner that @-imports AGENTS.md. All
+  # orientation content lives in AGENTS.md. Keeping CLAUDE.md
+  # body content alongside the @AGENTS.md import would
+  # double-load the content at every session start (the import
+  # expansion plus the inline body).
   claudeMd = ''
     # CLAUDE.md
 
     @AGENTS.md
-
-    ${rootComposed.text}
   '';
   # ── README.md generation ─────────────────────────────────────────────
 
