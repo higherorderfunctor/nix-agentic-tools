@@ -52,8 +52,17 @@
       if buddyCfg.shiny
       then "true"
       else "";
-    peakArg = buddyCfg.peak or "";
-    dumpArg = buddyCfg.dump or "";
+    # Nix `or` only catches missing-attribute, not null values. Nullable
+    # options (peak/dump) need explicit null checks, otherwise string
+    # interpolation below throws "cannot coerce null to a string".
+    peakArg =
+      if buddyCfg.peak == null
+      then ""
+      else buddyCfg.peak;
+    dumpArg =
+      if buddyCfg.dump == null
+      then ""
+      else buddyCfg.dump;
     userIdText = buddyCfg.userId.text or "";
     userIdFile = buddyCfg.userId.file or "";
   in ''
