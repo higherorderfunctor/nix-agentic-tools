@@ -74,6 +74,15 @@
       "modules/kiro-cli/**"
       "packages/ai-clis/**"
     ];
+    # claude-code: wrapper chain + buddy activation lifecycle.
+    # Spans the claude-code package and the buddy HM module because
+    # the two are tightly coupled (Bun wrapper picks writable cli.js
+    # from buddy state, activation script patches that cli.js).
+    claude-code = [
+      "packages/ai-clis/claude-code.nix"
+      "packages/ai-clis/any-buddy.nix"
+      "modules/claude-code-buddy/**"
+    ];
     mcp-servers = [
       "modules/mcp-servers/**"
       "packages/mcp-servers/**"
@@ -85,6 +94,13 @@
   # ── Dev fragment names per package ───────────────────────────────────
   devFragmentNames = {
     ai-clis = ["packaging-guide"];
+    claude-code = [
+      {
+        location = "package";
+        name = "claude-code-wrapper";
+        dir = "ai-clis";
+      }
+    ];
     monorepo = [
       "architecture-fragments"
       "binary-cache"
