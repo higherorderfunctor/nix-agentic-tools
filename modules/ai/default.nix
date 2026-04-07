@@ -218,21 +218,15 @@ in {
     (mkIf cfg.claude.enable (mkMerge [
       {
         programs.claude-code.enable = mkDefault true;
+        programs.claude-code.skills = lib.mapAttrs (_: mkDefault) cfg.skills;
         home.file =
           # Instructions as Claude rules with frontmatter
-          (concatMapAttrs (name: instr: {
-              ".claude/rules/${name}.md" = {
-                text = mkDefault (aiTransforms.claude {package = name;} instr);
-              };
-            })
-            cfg.instructions)
-          # Skills as directory symlinks
-          // (concatMapAttrs (name: path: {
-              ".claude/skills/${name}" = {
-                source = mkDefault path;
-              };
-            })
-            cfg.skills);
+          concatMapAttrs (name: instr: {
+            ".claude/rules/${name}.md" = {
+              text = mkDefault (aiTransforms.claude {package = name;} instr);
+            };
+          })
+          cfg.instructions;
       }
       # Auto-set ENABLE_LSP_TOOL=1 when LSP servers are configured
       (mkIf (cfg.lspServers != {} && hasModule ["programs" "claude-code" "settings"]) {

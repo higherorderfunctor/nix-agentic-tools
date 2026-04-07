@@ -168,6 +168,22 @@
       };
     }
   ];
+
+  # Test: ai.skills fans out to programs.claude-code.skills (not home.file).
+  # Guards the Claude branch against regressing to direct home.file writes,
+  # which produce Layout A (single dir symlink) instead of the upstream
+  # Layout B (real dir with per-file symlinks via recursive = true).
+  aiSkillsFanout = evalModule [
+    self.homeManagerModules.default
+    {
+      config = {
+        ai = {
+          claude.enable = true;
+          skills.stack-fix = /tmp/test-skill;
+        };
+      };
+    }
+  ];
 in {
   copilot-cli-eval = pkgs.runCommand "copilot-cli-eval" {} ''
     echo "copilot-cli module evaluation: ${
@@ -236,5 +252,13 @@ in {
       then "model propagated"
       else "model missing"
     }" > $out
+  '';
+
+  ai-skills-fanout-eval = pkgs.runCommand "ai-skills-fanout-eval" {} ''
+    ${
+      if aiSkillsFanout.config.programs.claude-code.skills ? stack-fix
+      then "echo ok > $out"
+      else "echo 'FAIL: ai.skills not routed via programs.claude-code.skills' >&2; exit 1"
+    }
   '';
 }
