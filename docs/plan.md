@@ -531,25 +531,25 @@ ourPkgs inputs final.system; in { ... };`.
       cross-ecosystem options (ai.skills, ai.instructions,
       ai.lspServers, ai.settings.{model,telemetry}) stay as
       convenience layers that fan out to multiple ecosystems
-- [ ] **Bundle any-buddy into claude-code package** — `any-buddy-source`
+- [ ] **Bundle any-buddy into claude-code package** — `any-buddy`
       is currently its own overlay package
       (`packages/ai-clis/any-buddy.nix`), exposed at
-      `pkgs.any-buddy-source`, solely so the activation script in
+      `pkgs.any-buddy`, solely so the activation script in
       `modules/claude-code-buddy/default.nix` can reference
-      `${pkgs.any-buddy-source}/src/finder/worker.ts`. It's not
+      `${pkgs.any-buddy}/src/finder/worker.ts`. It's not
       consumed by anything else. Move the source tree into the
       claude-code package as a private passthru (e.g.
-      `pkgs.claude-code.passthru.anyBuddySource`) and update the
+      `pkgs.claude-code.passthru.anyBuddy`) and update the
       buddy module to pull it from there. Removes one top-level
       package export and one nvfetcher entry's exposed surface
       (nvfetcher entry stays; just not re-exported). Touch points:
       `packages/ai-clis/claude-code.nix` (add passthru),
-      `packages/ai-clis/default.nix` (stop exporting
-      any-buddy-source), `packages/ai-clis/any-buddy.nix` (keep
-      but feed into claude-code only, or inline),
+      `packages/ai-clis/default.nix` (stop exporting any-buddy),
+      `packages/ai-clis/any-buddy.nix` (keep but feed into
+      claude-code only, or inline),
       `modules/claude-code-buddy/default.nix` (switch worker
-      reference), `flake.nix` packages attrset (drop
-      any-buddy-source), `README.md` if it enumerates packages.
+      reference), `flake.nix` packages attrset (drop any-buddy),
+      `README.md` if it enumerates packages.
 
       General refactor pattern to apply when any
       `packages/<group>/<name>.nix` gets too big: convert to

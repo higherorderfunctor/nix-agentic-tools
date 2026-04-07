@@ -3,12 +3,12 @@
 #
 # Note: buddy customization for claude-code lives in the HM module
 # (modules/claude-code-buddy/), not as package passthru. The any-buddy
-# worker source is still exposed as `any-buddy-source` for the
-# activation script to use.
+# worker source tree is exposed as `any-buddy` (matching upstream
+# package name) for the activation script to use.
 _: final: prev: let
   sources = import ./sources.nix {inherit final;};
 in {
-  any-buddy-source = import ./any-buddy.nix {
+  any-buddy = import ./any-buddy.nix {
     inherit final;
     nv = sources.any-buddy;
   };

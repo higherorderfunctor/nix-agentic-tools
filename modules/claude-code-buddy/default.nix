@@ -47,7 +47,7 @@
       config.programs.claude-code.package.passthru.baseClaudeCode
       or config.programs.claude-code.package;
     storeLib = "${baseClaudeCode}/lib/node_modules/@anthropic-ai/claude-code";
-    workerScript = "${pkgs.any-buddy-source}/src/finder/worker.ts";
+    workerScript = "${pkgs.any-buddy}/src/finder/worker.ts";
     shinyArg =
       if buddyCfg.shiny
       then "true"

@@ -5,7 +5,7 @@
   nv,
 }:
 final.stdenvNoCC.mkDerivation {
-  pname = "any-buddy-source";
+  pname = "any-buddy";
   inherit (nv) version src;
 
   dontBuild = true;
