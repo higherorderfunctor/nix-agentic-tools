@@ -17,26 +17,35 @@
 #
 # Buddy state management lives in modules/claude-code-buddy/.
 #
-# The `...` absorbs the `inputs` arg that packages/ai-clis/default.nix
-# threads through every per-package import for Phase 3.7 of the
-# architecture-foundation plan (cache-hit parity). Not yet consumed
-# in this file; plumbing-only for now.
+# Instantiates `ourPkgs` from `inputs.nixpkgs` so the base claude-code
+# derivation, buildNpmPackage, fetchzip, bun, writeShellScript, and
+# symlinkJoin all route through this repo's pinned nixpkgs instead of
+# the consumer's. `passthru.baseClaudeCode` exposes OUR pinned
+# claude-code so the buddy activation script in
+# modules/claude-code-buddy/ closes over the same store paths CI
+# builds and pushes to cachix. See .claude/rules/overlays.md and
+# dev/notes/overlay-cache-hit-parity-fix.md.
 {
+  inputs,
   final,
-  prev,
   nv,
   lockFile,
   ...
 }: let
-  baseClaudeCode = prev.claude-code.override (_: {
+  ourPkgs = import inputs.nixpkgs {
+    inherit (final.stdenv.hostPlatform) system;
+    config.allowUnfree = true;
+  };
+
+  baseClaudeCode = ourPkgs.claude-code.override (_: {
     buildNpmPackage = args:
-      final.buildNpmPackage (finalAttrs: let
-        a = (final.lib.toFunction args) finalAttrs;
+      ourPkgs.buildNpmPackage (finalAttrs: let
+        a = (ourPkgs.lib.toFunction args) finalAttrs;
       in
         a
         // {
           inherit (nv) version;
-          src = final.fetchzip {
+          src = ourPkgs.fetchzip {
             url = "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-${nv.version}.tgz";
             hash = nv.srcHash;
           };
@@ -53,7 +62,7 @@
 
   storeCliJs = "${baseClaudeCode}/lib/node_modules/@anthropic-ai/claude-code/cli.js";
 
-  wrapperScript = final.writeShellScript "claude-buddy-wrapper" ''
+  wrapperScript = ourPkgs.writeShellScript "claude-buddy-wrapper" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
 
@@ -65,10 +74,10 @@
       CLI="${storeCliJs}"
     fi
 
-    exec ${final.bun}/bin/bun run "$CLI" "$@"
+    exec ${ourPkgs.bun}/bin/bun run "$CLI" "$@"
   '';
 in
-  final.symlinkJoin {
+  ourPkgs.symlinkJoin {
     inherit (baseClaudeCode) name version;
     paths = [baseClaudeCode];
     postBuild = ''

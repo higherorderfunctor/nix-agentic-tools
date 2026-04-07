@@ -2,18 +2,24 @@
 # x86_64-linux: tarball from nvfetcher (kiro-cli)
 # aarch64-darwin: .dmg from nvfetcher (kiro-cli-darwin), extracted by nixpkgs undmg
 #
-# The `...` absorbs the `inputs` arg that packages/ai-clis/default.nix
-# threads through every per-package import for Phase 3.7 of the
-# architecture-foundation plan (cache-hit parity). Not yet consumed
-# in this file; plumbing-only for now.
+# Instantiates `ourPkgs` from `inputs.nixpkgs` so the base derivation
+# (kiro-cli) and every build input (makeWrapper) route through this
+# repo's pinned nixpkgs instead of the consumer's. This is what gives
+# the store path cache-hit parity against CI's standalone build —
+# see .claude/rules/overlays.md and
+# dev/notes/overlay-cache-hit-parity-fix.md.
 {
+  inputs,
   final,
-  prev,
   nv,
   nv-darwin,
   ...
 }: let
-  inherit (final.stdenv.hostPlatform) system;
+  ourPkgs = import inputs.nixpkgs {
+    inherit (final.stdenv.hostPlatform) system;
+    config.allowUnfree = true;
+  };
+  inherit (ourPkgs.stdenv.hostPlatform) system;
   src =
     if system == "x86_64-linux"
     then nv.src
@@ -22,10 +28,10 @@
     else throw "kiro-cli: unsupported system ${system}";
   inherit (nv) version;
 in
-  prev.kiro-cli.overrideAttrs (attrs: {
+  ourPkgs.kiro-cli.overrideAttrs (attrs: {
     inherit src version;
 
-    nativeBuildInputs = (attrs.nativeBuildInputs or []) ++ [final.makeWrapper];
+    nativeBuildInputs = (attrs.nativeBuildInputs or []) ++ [ourPkgs.makeWrapper];
 
     postFixup =
       (attrs.postFixup or "")
@@ -35,8 +41,8 @@ in
       '';
 
     meta =
-      prev.kiro-cli.meta
+      ourPkgs.kiro-cli.meta
       // {
-        changelog = builtins.replaceStrings [prev.kiro-cli.version] [version] prev.kiro-cli.meta.changelog;
+        changelog = builtins.replaceStrings [ourPkgs.kiro-cli.version] [version] ourPkgs.kiro-cli.meta.changelog;
       };
   })
