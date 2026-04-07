@@ -1,16 +1,22 @@
 # nix-agentic-tools Plan
 
 > Living document. Single source of truth for remaining work.
-> Branch: `sentinel/monorepo-plan`
+> Branch: `sentinel/monorepo-plan`.
+>
+> **Priority rule:** work TOP to MIDDLE to LOWER. Top items unblock
+> middle and lower. Ecosystem expansion waits for architecture to
+> solidify. Deprioritized items stay parked until the architecture
+> and nixos-config integration are stable.
 
 ## Authoring notes
 
-Pre-commit runs cspell over this file. When writing backlog entries,
-avoid strings that trip the spellchecker on every commit:
+Pre-commit runs cspell over this file. When writing backlog
+entries, avoid strings that trip the spellchecker on every commit:
 
-- **No literal Nix store hashes.** Use `<HASH>-<name>-<version>` or
-  `/nix/store/...-name-version` as placeholders. Real 32-char base32
-  store hashes will always contain novel letter runs cspell flags.
+- **No literal Nix store hashes.** Use `<HASH>-<name>-<version>`
+  or `/nix/store/...-name-version` as placeholders. Real 32-char
+  base32 store hashes will always contain novel letter runs cspell
+  flags.
 - **No raw narinfo URLs.** Describe the path
   (`cachix.org/<hash>.narinfo`) or add the word to
   `.cspell/project-terms.txt` once and reuse.
@@ -18,918 +24,523 @@ avoid strings that trip the spellchecker on every commit:
   Words like `narinfo` should be added to the allowlist the first
   time they appear. Keep the list alphabetical.
 
-## Architecture
+## Architecture (current state)
 
 - **Standalone devenv CLI** for dev shell (not flake-based)
 - **Top-level `ai`** namespace for unified config (HM and devenv)
 - **Config parity** — lib, HM, and devenv must align in capability
-- **Content packages** — published content (skills, fragments) lives in
-  `packages/` as derivations with passthru for eval-time composition
-- **Topic packages** — each topic bundles content (derivation) + API
-  (passthru transforms/functions). Core fragment lib stays in `lib/`
-  (pure functions, no content). Topic packages (`fragments-ai`,
-  `fragments-docs`) carry templates + transforms together
+- **Content packages** — published content (skills, fragments)
+  lives in `packages/` as derivations with passthru for eval-time
+  composition
+- **Topic packages** — `fragments-ai`, `fragments-docs` bundle
+  content + transforms via passthru
 - **Pure fragment lib** — `lib/fragments.nix` provides compose,
-  mkFragment, render; target-agnostic core. `render` takes a
-  transform lambda (`fragment -> string`) supplied by topic packages
-- **treefmt** via devenv built-in module (replaced dprint)
+  mkFragment, render
+- **treefmt** via devenv built-in module
 - **devenv MCP** uses public `mcp.devenv.sh` (local Boehm GC bug)
+- **Buddy activation-time** rewrite landed; working end-to-end
+- **ai.enable dropped** — per-CLI enable is sole gate, flips
+  corresponding upstream/devenv enable (both HM and devenv mirror)
+- **Architecture fragments** — path-scoped per-ecosystem, single
+  markdown source feeds Claude/Copilot/Kiro/AGENTS.md + mdbook
+  contributing section
+
+## Priorities
+
+Three tiers:
+
+- **TOP** — Foundational architecture, maintain current fragments,
+  integrate nixos-config (complete port to `ai.*`)
+- **MIDDLE** — Bring Kiro online, bring Copilot online, add OpenAI
+  Codex as 4th ecosystem (in that order)
+- **LOWER** — CI polish (except cachix already done), agentic
+  tooling (check-drift, check-health, index-repo-docs), PR/stack
+  workflow, contributor docs and build-out, doc site polish,
+  misc backlog
 
 ---
 
-## Next Session
+## TOP priority
 
-### HITL Integration
+### Architecture foundation
 
-- [ ] Wire nix-agentic-tools into nixos-config: HM global + devshell per-repo
-- [ ] Review docs accuracy against actual consumer experience
-- [ ] Fix any doc gaps found during integration testing
+- [ ] **Overlay cache-hit parity fix** — every compiled overlay
+      package must instantiate its own `pkgs` from `inputs.nixpkgs`
+      (not consumer `final`/`prev`) so cachix substituters actually
+      serve the packages. Current overlays use `final.rust-bin`,
+      `prev.git-branchless`, etc., which binds build infrastructure
+      to the consumer's nixpkgs → store path drift → cache miss.
+      Full fix pattern, file enumeration, and verification protocol
+      in `dev/notes/overlay-cache-hit-parity-fix.md`. Related
+      fragment: `dev/fragments/overlays/cache-hit-parity.md`.
+
+- [ ] **Consolidate fragment enumeration into single metadata
+      table** — `devFragmentNames`, `packagePaths`, and
+      `flake.nix`'s `siteArchitecture` runCommand all hand-list
+      the same fragments. Adding a new architecture fragment
+      requires three coordinated edits. Extract a single
+      `fragmentMetadata` attrset in `dev/generate.nix` that
+      declares each fragment once with all fields (location, dir,
+      name, paths, docsite output path, category), then project it
+      into `devFragmentNames` (grouped by category), `packagePaths`
+      (grouped by category), and an exported attr that `flake.nix`
+      consumes to build `siteArchitecture`. Ideally
+      `siteArchitecture` becomes fully auto-discovered.
+
+- [ ] **`ai` HM module should `imports` its deps** —
+      `homeManagerModules.ai` should pull in `claude-code-buddy`,
+      `copilot-cli`, `kiro-cli` via `imports = [ ... ]` so
+      consumers get a single import. Currently the `ai` module
+      references `programs.copilot-cli` / `programs.kiro-cli`
+      unconditionally inside `mkIf cfg.copilot.enable` blocks,
+      forcing consumers to manually import those modules. Real-world
+      surfaced 2026-04-06: nixos-config had to add four surgical
+      imports where one should suffice. Pick option (a): `ai/default.nix`
+      adds `imports = [ ../claude-code-buddy ../copilot-cli ../kiro-cli ];`.
+
+- [ ] **Drop standalone `claude-code-buddy` HM module** — fold
+      the buddy option into a single `claude-code` HM module that
+      augments upstream `programs.claude-code` (mirrors how
+      `copilot-cli` and `kiro-cli` modules work). Eliminates the
+      awkward `homeManagerModules.claude-code-buddy` consumers have
+      to know about. The `ai` module's `imports` (above) brings it
+      in transparently. Naming decision needed: keep as
+      `programs.claude-code.buddy` or move to
+      `programs.claude-code-extras.buddy` to avoid conflict with
+      upstream HM's claude-code module if it ever adds its own
+      `buddy` option.
+
+- [ ] **Bundle `any-buddy` into claude-code package** — currently
+      its own overlay package at `packages/ai-clis/any-buddy.nix`
+      exposed at `pkgs.any-buddy`, solely for the buddy activation
+      script. Move the source tree into the claude-code package as
+      a private passthru (`pkgs.claude-code.passthru.anyBuddy`) and
+      update the buddy module to pull it from there. Removes one
+      top-level package export. General refactor pattern worth
+      adopting: when a single `packages/<group>/<name>.nix` gets
+      unwieldy, convert to `packages/<group>/<name>/default.nix`
+      with sibling files in the same directory (`wrapper.nix`,
+      `patching.nix`). Don't pre-split — do it when a single file
+      gets unwieldy.
+
+- [ ] **Claude-code npm distribution removal contingency** — monitor
+      `@anthropic-ai/claude-code` publish frequency. If Anthropic
+      stops publishing to npm, follow the migration plan in
+      `dev/notes/claude-code-npm-contingency.md` (nvfetcher swap
+      to binary fetch + one of three buddy fallback options,
+      option 3 blocked by closed-source sourcemap leak). Related
+      fragment: `packages/ai-clis/fragments/dev/buddy-activation.md`.
+
+- [ ] **Set `DISABLE_AUTOUPDATER=1` defensively in claude-code
+      wrapper env** — claude-code runs a background autoupdater
+      that downloads new binaries and rewrites them at the install
+      path. Inappropriate for a nix-managed store path. Also set
+      `DISABLE_INSTALLATION_CHECKS=1` to silence the "Claude Code
+      has switched from npm to native installer" snackbar.
+      Touch points: either the Bun wrapper script in
+      `packages/ai-clis/claude-code.nix` (always-on) or
+      `programs.claude-code.settings.env` in the ai HM module
+      (overridable). Design question: which is more appropriate?
+
+### ai.claude.\* full passthrough
+
+Detail lives in `memory/project_ai_claude_passthrough.md`. Task 2
+is BLOCKING for the rest. Draft a fresh plan from the memory when
+ready to execute this chunk.
+
+- [ ] **Task 2 (BLOCKING): Route `ai.skills` Claude fanout through
+      `programs.claude-code.skills`** — currently writes
+      `home.file` directly, which collides with per-Claude
+      `ai.claude.skills` and produces Layout A (single dir symlink)
+      instead of Layout B (real dir with per-file symlinks). Blocks
+      Tasks 3-7. Consumer transition note: migrated users hit
+      "would be clobbered" on first activation; `home-manager switch -b backup`
+      once.
+
+- [ ] **Task 2b: Devenv skills fanout parity (Option A
+      recommended)** — HM all three ecosystems produce Layout B;
+      devenv all three produce Layout A. devenv's `files.*.source`
+      cannot walk recursively (see
+      `memory/project_devenv_files_internals.md`). Option A: add
+      `mkDevenvSkillEntries` helper to `lib/hm-helpers.nix` that
+      walks the source dir at eval time with `builtins.readDir`.
+      Option C (upstream PR to cachix/devenv `recursive` field) can
+      happen in parallel. Copilot `configDir` verification needed
+      (`.github` vs `.copilot`).
+
+- [ ] **Task 3: `ai.claude.memory` passthrough** — mirror upstream
+      `memory.{text,source}` submodule, mutual exclusion asserted
+      upstream.
+
+- [ ] **Task 4: `ai.claude.settings` freeform JSON passthrough** —
+      `pkgs.formats.json {}` type. Covers effortLevel, permissions,
+      enableAllProjectMcpServers, enabledPlugins, theme, hooks,
+      statusLine. Fanout via `mkMerge` (not `mkDefault`) so consumer
+      `programs.claude-code.settings` stays composable.
+
+- [ ] **Task 5: `ai.claude.mcpServers` + `enableMcpIntegration`
+      passthrough** — separate from cross-ecosystem `ai.mcpServers`
+      bridge (different backlog item).
+
+- [ ] **Task 6: `ai.claude.skills` + `ai.claude.skillsDir`
+      passthrough** — depends on Task 2. Uses `mkMerge` with
+      cross-ecosystem `ai.skills`; per-Claude overrides win.
+
+- [ ] **Task 7: `ai.claude.plugins` + `ai.claude.marketplaces`
+      passthrough** — declarative option only. Plugin install
+      activation script (`installClaudePlugins`) stays bespoke in
+      the consumer for now.
+
+- [ ] **Task D: Devenv ai module mirror** — after Tasks 3-7 land
+      on HM side, mirror each option on `modules/devenv/ai.nix`
+      with identical types and fanout semantics, respecting
+      devenv's `files.*` / `claude.code.*` native options.
+
+- [ ] **`ai.claude.*` full passthrough: architectural gap** —
+      overarching intent is that `ai.claude.*` mirrors EVERY option
+      from `programs.claude-code.*`. Same for `ai.copilot` and
+      `ai.kiro` vs their respective `programs.*` modules. Tasks
+      above are the concrete Claude-side work; Copilot/Kiro
+      analogous passthroughs are separate plans (MIDDLE tier).
+
+### Architecture fragment maintenance
+
+These are the follow-ups from the Checkpoint 8 multi-reviewer
+audit of the steering-fragments work. Low individual risk, high
+cumulative value.
+
+- [ ] **Codify gap: ai.skills layout** — create new scoped
+      architecture fragment documenting the "all three branches
+      delegate through `programs.<cli>.skills`, no direct home.file
+      writes" decision + the 2026-04-06 consumer clobber story.
+      Source content:
+      `memory/project_ai_skills_layout.md`. Scope to
+      `modules/ai/**`, `packages/**/fragments/**`, and
+      `lib/hm-helpers.nix`. Lets fresh clones understand the
+      constraint without needing memory access.
+
+- [ ] **Codify gap: devenv files internals** — create new scoped
+      architecture fragment documenting the devenv `files.*`
+      option's structural constraints (no recursive walk,
+      silent-fail on dir-vs-symlink conflict, `mkDevenvSkillEntries`
+      workaround). Source content:
+      `memory/project_devenv_files_internals.md`. Scope to
+      `modules/devenv/**`, `lib/hm-helpers.nix`.
+
+- [ ] **Add scope→fragment map to the self-maintenance directive**
+      — the always-loaded `dev/fragments/monorepo/architecture-fragments.md`
+      doesn't tell sessions which fragment covers which scope.
+      Either hand-maintain a table in the fragment OR generate one
+      from `packagePaths` via a new nix expression embedded at
+      generation time.
+
+- [ ] **Introduction → Contributing link** — the mdbook introduction
+      page (`dev/docs/index.md`) doesn't mention the new
+      Contributing / Architecture section. Add a short section.
+
+- [ ] **Soften agent-directed language in docsite copies of
+      fragments** — architecture fragments use imperative phrasing
+      ("stop and fix it", "MUST be updated") that reads as jarring
+      in the mdbook. Option (a): rewrite imperative directives as
+      declarative design contracts. Option (c): add a
+      docsite-specific intro blurb framing the tone. Option (a)
+      cleaner.
+
+- [ ] **Include commit subject in Last-verified markers** — extend
+      `Last verified: 2026-04-07 (commit a3c05f3)` to
+      `Last verified: 2026-04-07 (commit a3c05f3 — subject)`. Apply
+      to all 7 existing fragments + document the format in the
+      always-loaded architecture-fragments fragment.
+
+- [ ] **HM ↔ devenv ai module parity test** — currently enforced
+      by code review only. Add a parity-check eval test in
+      `checks/module-eval.nix` that evaluates both modules with
+      equivalent config and spot-checks that option paths match
+      (minus intentional divergences like `ai.claude.buddy`).
+
+- [ ] **Fragment size reduction: `hm-modules` and
+      `fragment-pipeline`** — 267 and 186 lines respectively, over
+      the 150-line soft budget. Split by sub-concern IF real-world
+      usage shows context dilution. Not urgent.
+
+- [ ] **Refactor `mkDevFragment` location discriminator as attrset
+      lookup** — current if/else-if branching on `dev | package |
+  module` works but extends linearly. Replace with
+      `locationBases.${location} or (throw ...)`. Pure cleanup.
+
+- [ ] **Replace `isRoot = package == "monorepo"` with category
+      metadata** — `mkDevComposed` hardcodes a string match.
+      Should be explicit category metadata (e.g.,
+      `{ includesCommonStandards = true; }`). Paired with
+      "consolidate fragment enumeration" above.
+
+- [ ] **Document the intentional hm-modules / claude-code scope
+      overlap** — both categories' `packagePaths` include
+      `modules/claude-code-buddy/**`. Add a comment in
+      `dev/generate.nix` explaining the overlap is intentional.
+
+- [ ] **`ai.skills` stacked-workflows special case** — currently
+      consumers need `stacked-workflows.integrations.<ecosystem>.enable
+  = true` per ecosystem alongside `ai.skills`. Augment
+      `ai.skills` to support `ai.skills.stackedWorkflows.enable =
+  true` (or similar) that pulls SWS skills + routing table into
+      every enabled ecosystem in one line. Keep raw
+      `ai.skills.<name> = path` for bring-your-own.
+
+### nixos-config integration
+
+Goal: nixos-config fully ported to `ai.*`. Blocked on Tasks 2-7 of
+the ai.claude passthrough (above).
+
+- [ ] **Wire nix-agentic-tools into nixos-config** — HM global +
+      devshell per-repo. Flake input, overlay, module imports. Has
+      been partially done (HITL work 2026-04-06); verify current
+      state and close any gaps.
+
+- [ ] **Migrate nixos-config AI config to `ai.*` unified module**
+      — replace hardcoded `programs.claude-code.*` / `copilot.*` /
+      `kiro.*` blocks with the `ai.*` fanout. Depends on
+      ai.claude.\* full passthrough landing. See
+      `memory/project_nixos_config_integration.md` for the 8
+      interface contracts and the current vendored package list.
+
+- [ ] **Verify 8 interface contracts hold** — enumerated in
+      `memory/project_nixos_config_integration.md`. Refresh the
+      memory after integration lands.
+
+- [ ] **Remove vendored AI packages from nixos-config** —
+      copilot-cli, kiro-cli, kiro-gateway, ollama HM module (TBD).
+      Verify each one's migration path before removal.
+
+- [ ] **Ollama ownership decision** — ollama HM module + model
+      management currently in nixos-config (GPU/host-specific).
+      Decide: stay in nixos-config (host-specific) or move to
+      nix-agentic-tools (reusable)?
+
+- [ ] **Kiro openmemory still raw npx** — not yet using
+      `mkStdioEntry`. Fix as part of the nixos-config migration.
+
+### Monitoring / low-urgency TOP
+
+- [ ] **Agentic UX: pre-approve nix-store reads for HM-symlinked
+      skills and references** — Claude Code prompts for read
+      permission on every resolved `/nix/store` target when
+      following symlinks from `~/.claude/skills/`. Five fix options
+      to research: global allow rule for `/nix/store/**`,
+      per-subtree pre-approval, teach session shortcut, managed
+      policy CLAUDE.md, copy instead of symlink. Real-world
+      observed 2026-04-07: 10+ minute commit delay from approval
+      cycles.
 
 ---
 
-## Solo (no external deps — can run autonomously)
+## MIDDLE priority
 
-### CI & Automation
+After the architecture foundation solidifies, bring the other
+ecosystems online through the completed `ai.*` interface.
 
-- [x] `ci.yml` — `devenv test` + package build matrix + cachix push
-      2-arch matrix (x86_64-linux, aarch64-darwin). Cachix upstream
-      dedup handles nixpkgs paths automatically.
-- [x] `update.yml` — daily nvfetcher update pipeline (devenv tasks)
-- [x] Binary cache: `nix-agentic-tools` cachix setup (50G plan)
-- [ ] Revert `ci.yml` branch trigger to `[main]` only (after sentinel merge)
-- [ ] Review CI cachix push strategy — currently pushes on every build
-      which speeds up subsequent runs via cache hits. May be fine as-is
-      since upstream dedup avoids storage waste. Re-evaluate if cache
-      size becomes a concern
-- [ ] Remove `update.yml` push trigger, keep schedule + workflow_dispatch only
-- [ ] Document binary cache for consumers (blocked on docs rewrite)
+### Bring Kiro online (via `ai.kiro.*`)
+
+- [ ] **ai.kiro.\* full passthrough** — mirror every
+      `programs.kiro-cli.*` option through `ai.kiro.*`. Same
+      pattern as the ai.claude.\* work (TOP). Separate plan to be
+      drafted when that chunk is ready.
+
+- [ ] **nixos-config Kiro migration** — move the consumer's Kiro
+      config from direct `programs.kiro-cli.*` to `ai.kiro.*`.
+
+### Bring Copilot online (via `ai.copilot.*`)
+
+- [ ] **ai.copilot.\* full passthrough** — mirror every
+      `programs.copilot-cli.*` option through `ai.copilot.*`.
+      Separate plan to be drafted.
+
+- [ ] **nixos-config Copilot migration** — move consumer config.
+
+- [ ] **copilot-cli / kiro-cli DRY** — 7 helpers copy-pasted
+      between the modules. Consolidate as part of the
+      full-passthrough work.
+
+- [ ] **MCP server submodule DRY** — duplicated in devenv
+      copilot/kiro modules. Consolidate.
+
+### Add OpenAI Codex (4th ecosystem, LAST)
+
+- [ ] **Package chatgpt-codex CLI + HM/devenv module** — follow
+      the copilot-cli / kiro-cli pattern. Add to `ai.*` unified
+      fanout as 4th ecosystem.
+
+- [ ] **Add Codex ecosystem transform to `fragments-ai`** —
+      curried frontmatter generator for Codex steering/instructions
+      format (verify what format Codex uses; currently AGENTS.md
+      standard is flat).
+
+- [ ] **Wire Codex into `modules/ai/default.nix`** — `ai.codex`
+      submodule with `enable`/`package`. Per-CLI enable flips
+      `programs.chatgpt-codex.enable` via mkDefault.
+
+- [ ] **Mirror in `modules/devenv/ai.nix`** per config parity.
+
+---
+
+## LOWER priority (deferred)
+
+Everything else. Park these until TOP/MIDDLE are stable.
+
+### CI (except cachix)
+
+- [ ] Revert `ci.yml` branch trigger to `[main]` only (after
+      sentinel merge)
+- [ ] Remove `update.yml` push trigger, keep schedule +
+      workflow_dispatch only
 - [ ] After cachix: remove flake input overrides in nixos-config
-      (currently needed because no binary cache — builds from source)
+- [ ] GitHub Pages `docs.yml` workflow — not yet wired in Actions.
+      Base path fixes for preview branches also deferred.
+- [ ] Review CI cachix push strategy — currently pushes on every
+      build (upstream dedup handles storage). Re-evaluate if cache
+      size becomes a concern
 
-### Apps & Structural Checks
+### Agentic tooling
 
 - [ ] `apps/check-drift` — detect config parity gaps
 - [ ] `apps/check-health` — validate cross-references
-- [ ] Structural checks (symlinks, fragments, nvfetcher keys, module imports)
+- [ ] Structural checks (symlinks, fragments, nvfetcher keys,
+      module imports)
 
-### Generated Docs & Fragment Refactor
+### Contributor / build-out docs
 
-Phase 1 — Fragment core FP refactor: **DONE**
+- [ ] Generate CONTRIBUTING.md from fragments
+- [ ] CONTRIBUTING.md content — dev workflow, package patterns,
+      module patterns, `devenv up docs` for docs preview
+- [ ] Consumer migration guide — replace vendored packages +
+      nix-mcp-servers
+- [ ] ADRs for key decisions (standalone devenv, fragment pipeline,
+      config parity)
 
-- [x] Refactor `lib/fragments.nix`: replace `mkEcosystemContent` with
-      generic `render { composed, transform }`
-- [x] Create `packages/fragments-ai/` with curried transforms
-- [x] Migrate all callers (flake.nix, devenv.nix, 3 modules, ai-common)
-- [x] Verify byte-identical instruction file output
+### Misc backlog (unsorted)
 
-Phase 2 — DRY audit fixes + fragment consolidation: **DONE**
-
-- [x] Generate CLAUDE.md from fragments (gitignored)
-- [x] Consolidate routing-table fragment duplication
-- [x] Extract CLAUDE-specific sections as new dev fragments
-
-Phase 3a — Instruction task migration: **DONE**
-
-- [x] Extract composition to `dev/generate.nix` (single source of truth)
-- [x] Instruction derivations in flake.nix (nix store cached)
-- [x] `generate:instructions:*` devenv tasks
-- [x] Remove `files.*` instruction generation + `apps.generate`
-- [x] Byte-identical output verified
-- [x] Architecture steering fragment added
-
-Phase 3b — Repo doc generation: **DONE**
-
-- [x] README.md generated from fragments + nix data (committed)
-- [ ] Generate CONTRIBUTING.md from fragments (committed — front door)
-
-Phase 3c — Doc site generation: **DONE**
-
-- [x] `packages/fragments-docs/` with dynamic generators
-- [x] Prose moved to `dev/docs/`, `docs/src/` gitignored
-- [x] `docs-site-{prose,snippets,reference}` derivations
-- [x] `generate:site:*` devenv tasks + `generate:all` meta
-- [x] `devenv up docs` generates before serving
-- [x] `{{#include}}` snippets: credentials, AI mapping, skill table,
-      routing table, overlay table, CLI table
-- [x] Dynamic generators: overlay packages, MCP servers from nix data
-- [x] Removed static fallback pages (home-manager, devenv, mcp-servers)
-
-Phase 4 — Options browser & heavy content: **DONE**
-
-- [x] `nixosOptionsDoc` for HM (281 options) and devenv (64 options)
-- [x] NuschtOS/search static client-side options browser (HM + devenv scopes)
-- [x] Pagefind post-build full-text search indexing
-
-Generated file policy:
-
-| File              | Generated       | Committed     | Reason                          |
-| ----------------- | --------------- | ------------- | ------------------------------- |
-| CLAUDE.md         | fragments       | gitignored    | devenv generates on shell entry |
-| AGENTS.md         | fragments       | gitignored    | devenv generates on shell entry |
-| README.md         | fragments + nix | **committed** | front door for repo visitors    |
-| CONTRIBUTING.md   | fragments       | **committed** | front door                      |
-| docs/src/\*\*     | fragments + nix | gitignored    | built artifact, GH Pages        |
-| .claude/rules/\*  | fragments       | gitignored    | devenv generates                |
-| .github/\*        | fragments       | gitignored    | devenv generates                |
-| .kiro/steering/\* | fragments       | gitignored    | devenv generates                |
-
-### Documentation & Guides
-
-- [ ] CONTRIBUTING.md — dev workflow, package patterns, module patterns,
-      `devenv up docs` for docs preview, `devenv up` process naming
-- [ ] Consumer migration guide — replace vendored packages + nix-mcp-servers
-- [ ] ADRs for key decisions (standalone devenv, fragment pipeline, config parity)
-- [x] Docs favicon — configured in book.toml
-- [x] GitHub Pages deploy workflow (docs.yml with per-branch previews)
-- [ ] SecretSpec — declarative secrets for MCP credentials
-- [ ] Declutter root dotfiles — move `.cspell/`, `.nvfetcher/`,
-      `.agnix.toml` to `config/` or `dev/` using tool config path
-      overrides (all three support custom paths)
-- [x] Document binary cache for consumers — in getting-started guides
-
----
-
-## HITL (requires nixos-config or interactive testing)
-
-### Consumer Integration
-
-- [ ] Add `inputs.nix-agentic-tools` to nixos-config with follows
-- [ ] Verify overlays + 8 interface contracts hold
-- [ ] Migrate nixos-config AI config to `ai.*` unified module
-- [ ] Remove vendored copilot-cli, kiro-cli, kiro-gateway from nixos-config
-- [ ] Remove `inputs.nix-mcp-servers` + `inputs.stacked-workflow-skills`
-- [ ] Verify `home-manager switch` end-to-end
-
-### HM Module Verification
-
-- [ ] Kiro openmemory MCP: migrate from raw npx to mkStdioEntry
-- [ ] Verify copilot-cli activation merge (settings deep-merge)
-- [ ] Verify kiro-cli steering file generation (YAML frontmatter)
-- [ ] Verify stacked-workflows integrations wire all 3 ecosystems
-- [ ] CUDA — verify packages build with cudaSupport on x86_64-linux
-- [ ] Fresh clone test — clone to /tmp, `devenv test`, verify no rogue
-      .gitignore files making dev workflow work but fresh clone fail
-
-### Publish (Pre-Release)
-
-- [ ] Stack redistribution — use `/stack-plan` on the TIP state only:
-  - Run `/stack-summary --root` to understand the final tree at HEAD
-  - Ignore the commit history (failed paths, pivots, restacks are noise)
-  - Plan new commits from scratch based on what FILES exist at tip
-  - Only main's merged content is the base — everything else is new
-  - Think through end-to-end: what order lets a reviewer understand
-    the architecture incrementally? Consider dependency timing + the
-    content-level audit rules from the skill
-  - Don't preserve intermediate implementations that were replaced
-    (e.g., flake-based devenv commits are gone, dprint config is gone)
-- [ ] Content-level audit (no forward references)
-- [ ] Open PRs one at a time (Copilot reviews each)
-
----
-
-## Backlog
-
-- [ ] Auto-display images in terminal — fragment/hook/plugin that auto-runs
-      `chafa --format=sixel` when AI reads/generates images. Wire via ai.\*
-      so all ecosystems get it. Needs chafa in packages.
-- [ ] ChatGPT Codex CLI — package + HM/devenv module, same pattern as
-      copilot-cli/kiro-cli; add to `ai.*` unified fanout as 4th ecosystem
-- [ ] cclsp — Claude Code LSP integration (passthru.withAdapters pattern)
-- [ ] claude-code-nix review — audit github.com/sadjow/claude-code-nix for
-      features to adopt. Bun runtime interesting if faster than native Node
-- [x] claude-code.withBuddy — passthru function on claude-code package
-      that binary-patches the buddy salt at build time. Two-derivation
-      split: mkBuddySalt (cached, expensive) + withBuddy (cheap byte
-      replacement). HM + devenv `ai.claude.buddy` option with full
-      enum types. Ref: github.com/cpaczek/any-buddy
-- [ ] CONTRIBUTING.md refinement — review with maintainer, expand sections
-- [ ] copilot-cli/kiro-cli DRY — 7 helpers copy-pasted between modules
-- [ ] cspell permissions — wire via `ai.*` permissions so all ecosystems
-      get cspell in Bash allow rules (not Claude-specific)
-- [ ] devenv feature audit — explore underused devenv features (tasks,
-      services, process dependencies, readiness probes, env vars, containers,
-      `devenv up` process naming) for potential adoption
-- [ ] filesystem-mcp — package + wire to devenv; may reduce tool approval
-      friction for file operations
+- [ ] **Fragment metadata consolidation follow-up** — after the
+      TOP item lands, also reduce plan.md churn by having this
+      file reference the metadata table instead of re-listing
+      fragments
+- [ ] **Research cspell plural/inflection syntax** — currently
+      every inflected form (`fanout`/`fanouts`, `dedup`/
+      `deduplicate`) must be added to `.cspell/project-terms.txt`
+      separately. Check cspell docs for root-word expansion or
+      Hunspell affix files
+- [ ] **outOfStoreSymlink helper for runtime state dirs** — Claude
+      writes `~/.claude/projects` mid-session. Document the pattern
+      or wrap as `ai.claude.persistentDirs`
+- [ ] Secret scanning — integrate gitleaks into pre-commit hook
+      or CI
+- [ ] Auto-display images in terminal — fragment/hook that runs
+      `chafa --format=sixel` via `ai.*` fanout
+- [ ] cclsp — Claude Code LSP integration (`passthru.withAdapters`)
+- [ ] claude-code-nix review — audit github.com/sadjow/claude-code-nix
+      for features to adopt
+- [ ] cspell permissions — wire via `ai.*` so all ecosystems get
+      cspell in Bash allow rules
+- [ ] devenv feature audit — explore underused devenv features
+      (tasks, services, process dependencies, readiness probes,
+      containers, `devenv up` process naming)
+- [ ] filesystem-mcp — package + wire to devenv
 - [ ] flake-parts — modular per-package flake outputs
-- [ ] Fragment content expansion — new presets (code review, security, testing)
-- [ ] HM/devenv modules as packages — research NixOS module packaging
-      patterns; would allow `pkgs.agentic-modules.ai` etc. for FP composition
-- [ ] Logo refinement — higher quality SVG or larger PNG, crisp at all sizes
+- [ ] Fragment content expansion — new presets (code review,
+      security, testing)
+- [ ] HM/devenv modules as packages — research NixOS module
+      packaging patterns for FP composition
+- [ ] Logo refinement — higher quality SVG/PNG
 - [ ] MCP processes — no-cred servers for `devenv up`
-- [ ] MCP server submodule DRY — duplicated in devenv copilot/kiro modules
-- [ ] Module fragment exposure — MCP servers contributing own fragments
-- [ ] Ollama HM module
-- [ ] scripts/update auto-discovery — derive which hashes to update from
-      the nix files themselves (scan for npmDepsHash/vendorHash/cargoHash in
-      hashes.json, match to package names). Eliminates hardcoded package
-      lists in the script. Could also use a fragment/instruction so adding
-      a new overlay package automatically updates the update script.
-- [x] Shell linters (shellcheck, shfmt) — added to devenv git hooks
-- [ ] atlassian-mcp, gitlab-mcp, slack-mcp
-- [ ] openmemory-mcp typed settings + missing option descriptions (11 attrTag variants)
-- [ ] stack-plan: missing git restack after autosquash fixup pattern
-- [ ] Repo review re-run — DRY + FP composition audit of fragment system,
-      generation pipeline, and doc site. Verify no duplication crept back
-      in during rapid iteration. Use /repo-review with fragment focus.
-      Also codify patterns for local agentic development: nightly packaging
-      via nvfetcher, split-platform sources, overlay composition, fragment
-      authoring, generation task structure. Ensure dev fragments capture
-      all patterns so new sessions have full context.
+- [ ] Module fragment exposure — MCP servers contributing own
+      fragments
+- [ ] Ollama HM module (if kept in this repo per decision above)
+- [ ] `scripts/update` auto-discovery — scan nix files for
+      hashes instead of hardcoded package lists
+- [ ] atlassian-mcp, gitlab-mcp, slack-mcp packaging
+- [ ] openmemory-mcp typed settings + missing option descriptions
+      (11 attrTag variants)
+- [ ] `stack-plan` skill: missing git restack after autosquash
+      fixup pattern
+- [ ] Repo review re-run — DRY + FP audit of fragment system,
+      generation pipeline, doc site. Use `/repo-review` with
+      fragment focus
 - [ ] Rolling stack workflow skill
-- [ ] claude-code build approach docs — thoroughly document how our
-      claude-code package differs from upstream nixpkgs: Bun runtime
-      wrapper (not Node), buddy state at $XDG_STATE_HOME, withBuddy
-      removal, cli.js writable copy, fnv1a vs wyhash hash routing.
-      Consumer-facing docs explaining what they get vs upstream.
-- [ ] **Overlays must instantiate their own pkgs from `inputs.nixpkgs`
-      so cachix substituters actually serve compiled packages**
-
-  ### Problem
-
-  Every compiled overlay package in this repo currently builds against
-  the **consumer's** nixpkgs/rust-overlay/etc. when the overlay is
-  composed into a downstream flake. CI builds them standalone against
-  this repo's pinned `inputs.nixpkgs` and pushes to
-  `nix-agentic-tools.cachix.org`. The two store paths differ because
-  rustc/glibc/openssl/python/nodejs/go-toolchain/build-helpers come
-  from different nixpkgs revs. Result: cache miss on every consumer
-  rebuild even though the cachix substituter is wired up correctly.
-
-  Real-world surfaced 2026-04-06 when nixos-config consumed
-  `inputs.nix-agentic-tools.overlays.default` after the overlay swap
-  to use the full overlay (not just `ai-clis`). git-branchless forced
-  a local Rust compile despite `nix-agentic-tools.cachix.org` being
-  in `nix.settings.substituters`. Verified by computing both store
-  paths and querying narinfo:
-  - Standalone (this repo, `nix eval --raw .#git-branchless`):
-    `/nix/store/<HASH_A>-git-branchless-0.10.0`
-    → `curl cachix.org/<HASH_A>.narinfo` → **HTTP 200**
-  - Consumer (nixos-config, eval via `import nixpkgs { overlays = ...; }`):
-    `/nix/store/<HASH_B>-git-branchless-0.10.0`
-    → narinfo lookup against all known caches → **HTTP 404 everywhere**
-
-  This is the consequence of commit `e5406977` ("drop input follows
-  that defeat cachix substituters") — cachix substituters require this
-  repo's inputs to be a closed closure independent of consumers. The
-  deliberate trade-off was accepted: consumers get TWO nixpkgs in their
-  /nix/store (theirs + ours, mostly content-addressed dedup), flake.lock
-  grows, but cache hits work. The current overlay code only completes
-  HALF of that decision: cargoHash/src/version are pinned to this repo's
-  nvfetcher data, but the build infrastructure (rustc, build helpers,
-  base derivations) borrows from the consumer. Need to commit fully.
-
-  ### Fix pattern
-
-  Each compiled overlay package must instantiate `ourPkgs` from
-  `inputs.nixpkgs` (with whatever sub-overlays it needs from
-  `inputs.rust-overlay` etc.) and use `ourPkgs` for ALL build inputs
-  AND the base derivation. The overlay function signature still
-  receives `final`/`prev` from the consumer (overlay protocol
-  requirement), but only uses `final.system` to know the platform.
-
-  Threading: `inputs` is currently passed to the top-level overlay
-  composition functions (e.g. `packages/git-tools/default.nix:5`
-  takes `{inputs, ...}`), but is NOT threaded down to per-package
-  overlay files. The fix requires threading `inputs` (or at minimum
-  `inputs.nixpkgs` and `inputs.rust-overlay`) into each per-package
-  function.
-
-  Example transformation for `packages/git-tools/git-branchless.nix`:
-
-  ```nix
-  # BEFORE — uses consumer's pkgs for everything except src/cargoHash
-  sources: final: prev: let
-    nv = sources.git-branchless;
-    rust = final.rust-bin.stable."1.88.0".default;
-    rustPlatform = final.makeRustPlatform { cargo = rust; rustc = rust; };
-  in {
-    git-branchless = prev.git-branchless.override (_: {
-      rustPlatform.buildRustPackage = args:
-        rustPlatform.buildRustPackage (finalAttrs: let
-          a = (final.lib.toFunction args) finalAttrs;
-        in a // {
-          version = final.lib.removePrefix "v" nv.version;
-          inherit (nv) src cargoHash;
-          postPatch = null;
-        });
-    });
-  }
-
-  # AFTER — instantiates ourPkgs internally, uses it for everything
-  {inputs}: sources: final: _prev: let
-    ourPkgs = import inputs.nixpkgs {
-      inherit (final) system;
-      overlays = [(import inputs.rust-overlay)];
-      config.allowUnfree = true;
-    };
-    nv = sources.git-branchless;
-    rust = ourPkgs.rust-bin.stable."1.88.0".default;
-    rustPlatform = ourPkgs.makeRustPlatform { cargo = rust; rustc = rust; };
-  in {
-    git-branchless = ourPkgs.git-branchless.override (_: {
-      rustPlatform.buildRustPackage = args:
-        rustPlatform.buildRustPackage (finalAttrs: let
-          a = (ourPkgs.lib.toFunction args) finalAttrs;
-        in a // {
-          version = ourPkgs.lib.removePrefix "v" nv.version;
-          inherit (nv) src cargoHash;
-          postPatch = null;
-        });
-    });
-  }
-  ```
-
-  Note: `final.system` is still used to discover platform; everything
-  else is `ourPkgs.X`. The result is a derivation whose closure traces
-  back entirely to `inputs.nixpkgs` (this repo's pin), not the
-  consumer's. Store path is byte-identical to `nix build .#git-branchless`
-  run from this repo standalone → cache hit.
-
-  ### Threading inputs into per-package files
-
-  `packages/git-tools/default.nix` currently:
-
-  ```nix
-  {inputs, ...}: let
-    withSources = overlayPaths: final: prev: let
-      sources = import ./sources.nix { inherit (final) fetchurl ...; };
-      applyOverlay = path: (import path) sources final prev;  # ← no inputs
-    in lib.foldl' lib.recursiveUpdate {} (map applyOverlay overlayPaths);
-  in
-    lib.composeManyExtensions [
-      inputs.rust-overlay.overlays.default
-      (withSources localOverlays)
-    ]
-  ```
-
-  Update `applyOverlay` to pass `inputs` and drop the top-level
-  `inputs.rust-overlay.overlays.default` (since each package now
-  applies it internally to its own ourPkgs):
-
-  ```nix
-  {inputs, ...}: let
-    withSources = overlayPaths: final: prev: let
-      sources = import ./sources.nix { inherit (final) fetchurl ...; };
-      applyOverlay = path: (import path) {inherit inputs;} sources final prev;
-    in lib.foldl' lib.recursiveUpdate {} (map applyOverlay overlayPaths);
-  in
-    withSources localOverlays
-  ```
-
-  Same threading change applies to `packages/mcp-servers/default.nix`
-  (already has the `{inputs, ...}` pattern via `callPkg` for some
-  packages — needs to be applied to ALL).
-
-  ### Files to modify (audit completed 2026-04-06)
-
-  **packages/git-tools/** — every package builds Rust or Python:
-  - `default.nix` — thread `inputs` into per-package overlays; drop
-    top-level `inputs.rust-overlay.overlays.default` (now per-package)
-  - `git-absorb.nix` — Rust, uses `final.rust-bin.stable.latest.default`
-  - `git-branchless.nix` — Rust, pinned to 1.88.0
-  - `git-revise.nix` — `final.python3Packages.buildPythonApplication`
-    - hatchling. Python version-sensitive.
-  - `agnix.nix` — Rust, uses `final.rust-bin.stable.latest.default`,
-    `final.pkg-config`, `final.apple-sdk_15` (darwin)
-
-  **packages/mcp-servers/** — npm/Python/Go builds, all currently use `final`:
-  - `default.nix` — `callPkg` already supports `{inputs, ...}` pattern
-    but most package files don't take `inputs`. Update each package file.
-  - npm: `context7-mcp.nix`, `effect-mcp.nix`, `git-intel-mcp.nix`,
-    `openmemory-mcp.nix`, `sequential-thinking-mcp.nix` — use
-    `final.buildNpmPackage`, `final.nodejs`, `final.makeWrapper`
-  - Python: `fetch-mcp.nix`, `git-mcp.nix`, `kagi-mcp.nix`,
-    `mcp-proxy.nix`, `nixos-mcp.nix`, `serena-mcp.nix`, `sympy-mcp.nix`
-    — use `final.python3Packages.X` or `final.python3.withPackages`
-  - Go: `github-mcp.nix`, `mcp-language-server.nix` — use
-    `final.buildGoModule`
-
-  **packages/ai-clis/** — mixed:
-  - `claude-code.nix` — `prev.claude-code.override` (npm build) +
-    `final.symlinkJoin` + `final.writeShellScript` + `final.bun`. The
-    Bun runtime in the wrapper will close over consumer's bun version
-    → AFFECTED. Fix: build everything against ourPkgs.
-  - `copilot-cli.nix` — `prev.github-copilot-cli.overrideAttrs` with
-    just `src`/`version`. Pure binary install, low impact but still
-    technically affected (base derivation comes from consumer). Lower
-    priority unless verified to be cache-missing.
-  - `kiro-cli.nix` — same as copilot-cli plus `final.makeWrapper` for
-    postFixup. Same priority.
-  - `kiro-gateway.nix` — uses `final.python314.withPackages` with
-    explicit Python 3.14 + fastapi/httpx/etc. AFFECTED — Python env
-    closure changes with consumer's nixpkgs.
-
-  **packages/coding-standards/, fragments-ai/, fragments-docs/,
-  stacked-workflows/** — pure content (markdown files in derivations,
-  no compilation). NOT affected. Skip.
-
-  ### Verification protocol
-
-  After fixing each package, verify the consumer-side store path
-  matches the standalone-build store path:
-
-  ```bash
-  # 1. Standalone path (CI builds this)
-  cd ~/Documents/projects/nix-agentic-tools
-  STANDALONE=$(nix eval --raw .#git-branchless)
-  echo "standalone: $STANDALONE"
-
-  # 2. Consumer path (eval the overlay through consumer's nixpkgs)
-  cd ~/Documents/projects/nixos-config
-  CONSUMER=$(nix eval --raw --impure --expr '
-    let
-      flake = builtins.getFlake (toString ./.);
-      pkgs = import flake.inputs.nixpkgs {
-        system = "x86_64-linux";
-        overlays = import ./overlays { inherit (flake) inputs; lib = flake.inputs.nixpkgs.lib; };
-        config.allowUnfree = true;
-      };
-    in pkgs.git-branchless.outPath')
-  echo "consumer:   $CONSUMER"
-
-  # 3. Must be identical
-  [ "$STANDALONE" = "$CONSUMER" ] && echo "✓ MATCH" || echo "✗ DRIFT"
-
-  # 4. Confirm cache hit possible
-  HASH=$(basename "$STANDALONE" | cut -d- -f1)
-  curl -sI "https://nix-agentic-tools.cachix.org/${HASH}.narinfo" | head -1
-  # Expect: HTTP/2 200
-  ```
-
-  Repeat for each package after fixing it. Add a flake check or CI
-  test that runs this comparison automatically — would catch any
-  future drift where someone introduces `final.X` for a build input.
-
-  ### Why this isn't free (the trade-off the user already accepted)
-
-  The consumer's /nix/store ends up holding TWO nixpkgs evaluations:
-  their own (used for everything else) and ours (used to build our
-  packages). Most of the closure deduplicates via content-addressing
-  (glibc, bash, coreutils are byte-identical when source content
-  matches), but anything that drifted between the two pins is
-  duplicated. flake.lock grows because nix-agentic-tools' inputs
-  aren't deduped against the consumer's. Disk usage goes up, but
-  cache hits become reliable instead of theoretical.
-
-  This is the deliberate cost of `e5406977`. The fix here finishes
-  what that commit started.
-
-  ### Lower-priority follow-ups
-  - Add a flake check `checks.x86_64-linux.cache-hit-parity` that
-    fails if any consumer-side eval produces a store path different
-    from the standalone build. Prevents regression.
-  - Document this pattern in `dev/docs/concepts/` so future overlay
-    additions follow it from day one.
-  - Consider abstracting the `ourPkgs = import inputs.nixpkgs { ... }`
-    boilerplate into a `lib/our-pkgs.nix` helper that takes `inputs`
-    and `final.system` and returns a configured pkgs set. Each
-    package file becomes a one-liner `{inputs}: ... let pkgs =
-ourPkgs inputs final.system; in { ... };`.
-
-- [ ] **ai HM module should `imports` its deps** — `homeManagerModules.ai`
-      should pull in `claude-code-buddy`, `copilot-cli`, `kiro-cli` (and
-      whatever else it references) via `imports = [ ... ]` so consumers
-      get a single import. Currently the `ai` module references
-      `programs.copilot-cli` / `programs.kiro-cli` unconditionally inside
-      `mkIf cfg.copilot.enable` blocks, which forces consumers to manually
-      import those modules even when they're not using them, because the
-      NixOS module system requires option paths to exist regardless of
-      mkIf condition. Real-world surfaced this in nixos-config consumer
-      integration (2026-04-06): had to add four surgical imports
-      (ai, claude-code-buddy, copilot-cli, kiro-cli) where one should
-      have sufficed. Either:
-      (a) `ai/default.nix` adds `imports = [ ../claude-code-buddy ../copilot-cli ../kiro-cli ];`
-      (b) Guard the `programs.{copilot,kiro}-cli` references with
-      `lib.optionalAttrs (hasModule [...])` and keep modules separate
-      Pick (a) for least consumer friction.
-- [ ] **Drop standalone `claude-code-buddy` HM module** — fold the buddy
-      option into a single nix-agentic-tools `claude-code` HM module that
-      augments upstream `programs.claude-code` (mirrors how copilot-cli
-      and kiro-cli modules work). Eliminates the awkward
-      `homeManagerModules.claude-code-buddy` consumers have to know
-      about. The `ai` module's `imports` (above) brings it in
-      transparently. Naming question: keep as `programs.claude-code.buddy`
-      or move to `programs.claude-code-extras.buddy` to avoid conflict
-      with upstream HM's claude-code module if it ever adds its own
-      `buddy` option.
-- [ ] **ai.claude.\* full passthrough** — architectural gap: ai.claude
-      currently only exposes `enable`, `package`, and `buddy`. The
-      intent is that ai.claude.\* mirrors EVERY option from
-      programs.claude-code.\*, so consumers don't need to drop down
-      to programs.claude-code for anything. Same for ai.copilot and
-      ai.kiro vs their respective programs.\* modules. Missing options
-      from real-world consumer config (nixos-config claude/default.nix)
-      include at minimum: - `ai.claude.memory.text` (CLAUDE.md global instructions) - `ai.claude.skills` (per-Claude skills, separate from
-      cross-ecosystem `ai.skills`) - `ai.claude.mcpServers` (Claude-only MCP entries + explicit
-      inclusion list from services.mcp-servers) - `ai.claude.settings.*` (effortLevel, permissions,
-      enableAllProjectMcpServers, enabledPlugins, etc.) - `ai.claude.plugins` (marketplace plugin install — needs
-      new abstraction over current activation script pattern)
-      Approach: rather than enumerating every option, consider a
-      generic passthrough mechanism (submodule with freeformType
-      pointing at the upstream module's option set). The existing
-      cross-ecosystem options (ai.skills, ai.instructions,
-      ai.lspServers, ai.settings.{model,telemetry}) stay as
-      convenience layers that fan out to multiple ecosystems
-- [ ] **Bundle any-buddy into claude-code package** — `any-buddy`
-      is currently its own overlay package
-      (`packages/ai-clis/any-buddy.nix`), exposed at
-      `pkgs.any-buddy`, solely so the activation script in
-      `modules/claude-code-buddy/default.nix` can reference
-      `${pkgs.any-buddy}/src/finder/worker.ts`. It's not
-      consumed by anything else. Move the source tree into the
-      claude-code package as a private passthru (e.g.
-      `pkgs.claude-code.passthru.anyBuddy`) and update the
-      buddy module to pull it from there. Removes one top-level
-      package export and one nvfetcher entry's exposed surface
-      (nvfetcher entry stays; just not re-exported). Touch points:
-      `packages/ai-clis/claude-code.nix` (add passthru),
-      `packages/ai-clis/default.nix` (stop exporting any-buddy),
-      `packages/ai-clis/any-buddy.nix` (keep but feed into
-      claude-code only, or inline),
-      `modules/claude-code-buddy/default.nix` (switch worker
-      reference), `flake.nix` packages attrset (drop any-buddy),
-      `README.md` if it enumerates packages.
-
-      General refactor pattern to apply when any
-      `packages/<group>/<name>.nix` gets too big: convert to
-      `packages/<group>/<name>/default.nix` with sibling files
-      under the same directory (e.g. `wrapper.nix`, `patching.nix`)
-      keeping all concerns for that one package co-located. Keeps
-      the overlay entry point stable (`<name>`) and the flake
-      output path unchanged. Don't pre-split — do it when a single
-      file gets unwieldy.
-
-- [ ] **`ai.skills` stacked-workflows special case** — currently
-      `ai.skills` is raw data: it takes an attrset of name → path
-      and fans out to each enabled ecosystem's skills attribute.
-      Consumer wanting stacked-workflows skills today has to use
-      `stacked-workflows.integrations.<ecosystem>.enable = true`
-      per ecosystem, separate from `ai.skills`. Augment `ai.skills`
-      to support a structured "include stacked-workflows" flag
-      (e.g. `ai.skills.stackedWorkflows.enable = true` or a
-      similar scheme) that pulls SWS skills + routing table into
-      every enabled ecosystem in one line, without forcing
-      consumers to touch `stacked-workflows.integrations.*`
-      directly. Keep the raw `ai.skills.<name> = path` form for
-      bring-your-own skills. Design question: whether to move
-      stacked-workflows.integrations under ai.skills entirely
-      (deprecate the old option) or keep it as a parallel path
-      that ai.skills delegates to.
-- [ ] **Contingency: claude-code npm distribution removal** — Anthropic
-      soft-deprecated npm distribution 2026 (`npm installation is
-deprecated` per https://code.claude.com/docs/en/setup). Native
-      installer is a Bun-compiled single-exec fetched from a GPG-signed
-      manifest. The nvfetcher side is easy to migrate; the buddy
-      patching side may not be.
-
-            **Current state**: our pipeline uses `@anthropic-ai/claude-code`
-            (npm, `buildNpmPackage`), then wraps `bin/claude` with a Bun
-            runtime wrapper that execs `bun run $CLI`. The activation script
-            patches `cli.js` (15-byte salt marker `friend-2026-401`). A
-            snackbar warning fires on every launch because
-            `Zj() = typeof Bun < 'u' && Bun.embeddedFiles.length > 0`
-            returns false for us (we're running a plain cli.js, not a
-            compiled exec with embedded assets). Suppressible via
-            `DISABLE_INSTALLATION_CHECKS=1` — see separate backlog item.
-
-            **Risk**: Anthropic may eventually stop publishing to npm and
-            only distribute the compiled binary. Our buddy-patching pipeline
-            breaks because `cli.js` is no longer a file on disk — it's
-            embedded inside the Bun single-exec format's data section.
-
-            **What nvfetcher needs to do if that happens** (easy):
-
-            The native installer distribution URL is documented and
-            predictable:
-
-            ```
-            https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/
-              claude-code-releases/<VERSION>/
-                manifest.json        — lists platforms + SHA256 per binary
-                manifest.json.sig    — detached GPG signature (from 2.1.89+)
-                <platform>/claude    — the compiled single-exec
-            ```
-
-            GPG key at `https://downloads.claude.ai/keys/claude-code.asc`,
-            signed by "Anthropic Claude Code Release Signing
-            <security@anthropic.com>". Fingerprint published in the setup
-            docs under "Verify the manifest signature" — check the live
-            docs at migration time rather than embedding a rotatable
-            value in the backlog.
-
-            Migration pattern: swap our `claude-code.nix` from
-            `buildNpmPackage` override to `prev.claude-code.overrideAttrs`
-            fetching the binary — **exactly the same pattern already used
-            by `kiro-cli.nix` and `copilot-cli.nix`**. nvfetcher gets a
-            custom `fetch.file` strategy polling `manifest.json`, plus
-            per-platform SHA256 hashes tracked in `hashes.json` sidecar.
-            Maybe an afternoon of work.
-
-            **What the BUDDY pipeline needs to do** (hard, partially
-            blocked):
-
-            1. **Pin last-known-good npm version.** nvfetcher already
-               tracks srcHash; just freeze. Buddy keeps working against a
-               stale cli.js, no updates. Ugly but the minimum-viable
-               fallback. Cost: miss new claude-code features.
-
-            2. **Patch the compiled binary's embedded section.** The Bun
-               single-exec format is documented (sort of) but fragile —
-               the format can change between Bun versions. Would need to
-               unpack the data section, find and replace the salt bytes,
-               re-pack, re-sign (macOS). High maintenance, breakage risk
-               on every claude-code version bump.
-
-            3. **Compile our own with a patched source.** Would mean
-               fetching the source separately (not the pre-compiled
-               binary), applying the salt patch at build time, running
-               `bun build --compile` in a nix derivation. This is the
-               OLD `withBuddy` build-time approach — we already abandoned
-               it for good reasons (no sops support, multi-user broken,
-               stale companion field), but those concerns could be
-               reintroduced differently by computing the salt at
-               activation time and only running compile when
-               fingerprint changes (expensive activation step, not
-               build-time).
-
-               **BLOCKED BY CLOSED SOURCE.** The big claude-code
-               sourcemap leak 2026 confirmed the binary is NOT entirely
-               open source — significant portions are proprietary.
-               Even if we could obtain a source tree (via the leaked
-               maps or by reverse-engineering from npm), redistributing
-               or recompiling would be legally murky and would
-               technically leave nixpkgs policy compliance (we can't
-               ship non-redistributable source). This likely rules
-               option 3 out entirely, leaving options 1 and 2 as the
-               only viable long-term paths.
-
-            4. **Drop buddy patching entirely.** Just accept whatever
-               buddy the default salt produces. Cosmetic loss only —
-               claude-code still works.
-
-            **Recommended posture now**: monitor. Check
-            `@anthropic-ai/claude-code` npm publish frequency
-            periodically. If Anthropic slows down or stops npm
-            releases while the native channel keeps updating, that's
-            the signal. Also watch for changes in the sourcemap
-            situation — if more source becomes public or Anthropic
-            publishes an official source tree, option 3 moves back
-            into play.
-
-            **Touch points when migration happens**:
-            - `nvfetcher.toml` — change `claude-code` entry's fetch
-              strategy (github releases? custom file fetcher? we already
-              have `fetch.url` in the toolbox)
-            - `packages/ai-clis/claude-code.nix` — switch from
-              `buildNpmPackage` override to `overrideAttrs` binary
-              fetch (copy the `copilot-cli.nix` shape)
-            - `packages/ai-clis/hashes.json` — swap `npmDepsHash`/
-              `srcHash` for per-platform binary hashes
-            - `modules/claude-code-buddy/default.nix` — decide which
-              option above, update accordingly
-            - `dev/docs/guides/buddy-customization.md` — document
-              whatever fallback we land on
-            - Possibly delete `packages/ai-clis/locks/claude-code-package-lock.json`
-              (no longer needed when we stop using buildNpmPackage)
-
-- [ ] **Set `DISABLE_AUTOUPDATER=1` defensively in claude-code
-      wrapper env** — claude-code runs a background autoupdater that
-      downloads new binaries and rewrites them at the install path.
-      This is inappropriate for a nix-managed store path: writes
-      outside the store (probably silent failure because the store
-      is read-only), may corrupt user state when it fails, and at
-      best wastes network/disk reconstructing what the nix store
-      already has. Native-installer claude-code auto-updates "in the
-      background" per docs, so setting this env defensively matters
-      even more when we eventually migrate to the native channel.
-
-      While we're at it, also consider setting
-      `DISABLE_INSTALLATION_CHECKS=1` in the same place to silence
-      the "Claude Code has switched from npm to native installer"
-      snackbar. It fires on every launch because our `Zj()` check
-      returns false (we run `bun run cli.js`, not the embedded-files
-      compiled exec). Cosmetic only — the warning is a 15-second
-      snackbar with `priority: "high"` but no functional impact.
-      cli.js exposes three code paths gated on this env, all
-      install-check related; setting it is the officially supported
-      bypass.
-
-      Touch points:
-      - `packages/ai-clis/claude-code.nix` — the Bun wrapper script
-        currently does `exec ${bun}/bin/bun run "$CLI" "$@"`. Add
-        `DISABLE_AUTOUPDATER=1 DISABLE_INSTALLATION_CHECKS=1` to
-        the exec line (or as `export` before it).
-      - Or set them via `programs.claude-code.settings.env` in the
-        ai HM module — more idiomatic, lives closer to user-facing
-        config, visible in `~/.claude/settings.json`.
-      - Which approach is better is a design question: wrapper env
-        is always-on (can't opt out); settings.env is overridable.
-        Default autoupdater=off is probably correct for a nix build;
-        default install-checks=off is arguable (the warning is
-        legitimate if someone actually should migrate).
-
-- [ ] outOfStoreSymlink helper for runtime state dirs — Claude writes
-      ~/.claude/projects mid-session, can't use regular HM files.
-      Document the outOfStoreSymlink pattern or wrap as an option
-      (ai.claude.persistentDirs)
-
-### Steering Fragments Follow-ups (from Checkpoint 8 review)
-
-These surfaced during the multi-reviewer audit of commits
-`a012a41..2e5801e` (the Checkpoints 2-7 steering-fragments stack).
-None blocked closing Checkpoint 8; all are architectural
-improvements and quality-of-life fixes.
-
-- [ ] **Consolidate fragment enumeration into a single metadata
-      table** — `devFragmentNames`, `packagePaths`, and
-      `flake.nix`'s `siteArchitecture` runCommand all hand-list the
-      same fragments. Adding a new architecture fragment requires
-      three coordinated edits. Extract a single `fragmentMetadata`
-      attrset in `dev/generate.nix` that declares each fragment
-      once with all fields (location, dir, name, paths, docsite
-      output path, category), then project it into
-      `devFragmentNames` (grouped by category), `packagePaths`
-      (grouped by category), and an exported attr that
-      `flake.nix` consumes to build `siteArchitecture`. Ideally
-      `siteArchitecture` becomes fully auto-discovered. Touch
-      points: `dev/generate.nix`, `flake.nix` `packages.<system>`.
-- [ ] **Add scope→fragment map to the self-maintenance directive**
-      — the always-loaded `dev/fragments/monorepo/architecture-fragments.md`
-      tells sessions to update stale fragments when editing
-      matching code, but doesn't name which fragment covers which
-      scope. A session editing `modules/ai/default.nix` has to
-      read every fragment's frontmatter to figure out whether
-      `ai-module-fanout` or `hm-modules` (or both) need updating.
-      Either hand-maintain a scope table in the fragment OR
-      generate one from `packagePaths` via a new nix expression
-      embedded in the always-loaded file.
-- [ ] **Fragment size reduction: hm-modules and fragment-pipeline**
-      — both landed over the 150-line soft budget (267 and 186
-      lines respectively). Split by sub-concern if real-world
-      usage shows context dilution: - `hm-modules` → `hm-option-shape`, `hm-gating`,
-      `hm-activation`, `hm-parity` (four ~70-line fragments
-      sharing the `modules/**` scope) - `fragment-pipeline` → `pipeline-primitives` and
-      `pipeline-orchestration`
-      Only do this if actual session usage shows problems — the
-      current size is over guideline but may work fine in
-      practice.
-- [ ] **Soften agent-directed language in docsite copies of
-      fragments** — architecture fragments use imperative
-      agent-directed phrasing ("stop and fix it", "MUST be
-      updated") that reads as jarring when the same markdown
-      renders as human-facing mdbook pages under
-      `docs/src/contributing/architecture/`. Options:
-      (a) Rewrite imperative directives as declarative design
-      contracts, shared between agent and human readers;
-      (b) Split into two versions (agent copy vs human copy) —
-      rejected as DRY violation;
-      (c) Add a docsite-specific intro blurb that frames the
-      tone ("these files are the same markdown the agents load
-      as steering; the imperative tone is intentional").
-      Option (a) or (c) are acceptable; (a) is probably cleaner.
-- [ ] **Add Introduction → Contributing link** — the mdbook
-      introduction page (`dev/docs/index.md`) doesn't mention the
-      new Contributing / Architecture section. Human visitors
-      have no discovery path from the landing page to the
-      architecture docs. Add a short section to index.md pointing
-      at `./contributing/architecture/architecture-fragments.md`
-      as the entry point.
-- [ ] **HM ↔ devenv ai module parity test** — currently enforced
-      by code review only. Add a parity-check eval test in
-      `checks/module-eval.nix` that evaluates both
-      `modules/ai/default.nix` and `modules/devenv/ai.nix` with
-      equivalent config and spot-checks that option paths match
-      (minus intentional divergences like `ai.claude.buddy`).
-      Will catch future drift at `nix flake check` time.
-- [ ] **Include commit subject in Last-verified markers** —
-      current fragments open with `Last verified: 2026-04-07
-    (commit a3c05f3)`. A future session has to run
-      `git log -1 a3c05f3` to understand the reference point.
-      Extending to
-      `Last verified: 2026-04-07 (commit a3c05f3 — subject here)`
-      adds negligible context tokens but makes the marker
-      useful without a tool call. Apply to all 7 existing
-      fragments + document the format in the always-loaded
-      architecture-fragments fragment so future fragments use
-      the new style.
-- [ ] **Refactor `mkDevFragment` location discriminator as
-      attrset lookup** — the current if/else-if branching on
-      `"dev" | "package" | "module"` works but extends linearly.
-      Replace with:
-      `nix
-    locationBases = {
-      dev = ./fragments;
-      package = ../packages;
-      module = ../modules;
-    };
-    fragmentPath =
-      (locationBases.${location}
-        or (throw "mkDevFragment: unknown location '${location}'"))
-      + "/${dir}/${relPath location}/${name}.md";
-    `
-      Small refactor, improves extensibility. Pure code cleanup;
-      no behavior change.
-- [ ] **Replace `isRoot = package == "monorepo"` with category
-      metadata** — `mkDevComposed` hardcodes a string match to
-      decide whether commonFragments are included. Should be
-      explicit category metadata (e.g., `{ includesCommonStandards
-    = true; }`) so adding a new always-loaded category becomes
-      declarative instead of code-editing. Paired with the
-      "consolidate fragment enumeration" backlog item.
-- [ ] **Document the intentional hm-modules / claude-code scope
-      overlap** — both categories' `packagePaths` include
-      `modules/claude-code-buddy/**`, so editing a buddy file
-      co-loads both fragments plus always-loaded common.md
-      (~945 total lines). This is deliberate because buddy IS
-      an HM module and benefits from both the buddy-specific
-      guidance AND the general HM module conventions. But the
-      overlap isn't documented anywhere and looks accidental to
-      a reader. Either add a comment in `dev/generate.nix`
-      explaining the intentional overlap, or inside the
-      architecture-fragments always-loaded fragment with the
-      scope map (see related backlog item above).
-- [ ] **cache-hit-parity fragment → actual overlay fix** — the
-      fragment describes the rule but explicitly notes the rule
-      is NOT yet applied. Tracked under the existing backlog
-      item "Overlays must instantiate their own pkgs from
-      `inputs.nixpkgs`". The fragment becomes more valuable
-      once that backlog item lands. Add a cross-reference in
-      the backlog so landing the overlay fix also updates the
-      fragment's status note.
-
-- [ ] **Research cspell plural/inflection syntax** — currently every
-      inflected form of a word has to be added to
-      `.cspell/project-terms.txt` separately: `fanout` AND `fanouts`,
-      `dedup` AND `deduplicate`, `lifecycle` AND `lifecycles`, etc.
-      cspell may already support declaring a root word that covers
-      its inflections (plurals and other common suffix forms) or
-      hooking into a dictionary with morphological rules. If so,
-      restructuring project-terms.txt or adding a companion config
-      file would eliminate the churn of allowlisting every inflection
-      in every backlog/fragment commit. Check https://cspell.org/
-      docs for: - Root-word expansion syntax (something like `fanout+`?) - Dictionary definition files with affix rules - Whether cspell honors Hunspell-style `.aff`/`.dic` files - Any "ignore plurals" or "allow common morphology" flag
-      Touch points if it exists:
-      `.cspell/project-terms.txt` format switch, possibly a new
-      `.cspell.json` config file (none currently), or the treefmt
-      cspell formatter config.
-- [ ] **Agentic UX: pre-approve nix-store reads for HM-symlinked
-      skills and references** — when Claude Code follows a symlink
-      from `~/.claude/skills/<skill>/SKILL.md` or
-      `~/.claude/references/<name>.md` into `/nix/store/...`, it
-      prompts for read permission on each real store path. Users
-      experience this as a permission wall: every new skill file
-      Claude touches fires a modal "Do you want to proceed?"
-      dialog. Observed 2026-04-07 during real contributor work —
-      commit took 10+ minutes because of repeated "tab back and
-      approve" cycles walking through SWS skill files.
-
-      The root cause is that HM symlinks point into the store
-      (immutable, content-addressed), but Claude Code's permission
-      model treats each resolved target as a distinct readable
-      path. Pre-approving `~/.claude/skills/**` doesn't help
-      because that permission applies to the symlink path, not
-      the resolved store target.
-
-      Potential fixes to research and pick from:
-
-      1. **Claude Code settings Allow rule for `/nix/store/**`** —
-         if settings.json `permissions.allow` supports glob against
-         resolved paths, a single rule covers every store read.
-         May be too broad (gives Claude read access to the entire
-         store, including unrelated packages). Check Claude Code
-         settings docs for path-resolution semantics.
-      2. **Per-subtree pre-approval** — allowlist the specific
-         store paths for SWS skill and reference derivations.
-         nix-agentic-tools could generate a settings.json snippet
-         at HM activation time that pre-approves the current
-         derivation outputs. Breaks on every nix store GC and
-         requires re-activation to regenerate the allowlist.
-      3. **Mode 2 in the dialog — "Yes, allow reading from
-         references/ during this session"** — teach users this
-         shortcut as a workaround. Documentation fix, not a code
-         fix. Still repeats per session.
-      4. **Managed policy CLAUDE.md** — organization-wide
-         CLAUDE.md at `/etc/claude-code/CLAUDE.md` may be able to
-         preload trusted paths. Need to verify.
-      5. **Copy instead of symlink** for SWS skills/references —
-         use `home.file.source` with `builtins.readFile` to
-         inline content as text. Loses atomicity (HM tracks a
-         writable file, not a store symlink) and breaks for
-         non-text skill assets. Last resort.
-
-      Touch points once a fix is picked:
-      - `modules/stacked-workflows/default.nix` (SWS HM module
-        writing the skill symlinks)
-      - `modules/ai/default.nix` (ai.skills fanout writing the
-        Claude skill symlinks)
-      - Consumer-side `.claude/settings.json` or its HM-managed
-        counterpart if `programs.claude-code.settings` exposes
-        `permissions.allow`
-      - `dev/docs/guides/` (document the fix for consumers)
-      - `dev/docs/troubleshooting/` (document the workaround even
-        if the structural fix is longer-term)
-
-- [ ] Secret scanning — integrate gitleaks into pre-commit hook or CI.
-      Currently clean (406 commits verified 2026-04-06). Wire via
-      git-hooks.hooks in devenv or as a CI step in ci.yml
+- [ ] claude-code build approach consumer docs — Bun wrapper,
+      buddy state location, cli.js writable copy, hash routing
+
+---
+
+## Done (history)
+
+Major completed milestones worth tracking. Detailed task lists
+for each are in git history; the commit-level breakdown lives in
+memory (`project_plan_state.md`) and the session memories.
+
+### Fragment system + generation (2026-04-04 to 2026-04-07)
+
+- Phase 1: FP refactor — target-agnostic core + fragments-ai
+- Phase 2: DRY audit — CLAUDE.md generated, fragments
+  consolidated
+- Phase 3a: Instruction task migration (nix derivations + devenv
+  tasks)
+- Phase 3b: Repo doc generation — README + CONTRIBUTING from nix
+  data (README committed, CONTRIBUTING deferred per LOWER above)
+- Phase 3c: Doc site generation — prose/reference/snippets
+  pipeline
+- Phase 4: `nixosOptionsDoc` (281 HM + 64 devenv), NuschtOS/search,
+  Pagefind
+- Dynamic generators: overlay, MCP servers, credentials, skills,
+  routing
+- `{{#include}}` snippets in all mixed pages
+
+### Buddy (2026-04-06 to 2026-04-07)
+
+- `pkgs.claude-code.withBuddy` build-time design (superseded)
+- Activation-time HM module rewrite — Bun wrapper + fingerprint
+  caching + sops-nix integration
+- Null coercion fix for peak/dump
+- `any-buddy` rename (dropped `-source` suffix)
+- Buddy working end-to-end on user's host
+
+### Steering fragments (Checkpoints 2-8, 2026-04-07)
+
+- Context rot research (`dev/notes/steering-research.md`)
+- Prerequisite frontmatter fix: `packagePaths` → lists, Kiro
+  transform → inline YAML array
+- Generator extension: `mkDevFragment` location discriminator
+- Scoped rule file dedup fix (~80 lines per file saved)
+- 7 architecture fragments: `architecture-fragments`,
+  `claude-code-wrapper`, `buddy-activation`, `ai-module-fanout`,
+  `overlay-cache-hit-parity`, `fragment-pipeline`,
+  `hm-module-conventions`
+- Devenv ai module parity fix (dropped master `ai.enable`)
+- Consumer doc updates (4 files)
+- Docsite wiring: `siteArchitecture` derivation +
+  `docs/src/contributing/architecture/`
+- Multi-reviewer audit (6 parallel reviewers)
+
+### CI & Cachix (2026-04-06)
+
+- `ci.yml` — devenv test + package build matrix + cachix push
+  (2-arch: x86_64-linux, aarch64-darwin)
+- `update.yml` — daily nvfetcher update pipeline (devenv tasks)
+- Binary cache: `nix-agentic-tools` cachix (50G plan)
+
+### Backlog grooming (2026-04-07)
+
+- Removed superseded superpowers plan (`with-buddy.md`)
+- Removed mostly-done superpowers plan (`pre-hitl-next-steps.md`)
+- Extracted long-form content to `dev/notes/` (overlay cache-hit,
+  npm contingency)
+- Condensed ai-claude-passthrough plan to memory
+- Rewrote plan.md with priority tiers (this file)
+
+---
+
+## Next action
+
+**Draft a plan for Task 2 (skills fanout fix) from
+`memory/project_ai_claude_passthrough.md`.** It's BLOCKING all of
+the ai.claude.\* passthrough work, which in turn is BLOCKING
+nixos-config full migration to `ai.*`. Single session, small
+diff, high unblock value.
