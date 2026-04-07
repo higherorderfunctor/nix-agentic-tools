@@ -3,6 +3,21 @@
 > Living document. Single source of truth for remaining work.
 > Branch: `sentinel/monorepo-plan`
 
+## Authoring notes
+
+Pre-commit runs cspell over this file. When writing backlog entries,
+avoid strings that trip the spellchecker on every commit:
+
+- **No literal Nix store hashes.** Use `<HASH>-<name>-<version>` or
+  `/nix/store/...-name-version` as placeholders. Real 32-char base32
+  store hashes will always contain novel letter runs cspell flags.
+- **No raw narinfo URLs.** Describe the path
+  (`cachix.org/<hash>.narinfo`) or add the word to
+  `.cspell/project-terms.txt` once and reuse.
+- **Jargon goes in `.cspell/project-terms.txt`**, not the prose.
+  Words like `narinfo` should be added to the allowlist the first
+  time they appear. Keep the list alphabetical.
+
 ## Architecture
 
 - **Standalone devenv CLI** for dev shell (not flake-based)
@@ -227,6 +242,277 @@ Generated file policy:
       wrapper (not Node), buddy state at $XDG_STATE_HOME, withBuddy
       removal, cli.js writable copy, fnv1a vs wyhash hash routing.
       Consumer-facing docs explaining what they get vs upstream.
+- [ ] **Overlays must instantiate their own pkgs from `inputs.nixpkgs`
+      so cachix substituters actually serve compiled packages**
+
+  ### Problem
+
+  Every compiled overlay package in this repo currently builds against
+  the **consumer's** nixpkgs/rust-overlay/etc. when the overlay is
+  composed into a downstream flake. CI builds them standalone against
+  this repo's pinned `inputs.nixpkgs` and pushes to
+  `nix-agentic-tools.cachix.org`. The two store paths differ because
+  rustc/glibc/openssl/python/nodejs/go-toolchain/build-helpers come
+  from different nixpkgs revs. Result: cache miss on every consumer
+  rebuild even though the cachix substituter is wired up correctly.
+
+  Real-world surfaced 2026-04-06 when nixos-config consumed
+  `inputs.nix-agentic-tools.overlays.default` after the overlay swap
+  to use the full overlay (not just `ai-clis`). git-branchless forced
+  a local Rust compile despite `nix-agentic-tools.cachix.org` being
+  in `nix.settings.substituters`. Verified by computing both store
+  paths and querying narinfo:
+  - Standalone (this repo, `nix eval --raw .#git-branchless`):
+    `/nix/store/<HASH_A>-git-branchless-0.10.0`
+    → `curl cachix.org/<HASH_A>.narinfo` → **HTTP 200**
+  - Consumer (nixos-config, eval via `import nixpkgs { overlays = ...; }`):
+    `/nix/store/<HASH_B>-git-branchless-0.10.0`
+    → narinfo lookup against all known caches → **HTTP 404 everywhere**
+
+  This is the consequence of commit `e5406977` ("drop input follows
+  that defeat cachix substituters") — cachix substituters require this
+  repo's inputs to be a closed closure independent of consumers. The
+  deliberate trade-off was accepted: consumers get TWO nixpkgs in their
+  /nix/store (theirs + ours, mostly content-addressed dedup), flake.lock
+  grows, but cache hits work. The current overlay code only completes
+  HALF of that decision: cargoHash/src/version are pinned to this repo's
+  nvfetcher data, but the build infrastructure (rustc, build helpers,
+  base derivations) borrows from the consumer. Need to commit fully.
+
+  ### Fix pattern
+
+  Each compiled overlay package must instantiate `ourPkgs` from
+  `inputs.nixpkgs` (with whatever sub-overlays it needs from
+  `inputs.rust-overlay` etc.) and use `ourPkgs` for ALL build inputs
+  AND the base derivation. The overlay function signature still
+  receives `final`/`prev` from the consumer (overlay protocol
+  requirement), but only uses `final.system` to know the platform.
+
+  Threading: `inputs` is currently passed to the top-level overlay
+  composition functions (e.g. `packages/git-tools/default.nix:5`
+  takes `{inputs, ...}`), but is NOT threaded down to per-package
+  overlay files. The fix requires threading `inputs` (or at minimum
+  `inputs.nixpkgs` and `inputs.rust-overlay`) into each per-package
+  function.
+
+  Example transformation for `packages/git-tools/git-branchless.nix`:
+
+  ```nix
+  # BEFORE — uses consumer's pkgs for everything except src/cargoHash
+  sources: final: prev: let
+    nv = sources.git-branchless;
+    rust = final.rust-bin.stable."1.88.0".default;
+    rustPlatform = final.makeRustPlatform { cargo = rust; rustc = rust; };
+  in {
+    git-branchless = prev.git-branchless.override (_: {
+      rustPlatform.buildRustPackage = args:
+        rustPlatform.buildRustPackage (finalAttrs: let
+          a = (final.lib.toFunction args) finalAttrs;
+        in a // {
+          version = final.lib.removePrefix "v" nv.version;
+          inherit (nv) src cargoHash;
+          postPatch = null;
+        });
+    });
+  }
+
+  # AFTER — instantiates ourPkgs internally, uses it for everything
+  {inputs}: sources: final: _prev: let
+    ourPkgs = import inputs.nixpkgs {
+      inherit (final) system;
+      overlays = [(import inputs.rust-overlay)];
+      config.allowUnfree = true;
+    };
+    nv = sources.git-branchless;
+    rust = ourPkgs.rust-bin.stable."1.88.0".default;
+    rustPlatform = ourPkgs.makeRustPlatform { cargo = rust; rustc = rust; };
+  in {
+    git-branchless = ourPkgs.git-branchless.override (_: {
+      rustPlatform.buildRustPackage = args:
+        rustPlatform.buildRustPackage (finalAttrs: let
+          a = (ourPkgs.lib.toFunction args) finalAttrs;
+        in a // {
+          version = ourPkgs.lib.removePrefix "v" nv.version;
+          inherit (nv) src cargoHash;
+          postPatch = null;
+        });
+    });
+  }
+  ```
+
+  Note: `final.system` is still used to discover platform; everything
+  else is `ourPkgs.X`. The result is a derivation whose closure traces
+  back entirely to `inputs.nixpkgs` (this repo's pin), not the
+  consumer's. Store path is byte-identical to `nix build .#git-branchless`
+  run from this repo standalone → cache hit.
+
+  ### Threading inputs into per-package files
+
+  `packages/git-tools/default.nix` currently:
+
+  ```nix
+  {inputs, ...}: let
+    withSources = overlayPaths: final: prev: let
+      sources = import ./sources.nix { inherit (final) fetchurl ...; };
+      applyOverlay = path: (import path) sources final prev;  # ← no inputs
+    in lib.foldl' lib.recursiveUpdate {} (map applyOverlay overlayPaths);
+  in
+    lib.composeManyExtensions [
+      inputs.rust-overlay.overlays.default
+      (withSources localOverlays)
+    ]
+  ```
+
+  Update `applyOverlay` to pass `inputs` and drop the top-level
+  `inputs.rust-overlay.overlays.default` (since each package now
+  applies it internally to its own ourPkgs):
+
+  ```nix
+  {inputs, ...}: let
+    withSources = overlayPaths: final: prev: let
+      sources = import ./sources.nix { inherit (final) fetchurl ...; };
+      applyOverlay = path: (import path) {inherit inputs;} sources final prev;
+    in lib.foldl' lib.recursiveUpdate {} (map applyOverlay overlayPaths);
+  in
+    withSources localOverlays
+  ```
+
+  Same threading change applies to `packages/mcp-servers/default.nix`
+  (already has the `{inputs, ...}` pattern via `callPkg` for some
+  packages — needs to be applied to ALL).
+
+  ### Files to modify (audit completed 2026-04-06)
+
+  **packages/git-tools/** — every package builds Rust or Python:
+  - `default.nix` — thread `inputs` into per-package overlays; drop
+    top-level `inputs.rust-overlay.overlays.default` (now per-package)
+  - `git-absorb.nix` — Rust, uses `final.rust-bin.stable.latest.default`
+  - `git-branchless.nix` — Rust, pinned to 1.88.0
+  - `git-revise.nix` — `final.python3Packages.buildPythonApplication`
+    - hatchling. Python version-sensitive.
+  - `agnix.nix` — Rust, uses `final.rust-bin.stable.latest.default`,
+    `final.pkg-config`, `final.apple-sdk_15` (darwin)
+
+  **packages/mcp-servers/** — npm/Python/Go builds, all currently use `final`:
+  - `default.nix` — `callPkg` already supports `{inputs, ...}` pattern
+    but most package files don't take `inputs`. Update each package file.
+  - npm: `context7-mcp.nix`, `effect-mcp.nix`, `git-intel-mcp.nix`,
+    `openmemory-mcp.nix`, `sequential-thinking-mcp.nix` — use
+    `final.buildNpmPackage`, `final.nodejs`, `final.makeWrapper`
+  - Python: `fetch-mcp.nix`, `git-mcp.nix`, `kagi-mcp.nix`,
+    `mcp-proxy.nix`, `nixos-mcp.nix`, `serena-mcp.nix`, `sympy-mcp.nix`
+    — use `final.python3Packages.X` or `final.python3.withPackages`
+  - Go: `github-mcp.nix`, `mcp-language-server.nix` — use
+    `final.buildGoModule`
+
+  **packages/ai-clis/** — mixed:
+  - `claude-code.nix` — `prev.claude-code.override` (npm build) +
+    `final.symlinkJoin` + `final.writeShellScript` + `final.bun`. The
+    Bun runtime in the wrapper will close over consumer's bun version
+    → AFFECTED. Fix: build everything against ourPkgs.
+  - `copilot-cli.nix` — `prev.github-copilot-cli.overrideAttrs` with
+    just `src`/`version`. Pure binary install, low impact but still
+    technically affected (base derivation comes from consumer). Lower
+    priority unless verified to be cache-missing.
+  - `kiro-cli.nix` — same as copilot-cli plus `final.makeWrapper` for
+    postFixup. Same priority.
+  - `kiro-gateway.nix` — uses `final.python314.withPackages` with
+    explicit Python 3.14 + fastapi/httpx/etc. AFFECTED — Python env
+    closure changes with consumer's nixpkgs.
+
+  **packages/coding-standards/, fragments-ai/, fragments-docs/,
+  stacked-workflows/** — pure content (markdown files in derivations,
+  no compilation). NOT affected. Skip.
+
+  ### Verification protocol
+
+  After fixing each package, verify the consumer-side store path
+  matches the standalone-build store path:
+
+  ```bash
+  # 1. Standalone path (CI builds this)
+  cd ~/Documents/projects/nix-agentic-tools
+  STANDALONE=$(nix eval --raw .#git-branchless)
+  echo "standalone: $STANDALONE"
+
+  # 2. Consumer path (eval the overlay through consumer's nixpkgs)
+  cd ~/Documents/projects/nixos-config
+  CONSUMER=$(nix eval --raw --impure --expr '
+    let
+      flake = builtins.getFlake (toString ./.);
+      pkgs = import flake.inputs.nixpkgs {
+        system = "x86_64-linux";
+        overlays = import ./overlays { inherit (flake) inputs; lib = flake.inputs.nixpkgs.lib; };
+        config.allowUnfree = true;
+      };
+    in pkgs.git-branchless.outPath')
+  echo "consumer:   $CONSUMER"
+
+  # 3. Must be identical
+  [ "$STANDALONE" = "$CONSUMER" ] && echo "✓ MATCH" || echo "✗ DRIFT"
+
+  # 4. Confirm cache hit possible
+  HASH=$(basename "$STANDALONE" | cut -d- -f1)
+  curl -sI "https://nix-agentic-tools.cachix.org/${HASH}.narinfo" | head -1
+  # Expect: HTTP/2 200
+  ```
+
+  Repeat for each package after fixing it. Add a flake check or CI
+  test that runs this comparison automatically — would catch any
+  future drift where someone introduces `final.X` for a build input.
+
+  ### Why this isn't free (the trade-off the user already accepted)
+
+  The consumer's /nix/store ends up holding TWO nixpkgs evaluations:
+  their own (used for everything else) and ours (used to build our
+  packages). Most of the closure deduplicates via content-addressing
+  (glibc, bash, coreutils are byte-identical when source content
+  matches), but anything that drifted between the two pins is
+  duplicated. flake.lock grows because nix-agentic-tools' inputs
+  aren't deduped against the consumer's. Disk usage goes up, but
+  cache hits become reliable instead of theoretical.
+
+  This is the deliberate cost of `e5406977`. The fix here finishes
+  what that commit started.
+
+  ### Lower-priority follow-ups
+  - Add a flake check `checks.x86_64-linux.cache-hit-parity` that
+    fails if any consumer-side eval produces a store path different
+    from the standalone build. Prevents regression.
+  - Document this pattern in `dev/docs/concepts/` so future overlay
+    additions follow it from day one.
+  - Consider abstracting the `ourPkgs = import inputs.nixpkgs { ... }`
+    boilerplate into a `lib/our-pkgs.nix` helper that takes `inputs`
+    and `final.system` and returns a configured pkgs set. Each
+    package file becomes a one-liner `{inputs}: ... let pkgs =
+ourPkgs inputs final.system; in { ... };`.
+
+- [ ] **ai HM module should `imports` its deps** — `homeManagerModules.ai`
+      should pull in `claude-code-buddy`, `copilot-cli`, `kiro-cli` (and
+      whatever else it references) via `imports = [ ... ]` so consumers
+      get a single import. Currently the `ai` module references
+      `programs.copilot-cli` / `programs.kiro-cli` unconditionally inside
+      `mkIf cfg.copilot.enable` blocks, which forces consumers to manually
+      import those modules even when they're not using them, because the
+      NixOS module system requires option paths to exist regardless of
+      mkIf condition. Real-world surfaced this in nixos-config consumer
+      integration (2026-04-06): had to add four surgical imports
+      (ai, claude-code-buddy, copilot-cli, kiro-cli) where one should
+      have sufficed. Either:
+      (a) `ai/default.nix` adds `imports = [ ../claude-code-buddy ../copilot-cli ../kiro-cli ];`
+      (b) Guard the `programs.{copilot,kiro}-cli` references with
+      `lib.optionalAttrs (hasModule [...])` and keep modules separate
+      Pick (a) for least consumer friction.
+- [ ] **Drop standalone `claude-code-buddy` HM module** — fold the buddy
+      option into a single nix-agentic-tools `claude-code` HM module that
+      augments upstream `programs.claude-code` (mirrors how copilot-cli
+      and kiro-cli modules work). Eliminates the awkward
+      `homeManagerModules.claude-code-buddy` consumers have to know
+      about. The `ai` module's `imports` (above) brings it in
+      transparently. Naming question: keep as `programs.claude-code.buddy`
+      or move to `programs.claude-code-extras.buddy` to avoid conflict
+      with upstream HM's claude-code module if it ever adds its own
+      `buddy` option.
 - [ ] **ai.claude.\* full passthrough** — architectural gap: ai.claude
       currently only exposes `enable`, `package`, and `buddy`. The
       intent is that ai.claude.\* mirrors EVERY option from
@@ -245,6 +531,51 @@ Generated file policy:
       cross-ecosystem options (ai.skills, ai.instructions,
       ai.lspServers, ai.settings.{model,telemetry}) stay as
       convenience layers that fan out to multiple ecosystems
+- [ ] **Bundle any-buddy into claude-code package** — `any-buddy-source`
+      is currently its own overlay package
+      (`packages/ai-clis/any-buddy.nix`), exposed at
+      `pkgs.any-buddy-source`, solely so the activation script in
+      `modules/claude-code-buddy/default.nix` can reference
+      `${pkgs.any-buddy-source}/src/finder/worker.ts`. It's not
+      consumed by anything else. Move the source tree into the
+      claude-code package as a private passthru (e.g.
+      `pkgs.claude-code.passthru.anyBuddySource`) and update the
+      buddy module to pull it from there. Removes one top-level
+      package export and one nvfetcher entry's exposed surface
+      (nvfetcher entry stays; just not re-exported). Touch points:
+      `packages/ai-clis/claude-code.nix` (add passthru),
+      `packages/ai-clis/default.nix` (stop exporting
+      any-buddy-source), `packages/ai-clis/any-buddy.nix` (keep
+      but feed into claude-code only, or inline),
+      `modules/claude-code-buddy/default.nix` (switch worker
+      reference), `flake.nix` packages attrset (drop
+      any-buddy-source), `README.md` if it enumerates packages.
+
+      General refactor pattern to apply when any
+      `packages/<group>/<name>.nix` gets too big: convert to
+      `packages/<group>/<name>/default.nix` with sibling files
+      under the same directory (e.g. `wrapper.nix`, `patching.nix`)
+      keeping all concerns for that one package co-located. Keeps
+      the overlay entry point stable (`<name>`) and the flake
+      output path unchanged. Don't pre-split — do it when a single
+      file gets unwieldy.
+
+- [ ] **`ai.skills` stacked-workflows special case** — currently
+      `ai.skills` is raw data: it takes an attrset of name → path
+      and fans out to each enabled ecosystem's skills attribute.
+      Consumer wanting stacked-workflows skills today has to use
+      `stacked-workflows.integrations.<ecosystem>.enable = true`
+      per ecosystem, separate from `ai.skills`. Augment `ai.skills`
+      to support a structured "include stacked-workflows" flag
+      (e.g. `ai.skills.stackedWorkflows.enable = true` or a
+      similar scheme) that pulls SWS skills + routing table into
+      every enabled ecosystem in one line, without forcing
+      consumers to touch `stacked-workflows.integrations.*`
+      directly. Keep the raw `ai.skills.<name> = path` form for
+      bring-your-own skills. Design question: whether to move
+      stacked-workflows.integrations under ai.skills entirely
+      (deprecate the old option) or keep it as a parallel path
+      that ai.skills delegates to.
 - [ ] outOfStoreSymlink helper for runtime state dirs — Claude writes
       ~/.claude/projects mid-session, can't use regular HM files.
       Document the outOfStoreSymlink pattern or wrap as an option

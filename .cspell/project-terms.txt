@@ -65,6 +65,7 @@ markdownify
 mdbook
 mergetool
 mystor
+narinfo
 nixd
 nixos
 nixpkgs
