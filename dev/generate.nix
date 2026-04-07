@@ -107,11 +107,24 @@
   };
 
   # ── Compose fragments for a dev package profile ──────────────────────
+  # The monorepo (root) profile includes shared content (coding standards,
+  # commit conventions, etc. from commonFragments) because its output is
+  # the always-loaded CLAUDE.md / common.md. Scoped profiles include ONLY
+  # their scope-specific content — repeating the shared content in every
+  # scoped rule file amplifies context rot (duplicate tokens loaded when
+  # a scoped rule triggers alongside the always-loaded common.md).
+  # Per Checkpoint 2 research on context dilution.
   mkDevComposed = package: let
     devFrags = map (mkDevFragment package) (devFragmentNames.${package} or []);
     extraFrags = extraPublishedFragments.${package} or [];
+    isRoot = package == "monorepo";
   in
-    fragments.compose {fragments = commonFragments ++ extraFrags ++ devFrags;};
+    fragments.compose {
+      fragments =
+        if isRoot
+        then commonFragments ++ extraFrags ++ devFrags
+        else extraFrags ++ devFrags;
+    };
 
   # ── Ecosystem file transforms ────────────────────────────────────────
   aiTransforms = pkgs.fragments-ai.passthru.transforms;
