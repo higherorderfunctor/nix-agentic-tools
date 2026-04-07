@@ -74,6 +74,11 @@
       "modules/kiro-cli/**"
       "packages/ai-clis/**"
     ];
+    # ai-module: fanout semantics and per-CLI enable-as-sole-gate.
+    # Scoped tightly to modules/ai/ because that's where the fanout
+    # logic lives; consumers touching the upstream programs.*-cli
+    # modules don't need this loaded.
+    ai-module = ["modules/ai/**"];
     # claude-code: wrapper chain + buddy activation lifecycle.
     # Spans the claude-code package and the buddy HM module because
     # the two are tightly coupled (Bun wrapper picks writable cli.js
@@ -94,6 +99,13 @@
   # ── Dev fragment names per package ───────────────────────────────────
   devFragmentNames = {
     ai-clis = ["packaging-guide"];
+    ai-module = [
+      {
+        location = "module";
+        name = "ai-module-fanout";
+        dir = "ai";
+      }
+    ];
     claude-code = [
       {
         location = "package";

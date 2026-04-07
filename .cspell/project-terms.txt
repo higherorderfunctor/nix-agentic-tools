@@ -41,6 +41,7 @@ docsite
 dsolve
 envrc
 fanout
+fanouts
 fetchgit
 fetchurl
 fetchzip
