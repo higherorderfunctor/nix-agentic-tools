@@ -247,17 +247,19 @@
     ("\n" + builtins.concatStringsSep "\n" packageContents);
 
   # ── Claude rule files ────────────────────────────────────────────────
+  # Scoped rule files only. No common.md — the body content is
+  # already loaded via CLAUDE.md (which @-imports AGENTS.md), so
+  # a separate .claude/rules/common.md byte-identical to the body
+  # was pure waste and triple-loaded orientation content at every
+  # Claude session start.
   claudeFiles =
-    {
-      "common.md" = monorepoEco.claude rootComposed;
-    }
-    // (lib.concatMapAttrs (pkg: _: let
-        composed = mkDevComposed pkg;
-        pkgEco = mkEcosystemFile pkg;
-      in {
-        "${pkg}.md" = pkgEco.claude composed;
-      })
-      nonRootPackages);
+    lib.concatMapAttrs (pkg: _: let
+      composed = mkDevComposed pkg;
+      pkgEco = mkEcosystemFile pkg;
+    in {
+      "${pkg}.md" = pkgEco.claude composed;
+    })
+    nonRootPackages;
 
   # ── Copilot instruction files ────────────────────────────────────────
   copilotFiles =
