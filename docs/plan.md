@@ -583,115 +583,115 @@ deprecated` per https://code.claude.com/docs/en/setup). Native
       manifest. The nvfetcher side is easy to migrate; the buddy
       patching side may not be.
 
-        **Current state**: our pipeline uses `@anthropic-ai/claude-code`
-        (npm, `buildNpmPackage`), then wraps `bin/claude` with a Bun
-        runtime wrapper that execs `bun run $CLI`. The activation script
-        patches `cli.js` (15-byte salt marker `friend-2026-401`). A
-        snackbar warning fires on every launch because
-        `Zj() = typeof Bun < 'u' && Bun.embeddedFiles.length > 0`
-        returns false for us (we're running a plain cli.js, not a
-        compiled exec with embedded assets). Suppressible via
-        `DISABLE_INSTALLATION_CHECKS=1` — see separate backlog item.
+          **Current state**: our pipeline uses `@anthropic-ai/claude-code`
+          (npm, `buildNpmPackage`), then wraps `bin/claude` with a Bun
+          runtime wrapper that execs `bun run $CLI`. The activation script
+          patches `cli.js` (15-byte salt marker `friend-2026-401`). A
+          snackbar warning fires on every launch because
+          `Zj() = typeof Bun < 'u' && Bun.embeddedFiles.length > 0`
+          returns false for us (we're running a plain cli.js, not a
+          compiled exec with embedded assets). Suppressible via
+          `DISABLE_INSTALLATION_CHECKS=1` — see separate backlog item.
 
-        **Risk**: Anthropic may eventually stop publishing to npm and
-        only distribute the compiled binary. Our buddy-patching pipeline
-        breaks because `cli.js` is no longer a file on disk — it's
-        embedded inside the Bun single-exec format's data section.
+          **Risk**: Anthropic may eventually stop publishing to npm and
+          only distribute the compiled binary. Our buddy-patching pipeline
+          breaks because `cli.js` is no longer a file on disk — it's
+          embedded inside the Bun single-exec format's data section.
 
-        **What nvfetcher needs to do if that happens** (easy):
+          **What nvfetcher needs to do if that happens** (easy):
 
-        The native installer distribution URL is documented and
-        predictable:
+          The native installer distribution URL is documented and
+          predictable:
 
-        ```
-        https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/
-          claude-code-releases/<VERSION>/
-            manifest.json        — lists platforms + SHA256 per binary
-            manifest.json.sig    — detached GPG signature (from 2.1.89+)
-            <platform>/claude    — the compiled single-exec
-        ```
+          ```
+          https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/
+            claude-code-releases/<VERSION>/
+              manifest.json        — lists platforms + SHA256 per binary
+              manifest.json.sig    — detached GPG signature (from 2.1.89+)
+              <platform>/claude    — the compiled single-exec
+          ```
 
-        GPG key at `https://downloads.claude.ai/keys/claude-code.asc`,
-        signed by "Anthropic Claude Code Release Signing
-        <security@anthropic.com>". Fingerprint published in the setup
-        docs under "Verify the manifest signature" — check the live
-        docs at migration time rather than embedding a rotatable
-        value in the backlog.
+          GPG key at `https://downloads.claude.ai/keys/claude-code.asc`,
+          signed by "Anthropic Claude Code Release Signing
+          <security@anthropic.com>". Fingerprint published in the setup
+          docs under "Verify the manifest signature" — check the live
+          docs at migration time rather than embedding a rotatable
+          value in the backlog.
 
-        Migration pattern: swap our `claude-code.nix` from
-        `buildNpmPackage` override to `prev.claude-code.overrideAttrs`
-        fetching the binary — **exactly the same pattern already used
-        by `kiro-cli.nix` and `copilot-cli.nix`**. nvfetcher gets a
-        custom `fetch.file` strategy polling `manifest.json`, plus
-        per-platform SHA256 hashes tracked in `hashes.json` sidecar.
-        Maybe an afternoon of work.
+          Migration pattern: swap our `claude-code.nix` from
+          `buildNpmPackage` override to `prev.claude-code.overrideAttrs`
+          fetching the binary — **exactly the same pattern already used
+          by `kiro-cli.nix` and `copilot-cli.nix`**. nvfetcher gets a
+          custom `fetch.file` strategy polling `manifest.json`, plus
+          per-platform SHA256 hashes tracked in `hashes.json` sidecar.
+          Maybe an afternoon of work.
 
-        **What the BUDDY pipeline needs to do** (hard, partially
-        blocked):
+          **What the BUDDY pipeline needs to do** (hard, partially
+          blocked):
 
-        1. **Pin last-known-good npm version.** nvfetcher already
-           tracks srcHash; just freeze. Buddy keeps working against a
-           stale cli.js, no updates. Ugly but the minimum-viable
-           fallback. Cost: miss new claude-code features.
+          1. **Pin last-known-good npm version.** nvfetcher already
+             tracks srcHash; just freeze. Buddy keeps working against a
+             stale cli.js, no updates. Ugly but the minimum-viable
+             fallback. Cost: miss new claude-code features.
 
-        2. **Patch the compiled binary's embedded section.** The Bun
-           single-exec format is documented (sort of) but fragile —
-           the format can change between Bun versions. Would need to
-           unpack the data section, find and replace the salt bytes,
-           re-pack, re-sign (macOS). High maintenance, breakage risk
-           on every claude-code version bump.
+          2. **Patch the compiled binary's embedded section.** The Bun
+             single-exec format is documented (sort of) but fragile —
+             the format can change between Bun versions. Would need to
+             unpack the data section, find and replace the salt bytes,
+             re-pack, re-sign (macOS). High maintenance, breakage risk
+             on every claude-code version bump.
 
-        3. **Compile our own with a patched source.** Would mean
-           fetching the source separately (not the pre-compiled
-           binary), applying the salt patch at build time, running
-           `bun build --compile` in a nix derivation. This is the
-           OLD `withBuddy` build-time approach — we already abandoned
-           it for good reasons (no sops support, multi-user broken,
-           stale companion field), but those concerns could be
-           reintroduced differently by computing the salt at
-           activation time and only running compile when
-           fingerprint changes (expensive activation step, not
-           build-time).
+          3. **Compile our own with a patched source.** Would mean
+             fetching the source separately (not the pre-compiled
+             binary), applying the salt patch at build time, running
+             `bun build --compile` in a nix derivation. This is the
+             OLD `withBuddy` build-time approach — we already abandoned
+             it for good reasons (no sops support, multi-user broken,
+             stale companion field), but those concerns could be
+             reintroduced differently by computing the salt at
+             activation time and only running compile when
+             fingerprint changes (expensive activation step, not
+             build-time).
 
-           **BLOCKED BY CLOSED SOURCE.** The big claude-code
-           sourcemap leak 2026 confirmed the binary is NOT entirely
-           open source — significant portions are proprietary.
-           Even if we could obtain a source tree (via the leaked
-           maps or by reverse-engineering from npm), redistributing
-           or recompiling would be legally murky and would
-           technically leave nixpkgs policy compliance (we can't
-           ship non-redistributable source). This likely rules
-           option 3 out entirely, leaving options 1 and 2 as the
-           only viable long-term paths.
+             **BLOCKED BY CLOSED SOURCE.** The big claude-code
+             sourcemap leak 2026 confirmed the binary is NOT entirely
+             open source — significant portions are proprietary.
+             Even if we could obtain a source tree (via the leaked
+             maps or by reverse-engineering from npm), redistributing
+             or recompiling would be legally murky and would
+             technically leave nixpkgs policy compliance (we can't
+             ship non-redistributable source). This likely rules
+             option 3 out entirely, leaving options 1 and 2 as the
+             only viable long-term paths.
 
-        4. **Drop buddy patching entirely.** Just accept whatever
-           buddy the default salt produces. Cosmetic loss only —
-           claude-code still works.
+          4. **Drop buddy patching entirely.** Just accept whatever
+             buddy the default salt produces. Cosmetic loss only —
+             claude-code still works.
 
-        **Recommended posture now**: monitor. Check
-        `@anthropic-ai/claude-code` npm publish frequency
-        periodically. If Anthropic slows down or stops npm
-        releases while the native channel keeps updating, that's
-        the signal. Also watch for changes in the sourcemap
-        situation — if more source becomes public or Anthropic
-        publishes an official source tree, option 3 moves back
-        into play.
+          **Recommended posture now**: monitor. Check
+          `@anthropic-ai/claude-code` npm publish frequency
+          periodically. If Anthropic slows down or stops npm
+          releases while the native channel keeps updating, that's
+          the signal. Also watch for changes in the sourcemap
+          situation — if more source becomes public or Anthropic
+          publishes an official source tree, option 3 moves back
+          into play.
 
-        **Touch points when migration happens**:
-        - `nvfetcher.toml` — change `claude-code` entry's fetch
-          strategy (github releases? custom file fetcher? we already
-          have `fetch.url` in the toolbox)
-        - `packages/ai-clis/claude-code.nix` — switch from
-          `buildNpmPackage` override to `overrideAttrs` binary
-          fetch (copy the `copilot-cli.nix` shape)
-        - `packages/ai-clis/hashes.json` — swap `npmDepsHash`/
-          `srcHash` for per-platform binary hashes
-        - `modules/claude-code-buddy/default.nix` — decide which
-          option above, update accordingly
-        - `dev/docs/guides/buddy-customization.md` — document
-          whatever fallback we land on
-        - Possibly delete `packages/ai-clis/locks/claude-code-package-lock.json`
-          (no longer needed when we stop using buildNpmPackage)
+          **Touch points when migration happens**:
+          - `nvfetcher.toml` — change `claude-code` entry's fetch
+            strategy (github releases? custom file fetcher? we already
+            have `fetch.url` in the toolbox)
+          - `packages/ai-clis/claude-code.nix` — switch from
+            `buildNpmPackage` override to `overrideAttrs` binary
+            fetch (copy the `copilot-cli.nix` shape)
+          - `packages/ai-clis/hashes.json` — swap `npmDepsHash`/
+            `srcHash` for per-platform binary hashes
+          - `modules/claude-code-buddy/default.nix` — decide which
+            option above, update accordingly
+          - `dev/docs/guides/buddy-customization.md` — document
+            whatever fallback we land on
+          - Possibly delete `packages/ai-clis/locks/claude-code-package-lock.json`
+            (no longer needed when we stop using buildNpmPackage)
 
 - [ ] **Set `DISABLE_AUTOUPDATER=1` defensively in claude-code
       wrapper env** — claude-code runs a background autoupdater that
@@ -748,6 +748,63 @@ deprecated` per https://code.claude.com/docs/en/setup). Native
       `.cspell/project-terms.txt` format switch, possibly a new
       `.cspell.json` config file (none currently), or the treefmt
       cspell formatter config.
+- [ ] **Agentic UX: pre-approve nix-store reads for HM-symlinked
+      skills and references** — when Claude Code follows a symlink
+      from `~/.claude/skills/<skill>/SKILL.md` or
+      `~/.claude/references/<name>.md` into `/nix/store/...`, it
+      prompts for read permission on each real store path. Users
+      experience this as a permission wall: every new skill file
+      Claude touches fires a modal "Do you want to proceed?"
+      dialog. Observed 2026-04-07 during real contributor work —
+      commit took 10+ minutes because of repeated "tab back and
+      approve" cycles walking through SWS skill files.
+
+      The root cause is that HM symlinks point into the store
+      (immutable, content-addressed), but Claude Code's permission
+      model treats each resolved target as a distinct readable
+      path. Pre-approving `~/.claude/skills/**` doesn't help
+      because that permission applies to the symlink path, not
+      the resolved store target.
+
+      Potential fixes to research and pick from:
+
+      1. **Claude Code settings Allow rule for `/nix/store/**`** —
+         if settings.json `permissions.allow` supports glob against
+         resolved paths, a single rule covers every store read.
+         May be too broad (gives Claude read access to the entire
+         store, including unrelated packages). Check Claude Code
+         settings docs for path-resolution semantics.
+      2. **Per-subtree pre-approval** — allowlist the specific
+         store paths for SWS skill and reference derivations.
+         nix-agentic-tools could generate a settings.json snippet
+         at HM activation time that pre-approves the current
+         derivation outputs. Breaks on every nix store GC and
+         requires re-activation to regenerate the allowlist.
+      3. **Mode 2 in the dialog — "Yes, allow reading from
+         references/ during this session"** — teach users this
+         shortcut as a workaround. Documentation fix, not a code
+         fix. Still repeats per session.
+      4. **Managed policy CLAUDE.md** — organization-wide
+         CLAUDE.md at `/etc/claude-code/CLAUDE.md` may be able to
+         preload trusted paths. Need to verify.
+      5. **Copy instead of symlink** for SWS skills/references —
+         use `home.file.source` with `builtins.readFile` to
+         inline content as text. Loses atomicity (HM tracks a
+         writable file, not a store symlink) and breaks for
+         non-text skill assets. Last resort.
+
+      Touch points once a fix is picked:
+      - `modules/stacked-workflows/default.nix` (SWS HM module
+        writing the skill symlinks)
+      - `modules/ai/default.nix` (ai.skills fanout writing the
+        Claude skill symlinks)
+      - Consumer-side `.claude/settings.json` or its HM-managed
+        counterpart if `programs.claude-code.settings` exposes
+        `permissions.allow`
+      - `dev/docs/guides/` (document the fix for consumers)
+      - `dev/docs/troubleshooting/` (document the workaround even
+        if the structural fix is longer-term)
+
 - [ ] Secret scanning — integrate gitleaks into pre-commit hook or CI.
       Currently clean (406 commits verified 2026-04-06). Wire via
       git-hooks.hooks in devenv or as a CI step in ci.yml
