@@ -17,6 +17,7 @@ berberman
 Bitemporality
 Boehm
 cachix
+caubut
 cclsp
 chafa
 chonk
@@ -83,12 +84,14 @@ nvfetcher
 OLED
 Ollama
 openmemory
+operationalizes
 oraios
 Osmani
 oxalica
 pagefind
 partialclone
 passthru
+passthroughs
 pasteable
 pdsolve
 peaceiris
