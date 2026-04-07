@@ -144,33 +144,31 @@ Three tiers:
 
 ### ai.claude.\* full passthrough
 
-Detail lives in `memory/project_ai_claude_passthrough.md`. Task 2
-is BLOCKING for the rest. Draft a fresh plan from the memory when
-ready to execute this chunk.
+Detail lives in `memory/project_ai_claude_passthrough.md`. Tasks
+2, 2b, and the consumer verification landed 2026-04-08 (plan
+`docs/superpowers/plans/2026-04-08-skills-fanout-fix.md`,
+deleted after close-out). Tasks 3-7 and Task D remain — draft a
+fresh plan from the memory when ready to execute the next chunk.
 
-- [ ] **Task 2 (BLOCKING): Route `ai.skills` Claude fanout through
-      `programs.claude-code.skills`** — currently writes
-      `home.file` directly, which collides with per-Claude
-      `ai.claude.skills` and produces Layout A (single dir symlink)
-      instead of Layout B (real dir with per-file symlinks). Blocks
-      Tasks 3-7. Consumer transition note: migrated users hit
-      "would be clobbered" on first activation; `home-manager switch -b backup`
-      once.
+- [x] **Task 2: Route `ai.skills` Claude fanout through
+      `programs.claude-code.skills`** — landed 2026-04-08 in
+      commit `62c247b`. HM Claude branch now delegates skills
+      through the upstream option, matching Copilot/Kiro. Layout
+      B (real dir with per-file symlinks) confirmed end-to-end on
+      a real consumer.
 
-- [ ] **Task 2b: Devenv skills fanout parity (Option A
-      confirmed)** — HM all three ecosystems produce Layout B;
-      devenv all three produce Layout A. devenv's `files.*.source`
-      cannot walk recursively (see
-      `memory/project_devenv_files_internals.md`). Option A
-      confirmed by user 2026-04-07: add `mkDevenvSkillEntries`
-      helper to `lib/hm-helpers.nix` that walks the source dir at
-      eval time with `builtins.readDir`. Drafted in
-      `docs/superpowers/plans/2026-04-08-skills-fanout-fix.md`.
-      Option C (upstream PR to cachix/devenv `recursive` field)
-      can happen in parallel as a follow-up. Copilot configDir
-      divergence (`.copilot` HM vs `.github` devenv) is
-      intentional — both are valid Copilot CLI scopes per
-      GitHub docs.
+- [x] **Task 2b: Devenv skills fanout parity (Option A
+      implemented)** — landed 2026-04-08 across commits `03af9d3`
+      (walker helper), `18c6a40` + `9c94e2f` (extension module +
+      registration), `8421d75` + `61205a7` (copilot/kiro walker
+      refactor), `97ac174` (ai.nix pure-fanout cleanup), `1c98fe3`
+      (devshell eval check). Plus follow-up fixes: `8655130`
+      (walker handles string paths), `1695263` (buddy activation
+      `exit 0` → `if/fi`), `991e23a` (stacked-workflows cruft
+      filter), `5a14a0c` (real fix — path literal in
+      stacked-workflows HM module). Lessons encoded in
+      `dev/fragments/hm-modules/module-conventions.md` in commit
+      `feeb5fb`.
 
 - [ ] **Drop `modules/devenv/claude-code-skills` extension when
       upstream devenv ships `claude.code.skills`** — the
@@ -180,23 +178,23 @@ ready to execute this chunk.
       mirroring how `modules/claude-code-buddy/` extends HM's
       `programs.claude-code` with `buddy`. Upstream tracking:
       [cachix/devenv#2441](https://github.com/cachix/devenv/issues/2441).
-      When that lands: 1. Bump devenv flake input to a version with the upstream
-      option 2. Verify upstream's option shape matches ours (or file a
-      compat shim if it diverges) 3. Delete `modules/devenv/claude-code-skills/` (entire
-      extension module) 4. Drop the `devenvModules.claude-code-skills` entry from
-      `flake.nix` 5. `modules/devenv/ai.nix` Claude branch keeps the same
+      When that lands: 1. Bump devenv flake input to a version
+      with the upstream option 2. Verify upstream's option shape
+      matches ours (or file a compat shim if it diverges) 3. Delete `modules/devenv/claude-code-skills/` (entire
+      extension module) 4. Drop the
+      `devenvModules.claude-code-skills` entry from `flake.nix` 5. `modules/devenv/ai.nix` Claude branch keeps the same
       delegation line — `claude.code.skills = lib.mapAttrs
-(_: mkDefault) cfg.skills;` — it now points at the
-      upstream option transparently. No ai.nix changes needed. 6. Update `dev/fragments/devenv/files-internals.md` and
+    (_: mkDefault) cfg.skills;` — it now points at the upstream
+      option transparently. No ai.nix changes needed. 6. Update
+      `dev/fragments/devenv/files-internals.md` and
       `dev/fragments/ai-skills/skills-fanout-pattern.md` to
-      reflect the new state
-      Copilot and Kiro devenv modules
+      reflect the new state. Copilot and Kiro devenv modules
       (`modules/devenv/copilot.nix`, `modules/devenv/kiro.nix`)
       are ours and continue to use the walker internally — no
       upstream equivalent to delegate to. Devenv doesn't have
       Copilot or Kiro modules at all currently. Low urgency —
-      current extension works fine; this is just hygiene
-      cleanup if upstream catches up.
+      current extension works fine; this is just hygiene cleanup
+      if upstream catches up.
 
 - [ ] **Task 3: `ai.claude.memory` passthrough** — mirror upstream
       `memory.{text,source}` submodule, mutual exclusion asserted
@@ -719,8 +717,23 @@ memory (`project_plan_state.md`) and the session memories.
 
 ## Next action
 
-**Draft a plan for Task 2 (skills fanout fix) from
-`memory/project_ai_claude_passthrough.md`.** It's BLOCKING all of
-the ai.claude.\* passthrough work, which in turn is BLOCKING
-nixos-config full migration to `ai.*`. Single session, small
-diff, high unblock value.
+**Skills fanout fix landed 2026-04-08** (commits `62c247b` ..
+`feeb5fb`). Tasks 2 and 2b complete, consumer verified end-to-end,
+lessons encoded in `hm-modules/module-conventions.md` fragment.
+Remaining ai.claude.\* passthrough work: Tasks 3-7 (memory,
+settings, mcpServers, skills, plugins) and Task D (devenv
+mirror). Next plan can cover any subset.
+
+Other TOP priority candidates that are independent of the
+passthrough:
+
+- **Always-loaded content audit + dynamic loading fix** — 27k
+  tokens loaded at startup, ~13% of context budget. High impact,
+  well-scoped investigation + fix.
+- **Overlay cache-hit parity fix** — consumers currently rebuild
+  from source instead of hitting cachix. Full plan in
+  `dev/notes/overlay-cache-hit-parity-fix.md`.
+- **`ai` HM module should `imports` its deps** — single-line
+  import for consumers instead of four surgical imports.
+
+Pick the next chunk based on user priority.
