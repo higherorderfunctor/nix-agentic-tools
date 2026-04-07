@@ -63,6 +63,7 @@ kiro
 kirocli
 ldflags
 libgit
+lifecycles
 lockdown
 markdownify
 mdbook
