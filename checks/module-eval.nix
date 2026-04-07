@@ -195,6 +195,14 @@
     {
       config = {
         ai = {
+          claude = {
+            enable = true;
+            buddy = {
+              userId.text = "test-00000000-0000-0000-0000-000000000000";
+              species = "duck";
+              rarity = "common";
+            };
+          };
           copilot.enable = true;
           kiro.enable = true;
         };
@@ -284,8 +292,9 @@ in {
       if
         aiSelfContained.config.programs.copilot-cli.enable
         && aiSelfContained.config.programs.kiro-cli.enable
+        && aiSelfContained.config.programs.claude-code.buddy != null
       then "echo ok > $out"
-      else "echo 'FAIL: ai module not self-contained — importing homeManagerModules.ai alone did not bring in copilot-cli/kiro-cli modules' >&2; exit 1"
+      else "echo 'FAIL: ai module not self-contained — importing homeManagerModules.ai alone did not bring in copilot-cli/kiro-cli/claude-code-buddy modules' >&2; exit 1"
     }
   '';
 }

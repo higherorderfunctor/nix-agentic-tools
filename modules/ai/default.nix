@@ -25,13 +25,11 @@
 {
   config,
   lib,
-  options,
   pkgs,
   ...
 }: let
   inherit
     (lib)
-    attrByPath
     concatMapAttrs
     mkDefault
     mkEnableOption
@@ -49,10 +47,6 @@
   inherit (import ../../lib/buddy-types.nix {inherit lib;}) buddySubmodule;
 
   cfg = config.ai;
-
-  # Check if a module option path exists (use options, not config)
-  hasModule = path:
-    (attrByPath path null options) != null;
 in {
   # Pull in the HM modules this one references inside its mkIf
   # blocks. Without these imports, consumers importing only
@@ -192,14 +186,6 @@ in {
       assertions =
         [
           {
-            assertion = cfg.copilot.enable -> hasModule ["programs" "copilot-cli" "enable"];
-            message = "ai.copilot.enable requires programs.copilot-cli to be available.";
-          }
-          {
-            assertion = cfg.kiro.enable -> hasModule ["programs" "kiro-cli" "enable"];
-            message = "ai.kiro.enable requires programs.kiro-cli to be available.";
-          }
-          {
             assertion =
               cfg.skills
               != {}
@@ -241,11 +227,11 @@ in {
           cfg.instructions;
       }
       # Auto-set ENABLE_LSP_TOOL=1 when LSP servers are configured
-      (mkIf (cfg.lspServers != {} && hasModule ["programs" "claude-code" "settings"]) {
+      (mkIf (cfg.lspServers != {}) {
         programs.claude-code.settings.env.ENABLE_LSP_TOOL = mkDefault "1";
       })
-      # Normalized model setting (only if upstream module is available)
-      (mkIf (cfg.settings.model != null && hasModule ["programs" "claude-code" "settings"]) {
+      # Normalized model setting
+      (mkIf (cfg.settings.model != null) {
         programs.claude-code.settings.model = mkDefault cfg.settings.model;
       })
       # Buddy fanout — sets the canonical programs.claude-code.buddy
