@@ -576,6 +576,159 @@ ourPkgs inputs final.system; in { ... };`.
       stacked-workflows.integrations under ai.skills entirely
       (deprecate the old option) or keep it as a parallel path
       that ai.skills delegates to.
+- [ ] **Contingency: claude-code npm distribution removal** — Anthropic
+      soft-deprecated npm distribution 2026 (`npm installation is
+  deprecated` per https://code.claude.com/docs/en/setup). Native
+      installer is a Bun-compiled single-exec fetched from a GPG-signed
+      manifest. The nvfetcher side is easy to migrate; the buddy
+      patching side may not be.
+
+      **Current state**: our pipeline uses `@anthropic-ai/claude-code`
+      (npm, `buildNpmPackage`), then wraps `bin/claude` with a Bun
+      runtime wrapper that execs `bun run $CLI`. The activation script
+      patches `cli.js` (15-byte salt marker `friend-2026-401`). A
+      snackbar warning fires on every launch because
+      `Zj() = typeof Bun < 'u' && Bun.embeddedFiles.length > 0`
+      returns false for us (we're running a plain cli.js, not a
+      compiled exec with embedded assets). Suppressible via
+      `DISABLE_INSTALLATION_CHECKS=1` — see separate backlog item.
+
+      **Risk**: Anthropic may eventually stop publishing to npm and
+      only distribute the compiled binary. Our buddy-patching pipeline
+      breaks because `cli.js` is no longer a file on disk — it's
+      embedded inside the Bun single-exec format's data section.
+
+      **What nvfetcher needs to do if that happens** (easy):
+
+      The native installer distribution URL is documented and
+      predictable:
+
+      ```
+      https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/
+        claude-code-releases/<VERSION>/
+          manifest.json        — lists platforms + SHA256 per binary
+          manifest.json.sig    — detached GPG signature (from 2.1.89+)
+          <platform>/claude    — the compiled single-exec
+      ```
+
+      GPG key at `https://downloads.claude.ai/keys/claude-code.asc`,
+      signed by "Anthropic Claude Code Release Signing
+      <security@anthropic.com>". Fingerprint published in the setup
+      docs under "Verify the manifest signature" — check the live
+      docs at migration time rather than embedding a rotatable
+      value in the backlog.
+
+      Migration pattern: swap our `claude-code.nix` from
+      `buildNpmPackage` override to `prev.claude-code.overrideAttrs`
+      fetching the binary — **exactly the same pattern already used
+      by `kiro-cli.nix` and `copilot-cli.nix`**. nvfetcher gets a
+      custom `fetch.file` strategy polling `manifest.json`, plus
+      per-platform SHA256 hashes tracked in `hashes.json` sidecar.
+      Maybe an afternoon of work.
+
+      **What the BUDDY pipeline needs to do** (hard, partially
+      blocked):
+
+      1. **Pin last-known-good npm version.** nvfetcher already
+         tracks srcHash; just freeze. Buddy keeps working against a
+         stale cli.js, no updates. Ugly but the minimum-viable
+         fallback. Cost: miss new claude-code features.
+
+      2. **Patch the compiled binary's embedded section.** The Bun
+         single-exec format is documented (sort of) but fragile —
+         the format can change between Bun versions. Would need to
+         unpack the data section, find and replace the salt bytes,
+         re-pack, re-sign (macOS). High maintenance, breakage risk
+         on every claude-code version bump.
+
+      3. **Compile our own with a patched source.** Would mean
+         fetching the source separately (not the pre-compiled
+         binary), applying the salt patch at build time, running
+         `bun build --compile` in a nix derivation. This is the
+         OLD `withBuddy` build-time approach — we already abandoned
+         it for good reasons (no sops support, multi-user broken,
+         stale companion field), but those concerns could be
+         reintroduced differently by computing the salt at
+         activation time and only running compile when
+         fingerprint changes (expensive activation step, not
+         build-time).
+
+         **BLOCKED BY CLOSED SOURCE.** The big claude-code
+         sourcemap leak 2026 confirmed the binary is NOT entirely
+         open source — significant portions are proprietary.
+         Even if we could obtain a source tree (via the leaked
+         maps or by reverse-engineering from npm), redistributing
+         or recompiling would be legally murky and would
+         technically leave nixpkgs policy compliance (we can't
+         ship non-redistributable source). This likely rules
+         option 3 out entirely, leaving options 1 and 2 as the
+         only viable long-term paths.
+
+      4. **Drop buddy patching entirely.** Just accept whatever
+         buddy the default salt produces. Cosmetic loss only —
+         claude-code still works.
+
+      **Recommended posture now**: monitor. Check
+      `@anthropic-ai/claude-code` npm publish frequency
+      periodically. If Anthropic slows down or stops npm
+      releases while the native channel keeps updating, that's
+      the signal. Also watch for changes in the sourcemap
+      situation — if more source becomes public or Anthropic
+      publishes an official source tree, option 3 moves back
+      into play.
+
+      **Touch points when migration happens**:
+      - `nvfetcher.toml` — change `claude-code` entry's fetch
+        strategy (github releases? custom file fetcher? we already
+        have `fetch.url` in the toolbox)
+      - `packages/ai-clis/claude-code.nix` — switch from
+        `buildNpmPackage` override to `overrideAttrs` binary
+        fetch (copy the `copilot-cli.nix` shape)
+      - `packages/ai-clis/hashes.json` — swap `npmDepsHash`/
+        `srcHash` for per-platform binary hashes
+      - `modules/claude-code-buddy/default.nix` — decide which
+        option above, update accordingly
+      - `dev/docs/guides/buddy-customization.md` — document
+        whatever fallback we land on
+      - Possibly delete `packages/ai-clis/locks/claude-code-package-lock.json`
+        (no longer needed when we stop using buildNpmPackage)
+
+- [ ] **Set `DISABLE_AUTOUPDATER=1` defensively in claude-code
+      wrapper env** — claude-code runs a background autoupdater that
+      downloads new binaries and rewrites them at the install path.
+      This is inappropriate for a nix-managed store path: writes
+      outside the store (probably silent failure because the store
+      is read-only), may corrupt user state when it fails, and at
+      best wastes network/disk reconstructing what the nix store
+      already has. Native-installer claude-code auto-updates "in the
+      background" per docs, so setting this env defensively matters
+      even more when we eventually migrate to the native channel.
+
+      While we're at it, also consider setting
+      `DISABLE_INSTALLATION_CHECKS=1` in the same place to silence
+      the "Claude Code has switched from npm to native installer"
+      snackbar. It fires on every launch because our `Zj()` check
+      returns false (we run `bun run cli.js`, not the embedded-files
+      compiled exec). Cosmetic only — the warning is a 15-second
+      snackbar with `priority: "high"` but no functional impact.
+      cli.js exposes three code paths gated on this env, all
+      install-check related; setting it is the officially supported
+      bypass.
+
+      Touch points:
+      - `packages/ai-clis/claude-code.nix` — the Bun wrapper script
+        currently does `exec ${bun}/bin/bun run "$CLI" "$@"`. Add
+        `DISABLE_AUTOUPDATER=1 DISABLE_INSTALLATION_CHECKS=1` to
+        the exec line (or as `export` before it).
+      - Or set them via `programs.claude-code.settings.env` in the
+        ai HM module — more idiomatic, lives closer to user-facing
+        config, visible in `~/.claude/settings.json`.
+      - Which approach is better is a design question: wrapper env
+        is always-on (can't opt out); settings.env is overridable.
+        Default autoupdater=off is probably correct for a nix build;
+        default install-checks=off is arguable (the warning is
+        legitimate if someone actually should migrate).
+
 - [ ] outOfStoreSymlink helper for runtime state dirs — Claude writes
       ~/.claude/projects mid-session, can't use regular HM files.
       Document the outOfStoreSymlink pattern or wrap as an option
