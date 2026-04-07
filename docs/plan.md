@@ -583,115 +583,115 @@ deprecated` per https://code.claude.com/docs/en/setup). Native
       manifest. The nvfetcher side is easy to migrate; the buddy
       patching side may not be.
 
-          **Current state**: our pipeline uses `@anthropic-ai/claude-code`
-          (npm, `buildNpmPackage`), then wraps `bin/claude` with a Bun
-          runtime wrapper that execs `bun run $CLI`. The activation script
-          patches `cli.js` (15-byte salt marker `friend-2026-401`). A
-          snackbar warning fires on every launch because
-          `Zj() = typeof Bun < 'u' && Bun.embeddedFiles.length > 0`
-          returns false for us (we're running a plain cli.js, not a
-          compiled exec with embedded assets). Suppressible via
-          `DISABLE_INSTALLATION_CHECKS=1` — see separate backlog item.
+            **Current state**: our pipeline uses `@anthropic-ai/claude-code`
+            (npm, `buildNpmPackage`), then wraps `bin/claude` with a Bun
+            runtime wrapper that execs `bun run $CLI`. The activation script
+            patches `cli.js` (15-byte salt marker `friend-2026-401`). A
+            snackbar warning fires on every launch because
+            `Zj() = typeof Bun < 'u' && Bun.embeddedFiles.length > 0`
+            returns false for us (we're running a plain cli.js, not a
+            compiled exec with embedded assets). Suppressible via
+            `DISABLE_INSTALLATION_CHECKS=1` — see separate backlog item.
 
-          **Risk**: Anthropic may eventually stop publishing to npm and
-          only distribute the compiled binary. Our buddy-patching pipeline
-          breaks because `cli.js` is no longer a file on disk — it's
-          embedded inside the Bun single-exec format's data section.
+            **Risk**: Anthropic may eventually stop publishing to npm and
+            only distribute the compiled binary. Our buddy-patching pipeline
+            breaks because `cli.js` is no longer a file on disk — it's
+            embedded inside the Bun single-exec format's data section.
 
-          **What nvfetcher needs to do if that happens** (easy):
+            **What nvfetcher needs to do if that happens** (easy):
 
-          The native installer distribution URL is documented and
-          predictable:
+            The native installer distribution URL is documented and
+            predictable:
 
-          ```
-          https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/
-            claude-code-releases/<VERSION>/
-              manifest.json        — lists platforms + SHA256 per binary
-              manifest.json.sig    — detached GPG signature (from 2.1.89+)
-              <platform>/claude    — the compiled single-exec
-          ```
+            ```
+            https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/
+              claude-code-releases/<VERSION>/
+                manifest.json        — lists platforms + SHA256 per binary
+                manifest.json.sig    — detached GPG signature (from 2.1.89+)
+                <platform>/claude    — the compiled single-exec
+            ```
 
-          GPG key at `https://downloads.claude.ai/keys/claude-code.asc`,
-          signed by "Anthropic Claude Code Release Signing
-          <security@anthropic.com>". Fingerprint published in the setup
-          docs under "Verify the manifest signature" — check the live
-          docs at migration time rather than embedding a rotatable
-          value in the backlog.
+            GPG key at `https://downloads.claude.ai/keys/claude-code.asc`,
+            signed by "Anthropic Claude Code Release Signing
+            <security@anthropic.com>". Fingerprint published in the setup
+            docs under "Verify the manifest signature" — check the live
+            docs at migration time rather than embedding a rotatable
+            value in the backlog.
 
-          Migration pattern: swap our `claude-code.nix` from
-          `buildNpmPackage` override to `prev.claude-code.overrideAttrs`
-          fetching the binary — **exactly the same pattern already used
-          by `kiro-cli.nix` and `copilot-cli.nix`**. nvfetcher gets a
-          custom `fetch.file` strategy polling `manifest.json`, plus
-          per-platform SHA256 hashes tracked in `hashes.json` sidecar.
-          Maybe an afternoon of work.
+            Migration pattern: swap our `claude-code.nix` from
+            `buildNpmPackage` override to `prev.claude-code.overrideAttrs`
+            fetching the binary — **exactly the same pattern already used
+            by `kiro-cli.nix` and `copilot-cli.nix`**. nvfetcher gets a
+            custom `fetch.file` strategy polling `manifest.json`, plus
+            per-platform SHA256 hashes tracked in `hashes.json` sidecar.
+            Maybe an afternoon of work.
 
-          **What the BUDDY pipeline needs to do** (hard, partially
-          blocked):
+            **What the BUDDY pipeline needs to do** (hard, partially
+            blocked):
 
-          1. **Pin last-known-good npm version.** nvfetcher already
-             tracks srcHash; just freeze. Buddy keeps working against a
-             stale cli.js, no updates. Ugly but the minimum-viable
-             fallback. Cost: miss new claude-code features.
+            1. **Pin last-known-good npm version.** nvfetcher already
+               tracks srcHash; just freeze. Buddy keeps working against a
+               stale cli.js, no updates. Ugly but the minimum-viable
+               fallback. Cost: miss new claude-code features.
 
-          2. **Patch the compiled binary's embedded section.** The Bun
-             single-exec format is documented (sort of) but fragile —
-             the format can change between Bun versions. Would need to
-             unpack the data section, find and replace the salt bytes,
-             re-pack, re-sign (macOS). High maintenance, breakage risk
-             on every claude-code version bump.
+            2. **Patch the compiled binary's embedded section.** The Bun
+               single-exec format is documented (sort of) but fragile —
+               the format can change between Bun versions. Would need to
+               unpack the data section, find and replace the salt bytes,
+               re-pack, re-sign (macOS). High maintenance, breakage risk
+               on every claude-code version bump.
 
-          3. **Compile our own with a patched source.** Would mean
-             fetching the source separately (not the pre-compiled
-             binary), applying the salt patch at build time, running
-             `bun build --compile` in a nix derivation. This is the
-             OLD `withBuddy` build-time approach — we already abandoned
-             it for good reasons (no sops support, multi-user broken,
-             stale companion field), but those concerns could be
-             reintroduced differently by computing the salt at
-             activation time and only running compile when
-             fingerprint changes (expensive activation step, not
-             build-time).
+            3. **Compile our own with a patched source.** Would mean
+               fetching the source separately (not the pre-compiled
+               binary), applying the salt patch at build time, running
+               `bun build --compile` in a nix derivation. This is the
+               OLD `withBuddy` build-time approach — we already abandoned
+               it for good reasons (no sops support, multi-user broken,
+               stale companion field), but those concerns could be
+               reintroduced differently by computing the salt at
+               activation time and only running compile when
+               fingerprint changes (expensive activation step, not
+               build-time).
 
-             **BLOCKED BY CLOSED SOURCE.** The big claude-code
-             sourcemap leak 2026 confirmed the binary is NOT entirely
-             open source — significant portions are proprietary.
-             Even if we could obtain a source tree (via the leaked
-             maps or by reverse-engineering from npm), redistributing
-             or recompiling would be legally murky and would
-             technically leave nixpkgs policy compliance (we can't
-             ship non-redistributable source). This likely rules
-             option 3 out entirely, leaving options 1 and 2 as the
-             only viable long-term paths.
+               **BLOCKED BY CLOSED SOURCE.** The big claude-code
+               sourcemap leak 2026 confirmed the binary is NOT entirely
+               open source — significant portions are proprietary.
+               Even if we could obtain a source tree (via the leaked
+               maps or by reverse-engineering from npm), redistributing
+               or recompiling would be legally murky and would
+               technically leave nixpkgs policy compliance (we can't
+               ship non-redistributable source). This likely rules
+               option 3 out entirely, leaving options 1 and 2 as the
+               only viable long-term paths.
 
-          4. **Drop buddy patching entirely.** Just accept whatever
-             buddy the default salt produces. Cosmetic loss only —
-             claude-code still works.
+            4. **Drop buddy patching entirely.** Just accept whatever
+               buddy the default salt produces. Cosmetic loss only —
+               claude-code still works.
 
-          **Recommended posture now**: monitor. Check
-          `@anthropic-ai/claude-code` npm publish frequency
-          periodically. If Anthropic slows down or stops npm
-          releases while the native channel keeps updating, that's
-          the signal. Also watch for changes in the sourcemap
-          situation — if more source becomes public or Anthropic
-          publishes an official source tree, option 3 moves back
-          into play.
+            **Recommended posture now**: monitor. Check
+            `@anthropic-ai/claude-code` npm publish frequency
+            periodically. If Anthropic slows down or stops npm
+            releases while the native channel keeps updating, that's
+            the signal. Also watch for changes in the sourcemap
+            situation — if more source becomes public or Anthropic
+            publishes an official source tree, option 3 moves back
+            into play.
 
-          **Touch points when migration happens**:
-          - `nvfetcher.toml` — change `claude-code` entry's fetch
-            strategy (github releases? custom file fetcher? we already
-            have `fetch.url` in the toolbox)
-          - `packages/ai-clis/claude-code.nix` — switch from
-            `buildNpmPackage` override to `overrideAttrs` binary
-            fetch (copy the `copilot-cli.nix` shape)
-          - `packages/ai-clis/hashes.json` — swap `npmDepsHash`/
-            `srcHash` for per-platform binary hashes
-          - `modules/claude-code-buddy/default.nix` — decide which
-            option above, update accordingly
-          - `dev/docs/guides/buddy-customization.md` — document
-            whatever fallback we land on
-          - Possibly delete `packages/ai-clis/locks/claude-code-package-lock.json`
-            (no longer needed when we stop using buildNpmPackage)
+            **Touch points when migration happens**:
+            - `nvfetcher.toml` — change `claude-code` entry's fetch
+              strategy (github releases? custom file fetcher? we already
+              have `fetch.url` in the toolbox)
+            - `packages/ai-clis/claude-code.nix` — switch from
+              `buildNpmPackage` override to `overrideAttrs` binary
+              fetch (copy the `copilot-cli.nix` shape)
+            - `packages/ai-clis/hashes.json` — swap `npmDepsHash`/
+              `srcHash` for per-platform binary hashes
+            - `modules/claude-code-buddy/default.nix` — decide which
+              option above, update accordingly
+            - `dev/docs/guides/buddy-customization.md` — document
+              whatever fallback we land on
+            - Possibly delete `packages/ai-clis/locks/claude-code-package-lock.json`
+              (no longer needed when we stop using buildNpmPackage)
 
 - [ ] **Set `DISABLE_AUTOUPDATER=1` defensively in claude-code
       wrapper env** — claude-code runs a background autoupdater that
@@ -733,6 +733,131 @@ deprecated` per https://code.claude.com/docs/en/setup). Native
       ~/.claude/projects mid-session, can't use regular HM files.
       Document the outOfStoreSymlink pattern or wrap as an option
       (ai.claude.persistentDirs)
+
+### Steering Fragments Follow-ups (from Checkpoint 8 review)
+
+These surfaced during the multi-reviewer audit of commits
+`a012a41..2e5801e` (the Checkpoints 2-7 steering-fragments stack).
+None blocked closing Checkpoint 8; all are architectural
+improvements and quality-of-life fixes.
+
+- [ ] **Consolidate fragment enumeration into a single metadata
+      table** — `devFragmentNames`, `packagePaths`, and
+      `flake.nix`'s `siteArchitecture` runCommand all hand-list the
+      same fragments. Adding a new architecture fragment requires
+      three coordinated edits. Extract a single `fragmentMetadata`
+      attrset in `dev/generate.nix` that declares each fragment
+      once with all fields (location, dir, name, paths, docsite
+      output path, category), then project it into
+      `devFragmentNames` (grouped by category), `packagePaths`
+      (grouped by category), and an exported attr that
+      `flake.nix` consumes to build `siteArchitecture`. Ideally
+      `siteArchitecture` becomes fully auto-discovered. Touch
+      points: `dev/generate.nix`, `flake.nix` `packages.<system>`.
+- [ ] **Add scope→fragment map to the self-maintenance directive**
+      — the always-loaded `dev/fragments/monorepo/architecture-fragments.md`
+      tells sessions to update stale fragments when editing
+      matching code, but doesn't name which fragment covers which
+      scope. A session editing `modules/ai/default.nix` has to
+      read every fragment's frontmatter to figure out whether
+      `ai-module-fanout` or `hm-modules` (or both) need updating.
+      Either hand-maintain a scope table in the fragment OR
+      generate one from `packagePaths` via a new nix expression
+      embedded in the always-loaded file.
+- [ ] **Fragment size reduction: hm-modules and fragment-pipeline**
+      — both landed over the 150-line soft budget (267 and 186
+      lines respectively). Split by sub-concern if real-world
+      usage shows context dilution: - `hm-modules` → `hm-option-shape`, `hm-gating`,
+      `hm-activation`, `hm-parity` (four ~70-line fragments
+      sharing the `modules/**` scope) - `fragment-pipeline` → `pipeline-primitives` and
+      `pipeline-orchestration`
+      Only do this if actual session usage shows problems — the
+      current size is over guideline but may work fine in
+      practice.
+- [ ] **Soften agent-directed language in docsite copies of
+      fragments** — architecture fragments use imperative
+      agent-directed phrasing ("stop and fix it", "MUST be
+      updated") that reads as jarring when the same markdown
+      renders as human-facing mdbook pages under
+      `docs/src/contributing/architecture/`. Options:
+      (a) Rewrite imperative directives as declarative design
+      contracts, shared between agent and human readers;
+      (b) Split into two versions (agent copy vs human copy) —
+      rejected as DRY violation;
+      (c) Add a docsite-specific intro blurb that frames the
+      tone ("these files are the same markdown the agents load
+      as steering; the imperative tone is intentional").
+      Option (a) or (c) are acceptable; (a) is probably cleaner.
+- [ ] **Add Introduction → Contributing link** — the mdbook
+      introduction page (`dev/docs/index.md`) doesn't mention the
+      new Contributing / Architecture section. Human visitors
+      have no discovery path from the landing page to the
+      architecture docs. Add a short section to index.md pointing
+      at `./contributing/architecture/architecture-fragments.md`
+      as the entry point.
+- [ ] **HM ↔ devenv ai module parity test** — currently enforced
+      by code review only. Add a parity-check eval test in
+      `checks/module-eval.nix` that evaluates both
+      `modules/ai/default.nix` and `modules/devenv/ai.nix` with
+      equivalent config and spot-checks that option paths match
+      (minus intentional divergences like `ai.claude.buddy`).
+      Will catch future drift at `nix flake check` time.
+- [ ] **Include commit subject in Last-verified markers** —
+      current fragments open with `Last verified: 2026-04-07
+    (commit a3c05f3)`. A future session has to run
+      `git log -1 a3c05f3` to understand the reference point.
+      Extending to
+      `Last verified: 2026-04-07 (commit a3c05f3 — subject here)`
+      adds negligible context tokens but makes the marker
+      useful without a tool call. Apply to all 7 existing
+      fragments + document the format in the always-loaded
+      architecture-fragments fragment so future fragments use
+      the new style.
+- [ ] **Refactor `mkDevFragment` location discriminator as
+      attrset lookup** — the current if/else-if branching on
+      `"dev" | "package" | "module"` works but extends linearly.
+      Replace with:
+      `nix
+    locationBases = {
+      dev = ./fragments;
+      package = ../packages;
+      module = ../modules;
+    };
+    fragmentPath =
+      (locationBases.${location}
+        or (throw "mkDevFragment: unknown location '${location}'"))
+      + "/${dir}/${relPath location}/${name}.md";
+    `
+      Small refactor, improves extensibility. Pure code cleanup;
+      no behavior change.
+- [ ] **Replace `isRoot = package == "monorepo"` with category
+      metadata** — `mkDevComposed` hardcodes a string match to
+      decide whether commonFragments are included. Should be
+      explicit category metadata (e.g., `{ includesCommonStandards
+    = true; }`) so adding a new always-loaded category becomes
+      declarative instead of code-editing. Paired with the
+      "consolidate fragment enumeration" backlog item.
+- [ ] **Document the intentional hm-modules / claude-code scope
+      overlap** — both categories' `packagePaths` include
+      `modules/claude-code-buddy/**`, so editing a buddy file
+      co-loads both fragments plus always-loaded common.md
+      (~945 total lines). This is deliberate because buddy IS
+      an HM module and benefits from both the buddy-specific
+      guidance AND the general HM module conventions. But the
+      overlap isn't documented anywhere and looks accidental to
+      a reader. Either add a comment in `dev/generate.nix`
+      explaining the intentional overlap, or inside the
+      architecture-fragments always-loaded fragment with the
+      scope map (see related backlog item above).
+- [ ] **cache-hit-parity fragment → actual overlay fix** — the
+      fragment describes the rule but explicitly notes the rule
+      is NOT yet applied. Tracked under the existing backlog
+      item "Overlays must instantiate their own pkgs from
+      `inputs.nixpkgs`". The fragment becomes more valuable
+      once that backlog item lands. Add a cross-reference in
+      the backlog so landing the overlay fix also updates the
+      fragment's status note.
+
 - [ ] **Research cspell plural/inflection syntax** — currently every
       inflected form of a word has to be added to
       `.cspell/project-terms.txt` separately: `fanout` AND `fanouts`,
