@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-8f56cdc7.js";
+            window.path_to_searchindex_js = "searchindex-e0031c4c.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-903d4130.js"></script>
+        <script src="toc-fc53bced.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -6211,6 +6211,1029 @@ programs.copilot-cli.settings.model = "gpt-4o";      # normal (100) -- wins
 </code></pre>
 <p>This applies to all mapped values: skills, instructions,
 environmentVariables, and lspServers.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="architecture-fragments-index"><a href="#architecture-fragments-index" class="header">Architecture Fragments Index</a></h1>
+<h2 id="architecture-fragments"><a class="header" href="#architecture-fragments">Architecture Fragments</a></h2>
+<p>This repo ships path-scoped architecture fragments as dev-only
+context for agents working on it. They are SEPARATE from the
+published consumer-facing content. Locations:</p>
+<ul>
+<li><code>dev/fragments/monorepo/</code> — always-loaded orientation (this
+category, composed into <code>common.md</code> and the equivalent for
+each ecosystem)</li>
+<li><code>packages/&lt;pkg&gt;/fragments/dev/</code> — scoped to files under
+<code>packages/&lt;pkg&gt;/**</code>, co-located with the code they document</li>
+<li><code>modules/&lt;subdir&gt;/fragments/dev/</code> — scoped to files under
+<code>modules/&lt;subdir&gt;/**</code>, co-located with the code they document</li>
+</ul>
+<p>Each scoped fragment emits per-ecosystem frontmatter via the
+<code>fragments-ai.passthru.transforms</code> pipeline:</p>
+<ul>
+<li>Claude: <code>.claude/rules/&lt;name&gt;.md</code> with <code>paths:</code> YAML list</li>
+<li>Copilot: <code>.github/instructions/&lt;name&gt;.instructions.md</code> with
+<code>applyTo:</code> comma-joined globs</li>
+<li>Kiro: <code>.kiro/steering/&lt;name&gt;.md</code> with <code>inclusion: fileMatch</code>
+and an array <code>fileMatchPattern:</code></li>
+<li>Codex / AGENTS.md: flat concatenation (no scoping)</li>
+</ul>
+<h3 id="maintenance-is-mandatory"><a class="header" href="#maintenance-is-mandatory">Maintenance is mandatory</a></h3>
+<p><strong>When you make changes that alter the shape of any abstraction a
+scoped fragment describes, update the fragment in the same commit.</strong>
+Out-of-date architecture fragments actively mislead future sessions
+and are worse than no fragment at all.</p>
+<p>Each scoped fragment opens with a <code>Last verified: &lt;date&gt; (commit &lt;hash&gt;)</code> marker. If that marker predates your change to the area
+the fragment scopes, the fragment is stale. Stop and update it
+before landing the commit — in the same commit, not a follow-up.</p>
+<p>This is not an etiquette rule. Research on LLM context shows
+out-of-date instructions degrade task success more than missing
+instructions. A lie is worse than silence.</p>
+<h3 id="when-to-add-a-new-fragment"><a class="header" href="#when-to-add-a-new-fragment">When to add a new fragment</a></h3>
+<p>Add a fragment when you encounter a piece of non-inferable
+knowledge during debugging or implementation — something the
+next session would burn a lot of tokens rediscovering. Examples
+of the kind of content worth writing down:</p>
+<ul>
+<li><strong>Why</strong> a non-obvious design decision was made (trade-offs,
+abandoned alternatives)</li>
+<li><strong>Cross-cutting invariants</strong> that span multiple files</li>
+<li><strong>Shapes of abstractions</strong> (fanout patterns, wrapper chains,
+activation lifecycles)</li>
+<li><strong>Known pitfalls</strong> (subtle bugs, gotchas, migrations in flight)</li>
+<li><strong>Debugging entry points</strong> (what to grep, what to eval)</li>
+</ul>
+<p>Do NOT add fragments for content that is:</p>
+<ul>
+<li>Discoverable by reading the code itself in under 10 seconds</li>
+<li>Already covered by existing code comments (DRY)</li>
+<li>A restatement of function signatures, file paths, or line numbers</li>
+<li>Ephemeral (in-progress state goes in plan.md or memory, not
+fragments)</li>
+</ul>
+<p>Target under 150 lines per fragment. If a topic outgrows that,
+split by sub-concern with tighter scopes.</p>
+<h3 id="generator-registration"><a class="header" href="#generator-registration">Generator registration</a></h3>
+<p>New fragments are registered in <code>dev/generate.nix</code> under
+<code>devFragmentNames</code>. The attribute key is the category (which
+becomes the output filename for scoped Claude rules, Copilot
+instructions, and Kiro steering). Each entry is either a bare
+string (legacy dev/fragments/ path) or an attrset with an
+explicit location:</p>
+<pre><code class="language-nix">devFragmentNames.ai-clis = [
+  "packaging-guide"  # legacy: dev/fragments/ai-clis/packaging-guide.md
+  {
+    location = "package";
+    name = "claude-code-wrapper";
+    # dir defaults to "ai-clis"
+    # → packages/ai-clis/fragments/dev/claude-code-wrapper.md
+  }
+];
+</code></pre>
+<p>Scope globs for each category live in <code>packagePaths</code> as Nix lists.
+<code>null</code> means always-loaded. The transforms handle per-ecosystem
+emission — do not hand-format frontmatter.</p>
+<p>After adding or editing fragments, run
+<code>devenv tasks run --mode before generate:instructions</code> to
+regenerate steering files for all ecosystems.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="fragment-pipeline"><a href="#fragment-pipeline" class="header">Fragment Pipeline</a></h1>
+<h2 id="fragment-pipeline-architecture"><a class="header" href="#fragment-pipeline-architecture">Fragment Pipeline Architecture</a></h2>
+<blockquote>
+<p><strong>Last verified:</strong> 2026-04-07 (commit a3c05f3). If you touch
+<code>lib/fragments.nix</code>, <code>dev/generate.nix</code>, <code>packages/fragments-ai/</code>,
+<code>packages/fragments-docs/</code>, or any content-package <code>passthru.fragments</code>
+surface and this fragment isn’t updated in the same commit, stop
+and fix it. This is a cross-cutting pipeline — changes that look
+small in one file frequently ripple into generator outputs for
+four ecosystems plus the docsite.</p>
+</blockquote>
+<h3 id="the-four-layers"><a class="header" href="#the-four-layers">The four layers</a></h3>
+<p>The fragment pipeline is deliberately layered so the same markdown
+source can fan out to many different consumers without duplication:</p>
+<ol>
+<li>
+<p><strong>Primitives (<code>lib/fragments.nix</code>)</strong> — pure, target-agnostic.
+Defines <code>mkFragment { text, description, paths, priority }</code>,
+<code>compose { fragments, ... }</code> (priority sort + SHA256 dedup +
+concat), <code>mkFrontmatter</code> (flat attrset → YAML header), and
+<code>render</code> (applies a transform to a composed fragment). No file
+I/O, no ecosystem knowledge, no hardcoded paths.</p>
+</li>
+<li>
+<p><strong>Topic packages (<code>packages/fragments-ai/</code>,
+<code>packages/fragments-docs/</code>)</strong> — derivations that bundle content
+templates together with per-ecosystem transforms. Transforms are
+exposed via <code>passthru.transforms</code> (fragments-ai) or
+<code>passthru.generators</code> (fragments-docs). These are the eval-time
+API — callers pull them via <code>pkgs.fragments-ai.passthru.transforms.claude</code>
+etc.</p>
+</li>
+<li>
+<p><strong>Content packages (<code>packages/coding-standards/</code>,
+<code>packages/stacked-workflows/</code>, etc.)</strong> — derivations that ship
+markdown files in the store AND expose the same files as
+typed fragments via <code>passthru.fragments</code> and <code>passthru.presets</code>.
+Consumers and the dev generator both read from the same
+passthru surface.</p>
+</li>
+<li>
+<p><strong>Orchestration (<code>dev/generate.nix</code>)</strong> — composes dev-only
+fragments with published fragments, applies transforms, and
+produces the final output strings for each ecosystem +
+AGENTS.md + README + CONTRIBUTING.</p>
+</li>
+</ol>
+<h3 id="data-flow-for-a-scoped-rule-file"><a class="header" href="#data-flow-for-a-scoped-rule-file">Data flow for a scoped rule file</a></h3>
+<p>Concrete example: generating <code>.claude/rules/claude-code.md</code> from
+the <code>claude-code</code> category:</p>
+<ol>
+<li><code>mkDevComposed "claude-code"</code> in <code>dev/generate.nix</code> reads the
+fragment names from <code>devFragmentNames.claude-code</code> and calls
+<code>mkDevFragment</code> on each. The location discriminator
+(<code>"dev" | "package" | "module"</code>) controls where on disk the
+markdown is read from.</li>
+<li><code>compose { fragments = devFrags; }</code> sorts by priority, dedupes
+by SHA256, and concatenates. Scoped categories do NOT include
+commonFragments — only the root <code>monorepo</code> profile does, to
+avoid duplicating shared content across always-loaded common.md
+and every scoped rule file.</li>
+<li><code>mkEcosystemFile "claude-code"</code> looks up the path scope in
+<code>packagePaths.claude-code</code> and returns a set of per-ecosystem
+renderers. The claude renderer wraps <code>aiTransforms.claude { package = "claude-code"; }</code> which emits <code>paths:</code> frontmatter
+as a YAML list.</li>
+<li>The flake derivation <code>packages.&lt;system&gt;.instructions-claude</code>
+stores the result at a nix store path.</li>
+<li>The devenv task <code>generate:instructions:claude</code> runs
+<code>nix build .#instructions-claude</code>, then copies
+<code>$out/rules/claude-code.md</code> to the working tree.</li>
+</ol>
+<p>The same composed fragment runs through <code>copilot</code>, <code>kiro</code>, and
+<code>agentsmd</code> transforms for the other outputs. Single source,
+four ecosystem shapes.</p>
+<h3 id="the-transforms-in-detail"><a class="header" href="#the-transforms-in-detail">The transforms in detail</a></h3>
+<p><code>packages/fragments-ai/default.nix</code> defines exactly four
+transforms, all curried as <code>(transform-args)</code> then <code>(fragment)</code>:</p>
+<ul>
+<li><code>claude { package }</code> — emits a YAML header with <code>description:</code>
+and <code>paths:</code>. Handles three <code>paths</code> shapes: null (no paths
+key), list (YAML list with quoted entries), string (verbatim).
+Description has a smart default: “Instructions for the
+${package} package” when paths are set and description is null,
+otherwise omitted or passed through.</li>
+<li><code>copilot</code> — emits <code>applyTo:</code> as a quoted string. List input
+is joined with commas (Copilot’s native multi-glob syntax).
+Null input defaults to <code>applyTo: "**"</code> (global fallback).</li>
+<li><code>kiro { name }</code> — emits <code>inclusion: always | fileMatch</code>,
+<code>name: ${name}</code>, and optionally <code>description:</code> +
+<code>fileMatchPattern:</code>. The pattern uses a quoted string for
+single-element lists and inline YAML array syntax for
+multi-element lists. Kiro docs explicitly require array
+form for multi-pattern — a previous comma-joined string
+form was silently interpreted as one literal pattern and
+matched nothing. Fix landed in commit 5a97f09.</li>
+<li><code>agentsmd</code> — identity function. Returns <code>fragment.text</code> raw,
+no frontmatter. AGENTS.md is a flat, always-loaded file; there’s
+nothing to scope.</li>
+</ul>
+<h3 id="orchestration-details-worth-knowing"><a class="header" href="#orchestration-details-worth-knowing">Orchestration details worth knowing</a></h3>
+<ul>
+<li><strong>Scoped files skip commonFragments.</strong> Before commit 1075bc4,
+every scoped rule file prepended the full coding-standards
+header on top of its scope-specific content, duplicating ~80
+lines against always-loaded common.md. Fixed in
+<code>mkDevComposed</code> by gating <code>commonFragments</code> on <code>package == "monorepo"</code>.</li>
+<li><strong>Dev fragment location discriminator.</strong> Since commit de3dd12,
+each entry in <code>devFragmentNames.&lt;category&gt;</code> may be either a
+bare string (legacy, reads <code>dev/fragments/&lt;category&gt;/&lt;name&gt;.md</code>)
+or an attrset <code>{ location, name, dir }</code>:
+<ul>
+<li><code>location = "dev"</code> (default) → <code>dev/fragments/&lt;dir&gt;/&lt;name&gt;.md</code></li>
+<li><code>location = "package"</code> → <code>packages/&lt;dir&gt;/fragments/dev/&lt;name&gt;.md</code></li>
+<li><code>location = "module"</code> → <code>modules/&lt;dir&gt;/fragments/dev/&lt;name&gt;.md</code>
+The <code>dir</code> field defaults to the category key but is explicit
+when they differ (e.g., category “ai-module” pointing at
+<code>modules/ai/</code>).</li>
+</ul>
+</li>
+<li><strong>Path scoping is a list, not a string.</strong> <code>packagePaths</code> must
+hold Nix lists; pre-quoted comma-joined strings produced broken
+YAML for Claude and Kiro before commit 5a97f09.</li>
+<li><strong>Priority is for intra-composition ordering only.</strong> Never
+emitted to frontmatter. Dev fragments default to priority 5,
+published fragments typically 10.</li>
+<li><strong>SHA256 dedup runs before priority sort.</strong> Two fragments with
+identical text are collapsed; the survivor’s priority wins.</li>
+</ul>
+<h3 id="docsite-pipeline-is-different-and-not-yet-dry"><a class="header" href="#docsite-pipeline-is-different-and-not-yet-dry">docsite pipeline is different (and not yet DRY)</a></h3>
+<p><code>packages/fragments-docs/</code> is NOT a fragment-markdown reader.
+It exposes <code>passthru.generators</code>:</p>
+<ul>
+<li><code>snippets.*</code> — small tables embedded in prose pages via
+<code>{{#include ../generated/snippets/&lt;name&gt;.md}}</code>. Data-driven
+from <code>dev/data.nix</code>.</li>
+<li>Full-page generators (<code>overlayPackages</code>, <code>mcpServers</code>,
+<code>libApi</code>, <code>typesRef</code>, <code>aiMapping</code>) — emit complete mdbook
+pages from nix-evaluated data OR read static markdown from
+<code>packages/fragments-docs/pages/</code>.</li>
+</ul>
+<p><strong>Dev fragments do not currently feed the docsite.</strong> A future
+“Contributing / Architecture” section would need a new
+generator in <code>fragments-docs</code> that reads dev fragments by path
+(same inputs <code>mkDevFragment</code> uses), strips frontmatter, and
+wraps for mdbook. Single-source DRY across steering files
+AND docsite — tracked as Checkpoint 7 of the
+steering-fragments design spec.</p>
+<h3 id="extension-points-how-to-add-things"><a class="header" href="#extension-points-how-to-add-things">Extension points (how to add things)</a></h3>
+<ul>
+<li><strong>New dev fragment</strong>: create markdown file at the right
+location, add to <code>devFragmentNames.&lt;category&gt;</code> in
+<code>dev/generate.nix</code>, run
+<code>devenv tasks run --mode before generate:instructions</code>.</li>
+<li><strong>New content package published fragment</strong>: create markdown
+at <code>packages/&lt;pkg&gt;/fragments/&lt;name&gt;.md</code>, declare in the
+package’s <code>passthru.fragments.&lt;name&gt;</code> using
+<code>fragmentsLib.mkFragment { text = builtins.readFile ...; }</code>.
+If dev instruction files should include it, add to
+<code>extraPublishedFragments.&lt;category&gt;</code> in <code>dev/generate.nix</code>.</li>
+<li><strong>New ecosystem transform</strong> (e.g., Codex): add function to
+<code>packages/fragments-ai/default.nix</code> <code>passthru.transforms.&lt;name&gt;</code>,
+wire into <code>mkEcosystemFile</code> in <code>dev/generate.nix</code>, add a new
+<code>instructions-&lt;ecosystem&gt;</code> derivation in <code>flake.nix</code>, add
+the corresponding <code>generate:instructions:&lt;ecosystem&gt;</code> task in
+<code>dev/tasks/generate.nix</code>.</li>
+<li><strong>New docsite snippet</strong>: add function to
+<code>packages/fragments-docs/default.nix</code> <code>passthru.generators.snippets</code>,
+wire into the <code>site-snippets</code> runCommand in <code>flake.nix</code>.</li>
+</ul>
+<h3 id="gotchas"><a class="header" href="#gotchas">Gotchas</a></h3>
+<ul>
+<li><strong>DevEnv task DAG requires <code>--mode before</code> for DAG
+resolution.</strong> Running <code>devenv tasks run generate:instructions</code>
+alone only runs the top-level task, not its dependencies.
+Use <code>devenv tasks run --mode before generate:instructions</code>
+or run the sub-tasks directly.</li>
+<li><strong>New untracked files must be <code>git add</code>-ed before
+<code>nix build</code></strong> can see them in the flake context. This trips
+new fragment creation every time — add the file, THEN run
+the generate task, or the nix build won’t find it.</li>
+<li><strong>devenv caches nix eval</strong> in <code>.devenv/nix-eval-cache.db</code>.
+If task definitions change and the tasks look stale, delete
+that file.</li>
+<li><strong>Monorepo profile vs scoped profile differs semantically</strong>.
+Only <code>monorepo</code> gets commonFragments + swsFragments. Scoped
+categories are intentionally lean. Don’t “fix” this by
+re-adding commonFragments — that’s the context-rot bug that
+was removed.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="ai-module-fanout"><a href="#ai-module-fanout" class="header">ai Module Fanout</a></h1>
+<h2 id="ai-module-fanout-semantics"><a class="header" href="#ai-module-fanout-semantics">ai Module Fanout Semantics</a></h2>
+<blockquote>
+<p><strong>Last verified:</strong> 2026-04-07 (commit f2e911c). If you change the
+gating, the <code>programs.*.enable</code> flipping, or the cross-ecosystem
+data flow in <code>modules/ai/default.nix</code> and this fragment isn’t
+updated in the same commit, stop and fix it.</p>
+</blockquote>
+<p>The <code>ai.*</code> HM module provides a unified interface that fans out
+shared AI-CLI configuration to each enabled ecosystem (Claude,
+Copilot, Kiro, future Codex). It is NOT a thin wrapper — the
+gating semantics, default-setting behavior, and fanout patterns
+are load-bearing and got bitten into production by a silent
+no-op bug. Read this fragment before changing the gating.</p>
+<h3 id="there-is-no-aienable"><a class="header" href="#there-is-no-aienable">There is no <code>ai.enable</code></a></h3>
+<p>The <code>ai</code> module has <strong>no master enable option</strong>. Each per-CLI
+sub-enable is the sole gate for that ecosystem’s fanout:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Consumer sets</th><th>What fires</th></tr>
+</thead>
+<tbody>
+<tr><td><code>ai.claude.enable = true</code></td><td>claude fanout block + <code>programs.claude-code.enable = mkDefault true</code></td></tr>
+<tr><td><code>ai.copilot.enable = true</code></td><td>copilot fanout block + <code>programs.copilot-cli.enable = mkDefault true</code></td></tr>
+<tr><td><code>ai.kiro.enable = true</code></td><td>kiro fanout block + <code>programs.kiro-cli.enable = mkDefault true</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>Each per-CLI block implicitly flips the corresponding upstream
+module’s enable via <code>mkDefault</code>, so consumers don’t have to set
+enable twice. A consumer can still override by setting
+<code>programs.&lt;cli&gt;.enable = false</code> explicitly, but the default is on
+when the ai-level enable is on.</p>
+<h3 id="why-theres-no-master-switch"><a class="header" href="#why-theres-no-master-switch">Why there’s no master switch</a></h3>
+<p>The original design had <code>config = mkIf cfg.enable (mkMerge [...])</code>
+wrapping everything, requiring BOTH <code>ai.enable = true</code> AND
+<code>ai.claude.enable = true</code> to fan out. This caused a silent no-op:
+a consumer who set <code>ai.claude = { enable = true; buddy = { ... }; }</code>
+without <code>ai.enable = true</code> got no fanout at all —
+<code>programs.claude-code.buddy</code> stayed null, the activation script
+was never installed, the buddy silently hatched as the default
+(capybara/penguin) instead of the configured value.</p>
+<p>Surfaced 2026-04-07 during HITL integration. Debugged by evaluating
+the HM config and finding <code>programs.claude-code.buddy = null</code>
+despite <code>ai.claude.buddy.species = "duck"</code>. Root cause: the outer
+<code>mkIf cfg.enable</code> gate was false.</p>
+<p>Four fix options were considered; option (b) was chosen:</p>
+<ol>
+<li>Move buddy fanout outside the mkIf (kept rest of gating)</li>
+<li><strong>Drop <code>ai.enable</code> as a master switch entirely</strong> ← chosen</li>
+<li>Magic-default <code>ai.enable</code> from sub-options (opaque)</li>
+<li>Document the requirement loudly with an assertion</li>
+</ol>
+<p>Option (b) is the cleanest: redundant gates create silent failure
+modes. Each option that looks like it should “do something” must
+actually do something. The master switch added no information
+over the per-CLI enables.</p>
+<p>Fix landed in commit f2e911c.</p>
+<h3 id="fanout-data-flow"><a class="header" href="#fanout-data-flow">Fanout data flow</a></h3>
+<p>The ai module fans out TWO kinds of configuration:</p>
+<p><strong>Per-CLI options</strong> (live inside <code>ai.{claude,copilot,kiro}.*</code>):</p>
+<ul>
+<li><code>ai.claude.package</code> / <code>ai.copilot.package</code> / <code>ai.kiro.package</code>
+— package override, fans out to <code>programs.&lt;cli&gt;.package</code></li>
+<li><code>ai.claude.buddy</code> — fans out to <code>programs.claude-code.buddy</code>
+(which is declared by <code>modules/claude-code-buddy/</code>, a separate
+HM module that must also be imported)</li>
+</ul>
+<p><strong>Cross-ecosystem options</strong> (live at <code>ai.*</code> top level, fan out
+to every enabled ecosystem simultaneously):</p>
+<ul>
+<li><code>ai.skills</code> — attrset of name → directory path. Each enabled
+ecosystem gets its native representation (Claude:
+<code>.claude/skills/&lt;name&gt;</code> symlink; Copilot and Kiro: native
+<code>skills</code> option on their module).</li>
+<li><code>ai.instructions</code> — attrset of name → <code>instructionModule</code>
+(text + optional path scoping + description). Transformed per
+ecosystem via <code>fragments-ai.passthru.transforms</code>: Claude gets
+<code>.claude/rules/&lt;name&gt;.md</code> with YAML frontmatter; Copilot gets
+<code>.github/instructions/&lt;name&gt;.instructions.md</code>; Kiro gets
+<code>.kiro/steering/&lt;name&gt;.md</code> (via the CLI module).</li>
+<li><code>ai.lspServers</code> — typed LSP definitions, translated to each
+ecosystem’s native LSP config format (Claude via
+<code>ENABLE_LSP_TOOL=1</code>; Copilot has <code>lspServers</code> option; Kiro too).</li>
+<li><code>ai.settings.{model,telemetry}</code> — normalized settings; each
+ecosystem has a different native option path (Claude has no
+model setting; Copilot has <code>settings.model</code>; Kiro has
+<code>settings.chat.defaultModel</code>).</li>
+<li><code>ai.environmentVariables</code> — shared env vars; Copilot and Kiro
+fan out directly, Claude has no native option so Claude itself
+receives nothing from this (intentional — Claude env goes via
+<code>programs.claude-code.settings.env</code> directly).</li>
+</ul>
+<p>All cross-ecosystem fanouts use <code>mkDefault</code> so per-CLI overrides
+take precedence.</p>
+<h3 id="assertion-semantics"><a class="header" href="#assertion-semantics">Assertion semantics</a></h3>
+<p>Three assertions live in the config block, always evaluated (no
+mkIf gate to skip them):</p>
+<ol>
+<li><code>ai.copilot.enable</code> requires <code>programs.copilot-cli</code> module to
+be imported</li>
+<li><code>ai.kiro.enable</code> requires <code>programs.kiro-cli</code> module to be
+imported</li>
+<li>If any cross-ecosystem option is set (skills, instructions,
+environmentVariables), at least one ecosystem must be enabled
+— otherwise the config does nothing and the user didn’t notice</li>
+</ol>
+<p>Plus buddy-specific assertions (gated on
+<code>cfg.claude.buddy != null</code>):</p>
+<ol start="4">
+<li><code>buddy.peak != buddy.dump</code> (or both null)</li>
+<li><code>buddy.rarity == "common" -&gt; buddy.hat == "none"</code></li>
+</ol>
+<h3 id="whats-not-in-the-ai-module"><a class="header" href="#whats-not-in-the-ai-module">What’s NOT in the ai module</a></h3>
+<ul>
+<li>The actual <code>programs.claude-code.buddy</code> OPTION — declared by
+<code>modules/claude-code-buddy/default.nix</code>. The ai module just
+fans VALUES into it.</li>
+<li>The package wrapping (Bun runtime) for claude-code — handled
+in <code>packages/ai-clis/claude-code.nix</code> at overlay level.</li>
+<li>MCP server config — ai has no <code>mcpServers</code> option. Consumers
+configure <code>programs.mcp.servers</code> or per-CLI <code>mcpServers</code>
+directly. This is intentional: the ai module stayed focused
+on scope that’s cleanly cross-ecosystem. MCP integration has
+enough ecosystem-specific quirks that centralizing it would
+have been more pain than value.</li>
+</ul>
+<p>See the backlog item “ai.claude.* full passthrough” for the
+ongoing work to expose more <code>programs.claude-code.*</code> options via
+<code>ai.claude.*</code>.</p>
+<h3 id="config-parity"><a class="header" href="#config-parity">Config parity</a></h3>
+<p>Every option on the HM <code>ai</code> module (<code>modules/ai/default.nix</code>)
+must have a matching option on the devenv <code>ai</code> module
+(<code>modules/devenv/ai.nix</code>) with the same semantics. If you add
+an option to one, add it to the other in the same commit.
+This is enforced by convention, not by the module system.</p>
+<h3 id="verifying-fanout-works"><a class="header" href="#verifying-fanout-works">Verifying fanout works</a></h3>
+<p>From a consumer repo with the module imported:</p>
+<pre><code class="language-bash">nix eval --impure --json \
+  '.#homeConfigurations."&lt;host&gt;".config.programs.claude-code.enable'
+# Should be true if ai.claude.enable = true
+
+nix eval --impure --json \
+  '.#homeConfigurations."&lt;host&gt;".config.programs.claude-code.buddy.species'
+# Should be the configured species, not null
+
+nix eval --impure --json \
+  '.#homeConfigurations."&lt;host&gt;".config.ai.claude.buddy.species'
+# Should match (same value stored on the ai side)
+</code></pre>
+<p>If <code>programs.claude-code.buddy</code> is null but <code>ai.claude.buddy.species</code>
+is set, the fanout is broken — fix the module, not the consumer.
+This is exactly how the dropped <code>ai.enable</code> bug was caught.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="claude-code-wrapper-chain-1"><a href="#claude-code-wrapper-chain-1" class="header">claude-code Wrapper Chain</a></h1>
+<h2 id="claude-code-wrapper-chain"><a class="header" href="#claude-code-wrapper-chain">claude-code Wrapper Chain</a></h2>
+<blockquote>
+<p><strong>Last verified:</strong> 2026-04-07 (commit a56b8d4). If you touch
+<code>packages/ai-clis/claude-code.nix</code>, the buddy activation script,
+or the HM plugin wrapper integration and this fragment isn’t
+updated in the same commit, stop and fix it.</p>
+</blockquote>
+<p>The <code>claude</code> binary a user invokes goes through <strong>two wrappers</strong>
+before reaching the actual JavaScript CLI. Debugging any runtime
+oddity (missing env vars, wrong cli.js being run, broken
+<code>--plugin-dir</code>) requires knowing the full chain.</p>
+<h3 id="the-chain"><a class="header" href="#the-chain">The chain</a></h3>
+<pre><code>claude             (HM plugin wrapper, from nixpkgs claude-code module)
+  → .claude-wrapped  (our Bun runtime wrapper, added by claude-code.nix)
+    → bun run cli.js  (the actual CLI under Bun runtime)
+</code></pre>
+<ol>
+<li><strong>HM plugin wrapper</strong> (<code>$out/bin/claude</code>): a short bash script
+produced by nixpkgs’ <code>programs.claude-code</code> module. It execs
+<code>.claude-wrapped</code> with a <code>--plugin-dir &lt;store-path&gt;</code> argument
+pointing at a generated plugin store path.</li>
+<li><strong>Our Bun wrapper</strong> (<code>$out/bin/.claude-wrapped</code>): a bash script
+generated inside <code>packages/ai-clis/claude-code.nix</code> by the
+<code>symlinkJoin</code> postBuild. Always installed, whether or not a
+buddy is configured. Its job is to pick which <code>cli.js</code> to run
+(user state or store) and exec it under Bun.</li>
+<li><strong>Bun runtime</strong> (<code>${bun}/bin/bun run $CLI</code>): the actual JS
+executor. Under Bun, <code>typeof Bun !== "undefined"</code> in the
+process, which claude-code’s buddy hashing detects and uses
+to route to wyhash (instead of fnv1a on Node).</li>
+</ol>
+<h3 id="why-bun-1"><a class="header" href="#why-bun-1">Why Bun</a></h3>
+<p>The any-buddy worker computes a 15-char salt that hashes, together
+with the user’s UUID, to the desired buddy traits. Claude-code’s
+runtime buddy hash function is <code>wyhash</code> when <code>typeof Bun !== "u"</code>
+and <code>fnv1a</code> otherwise. If the salt is computed under wyhash and
+the runtime uses fnv1a (or vice versa), the buddy you asked for
+is NOT what hatches. Running under <code>bun run</code> ensures both the
+worker AND the runtime use wyhash. This is why the Bun wrapper
+is installed unconditionally, even when no buddy is configured —
+the wrapper is cheap insurance against accidental Node execution
+breaking a future buddy config.</p>
+<p>Bun adds ~95 MB to the runtime closure. Acceptable trade-off for
+the hash-consistency guarantee.</p>
+<h3 id="passthrubaseclaudecode"><a class="header" href="#passthrubaseclaudecode">passthru.baseClaudeCode</a></h3>
+<p><code>packages/ai-clis/claude-code.nix</code> builds a <code>symlinkJoin</code> around
+the base nixpkgs <code>claude-code</code> derivation, replacing <code>bin/claude</code>
+with the Bun wrapper. The wrapped join is <code>pkgs.claude-code</code> (what
+consumers get). The unwrapped base is exposed as
+<code>pkgs.claude-code.passthru.baseClaudeCode</code>.</p>
+<p>The buddy activation script in <code>modules/claude-code-buddy/</code> needs
+to find the store’s actual <code>cli.js</code> at the nixpkgs-managed path
+(under <code>lib/node_modules/@anthropic-ai/claude-code/cli.js</code>), not
+the wrapped binary. It does:</p>
+<pre><code class="language-nix">baseClaudeCode =
+  config.programs.claude-code.package.passthru.baseClaudeCode
+  or config.programs.claude-code.package;
+storeLib = "${baseClaudeCode}/lib/node_modules/@anthropic-ai/claude-code";
+</code></pre>
+<p>The <code>or</code> fallback handles the case where a user swaps out
+<code>programs.claude-code.package</code> with a non-nix-agentic-tools
+package that doesn’t have this passthru. The activation script
+still works — it just points at whatever <code>package</code> the HM config
+is using and hopes the <code>lib/node_modules/...</code> layout exists.</p>
+<h3 id="clijs-resolution-in-the-wrapper"><a class="header" href="#clijs-resolution-in-the-wrapper">cli.js resolution in the wrapper</a></h3>
+<p>The Bun wrapper has two code paths:</p>
+<pre><code class="language-bash">USER_LIB="${XDG_STATE_HOME:-$HOME/.local/state}/claude-code-buddy/lib"
+if [ -f "$USER_LIB/cli.js" ]; then
+  CLI="$USER_LIB/cli.js"          # buddy state copy (patched)
+else
+  CLI="$STORE_LIB/cli.js"         # store fallback (unpatched)
+fi
+exec ${bun}/bin/bun run "$CLI" "$@"
+</code></pre>
+<p>When the buddy activation script has run at least once, a writable
+<code>cli.js</code> exists at <code>$XDG_STATE_HOME/claude-code-buddy/lib/cli.js</code>
+with the salt patched into it. The wrapper picks that up. Before
+first activation (or if the state dir is wiped), the wrapper falls
+back to the store cli.js, which runs claude-code normally without
+the custom buddy. No breakage either way — this is the “always
+wrapped, gracefully degrades” design.</p>
+<h3 id="symptoms-and-what-they-mean"><a class="header" href="#symptoms-and-what-they-mean">Symptoms and what they mean</a></h3>
+<ul>
+<li><strong><code>claude</code> launches but the buddy is wrong</strong>: activation script
+probably didn’t run (check <code>$XDG_STATE_HOME/claude-code-buddy/fingerprint</code>
+exists) OR the salt the worker computed doesn’t match the
+claude-code runtime’s hash function (verify both are under Bun)</li>
+<li><strong>“Claude Code has switched from npm to native installer”</strong>
+snackbar warning every launch: the <code>Zj()</code> check in cli.js looks
+for <code>Bun.embeddedFiles.length &gt; 0</code>, which is true only for
+<code>bun build --compile</code> single-execs. We run a plain cli.js under
+<code>bun run</code> so embeddedFiles is empty. Suppressible via
+<code>DISABLE_INSTALLATION_CHECKS=1</code> env var — see the backlog.</li>
+<li><strong><code>cat $(which claude)</code> shows the HM plugin wrapper, not our
+Bun wrapper</strong>: expected. The HM plugin wrapper execs <code>.claude-wrapped</code>
+which IS our wrapper. Inspect <code>bin/.claude-wrapped</code> in the
+claude-code store path to see the Bun wrapper source.</li>
+</ul>
+<h3 id="not-here"><a class="header" href="#not-here">Not here</a></h3>
+<p>Buddy activation lifecycle (fingerprint semantics, salt search,
+cli.js patching, companion reset): see
+<code>buddy-activation</code> fragment in this same directory.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="buddy-activation"><a href="#buddy-activation" class="header">Buddy Activation</a></h1>
+<h2 id="buddy-activation-lifecycle"><a class="header" href="#buddy-activation-lifecycle">Buddy Activation Lifecycle</a></h2>
+<blockquote>
+<p><strong>Last verified:</strong> 2026-04-07 (commit 2cd4f2b). If you touch
+<code>modules/claude-code-buddy/default.nix</code>, the any-buddy worker
+invocation, the fingerprint scheme, or how cli.js gets patched
+and this fragment isn’t updated in the same commit, stop and
+fix it.</p>
+</blockquote>
+<p>When a user configures <code>programs.claude-code.buddy = { ... }</code>
+(canonical) or <code>ai.claude.buddy = { ... }</code> (fanout from
+<code>modules/ai/default.nix</code>), an HM activation script runs on every
+<code>home-manager switch</code>. It computes a fingerprint, compares to the
+stored one, and on mismatch: refreshes a writable cli.js copy,
+runs the any-buddy worker, patches the salt into cli.js, and
+resets the companion field in <code>~/.claude.json</code>.</p>
+<h3 id="fingerprint-inputs"><a class="header" href="#fingerprint-inputs">Fingerprint inputs</a></h3>
+<p>The fingerprint is <code>sha256sum</code> of a newline-separated concatenation
+of:</p>
+<ol>
+<li>The store path of <code>baseClaudeCode/lib/node_modules/@anthropic-ai/claude-code</code>
+(so a claude-code version bump invalidates)</li>
+<li>The resolved <code>$USER_ID</code> (from <code>userId.text</code> or
+<code>cat $USER_ID_FILE</code>)</li>
+<li><code>buddy.species</code></li>
+<li><code>buddy.rarity</code></li>
+<li><code>buddy.eyes</code></li>
+<li><code>buddy.hat</code></li>
+<li><code>shiny</code> flag (string “true” or empty)</li>
+<li><code>buddy.peak</code> (or empty when null)</li>
+<li><code>buddy.dump</code> (or empty when null)</li>
+</ol>
+<p>Only the first 16 hex chars of the sha256 are stored. Stored at
+<code>$XDG_STATE_HOME/claude-code-buddy/fingerprint</code>.</p>
+<p><strong>If fingerprint matches, the script exits 0 immediately.</strong> The
+entire downstream pipeline is skipped. This is why re-running
+<code>home-manager switch</code> with unchanged config is fast.</p>
+<h3 id="invalidation-triggers"><a class="header" href="#invalidation-triggers">Invalidation triggers</a></h3>
+<p>The fingerprint changes (triggering re-run) on:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Trigger</th><th>Why</th></tr>
+</thead>
+<tbody>
+<tr><td>First activation</td><td>No fingerprint exists yet</td></tr>
+<tr><td>Any <code>buddy.*</code> option change</td><td>Direct input to the hash</td></tr>
+<tr><td><code>claude-code</code> version upgrade</td><td>Store path is an input</td></tr>
+<tr><td>sops-decrypted UUID file content change</td><td><code>userId.file</code> read at activation time</td></tr>
+<tr><td>Manual <code>rm $XDG_STATE_HOME/claude-code-buddy/fingerprint</code></td><td>Forces re-run</td></tr>
+</tbody>
+</table>
+</div>
+<p>Explicitly NOT triggering:</p>
+<ul>
+<li>User manually edits <code>cli.js</code> in the state dir (fingerprint only
+tracks inputs, not outputs)</li>
+<li>User manually edits <code>~/.claude.json</code> <code>companion</code> field (runtime
+state, not tracked)</li>
+<li>claude-code autoupdate (if enabled) replaces the store — would
+trigger, but our package pins via nvfetcher so autoupdate doesn’t
+normally happen</li>
+</ul>
+<h3 id="what-the-activation-script-does-on-re-run"><a class="header" href="#what-the-activation-script-does-on-re-run">What the activation script does on re-run</a></h3>
+<ol>
+<li><strong>Resolve userId</strong>: from <code>userId.text</code> (literal) or
+<code>userId.file</code> (sops path). File case uses <code>tr -d '\n\r'</code> to
+strip trailing whitespace. If file doesn’t exist, errors out
+with a pointer to sops-nix ordering.</li>
+<li><strong>Fresh writable lib tree</strong>: <code>rm -rf $STATE_DIR/lib</code>, <code>mkdir</code>,
+<code>cp -rs $STORE_LIB/* $STATE_DIR/lib/</code> (symlink tree to store),
+<code>chmod -R u+w</code>. Most files stay as symlinks into the nix store
+(read-only but discoverable).</li>
+<li><strong>Real cli.js copy</strong>: <code>rm $STATE_DIR/lib/cli.js</code> (the symlink
+created in step 2), <code>cp -L $STORE_LIB/cli.js $STATE_DIR/lib/cli.js</code>
+(real file), <code>chmod u+w</code>. Now cli.js is a writable copy, siblings
+are still store symlinks.</li>
+<li><strong>Salt search</strong>: <code>bun ${any-buddy}/src/finder/worker.ts "$USER_ID" species rarity eyes hat shiny peak dump | jq -r .salt</code>.
+Worker brute-forces a 15-char salt that hashes (via wyhash under
+Bun) to the desired traits. Validates output is 15 chars matching
+<code>[a-zA-Z0-9_-]</code>.</li>
+<li><strong>Patch cli.js</strong>: python3 binary-safe replace of <code>b'friend-2026-401'</code>
+with the new salt. The marker is 15 bytes, the salt is 15 bytes
+(constrained by the regex validation), so byte length is preserved.</li>
+<li><strong>Reset companion</strong>: if <code>~/.claude.json</code> exists, <code>jq 'del(.companion)'</code>
+through a temp file. Otherwise skipped (first-run case).</li>
+<li><strong>Save fingerprint</strong>: write the new 16-char hash to
+<code>$STATE_DIR/fingerprint</code>.</li>
+</ol>
+<h3 id="why-the-companion-reset-matters"><a class="header" href="#why-the-companion-reset-matters">Why the companion reset matters</a></h3>
+<p><code>~/.claude.json</code> <code>companion</code> field is set by claude-code on first
+hatch and cached across runs. It contains the buddy traits derived
+from the current salt. If you change the salt (by changing buddy
+options) but leave the cached companion alone, claude-code happily
+keeps showing the OLD buddy because its runtime lookup hits the
+cache before re-running the hash.</p>
+<p>So the activation script MUST reset companion on every fingerprint
+mismatch. Otherwise users think their config didn’t take effect.</p>
+<h3 id="common-failure-modes"><a class="header" href="#common-failure-modes">Common failure modes</a></h3>
+<p><strong>“cannot coerce null to a string”</strong> during activation eval:
+<code>peakArg</code> or <code>dumpArg</code> was null and hit <code>"${null}"</code> interpolation.
+Nix <code>or ""</code> doesn’t catch null, only missing attributes. Fix is
+explicit <code>if cfg.peak == null then "" else cfg.peak</code>. Landed in
+commit 753ec43. If it recurs, check whether any other nullable
+buddy option is being string-interpolated without a null guard.</p>
+<p><strong><code>programs.claude-code.buddy = null</code> despite <code>ai.claude.buddy</code>
+being set</strong>: the <code>ai.*</code> fanout block in <code>modules/ai/default.nix</code>
+used to be gated on <code>mkIf cfg.enable</code> (where <code>cfg = config.ai</code>),
+requiring <code>ai.enable = true</code> in addition to <code>ai.claude.enable</code>.
+Users who only set <code>ai.claude.enable</code> got a silent no-op — the
+buddy config was stored in the option but never fanned out.
+Dropped the master switch in commit f2e911c. If it recurs, verify
+the fanout block is NOT gated on anything except
+<code>cfg.claude.enable</code>.</p>
+<p><strong>Salt search returns a buddy that’s not what you configured</strong>:
+hash-function mismatch between the worker and the runtime. Worker
+runs under Bun (wyhash). Runtime must ALSO run under Bun (via the
+wrapper chain — see <code>claude-code-wrapper</code> fragment). If the wrapper
+got bypassed and claude ran under Node, the runtime uses fnv1a and
+the salt produces a different buddy.</p>
+<p><strong>State dir corruption</strong>: <code>cp -rs</code> leaves a symlink tree into the
+store. If the underlying store paths get GC’d (rare, only if
+<code>claude-code</code> is uninstalled then a GC runs), the symlinks break.
+<code>rm -rf $XDG_STATE_HOME/claude-code-buddy/</code> and re-run
+<code>home-manager switch</code> — activation script rebuilds from scratch.</p>
+<h3 id="verifying-activation-worked"><a class="header" href="#verifying-activation-worked">Verifying activation worked</a></h3>
+<p>After <code>home-manager switch</code>:</p>
+<ol>
+<li><code>ls $XDG_STATE_HOME/claude-code-buddy/fingerprint</code> — exists</li>
+<li><code>cat $XDG_STATE_HOME/claude-code-buddy/lib/cli.js | head -1</code> —
+real file, not a broken symlink</li>
+<li><code>grep -c friend-2026-401 $XDG_STATE_HOME/claude-code-buddy/lib/cli.js</code>
+— should be 0 (old marker replaced with new salt)</li>
+<li><code>jq .companion ~/.claude.json</code> — should be <code>null</code> until next
+claude launch</li>
+<li>Launch claude. <code>/buddy</code> should show the configured species.</li>
+</ol>
+<h3 id="not-here-1"><a class="header" href="#not-here-1">Not here</a></h3>
+<p>Wrapper chain, why Bun, <code>baseClaudeCode</code> passthru: see
+<code>claude-code-wrapper</code> fragment in this same directory.</p>
+<p><code>ai.claude.buddy</code> fanout mechanics and the ai module’s per-CLI
+gating: see <code>ai-module-fanout</code> fragment under <code>modules/ai/</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="hm-module-conventions-1"><a href="#hm-module-conventions-1" class="header">HM Module Conventions</a></h1>
+<h2 id="hm-module-conventions"><a class="header" href="#hm-module-conventions">HM Module Conventions</a></h2>
+<blockquote>
+<p><strong>Last verified:</strong> 2026-04-07 (commit adce79e). If you touch
+any <code>modules/&lt;subdir&gt;/default.nix</code> file, add a new option, or
+change an assertion/activation pattern and this fragment isn’t
+updated in the same commit, stop and fix it.</p>
+</blockquote>
+<p>These conventions are enforced by code review and the
+<code>checks/module-eval.nix</code> evaluation tests, not by the module
+system itself. Follow them when adding or modifying any HM module
+under <code>modules/**</code>.</p>
+<h3 id="option-shape-conventions"><a class="header" href="#option-shape-conventions">Option shape conventions</a></h3>
+<p><strong>Use explicit types.</strong> Rare <code>types.anything</code> appears only as an
+<code>internal = true</code> escape hatch in the MCP module’s <code>mcpConfig</code>.
+Everywhere else, declare the real type: <code>types.submodule</code>,
+<code>types.nullOr</code>, <code>types.attrsOf</code>, <code>types.enum</code>, <code>types.attrTag</code>
+(for mutually exclusive variants like the buddy <code>userId.text</code>
+XOR <code>userId.file</code> discriminated union), <code>types.listOf</code>, etc.</p>
+<p><strong>Submodules as containers.</strong> Per-ecosystem config lives in a
+submodule: <code>ai.claude</code>, <code>ai.copilot</code>, <code>ai.kiro</code> are each a
+<code>types.submodule { options = { enable; package; ... }; }</code>. The
+submodule is the logical grouping — do not flatten per-ecosystem
+options into the top level.</p>
+<p><strong>Flat at top level for cross-ecosystem.</strong> <code>ai.skills</code>,
+<code>ai.instructions</code>, <code>ai.lspServers</code>, <code>ai.settings</code>, and
+<code>ai.environmentVariables</code> are NOT nested inside a per-ecosystem
+submodule. They fan out to whichever ecosystems are enabled at
+<code>mkDefault</code> priority. Anything that’s “one option, many
+destinations” lives flat.</p>
+<p><strong>Settings pattern: freeformType + typed subkeys.</strong> When wrapping
+a CLI’s settings.json, use <code>freeformType = jsonFormat.type</code> plus
+explicit <code>mkOption</code> declarations for known typed keys (e.g.
+<code>settings.model</code>, <code>settings.telemetry</code>). Unknown keys flow
+through freely; known keys get type-checked.</p>
+<p><strong>Defaults via <code>mkOption { default = ...; }</code></strong>, not <code>mkDefault</code>
+in the declaration. Reserve <code>mkDefault</code> for fanout values in the
+config block (so consumers can override).</p>
+<h3 id="gating-and-mkif-patterns"><a class="header" href="#gating-and-mkif-patterns">Gating and mkIf patterns</a></h3>
+<p><strong>Per-CLI enable is the SOLE gate.</strong> Each <code>ai.{claude,copilot,kiro}.enable</code>
+is its own mkIf block. There is <strong>no master <code>ai.enable</code></strong> — it
+was dropped in commit f2e911c after causing a silent no-op bug
+(see <code>ai-module-fanout</code> fragment for the full story).</p>
+<p>The <code>config</code> block shape:</p>
+<pre><code class="language-nix">config = mkMerge [
+  { assertions = [...]; }                # Always evaluated
+  (mkIf cfg.claude.enable  { ... })      # Each CLI independent
+  (mkIf cfg.copilot.enable { ... })
+  (mkIf cfg.kiro.enable    { ... })
+];
+</code></pre>
+<p><strong>Each per-CLI block also flips the corresponding
+<code>programs.&lt;cli&gt;.enable</code>:</strong></p>
+<pre><code class="language-nix">(mkIf cfg.claude.enable {
+  programs.claude-code.enable = mkDefault true;
+  # ... rest of claude fanout
+})
+</code></pre>
+<p><code>mkDefault</code> lets the consumer override with <code>programs.claude-code.enable = false</code>
+explicitly if they want to turn it off while keeping <code>ai.claude.enable = true</code>
+for other reasons. In practice they don’t — it’s an escape hatch.</p>
+<p><strong>hasModule checks upstream availability</strong>:</p>
+<pre><code class="language-nix">hasModule = path: (attrByPath path null options) != null;
+</code></pre>
+<p>This queries the OPTION space, not the config values. Used in
+assertions to verify <code>programs.copilot-cli.enable</code> exists as an
+option path before trying to reference it. Different from runtime
+checks — runs at eval time.</p>
+<p><strong>Nested mkIf for conditional fanout:</strong></p>
+<pre><code class="language-nix">(mkIf (cfg.lspServers != {} &amp;&amp; hasModule ["programs" "claude-code" "settings"]) {
+  programs.claude-code.settings.env.ENABLE_LSP_TOOL = mkDefault "1";
+})
+</code></pre>
+<p>Check both the data condition (<code>lspServers != {}</code>) and the module
+availability (<code>hasModule ...</code>) before touching an upstream option
+path. Keeps the module robust to consumers who haven’t imported
+everything.</p>
+<h3 id="assertion-conventions"><a class="header" href="#assertion-conventions">Assertion conventions</a></h3>
+<p><strong>Always outside mkIf.</strong> Assertions live in an unguarded block
+inside <code>mkMerge [...]</code>. This ensures misconfigurations surface
+even when the feature itself isn’t enabled:</p>
+<pre><code class="language-nix">config = mkMerge [
+  {
+    assertions = [
+      { assertion = cfg.copilot.enable -&gt; hasModule ["programs" "copilot-cli" "enable"];
+        message = "ai.copilot.enable requires programs.copilot-cli to be available."; }
+      # ...
+    ];
+  }
+  # ... mkIf blocks ...
+];
+</code></pre>
+<p><strong>Precise messages naming the option path.</strong> Don’t say “module
+error” or “configuration invalid.” Say
+<code>ai.copilot.enable requires programs.copilot-cli to be available</code>.</p>
+<p><strong>Data-dependent assertions use lib.optionals + implication.</strong>
+Example from the buddy assertions:</p>
+<pre><code class="language-nix">assertions =
+  [{ assertion = ...; message = ...; }]
+  ++ (optionals (cfg.claude.buddy != null) [
+    { assertion = cfg.claude.buddy.peak != cfg.claude.buddy.dump || cfg.claude.buddy.peak == null;
+      message = "ai.claude.buddy: peak and dump stats must differ"; }
+    { assertion = cfg.claude.buddy.rarity == "common" -&gt; cfg.claude.buddy.hat == "none";
+      message = "ai.claude.buddy: common rarity forces hat = \"none\""; }
+  ]);
+</code></pre>
+<p>The <code>optionals</code> wrapper only runs the inner assertions when
+<code>buddy != null</code>, so the per-field references don’t fail on
+unset buddy config.</p>
+<h3 id="package-override-pattern"><a class="header" href="#package-override-pattern">Package override pattern</a></h3>
+<p><strong>Every per-CLI submodule exposes a <code>package</code> option.</strong> Consumers
+can swap out the package entirely. Wrapping pattern (claude-code,
+copilot-cli, kiro-cli):</p>
+<pre><code class="language-nix">pkgs.symlinkJoin {
+  name = "&lt;cli&gt;-wrapped";
+  paths = [cfg.package];
+  postBuild = ''
+    mv $out/bin/&lt;cli&gt; $out/bin/.&lt;cli&gt;-wrapped
+    cat &gt; $out/bin/&lt;cli&gt; &lt;&lt; 'WRAPPER'
+    #!/usr/bin/env bash
+    set -euETo pipefail
+    shopt -s inherit_errexit 2&gt;/dev/null || :
+    # ...env exports, path setup, etc.
+    exec "$out/bin/.&lt;cli&gt;-wrapped" "$@"
+    WRAPPER
+    chmod +x $out/bin/&lt;cli&gt;
+  '';
+}
+</code></pre>
+<p><strong>passthru.baseClaudeCode escape hatch.</strong> The claude-code wrap
+exposes the unwrapped nixpkgs derivation as
+<code>passthru.baseClaudeCode</code> so downstream modules (buddy activation
+script) can find the real <code>cli.js</code> in the store. See
+<code>claude-code-wrapper</code> fragment for the full chain.</p>
+<h3 id="activation-script-patterns"><a class="header" href="#activation-script-patterns">Activation script patterns</a></h3>
+<p><strong>Location and ordering:</strong></p>
+<pre><code class="language-nix">home.activation.&lt;name&gt; = lib.hm.dag.entryAfter ["writeBoundary"] (script);
+</code></pre>
+<p>All activation scripts run <code>entryAfter ["writeBoundary"]</code>, meaning
+after HM has written all files to the home directory. No use of
+<code>entryBefore</code> in this repo.</p>
+<p><strong>Fingerprint caching pattern</strong> (buddy activation, see
+<code>buddy-activation</code> fragment): compute sha256 of inputs, compare
+to stored marker, exit early if unchanged. Re-running
+<code>home-manager switch</code> with unchanged config becomes a no-op.</p>
+<p><strong>Settings merge pattern</strong> (copilot-cli, kiro-cli): runtime
+config.json files are merged with Nix-declared values using
+<code>jq -s '.[0] * .[1]'</code> so user runtime edits (e.g.,
+<code>trusted_folders</code>) are preserved across rebuilds. The Nix
+settings override on conflict, user-added keys pass through.</p>
+<p><strong>Secrets at activation time, not eval time.</strong> Sops-nix paths
+(<code>cfg.userId.file</code>) are read by the activation script at run
+time via <code>cat "$path"</code>. Do NOT <code>builtins.readFile</code> them at
+eval time — sops decryption happens after nix eval finishes.</p>
+<h3 id="homefile-vs-homeactivation-vs-outofstoresymlink"><a class="header" href="#homefile-vs-homeactivation-vs-outofstoresymlink">home.file vs home.activation vs outOfStoreSymlink</a></h3>
+<p><strong><code>home.file</code> with <code>source =</code></strong> — immutable store-backed content.
+Used for skills directory symlinks and static config files. If
+the content is already in the store (a derivation output, a
+file inside the flake), this is the right tool.</p>
+<p><strong><code>home.file</code> with <code>text =</code></strong> — content built at eval time from
+Nix data. Used for transformed instructions (e.g., the
+<code>fragments-ai</code> transforms emit strings that become
+<code>home.file.".claude/rules/&lt;name&gt;.md".text</code>).</p>
+<p><strong><code>home.activation</code></strong> — stateful operations that need runtime
+info: reading sops files, computing fingerprints, merging
+runtime-mutable config files, resetting cached state.</p>
+<p><strong><code>outOfStoreSymlink</code></strong> is NOT used in this repo’s modules. See
+the backlog item about runtime state dirs for Claude’s
+<code>~/.claude/projects</code>, which would need it.</p>
+<p><strong>Runtime-mutable files</strong> like <code>~/.claude.json</code> (buddy companion
+field written by claude at runtime) are NOT managed by HM. The
+buddy activation script only RESETS the companion field on
+fingerprint mismatch, letting claude re-hatch on next launch.</p>
+<h3 id="config-parity-rule-hm--devenv"><a class="header" href="#config-parity-rule-hm--devenv">Config parity rule (HM ↔ devenv)</a></h3>
+<p><strong>Every option on an HM module under <code>modules/&lt;subdir&gt;/</code> MUST
+have a matching option on the corresponding devenv module under
+<code>modules/devenv/&lt;subdir&gt;.nix</code></strong> — same types, same semantics,
+same fanout behavior. If you add an option to one, add it to
+the other in the same commit. Enforced by convention, checked
+at code review.</p>
+<p><strong>Shared types live in <code>lib/</code>.</strong> Both HM and devenv modules import
+types from <code>lib/buddy-types.nix</code> (<code>buddySubmodule</code>) and
+<code>lib/ai-common.nix</code> (<code>instructionModule</code>, <code>lspServerModule</code>,
+<code>mkCopilotLspConfig</code>, <code>mkLspConfig</code>) so the surfaces stay in
+sync by construction.</p>
+<p><strong>Intentional differences</strong> exist and are NOT parity gaps:</p>
+<ul>
+<li><code>ai.claude.buddy</code> is HM-only (per-user, needs ~/.claude.json
+which devenv doesn’t touch)</li>
+<li>Activation scripts are HM-only (devenv lifecycle is different)</li>
+<li>HM uses <code>home.file</code> / <code>home.activation</code>; devenv uses <code>files.*</code>
+(per-project writable tree, not home dir)</li>
+</ul>
+<p>If you touch one and the other is “intentionally different,” say
+so in the commit message. If the mismatch is accidental, it’s a
+bug.</p>
+<h3 id="validation"><a class="header" href="#validation">Validation</a></h3>
+<p><code>checks/module-eval.nix</code> runs module evaluation tests via
+<code>evalModule</code> with the full <code>homeManagerModules.default</code> set.
+Add test cases there whenever you add new module behavior —
+especially for:</p>
+<ul>
+<li>Option discoverability (set an option, verify it evaluates)</li>
+<li>Fanout correctness (set <code>ai.claude.buddy</code>, verify
+<code>programs.claude-code.buddy</code> becomes non-null)</li>
+<li>Assertion firing (intentionally misconfigure, verify the
+right assertion triggers)</li>
+</ul>
+<p>The tests caught the <code>ai.enable</code> master-switch bug during
+the f2e911c fix because the post-fix tests didn’t reference
+<code>ai.enable</code> anymore. Regression protection via the eval harness.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="overlay-cache-hit-parity-1"><a href="#overlay-cache-hit-parity-1" class="header">Overlay Cache-Hit Parity</a></h1>
+<h2 id="overlay-cache-hit-parity"><a class="header" href="#overlay-cache-hit-parity">Overlay Cache-Hit Parity</a></h2>
+<blockquote>
+<p><strong>Last verified:</strong> 2026-04-07 (commit 0f4228d). If you touch any
+<code>packages/&lt;group&gt;/*.nix</code> overlay file or the overlay composition
+machinery and this fragment isn’t updated in the same commit,
+stop and fix it. This rule is documented in detail as an OPEN
+backlog item in <code>docs/plan.md</code> (“Overlays must instantiate their
+own pkgs from <code>inputs.nixpkgs</code>”).</p>
+</blockquote>
+<h3 id="the-rule"><a class="header" href="#the-rule">The rule</a></h3>
+<p><strong>Every compiled overlay package in this repo must instantiate its
+own <code>pkgs</code> from <code>inputs.nixpkgs</code> and use THAT for all build inputs
+and the base derivation.</strong> Do not use the <code>final</code> / <code>prev</code> arguments
+for anything other than discovering <code>final.system</code>.</p>
+<p>If you use <code>final</code> or <code>prev</code> for build inputs, the derivation binds
+to the <strong>consumer’s</strong> nixpkgs pin. CI builds against this repo’s
+own nixpkgs pin. Different pins → different store paths →
+<code>nix-agentic-tools.cachix.org</code> does not serve the consumer because
+the hash they’re asking for was never computed. Cache miss on
+every consumer rebuild.</p>
+<h3 id="the-pattern"><a class="header" href="#the-pattern">The pattern</a></h3>
+<pre><code class="language-nix"># packages/git-tools/git-branchless.nix — CORRECT
+{inputs}: sources: final: _prev: let
+  ourPkgs = import inputs.nixpkgs {
+    inherit (final) system;
+    overlays = [(import inputs.rust-overlay)];
+    config.allowUnfree = true;
+  };
+  nv = sources.git-branchless;
+  rust = ourPkgs.rust-bin.stable."1.88.0".default;
+  rustPlatform = ourPkgs.makeRustPlatform { cargo = rust; rustc = rust; };
+in {
+  git-branchless = ourPkgs.git-branchless.override (_: {
+    rustPlatform.buildRustPackage = args:
+      rustPlatform.buildRustPackage (finalAttrs: let
+        a = (ourPkgs.lib.toFunction args) finalAttrs;
+      in a // {
+        inherit (nv) src cargoHash;
+        version = ourPkgs.lib.removePrefix "v" nv.version;
+      });
+  });
+}
+</code></pre>
+<ul>
+<li><code>final.system</code> is the only thing we read from the consumer —
+we need it to know which platform to instantiate <code>ourPkgs</code> for.</li>
+<li><code>ourPkgs</code> is built from THIS repo’s <code>inputs.nixpkgs</code> plus any
+sub-overlays the package needs (rust-overlay here).</li>
+<li>Every downstream reference (<code>ourPkgs.git-branchless</code>,
+<code>ourPkgs.rust-bin</code>, <code>ourPkgs.makeRustPlatform</code>, <code>ourPkgs.lib</code>)
+routes through <code>ourPkgs</code>, not <code>final</code>/<code>prev</code>.</li>
+<li>The package function still takes <code>final: prev:</code> because the
+overlay protocol requires it and consumers expect
+<code>pkgs.git-branchless</code> to be available on their pkgs set.</li>
+</ul>
+<h3 id="the-trade-off-accepted-in-commit-e5406977"><a class="header" href="#the-trade-off-accepted-in-commit-e5406977">The trade-off (accepted in commit e5406977)</a></h3>
+<p>This pattern means <strong>consumers get TWO nixpkgs evaluations in
+their /nix/store</strong>: their own (used for everything else) and
+this repo’s (used to build our packages). Most of the closure
+dedupes via content-addressing (glibc, bash, coreutils are
+byte-identical when the source content matches between pins),
+but anything that drifted between the two pins gets duplicated.</p>
+<p><code>flake.lock</code> grows because <code>nix-agentic-tools</code>’s inputs are
+not deduped against the consumer’s inputs (no <code>follows</code>).
+Disk usage goes up. Evaluation is slightly slower.</p>
+<p><strong>We accept this cost because cache hits are only reachable
+this way.</strong> The alternative (using <code>follows</code> to share inputs)
+produces a cleaner closure but defeats the cachix substituter
+entirely: every consumer builds from source on every rebuild.</p>
+<h3 id="status-backlog-item-in-progress"><a class="header" href="#status-backlog-item-in-progress">Status: backlog item in progress</a></h3>
+<p>As of 2026-04-07 the rule is NOT yet consistently applied. Current
+overlay code in <code>packages/git-tools/git-branchless.nix</code> (and
+friends) still uses <code>final.rust-bin</code> and <code>prev.git-branchless</code>.
+The store path consumers get differs from CI’s standalone-build
+store path. Cache miss confirmed via narinfo lookup against
+<code>nix-agentic-tools.cachix.org</code>.</p>
+<p>The full fix plan, file enumeration, verification protocol, and
+verification bash script all live in <code>docs/plan.md</code> under the
+backlog item
+“Overlays must instantiate their own pkgs from <code>inputs.nixpkgs</code>”.
+Read that before making changes — the answer is longer than
+this fragment.</p>
+<h3 id="when-youre-writing-a-new-overlay-package"><a class="header" href="#when-youre-writing-a-new-overlay-package">When you’re writing a new overlay package</a></h3>
+<ol>
+<li>Accept <code>{inputs}: sources: final: _prev:</code> as the function
+signature (threading <code>inputs</code> is done in
+<code>packages/&lt;group&gt;/default.nix</code>).</li>
+<li>Instantiate <code>ourPkgs = import inputs.nixpkgs { ... }</code> with any
+required sub-overlays.</li>
+<li>Use <code>ourPkgs.X</code> for every build input.</li>
+<li>Use <code>ourPkgs.package.override</code> (or similar) for the base
+derivation, not <code>prev.package.override</code>.</li>
+<li>Verify: <code>nix eval --raw .#&lt;package&gt;</code> from this repo, then eval
+the same package through a consumer’s nixpkgs with the overlay
+applied, and confirm the store path is byte-identical. If they
+differ, cache hits won’t happen.</li>
+</ol>
+<h3 id="verification-protocol"><a class="header" href="#verification-protocol">Verification protocol</a></h3>
+<pre><code class="language-bash"># 1. Standalone path (what CI builds and pushes to cachix)
+cd ~/Documents/projects/nix-agentic-tools
+STANDALONE=$(nix eval --raw .#git-branchless)
+
+# 2. Consumer path (what your consumer gets via the overlay)
+cd ~/Documents/projects/&lt;consumer&gt;
+CONSUMER=$(nix eval --raw --impure --expr '
+  let
+    flake = builtins.getFlake (toString ./.);
+    pkgs = import flake.inputs.nixpkgs {
+      system = "x86_64-linux";
+      overlays = [ flake.inputs.nix-agentic-tools.overlays.default ];
+      config.allowUnfree = true;
+    };
+  in pkgs.git-branchless.outPath')
+
+# 3. MUST be identical
+[ "$STANDALONE" = "$CONSUMER" ] &amp;&amp; echo "OK" || echo "DRIFT"
+
+# 4. Confirm cachix actually has it
+HASH=$(basename "$STANDALONE" | cut -d- -f1)
+curl -sI "https://nix-agentic-tools.cachix.org/${HASH}.narinfo" | head -1
+# Expect: HTTP/2 200
+</code></pre>
+<h3 id="exceptions"><a class="header" href="#exceptions">Exceptions</a></h3>
+<p><strong>Content-only packages don’t need this.</strong> Packages that just
+ship markdown files (coding-standards, stacked-workflows-content,
+fragments-ai) have no compiled inputs, so their store paths are
+already byte-identical regardless of which nixpkgs evaluates
+them. Skip the ourPkgs pattern for these.</p>
+<p><strong>Pure binary-fetch packages</strong> (no build, just an <code>overrideAttrs</code>
+that swaps <code>src</code>/<code>version</code>) are borderline. If the <code>overrideAttrs</code>
+uses <code>prev.X</code> for nothing except the starting meta, the store
+path may still match. In practice, <code>copilot-cli.nix</code> and
+<code>kiro-cli.nix</code> use this pattern and the cache parity is the
+subject of ongoing verification — see the backlog item.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h1>
 <p>Common issues and their solutions.</p>
