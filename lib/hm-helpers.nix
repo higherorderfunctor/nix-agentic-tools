@@ -52,6 +52,53 @@ in rec {
         (mkSourceEntry content))
     attrs;
 
+  # Recursively enumerate a skill source directory at eval time
+  # and emit devenv-compatible
+  # `files."<prefix>/<relpath>".source = <file>;` entries for
+  # every leaf file. Mirrors HM `recursive = true` in user space
+  # because devenv's `files.<name>.source = path` option only
+  # creates a single dir symlink (Layout A) and has no recursive
+  # walk of its own.
+  #
+  # Usage:
+  #   mkDevenvSkillEntries ".claude" { skillName = ./path/to/skill; }
+  # Returns:
+  #   {
+  #     ".claude/skills/skillName/SKILL.md".source =
+  #       ./path/to/skill/SKILL.md;
+  #     ".claude/skills/skillName/supporting.md".source =
+  #       ./path/to/skill/supporting.md;
+  #     ...
+  #   }
+  #
+  # Nested subdirectories inside a skill dir are preserved in the
+  # resulting path keys (e.g.
+  # `.claude/skills/foo/references/bar.md`).
+  #
+  # For single-file skills (path points to a regular file, not a
+  # dir), falls back to a single
+  # `{configDir}/skills/{name}/SKILL.md` entry mirroring how
+  # `mkSkillEntries` handles the same case.
+  mkDevenvSkillEntries = configDir: attrs: let
+    walkDir = prefix: dir:
+      lib.concatMapAttrs (
+        name: kind:
+          if kind == "directory"
+          then walkDir "${prefix}/${name}" (dir + "/${name}")
+          else if kind == "regular" || kind == "symlink"
+          then {"${prefix}/${name}".source = dir + "/${name}";}
+          else {} # skip unknown entries
+      )
+      (builtins.readDir dir);
+  in
+    lib.concatMapAttrs (
+      skillName: skillPath:
+        if lib.isPath skillPath && lib.pathIsDirectory skillPath
+        then walkDir "${configDir}/skills/${skillName}" skillPath
+        else {"${configDir}/skills/${skillName}/SKILL.md".source = skillPath;}
+    )
+    attrs;
+
   # ── MCP server transformation ───────────────────────────────────────
 
   mkMcpServer = server:
