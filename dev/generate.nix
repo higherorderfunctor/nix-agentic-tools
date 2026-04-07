@@ -233,18 +233,16 @@
   monorepoEco = mkEcosystemFile "monorepo";
 
   # ── AGENTS.md content ────────────────────────────────────────────────
-  agentsContent = let
-    packageContents = lib.mapAttrsToList (pkg: _: let
-      pkgOnly = fragments.compose {
-        fragments = map (mkDevFragment pkg) (devFragmentNames.${pkg} or []);
-      };
-    in
-      pkgOnly.text)
-    nonRootPackages;
-  in
-    rootComposed.text
-    + lib.optionalString (packageContents != [])
-    ("\n" + builtins.concatStringsSep "\n" packageContents);
+  # AGENTS.md is orientation only. Previously concatenated
+  # every scoped architecture fragment into one flat file
+  # because the agents.md standard has no scoping primitive —
+  # but that bloated the file to ~19k tokens of content mostly
+  # irrelevant to any given edit. Flat consumers (Codex,
+  # generic agents.md-compatible tooling) get orientation;
+  # deep-dive architecture fragments are documented in the
+  # mdbook contributing section (siteArchitecture in flake.nix)
+  # and in per-ecosystem scoped files for Claude/Copilot/Kiro.
+  agentsContent = rootComposed.text;
 
   # ── Claude rule files ────────────────────────────────────────────────
   # Scoped rule files only. No common.md — the body content is
@@ -294,6 +292,14 @@
     Project instructions for AI coding assistants working in this repository.
     Read by Claude Code, Kiro, GitHub Copilot, Codex, and other tools that
     support the [AGENTS.md standard](https://agents.md).
+
+    Deep-dive architecture documentation (fanout semantics, wrapper chains,
+    buddy activation, fragment pipeline, overlay cache-hit parity, HM module
+    conventions, etc.) lives in the mdbook contributing section and in
+    path-scoped per-ecosystem files (`.claude/rules/<name>.md`,
+    `.github/instructions/<name>.instructions.md`,
+    `.kiro/steering/<name>.md`). Those files load on demand when editing
+    matching paths; they are not duplicated here to keep this file small.
 
     ${agentsContent}
   '';
