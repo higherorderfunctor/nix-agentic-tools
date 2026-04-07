@@ -121,14 +121,19 @@ in {
     # ── Claude Code ────────────────────────────────────────────────────
     (lib.mkIf (cfg.integrations.claude.enable && claudeAvailable) {
       programs.claude-code = {
-        # Per-skill entries merge with skills from other modules
+        # Per-skill entries merge with skills from other modules.
+        # `self.skillsDir + "/stack-*"` is path ADDITION (result is a
+        # Nix path), not string interpolation (which would produce a
+        # string and trigger the upstream HM `mkSkillEntry` fallback
+        # that writes the path itself as SKILL.md text content —
+        # matching lib.isPath is a hard type check, not a value check).
         skills = {
-          stack-fix = "${self.skillsDir}/stack-fix";
-          stack-plan = "${self.skillsDir}/stack-plan";
-          stack-split = "${self.skillsDir}/stack-split";
-          stack-submit = "${self.skillsDir}/stack-submit";
-          stack-summary = "${self.skillsDir}/stack-summary";
-          stack-test = "${self.skillsDir}/stack-test";
+          stack-fix = self.skillsDir + "/stack-fix";
+          stack-plan = self.skillsDir + "/stack-plan";
+          stack-split = self.skillsDir + "/stack-split";
+          stack-submit = self.skillsDir + "/stack-submit";
+          stack-summary = self.skillsDir + "/stack-summary";
+          stack-test = self.skillsDir + "/stack-test";
         };
       };
       # Per-file references — instructions + tool docs
@@ -153,13 +158,17 @@ in {
     # ── Copilot CLI ────────────────────────────────────────────────────
     (lib.mkIf cfg.integrations.copilot.enable {
       home.file = {
-        # Per-skill entries so user can add their own alongside
-        ".copilot/skills/stack-fix".source = "${self.skillsDir}/stack-fix";
-        ".copilot/skills/stack-plan".source = "${self.skillsDir}/stack-plan";
-        ".copilot/skills/stack-split".source = "${self.skillsDir}/stack-split";
-        ".copilot/skills/stack-submit".source = "${self.skillsDir}/stack-submit";
-        ".copilot/skills/stack-summary".source = "${self.skillsDir}/stack-summary";
-        ".copilot/skills/stack-test".source = "${self.skillsDir}/stack-test";
+        # Per-skill entries so user can add their own alongside.
+        # Path addition keeps values as Nix paths; string
+        # interpolation here would still work for `home.file.source`
+        # (it accepts strings) but diverges from the idiom used
+        # upstream and in the Claude branch above.
+        ".copilot/skills/stack-fix".source = self.skillsDir + "/stack-fix";
+        ".copilot/skills/stack-plan".source = self.skillsDir + "/stack-plan";
+        ".copilot/skills/stack-split".source = self.skillsDir + "/stack-split";
+        ".copilot/skills/stack-submit".source = self.skillsDir + "/stack-submit";
+        ".copilot/skills/stack-summary".source = self.skillsDir + "/stack-summary";
+        ".copilot/skills/stack-test".source = self.skillsDir + "/stack-test";
         ".copilot/instructions/stacked-workflow.md".text = self.instructionsCopilot;
       };
     })
@@ -168,12 +177,12 @@ in {
     (lib.mkIf cfg.integrations.kiro.enable {
       home.file = {
         # Per-skill entries so user can add their own alongside
-        ".kiro/skills/stack-fix".source = "${self.skillsDir}/stack-fix";
-        ".kiro/skills/stack-plan".source = "${self.skillsDir}/stack-plan";
-        ".kiro/skills/stack-split".source = "${self.skillsDir}/stack-split";
-        ".kiro/skills/stack-submit".source = "${self.skillsDir}/stack-submit";
-        ".kiro/skills/stack-summary".source = "${self.skillsDir}/stack-summary";
-        ".kiro/skills/stack-test".source = "${self.skillsDir}/stack-test";
+        ".kiro/skills/stack-fix".source = self.skillsDir + "/stack-fix";
+        ".kiro/skills/stack-plan".source = self.skillsDir + "/stack-plan";
+        ".kiro/skills/stack-split".source = self.skillsDir + "/stack-split";
+        ".kiro/skills/stack-submit".source = self.skillsDir + "/stack-submit";
+        ".kiro/skills/stack-summary".source = self.skillsDir + "/stack-summary";
+        ".kiro/skills/stack-test".source = self.skillsDir + "/stack-test";
         ".kiro/steering/stacked-workflow.md".text = self.instructionsKiro;
       };
     })

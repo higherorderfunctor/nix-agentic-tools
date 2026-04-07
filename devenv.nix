@@ -59,14 +59,20 @@ in {
     copilot.enable = true;
     kiro.enable = true;
 
-    # Consumer skills (stacked workflows)
-    skills = {
-      sws-stack-fix = "${contentPkgs.stacked-workflows-content.passthru.skillsDir}/stack-fix";
-      sws-stack-plan = "${contentPkgs.stacked-workflows-content.passthru.skillsDir}/stack-plan";
-      sws-stack-split = "${contentPkgs.stacked-workflows-content.passthru.skillsDir}/stack-split";
-      sws-stack-submit = "${contentPkgs.stacked-workflows-content.passthru.skillsDir}/stack-submit";
-      sws-stack-summary = "${contentPkgs.stacked-workflows-content.passthru.skillsDir}/stack-summary";
-      sws-stack-test = "${contentPkgs.stacked-workflows-content.passthru.skillsDir}/stack-test";
+    # Consumer skills (stacked workflows). Path addition instead of
+    # string interpolation — keeps values as Nix paths so downstream
+    # consumers that type-check with `lib.isPath` (including
+    # upstream HM `programs.claude-code.skills`) take the correct
+    # directory-recursive branch.
+    skills = let
+      sws = contentPkgs.stacked-workflows-content.passthru.skillsDir;
+    in {
+      sws-stack-fix = sws + "/stack-fix";
+      sws-stack-plan = sws + "/stack-plan";
+      sws-stack-split = sws + "/stack-split";
+      sws-stack-submit = sws + "/stack-submit";
+      sws-stack-summary = sws + "/stack-summary";
+      sws-stack-test = sws + "/stack-test";
 
       # Dev skills
       index-repo-docs = ./dev/skills/index-repo-docs;

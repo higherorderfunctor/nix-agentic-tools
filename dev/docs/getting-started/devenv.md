@@ -75,9 +75,11 @@ in {
     copilot.enable = true;
     kiro.enable = true;
 
-    skills = {
-      stack-fix = "${contentPkgs.stacked-workflows-content.passthru.skillsDir}/stack-fix";
-      stack-plan = "${contentPkgs.stacked-workflows-content.passthru.skillsDir}/stack-plan";
+    skills = let
+      sws = contentPkgs.stacked-workflows-content.passthru.skillsDir;
+    in {
+      stack-fix = sws + "/stack-fix";
+      stack-plan = sws + "/stack-plan";
     };
   };
 

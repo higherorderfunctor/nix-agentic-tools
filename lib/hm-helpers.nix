@@ -39,9 +39,17 @@ in rec {
       (mkSourceEntry content))
     attrs;
 
+  # Accepts both Nix path literals and absolute string paths for
+  # the directory case (via `builtins.readFileType`). Guarding on
+  # `lib.isPath` alone would short-circuit string-interpolated
+  # paths like `"${pkg}/share/skill"` to the file fallback, which
+  # uses `mkSourceEntry` and writes the path text as SKILL.md
+  # content — matching the upstream HM `mkSkillEntry` bug.
   mkSkillEntries = configDir: attrs:
     lib.mapAttrs' (name: content:
-      if lib.isPath content && lib.pathIsDirectory content
+      if
+        (builtins.isPath content || builtins.isString content)
+        && (builtins.readFileType content) == "directory"
       then
         lib.nameValuePair "${configDir}/skills/${name}" {
           source = content;

@@ -78,9 +78,16 @@ only the destination changes:
 
 ```nix
 ai.skills = {
-  stack-fix = "${pkgs.stacked-workflows-content.passthru.skillsDir}/stack-fix";
+  stack-fix = pkgs.stacked-workflows-content.passthru.skillsDir + "/stack-fix";
 };
 ```
+
+**Path addition, not string interpolation.** Use `path + "/suffix"`
+rather than `"${path}/suffix"` — the former returns a Nix path and
+the downstream helpers type-check correctly for the
+directory-recursive branch. String interpolation coerces to a
+string, which some helpers handle but some (notably upstream HM's
+`mkSkillEntry`) reject silently.
 
 | Ecosystem | Destination                                                        |
 | --------- | ------------------------------------------------------------------ |
