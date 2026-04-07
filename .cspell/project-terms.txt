@@ -56,12 +56,14 @@ gpgsign
 heredocs
 higherorderfunctor
 HITL
+hostable
 hotspots
 indexedlog
 isaacphi
 kagi
 kagiapi
 kagimcp
+kanagawa
 kiro
 kirocli
 ldflags

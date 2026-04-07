@@ -184,7 +184,7 @@ fresh plan from the memory when ready to execute the next chunk.
       extension module) 4. Drop the
       `devenvModules.claude-code-skills` entry from `flake.nix` 5. `modules/devenv/ai.nix` Claude branch keeps the same
       delegation line — `claude.code.skills = lib.mapAttrs
-    (_: mkDefault) cfg.skills;` — it now points at the upstream
+(_: mkDefault) cfg.skills;` — it now points at the upstream
       option transparently. No ai.nix changes needed. 6. Update
       `dev/fragments/devenv/files-internals.md` and
       `dev/fragments/ai-skills/skills-fanout-pattern.md` to
@@ -594,6 +594,141 @@ Everything else. Park these until TOP/MIDDLE are stable.
       nix-mcp-servers
 - [ ] ADRs for key decisions (standalone devenv, fragment pipeline,
       config parity)
+
+### Doc site polish
+
+- [ ] **NuschtOS options browser: scopes, deep links, dark mode,
+      packages** — observed 2026-04-07: the embedded options
+      search at `/options/` defaults to the `All` scope which
+      blends DevEnv + Home-Manager and shows duplicate entries
+      for every parity option (e.g. `ai.claude.enable` appears
+      twice in the list with no disambiguation; only the
+      detail pane reveals which scope a hit came from). Six
+      separable issues, listed roughly in priority order:
+
+      **1. Add a `lib` scope.** `flake.nix:264` `optionsSearch`
+      currently passes only two scopes: `DevEnv` and
+      `Home-Manager`. The `lib/` API surface (mkAgenticShell,
+      fragments.nix primitives, hm-helpers, ai-common types,
+      buddy-types) has no options-doc representation at all.
+      Either feed `lib` through `nixosOptionsDoc` via a
+      synthetic module that wraps each public function as an
+      option (cumbersome), or generate a separate static
+      reference page in `fragments-docs` and link to it from
+      the search UI's empty-state. The current state silently
+      pretends `lib` doesn't exist.
+
+      **2. Link the options browser from README and mdbook.**
+      Neither `README.md` nor any page under `dev/docs/`
+      mentions `/options/` exists. The browser only shows up
+      if a visitor stumbles across the URL. Fix: add a top-level
+      "Browse options" link in the README feature matrix and a
+      dedicated entry in the mdbook left nav (likely
+      `dev/docs/index.md` and the SUMMARY scaffold the
+      site-prose generator emits). Cross-link each scope:
+      `?scope=0` for DevEnv, `?scope=1` for Home-Manager (and
+      eventually `?scope=2` for lib).
+
+      **3. Hide the `All` scope (or remove the blended view).**
+      The blended view actively misleads — it suggests every
+      option is configured the same way across HM and devenv,
+      and the duplicate-row display gives no fast way to tell
+      them apart. Upstream blocker:
+      [NuschtOS/search#244 "How to hide scope `All`"](https://github.com/NuschtOS/search/issues/244)
+      (open, unresolved). Related:
+      [NuschtOS/search#284](https://github.com/NuschtOS/search/issues/284)
+      (request a `?hideScopes=1` query param). Workarounds
+      until upstream lands a fix:
+
+      - **(a) Default-route to a non-`All` scope.** Set the
+        embed iframe / mdbook link to `?scope=0` so visitors
+        land on DevEnv by default, never see `All` unless they
+        change the dropdown. Cheap, partial fix.
+      - **(b) Run separate `mkSearch` instances per scope and
+        deploy each under its own `baseHref`.** Per the
+        research, NuschtOS routes are query-param-only
+        (`src/app/app.routes.ts` declares a single
+        `path: ""`); there is no path-based per-scope URL like
+        `/scope/lib`. To get clean canonical URLs
+        (`/options/lib/`, `/options/hm/`, `/options/devenv/`)
+        we'd publish three sites side by side. More disk +
+        more CI work, but produces shareable per-scope
+        landing pages and naturally eliminates the blended
+        view since each instance has only one scope.
+      - **(c) Wait for upstream.** Watch #244, drop the
+        workaround when the option lands.
+
+      Decide between (a)+(c) and (b) based on whether canonical
+      per-scope URLs are worth ~3x the search build cost.
+
+      **4. Dark mode investigation.** NuschtOS ships dark theme
+      support out of the box (kanagawa palette via `@feel/style`,
+      see open issue NuschtOS/search#292 for evidence both
+      themes coexist). Our deployed instance (screenshot
+      2026-04-07) renders light. Unclear whether NuschtOS
+      auto-respects `prefers-color-scheme` or needs a config
+      flag — the `@feel/style` source isn't in the NuschtOS
+      org and the published package metadata is opaque. Action:
+      open the deployed `/options/index.html` in a
+      dark-prefers-color-scheme browser, see if it flips. If
+      not, file an upstream feature request or check if
+      `mkMultiSearch` accepts a theme override. Low effort,
+      high quality-of-life win for users on dark systems.
+
+      **5. Packages search (separate tool decision).** When
+      this work was originally scoped, the intent was for the
+      browser to cover BOTH options (like the Options tab on
+      search.nixos.org) AND packages (like the Packages tab,
+      e.g.
+      `https://search.nixos.org/packages?channel=unstable`).
+      NuschtOS does not currently index packages — package
+      support lives in
+      [NuschtOS/search#280 "packages: init"](https://github.com/NuschtOS/search/pull/280)
+      which is still a draft (state: DRAFT, large diff). No
+      single self-hostable static web tool currently does
+      both options and packages: nixos-search (the
+      search.nixos.org backend) requires Elasticsearch which
+      NuschtOS was explicitly built to avoid; nix-search-tv is
+      TUI-only. Three options:
+
+      - **(a) Wait for #280 to merge** and bump the
+        `nuscht-search` flake input. Lowest effort, indefinite
+        timeline.
+      - **(b) Run NuschtOS for options + a second tool for
+        packages** side by side. Doubles the surface to maintain
+        and the visitor has to know which tab does what.
+      - **(c) Generate a static packages page from
+        `fragments-docs`.** We already evaluate the overlay
+        package list in `packages/fragments-docs/` for the
+        snippets pipeline. Could extend to emit a full mdbook
+        page with package name + version + description per
+        platform — pagefind would index it for free as part of
+        the existing full-text search. Not as rich as a faceted
+        UI but ships today, with no upstream dependency.
+
+      Pick (c) if we want it now; (a) otherwise. (b) is
+      probably worse than either.
+
+      **6. File a discoverable upstream tracking issue.**
+      Once we land any of the above, post a comment summarizing
+      our use case on NuschtOS/search#244 (and #280 for
+      packages) so upstream knows the multi-scope-no-`All`
+      workflow has real users. Helps prioritize.
+
+      **Touch points for the in-repo work:**
+
+      - `flake.nix` — `optionsSearch` `mkMultiSearch` config
+        (add `lib` scope, possibly switch to `mkSearch` ×3 for
+        approach (b))
+      - `dev/docs/index.md` + mdbook SUMMARY scaffold —
+        navigation links to `/options/<scope>`
+      - `README.md` (which is generated from
+        `dev/generate.nix:readmeMd`) — feature matrix entry
+        + top-of-readme "Browse options" call-out
+      - `dev/notes/` — capture decision rationale (which of
+        approaches a/b/c, why) once chosen
+      - `.cspell/project-terms.txt` — add `kanagawa` if any
+        new prose mentions the palette by name
 
 ### Misc backlog (unsorted)
 
