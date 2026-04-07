@@ -97,6 +97,11 @@
     claude-code = [
       {
         location = "package";
+        name = "buddy-activation";
+        dir = "ai-clis";
+      }
+      {
+        location = "package";
         name = "claude-code-wrapper";
         dir = "ai-clis";
       }
