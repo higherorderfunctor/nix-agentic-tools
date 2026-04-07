@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-ada647d3.js";
+            window.path_to_searchindex_js = "searchindex-d6551f1d.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-841f2094.js"></script>
@@ -549,9 +549,11 @@ in {
     copilot.enable = true;
     kiro.enable = true;
 
-    skills = {
-      stack-fix = "${contentPkgs.stacked-workflows-content.passthru.skillsDir}/stack-fix";
-      stack-plan = "${contentPkgs.stacked-workflows-content.passthru.skillsDir}/stack-plan";
+    skills = let
+      sws = contentPkgs.stacked-workflows-content.passthru.skillsDir;
+    in {
+      stack-fix = sws + "/stack-fix";
+      stack-plan = sws + "/stack-plan";
     };
   };
 
@@ -836,9 +838,15 @@ programs.copilot-cli.settings.model = "gpt-4o";
 <p>Skills are directory paths. The format is identical across ecosystems –
 only the destination changes:</p>
 <pre><code class="language-nix">ai.skills = {
-  stack-fix = "${pkgs.stacked-workflows-content.passthru.skillsDir}/stack-fix";
+  stack-fix = pkgs.stacked-workflows-content.passthru.skillsDir + "/stack-fix";
 };
 </code></pre>
+<p><strong>Path addition, not string interpolation.</strong> Use <code>path + "/suffix"</code>
+rather than <code>"${path}/suffix"</code> — the former returns a Nix path and
+the downstream helpers type-check correctly for the
+directory-recursive branch. String interpolation coerces to a
+string, which some helpers handle but some (notably upstream HM’s
+<code>mkSkillEntry</code>) reject silently.</p>
 <div class="table-wrapper">
 <table>
 <thead>
