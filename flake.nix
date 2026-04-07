@@ -74,6 +74,7 @@
 
     devenvModules = {
       ai = ./modules/devenv/ai.nix;
+      claude-code-skills = ./modules/devenv/claude-code-skills;
       copilot = ./modules/devenv/copilot.nix;
       default = ./modules/devenv;
       kiro = ./modules/devenv/kiro.nix;
