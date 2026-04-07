@@ -1,13 +1,20 @@
-# `{inputs}` is threaded through by packages/git-tools/default.nix
-# so Phase 3.3 can switch build inputs to
-# `ourPkgs = import inputs.nixpkgs { ... }` for cache-hit parity.
-# Not yet consumed in this file; plumbing-only for now.
-_: sources: final: _: let
+# Instantiate `ourPkgs` from `inputs.nixpkgs` so every build input
+# (rust toolchain, makeRustPlatform, pkg-config, darwin SDK) routes
+# through this repo's pinned nixpkgs instead of the consumer's. This
+# is what gives the store path cache-hit parity against CI's
+# standalone build — see dev/fragments/overlays/cache-hit-parity.md
+# and dev/notes/overlay-cache-hit-parity-fix.md.
+{inputs}: sources: final: _prev: let
+  ourPkgs = import inputs.nixpkgs {
+    inherit (final) system;
+    overlays = [(import inputs.rust-overlay)];
+    config.allowUnfree = true;
+  };
   nv = sources.agnix;
 
   # agnix requires Rust edition 2024 (>= 1.91)
-  rust = final.rust-bin.stable.latest.default;
-  rustPlatform = final.makeRustPlatform {
+  rust = ourPkgs.rust-bin.stable.latest.default;
+  rustPlatform = ourPkgs.makeRustPlatform {
     cargo = rust;
     rustc = rust;
   };
@@ -17,9 +24,9 @@ in {
     inherit (nv) version src;
     inherit (nv) cargoHash;
 
-    nativeBuildInputs = [final.pkg-config];
-    buildInputs = final.lib.optionals final.stdenv.hostPlatform.isDarwin [
-      final.apple-sdk_15
+    nativeBuildInputs = [ourPkgs.pkg-config];
+    buildInputs = ourPkgs.lib.optionals ourPkgs.stdenv.hostPlatform.isDarwin [
+      ourPkgs.apple-sdk_15
     ];
 
     # Build all binary crates: agnix (CLI), agnix-lsp, agnix-mcp
@@ -34,7 +41,7 @@ in {
     meta = {
       description = "Linter, LSP, and MCP server for AI coding assistant config files";
       homepage = "https://github.com/agent-sh/agnix";
-      license = final.lib.licenses.mit;
+      license = ourPkgs.lib.licenses.mit;
       mainProgram = "agnix";
     };
   };
