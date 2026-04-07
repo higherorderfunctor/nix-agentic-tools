@@ -47,9 +47,12 @@ in
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
 
+      # --fnv1a: claude-code runs under Node, not Bun. Node uses fnv1a
+      # for the buddy hash, Bun uses wyhash. The worker must use the
+      # same hash function as the target runtime or salts won't match.
       salt=$(bun ${any-buddy-source}/src/finder/worker.ts \
         "$userId" "$species" "$rarity" "$eyes" "$hat" \
-        "$shinyFlag" "$peakStat" "$dumpStat" \
+        "$shinyFlag" "$peakStat" "$dumpStat" --fnv1a \
         | jq -r '.salt')
 
       if [[ ! "$salt" =~ ^[a-zA-Z0-9_-]{15}$ ]]; then
