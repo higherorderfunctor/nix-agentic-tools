@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-48d640cb.js";
+            window.path_to_searchindex_js = "searchindex-2f1e2a56.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-903d4130.js"></script>
@@ -1352,62 +1352,56 @@ automatically, but not all parity guarantees can be checked statically.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="buddy-customization"><a class="header" href="#buddy-customization">Buddy Customization</a></h1>
 <p>Customize your Claude Code terminal companion (buddy) via Nix.
-The buddy is patched into the binary at build time — no runtime
-modification needed.</p>
+The buddy is patched at home-manager <strong>activation time</strong>, not build
+time, so it works with sops-nix secrets and gives each user their
+own buddy in multi-user systems.</p>
 <h2 id="quick-start"><a class="header" href="#quick-start">Quick Start</a></h2>
-<pre><code class="language-nix"># In your home-manager config:
-ai.claude = {
+<pre><code class="language-nix">{config, ...}: {
+  ai.claude = {
+    enable = true;
+    buddy = {
+      userId.file = config.sops.secrets."${config.home.username}-claude-uuid".path;
+      species = "duck";
+    };
+  };
+}
+</code></pre>
+<p>The <code>userId.file</code> reads your account UUID from a sops-nix (or
+agenix, or any plaintext file) at activation time. Your account
+UUID is in <code>~/.claude.json</code> under <code>oauthAccount.accountUuid</code>.</p>
+<p>The UUID is <strong>not</strong> a real secret — it can’t authenticate or make
+API calls. It’s a stable identifier. But if you prefer to keep it
+out of your config repo, sops works.</p>
+<h2 id="inline-uuid"><a class="header" href="#inline-uuid">Inline UUID</a></h2>
+<p>If you don’t want sops, paste the UUID directly:</p>
+<pre><code class="language-nix">ai.claude.buddy = {
+  userId.text = "ebd8b240-9b28-44b1-a4bf-da487d9f111f";
+  species = "capybara";
+};
+</code></pre>
+<h2 id="direct-without-ai-convenience"><a class="header" href="#direct-without-ai-convenience">Direct (without <code>ai.*</code> convenience)</a></h2>
+<p>The canonical option is <code>programs.claude-code.buddy</code>. The <code>ai.claude.buddy</code>
+above is just a fanout convenience that sets it for you.</p>
+<pre><code class="language-nix">programs.claude-code = {
   enable = true;
   buddy = {
-    userId = "your-account-uuid-here";
-    species = "dragon";
-    rarity = "legendary";
-    hat = "wizard";
-    eyes = "✦";
+    userId.file = config.sops.secrets."${config.home.username}-claude-uuid".path;
+    species = "duck";
   };
 };
 </code></pre>
-<p>Your account UUID is in <code>~/.claude.json</code> under
-<code>oauthAccount.accountUuid</code>.</p>
-<blockquote>
-<p><strong>Note on secrets:</strong> The UUID is read at <strong>build time</strong> by Nix
-evaluation, before any runtime secret manager has mounted its
-secrets. sops-nix and agenix decrypt to paths like
-<code>/run/user/&lt;uid&gt;/secrets/</code> during activation — those paths
-don’t exist when Nix evaluates your config, so they cannot
-provide the userId.</p>
-<p><strong>The UUID is not cryptographically secret.</strong> It’s a stable
-identifier Anthropic uses to associate data with your account
-(closer to an email address than a password). It can’t
-authenticate as you, make API calls, or access conversations.
-The actual auth secrets are the OAuth tokens in <code>~/.claude.json</code>
-(<code>sessionToken</code>, <code>refreshToken</code>) — those should still be
-protected, but the UUID does not need the same treatment.</p>
-<p><strong>Recommended:</strong> Paste the UUID directly into your config as a
-literal string. It ends up in the nix store (in the derivation
-hash), but that’s the same machine that already has your auth
-tokens, so the threat model doesn’t change.</p>
-<p>If you want to keep the UUID out of your config repo without an
-activation script, read from a plaintext file outside the repo
-at eval time:</p>
-<pre><code class="language-nix">userId = lib.removeSuffix "\n"
-  (builtins.readFile /home/you/.config/nix-secrets/claude-uuid);
-</code></pre>
-<p>The path must be a Nix path literal (no quotes, no <code>~</code>) and the
-file must exist before <code>home-manager switch</code> runs.</p>
-</blockquote>
-<h2 id="direct-package-usage"><a class="header" href="#direct-package-usage">Direct Package Usage</a></h2>
-<p>Without the module system:</p>
-<pre><code class="language-nix">pkgs.claude-code.withBuddy {
-  userId = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
-  species = "capybara";
-  rarity = "rare";
+<h2 id="full-options"><a class="header" href="#full-options">Full Options</a></h2>
+<pre><code class="language-nix">ai.claude.buddy = {
+  userId.file = config.sops.secrets."${username}-claude-uuid".path;
+  species = "dragon";
+  rarity = "legendary";
+  hat = "wizard";
+  eyes = "✦";
   shiny = true;
   peak = "WISDOM";
   dump = "CHAOS";
-}
+};
 </code></pre>
-<h2 id="available-options"><a class="header" href="#available-options">Available Options</a></h2>
 <h3 id="species-18"><a class="header" href="#species-18">Species (18)</a></h3>
 <p>axolotl, blob, cactus, capybara, cat, chonk, dragon, duck,
 ghost, goose, mushroom, octopus, owl, penguin, rabbit, robot,
@@ -1424,9 +1418,10 @@ tophat, wizard</p>
 <p>CHAOS, DEBUGGING, PATIENCE, SNARK, WISDOM</p>
 <p>Both are optional. When set, the salt search constrains which
 stat is highest (peak) and lowest (dump). They must differ.</p>
-<h2 id="build-time"><a class="header" href="#build-time">Build Time</a></h2>
-<p>The salt search runs once and is cached. It only re-runs when
-your buddy options change — not on claude-code version updates.</p>
+<h2 id="buildactivation-time"><a class="header" href="#buildactivation-time">Build/Activation Time</a></h2>
+<p>The salt search runs once during home-manager activation and is
+cached by a fingerprint of your buddy options + claude-code
+version + userId. It only re-runs when something changes.</p>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -1442,19 +1437,62 @@ your buddy options change — not on claude-code version updates.</p>
 </table>
 </div>
 <h2 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h2>
-<p>Under the hood, <code>withBuddy</code> creates two Nix derivations:</p>
+<p>The package and the user state are layered:</p>
 <ol>
-<li><strong>Salt search</strong> — brute-forces a 15-character salt string
-that, when hashed with your account UUID, produces the
-desired buddy traits. Uses any-buddy’s worker script via Bun.</li>
-<li><strong>Binary patching</strong> — replaces the default salt in the
-claude-code binary with your computed salt. Uses python3 for
-binary-safe replacement.</li>
+<li>
+<p><strong>Package layer</strong> (<code>pkgs.claude-code</code>): Our overlay wraps
+nixpkgs’ claude-code with a Bun-runtime wrapper at
+<code>bin/claude</code>. The wrapper checks for a writable <code>cli.js</code> at
+<code>$XDG_STATE_HOME/claude-code-buddy/lib/cli.js</code>. If it exists,
+the wrapper execs it. Otherwise it falls back to the store
+<code>cli.js</code>. The wrapper is harmless when no buddy is configured —
+you just get unmodified claude-code under Bun.</p>
+</li>
+<li>
+<p><strong>State layer</strong> (HM activation script): When <code>buddy</code> is set,
+the activation script:</p>
+<ul>
+<li>Computes a fingerprint of <code>(claude-code store path, userId, buddy options)</code></li>
+<li>Compares to <code>$XDG_STATE_HOME/claude-code-buddy/fingerprint</code></li>
+<li>If different: copies the cli.js (and symlinks the rest of
+the lib) into <code>$XDG_STATE_HOME/claude-code-buddy/lib/</code>,
+runs the any-buddy worker via Bun, patches the writable
+cli.js, resets the <code>companion</code> field in <code>~/.claude.json</code>,
+and writes the new fingerprint</li>
+<li>If same: exits cleanly (cached)</li>
+</ul>
+</li>
 </ol>
-<p>The salt search derivation depends only on your buddy options
-and UUID. The patching derivation depends on the claude-code
-package. This means version updates only trigger the cheap
-patching step, not the expensive salt search.</p>
+<p>The companion field reset ensures the next <code>claude</code> invocation
+re-hatches with the new buddy traits. Without it, claude-code
+would keep showing the cached buddy from the first hatch.</p>
+<h2 id="why-activation-time-instead-of-build-time"><a class="header" href="#why-activation-time-instead-of-build-time">Why Activation-Time Instead of Build-Time</a></h2>
+<p>Earlier versions of this feature (<code>pkgs.claude-code.withBuddy { ... }</code>)
+patched the binary at build time. Three problems:</p>
+<ol>
+<li><strong>No sops support.</strong> The userId was read at Nix evaluation,
+before sops decrypts secrets.</li>
+<li><strong>Multi-user broken.</strong> A NixOS-level install gave all users
+the same patched binary, since the salt was baked into the
+nix store path.</li>
+<li><strong>Stale companion field.</strong> The buddy state in <code>~/.claude.json</code>
+couldn’t be reset by a build-time approach.</li>
+</ol>
+<p>Activation-time fixes all three. The trade-off is a small amount
+of state management in <code>$XDG_STATE_HOME/claude-code-buddy/</code>, which
+is a fair price.</p>
+<h2 id="why-bun"><a class="header" href="#why-bun">Why Bun</a></h2>
+<p>claude-code runs under whichever JS runtime executes its <code>cli.js</code>.
+Our overlay wrapper invokes <code>bun run cli.js</code> instead of <code>node</code>,
+which activates the wyhash code path inside claude-code’s buddy
+hash function. The any-buddy worker also defaults to wyhash, so
+the salts the worker computes match what claude-code reads at
+runtime.</p>
+<p>If we ran under Node, claude-code would use fnv1a internally, and
+we’d need to pass <code>--fnv1a</code> to the worker to match. We chose Bun
+for the cleaner alignment.</p>
+<p>Startup overhead is negligible (~50 ms vs Node), dominated by MCP
+probes in real workloads.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="devenv-options-reference"><a class="header" href="#devenv-options-reference">DevEnv Options Reference</a></h1>
 <p>Auto-generated from module definitions via <code>nixosOptionsDoc</code>. See
@@ -1491,6 +1529,9 @@ boolean</p>
 </ul>
 <h2 id="aiclaude"><a class="header" href="#aiclaude">ai.claude</a></h2>
 <p>Claude Code ecosystem configuration.</p>
+<p>Note: buddy customization is HM-only (devenv is per-project,
+buddy is per-user). Use the home-manager <code>programs.claude-code.buddy</code>
+or <code>ai.claude.buddy</code> option instead.</p>
 <p><em>Type:</em>
 submodule</p>
 <p><em>Default:</em></p>
@@ -1515,105 +1556,12 @@ boolean</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
 </ul>
 <h2 id="aiclaudepackage"><a class="header" href="#aiclaudepackage">ai.claude.package</a></h2>
-<p>Claude Code package. Automatically patched when buddy is set.</p>
+<p>Claude Code package.</p>
 <p><em>Type:</em>
 package</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">pkgs.claude-code
 </code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudebuddy"><a class="header" href="#aiclaudebuddy">ai.claude.buddy</a></h2>
-<p>Buddy companion customization. Patches claude-code at build time.</p>
-<p><em>Type:</em>
-null or (submodule)</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudebuddydump"><a class="header" href="#aiclaudebuddydump">ai.claude.buddy.dump</a></h2>
-<p>Preferred lowest stat. Must differ from peak.</p>
-<p><em>Type:</em>
-null or one of “CHAOS”, “DEBUGGING”, “PATIENCE”, “SNARK”, “WISDOM”</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudebuddyeyes"><a class="header" href="#aiclaudebuddyeyes">ai.claude.buddy.eyes</a></h2>
-<p>Eye character.</p>
-<p><em>Type:</em>
-one of “·”, “✦”, “×”, “◉”, “@”, “°”</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">"·"
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudebuddyhat"><a class="header" href="#aiclaudebuddyhat">ai.claude.buddy.hat</a></h2>
-<p>Hat accessory. Must be none for common rarity.</p>
-<p><em>Type:</em>
-one of “none”, “beanie”, “crown”, “halo”, “propeller”, “tinyduck”, “tophat”, “wizard”</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">"none"
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudebuddypeak"><a class="header" href="#aiclaudebuddypeak">ai.claude.buddy.peak</a></h2>
-<p>Preferred highest stat.</p>
-<p><em>Type:</em>
-null or one of “CHAOS”, “DEBUGGING”, “PATIENCE”, “SNARK”, “WISDOM”</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudebuddyrarity"><a class="header" href="#aiclaudebuddyrarity">ai.claude.buddy.rarity</a></h2>
-<p>Rarity tier. Higher rarities take longer to compute.</p>
-<p><em>Type:</em>
-one of “common”, “uncommon”, “rare”, “epic”, “legendary”</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">"common"
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudebuddyshiny"><a class="header" href="#aiclaudebuddyshiny">ai.claude.buddy.shiny</a></h2>
-<p>Rainbow shimmer variant.</p>
-<p><em>Type:</em>
-boolean</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">false
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudebuddyspecies"><a class="header" href="#aiclaudebuddyspecies">ai.claude.buddy.species</a></h2>
-<p>Buddy species.</p>
-<p><em>Type:</em>
-one of “axolotl”, “blob”, “cactus”, “capybara”, “cat”, “chonk”, “dragon”, “duck”, “ghost”, “goose”, “mushroom”, “octopus”, “owl”, “penguin”, “rabbit”, “robot”, “snail”, “turtle”</p>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
-<h2 id="aiclaudebuddyuserid"><a class="header" href="#aiclaudebuddyuserid">ai.claude.buddy.userId</a></h2>
-<p>Claude account UUID (oauthAccount.accountUuid from ~/.claude.json).</p>
-<p><em>Type:</em>
-string</p>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
@@ -2356,7 +2304,7 @@ boolean</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
 <h2 id="aiclaudepackage-1"><a class="header" href="#aiclaudepackage-1">ai.claude.package</a></h2>
-<p>Claude Code package. Automatically patched when buddy is set.</p>
+<p>Claude Code package.</p>
 <p><em>Type:</em>
 package</p>
 <p><em>Default:</em></p>
@@ -2366,8 +2314,11 @@ package</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
-<h2 id="aiclaudebuddy-1"><a class="header" href="#aiclaudebuddy-1">ai.claude.buddy</a></h2>
-<p>Buddy companion customization. Patches claude-code at build time.</p>
+<h2 id="aiclaudebuddy"><a class="header" href="#aiclaudebuddy">ai.claude.buddy</a></h2>
+<p>Buddy companion customization. When set, fans out to
+<code>programs.claude-code.buddy</code> which installs an
+activation script to patch the buddy salt at activation
+time. See modules/claude-code-buddy/ for details.</p>
 <p><em>Type:</em>
 null or (submodule)</p>
 <p><em>Default:</em></p>
@@ -2377,8 +2328,9 @@ null or (submodule)</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
-<h2 id="aiclaudebuddydump-1"><a class="header" href="#aiclaudebuddydump-1">ai.claude.buddy.dump</a></h2>
-<p>Preferred lowest stat. Must differ from peak.</p>
+<h2 id="aiclaudebuddydump"><a class="header" href="#aiclaudebuddydump">ai.claude.buddy.dump</a></h2>
+<p>Preferred lowest stat. Must differ from peak when both are
+set. null = accept whatever the salt produces.</p>
 <p><em>Type:</em>
 null or one of “CHAOS”, “DEBUGGING”, “PATIENCE”, “SNARK”, “WISDOM”</p>
 <p><em>Default:</em></p>
@@ -2388,7 +2340,7 @@ null or one of “CHAOS”, “DEBUGGING”, “PATIENCE”, “SNARK”, “WIS
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
-<h2 id="aiclaudebuddyeyes-1"><a class="header" href="#aiclaudebuddyeyes-1">ai.claude.buddy.eyes</a></h2>
+<h2 id="aiclaudebuddyeyes"><a class="header" href="#aiclaudebuddyeyes">ai.claude.buddy.eyes</a></h2>
 <p>Eye character.</p>
 <p><em>Type:</em>
 one of “·”, “✦”, “×”, “◉”, “@”, “°”</p>
@@ -2399,10 +2351,11 @@ one of “·”, “✦”, “×”, “◉”, “@”, “°”</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
-<h2 id="aiclaudebuddyhat-1"><a class="header" href="#aiclaudebuddyhat-1">ai.claude.buddy.hat</a></h2>
-<p>Hat accessory. Must be none for common rarity.</p>
+<h2 id="aiclaudebuddyhat"><a class="header" href="#aiclaudebuddyhat">ai.claude.buddy.hat</a></h2>
+<p>Hat accessory. Must be “none” for common rarity (assertion
+enforced at module evaluation).</p>
 <p><em>Type:</em>
-one of “none”, “beanie”, “crown”, “halo”, “propeller”, “tinyduck”, “tophat”, “wizard”</p>
+one of “beanie”, “crown”, “halo”, “none”, “propeller”, “tinyduck”, “tophat”, “wizard”</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">"none"
 </code></pre>
@@ -2410,8 +2363,9 @@ one of “none”, “beanie”, “crown”, “halo”, “propeller”, “ti
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
-<h2 id="aiclaudebuddypeak-1"><a class="header" href="#aiclaudebuddypeak-1">ai.claude.buddy.peak</a></h2>
-<p>Preferred highest stat.</p>
+<h2 id="aiclaudebuddypeak"><a class="header" href="#aiclaudebuddypeak">ai.claude.buddy.peak</a></h2>
+<p>Preferred highest stat. null = accept whatever the salt
+produces. Increases search time ~5x.</p>
 <p><em>Type:</em>
 null or one of “CHAOS”, “DEBUGGING”, “PATIENCE”, “SNARK”, “WISDOM”</p>
 <p><em>Default:</em></p>
@@ -2421,10 +2375,22 @@ null or one of “CHAOS”, “DEBUGGING”, “PATIENCE”, “SNARK”, “WIS
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
-<h2 id="aiclaudebuddyrarity-1"><a class="header" href="#aiclaudebuddyrarity-1">ai.claude.buddy.rarity</a></h2>
-<p>Rarity tier. Higher rarities take longer to compute.</p>
+<h2 id="aiclaudebuddyrarity"><a class="header" href="#aiclaudebuddyrarity">ai.claude.buddy.rarity</a></h2>
+<p>Rarity tier. Higher rarities take longer to compute at
+activation time:</p>
+<ul>
+<li>common: instant (~180 attempts)</li>
+<li>uncommon/rare: &lt;1s</li>
+<li>epic: ~1s</li>
+<li>legendary: ~1s (or ~30s shiny, minutes shiny+stats)</li>
+</ul>
+<p>The salt search is cached by a fingerprint of buddy options</p>
+<ul>
+<li>claude-code version + userId — only re-runs when something
+changes.</li>
+</ul>
 <p><em>Type:</em>
-one of “common”, “uncommon”, “rare”, “epic”, “legendary”</p>
+one of “common”, “epic”, “legendary”, “rare”, “uncommon”</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">"common"
 </code></pre>
@@ -2432,8 +2398,9 @@ one of “common”, “uncommon”, “rare”, “epic”, “legendary”</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
-<h2 id="aiclaudebuddyshiny-1"><a class="header" href="#aiclaudebuddyshiny-1">ai.claude.buddy.shiny</a></h2>
-<p>Rainbow shimmer variant.</p>
+<h2 id="aiclaudebuddyshiny"><a class="header" href="#aiclaudebuddyshiny">ai.claude.buddy.shiny</a></h2>
+<p>Rainbow shimmer variant. Significantly increases salt search
+time (~100x more attempts).</p>
 <p><em>Type:</em>
 boolean</p>
 <p><em>Default:</em></p>
@@ -2443,21 +2410,51 @@ boolean</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
-<h2 id="aiclaudebuddyspecies-1"><a class="header" href="#aiclaudebuddyspecies-1">ai.claude.buddy.species</a></h2>
-<p>Buddy species.</p>
+<h2 id="aiclaudebuddyspecies"><a class="header" href="#aiclaudebuddyspecies">ai.claude.buddy.species</a></h2>
+<p>Buddy species (one of 18).</p>
 <p><em>Type:</em>
 one of “axolotl”, “blob”, “cactus”, “capybara”, “cat”, “chonk”, “dragon”, “duck”, “ghost”, “goose”, “mushroom”, “octopus”, “owl”, “penguin”, “rabbit”, “robot”, “snail”, “turtle”</p>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">"duck"
+</code></pre>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
 </ul>
-<h2 id="aiclaudebuddyuserid-1"><a class="header" href="#aiclaudebuddyuserid-1">ai.claude.buddy.userId</a></h2>
-<p>Claude account UUID (oauthAccount.accountUuid from ~/.claude.json).</p>
+<h2 id="aiclaudebuddyuserid"><a class="header" href="#aiclaudebuddyuserid">ai.claude.buddy.userId</a></h2>
+<p>Claude account UUID source. Provide exactly one of <code>text</code>
+(literal string) or <code>file</code> (path to file read at activation).</p>
 <p><em>Type:</em>
-string</p>
+attribute-tagged union with choices: file, text</p>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyuseridfile"><a class="header" href="#aiclaudebuddyuseridfile">ai.claude.buddy.userId.file</a></h2>
+<p>Path to a file containing the Claude account UUID.
+Read at activation time, so sops-nix and agenix paths
+work. Trailing whitespace is stripped.</p>
+<p><em>Type:</em>
+absolute path</p>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">config.sops.secrets."${username}-claude-uuid".path
+
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/lib/buddy-types.nix">lib/buddy-types.nix</a></li>
+</ul>
+<h2 id="aiclaudebuddyuseridtext"><a class="header" href="#aiclaudebuddyuseridtext">ai.claude.buddy.userId.text</a></h2>
+<p>Literal Claude account UUID string. Get it from
+~/.claude.json under oauthAccount.accountUuid.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">"ebd8b240-9b28-44b1-a4bf-da487d9f111f"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/lib/buddy-types.nix">lib/buddy-types.nix</a></li>
 </ul>
 <h2 id="aicopilot-1"><a class="header" href="#aicopilot-1">ai.copilot</a></h2>
 <p>Copilot CLI ecosystem configuration.</p>
