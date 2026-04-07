@@ -222,6 +222,11 @@ Generated file policy:
       authoring, generation task structure. Ensure dev fragments capture
       all patterns so new sessions have full context.
 - [ ] Rolling stack workflow skill
+- [ ] claude-code build approach docs — thoroughly document how our
+      claude-code package differs from upstream nixpkgs: Bun runtime
+      wrapper (not Node), buddy state at $XDG_STATE_HOME, withBuddy
+      removal, cli.js writable copy, fnv1a vs wyhash hash routing.
+      Consumer-facing docs explaining what they get vs upstream.
 - [ ] Secret scanning — integrate gitleaks into pre-commit hook or CI.
       Currently clean (406 commits verified 2026-04-06). Wire via
       git-hooks.hooks in devenv or as a CI step in ci.yml

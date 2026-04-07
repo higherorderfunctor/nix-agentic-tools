@@ -40,69 +40,9 @@
   inherit (aiCommon) instructionModule lspServerModule mkCopilotLspConfig mkLspConfig;
   aiTransforms = pkgs.fragments-ai.passthru.transforms;
 
-  cfg = config.ai;
+  inherit (import ../../lib/buddy-types.nix {inherit lib;}) buddySubmodule;
 
-  buddySubmodule = types.submodule {
-    options = {
-      userId = mkOption {
-        type = types.str;
-        description = "Claude account UUID (oauthAccount.accountUuid from ~/.claude.json).";
-      };
-      species = mkOption {
-        type = types.enum [
-          "axolotl"
-          "blob"
-          "cactus"
-          "capybara"
-          "cat"
-          "chonk"
-          "dragon"
-          "duck"
-          "ghost"
-          "goose"
-          "mushroom"
-          "octopus"
-          "owl"
-          "penguin"
-          "rabbit"
-          "robot"
-          "snail"
-          "turtle"
-        ];
-        description = "Buddy species.";
-      };
-      rarity = mkOption {
-        type = types.enum ["common" "uncommon" "rare" "epic" "legendary"];
-        default = "common";
-        description = "Rarity tier. Higher rarities take longer to compute.";
-      };
-      eyes = mkOption {
-        type = types.enum ["·" "✦" "×" "◉" "@" "°"];
-        default = "·";
-        description = "Eye character.";
-      };
-      hat = mkOption {
-        type = types.enum ["none" "beanie" "crown" "halo" "propeller" "tinyduck" "tophat" "wizard"];
-        default = "none";
-        description = "Hat accessory. Must be none for common rarity.";
-      };
-      shiny = mkOption {
-        type = types.bool;
-        default = false;
-        description = "Rainbow shimmer variant.";
-      };
-      peak = mkOption {
-        type = types.nullOr (types.enum ["CHAOS" "DEBUGGING" "PATIENCE" "SNARK" "WISDOM"]);
-        default = null;
-        description = "Preferred highest stat.";
-      };
-      dump = mkOption {
-        type = types.nullOr (types.enum ["CHAOS" "DEBUGGING" "PATIENCE" "SNARK" "WISDOM"]);
-        default = null;
-        description = "Preferred lowest stat. Must differ from peak.";
-      };
-    };
-  };
+  cfg = config.ai;
 
   # Check if a module option path exists (use options, not config)
   hasModule = path:
@@ -112,25 +52,27 @@ in {
     enable = mkEnableOption "unified AI configuration across Claude, Copilot, and Kiro";
 
     claude = mkOption {
-      type = types.submodule ({config, ...}: {
+      type = types.submodule {
         options = {
           enable = mkEnableOption "Fan out shared config to Claude Code";
           package = mkOption {
             type = types.package;
-            default =
-              if config.buddy != null
-              then pkgs.claude-code.withBuddy config.buddy
-              else pkgs.claude-code;
+            default = pkgs.claude-code;
             defaultText = lib.literalExpression "pkgs.claude-code";
-            description = "Claude Code package. Automatically patched when buddy is set.";
+            description = "Claude Code package.";
           };
           buddy = mkOption {
             type = types.nullOr buddySubmodule;
             default = null;
-            description = "Buddy companion customization. Patches claude-code at build time.";
+            description = ''
+              Buddy companion customization. When set, fans out to
+              `programs.claude-code.buddy` which installs an
+              activation script to patch the buddy salt at activation
+              time. See modules/claude-code-buddy/ for details.
+            '';
           };
         };
-      });
+      };
       default = {};
       description = "Claude Code ecosystem configuration.";
     };
@@ -296,6 +238,10 @@ in {
       # Normalized model setting (only if upstream module is available)
       (mkIf (cfg.settings.model != null && hasModule ["programs" "claude-code" "settings"]) {
         programs.claude-code.settings.model = mkDefault cfg.settings.model;
+      })
+      # Buddy fanout — sets the canonical programs.claude-code.buddy
+      (mkIf (cfg.claude.buddy != null) {
+        programs.claude-code.buddy = cfg.claude.buddy;
       })
     ]))
 

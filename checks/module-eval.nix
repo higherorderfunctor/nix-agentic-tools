@@ -54,6 +54,10 @@
               # Stub programs.claude-code (upstream HM module, not in this repo)
               programs.claude-code = {
                 enable = lib.mkEnableOption "claude-code";
+                package = lib.mkOption {
+                  type = lib.types.package;
+                  default = pkgs.claude-code or pkgs.hello;
+                };
                 settings = lib.mkOption {
                   type = lib.types.submodule {
                     freeformType = (pkgs.formats.json {}).type;
@@ -132,7 +136,7 @@
     }
   ];
 
-  # Test: ai module evaluates with buddy configured
+  # Test: ai module evaluates with buddy configured (new attrTag userId)
   aiBuddy = evalModule [
     self.homeManagerModules.default
     {
@@ -142,7 +146,7 @@
           claude = {
             enable = true;
             buddy = {
-              userId = "test-00000000-0000-0000-0000-000000000000";
+              userId.text = "test-00000000-0000-0000-0000-000000000000";
               species = "duck";
               rarity = "common";
             };

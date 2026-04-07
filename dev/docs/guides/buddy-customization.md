@@ -1,76 +1,72 @@
 # Buddy Customization
 
 Customize your Claude Code terminal companion (buddy) via Nix.
-The buddy is patched into the binary at build time — no runtime
-modification needed.
+The buddy is patched at home-manager **activation time**, not build
+time, so it works with sops-nix secrets and gives each user their
+own buddy in multi-user systems.
 
 ## Quick Start
 
 ```nix
-# In your home-manager config:
-ai.claude = {
+{config, ...}: {
+  ai.claude = {
+    enable = true;
+    buddy = {
+      userId.file = config.sops.secrets."${config.home.username}-claude-uuid".path;
+      species = "duck";
+    };
+  };
+}
+```
+
+The `userId.file` reads your account UUID from a sops-nix (or
+agenix, or any plaintext file) at activation time. Your account
+UUID is in `~/.claude.json` under `oauthAccount.accountUuid`.
+
+The UUID is **not** a real secret — it can't authenticate or make
+API calls. It's a stable identifier. But if you prefer to keep it
+out of your config repo, sops works.
+
+## Inline UUID
+
+If you don't want sops, paste the UUID directly:
+
+```nix
+ai.claude.buddy = {
+  userId.text = "ebd8b240-9b28-44b1-a4bf-da487d9f111f";
+  species = "capybara";
+};
+```
+
+## Direct (without `ai.*` convenience)
+
+The canonical option is `programs.claude-code.buddy`. The `ai.claude.buddy`
+above is just a fanout convenience that sets it for you.
+
+```nix
+programs.claude-code = {
   enable = true;
   buddy = {
-    userId = "your-account-uuid-here";
-    species = "dragon";
-    rarity = "legendary";
-    hat = "wizard";
-    eyes = "✦";
+    userId.file = config.sops.secrets."${config.home.username}-claude-uuid".path;
+    species = "duck";
   };
 };
 ```
 
-Your account UUID is in `~/.claude.json` under
-`oauthAccount.accountUuid`.
-
-> **Note on secrets:** The UUID is read at **build time** by Nix
-> evaluation, before any runtime secret manager has mounted its
-> secrets. sops-nix and agenix decrypt to paths like
-> `/run/user/<uid>/secrets/` during activation — those paths
-> don't exist when Nix evaluates your config, so they cannot
-> provide the userId.
->
-> **The UUID is not cryptographically secret.** It's a stable
-> identifier Anthropic uses to associate data with your account
-> (closer to an email address than a password). It can't
-> authenticate as you, make API calls, or access conversations.
-> The actual auth secrets are the OAuth tokens in `~/.claude.json`
-> (`sessionToken`, `refreshToken`) — those should still be
-> protected, but the UUID does not need the same treatment.
->
-> **Recommended:** Paste the UUID directly into your config as a
-> literal string. It ends up in the nix store (in the derivation
-> hash), but that's the same machine that already has your auth
-> tokens, so the threat model doesn't change.
->
-> If you want to keep the UUID out of your config repo without an
-> activation script, read from a plaintext file outside the repo
-> at eval time:
->
-> ```nix
-> userId = lib.removeSuffix "\n"
->   (builtins.readFile /home/you/.config/nix-secrets/claude-uuid);
-> ```
->
-> The path must be a Nix path literal (no quotes, no `~`) and the
-> file must exist before `home-manager switch` runs.
-
-## Direct Package Usage
-
-Without the module system:
+## Full Options
 
 ```nix
-pkgs.claude-code.withBuddy {
-  userId = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
-  species = "capybara";
-  rarity = "rare";
+ai.claude.buddy = {
+  userId.file = config.sops.secrets."${username}-claude-uuid".path;
+  species = "dragon";
+  rarity = "legendary";
+  hat = "wizard";
+  eyes = "✦";
   shiny = true;
   peak = "WISDOM";
   dump = "CHAOS";
-}
+};
 ```
-
-## Available Options
 
 ### Species (18)
 
@@ -100,10 +96,11 @@ CHAOS, DEBUGGING, PATIENCE, SNARK, WISDOM
 Both are optional. When set, the salt search constrains which
 stat is highest (peak) and lowest (dump). They must differ.
 
-## Build Time
+## Build/Activation Time
 
-The salt search runs once and is cached. It only re-runs when
-your buddy options change — not on claude-code version updates.
+The salt search runs once during home-manager activation and is
+cached by a fingerprint of your buddy options + claude-code
+version + userId. It only re-runs when something changes.
 
 | Target                          | Time    |
 | ------------------------------- | ------- |
@@ -115,16 +112,61 @@ your buddy options change — not on claude-code version updates.
 
 ## How It Works
 
-Under the hood, `withBuddy` creates two Nix derivations:
+The package and the user state are layered:
 
-1. **Salt search** — brute-forces a 15-character salt string
-   that, when hashed with your account UUID, produces the
-   desired buddy traits. Uses any-buddy's worker script via Bun.
-2. **Binary patching** — replaces the default salt in the
-   claude-code binary with your computed salt. Uses python3 for
-   binary-safe replacement.
+1. **Package layer** (`pkgs.claude-code`): Our overlay wraps
+   nixpkgs' claude-code with a Bun-runtime wrapper at
+   `bin/claude`. The wrapper checks for a writable `cli.js` at
+   `$XDG_STATE_HOME/claude-code-buddy/lib/cli.js`. If it exists,
+   the wrapper execs it. Otherwise it falls back to the store
+   `cli.js`. The wrapper is harmless when no buddy is configured —
+   you just get unmodified claude-code under Bun.
 
-The salt search derivation depends only on your buddy options
-and UUID. The patching derivation depends on the claude-code
-package. This means version updates only trigger the cheap
-patching step, not the expensive salt search.
+2. **State layer** (HM activation script): When `buddy` is set,
+   the activation script:
+   - Computes a fingerprint of `(claude-code store path, userId,
+buddy options)`
+   - Compares to `$XDG_STATE_HOME/claude-code-buddy/fingerprint`
+   - If different: copies the cli.js (and symlinks the rest of
+     the lib) into `$XDG_STATE_HOME/claude-code-buddy/lib/`,
+     runs the any-buddy worker via Bun, patches the writable
+     cli.js, resets the `companion` field in `~/.claude.json`,
+     and writes the new fingerprint
+   - If same: exits cleanly (cached)
+
+The companion field reset ensures the next `claude` invocation
+re-hatches with the new buddy traits. Without it, claude-code
+would keep showing the cached buddy from the first hatch.
+
+## Why Activation-Time Instead of Build-Time
+
+Earlier versions of this feature (`pkgs.claude-code.withBuddy { ... }`)
+patched the binary at build time. Three problems:
+
+1. **No sops support.** The userId was read at Nix evaluation,
+   before sops decrypts secrets.
+2. **Multi-user broken.** A NixOS-level install gave all users
+   the same patched binary, since the salt was baked into the
+   nix store path.
+3. **Stale companion field.** The buddy state in `~/.claude.json`
+   couldn't be reset by a build-time approach.
+
+Activation-time fixes all three. The trade-off is a small amount
+of state management in `$XDG_STATE_HOME/claude-code-buddy/`, which
+is a fair price.
+
+## Why Bun
+
+claude-code runs under whichever JS runtime executes its `cli.js`.
+Our overlay wrapper invokes `bun run cli.js` instead of `node`,
+which activates the wyhash code path inside claude-code's buddy
+hash function. The any-buddy worker also defaults to wyhash, so
+the salts the worker computes match what claude-code reads at
+runtime.
+
+If we ran under Node, claude-code would use fnv1a internally, and
+we'd need to pass `--fnv1a` to the worker to match. We chose Bun
+for the cleaner alignment.
+
+Startup overhead is negligible (~50 ms vs Node), dominated by MCP
+probes in real workloads.

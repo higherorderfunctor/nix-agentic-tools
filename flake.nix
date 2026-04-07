@@ -81,6 +81,7 @@
 
     homeManagerModules = {
       ai = ./modules/ai;
+      claude-code-buddy = ./modules/claude-code-buddy;
       copilot-cli = ./modules/copilot-cli;
       default = ./modules;
       kiro-cli = ./modules/kiro-cli;

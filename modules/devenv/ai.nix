@@ -43,68 +43,6 @@
 
   cfg = config.ai;
 
-  buddySubmodule = types.submodule {
-    options = {
-      userId = mkOption {
-        type = types.str;
-        description = "Claude account UUID (oauthAccount.accountUuid from ~/.claude.json).";
-      };
-      species = mkOption {
-        type = types.enum [
-          "axolotl"
-          "blob"
-          "cactus"
-          "capybara"
-          "cat"
-          "chonk"
-          "dragon"
-          "duck"
-          "ghost"
-          "goose"
-          "mushroom"
-          "octopus"
-          "owl"
-          "penguin"
-          "rabbit"
-          "robot"
-          "snail"
-          "turtle"
-        ];
-        description = "Buddy species.";
-      };
-      rarity = mkOption {
-        type = types.enum ["common" "uncommon" "rare" "epic" "legendary"];
-        default = "common";
-        description = "Rarity tier. Higher rarities take longer to compute.";
-      };
-      eyes = mkOption {
-        type = types.enum ["·" "✦" "×" "◉" "@" "°"];
-        default = "·";
-        description = "Eye character.";
-      };
-      hat = mkOption {
-        type = types.enum ["none" "beanie" "crown" "halo" "propeller" "tinyduck" "tophat" "wizard"];
-        default = "none";
-        description = "Hat accessory. Must be none for common rarity.";
-      };
-      shiny = mkOption {
-        type = types.bool;
-        default = false;
-        description = "Rainbow shimmer variant.";
-      };
-      peak = mkOption {
-        type = types.nullOr (types.enum ["CHAOS" "DEBUGGING" "PATIENCE" "SNARK" "WISDOM"]);
-        default = null;
-        description = "Preferred highest stat.";
-      };
-      dump = mkOption {
-        type = types.nullOr (types.enum ["CHAOS" "DEBUGGING" "PATIENCE" "SNARK" "WISDOM"]);
-        default = null;
-        description = "Preferred lowest stat. Must differ from peak.";
-      };
-    };
-  };
-
   # Check if an option path exists (returns true if defined, even if not set).
   hasOpt = path: lib.hasAttrByPath path config;
 in {
@@ -112,34 +50,25 @@ in {
     enable = mkEnableOption "unified AI configuration across Claude, Copilot, and Kiro";
 
     claude = mkOption {
-      type = types.submodule ({config, ...}: {
+      type = types.submodule {
         options = {
           enable = mkEnableOption "Fan out shared config to Claude Code";
           package = mkOption {
             type = types.package;
-            default =
-              if config.buddy != null
-              then
-                assert lib.assertMsg
-                (config.buddy.peak != config.buddy.dump || config.buddy.peak == null)
-                "ai.claude.buddy: peak and dump stats must differ";
-                assert lib.assertMsg
-                (config.buddy.rarity == "common" -> config.buddy.hat == "none")
-                "ai.claude.buddy: common rarity forces hat = \"none\"";
-                  pkgs.claude-code.withBuddy config.buddy
-              else pkgs.claude-code;
+            default = pkgs.claude-code;
             defaultText = lib.literalExpression "pkgs.claude-code";
-            description = "Claude Code package. Automatically patched when buddy is set.";
-          };
-          buddy = mkOption {
-            type = types.nullOr buddySubmodule;
-            default = null;
-            description = "Buddy companion customization. Patches claude-code at build time.";
+            description = "Claude Code package.";
           };
         };
-      });
+      };
       default = {};
-      description = "Claude Code ecosystem configuration.";
+      description = ''
+        Claude Code ecosystem configuration.
+
+        Note: buddy customization is HM-only (devenv is per-project,
+        buddy is per-user). Use the home-manager `programs.claude-code.buddy`
+        or `ai.claude.buddy` option instead.
+      '';
     };
 
     copilot = mkOption {

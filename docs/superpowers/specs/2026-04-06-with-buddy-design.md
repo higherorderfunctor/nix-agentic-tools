@@ -1,67 +1,109 @@
-# withBuddy Design Spec
+# Buddy Activation-Time Module Design Spec
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
 > superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add a `withBuddy` passthru function to the claude-code package
-that binary-patches the buddy companion salt at build time, with all
-options type-checked via Nix enum literals.
+**Goal:** Provide a `programs.claude-code.buddy` HM module option that
+manages claude-code's buddy companion via activation-time patching,
+supporting per-user configuration in multi-user systems and sops-nix
+integration for the userId.
 
-**Approach:** Package any-buddy from npm, invoke its worker script
-directly via Bun at build time for salt search, then do a trivial
-byte replacement on the claude-code binary. Two-derivation split
-separates the expensive salt search from the cheap patching so
-claude-code version bumps don't re-trigger the search.
+**Approach:** Activation script computes a fingerprint of the buddy
+options + claude-code store path + userId, compares to a stored
+fingerprint at `$XDG_STATE_HOME/claude-code-buddy/fingerprint`, and on
+mismatch:
+
+1. Sets up a writable cli.js copy at
+   `$XDG_STATE_HOME/claude-code-buddy/lib/cli.js` (rest of the
+   `@anthropic-ai/claude-code` lib is symlinked to the store)
+2. Reads userId (from text or sops-mounted file)
+3. Runs the any-buddy worker (Bun runtime → wyhash)
+4. Patches the writable cli.js with the new salt
+5. Resets the `companion` field in `~/.claude.json`
+6. Writes the new fingerprint
+
+A claude-code wrapper script (installed via the HM module) execs
+`bun run $STATE/lib/cli.js` if the user state exists, falling back to
+the store cli.js otherwise. This means the binary always works (even
+before first activation), and Bun runtime is used so claude-code reads
+the salt under wyhash.
 
 ---
 
-## Architecture
+## Why activation-time, not build-time
 
-### Two-Derivation Split
+The previous build-time approach (`pkgs.claude-code.withBuddy { ... }`)
+had three fatal flaws:
 
-```
-buddy-salt derivation                 withBuddy derivation
-(expensive, cached forever)           (cheap, runs on claude-code update)
+1. **No sops support.** `userId` was read at Nix evaluation time, before
+   sops decrypts secrets. The salt search baked the UUID into the
+   derivation hash, so consumers had to paste plaintext UUIDs.
+2. **Multi-user broken.** A NixOS-level `pkgs.claude-code.withBuddy`
+   gave all users the same patched binary (same buddy). Buddy is
+   user-personal state and can't be system-wide.
+3. **Stale companion field.** `~/.claude.json` `companion` is set on
+   first hatch and persists across binary swaps. Build-time approach
+   couldn't reset it without manual user intervention.
 
-Inputs:                               Inputs:
-  - userId                              - claude-code package
-  - species, rarity, eyes,             - salt (from buddy-salt)
-    hat, shiny, peak, dump
-                                      Steps:
-Steps:                                  1. Copy claude-code to $out
-  1. Run any-buddy worker               2. Replace "friend-2026-401"
-     via Bun                                (15 bytes, 3 occurrences
-  2. Write salt to $out                     in ELF/Mach-O, 1 in .js)
-                                         3. On darwin: codesign
-```
+Activation-time fixes all three: sops paths exist when activation runs,
+each user has their own state directory, and the activation script can
+freely modify `~/.claude.json`.
 
-The consumer-facing `withBuddy` function creates both derivations
-internally. The split is an implementation detail — consumers pass
-options once and get a patched package back.
+---
 
-### Consumer API
+## Consumer API
+
+The canonical option is `programs.claude-code.buddy`. The unified
+`ai.claude.buddy` is a convenience that fans out to it (matching the
+existing pattern with `ai.skills`, `ai.instructions`, etc.).
+
+### Minimal sops-nix usage
 
 ```nix
-# Direct passthru usage
-pkgs.claude-code.withBuddy {
-  userId = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
+{config, ...}: {
+  ai.claude = {
+    enable = true;
+    buddy = {
+      userId.file = config.sops.secrets."${config.home.username}-claude-uuid".path;
+      species = "duck";
+    };
+  };
+}
+```
+
+### Inline UUID
+
+```nix
+ai.claude.buddy = {
+  userId.text = "ebd8b240-9b28-44b1-a4bf-da487d9f111f";
+  species = "capybara";
+};
+```
+
+### Full options
+
+```nix
+ai.claude.buddy = {
+  userId.file = config.sops.secrets."${username}-claude-uuid".path;
   species = "dragon";
   rarity = "legendary";
-  eyes = "✦";
   hat = "wizard";
+  eyes = "✦";
   shiny = true;
-  peak = "CHAOS";
-  dump = "PATIENCE";
-}
+  peak = "WISDOM";
+  dump = "CHAOS";
+};
+```
 
-# Via HM module
-programs.ai.claude = {
+### Direct (without `ai.*` convenience)
+
+```nix
+programs.claude-code = {
   enable = true;
   buddy = {
-    userId = config.sops.secrets.claude-uuid.path;
-    species = "dragon";
-    rarity = "legendary";
+    userId.file = config.sops.secrets."${username}-claude-uuid".path;
+    species = "duck";
   };
 };
 ```
@@ -70,28 +112,48 @@ programs.ai.claude = {
 
 ## Option Types
 
-All options use enum literals for closed domains. Free-form strings
-only where the domain is genuinely open (userId).
+### `userId` — discriminated union
 
-### Required Options
+Uses `lib.types.attrTag` to enforce exactly one of `text` or `file`:
 
-| Option    | Type         | Description                                                                                                           |
-| --------- | ------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `userId`  | `types.str`  | Claude account UUID (`oauthAccount.accountUuid` from `~/.claude.json`). Consumer manages secrecy (sops, agenix, etc.) |
-| `species` | `types.enum` | One of 18 species (see below)                                                                                         |
+```nix
+userId = mkOption {
+  type = types.attrTag {
+    text = mkOption {
+      type = types.str;
+      description = "Literal Claude account UUID string.";
+      example = "ebd8b240-9b28-44b1-a4bf-da487d9f111f";
+    };
+    file = mkOption {
+      type = types.path;
+      description = ''
+        Path to a file containing the Claude account UUID. Read at
+        activation time, so sops-nix and agenix paths work.
+      '';
+      example = literalExpression
+        ''config.sops.secrets."''${username}-claude-uuid".path'';
+    };
+  };
+  description = "Claude account UUID source.";
+};
+```
 
-### Optional Options
+The module system enforces "exactly one" at type-check time. No
+additional assertions needed.
 
-| Option   | Type                        | Default    | Description             |
-| -------- | --------------------------- | ---------- | ----------------------- |
-| `rarity` | `types.enum`                | `"common"` | Rarity tier             |
-| `eyes`   | `types.enum`                | `"·"`      | Eye character           |
-| `hat`    | `types.enum`                | `"none"`   | Hat accessory           |
-| `shiny`  | `types.bool`                | `false`    | Rainbow shimmer variant |
-| `peak`   | `types.nullOr (types.enum)` | `null`     | Preferred highest stat  |
-| `dump`   | `types.nullOr (types.enum)` | `null`     | Preferred lowest stat   |
+### Other options
 
-### Enum Values
+| Option    | Type                        | Default    | Description             |
+| --------- | --------------------------- | ---------- | ----------------------- |
+| `species` | `types.enum`                | (required) | One of 18 species       |
+| `rarity`  | `types.enum`                | `"common"` | Rarity tier             |
+| `eyes`    | `types.enum`                | `"·"`      | Eye character           |
+| `hat`     | `types.enum`                | `"none"`   | Hat accessory           |
+| `shiny`   | `types.bool`                | `false`    | Rainbow shimmer variant |
+| `peak`    | `types.nullOr (types.enum)` | `null`     | Preferred highest stat  |
+| `dump`    | `types.nullOr (types.enum)` | `null`     | Preferred lowest stat   |
+
+### Enum values
 
 **Species** (18): `"axolotl"`, `"blob"`, `"cactus"`, `"capybara"`,
 `"cat"`, `"chonk"`, `"dragon"`, `"duck"`, `"ghost"`, `"goose"`,
@@ -111,302 +173,289 @@ only where the domain is genuinely open (userId).
 
 ### Assertions
 
-```nix
-assertions = [
-  {
-    assertion = cfg.peak != cfg.dump || cfg.peak == null;
-    message = "withBuddy: peak and dump stats must differ";
-  }
-  {
-    assertion = cfg.rarity == "common" -> cfg.hat == "none";
-    message = "withBuddy: common rarity forces hat = \"none\"";
-  }
-];
-```
+- `peak != dump` (or both null) — module assertion
+- `rarity == "common" → hat == "none"` — module assertion
 
 ---
 
-## Package Structure
+## Module Architecture
 
-### New Files
+### File layout
 
-| File                              | Purpose                                        |
-| --------------------------------- | ---------------------------------------------- |
-| `packages/ai-clis/any-buddy.nix`  | Package any-buddy from npm via nvfetcher       |
-| `packages/ai-clis/buddy-salt.nix` | `mkBuddySalt` function: salt search derivation |
-| `packages/ai-clis/with-buddy.nix` | `withBuddy` function: patching derivation      |
+| File                                       | Responsibility                                              |
+| ------------------------------------------ | ----------------------------------------------------------- |
+| `lib/buddy-types.nix`                      | Shared `buddySubmodule` type definition                     |
+| `modules/claude-code-buddy/default.nix`    | Extends `programs.claude-code` with `buddy` option          |
+| `modules/claude-code-buddy/wrapper.nix`    | Wrapper script that execs `bun run cli.js` (state or store) |
+| `modules/claude-code-buddy/activation.nix` | Activation script (fingerprint check, salt, patch, reset)   |
+| `modules/ai/default.nix`                   | Adds `ai.claude.buddy` fanout to `programs.claude-code`     |
 
-### Modified Files
+### Wrapper script
 
-| File                               | Change                                             |
-| ---------------------------------- | -------------------------------------------------- |
-| `packages/ai-clis/claude-code.nix` | Add `passthru.withBuddy` wired to `with-buddy.nix` |
-| `packages/ai-clis/default.nix`     | Register any-buddy in overlay                      |
-| `flake.nix`                        | Expose any-buddy in packages                       |
-| `nvfetcher.toml`                   | Add any-buddy source tracking                      |
-| `packages/ai-clis/hashes.json`     | Add any-buddy npmDepsHash                          |
-| `packages/ai-clis/sources.nix`     | Merge any-buddy source entry                       |
-| `modules/ai/default.nix`           | Add `buddy` option under `ai.claude`               |
-| `modules/devenv/ai.nix`            | Add `buddy` option (config parity)                 |
+Installed via the HM module by overriding `programs.claude-code.package`
+with a `symlinkJoin` that replaces `bin/claude` with our wrapper:
 
-### Documentation Updates
+```bash
+#!/usr/bin/env bash
+set -euETo pipefail
+shopt -s inherit_errexit 2>/dev/null || :
 
-| File                  | Change                            |
-| --------------------- | --------------------------------- |
-| Doc site Claude page  | New "Buddy Customization" section |
-| README feature matrix | Mention buddy support             |
-| Dev fragments         | any-buddy packaging pattern       |
+USER_LIB="${XDG_STATE_HOME:-$HOME/.local/state}/claude-code-buddy/lib"
+STORE_LIB="@CLAUDE_CODE@/lib/node_modules/@anthropic-ai/claude-code"
 
----
+if [ -f "$USER_LIB/cli.js" ]; then
+  CLI="$USER_LIB/cli.js"
+else
+  CLI="$STORE_LIB/cli.js"
+fi
 
-## Build Mechanism
-
-### buddy-salt derivation (`mkBuddySalt`)
-
-```nix
-mkBuddySalt = {
-  userId, species, rarity, eyes, hat, shiny, peak, dump
-}: pkgs.runCommand "buddy-salt" {
-  nativeBuildInputs = [ pkgs.bun ];
-  # All options as env vars for the build script
-} ''
-  salt=$(bun ${any-buddy}/lib/any-buddy/src/finder/worker.ts \
-    "${userId}" "${species}" "${rarity}" "${eyes}" "${hat}" \
-    "${if shiny then "true" else ""}" \
-    "${if peak != null then peak else ""}" \
-    "${if dump != null then dump else ""}" \
-    | ${pkgs.jq}/bin/jq -r '.salt')
-  echo -n "$salt" > $out
-'';
+exec @BUN@/bin/bun run "$CLI" "$@"
 ```
 
-**Cache behavior:** Inputs are `userId + buddy options`. Claude-code
-version bumps do not invalidate this derivation.
+`@CLAUDE_CODE@` and `@BUN@` are substituted at build time. The wrapper
+falls back to the store cli.js if the user state doesn't exist yet
+(graceful degradation — buddy options are optional, claude still works).
 
-**Build time by target:**
+### Activation script
 
-| Target                          | ~Attempts    | Time    |
-| ------------------------------- | ------------ | ------- |
-| Common + species + eye          | ~180         | instant |
-| Rare + species + eye + hat      | ~8,600       | <1s     |
-| Legendary + species             | ~86,000      | ~1s     |
-| Legendary + shiny               | ~8,600,000   | ~30s    |
-| Legendary + shiny + peak + dump | ~170,000,000 | minutes |
+```bash
+#!/usr/bin/env bash
+set -euETo pipefail
+shopt -s inherit_errexit 2>/dev/null || :
 
-### withBuddy patching derivation
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/claude-code-buddy"
+STORE_LIB="@CLAUDE_CODE@/lib/node_modules/@anthropic-ai/claude-code"
+WORKER="@ANY_BUDDY@/src/finder/worker.ts"
 
-```nix
-withBuddy = opts: let
-  salt = builtins.readFile (mkBuddySalt opts);
-  original = "friend-2026-401";
-in pkgs.runCommand "claude-code-buddy" {
-  nativeBuildInputs =
-    lib.optional pkgs.stdenv.hostPlatform.isDarwin pkgs.sigtool;
-} ''
-  cp -r ${claude-code} $out
-  chmod -R u+w $out
+# Resolve userId
+if [ -n "${BUDDY_USER_ID_FILE:-}" ]; then
+  USER_ID=$(cat "$BUDDY_USER_ID_FILE" | tr -d '\n')
+else
+  USER_ID="$BUDDY_USER_ID_TEXT"
+fi
 
-  # Binary-safe 15-byte replacement (ASCII-only, same length)
-  # python3 for reliable binary read/write — sd/sed are
-  # text-oriented and may corrupt ELF null bytes
-  for f in $(find $out -type f \( -name "claude-code" -o -name "cli.js" \)); do
-    ${pkgs.python3}/bin/python3 -c "
-  import sys
-  data = open(sys.argv[1], 'rb').read()
-  patched = data.replace(b'${original}', b'${salt}')
-  assert patched != data, 'salt not found in binary'
-  open(sys.argv[1], 'wb').write(patched)
-    " "$f"
-  done
+# Compute fingerprint
+NEW_FP=$(printf '%s\n' \
+  "$STORE_LIB" \
+  "$USER_ID" \
+  "$BUDDY_SPECIES" \
+  "$BUDDY_RARITY" \
+  "$BUDDY_EYES" \
+  "$BUDDY_HAT" \
+  "$BUDDY_SHINY" \
+  "$BUDDY_PEAK" \
+  "$BUDDY_DUMP" \
+  | sha256sum | cut -c1-16)
 
-  # macOS ad-hoc re-signing
-  ${lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
-    codesign --force --sign - $out/bin/claude-code
-  ''}
-'';
+OLD_FP=$(cat "$STATE_DIR/fingerprint" 2>/dev/null || echo "")
+if [ "$NEW_FP" = "$OLD_FP" ]; then
+  exit 0  # cached, nothing to do
+fi
+
+echo "==> Updating buddy ($BUDDY_SPECIES, $BUDDY_RARITY)"
+
+# Refresh writable cli.js (cleanup old state, fresh symlink tree)
+rm -rf "$STATE_DIR/lib"
+mkdir -p "$STATE_DIR/lib"
+cp -rs "$STORE_LIB"/* "$STATE_DIR/lib/"
+chmod -R u+w "$STATE_DIR/lib"
+# Replace cli.js symlink with a real writable copy
+rm "$STATE_DIR/lib/cli.js"
+cp -L "$STORE_LIB/cli.js" "$STATE_DIR/lib/cli.js"
+chmod u+w "$STATE_DIR/lib/cli.js"
+
+# Run salt search (Bun runtime, no --fnv1a since we're using Bun runtime)
+SALT=$(@BUN@/bin/bun "$WORKER" \
+  "$USER_ID" \
+  "$BUDDY_SPECIES" \
+  "$BUDDY_RARITY" \
+  "$BUDDY_EYES" \
+  "$BUDDY_HAT" \
+  "$BUDDY_SHINY" \
+  "$BUDDY_PEAK" \
+  "$BUDDY_DUMP" \
+  | @JQ@/bin/jq -r '.salt')
+
+if [[ ! "$SALT" =~ ^[a-zA-Z0-9_-]{15}$ ]]; then
+  echo "ERROR: invalid salt format: '$SALT'" >&2
+  exit 1
+fi
+
+# Patch cli.js
+@PYTHON3@/bin/python3 -c "
+import sys
+path = '$STATE_DIR/lib/cli.js'
+data = open(path, 'rb').read()
+old = b'friend-2026-401'
+new = b'$SALT'
+if old not in data:
+    sys.exit('ERROR: salt marker not found in cli.js')
+open(path, 'wb').write(data.replace(old, new))
+"
+
+# Reset companion field in claude.json (ignore if file doesn't exist)
+if [ -f "$HOME/.claude.json" ]; then
+  tmp=$(mktemp)
+  @JQ@/bin/jq 'del(.companion)' "$HOME/.claude.json" > "$tmp"
+  mv "$tmp" "$HOME/.claude.json"
+fi
+
+# Save fingerprint
+mkdir -p "$STATE_DIR"
+echo -n "$NEW_FP" > "$STATE_DIR/fingerprint"
+
+echo "==> Buddy updated. Next claude run will hatch a new $BUDDY_SPECIES."
 ```
 
-### Worker Invocation Details
-
-The any-buddy worker (`src/finder/worker.ts`) is a standalone script:
-
-- **Invocation:** positional args: `userId species rarity eye hat [shiny] [peak] [dump]`
-- **Hash function:** Uses `Bun.hash()` (wyhash) — Bun is required
-- **Output:** JSON to stdout: `{"salt": "<15-char>", "attempts": N, "elapsed": N}`
-- **Exit:** Code 0 on success
-- **Salt format:** Exactly 15 characters from `[a-zA-Z0-9_-]`
-- **Original salt:** `"friend-2026-401"` (also 15 chars)
-- **Occurrences in binary:** 3 in compiled ELF/Mach-O, 1 in JS bundle
-
-### Platform Concerns
-
-- **Linux:** No special handling beyond file permissions
-- **macOS:** Must ad-hoc re-sign after patching (`codesign --force --sign -`)
-- **Build sandbox:** Worker needs no network access, only CPU
-
----
-
-## HM Module Integration
+### Module config wiring
 
 ```nix
-# modules/ai/default.nix — additions
-buddy = mkOption {
-  type = types.nullOr (types.submodule {
-    options = {
-      userId = mkOption { type = types.str; };
-      species = mkOption {
-        type = types.enum [
-          "axolotl" "blob" "cactus" "capybara" "cat" "chonk"
-          "dragon" "duck" "ghost" "goose" "mushroom" "octopus"
-          "owl" "penguin" "rabbit" "robot" "snail" "turtle"
-        ];
-      };
-      rarity = mkOption {
-        type = types.enum [
-          "common" "uncommon" "rare" "epic" "legendary"
-        ];
-        default = "common";
-      };
-      eyes = mkOption {
-        type = types.enum [ "·" "✦" "×" "◉" "@" "°" ];
-        default = "·";
-      };
-      hat = mkOption {
-        type = types.enum [
-          "none" "beanie" "crown" "halo"
-          "propeller" "tinyduck" "tophat" "wizard"
-        ];
-        default = "none";
-      };
-      shiny = mkOption {
-        type = types.bool;
-        default = false;
-      };
-      peak = mkOption {
-        type = types.nullOr (types.enum [
-          "CHAOS" "DEBUGGING" "PATIENCE" "SNARK" "WISDOM"
-        ]);
-        default = null;
-      };
-      dump = mkOption {
-        type = types.nullOr (types.enum [
-          "CHAOS" "DEBUGGING" "PATIENCE" "SNARK" "WISDOM"
-        ]);
-        default = null;
-      };
-    };
-  });
-  default = null;
-  description = ''
-    Buddy companion customization. When set, the claude-code
-    package is patched at build time with a salt that produces
-    the specified companion for your account.
+config = lib.mkIf (cfg != null) {
+  assertions = [
+    { assertion = cfg.peak != cfg.dump || cfg.peak == null;
+      message = "programs.claude-code.buddy: peak and dump must differ"; }
+    { assertion = cfg.rarity == "common" -> cfg.hat == "none";
+      message = "programs.claude-code.buddy: common rarity forces hat = none"; }
+  ];
 
-    Build time depends on rarity: common is instant, legendary
-    shiny with specific stats may take minutes. The salt is
-    cached — only recomputed when buddy options change, not on
-    claude-code version bumps.
+  programs.claude-code.package = lib.mkForce (
+    pkgs.symlinkJoin {
+      name = "claude-code-buddy-wrapper";
+      paths = [pkgs.claude-code];
+      postBuild = ''
+        rm $out/bin/claude
+        cat > $out/bin/claude <<EOF
+        #!/usr/bin/env bash
+        ...
+        EOF
+        chmod +x $out/bin/claude
+      '';
+    }
+  );
+
+  home.activation.claudeBuddy = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    export BUDDY_USER_ID_FILE="${cfg.userId.file or ""}"
+    export BUDDY_USER_ID_TEXT="${cfg.userId.text or ""}"
+    export BUDDY_SPECIES="${cfg.species}"
+    export BUDDY_RARITY="${cfg.rarity}"
+    export BUDDY_EYES="${cfg.eyes}"
+    export BUDDY_HAT="${cfg.hat}"
+    export BUDDY_SHINY="${if cfg.shiny then "true" else ""}"
+    export BUDDY_PEAK="${cfg.peak or ""}"
+    export BUDDY_DUMP="${cfg.dump or ""}"
+    ${activationScript}
   '';
 };
 ```
 
-**Module config wiring:**
+### `ai.claude.buddy` fanout
 
 ```nix
-config = mkIf cfg.enable {
-  assertions = lib.optionals (cfg.buddy != null) [
-    {
-      assertion = cfg.buddy.peak != cfg.buddy.dump
-        || cfg.buddy.peak == null;
-      message = "ai.claude.buddy: peak and dump must differ";
-    }
-    {
-      assertion = cfg.buddy.rarity == "common"
-        -> cfg.buddy.hat == "none";
-      message = "ai.claude.buddy: common rarity forces hat = none";
-    }
-  ];
+# In modules/ai/default.nix
+options.ai.claude.buddy = mkOption {
+  type = types.nullOr buddySubmodule;
+  default = null;
+  description = "Buddy companion config (fans out to programs.claude-code.buddy).";
+};
 
-  # Override package when buddy is configured
-  ai.claude.package = mkIf (cfg.buddy != null)
-    (cfg.package.withBuddy cfg.buddy);
+config = mkIf cfg.enable {
+  programs.claude-code.buddy = mkIf (cfg.claude.buddy != null) cfg.claude.buddy;
 };
 ```
 
 ---
 
-## any-buddy Package
+## Caching Behavior
 
-### nvfetcher Entry
+The fingerprint check covers all relevant invalidation cases:
 
-```toml
-[any-buddy]
-src.git = "https://github.com/cpaczek/any-buddy.git"
-src.branch = "main"
-fetch.git = "https://github.com/cpaczek/any-buddy.git"
-```
+| Trigger                              | Fingerprint changes? | Action                            |
+| ------------------------------------ | -------------------- | --------------------------------- |
+| First setup                          | (no file exists)     | Run salt search, patch, reset     |
+| Buddy options unchanged              | No                   | Skip (cached)                     |
+| Buddy option changed                 | Yes                  | Re-run, re-patch, reset companion |
+| claude-code version upgrade          | Yes (store path)     | Re-run, re-patch, reset companion |
+| sops-decrypted UUID file changed     | Yes                  | Re-run, re-patch, reset companion |
+| User manually edited cli.js or json  | No (we don't detect) | No action                         |
+| Migration from build-time `withBuddy`| (no fingerprint)     | Run, reset companion              |
 
-### Derivation Pattern
-
-Package as a standard npm project. We only need the source tree
-available at build time for the worker script — we do not need to
-build or install the full CLI.
-
-However, the worker imports from other source files (`generation/hash`,
-`generation/rng`, `generation/roll`, `constants`), so the full source
-tree must be present. Packaging as `buildNpmPackage` ensures
-dependencies are resolved and the source is intact.
-
-Alternative: `fetchFromGitHub` + just make the source tree available
-without a full npm install, since Bun can resolve imports from source.
-This avoids needing npmDepsHash. Test whether `bun run worker.ts`
-works from the raw source tree without `npm install`.
+The companion field is always reset whenever the activation script runs
+(i.e., on any fingerprint mismatch). This guarantees that whenever the
+salt changes, the cached buddy state in `~/.claude.json` is invalidated.
 
 ---
 
-## Scope Exclusions
+## Bun Runtime
 
-- **name/personality:** These are the "soul layer" — LLM-generated
-  at first hatch, stored in `~/.claude-code-any-buddy.json`. Not in
-  the binary, not relevant to Nix packaging
-- **Auto-patch hook:** Not needed — Nix rebuilds handle updates
-- **withPlugins:** Separate feature for the real plugin system.
-  Different mechanism (symlinks, not binary patching)
-- **devenv buddy option:** Add for config parity but lower priority
-  than HM module
+The wrapper uses `bun run cli.js` instead of `node cli.js`. This:
+
+- Activates wyhash for the buddy hash (via `typeof Bun !== 'undefined'`)
+- Means the salt search worker can drop `--fnv1a` (defaults to wyhash)
+- Adds Bun (~95 MB) to the runtime closure
+
+This is the "Option A wrapper" approach from the claude-code-nix research.
+Startup overhead is negligible (~50 ms vs Node, dominated by MCP probes
+in real workloads). Compile-time bun (`bun build --compile`) was
+evaluated and rejected — it doubles binary size, slows startup slightly,
+and breaks the writable-cli.js patching pattern.
+
+---
+
+## What Gets Removed
+
+### Files deleted
+
+- `packages/ai-clis/with-buddy.nix` (build-time patching derivation)
+- `packages/ai-clis/buddy-salt.nix` (build-time salt search derivation)
+
+### Files modified
+
+- `packages/ai-clis/claude-code.nix`: remove `withBuddyFn` parameter and
+  `passthru.withBuddy`
+- `packages/ai-clis/default.nix`: remove `mkBuddySalt`/`withBuddyFn` wiring
+- `modules/ai/default.nix`: replace existing buddy submodule with the
+  new fanout pattern (just sets `programs.claude-code.buddy`)
+- `modules/devenv/ai.nix`: remove buddy entirely (per-user, not per-project)
+- `dev/docs/guides/buddy-customization.md`: rewrite for new architecture
+- `flake.nix`: register the new module under `homeManagerModules`
+
+### Files unchanged
+
+- `packages/ai-clis/any-buddy.nix` (worker source still needed)
+- `nvfetcher.toml` `[any-buddy]` entry
+- `checks/module-eval.nix` (test will need a small update for new option shape)
 
 ---
 
 ## Verification
 
-After building `claude-code.withBuddy { ... }`:
+After implementing:
 
-1. Binary contains the new salt (not `friend-2026-401`)
-2. Salt appears the expected number of times (3 in ELF, 1 in JS)
-3. `claude-code --version` still works (binary not corrupted)
-4. On macOS: binary passes Gatekeeper (`codesign -v`)
-5. Running `/buddy` in the patched binary shows the expected species
+1. `nix flake check --no-build` passes
+2. Module evaluation test (`ai-buddy-eval`) passes with new option shape
+3. Standalone activation script test:
+   - Set up env vars manually
+   - Run script
+   - Verify cli.js patched, fingerprint written, companion field cleared
+4. Re-run with same options: should be a no-op (fingerprint cached)
+5. Change species and re-run: should re-patch and reset companion
 
 ---
 
 ## Open Questions
 
-1. **Worker without npm install:** Can `bun src/finder/worker.ts`
-   run from a raw git checkout without `npm install`? If yes, we
-   can skip `buildNpmPackage` and just use `fetchFromGitHub`. If
-   not, we need full npm deps resolution.
+1. **Module location:** new `modules/claude-code-buddy/` directory or
+   inline in existing `modules/ai/` files? Separate dir is cleaner and
+   matches the convention of one feature per module dir, but adds a
+   file. Going with separate dir.
 
-2. **Parallelism in salt search:** The worker is single-process.
-   For extreme targets (legendary shiny + peak + dump), spawning
-   multiple workers in the build script would cut time linearly.
-   Worth the complexity? Probably not for v1.
+2. **Fallback when buddy disabled:** if user removes buddy config, the
+   activation script doesn't run, leaving the writable cli.js in
+   `$STATE/lib`. The wrapper still execs that stale patched copy.
+   Solution: when buddy is null, the package override doesn't apply
+   (mkForce only runs when buddy != null), so user gets the unwrapped
+   `pkgs.claude-code`. The state dir is leftover but harmless. Worth a
+   cleanup hook? Probably not — `rm -rf $STATE_DIR` is a one-liner.
 
-3. **Salt stability across any-buddy versions:** If upstream changes
-   the salt format (currently 15 chars, `[a-zA-Z0-9_-]`), the
-   patching would break. Pin any-buddy version via nvfetcher to
-   control updates.
-
-4. **Upstream salt change by Anthropic:** If Anthropic changes
-   `friend-2026-401` in a future claude-code release, both
-   any-buddy and our patching break. Low risk — the salt is
-   embedded in the compiled binary and any-buddy tracks it.
+3. **Bun version:** nixpkgs `bun` is fine (1.3.11 tested). User's
+   newer-bun overlay isn't needed.

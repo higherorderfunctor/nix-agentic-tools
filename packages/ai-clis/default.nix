@@ -1,27 +1,19 @@
-# AI CLI package overlay: copilot-cli, kiro-cli, kiro-gateway.
-# Packages are top-level (pkgs.github-copilot-cli, pkgs.kiro-cli, pkgs.kiro-gateway).
+# AI CLI package overlay: claude-code, copilot-cli, kiro-cli, kiro-gateway.
+# Packages are top-level (pkgs.claude-code, pkgs.github-copilot-cli, etc.).
+#
+# Note: buddy customization for claude-code lives in the HM module
+# (modules/claude-code-buddy/), not as package passthru. The any-buddy
+# worker source is still exposed as `any-buddy-source` for the
+# activation script to use.
 _: final: prev: let
   sources = import ./sources.nix {inherit final;};
-
+in {
   any-buddy-source = import ./any-buddy.nix {
     inherit final;
     nv = sources.any-buddy;
   };
-
-  mkBuddySalt = import ./buddy-salt.nix {
-    inherit (final) bun jq runCommand;
-    inherit any-buddy-source;
-  };
-
-  withBuddyFn = import ./with-buddy.nix {
-    inherit (final) lib python3 runCommand stdenv;
-    inherit mkBuddySalt;
-    sigtool = final.sigtool or null;
-  };
-in {
-  inherit any-buddy-source;
   claude-code = import ./claude-code.nix {
-    inherit final prev withBuddyFn;
+    inherit final prev;
     nv = sources.claude-code;
     lockFile = ./locks/claude-code-package-lock.json;
   };
