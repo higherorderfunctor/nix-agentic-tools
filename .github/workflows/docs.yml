@@ -65,12 +65,23 @@ jobs:
         env:
           BRANCH: ${{ github.ref_name }}
         run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
           BASE="/nix-agentic-tools/pr/${BRANCH}"
+          # Rewrite mdbook HTML paths (excluding options/, which is
+          # a separate NuschtOS SPA with its own base href handled
+          # below). Without this exclusion, options/*.html would be
+          # rewritten twice — once here to /nix-agentic-tools/pr/
+          # <branch>/ and again below to /nix-agentic-tools/pr/
+          # <branch>/options/, producing a doubled path like
+          # /nix-agentic-tools/pr/<branch>/pr/<branch>/options/
+          # that 404s every SPA asset fetch.
+          find docs-out -name '*.html' -not -path 'docs-out/options/*' -exec \
+            sed -i "s|/nix-agentic-tools/|${BASE}/|g" {} +
+          # Rewrite NuschtOS options-search base href (single pass).
           sed -i "s|/nix-agentic-tools/options/|${BASE}/options/|g" \
             docs-out/options/index.html \
             docs-out/options/index.csr.html
-          find docs-out -name '*.html' -exec \
-            sed -i "s|/nix-agentic-tools/|${BASE}/|g" {} +
 
       - name: Deploy preview
         uses: peaceiris/actions-gh-pages@v4
