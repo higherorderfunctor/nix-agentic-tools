@@ -93,6 +93,15 @@
       "packages/mcp-servers/**"
     ];
     monorepo = null;
+    # overlays: cross-cutting cache-hit parity rule. Scoped to every
+    # overlay package file in packages/, excluding the content-only
+    # fragments dirs (which ship markdown, no compilation, so the
+    # rule doesn't apply).
+    overlays = [
+      "packages/ai-clis/*.nix"
+      "packages/git-tools/*.nix"
+      "packages/mcp-servers/*.nix"
+    ];
     stacked-workflows = ["packages/stacked-workflows/**"];
   };
 
@@ -131,6 +140,7 @@
       "project-overview"
     ];
     mcp-servers = ["overlay-guide"];
+    overlays = ["cache-hit-parity"];
     stacked-workflows = ["development"];
   };
 
