@@ -103,6 +103,14 @@
       "modules/devenv/**"
       "lib/hm-helpers.nix"
     ];
+    # flake: binary cache config + flake-level settings. Scoped to
+    # files that touch nixConfig or cachix settings so consumers
+    # editing their flake inputs get the rule, and consumers
+    # editing ai modules don't.
+    flake = [
+      "flake.nix"
+      "devenv.nix"
+    ];
     # hm-modules: cross-cutting module conventions. Scoped to every
     # HM module file so conventions load whenever a contributor is
     # touching any module. Excludes modules/devenv/ because devenv
@@ -121,6 +129,9 @@
       "packages/mcp-servers/**"
     ];
     monorepo = null;
+    # nix-standards: broad Nix code conventions. Applies to any
+    # .nix file in the tree.
+    nix-standards = ["**/*.nix"];
     # overlays: cross-cutting cache-hit parity rule. Scoped to every
     # overlay package file in packages/, excluding the content-only
     # fragments dirs (which ship markdown, no compilation, so the
@@ -129,6 +140,14 @@
       "packages/ai-clis/*.nix"
       "packages/git-tools/*.nix"
       "packages/mcp-servers/*.nix"
+    ];
+    # packaging: naming conventions + platform handling for overlay
+    # packages. Scoped to the packages tree plus nvfetcher.toml
+    # (source tracking).
+    packaging = [
+      "nvfetcher.toml"
+      "packages/**/*.nix"
+      "packages/**/sources.nix"
     ];
     # pipeline: fragment composition + ecosystem transforms + docsite
     # generators. Scoped to every file that participates in the dev
@@ -167,22 +186,26 @@
       }
     ];
     devenv = ["files-internals"];
+    flake = ["binary-cache"];
     hm-modules = ["module-conventions"];
+    mcp-servers = ["overlay-guide"];
     monorepo = [
       "architecture-fragments"
-      "binary-cache"
       "build-commands"
       "change-propagation"
-      "generation-architecture"
       "linting"
-      "naming-conventions"
-      "nix-standards"
-      "platforms"
       "project-overview"
     ];
-    mcp-servers = ["overlay-guide"];
+    nix-standards = ["nix-standards"];
     overlays = ["cache-hit-parity"];
-    pipeline = ["fragment-pipeline"];
+    packaging = [
+      "naming-conventions"
+      "platforms"
+    ];
+    pipeline = [
+      "fragment-pipeline"
+      "generation-architecture"
+    ];
     stacked-workflows = ["development"];
   };
 
@@ -632,7 +655,7 @@
   # ── CONTRIBUTING.md content ─────────────────────────────────────────
   contributingMd = let
     buildCommands = builtins.readFile ./fragments/monorepo/build-commands.md;
-    generationArch = builtins.readFile ./fragments/monorepo/generation-architecture.md;
+    generationArch = builtins.readFile ./fragments/pipeline/generation-architecture.md;
     commitConvention = builtins.readFile ../packages/coding-standards/fragments/commit-convention.md;
   in ''
     # Contributing to nix-agentic-tools
