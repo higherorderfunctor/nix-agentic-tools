@@ -7,12 +7,18 @@
 # Pattern mirrors the home-manager modules/ai/default.nix but targets
 # devenv's files.* instead of home.file.
 #
+# Each ai.{claude,copilot,kiro}.enable is the SOLE gate for that CLI's
+# fanout — it also implicitly enables the corresponding devenv module
+# (claude.code.enable, copilot.enable, kiro.enable), so consumers don't
+# need to set enable twice. There is no master ai.enable switch;
+# enabling at least one ecosystem sub-option is the activation.
+# Parity with the home-manager ai module (dropped ai.enable in f2e911c).
+#
 # Usage:
 #   ai = {
-#     enable = true;
-#     claude.enable = true;
-#     copilot.enable = true;
-#     kiro.enable = true;
+#     claude.enable = true;   # also sets claude.code.enable
+#     copilot.enable = true;  # also sets copilot.enable
+#     kiro.enable = true;     # also sets kiro.enable
 #     skills = { stack-fix = ./skills/stack-fix; };
 #     instructions.coding-standards = {
 #       text = "Always use strict mode...";
@@ -47,8 +53,6 @@
   hasOpt = path: lib.hasAttrByPath path config;
 in {
   options.ai = {
-    enable = mkEnableOption "unified AI configuration across Claude, Copilot, and Kiro";
-
     claude = mkOption {
       type = types.submodule {
         options = {
@@ -162,15 +166,17 @@ in {
     };
   };
 
-  config = mkIf cfg.enable (mkMerge [
+  config = mkMerge [
     # Shared environment variables — merge into devenv env for all ecosystems
     (mkIf (cfg.environmentVariables != {}) {
       env = lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
     })
 
-    # Claude Code — uses files.* for both rules and skills
+    # Claude Code — uses files.* for both rules and skills.
+    # ai.claude.enable flips claude.code.enable via mkDefault.
     (mkIf cfg.claude.enable (mkMerge [
       {
+        claude.code.enable = mkDefault true;
         files =
           # Instructions as Claude rules with frontmatter
           concatMapAttrs (name: instr: {
@@ -193,9 +199,11 @@ in {
       })
     ]))
 
-    # Copilot — uses copilot.* options
+    # Copilot — uses copilot.* options.
+    # ai.copilot.enable flips copilot.enable via mkDefault.
     (mkIf cfg.copilot.enable {
       copilot = {
+        enable = mkDefault true;
         environmentVariables = lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
         instructions = lib.mapAttrs (_name: instr:
           mkDefault (aiTransforms.copilot instr))
@@ -210,9 +218,11 @@ in {
       };
     })
 
-    # Kiro — uses kiro.* options
+    # Kiro — uses kiro.* options.
+    # ai.kiro.enable flips kiro.enable via mkDefault.
     (mkIf cfg.kiro.enable {
       kiro = {
+        enable = mkDefault true;
         environmentVariables = lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
         lspServers = lib.mapAttrs (name: server:
           mkDefault (mkLspConfig name server))
@@ -231,5 +241,5 @@ in {
         cfg.instructions;
       };
     })
-  ]);
+  ];
 }
