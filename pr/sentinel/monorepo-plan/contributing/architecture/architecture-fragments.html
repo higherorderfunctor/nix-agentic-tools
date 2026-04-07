@@ -34,7 +34,7 @@
             const path_to_root = "../../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../../searchindex-5ee07d87.js";
+            window.path_to_searchindex_js = "../../searchindex-e9101bfe.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../../toc-841f2094.js"></script>
@@ -180,6 +180,10 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h2 id="architecture-fragments"><a class="header" href="#architecture-fragments">Architecture Fragments</a></h2>
+<blockquote>
+<p><strong>Last verified:</strong> 2026-04-08 (commit pending — follows the
+monorepo fragment re-scope in a9f991b).</p>
+</blockquote>
 <p>This repo ships path-scoped architecture fragments as dev-only
 context for agents working on it. They are SEPARATE from the
 published consumer-facing content. Locations:</p>
@@ -200,7 +204,12 @@ each ecosystem)</li>
 <code>applyTo:</code> comma-joined globs</li>
 <li>Kiro: <code>.kiro/steering/&lt;name&gt;.md</code> with <code>inclusion: fileMatch</code>
 and an array <code>fileMatchPattern:</code></li>
-<li>Codex / AGENTS.md: flat concatenation (no scoping)</li>
+<li>Codex / AGENTS.md: orientation only (no scoped fragments).
+Deep-dive architecture content lives in the per-ecosystem
+scoped files above and in the mdbook contributing section.
+AGENTS.md used to concatenate every scoped fragment flat, but
+that bloated it to ~2k lines; Phase 2.4 trimmed it to just the
+monorepo orientation content (commit c4f4aff).</li>
 </ul>
 <h3 id="maintenance-is-mandatory"><a class="header" href="#maintenance-is-mandatory">Maintenance is mandatory</a></h3>
 <p><strong>When you make changes that alter the shape of any abstraction a

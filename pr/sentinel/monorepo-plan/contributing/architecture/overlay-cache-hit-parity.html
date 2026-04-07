@@ -34,7 +34,7 @@
             const path_to_root = "../../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../../searchindex-5ee07d87.js";
+            window.path_to_searchindex_js = "../../searchindex-e9101bfe.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../../toc-841f2094.js"></script>
@@ -181,12 +181,12 @@
                     <main>
                         <h2 id="overlay-cache-hit-parity"><a class="header" href="#overlay-cache-hit-parity">Overlay Cache-Hit Parity</a></h2>
 <blockquote>
-<p><strong>Last verified:</strong> 2026-04-07 (commit 0f4228d). If you touch any
+<p><strong>Last verified:</strong> 2026-04-08 (commit pending — full rollout
+across git-tools, mcp-servers, and ai-clis). If you touch any
 <code>packages/&lt;group&gt;/*.nix</code> overlay file or the overlay composition
 machinery and this fragment isn’t updated in the same commit,
-stop and fix it. This rule is documented in detail as an OPEN
-backlog item in <code>docs/plan.md</code> (“Overlays must instantiate their
-own pkgs from <code>inputs.nixpkgs</code>”).</p>
+stop and fix it. Regressions are gated by the
+<code>checks.cache-hit-parity</code> flake check (see “Verification” below).</p>
 </blockquote>
 <h3 id="the-rule"><a class="header" href="#the-rule">The rule</a></h3>
 <p><strong>Every compiled overlay package in this repo must instantiate its
@@ -248,19 +248,6 @@ Disk usage goes up. Evaluation is slightly slower.</p>
 this way.</strong> The alternative (using <code>follows</code> to share inputs)
 produces a cleaner closure but defeats the cachix substituter
 entirely: every consumer builds from source on every rebuild.</p>
-<h3 id="status-backlog-item-in-progress"><a class="header" href="#status-backlog-item-in-progress">Status: backlog item in progress</a></h3>
-<p>As of 2026-04-07 the rule is NOT yet consistently applied. Current
-overlay code in <code>packages/git-tools/git-branchless.nix</code> (and
-friends) still uses <code>final.rust-bin</code> and <code>prev.git-branchless</code>.
-The store path consumers get differs from CI’s standalone-build
-store path. Cache miss confirmed via narinfo lookup against
-<code>nix-agentic-tools.cachix.org</code>.</p>
-<p>The full fix plan, file enumeration, verification protocol, and
-verification bash script all live in <code>docs/plan.md</code> under the
-backlog item
-“Overlays must instantiate their own pkgs from <code>inputs.nixpkgs</code>”.
-Read that before making changes — the answer is longer than
-this fragment.</p>
 <h3 id="when-youre-writing-a-new-overlay-package"><a class="header" href="#when-youre-writing-a-new-overlay-package">When you’re writing a new overlay package</a></h3>
 <ol>
 <li>Accept <code>{inputs}: sources: final: _prev:</code> as the function
@@ -276,7 +263,21 @@ the same package through a consumer’s nixpkgs with the overlay
 applied, and confirm the store path is byte-identical. If they
 differ, cache hits won’t happen.</li>
 </ol>
-<h3 id="verification-protocol"><a class="header" href="#verification-protocol">Verification protocol</a></h3>
+<h3 id="verification"><a class="header" href="#verification">Verification</a></h3>
+<p>Automated (preferred): the <code>checks.cache-hit-parity</code> flake check
+evaluates every compiled overlay package twice — once against
+<code>inputs.nixpkgs</code> (the “standalone” / CI path) and once against a
+deliberately divergent <code>inputs.nixpkgs-test</code> pin playing the role
+of a consumer pkgs set. If any package’s store path differs
+between the two, the check fails with a drift report naming the
+offender. Run it locally with:</p>
+<pre><code class="language-bash">nix build .#checks.x86_64-linux.cache-hit-parity
+cat result   # "ok — no drift detected" on success
+</code></pre>
+<p>Any regression — a new overlay package that uses <code>final.X</code> or
+<code>prev.X</code> for a build input, or an existing one that was
+refactored — will turn the check red before it ships.</p>
+<p>Manual (legacy, for ad-hoc debugging):</p>
 <pre><code class="language-bash"># 1. Standalone path (what CI builds and pushes to cachix)
 cd ~/Documents/projects/nix-agentic-tools
 STANDALONE=$(nix eval --raw .#git-branchless)
@@ -308,11 +309,11 @@ fragments-ai) have no compiled inputs, so their store paths are
 already byte-identical regardless of which nixpkgs evaluates
 them. Skip the ourPkgs pattern for these.</p>
 <p><strong>Pure binary-fetch packages</strong> (no build, just an <code>overrideAttrs</code>
-that swaps <code>src</code>/<code>version</code>) are borderline. If the <code>overrideAttrs</code>
-uses <code>prev.X</code> for nothing except the starting meta, the store
-path may still match. In practice, <code>copilot-cli.nix</code> and
-<code>kiro-cli.nix</code> use this pattern and the cache parity is the
-subject of ongoing verification — see the backlog item.</p>
+that swaps <code>src</code>/<code>version</code>) still route through <code>ourPkgs</code> to keep
+the starting derivation tied to this repo’s nixpkgs pin. The
+<code>copilot-cli</code>, <code>github-copilot-cli</code>, <code>kiro-cli</code>, and
+<code>kiro-gateway</code> overlays in <code>packages/ai-clis/</code> follow this shape
+and are covered by the <code>checks.cache-hit-parity</code> flake check.</p>
 
                     </main>
 
