@@ -16,6 +16,16 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+
+    # Regression-test-only second nixpkgs pin used by
+    # checks/cache-hit-parity.nix to verify overlay packages
+    # produce byte-identical store paths regardless of which
+    # nixpkgs the consumer brings. Pinned to `master` so it's
+    # a *different* rev than `inputs.nixpkgs` (nixos-unstable),
+    # giving the parity check something to push against.
+    # No production package imports this input.
+    nixpkgs-test.url = "github:NixOS/nixpkgs/master";
+
     nuscht-search = {
       url = "github:NuschtOS/search";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -129,8 +139,9 @@
       pkgs = pkgsFor system;
       moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs self;};
       devshellChecks = import ./checks/devshell-eval.nix {inherit lib pkgs self;};
+      parityChecks = import ./checks/cache-hit-parity.nix {inherit inputs lib pkgs self;};
     in
-      moduleChecks // devshellChecks);
+      moduleChecks // devshellChecks // parityChecks);
 
     # devShell provided by devenv CLI (devenv shell / devenv test)
     # See devenv.nix for shell configuration.

@@ -166,6 +166,22 @@
         "type": "github"
       }
     },
+    "nixpkgs-test": {
+      "locked": {
+        "lastModified": 1775592937,
+        "narHash": "sha256-u2RX6ITUzdfrSqZQZGiU9qxStDmVn8GtyykL0dWEl18=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "32b70c7b78958f99833eb4024743f975a1e1d19a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "master",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "nuscht-search": {
       "inputs": {
         "flake-utils": "flake-utils",
@@ -264,6 +280,7 @@
       "inputs": {
         "mcp-nixos": "mcp-nixos",
         "nixpkgs": "nixpkgs",
+        "nixpkgs-test": "nixpkgs-test",
         "nuscht-search": "nuscht-search",
         "nvfetcher": "nvfetcher",
         "rust-overlay": "rust-overlay",
