@@ -34,7 +34,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-94040b2d.js";
+            window.path_to_searchindex_js = "../searchindex-8f56cdc7.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-903d4130.js"></script>
@@ -252,11 +252,11 @@ imports = [
 ];
 </code></pre>
 <h2 id="4-minimal-configuration"><a class="header" href="#4-minimal-configuration">4. Minimal configuration</a></h2>
-<pre><code class="language-nix"># Enable the unified AI module for Claude Code
-ai = {
-  enable = true;
-  claude.enable = true;
-};
+<pre><code class="language-nix"># Enable the unified AI module for Claude Code.
+# ai.claude.enable is the sole gate — it also flips
+# programs.claude-code.enable via mkDefault, so no need to set
+# enable twice.
+ai.claude.enable = true;
 
 # Enable stacked workflows (git presets + skills)
 stacked-workflows = {
@@ -268,8 +268,9 @@ stacked-workflows = {
 <h2 id="5-full-configuration-example"><a class="header" href="#5-full-configuration-example">5. Full configuration example</a></h2>
 <pre><code class="language-nix">{pkgs, ...}: {
   # ── Unified AI config ──────────────────────────────────────────────
+  # Each ai.&lt;cli&gt;.enable is the sole gate — it also flips the
+  # corresponding programs.&lt;cli&gt;.enable via mkDefault.
   ai = {
-    enable = true;
     claude.enable = true;
     copilot.enable = true;
     kiro.enable = true;

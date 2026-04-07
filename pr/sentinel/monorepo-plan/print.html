@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-94040b2d.js";
+            window.path_to_searchindex_js = "searchindex-8f56cdc7.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-903d4130.js"></script>
@@ -246,10 +246,7 @@ systemd services, stacked workflow git presets, per-CLI modules
 (copilot-cli, kiro-cli).</p>
 <pre><code class="language-nix">imports = [inputs.nix-agentic-tools.homeManagerModules.default];
 
-ai = {
-  enable = true;
-  claude.enable = true;
-};
+ai.claude.enable = true;
 
 stacked-workflows.enable = true;
 </code></pre>
@@ -270,10 +267,7 @@ inputs:
 # devenv.nix
 imports = [inputs.nix-agentic-tools.devenvModules.default];
 
-ai = {
-  enable = true;
-  claude.enable = true;
-};
+ai.claude.enable = true;
 </code></pre>
 <p><strong>Next:</strong> <a href="#devenv-setup">DevEnv Setup</a></p>
 <h2 id="manual-lib"><a class="header" href="#manual-lib">Manual lib</a></h2>
@@ -377,11 +371,11 @@ imports = [
 ];
 </code></pre>
 <h2 id="4-minimal-configuration"><a class="header" href="#4-minimal-configuration">4. Minimal configuration</a></h2>
-<pre><code class="language-nix"># Enable the unified AI module for Claude Code
-ai = {
-  enable = true;
-  claude.enable = true;
-};
+<pre><code class="language-nix"># Enable the unified AI module for Claude Code.
+# ai.claude.enable is the sole gate — it also flips
+# programs.claude-code.enable via mkDefault, so no need to set
+# enable twice.
+ai.claude.enable = true;
 
 # Enable stacked workflows (git presets + skills)
 stacked-workflows = {
@@ -393,8 +387,9 @@ stacked-workflows = {
 <h2 id="5-full-configuration-example"><a class="header" href="#5-full-configuration-example">5. Full configuration example</a></h2>
 <pre><code class="language-nix">{pkgs, ...}: {
   # ── Unified AI config ──────────────────────────────────────────────
+  # Each ai.&lt;cli&gt;.enable is the sole gate — it also flips the
+  # corresponding programs.&lt;cli&gt;.enable via mkDefault.
   ai = {
-    enable = true;
     claude.enable = true;
     copilot.enable = true;
     kiro.enable = true;
@@ -529,12 +524,7 @@ individually if preferred:</p>
 <pre><code class="language-nix">{inputs, pkgs, ...}: {
   imports = [inputs.nix-agentic-tools.devenvModules.default];
 
-  ai = {
-    enable = true;
-    claude.enable = true;
-  };
-
-  claude.code.enable = true;
+  ai.claude.enable = true;
 }
 </code></pre>
 <h2 id="4-full-configuration-example"><a class="header" href="#4-full-configuration-example">4. Full configuration example</a></h2>
@@ -551,8 +541,10 @@ in {
   packages = with pkgs; [nixd marksman taplo];
 
   # ── Unified AI config ─────────────────────────────────────────────
+  # Each ai.&lt;cli&gt;.enable is the sole gate and also flips the
+  # corresponding devenv module's enable via mkDefault, so consumers
+  # don't need to set enable twice.
   ai = {
-    enable = true;
     claude.enable = true;
     copilot.enable = true;
     kiro.enable = true;
@@ -564,8 +556,8 @@ in {
   };
 
   # ── Claude Code ────────────────────────────────────────────────────
+  # claude.code.enable is set by ai.claude.enable above via the fanout.
   claude.code = {
-    enable = true;
     env.ENABLE_LSP_TOOL = "1";
 
     mcpServers.github-mcp = {
@@ -576,16 +568,12 @@ in {
   };
 
   # ── Copilot ────────────────────────────────────────────────────────
-  copilot = {
-    enable = true;
-    settings.model = "gpt-4o";
-  };
+  # copilot.enable is set by ai.copilot.enable above via the fanout.
+  copilot.settings.model = "gpt-4o";
 
   # ── Kiro ───────────────────────────────────────────────────────────
-  kiro = {
-    enable = true;
-    settings.chat.defaultModel = "claude-sonnet-4";
-  };
+  # kiro.enable is set by ai.kiro.enable above via the fanout.
+  kiro.settings.chat.defaultModel = "claude-sonnet-4";
 }
 </code></pre>
 <h2 id="5-verify"><a class="header" href="#5-verify">5. Verify</a></h2>
@@ -785,15 +773,19 @@ translation.</p>
 <p>Both home-manager and devenv expose the same <code>ai.*</code> interface.</p>
 <h2 id="enabling-clis"><a class="header" href="#enabling-clis">Enabling CLIs</a></h2>
 <pre><code class="language-nix">ai = {
-  enable = true;          # master switch
   claude.enable = true;   # fan out to Claude Code
   copilot.enable = true;  # fan out to Copilot CLI
   kiro.enable = true;     # fan out to Kiro CLI
 };
 </code></pre>
-<p>Each ecosystem submodule controls whether shared config is written to
-that CLI’s config paths. You can enable any combination. Each also
-exposes a <code>package</code> option for overriding the default package:</p>
+<p>Each <code>ai.&lt;cli&gt;.enable</code> is the sole gate for that ecosystem. There is
+no master <code>ai.enable</code> switch — setting any sub-enable activates the
+corresponding fanout. Each per-CLI enable also implicitly flips the
+upstream module’s enable option (<code>programs.claude-code.enable</code>,
+<code>programs.copilot-cli.enable</code>, <code>programs.kiro-cli.enable</code>) via
+<code>mkDefault</code>, so consumers don’t need to set enable twice.</p>
+<p>Each submodule also exposes a <code>package</code> option for overriding the
+default package:</p>
 <pre><code class="language-nix">ai.claude = {
   enable = true;
   package = pkgs.claude-code;  # override with custom build
@@ -893,12 +885,19 @@ Copilot uses <code>applyTo: "**"</code>, and Kiro uses <code>inclusion: always</
 <li><strong>Kiro</strong>: writes JSON with <code>command</code>, <code>args</code>, and optional <code>initializationOptions</code></li>
 </ul>
 <h2 id="assertions"><a class="header" href="#assertions">Assertions</a></h2>
-<p>The module includes safety assertions:</p>
+<p>The module includes safety assertions (always evaluated, not gated
+on any enable):</p>
 <ul>
 <li>At least one CLI must be enabled when shared config exists</li>
 <li><code>copilot.enable</code> requires <code>programs.copilot-cli</code> to be available</li>
 <li><code>kiro.enable</code> requires <code>programs.kiro-cli</code> to be available</li>
-<li>Claude has no assertion – it uses <code>home.file</code> directly</li>
+<li>Claude has no upstream-module assertion — it uses <code>home.file</code> directly</li>
+</ul>
+<p>When <code>ai.claude.buddy</code> is set (see Buddy Customization guide), two
+additional assertions apply:</p>
+<ul>
+<li><code>buddy.peak != buddy.dump</code> (or both null)</li>
+<li><code>buddy.rarity == "common" -&gt; buddy.hat == "none"</code></li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="overlays--packages"><a class="header" href="#overlays--packages">Overlays &amp; Packages</a></h1>
@@ -1513,20 +1512,6 @@ quickstart.</p>
 </table>
 </div>
 <h2 id="options"><a class="header" href="#options">Options</a></h2>
-<h2 id="aienable"><a class="header" href="#aienable">ai.enable</a></h2>
-<p>Whether to enable unified AI configuration across Claude, Copilot, and Kiro.</p>
-<p><em>Type:</em>
-boolean</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">false
-</code></pre>
-<p><em>Example:</em></p>
-<pre><code class="language-nix">true
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/monorepo-plan/blob/main/modules/devenv/ai.nix">modules/devenv/ai.nix</a></li>
-</ul>
 <h2 id="aiclaude"><a class="header" href="#aiclaude">ai.claude</a></h2>
 <p>Claude Code ecosystem configuration.</p>
 <p>Note: buddy customization is HM-only (devenv is per-project,

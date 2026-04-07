@@ -34,7 +34,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-94040b2d.js";
+            window.path_to_searchindex_js = "../searchindex-8f56cdc7.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-903d4130.js"></script>
@@ -187,15 +187,19 @@ translation.</p>
 <p>Both home-manager and devenv expose the same <code>ai.*</code> interface.</p>
 <h2 id="enabling-clis"><a class="header" href="#enabling-clis">Enabling CLIs</a></h2>
 <pre><code class="language-nix">ai = {
-  enable = true;          # master switch
   claude.enable = true;   # fan out to Claude Code
   copilot.enable = true;  # fan out to Copilot CLI
   kiro.enable = true;     # fan out to Kiro CLI
 };
 </code></pre>
-<p>Each ecosystem submodule controls whether shared config is written to
-that CLI’s config paths. You can enable any combination. Each also
-exposes a <code>package</code> option for overriding the default package:</p>
+<p>Each <code>ai.&lt;cli&gt;.enable</code> is the sole gate for that ecosystem. There is
+no master <code>ai.enable</code> switch — setting any sub-enable activates the
+corresponding fanout. Each per-CLI enable also implicitly flips the
+upstream module’s enable option (<code>programs.claude-code.enable</code>,
+<code>programs.copilot-cli.enable</code>, <code>programs.kiro-cli.enable</code>) via
+<code>mkDefault</code>, so consumers don’t need to set enable twice.</p>
+<p>Each submodule also exposes a <code>package</code> option for overriding the
+default package:</p>
 <pre><code class="language-nix">ai.claude = {
   enable = true;
   package = pkgs.claude-code;  # override with custom build
@@ -295,12 +299,19 @@ Copilot uses <code>applyTo: "**"</code>, and Kiro uses <code>inclusion: always</
 <li><strong>Kiro</strong>: writes JSON with <code>command</code>, <code>args</code>, and optional <code>initializationOptions</code></li>
 </ul>
 <h2 id="assertions"><a class="header" href="#assertions">Assertions</a></h2>
-<p>The module includes safety assertions:</p>
+<p>The module includes safety assertions (always evaluated, not gated
+on any enable):</p>
 <ul>
 <li>At least one CLI must be enabled when shared config exists</li>
 <li><code>copilot.enable</code> requires <code>programs.copilot-cli</code> to be available</li>
 <li><code>kiro.enable</code> requires <code>programs.kiro-cli</code> to be available</li>
-<li>Claude has no assertion – it uses <code>home.file</code> directly</li>
+<li>Claude has no upstream-module assertion — it uses <code>home.file</code> directly</li>
+</ul>
+<p>When <code>ai.claude.buddy</code> is set (see Buddy Customization guide), two
+additional assertions apply:</p>
+<ul>
+<li><code>buddy.peak != buddy.dump</code> (or both null)</li>
+<li><code>buddy.rarity == "common" -&gt; buddy.hat == "none"</code></li>
 </ul>
 
                     </main>
