@@ -101,6 +101,7 @@ readabilipy
 reauthor
 reflog
 Reftable
+reimplementation
 rerere
 revertibility
 Revset

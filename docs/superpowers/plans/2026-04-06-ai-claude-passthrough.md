@@ -157,6 +157,10 @@ copy upstream types verbatim without re-reading the store."
 
 Today `ai.skills` writes `home.file.".claude/skills/<name>".source` directly (`modules/ai/default.nix:229-235`), bypassing `programs.claude-code.skills`. This creates a dead-end: `ai.claude.skills` would collide on the same `home.file` path, and consumers can't compose both. Routing the Claude fanout through `programs.claude-code.skills` consolidates to one source of truth.
 
+**Fanout pattern rationale:** the Copilot and Kiro branches of `modules/ai/default.nix` already delegate through their respective HM modules (`programs.copilot-cli.skills`, `programs.kiro-cli.skills`) — the Claude branch is the only one writing `home.file` directly. This task aligns Claude to the same delegation pattern so all three branches look structurally identical: `programs.<cli>.skills = lib.mapAttrs (_: mkDefault) cfg.skills;`. No behavioral choice about on-disk layout — mirror the upstream HM `programs.claude-code.skills` conventions exactly, same as how Copilot/Kiro mirror their vendored module conventions via `lib/hm-helpers.nix:mkSkillEntries`.
+
+**Consumer transition note:** any consumer who migrated a skill from `programs.claude-code.skills` to `ai.skills` while the old direct-`home.file` code was live will still have a real `.claude/skills/<name>/` directory on disk (laid down by upstream `programs.claude-code.skills` previously). When they pull this fix, the first activation will error with `Existing file '<path>' would be clobbered` because the old `ai.skills` path was a dir symlink and the new delegated path is a real dir. They run `home-manager switch -b backup` once and subsequent activations succeed cleanly. Call this out in the commit message.
+
 **Files:**
 
 - Modify: `modules/ai/default.nix:218-236`
@@ -276,6 +280,219 @@ ai.claude.skills impossible without a home.file collision. Route
 the Claude fanout through the upstream option so there's one
 source of truth for .claude/skills/*."
 ```
+
+---
+
+### Task 2b: Align devenv skills fanout to match HM Layout B (PRE-GROOMING)
+
+> **Status:** Research complete 2026-04-06, approach NOT yet chosen. Written into the plan so a grooming session can decide Option A / B / C without re-doing the investigation. See also `project_devenv_files_internals.md` memory for deep technical details on the devenv `files` module.
+
+**The problem:** HM modules and devenv modules currently produce different on-disk layouts for the same `ai.skills` / `programs.<cli>.skills` config. This is a cross-surface inconsistency that bit the nixos-config consumer during the 2026-04-06 `nix-mcp-servers` migration (see `project_ai_skills_layout.md` memory) and would bite any user mixing HM + devenv on the same filesystem paths.
+
+#### Current state (verified 2026-04-06)
+
+**HM side — all three produce Layout B** (`.claude/skills/<name>/` is a real dir with per-file store symlinks inside):
+
+| Surface                                   | File                                                    | Mechanism                                                    | Layout |
+| ----------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------ | ------ |
+| Upstream `programs.claude-code.skills`    | home-manager `modules/programs/claude-code.nix:516-524` | `mkSkillEntry` hardcodes `recursive = true` for dir paths    | B      |
+| `programs.copilot-cli.skills` (this repo) | `modules/copilot-cli/default.nix:178`                   | `hmHelpers.mkSkillEntries` (hardcodes `recursive = true`)    | B      |
+| `programs.kiro-cli.skills` (this repo)    | `modules/kiro-cli/default.nix:220`                      | `hmHelpers.mkSkillEntries` (same helper)                     | B      |
+| Helper source                             | `lib/hm-helpers.nix:42-53`                              | `recursive = true` hardcoded for `lib.pathIsDirectory` input | —      |
+
+The only HM-side gap is the `ai.skills` fanout Claude branch — Task 2 (above) fixes it.
+
+**devenv side — all three produce Layout A** (single dir symlink → store path):
+
+| Surface                     | File                                 | Mechanism                                     | Layout |
+| --------------------------- | ------------------------------------ | --------------------------------------------- | ------ |
+| `ai.skills` (Claude branch) | `modules/devenv/ai.nix:187-190`      | `files.".claude/skills/<name>".source = path` | A      |
+| `copilot.skills`            | `modules/devenv/copilot.nix:113-116` | `files.".github/skills/<name>".source = path` | A      |
+| `kiro.skills`               | `modules/devenv/kiro.nix:146-149`    | `files.".kiro/skills/<name>".source = path`   | A      |
+
+#### Root cause: devenv's `files` option structurally cannot do Layout B
+
+The devenv `files` option is a thin wrapper that produces single symlinks. It has no `recursive` knob, no per-file enumeration, and cannot walk a source directory. Setting `files.".claude/skills/foo".source = ./skill-dir;` produces **one symlink** whose target is the directory in the nix store. Layout A by construction.
+
+Full technical breakdown (format definitions, submodule structure, create-script internals, silent-fail behavior on dir-vs-symlink conflicts) lives in the `project_devenv_files_internals.md` memory. Read that before attempting any of the fixes below.
+
+#### devenv silent-fail summary (important for transition planning)
+
+Unlike HM which errors out with "would be clobbered", devenv **silently skips** when a real dir is in the way of a symlink it wants to create. It logs `Conflicting non-file <path>` to stderr and no-ops. This means a Layout A → Layout B transition in devenv is a silent failure, not a noisy one. Debugging requires watching stderr during `devenv shell` startup or `devenv test` output. See the memory for the exact stderr line to grep for.
+
+#### Options
+
+**Option A — Eval-time `builtins.readDir` walker** (recommended):
+
+Add `mkDevenvSkillEntries` to `lib/hm-helpers.nix` (or a new `lib/devenv-helpers.nix`) that recursively walks a source directory path at eval time using `builtins.readDir`, emitting one `files."<prefix>/<relpath>".source = <file>;` entry per leaf file. Effectively a user-space reimplementation of what HM's `recursive = true` does. All three devenv modules (`ai.nix`, `copilot.nix`, `kiro.nix`) swap their single-`.source` assignments for the helper output.
+
+- **Pros**: ships today, no upstream dependency, aligns devenv + HM output exactly, no silent failures on cross-surface filesystem moves
+- **Cons**: eval-time FS walks (negligible cost for skill dirs); Nix evaluation must have read access to the source path (already required for `.source`); the helper can only walk through source paths Nix can `readDir` — but `ai.skills` / per-ecosystem `skills` options use `types.attrsOf types.path`, so this is fine
+- **Touch points**: `lib/hm-helpers.nix` (or new helper file), `modules/devenv/ai.nix:187-190`, `modules/devenv/copilot.nix:113-116`, `modules/devenv/kiro.nix:146-149`, `checks/devshell-eval.nix` (add layout-assertion check)
+
+**Option B — Accept the split and document**:
+
+HM produces Layout B, devenv produces Layout A. Runtime behavior of the Claude/Copilot/Kiro CLIs is the same (they walk `.claude/skills/` and find SKILL.md either way), so skills functionally work on both surfaces. Add a doc note warning users not to mix HM + devenv management of the same `.claude/skills/<name>` path.
+
+- **Pros**: zero code changes, minimum risk
+- **Cons**: keeps the cross-surface inconsistency forever; silent-fail risk if anyone hits the exact mixing scenario; contradicts the "config parity" rule in `CLAUDE.md` which says "Gaps between methods are bugs"
+
+**Option C — Upstream PR to devenv `files` option**:
+
+File a PR against `cachix/devenv` adding a `recursive` field to the `fileType` submodule in `src/modules/files.nix` that triggers a `builtins.readDir`-based walk in the create script. Mirrors HM's `home.file.*.recursive` semantics.
+
+- **Pros**: correct long-term fix, benefits every devenv user
+- **Cons**: doesn't unblock us today; requires upstream maintainer review + release cadence; in the meantime we're on Option A or B anyway
+
+#### Recommendation for grooming
+
+**Option A** — aligns with the `CLAUDE.md` "config parity is mandatory" rule, ships today, matches HM output exactly. Option C can happen in parallel as a follow-up contribution but isn't a blocker for this plan.
+
+#### Draft implementation for Option A (skip if picking B or C)
+
+**Files:**
+
+- Create or extend: `lib/hm-helpers.nix` (add `mkDevenvSkillEntries`)
+- Modify: `modules/devenv/ai.nix:186-190` (Claude branch skills fanout)
+- Modify: `modules/devenv/copilot.nix:112-116`
+- Modify: `modules/devenv/kiro.nix:145-149`
+- Modify: `checks/devshell-eval.nix` (add per-file layout eval check)
+
+- [ ] **Step 1: Write the failing devshell eval check**
+
+In `checks/devshell-eval.nix`, add a test that evaluates a devenv module with `ai.skills = { sample = /tmp/sample-skill-dir; }` and asserts that `config.files` contains per-file entries like `".claude/skills/sample/SKILL.md"`, not a single `".claude/skills/sample"`. The test should fail against the current code that produces Layout A.
+
+- [ ] **Step 2: Add `mkDevenvSkillEntries` helper**
+
+Append to `lib/hm-helpers.nix`:
+
+```nix
+  # Recursively enumerate a skill source directory at eval time and emit
+  # devenv-compatible `files."<prefix>/<relpath>".source = <file>;` entries
+  # for every leaf file. Mirrors HM `recursive = true` in user space because
+  # devenv's `files.<name>.source = path` option only creates a single dir
+  # symlink (Layout A) and has no recursive walk of its own.
+  #
+  # Usage: `mkDevenvSkillEntries ".claude" { skillName = ./path/to/skill; }`
+  # returns: { ".claude/skills/skillName/SKILL.md".source = ...; ... }
+  mkDevenvSkillEntries = configDir: attrs: let
+    walkDir = prefix: dir: let
+      entries = builtins.readDir dir;
+    in
+      lib.concatMapAttrs (name: kind:
+        if kind == "directory"
+        then walkDir "${prefix}/${name}" "${dir}/${name}"
+        else if kind == "regular" || kind == "symlink"
+        then {"${prefix}/${name}".source = "${dir}/${name}";}
+        else {} # skip unknown (e.g. `unknown`) entries
+      )
+      entries;
+  in
+    lib.concatMapAttrs (
+      skillName: skillPath:
+        if lib.isPath skillPath && lib.pathIsDirectory skillPath
+        then walkDir "${configDir}/skills/${skillName}" skillPath
+        else {"${configDir}/skills/${skillName}/SKILL.md".source = skillPath;}
+    )
+    attrs;
+```
+
+- [ ] **Step 3: Update `modules/devenv/ai.nix` Claude branch**
+
+Replace `modules/devenv/ai.nix:186-190`:
+
+```nix
+          # OLD
+          # Skills as directory symlinks
+          // concatMapAttrs (name: path: {
+            ".claude/skills/${name}".source = mkDefault path;
+          })
+          cfg.skills;
+```
+
+with:
+
+```nix
+          # Skills as file-level symlinks (matches HM Layout B)
+          // lib.mapAttrs (_: entry: entry // {source = mkDefault entry.source;})
+            (hmHelpers.mkDevenvSkillEntries ".claude" cfg.skills);
+```
+
+Note: `mkDefault` needs to wrap the `source` attribute of each generated entry, not the entry itself, so the helper returns plain attrsets and the caller re-wraps.
+
+- [ ] **Step 4: Update `modules/devenv/copilot.nix`**
+
+Replace `modules/devenv/copilot.nix:112-116`:
+
+```nix
+      # OLD
+      # Skills (directory symlinks)
+      // lib.concatMapAttrs (name: path: {
+        ".github/skills/${name}".source = path;
+      })
+      cfg.skills;
+```
+
+with:
+
+```nix
+      # Skills (file-level symlinks, matches HM Layout B)
+      // hmHelpers.mkDevenvSkillEntries ".github" cfg.skills;
+```
+
+> **Grooming verification needed:** the `configDir` here is `.github` because the current code uses `.github/skills/`. Double-check against the HM Copilot module and Copilot CLI docs before merging — if the CLI actually reads from `.copilot/skills/`, this is a pre-existing bug and both the current code AND this fix need updating in the same commit.
+
+- [ ] **Step 5: Update `modules/devenv/kiro.nix`**
+
+Replace `modules/devenv/kiro.nix:145-149`:
+
+```nix
+      # OLD
+      # Skills (directory symlinks)
+      // lib.concatMapAttrs (name: path: {
+        ".kiro/skills/${name}".source = path;
+      })
+      cfg.skills
+```
+
+with:
+
+```nix
+      # Skills (file-level symlinks, matches HM Layout B)
+      // hmHelpers.mkDevenvSkillEntries ".kiro" cfg.skills
+```
+
+- [ ] **Step 6: Run the devshell eval check**
+
+```bash
+nix build .#checks.x86_64-linux.devenv-skills-layout-b-eval
+nix flake check
+```
+
+Expected: previously-failing check passes. No regressions in existing devshell checks.
+
+- [ ] **Step 7: Commit**
+
+```bash
+treefmt lib/hm-helpers.nix modules/devenv/ai.nix modules/devenv/copilot.nix modules/devenv/kiro.nix checks/devshell-eval.nix
+git add lib/hm-helpers.nix modules/devenv/ai.nix modules/devenv/copilot.nix modules/devenv/kiro.nix checks/devshell-eval.nix
+git commit -m "refactor(devenv): align skills fanout to HM Layout B
+
+devenv's files option only creates single dir symlinks (Layout A)
+while HM's programs.<cli>.skills uses recursive = true (Layout B).
+Add mkDevenvSkillEntries helper that walks the source dir at eval
+time with builtins.readDir and emits per-file files.<path>.source
+entries, matching HM output. Closes the config parity gap between
+HM and devenv skills fanout for all three ecosystems."
+```
+
+#### Grooming decision log (fill in when deciding)
+
+- Selected option: _A / B / C_
+- Reasoning: _…_
+- Follow-up task created (if picking B): _link_
+- Upstream PR filed (if picking C): _link_
+- Copilot `configDir` verified (`.github` vs `.copilot`): _yes / no_
 
 ---
 
