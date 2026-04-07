@@ -109,10 +109,7 @@ in {
       // lib.optionalAttrs (filteredSettings != {}) {
         ".copilot/config.json".json = filteredSettings;
       }
-      # Skills (directory symlinks)
-      // lib.concatMapAttrs (name: path: {
-        ".github/skills/${name}".source = path;
-      })
-      cfg.skills;
+      # Skills (walked per-file for Layout B parity with HM)
+      // helpers.mkDevenvSkillEntries ".github" cfg.skills;
   };
 }
