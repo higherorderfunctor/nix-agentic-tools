@@ -23,6 +23,16 @@
     fragments = builtins.attrValues swsContent.passthru.fragments;
   };
 
+  # Module-relative path literal for the source skills directory.
+  # This MUST be a `./` path literal — `builtins.path`, `filterSource`,
+  # and `lib.cleanSourceWith` all return store-path *strings*, which
+  # fail upstream HM's `mkSkillEntry` `lib.isPath` guard and silently
+  # fall through to the text-content fallback (writing the path
+  # string as SKILL.md content). The path must also come directly
+  # from a literal, not via attrset access — module-relative paths
+  # preserve the path type through the file's evaluation frame.
+  skillsRepo = ../../packages/stacked-workflows/skills;
+
   self = {
     inherit (swsContent.passthru) referencesDir skillsDir;
     instructionsClaude = aiTransforms.claude {package = "stacked-workflows";} composed;
@@ -122,18 +132,23 @@ in {
     (lib.mkIf (cfg.integrations.claude.enable && claudeAvailable) {
       programs.claude-code = {
         # Per-skill entries merge with skills from other modules.
-        # `self.skillsDir + "/stack-*"` is path ADDITION (result is a
-        # Nix path), not string interpolation (which would produce a
-        # string and trigger the upstream HM `mkSkillEntry` fallback
-        # that writes the path itself as SKILL.md text content —
-        # matching lib.isPath is a hard type check, not a value check).
+        # Uses `skillsRepo` (a `./` path literal defined in the
+        # module-level let) for path addition. Upstream HM's
+        # `mkSkillEntry` has a `lib.isPath content && lib.pathIsDirectory
+        # content` guard; `swsContent.passthru.skillsDir` is a store-path
+        # *string* (the output of `builtins.path`), which fails the
+        # `lib.isPath` check and falls through to the text fallback,
+        # writing the path itself as SKILL.md content. `skillsRepo` is
+        # a literal path that preserves the path type through
+        # addition, so `mkSkillEntry` takes the intended Layout B
+        # branch.
         skills = {
-          stack-fix = self.skillsDir + "/stack-fix";
-          stack-plan = self.skillsDir + "/stack-plan";
-          stack-split = self.skillsDir + "/stack-split";
-          stack-submit = self.skillsDir + "/stack-submit";
-          stack-summary = self.skillsDir + "/stack-summary";
-          stack-test = self.skillsDir + "/stack-test";
+          stack-fix = skillsRepo + "/stack-fix";
+          stack-plan = skillsRepo + "/stack-plan";
+          stack-split = skillsRepo + "/stack-split";
+          stack-submit = skillsRepo + "/stack-submit";
+          stack-summary = skillsRepo + "/stack-summary";
+          stack-test = skillsRepo + "/stack-test";
         };
       };
       # Per-file references — instructions + tool docs
