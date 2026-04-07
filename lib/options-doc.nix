@@ -199,6 +199,7 @@
   devenvEval = lib.evalModules {
     modules = [
       self.devenvModules.ai
+      self.devenvModules.claude-code-skills
       self.devenvModules.copilot
       self.devenvModules.kiro
       {

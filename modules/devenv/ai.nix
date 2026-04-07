@@ -172,22 +172,19 @@ in {
       env = lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
     })
 
-    # Claude Code — uses files.* for both rules and skills.
-    # ai.claude.enable flips claude.code.enable via mkDefault.
+    # Claude Code — delegates skills through claude.code.skills
+    # (from the claude-code-skills extension module). ai.claude.enable
+    # flips claude.code.enable via mkDefault.
     (mkIf cfg.claude.enable (mkMerge [
       {
         claude.code.enable = mkDefault true;
+        claude.code.skills = lib.mapAttrs (_: mkDefault) cfg.skills;
         files =
           # Instructions as Claude rules with frontmatter
           concatMapAttrs (name: instr: {
             ".claude/rules/${name}.md".text = mkDefault (aiTransforms.claude {package = name;} instr);
           })
-          cfg.instructions
-          # Skills as directory symlinks
-          // concatMapAttrs (name: path: {
-            ".claude/skills/${name}".source = mkDefault path;
-          })
-          cfg.skills;
+          cfg.instructions;
       }
       # Auto-set ENABLE_LSP_TOOL=1 when LSP servers are configured
       (mkIf (cfg.lspServers != {} && hasOpt ["claude" "code" "env"]) {
