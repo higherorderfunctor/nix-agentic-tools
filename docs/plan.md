@@ -227,6 +227,28 @@ Generated file policy:
       wrapper (not Node), buddy state at $XDG_STATE_HOME, withBuddy
       removal, cli.js writable copy, fnv1a vs wyhash hash routing.
       Consumer-facing docs explaining what they get vs upstream.
+- [ ] **ai.claude.\* full passthrough** — architectural gap: ai.claude
+      currently only exposes `enable`, `package`, and `buddy`. The
+      intent is that ai.claude.\* mirrors EVERY option from
+      programs.claude-code.\*, so consumers don't need to drop down
+      to programs.claude-code for anything. Same for ai.copilot and
+      ai.kiro vs their respective programs.\* modules. Missing options
+      from real-world consumer config (nixos-config claude/default.nix)
+      include at minimum: - `ai.claude.memory.text` (CLAUDE.md global instructions) - `ai.claude.skills` (per-Claude skills, separate from
+      cross-ecosystem `ai.skills`) - `ai.claude.mcpServers` (Claude-only MCP entries + explicit
+      inclusion list from services.mcp-servers) - `ai.claude.settings.*` (effortLevel, permissions,
+      enableAllProjectMcpServers, enabledPlugins, etc.) - `ai.claude.plugins` (marketplace plugin install — needs
+      new abstraction over current activation script pattern)
+      Approach: rather than enumerating every option, consider a
+      generic passthrough mechanism (submodule with freeformType
+      pointing at the upstream module's option set). The existing
+      cross-ecosystem options (ai.skills, ai.instructions,
+      ai.lspServers, ai.settings.{model,telemetry}) stay as
+      convenience layers that fan out to multiple ecosystems
+- [ ] outOfStoreSymlink helper for runtime state dirs — Claude writes
+      ~/.claude/projects mid-session, can't use regular HM files.
+      Document the outOfStoreSymlink pattern or wrap as an option
+      (ai.claude.persistentDirs)
 - [ ] Secret scanning — integrate gitleaks into pre-commit hook or CI.
       Currently clean (406 commits verified 2026-04-06). Wire via
       git-hooks.hooks in devenv or as a CI step in ci.yml
