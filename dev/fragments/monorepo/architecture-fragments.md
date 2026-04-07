@@ -1,5 +1,8 @@
 ## Architecture Fragments
 
+> **Last verified:** 2026-04-08 (commit pending — follows the
+> monorepo fragment re-scope in a9f991b).
+
 This repo ships path-scoped architecture fragments as dev-only
 context for agents working on it. They are SEPARATE from the
 published consumer-facing content. Locations:
@@ -20,7 +23,12 @@ Each scoped fragment emits per-ecosystem frontmatter via the
   `applyTo:` comma-joined globs
 - Kiro: `.kiro/steering/<name>.md` with `inclusion: fileMatch`
   and an array `fileMatchPattern:`
-- Codex / AGENTS.md: flat concatenation (no scoping)
+- Codex / AGENTS.md: orientation only (no scoped fragments).
+  Deep-dive architecture content lives in the per-ecosystem
+  scoped files above and in the mdbook contributing section.
+  AGENTS.md used to concatenate every scoped fragment flat, but
+  that bloated it to ~2k lines; Phase 2.4 trimmed it to just the
+  monorepo orientation content (commit c4f4aff).
 
 ### Maintenance is mandatory
 
