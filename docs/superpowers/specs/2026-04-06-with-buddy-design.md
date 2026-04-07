@@ -369,15 +369,15 @@ config = mkIf cfg.enable {
 
 The fingerprint check covers all relevant invalidation cases:
 
-| Trigger                              | Fingerprint changes? | Action                            |
-| ------------------------------------ | -------------------- | --------------------------------- |
-| First setup                          | (no file exists)     | Run salt search, patch, reset     |
-| Buddy options unchanged              | No                   | Skip (cached)                     |
-| Buddy option changed                 | Yes                  | Re-run, re-patch, reset companion |
-| claude-code version upgrade          | Yes (store path)     | Re-run, re-patch, reset companion |
-| sops-decrypted UUID file changed     | Yes                  | Re-run, re-patch, reset companion |
-| User manually edited cli.js or json  | No (we don't detect) | No action                         |
-| Migration from build-time `withBuddy`| (no fingerprint)     | Run, reset companion              |
+| Trigger                               | Fingerprint changes? | Action                            |
+| ------------------------------------- | -------------------- | --------------------------------- |
+| First setup                           | (no file exists)     | Run salt search, patch, reset     |
+| Buddy options unchanged               | No                   | Skip (cached)                     |
+| Buddy option changed                  | Yes                  | Re-run, re-patch, reset companion |
+| claude-code version upgrade           | Yes (store path)     | Re-run, re-patch, reset companion |
+| sops-decrypted UUID file changed      | Yes                  | Re-run, re-patch, reset companion |
+| User manually edited cli.js or json   | No (we don't detect) | No action                         |
+| Migration from build-time `withBuddy` | (no fingerprint)     | Run, reset companion              |
 
 The companion field is always reset whenever the activation script runs
 (i.e., on any fingerprint mismatch). This guarantees that whenever the
