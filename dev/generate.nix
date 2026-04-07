@@ -23,10 +23,42 @@
   swsFragments = builtins.attrValues pkgs.stacked-workflows-content.passthru.fragments;
 
   # ── Dev-only fragment reader ─────────────────────────────────────────
-  mkDevFragment = pkg: name:
+  # Each entry in devFragmentNames may be either:
+  #   - A bare string "name" (legacy form, equivalent to location = "dev")
+  #     reads ./fragments/<pkg>/<name>.md
+  #   - An attrset { location, name, dir ? pkg } for co-located fragments:
+  #     - location = "dev" (default): ./fragments/<dir>/<name>.md
+  #     - location = "package": ../packages/<dir>/fragments/dev/<name>.md
+  #     - location = "module":  ../modules/<dir>/fragments/dev/<name>.md
+  #     The `dir` field defaults to `pkg` (the devFragmentNames key) but can
+  #     be set explicitly when the category name differs from the directory
+  #     name (e.g., category "ai-module" pointing at modules/ai/).
+  mkDevFragment = pkg: entry: let
+    normalized =
+      if builtins.isString entry
+      then {
+        location = "dev";
+        name = entry;
+        dir = pkg;
+      }
+      else {
+        location = entry.location or "dev";
+        inherit (entry) name;
+        dir = entry.dir or pkg;
+      };
+    inherit (normalized) location name dir;
+    fragmentPath =
+      if location == "dev"
+      then ./fragments + "/${dir}/${name}.md"
+      else if location == "package"
+      then ../packages + "/${dir}/fragments/dev/${name}.md"
+      else if location == "module"
+      then ../modules + "/${dir}/fragments/dev/${name}.md"
+      else throw "mkDevFragment: unknown location '${location}' (expected dev|package|module)";
+  in
     fragments.mkFragment {
-      text = builtins.readFile ./fragments/${pkg}/${name}.md;
-      description = "dev/${pkg}/${name}";
+      text = builtins.readFile fragmentPath;
+      description = "${location}:${dir}/${name}";
       priority = 5;
     };
 
