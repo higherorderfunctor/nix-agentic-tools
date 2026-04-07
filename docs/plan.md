@@ -186,7 +186,7 @@ ready to execute this chunk.
       extension module) 4. Drop the `devenvModules.claude-code-skills` entry from
       `flake.nix` 5. `modules/devenv/ai.nix` Claude branch keeps the same
       delegation line — `claude.code.skills = lib.mapAttrs
-       (_: mkDefault) cfg.skills;` — it now points at the
+(_: mkDefault) cfg.skills;` — it now points at the
       upstream option transparently. No ai.nix changes needed. 6. Update `dev/fragments/devenv/files-internals.md` and
       `dev/fragments/ai-skills/skills-fanout-pattern.md` to
       reflect the new state
