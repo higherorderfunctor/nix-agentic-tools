@@ -90,16 +90,18 @@ Three tiers:
       consumes to build `siteArchitecture`. Ideally
       `siteArchitecture` becomes fully auto-discovered.
 
-- [ ] **`ai` HM module should `imports` its deps** —
-      `homeManagerModules.ai` should pull in `claude-code-buddy`,
-      `copilot-cli`, `kiro-cli` via `imports = [ ... ]` so
-      consumers get a single import. Currently the `ai` module
-      references `programs.copilot-cli` / `programs.kiro-cli`
-      unconditionally inside `mkIf cfg.copilot.enable` blocks,
-      forcing consumers to manually import those modules. Real-world
-      surfaced 2026-04-06: nixos-config had to add four surgical
-      imports where one should suffice. Pick option (a): `ai/default.nix`
-      adds `imports = [ ../claude-code-buddy ../copilot-cli ../kiro-cli ];`.
+- [x] **`ai` HM module should `imports` its deps** — landed
+      2026-04-08 in commits `761f8ba` (Phase 1 of
+      architecture-foundation plan) and `c082166` (dead-code
+      cleanup follow-up). The ai module now declares
+      `imports = [../claude-code-buddy ../copilot-cli
+    ../kiro-cli]`, so a single
+      `homeManagerModules.ai` import brings everything needed.
+      Regression gated by the new `aiSelfContained`
+      module-eval check. Dead `hasModule` guards + the
+      `attrByPath` import + the `options` function arg all
+      removed in c082166 since the imports make them
+      tautological.
 
 - [ ] **Drop standalone `claude-code-buddy` HM module** — fold
       the buddy option into a single `claude-code` HM module that
@@ -240,155 +242,35 @@ These are the follow-ups from the Checkpoint 8 multi-reviewer
 audit of the steering-fragments work. Low individual risk, high
 cumulative value.
 
-- [ ] **Always-loaded content audit + dynamic loading fix
-      (HIGH IMPACT)** — measured 2026-04-07 startup context for
-      this repo: ~27k tokens across CLAUDE.md (4.2k), AGENTS.md
-      (19.1k), `.claude/rules/common.md` (4.2k). That's ~13% of
-      Claude's effective context budget burned on orientation
-      before any actual work. Three distinct bugs cascading:
+- [x] **Always-loaded content audit + dynamic loading fix
+      (HIGH IMPACT)** — landed 2026-04-08 across Phase 2 of the
+      architecture-foundation plan. Three cascading bugs fixed
+      in order: (1) `.claude/rules/common.md` duplicate dropped
+      (`432cabb`), (2) CLAUDE.md trimmed to `@AGENTS.md` stub
+      (`be6333e`), (3) AGENTS.md de-flattened from 2015 lines
+      of concatenated scoped fragments to 304 lines of
+      orientation-only content (`c4f4aff`). Plus the monorepo
+      fragment audit (`a9f991b`) re-scoped 5 of 10 always-loaded
+      fragments to new scoped categories (`flake`, `packaging`,
+      `nix-standards`; `generation-architecture` merged into
+      existing `pipeline`).
 
-      **Bug 1: CLAUDE.md triple-loads.** CLAUDE.md is generated
-      as `# CLAUDE.md\n\n@AGENTS.md\n\n` followed by content
-      that is **byte-identical** to `.claude/rules/common.md`
-      body (verified via diff). At session start Claude Code
-      loads:
+      **Measured token budget (via dev/scripts/measure-context.sh):**
 
-      1. CLAUDE.md content (~4.2k)
-      2. The `@AGENTS.md` import inside CLAUDE.md expands to the
-         full AGENTS.md (~19.1k)
-      3. `.claude/rules/common.md` (auto-loaded, no `paths`
-         frontmatter) — same content as CLAUDE.md body (~4.2k)
+      | Ecosystem | Before | After | Reduction |
+      | --------- | ------ | ----- | --------- |
+      | Claude | 779 lines / 4011 words | 3 lines / 3 words | -99.6% |
+      | Copilot | 391 lines / 2008 words | 293 lines / 1541 words | -25% |
+      | Kiro | 393 lines / 2016 words | 295 lines / 1549 words | -25% |
+      | AGENTS.md | 2015 lines / 10872 words | 304 lines / 1616 words | -85% |
 
-      So the orientation content is loaded **three times** under
-      Claude.
-
-      **Bug 2: AGENTS.md concatenates every scoped fragment.**
-      `dev/generate.nix` `agentsContent` builds AGENTS.md as
-      `rootComposed.text + concat-of-every-package-content`.
-      Since the agents.md standard has no scoping primitive,
-      the generator chose to dump everything into one flat file.
-      Result: every scoped architecture fragment
-      (claude-code-wrapper, buddy-activation, ai-module-fanout,
-      ai-skills, devenv-files, hm-modules, overlays, pipeline,
-      etc.) ends up in AGENTS.md regardless of relevance to the
-      current edit. 1870 lines, 19.1k tokens.
-
-      **Bug 3: always-loaded monorepo content is itself ~390 lines.**
-      The `monorepo` category has 10 fragments (architecture-fragments,
-      binary-cache, build-commands, change-propagation,
-      generation-architecture, linting, naming-conventions,
-      nix-standards, platforms, project-overview) composing into
-      ~390 lines / ~4k tokens. Several of these don't need to be
-      always-loaded — `binary-cache` is only relevant when editing
-      `flake.nix`/`nixConfig`, `platforms` only when adding overlay
-      packages, etc. The "always-loaded" set has crept into a
-      dumping ground.
-
-      **Cross-ecosystem implication.** Each ecosystem has its own
-      always-loaded file with the same orientation content:
-
-      | Ecosystem | Always-loaded file                | Lines |
-      | --------- | --------------------------------- | ----- |
-      | Claude    | CLAUDE.md + .claude/rules/common.md | 392+387 (dup) |
-      | Copilot   | .github/copilot-instructions.md   | 391   |
-      | Kiro      | .kiro/steering/common.md          | 393   |
-      | Codex (future) | AGENTS.md or its own format   | 1870 (currently) |
-
-      Codex (when added as 4th ecosystem in MIDDLE) will hit the
-      same problem because it's also flat. Whatever fix lands
-      here must factor in all four ecosystems.
-
-      **Fix plan (small, mostly dev/generate.nix):**
-
-      1. **AGENTS.md = orientation only** — drop the per-package
-         concatenation in `agentsContent`. AGENTS.md becomes
-         `rootComposed.text` plus a small "see scoped files for
-         deep dives" pointer. Tools that consume agents.md
-         (Codex, generic agents.md-compatible tooling) get
-         orientation, not bloat. ~10-line change in
-         `dev/generate.nix`.
-
-      2. **CLAUDE.md → minimal stub** — generate as a one-line
-         `@AGENTS.md` (or two-line with `# CLAUDE.md\n\n@AGENTS.md`)
-         instead of "AGENTS import + body content". Eliminates
-         the 4.2k duplicate. Claude follows the import and gets
-         the content from AGENTS.md. ~5-line change in
-         `dev/generate.nix`.
-
-      3. **Drop common.md generation** — Claude Code already
-         loads CLAUDE.md (which `@AGENTS.md` imports). A separate
-         common.md in `.claude/rules/` byte-identical to the body
-         is pure waste. Remove the `claudeFiles."common.md" = ...`
-         line in `dev/generate.nix`. The scoped rule files stay.
-         ~3-line change.
-
-      4. **Audit the monorepo always-loaded set** — for each of
-         the 10 monorepo fragments, decide: stay always-loaded,
-         move to a scoped category, or delete. Likely stays
-         always-loaded:
-
-         - architecture-fragments (orientation + self-maintenance,
-           critical)
-         - project-overview (what is this repo, must-know)
-         - build-commands (universal)
-         - linting (universal)
-         - change-propagation (cross-cutting rule)
-
-         Likely moves to scoped:
-
-         - binary-cache → scoped to `flake.nix`, `devenv.nix`,
-           `nixConfig`-touching files
-         - platforms → scoped to `nvfetcher.toml`,
-           `packages/**/sources.nix`, `packages/**/*.nix`
-         - naming-conventions → scoped to `packages/**`,
-           `modules/**`
-         - nix-standards → scoped to `**/*.nix` (broad but
-           specific to nix files)
-         - generation-architecture → scoped to `dev/generate.nix`,
-           `dev/tasks/**`, `flake.nix` (overlap with
-           pipeline fragment — consider merging)
-
-      5. **Apply same shape across all four ecosystems** — once
-         the fragment categorization is settled, the per-ecosystem
-         outputs follow:
-
-         - Claude: CLAUDE.md = `@AGENTS.md` stub, common.md
-           dropped, `.claude/rules/<cat>.md` scoped
-         - Copilot: `.github/copilot-instructions.md` = orientation,
-           `.github/instructions/<cat>.instructions.md` scoped
-         - Kiro: `.kiro/steering/common.md` (`inclusion: always`)
-           = orientation, `.kiro/steering/<cat>.md`
-           (`inclusion: fileMatch`) scoped
-         - Codex (future): AGENTS.md = orientation. Deep dives
-           NOT in AGENTS.md. Codex either lacks the deep dives
-           or we add a Codex-native scoping mechanism if one
-           emerges.
-
-      **Expected reduction:** ~27k → ~5-7k always-loaded tokens
-      (~5x reduction). Per-edit total stays similar because
-      scoped fragments load on demand, but the constant cost
-      drops.
-
-      **Verification:** after the fix, run `claude /memory` (or
-      equivalent) to see the loaded file list and token counts.
-      Each ecosystem's always-loaded file should be in the
-      ~3-5k token range, not 19k.
-
-      **Touch points:**
-
-      - `dev/generate.nix` — `agentsContent`, `claudeFiles`,
-        and `monorepo` category fragment list
-      - `dev/fragments/monorepo/*` — 5 fragments may be relocated
-        to new scoped categories with new `packagePaths` entries
-      - `flake.nix` `siteArchitecture` — if any monorepo fragments
-        get scoped, they may need to land in the docsite
-        contributing section too
-      - `dev/fragments/monorepo/architecture-fragments.md` — the
-        always-loaded orientation may need updating to reflect
-        the new category list and to document the
-        "AGENTS.md = orientation, not deep-dives" decision
-      - Verify after: run a session in this repo, count loaded
-        tokens via `/memory`, confirm ~5x reduction
+      Total always-loaded across all four ecosystems: **~27k
+      tokens → ~5k tokens**, matching the ~5x reduction target.
+      Scoped fragments load on demand per edit, so the per-edit
+      total stays similar but the constant session-startup cost
+      drops sharply. Regeneration helper at
+      `dev/scripts/measure-context.sh` can be re-run at any
+      time to track drift.
 
 - [ ] **Codify gap: ai.skills layout** — create new scoped
       architecture fragment documenting the "all three branches
@@ -805,23 +687,49 @@ memory (`project_plan_state.md`) and the session memories.
 
 ## Next action
 
-**Skills fanout fix landed 2026-04-08** (commits `62c247b` ..
-`feeb5fb`). Tasks 2 and 2b complete, consumer verified end-to-end,
-lessons encoded in `hm-modules/module-conventions.md` fragment.
-Remaining ai.claude.\* passthrough work: Tasks 3-7 (memory,
-settings, mcpServers, skills, plugins) and Task D (devenv
-mirror). Next plan can cover any subset.
+**Architecture-foundation plan landed 2026-04-08** (commits
+`761f8ba` .. `f341bcb`, 18 commits across three phases):
 
-Other TOP priority candidates that are independent of the
-passthrough:
+- **Phase 1:** `ai` HM module imports its deps (single-import
+  consumer)
+- **Phase 2:** Always-loaded content audit ~27k → ~5k tokens
+  across all four ecosystems (~5x reduction)
+- **Phase 3:** Overlay cache-hit parity fix across 22 compiled
+  packages + regression gate via
+  `checks.cache-hit-parity` (TDD red → green)
 
-- **Always-loaded content audit + dynamic loading fix** — 27k
-  tokens loaded at startup, ~13% of context budget. High impact,
-  well-scoped investigation + fix.
-- **Overlay cache-hit parity fix** — consumers currently rebuild
-  from source instead of hitting cachix. Full plan in
-  `dev/notes/overlay-cache-hit-parity-fix.md`.
-- **`ai` HM module should `imports` its deps** — single-line
-  import for consumers instead of four surgical imports.
+Previously landed 2026-04-08: skills fanout fix (commits
+`62c247b` .. `feeb5fb`) closed out by commit `8aa4991`.
 
-Pick the next chunk based on user priority.
+**Very next plan: sentinel → main merge.** Sentinel branch has
+accumulated 200+ commits and main needs to catch up before any
+more backlog work lands. Strategy captured in
+`memory/project_merge_to_main_strategy.md`:
+
+1. Start a new branch from main with ONE squash commit whose
+   content matches the sentinel tip
+2. Use stack skills to chunk into reviewable atomic commits
+   grouping like changes (docs/CI travel with feature commits,
+   no docs-only catchup commits, no forward references)
+3. Lazy extraction loop: keep the squash as a larger tip, pull
+   individual chunks as PRs so Copilot/user feedback only
+   invalidates the extracted chunk rather than the whole stack
+4. Per-PR loop: open → Copilot review → fix/resolve/backlog →
+   user GitHub review → merge → next chunk
+5. Resume backlog work normally after main is caught up
+
+Remaining TOP-priority items after the merge:
+
+- **ai.claude.\* full passthrough** — Tasks 3-7 (memory,
+  settings, mcpServers, skills, plugins) + Task D (devenv
+  mirror). See `memory/project_ai_claude_passthrough.md`.
+- **Consolidate fragment enumeration** (low urgency, cleanup)
+- **Drop standalone `claude-code-buddy` HM module** (fold into
+  claude-code)
+- **Bundle `any-buddy` into claude-code passthru**
+- **Claude-code npm distribution removal contingency** (passive
+  monitoring)
+- **Set `DISABLE_AUTOUPDATER=1` in claude-code wrapper env**
+
+MIDDLE tier (ecosystem expansion) and LOWER tier (doc site,
+CI polish, misc) items remain as-is.
