@@ -60,6 +60,10 @@ in rec {
   # creates a single dir symlink (Layout A) and has no recursive
   # walk of its own.
   #
+  # Accepts both Nix path literals (e.g. `./path/to/skill`) and
+  # absolute string paths (e.g. `"${pkg}/share/skill"`) — uses
+  # `builtins.readFileType` which is type-agnostic.
+  #
   # Usage:
   #   mkDevenvSkillEntries ".claude" { skillName = ./path/to/skill; }
   # Returns:
@@ -93,7 +97,11 @@ in rec {
   in
     lib.concatMapAttrs (
       skillName: skillPath:
-        if lib.isPath skillPath && lib.pathIsDirectory skillPath
+      # `builtins.readFileType` accepts both Nix paths and
+      # absolute string paths, so this handles skill sources
+      # from both `./rel/path` literals and `"${pkg}/share"`
+      # interpolation results uniformly.
+        if (builtins.readFileType skillPath) == "directory"
         then walkDir "${configDir}/skills/${skillName}" skillPath
         else {"${configDir}/skills/${skillName}/SKILL.md".source = skillPath;}
     )

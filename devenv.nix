@@ -220,11 +220,13 @@ in {
   enterTest = ''
     echo "Validating devenv configuration..."
 
-    # Check skills are wired (Claude + Copilot + Kiro)
-    test -L .claude/skills/sws-stack-fix || { echo "FAIL: .claude/skills/sws-stack-fix missing"; exit 1; }
-    test -L .claude/skills/repo-review || { echo "FAIL: .claude/skills/repo-review missing"; exit 1; }
-    test -L .github/skills/sws-stack-fix || { echo "FAIL: .github/skills/sws-stack-fix missing"; exit 1; }
-    test -L .kiro/skills/sws-stack-fix || { echo "FAIL: .kiro/skills/sws-stack-fix missing"; exit 1; }
+    # Skills use Layout B (real dir containing per-file symlinks)
+    # after the mkDevenvSkillEntries walker fanout. The dir exists
+    # on disk; SKILL.md inside is a store symlink.
+    test -f .claude/skills/sws-stack-fix/SKILL.md || { echo "FAIL: .claude/skills/sws-stack-fix/SKILL.md missing"; exit 1; }
+    test -f .claude/skills/repo-review/SKILL.md || { echo "FAIL: .claude/skills/repo-review/SKILL.md missing"; exit 1; }
+    test -f .github/skills/sws-stack-fix/SKILL.md || { echo "FAIL: .github/skills/sws-stack-fix/SKILL.md missing"; exit 1; }
+    test -f .kiro/skills/sws-stack-fix/SKILL.md || { echo "FAIL: .kiro/skills/sws-stack-fix/SKILL.md missing"; exit 1; }
 
     # Check Claude settings generated
     test -L .claude/settings.json || { echo "FAIL: .claude/settings.json missing"; exit 1; }
