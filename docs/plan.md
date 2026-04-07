@@ -209,6 +209,156 @@ These are the follow-ups from the Checkpoint 8 multi-reviewer
 audit of the steering-fragments work. Low individual risk, high
 cumulative value.
 
+- [ ] **Always-loaded content audit + dynamic loading fix
+      (HIGH IMPACT)** — measured 2026-04-07 startup context for
+      this repo: ~27k tokens across CLAUDE.md (4.2k), AGENTS.md
+      (19.1k), `.claude/rules/common.md` (4.2k). That's ~13% of
+      Claude's effective context budget burned on orientation
+      before any actual work. Three distinct bugs cascading:
+
+      **Bug 1: CLAUDE.md triple-loads.** CLAUDE.md is generated
+      as `# CLAUDE.md\n\n@AGENTS.md\n\n` followed by content
+      that is **byte-identical** to `.claude/rules/common.md`
+      body (verified via diff). At session start Claude Code
+      loads:
+
+      1. CLAUDE.md content (~4.2k)
+      2. The `@AGENTS.md` import inside CLAUDE.md expands to the
+         full AGENTS.md (~19.1k)
+      3. `.claude/rules/common.md` (auto-loaded, no `paths`
+         frontmatter) — same content as CLAUDE.md body (~4.2k)
+
+      So the orientation content is loaded **three times** under
+      Claude.
+
+      **Bug 2: AGENTS.md concatenates every scoped fragment.**
+      `dev/generate.nix` `agentsContent` builds AGENTS.md as
+      `rootComposed.text + concat-of-every-package-content`.
+      Since the agents.md standard has no scoping primitive,
+      the generator chose to dump everything into one flat file.
+      Result: every scoped architecture fragment
+      (claude-code-wrapper, buddy-activation, ai-module-fanout,
+      ai-skills, devenv-files, hm-modules, overlays, pipeline,
+      etc.) ends up in AGENTS.md regardless of relevance to the
+      current edit. 1870 lines, 19.1k tokens.
+
+      **Bug 3: always-loaded monorepo content is itself ~390 lines.**
+      The `monorepo` category has 10 fragments (architecture-fragments,
+      binary-cache, build-commands, change-propagation,
+      generation-architecture, linting, naming-conventions,
+      nix-standards, platforms, project-overview) composing into
+      ~390 lines / ~4k tokens. Several of these don't need to be
+      always-loaded — `binary-cache` is only relevant when editing
+      `flake.nix`/`nixConfig`, `platforms` only when adding overlay
+      packages, etc. The "always-loaded" set has crept into a
+      dumping ground.
+
+      **Cross-ecosystem implication.** Each ecosystem has its own
+      always-loaded file with the same orientation content:
+
+      | Ecosystem | Always-loaded file                | Lines |
+      | --------- | --------------------------------- | ----- |
+      | Claude    | CLAUDE.md + .claude/rules/common.md | 392+387 (dup) |
+      | Copilot   | .github/copilot-instructions.md   | 391   |
+      | Kiro      | .kiro/steering/common.md          | 393   |
+      | Codex (future) | AGENTS.md or its own format   | 1870 (currently) |
+
+      Codex (when added as 4th ecosystem in MIDDLE) will hit the
+      same problem because it's also flat. Whatever fix lands
+      here must factor in all four ecosystems.
+
+      **Fix plan (small, mostly dev/generate.nix):**
+
+      1. **AGENTS.md = orientation only** — drop the per-package
+         concatenation in `agentsContent`. AGENTS.md becomes
+         `rootComposed.text` plus a small "see scoped files for
+         deep dives" pointer. Tools that consume agents.md
+         (Codex, generic agents.md-compatible tooling) get
+         orientation, not bloat. ~10-line change in
+         `dev/generate.nix`.
+
+      2. **CLAUDE.md → minimal stub** — generate as a one-line
+         `@AGENTS.md` (or two-line with `# CLAUDE.md\n\n@AGENTS.md`)
+         instead of "AGENTS import + body content". Eliminates
+         the 4.2k duplicate. Claude follows the import and gets
+         the content from AGENTS.md. ~5-line change in
+         `dev/generate.nix`.
+
+      3. **Drop common.md generation** — Claude Code already
+         loads CLAUDE.md (which `@AGENTS.md` imports). A separate
+         common.md in `.claude/rules/` byte-identical to the body
+         is pure waste. Remove the `claudeFiles."common.md" = ...`
+         line in `dev/generate.nix`. The scoped rule files stay.
+         ~3-line change.
+
+      4. **Audit the monorepo always-loaded set** — for each of
+         the 10 monorepo fragments, decide: stay always-loaded,
+         move to a scoped category, or delete. Likely stays
+         always-loaded:
+
+         - architecture-fragments (orientation + self-maintenance,
+           critical)
+         - project-overview (what is this repo, must-know)
+         - build-commands (universal)
+         - linting (universal)
+         - change-propagation (cross-cutting rule)
+
+         Likely moves to scoped:
+
+         - binary-cache → scoped to `flake.nix`, `devenv.nix`,
+           `nixConfig`-touching files
+         - platforms → scoped to `nvfetcher.toml`,
+           `packages/**/sources.nix`, `packages/**/*.nix`
+         - naming-conventions → scoped to `packages/**`,
+           `modules/**`
+         - nix-standards → scoped to `**/*.nix` (broad but
+           specific to nix files)
+         - generation-architecture → scoped to `dev/generate.nix`,
+           `dev/tasks/**`, `flake.nix` (overlap with
+           pipeline fragment — consider merging)
+
+      5. **Apply same shape across all four ecosystems** — once
+         the fragment categorization is settled, the per-ecosystem
+         outputs follow:
+
+         - Claude: CLAUDE.md = `@AGENTS.md` stub, common.md
+           dropped, `.claude/rules/<cat>.md` scoped
+         - Copilot: `.github/copilot-instructions.md` = orientation,
+           `.github/instructions/<cat>.instructions.md` scoped
+         - Kiro: `.kiro/steering/common.md` (`inclusion: always`)
+           = orientation, `.kiro/steering/<cat>.md`
+           (`inclusion: fileMatch`) scoped
+         - Codex (future): AGENTS.md = orientation. Deep dives
+           NOT in AGENTS.md. Codex either lacks the deep dives
+           or we add a Codex-native scoping mechanism if one
+           emerges.
+
+      **Expected reduction:** ~27k → ~5-7k always-loaded tokens
+      (~5x reduction). Per-edit total stays similar because
+      scoped fragments load on demand, but the constant cost
+      drops.
+
+      **Verification:** after the fix, run `claude /memory` (or
+      equivalent) to see the loaded file list and token counts.
+      Each ecosystem's always-loaded file should be in the
+      ~3-5k token range, not 19k.
+
+      **Touch points:**
+
+      - `dev/generate.nix` — `agentsContent`, `claudeFiles`,
+        and `monorepo` category fragment list
+      - `dev/fragments/monorepo/*` — 5 fragments may be relocated
+        to new scoped categories with new `packagePaths` entries
+      - `flake.nix` `siteArchitecture` — if any monorepo fragments
+        get scoped, they may need to land in the docsite
+        contributing section too
+      - `dev/fragments/monorepo/architecture-fragments.md` — the
+        always-loaded orientation may need updating to reflect
+        the new category list and to document the
+        "AGENTS.md = orientation, not deep-dives" decision
+      - Verify after: run a session in this repo, count loaded
+        tokens via `/memory`, confirm ~5x reduction
+
 - [ ] **Codify gap: ai.skills layout** — create new scoped
       architecture fragment documenting the "all three branches
       delegate through `programs.<cli>.skills`, no direct home.file
@@ -265,7 +415,7 @@ cumulative value.
 
 - [ ] **Refactor `mkDevFragment` location discriminator as attrset
       lookup** — current if/else-if branching on `dev | package |
-  module` works but extends linearly. Replace with
+module` works but extends linearly. Replace with
       `locationBases.${location} or (throw ...)`. Pure cleanup.
 
 - [ ] **Replace `isRoot = package == "monorepo"` with category
@@ -281,9 +431,9 @@ cumulative value.
 
 - [ ] **`ai.skills` stacked-workflows special case** — currently
       consumers need `stacked-workflows.integrations.<ecosystem>.enable
-  = true` per ecosystem alongside `ai.skills`. Augment
+= true` per ecosystem alongside `ai.skills`. Augment
       `ai.skills` to support `ai.skills.stackedWorkflows.enable =
-  true` (or similar) that pulls SWS skills + routing table into
+true` (or similar) that pulls SWS skills + routing table into
       every enabled ecosystem in one line. Keep raw
       `ai.skills.<name> = path` for bring-your-own.
 
