@@ -4,12 +4,17 @@
 # and Kiro CLI. Fans out to individual CLI modules via mkDefault so
 # per-CLI config always wins.
 #
+# Each ai.{claude,copilot,kiro}.enable is the SOLE gate for that CLI's
+# fanout — it also implicitly enables the corresponding upstream module
+# (programs.claude-code.enable, programs.copilot-cli.enable, etc.), so
+# consumers don't need to set enable twice. There is no master ai.enable
+# switch; enabling at least one ecosystem sub-option is the activation.
+#
 # Usage:
 #   ai = {
-#     enable = true;
-#     claude.enable = true;
-#     copilot.enable = true;
-#     kiro.enable = true;
+#     claude.enable = true;   # also sets programs.claude-code.enable
+#     copilot.enable = true;  # also sets programs.copilot-cli.enable
+#     kiro.enable = true;     # also sets programs.kiro-cli.enable
 #     skills = { stack-fix = ./skills/stack-fix; };
 #     instructions.coding-standards = {
 #       text = "Always use strict mode...";
@@ -33,6 +38,7 @@
     mkIf
     mkMerge
     mkOption
+    optionals
     types
     ;
 
@@ -49,8 +55,6 @@
     (attrByPath path null options) != null;
 in {
   options.ai = {
-    enable = mkEnableOption "unified AI configuration across Claude, Copilot, and Kiro";
-
     claude = mkOption {
       type = types.submodule {
         options = {
@@ -169,14 +173,12 @@ in {
     };
   };
 
-  config = mkIf cfg.enable (mkMerge [
-    # Assertions
+  config = mkMerge [
+    # Assertions — per-CLI enables are the only gates; always-on so
+    # misconfigurations surface even when nothing else is set.
     {
       assertions =
         [
-          # Claude Code uses home.file directly, no upstream module dependency.
-          # If programs.claude-code IS available, users can still configure it
-          # directly for Claude-specific settings (model, permissions, etc.).
           {
             assertion = cfg.copilot.enable -> hasModule ["programs" "copilot-cli" "enable"];
             message = "ai.copilot.enable requires programs.copilot-cli to be available.";
@@ -195,7 +197,7 @@ in {
             message = "ai has shared config but no CLIs enabled. Set at least one of claude.enable, copilot.enable, kiro.enable.";
           }
         ]
-        ++ (lib.optionals (cfg.claude.buddy != null) [
+        ++ (optionals (cfg.claude.buddy != null) [
           {
             assertion = cfg.claude.buddy.peak != cfg.claude.buddy.dump || cfg.claude.buddy.peak == null;
             message = "ai.claude.buddy: peak and dump stats must differ";
@@ -211,10 +213,11 @@ in {
     # Users configure programs.mcp.servers directly and each CLI's
     # enableMcpIntegration picks them up. This avoids double-injection.
 
-    # Claude Code — uses home.file for both rules and skills to avoid
-    # depending on the upstream programs.claude-code module being imported.
+    # Claude Code — ai.claude.enable is the sole gate. It also flips
+    # programs.claude-code.enable so consumers don't set enable twice.
     (mkIf cfg.claude.enable (mkMerge [
       {
+        programs.claude-code.enable = mkDefault true;
         home.file =
           # Instructions as Claude rules with frontmatter
           (concatMapAttrs (name: instr: {
@@ -245,9 +248,10 @@ in {
       })
     ]))
 
-    # Copilot CLI
+    # Copilot CLI — ai.copilot.enable also flips programs.copilot-cli.enable.
     (mkIf cfg.copilot.enable {
       programs.copilot-cli = {
+        enable = mkDefault true;
         environmentVariables =
           lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
         instructions = lib.mapAttrs (_name: instr:
@@ -263,9 +267,10 @@ in {
       };
     })
 
-    # Kiro CLI
+    # Kiro CLI — ai.kiro.enable also flips programs.kiro-cli.enable.
     (mkIf cfg.kiro.enable {
       programs.kiro-cli = {
+        enable = mkDefault true;
         environmentVariables =
           lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
         lspServers = lib.mapAttrs (name: server:
@@ -285,5 +290,5 @@ in {
         cfg.instructions;
       };
     })
-  ]);
+  ];
 }

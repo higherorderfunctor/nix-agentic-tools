@@ -108,11 +108,12 @@
     {config.stacked-workflows.enable = false;}
   ];
 
-  # Test: ai module evaluates with enable = false (no-op)
+  # Test: ai module evaluates as no-op when nothing is enabled
+  # (there is no master ai.enable anymore — each ai.{claude,copilot,kiro}.enable
+  # is the sole gate and flips its corresponding programs.*.enable).
   # Must import full module set since ai references programs.copilot-cli, etc.
   aiDisabled = evalModule [
     self.homeManagerModules.default
-    {config.ai.enable = false;}
   ];
 
   # Test: ai module evaluates with copilot + kiro enabled
@@ -121,7 +122,6 @@
     {
       config = {
         ai = {
-          enable = true;
           copilot.enable = true;
           kiro.enable = true;
           skills = {};
@@ -130,8 +130,6 @@
             description = "Test";
           };
         };
-        programs.copilot-cli.enable = true;
-        programs.kiro-cli.enable = true;
       };
     }
   ];
@@ -141,15 +139,12 @@
     self.homeManagerModules.default
     {
       config = {
-        ai = {
+        ai.claude = {
           enable = true;
-          claude = {
-            enable = true;
-            buddy = {
-              userId.text = "test-00000000-0000-0000-0000-000000000000";
-              species = "duck";
-              rarity = "common";
-            };
+          buddy = {
+            userId.text = "test-00000000-0000-0000-0000-000000000000";
+            species = "duck";
+            rarity = "common";
           };
         };
       };
@@ -162,7 +157,6 @@
     {
       config = {
         ai = {
-          enable = true;
           claude.enable = true;
           copilot.enable = true;
           kiro.enable = true;
@@ -171,8 +165,6 @@
             telemetry = false;
           };
         };
-        programs.copilot-cli.enable = true;
-        programs.kiro-cli.enable = true;
       };
     }
   ];
@@ -211,7 +203,10 @@ in {
 
   ai-eval = pkgs.runCommand "ai-eval" {} ''
     echo "ai module evaluation: ${
-      if aiDisabled.config.ai.enable
+      if
+        aiDisabled.config.programs.claude-code.enable
+        || aiDisabled.config.programs.copilot-cli.enable
+        || aiDisabled.config.programs.kiro-cli.enable
       then "enabled"
       else "disabled (no-op)"
     }" > $out
@@ -219,7 +214,9 @@ in {
 
   ai-with-clis-eval = pkgs.runCommand "ai-with-clis-eval" {} ''
     echo "ai with copilot+kiro: ${
-      if aiWithClis.config.ai.enable
+      if
+        aiWithClis.config.programs.copilot-cli.enable
+        && aiWithClis.config.programs.kiro-cli.enable
       then "enabled"
       else "disabled"
     }" > $out
