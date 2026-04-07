@@ -184,6 +184,23 @@
       };
     }
   ];
+
+  # Test: homeManagerModules.ai is self-contained — importing
+  # only the ai module (not the full default bundle) should
+  # still declare the programs.{copilot-cli,kiro-cli}.* and
+  # programs.claude-code.buddy option paths that ai.nix
+  # references unconditionally inside its mkIf blocks.
+  aiSelfContained = evalModule [
+    self.homeManagerModules.ai
+    {
+      config = {
+        ai = {
+          copilot.enable = true;
+          kiro.enable = true;
+        };
+      };
+    }
+  ];
 in {
   copilot-cli-eval = pkgs.runCommand "copilot-cli-eval" {} ''
     echo "copilot-cli module evaluation: ${
@@ -259,6 +276,16 @@ in {
       if aiSkillsFanout.config.programs.claude-code.skills ? stack-fix
       then "echo ok > $out"
       else "echo 'FAIL: ai.skills not routed via programs.claude-code.skills' >&2; exit 1"
+    }
+  '';
+
+  ai-self-contained-eval = pkgs.runCommand "ai-self-contained-eval" {} ''
+    ${
+      if
+        aiSelfContained.config.programs.copilot-cli.enable
+        && aiSelfContained.config.programs.kiro-cli.enable
+      then "echo ok > $out"
+      else "echo 'FAIL: ai module not self-contained — importing homeManagerModules.ai alone did not bring in copilot-cli/kiro-cli modules' >&2; exit 1"
     }
   '';
 }

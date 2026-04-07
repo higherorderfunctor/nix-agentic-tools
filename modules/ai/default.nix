@@ -54,6 +54,18 @@
   hasModule = path:
     (attrByPath path null options) != null;
 in {
+  # Pull in the HM modules this one references inside its mkIf
+  # blocks. Without these imports, consumers importing only
+  # `homeManagerModules.ai` get eval errors like
+  # "programs.copilot-cli.enable is not a declared option"
+  # because NixOS modules need option paths declared even when
+  # the mkIf guard is false.
+  imports = [
+    ../claude-code-buddy
+    ../copilot-cli
+    ../kiro-cli
+  ];
+
   options.ai = {
     claude = mkOption {
       type = types.submodule {
