@@ -11,16 +11,21 @@ Both home-manager and devenv expose the same `ai.*` interface.
 
 ```nix
 ai = {
-  enable = true;          # master switch
   claude.enable = true;   # fan out to Claude Code
   copilot.enable = true;  # fan out to Copilot CLI
   kiro.enable = true;     # fan out to Kiro CLI
 };
 ```
 
-Each ecosystem submodule controls whether shared config is written to
-that CLI's config paths. You can enable any combination. Each also
-exposes a `package` option for overriding the default package:
+Each `ai.<cli>.enable` is the sole gate for that ecosystem. There is
+no master `ai.enable` switch — setting any sub-enable activates the
+corresponding fanout. Each per-CLI enable also implicitly flips the
+upstream module's enable option (`programs.claude-code.enable`,
+`programs.copilot-cli.enable`, `programs.kiro-cli.enable`) via
+`mkDefault`, so consumers don't need to set enable twice.
+
+Each submodule also exposes a `package` option for overriding the
+default package:
 
 ```nix
 ai.claude = {
@@ -127,9 +132,16 @@ Fanout per ecosystem:
 
 ## Assertions
 
-The module includes safety assertions:
+The module includes safety assertions (always evaluated, not gated
+on any enable):
 
 - At least one CLI must be enabled when shared config exists
 - `copilot.enable` requires `programs.copilot-cli` to be available
 - `kiro.enable` requires `programs.kiro-cli` to be available
-- Claude has no assertion -- it uses `home.file` directly
+- Claude has no upstream-module assertion — it uses `home.file` directly
+
+When `ai.claude.buddy` is set (see Buddy Customization guide), two
+additional assertions apply:
+
+- `buddy.peak != buddy.dump` (or both null)
+- `buddy.rarity == "common" -> buddy.hat == "none"`

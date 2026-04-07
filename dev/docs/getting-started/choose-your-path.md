@@ -25,10 +25,7 @@ systemd services, stacked workflow git presets, per-CLI modules
 ```nix
 imports = [inputs.nix-agentic-tools.homeManagerModules.default];
 
-ai = {
-  enable = true;
-  claude.enable = true;
-};
+ai.claude.enable = true;
 
 stacked-workflows.enable = true;
 ```
@@ -55,10 +52,7 @@ inputs:
 # devenv.nix
 imports = [inputs.nix-agentic-tools.devenvModules.default];
 
-ai = {
-  enable = true;
-  claude.enable = true;
-};
+ai.claude.enable = true;
 ```
 
 **Next:** [DevEnv Setup](./devenv.md)

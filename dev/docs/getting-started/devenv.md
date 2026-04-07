@@ -47,12 +47,7 @@ imports = [inputs.nix-agentic-tools.devenvModules.ai];
 {inputs, pkgs, ...}: {
   imports = [inputs.nix-agentic-tools.devenvModules.default];
 
-  ai = {
-    enable = true;
-    claude.enable = true;
-  };
-
-  claude.code.enable = true;
+  ai.claude.enable = true;
 }
 ```
 
@@ -72,8 +67,10 @@ in {
   packages = with pkgs; [nixd marksman taplo];
 
   # ── Unified AI config ─────────────────────────────────────────────
+  # Each ai.<cli>.enable is the sole gate and also flips the
+  # corresponding devenv module's enable via mkDefault, so consumers
+  # don't need to set enable twice.
   ai = {
-    enable = true;
     claude.enable = true;
     copilot.enable = true;
     kiro.enable = true;
@@ -85,8 +82,8 @@ in {
   };
 
   # ── Claude Code ────────────────────────────────────────────────────
+  # claude.code.enable is set by ai.claude.enable above via the fanout.
   claude.code = {
-    enable = true;
     env.ENABLE_LSP_TOOL = "1";
 
     mcpServers.github-mcp = {
@@ -97,16 +94,12 @@ in {
   };
 
   # ── Copilot ────────────────────────────────────────────────────────
-  copilot = {
-    enable = true;
-    settings.model = "gpt-4o";
-  };
+  # copilot.enable is set by ai.copilot.enable above via the fanout.
+  copilot.settings.model = "gpt-4o";
 
   # ── Kiro ───────────────────────────────────────────────────────────
-  kiro = {
-    enable = true;
-    settings.chat.defaultModel = "claude-sonnet-4";
-  };
+  # kiro.enable is set by ai.kiro.enable above via the fanout.
+  kiro.settings.chat.defaultModel = "claude-sonnet-4";
 }
 ```
 

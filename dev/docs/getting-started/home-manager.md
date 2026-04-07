@@ -88,11 +88,11 @@ imports = [
 ## 4. Minimal configuration
 
 ```nix
-# Enable the unified AI module for Claude Code
-ai = {
-  enable = true;
-  claude.enable = true;
-};
+# Enable the unified AI module for Claude Code.
+# ai.claude.enable is the sole gate — it also flips
+# programs.claude-code.enable via mkDefault, so no need to set
+# enable twice.
+ai.claude.enable = true;
 
 # Enable stacked workflows (git presets + skills)
 stacked-workflows = {
@@ -107,8 +107,9 @@ stacked-workflows = {
 ```nix
 {pkgs, ...}: {
   # ── Unified AI config ──────────────────────────────────────────────
+  # Each ai.<cli>.enable is the sole gate — it also flips the
+  # corresponding programs.<cli>.enable via mkDefault.
   ai = {
-    enable = true;
     claude.enable = true;
     copilot.enable = true;
     kiro.enable = true;
