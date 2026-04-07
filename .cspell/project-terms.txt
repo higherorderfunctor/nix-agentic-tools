@@ -116,6 +116,7 @@ sixel
 smartlog
 statix
 stdenv
+subkeys
 substituters
 taplo
 tinyduck

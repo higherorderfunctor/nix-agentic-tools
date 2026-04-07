@@ -88,6 +88,19 @@
       "packages/ai-clis/any-buddy.nix"
       "modules/claude-code-buddy/**"
     ];
+    # hm-modules: cross-cutting module conventions. Scoped to every
+    # HM module file so conventions load whenever a contributor is
+    # touching any module. Excludes modules/devenv/ because devenv
+    # modules have different conventions (per-project files rather
+    # than home-manager activation).
+    hm-modules = [
+      "modules/ai/**"
+      "modules/claude-code-buddy/**"
+      "modules/copilot-cli/**"
+      "modules/kiro-cli/**"
+      "modules/mcp-servers/**"
+      "modules/stacked-workflows/**"
+    ];
     mcp-servers = [
       "modules/mcp-servers/**"
       "packages/mcp-servers/**"
@@ -137,6 +150,7 @@
         dir = "ai-clis";
       }
     ];
+    hm-modules = ["module-conventions"];
     monorepo = [
       "architecture-fragments"
       "binary-cache"
