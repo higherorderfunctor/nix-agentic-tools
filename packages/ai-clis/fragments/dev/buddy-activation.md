@@ -1,6 +1,6 @@
 ## Buddy Activation Lifecycle
 
-> **Last verified:** 2026-04-07 (commit 2cd4f2b). If you touch
+> **Last verified:** 2026-04-08 (pending — fixes silent-activation-abort bug). If you touch
 > `modules/claude-code-buddy/default.nix`, the any-buddy worker
 > invocation, the fingerprint scheme, or how cli.js gets patched
 > and this fragment isn't updated in the same commit, stop and
@@ -34,9 +34,26 @@ of:
 Only the first 16 hex chars of the sha256 are stored. Stored at
 `$XDG_STATE_HOME/claude-code-buddy/fingerprint`.
 
-**If fingerprint matches, the script exits 0 immediately.** The
-entire downstream pipeline is skipped. This is why re-running
-`home-manager switch` with unchanged config is fast.
+**If fingerprint matches, the update block is skipped via an
+`if`/`fi` guard.** The entire update pipeline (cli.js rewrite,
+salt patch, companion reset, fingerprint save) is gated so
+re-running `home-manager switch` with unchanged config is fast.
+
+**CRITICAL — do NOT use `exit 0` for the short-circuit.** HM
+activation scripts are INLINED into a single outer bash script
+(`$out/home-manager-generation/activate`) that runs under
+`set -eu -o pipefail`. A bare `exit 0` inside any activation
+block terminates the WHOLE activation — every subsequent hook
+(including `home.file` writes for skills, plugin installs, and
+the linkGeneration step) is silently skipped. Users observe
+"activation succeeded" but skills never update on disk.
+
+This bit us in commit (pending — the fix) after Task 2 of the
+skills-fanout-fix plan: re-activation stopped at
+`Activating claudeBuddy` with no error, and the stale Layout A
+skills persisted because every post-buddy step was unreached.
+Always use `if [ "$NEW_FP" != "$OLD_FP" ]; then ... fi` — never
+`exit` for the fast path.
 
 ### Invalidation triggers
 

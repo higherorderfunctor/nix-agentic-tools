@@ -105,66 +105,69 @@
 
     OLD_FP=$(${pkgs.coreutils}/bin/cat "$STATE_DIR/fingerprint" 2>/dev/null || echo "")
 
-    if [ "$NEW_FP" = "$OLD_FP" ]; then
-      # Cached — nothing to do
-      exit 0
+    # Cache check: gate all the update work on a fingerprint miss.
+    # NOTE: DO NOT use `exit 0` here — this script is inlined into
+    # the outer home-manager activate script, so a bare `exit` would
+    # terminate the entire activation and skip every subsequent hook
+    # (including home.file writes for skills, plugin installs, etc).
+    # Use structured control flow to short-circuit cleanly.
+    if [ "$NEW_FP" != "$OLD_FP" ]; then
+      echo "==> Updating claude-code buddy (${buddyCfg.species}, ${buddyCfg.rarity})"
+
+      # Refresh writable lib tree (symlinks to store, except cli.js which is real)
+      ${pkgs.coreutils}/bin/rm -rf "$STATE_DIR/lib"
+      ${pkgs.coreutils}/bin/mkdir -p "$STATE_DIR/lib"
+      ${pkgs.coreutils}/bin/cp -rs "$STORE_LIB"/* "$STATE_DIR/lib/"
+      ${pkgs.coreutils}/bin/chmod -R u+w "$STATE_DIR/lib"
+
+      # Replace cli.js symlink with a real writable copy
+      ${pkgs.coreutils}/bin/rm "$STATE_DIR/lib/cli.js"
+      ${pkgs.coreutils}/bin/cp -L "$STORE_LIB/cli.js" "$STATE_DIR/lib/cli.js"
+      ${pkgs.coreutils}/bin/chmod u+w "$STATE_DIR/lib/cli.js"
+
+      # Run salt search via Bun (wyhash, no --fnv1a needed since claude-code
+      # also runs under Bun via our wrapper)
+      SALT=$(${pkgs.bun}/bin/bun "$WORKER" \
+        "$USER_ID" \
+        "${buddyCfg.species}" \
+        "${buddyCfg.rarity}" \
+        "${buddyCfg.eyes}" \
+        "${buddyCfg.hat}" \
+        "${shinyArg}" \
+        "${peakArg}" \
+        "${dumpArg}" \
+        | ${pkgs.jq}/bin/jq -r '.salt')
+
+      if [[ ! "$SALT" =~ ^[a-zA-Z0-9_-]{15}$ ]]; then
+        echo "ERROR: invalid salt format: '$SALT'" >&2
+        exit 1
+      fi
+
+      # Patch cli.js
+      ${pkgs.python3}/bin/python3 -c "
+      import sys
+      path = '$STATE_DIR/lib/cli.js'
+      data = open(path, 'rb').read()
+      old = b'friend-2026-401'
+      new = b'$SALT'
+      if old not in data:
+          sys.exit('ERROR: salt marker not found in cli.js')
+      open(path, 'wb').write(data.replace(old, new))
+      "
+
+      # Reset companion field in ~/.claude.json (if file exists)
+      if [ -f "$HOME/.claude.json" ]; then
+        tmp=$(${pkgs.coreutils}/bin/mktemp)
+        ${pkgs.jq}/bin/jq 'del(.companion)' "$HOME/.claude.json" > "$tmp"
+        ${pkgs.coreutils}/bin/mv "$tmp" "$HOME/.claude.json"
+      fi
+
+      # Save fingerprint
+      ${pkgs.coreutils}/bin/mkdir -p "$STATE_DIR"
+      echo -n "$NEW_FP" > "$STATE_DIR/fingerprint"
+
+      echo "==> Buddy updated. Next claude run will hatch a new ${buddyCfg.species}."
     fi
-
-    echo "==> Updating claude-code buddy (${buddyCfg.species}, ${buddyCfg.rarity})"
-
-    # Refresh writable lib tree (symlinks to store, except cli.js which is real)
-    ${pkgs.coreutils}/bin/rm -rf "$STATE_DIR/lib"
-    ${pkgs.coreutils}/bin/mkdir -p "$STATE_DIR/lib"
-    ${pkgs.coreutils}/bin/cp -rs "$STORE_LIB"/* "$STATE_DIR/lib/"
-    ${pkgs.coreutils}/bin/chmod -R u+w "$STATE_DIR/lib"
-
-    # Replace cli.js symlink with a real writable copy
-    ${pkgs.coreutils}/bin/rm "$STATE_DIR/lib/cli.js"
-    ${pkgs.coreutils}/bin/cp -L "$STORE_LIB/cli.js" "$STATE_DIR/lib/cli.js"
-    ${pkgs.coreutils}/bin/chmod u+w "$STATE_DIR/lib/cli.js"
-
-    # Run salt search via Bun (wyhash, no --fnv1a needed since claude-code
-    # also runs under Bun via our wrapper)
-    SALT=$(${pkgs.bun}/bin/bun "$WORKER" \
-      "$USER_ID" \
-      "${buddyCfg.species}" \
-      "${buddyCfg.rarity}" \
-      "${buddyCfg.eyes}" \
-      "${buddyCfg.hat}" \
-      "${shinyArg}" \
-      "${peakArg}" \
-      "${dumpArg}" \
-      | ${pkgs.jq}/bin/jq -r '.salt')
-
-    if [[ ! "$SALT" =~ ^[a-zA-Z0-9_-]{15}$ ]]; then
-      echo "ERROR: invalid salt format: '$SALT'" >&2
-      exit 1
-    fi
-
-    # Patch cli.js
-    ${pkgs.python3}/bin/python3 -c "
-    import sys
-    path = '$STATE_DIR/lib/cli.js'
-    data = open(path, 'rb').read()
-    old = b'friend-2026-401'
-    new = b'$SALT'
-    if old not in data:
-        sys.exit('ERROR: salt marker not found in cli.js')
-    open(path, 'wb').write(data.replace(old, new))
-    "
-
-    # Reset companion field in ~/.claude.json (if file exists)
-    if [ -f "$HOME/.claude.json" ]; then
-      tmp=$(${pkgs.coreutils}/bin/mktemp)
-      ${pkgs.jq}/bin/jq 'del(.companion)' "$HOME/.claude.json" > "$tmp"
-      ${pkgs.coreutils}/bin/mv "$tmp" "$HOME/.claude.json"
-    fi
-
-    # Save fingerprint
-    ${pkgs.coreutils}/bin/mkdir -p "$STATE_DIR"
-    echo -n "$NEW_FP" > "$STATE_DIR/fingerprint"
-
-    echo "==> Buddy updated. Next claude run will hatch a new ${buddyCfg.species}."
   '';
 in {
   options.programs.claude-code.buddy = mkOption {
