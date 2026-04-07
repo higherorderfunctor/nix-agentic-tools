@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-e0031c4c.js";
+            window.path_to_searchindex_js = "searchindex-25614d53.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-fc53bced.js"></script>
+        <script src="toc-841f2094.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -6640,6 +6640,102 @@ nix eval --impure --json \
 is set, the fanout is broken — fix the module, not the consumer.
 This is exactly how the dropped <code>ai.enable</code> bug was caught.</p>
 <div style="break-before: page; page-break-before: always;"></div>
+<h1 id="aiskills-fanout-pattern"><a href="#aiskills-fanout-pattern" class="header">ai.skills Fanout Pattern</a></h1>
+<h2 id="aiskills-fanout-delegation-pattern"><a class="header" href="#aiskills-fanout-delegation-pattern">ai.skills Fanout Delegation Pattern</a></h2>
+<blockquote>
+<p><strong>Last verified:</strong> 2026-04-07 (commit 781ab3e). If you touch
+the Claude/Copilot/Kiro skills fanout in <code>modules/ai/default.nix</code>
+(or the devenv equivalent), <code>lib/hm-helpers.nix:mkSkillEntries</code>,
+or upstream <code>programs.&lt;cli&gt;.skills</code> references, and this
+fragment isn’t updated in the same commit, stop and fix it.</p>
+</blockquote>
+<p>The <code>ai.skills</code> fanout MUST go through each ecosystem’s
+respective <code>programs.&lt;cli&gt;.skills</code> option. <strong>No branch writes
+<code>home.file</code> directly.</strong> Doing so produces a different on-disk
+layout from the upstream module and creates collision bugs when
+per-CLI <code>ai.&lt;cli&gt;.skills</code> lands.</p>
+<h3 id="uniform-pattern"><a class="header" href="#uniform-pattern">Uniform pattern</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Branch</th><th>Delegates to</th><th>Helper</th></tr>
+</thead>
+<tbody>
+<tr><td>Claude</td><td><code>programs.claude-code.skills</code></td><td>upstream HM <code>mkSkillEntry</code></td></tr>
+<tr><td>Copilot</td><td><code>programs.copilot-cli.skills</code></td><td>our <code>lib/hm-helpers.nix</code></td></tr>
+<tr><td>Kiro</td><td><code>programs.kiro-cli.skills</code></td><td>our <code>lib/hm-helpers.nix</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>On-disk result is identical across all three: a real
+<code>.claude/skills/&lt;name&gt;/</code> (or equivalent) directory with per-file
+store symlinks inside, via <code>recursive = true</code> in each helper.</p>
+<h3 id="why-this-matters"><a class="header" href="#why-this-matters">Why this matters</a></h3>
+<p>The Copilot and Kiro branches of <code>modules/ai/default.nix</code> already
+delegate via their <code>programs.&lt;cli&gt;.skills</code> options. The Claude
+branch is currently the odd one out — it writes
+<code>home.file.".claude/skills/&lt;name&gt;".source</code> directly. This
+produces a single dir symlink (Layout A), while upstream
+<code>programs.claude-code.skills</code> produces a real directory with
+per-file symlinks (Layout B via <code>recursive = true</code>).</p>
+<p>Two concrete problems:</p>
+<ol>
+<li>
+<p><strong>Per-Claude <code>ai.claude.skills</code> collision.</strong> Once
+<code>ai.claude.skills</code> lands as part of the full passthrough work,
+it would collide with cross-ecosystem <code>ai.skills</code> on the same
+<code>home.file</code> path. Consumers can’t compose both.</p>
+</li>
+<li>
+<p><strong>Consumer migration clobber.</strong> A consumer who migrated from
+<code>programs.claude-code.skills</code> to <code>ai.skills</code> while the old
+direct-<code>home.file</code> code was live ends up with a real
+<code>.claude/skills/&lt;name&gt;/</code> directory on disk (laid down by
+upstream previously). When the fix lands, the first activation
+errors with <code>Existing file '&lt;path&gt;' would be clobbered</code>.
+Remedy: <code>home-manager switch -b backup</code> once; subsequent
+activations succeed cleanly. Mention this in the fix commit
+message.</p>
+</li>
+</ol>
+<h3 id="how-to-apply"><a class="header" href="#how-to-apply">How to apply</a></h3>
+<p>When working on the Claude skills fanout fix:</p>
+<ul>
+<li>Replace the <code>home.file.".claude/skills/&lt;name&gt;".source</code> block in
+the Claude branch of <code>modules/ai/default.nix</code> with
+<code>programs.claude-code.skills = lib.mapAttrs (_: mkDefault) cfg.skills;</code></li>
+<li>Match the Copilot/Kiro pattern exactly — all three branches
+should look structurally identical</li>
+<li>Do NOT propose bypassing <code>programs.claude-code.skills</code> with
+direct <code>home.file</code> writes. The <code>recursive = true</code> behavior in
+upstream is the intended on-disk shape; mirror it, don’t fight
+it.</li>
+<li>Add a <code>checks/module-eval.nix</code> test that asserts
+<code>aiSkillsFanout.config.programs.claude-code.skills ? &lt;name&gt;</code>
+when <code>ai.skills.&lt;name&gt;</code> is set.</li>
+</ul>
+<h3 id="devenv-counterpart"><a class="header" href="#devenv-counterpart">Devenv counterpart</a></h3>
+<p>devenv currently produces Layout A (single dir symlink) for all
+three ecosystems because <code>devenv.files.*.source</code> is structurally
+incapable of recursive walks. See the related
+<code>devenv-files-internals</code> fragment under <code>dev/fragments/devenv/</code>
+for the full constraints, and the <code>mkDevenvSkillEntries</code>
+user-space walker that brings devenv to Layout B parity. Both
+the HM Claude branch fix and the devenv parity fix are
+prerequisites for full <code>ai.claude.*</code> passthrough.</p>
+<h3 id="related"><a class="header" href="#related">Related</a></h3>
+<ul>
+<li><code>dev/fragments/devenv/files-internals.md</code> — devenv constraints
+<ul>
+<li>walker workaround</li>
+</ul>
+</li>
+<li><code>memory/project_ai_skills_layout.md</code> — original design
+decision and context</li>
+<li><code>memory/project_ai_claude_passthrough.md</code> — Tasks 2/2b in the
+passthrough plan that operationalize this</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="claude-code-wrapper-chain-1"><a href="#claude-code-wrapper-chain-1" class="header">claude-code Wrapper Chain</a></h1>
 <h2 id="claude-code-wrapper-chain"><a class="header" href="#claude-code-wrapper-chain">claude-code Wrapper Chain</a></h2>
 <blockquote>
@@ -7098,6 +7194,142 @@ right assertion triggers)</li>
 <p>The tests caught the <code>ai.enable</code> master-switch bug during
 the f2e911c fix because the post-fix tests didn’t reference
 <code>ai.enable</code> anymore. Regression protection via the eval harness.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="devenv-files-internals"><a href="#devenv-files-internals" class="header">devenv files Internals</a></h1>
+<h2 id="devenv-files-option-internals"><a class="header" href="#devenv-files-option-internals">devenv <code>files</code> Option Internals</a></h2>
+<blockquote>
+<p><strong>Last verified:</strong> 2026-04-07 (commit 781ab3e). devenv internals
+are pinned to whatever version is in flake.lock; if you touch
+<code>modules/devenv/**</code>, <code>lib/hm-helpers.nix:mkDevenvSkillEntries</code>,
+or anywhere that uses <code>files.*.source</code> and this fragment isn’t
+updated in the same commit, stop and fix it.</p>
+</blockquote>
+<p>devenv’s <code>files</code> option is structurally simpler than HM’s
+<code>home.file</code>. Specifically, <strong>it cannot walk a source directory
+recursively to produce per-file symlinks</strong>, and it <strong>silently
+no-ops on dir-vs-symlink conflicts</strong>. Both behaviors matter when
+working on devenv module files in this repo.</p>
+<h3 id="where-devenv-files-is-defined"><a class="header" href="#where-devenv-files-is-defined">Where devenv <code>files</code> is defined</a></h3>
+<p>Upstream: <code>&lt;devenv-source&gt;/src/modules/files.nix</code> in the
+<code>cachix/devenv</code> flake. On a system that has devenv installed,
+locate with:</p>
+<pre><code class="language-bash">find /nix/store -name 'files.nix' -path '*devenv*' 2&gt;/dev/null
+</code></pre>
+<p>Hashes change across releases; don’t bookmark a specific path.</p>
+<h3 id="structural-constraints"><a class="header" href="#structural-constraints">Structural constraints</a></h3>
+<p><strong>The <code>source</code> format is identity:</strong></p>
+<pre><code class="language-nix">source = {
+  type = types.path;
+  generate = filename: path: path;   # identity — no walk, no expansion
+};
+</code></pre>
+<p>Whatever path you provide becomes the symlink target verbatim.
+No recursion, no enumeration, no per-file generation.</p>
+<p><strong>The submodule has no recursive field:</strong></p>
+<p><code>fileType</code> has <code>format</code>, <code>data</code>, <code>file</code>, <code>executable</code>, plus one
+option per format (<code>ini</code>, <code>json</code>, <code>yaml</code>, <code>toml</code>, <code>text</code>,
+<code>source</code>). Notably <strong>missing</strong>:</p>
+<ul>
+<li>No <code>recursive</code> field</li>
+<li>No <code>tree</code> / <code>walk</code> field</li>
+<li>No file-level enumeration hook</li>
+</ul>
+<p>Each <code>files.&lt;name&gt;</code> is exactly one on-disk entry.</p>
+<p><strong>Create script does one <code>ln -s</code> per entry:</strong></p>
+<pre><code class="language-bash">createFileScript = filename: fileOption: ''
+  if [ -L "${filename}" ]; then
+    # Update symlink target if it changed
+    if [ "$(readlink "${filename}")" != "${fileOption.file}" ]; then
+      ln -sf ${fileOption.file} "${filename}"
+    fi
+  elif [ -f "${filename}" ]; then
+    echo "Conflicting file ${filename}" &gt;&amp;2  # NO non-zero exit
+  elif [ -e "${filename}" ]; then
+    echo "Conflicting non-file ${filename}" &gt;&amp;2  # NO non-zero exit
+  else
+    mkdir -p "${dirOf filename}"
+    ln -s ${fileOption.file} "${filename}"
+  fi
+'';
+</code></pre>
+<p>No recursion. One <code>ln -s</code> per entry.</p>
+<h3 id="silent-fail-behavior-important"><a class="header" href="#silent-fail-behavior-important">Silent-fail behavior (important)</a></h3>
+<p>The create script has three branches for conflicts. Cases 2 and
+3 (existing file or non-file at the target path) <strong>log to stderr
+but do NOT exit non-zero</strong>. The <code>ai.skills</code> config evaluates
+fine, the build succeeds, but on disk there’s no symlink.</p>
+<p><strong>Consequence for Layout A → B transitions:</strong> if a real directory
+exists at the target path (because an HM activation or a previous
+devenv run using a directory-walking helper laid it down), devenv
+will log a warning and silently skip creating the file entry. The
+user sees skills “missing” with no clear error.</p>
+<p><strong>Detect silent failures in practice:</strong></p>
+<pre><code class="language-bash">devenv shell 2&gt;&amp;1 | grep -i conflict
+# OR
+devenv test 2&gt;&amp;1 | grep -i conflict
+</code></pre>
+<p>Look for <code>Conflicting file &lt;path&gt;</code> or <code>Conflicting non-file &lt;path&gt;</code>
+lines.</p>
+<h3 id="state-tracking-and-orphan-cleanup"><a class="header" href="#state-tracking-and-orphan-cleanup">State tracking and orphan cleanup</a></h3>
+<p>devenv tracks managed files in <code>${config.devenv.state}/files.json</code>.
+On every run, the cleanup task reads previous state, compares to
+current config, and removes orphaned symlinks pointing into
+<code>/nix/store/*</code>. It <strong>only removes symlinks</strong> — never real files
+or directories. This is another reason Layout A → B transitions
+get stuck: orphan cleanup can’t clear a real dir that a previous
+generation laid down.</p>
+<h3 id="the-user-space-walker-mkdevenvskillentries"><a class="header" href="#the-user-space-walker-mkdevenvskillentries">The user-space walker (<code>mkDevenvSkillEntries</code>)</a></h3>
+<p>To produce Layout B (a directory containing per-file symlinks)
+via the <code>files</code> option, split one logical “skill directory” into
+N <code>files."&lt;path&gt;".source = &lt;file&gt;;</code> entries — one per leaf file.
+This must happen at Nix evaluation time because devenv’s create
+script has no hook for runtime expansion.</p>
+<p><code>builtins.readDir &lt;path&gt;</code> returns <code>{ name → type }</code> for a
+directory. Recursing through it produces the leaf-file list, and
+each leaf becomes a <code>files</code> entry whose <code>source</code> points at the
+full path within the original tree.</p>
+<p>Key behaviors:</p>
+<ul>
+<li>Works on any path Nix evaluation has read access to. For
+<code>ai.skills = { foo = ./skills/foo; }</code>, the path is relative to
+the flake root and Nix can read it.</li>
+<li>Preserves the directory structure of the source.</li>
+<li>Eval-time cost is proportional to file count. Negligible for
+typical skill dirs.</li>
+<li>Does NOT need IFD. It’s pure <code>readDir</code> on paths the flake
+already tracks.</li>
+</ul>
+<p>The implementation lives in <code>lib/hm-helpers.nix:mkDevenvSkillEntries</code>
+(when Task 2b lands) and is the recommended fix for the HM/devenv
+skills layout parity gap.</p>
+<h3 id="why-hm-doesnt-have-this-problem"><a class="header" href="#why-hm-doesnt-have-this-problem">Why HM doesn’t have this problem</a></h3>
+<p>HM’s <code>home.file.&lt;name&gt;</code> submodule has a <code>recursive</code> field
+(<code>home-manager/modules/files.nix</code>). When <code>source</code> is a directory
+and <code>recursive = true</code>, HM’s activation script walks the directory
+and creates per-file symlinks inside a real subdirectory at
+<code>&lt;name&gt;</code>, with state tracking per file. Upstream
+<code>programs.claude-code.skills</code> uses this via <code>mkSkillEntry</code>. Our
+own <code>lib/hm-helpers.nix:mkSkillEntries</code> mirrors the pattern for
+<code>programs.copilot-cli.skills</code> and <code>programs.kiro-cli.skills</code>.</p>
+<p>devenv chose a simpler, flatter model without recursive support.
+Not a bug; a deliberate design difference. The user-space walker
+restores parity at the cost of eval-time directory walks.</p>
+<h3 id="upstream-pr-opportunity"><a class="header" href="#upstream-pr-opportunity">Upstream PR opportunity</a></h3>
+<p>Filing a PR to <code>cachix/devenv</code> adding a <code>recursive</code> field to
+<code>fileType</code> that triggers a <code>builtins.readDir</code>-based walk in the
+<code>createFileScript</code> generator would benefit every devenv user, not
+just us. Not blocking any current work — the user-space walker is
+a viable fix while waiting for upstream.</p>
+<h3 id="related-1"><a class="header" href="#related-1">Related</a></h3>
+<ul>
+<li><code>dev/fragments/ai-skills/skills-fanout-pattern.md</code> — the
+uniform <code>programs.&lt;cli&gt;.skills</code> delegation pattern that this
+walker enables on devenv side</li>
+<li><code>memory/project_devenv_files_internals.md</code> — original deep-dive
+source content</li>
+<li><code>memory/project_ai_claude_passthrough.md</code> — Task 2b (devenv
+parity decision: Option A recommended uses this walker)</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="overlay-cache-hit-parity-1"><a href="#overlay-cache-hit-parity-1" class="header">Overlay Cache-Hit Parity</a></h1>
 <h2 id="overlay-cache-hit-parity"><a class="header" href="#overlay-cache-hit-parity">Overlay Cache-Hit Parity</a></h2>
