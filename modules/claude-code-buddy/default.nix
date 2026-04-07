@@ -11,7 +11,8 @@
 #    worker (Bun runtime → wyhash), patches cli.js with the new
 #    salt, resets the `companion` field in ~/.claude.json, and
 #    writes the new fingerprint
-# 4. If same: exits cleanly (cached)
+# 4. If same: skips the update block via an `if`/`fi` guard
+#    (NOT `exit 0` — see mkActivationScript for why)
 #
 # The package wrapping happens at the OVERLAY level (see
 # packages/ai-clis/claude-code.nix). pkgs.claude-code's bin/claude is
