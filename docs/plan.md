@@ -64,15 +64,18 @@ Three tiers:
 
 ### Architecture foundation
 
-- [ ] **Overlay cache-hit parity fix** — every compiled overlay
-      package must instantiate its own `pkgs` from `inputs.nixpkgs`
-      (not consumer `final`/`prev`) so cachix substituters actually
-      serve the packages. Current overlays use `final.rust-bin`,
-      `prev.git-branchless`, etc., which binds build infrastructure
-      to the consumer's nixpkgs → store path drift → cache miss.
-      Full fix pattern, file enumeration, and verification protocol
-      in `dev/notes/overlay-cache-hit-parity-fix.md`. Related
-      fragment: `dev/fragments/overlays/cache-hit-parity.md`.
+- [x] **Overlay cache-hit parity fix** — landed 2026-04-08 across
+      Phase 3 of the architecture-foundation plan. Every compiled
+      overlay package in `packages/git-tools/`,
+      `packages/mcp-servers/`, and `packages/ai-clis/` now
+      instantiates its own `ourPkgs = import inputs.nixpkgs { ... }`.
+      Verified end-to-end with the new `checks.cache-hit-parity`
+      flake check (which gates regressions against a deliberately
+      divergent `inputs.nixpkgs-test` pin). Consumer store paths
+      now match CI's standalone paths; cachix substitution works
+      after the next CI run pushes the new hashes. Full fix
+      pattern preserved in
+      `dev/notes/overlay-cache-hit-parity-fix.md`.
 
 - [ ] **Consolidate fragment enumeration into single metadata
       table** — `devFragmentNames`, `packagePaths`, and
@@ -473,7 +476,20 @@ the ai.claude passthrough (above).
 - [ ] **Wire nix-agentic-tools into nixos-config** — HM global +
       devshell per-repo. Flake input, overlay, module imports. Has
       been partially done (HITL work 2026-04-06); verify current
-      state and close any gaps.
+      state and close any gaps. End-to-end verification checklist
+      that the rewrite dropped:
+
+      - [ ] `home-manager switch` runs cleanly end-to-end on the
+            real consumer (not just module-eval)
+      - [ ] copilot-cli activation merge: settings.json deep-merge
+            preserves user runtime additions across rebuilds
+      - [ ] kiro-cli steering files generate with valid YAML
+            frontmatter (`inclusion`, `fileMatchPattern`, etc.)
+      - [ ] stacked-workflows integrations wire skill files into
+            all three ecosystems (Claude, Copilot, Kiro)
+      - [ ] Fresh-clone smoke test: `git clone` to /tmp,
+            `devenv test`, verify no rogue `.gitignore` or
+            generated files leak into the working tree
 
 - [ ] **Migrate nixos-config AI config to `ai.*` unified module**
       — replace hardcoded `programs.claude-code.*` / `copilot.*` /
@@ -577,6 +593,21 @@ Everything else. Park these until TOP/MIDDLE are stable.
 - [ ] Review CI cachix push strategy — currently pushes on every
       build (upstream dedup handles storage). Re-evaluate if cache
       size becomes a concern
+- [ ] **CUDA build verification** — verify packages that opt into
+      `cudaSupport` actually build on `x86_64-linux` in CI. Lost
+      from the pre-rewrite backlog; never explicitly checked since
+      the matrix was set up.
+
+### Repo hygiene
+
+- [ ] **Declutter root dotfiles** — root currently holds
+      `.cspell/`, `.nvfetcher/`, `.agnix.toml`, plus other tool
+      configs. Move whatever can be moved into a `config/`
+      subdirectory (or each tool's idiomatic alternate location)
+      to reduce visual noise at the repo root. Some tools (e.g.
+      `.envrc`, `.gitignore`, `flake.nix`) MUST stay at root —
+      audit each one before moving. Lost from the pre-rewrite
+      backlog; called out by the user 2026-04-07.
 
 ### Agentic tooling
 
@@ -592,143 +623,59 @@ Everything else. Park these until TOP/MIDDLE are stable.
       module patterns, `devenv up docs` for docs preview
 - [ ] Consumer migration guide — replace vendored packages +
       nix-mcp-servers
+- [ ] **Document binary cache for consumers** — current
+      `nix-agentic-tools.cachix.org` substituter setup is
+      documented internally (`memory/project_cachix_setup.md`)
+      but consumers don't have a public-facing "how to opt in"
+      page (`extra-substituters` + `extra-trusted-public-keys`
+      snippet, `cachix use` instructions, sandbox flag notes).
+      Lost from the pre-rewrite backlog.
 - [ ] ADRs for key decisions (standalone devenv, fragment pipeline,
       config parity)
 
 ### Doc site polish
 
-- [ ] **NuschtOS options browser: scopes, deep links, dark mode,
-      packages** — observed 2026-04-07: the embedded options
-      search at `/options/` defaults to the `All` scope which
-      blends DevEnv + Home-Manager and shows duplicate entries
-      for every parity option (e.g. `ai.claude.enable` appears
-      twice in the list with no disambiguation; only the
-      detail pane reveals which scope a hit came from). Six
-      separable issues, listed roughly in priority order:
+- [ ] **NuschtOS options browser gaps** — observed 2026-04-07,
+      `/options/` defaults to the `All` scope which blends
+      DevEnv + Home-Manager and shows duplicate rows for every
+      parity option with no way to disambiguate them in the
+      list view. Plus dark mode renders light, and packages
+      indexing is missing entirely. Full technical research
+      (PR #280 viability, patch sizes for #244/#284, dark-mode
+      investigation, maintainer responsiveness, alternative
+      tools considered) lives in
+      `memory/project_nuschtos_search.md`. **Chosen strategy
+      (2026-04-07): (A)+(C) — wait on PR #280 upstream, file
+      a small upstream PR ourselves for #244/#284 when convenient.
+      Not a fork.** Concrete in-repo work:
 
-      **1. Add a `lib` scope.** `flake.nix:264` `optionsSearch`
-      currently passes only two scopes: `DevEnv` and
-      `Home-Manager`. The `lib/` API surface (mkAgenticShell,
-      fragments.nix primitives, hm-helpers, ai-common types,
-      buddy-types) has no options-doc representation at all.
-      Either feed `lib` through `nixosOptionsDoc` via a
-      synthetic module that wraps each public function as an
-      option (cumbersome), or generate a separate static
-      reference page in `fragments-docs` and link to it from
-      the search UI's empty-state. The current state silently
-      pretends `lib` doesn't exist.
-
-      **2. Link the options browser from README and mdbook.**
-      Neither `README.md` nor any page under `dev/docs/`
-      mentions `/options/` exists. The browser only shows up
-      if a visitor stumbles across the URL. Fix: add a top-level
-      "Browse options" link in the README feature matrix and a
-      dedicated entry in the mdbook left nav (likely
-      `dev/docs/index.md` and the SUMMARY scaffold the
-      site-prose generator emits). Cross-link each scope:
-      `?scope=0` for DevEnv, `?scope=1` for Home-Manager (and
-      eventually `?scope=2` for lib).
-
-      **3. Hide the `All` scope (or remove the blended view).**
-      The blended view actively misleads — it suggests every
-      option is configured the same way across HM and devenv,
-      and the duplicate-row display gives no fast way to tell
-      them apart. Upstream blocker:
-      [NuschtOS/search#244 "How to hide scope `All`"](https://github.com/NuschtOS/search/issues/244)
-      (open, unresolved). Related:
-      [NuschtOS/search#284](https://github.com/NuschtOS/search/issues/284)
-      (request a `?hideScopes=1` query param). Workarounds
-      until upstream lands a fix:
-
-      - **(a) Default-route to a non-`All` scope.** Set the
-        embed iframe / mdbook link to `?scope=0` so visitors
-        land on DevEnv by default, never see `All` unless they
-        change the dropdown. Cheap, partial fix.
-      - **(b) Run separate `mkSearch` instances per scope and
-        deploy each under its own `baseHref`.** Per the
-        research, NuschtOS routes are query-param-only
-        (`src/app/app.routes.ts` declares a single
-        `path: ""`); there is no path-based per-scope URL like
-        `/scope/lib`. To get clean canonical URLs
-        (`/options/lib/`, `/options/hm/`, `/options/devenv/`)
-        we'd publish three sites side by side. More disk +
-        more CI work, but produces shareable per-scope
-        landing pages and naturally eliminates the blended
-        view since each instance has only one scope.
-      - **(c) Wait for upstream.** Watch #244, drop the
-        workaround when the option lands.
-
-      Decide between (a)+(c) and (b) based on whether canonical
-      per-scope URLs are worth ~3x the search build cost.
-
-      **4. Dark mode investigation.** NuschtOS ships dark theme
-      support out of the box (kanagawa palette via `@feel/style`,
-      see open issue NuschtOS/search#292 for evidence both
-      themes coexist). Our deployed instance (screenshot
-      2026-04-07) renders light. Unclear whether NuschtOS
-      auto-respects `prefers-color-scheme` or needs a config
-      flag — the `@feel/style` source isn't in the NuschtOS
-      org and the published package metadata is opaque. Action:
-      open the deployed `/options/index.html` in a
-      dark-prefers-color-scheme browser, see if it flips. If
-      not, file an upstream feature request or check if
-      `mkMultiSearch` accepts a theme override. Low effort,
-      high quality-of-life win for users on dark systems.
-
-      **5. Packages search (separate tool decision).** When
-      this work was originally scoped, the intent was for the
-      browser to cover BOTH options (like the Options tab on
-      search.nixos.org) AND packages (like the Packages tab,
-      e.g.
-      `https://search.nixos.org/packages?channel=unstable`).
-      NuschtOS does not currently index packages — package
-      support lives in
-      [NuschtOS/search#280 "packages: init"](https://github.com/NuschtOS/search/pull/280)
-      which is still a draft (state: DRAFT, large diff). No
-      single self-hostable static web tool currently does
-      both options and packages: nixos-search (the
-      search.nixos.org backend) requires Elasticsearch which
-      NuschtOS was explicitly built to avoid; nix-search-tv is
-      TUI-only. Three options:
-
-      - **(a) Wait for #280 to merge** and bump the
-        `nuscht-search` flake input. Lowest effort, indefinite
-        timeline.
-      - **(b) Run NuschtOS for options + a second tool for
-        packages** side by side. Doubles the surface to maintain
-        and the visitor has to know which tab does what.
-      - **(c) Generate a static packages page from
-        `fragments-docs`.** We already evaluate the overlay
-        package list in `packages/fragments-docs/` for the
-        snippets pipeline. Could extend to emit a full mdbook
-        page with package name + version + description per
-        platform — pagefind would index it for free as part of
-        the existing full-text search. Not as rich as a faceted
-        UI but ships today, with no upstream dependency.
-
-      Pick (c) if we want it now; (a) otherwise. (b) is
-      probably worse than either.
-
-      **6. File a discoverable upstream tracking issue.**
-      Once we land any of the above, post a comment summarizing
-      our use case on NuschtOS/search#244 (and #280 for
-      packages) so upstream knows the multi-scope-no-`All`
-      workflow has real users. Helps prioritize.
-
-      **Touch points for the in-repo work:**
-
-      - `flake.nix` — `optionsSearch` `mkMultiSearch` config
-        (add `lib` scope, possibly switch to `mkSearch` ×3 for
-        approach (b))
-      - `dev/docs/index.md` + mdbook SUMMARY scaffold —
-        navigation links to `/options/<scope>`
-      - `README.md` (which is generated from
-        `dev/generate.nix:readmeMd`) — feature matrix entry
-        + top-of-readme "Browse options" call-out
-      - `dev/notes/` — capture decision rationale (which of
-        approaches a/b/c, why) once chosen
-      - `.cspell/project-terms.txt` — add `kanagawa` if any
-        new prose mentions the palette by name
+      - [ ] Add a `lib` scope to `flake.nix:262` `optionsSearch`
+            (`lib/` API surface has no options-doc representation
+            today — needs a synthetic-module wrapper or a static
+            reference page in `fragments-docs`)
+      - [ ] Link the options browser from README and mdbook
+            (`README.md` and `dev/docs/index.md` both omit
+            `/options/`); use `?scope=0`/`?scope=1` query-param
+            deep links per scope (NuschtOS has no path-based
+            per-scope URLs)
+      - [ ] Workaround the `All`-scope blending: change the
+            in-repo links to default-route to `?scope=0` so
+            visitors never see the blended view unless they
+            change the dropdown
+      - [ ] Investigate dark mode: open the deployed
+            `/options/index.html` in a `prefers-color-scheme: dark`
+            browser, see if it flips; if not, fetch `@feel/style`
+            from npm and check whether `$theme-mode: dark` SCSS
+            override works
+      - [ ] (Optional, when budget allows) File the combined
+            #244+#284 upstream PR — ~25 lines, single commit,
+            patch shape documented in the memory file; tag both
+            issues
+      - [ ] (Optional, if package search becomes critical-path
+            before PR #280 merges) Generate a static packages
+            page from `fragments-docs` and let pagefind index
+            it — uses the overlay package list we already
+            evaluate for the snippets pipeline
 
 ### Misc backlog (unsorted)
 
@@ -746,6 +693,12 @@ Everything else. Park these until TOP/MIDDLE are stable.
       or wrap as `ai.claude.persistentDirs`
 - [ ] Secret scanning — integrate gitleaks into pre-commit hook
       or CI
+- [ ] **SecretSpec for MCP credentials** — declarative secrets
+      provider abstraction for MCP server credentials. Pre-rewrite
+      backlog had this; condensed to memory but never landed in
+      the new plan structure. Pairs well with the bridge/credentials
+      pattern in `lib/mcp/` and the per-server credential handling
+      in `modules/mcp-servers/`.
 - [ ] Auto-display images in terminal — fragment/hook that runs
       `chafa --format=sixel` via `ai.*` fanout
 - [ ] cclsp — Claude Code LSP integration (`passthru.withAdapters`)
