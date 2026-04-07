@@ -102,6 +102,16 @@
       "packages/git-tools/*.nix"
       "packages/mcp-servers/*.nix"
     ];
+    # pipeline: fragment composition + ecosystem transforms + docsite
+    # generators. Scoped to every file that participates in the dev
+    # fragment and instruction generation chain.
+    pipeline = [
+      "lib/fragments.nix"
+      "dev/generate.nix"
+      "dev/tasks/generate.nix"
+      "packages/fragments-ai/**"
+      "packages/fragments-docs/**"
+    ];
     stacked-workflows = ["packages/stacked-workflows/**"];
   };
 
@@ -141,6 +151,7 @@
     ];
     mcp-servers = ["overlay-guide"];
     overlays = ["cache-hit-parity"];
+    pipeline = ["fragment-pipeline"];
     stacked-workflows = ["development"];
   };
 
