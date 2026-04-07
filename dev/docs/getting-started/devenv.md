@@ -1,0 +1,152 @@
+# DevEnv Setup
+
+Per-project AI tool configuration via devenv. Config lives with the
+project and activates on shell entry.
+
+## 1. Add the input
+
+```yaml
+# devenv.yaml
+inputs:
+  nix-agentic-tools:
+    url: github:higherorderfunctor/nix-agentic-tools
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
+```
+
+### Binary cache (recommended)
+
+Add to your `devenv.nix` to pull pre-built packages from Cachix:
+
+```nix
+cachix.pull = ["nix-agentic-tools"];
+```
+
+## 2. Import the modules
+
+```nix
+# devenv.nix
+{inputs, ...}: {
+  imports = [
+    inputs.nix-agentic-tools.devenvModules.default
+  ];
+}
+```
+
+This imports `ai`, `copilot`, and `kiro` devenv modules. Import
+individually if preferred:
+
+```nix
+imports = [inputs.nix-agentic-tools.devenvModules.ai];
+```
+
+## 3. Minimal configuration
+
+```nix
+{inputs, pkgs, ...}: {
+  imports = [inputs.nix-agentic-tools.devenvModules.default];
+
+  ai.claude.enable = true;
+}
+```
+
+## 4. Full configuration example
+
+```nix
+{inputs, pkgs, lib, ...}: let
+  # Apply overlays to get content packages
+  contentPkgs = pkgs.extend (lib.composeManyExtensions [
+    (import "${inputs.nix-agentic-tools}/packages/coding-standards" {})
+    (import "${inputs.nix-agentic-tools}/packages/stacked-workflows" {})
+  ]);
+in {
+  imports = [inputs.nix-agentic-tools.devenvModules.default];
+
+  # ── Packages ──────────────────────────────────────────────────────
+  packages = with pkgs; [nixd marksman taplo];
+
+  # ── Unified AI config ─────────────────────────────────────────────
+  # Each ai.<cli>.enable is the sole gate and also flips the
+  # corresponding devenv module's enable via mkDefault, so consumers
+  # don't need to set enable twice.
+  ai = {
+    claude.enable = true;
+    copilot.enable = true;
+    kiro.enable = true;
+
+    skills = let
+      sws = contentPkgs.stacked-workflows-content.passthru.skillsDir;
+    in {
+      stack-fix = sws + "/stack-fix";
+      stack-plan = sws + "/stack-plan";
+    };
+  };
+
+  # ── Claude Code ────────────────────────────────────────────────────
+  # claude.code.enable is set by ai.claude.enable above via the fanout.
+  claude.code = {
+    env.ENABLE_LSP_TOOL = "1";
+
+    mcpServers.github-mcp = {
+      type = "stdio";
+      command = "${pkgs.nix-mcp-servers.github-mcp}/bin/github-mcp-server";
+      args = ["--stdio"];
+    };
+  };
+
+  # ── Copilot ────────────────────────────────────────────────────────
+  # copilot.enable is set by ai.copilot.enable above via the fanout.
+  copilot.settings.model = "gpt-4o";
+
+  # ── Kiro ───────────────────────────────────────────────────────────
+  # kiro.enable is set by ai.kiro.enable above via the fanout.
+  kiro.settings.chat.defaultModel = "claude-sonnet-4";
+}
+```
+
+## 5. Verify
+
+```bash
+devenv shell
+
+# Check generated files
+ls .claude/rules/         # Claude instructions
+ls .claude/skills/        # Skills (symlinks to store)
+ls .claude/settings.json  # Claude settings
+ls .copilot/              # Copilot config
+ls .kiro/                 # Kiro config
+```
+
+## What gets generated
+
+DevEnv writes config to project-local dotfiles via `files.*`:
+
+| ai.\* option   | Claude                  | Copilot                 | Kiro                      |
+| -------------- | ----------------------- | ----------------------- | ------------------------- |
+| `skills`       | `.claude/skills/`       | `.github/skills/`       | `.kiro/skills/`           |
+| `instructions` | `.claude/rules/`        | `.github/instructions/` | `.kiro/steering/`         |
+| `settings`     | `.claude/settings.json` | `.copilot/config.json`  | `.kiro/settings/cli.json` |
+| `mcpServers`   | `.claude/settings.json` | `.copilot/mcp.json`     | `.kiro/settings/mcp.json` |
+
+> **Note:** Generated files are `.gitignore`'d. They're recreated on
+> every `devenv shell` entry.
+
+## Differences from Home-Manager
+
+| Aspect            | Home-Manager                     | DevEnv                     |
+| ----------------- | -------------------------------- | -------------------------- |
+| Scope             | System-wide (`~/.claude/`)       | Project-local (`.claude/`) |
+| Persistence       | Survives shell exit              | Recreated on shell entry   |
+| MCP servers       | `services.mcp-servers` (systemd) | Inline per-CLI config      |
+| Stacked workflows | Module with git presets          | Manual skill wiring        |
+| Fragment pipeline | N/A                              | `files.*` materialization  |
+
+## Next steps
+
+- [The Unified ai.\* Module](../concepts/unified-ai-module.md) — same
+  module, both HM and devenv
+- [Overlays & Packages](../concepts/overlays-packages.md) — what the
+  overlay provides
+- [Fragments & Composition](../concepts/fragments.md) — composable
+  instruction building blocks

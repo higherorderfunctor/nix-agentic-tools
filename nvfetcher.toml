@@ -1,0 +1,138 @@
+# Unified version tracking for all packages.
+# Run: nvfetcher (regenerates per-package .nvfetcher/generated.nix)
+#
+# Note: nvfetcher output is currently per-package (.nvfetcher/ in each
+# package group). This unified config is the source of truth for what
+# versions to track. The update app (Phase 4) will handle routing
+# nvfetcher output to the correct per-package directory.
+
+# ── Dev tools ─────────────────────────────────────────────────────
+
+[agnix]
+src.github = "agent-sh/agnix"
+fetch.github = "agent-sh/agnix"
+
+# ── AI CLIs ──────────────────────────────────────────────────────
+
+[any-buddy]
+src.github = "cpaczek/any-buddy"
+fetch.github = "cpaczek/any-buddy"
+
+[claude-code]
+src.cmd = "curl -s https://registry.npmjs.org/@anthropic-ai/claude-code/latest | jq -r .version"
+fetch.url = "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-$ver.tgz"
+
+[github-copilot-cli]
+src.github = "github/copilot-cli"
+src.from_pattern = "v([0-9]+\\.[0-9]+\\.[0-9]+)$"
+src.exclude_regex = ".*-[0-9]+$"
+src.to_pattern = "\\1"
+fetch.url = "https://github.com/github/copilot-cli/releases/download/v$ver/copilot-linux-x64.tar.gz"
+
+[kiro-cli]
+src.cmd = "curl -s https://desktop-release.q.us-east-1.amazonaws.com/latest/manifest.json | jq -r '.version'"
+fetch.url = "https://desktop-release.q.us-east-1.amazonaws.com/$ver/kirocli-x86_64-linux.tar.gz"
+
+[kiro-cli-darwin]
+src.cmd = "curl -s https://desktop-release.q.us-east-1.amazonaws.com/latest/manifest.json | jq -r '.version'"
+fetch.url = "https://desktop-release.q.us-east-1.amazonaws.com/$ver/Kiro%20CLI.dmg"
+url.name = "kiro-cli.dmg"
+
+[kiro-gateway]
+src.git = "https://github.com/jwadow/kiro-gateway.git"
+src.use_commit = true
+src.branch = "main"
+fetch.git = "https://github.com/jwadow/kiro-gateway.git"
+
+# ── Git tools ─────────────────────────────────────────────────────
+
+[git-absorb]
+src.github = "tummychow/git-absorb"
+fetch.github = "tummychow/git-absorb"
+
+[git-branchless]
+src.github = "arxanas/git-branchless"
+fetch.github = "arxanas/git-branchless"
+
+[git-revise]
+# Track version from PyPI, fetch source from GitHub (includes tests).
+# from_pattern/to_pattern adds "v" prefix: PyPI "0.8.0" → GitHub tag "v0.8.0"
+src.pypi = "git-revise"
+src.from_pattern = "^(.*)$"
+src.to_pattern = "v\\1"
+fetch.github = "mystor/git-revise"
+
+# ── MCP servers: GitHub ───────────────────────────────────────────
+
+# Upstream: https://github.com/github/github-mcp-server (tagged releases)
+[github-mcp-server]
+src.github = "github/github-mcp-server"
+fetch.github = "github/github-mcp-server"
+
+# Upstream: https://github.com/hoangsonww/GitIntel-MCP-Server (no releases)
+[git-intel-mcp]
+src.git = "https://github.com/hoangsonww/GitIntel-MCP-Server.git"
+src.use_commit = true
+src.branch = "master"
+fetch.git = "https://github.com/hoangsonww/GitIntel-MCP-Server.git"
+
+# Upstream: https://github.com/isaacphi/mcp-language-server (tagged releases)
+[mcp-language-server]
+src.github = "isaacphi/mcp-language-server"
+fetch.github = "isaacphi/mcp-language-server"
+
+# Upstream: https://github.com/sdiehl/sympy-mcp (no releases)
+[sympy-mcp]
+src.git = "https://github.com/sdiehl/sympy-mcp.git"
+src.use_commit = true
+src.branch = "main"
+fetch.github = "sdiehl/sympy-mcp"
+
+# ── MCP servers: npm ──────────────────────────────────────────────
+
+# Upstream: https://github.com/upstash/context7
+[context7-mcp]
+src.cmd = "curl -s https://registry.npmjs.org/@upstash/context7-mcp/latest | jq -r .version"
+fetch.url = "https://registry.npmjs.org/@upstash/context7-mcp/-/context7-mcp-$ver.tgz"
+
+# Upstream: https://github.com/tim-smart/effect-mcp
+[effect-mcp]
+src.cmd = "curl -s https://registry.npmjs.org/effect-mcp/latest | jq -r .version"
+fetch.url = "https://registry.npmjs.org/effect-mcp/-/effect-mcp-$ver.tgz"
+
+# Upstream: https://github.com/openmemory/openmemory
+[openmemory-mcp]
+src.cmd = "curl -s https://registry.npmjs.org/openmemory-js/latest | jq -r .version"
+fetch.url = "https://registry.npmjs.org/openmemory-js/-/openmemory-js-$ver.tgz"
+
+# Upstream: https://github.com/modelcontextprotocol/servers (sequentialthinking)
+[sequential-thinking-mcp]
+src.cmd = "curl -s https://registry.npmjs.org/@modelcontextprotocol/server-sequential-thinking/latest | jq -r .version"
+fetch.url = "https://registry.npmjs.org/@modelcontextprotocol/server-sequential-thinking/-/server-sequential-thinking-$ver.tgz"
+
+# ── MCP servers: PyPI ─────────────────────────────────────────────
+
+# Upstream: https://github.com/kagisearch/kagimcp (dependency)
+[kagiapi]
+src.pypi = "kagiapi"
+fetch.pypi = "kagiapi"
+
+# Upstream: https://github.com/kagisearch/kagimcp
+[kagimcp]
+src.pypi = "kagimcp"
+fetch.pypi = "kagimcp"
+
+# Upstream: https://github.com/modelcontextprotocol/python-sdk (mcp-proxy CLI)
+[mcp-proxy]
+src.pypi = "mcp-proxy"
+fetch.pypi = "mcp_proxy"
+
+# Upstream: https://github.com/modelcontextprotocol/servers (src/fetch)
+[mcp-server-fetch]
+src.pypi = "mcp-server-fetch"
+fetch.pypi = "mcp_server_fetch"
+
+# Upstream: https://github.com/modelcontextprotocol/servers (src/git)
+[mcp-server-git]
+src.pypi = "mcp-server-git"
+fetch.pypi = "mcp_server_git"

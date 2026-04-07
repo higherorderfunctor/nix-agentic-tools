@@ -1,0 +1,26 @@
+# agnix configuration for nix-agentic-tools
+# See: https://github.com/agent-sh/agnix
+
+[targets]
+claude-code = true
+copilot = true
+kiro = true
+
+[rules]
+# Suppress false positives:
+# - AS-014: shell quoting in code blocks mistaken for Windows paths
+# - CC-HK-009: || true on treefmt format hook is intentional (best-effort)
+# - CC-MEM-008: MANDATORY keyword placement is deliberate
+# - CDX-AG-005: agnix bug — rule message not interpolated (review on upgrade)
+# - PE-001: placeholder entries in stub files during scaffold phase
+# - XML-001: angle brackets in git placeholder syntax (<hash>, <commit>, etc.)
+# - XP-003: hard-coded paths are intentional in install/reference docs
+disabled_rules = [
+  "AS-014",
+  "CC-HK-009",
+  "CC-MEM-008",
+  "CDX-AG-005",
+  "PE-001",
+  "XML-001",
+  "XP-003",
+]
