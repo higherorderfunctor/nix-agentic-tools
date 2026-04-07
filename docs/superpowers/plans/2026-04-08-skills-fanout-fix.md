@@ -223,21 +223,47 @@ Copilot and Kiro patterns.
   )"
   ```
 
-### Task 2: Devenv parity — `mkDevenvSkillEntries` walker (Option A)
+### Task 2: Devenv parity — extension module + ecosystem walker (Option A)
 
-Add a user-space directory walker to `lib/hm-helpers.nix` that
-emits per-leaf-file devenv `files` entries, achieving Layout B
-parity with HM. Apply to all three devenv ecosystem modules.
+**Architectural principle:** `ai.*` is fanout-only; never
+contains implementation logic. Missing functionality in upstream
+(devenv `claude.code` lacking a `skills` option) lives in an
+extension module that mirrors how `modules/claude-code-buddy/`
+extends HM's `programs.claude-code` with the `buddy` option.
+When the upstream option ships, the extension module either
+delegates through it or gets dropped entirely.
+
+For Claude (devenv): create a NEW extension module that adds
+`claude.code.skills` option to devenv. For Copilot/Kiro
+(devenv): the `cfg.skills` options already exist on our own
+modules (`modules/devenv/copilot.nix:77`,
+`modules/devenv/kiro.nix:106`); just swap their internal
+implementations from single-source writes to the walker.
+
+After this task, all three devenv ecosystem modules have a
+`<cli>.skills` option and `modules/devenv/ai.nix` becomes pure
+fanout — three structurally identical lines.
 
 **Files:**
 
 - Modify: `lib/hm-helpers.nix` (add `mkDevenvSkillEntries`)
-- Modify: `modules/devenv/ai.nix` (Claude branch skills fanout)
-- Modify: `modules/devenv/copilot.nix`
-- Modify: `modules/devenv/kiro.nix`
+- Create: `modules/devenv/claude-code-skills/default.nix`
+  (NEW extension module — adds `claude.code.skills` option to
+  devenv, mirrors `modules/claude-code-buddy/` for HM)
+- Modify: `modules/devenv/copilot.nix` (swap implementation to
+  walker)
+- Modify: `modules/devenv/kiro.nix` (swap implementation to
+  walker)
+- Modify: `modules/devenv/ai.nix` (replace per-branch files.\*
+  writes with delegation through `<cli>.skills` options)
+- Modify: `flake.nix` (register new extension module under
+  `devenvModules.claude-code-skills`)
 - Modify: `checks/devshell-eval.nix` (add layout-assertion check)
 - Modify: `dev/fragments/devenv/files-internals.md` (update Last
-  verified marker)
+  verified marker, document the extension module pattern)
+- Modify: `dev/fragments/ai-skills/skills-fanout-pattern.md`
+  (update the table to show devenv branches delegate the same
+  way as HM branches now)
 
 **Steps:**
 
@@ -275,8 +301,14 @@ parity with HM. Apply to all three devenv ecosystem modules.
   "Switch devenv claude branch to claude.code.skills delegation
   when upstream lands" in `docs/plan.md`.
 
-- [ ] **Step 2: Add `mkDevenvSkillEntries` to
-      `lib/hm-helpers.nix`.** Append:
+- [ ] **Step 2: Add `mkDevenvSkillEntries` walker to
+      `lib/hm-helpers.nix`.** This is the SHARED implementation
+      that all three devenv ecosystem modules will call from
+      their config blocks. The walker stays in lib/ — not in any
+      individual ecosystem module — because it's a generic
+      utility.
+
+  Append to `lib/hm-helpers.nix`:
 
   ```nix
   # Recursively enumerate a skill source directory at eval time
@@ -312,78 +344,301 @@ parity with HM. Apply to all three devenv ecosystem modules.
     attrs;
   ```
 
-- [ ] **Step 3: Write the failing devshell eval check** in
+  Format and commit the helper alone:
+
+  ```bash
+  treefmt lib/hm-helpers.nix
+  git add lib/hm-helpers.nix
+  git commit -m "$(cat <<'EOF'
+  feat(lib): add mkDevenvSkillEntries walker for devenv files.* parity
+
+  Generic helper that walks a source directory at eval time with
+  builtins.readDir and emits devenv-compatible files.<path>.source
+  entries — one per leaf file. Matches the on-disk layout HM
+  produces via recursive = true, but does it through devenv's
+  native files.* mechanism in user space (devenv's files option
+  has no recursive walk of its own).
+
+  Used by the next several commits to back ecosystem-specific
+  skills options on the devenv side (claude-code-skills extension
+  module + copilot/kiro module config blocks). Lives in lib/ not
+  in any individual ecosystem module because it's a generic
+  utility.
+
+  Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+  EOF
+  )"
+  ```
+
+- [ ] **Step 3: Create `modules/devenv/claude-code-skills/default.nix`
+      extension module.** This adds a `claude.code.skills` option
+      to devenv, mirroring how `modules/claude-code-buddy/`
+      extends HM's `programs.claude-code` with `buddy`. The
+      implementation uses `mkDevenvSkillEntries`.
+
+  Sketch (verify against current devenv claude.code option
+  structure before finalizing):
+
+  ```nix
+  # claude.code.skills — devenv extension that adds a `skills`
+  # option to upstream devenv's claude.code module. Mirrors how
+  # modules/claude-code-buddy/ extends HM's programs.claude-code
+  # with `buddy`. The upstream devenv claude.code module
+  # (cachix/devenv src/modules/integrations/claude.nix) does not
+  # yet expose a skills option — see cachix/devenv#2441. When
+  # that lands, this whole module gets dropped (or refactored to
+  # delegate through the upstream option).
+  {
+    config,
+    lib,
+    pkgs,
+    ...
+  }: let
+    inherit (lib) mkOption types;
+    inherit (import ../../../lib/hm-helpers.nix {inherit lib;}) mkDevenvSkillEntries;
+    cfg = config.claude.code.skills or {};
+  in {
+    options.claude.code.skills = mkOption {
+      type = types.attrsOf types.path;
+      default = {};
+      description = ''
+        Skill directories to expose as ~/.claude/skills/<name>/
+        (project-local: .claude/skills/<name>/). Each value is a
+        path to a skill directory containing SKILL.md and
+        supporting files. The directory tree is walked at
+        evaluation time and per-file symlinks are written via
+        devenv files.* entries (Layout B parity with HM).
+      '';
+      example = lib.literalExpression ''
+        {
+          stack-fix = ./skills/stack-fix;
+          stack-plan = ./skills/stack-plan;
+        }
+      '';
+    };
+
+    config = lib.mkIf (cfg != {}) {
+      files = mkDevenvSkillEntries ".claude" cfg;
+    };
+  }
+  ```
+
+  Format and commit:
+
+  ```bash
+  treefmt modules/devenv/claude-code-skills/default.nix
+  git add modules/devenv/claude-code-skills/default.nix
+  git commit -m "$(cat <<'EOF'
+  feat(devenv): add claude.code.skills extension module
+
+  Upstream devenv claude.code (cachix/devenv) does not yet expose
+  a skills option — tracked at cachix/devenv#2441. Add an
+  extension module that declares claude.code.skills, mirroring
+  how modules/claude-code-buddy/ extends HM's
+  programs.claude-code with the buddy option. Implementation
+  uses the mkDevenvSkillEntries walker added in the previous
+  commit.
+
+  When upstream devenv ships claude.code.skills, this module
+  becomes vestigial — delete it and have ai.nix delegate
+  directly through the upstream option. See plan.md backlog
+  item.
+
+  Note: this extension module is NOT yet imported by anything.
+  The next commit registers it in flake.nix devenvModules and
+  the ai.nix Claude branch starts delegating through it.
+
+  Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+  EOF
+  )"
+  ```
+
+- [ ] **Step 4: Register the new extension module in `flake.nix`.**
+      Add to `devenvModules` attrset alongside the existing
+      modules. Consumers using `devenvModules.default` get it
+      automatically; consumers using surgical imports add it
+      manually.
+
+  ```bash
+  treefmt flake.nix
+  git add flake.nix
+  git commit -m "$(cat <<'EOF'
+  build(flake): register devenvModules.claude-code-skills
+
+  Wires the devenv claude.code.skills extension module into the
+  flake's devenvModules attrset so consumers can import it.
+  Required before the ai.nix Claude branch can delegate through
+  claude.code.skills (next commit).
+
+  Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+  EOF
+  )"
+  ```
+
+- [ ] **Step 5: Refactor `modules/devenv/copilot.nix` to use the
+      walker internally.** The `cfg.skills` option already exists
+      (line 77); just swap the implementation in the config
+      block. Replace the
+      `lib.concatMapAttrs (name: path: { ".github/skills/${name}".source = path; }) cfg.skills`
+      block with:
+
+  ```nix
+  // hmHelpers.mkDevenvSkillEntries ".github" cfg.skills
+  ```
+
+  (Make sure `hmHelpers` is in scope; if not, add the import to
+  the let block.)
+
+  Format and commit:
+
+  ```bash
+  treefmt modules/devenv/copilot.nix
+  git add modules/devenv/copilot.nix
+  git commit -m "$(cat <<'EOF'
+  refactor(devenv): copilot.skills uses walker for Layout B parity
+
+  Swap copilot.skills internal implementation from single
+  files.<path>.source writes (Layout A — single dir symlink) to
+  mkDevenvSkillEntries walker (Layout B — per-file symlinks
+  inside a real dir). Matches HM programs.copilot-cli.skills
+  on-disk shape.
+
+  No interface change for consumers — copilot.skills option
+  signature is unchanged. Only the internal expansion differs.
+
+  Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+  EOF
+  )"
+  ```
+
+- [ ] **Step 6: Refactor `modules/devenv/kiro.nix` to use the
+      walker internally.** Same shape as Step 5 but for Kiro.
+      Replace the
+      `lib.concatMapAttrs (name: path: { ".kiro/skills/${name}".source = path; }) cfg.skills`
+      block with:
+
+  ```nix
+  // hmHelpers.mkDevenvSkillEntries ".kiro" cfg.skills
+  ```
+
+  Format and commit:
+
+  ```bash
+  treefmt modules/devenv/kiro.nix
+  git add modules/devenv/kiro.nix
+  git commit -m "$(cat <<'EOF'
+  refactor(devenv): kiro.skills uses walker for Layout B parity
+
+  Swap kiro.skills internal implementation from single
+  files.<path>.source writes (Layout A) to mkDevenvSkillEntries
+  walker (Layout B). Matches HM programs.kiro-cli.skills on-disk
+  shape.
+
+  No interface change for consumers.
+
+  Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+  EOF
+  )"
+  ```
+
+- [ ] **Step 7: Refactor `modules/devenv/ai.nix` to delegate
+      through ecosystem options.** This is the architectural
+      cleanup that makes ai.\* pure fanout. Each branch becomes a
+      one-line delegation.
+
+  Find the existing per-branch `files = ... // concatMapAttrs ...`
+  blocks for skills and replace with:
+
+  ```nix
+  # Claude branch (currently hardcoded files.* writes for skills):
+  (mkIf cfg.claude.enable {
+    claude.code.enable = mkDefault true;
+    claude.code.skills = lib.mapAttrs (_: mkDefault) cfg.skills;
+    # ... instructions stay as before
+  })
+
+  # Copilot branch:
+  (mkIf cfg.copilot.enable {
+    copilot.enable = mkDefault true;
+    copilot.skills = lib.mapAttrs (_: mkDefault) cfg.skills;
+    # ... rest of copilot fanout
+  })
+
+  # Kiro branch:
+  (mkIf cfg.kiro.enable {
+    kiro.enable = mkDefault true;
+    kiro.skills = lib.mapAttrs (_: mkDefault) cfg.skills;
+    # ... rest of kiro fanout
+  })
+  ```
+
+  All three skills lines should be structurally identical
+  (delegating through the ecosystem option, mkDefault wrapped).
+  ai.nix no longer touches `files.*` for skills. Implementation
+  lives entirely in the ecosystem modules.
+
+  This requires the claude-code-skills extension module to be
+  imported (Step 4 registered it; consumers need to import it
+  via `devenvModules.default` or surgical imports).
+
+  Format and commit:
+
+  ```bash
+  treefmt modules/devenv/ai.nix
+  git add modules/devenv/ai.nix
+  git commit -m "$(cat <<'EOF'
+  refactor(devenv): ai.skills branches delegate through ecosystem options
+
+  ai.* should be pure fanout. Implementation logic belongs in
+  ecosystem modules. This commit moves the devenv ai.skills
+  branches from direct files.* writes to delegation through:
+
+  - claude.code.skills (provided by the new claude-code-skills
+    extension module added two commits ago)
+  - copilot.skills (existing option, internal walker landed in
+    the previous commit)
+  - kiro.skills (existing option, same)
+
+  All three ai.skills branches now look structurally identical:
+  mkIf cfg.<cli>.enable + <cli>.skills = lib.mapAttrs mkDefault.
+  Mirrors the HM ai.nix shape exactly. ai.* is pure fanout on
+  both HM and devenv.
+
+  Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+  EOF
+  )"
+  ```
+
+- [ ] **Step 8: Add devshell eval check** in
       `checks/devshell-eval.nix`. Test that evaluating a devenv
       module with `ai.skills = { sample = /tmp/sample-skill-dir; }`
       produces per-file entries like
       `files.".claude/skills/sample/SKILL.md".source` instead of
       a single `.claude/skills/sample` entry.
 
-- [ ] **Step 4: Update `modules/devenv/ai.nix` Claude branch.**
-      Replace the existing
-      `concatMapAttrs (name: path: { ".claude/skills/${name}".source = mkDefault path; })`
-      block with the walker. Note that `mkDefault` needs to wrap
-      the `source` attribute of each generated entry, not the
-      entry itself, so the helper returns plain attrsets and the
-      caller re-wraps:
-
-  ```nix
-  // lib.mapAttrs
-    (_: entry: entry // {source = mkDefault entry.source;})
-    (hmHelpers.mkDevenvSkillEntries ".claude" cfg.skills);
-  ```
-
-- [ ] **Step 5: Update `modules/devenv/copilot.nix`** with the
-      same pattern, using the configDir verified in Step 1:
-
-  ```nix
-  // hmHelpers.mkDevenvSkillEntries ".github" cfg.skills;
-  ```
-
-- [ ] **Step 6: Update `modules/devenv/kiro.nix`** with the same
-      pattern:
-
-  ```nix
-  // hmHelpers.mkDevenvSkillEntries ".kiro" cfg.skills
-  ```
-
-- [ ] **Step 7: Run the devshell eval check + flake check.**
+- [ ] **Step 9: Run the devshell eval check + flake check.**
 
   ```bash
   nix build .#checks.x86_64-linux.devenv-skills-layout-eval
   nix flake check
+  devenv test
   ```
 
-  Expected: previously-failing check passes. No regressions in
-  existing devshell checks.
+  Expected: all checks pass.
 
-- [ ] **Step 8: Update the architecture fragment's Last verified
-      marker** in `dev/fragments/devenv/files-internals.md`.
-
-- [ ] **Step 9: Format and commit.**
+  Format and commit:
 
   ```bash
-  treefmt lib/hm-helpers.nix modules/devenv/ai.nix \
-    modules/devenv/copilot.nix modules/devenv/kiro.nix \
-    checks/devshell-eval.nix \
-    dev/fragments/devenv/files-internals.md
-  git add lib/hm-helpers.nix modules/devenv/ai.nix \
-    modules/devenv/copilot.nix modules/devenv/kiro.nix \
-    checks/devshell-eval.nix \
-    dev/fragments/devenv/files-internals.md
+  treefmt checks/devshell-eval.nix
+  git add checks/devshell-eval.nix
   git commit -m "$(cat <<'EOF'
-  refactor(devenv): align skills fanout to HM Layout B
+  test(devenv): add devshell-skills-layout eval check
 
-  devenv's files option only creates single dir symlinks (Layout A)
-  while HM's programs.<cli>.skills uses recursive = true (Layout B).
-  Add mkDevenvSkillEntries helper that walks the source dir at
-  eval time with builtins.readDir and emits per-file
-  files.<path>.source entries, matching HM output.
-
-  Closes the config parity gap between HM and devenv skills fanout
-  for all three ecosystems (Claude, Copilot, Kiro).
-
-  Adds devenv-skills-layout-eval check to prevent regression.
+  Verifies the devenv ai.skills fanout produces per-file Layout B
+  entries (".claude/skills/<name>/SKILL.md".source) rather than
+  single dir symlinks (".claude/skills/<name>".source). Catches
+  any regression that re-introduces direct files.* writes in
+  ai.nix or any ecosystem module.
 
   Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
   EOF
@@ -449,7 +704,7 @@ against the user's nixos-config consumer.
       the commit chain.** Either: amend the Task 1 commit message
       to mention the actual command the user ran (`-b backup`),
       OR add a third commit `docs: note skills layout migration
-  one-time backup` documenting the transition for other
+one-time backup` documenting the transition for other
       consumers.
 
 ### Task 4: Tidy fragment Last-verified markers
@@ -546,16 +801,35 @@ After all four tasks land:
 
 ## Commit count target
 
-4 commits in this session:
+~9 commits in this session, atomic per concern:
 
 1. `refactor(ai): route ai.skills through programs.claude-code.skills`
-2. `refactor(devenv): align skills fanout to HM Layout B`
-3. (Optional) `docs: note skills layout migration one-time backup`
-4. `docs(fragments): update Last verified markers post skills fanout fix`
+   (Task 1 — HM side fix)
+2. `feat(lib): add mkDevenvSkillEntries walker for devenv files.* parity`
+   (Task 2 Step 2 — generic helper)
+3. `feat(devenv): add claude.code.skills extension module`
+   (Task 2 Step 3 — new extension module, mirrors buddy pattern)
+4. `build(flake): register devenvModules.claude-code-skills`
+   (Task 2 Step 4 — wire new module into the flake)
+5. `refactor(devenv): copilot.skills uses walker for Layout B parity`
+   (Task 2 Step 5 — internal implementation swap)
+6. `refactor(devenv): kiro.skills uses walker for Layout B parity`
+   (Task 2 Step 6 — same)
+7. `refactor(devenv): ai.skills branches delegate through ecosystem options`
+   (Task 2 Step 7 — the architectural cleanup, ai.\* becomes pure fanout)
+8. `test(devenv): add devshell-skills-layout eval check`
+   (Task 2 Step 8 — regression protection)
+9. `docs(fragments): update Last verified markers post skills fanout fix`
+   (Task 4 — fragment hygiene)
 
-If Task 3 reveals issues that require fixes in Task 1 or 2, add
-follow-up commits on tip rather than amending. Sentinel workflow
-is additive only.
+Optional 10th commit if Task 3 reveals migration issues:
+`docs: note skills layout migration one-time backup`.
+
+If anything breaks during Tasks 5-7, fix on tip with new commits
+rather than amending. Sentinel workflow is additive only.
+
+The atomic split lets you bisect cleanly. Each commit is small
+(~30-150 lines) and stands alone (flake check passes after each).
 
 ## After this session
 

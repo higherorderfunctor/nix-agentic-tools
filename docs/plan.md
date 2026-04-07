@@ -172,23 +172,31 @@ ready to execute this chunk.
       intentional — both are valid Copilot CLI scopes per
       GitHub docs.
 
-- [ ] **Switch devenv claude branch to `claude.code.skills`
-      delegation when upstream lands** — devenv `claude.code` is
-      missing a `skills` option; tracked at
+- [ ] **Drop `modules/devenv/claude-code-skills` extension when
+      upstream devenv ships `claude.code.skills`** — the
+      2026-04-08 skills fanout fix landed an extension module
+      that adds `claude.code.skills` to devenv (file:
+      `modules/devenv/claude-code-skills/default.nix`),
+      mirroring how `modules/claude-code-buddy/` extends HM's
+      `programs.claude-code` with `buddy`. Upstream tracking:
       [cachix/devenv#2441](https://github.com/cachix/devenv/issues/2441).
-      Until it lands, the devenv Claude branch uses
-      `mkDevenvSkillEntries` (the user-space walker from Task 2b)
-      to write `files.*` entries directly. When the upstream
-      option ships: 1. Bump devenv flake input to a version with the option 2. Replace the walker invocation in
-      `modules/devenv/ai.nix` Claude branch with
-      `claude.code.skills = lib.mapAttrs (_: mkDefault) cfg.skills;` 3. Keep the walker for Copilot/Kiro devenv branches (those
-      devenv modules are ours and don't have a comparable
-      upstream option to delegate to — though we could file
-      feature requests for those too) 4. Update `dev/fragments/devenv/files-internals.md` and
+      When that lands: 1. Bump devenv flake input to a version with the upstream
+      option 2. Verify upstream's option shape matches ours (or file a
+      compat shim if it diverges) 3. Delete `modules/devenv/claude-code-skills/` (entire
+      extension module) 4. Drop the `devenvModules.claude-code-skills` entry from
+      `flake.nix` 5. `modules/devenv/ai.nix` Claude branch keeps the same
+      delegation line — `claude.code.skills = lib.mapAttrs
+       (_: mkDefault) cfg.skills;` — it now points at the
+      upstream option transparently. No ai.nix changes needed. 6. Update `dev/fragments/devenv/files-internals.md` and
       `dev/fragments/ai-skills/skills-fanout-pattern.md` to
       reflect the new state
-      Monitoring: watch the devenv#2441 issue or release notes.
-      Low urgency — current walker works.
+      Copilot and Kiro devenv modules
+      (`modules/devenv/copilot.nix`, `modules/devenv/kiro.nix`)
+      are ours and continue to use the walker internally — no
+      upstream equivalent to delegate to. Devenv doesn't have
+      Copilot or Kiro modules at all currently. Low urgency —
+      current extension works fine; this is just hygiene
+      cleanup if upstream catches up.
 
 - [ ] **Task 3: `ai.claude.memory` passthrough** — mirror upstream
       `memory.{text,source}` submodule, mutual exclusion asserted
