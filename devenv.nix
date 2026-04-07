@@ -52,8 +52,9 @@ in {
     ];
 
   # ── Unified AI Config ─────────────────────────────────────────────────
+  # Each ai.<cli>.enable is the sole gate and flips the corresponding
+  # devenv module enable via mkDefault. No master ai.enable.
   ai = {
-    enable = true;
     claude.enable = true;
     copilot.enable = true;
     kiro.enable = true;

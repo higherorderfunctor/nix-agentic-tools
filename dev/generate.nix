@@ -79,6 +79,15 @@
     # logic lives; consumers touching the upstream programs.*-cli
     # modules don't need this loaded.
     ai-module = ["modules/ai/**"];
+    # ai-skills: uniform delegation pattern (all branches go through
+    # programs.<cli>.skills, no direct home.file). Scoped to ai
+    # module + the skill helper + ecosystem CLI modules.
+    ai-skills = [
+      "modules/ai/**"
+      "modules/copilot-cli/**"
+      "modules/kiro-cli/**"
+      "lib/hm-helpers.nix"
+    ];
     # claude-code: wrapper chain + buddy activation lifecycle.
     # Spans the claude-code package and the buddy HM module because
     # the two are tightly coupled (Bun wrapper picks writable cli.js
@@ -87,6 +96,12 @@
       "packages/ai-clis/claude-code.nix"
       "packages/ai-clis/any-buddy.nix"
       "modules/claude-code-buddy/**"
+    ];
+    # devenv: devenv files.* internals + skills layout walker. Scoped
+    # to devenv modules and the helper file.
+    devenv = [
+      "modules/devenv/**"
+      "lib/hm-helpers.nix"
     ];
     # hm-modules: cross-cutting module conventions. Scoped to every
     # HM module file so conventions load whenever a contributor is
@@ -138,6 +153,7 @@
         dir = "ai";
       }
     ];
+    ai-skills = ["skills-fanout-pattern"];
     claude-code = [
       {
         location = "package";
@@ -150,6 +166,7 @@
         dir = "ai-clis";
       }
     ];
+    devenv = ["files-internals"];
     hm-modules = ["module-conventions"];
     monorepo = [
       "architecture-fragments"
@@ -364,7 +381,6 @@
     imports = [inputs.nix-agentic-tools.homeManagerModules.default];
 
     ai = {
-      enable = true;
       claude.enable = true;
       copilot.enable = true;
       kiro.enable = true;
@@ -405,13 +421,9 @@
     {inputs, ...}: {
       imports = [inputs.nix-agentic-tools.devenvModules.default];
 
-      ai = {
-        enable = true;
-        claude.enable = true;
-      };
+      ai.claude.enable = true;
 
       claude.code = {
-        enable = true;
         mcpServers.github-mcp = {
           type = "stdio";
           command = "github-mcp-server";
@@ -517,7 +529,6 @@
 
     ```nix
     ai = {
-      enable = true;
       claude.enable = true;
       copilot.enable = true;
 

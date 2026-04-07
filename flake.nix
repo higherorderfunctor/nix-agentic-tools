@@ -231,6 +231,10 @@
           $out/contributing/architecture/overlay-cache-hit-parity.md
         cp ${./dev/fragments/hm-modules/module-conventions.md} \
           $out/contributing/architecture/hm-module-conventions.md
+        cp ${./dev/fragments/ai-skills/skills-fanout-pattern.md} \
+          $out/contributing/architecture/ai-skills-fanout-pattern.md
+        cp ${./dev/fragments/devenv/files-internals.md} \
+          $out/contributing/architecture/devenv-files-internals.md
         cp ${./packages/ai-clis/fragments/dev/claude-code-wrapper.md} \
           $out/contributing/architecture/claude-code-wrapper.md
         cp ${./packages/ai-clis/fragments/dev/buddy-activation.md} \

@@ -46,9 +46,11 @@
 - [Architecture Fragments Index](./contributing/architecture/architecture-fragments.md)
   - [Fragment Pipeline](./contributing/architecture/fragment-pipeline.md)
   - [ai Module Fanout](./contributing/architecture/ai-module-fanout.md)
+  - [ai.skills Fanout Pattern](./contributing/architecture/ai-skills-fanout-pattern.md)
   - [claude-code Wrapper Chain](./contributing/architecture/claude-code-wrapper.md)
   - [Buddy Activation](./contributing/architecture/buddy-activation.md)
   - [HM Module Conventions](./contributing/architecture/hm-module-conventions.md)
+  - [devenv files Internals](./contributing/architecture/devenv-files-internals.md)
   - [Overlay Cache-Hit Parity](./contributing/architecture/overlay-cache-hit-parity.md)
 
 ---
