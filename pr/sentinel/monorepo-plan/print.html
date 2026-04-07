@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-d6551f1d.js";
+            window.path_to_searchindex_js = "searchindex-4cc8bcb1.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-841f2094.js"></script>
@@ -6851,7 +6851,7 @@ cli.js patching, companion reset): see
 <h1 id="buddy-activation"><a href="#buddy-activation" class="header">Buddy Activation</a></h1>
 <h2 id="buddy-activation-lifecycle"><a class="header" href="#buddy-activation-lifecycle">Buddy Activation Lifecycle</a></h2>
 <blockquote>
-<p><strong>Last verified:</strong> 2026-04-07 (commit 2cd4f2b). If you touch
+<p><strong>Last verified:</strong> 2026-04-08 (pending — fixes silent-activation-abort bug). If you touch
 <code>modules/claude-code-buddy/default.nix</code>, the any-buddy worker
 invocation, the fingerprint scheme, or how cli.js gets patched
 and this fragment isn’t updated in the same commit, stop and
@@ -6882,9 +6882,24 @@ of:</p>
 </ol>
 <p>Only the first 16 hex chars of the sha256 are stored. Stored at
 <code>$XDG_STATE_HOME/claude-code-buddy/fingerprint</code>.</p>
-<p><strong>If fingerprint matches, the script exits 0 immediately.</strong> The
-entire downstream pipeline is skipped. This is why re-running
-<code>home-manager switch</code> with unchanged config is fast.</p>
+<p><strong>If fingerprint matches, the update block is skipped via an
+<code>if</code>/<code>fi</code> guard.</strong> The entire update pipeline (cli.js rewrite,
+salt patch, companion reset, fingerprint save) is gated so
+re-running <code>home-manager switch</code> with unchanged config is fast.</p>
+<p><strong>CRITICAL — do NOT use <code>exit 0</code> for the short-circuit.</strong> HM
+activation scripts are INLINED into a single outer bash script
+(<code>$out/home-manager-generation/activate</code>) that runs under
+<code>set -eu -o pipefail</code>. A bare <code>exit 0</code> inside any activation
+block terminates the WHOLE activation — every subsequent hook
+(including <code>home.file</code> writes for skills, plugin installs, and
+the linkGeneration step) is silently skipped. Users observe
+“activation succeeded” but skills never update on disk.</p>
+<p>This bit us in commit (pending — the fix) after Task 2 of the
+skills-fanout-fix plan: re-activation stopped at
+<code>Activating claudeBuddy</code> with no error, and the stale Layout A
+skills persisted because every post-buddy step was unreached.
+Always use <code>if [ "$NEW_FP" != "$OLD_FP" ]; then ... fi</code> — never
+<code>exit</code> for the fast path.</p>
 <h3 id="invalidation-triggers"><a class="header" href="#invalidation-triggers">Invalidation triggers</a></h3>
 <p>The fingerprint changes (triggering re-run) on:</p>
 <div class="table-wrapper">
