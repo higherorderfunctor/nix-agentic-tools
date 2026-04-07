@@ -72,6 +72,13 @@ in {
         # - non-empty string: always include
         # - "" (from instructionModule default): omit
         # - null (from compose or ecosystem generate): use contextual default
+        #
+        # fileMatchPattern emission:
+        # - single pattern: bare quoted string ("pattern")
+        # - multiple patterns: inline YAML array (["a", "b"])
+        # Per https://kiro.dev/docs/steering/ — docs explicitly show
+        # array form for multiple patterns. Comma-joined strings are
+        # WRONG (interpreted as one literal pattern containing commas).
         kiro = {name}: fragment: let
           pathsAttr = fragment.paths or null;
           descAttr = fragment.description or null;
@@ -83,7 +90,10 @@ in {
             if pathsAttr == null
             then null
             else if builtins.isList pathsAttr
-            then ''"${lib.concatStringsSep "," pathsAttr}"''
+            then
+              if builtins.length pathsAttr == 1
+              then ''"${builtins.head pathsAttr}"''
+              else "[" + lib.concatMapStringsSep ", " (p: ''"${p}"'') pathsAttr + "]"
             else pathsAttr;
           # Resolve description: non-empty explicit > null-default > omit for ""
           descStr =

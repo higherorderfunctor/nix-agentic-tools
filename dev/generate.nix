@@ -31,11 +31,23 @@
     };
 
   # ── Package path scoping (for ecosystem frontmatter) ─────────────────
+  # Lists are the canonical form. The fragments-ai transforms handle
+  # per-ecosystem emission: Claude as a YAML list, Copilot as a
+  # comma-joined string (native applyTo syntax), Kiro as an inline
+  # YAML array (native fileMatchPattern multi-pattern syntax).
+  # null means "always-loaded" (no scoping).
   packagePaths = {
-    ai-clis = ''"modules/copilot-cli/**,modules/kiro-cli/**,packages/ai-clis/**"'';
-    mcp-servers = ''"modules/mcp-servers/**,packages/mcp-servers/**"'';
+    ai-clis = [
+      "modules/copilot-cli/**"
+      "modules/kiro-cli/**"
+      "packages/ai-clis/**"
+    ];
+    mcp-servers = [
+      "modules/mcp-servers/**"
+      "packages/mcp-servers/**"
+    ];
     monorepo = null;
-    stacked-workflows = ''"packages/stacked-workflows/**"'';
+    stacked-workflows = ["packages/stacked-workflows/**"];
   };
 
   # ── Dev fragment names per package ───────────────────────────────────
