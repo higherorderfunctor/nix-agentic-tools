@@ -1,0 +1,3529 @@
+<!DOCTYPE HTML>
+<html lang="en" class="coal sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Home-Manager Deep Dive - nix-agentic-tools</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Stacked workflows, MCP servers, and declarative AI CLI configuration">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="shortcut icon" href="../favicon-aabfb18a.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-2459343d.css">
+        <link rel="stylesheet" href="../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "coal";
+            const default_dark_theme = "coal";
+            window.path_to_searchindex_js = "../searchindex-e9101bfe.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc-841f2094.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('coal')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">nix-agentic-tools</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+                        <a href="https://github.com/higherorderfunctor/nix-agentic-tools" title="Git repository" aria-label="Git repository">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                        </a>
+                        <a href="https://github.com/higherorderfunctor/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/edit/main/docs/src/guides/home-manager.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                            <span class=fa-svg id="git-edit-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M421.7 220.3l-11.3 11.3-22.6 22.6-205 205c-6.6 6.6-14.8 11.5-23.8 14.1L30.8 511c-8.4 2.5-17.5 .2-23.7-6.1S-1.5 489.7 1 481.2L38.7 353.1c2.6-9 7.5-17.2 14.1-23.8l205-205 22.6-22.6 11.3-11.3 33.9 33.9 62.1 62.1 33.9 33.9zM96 353.9l-9.3 9.3c-.9 .9-1.6 2.1-2 3.4l-25.3 86 86-25.3c1.3-.4 2.5-1.1 3.4-2l9.3-9.3H112c-8.8 0-16-7.2-16-16V353.9zM453.3 19.3l39.4 39.4c25 25 25 65.5 0 90.5l-14.5 14.5-22.6 22.6-11.3 11.3-33.9-33.9-62.1-62.1L314.3 67.7l11.3-11.3 22.6-22.6 14.5-14.5c25-25 65.5-25 90.5 0z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="home-manager-options-reference"><a class="header" href="#home-manager-options-reference">Home-Manager Options Reference</a></h1>
+<p>Auto-generated from module definitions via <code>nixosOptionsDoc</code>. See
+<a href="../getting-started/home-manager.html">Home-Manager Setup</a> for
+installation and quickstart.</p>
+<h2 id="module-index"><a class="header" href="#module-index">Module Index</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Module</th><th>Import path</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>ai</code></td><td><code>homeManagerModules.ai</code></td><td>Unified config fanout</td></tr>
+<tr><td><code>copilot-cli</code></td><td><code>homeManagerModules.copilot-cli</code></td><td>Copilot CLI config</td></tr>
+<tr><td><code>kiro-cli</code></td><td><code>homeManagerModules.kiro-cli</code></td><td>Kiro CLI config</td></tr>
+<tr><td><code>mcp-servers</code></td><td><code>homeManagerModules.mcp-servers</code></td><td>MCP server management</td></tr>
+<tr><td><code>stacked-workflows</code></td><td><code>homeManagerModules.stacked-workflows</code></td><td>Git presets + skills</td></tr>
+<tr><td><code>default</code></td><td><code>homeManagerModules.default</code></td><td>All of the above</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="options"><a class="header" href="#options">Options</a></h2>
+<h2 id="aiclaude"><a class="header" href="#aiclaude">ai.claude</a></h2>
+<p>Claude Code ecosystem configuration.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudeenable"><a class="header" href="#aiclaudeenable">ai.claude.enable</a></h2>
+<p>Whether to enable Fan out shared config to Claude Code.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudepackage"><a class="header" href="#aiclaudepackage">ai.claude.package</a></h2>
+<p>Claude Code package.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.claude-code
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddy"><a class="header" href="#aiclaudebuddy">ai.claude.buddy</a></h2>
+<p>Buddy companion customization. When set, fans out to
+<code>programs.claude-code.buddy</code> which installs an
+activation script to patch the buddy salt at activation
+time. See modules/claude-code-buddy/ for details.</p>
+<p><em>Type:</em>
+null or (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddydump"><a class="header" href="#aiclaudebuddydump">ai.claude.buddy.dump</a></h2>
+<p>Preferred lowest stat. Must differ from peak when both are
+set. null = accept whatever the salt produces.</p>
+<p><em>Type:</em>
+null or one of “CHAOS”, “DEBUGGING”, “PATIENCE”, “SNARK”, “WISDOM”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyeyes"><a class="header" href="#aiclaudebuddyeyes">ai.claude.buddy.eyes</a></h2>
+<p>Eye character.</p>
+<p><em>Type:</em>
+one of “·”, “✦”, “×”, “◉”, “@”, “°”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"·"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyhat"><a class="header" href="#aiclaudebuddyhat">ai.claude.buddy.hat</a></h2>
+<p>Hat accessory. Must be “none” for common rarity (assertion
+enforced at module evaluation).</p>
+<p><em>Type:</em>
+one of “beanie”, “crown”, “halo”, “none”, “propeller”, “tinyduck”, “tophat”, “wizard”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"none"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddypeak"><a class="header" href="#aiclaudebuddypeak">ai.claude.buddy.peak</a></h2>
+<p>Preferred highest stat. null = accept whatever the salt
+produces. Increases search time ~5x.</p>
+<p><em>Type:</em>
+null or one of “CHAOS”, “DEBUGGING”, “PATIENCE”, “SNARK”, “WISDOM”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyrarity"><a class="header" href="#aiclaudebuddyrarity">ai.claude.buddy.rarity</a></h2>
+<p>Rarity tier. Higher rarities take longer to compute at
+activation time:</p>
+<ul>
+<li>common: instant (~180 attempts)</li>
+<li>uncommon/rare: &lt;1s</li>
+<li>epic: ~1s</li>
+<li>legendary: ~1s (or ~30s shiny, minutes shiny+stats)</li>
+</ul>
+<p>The salt search is cached by a fingerprint of buddy options</p>
+<ul>
+<li>claude-code version + userId — only re-runs when something
+changes.</li>
+</ul>
+<p><em>Type:</em>
+one of “common”, “epic”, “legendary”, “rare”, “uncommon”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"common"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyshiny"><a class="header" href="#aiclaudebuddyshiny">ai.claude.buddy.shiny</a></h2>
+<p>Rainbow shimmer variant. Significantly increases salt search
+time (~100x more attempts).</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyspecies"><a class="header" href="#aiclaudebuddyspecies">ai.claude.buddy.species</a></h2>
+<p>Buddy species (one of 18).</p>
+<p><em>Type:</em>
+one of “axolotl”, “blob”, “cactus”, “capybara”, “cat”, “chonk”, “dragon”, “duck”, “ghost”, “goose”, “mushroom”, “octopus”, “owl”, “penguin”, “rabbit”, “robot”, “snail”, “turtle”</p>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">"duck"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyuserid"><a class="header" href="#aiclaudebuddyuserid">ai.claude.buddy.userId</a></h2>
+<p>Claude account UUID source. Provide exactly one of <code>text</code>
+(literal string) or <code>file</code> (path to file read at activation).</p>
+<p><em>Type:</em>
+attribute-tagged union with choices: file, text</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiclaudebuddyuseridfile"><a class="header" href="#aiclaudebuddyuseridfile">ai.claude.buddy.userId.file</a></h2>
+<p>Path to a file containing the Claude account UUID.
+Read at activation time, so sops-nix and agenix paths
+work. Trailing whitespace is stripped.</p>
+<p><em>Type:</em>
+absolute path</p>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">config.sops.secrets."${username}-claude-uuid".path
+
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/lib/buddy-types.nix">lib/buddy-types.nix</a></li>
+</ul>
+<h2 id="aiclaudebuddyuseridtext"><a class="header" href="#aiclaudebuddyuseridtext">ai.claude.buddy.userId.text</a></h2>
+<p>Literal Claude account UUID string. Get it from
+~/.claude.json under oauthAccount.accountUuid.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">"ebd8b240-9b28-44b1-a4bf-da487d9f111f"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/lib/buddy-types.nix">lib/buddy-types.nix</a></li>
+</ul>
+<h2 id="aicopilot"><a class="header" href="#aicopilot">ai.copilot</a></h2>
+<p>Copilot CLI ecosystem configuration.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aicopilotenable"><a class="header" href="#aicopilotenable">ai.copilot.enable</a></h2>
+<p>Whether to enable Fan out shared config to Copilot CLI.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aicopilotpackage"><a class="header" href="#aicopilotpackage">ai.copilot.package</a></h2>
+<p>Copilot CLI package.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.github-copilot-cli
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aienvironmentvariables"><a class="header" href="#aienvironmentvariables">ai.environmentVariables</a></h2>
+<p>Shared environment variables for all enabled CLIs.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiinstructions"><a class="header" href="#aiinstructions">ai.instructions</a></h2>
+<p>Shared instructions with optional path scoping. Body is shared;
+frontmatter is generated per ecosystem.</p>
+<p><em>Type:</em>
+attribute set of (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiinstructionsnamedescription"><a class="header" href="#aiinstructionsnamedescription">ai.instructions.&lt;name&gt;.description</a></h2>
+<p>Short description (used by Claude and Kiro frontmatter).</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">""
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiinstructionsnamepaths"><a class="header" href="#aiinstructionsnamepaths">ai.instructions.&lt;name&gt;.paths</a></h2>
+<p>File path globs this instruction applies to. null = always loaded.
+Translated per ecosystem:</p>
+<ul>
+<li>Claude: paths: frontmatter</li>
+<li>Kiro: inclusion: fileMatch + fileMatchPattern:</li>
+<li>Copilot: applyTo: glob</li>
+</ul>
+<p><em>Type:</em>
+null or (list of string)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiinstructionsnametext"><a class="header" href="#aiinstructionsnametext">ai.instructions.&lt;name&gt;.text</a></h2>
+<p>Instruction body (markdown).</p>
+<p><em>Type:</em>
+strings concatenated with “\n”</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aikiro"><a class="header" href="#aikiro">ai.kiro</a></h2>
+<p>Kiro CLI ecosystem configuration.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aikiroenable"><a class="header" href="#aikiroenable">ai.kiro.enable</a></h2>
+<p>Whether to enable Fan out shared config to Kiro CLI.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aikiropackage"><a class="header" href="#aikiropackage">ai.kiro.package</a></h2>
+<p>Kiro CLI package.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.kiro-cli
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="ailspservers"><a class="header" href="#ailspservers">ai.lspServers</a></h2>
+<p>Typed LSP server definitions with explicit packages. Transformed
+to per-ecosystem JSON (with full store paths) during fanout.
+Each CLI writes the result to its own config path.</p>
+<p><em>Type:</em>
+attribute set of (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">{
+  nixd = { package = pkgs.nixd; extensions = ["nix"]; };
+  marksman = { package = pkgs.marksman; extensions = ["md"]; };
+}
+
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="ailspserversnamepackage"><a class="header" href="#ailspserversnamepackage">ai.lspServers.&lt;name&gt;.package</a></h2>
+<p>The LSP server package.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="ailspserversnameargs"><a class="header" href="#ailspserversnameargs">ai.lspServers.&lt;name&gt;.args</a></h2>
+<p>Arguments to pass to the LSP binary.</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[
+  "--stdio"
+]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="ailspserversnamebinary"><a class="header" href="#ailspserversnamebinary">ai.lspServers.&lt;name&gt;.binary</a></h2>
+<p>Binary name within the package (defaults to the attribute name).</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"‹name›"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="ailspserversnameextensions"><a class="header" href="#ailspserversnameextensions">ai.lspServers.&lt;name&gt;.extensions</a></h2>
+<p>File extensions this server handles (without leading dots).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">[
+  "nix"
+]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="ailspserversnameinitializationoptions"><a class="header" href="#ailspserversnameinitializationoptions">ai.lspServers.&lt;name&gt;.initializationOptions</a></h2>
+<p>LSP initialization options passed during handshake.</p>
+<p><em>Type:</em>
+attribute set</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aisettings"><a class="header" href="#aisettings">ai.settings</a></h2>
+<p>Normalized settings translated to ecosystem-specific keys.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aisettingsmodel"><a class="header" href="#aisettingsmodel">ai.settings.model</a></h2>
+<p>Default model – translated per ecosystem.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aisettingstelemetry"><a class="header" href="#aisettingstelemetry">ai.settings.telemetry</a></h2>
+<p>Enable/disable telemetry – translated per ecosystem.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="aiskills"><a class="header" href="#aiskills">ai.skills</a></h2>
+<p>Shared skills (directory paths). Identical format across ecosystems.
+Injected at mkDefault priority so per-CLI skills win.</p>
+<p><em>Type:</em>
+attribute set of absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/ai">modules/ai</a></li>
+</ul>
+<h2 id="programscopilot-clienable"><a class="header" href="#programscopilot-clienable">programs.copilot-cli.enable</a></h2>
+<p>Whether to enable GitHub Copilot CLI.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/copilot-cli">modules/copilot-cli</a></li>
+</ul>
+<h2 id="programscopilot-clienablemcpintegration"><a class="header" href="#programscopilot-clienablemcpintegration">programs.copilot-cli.enableMcpIntegration</a></h2>
+<p>Whether to enable shared programs.mcp.servers integration.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/copilot-cli">modules/copilot-cli</a></li>
+</ul>
+<h2 id="programscopilot-clipackage"><a class="header" href="#programscopilot-clipackage">programs.copilot-cli.package</a></h2>
+<p>The copilot-cli package to install.</p>
+<p><em>Type:</em>
+null or package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.github-copilot-cli
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/copilot-cli">modules/copilot-cli</a></li>
+</ul>
+<h2 id="programscopilot-cliagents"><a class="header" href="#programscopilot-cliagents">programs.copilot-cli.agents</a></h2>
+<p>Custom agent .md files for ~/.copilot/agents/.</p>
+<p><em>Type:</em>
+attribute set of (strings concatenated with “\n” or absolute path)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/copilot-cli">modules/copilot-cli</a></li>
+</ul>
+<h2 id="programscopilot-cliagentsdir"><a class="header" href="#programscopilot-cliagentsdir">programs.copilot-cli.agentsDir</a></h2>
+<p>Directory of agent .md files.</p>
+<p><em>Type:</em>
+null or absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/copilot-cli">modules/copilot-cli</a></li>
+</ul>
+<h2 id="programscopilot-cliconfigdir"><a class="header" href="#programscopilot-cliconfigdir">programs.copilot-cli.configDir</a></h2>
+<p>Config directory relative to HOME. Override via COPILOT_HOME.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">".copilot"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/copilot-cli">modules/copilot-cli</a></li>
+</ul>
+<h2 id="programscopilot-clienvironmentvariables"><a class="header" href="#programscopilot-clienvironmentvariables">programs.copilot-cli.environmentVariables</a></h2>
+<p>Extra environment variables exported when launching copilot CLI.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">{
+  COPILOT_AUTO_UPDATE = "false";
+  COPILOT_MODEL = "claude-sonnet-4";
+}
+
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/copilot-cli">modules/copilot-cli</a></li>
+</ul>
+<h2 id="programscopilot-cliinstructions"><a class="header" href="#programscopilot-cliinstructions">programs.copilot-cli.instructions</a></h2>
+<p>Instruction .md files for ~/.copilot/instructions/.</p>
+<p><em>Type:</em>
+attribute set of (strings concatenated with “\n” or absolute path)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/copilot-cli">modules/copilot-cli</a></li>
+</ul>
+<h2 id="programscopilot-cliinstructionsdir"><a class="header" href="#programscopilot-cliinstructionsdir">programs.copilot-cli.instructionsDir</a></h2>
+<p>Directory of instruction .md files.</p>
+<p><em>Type:</em>
+null or absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/copilot-cli">modules/copilot-cli</a></li>
+</ul>
+<h2 id="programscopilot-clilspservers"><a class="header" href="#programscopilot-clilspservers">programs.copilot-cli.lspServers</a></h2>
+<p>LSP server definitions for lsp-config.json.</p>
+<p><em>Type:</em>
+attribute set of (JSON value)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">{
+  typescript = {
+    command = "typescript-language-server";
+    args = ["--stdio"];
+    fileExtensions = {".ts" = "typescript";};
+  };
+}
+
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/copilot-cli">modules/copilot-cli</a></li>
+</ul>
+<h2 id="programscopilot-climcpservers"><a class="header" href="#programscopilot-climcpservers">programs.copilot-cli.mcpServers</a></h2>
+<p>MCP server definitions. Injected via –additional-mcp-config.</p>
+<p><em>Type:</em>
+attribute set of (JSON value)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/copilot-cli">modules/copilot-cli</a></li>
+</ul>
+<h2 id="programscopilot-clisettings"><a class="header" href="#programscopilot-clisettings">programs.copilot-cli.settings</a></h2>
+<p>JSON settings merged into ~/.copilot/config.json on activation.
+Runtime-mutated keys (trusted_folders, etc.) are preserved.
+Known keys are typed; unknown keys are accepted via freeformType.</p>
+<p><em>Type:</em>
+open submodule of (JSON value)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">{
+  autoUpdates = false;
+  model = "claude-sonnet-4";
+  theme = "dark";
+}
+
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/copilot-cli">modules/copilot-cli</a></li>
+</ul>
+<h2 id="programscopilot-clisettingsmodel"><a class="header" href="#programscopilot-clisettingsmodel">programs.copilot-cli.settings.model</a></h2>
+<p>Default model for Copilot CLI.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/copilot-cli">modules/copilot-cli</a></li>
+</ul>
+<h2 id="programscopilot-clisettingstheme"><a class="header" href="#programscopilot-clisettingstheme">programs.copilot-cli.settings.theme</a></h2>
+<p>Color theme.</p>
+<p><em>Type:</em>
+null or one of “dark”, “light”, “auto”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/copilot-cli">modules/copilot-cli</a></li>
+</ul>
+<h2 id="programscopilot-cliskills"><a class="header" href="#programscopilot-cliskills">programs.copilot-cli.skills</a></h2>
+<p>Skill directories (SKILL.md) for ~/.copilot/skills/.</p>
+<p><em>Type:</em>
+attribute set of (strings concatenated with “\n” or absolute path)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/copilot-cli">modules/copilot-cli</a></li>
+</ul>
+<h2 id="programscopilot-cliskillsdir"><a class="header" href="#programscopilot-cliskillsdir">programs.copilot-cli.skillsDir</a></h2>
+<p>Directory of skill subdirectories.</p>
+<p><em>Type:</em>
+null or absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/copilot-cli">modules/copilot-cli</a></li>
+</ul>
+<h2 id="programskiro-clienable"><a class="header" href="#programskiro-clienable">programs.kiro-cli.enable</a></h2>
+<p>Whether to enable Kiro CLI.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-clienablemcpintegration"><a class="header" href="#programskiro-clienablemcpintegration">programs.kiro-cli.enableMcpIntegration</a></h2>
+<p>Whether to enable shared programs.mcp.servers integration.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-clipackage"><a class="header" href="#programskiro-clipackage">programs.kiro-cli.package</a></h2>
+<p>The kiro-cli package to install.</p>
+<p><em>Type:</em>
+null or package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.kiro-cli
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-cliagents"><a class="header" href="#programskiro-cliagents">programs.kiro-cli.agents</a></h2>
+<p>Global agent .json definition files for ~/.kiro/agents/.</p>
+<p><em>Type:</em>
+attribute set of (strings concatenated with “\n” or absolute path)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-cliagentsdir"><a class="header" href="#programskiro-cliagentsdir">programs.kiro-cli.agentsDir</a></h2>
+<p>Directory of global agent .json files.</p>
+<p><em>Type:</em>
+null or absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-cliconfigdir"><a class="header" href="#programskiro-cliconfigdir">programs.kiro-cli.configDir</a></h2>
+<p>Config directory relative to HOME.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">".kiro"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-clienvironmentvariables"><a class="header" href="#programskiro-clienvironmentvariables">programs.kiro-cli.environmentVariables</a></h2>
+<p>Extra environment variables for kiro-cli.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">{
+  KIRO_LOG_LEVEL = "info";
+}
+
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-clihooks"><a class="header" href="#programskiro-clihooks">programs.kiro-cli.hooks</a></h2>
+<p>Global hook .json files for ~/.kiro/hooks/.</p>
+<p><em>Type:</em>
+attribute set of (strings concatenated with “\n” or absolute path)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-clihooksdir"><a class="header" href="#programskiro-clihooksdir">programs.kiro-cli.hooksDir</a></h2>
+<p>Directory of global hook .json files.</p>
+<p><em>Type:</em>
+null or absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-clilspservers"><a class="header" href="#programskiro-clilspservers">programs.kiro-cli.lspServers</a></h2>
+<p>LSP server definitions for ~/.kiro/settings/lsp.json.</p>
+<p><em>Type:</em>
+attribute set of (JSON value)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">{
+  nix = {
+    command = "nixd";
+    args = [];
+  };
+}
+
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-climcpservers"><a class="header" href="#programskiro-climcpservers">programs.kiro-cli.mcpServers</a></h2>
+<p>MCP server definitions for ~/.kiro/settings/mcp.json.</p>
+<p><em>Type:</em>
+attribute set of (JSON value)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-clisettings"><a class="header" href="#programskiro-clisettings">programs.kiro-cli.settings</a></h2>
+<p>JSON settings merged into ~/.kiro/settings/cli.json on activation.
+Runtime-mutated keys are preserved.
+Known keys are typed; unknown keys are accepted via freeformType.</p>
+<p><em>Type:</em>
+open submodule of (JSON value)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">{
+  chat = {
+    defaultModel = "claude-sonnet-4";
+    enableThinking = true;
+  };
+  telemetry.enabled = false;
+}
+
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-clisettingschat"><a class="header" href="#programskiro-clisettingschat">programs.kiro-cli.settings.chat</a></h2>
+<p>Chat-related settings.</p>
+<p><em>Type:</em>
+open submodule of (JSON value)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-clisettingschatenablethinking"><a class="header" href="#programskiro-clisettingschatenablethinking">programs.kiro-cli.settings.chat.enableThinking</a></h2>
+<p>Enable thinking/reasoning mode.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-clisettingschatdefaultmodel"><a class="header" href="#programskiro-clisettingschatdefaultmodel">programs.kiro-cli.settings.chat.defaultModel</a></h2>
+<p>Default chat model.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-clisettingstelemetry"><a class="header" href="#programskiro-clisettingstelemetry">programs.kiro-cli.settings.telemetry</a></h2>
+<p>Telemetry settings.</p>
+<p><em>Type:</em>
+open submodule of (JSON value)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-clisettingstelemetryenabled"><a class="header" href="#programskiro-clisettingstelemetryenabled">programs.kiro-cli.settings.telemetry.enabled</a></h2>
+<p>Enable telemetry reporting.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-cliskills"><a class="header" href="#programskiro-cliskills">programs.kiro-cli.skills</a></h2>
+<p>Skill directories (SKILL.md) for ~/.kiro/skills/.</p>
+<p><em>Type:</em>
+attribute set of (strings concatenated with “\n” or absolute path)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-cliskillsdir"><a class="header" href="#programskiro-cliskillsdir">programs.kiro-cli.skillsDir</a></h2>
+<p>Directory of skill subdirectories.</p>
+<p><em>Type:</em>
+null or absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-clisteering"><a class="header" href="#programskiro-clisteering">programs.kiro-cli.steering</a></h2>
+<p>Global steering .md files for ~/.kiro/steering/.
+Should include YAML frontmatter with inclusion mode (auto, always, manual, fileMatch).</p>
+<p><em>Type:</em>
+attribute set of (strings concatenated with “\n” or absolute path)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="programskiro-clisteeringdir"><a class="header" href="#programskiro-clisteeringdir">programs.kiro-cli.steeringDir</a></h2>
+<p>Directory of global steering .md files.</p>
+<p><em>Type:</em>
+null or absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/kiro-cli">modules/kiro-cli</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcp"><a class="header" href="#servicesmcp-serversserverscontext7-mcp">services.mcp-servers.servers.context7-mcp</a></h2>
+<p>Configuration for the context7-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpenable"><a class="header" href="#servicesmcp-serversserverscontext7-mcpenable">services.mcp-servers.servers.context7-mcp.enable</a></h2>
+<p>Whether to enable the context7-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcppackage"><a class="header" href="#servicesmcp-serversserverscontext7-mcppackage">services.mcp-servers.servers.context7-mcp.package</a></h2>
+<p>The context7-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.nix-mcp-servers.context7-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpargs"><a class="header" href="#servicesmcp-serversserverscontext7-mcpargs">services.mcp-servers.servers.context7-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpenv"><a class="header" href="#servicesmcp-serversserverscontext7-mcpenv">services.mcp-servers.servers.context7-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store — use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpservicehost"><a class="header" href="#servicesmcp-serversserverscontext7-mcpservicehost">services.mcp-servers.servers.context7-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpserviceport"><a class="header" href="#servicesmcp-serversserverscontext7-mcpserviceport">services.mcp-servers.servers.context7-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19750
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpsettings"><a class="header" href="#servicesmcp-serversserverscontext7-mcpsettings">services.mcp-servers.servers.context7-mcp.settings</a></h2>
+<p>Server-specific configuration for context7-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpsettingsapiurl"><a class="header" href="#servicesmcp-serversserverscontext7-mcpsettingsapiurl">services.mcp-servers.servers.context7-mcp.settings.apiUrl</a></h2>
+<p>Override the base URL for the Context7 API.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpsettingscredentials"><a class="header" href="#servicesmcp-serversserverscontext7-mcpsettingscredentials">services.mcp-servers.servers.context7-mcp.settings.credentials</a></h2>
+<p>Credential mapped to CONTEXT7_API_KEY. Set exactly one of file or helper.</p>
+<p><em>Type:</em>
+null or attribute-tagged union with choices: file, helper</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpsettingscredentialsfile"><a class="header" href="#servicesmcp-serversserverscontext7-mcpsettingscredentialsfile">services.mcp-servers.servers.context7-mcp.settings.credentials.file</a></h2>
+<p>Path to a file containing the raw secret value, read at runtime.
+Not stored in the Nix store. Works with sops-nix, agenix, or any
+tool that decrypts secrets to files. Mapped to CONTEXT7_API_KEY.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpsettingscredentialshelper"><a class="header" href="#servicesmcp-serversserverscontext7-mcpsettingscredentialshelper">services.mcp-servers.servers.context7-mcp.settings.credentials.helper</a></h2>
+<p>Path to an executable that outputs the raw secret value on stdout.
+Executed at service start. Mapped to CONTEXT7_API_KEY.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpsettingspath"><a class="header" href="#servicesmcp-serversserverscontext7-mcpsettingspath">services.mcp-servers.servers.context7-mcp.settings.path</a></h2>
+<p>HTTP endpoint path. Only used in HTTP mode.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"/mcp"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverseffect-mcp"><a class="header" href="#servicesmcp-serversserverseffect-mcp">services.mcp-servers.servers.effect-mcp</a></h2>
+<p>Configuration for the effect-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverseffect-mcpenable"><a class="header" href="#servicesmcp-serversserverseffect-mcpenable">services.mcp-servers.servers.effect-mcp.enable</a></h2>
+<p>Whether to enable the effect-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverseffect-mcppackage"><a class="header" href="#servicesmcp-serversserverseffect-mcppackage">services.mcp-servers.servers.effect-mcp.package</a></h2>
+<p>The effect-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.nix-mcp-servers.effect-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverseffect-mcpargs"><a class="header" href="#servicesmcp-serversserverseffect-mcpargs">services.mcp-servers.servers.effect-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverseffect-mcpenv"><a class="header" href="#servicesmcp-serversserverseffect-mcpenv">services.mcp-servers.servers.effect-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store — use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverseffect-mcpservicehost"><a class="header" href="#servicesmcp-serversserverseffect-mcpservicehost">services.mcp-servers.servers.effect-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverseffect-mcpserviceport"><a class="header" href="#servicesmcp-serversserverseffect-mcpserviceport">services.mcp-servers.servers.effect-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19754
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverseffect-mcpsettings"><a class="header" href="#servicesmcp-serversserverseffect-mcpsettings">services.mcp-servers.servers.effect-mcp.settings</a></h2>
+<p>Server-specific configuration for effect-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcp"><a class="header" href="#servicesmcp-serversserversfetch-mcp">services.mcp-servers.servers.fetch-mcp</a></h2>
+<p>Configuration for the fetch-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcpenable"><a class="header" href="#servicesmcp-serversserversfetch-mcpenable">services.mcp-servers.servers.fetch-mcp.enable</a></h2>
+<p>Whether to enable the fetch-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcppackage"><a class="header" href="#servicesmcp-serversserversfetch-mcppackage">services.mcp-servers.servers.fetch-mcp.package</a></h2>
+<p>The fetch-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.nix-mcp-servers.fetch-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcpargs"><a class="header" href="#servicesmcp-serversserversfetch-mcpargs">services.mcp-servers.servers.fetch-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcpenv"><a class="header" href="#servicesmcp-serversserversfetch-mcpenv">services.mcp-servers.servers.fetch-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store — use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcpservicehost"><a class="header" href="#servicesmcp-serversserversfetch-mcpservicehost">services.mcp-servers.servers.fetch-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcpserviceport"><a class="header" href="#servicesmcp-serversserversfetch-mcpserviceport">services.mcp-servers.servers.fetch-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19755
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcpsettings"><a class="header" href="#servicesmcp-serversserversfetch-mcpsettings">services.mcp-servers.servers.fetch-mcp.settings</a></h2>
+<p>Server-specific configuration for fetch-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcpsettingsignorerobotstxt"><a class="header" href="#servicesmcp-serversserversfetch-mcpsettingsignorerobotstxt">services.mcp-servers.servers.fetch-mcp.settings.ignoreRobotsTxt</a></h2>
+<p>Whether to ignore robots.txt restrictions.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcpsettingsproxyurl"><a class="header" href="#servicesmcp-serversserversfetch-mcpsettingsproxyurl">services.mcp-servers.servers.fetch-mcp.settings.proxyUrl</a></h2>
+<p>Proxy URL for outbound HTTP requests.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcpsettingsuseragent"><a class="header" href="#servicesmcp-serversserversfetch-mcpsettingsuseragent">services.mcp-servers.servers.fetch-mcp.settings.userAgent</a></h2>
+<p>Custom User-Agent string for HTTP requests.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-intel-mcp"><a class="header" href="#servicesmcp-serversserversgit-intel-mcp">services.mcp-servers.servers.git-intel-mcp</a></h2>
+<p>Configuration for the git-intel-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-intel-mcpenable"><a class="header" href="#servicesmcp-serversserversgit-intel-mcpenable">services.mcp-servers.servers.git-intel-mcp.enable</a></h2>
+<p>Whether to enable the git-intel-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-intel-mcppackage"><a class="header" href="#servicesmcp-serversserversgit-intel-mcppackage">services.mcp-servers.servers.git-intel-mcp.package</a></h2>
+<p>The git-intel-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.nix-mcp-servers.git-intel-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-intel-mcpargs"><a class="header" href="#servicesmcp-serversserversgit-intel-mcpargs">services.mcp-servers.servers.git-intel-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-intel-mcpenv"><a class="header" href="#servicesmcp-serversserversgit-intel-mcpenv">services.mcp-servers.servers.git-intel-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store — use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-intel-mcpservicehost"><a class="header" href="#servicesmcp-serversserversgit-intel-mcpservicehost">services.mcp-servers.servers.git-intel-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-intel-mcpserviceport"><a class="header" href="#servicesmcp-serversserversgit-intel-mcpserviceport">services.mcp-servers.servers.git-intel-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19756
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-intel-mcpsettings"><a class="header" href="#servicesmcp-serversserversgit-intel-mcpsettings">services.mcp-servers.servers.git-intel-mcp.settings</a></h2>
+<p>Server-specific configuration for git-intel-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-intel-mcpsettingsrepository"><a class="header" href="#servicesmcp-serversserversgit-intel-mcpsettingsrepository">services.mcp-servers.servers.git-intel-mcp.settings.repository</a></h2>
+<p>Default git repository path for analysis.
+Resolution order: this option &gt; GIT_INTEL_REPO env &gt; cwd.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-mcp"><a class="header" href="#servicesmcp-serversserversgit-mcp">services.mcp-servers.servers.git-mcp</a></h2>
+<p>Configuration for the git-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-mcpenable"><a class="header" href="#servicesmcp-serversserversgit-mcpenable">services.mcp-servers.servers.git-mcp.enable</a></h2>
+<p>Whether to enable the git-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-mcppackage"><a class="header" href="#servicesmcp-serversserversgit-mcppackage">services.mcp-servers.servers.git-mcp.package</a></h2>
+<p>The git-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.nix-mcp-servers.git-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-mcpargs"><a class="header" href="#servicesmcp-serversserversgit-mcpargs">services.mcp-servers.servers.git-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-mcpenv"><a class="header" href="#servicesmcp-serversserversgit-mcpenv">services.mcp-servers.servers.git-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store — use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-mcpservicehost"><a class="header" href="#servicesmcp-serversserversgit-mcpservicehost">services.mcp-servers.servers.git-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-mcpserviceport"><a class="header" href="#servicesmcp-serversserversgit-mcpserviceport">services.mcp-servers.servers.git-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19757
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-mcpsettings"><a class="header" href="#servicesmcp-serversserversgit-mcpsettings">services.mcp-servers.servers.git-mcp.settings</a></h2>
+<p>Server-specific configuration for git-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-mcpsettingsrepository"><a class="header" href="#servicesmcp-serversserversgit-mcpsettingsrepository">services.mcp-servers.servers.git-mcp.settings.repository</a></h2>
+<p>Git repository path. When set, restricts all operations to this path.
+When unset, the server accepts any repo path via tool arguments and
+discovers repos from MCP client roots.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcp"><a class="header" href="#servicesmcp-serversserversgithub-mcp">services.mcp-servers.servers.github-mcp</a></h2>
+<p>Configuration for the github-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpenable"><a class="header" href="#servicesmcp-serversserversgithub-mcpenable">services.mcp-servers.servers.github-mcp.enable</a></h2>
+<p>Whether to enable the github-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcppackage"><a class="header" href="#servicesmcp-serversserversgithub-mcppackage">services.mcp-servers.servers.github-mcp.package</a></h2>
+<p>The github-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.nix-mcp-servers.github-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpargs"><a class="header" href="#servicesmcp-serversserversgithub-mcpargs">services.mcp-servers.servers.github-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpenv"><a class="header" href="#servicesmcp-serversserversgithub-mcpenv">services.mcp-servers.servers.github-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store — use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpservicehost"><a class="header" href="#servicesmcp-serversserversgithub-mcpservicehost">services.mcp-servers.servers.github-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpserviceport"><a class="header" href="#servicesmcp-serversserversgithub-mcpserviceport">services.mcp-servers.servers.github-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19751
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettings"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettings">services.mcp-servers.servers.github-mcp.settings</a></h2>
+<p>Server-specific configuration for github-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingsenablecommandlogging"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingsenablecommandlogging">services.mcp-servers.servers.github-mcp.settings.enableCommandLogging</a></h2>
+<p>Log all command requests and responses.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingscontentwindowsize"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingscontentwindowsize">services.mcp-servers.servers.github-mcp.settings.contentWindowSize</a></h2>
+<p>Content window size. Server default is 5000.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingscredentials"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingscredentials">services.mcp-servers.servers.github-mcp.settings.credentials</a></h2>
+<p>Credential mapped to GITHUB_PERSONAL_ACCESS_TOKEN. Set exactly one of file or helper.</p>
+<p><em>Type:</em>
+null or attribute-tagged union with choices: file, helper</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingscredentialsfile"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingscredentialsfile">services.mcp-servers.servers.github-mcp.settings.credentials.file</a></h2>
+<p>Path to a file containing the raw secret value, read at runtime.
+Not stored in the Nix store. Works with sops-nix, agenix, or any
+tool that decrypts secrets to files. Mapped to GITHUB_PERSONAL_ACCESS_TOKEN.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingscredentialshelper"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingscredentialshelper">services.mcp-servers.servers.github-mcp.settings.credentials.helper</a></h2>
+<p>Path to an executable that outputs the raw secret value on stdout.
+Executed at service start. Mapped to GITHUB_PERSONAL_ACCESS_TOKEN.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingsdynamictoolsets"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingsdynamictoolsets">services.mcp-servers.servers.github-mcp.settings.dynamicToolsets</a></h2>
+<p>Enable dynamic toolsets discovery. When false (default), all tools from configured toolsets are available at startup. When true, only meta-tools are advertised initially and toolsets must be enabled at runtime — requires client support for tools/list_changed notifications.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingsexcludetools"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingsexcludetools">services.mcp-servers.servers.github-mcp.settings.excludeTools</a></h2>
+<p>Tool names to forcibly disable regardless of other settings.</p>
+<p><em>Type:</em>
+list of (one of “add_issue_comment”, “create_branch”, “create_or_update_file”, “create_pull_request”, “create_repository”, “delete_file”, “fork_repository”, “get_code_scanning_alert”, “get_commit”, “get_file_contents”, “get_issue”, “get_latest_release”, “get_me”, “get_release_by_tag”, “get_tag”, “list_branches”, “list_code_scanning_alerts”, “list_commits”, “list_issues”, “list_pull_requests”, “list_releases”, “list_tags”, “merge_pull_request”, “push_files”, “search_code”, “search_issues”, “search_pull_requests”, “search_repositories”, “search_users”, “update_pull_request”, “update_pull_request_branch” or string)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingsghhost"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingsghhost">services.mcp-servers.servers.github-mcp.settings.ghHost</a></h2>
+<p>GitHub hostname for GHE Server or data residency (e.g. https://ghes.example.com). Defaults to public github.com when unset.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingsinsiders"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingsinsiders">services.mcp-servers.servers.github-mcp.settings.insiders</a></h2>
+<p>Enable experimental/insiders features.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingslockdownmode"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingslockdownmode">services.mcp-servers.servers.github-mcp.settings.lockdownMode</a></h2>
+<p>Filter public repository content by push access. Only shows repos the token can push to.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingslogfile"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingslogfile">services.mcp-servers.servers.github-mcp.settings.logFile</a></h2>
+<p>Path to a log file.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingsreadonly"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingsreadonly">services.mcp-servers.servers.github-mcp.settings.readOnly</a></h2>
+<p>Restrict to read-only operations.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingsrepoaccesscachettl"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingsrepoaccesscachettl">services.mcp-servers.servers.github-mcp.settings.repoAccessCacheTtl</a></h2>
+<p>Cache duration for repository access checks (e.g. “5m”, “1h”). Server default is used when unset.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingstools"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingstools">services.mcp-servers.servers.github-mcp.settings.tools</a></h2>
+<p>Individual tool names to enable (additive with toolsets).</p>
+<p><em>Type:</em>
+list of (one of “add_issue_comment”, “create_branch”, “create_or_update_file”, “create_pull_request”, “create_repository”, “delete_file”, “fork_repository”, “get_code_scanning_alert”, “get_commit”, “get_file_contents”, “get_issue”, “get_latest_release”, “get_me”, “get_release_by_tag”, “get_tag”, “list_branches”, “list_code_scanning_alerts”, “list_commits”, “list_issues”, “list_pull_requests”, “list_releases”, “list_tags”, “merge_pull_request”, “push_files”, “search_code”, “search_issues”, “search_pull_requests”, “search_repositories”, “search_users”, “update_pull_request”, “update_pull_request_branch” or string)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingstoolsets"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingstoolsets">services.mcp-servers.servers.github-mcp.settings.toolsets</a></h2>
+<p>Toolset groups to enable. Each group activates a related set of tools.</p>
+<p><em>Type:</em>
+list of (one of “actions”, “all”, “code_security”, “context”, “default”, “discussions”, “gists”, “issues”, “notifications”, “orgs”, “packages”, “pages”, “projects”, “pull_requests”, “releases”, “repos”, “search”, “secret_protection”, “stargazers”, “sub_issues”, “users” or string)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[
+  "all"
+]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcp"><a class="header" href="#servicesmcp-serversserverskagi-mcp">services.mcp-servers.servers.kagi-mcp</a></h2>
+<p>Configuration for the kagi-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpenable"><a class="header" href="#servicesmcp-serversserverskagi-mcpenable">services.mcp-servers.servers.kagi-mcp.enable</a></h2>
+<p>Whether to enable the kagi-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcppackage"><a class="header" href="#servicesmcp-serversserverskagi-mcppackage">services.mcp-servers.servers.kagi-mcp.package</a></h2>
+<p>The kagi-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.nix-mcp-servers.kagi-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpargs"><a class="header" href="#servicesmcp-serversserverskagi-mcpargs">services.mcp-servers.servers.kagi-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpenv"><a class="header" href="#servicesmcp-serversserverskagi-mcpenv">services.mcp-servers.servers.kagi-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store — use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpservicehost"><a class="header" href="#servicesmcp-serversserverskagi-mcpservicehost">services.mcp-servers.servers.kagi-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpserviceport"><a class="header" href="#servicesmcp-serversserverskagi-mcpserviceport">services.mcp-servers.servers.kagi-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19753
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpsettings"><a class="header" href="#servicesmcp-serversserverskagi-mcpsettings">services.mcp-servers.servers.kagi-mcp.settings</a></h2>
+<p>Server-specific configuration for kagi-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpsettingscredentials"><a class="header" href="#servicesmcp-serversserverskagi-mcpsettingscredentials">services.mcp-servers.servers.kagi-mcp.settings.credentials</a></h2>
+<p>Credential mapped to KAGI_API_KEY. Set exactly one of file or helper.</p>
+<p><em>Type:</em>
+null or attribute-tagged union with choices: file, helper</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpsettingscredentialsfile"><a class="header" href="#servicesmcp-serversserverskagi-mcpsettingscredentialsfile">services.mcp-servers.servers.kagi-mcp.settings.credentials.file</a></h2>
+<p>Path to a file containing the raw secret value, read at runtime.
+Not stored in the Nix store. Works with sops-nix, agenix, or any
+tool that decrypts secrets to files. Mapped to KAGI_API_KEY.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpsettingscredentialshelper"><a class="header" href="#servicesmcp-serversserverskagi-mcpsettingscredentialshelper">services.mcp-servers.servers.kagi-mcp.settings.credentials.helper</a></h2>
+<p>Path to an executable that outputs the raw secret value on stdout.
+Executed at service start. Mapped to KAGI_API_KEY.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpsettingspath"><a class="header" href="#servicesmcp-serversserverskagi-mcpsettingspath">services.mcp-servers.servers.kagi-mcp.settings.path</a></h2>
+<p>HTTP endpoint path. Only used in HTTP mode.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"/mcp"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpsettingssummarizerengine"><a class="header" href="#servicesmcp-serversserverskagi-mcpsettingssummarizerengine">services.mcp-servers.servers.kagi-mcp.settings.summarizerEngine</a></h2>
+<p>Summarization engine to use. Defaults to cecil.</p>
+<p><em>Type:</em>
+null or one of “cecil”, “agnes”, “daphne”, “muriel”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcp"><a class="header" href="#servicesmcp-serversserversnixos-mcp">services.mcp-servers.servers.nixos-mcp</a></h2>
+<p>Configuration for the nixos-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcpenable"><a class="header" href="#servicesmcp-serversserversnixos-mcpenable">services.mcp-servers.servers.nixos-mcp.enable</a></h2>
+<p>Whether to enable the nixos-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcppackage"><a class="header" href="#servicesmcp-serversserversnixos-mcppackage">services.mcp-servers.servers.nixos-mcp.package</a></h2>
+<p>The nixos-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.nix-mcp-servers.nixos-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcpargs"><a class="header" href="#servicesmcp-serversserversnixos-mcpargs">services.mcp-servers.servers.nixos-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcpenv"><a class="header" href="#servicesmcp-serversserversnixos-mcpenv">services.mcp-servers.servers.nixos-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store — use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcpservicehost"><a class="header" href="#servicesmcp-serversserversnixos-mcpservicehost">services.mcp-servers.servers.nixos-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcpserviceport"><a class="header" href="#servicesmcp-serversserversnixos-mcpserviceport">services.mcp-servers.servers.nixos-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19752
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcpsettings"><a class="header" href="#servicesmcp-serversserversnixos-mcpsettings">services.mcp-servers.servers.nixos-mcp.settings</a></h2>
+<p>Server-specific configuration for nixos-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcpsettingspath"><a class="header" href="#servicesmcp-serversserversnixos-mcpsettingspath">services.mcp-servers.servers.nixos-mcp.settings.path</a></h2>
+<p>HTTP endpoint path (must start with /). Only used in HTTP mode.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"/mcp"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcpsettingsstatelesshttp"><a class="header" href="#servicesmcp-serversserversnixos-mcpsettingsstatelesshttp">services.mcp-servers.servers.nixos-mcp.settings.statelessHttp</a></h2>
+<p>Enable stateless HTTP mode (disables per-client session state).</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcp"><a class="header" href="#servicesmcp-serversserversopenmemory-mcp">services.mcp-servers.servers.openmemory-mcp</a></h2>
+<p>Configuration for the openmemory-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpenable"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpenable">services.mcp-servers.servers.openmemory-mcp.enable</a></h2>
+<p>Whether to enable the openmemory-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcppackage"><a class="header" href="#servicesmcp-serversserversopenmemory-mcppackage">services.mcp-servers.servers.openmemory-mcp.package</a></h2>
+<p>The openmemory-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.nix-mcp-servers.openmemory-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpargs"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpargs">services.mcp-servers.servers.openmemory-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpenv"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpenv">services.mcp-servers.servers.openmemory-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store — use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpservicehost"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpservicehost">services.mcp-servers.servers.openmemory-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpserviceport"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpserviceport">services.mcp-servers.servers.openmemory-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19758
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettings"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettings">services.mcp-servers.servers.openmemory-mcp.settings</a></h2>
+<p>Server-specific configuration for openmemory-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsadvembedparallel"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsadvembedparallel">services.mcp-servers.servers.openmemory-mcp.settings.advEmbedParallel</a></h2>
+<p>Enable advanced parallel embedding.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingscachesegments"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingscachesegments">services.mcp-servers.servers.openmemory-mcp.settings.cacheSegments</a></h2>
+<p>Number of cache segments. Auto-detected by tier when null.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingscompression"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingscompression">services.mcp-servers.servers.openmemory-mcp.settings.compression</a></h2>
+<p>Memory compression configuration.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingscompressionenabled"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingscompressionenabled">services.mcp-servers.servers.openmemory-mcp.settings.compression.enabled</a></h2>
+<p>Enable compression.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingscompressionalgorithm"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingscompressionalgorithm">services.mcp-servers.servers.openmemory-mcp.settings.compression.algorithm</a></h2>
+<p>Compression algorithm. Default: auto.</p>
+<p><em>Type:</em>
+null or value “auto” (singular enum)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingscompressionminlength"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingscompressionminlength">services.mcp-servers.servers.openmemory-mcp.settings.compression.minLength</a></h2>
+<p>Minimum length to compress. Default: 100.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingscredentials"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingscredentials">services.mcp-servers.servers.openmemory-mcp.settings.credentials</a></h2>
+<p>Credential mapped to OM_API_KEY. Set exactly one of file or helper.</p>
+<p><em>Type:</em>
+null or attribute-tagged union with choices: file, helper</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingscredentialsfile"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingscredentialsfile">services.mcp-servers.servers.openmemory-mcp.settings.credentials.file</a></h2>
+<p>Path to a file containing the raw secret value, read at runtime.
+Not stored in the Nix store. Works with sops-nix, agenix, or any
+tool that decrypts secrets to files. Mapped to OM_API_KEY.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingscredentialshelper"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingscredentialshelper">services.mcp-servers.servers.openmemory-mcp.settings.credentials.helper</a></h2>
+<p>Path to an executable that outputs the raw secret value on stdout.
+Executed at service start. Mapped to OM_API_KEY.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsdecay"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsdecay">services.mcp-servers.servers.openmemory-mcp.settings.decay</a></h2>
+<p>Memory decay configuration.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsdecaycoldthreshold"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsdecaycoldthreshold">services.mcp-servers.servers.openmemory-mcp.settings.decay.coldThreshold</a></h2>
+<p>Cold memory threshold. Default: 0.25.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsdecayintervalminutes"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsdecayintervalminutes">services.mcp-servers.servers.openmemory-mcp.settings.decay.intervalMinutes</a></h2>
+<p>Decay interval in minutes. Default: 1440 (24h).</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsdecaylambda"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsdecaylambda">services.mcp-servers.servers.openmemory-mcp.settings.decay.lambda</a></h2>
+<p>Decay lambda parameter. Default: 0.02.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsdecayratio"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsdecayratio">services.mcp-servers.servers.openmemory-mcp.settings.decay.ratio</a></h2>
+<p>Decay ratio. Default: 0.03.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsdecayreinforceonquery"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsdecayreinforceonquery">services.mcp-servers.servers.openmemory-mcp.settings.decay.reinforceOnQuery</a></h2>
+<p>Reinforce decay on query. Default: true.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsdecaysleepms"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsdecaysleepms">services.mcp-servers.servers.openmemory-mcp.settings.decay.sleepMs</a></h2>
+<p>Sleep interval between decay operations in milliseconds. Default: 200.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsdecaythreads"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsdecaythreads">services.mcp-servers.servers.openmemory-mcp.settings.decay.threads</a></h2>
+<p>Number of decay worker threads. Default: 3.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddelayms"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddelayms">services.mcp-servers.servers.openmemory-mcp.settings.embedDelayMs</a></h2>
+<p>Delay between embedding requests in milliseconds. Default: 200.</p>
+<p><em>Type:</em>
+null or (unsigned integer, meaning &gt;=0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembedfallback"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembedfallback">services.mcp-servers.servers.openmemory-mcp.settings.embedFallback</a></h2>
+<p>Fallback embedding strategy when primary fails. Default: synthetic.</p>
+<p><em>Type:</em>
+null or value “synthetic” (singular enum)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembedmode"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembedmode">services.mcp-servers.servers.openmemory-mcp.settings.embedMode</a></h2>
+<p>Embedding mode. Default: simple.</p>
+<p><em>Type:</em>
+null or value “simple” (singular enum)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembedtimeoutms"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembedtimeoutms">services.mcp-servers.servers.openmemory-mcp.settings.embedTimeoutMs</a></h2>
+<p>Embedding timeout in milliseconds. Default: 30000.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddings"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddings">services.mcp-servers.servers.openmemory-mcp.settings.embeddings</a></h2>
+<p>Embedding provider. Set exactly one.</p>
+<p><em>Type:</em>
+attribute-tagged union with choices: aws, gemini, local, ollama, openai, synthetic</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{
+  synthetic = { };
+}
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingsaws"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingsaws">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.aws</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers/servers/openmemory-mcp.nix">modules/mcp-servers/servers/openmemory-mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingsgemini"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingsgemini">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.gemini</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers/servers/openmemory-mcp.nix">modules/mcp-servers/servers/openmemory-mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingslocal"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingslocal">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.local</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers/servers/openmemory-mcp.nix">modules/mcp-servers/servers/openmemory-mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingslocalmodelpath"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingslocalmodelpath">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.local.modelPath</a></h2>
+<p>Path to local embedding model file.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingsollama"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingsollama">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.ollama</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers/servers/openmemory-mcp.nix">modules/mcp-servers/servers/openmemory-mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingsollamamodel"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingsollamamodel">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.ollama.model</a></h2>
+<p>Ollama embedding model.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"nomic-embed-text"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingsollamaurl"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingsollamaurl">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.ollama.url</a></h2>
+<p>Ollama server URL.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"http://localhost:11434"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingsopenai"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingsopenai">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.openai</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers/servers/openmemory-mcp.nix">modules/mcp-servers/servers/openmemory-mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingsopenaibaseurl"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingsopenaibaseurl">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.openai.baseUrl</a></h2>
+<p>OpenAI base URL override (for compatible APIs).</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingsopenaimodel"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingsopenaimodel">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.openai.model</a></h2>
+<p>OpenAI embedding model name.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingssynthetic"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingssynthetic">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.synthetic</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers/servers/openmemory-mcp.nix">modules/mcp-servers/servers/openmemory-mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsideallowedorigins"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsideallowedorigins">services.mcp-servers.servers.openmemory-mcp.settings.ideAllowedOrigins</a></h2>
+<p>Allowed CORS origins for IDE mode. Default: localhost:5173, localhost:3000.</p>
+<p><em>Type:</em>
+null or (list of string)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsidemode"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsidemode">services.mcp-servers.servers.openmemory-mcp.settings.ideMode</a></h2>
+<p>Enable IDE integration mode.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingskeywordboost"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingskeywordboost">services.mcp-servers.servers.openmemory-mcp.settings.keywordBoost</a></h2>
+<p>Keyword boost multiplier. Default: 2.5.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingskeywordminlength"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingskeywordminlength">services.mcp-servers.servers.openmemory-mcp.settings.keywordMinLength</a></h2>
+<p>Minimum keyword length. Default: 3.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingslanggraph"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingslanggraph">services.mcp-servers.servers.openmemory-mcp.settings.langGraph</a></h2>
+<p>LangGraph integration configuration.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingslanggraphmaxcontext"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingslanggraphmaxcontext">services.mcp-servers.servers.openmemory-mcp.settings.langGraph.maxContext</a></h2>
+<p>LangGraph max context. Default: 50.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingslanggraphnamespace"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingslanggraphnamespace">services.mcp-servers.servers.openmemory-mcp.settings.langGraph.namespace</a></h2>
+<p>LangGraph namespace. Default: default.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingslanggraphreflective"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingslanggraphreflective">services.mcp-servers.servers.openmemory-mcp.settings.langGraph.reflective</a></h2>
+<p>Enable LangGraph reflective mode. Default: true.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingslogauth"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingslogauth">services.mcp-servers.servers.openmemory-mcp.settings.logAuth</a></h2>
+<p>Enable authentication logging.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmaxactive"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmaxactive">services.mcp-servers.servers.openmemory-mcp.settings.maxActive</a></h2>
+<p>Maximum active memory items. Auto-detected by tier when null.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmaxpayloadsize"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmaxpayloadsize">services.mcp-servers.servers.openmemory-mcp.settings.maxPayloadSize</a></h2>
+<p>Maximum payload size in bytes. Default: 1000000.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmaxvectordim"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmaxvectordim">services.mcp-servers.servers.openmemory-mcp.settings.maxVectorDim</a></h2>
+<p>Maximum allowed vector dimension. Auto-detected by tier when null.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackend"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackend">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend</a></h2>
+<p>Metadata storage backend. Set exactly one of sqlite or postgres.</p>
+<p><em>Type:</em>
+attribute-tagged union with choices: postgres, sqlite</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{
+  sqlite = { };
+}
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgres"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgres">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.postgres</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers/servers/openmemory-mcp.nix">modules/mcp-servers/servers/openmemory-mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresdb"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresdb">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.postgres.db</a></h2>
+<p>PostgreSQL database name.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"openmemory"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgreshost"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgreshost">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.postgres.host</a></h2>
+<p>PostgreSQL host.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"localhost"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgrespassword"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgrespassword">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.postgres.password</a></h2>
+<p>PostgreSQL password. Prefer credentials option for secrets.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresport"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresport">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.postgres.port</a></h2>
+<p>PostgreSQL port.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">5432
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresschema"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresschema">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.postgres.schema</a></h2>
+<p>PostgreSQL schema.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"public"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresssl"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresssl">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.postgres.ssl</a></h2>
+<p>PostgreSQL SSL mode.</p>
+<p><em>Type:</em>
+null or one of “disable”, “require”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgrestable"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgrestable">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.postgres.table</a></h2>
+<p>PostgreSQL memories table name.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"openmemory_memories"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresuser"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresuser">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.postgres.user</a></h2>
+<p>PostgreSQL user. Defaults to current system user.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendsqlite"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendsqlite">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.sqlite</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers/servers/openmemory-mcp.nix">modules/mcp-servers/servers/openmemory-mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendsqlitepath"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendsqlitepath">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.sqlite.path</a></h2>
+<p>SQLite database file path.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"./data/openmemory.sqlite"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsminscore"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsminscore">services.mcp-servers.servers.openmemory-mcp.settings.minScore</a></h2>
+<p>Minimum relevance score threshold. Default: 0.3.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsminvectordim"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsminvectordim">services.mcp-servers.servers.openmemory-mcp.settings.minVectorDim</a></h2>
+<p>Minimum allowed vector dimension. Default: 64.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmode"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmode">services.mcp-servers.servers.openmemory-mcp.settings.mode</a></h2>
+<p>Server mode. Default: standard.</p>
+<p><em>Type:</em>
+null or value “standard” (singular enum)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsopenaicredentials"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsopenaicredentials">services.mcp-servers.servers.openmemory-mcp.settings.openaiCredentials</a></h2>
+<p>Credential mapped to OPENAI_API_KEY. Set exactly one of file or helper.</p>
+<p><em>Type:</em>
+null or attribute-tagged union with choices: file, helper</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsopenaicredentialsfile"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsopenaicredentialsfile">services.mcp-servers.servers.openmemory-mcp.settings.openaiCredentials.file</a></h2>
+<p>Path to a file containing the raw secret value, read at runtime.
+Not stored in the Nix store. Works with sops-nix, agenix, or any
+tool that decrypts secrets to files. Mapped to OPENAI_API_KEY.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsopenaicredentialshelper"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsopenaicredentialshelper">services.mcp-servers.servers.openmemory-mcp.settings.openaiCredentials.helper</a></h2>
+<p>Path to an executable that outputs the raw secret value on stdout.
+Executed at service start. Mapped to OPENAI_API_KEY.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingspath"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingspath">services.mcp-servers.servers.openmemory-mcp.settings.path</a></h2>
+<p>HTTP endpoint path. Only used in HTTP mode.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"/mcp"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsratelimit"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsratelimit">services.mcp-servers.servers.openmemory-mcp.settings.rateLimit</a></h2>
+<p>Rate limiting configuration.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsratelimitenabled"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsratelimitenabled">services.mcp-servers.servers.openmemory-mcp.settings.rateLimit.enabled</a></h2>
+<p>Enable rate limiting.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsratelimitmaxrequests"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsratelimitmaxrequests">services.mcp-servers.servers.openmemory-mcp.settings.rateLimit.maxRequests</a></h2>
+<p>Max requests per window. Default: 100.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsratelimitwindowms"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsratelimitwindowms">services.mcp-servers.servers.openmemory-mcp.settings.rateLimit.windowMs</a></h2>
+<p>Rate limit window in milliseconds. Default: 60000.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsreflection"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsreflection">services.mcp-servers.servers.openmemory-mcp.settings.reflection</a></h2>
+<p>Memory reflection and regeneration configuration.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsreflectionautoreflect"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsreflectionautoreflect">services.mcp-servers.servers.openmemory-mcp.settings.reflection.autoReflect</a></h2>
+<p>Enable automatic memory reflection.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsreflectioninterval"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsreflectioninterval">services.mcp-servers.servers.openmemory-mcp.settings.reflection.interval</a></h2>
+<p>Reflection interval (number of operations between reflections). Default: 10.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsreflectionminmemories"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsreflectionminmemories">services.mcp-servers.servers.openmemory-mcp.settings.reflection.minMemories</a></h2>
+<p>Minimum memories required before reflection triggers. Default: 20.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsreflectionregenerationenabled"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsreflectionregenerationenabled">services.mcp-servers.servers.openmemory-mcp.settings.reflection.regenerationEnabled</a></h2>
+<p>Enable memory regeneration. Default: true.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsreflectionusersummaryinterval"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsreflectionusersummaryinterval">services.mcp-servers.servers.openmemory-mcp.settings.reflection.userSummaryInterval</a></h2>
+<p>User summary update interval. Default: 30.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingssegsize"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingssegsize">services.mcp-servers.servers.openmemory-mcp.settings.segSize</a></h2>
+<p>Segment size. Default: 10000.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingssummarylayers"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingssummarylayers">services.mcp-servers.servers.openmemory-mcp.settings.summaryLayers</a></h2>
+<p>Number of summary layers (1-3). Default: 3.</p>
+<p><em>Type:</em>
+null or integer between 1 and 3 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingssummarymaxlength"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingssummarymaxlength">services.mcp-servers.servers.openmemory-mcp.settings.summaryMaxLength</a></h2>
+<p>Maximum summary length in characters. Default: 200.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingstelemetry"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingstelemetry">services.mcp-servers.servers.openmemory-mcp.settings.telemetry</a></h2>
+<p>Enable anonymous telemetry.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingstier"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingstier">services.mcp-servers.servers.openmemory-mcp.settings.tier</a></h2>
+<p>Performance tier. Affects defaults for vector dimensions, cache segments, and active memory limits.</p>
+<p><em>Type:</em>
+one of “hybrid”, “fast”, “smart”, “deep”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"hybrid"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsusesummaryonly"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsusesummaryonly">services.mcp-servers.servers.openmemory-mcp.settings.useSummaryOnly</a></h2>
+<p>Use only summary for reflection instead of full content.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvecdim"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvecdim">services.mcp-servers.servers.openmemory-mcp.settings.vecDim</a></h2>
+<p>Vector dimension. Must match the embedding model (e.g., 768 for nomic-embed-text). Auto-detected by tier when null.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvectorbackend"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvectorbackend">services.mcp-servers.servers.openmemory-mcp.settings.vectorBackend</a></h2>
+<p>Vector storage backend. Set exactly one of sqlite, postgres, or valkey.</p>
+<p><em>Type:</em>
+attribute-tagged union with choices: postgres, sqlite, valkey</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{
+  sqlite = { };
+}
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendpostgres"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendpostgres">services.mcp-servers.servers.openmemory-mcp.settings.vectorBackend.postgres</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers/servers/openmemory-mcp.nix">modules/mcp-servers/servers/openmemory-mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendpostgrestable"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendpostgrestable">services.mcp-servers.servers.openmemory-mcp.settings.vectorBackend.postgres.table</a></h2>
+<p>PostgreSQL vector table name.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"openmemory_vectors"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendsqlite"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendsqlite">services.mcp-servers.servers.openmemory-mcp.settings.vectorBackend.sqlite</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers/servers/openmemory-mcp.nix">modules/mcp-servers/servers/openmemory-mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendsqlitetable"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendsqlitetable">services.mcp-servers.servers.openmemory-mcp.settings.vectorBackend.sqlite.table</a></h2>
+<p>SQLite vector table name.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"vectors"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendvalkey"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendvalkey">services.mcp-servers.servers.openmemory-mcp.settings.vectorBackend.valkey</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers/servers/openmemory-mcp.nix">modules/mcp-servers/servers/openmemory-mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendvalkeyhost"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendvalkeyhost">services.mcp-servers.servers.openmemory-mcp.settings.vectorBackend.valkey.host</a></h2>
+<p>Valkey/Redis host.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"localhost"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendvalkeypassword"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendvalkeypassword">services.mcp-servers.servers.openmemory-mcp.settings.vectorBackend.valkey.password</a></h2>
+<p>Valkey/Redis password.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendvalkeyport"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendvalkeyport">services.mcp-servers.servers.openmemory-mcp.settings.vectorBackend.valkey.port</a></h2>
+<p>Valkey/Redis port.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">6379
+</code></pre>
+<h2 id="servicesmcp-serversserverssequential-thinking-mcp"><a class="header" href="#servicesmcp-serversserverssequential-thinking-mcp">services.mcp-servers.servers.sequential-thinking-mcp</a></h2>
+<p>Configuration for the sequential-thinking-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssequential-thinking-mcpenable"><a class="header" href="#servicesmcp-serversserverssequential-thinking-mcpenable">services.mcp-servers.servers.sequential-thinking-mcp.enable</a></h2>
+<p>Whether to enable the sequential-thinking-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssequential-thinking-mcppackage"><a class="header" href="#servicesmcp-serversserverssequential-thinking-mcppackage">services.mcp-servers.servers.sequential-thinking-mcp.package</a></h2>
+<p>The sequential-thinking-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.nix-mcp-servers.sequential-thinking-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssequential-thinking-mcpargs"><a class="header" href="#servicesmcp-serversserverssequential-thinking-mcpargs">services.mcp-servers.servers.sequential-thinking-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssequential-thinking-mcpenv"><a class="header" href="#servicesmcp-serversserverssequential-thinking-mcpenv">services.mcp-servers.servers.sequential-thinking-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store — use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssequential-thinking-mcpservicehost"><a class="header" href="#servicesmcp-serversserverssequential-thinking-mcpservicehost">services.mcp-servers.servers.sequential-thinking-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssequential-thinking-mcpserviceport"><a class="header" href="#servicesmcp-serversserverssequential-thinking-mcpserviceport">services.mcp-servers.servers.sequential-thinking-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19759
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssequential-thinking-mcpsettings"><a class="header" href="#servicesmcp-serversserverssequential-thinking-mcpsettings">services.mcp-servers.servers.sequential-thinking-mcp.settings</a></h2>
+<p>Server-specific configuration for sequential-thinking-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssympy-mcp"><a class="header" href="#servicesmcp-serversserverssympy-mcp">services.mcp-servers.servers.sympy-mcp</a></h2>
+<p>Configuration for the sympy-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssympy-mcpenable"><a class="header" href="#servicesmcp-serversserverssympy-mcpenable">services.mcp-servers.servers.sympy-mcp.enable</a></h2>
+<p>Whether to enable the sympy-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssympy-mcppackage"><a class="header" href="#servicesmcp-serversserverssympy-mcppackage">services.mcp-servers.servers.sympy-mcp.package</a></h2>
+<p>The sympy-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.nix-mcp-servers.sympy-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssympy-mcpargs"><a class="header" href="#servicesmcp-serversserverssympy-mcpargs">services.mcp-servers.servers.sympy-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssympy-mcpenv"><a class="header" href="#servicesmcp-serversserverssympy-mcpenv">services.mcp-servers.servers.sympy-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store — use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssympy-mcpservicehost"><a class="header" href="#servicesmcp-serversserverssympy-mcpservicehost">services.mcp-servers.servers.sympy-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssympy-mcpserviceport"><a class="header" href="#servicesmcp-serversserverssympy-mcpserviceport">services.mcp-servers.servers.sympy-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19760
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssympy-mcpsettings"><a class="header" href="#servicesmcp-serversserverssympy-mcpsettings">services.mcp-servers.servers.sympy-mcp.settings</a></h2>
+<p>Server-specific configuration for sympy-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="servicesmcp-serverstools"><a class="header" href="#servicesmcp-serverstools">services.mcp-servers.tools</a></h2>
+<p>Tool names exposed by each enabled server (from upstream metadata).
+Use this to build client-specific auto-approval configs by filtering
+and formatting with standard Nix functions or <code>lib.mapTools</code>.</p>
+<p><em>Type:</em>
+attribute set of list of string <em>(read only)</em></p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/mcp-servers">modules/mcp-servers</a></li>
+</ul>
+<h2 id="stacked-workflowsenable"><a class="header" href="#stacked-workflowsenable">stacked-workflows.enable</a></h2>
+<p>Whether to enable stacked workflow skills and references.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/stacked-workflows">modules/stacked-workflows</a></li>
+</ul>
+<h2 id="stacked-workflowsgitpreset"><a class="header" href="#stacked-workflowsgitpreset">stacked-workflows.gitPreset</a></h2>
+<p>Git configuration preset for stacked workflows.</p>
+<ul>
+<li><code>"minimal"</code> — required + strongly recommended settings</li>
+<li><code>"full"</code> — all recommended settings (branchless, revise, general git)</li>
+<li><code>"none"</code> — no git configuration changes</li>
+</ul>
+<p>All values are set at <code>mkDefault</code> priority so you can override
+individual keys at normal priority in <code>programs.git.settings</code>.</p>
+<p><em>Type:</em>
+one of “full”, “minimal”, “none”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"none"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/stacked-workflows">modules/stacked-workflows</a></li>
+</ul>
+<h2 id="stacked-workflowsintegrationsclaudeenable"><a class="header" href="#stacked-workflowsintegrationsclaudeenable">stacked-workflows.integrations.claude.enable</a></h2>
+<p>Whether to enable Claude Code integration.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/stacked-workflows">modules/stacked-workflows</a></li>
+</ul>
+<h2 id="stacked-workflowsintegrationscopilotenable"><a class="header" href="#stacked-workflowsintegrationscopilotenable">stacked-workflows.integrations.copilot.enable</a></h2>
+<p>Whether to enable GitHub Copilot CLI integration (gh copilot).</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/stacked-workflows">modules/stacked-workflows</a></li>
+</ul>
+<h2 id="stacked-workflowsintegrationskiroenable"><a class="header" href="#stacked-workflowsintegrationskiroenable">stacked-workflows.integrations.kiro.enable</a></h2>
+<p>Whether to enable Kiro integration.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/sentinel/main-catchup-2026-04-08/blob/main/modules/stacked-workflows">modules/stacked-workflows</a></li>
+</ul>
+<h2 id="priority-and-override-patterns"><a class="header" href="#priority-and-override-patterns">Priority and Override Patterns</a></h2>
+<p>All <code>ai.*</code> values are injected at <code>mkDefault</code> priority (1000). To
+override for a specific CLI:</p>
+<pre><code class="language-nix"># Shared default
+ai.settings.model = "claude-sonnet-4";
+
+# Copilot override (normal priority wins over mkDefault)
+programs.copilot-cli.settings.model = "gpt-4o";
+</code></pre>
+<p>For git config, <code>stacked-workflows.gitPreset</code> also uses <code>mkDefault</code> on
+every leaf, so you can override individual git settings at normal
+priority in <code>programs.git.settings</code>.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../guides/devenv.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="../guides/mcp-servers.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../guides/devenv.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="../guides/mcp-servers.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-c2a407aa.js"></script>
+
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>
