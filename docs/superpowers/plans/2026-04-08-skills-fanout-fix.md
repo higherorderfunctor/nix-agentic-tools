@@ -241,20 +241,39 @@ parity with HM. Apply to all three devenv ecosystem modules.
 
 **Steps:**
 
-- [ ] **Step 1: Verify Copilot configDir before starting.** The
-      current devenv copilot module uses `.github/skills/`.
-      Double-check against the upstream HM Copilot module + the
-      Copilot CLI docs:
+- [ ] **Step 1: Confirm pre-investigation findings before
+      starting.** Two questions were resolved during 2026-04-07
+      grooming and don't need to be re-investigated; just verify
+      the current code still matches the findings:
 
-  ```bash
-  grep -n "skills" modules/copilot-cli/default.nix
-  grep -n "skills" modules/devenv/copilot.nix
-  ```
+  **(a) Copilot configDir divergence is intentional.** Per
+  [GitHub Docs — Creating agent skills for Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/create-skills),
+  Copilot CLI reads from BOTH locations:
+  - `~/.copilot/skills/` for personal/global skills (HM scope —
+    `modules/copilot-cli/default.nix` defaults `configDir = ".copilot"`)
+  - `.github/skills/` for project-local skills (devenv scope —
+    `modules/devenv/copilot.nix` hardcodes `.github/skills/`)
 
-  Confirm both use the same prefix. If they diverge, that's a
-  pre-existing bug — fix it in the same commit as Task 2 or
-  flag it as a separate task (do not silently propagate the
-  divergence into the new walker).
+  Both are correct, no fix needed. Just don't accidentally
+  collapse them in the walker.
+
+  **(b) devenv `claude.code` has NO `skills` option yet.** Per
+  [cachix/devenv#2441](https://github.com/cachix/devenv/issues/2441),
+  it's an active feature request. devenv has
+  `claude.code.{commands,agents,mcpServers,hooks}` but no
+  `skills`. This is why Task 2 uses `files.*` directly instead
+  of delegating through `claude.code.skills` like Task 1
+  delegates through `programs.claude-code.skills`. The walker
+  produces Layout B output via devenv's native `files.*`
+  mechanism — matching the on-disk shape that HM produces but
+  using devenv's idioms.
+
+  When devenv#2441 lands upstream and `claude.code.skills`
+  becomes available, switch the devenv Claude branch to
+  delegate through it (matches HM pattern exactly, removes the
+  walker for the claude branch only). See backlog item
+  "Switch devenv claude branch to claude.code.skills delegation
+  when upstream lands" in `docs/plan.md`.
 
 - [ ] **Step 2: Add `mkDevenvSkillEntries` to
       `lib/hm-helpers.nix`.** Append:
@@ -430,7 +449,7 @@ against the user's nixos-config consumer.
       the commit chain.** Either: amend the Task 1 commit message
       to mention the actual command the user ran (`-b backup`),
       OR add a third commit `docs: note skills layout migration
-    one-time backup` documenting the transition for other
+  one-time backup` documenting the transition for other
       consumers.
 
 ### Task 4: Tidy fragment Last-verified markers

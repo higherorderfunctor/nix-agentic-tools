@@ -158,15 +158,37 @@ ready to execute this chunk.
       once.
 
 - [ ] **Task 2b: Devenv skills fanout parity (Option A
-      recommended)** — HM all three ecosystems produce Layout B;
+      confirmed)** — HM all three ecosystems produce Layout B;
       devenv all three produce Layout A. devenv's `files.*.source`
       cannot walk recursively (see
-      `memory/project_devenv_files_internals.md`). Option A: add
-      `mkDevenvSkillEntries` helper to `lib/hm-helpers.nix` that
-      walks the source dir at eval time with `builtins.readDir`.
-      Option C (upstream PR to cachix/devenv `recursive` field) can
-      happen in parallel. Copilot `configDir` verification needed
-      (`.github` vs `.copilot`).
+      `memory/project_devenv_files_internals.md`). Option A
+      confirmed by user 2026-04-07: add `mkDevenvSkillEntries`
+      helper to `lib/hm-helpers.nix` that walks the source dir at
+      eval time with `builtins.readDir`. Drafted in
+      `docs/superpowers/plans/2026-04-08-skills-fanout-fix.md`.
+      Option C (upstream PR to cachix/devenv `recursive` field)
+      can happen in parallel as a follow-up. Copilot configDir
+      divergence (`.copilot` HM vs `.github` devenv) is
+      intentional — both are valid Copilot CLI scopes per
+      GitHub docs.
+
+- [ ] **Switch devenv claude branch to `claude.code.skills`
+      delegation when upstream lands** — devenv `claude.code` is
+      missing a `skills` option; tracked at
+      [cachix/devenv#2441](https://github.com/cachix/devenv/issues/2441).
+      Until it lands, the devenv Claude branch uses
+      `mkDevenvSkillEntries` (the user-space walker from Task 2b)
+      to write `files.*` entries directly. When the upstream
+      option ships: 1. Bump devenv flake input to a version with the option 2. Replace the walker invocation in
+      `modules/devenv/ai.nix` Claude branch with
+      `claude.code.skills = lib.mapAttrs (_: mkDefault) cfg.skills;` 3. Keep the walker for Copilot/Kiro devenv branches (those
+      devenv modules are ours and don't have a comparable
+      upstream option to delegate to — though we could file
+      feature requests for those too) 4. Update `dev/fragments/devenv/files-internals.md` and
+      `dev/fragments/ai-skills/skills-fanout-pattern.md` to
+      reflect the new state
+      Monitoring: watch the devenv#2441 issue or release notes.
+      Low urgency — current walker works.
 
 - [ ] **Task 3: `ai.claude.memory` passthrough** — mirror upstream
       `memory.{text,source}` submodule, mutual exclusion asserted
