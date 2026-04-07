@@ -1,7 +1,13 @@
 # Kiro Gateway — Python proxy API for Kiro IDE & CLI.
+#
+# The `...` absorbs the `inputs` arg that packages/ai-clis/default.nix
+# threads through every per-package import for Phase 3.7 of the
+# architecture-foundation plan (cache-hit parity). Not yet consumed
+# in this file; plumbing-only for now.
 {
   final,
   nv,
+  ...
 }: let
   python = final.python314;
   pythonEnv = python.withPackages (ps:

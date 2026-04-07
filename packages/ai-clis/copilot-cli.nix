@@ -1,9 +1,15 @@
 # GitHub Copilot CLI — pre-built binary from GitHub releases.
 # Platform-specific tarballs: copilot-{linux-x64,darwin-arm64}.tar.gz
+#
+# The `...` absorbs the `inputs` arg that packages/ai-clis/default.nix
+# threads through every per-package import for Phase 3.7 of the
+# architecture-foundation plan (cache-hit parity). Not yet consumed
+# in this file; plumbing-only for now.
 {
   final,
   prev,
   nv,
+  ...
 }: let
   platformMap = {
     "x86_64-linux" = "linux-x64";

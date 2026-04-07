@@ -16,11 +16,17 @@
 # search use the simpler wyhash path. Startup overhead is negligible.
 #
 # Buddy state management lives in modules/claude-code-buddy/.
+#
+# The `...` absorbs the `inputs` arg that packages/ai-clis/default.nix
+# threads through every per-package import for Phase 3.7 of the
+# architecture-foundation plan (cache-hit parity). Not yet consumed
+# in this file; plumbing-only for now.
 {
   final,
   prev,
   nv,
   lockFile,
+  ...
 }: let
   baseClaudeCode = prev.claude-code.override (_: {
     buildNpmPackage = args:

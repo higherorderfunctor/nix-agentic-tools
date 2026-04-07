@@ -1,8 +1,15 @@
 # any-buddy — source-only package for buddy salt search worker.
 # Not a built CLI — we invoke src/finder/worker.ts directly via Bun.
+#
+# The `...` absorbs the `inputs` arg that packages/ai-clis/default.nix
+# threads through every per-package import for Phase 3.7 of the
+# architecture-foundation plan (cache-hit parity). any-buddy is
+# source-only so it never needs `ourPkgs`; dropping `inputs` on
+# the floor here is the intent.
 {
   final,
   nv,
+  ...
 }:
 final.stdenvNoCC.mkDerivation {
   pname = "any-buddy";

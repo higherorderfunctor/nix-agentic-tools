@@ -1,11 +1,17 @@
 # Kiro CLI — pre-built binary from AWS release channel.
 # x86_64-linux: tarball from nvfetcher (kiro-cli)
 # aarch64-darwin: .dmg from nvfetcher (kiro-cli-darwin), extracted by nixpkgs undmg
+#
+# The `...` absorbs the `inputs` arg that packages/ai-clis/default.nix
+# threads through every per-package import for Phase 3.7 of the
+# architecture-foundation plan (cache-hit parity). Not yet consumed
+# in this file; plumbing-only for now.
 {
   final,
   prev,
   nv,
   nv-darwin,
+  ...
 }: let
   inherit (final.stdenv.hostPlatform) system;
   src =
