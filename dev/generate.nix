@@ -86,6 +86,7 @@
   devFragmentNames = {
     ai-clis = ["packaging-guide"];
     monorepo = [
+      "architecture-fragments"
       "binary-cache"
       "build-commands"
       "change-propagation"
