@@ -212,6 +212,33 @@
           cp $aiMapping $out/reference/ai-mapping.md
         '';
 
+      # Dev architecture fragments surfaced as mdbook contributing
+      # pages. Same markdown source that feeds the scoped
+      # .claude/rules, .github/instructions, and .kiro/steering files
+      # — single source of truth across steering + docsite.
+      #
+      # Fragment sources are plain markdown with no YAML frontmatter
+      # (frontmatter is added by per-ecosystem transforms during
+      # instruction generation, not written in the source), so we can
+      # copy them directly to the mdbook tree without stripping.
+      siteArchitecture = pkgs.runCommand "docs-site-architecture" {} ''
+        mkdir -p $out/contributing/architecture
+        cp ${./dev/fragments/monorepo/architecture-fragments.md} \
+          $out/contributing/architecture/architecture-fragments.md
+        cp ${./dev/fragments/pipeline/fragment-pipeline.md} \
+          $out/contributing/architecture/fragment-pipeline.md
+        cp ${./dev/fragments/overlays/cache-hit-parity.md} \
+          $out/contributing/architecture/overlay-cache-hit-parity.md
+        cp ${./dev/fragments/hm-modules/module-conventions.md} \
+          $out/contributing/architecture/hm-module-conventions.md
+        cp ${./packages/ai-clis/fragments/dev/claude-code-wrapper.md} \
+          $out/contributing/architecture/claude-code-wrapper.md
+        cp ${./packages/ai-clis/fragments/dev/buddy-activation.md} \
+          $out/contributing/architecture/buddy-activation.md
+        cp ${./modules/ai/fragments/dev/ai-module-fanout.md} \
+          $out/contributing/architecture/ai-module-fanout.md
+      '';
+
       siteCombined = pkgs.runCommand "docs-site" {} ''
         cp -r ${siteProse} $out
         chmod -R u+w $out
@@ -221,6 +248,7 @@
         cp -r ${siteReference}/guides/* $out/guides/
         mkdir -p $out/reference
         cp -r ${siteReference}/reference/* $out/reference/
+        cp -r ${siteArchitecture}/* $out/
       '';
 
       # NuschtOS options search — static client-side options browser.
