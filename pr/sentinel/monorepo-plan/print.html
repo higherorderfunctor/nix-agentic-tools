@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-4cc8bcb1.js";
+            window.path_to_searchindex_js = "searchindex-5ee07d87.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-841f2094.js"></script>
@@ -7009,10 +7009,12 @@ gating: see <code>ai-module-fanout</code> fragment under <code>modules/ai/</code
 <h1 id="hm-module-conventions-1"><a href="#hm-module-conventions-1" class="header">HM Module Conventions</a></h1>
 <h2 id="hm-module-conventions"><a class="header" href="#hm-module-conventions">HM Module Conventions</a></h2>
 <blockquote>
-<p><strong>Last verified:</strong> 2026-04-07 (commit adce79e). If you touch
-any <code>modules/&lt;subdir&gt;/default.nix</code> file, add a new option, or
-change an assertion/activation pattern and this fragment isn’t
-updated in the same commit, stop and fix it.</p>
+<p><strong>Last verified:</strong> 2026-04-08 (commit pending — adds activation
+script <code>exit</code> warning + Nix path type strictness section after
+bugs on both fronts surfaced during skills-fanout-fix Task 3).
+If you touch any <code>modules/&lt;subdir&gt;/default.nix</code> file, add a new
+option, or change an assertion/activation pattern and this
+fragment isn’t updated in the same commit, stop and fix it.</p>
 </blockquote>
 <p>These conventions are enforced by code review and the
 <code>checks/module-eval.nix</code> evaluation tests, not by the module
@@ -7147,10 +7149,39 @@ script) can find the real <code>cli.js</code> in the store. See
 <p>All activation scripts run <code>entryAfter ["writeBoundary"]</code>, meaning
 after HM has written all files to the home directory. No use of
 <code>entryBefore</code> in this repo.</p>
+<p><strong>NEVER use <code>exit</code> as a short-circuit.</strong> <code>home.activation.&lt;name&gt;</code>
+blocks are <strong>inlined</strong> into a single outer bash script at
+<code>$out/home-manager-generation/activate</code> that runs under
+<code>set -eu -o pipefail</code>. Any <code>exit 0</code> or <code>exit 1</code> inside an
+activation block terminates the <strong>entire</strong> activation — every
+subsequent hook (including <code>linkGeneration</code>, <code>home.file</code> writes,
+plugin installs, <code>reload-secrets</code>, service reloads) is silently
+skipped. Symptom: activation output stops cleanly mid-run with no
+error, and downstream state changes never land.</p>
+<p>Use structured control flow for fast paths:</p>
+<pre><code class="language-nix"># WRONG — terminates all subsequent activation hooks
+if [ "$NEW_FP" = "$OLD_FP" ]; then exit 0; fi
+# ... update work ...
+
+# RIGHT — continues to next hook
+if [ "$NEW_FP" != "$OLD_FP" ]; then
+  # ... update work ...
+fi
+</code></pre>
+<p>Reserve <code>exit 1</code> for cases where you actually want to abort the
+whole activation on an error. Never <code>exit 0</code> for a cache-hit
+fast path. Surfaced 2026-04-08 in the buddy activation script
+during skills-fanout-fix Task 3 — the outer activation stopped
+at <code>Activating claudeBuddy</code> with no error, and every post-buddy
+hook (including the home.file rewrites for the skill symlinks we
+were trying to verify) silently never ran. Fixed in commit
+<code>1695263</code> by replacing the <code>exit 0</code> with an <code>if</code>/<code>fi</code> guard.</p>
 <p><strong>Fingerprint caching pattern</strong> (buddy activation, see
 <code>buddy-activation</code> fragment): compute sha256 of inputs, compare
-to stored marker, exit early if unchanged. Re-running
-<code>home-manager switch</code> with unchanged config becomes a no-op.</p>
+to stored marker, short-circuit via <code>if</code>/<code>fi</code> (NOT <code>exit</code>) when
+unchanged. Re-running <code>home-manager switch</code> with unchanged
+config becomes a no-op — the update block is skipped, but every
+subsequent activation hook continues to run.</p>
 <p><strong>Settings merge pattern</strong> (copilot-cli, kiro-cli): runtime
 config.json files are merged with Nix-declared values using
 <code>jq -s '.[0] * .[1]'</code> so user runtime edits (e.g.,
@@ -7217,6 +7248,96 @@ right assertion triggers)</li>
 <p>The tests caught the <code>ai.enable</code> master-switch bug during
 the f2e911c fix because the post-fix tests didn’t reference
 <code>ai.enable</code> anymore. Regression protection via the eval harness.</p>
+<p><strong>Eval-only checks DON’T catch everything.</strong> Some bugs only
+manifest during real HM activation against real consumer
+state (e.g., the buddy activation <code>exit</code> bug, the Nix path
+type strictness bug below). When touching anything that
+affects activation scripts or on-disk layout, verify
+end-to-end against a consumer (<code>home-manager switch</code> on a
+real system), not just <code>nix flake check</code>.</p>
+<h3 id="nix-path-types--strict-libispath-checks"><a class="header" href="#nix-path-types--strict-libispath-checks">Nix path types — strict <code>lib.isPath</code> checks</a></h3>
+<p><strong>Filter/copy operations on source paths return STRINGS, not
+path-typed values.</strong> Only <code>./</code> path literals in Nix source
+produce <code>builtins.typeOf</code> result <code>"path"</code>. Everything that
+copies a source into the store returns a store-path string:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Form</th><th><code>typeOf</code> result</th></tr>
+</thead>
+<tbody>
+<tr><td><code>./path/to/x</code> (literal)</td><td><code>"path"</code></td></tr>
+<tr><td><code>./x + "/suffix"</code> (path addition)</td><td><code>"path"</code></td></tr>
+<tr><td><code>builtins.path { path = ./x; ... }</code></td><td><code>"string"</code> (store path)</td></tr>
+<tr><td><code>builtins.filterSource f ./x</code></td><td><code>"string"</code> (store path)</td></tr>
+<tr><td><code>lib.cleanSourceWith { ... }</code></td><td><code>"set"</code> with <code>.outPath</code> str</td></tr>
+<tr><td><code>builtins.storePath "/nix/store/..."</code></td><td><code>"string"</code></td></tr>
+<tr><td><code>"${./x}/suffix"</code> (string interpolation)</td><td><code>"string"</code></td></tr>
+<tr><td><code>pkg.passthru.foo = ./x</code> then read back</td><td>usually <code>"string"</code> (coerced)</td></tr>
+</tbody>
+</table>
+</div>
+<p>This matters when passing values to options that gate on
+<code>lib.isPath</code> or <code>builtins.isPath</code>:</p>
+<ul>
+<li>
+<p><strong>Upstream HM <code>programs.claude-code.skills</code></strong> uses
+<code>mkSkillEntry</code> which checks
+<code>lib.isPath content &amp;&amp; lib.pathIsDirectory content</code>. On
+false (string input), it silently falls through to the
+single-file <code>mkSourceEntry</code> branch, which writes the
+string value as <strong>TEXT CONTENT</strong> to
+<code>.claude/skills/&lt;name&gt;/SKILL.md</code>. Symptom: skill files
+contain a single line like
+<code>/nix/store/abc-skills/stack-fix</code> instead of real YAML
+frontmatter, and Claude can’t load the skill.</p>
+</li>
+<li>
+<p>Our <code>lib/hm-helpers.nix:mkSkillEntries</code> had the same bug
+until commit <code>1f1ad35</code>. It now uses
+<code>(isPath || isString) &amp;&amp; (readFileType == "directory")</code>
+to handle both types correctly.</p>
+</li>
+<li>
+<p>Our <code>mkDevenvSkillEntries</code> walker (commit <code>8655130</code>) also
+uses <code>builtins.readFileType</code> — agnostic to path vs string.</p>
+</li>
+</ul>
+<p><strong>How to apply.</strong> When your module needs to pass a skill
+source (or any other value) through <code>programs.claude-code. skills</code> or anything else that strict-checks <code>lib.isPath</code>,
+<strong>use a <code>./</code> path literal</strong>, not a filtered/copied source.
+If the value needs filtering, introduce a module-relative
+path literal in the <code>let</code> block:</p>
+<pre><code class="language-nix">{ ... }: let
+  # Literal path, relative to THIS module file. Resolves at
+  # parse time, retains `"path"` type through addition.
+  skillsRepo = ../../packages/foo/skills;
+in {
+  config = mkIf cfg.enable {
+    programs.claude-code.skills = {
+      # `path + "/suffix"` returns a path (type preserved)
+      bar = skillsRepo + "/bar";
+    };
+  };
+}
+</code></pre>
+<p>Do NOT do this:</p>
+<pre><code class="language-nix"># WRONG — builtins.path returns a string, mkSkillEntry
+# silently writes path-as-text instead of Layout B
+programs.claude-code.skills.bar = pkgs.myPkg.passthru.skillsDir + "/bar";
+</code></pre>
+<p>Surfaced 2026-04-08 during skills-fanout-fix Task 3. The
+stacked-workflows HM module was using
+<code>swsContent.passthru.skillsDir + "/stack-*"</code> where
+<code>skillsDir</code> came from <code>builtins.path</code> (a string). Every
+consumer had garbage <code>~/.claude/skills/stack-*/SKILL.md</code>
+files for weeks. Fixed in commit <code>5a14a0c</code> by introducing a
+module-relative <code>skillsRepo</code> path literal.</p>
+<p><strong>Our helpers are defensive, upstream is not.</strong> We can’t fix
+upstream HM’s <code>mkSkillEntry</code> — it’s in nixpkgs. Always use
+literals for values flowing into upstream options that
+type-check paths. Our own helpers handle both, but don’t
+rely on that when the value might flow further.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="devenv-files-internals"><a href="#devenv-files-internals" class="header">devenv files Internals</a></h1>
 <h2 id="devenv-files-option-internals"><a class="header" href="#devenv-files-option-internals">devenv <code>files</code> Option Internals</a></h2>
