@@ -933,24 +933,79 @@ memory (`project_plan_state.md`) and the session memories.
 Previously landed 2026-04-08: skills fanout fix (commits
 `62c247b` .. `feeb5fb`) closed out by commit `8aa4991`.
 
-**Very next plan: sentinel → main merge.** Sentinel branch has
-accumulated 200+ commits and main needs to catch up before any
-more backlog work lands. Strategy captured in
-`memory/project_merge_to_main_strategy.md`:
+### Sentinel → main merge loop status (2026-04-08, paused)
 
-1. Start a new branch from main with ONE squash commit whose
-   content matches the sentinel tip
-2. Use stack skills to chunk into reviewable atomic commits
-   grouping like changes (docs/CI travel with feature commits,
-   no docs-only catchup commits, no forward references)
-3. Lazy extraction loop: keep the squash as a larger tip, pull
-   individual chunks as PRs so Copilot/user feedback only
-   invalidates the extracted chunk rather than the whole stack
-4. Per-PR loop: open → Copilot review → fix/resolve/backlog →
-   user GitHub review → merge → next chunk
-5. Resume backlog work normally after main is caught up
+**Done — chunks 1–7 merged on main:**
 
-Remaining TOP-priority items after the merge:
+- **PR #3 chunk 1** `flake-scaffold` — flake skeleton + pre-commit
+- **PR #4 chunk 2** `lib-primitives` — lib + devshell modules
+- **PR #5 chunk 3** `fragment-pipeline` — reduced
+  dev/generate.nix + fragments-ai + 11 dev fragments across 5
+  categories
+- **PR #6 chunk 4a** `coding-standards` — content package + first
+  `commonFragments` wiring
+- **PR #7 chunk 4b** `stacked-workflows-content` — sws content +
+  routing-table + un-gitignored AGENTS.md +
+  .github/copilot-instructions.md
+- **PR #8 chunk 4c** `fragments-docs` — page generators + new
+  `dev/fragments/overlays/overlay-pattern.md` + `build-commands.md`
+  codifying devenv tasks as canonical regen UX
+- **PR #9 chunk 5** `overlay-git-tools` — first compiled overlay,
+  `nvSourcesOverlay` exposing `final.nv-sources`, agnix moved to
+  its own `packages/agnix/` (linter/LSP/MCP, not a git tool)
+- **PR #10 chunk 6** `overlay-mcp-servers` — 14 MCP servers +
+  serena/mcp-nixos flake inputs
+- **PR #11 chunk 7** `overlay-ai-clis` — claude-code/copilot-cli/
+  kiro-cli/kiro-gateway/any-buddy. **Awaiting merge as of
+  2026-04-08 (CI green, both Copilot threads addressed).**
+
+**Patterns established across chunks 5–7 (load-bearing for
+remaining chunks):**
+
+- `final.nv-sources` set by `nvSourcesOverlay` in `flake.nix`
+  (composed first in `overlays.default`). Per-package overlays
+  read from `final.nv-sources` + merge in their own
+  `hashes.json` sidecars locally. No per-group `sources.nix`.
+- 3-arg overlay shape `{inputs, ...}: final: prev: ...` per
+  `dev/fragments/overlays/overlay-pattern.md`.
+- Rust packages use `inputs.rust-overlay.overlays.default`
+  (not `import inputs.rust-overlay`).
+- Forward refs to `dev/fragments/overlays/cache-hit-parity.md`
+  replaced with `overlay-pattern.md` until chunk 15 lands the
+  cache-hit-parity fragment.
+- cspell `overrides` block enables `python`/`rust`/`node`/`npm`
+  dictionaries scoped to `**/*.nix`, `**/*.md`, `nvfetcher.toml`.
+- Always use `devenv tasks run --mode before generate:instructions:*`
+  for regen.
+- Copilot auto-reviews on PR open — no manual `gh pr edit
+--add-reviewer` needed.
+
+**Pause point (2026-04-08):** user requested clean pause after
+PR #11 merges to consider an implementation pivot. Pending tasks
+before the next session picks up the chunk loop:
+
+1. **Sentinel rebase**: `sentinel/monorepo-plan` should be
+   rebased onto current `origin/main` so it builds off the
+   merged + post-review work. Right now sentinel is the
+   original parallel-history snapshot — its tip needs to move
+   to `main + sentinel-only delta` (plan.md updates,
+   dev/notes additions, etc.). Resolve conflicts by accepting
+   main's version (it has the post-review fixes) unless
+   sentinel has unique additive content.
+2. Verify `dev/notes/merge-chunks-2026-04-08.md` post-merge
+   corrections are still accurate for chunks 8–17. Notable:
+   the chunk 8 plan needs the `lib/buddy-types.nix` →
+   `modules/claude-code-buddy/types.nix` relocation noted in
+   the post-merge corrections section.
+3. If continuing the chunk loop unchanged, next is **chunk 8**:
+   HM modules wave (claude-code-buddy, copilot-cli, kiro-cli,
+   mcp-servers, stacked-workflows). ~2,428 lines, second-largest
+   chunk after chunk 6.
+4. If pivoting (user mentioned this is possible), a new session
+   should ask the user what pivot they're considering before
+   continuing chunk-by-chunk merges.
+
+### Remaining TOP-priority items after the merge
 
 - **ai.claude.\* full passthrough** — Tasks 3-7 (memory,
   settings, mcpServers, skills, plugins) + Task D (devenv
