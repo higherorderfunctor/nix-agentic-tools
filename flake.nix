@@ -58,12 +58,10 @@
     };
     # Bind each overlay once so `overlays.<name>` and the
     # `overlays.default` composition share the same import.
-    agnixOverlay = import ./packages/agnix {inherit inputs;};
     aiOverlay = import ./overlays {inherit inputs;};
     codingStandardsOverlay = import ./packages/coding-standards {};
     fragmentsAiOverlay = import ./packages/fragments-ai {};
     fragmentsDocsOverlay = import ./packages/fragments-docs {};
-    gitToolsOverlay = import ./packages/git-tools {inherit inputs;};
     stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
 
     # Barrel walker — collects non-binary facets from packages/*/default.nix.
@@ -80,22 +78,18 @@
     );
   in {
     overlays = {
-      agnix = agnixOverlay;
       ai = aiOverlay;
       coding-standards = codingStandardsOverlay;
       default = lib.composeManyExtensions [
         nvSourcesOverlay
         aiOverlay
-        agnixOverlay
         codingStandardsOverlay
         fragmentsAiOverlay
         fragmentsDocsOverlay
-        gitToolsOverlay
         stackedWorkflowsOverlay
       ];
       fragments-ai = fragmentsAiOverlay;
       fragments-docs = fragmentsDocsOverlay;
-      git-tools = gitToolsOverlay;
       stacked-workflows = stackedWorkflowsOverlay;
     };
 
@@ -180,29 +174,27 @@
     packages = forAllSystems (system: let
       pkgs = pkgsFor system;
     in {
-      # Git tool packages — exposed via the git-tools overlay so
-      # `nix build .#<name>` works for CI and consumers building
-      # directly. The overlay's `ourPkgs` cache-hit-parity pattern
-      # ensures these store paths match what CI pushes to cachix
-      # regardless of the consumer's nixpkgs pin (see
-      # `dev/fragments/overlays/cache-hit-parity.md` once it lands).
-      inherit (pkgs) agnix git-absorb git-branchless git-revise;
-
-      # All AI packages — CLIs and MCP servers — now live under pkgs.ai
-      # (unified overlay). The legacy pkgs.nix-mcp-servers namespace was
-      # dissolved as part of Milestone 5.
+      # All AI packages — CLIs, git tools, and MCP servers — now live
+      # under pkgs.ai (unified overlay). The legacy pkgs.nix-mcp-servers
+      # namespace was dissolved as part of Milestone 5; the legacy
+      # pkgs.{agnix,git-*} flat entries were moved to pkgs.ai.* as part
+      # of Milestone 6.
       # Note: github-copilot-cli has been renamed copilot-cli (dropped
       # the "github-" prefix) as part of the Milestone 4 factory port.
       inherit
         (pkgs.ai)
+        agnix
         any-buddy
         claude-code
         context7-mcp
         copilot-cli
         effect-mcp
         fetch-mcp
+        git-absorb
+        git-branchless
         git-intel-mcp
         git-mcp
+        git-revise
         github-mcp
         kagi-mcp
         kiro-cli

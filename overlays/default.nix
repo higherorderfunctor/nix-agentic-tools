@@ -14,14 +14,18 @@
   merge = name: (final.nv-sources.${name} or {}) // (hashes.${name} or {});
 
   nv = {
+    agnix = merge "agnix";
     any-buddy = merge "any-buddy";
     claude-code = merge "claude-code";
     context7-mcp = merge "context7-mcp";
     copilot-cli = merge "github-copilot-cli"; # nvfetcher key
     effect-mcp = merge "effect-mcp";
     fetch-mcp = merge "mcp-server-fetch"; # nvfetcher key
+    git-absorb = merge "git-absorb";
+    git-branchless = merge "git-branchless";
     git-intel-mcp = merge "git-intel-mcp";
     git-mcp = merge "mcp-server-git"; # nvfetcher key
+    git-revise = merge "git-revise";
     github-mcp = merge "github-mcp-server"; # nvfetcher key
     kagi-mcp = merge "kagimcp"; # nvfetcher key
     kiro-cli = merge "kiro-cli";
@@ -35,6 +39,10 @@
   };
 
   aiDrvs = {
+    agnix = import ./agnix.nix {
+      inherit inputs final;
+      nv = nv.agnix;
+    };
     any-buddy = import ./any-buddy.nix {
       inherit inputs final;
       nv = nv.any-buddy;
@@ -60,6 +68,14 @@
       inherit inputs final;
       nv = nv.fetch-mcp;
     };
+    git-absorb = import ./git-absorb.nix {
+      inherit inputs final;
+      nv = nv.git-absorb;
+    };
+    git-branchless = import ./git-branchless.nix {
+      inherit inputs final;
+      nv = nv.git-branchless;
+    };
     git-intel-mcp = import ./git-intel-mcp.nix {
       inherit inputs final;
       nv = nv.git-intel-mcp;
@@ -67,6 +83,10 @@
     git-mcp = import ./git-mcp.nix {
       inherit inputs final;
       nv = nv.git-mcp;
+    };
+    git-revise = import ./git-revise.nix {
+      inherit inputs final;
+      nv = nv.git-revise;
     };
     github-mcp = import ./github-mcp.nix {
       inherit inputs final;

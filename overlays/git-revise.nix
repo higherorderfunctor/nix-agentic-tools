@@ -5,15 +5,21 @@
 # standalone build — see dev/fragments/overlays/overlay-pattern.md
 #
 # No rust-overlay here — git-revise is a pure-python build.
-{inputs}: sources: final: _prev: let
+#
+# Argument shape adapted from legacy 3-layer curried pattern during Milestone 6 port.
+{
+  inputs,
+  final,
+  nv,
+  ...
+}: let
   ourPkgs = import inputs.nixpkgs {
-    inherit (final) system;
+    inherit (final.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
-  nv = sources.git-revise;
   inherit (ourPkgs) lib stdenv;
-in {
-  git-revise = ourPkgs.python3Packages.buildPythonApplication {
+in
+  ourPkgs.python3Packages.buildPythonApplication {
     pname = "git-revise";
     inherit (nv) version src;
     pyproject = true;
@@ -34,5 +40,4 @@ in {
       license = lib.licenses.mit;
       mainProgram = "git-revise";
     };
-  };
-}
+  }

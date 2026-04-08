@@ -3,36 +3,34 @@
 # this repo's pinned nixpkgs instead of the consumer's. This is what
 # gives the store path cache-hit parity against CI's standalone build
 # — see dev/fragments/overlays/overlay-pattern.md
-{inputs}: sources: final: _prev: let
+#
+# Argument shape adapted from legacy 3-layer curried pattern during Milestone 6 port.
+{
+  inputs,
+  final,
+  nv,
+  ...
+}: let
   ourPkgs = import inputs.nixpkgs {
-    inherit (final) system;
+    inherit (final.stdenv.hostPlatform) system;
     overlays = [inputs.rust-overlay.overlays.default];
     config.allowUnfree = true;
   };
-  nv = sources.git-branchless;
 
-  # Pin to 1.88.0 — git-branchless v0.10.0 has esl01-indexedlog build
-  # failure on Rust 1.89+ (arxanas/git-branchless#1585). Update this
-  # when upstream fixes the issue or a new release ships.
-  rust = ourPkgs.rust-bin.stable."1.88.0".default;
+  rust = ourPkgs.rust-bin.stable.latest.default;
   rustPlatform = ourPkgs.makeRustPlatform {
     cargo = rust;
     rustc = rust;
   };
-in {
-  git-branchless = ourPkgs.git-branchless.override (_: {
+in
+  ourPkgs.git-absorb.override (_: {
     rustPlatform.buildRustPackage = args:
       rustPlatform.buildRustPackage (finalAttrs: let
         a = (ourPkgs.lib.toFunction args) finalAttrs;
       in
         a
         // {
-          # Strip "v" prefix — nvfetcher gives "v0.10.0" from the tag
-          # but the binary prints "0.10.0" in --version output.
-          version = ourPkgs.lib.removePrefix "v" nv.version;
-          inherit (nv) src;
+          inherit (nv) version src;
           inherit (nv) cargoHash;
-          postPatch = null;
         });
-  });
-}
+  })

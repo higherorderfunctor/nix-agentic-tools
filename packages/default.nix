@@ -2,14 +2,18 @@
 # barrel. flake.nix walks this to compose homeManagerModules,
 # devenvModules, and flake.lib contributions.
 {
+  agnix = import ./agnix;
   any-buddy = import ./any-buddy;
   claude-code = import ./claude-code;
   context7-mcp = import ./context7-mcp;
   copilot-cli = import ./copilot-cli;
   effect-mcp = import ./effect-mcp;
   fetch-mcp = import ./fetch-mcp;
+  git-absorb = import ./git-absorb;
+  git-branchless = import ./git-branchless;
   git-intel-mcp = import ./git-intel-mcp;
   git-mcp = import ./git-mcp;
+  git-revise = import ./git-revise;
   github-mcp = import ./github-mcp;
   kagi-mcp = import ./kagi-mcp;
   kiro-cli = import ./kiro-cli;
