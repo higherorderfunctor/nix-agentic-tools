@@ -1,7 +1,10 @@
 # lib API
 
-All public functions exported by `inputs.nix-agentic-tools.lib`. Organized
-by source module.
+Public functions exported by `inputs.nix-agentic-tools.lib`, organized
+by source module. This page documents the **current** exported surface
+on this branch — additional functions exist in the `lib/` source files
+but are not yet exported via `flake.nix`. As later chunks land, the
+flake `lib` output expands and this page grows with it.
 
 ## lib/fragments.nix
 
@@ -29,7 +32,8 @@ compose :: { fragments, description?, paths?, priority? } -> Fragment
 ```
 
 Compose multiple fragments into one. Sorts by priority descending,
-deduplicates by SHA-256 hash of text, concatenates with newlines.
+then walks the sorted list and skips any fragment whose SHA-256
+text hash has already been seen, then concatenates with newlines.
 
 | Parameter     | Type                   | Default | Description                     |
 | ------------- | ---------------------- | ------- | ------------------------------- |
@@ -76,7 +80,17 @@ attrset. Used internally by ecosystem generators.
 
 ## lib/mcp.nix
 
-MCP server entry builders and credential helpers.
+MCP server entry builders. Exported via top-level `lib.<name>`
+(no `lib.mcp.*` sub-namespace).
+
+### loadServer
+
+```nix
+loadServer :: name -> serverDef
+```
+
+Load a server module definition by name. Internal helper consumed
+by `mkStdioEntry` for settings validation.
 
 ### mkPackageEntry
 
@@ -112,8 +126,9 @@ validation.
 mkHttpEntry :: { name, host?, port?, settings? } -> McpEntry
 ```
 
-HTTP mode entry. For external servers, returns `{ type = "http"; url = ...; }`.
-For local servers, builds URL from host/port.
+HTTP mode entry. For external servers, returns
+`{ type = "http"; url = ...; }`. For local servers, builds URL from
+host/port.
 
 ### mkStdioConfig
 
@@ -122,123 +137,26 @@ mkStdioConfig :: pkgs -> attrsOf serverConfig -> { mcpServers :: attrsOf McpEntr
 ```
 
 Convenience wrapper: build multiple stdio entries at once. Server
-packages are looked up from `pkgs.nix-mcp-servers`.
+packages are looked up from `pkgs.nix-mcp-servers` (the overlay
+landing in a later chunk).
 
-### mkSecretsWrapper
-
-```nix
-mkSecretsWrapper :: { pkgs, name, package, credentialVars, settings } -> storePath
-```
-
-Generate a shell wrapper that reads credentials at runtime and execs
-the server binary.
-
-### mkCredentialsOption
+### mkMcpConfig
 
 ```nix
-mkCredentialsOption :: envVar -> NixOS option
+mkMcpConfig :: attrsOf McpEntry -> { mcpServers :: attrsOf McpEntry }
 ```
 
-Create a `nullOr (attrTag { file; helper; })` option for a credential
-mapped to the given environment variable.
+Wrap a pre-built map of MCP entries in the canonical
+`{ mcpServers = ...; }` shape consumed by every CLI's MCP config.
 
-### evalSettings
+### mapTools
 
 ```nix
-evalSettings :: name -> settings -> evaluatedSettings
+mapTools :: (server -> tool -> result) -> attrsOf (listOf string) -> listOf result
 ```
 
-Evaluate settings through the NixOS module system using the server's
-`settingsOptions`.
-
-### hasCredentials
-
-```nix
-hasCredentials :: credentialVars -> settings -> bool
-```
-
-Check if any credentials are configured in the settings.
-
-### mkCredentialsSnippet
-
-```nix
-mkCredentialsSnippet :: credentialVars -> settings -> string
-```
-
-Generate shell commands to read and export credentials.
-
-## lib/ai-common.nix
-
-Shared content generation for AI CLI modules.
-
-### instructionModule
-
-NixOS module type for shared instructions with `text`, `description`,
-and `paths` fields. Used by `ai.instructions`.
-
-### lspServerModule
-
-NixOS module type for LSP server definitions with `package`, `binary`,
-`args`, `extensions`, and `initializationOptions`. Used by
-`ai.lspServers`.
-
-### mkLspConfig
-
-```nix
-mkLspConfig :: name -> server -> attrset
-```
-
-Transform a typed LSP server to JSON format (`command`, `args`,
-optional `initializationOptions`).
-
-### mkCopilotLspConfig
-
-```nix
-mkCopilotLspConfig :: name -> server -> attrset
-```
-
-Same as `mkLspConfig` but adds `fileExtensions` mapping for Copilot.
-
-### transformMcpServer
-
-```nix
-transformMcpServer :: server -> attrset
-```
-
-Transform a typed MCP server submodule value to ecosystem JSON.
-
-### filterNulls
-
-```nix
-filterNulls :: attrset -> attrset
-```
-
-Recursively remove null values and empty sub-attrsets.
-
-## lib/hm-helpers.nix
-
-Shared helpers for AI CLI home-manager modules.
-
-### mkContentOption / mkDirOption
-
-Option builders for instruction/skill/steering content.
-
-### mkSourceEntry / mkMarkdownEntries / mkSkillEntries
-
-File entry builders that handle both path and string content.
-
-### mkMcpServer
-
-Transform an MCP server config for ecosystem JSON output.
-
-### mkExclusiveAssertion
-
-Generate an assertion that `foo` and `fooDir` are not both set.
-
-### mkSettingsActivationScript
-
-Generate a shell snippet that merges Nix-declared settings into an
-existing mutable JSON config file using `jq`.
+Flatten an attrset-of-tool-lists into a single list, applying a
+function to each `(server, tool)` pair.
 
 ## lib/devshell.nix
 
@@ -250,3 +168,34 @@ mkAgenticShell :: pkgs -> userConfig -> derivation
 
 Standalone devshell (no home-manager or devenv required). Evaluates
 modules and produces a `mkShell` derivation.
+
+## externalServers
+
+Static registry of remote MCP server URLs that don't ship with their
+own package. Currently keyed by provider:
+
+```nix
+inputs.nix-agentic-tools.lib.externalServers.aws-mcp
+# => { type = "http"; url = "https://knowledge-mcp.global.api.aws"; }
+```
+
+## presets
+
+```nix
+inputs.nix-agentic-tools.lib.presets.nix-agentic-tools-dev
+```
+
+Composed `Fragment` containing all coding-standards content
+(`pkgs.coding-standards.passthru.fragments`) plus stacked-workflows
+content (`pkgs.stacked-workflows-content.passthru.fragments`). Used
+as a one-line "give me everything" instruction set for downstream
+projects.
+
+---
+
+Functions defined in `lib/mcp.nix`, `lib/ai-common.nix`, and
+`lib/hm-helpers.nix` that are NOT yet exported through the flake
+`lib` output (e.g., `mkSecretsWrapper`, `mkCredentialsOption`,
+`mkLspConfig`, `mkContentOption`, `mkSkillEntries`) become public
+as later chunks land their consumers and promote them to the
+flake export surface.

@@ -37,9 +37,13 @@ in {
 }
 ```
 
-For MCP server packages, apply the mcp-servers overlay:
+**Future:** MCP server packages will be exposed via a
+`packages/mcp-servers` overlay, but that path does not yet exist on
+this branch — do not copy this snippet until the MCP packaging
+chunk lands.
 
 ```nix
+# Future example only — not available on this branch yet.
 mcpPkgs = pkgs.extend (import "${inputs.nix-agentic-tools}/packages/mcp-servers" {
   inherit inputs;
 });

@@ -15,29 +15,42 @@ but the three-argument form is the convention here.
 ### Why three arguments
 
 The first argument is reserved for an **inputs blob** that some
-overlays need (e.g., the AI CLI overlay that consumes
-`inputs.rust-overlay` for Rust toolchain pinning, or the git-tools
-overlay that pulls version data from `inputs.nix-mcp-servers`). To
-keep all overlays uniformly callable from `flake.nix`, every overlay
-takes the same three-argument shape regardless of whether it actually
-uses the inputs:
+overlays may need (e.g., a future AI CLI overlay that consumes
+`inputs.rust-overlay` for Rust toolchain pinning, or a git-tools
+overlay that pulls version data from external inputs). To keep all
+overlays uniformly callable from `flake.nix`, every overlay takes the
+same three-argument shape regardless of whether it actually uses the
+inputs.
+
+On the **current branch**, the overlays under `packages/` don't use
+extra flake inputs — they're all called with an empty `{}` for the
+first argument. They still keep the same three-argument shape so all
+overlays remain uniformly callable from `flake.nix`'s
+`bind-once → reuse` composition pattern:
 
 ```nix
 # flake.nix
+codingStandardsOverlay = import ./packages/coding-standards {};
 fragmentsAiOverlay = import ./packages/fragments-ai {};
-gitToolsOverlay = import ./packages/git-tools { inherit inputs; };
+fragmentsDocsOverlay = import ./packages/fragments-docs {};
+stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
 
 overlays.default = lib.composeManyExtensions [
-  fragmentsAiOverlay   # both call sites pass {} or the inputs blob
-  gitToolsOverlay      # but the resulting overlay function is the
-];                     # same `final: prev: { ... }` shape
+  codingStandardsOverlay   # call sites bind once up front
+  fragmentsAiOverlay       # and every imported value exposes the
+  fragmentsDocsOverlay     # same `final: prev: { ... }` shape
+  stackedWorkflowsOverlay  # that composeManyExtensions expects
+];
 ```
 
-The first `_:` swallows the import-time argument so the resulting
-function is the standard `final: prev:` shape that
-`composeManyExtensions` expects. Without this, every overlay would
-need a different binding pattern at the call site, breaking the
-DRY `bind-once → reuse` pattern.
+Future overlays may consume `inputs` (e.g.,
+`import ./packages/git-tools { inherit inputs; }`), but that
+isn't required for the pattern. The first `_:` swallows the
+import-time argument so the resulting function is the standard
+`final: prev:` shape `composeManyExtensions` expects regardless.
+Without this, overlays that need inputs would have a different
+binding pattern at the call site than overlays that don't, breaking
+the DRY composition.
 
 ### Why `_prev`
 

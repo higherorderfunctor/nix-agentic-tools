@@ -271,7 +271,7 @@ _: final: _prev: let
 
     # DevEnv (inline per-CLI)
     claude.code.mcpServers.github-mcp =
-      inputs.nix-agentic-tools.lib.mcp.mkStdioEntry pkgs {
+      inputs.nix-agentic-tools.lib.mkStdioEntry pkgs {
         package = pkgs.nix-mcp-servers.github-mcp;
         settings.credentials.file = "/run/secrets/github-token";
       };

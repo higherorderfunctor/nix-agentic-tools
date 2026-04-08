@@ -338,4 +338,3 @@ Future top-level directories (introduced in later chunks):
 - `packages/git-tools/` — git tool overlays
 - `packages/mcp-servers/` — MCP server overlays
 - `packages/fragments-docs/` — docsite transforms and generators
-
