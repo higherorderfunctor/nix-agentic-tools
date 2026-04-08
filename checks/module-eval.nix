@@ -79,7 +79,15 @@ in {
 
   module-claude-buddy-submodule-default = mkTest "claude-buddy-submodule-default" (!(evalHm {}).config.ai.claude.buddy.enable);
 
-  module-claude-shared-mcp-fanout = mkTest "claude-shared-mcp-fanout" (
+  # NOTE: this test verifies that the shared ai.mcpServers pool ACCEPTS
+  # an entry when a package module (claude) is also loaded — i.e. no type
+  # conflicts between sharedOptions.nix's mcpServers declaration and the
+  # per-app one contributed by mkAiApp. It does NOT verify the claude
+  # module's internal mergedServers fanout computation. Fanout correctness
+  # is tested in checks/factory-eval.nix via factory-mkAiApp-fanout-*.
+  # A true end-to-end fanout test requires the rendering pipeline landed
+  # in a later milestone (writing mergedServers into home.file output).
+  module-claude-shared-mcp-pool-accepted = mkTest "claude-shared-mcp-pool-accepted" (
     let
       evaluated = evalHm {
         ai.claude.enable = true;

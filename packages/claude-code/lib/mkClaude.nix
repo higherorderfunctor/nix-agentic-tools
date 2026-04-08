@@ -40,10 +40,16 @@ lib.ai.app.mkAiApp {
       default = null;
       description = "Path to a file used as Claude's memory.";
     };
+    # NOTE: `settings` is declared here but NOT yet rendered to disk.
+    # Writing settings JSON to ~/.claude/settings.json (or similar) is
+    # deferred to the milestone that wires the transformers + outputPath
+    # rendering pipeline. Until then, values assigned to ai.claude.settings
+    # are accepted without error but silently ignored. Flagged in the
+    # Milestone 2 code review.
     settings = lib.mkOption {
       type = lib.types.attrsOf lib.types.anything;
       default = {};
-      description = "Freeform settings passed to Claude's config file.";
+      description = "Freeform settings passed to Claude's config file (rendering deferred to a later milestone).";
     };
   };
   config = {cfg, ...}:
