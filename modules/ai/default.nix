@@ -41,7 +41,7 @@
 
   aiCommon = import ../../lib/ai-common.nix {inherit lib;};
   aiOptions = import ../../lib/ai-options.nix {inherit lib;};
-  inherit (aiCommon) mkCopilotLspConfig mkLspConfig;
+  inherit (aiCommon) mkLspConfig;
   aiTransforms = pkgs.fragments-ai.passthru.transforms;
 
   cfg = config.ai;
@@ -66,6 +66,7 @@ in {
     # same single source of truth that packages/fragments-ai/default.nix
     # re-exports via passthru.records.claude.
     (mkAiEcosystemHmModule (import ../../lib/ai-ecosystems/claude.nix {inherit lib;}))
+    (mkAiEcosystemHmModule (import ../../lib/ai-ecosystems/copilot.nix {inherit lib;}))
   ];
 
   options.ai = {
@@ -74,21 +75,10 @@ in {
     # lib/mk-ai-ecosystem-hm-module.nix and
     # pkgs.fragments-ai.passthru.records.claude.
 
-    copilot = mkOption {
-      type = types.submodule {
-        options = {
-          enable = mkEnableOption "Fan out shared config to Copilot CLI";
-          package = mkOption {
-            type = types.package;
-            default = pkgs.github-copilot-cli;
-            defaultText = lib.literalExpression "pkgs.github-copilot-cli";
-            description = "Copilot CLI package.";
-          };
-        };
-      };
-      default = {};
-      description = "Copilot CLI ecosystem configuration.";
-    };
+    # ai.copilot options are now declared by the adapter-generated
+    # module in the imports list. See
+    # lib/mk-ai-ecosystem-hm-module.nix and
+    # lib/ai-ecosystems/copilot.nix.
 
     kiro = mkOption {
       type = types.submodule {
@@ -154,24 +144,9 @@ in {
     # pkgs.fragments-ai.passthru.records.claude for the per-ecosystem
     # policy (markdownTransformer, translators, layout, upstream).
 
-    # Copilot CLI — ai.copilot.enable also flips programs.copilot-cli.enable.
-    (mkIf cfg.copilot.enable {
-      programs.copilot-cli = {
-        enable = mkDefault true;
-        environmentVariables =
-          lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
-        instructions = lib.mapAttrs (_name: instr:
-          mkDefault (aiTransforms.copilot instr))
-        cfg.instructions;
-        lspServers = lib.mapAttrs (name: server:
-          mkDefault (mkCopilotLspConfig name server))
-        cfg.lspServers;
-        settings = lib.optionalAttrs (cfg.settings.model != null) {
-          model = mkDefault cfg.settings.model;
-        };
-        skills = lib.mapAttrs (_: mkDefault) cfg.skills;
-      };
-    })
+    # Copilot fanout is now handled by the adapter-generated module
+    # imported via lib/mk-ai-ecosystem-hm-module.nix. See
+    # lib/ai-ecosystems/copilot.nix for the per-ecosystem policy.
 
     # Kiro CLI — ai.kiro.enable also flips programs.kiro-cli.enable.
     (mkIf cfg.kiro.enable {
