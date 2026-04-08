@@ -101,7 +101,13 @@ in {
       evaluated.config.ai.mcpServers ? testServer
   );
 
-  module-context7-fanout-into-claude = mkTest "context7-fanout-into-claude" (
+  # Matches the module-claude-shared-mcp-pool-accepted naming precedent:
+  # this test verifies the shared ai.mcpServers pool ACCEPTS a context7
+  # entry alongside a loaded claude module without type conflicts. It
+  # does NOT verify the claude module's internal mergedServers fanout
+  # computation — that's covered in checks/factory-eval.nix via the
+  # factory-mkAiApp-fanout-* tests.
+  module-context7-shared-mcp-pool-accepted = mkTest "context7-shared-mcp-pool-accepted" (
     let
       evaluated = evalHm {
         ai.claude.enable = true;
@@ -113,7 +119,6 @@ in {
       };
     in
       evaluated.config.ai.mcpServers ? ctx
-      && evaluated.config.ai.claude.enable
   );
 
   module-context7-factory-call = mkTest "context7-factory-call" (
