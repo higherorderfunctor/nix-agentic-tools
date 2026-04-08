@@ -199,6 +199,29 @@ in {
       && builtins.elem "--from-consumer" instance.args
   );
 
+  # ── loadServer per-package relocation tests (A5) ────────────────
+  factory-loadServer-github-mcp-from-package-dir = mkTest "loadServer-github-mcp-from-package-dir" (
+    let
+      mcpLib = import ../lib/mcp.nix {inherit lib;};
+      serverDef = mcpLib.loadServer "github-mcp";
+    in
+      serverDef ? settingsOptions
+      && serverDef.settingsOptions ? credentials
+  );
+
+  factory-loadServer-kagi-mcp-from-package-dir = mkTest "loadServer-kagi-mcp-from-package-dir" (
+    let
+      mcpLib = import ../lib/mcp.nix {inherit lib;};
+      serverDef = mcpLib.loadServer "kagi-mcp";
+    in
+      serverDef ? settingsOptions
+      && serverDef.settingsOptions ? credentials
+  );
+
+  factory-github-mcp-has-package-module = mkTest "github-mcp-has-package-module" (
+    builtins.pathExists ../packages/github-mcp/modules/mcp-server.nix
+  );
+
   # ── sharedOptions tests ─────────────────────────────────────────
   factory-sharedOptions-empty-defaults = mkTest "sharedOptions-empty-defaults" (
     let

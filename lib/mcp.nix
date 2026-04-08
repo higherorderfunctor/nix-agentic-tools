@@ -15,7 +15,11 @@
   # Loads on demand — no centralized server list needed in lib.
   # The server list lives in modules/home-manager.nix (for HM) or is
   # implicit from the caller's attrset keys (for standalone mkStdioConfig).
-  loadServer = name: import ../modules/mcp-servers/servers/${name}.nix {inherit lib mcpLib;};
+  #
+  # Resolve the per-package typed MCP server module. Each MCP package
+  # under packages/<name>/ owns its typed settings schema at
+  # packages/<name>/modules/mcp-server.nix.
+  loadServer = name: import ../packages/${name}/modules/mcp-server.nix {inherit lib mcpLib;};
   mcpLib = {inherit mkCredentialsOption;};
 
   isExternal = serverDef: serverDef.meta ? external && serverDef.meta.external;
