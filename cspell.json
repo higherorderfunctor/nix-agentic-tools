@@ -23,7 +23,7 @@
   "overrides": [
     {
       "dictionaries": ["python", "node", "npm", "rust"],
-      "filename": "**/*.nix"
+      "filename": ["**/*.nix", "**/*.md", "nvfetcher.toml"]
     }
   ],
   "version": "0.2"
