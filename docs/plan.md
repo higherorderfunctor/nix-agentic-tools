@@ -133,6 +133,54 @@ The blocking chain, with named dependencies:
 
 ---
 
+## Factory rollout status (2026-04-08)
+
+**Milestones 1–10 landed.** All 24 binary packages live under
+`pkgs.ai.*`. The factory primitives (`lib.ai.app.mkAiApp`,
+`lib.ai.mcpServer.mkMcpServer`, `lib.ai.sharedOptions`,
+`lib.ai.transformers.*`) are green with 17 golden tests. The
+HM + devenv module barrels are wired (`homeManagerModules.nix-agentic-tools`
+
+- `devenvModules.nix-agentic-tools`) with 8 module-eval tests.
+
+Full rollout commit log on `refactor/ai-factory-architecture`:
+
+- `13fe3a3` M1 lib scaffolding + `769c6cf` M1 review fixes
+- `b9620d7` M2 claude-code port + `71895b4` M2 cleanup
+- `c3b171d` M3 context7-mcp + `c153280` M3 naming fix
+- `64791af` M4 copilot/kiro/gateway/any-buddy
+- `5ec4587` M5 13 MCP servers + `68dc0f7` M5 cleanup
+- `dae9cdf` M6 git tools + agnix
+- `87d1ce8` M7 flake packages splat
+- (M8 absorbed into M4/M5/M6 — no separate commit)
+- `fba89e9` M9 dissolve fragments-ai
+- `be0185e` M10 move fragments-docs → devshell
+
+**Milestones 11–12 deferred as backlog.** They are purely
+organizational cleanup with no functional impact on the factory:
+
+- **M11: Reorganize dev fragments per-package** — moves
+  `dev/fragments/<category>/*.md` into either
+  `packages/<name>/docs/` or `devshell/monorepo/docs/`, updates
+  `mkDevFragment`'s path discriminator. All 12 current dev
+  fragments are repo-level (flake, monorepo, nix-standards,
+  overlays, packaging, pipeline), not package-specific, so
+  `devshell/monorepo/docs/` is the target. No functional
+  benefit over the current `dev/fragments/` layout; doc
+  generation works fine as-is.
+- **M12: Restructure devshell/ Bazel-style** — devshell is
+  already mostly Bazel-style after M10 landed `docs-site/`
+  alongside existing `instructions/`, `mcp-servers/`, `skills/`
+  subdirs. The two remaining flat files (`files.nix`,
+  `top-level.nix`) are single-file and don't need wrapping per
+  the plan's own "only split when grown beyond one file"
+  guideline.
+
+Both milestones remain available as separate PRs if reorganization
+becomes necessary later. Moving them to the parallel backlog.
+
+---
+
 ## Now: target architecture spec
 
 ### Open questions
@@ -142,27 +190,33 @@ needs a written answer before the implementation plan gets
 drafted. Extended context in
 `memory/project_factory_architecture_pivot.md`.
 
-- [ ] **Q1: Factory return shape** — does `mkCli` return a
+\*\*STATUS (2026-04-08): ANSWERED in
+`docs/superpowers/specs/2026-04-08-ai-factory-architecture-design.md`
+
+- IMPLEMENTED in Milestones 1-10. This section is kept for
+  historical reference of the design process.\*\*
+
+* [ ] **Q1: Factory return shape** — does `mkCli` return a
       plain derivation with `passthru.ai = { … }`, a NixOS
       module fragment, or a pair `{ package, module }`?
       Related: where does `passthru.fragments` live, and does
       the HM adapter consume `passthru.ai` directly or go
       through a registry attrset?
-- [ ] **Q2: HM/devenv handler split** — single backend-agnostic
+* [ ] **Q2: HM/devenv handler split** — single backend-agnostic
       handler (package declares `extraOptions.<name>.onSet`
       once, both HM and devenv call it) vs separate
       `extraOptions.<name>.hmOnSet` / `.devenvOnSet`? Picks the
       complexity/flexibility trade-off.
-- [ ] **Q3: Package discovery convention** — `packages/ai/`
+* [ ] **Q3: Package discovery convention** — `packages/ai/`
       auto-walked by `lib.ai.discoverPackages` vs explicit
       registry in `packages/ai/default.nix`? Affects how
       closely we can approach "add a directory, done".
-- [ ] **Q4: `mkCli` × `mkMcpServer` composition** — how does a
+* [ ] **Q4: `mkCli` × `mkMcpServer` composition** — how does a
       CLI factory declare its default MCP server set, and how
       do named+duplicated server instances compose with
       per-CLI fanout? (E.g. "github-mcp instance A bound to
       ai.claude + ai.copilot, instance B bound to ai.codex".)
-- [ ] **Q5: Big-bang vs sequenced rollout** — one squash PR
+* [ ] **Q5: Big-bang vs sequenced rollout** — one squash PR
       that rewrites `packages/`, `lib/`, `modules/`, overlays,
       and flake outputs in one shot, vs a staged sequence
       (factory lib → one package ported as proof → drop
@@ -170,7 +224,7 @@ drafted. Extended context in
       Single-consumer + unstable-interface pushes toward
       big-bang, but staged keeps `nix flake check` green
       between increments.
-- [ ] **Q6: Buddy as extra contract** — confirm buddy becomes
+* [ ] **Q6: Buddy as extra contract** — confirm buddy becomes
       `packages/ai/claude-code/extras/buddy.nix` registered
       via `extraOptions.buddy = { type = submodule …;
 default = { }; description = "…"; onSet =
@@ -178,11 +232,11 @@ default = { }; description = "…"; onSet =
       resolving whether extras can introduce activation
       scripts (buddy needs one) and if that changes the
       `onSet` return shape.
-- [ ] **Q7: Named MCP server duplication story** — naming
+* [ ] **Q7: Named MCP server duplication story** — naming
       rules (must be unique per-CLI? globally?), how the lib
       keys the set, and whether the `pkgs.ai.mcpServer.<name>`
       overlay exposes a _factory_ or an _instance_.
-- [ ] **Q8: Typed extras handler signature** — `onSet =
+* [ ] **Q8: Typed extras handler signature** — `onSet =
 { value, cfg, pkgs, lib }: …` returning a module-config
       attrset vs returning a free-form `{ hmConfig,
 devenvConfig, packages }` trio. Ties to Q2.
