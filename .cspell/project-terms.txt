@@ -55,6 +55,7 @@ pkgs
 pname
 PYTHONNOUSERSITE
 PYTHONPATH
+pypi
 reauthor
 reflog
 reftable
