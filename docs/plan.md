@@ -135,13 +135,19 @@ The blocking chain, with named dependencies:
 
 ## Factory rollout status (2026-04-08)
 
-**Milestones 1–10 landed.** All 24 binary packages live under
-`pkgs.ai.*`. The factory primitives (`lib.ai.app.mkAiApp`,
-`lib.ai.mcpServer.mkMcpServer`, `lib.ai.sharedOptions`,
-`lib.ai.transformers.*`) are green with 17 golden tests. The
-HM + devenv module barrels are wired (`homeManagerModules.nix-agentic-tools`
+**Milestones 1–16 landed.** The branch is content-complete and
+converged: factory architecture + sentinel chunks 8–17 + Phase 2a
+transformer design + doc site build pipeline + M13-era consumer
+fixes are all present in one tree. Ready for re-chunking into
+PR-sized batches for the main merge.
 
-- `devenvModules.nix-agentic-tools`) with 8 module-eval tests.
+All 24 binary packages live under `pkgs.ai.*`. The factory
+primitives (`lib.ai.app.mkAiApp`, `lib.ai.apps.mk*`,
+`lib.ai.mcpServer.mkMcpServer`, `lib.ai.sharedOptions`,
+`lib.ai.transformers.*`) are green with golden tests, and the
+HM + devenv module barrels (`homeManagerModules.nix-agentic-tools`,
+`devenvModules.nix-agentic-tools`) are wired with module-eval
+tests. `nix flake check` and `nix build .#docs` both green.
 
 Full rollout commit log on `refactor/ai-factory-architecture`:
 
@@ -155,29 +161,177 @@ Full rollout commit log on `refactor/ai-factory-architecture`:
 - (M8 absorbed into M4/M5/M6 — no separate commit)
 - `fba89e9` M9 dissolve fragments-ai
 - `be0185e` M10 move fragments-docs → devshell
+- `0fa3ca6` mkAiApp baseline instruction render pipeline
+  (wires `defaults.outputPath` + `transformers.markdown` → `home.file`)
+- `2b7653c` M13 import chunks 8–17 content from sentinel
+  (modules/ tree, dev/docs/, dev/skills/, CONTRIBUTING, workflows)
+- `0788125` + `18100e8` M14 restore lib helpers + devenv integration
+  (lib/ai-common.nix, lib/buddy-types.nix, lib/hm-helpers.nix
+  restored so modules/ tree evaluates; devenv.nix rewired to
+  composed overlay)
+- `3452c66` M15 wire doc site build pipeline (lib/options-doc.nix
+  ported and adapted for factory modules, mdbook + NuschtOS +
+  pagefind derivations restored to flake.nix, nuscht-search input
+  added)
 
-**Milestones 11–12 deferred as backlog.** They are purely
-organizational cleanup with no functional impact on the factory:
+**Milestones 11–12 effectively done by M13.** They were organizational
+cleanup (dev fragment reorg + Bazel-style devshell) and the M13
+convergence import landed both targets as a side effect:
 
-- **M11: Reorganize dev fragments per-package** — moves
-  `dev/fragments/<category>/*.md` into either
-  `packages/<name>/docs/` or `devshell/monorepo/docs/`, updates
-  `mkDevFragment`'s path discriminator. All 12 current dev
-  fragments are repo-level (flake, monorepo, nix-standards,
-  overlays, packaging, pipeline), not package-specific, so
-  `devshell/monorepo/docs/` is the target. No functional
-  benefit over the current `dev/fragments/` layout; doc
-  generation works fine as-is.
-- **M12: Restructure devshell/ Bazel-style** — devshell is
-  already mostly Bazel-style after M10 landed `docs-site/`
-  alongside existing `instructions/`, `mcp-servers/`, `skills/`
-  subdirs. The two remaining flat files (`files.nix`,
-  `top-level.nix`) are single-file and don't need wrapping per
-  the plan's own "only split when grown beyond one file"
-  guideline.
+- Per-package docs: `packages/claude-code/docs/buddy-activation.md`
+  and `packages/claude-code/docs/claude-code-wrapper.md` are the
+  first per-package doc fragments.
+- `devshell/` is Bazel-style — `docs-site/`, `instructions/`,
+  `mcp-servers/`, `skills/` subdirectories plus `files.nix` +
+  `top-level.nix` flat files (single-file, don't need wrapping).
+- `dev/fragments/` keeps its 12 topic categories as repo-level
+  content (flake, monorepo, nix-standards, overlays, packaging,
+  pipeline, ai-clis, ai-skills, devenv, hm-modules, mcp-servers,
+  stacked-workflows). These are all cross-cutting topics, not
+  package-owned, so moving them under `packages/<name>/docs/`
+  would be wrong. They belong here.
 
-Both milestones remain available as separate PRs if reorganization
-becomes necessary later. Moving them to the parallel backlog.
+Any remaining fragment relocations are tracked as individual
+items in the "Future absorption backlog" below rather than as
+M11/M12 umbrellas.
+
+### Convergence gap analysis (2026-04-08)
+
+The pre-convergence state of `refactor/ai-factory-architecture`
+was missing ~1800 lines of sentinel content. Root cause: the
+branch forked from `main` (chunks 1–7 only) and cherry-picked
+only factory primitives from `phase-2a-refactor`, stranding
+chunks 8–17 content (modules/, dev/docs/, dev/skills/,
+workflows, CONTRIBUTING.md, plus the Phase 2a transformer
+design updates) on sentinel. nixos-config's pin was pointing at
+`sentinel/monorepo-plan` at the time of the fork, so the
+divergence showed up as disappeared features from the consumer's
+perspective. M13-M15 closed the gap via `git checkout
+origin/sentinel/monorepo-plan -- <paths>` rather than a full git
+merge (which would have been 153+ conflicts across the factory
+restructure).
+
+**Content that survived the gap analysis and is now in-tree:**
+
+- `modules/ai/default.nix` (286 lines) — legacy HM module with
+  per-CLI gating and fanout; kept as reference, not consumed by
+  flake outputs.
+- `modules/claude-code-buddy/default.nix` (208 lines) — buddy
+  activation HM module with fingerprint caching, Bun wrapper
+  integration, sops-nix UUID file handling; still consumed by
+  `modules/ai/default.nix` and transitively by `devenv.nix`
+  via `modules/devenv/`.
+- `modules/copilot-cli/default.nix` (222 lines), `modules/kiro-cli/default.nix`
+  (272 lines) — legacy standalone HM modules for the per-CLI
+  surfaces. These were slated for deletion under Q5 of the spec
+  but are kept in-tree during the convergence window so nixos-config
+  can still pin against them until the factory migration.
+- `modules/mcp-servers/servers/*.nix` (12 files, 1145 lines
+  including `openmemory-mcp.nix` at 655 lines and
+  `github-mcp.nix` at 181 lines) — legacy per-server typed option
+  schemas. The factory's `mkMcpServer` uses simpler
+  `commonSchema`; absorbing the typed-options work into each
+  `packages/<mcp>/lib/mk<Name>.nix` is pending.
+- `modules/stacked-workflows/default.nix` (205 lines) — legacy HM
+  module for stacked-workflows skill/git-config fanout.
+- `modules/devenv/{ai,copilot,kiro}.nix` + `claude-code-skills/` —
+  legacy devenv modules still consumed by `devenv.nix` via
+  `imports = [ ./modules/devenv ]`. Pre-factory integration;
+  works in parallel with the factory devenv module barrel.
+- `dev/skills/` (index-repo-docs + repo-review) — consumer dev
+  skills referenced by `devenv.nix`'s `ai.skills` config.
+- `dev/notes/ai-transformer-design.md` — the Phase 2a transformer
+  design research notes. The design survives in
+  `lib/ai/transformers/*.nix` (per-ecosystem render functions)
+  and the `mkAiApp` render wiring.
+- Doc site infrastructure — mdbook + NuschtOS search +
+  `lib/options-doc.nix` adapted for factory modules.
+
+The modules/ tree is **imported but not absorbed into factories**.
+Absorption is tracked as the "Future absorption backlog" section
+below. Until absorption lands, the factory's `mkAiApp` /
+`mkMcpServer` and the legacy `modules/` tree coexist: factories
+drive new code paths, `modules/` drives the pre-factory consumer
+paths via `devenv.nix`. Cache-hit parity is preserved because
+both sides use the same `ourPkgs` overlay composition.
+
+### Future absorption backlog
+
+These items finish the factory architecture pivot. Each one
+absorbs legacy `modules/` content into the per-package factory
+directories, then deletes the corresponding legacy tree. Order
+doesn't matter — each is independent — but the `modules/` tree
+cannot be deleted until all sub-items land.
+
+- [ ] **Absorb `modules/claude-code-buddy/` into
+      `packages/claude-code/lib/mkClaude.nix`** — port the 208-line
+      buddy HM module (fingerprint caching, Bun wrapper
+      integration, sops-nix UUID file handling, activation
+      script) into the claude-code factory as a typed extra.
+      Extras contract: `extraOptions.buddy = { type = submodule
+      …; onSet = { value, cfg, pkgs, lib }: { home.activation.…
+= …; }; };`. Resolves Q6 from the spec. Blocked on
+      confirming `onSet` can introduce activation scripts.
+- [ ] **Absorb `modules/copilot-cli/` + `modules/kiro-cli/`
+      into factory-of-factories** — 222 + 272 lines of HM
+      module surface ported to `packages/copilot-cli/lib/mkCopilot.nix`
+      and `packages/kiro-cli/lib/mkKiro.nix`. Resolves the
+      "Drop `programs.{copilot-cli,kiro-cli}` HM modules
+      entirely" directive from the pivot. Coordinate with the
+      nixos-config Kiro/Copilot migration below.
+- [ ] **Absorb `modules/mcp-servers/servers/*.nix` typed options
+      into each `packages/<mcp>/lib/mk<Name>.nix`** — 12 servers,
+      ~1145 lines total, with `openmemory-mcp.nix` at 655 lines
+      and `github-mcp.nix` at 181 lines being the largest.
+      Each server's typed option schema moves under its
+      per-package factory call. The factory's simpler
+      `commonSchema` stays as the default fallback; typed
+      options become per-server customizations.
+- [ ] **Absorb `modules/devenv/*` into per-package factory
+      devenv modules** — `ai.nix`, `copilot.nix`, `kiro.nix`,
+      `mcp-common.nix`, `claude-code-skills/` move under
+      `packages/<name>/modules/devenv/`. The factory's devenv
+      module barrel then walks packages instead of importing
+      a central `modules/devenv/default.nix`.
+- [ ] **Absorb `modules/stacked-workflows/` into
+      `packages/stacked-workflows-content/`** — 205-line HM
+      module for stacked-workflows skill/git-config fanout
+      moves under the content package. The content package
+      becomes a full factory participant.
+- [ ] **Delete `modules/` tree entirely once all absorptions
+      land** — with all content ported, `modules/` can be
+      removed. `devenv.nix` stops importing `./modules/devenv`
+      and switches to `devenvModules.nix-agentic-tools` from
+      the factory. `lib/{ai-common,buddy-types,hm-helpers}.nix`
+      can also be removed (they were only restored to keep
+      `modules/` evaluating).
+
+Additional factory-architecture work that isn't tied to the
+modules/ tree:
+
+- [ ] **`mkAiApp` HM vs devenv backend dispatch** — the current
+      render wiring writes to `home.file` regardless of backend.
+      In a real devenv context this is a type error absorbed by
+      stubs in `lib/options-doc.nix:devenvStubModule`. The
+      factory should dispatch: `home.file.<outputPath>` for HM
+      backends, `files.<outputPath>` for devenv backends. The
+      factory captures the render output via
+      `_module.args.aiTransformers` so the dispatch can happen
+      after the fact. Marked DEFERRED in `lib/ai/app/mkAiApp.nix`.
+- [ ] **`github-mcp` + `kagi-mcp` auth option schemas** —
+      TODO comments in `packages/github-mcp/lib/mkGithubMcp.nix`
+      and `packages/kagi-mcp/lib/mkKagiMcp.nix`. Needs concrete
+      option schemas + credential handling (sops-nix pass-through).
+- [ ] **Backend-specific render outputs for
+      `ai.instructions`** — today the baseline wires every
+      ecosystem's rendered instructions into one home.file
+      path per app. Per-ecosystem fanout (e.g.,
+      `.claude/CLAUDE.md`, `.github/copilot-instructions.md`,
+      `.kiro/steering/*.md`, `AGENTS.md`) still lives in
+      `modules/ai/default.nix` and should be ported into
+      `mkAiApp` once the backend dispatch above lands. The
+      `lib/ai/transformers/{claude,copilot,kiro,agentsmd}.nix`
+      per-ecosystem transformers are ready and waiting.
 
 ---
 
@@ -301,25 +455,35 @@ module-eval.nix`, 22 tests) translated to the new
 ### Sentinel → main catchup leftovers
 
 Chunks 1–7 landed on main in PRs #3–#11 (see "Done" section
-below). Chunks 8–17 were paused pre-pivot. Under the pivot,
-most of those chunks get absorbed into the factory port; the
-items below are the ones that don't map cleanly and still
-need their own work. They belong to the factory implementation
-sequence rather than the parallel track because they touch
-the same files.
+below). Chunks 8–17 were paused pre-pivot and imported into
+this branch via M13 (`2b7653c`) on 2026-04-08. They are now
+in-tree as the legacy `modules/` reference content, pending
+absorption into the factory (see "Future absorption backlog"
+above).
 
 - [ ] **Kiro openmemory still raw npx** — not yet using
       `mkStdioEntry`. Fix as part of the MCP-server factory
       port.
-- [ ] **Remaining merge-plan chunks (8–17)** — HM modules
-      wave, devenv modules, devshell, dev/update, fragments,
-      docsite, checks. Under the pivot these become line
-      items within the factory-port steps above; most of
-      chunk 8 (HM modules) disappears when
-      `programs.{copilot,kiro}` get dropped. Re-evaluate
-      after the spec answers Q5 (big-bang vs sequenced).
-      Backup of the original merge plan is in
+- [x] **Import chunks 8–17 content into the refactor branch**
+      — LANDED in M13 (`2b7653c`) via targeted
+      `git checkout origin/sentinel/monorepo-plan -- <paths>`.
+      HM modules wave, devenv modules, devshell subdirectories,
+      dev/update, fragments, docsite infrastructure, and
+      checks are all present in the branch. Absorption into
+      factory-of-factories is tracked in the "Future
+      absorption backlog" section above. Backup of the
+      original merge plan is in
       `archive/sentinel-pre-takeover:docs/superpowers/plans/2026-04-08-sentinel-to-main-merge.md`.
+- [ ] **Re-chunk the converged branch into PR-sized batches
+      for main merge** — the branch has ~20 commits across
+      16 milestones plus review cleanups and the convergence
+      import. Milestone commit messages reference their
+      number for grouping. Target PR chunks should line up
+      with the factory rollout boundaries (M1 primitives,
+      M2-M6 per-ecosystem ports, M7 flake splat, M9-M10
+      dissolves, M13 convergence, M14-M15 doc site restore).
+      User will drive re-chunking; this plan tracks the
+      content-complete state, not the chunk breakdown.
 
 ---
 
@@ -1033,10 +1197,41 @@ session memories.
 
 ## Next action
 
-Answer Q1–Q8 in the "Now: target architecture spec" section
-above (write the design doc under
-`docs/superpowers/specs/`), then draft the implementation
-plan for Steps 1–7 of the factory rollout under
-`docs/superpowers/plans/`. The spec work is blocked on user
-input; the implementation plan is blocked on the spec. Both
-directories are cspell-excluded and never merge to main.
+**Factory rollout M1–M16 landed** (see "Factory rollout
+status" above). Branch `refactor/ai-factory-architecture` is
+content-complete: factory primitives + all 24 binary packages
+under `pkgs.ai.*` + chunks 8–17 imported from sentinel +
+transformers wired + doc site build restored + `nix flake
+check` and `nix build .#docs` green. Branch has been pushed
+to origin along with `archive/phase-2a-refactor` and
+`archive/sentinel-pre-takeover` backups.
+
+Two parallel next steps:
+
+1. **Re-chunk for main merge.** User will drive the
+   re-chunking into PR-sized batches next week. Milestone
+   commit messages (`M1..M16`) provide grouping anchors.
+   Chunks 1–7 already landed on main in PRs #3–#11; chunks
+   8–17 are now in this branch ready to be re-chunked under
+   the factory layout. The merge strategy: stack from main
+   with lazy PR extraction + copilot review loops (see
+   `project_merge_to_main_strategy.md`).
+2. **Start the modules/ tree absorption backlog** (see
+   "Future absorption backlog" above). Each sub-item is
+   independent and can proceed in parallel with re-chunking.
+   The modules/ tree cannot be deleted until all 6
+   absorptions land, but individual absorptions unblock
+   deletion incrementally. Start with
+   `modules/claude-code-buddy/` since it has the clearest
+   factory target (`packages/claude-code/lib/mkClaude.nix`)
+   and resolves spec question Q6 about extras + activation
+   scripts.
+
+The original "Answer Q1–Q8" next action is kept as historical
+context in the "Now: target architecture spec" section above;
+Q1–Q8 are all answered in
+`docs/superpowers/specs/2026-04-08-ai-factory-architecture-design.md`
+and implemented across M1–M16.
+
+Both `docs/superpowers/specs/` and `docs/superpowers/plans/`
+remain cspell-excluded and never merge to main.
