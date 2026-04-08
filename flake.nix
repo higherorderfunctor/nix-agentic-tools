@@ -34,7 +34,29 @@
     # Scaffolding placeholders — subsequent PRs populate these.
     devenvModules = {};
     homeManagerModules = {};
-    lib = {};
+
+    lib = let
+      fragments = import ./lib/fragments.nix {inherit lib;};
+      devshellLib = import ./lib/devshell.nix {inherit lib;};
+      mcpLib = import ./lib/mcp.nix {inherit lib;};
+    in {
+      inherit fragments;
+      inherit (devshellLib) mkAgenticShell;
+      inherit (fragments) compose mkFragment mkFrontmatter render;
+      inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig;
+      mkMcpConfig = entries: {mcpServers = entries;};
+      mapTools = f: lib.concatLists (lib.mapAttrsToList (server: tools: map (tool: f server tool) tools));
+      externalServers = {
+        aws-mcp = {
+          type = "http";
+          url = "https://knowledge-mcp.global.api.aws";
+        };
+      };
+      # `presets` defers to Chunk 4 (depends on coding-standards +
+      # stacked-workflows content packages).
+      # `gitConfig` / `gitConfigFull` defer to Chunk 8 (depends on
+      # modules/stacked-workflows/git-config*.nix).
+    };
 
     checks = forAllSystems (_: {});
     packages = forAllSystems (_: {});
