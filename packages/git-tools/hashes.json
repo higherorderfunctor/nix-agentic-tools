@@ -1,0 +1,8 @@
+{
+  "git-absorb": {
+    "cargoHash": "sha256-8uCXk5bXn/x4QXbGOROGlWYMSqIv+/7dBGZKbYkLfF4="
+  },
+  "git-branchless": {
+    "cargoHash": "sha256-i7KpTd4fX3PrhDjj3R9u98rdI0uHkpQCxSmEF+Gu7yk="
+  }
+}

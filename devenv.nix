@@ -22,7 +22,14 @@
   # treefmt hook is auto-wired by treefmt.enable above
   git-hooks.hooks = {
     # Nix linting
-    deadnix.enable = true;
+    deadnix = {
+      enable = true;
+      # nvfetcher generates `.nvfetcher/generated.nix` with a fixed
+      # arg list (`fetchgit`/`fetchurl`/`fetchFromGitHub`/`dockerTools`)
+      # regardless of which of those a given source actually uses.
+      # The unused-args are part of nvfetcher's output contract.
+      excludes = [".*\\.nvfetcher/generated\\.nix$"];
+    };
     statix.enable = true;
 
     # Spelling
