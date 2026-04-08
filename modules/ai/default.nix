@@ -1,14 +1,30 @@
 # Unified AI configuration module.
 #
 # Single source of truth for shared config across Claude Code, Copilot CLI,
-# and Kiro CLI. Fans out to individual CLI modules via mkDefault so
-# per-CLI config always wins.
+# and Kiro CLI. Per-ecosystem fanout is driven by ecosystem records
+# (lib/ai-ecosystems/<name>.nix) and the HM adapter
+# (lib/mk-ai-ecosystem-hm-module.nix). This file contains only:
+#   - Shared option declarations (ai.skills, ai.instructions,
+#     ai.lspServers, ai.environmentVariables, ai.settings)
+#   - Cross-ecosystem assertions (shared-config-requires-enabled-CLI,
+#     claude buddy validations)
+#   - The imports list that pulls in the per-ecosystem upstream HM
+#     modules (programs.claude-code via claude-code-buddy,
+#     programs.copilot-cli, programs.kiro-cli) AND the
+#     adapter-generated modules (one per ecosystem record).
 #
-# Each ai.{claude,copilot,kiro}.enable is the SOLE gate for that CLI's
-# fanout — it also implicitly enables the corresponding upstream module
-# (programs.claude-code.enable, programs.copilot-cli.enable, etc.), so
-# consumers don't need to set enable twice. There is no master ai.enable
-# switch; enabling at least one ecosystem sub-option is the activation.
+# Each ai.{claude,copilot,kiro}.enable is the sole gate for that
+# ecosystem's fanout — it also implicitly enables the corresponding
+# upstream module via the adapter's mkDefault on
+# programs.<cli>.enable. There is no master ai.enable switch;
+# enabling at least one ecosystem sub-option is the activation.
+#
+# Adding a new ecosystem to ai.* is now:
+#   1. Create lib/ai-ecosystems/<name>.nix with a complete record
+#      (markdownTransformer, translators, layout, upstream, extraOptions)
+#   2. Add (mkAiEcosystemHmModule (import ../../lib/ai-ecosystems/<name>.nix
+#      {inherit lib;})) to this file's imports list
+# No per-ecosystem fanout code changes to this file needed.
 #
 # Usage:
 #   ai = {
@@ -35,58 +51,43 @@
 
   mkAiEcosystemHmModule = import ../../lib/mk-ai-ecosystem-hm-module.nix {inherit lib;};
 in {
-  # Pull in the HM modules this one references inside its mkIf
-  # blocks. Without these imports, consumers importing only
-  # `homeManagerModules.ai` get eval errors like
-  # "programs.copilot-cli.enable is not a declared option"
-  # because NixOS modules need option paths declared even when
-  # the mkIf guard is false.
+  # The first three imports pull in the upstream HM modules whose
+  # option paths the adapter-generated modules below reference
+  # (programs.claude-code.*, programs.copilot-cli.*,
+  # programs.kiro-cli.*). The remaining three are the per-ecosystem
+  # adapter-generated modules.
+  #
+  # Each ecosystem record is imported DIRECTLY from
+  # lib/ai-ecosystems/<name>.nix rather than via
+  # pkgs.fragments-ai.passthru.records.<name>: the module system
+  # evaluates `imports` before `_module.args.pkgs` is available, so
+  # reading `pkgs` here triggers infinite recursion through
+  # `_module.freeformType`. The lib/ai-ecosystems/ files are the
+  # single source of truth that packages/fragments-ai/default.nix
+  # also re-exports via passthru.records.
   imports = [
     ../claude-code-buddy
     ../copilot-cli
     ../kiro-cli
-    # Record is imported directly from lib/ai-ecosystems/claude.nix
-    # rather than via pkgs.fragments-ai.passthru.records.claude: the
-    # module system evaluates `imports` before `_module.args.pkgs` is
-    # available, so reading `pkgs` here triggers infinite recursion
-    # through `_module.freeformType`. The file at that path is the
-    # same single source of truth that packages/fragments-ai/default.nix
-    # re-exports via passthru.records.claude.
     (mkAiEcosystemHmModule (import ../../lib/ai-ecosystems/claude.nix {inherit lib;}))
     (mkAiEcosystemHmModule (import ../../lib/ai-ecosystems/copilot.nix {inherit lib;}))
     (mkAiEcosystemHmModule (import ../../lib/ai-ecosystems/kiro.nix {inherit lib;}))
   ];
 
+  # Shared option declarations. The per-ecosystem options
+  # (ai.<eco>.enable, ai.<eco>.package, ai.claude.buddy) are
+  # declared by the adapter-generated modules above.
   options.ai = {
-    # ai.claude options are now declared by the adapter-generated
-    # module in the imports list. See
-    # lib/mk-ai-ecosystem-hm-module.nix and
-    # pkgs.fragments-ai.passthru.records.claude.
-
-    # ai.copilot options are now declared by the adapter-generated
-    # module in the imports list. See
-    # lib/mk-ai-ecosystem-hm-module.nix and
-    # lib/ai-ecosystems/copilot.nix.
-
-    # ai.kiro options are now declared by the adapter-generated
-    # module in the imports list. See
-    # lib/mk-ai-ecosystem-hm-module.nix and
-    # lib/ai-ecosystems/kiro.nix.
-
     skills = aiOptions.skillsOption;
-
     instructions = aiOptions.instructionsOption;
-
     lspServers = aiOptions.lspServersOption;
-
     environmentVariables = aiOptions.environmentVariablesOption;
-
     settings = aiOptions.settingsOption;
   };
 
+  # Cross-ecosystem assertions only. Per-ecosystem fanout config
+  # is produced by the adapter-generated modules above.
   config = mkMerge [
-    # Assertions — per-CLI enables are the only gates; always-on so
-    # misconfigurations surface even when nothing else is set.
     {
       assertions =
         [
@@ -111,22 +112,5 @@ in {
           }
         ]);
     }
-
-    # MCP bridging: ai doesn't have its own mcpServers option.
-    # Users configure programs.mcp.servers directly and each CLI's
-    # enableMcpIntegration picks them up. This avoids double-injection.
-
-    # Claude fanout is now handled by the adapter-generated module
-    # imported via lib/mk-ai-ecosystem-hm-module.nix. See
-    # pkgs.fragments-ai.passthru.records.claude for the per-ecosystem
-    # policy (markdownTransformer, translators, layout, upstream).
-
-    # Copilot fanout is now handled by the adapter-generated module
-    # imported via lib/mk-ai-ecosystem-hm-module.nix. See
-    # lib/ai-ecosystems/copilot.nix for the per-ecosystem policy.
-
-    # Kiro fanout is now handled by the adapter-generated module
-    # imported via lib/mk-ai-ecosystem-hm-module.nix. See
-    # lib/ai-ecosystems/kiro.nix for the per-ecosystem policy.
   ];
 }
