@@ -1342,6 +1342,35 @@ the time comes:
      them into `dev/generate.nix` to replace the existing
      hand-rolled README/CONTRIBUTING generation. Validates
      the design works for non-AI targets.
+
+     **Byte-identical verification for Commit 13** (and any
+     future commit that touches `dev/generate.nix` or the
+     fragment pipeline): use the existing devenv generate
+     tasks, not a custom snapshot-and-hash dance.
+
+     ```bash
+     devenv tasks run generate:repo
+     devenv tasks run generate:instructions
+     git diff --exit-code -- README.md CONTRIBUTING.md AGENTS.md CLAUDE.md
+     ```
+
+     If exit 0, the tracked generated files are byte-identical
+     to what's committed. The gitignored files (`.claude/rules/*`,
+     `.kiro/steering/*`, `.github/instructions/*`) share the
+     same generation pipeline so any drift would also surface
+     in the tracked files.
+
+     **Anti-pattern (do NOT do this):** copying nix store outputs
+     to a temp dir via `cp -r`, hashing them, and diffing against
+     a snapshot. The Phase 2a Commit 4-5 gap had a brief
+     experiment with this approach (`dev/tasks/verify.nix`,
+     reverted) which hit Nix store read-only permission issues
+     during cleanup, plus a stale-filter bug in the diff command.
+     The lesson: **never reinvent generate-and-diff logic. Use
+     existing devenv generate tasks and let git be the diff
+     engine.** Recorded as a feedback memory after the parallel
+     sentinel-to-main merge worktree learned the same lesson
+     from the same kind of bug.
    - **Commit 14**: update architecture fragments to document
      the new pattern (`dev/fragments/pipeline/`,
      `dev/fragments/ai-skills/`, plus a new

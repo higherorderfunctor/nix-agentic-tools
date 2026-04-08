@@ -115,6 +115,23 @@ refactor):**
   own thunk. Bind once at module top level, all three
   references share the same thunk via lazy eval.
 
+**Byte-identical verification convention** (cross-cutting):
+when verifying a refactor preserved generated file output, use
+the existing `devenv tasks run generate:*` tasks plus
+`git diff --exit-code` on the tracked front-door files
+(`README.md`, `CONTRIBUTING.md`, `AGENTS.md`, `CLAUDE.md`).
+**Do NOT** reinvent build-and-snapshot-and-hash logic — Nix
+store read-only mode bites you on cleanup, and the existing
+generate tasks already handle the build + copy correctly. The
+Phase 2a Commit 4 → Commit 5 gap had a brief experiment with
+a `dev/tasks/verify.nix` task that copied store outputs and
+hashed them, which was reverted after hitting permission
+errors and a stale-filter bug. Lesson recorded in
+`dev/notes/ai-transformer-design.md` Phase 4 Commit 13
+section. Apply when planning Phase 4 (README/mdBook ecosystem
+records) or any future plan that touches the fragment
+pipeline.
+
 See `dev/notes/ai-transformer-design.md` for the full
 design space, the rejected alternatives, the 14-commit
 sequencing, and 12 open questions.
