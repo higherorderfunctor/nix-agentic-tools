@@ -2,8 +2,7 @@
 # (rust toolchain, makeRustPlatform, base derivation) routes through
 # this repo's pinned nixpkgs instead of the consumer's. This is what
 # gives the store path cache-hit parity against CI's standalone build
-# — see dev/fragments/overlays/cache-hit-parity.md and
-# dev/notes/overlay-cache-hit-parity-fix.md.
+# — see dev/fragments/overlays/overlay-pattern.md
 {inputs}: sources: final: _prev: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final) system;

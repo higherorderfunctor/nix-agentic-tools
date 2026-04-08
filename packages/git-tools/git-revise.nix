@@ -2,8 +2,7 @@
 # (python interpreter, hatchling, pytest/git/openssh/gnupg check deps)
 # routes through this repo's pinned nixpkgs instead of the consumer's.
 # This is what gives the store path cache-hit parity against CI's
-# standalone build — see dev/fragments/overlays/cache-hit-parity.md
-# and dev/notes/overlay-cache-hit-parity-fix.md.
+# standalone build — see dev/fragments/overlays/overlay-pattern.md
 #
 # No rust-overlay here — git-revise is a pure-python build.
 {inputs}: sources: final: _prev: let

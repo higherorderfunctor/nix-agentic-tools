@@ -33,17 +33,17 @@ fetch.github = "mystor/git-revise"
 
 # ── MCP servers: GitHub ───────────────────────────────────────────
 
-# Upstream: https://github.com/github/github-mcp-server (tagged releases)
-[github-mcp-server]
-src.github = "github/github-mcp-server"
-fetch.github = "github/github-mcp-server"
-
 # Upstream: https://github.com/hoangsonww/GitIntel-MCP-Server (no releases)
 [git-intel-mcp]
 src.git = "https://github.com/hoangsonww/GitIntel-MCP-Server.git"
 src.use_commit = true
 src.branch = "master"
 fetch.git = "https://github.com/hoangsonww/GitIntel-MCP-Server.git"
+
+# Upstream: https://github.com/github/github-mcp-server (tagged releases)
+[github-mcp-server]
+src.github = "github/github-mcp-server"
+fetch.github = "github/github-mcp-server"
 
 # Upstream: https://github.com/isaacphi/mcp-language-server (tagged releases)
 [mcp-language-server]

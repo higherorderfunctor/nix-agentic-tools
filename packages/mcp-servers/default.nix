@@ -4,9 +4,11 @@
 # 3-argument overlay shape (`{inputs, ...}: final: prev: ...`) per
 # `dev/fragments/overlays/overlay-pattern.md`. The inputs blob is
 # threaded into per-package overlays so each can instantiate its
-# own `ourPkgs = import inputs.nixpkgs { ... }` (cache-hit parity
-# pattern, see `dev/fragments/overlays/cache-hit-parity.md` once
-# it lands in chunk 15).
+# own `ourPkgs = import inputs.nixpkgs { ... }` for cache-hit
+# parity (every build input routes through THIS repo's nixpkgs
+# pin instead of the consumer's, so the published store paths
+# stay byte-identical regardless of which nixpkgs the consumer
+# brings).
 #
 # Per-package files use a single attrset destructuring arg with
 # `nv-sources` injected from the local `nv-sources` binding (which

@@ -3,7 +3,7 @@
 # kagiapi helper) routes through this repo's pinned nixpkgs instead
 # of the consumer's. This is what gives the store path cache-hit
 # parity against CI's standalone build — see
-# dev/fragments/overlays/cache-hit-parity.md.
+# dev/fragments/overlays/overlay-pattern.md.
 {inputs}: {
   nv-sources,
   stdenv,
