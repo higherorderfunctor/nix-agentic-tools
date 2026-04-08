@@ -62,6 +62,31 @@ Three tiers:
 
 ## TOP priority
 
+### Commit generated Copilot instructions
+
+- [ ] **Un-gitignore + commit `.github/copilot-instructions.md`
+      and `.github/instructions/*.instructions.md`** so the
+      GitHub-hosted Copilot reviewer (used on every PR via
+      `gh pr edit --add-reviewer copilot-pull-request-reviewer`)
+      sees the project's instructions and produces project-aware
+      reviews instead of generic Nix concerns. Decision noted
+      2026-04-08 by user during chunk 4b execution: _"consider
+      committing in repo (this repo) fan out of copilot
+      instructions so the reviewer in github.com has access to
+      the instructions"_. Folding into chunk 4b because the
+      stacked-workflows routing table fragment landing in 4b
+      significantly changes the generated copilot-instructions
+      content and reviewers benefit from seeing it immediately.
+      Procedure: 1. Remove `.github/copilot-instructions.md` and
+      `.github/instructions/` from `.gitignore` 2. Run `devenv tasks run generate:instructions:copilot` 3. Stage and commit the materialized files alongside the
+      rest of chunk 4b 4. Backlog: CI drift check that fails if committed files
+      disagree with `nix build .#instructions-copilot`
+      Convention reference: GitHub Copilot custom instructions
+      docs specify `.github/copilot-instructions.md` (repo-wide)
+      and `.github/instructions/<name>.instructions.md` (path-
+      scoped via `applyTo:` frontmatter). User offered to verify
+      hosted reviewer pickup with local copilot-cli once landed.
+
 ### Architecture foundation
 
 - [x] **Overlay cache-hit parity fix** — landed 2026-04-08 across
@@ -607,6 +632,18 @@ Everything else. Park these until TOP/MIDDLE are stable.
       catchup-to-main merge sequence completes; do as a single
       dedicated PR rather than a chunk so reviewer sees the full
       shape change.
+- [ ] **CI drift check for committed generated instruction
+      files** — once `.github/copilot-instructions.md` and
+      `.github/instructions/*.instructions.md` are committed
+      (TOP priority above, lands in chunk 4b), add a CI step
+      that runs `nix build .#instructions-copilot` and diffs
+      the result against the committed files. Fails if they
+      drift. Same pattern for any other generated files we
+      decide to commit later (Claude rules, Kiro steering,
+      AGENTS.md). Could be a flake check
+      (`checks.instructions-copilot-drift`) or a separate
+      CI job. Pre-commit hook is the wrong layer because
+      regenerating in pre-commit slows down every commit.
 - [ ] **Fragment metadata consolidation follow-up** — after the
       TOP item lands, also reduce plan.md churn by having this
       file reference the metadata table instead of re-listing
