@@ -980,30 +980,46 @@ remaining chunks):**
 - Copilot auto-reviews on PR open — no manual `gh pr edit
 --add-reviewer` needed.
 
-**Pause point (2026-04-08):** user requested clean pause after
-PR #11 merges to consider an implementation pivot. Pending tasks
-before the next session picks up the chunk loop:
+**Pause point (2026-04-08):** PR #11 merged. User requested
+clean pause to consider an implementation pivot.
 
-1. **Sentinel rebase**: `sentinel/monorepo-plan` should be
-   rebased onto current `origin/main` so it builds off the
-   merged + post-review work. Right now sentinel is the
-   original parallel-history snapshot — its tip needs to move
-   to `main + sentinel-only delta` (plan.md updates,
-   dev/notes additions, etc.). Resolve conflicts by accepting
-   main's version (it has the post-review fixes) unless
-   sentinel has unique additive content.
-2. Verify `dev/notes/merge-chunks-2026-04-08.md` post-merge
-   corrections are still accurate for chunks 8–17. Notable:
-   the chunk 8 plan needs the `lib/buddy-types.nix` →
-   `modules/claude-code-buddy/types.nix` relocation noted in
-   the post-merge corrections section.
-3. If continuing the chunk loop unchanged, next is **chunk 8**:
-   HM modules wave (claude-code-buddy, copilot-cli, kiro-cli,
-   mcp-servers, stacked-workflows). ~2,428 lines, second-largest
-   chunk after chunk 6.
-4. If pivoting (user mentioned this is possible), a new session
-   should ask the user what pivot they're considering before
-   continuing chunk-by-chunk merges.
+**Sentinel rebase: NOT done** — user changed direction
+2026-04-08 ("just clean pause w/o rebase"). `sentinel/monorepo-plan`
+remains as-is: 262 commits ahead of `origin/main` (the original
+parallel history with all 17 chunks of content + plan.md +
+dev/notes + dev/docs additions), 9 commits behind main (the
+PR #3-#11 squash merges that aren't replayed onto sentinel).
+A future session deciding to rebase will need to:
+
+- Make a per-file decision for the 56 modified files
+  (sentinel has the original pre-review chunk-1-7 content;
+  main has the post-review fixed version)
+- Preserve the 87 sentinel-only added files (chunks 8-17
+  content, plan.md, dev/notes, dev/docs)
+- Re-apply the 9 deleted-on-sentinel files from main
+  (`AGENTS.md`, `.github/copilot-instructions.md`,
+  `.github/instructions/*.instructions.md`,
+  `dev/fragments/overlays/overlay-pattern.md`)
+
+Next-session pickup paths:
+
+1. **Continue chunk loop unchanged** — next is chunk 8 (HM
+   modules wave: claude-code-buddy, copilot-cli, kiro-cli,
+   mcp-servers, stacked-workflows). ~2,428 lines,
+   second-largest chunk after chunk 6. Branch from `origin/main`,
+   pull files from `sentinel/monorepo-plan`, and apply the
+   `lib/buddy-types.nix` → `modules/claude-code-buddy/types.nix`
+   relocation noted in `dev/notes/merge-chunks-2026-04-08.md`
+   on the catchup branch.
+2. **Implementation pivot** — user said this is possible. A
+   new session should ask the user what pivot they're
+   considering before continuing chunk-by-chunk merges.
+
+Both paths leave sentinel/monorepo-plan as the source of truth
+for backlog items, plan state, and the future-state design.
+The catchup branch (`sentinel/main-catchup-2026-04-08`) holds
+the chunk plan note (`dev/notes/merge-chunks-2026-04-08.md`)
+with post-merge corrections for chunks 8-17.
 
 ### Remaining TOP-priority items after the merge
 
