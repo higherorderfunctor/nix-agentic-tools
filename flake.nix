@@ -59,7 +59,6 @@
     # Bind each overlay once so `overlays.<name>` and the
     # `overlays.default` composition share the same import.
     agnixOverlay = import ./packages/agnix {inherit inputs;};
-    aiClisOverlay = import ./packages/ai-clis {inherit inputs;};
     aiOverlay = import ./overlays {inherit inputs;};
     codingStandardsOverlay = import ./packages/coding-standards {};
     fragmentsAiOverlay = import ./packages/fragments-ai {};
@@ -84,13 +83,11 @@
     overlays = {
       agnix = agnixOverlay;
       ai = aiOverlay;
-      ai-clis = aiClisOverlay;
       coding-standards = codingStandardsOverlay;
       default = lib.composeManyExtensions [
         nvSourcesOverlay
         aiOverlay
         agnixOverlay
-        aiClisOverlay
         codingStandardsOverlay
         fragmentsAiOverlay
         fragmentsDocsOverlay
@@ -214,14 +211,15 @@
         sympy-mcp
         ;
 
-      # AI CLI packages — claude-code and context7-mcp now live under
-      # pkgs.ai (unified overlay); remaining clis still at top-level
-      # until Milestone 4 ports them over.
-      inherit (pkgs.ai) claude-code context7-mcp;
+      # AI CLI packages — all now live under pkgs.ai (unified overlay).
+      # Note: github-copilot-cli has been renamed copilot-cli (dropped
+      # the "github-" prefix) as part of the Milestone 4 factory port.
       inherit
-        (pkgs)
+        (pkgs.ai)
         any-buddy
-        github-copilot-cli
+        claude-code
+        context7-mcp
+        copilot-cli
         kiro-cli
         kiro-gateway
         ;

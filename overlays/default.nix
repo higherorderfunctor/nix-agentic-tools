@@ -14,11 +14,20 @@
   merge = name: (final.nv-sources.${name} or {}) // (hashes.${name} or {});
 
   nv = {
+    any-buddy = merge "any-buddy";
     claude-code = merge "claude-code";
     context7-mcp = merge "context7-mcp";
+    copilot-cli = merge "github-copilot-cli"; # nvfetcher key
+    kiro-cli = merge "kiro-cli";
+    kiro-cli-darwin = merge "kiro-cli-darwin";
+    kiro-gateway = merge "kiro-gateway";
   };
 
   aiDrvs = {
+    any-buddy = import ./any-buddy.nix {
+      inherit inputs final;
+      nv = nv.any-buddy;
+    };
     claude-code = import ./claude-code.nix {
       inherit inputs final prev;
       nv = nv.claude-code;
@@ -27,6 +36,19 @@
     context7-mcp = import ./context7-mcp.nix {
       inherit inputs final;
       nv = nv.context7-mcp;
+    };
+    copilot-cli = import ./copilot-cli.nix {
+      inherit inputs final;
+      nv = nv.copilot-cli;
+    };
+    kiro-cli = import ./kiro-cli.nix {
+      inherit inputs final;
+      nv = nv.kiro-cli;
+      nv-darwin = nv.kiro-cli-darwin;
+    };
+    kiro-gateway = import ./kiro-gateway.nix {
+      inherit inputs final;
+      nv = nv.kiro-gateway;
     };
   };
 in {

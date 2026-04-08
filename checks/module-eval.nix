@@ -54,6 +54,8 @@
       modules = [
         ./../lib/ai/sharedOptions.nix
         ./../packages/claude-code/modules/homeManager
+        ./../packages/copilot-cli/modules/homeManager
+        ./../packages/kiro-cli/modules/homeManager
         hmStubs
         {inherit config;}
       ];
@@ -130,5 +132,24 @@ in {
       } {};
     in
       result.type == "stdio"
+  );
+
+  module-copilot-default-disabled = mkTest "copilot-default-disabled" (!(evalHm {}).config.ai.copilot.enable);
+
+  module-kiro-default-disabled = mkTest "kiro-default-disabled" (!(evalHm {}).config.ai.kiro.enable);
+
+  module-all-three-enabled = mkTest "all-three-enabled" (
+    let
+      evaluated = evalHm {
+        ai = {
+          claude.enable = true;
+          copilot.enable = true;
+          kiro.enable = true;
+        };
+      };
+    in
+      evaluated.config.ai.claude.enable
+      && evaluated.config.ai.copilot.enable
+      && evaluated.config.ai.kiro.enable
   );
 }
