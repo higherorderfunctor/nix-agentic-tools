@@ -13,6 +13,7 @@ cachix
 chonk
 clis
 convco
+cpaczek
 creds
 deadnix
 dedup
@@ -26,6 +27,7 @@ envrc
 fanout
 fetchgit
 fetchurl
+fetchzip
 foldl
 frontloaded
 frontmatter
@@ -93,4 +95,5 @@ unstages
 unstash
 worktree
 worktrees
+wyhash
 zdiff

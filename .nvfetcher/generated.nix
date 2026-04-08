@@ -16,6 +16,25 @@
       sha256 = "sha256-R7luTBydtj8H8L/rRXYvWEy45Krg+lL9gTeJL4j/0uA=";
     };
   };
+  any-buddy = {
+    pname = "any-buddy";
+    version = "v2.2.0";
+    src = fetchFromGitHub {
+      owner = "cpaczek";
+      repo = "any-buddy";
+      rev = "v2.2.0";
+      fetchSubmodules = false;
+      sha256 = "sha256-nkAeA2MuBmiDcBjIGzIbfxt0nvkHC++OSD+OWWwQ/e0=";
+    };
+  };
+  claude-code = {
+    pname = "claude-code";
+    version = "2.1.92";
+    src = fetchurl {
+      url = "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.92.tgz";
+      sha256 = "sha256-//iF+Rbms6cYU1WWAa8Sq7G2RxTPwvBjWiVhO5Z0k0c=";
+    };
+  };
   context7-mcp = {
     pname = "context7-mcp";
     version = "2.1.7";
@@ -79,6 +98,14 @@
       sha256 = "sha256-OdkhYEq30RtDOeCQWl/L9FMgCttznzihbYgT8B6KYuY=";
     };
   };
+  github-copilot-cli = {
+    pname = "github-copilot-cli";
+    version = "1.0.19";
+    src = fetchurl {
+      url = "https://github.com/github/copilot-cli/releases/download/v1.0.19/copilot-linux-x64.tar.gz";
+      sha256 = "sha256-8ZlmXw8lIuTDFf59nl65g+Yg7CvJeyJJ1pGMaARz+bg=";
+    };
+  };
   github-mcp-server = {
     pname = "github-mcp-server";
     version = "v0.32.0";
@@ -105,6 +132,37 @@
       url = "https://pypi.org/packages/source/k/kagimcp/kagimcp-0.1.4.tar.gz";
       sha256 = "sha256-fCFmd6BKyyeggekFsJtno394ZeswTYSRELryHQQAcyY=";
     };
+  };
+  kiro-cli = {
+    pname = "kiro-cli";
+    version = "1.29.4";
+    src = fetchurl {
+      url = "https://desktop-release.q.us-east-1.amazonaws.com/1.29.4/kirocli-x86_64-linux.tar.gz";
+      sha256 = "sha256-UH6uVmDS7FKWUGotH4yPVoVnzSHBMfz5rTaMkXl4ztM=";
+    };
+  };
+  kiro-cli-darwin = {
+    pname = "kiro-cli-darwin";
+    version = "1.29.4";
+    src = fetchurl {
+      url = "https://desktop-release.q.us-east-1.amazonaws.com/1.29.4/Kiro%20CLI.dmg";
+      name = "kiro-cli.dmg";
+      sha256 = "sha256-qFd2TRIknjMgg+Dpf3MwWzoCtkjEcaJulo2n+B+T4zY=";
+    };
+  };
+  kiro-gateway = {
+    pname = "kiro-gateway";
+    version = "e6f23c22fc5e9aa7a22e4c31af56cdc6f859afbd";
+    src = fetchgit {
+      url = "https://github.com/jwadow/kiro-gateway.git";
+      rev = "e6f23c22fc5e9aa7a22e4c31af56cdc6f859afbd";
+      fetchSubmodules = false;
+      deepClone = false;
+      leaveDotGit = false;
+      sparseCheckout = [ ];
+      sha256 = "sha256-V9sS82Jwx5y03ojNueHr+0qfp87fkACrdr7iP78Yxeo=";
+    };
+    date = "2026-02-12";
   };
   mcp-language-server = {
     pname = "mcp-language-server";

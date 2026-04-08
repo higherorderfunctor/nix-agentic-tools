@@ -3,15 +3,45 @@
 #
 # This file is the source of truth for what versions to track. The
 # update task (Phase 4) handles invoking nvfetcher and committing
-# the regenerated files. Currently scoped to git-tools and
-# mcp-servers entries — additional package groups (ai-clis) get
-# their own entries when their overlay chunks land.
+# the regenerated files.
 
 # ── Dev tools ─────────────────────────────────────────────────────
 
 [agnix]
 src.github = "agent-sh/agnix"
 fetch.github = "agent-sh/agnix"
+
+# ── AI CLIs ──────────────────────────────────────────────────────
+
+[any-buddy]
+src.github = "cpaczek/any-buddy"
+fetch.github = "cpaczek/any-buddy"
+
+[claude-code]
+src.cmd = "curl -s https://registry.npmjs.org/@anthropic-ai/claude-code/latest | jq -r .version"
+fetch.url = "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-$ver.tgz"
+
+[github-copilot-cli]
+src.github = "github/copilot-cli"
+src.from_pattern = "v([0-9]+\\.[0-9]+\\.[0-9]+)$"
+src.exclude_regex = ".*-[0-9]+$"
+src.to_pattern = "\\1"
+fetch.url = "https://github.com/github/copilot-cli/releases/download/v$ver/copilot-linux-x64.tar.gz"
+
+[kiro-cli]
+src.cmd = "curl -s https://desktop-release.q.us-east-1.amazonaws.com/latest/manifest.json | jq -r '.version'"
+fetch.url = "https://desktop-release.q.us-east-1.amazonaws.com/$ver/kirocli-x86_64-linux.tar.gz"
+
+[kiro-cli-darwin]
+src.cmd = "curl -s https://desktop-release.q.us-east-1.amazonaws.com/latest/manifest.json | jq -r '.version'"
+fetch.url = "https://desktop-release.q.us-east-1.amazonaws.com/$ver/Kiro%20CLI.dmg"
+url.name = "kiro-cli.dmg"
+
+[kiro-gateway]
+src.git = "https://github.com/jwadow/kiro-gateway.git"
+src.use_commit = true
+src.branch = "main"
+fetch.git = "https://github.com/jwadow/kiro-gateway.git"
 
 # ── Git tools ─────────────────────────────────────────────────────
 
