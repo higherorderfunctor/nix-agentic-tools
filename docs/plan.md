@@ -95,7 +95,7 @@ Three tiers:
       architecture-foundation plan) and `c082166` (dead-code
       cleanup follow-up). The ai module now declares
       `imports = [../claude-code-buddy ../copilot-cli
-  ../kiro-cli]`, so a single
+../kiro-cli]`, so a single
       `homeManagerModules.ai` import brings everything needed.
       Regression gated by the new `aiSelfContained`
       module-eval check. Dead `hasModule` guards + the
@@ -561,6 +561,24 @@ Everything else. Park these until TOP/MIDDLE are stable.
 
 ### Misc backlog (unsorted)
 
+- [ ] **Relocate `lib/buddy-types.nix` out of shared lib** —
+      `lib/buddy-types.nix` only has two consumers and both depend
+      on the `any-buddy` overlay (`modules/claude-code-buddy/` and
+      `modules/ai/`). It's not a target-agnostic primitive and should
+      not have landed in Chunk 2's lib-primitives PR. Move to either
+      `modules/claude-code-buddy/types.nix` (lives with primary
+      consumer) or alongside `packages/ai-clis/any-buddy.nix` exposed
+      via `passthru.types` (lives with the overlay). Caller flagged
+      this on PR #4 (2026-04-08, post-merge): _"buddy options should
+      have gone when we added any-buddy overlay after the claude-code
+      overlay. that wasn't very good content separation."_ Do this
+      either in Chunk 7 (any-buddy overlay introduction) or Chunk 8
+      (claude-code-buddy HM module) — adjust the chunk plan to drop
+      the `lib/buddy-types.nix` import path and add it under the
+      consumer's directory in the same PR that introduces the
+      consumer. Net effect: remove `lib/buddy-types.nix` and the
+      `flake.nix` re-export in the same chunk that introduces its
+      consumers.
 - [ ] **Move `externalServers` registry out of root `flake.nix`** —
       currently `lib.externalServers.aws-mcp` is hand-defined in
       `flake.nix:128` (sentinel) / `flake.nix:49` (catchup). Adding
