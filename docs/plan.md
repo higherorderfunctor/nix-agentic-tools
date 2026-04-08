@@ -95,7 +95,7 @@ Three tiers:
       architecture-foundation plan) and `c082166` (dead-code
       cleanup follow-up). The ai module now declares
       `imports = [../claude-code-buddy ../copilot-cli
-  ../kiro-cli]`, so a single
+../kiro-cli]`, so a single
       `homeManagerModules.ai` import brings everything needed.
       Regression gated by the new `aiSelfContained`
       module-eval check. Dead `hasModule` guards + the
@@ -407,6 +407,60 @@ true` (or similar) that pulls SWS skills + routing table into
       Surfaced 2026-04-08 during PR #3 review when noticing the
       `.agnix.toml` `[targets]` table is hardcoded duplication
       of "which ecosystems does this repo support".
+
+- [ ] **Drop prettier for a faster Rust-based markdown
+      formatter** — `treefmt.nix` currently uses `prettier`
+      (Node-based) for `*.md` and `*.json`. Prettier is the
+      single slowest tool in the treefmt run by a wide margin
+      — every CI cycle and every `treefmt` invocation pays the
+      Node startup cost plus prettier's JS-based parser
+      overhead. The repo has 100+ markdown files (fragments,
+      docs, references, notes); prettier dominates the
+      formatting wall-clock time.
+
+      Candidates for replacement:
+
+      - **dprint** — Rust-based formatter framework with
+        first-class markdown plugin (`dprint-plugin-markdown`).
+        Was the previous formatter in this repo (replaced by
+        treefmt + prettier in Chunk 1 of the sentinel-to-main
+        merge). Fast, configurable, has ecosystem (TypeScript,
+        Markdown, JSON, TOML, Dockerfile plugins). Downside:
+        treefmt-nix doesn't have a built-in dprint program
+        wrapper — would need to add one or use the lower-level
+        `formatter.<name>` config to invoke dprint as a CLI.
+      - **mdformat** — Python-based, CommonMark-strict,
+        plugin ecosystem. Faster than prettier but still
+        Python startup cost. Less compelling than dprint.
+      - **markdown-fmt-rs** / `mdsf` / other newer Rust
+        markdown formatters — less mature, may not be in
+        nixpkgs yet.
+
+      Plan:
+
+      1. Benchmark prettier-on-current-tree vs dprint-on-
+         current-tree. Capture the wall-clock delta. Should be
+         a multi-second per-run difference.
+      2. If dprint is decisively faster, switch `treefmt.nix`
+         from `programs.prettier.enable` to dprint via either:
+         - A new `programs.dprint` wrapper in treefmt-nix
+           (upstream contribution opportunity), OR
+         - Direct `formatter.dprint = { command = "..."; ...}`
+           wiring at the lower level
+      3. Verify output is byte-equivalent OR run a single
+         re-format pass to absorb any cosmetic differences in
+         a dedicated commit.
+      4. Update `treefmt.nix` `settings.formatter` to point
+         dprint at `**/*.md` (and possibly JSON if biome can
+         be replaced too — though biome is also fast Rust, so
+         probably keep biome for JSON).
+
+      Touch points: `treefmt.nix`, possibly `flake.nix` if
+      adding dprint as an input, `.gitignore` if dprint
+      generates a config file we don't want tracked.
+
+      Surfaced 2026-04-08 — wall-clock observation that
+      prettier dominates treefmt runs in this repo.
 
 ### nixos-config integration
 

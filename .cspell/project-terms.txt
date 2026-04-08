@@ -73,6 +73,8 @@ lockdown
 lockfiles
 markdownify
 mdbook
+mdformat
+mdsf
 mergetool
 mystor
 narinfo
