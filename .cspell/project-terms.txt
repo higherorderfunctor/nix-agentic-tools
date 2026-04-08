@@ -55,9 +55,6 @@ pkgs
 pname
 PYTHONNOUSERSITE
 PYTHONPATH
-pypi
-pyproject
-pytest
 reauthor
 reflog
 reftable
@@ -68,7 +65,6 @@ revertibility
 revset
 revsets
 revwalk
-rustc
 scriptable
 shellharden
 smartlog

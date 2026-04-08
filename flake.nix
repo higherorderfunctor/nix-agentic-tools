@@ -35,8 +35,22 @@
         config.allowUnfree = true;
         overlays = [self.overlays.default];
       };
+    # nvfetcher sources exposed on `final.nv-sources` per the
+    # `dev/fragments/nix-standards/nix-standards.md` rule that
+    # overlays must access nvfetcher sources via
+    # `final.nv-sources.<key>` instead of importing
+    # `generated.nix` directly. Compiled overlays then read
+    # their own entry by name and merge in `hashes.json`
+    # sidecar values for cargoHash etc. that nvfetcher can't
+    # produce itself.
+    nvSourcesOverlay = final: _prev: {
+      nv-sources = import ./.nvfetcher/generated.nix {
+        inherit (final) fetchurl fetchgit fetchFromGitHub dockerTools;
+      };
+    };
     # Bind each overlay once so `overlays.<name>` and the
     # `overlays.default` composition share the same import.
+    agnixOverlay = import ./packages/agnix {inherit inputs;};
     codingStandardsOverlay = import ./packages/coding-standards {};
     fragmentsAiOverlay = import ./packages/fragments-ai {};
     fragmentsDocsOverlay = import ./packages/fragments-docs {};
@@ -44,8 +58,11 @@
     stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
   in {
     overlays = {
+      agnix = agnixOverlay;
       coding-standards = codingStandardsOverlay;
       default = lib.composeManyExtensions [
+        nvSourcesOverlay
+        agnixOverlay
         codingStandardsOverlay
         fragmentsAiOverlay
         fragmentsDocsOverlay

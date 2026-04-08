@@ -7,7 +7,7 @@
 {inputs}: sources: final: _prev: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final) system;
-    overlays = [(import inputs.rust-overlay)];
+    overlays = [inputs.rust-overlay.overlays.default];
     config.allowUnfree = true;
   };
   nv = sources.git-branchless;

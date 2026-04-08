@@ -20,5 +20,11 @@
     "result"
   ],
   "language": "en",
+  "overrides": [
+    {
+      "dictionaries": ["python", "node", "npm", "rust"],
+      "filename": "**/*.nix"
+    }
+  ],
   "version": "0.2"
 }
