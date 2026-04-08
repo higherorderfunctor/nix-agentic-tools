@@ -64,7 +64,6 @@
     fragmentsAiOverlay = import ./packages/fragments-ai {};
     fragmentsDocsOverlay = import ./packages/fragments-docs {};
     gitToolsOverlay = import ./packages/git-tools {inherit inputs;};
-    mcpServersOverlay = import ./packages/mcp-servers {inherit inputs;};
     stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
 
     # Barrel walker — collects non-binary facets from packages/*/default.nix.
@@ -92,13 +91,11 @@
         fragmentsAiOverlay
         fragmentsDocsOverlay
         gitToolsOverlay
-        mcpServersOverlay
         stackedWorkflowsOverlay
       ];
       fragments-ai = fragmentsAiOverlay;
       fragments-docs = fragmentsDocsOverlay;
       git-tools = gitToolsOverlay;
-      mcp-servers = mcpServersOverlay;
       stacked-workflows = stackedWorkflowsOverlay;
     };
 
@@ -191,27 +188,9 @@
       # `dev/fragments/overlays/cache-hit-parity.md` once it lands).
       inherit (pkgs) agnix git-absorb git-branchless git-revise;
 
-      # MCP server packages — exposed via the mcp-servers overlay
-      # under `pkgs.nix-mcp-servers.<name>`. Same `ourPkgs` cache
-      # hit parity pattern.
-      inherit
-        (pkgs.nix-mcp-servers)
-        effect-mcp
-        fetch-mcp
-        git-intel-mcp
-        git-mcp
-        github-mcp
-        kagi-mcp
-        mcp-language-server
-        mcp-proxy
-        nixos-mcp
-        openmemory-mcp
-        sequential-thinking-mcp
-        serena-mcp
-        sympy-mcp
-        ;
-
-      # AI CLI packages — all now live under pkgs.ai (unified overlay).
+      # All AI packages — CLIs and MCP servers — now live under pkgs.ai
+      # (unified overlay). The legacy pkgs.nix-mcp-servers namespace was
+      # dissolved as part of Milestone 5.
       # Note: github-copilot-cli has been renamed copilot-cli (dropped
       # the "github-" prefix) as part of the Milestone 4 factory port.
       inherit
@@ -220,8 +199,21 @@
         claude-code
         context7-mcp
         copilot-cli
+        effect-mcp
+        fetch-mcp
+        git-intel-mcp
+        git-mcp
+        github-mcp
+        kagi-mcp
         kiro-cli
         kiro-gateway
+        mcp-language-server
+        mcp-proxy
+        nixos-mcp
+        openmemory-mcp
+        sequential-thinking-mcp
+        serena-mcp
+        sympy-mcp
         ;
 
       # Instruction file derivations (from dev/generate.nix).
