@@ -3,6 +3,7 @@ agenix
 agentic
 agentsmd
 agnix
+applyto
 arxanas
 attrset
 attrsets
@@ -88,6 +89,7 @@ stdenv
 substituters
 sympy
 taplo
+testapp
 tinyduck
 tophat
 treefmt

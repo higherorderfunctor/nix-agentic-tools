@@ -97,6 +97,7 @@
       fragments = import ./lib/fragments.nix {inherit lib;};
       devshellLib = import ./lib/devshell.nix {inherit lib;};
       mcpLib = import ./lib/mcp.nix {inherit lib;};
+      ai = import ./lib/ai {inherit lib;};
 
       # Cross-package presets (compose fragments from multiple
       # packages). Individual packages expose their own presets in
@@ -129,7 +130,7 @@
         };
       };
     in {
-      inherit fragments presets;
+      inherit ai fragments presets;
       inherit (devshellLib) mkAgenticShell;
       inherit (fragments) compose mkFragment mkFrontmatter render;
       inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig;
@@ -147,9 +148,10 @@
 
     checks = forAllSystems (system: let
       pkgs = pkgsFor system;
+      factoryChecks = import ./checks/factory-eval.nix {inherit lib pkgs;};
       fragmentsChecks = import ./checks/fragments-eval.nix {inherit lib pkgs;};
     in
-      fragmentsChecks);
+      fragmentsChecks // factoryChecks);
 
     # devShell provided by devenv CLI (devenv shell / devenv test)
     # See devenv.nix for shell configuration.
