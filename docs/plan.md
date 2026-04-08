@@ -625,19 +625,27 @@ Everything else. Park these until TOP/MIDDLE are stable.
       files** — `.github/copilot-instructions.md`,
       `.github/instructions/*.instructions.md`, and `AGENTS.md`
       are now committed (landed in PR #7). Add a CI step that
-      runs `nix build .#instructions-{copilot,agents}` and diffs
-      the result against the committed files. Fails if they
-      drift. Could be a flake check
-      (`checks.instructions-drift`) or a separate CI job.
-      Pre-commit hook is the wrong layer because regenerating
-      in pre-commit slows down every commit.
+      runs the canonical generators via the **devenv tasks**
+      (`devenv tasks run --mode before generate:instructions:copilot`
+      and `... generate:instructions:agents`) and diffs the
+      working tree against HEAD. Fails if there's any diff.
+      **Use the devenv tasks, not `nix build` directly** — per
+      user feedback on PR #8 (2026-04-08): running the tasks
+      exercises the entire generation pipeline (build + cp +
+      chmod), catching regressions in the task scripts that a
+      bare `nix build` would miss. This complements the
+      build-commands.md fragment that codifies devenv tasks as
+      the canonical regeneration UX. Could be a flake check
+      (`checks.instructions-drift`) or a separate CI job that
+      shells into devenv. Pre-commit hook is the wrong layer
+      because regenerating in pre-commit slows down every commit.
 - [ ] **Fragment assembler should leave inline source-path
       comments in generated outputs** — when `compose` produces
       a final file (CLAUDE.md, AGENTS.md, copilot-instructions.md,
       etc.), inject HTML comments at two levels:
       (1) top-of-file comment naming the source file that defines
       the composition (e.g., `<!-- generated from dev/generate.nix —
-    do not edit -->`); (2) above each composed fragment, a
+  do not edit -->`); (2) above each composed fragment, a
       comment naming the source markdown path (e.g.,
       `<!-- packages/coding-standards/fragments/coding-standards.md -->`).
       Reasoning from user 2026-04-08 PR #7 review: makes it
@@ -675,7 +683,7 @@ Everything else. Park these until TOP/MIDDLE are stable.
       isn't a great place for AST parsing — better to do this
       via a string-template DSL where fragments declare
       `{ heading = "Coding Conventions"; level = 2; subsection
-    = "## Bash"; text = "..."; }`. (3) This crosses into
+  = "## Bash"; text = "..."; }`. (3) This crosses into
       "fragment system as document model" territory which is
       a meaningful expansion of scope — counter-question is
       whether the docsite would benefit too (which would
