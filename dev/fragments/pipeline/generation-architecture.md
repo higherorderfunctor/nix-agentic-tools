@@ -20,15 +20,13 @@ working tree. Nix store caching means unchanged inputs skip rebuild.
   both devenv tasks and flake derivations.
 - `dev/tasks/generate.nix` — devenv task wrappers around the
   `instructions-*` derivations.
-- `packages/fragments-ai/` — AI ecosystem transforms (passthru).
-
-Future additions (introduced in later chunks):
-
-- `dev/docs/` — authored prose for the docsite
-- `docs/src/` — gitignored mdbook output
-- `packages/coding-standards/fragments/` — published coding standards
-- `packages/stacked-workflows/fragments/` — published routing table
-- `packages/fragments-docs/` — docsite transforms and generators
+- `lib/ai/transformers/` — pure ecosystem transformer functions
+  (claude, copilot, kiro, agentsmd). Consumed via
+  `lib.ai.transformers.<eco>.render`.
+- `packages/coding-standards/fragments/` — published coding standards.
+- `packages/stacked-workflows/fragments/` — published routing table.
+- `devshell/docs-site/` — mdbook doc site generators (internal,
+  never published to consumers).
 
 ### What Stays in Module System
 

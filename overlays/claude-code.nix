@@ -15,15 +15,19 @@
 # available, otherwise fnv1a. Running under Bun lets the buddy salt
 # search use the simpler wyhash path. Startup overhead is negligible.
 #
-# Buddy state management lives in modules/claude-code-buddy/.
+# Buddy user-facing options live in packages/claude-code/lib/mkClaude.nix
+# (inside the factory's `options.buddy` submodule). The actual buddy
+# activation script that consumes `$XDG_STATE_HOME/claude-code-buddy/lib/cli.js`
+# lives in the consumer repo (nixos-config's own modules/claude-code-buddy/
+# HM module) — this overlay just prepares the wrapper that supports it.
 #
 # Instantiates `ourPkgs` from `inputs.nixpkgs` so the base claude-code
 # derivation, buildNpmPackage, fetchzip, bun, writeShellScript,
 # symlinkJoin all route through this repo's pinned nixpkgs instead of
 # the consumer's. `passthru.baseClaudeCode` exposes OUR pinned
-# claude-code so the buddy activation script in
-# modules/claude-code-buddy/ closes over the same store paths CI
-# builds and pushes to cachix. See dev/fragments/overlays/overlay-pattern.md
+# claude-code so a consumer-side buddy activation script can close over
+# the same store paths CI builds and pushes to cachix.
+# See dev/fragments/overlays/overlay-pattern.md
 {
   inputs,
   final,

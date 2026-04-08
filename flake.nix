@@ -167,6 +167,11 @@
 
     packages = forAllSystems (system: let
       pkgs = pkgsFor system;
+      # Bind the fragment-composition data ONCE for all four
+      # instruction-* derivations below. import is memoized so
+      # the file is read once, but a single explicit binding is
+      # clearer and cheaper to extend when a 5th ecosystem lands.
+      gen = import ./dev/generate.nix {inherit lib pkgs;};
     in
       # All AI packages — CLIs, git tools, and MCP servers — live
       # under pkgs.ai (unified overlay) and are exposed flat at
@@ -183,13 +188,9 @@
         # Instruction file derivations (from dev/generate.nix).
         # Each ecosystem produces a content directory consumed by the
         # `generate:instructions:*` devenv tasks.
-        instructions-agents = let
-          gen = import ./dev/generate.nix {inherit lib pkgs;};
-        in
-          pkgs.writeText "AGENTS.md" gen.agentsMd;
+        instructions-agents = pkgs.writeText "AGENTS.md" gen.agentsMd;
 
         instructions-claude = let
-          gen = import ./dev/generate.nix {inherit lib pkgs;};
           files =
             {"CLAUDE.md" = gen.claudeMd;}
             // lib.mapAttrs' (
@@ -208,7 +209,6 @@
           );
 
         instructions-copilot = let
-          gen = import ./dev/generate.nix {inherit lib pkgs;};
           files =
             lib.mapAttrs' (
               name: content:
@@ -231,18 +231,15 @@
             )
           );
 
-        instructions-kiro = let
-          gen = import ./dev/generate.nix {inherit lib pkgs;};
-        in
-          pkgs.runCommand "instructions-kiro" {} (
-            "mkdir -p $out\n"
-            + lib.concatStringsSep "\n" (
-              lib.mapAttrsToList (
-                name: content: "cp ${pkgs.writeText name content} $out/${name}"
-              )
-              gen.kiroFiles
+        instructions-kiro = pkgs.runCommand "instructions-kiro" {} (
+          "mkdir -p $out\n"
+          + lib.concatStringsSep "\n" (
+            lib.mapAttrsToList (
+              name: content: "cp ${pkgs.writeText name content} $out/${name}"
             )
-          );
+            gen.kiroFiles
+          )
+        );
       });
 
     # Standard flake outputs for `nix develop` and `nix fmt`.

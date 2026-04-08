@@ -26,31 +26,37 @@ overlays uniformly callable from `flake.nix`, every overlay takes the
 same three-argument shape regardless of whether it actually uses the
 inputs.
 
-On the **current branch**, the overlays under `packages/` don't use
-extra flake inputs — they're all called with an empty `{}` for the
-first argument. They still keep the same three-argument shape so all
-overlays remain uniformly callable from `flake.nix`'s
+After the factory rollout (Milestones 1–10), the overlays at the
+flake level are split between the unified binary-package overlay
+(`./overlays`, which consumes `inputs` for cache-hit parity via
+per-package `ourPkgs`) and the content-only overlays under
+`packages/` (which don't need extra flake inputs and are called
+with an empty `{}`). All keep the same three-argument shape so
+all overlays remain uniformly callable from `flake.nix`'s
 `bind-once → reuse` composition pattern:
 
 ```nix
 # flake.nix
+aiOverlay = import ./overlays {inherit inputs;};           # NEW — all binary drvs under pkgs.ai.*
 codingStandardsOverlay = import ./packages/coding-standards {};
-fragmentsAiOverlay = import ./packages/fragments-ai {};
-fragmentsDocsOverlay = import ./packages/fragments-docs {};
 stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
 
 overlays.default = lib.composeManyExtensions [
-  codingStandardsOverlay   # call sites bind once up front
-  fragmentsAiOverlay       # and every imported value exposes the
-  fragmentsDocsOverlay     # same `final: prev: { ... }` shape
-  stackedWorkflowsOverlay  # that composeManyExtensions expects
+  nvSourcesOverlay          # exposes `final.nv-sources` from nvfetcher
+  aiOverlay                 # 24 binary packages under pkgs.ai.*
+  codingStandardsOverlay    # content package
+  stackedWorkflowsOverlay   # content package
 ];
 ```
 
-Future overlays may consume `inputs` (e.g.,
-`import ./packages/git-tools { inherit inputs; }`), but that
-isn't required for the pattern. The first `_:` swallows the
-import-time argument so the resulting function is the standard
+The content overlays (`codingStandardsOverlay`,
+`stackedWorkflowsOverlay`) are called with an empty `{}` first
+argument because they don't need flake inputs. The binary
+overlay (`aiOverlay`) consumes `{inherit inputs;}` because its
+per-package files in `overlays/<name>.nix` need `inputs.nixpkgs`
+for cache-hit parity and `inputs.rust-overlay` for Rust toolchain
+pinning. The first `_:` (or `{...}:`) swallows the import-time
+argument so the resulting function is the standard
 `final: prev:` shape `composeManyExtensions` expects regardless.
 Without this, overlays that need inputs would have a different
 binding pattern at the call site than overlays that don't, breaking

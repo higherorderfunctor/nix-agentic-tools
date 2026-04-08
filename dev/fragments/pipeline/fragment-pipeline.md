@@ -17,12 +17,13 @@ source can fan out to many different consumers without duplication:
    `render` (applies a transform to a composed fragment). No file
    I/O, no ecosystem knowledge, no hardcoded paths.
 
-2. **Topic package (`packages/fragments-ai/`)** — derivation that
-   bundles ecosystem templates with per-ecosystem transforms,
-   exposed via `passthru.transforms`. Callers pull them as
-   `pkgs.fragments-ai.passthru.transforms.<ecosystem>`. A future
-   topic package (`packages/fragments-docs/`) lands with the
-   docsite chunk; not present yet.
+2. **Ecosystem transformers (`lib/ai/transformers/`)** — pure
+   functions per ecosystem (claude, copilot, kiro, agentsmd)
+   that render a composed fragment into ecosystem-specific
+   bytes. Exposed via `flake.lib.ai.transformers.<ecosystem>.render`.
+   Each transformer has a `render` function taking a fragment
+   attrset (`{ text, description, paths, ... }`) and returning
+   the rendered string. No derivation, no IFD, pure Nix.
 
 3. **Content packages (`packages/coding-standards/`,
    `packages/stacked-workflows/`)** — derivations that ship
@@ -53,9 +54,9 @@ Concrete example: generating `.claude/rules/pipeline.md` from the
    (first occurrence wins), then concatenates.
 3. `mkEcosystemFile "pipeline"` looks up the path scope in
    `packagePaths.pipeline` and returns a set of per-ecosystem
-   renderers. The claude renderer wraps `aiTransforms.claude
-{ package = "pipeline"; }` which emits `paths:` frontmatter
-   as a YAML list.
+   renderers. The claude renderer calls
+   `aiTransforms.claude.render (composed // { package = "pipeline"; })`
+   which emits `paths:` frontmatter as a YAML list.
 4. The flake derivation `packages.<system>.instructions-claude`
    stores the result at a nix store path containing
    `rules/pipeline.md`.
@@ -69,27 +70,32 @@ four ecosystem shapes.
 
 ### The transforms in detail
 
-`packages/fragments-ai/default.nix` defines exactly four
-transforms, all curried as `(transform-args)` then `(fragment)`:
+`lib/ai/transformers/` contains four transformer files. Each
+exposes a `render` function that takes a composed fragment
+(optionally merged with ecosystem-specific extras like `package`
+for claude or `name` for kiro) and returns rendered bytes:
 
-- `claude { package }` — emits a YAML header with `description:`
-  and `paths:`. Handles three `paths` shapes: null (no paths
-  key), list (YAML list with quoted entries), string (verbatim).
-  Description has a smart default: "Instructions for the
-  ${package} package" when paths are set and description is null,
-  otherwise omitted or passed through.
-- `copilot` — emits `applyTo:` as a quoted string. List input
-  is joined with commas (Copilot's native multi-glob syntax).
-  Null input defaults to `applyTo: "**"` (global fallback).
-- `kiro { name }` — emits `inclusion: always | fileMatch`,
+- `lib/ai/transformers/claude.nix` — emits a YAML header with
+  `description:` and `paths:`. Handles three `paths` shapes:
+  null (no paths key), list (YAML list with quoted entries),
+  string (verbatim). Description has a smart default:
+  "Instructions for the ${package} package" when paths are set
+  and description is null, otherwise omitted or passed through.
+  Consumer pattern: `lib.ai.transformers.claude.render (composed // { inherit package; })`.
+- `lib/ai/transformers/copilot.nix` — emits `applyTo:` as a
+  quoted string. List input is joined with commas (Copilot's
+  native multi-glob syntax). Null input defaults to
+  `applyTo: "**"` (global fallback).
+- `lib/ai/transformers/kiro.nix` — emits `inclusion: always | fileMatch`,
   `name: ${name}`, and optionally `description:` +
   `fileMatchPattern:`. The pattern uses a quoted string for
   single-element lists and inline YAML array syntax for
   multi-element lists. Kiro docs explicitly require array form
-  for multi-pattern.
-- `agentsmd` — identity function. Returns `fragment.text` raw,
-  no frontmatter. AGENTS.md is a flat, always-loaded file; there's
-  nothing to scope.
+  for multi-pattern. Consumer pattern:
+  `lib.ai.transformers.kiro.render (composed // { name = package; })`.
+- `lib/ai/transformers/agentsmd.nix` — emits `fragment.text`
+  raw with no frontmatter. AGENTS.md is a flat, always-loaded
+  file; there's nothing to scope.
 
 ### Orchestration details worth knowing
 
@@ -129,12 +135,15 @@ transforms, all curried as `(transform-args)` then `(fragment)`:
   location, add to `devFragmentNames.<category>` in
   `dev/generate.nix`, run
   `devenv tasks run --mode before generate:instructions`.
-- **New ecosystem transform** (e.g., Codex): add function to
-  `packages/fragments-ai/default.nix` `passthru.transforms.<name>`,
-  wire into `mkEcosystemFile` in `dev/generate.nix`, add a new
-  `instructions-<ecosystem>` derivation in `flake.nix`, add
-  the corresponding `generate:instructions:<ecosystem>` task in
-  `dev/tasks/generate.nix`.
+- **New ecosystem transform** (e.g., Codex): create
+  `lib/ai/transformers/<name>.nix` exporting a `render` function
+  that takes `{ text, description, paths, ...extras }` and
+  returns rendered bytes. Wire it into `lib/ai/transformers/default.nix`.
+  Then add the new transformer to `mkEcosystemFile` in
+  `dev/generate.nix`, add a new `instructions-<ecosystem>`
+  derivation in `flake.nix` (inside the `pkgs.ai // { ... }` splat),
+  and add the corresponding `generate:instructions:<ecosystem>`
+  task in `dev/tasks/generate.nix`.
 
 ### Gotchas
 
