@@ -4,8 +4,10 @@ Project instructions for AI coding assistants working in this repository.
 Read by Claude Code, Kiro, GitHub Copilot, Codex, and other tools that
 support the [AGENTS.md standard](https://agents.md).
 
-Deep-dive architecture documentation lives in path-scoped per-ecosystem
-files (`.claude/rules/<name>.md`,
+Deep-dive architecture documentation (fanout semantics, wrapper chains,
+buddy activation, fragment pipeline, overlay cache-hit parity, HM module
+conventions, etc.) lives in the mdbook contributing section and in
+path-scoped per-ecosystem files (`.claude/rules/<name>.md`,
 `.github/instructions/<name>.instructions.md`,
 `.kiro/steering/<name>.md`). Those files load on demand when editing
 matching paths; they are not duplicated here to keep this file small.
@@ -120,7 +122,8 @@ that manual commands miss.
 
 ## Architecture Fragments
 
-> **Last verified:** 2026-04-08.
+> **Last verified:** 2026-04-08 (commit pending — follows the
+> monorepo fragment re-scope in a9f991b).
 
 This repo ships path-scoped architecture fragments as dev-only
 context for agents working on it. They are SEPARATE from the
@@ -223,47 +226,13 @@ regenerate steering files for all ecosystems.
 ## Build & Validation Commands
 
 ```bash
-nix flake show                              # List all outputs
-nix flake check                             # Linters + evaluation (does NOT build packages)
-nix build .#<package>                       # Build a specific package
-devenv shell                                # Enter devShell with all tools
-treefmt                                     # Format all files (Nix, markdown, JSON, TOML, shell)
+nix flake show                # List all outputs
+nix flake check               # Linters + evaluation (does NOT build packages)
+nix build .#<package>         # Build a specific package
+devenv shell                  # Enter devShell with all tools
+nix run .#generate            # Regenerate instruction files from fragments
+treefmt                       # Format all files (Nix, markdown, JSON, TOML, shell)
 ```
-
-## Regenerating Instruction Files (Always via DevEnv)
-
-When you change a dev fragment, the wired path scoping, or any
-content package fragment that feeds the always-loaded monorepo
-profile, regenerate the committed instruction files via the
-DevEnv task — **never** by running `nix build` + manual `cp`:
-
-```bash
-devenv tasks run --mode before generate:instructions:copilot   # .github/copilot-instructions.md + .github/instructions/*
-devenv tasks run --mode before generate:instructions:agents    # AGENTS.md
-devenv tasks run --mode before generate:instructions:claude    # .claude/rules/* (gitignored, local-only)
-devenv tasks run --mode before generate:instructions:kiro      # .kiro/steering/* (gitignored, local-only)
-devenv tasks run --mode before generate:instructions           # all four ecosystems
-```
-
-The `--mode before` flag is required for DevEnv DAG resolution —
-running `devenv tasks run generate:instructions` without it only
-runs the umbrella task, not its dependencies.
-
-**Why the task instead of `nix build` + `cp`:**
-
-1. The task is the documented contributor UX. Replicating its
-   work manually means you bypass the abstraction you ship and
-   make your workflow harder for collaborators to follow.
-2. Running the task **exercises** the generation pipeline end to
-   end, catching regressions that a manual `nix build` would
-   miss (e.g., the cp step's permissions handling, mkdir-on-cp,
-   the task DAG itself).
-3. The task handles the chmod-after-cp dance so the materialized
-   files are writable on first generation.
-4. CI drift checks that diff committed files against the task
-   output rely on the task being the canonical generator. If
-   contributors regenerate via `nix build` but the CI check
-   uses the task, divergence becomes possible.
 
 ## Change Propagation
 
@@ -300,11 +269,11 @@ All code must pass linters before committing:
 
 ## Project Overview
 
-nix-agentic-tools is a Nix flake monorepo that will provide:
+nix-agentic-tools is a Nix flake monorepo providing:
 
 - **Stacked workflow skills** — SKILL.md files for stacked commit workflows
   using git-branchless, git-absorb, and git-revise
-- **MCP server packages** — Model Context Protocol servers packaged as
+- **MCP server packages** — 12+ Model Context Protocol servers packaged as
   Nix derivations with typed settings and credential handling
 - **Home-manager modules** — declarative configuration for Claude Code,
   Copilot CLI, Kiro CLI, stacked workflows, and MCP services
@@ -312,30 +281,26 @@ nix-agentic-tools is a Nix flake monorepo that will provide:
   home-manager (`mkAgenticShell`)
 - **Git tool overlays** — git-absorb, git-branchless, git-revise
 
-The monorepo is being assembled bottom-up across a sequence of PRs.
-Skills work without Nix. Nix unlocks overlays, home-manager modules,
-and devshell integration.
+Skills work without Nix. Nix unlocks overlays, home-manager modules, and
+devshell integration.
 
-### Current Branch Layout
+### Key Directories
 
 ```
-dev/
-  fragments/         Dev-only instruction fragments (not exported)
-  generate.nix       Fragment composition for instruction file generation
-  tasks/             DevEnv task wrappers
-devshell/            Standalone devshell modules (mkAgenticShell)
-lib/                 Shared library: fragments, MCP helpers, devshell helpers
 packages/
-  agnix/             Linter, LSP, and MCP server for AI config files
-  <per-package dirs>/ Bazel-style dirs for every published AI app + MCP server
-                     under pkgs.ai.* (claude-code/, copilot-cli/, kiro-cli/,
-                     context7-mcp/, github-mcp/, etc.)
-  coding-standards/  Content package: reusable coding standards
-  fragments-ai/      AI ecosystem transforms (fragment frontmatter)
-  fragments-docs/    Doc site transforms and generators
-  stacked-workflows/ Content package: skills + references + routing fragment
+  stacked-workflows/  Content package: skills, references, routing-table fragment
+  coding-standards/   Content package: reusable coding standard fragments
+  ai-clis/            Overlay: AI CLI packages
+  git-tools/          Overlay: git tools (agnix, git-absorb, etc.)
+  mcp-servers/        Overlay: MCP server packages
+modules/      Home-manager modules
+lib/          Shared library: fragments, MCP helpers, credentials, devshell
+devshell/     Standalone devshell modules (mkAgenticShell)
+dev/
+  fragments/    Dev-only instruction fragments (not exported)
+  references/   Dev-only reference docs (not exported)
+  skills/       Dev-only skills (index-repo-docs, repo-review)
+apps/         Nix apps: generate, update, check-drift, check-health
+checks/       Flake checks
 ```
 
-Future top-level directories (introduced in later chunks):
-
-- `modules/` — Home-manager modules

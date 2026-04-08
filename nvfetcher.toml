@@ -1,9 +1,10 @@
 # Unified version tracking for all packages.
-# Run: nvfetcher (regenerates .nvfetcher/generated.{nix,json})
+# Run: nvfetcher (regenerates per-package .nvfetcher/generated.nix)
 #
-# This file is the source of truth for what versions to track. The
-# update task (Phase 4) handles invoking nvfetcher and committing
-# the regenerated files.
+# Note: nvfetcher output is currently per-package (.nvfetcher/ in each
+# package group). This unified config is the source of truth for what
+# versions to track. The update app (Phase 4) will handle routing
+# nvfetcher output to the correct per-package directory.
 
 # ── Dev tools ─────────────────────────────────────────────────────
 
@@ -63,17 +64,17 @@ fetch.github = "mystor/git-revise"
 
 # ── MCP servers: GitHub ───────────────────────────────────────────
 
+# Upstream: https://github.com/github/github-mcp-server (tagged releases)
+[github-mcp-server]
+src.github = "github/github-mcp-server"
+fetch.github = "github/github-mcp-server"
+
 # Upstream: https://github.com/hoangsonww/GitIntel-MCP-Server (no releases)
 [git-intel-mcp]
 src.git = "https://github.com/hoangsonww/GitIntel-MCP-Server.git"
 src.use_commit = true
 src.branch = "master"
 fetch.git = "https://github.com/hoangsonww/GitIntel-MCP-Server.git"
-
-# Upstream: https://github.com/github/github-mcp-server (tagged releases)
-[github-mcp-server]
-src.github = "github/github-mcp-server"
-fetch.github = "github/github-mcp-server"
 
 # Upstream: https://github.com/isaacphi/mcp-language-server (tagged releases)
 [mcp-language-server]

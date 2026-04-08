@@ -1,80 +1,158 @@
 ---
-applyTo: "packages/**/*.nix"
+applyTo: "packages/ai-clis/*.nix,packages/git-tools/*.nix,packages/mcp-servers/*.nix"
 ---
 
-## Overlay Lambda Signature
+## Overlay Cache-Hit Parity
 
-All overlays in this repo use a **three-argument signature** with the
-first argument typically discarded:
+> **Last verified:** 2026-04-08 (commit pending — full rollout
+> across git-tools, mcp-servers, and ai-clis). If you touch any
+> `packages/<group>/*.nix` overlay file or the overlay composition
+> machinery and this fragment isn't updated in the same commit,
+> stop and fix it. Regressions are gated by the
+> `checks.cache-hit-parity` flake check (see "Verification" below).
 
-```nix
-_: final: _prev: { ... }
-```
+### The rule
 
-This is **deliberate**, not a typo. Reviewers (especially automated
-ones) frequently flag this as "atypical" because the standard nixpkgs
-overlay convention is `final: prev:` (two arguments). Both forms work,
-but the three-argument form is the convention here.
+**Every compiled overlay package in this repo must instantiate its
+own `pkgs` from `inputs.nixpkgs` and use THAT for all build inputs
+and the base derivation.** Do not use the `final` / `prev` arguments
+for anything other than discovering `final.system`.
 
-### Why three arguments
+If you use `final` or `prev` for build inputs, the derivation binds
+to the **consumer's** nixpkgs pin. CI builds against this repo's
+own nixpkgs pin. Different pins → different store paths →
+`nix-agentic-tools.cachix.org` does not serve the consumer because
+the hash they're asking for was never computed. Cache miss on
+every consumer rebuild.
 
-The first argument is reserved for an **inputs blob** that some
-overlays may need (e.g., a future AI CLI overlay that consumes
-`inputs.rust-overlay` for Rust toolchain pinning, or a git-tools
-overlay that pulls version data from external inputs). To keep all
-overlays uniformly callable from `flake.nix`, every overlay takes the
-same three-argument shape regardless of whether it actually uses the
-inputs.
-
-After the factory rollout (Milestones 1–10), the overlays at the
-flake level are split between the unified binary-package overlay
-(`./overlays`, which consumes `inputs` for cache-hit parity via
-per-package `ourPkgs`) and the content-only overlays under
-`packages/` (which don't need extra flake inputs and are called
-with an empty `{}`). All keep the same three-argument shape so
-all overlays remain uniformly callable from `flake.nix`'s
-`bind-once → reuse` composition pattern:
+### The pattern
 
 ```nix
-# flake.nix
-aiOverlay = import ./overlays {inherit inputs;};           # NEW — all binary drvs under pkgs.ai.*
-codingStandardsOverlay = import ./packages/coding-standards {};
-stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
-
-overlays.default = lib.composeManyExtensions [
-  nvSourcesOverlay          # exposes `final.nv-sources` from nvfetcher
-  aiOverlay                 # 24 binary packages under pkgs.ai.*
-  codingStandardsOverlay    # content package
-  stackedWorkflowsOverlay   # content package
-];
+# packages/git-tools/git-branchless.nix — CORRECT
+{inputs}: sources: final: _prev: let
+  ourPkgs = import inputs.nixpkgs {
+    inherit (final) system;
+    overlays = [(import inputs.rust-overlay)];
+    config.allowUnfree = true;
+  };
+  nv = sources.git-branchless;
+  rust = ourPkgs.rust-bin.stable."1.88.0".default;
+  rustPlatform = ourPkgs.makeRustPlatform { cargo = rust; rustc = rust; };
+in {
+  git-branchless = ourPkgs.git-branchless.override (_: {
+    rustPlatform.buildRustPackage = args:
+      rustPlatform.buildRustPackage (finalAttrs: let
+        a = (ourPkgs.lib.toFunction args) finalAttrs;
+      in a // {
+        inherit (nv) src cargoHash;
+        version = ourPkgs.lib.removePrefix "v" nv.version;
+      });
+  });
+}
 ```
 
-The content overlays (`codingStandardsOverlay`,
-`stackedWorkflowsOverlay`) are called with an empty `{}` first
-argument because they don't need flake inputs. The binary
-overlay (`aiOverlay`) consumes `{inherit inputs;}` because its
-per-package files in `overlays/<name>.nix` need `inputs.nixpkgs`
-for cache-hit parity and `inputs.rust-overlay` for Rust toolchain
-pinning. The first `_:` (or `{...}:`) swallows the import-time
-argument so the resulting function is the standard
-`final: prev:` shape `composeManyExtensions` expects regardless.
-Without this, overlays that need inputs would have a different
-binding pattern at the call site than overlays that don't, breaking
-the DRY composition.
+- `final.system` is the only thing we read from the consumer —
+  we need it to know which platform to instantiate `ourPkgs` for.
+- `ourPkgs` is built from THIS repo's `inputs.nixpkgs` plus any
+  sub-overlays the package needs (rust-overlay here).
+- Every downstream reference (`ourPkgs.git-branchless`,
+  `ourPkgs.rust-bin`, `ourPkgs.makeRustPlatform`, `ourPkgs.lib`)
+  routes through `ourPkgs`, not `final`/`prev`.
+- The package function still takes `final: prev:` because the
+  overlay protocol requires it and consumers expect
+  `pkgs.git-branchless` to be available on their pkgs set.
 
-### Why `_prev`
+### The trade-off (accepted in commit e5406977)
 
-The vast majority of overlays in this repo only **add** packages
-(via `passthru`-rich derivations) and never **modify** existing ones.
-When you don't read from `prev`, leading-underscore-prefix it as
-`_prev` so deadnix and human reviewers see at a glance "this overlay
-doesn't depend on the previous overlay's state". The few overlays
-that DO read from `prev` (e.g., to wrap an upstream package) drop
-the underscore prefix and inherit from `prev` explicitly.
+This pattern means **consumers get TWO nixpkgs evaluations in
+their /nix/store**: their own (used for everything else) and
+this repo's (used to build our packages). Most of the closure
+dedupes via content-addressing (glibc, bash, coreutils are
+byte-identical when the source content matches between pins),
+but anything that drifted between the two pins gets duplicated.
 
-### Don't "fix" the signature
+`flake.lock` grows because `nix-agentic-tools`'s inputs are
+not deduped against the consumer's inputs (no `follows`).
+Disk usage goes up. Evaluation is slightly slower.
 
-If you see a Copilot or human reviewer suggest changing
-`_: final: _prev:` → `final: prev:`, **decline**. The three-argument
-form is the established convention and is required for the bind-once
-overlay composition pattern in `flake.nix`.
+**We accept this cost because cache hits are only reachable
+this way.** The alternative (using `follows` to share inputs)
+produces a cleaner closure but defeats the cachix substituter
+entirely: every consumer builds from source on every rebuild.
+
+### When you're writing a new overlay package
+
+1. Accept `{inputs}: sources: final: _prev:` as the function
+   signature (threading `inputs` is done in
+   `packages/<group>/default.nix`).
+2. Instantiate `ourPkgs = import inputs.nixpkgs { ... }` with any
+   required sub-overlays.
+3. Use `ourPkgs.X` for every build input.
+4. Use `ourPkgs.package.override` (or similar) for the base
+   derivation, not `prev.package.override`.
+5. Verify: `nix eval --raw .#<package>` from this repo, then eval
+   the same package through a consumer's nixpkgs with the overlay
+   applied, and confirm the store path is byte-identical. If they
+   differ, cache hits won't happen.
+
+### Verification
+
+Automated (preferred): the `checks.cache-hit-parity` flake check
+evaluates every compiled overlay package twice — once against
+`inputs.nixpkgs` (the "standalone" / CI path) and once against a
+deliberately divergent `inputs.nixpkgs-test` pin playing the role
+of a consumer pkgs set. If any package's store path differs
+between the two, the check fails with a drift report naming the
+offender. Run it locally with:
+
+```bash
+nix build .#checks.x86_64-linux.cache-hit-parity
+cat result   # "ok — no drift detected" on success
+```
+
+Any regression — a new overlay package that uses `final.X` or
+`prev.X` for a build input, or an existing one that was
+refactored — will turn the check red before it ships.
+
+Manual (legacy, for ad-hoc debugging):
+
+```bash
+# 1. Standalone path (what CI builds and pushes to cachix)
+cd ~/Documents/projects/nix-agentic-tools
+STANDALONE=$(nix eval --raw .#git-branchless)
+
+# 2. Consumer path (what your consumer gets via the overlay)
+cd ~/Documents/projects/<consumer>
+CONSUMER=$(nix eval --raw --impure --expr '
+  let
+    flake = builtins.getFlake (toString ./.);
+    pkgs = import flake.inputs.nixpkgs {
+      system = "x86_64-linux";
+      overlays = [ flake.inputs.nix-agentic-tools.overlays.default ];
+      config.allowUnfree = true;
+    };
+  in pkgs.git-branchless.outPath')
+
+# 3. MUST be identical
+[ "$STANDALONE" = "$CONSUMER" ] && echo "OK" || echo "DRIFT"
+
+# 4. Confirm cachix actually has it
+HASH=$(basename "$STANDALONE" | cut -d- -f1)
+curl -sI "https://nix-agentic-tools.cachix.org/${HASH}.narinfo" | head -1
+# Expect: HTTP/2 200
+```
+
+### Exceptions
+
+**Content-only packages don't need this.** Packages that just
+ship markdown files (coding-standards, stacked-workflows-content,
+fragments-ai) have no compiled inputs, so their store paths are
+already byte-identical regardless of which nixpkgs evaluates
+them. Skip the ourPkgs pattern for these.
+
+**Pure binary-fetch packages** (no build, just an `overrideAttrs`
+that swaps `src`/`version`) still route through `ourPkgs` to keep
+the starting derivation tied to this repo's nixpkgs pin. The
+`copilot-cli`, `github-copilot-cli`, `kiro-cli`, and
+`kiro-gateway` overlays in `packages/ai-clis/` follow this shape
+and are covered by the `checks.cache-hit-parity` flake check.

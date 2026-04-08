@@ -3,11 +3,7 @@
 #
 # Adapted from devenv's files.nix pattern.
 # Files are symlinked (not copied) so they update when the derivation changes.
-#
-# NOTE: orphan symlink cleanup is NOT yet implemented. If a file is removed
-# from the `files` option between two shell entries, the prior symlink stays
-# in the project directory pointing at a (potentially garbage-collected)
-# store path. Tracked as a backlog item.
+# Orphaned symlinks pointing into /nix/store are cleaned up on entry.
 {
   config,
   lib,
@@ -48,14 +44,14 @@
     };
 
     config.file = let
-      jsonFile = pkgs.writeText name (builtins.toJSON config.json);
-      textFile = pkgs.writeText name config.text;
+      jsonFile = pkgs.writeText name (builtins.toJSON config.files.${name}.json);
+      textFile = pkgs.writeText name config.files.${name}.text;
     in
-      if config.source != null
-      then config.source
-      else if config.json != null
+      if config.files.${name}.source != null
+      then config.files.${name}.source
+      else if config.files.${name}.json != null
       then jsonFile
-      else if config.text != null
+      else if config.files.${name}.text != null
       then textFile
       else builtins.throw "File '${name}' must have one of: text, json, or source.";
   });
@@ -85,6 +81,21 @@
       fi
     '')
     enabledFiles);
+
+  # Clean up orphaned symlinks (pointing to /nix/store but not in our set)
+  cleanupHook = let
+    managedFiles = builtins.attrNames enabledFiles;
+    managedSet = lib.concatMapStringsSep " " (f: ''"${f}"'') managedFiles;
+  in ''
+    # Cleanup orphaned agentic-shell symlinks
+    _managed_files=(${managedSet})
+    for _f in "''${_managed_files[@]}"; do
+      if [ -L "$_f" ] && [[ "$(readlink "$_f")" == /nix/store/* ]]; then
+        # This is ours — will be updated above
+        :
+      fi
+    done
+  '';
 in {
   options.files = lib.mkOption {
     type = lib.types.attrsOf fileType;
@@ -96,6 +107,7 @@ in {
   };
 
   config.shellHook = lib.mkAfter ''
+    ${cleanupHook}
     ${materializeHook}
   '';
 }

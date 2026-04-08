@@ -1,15 +1,18 @@
 ---
-applyTo: "lib/fragments.nix,lib/ai/transformers/**,dev/generate.nix,dev/tasks/generate.nix"
+applyTo: "lib/fragments.nix,lib/ai/transformers/**,dev/generate.nix,dev/tasks/generate.nix,devshell/docs-site/**"
 ---
 
 ## Fragment Pipeline Architecture
 
-> **Reduced state:** this fragment documents the pipeline as it
-> exists on the current branch. Components introduced in later
-> chunks (content packages, docsite generators, additional dev
-> fragment categories) are noted as "future" or omitted.
+> **Last verified:** 2026-04-07 (commit a3c05f3). If you touch
+> `lib/fragments.nix`, `dev/generate.nix`, `packages/fragments-ai/`,
+> `packages/fragments-docs/`, or any content-package `passthru.fragments`
+> surface and this fragment isn't updated in the same commit, stop
+> and fix it. This is a cross-cutting pipeline — changes that look
+> small in one file frequently ripple into generator outputs for
+> four ecosystems plus the docsite.
 
-### The layers (current branch)
+### The four layers
 
 The fragment pipeline is deliberately layered so the same markdown
 source can fan out to many different consumers without duplication:
@@ -21,52 +24,51 @@ source can fan out to many different consumers without duplication:
    `render` (applies a transform to a composed fragment). No file
    I/O, no ecosystem knowledge, no hardcoded paths.
 
-2. **Ecosystem transformers (`lib/ai/transformers/`)** — pure
-   functions per ecosystem (claude, copilot, kiro, agentsmd)
-   that render a composed fragment into ecosystem-specific
-   bytes. Exposed via `flake.lib.ai.transformers.<ecosystem>.render`.
-   Each transformer has a `render` function taking a fragment
-   attrset (`{ text, description, paths, ... }`) and returning
-   the rendered string. No derivation, no IFD, pure Nix.
+2. **Topic packages (`packages/fragments-ai/`,
+   `packages/fragments-docs/`)** — derivations that bundle content
+   templates together with per-ecosystem transforms. Transforms are
+   exposed via `passthru.transforms` (fragments-ai) or
+   `passthru.generators` (fragments-docs). These are the eval-time
+   API — callers pull them via `pkgs.fragments-ai.passthru.transforms.claude`
+   etc.
 
 3. **Content packages (`packages/coding-standards/`,
-   `packages/stacked-workflows/`)** — derivations that ship
-   markdown files in the store AND expose the same files as typed
-   fragments via `passthru.fragments` (and, for stacked-workflows,
-   `passthru.skillsDir` + `passthru.referencesDir`). Consumers
-   and the dev generator read from the same passthru surface.
+   `packages/stacked-workflows/`, etc.)** — derivations that ship
+   markdown files in the store AND expose the same files as
+   typed fragments via `passthru.fragments` and `passthru.presets`.
+   Consumers and the dev generator both read from the same
+   passthru surface.
 
 4. **Orchestration (`dev/generate.nix`)** — composes dev-only
-   fragments together with content-package fragments
-   (`commonFragments` from coding-standards always-loaded;
-   `swsFragments` from stacked-workflows-content per
-   `extraPublishedFragments`), applies transforms, and produces
-   the final output strings for each ecosystem + AGENTS.md.
+   fragments with published fragments, applies transforms, and
+   produces the final output strings for each ecosystem +
+   AGENTS.md + README + CONTRIBUTING.
 
 ### Data flow for a scoped rule file
 
-Concrete example: generating `.claude/rules/pipeline.md` from the
-`pipeline` category:
+Concrete example: generating `.claude/rules/claude-code.md` from
+the `claude-code` category:
 
-1. `mkDevComposed "pipeline"` in `dev/generate.nix` reads the
-   fragment names from `devFragmentNames.pipeline` and calls
+1. `mkDevComposed "claude-code"` in `dev/generate.nix` reads the
+   fragment names from `devFragmentNames.claude-code` and calls
    `mkDevFragment` on each. The location discriminator
    (`"dev" | "package" | "module"`) controls where on disk the
    markdown is read from.
-2. `compose { fragments = devFrags; }` sorts by priority
-   (descending), then deduplicates the sorted list by SHA256
-   (first occurrence wins), then concatenates.
-3. `mkEcosystemFile "pipeline"` looks up the path scope in
-   `packagePaths.pipeline` and returns a set of per-ecosystem
-   renderers. The claude renderer calls
-   `aiTransforms.claude.render (composed // { package = "pipeline"; })`
-   which emits `paths:` frontmatter as a YAML list.
+2. `compose { fragments = devFrags; }` sorts by priority, dedupes
+   by SHA256, and concatenates. Scoped categories do NOT include
+   commonFragments — only the root `monorepo` profile does, to
+   avoid duplicating shared content across always-loaded common.md
+   and every scoped rule file.
+3. `mkEcosystemFile "claude-code"` looks up the path scope in
+   `packagePaths.claude-code` and returns a set of per-ecosystem
+   renderers. The claude renderer wraps `aiTransforms.claude
+{ package = "claude-code"; }` which emits `paths:` frontmatter
+   as a YAML list.
 4. The flake derivation `packages.<system>.instructions-claude`
-   stores the result at a nix store path containing
-   `rules/pipeline.md`.
+   stores the result at a nix store path.
 5. The devenv task `generate:instructions:claude` runs
    `nix build .#instructions-claude`, then copies
-   `$out/rules/pipeline.md` to the working tree.
+   `$out/rules/claude-code.md` to the working tree.
 
 The same composed fragment runs through `copilot`, `kiro`, and
 `agentsmd` transforms for the other outputs. Single source,
@@ -74,64 +76,76 @@ four ecosystem shapes.
 
 ### The transforms in detail
 
-`lib/ai/transformers/` contains four transformer files. Each
-exposes a `render` function that takes a composed fragment
-(optionally merged with ecosystem-specific extras like `package`
-for claude or `name` for kiro) and returns rendered bytes:
+`packages/fragments-ai/default.nix` defines exactly four
+transforms, all curried as `(transform-args)` then `(fragment)`:
 
-- `lib/ai/transformers/claude.nix` — emits a YAML header with
-  `description:` and `paths:`. Handles three `paths` shapes:
-  null (no paths key), list (YAML list with quoted entries),
-  string (verbatim). Description has a smart default:
-  "Instructions for the ${package} package" when paths are set
-  and description is null, otherwise omitted or passed through.
-  Consumer pattern: `lib.ai.transformers.claude.render (composed // { inherit package; })`.
-- `lib/ai/transformers/copilot.nix` — emits `applyTo:` as a
-  quoted string. List input is joined with commas (Copilot's
-  native multi-glob syntax). Null input defaults to
-  `applyTo: "**"` (global fallback).
-- `lib/ai/transformers/kiro.nix` — emits `inclusion: always | fileMatch`,
+- `claude { package }` — emits a YAML header with `description:`
+  and `paths:`. Handles three `paths` shapes: null (no paths
+  key), list (YAML list with quoted entries), string (verbatim).
+  Description has a smart default: "Instructions for the
+  ${package} package" when paths are set and description is null,
+  otherwise omitted or passed through.
+- `copilot` — emits `applyTo:` as a quoted string. List input
+  is joined with commas (Copilot's native multi-glob syntax).
+  Null input defaults to `applyTo: "**"` (global fallback).
+- `kiro { name }` — emits `inclusion: always | fileMatch`,
   `name: ${name}`, and optionally `description:` +
   `fileMatchPattern:`. The pattern uses a quoted string for
   single-element lists and inline YAML array syntax for
-  multi-element lists. Kiro docs explicitly require array form
-  for multi-pattern. Consumer pattern:
-  `lib.ai.transformers.kiro.render (composed // { name = package; })`.
-- `lib/ai/transformers/agentsmd.nix` — emits `fragment.text`
-  raw with no frontmatter. AGENTS.md is a flat, always-loaded
-  file; there's nothing to scope.
+  multi-element lists. Kiro docs explicitly require array
+  form for multi-pattern — a previous comma-joined string
+  form was silently interpreted as one literal pattern and
+  matched nothing. Fix landed in commit 5a97f09.
+- `agentsmd` — identity function. Returns `fragment.text` raw,
+  no frontmatter. AGENTS.md is a flat, always-loaded file; there's
+  nothing to scope.
 
 ### Orchestration details worth knowing
 
-- **`mkDevComposed` profile semantics.** The monorepo (root)
-  profile prepends `commonFragments` (always-loaded coding
-  standards from `coding-standards.passthru.fragments`) plus any
-  `extraPublishedFragments` (e.g., the SWS routing-table
-  fragment). Scoped profiles include ONLY their dev fragments —
-  repeating the always-loaded set in scoped rule files would
-  amplify context rot.
-- **Dev fragment location discriminator.** Each entry in
-  `devFragmentNames.<category>` may be either a bare string
-  (legacy, reads `dev/fragments/<category>/<name>.md`) or an
-  attrset `{ location, name, dir }`:
+- **Scoped files skip commonFragments.** Before commit 1075bc4,
+  every scoped rule file prepended the full coding-standards
+  header on top of its scope-specific content, duplicating ~80
+  lines against always-loaded common.md. Fixed in
+  `mkDevComposed` by gating `commonFragments` on `package == "monorepo"`.
+- **Dev fragment location discriminator.** Since commit de3dd12,
+  each entry in `devFragmentNames.<category>` may be either a
+  bare string (legacy, reads `dev/fragments/<category>/<name>.md`)
+  or an attrset `{ location, name, dir }`:
   - `location = "dev"` (default) → `dev/fragments/<dir>/<name>.md`
   - `location = "package"` → `packages/<dir>/fragments/dev/<name>.md`
   - `location = "module"` → `modules/<dir>/fragments/dev/<name>.md`
     The `dir` field defaults to the category key but is explicit
-    when they differ.
+    when they differ (e.g., category "ai-module" pointing at
+    `modules/ai/`).
 - **Path scoping is a list, not a string.** `packagePaths` must
-  hold Nix lists; pre-quoted comma-joined strings produce broken
-  YAML for Claude and Kiro.
+  hold Nix lists; pre-quoted comma-joined strings produced broken
+  YAML for Claude and Kiro before commit 5a97f09.
 - **Priority is for intra-composition ordering only.** Never
   emitted to frontmatter. Dev fragments default to priority 5,
-  published fragments typically 10. Higher priority sorts
-  earlier (descending order).
-- **Sort runs BEFORE dedup.** `compose` sorts the input list by
-  priority descending, then walks the sorted list and skips any
-  fragment whose SHA256 has already been seen. So the
-  highest-priority occurrence of duplicated text is the one that
-  survives, not "whichever priority wins" — the sort order
-  determines who's first.
+  published fragments typically 10.
+- **SHA256 dedup runs before priority sort.** Two fragments with
+  identical text are collapsed; the survivor's priority wins.
+
+### docsite pipeline is different (and not yet DRY)
+
+`packages/fragments-docs/` is NOT a fragment-markdown reader.
+It exposes `passthru.generators`:
+
+- `snippets.*` — small tables embedded in prose pages via
+  `{{#include ../generated/snippets/<name>.md}}`. Data-driven
+  from `dev/data.nix`.
+- Full-page generators (`overlayPackages`, `mcpServers`,
+  `libApi`, `typesRef`, `aiMapping`) — emit complete mdbook
+  pages from nix-evaluated data OR read static markdown from
+  `packages/fragments-docs/pages/`.
+
+**Dev fragments do not currently feed the docsite.** A future
+"Contributing / Architecture" section would need a new
+generator in `fragments-docs` that reads dev fragments by path
+(same inputs `mkDevFragment` uses), strips frontmatter, and
+wraps for mdbook. Single-source DRY across steering files
+AND docsite — tracked as Checkpoint 7 of the
+steering-fragments design spec.
 
 ### Extension points (how to add things)
 
@@ -139,15 +153,21 @@ for claude or `name` for kiro) and returns rendered bytes:
   location, add to `devFragmentNames.<category>` in
   `dev/generate.nix`, run
   `devenv tasks run --mode before generate:instructions`.
-- **New ecosystem transform** (e.g., Codex): create
-  `lib/ai/transformers/<name>.nix` exporting a `render` function
-  that takes `{ text, description, paths, ...extras }` and
-  returns rendered bytes. Wire it into `lib/ai/transformers/default.nix`.
-  Then add the new transformer to `mkEcosystemFile` in
-  `dev/generate.nix`, add a new `instructions-<ecosystem>`
-  derivation in `flake.nix` (inside the `pkgs.ai // { ... }` splat),
-  and add the corresponding `generate:instructions:<ecosystem>`
-  task in `dev/tasks/generate.nix`.
+- **New content package published fragment**: create markdown
+  at `packages/<pkg>/fragments/<name>.md`, declare in the
+  package's `passthru.fragments.<name>` using
+  `fragmentsLib.mkFragment { text = builtins.readFile ...; }`.
+  If dev instruction files should include it, add to
+  `extraPublishedFragments.<category>` in `dev/generate.nix`.
+- **New ecosystem transform** (e.g., Codex): add function to
+  `packages/fragments-ai/default.nix` `passthru.transforms.<name>`,
+  wire into `mkEcosystemFile` in `dev/generate.nix`, add a new
+  `instructions-<ecosystem>` derivation in `flake.nix`, add
+  the corresponding `generate:instructions:<ecosystem>` task in
+  `dev/tasks/generate.nix`.
+- **New docsite snippet**: add function to
+  `packages/fragments-docs/default.nix` `passthru.generators.snippets`,
+  wire into the `site-snippets` runCommand in `flake.nix`.
 
 ### Gotchas
 
@@ -163,46 +183,55 @@ for claude or `name` for kiro) and returns rendered bytes:
 - **devenv caches nix eval** in `.devenv/nix-eval-cache.db`.
   If task definitions change and the tasks look stale, delete
   that file.
+- **Monorepo profile vs scoped profile differs semantically**.
+  Only `monorepo` gets commonFragments + swsFragments. Scoped
+  categories are intentionally lean. Don't "fix" this by
+  re-adding commonFragments — that's the context-rot bug that
+  was removed.
 
 ## Generation Architecture
 
 Content is generated via Nix derivations wrapped in devenv tasks,
-organized by scope. On the current branch only the
-`generate:instructions:*` group is wired; `generate:repo:*` and
-`generate:site:*` task groups (and the `generate:all` umbrella) land
-in later chunks alongside their derivations.
+organized by scope:
 
 - `generate:instructions:*` — AI instruction files (CLAUDE.md,
   AGENTS.md, Copilot, Kiro) from fragments + ecosystem transforms
+- `generate:repo:*` — repo front-door files (README.md,
+  CONTRIBUTING.md) from fragments + nix-evaluated data
+- `generate:site:*` — doc site (mdbook) from authored prose +
+  nix-evaluated reference pages and data snippets
+- `generate:all` — runs all scopes
 
 Each task wraps a `nix build .#<derivation>` and copies output to the
 working tree. Nix store caching means unchanged inputs skip rebuild.
 
 ### Source Layout
 
+- `dev/docs/` — authored prose (getting-started guides, concepts,
+  troubleshooting). Copied to `docs/src/` by `generate:site:prose`.
 - `dev/fragments/` — dev-only instruction fragments. Composed into
   instruction files and CLAUDE.md.
 - `dev/generate.nix` — shared fragment composition logic consumed by
   both devenv tasks and flake derivations.
-- `dev/tasks/generate.nix` — devenv task wrappers around the
-  `instructions-*` derivations.
-- `lib/ai/transformers/` — pure ecosystem transformer functions
-  (claude, copilot, kiro, agentsmd). Consumed via
-  `lib.ai.transformers.<eco>.render`.
+- `docs/src/` — gitignored generated output. mdbook serves from here.
 - `packages/coding-standards/fragments/` — published coding standards.
 - `packages/stacked-workflows/fragments/` — published routing table.
-- `devshell/docs-site/` — mdbook doc site generators (internal,
-  never published to consumers).
+- `packages/fragments-ai/` — AI ecosystem transforms (passthru).
+- `packages/fragments-docs/` — doc site transforms and generators
+  (passthru).
 
 ### What Stays in Module System
 
-Skills, `settings.json`, MCP config, and CLI settings use `files.*`
+Skills, settings.json, MCP config, and CLI settings use `files.*`
 (devenv) or `home.file` (HM). These are symlinks to immutable store
 paths — no generation step.
 
 ### Running Generation
 
 ```bash
-devenv tasks run generate:instructions          # all instruction files
-devenv tasks run generate:instructions:claude   # CLAUDE.md + rules only
+devenv tasks run generate:instructions    # all instruction files
+devenv tasks run generate:instructions:claude  # just CLAUDE.md + rules
+devenv tasks run generate:repo            # README.md + CONTRIBUTING.md
+devenv tasks run generate:site            # full doc site
+devenv tasks run generate:all             # everything
 ```

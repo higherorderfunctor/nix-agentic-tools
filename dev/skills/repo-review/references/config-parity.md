@@ -1,0 +1,1 @@
+../../../references/config-parity.md

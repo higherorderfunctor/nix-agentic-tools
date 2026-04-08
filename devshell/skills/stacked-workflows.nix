@@ -1,5 +1,5 @@
 # Stacked workflows devshell module — injects skills and references
-# into the devshell project directory.
+# into the devshell's project directory.
 #
 # Content populated in Phase 3.1 when skills migrate.
 {
