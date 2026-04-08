@@ -59,6 +59,7 @@
     # Bind each overlay once so `overlays.<name>` and the
     # `overlays.default` composition share the same import.
     agnixOverlay = import ./packages/agnix {inherit inputs;};
+    aiClisOverlay = import ./packages/ai-clis {inherit inputs;};
     codingStandardsOverlay = import ./packages/coding-standards {};
     fragmentsAiOverlay = import ./packages/fragments-ai {};
     fragmentsDocsOverlay = import ./packages/fragments-docs {};
@@ -68,10 +69,12 @@
   in {
     overlays = {
       agnix = agnixOverlay;
+      ai-clis = aiClisOverlay;
       coding-standards = codingStandardsOverlay;
       default = lib.composeManyExtensions [
         nvSourcesOverlay
         agnixOverlay
+        aiClisOverlay
         codingStandardsOverlay
         fragmentsAiOverlay
         fragmentsDocsOverlay
@@ -173,6 +176,19 @@
         sequential-thinking-mcp
         serena-mcp
         sympy-mcp
+        ;
+
+      # AI CLI packages — exposed at top-level via the ai-clis
+      # overlay (claude-code, github-copilot-cli, kiro-cli,
+      # kiro-gateway) plus the any-buddy source tree consumed by
+      # the buddy activation script in modules/claude-code-buddy/.
+      inherit
+        (pkgs)
+        any-buddy
+        claude-code
+        github-copilot-cli
+        kiro-cli
+        kiro-gateway
         ;
 
       # Instruction file derivations (from dev/generate.nix).

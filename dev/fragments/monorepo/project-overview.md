@@ -27,6 +27,7 @@ devshell/            Standalone devshell modules (mkAgenticShell)
 lib/                 Shared library: fragments, MCP helpers, devshell helpers
 packages/
   agnix/             Linter, LSP, and MCP server for AI config files
+  ai-clis/           AI CLI overlays (claude-code, copilot-cli, kiro-cli, kiro-gateway, any-buddy)
   coding-standards/  Content package: reusable coding standards
   fragments-ai/      AI ecosystem transforms (fragment frontmatter)
   fragments-docs/    Doc site transforms and generators
@@ -38,4 +39,3 @@ packages/
 Future top-level directories (introduced in later chunks):
 
 - `modules/` — Home-manager modules
-- `packages/ai-clis/` — AI CLI overlays (claude-code, copilot-cli, kiro-cli, etc.)
