@@ -18,6 +18,7 @@ docsite
 fanout
 foldl
 frontmatter
+heredocs
 kiro
 lifecycles
 mdbook
@@ -31,6 +32,7 @@ pname
 PYTHONNOUSERSITE
 PYTHONPATH
 relpath
+scriptable
 shellharden
 statix
 stdenv

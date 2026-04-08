@@ -33,7 +33,9 @@
       };
   in {
     overlays = {
+      coding-standards = import ./packages/coding-standards {};
       default = lib.composeManyExtensions [
+        (import ./packages/coding-standards {})
         (import ./packages/fragments-ai {})
       ];
       fragments-ai = import ./packages/fragments-ai {};
