@@ -1143,24 +1143,61 @@ steps.
 
 ### Repo hygiene
 
-- [ ] **Single-source cspell excludes** — today there are two
-      parallel exclude lists for cspell:
+- [ ] **Single source of truth for tool exclude lists (cspell,
+      treefmt, agnix, etc.) with file-category classification**
+      — today exclude lists for generated/scratch files are
+      duplicated across four places minimum:
       (a) `cspell.json` `ignorePaths` (static config, used by
           direct cspell invocations and IDE extensions)
       (b) `devenv.nix` `git-hooks.hooks.cspell.excludes`
-          (pre-commit regex filter, prevents cspell from even
-          being invoked on matched files)
-      Both lists must stay in sync. The duplication exists
-      because cspell exits 1 with "no files matched" when its
-      entire input list is filtered by `ignorePaths` alone —
-      hitting this bug needs the pre-commit layer to pre-filter
-      too. Seen while committing `docs/superpowers/plans/*.md`
-      which are excluded in both. Rectify by having `devenv.nix`
-      own the authoritative exclude list and generate
-      `cspell.json` (via `pkgs.writeText` or similar), mirroring
-      the `treefmt.nix` + devenv treefmt pattern. Single source
-      of truth, zero drift possible. Spotted 2026-04-08 during
-      the ideal-architecture-gate plan commit.
+          (pre-commit regex filter; must pre-filter because
+          cspell exits 1 with "no files matched" when its entire
+          input list is filtered by `ignorePaths` alone)
+      (c) `treefmt.nix` `settings.global.excludes` (formatter
+          bypass — prevents prettier from corrupting Nix globs
+          in markdown, e.g. `*.nix` → `_.nix`)
+      (d) (future) agnix, biome, taplo, shellcheck, etc. as they
+          grow file-specific excludes
+      Any new scratch file path has to be added manually in all
+      four places without drift. Rectify by building a single
+      Nix attrset (probably under `lib/` or `devshell/`) that
+      classifies files into categories and feeds every tool
+      config that needs them. Categories needed (with some
+      overlap):
+      - **Generated published docs** (e.g., doc site output,
+        README, CONTRIBUTING) — spell-check YES, format NO
+        (tool-generated markdown shouldn't be re-formatted on
+        top of the generator)
+      - **Generated plan / scratch docs** (e.g., `docs/plan.md`,
+        `docs/superpowers/**`) — spell-check NO, format NO
+        (sentinel-tip only, never merges to main, PR extraction
+        filters them out; no value gating commits on their
+        content)
+      - **Tool artifacts** (e.g., `.direnv/`, `.nvfetcher/`,
+        `result/`, `.devenv/`) — spell-check NO, format NO
+        (symlinks / build output / caches)
+      - **Vendored code** (e.g., `locks/`, anything fetched) —
+        case-by-case; usually both NO
+      Each tool config reads the category intersection it
+      cares about and projects it into the format that tool
+      wants (regex list for pre-commit, glob list for treefmt,
+      ignorePaths shape for cspell.json generated via
+      `pkgs.writeText`). Zero drift possible.
+      **Do NOT take the easy route of making treefmt
+      best-effort** (e.g., the way agnix can swallow errors
+      silently). If a file can't be formatted, it should be in
+      an explicit exclude category — not silently skipped at
+      runtime. Best-effort modes hide real problems.
+      Spotted 2026-04-08 during the ideal-architecture-gate
+      plan commit: plan files had to be added to both
+      `cspell.json`, `devenv.nix` cspell excludes, AND
+      `treefmt.nix` global excludes in three separate commits
+      before the tooling stopped fighting the content. The
+      treefmt corruption was real (`*.nix` → `_.nix` markdown
+      parsing bug) and only caught because I was watching the
+      diff. Deferred for another time; listed here so future
+      additions to the scratch-file set don't repeat the same
+      duplication.
 - [ ] **Declutter root dotfiles** — root currently holds
       `.cspell/`, `.nvfetcher/`, `.agnix.toml`, plus other
       tool configs. Move whatever can be moved into a
