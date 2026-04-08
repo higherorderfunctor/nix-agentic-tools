@@ -119,6 +119,52 @@ See `dev/notes/ai-transformer-design.md` for the full
 design space, the rejected alternatives, the 14-commit
 sequencing, and 12 open questions.
 
+**Branch lifecycle / rebase anchor (IMPORTANT):**
+
+The `refactor/ai-ecosystem-records` branch was forked from
+`sentinel/monorepo-plan` on 2026-04-07 at commit
+**`31590a37df86af0c65d14185b598558d6ed2899a`** (subject:
+`docs(plan): draft sentinel-to-main merge plan`). All Phase 1
+implementation commits sit on top of that anchor.
+
+After the refactor branch was created, the parallel
+sentinel-to-main merge worktree continued to land docs-only
+backlog updates on `sentinel/monorepo-plan` (commits like
+`b487f9d`, `880507c`, etc.). These additions do NOT conflict
+with the refactor branch (they touch `docs/plan.md`; the
+refactor touches `lib/`, `modules/`, `packages/`, `checks/`,
+and `dev/`), but they do mean `git merge-base
+sentinel/monorepo-plan refactor/ai-ecosystem-records` is no
+longer the same as `git rev-parse sentinel/monorepo-plan`.
+
+When the sentinel-to-main merge work completes and the refactor
+needs to be rebased onto the final main-aligned state, use:
+
+```bash
+git rebase --onto <new-base> 31590a37df86af0c65d14185b598558d6ed2899a refactor/ai-ecosystem-records
+```
+
+where `<new-base>` is whatever commit/branch represents the
+post-merge target (likely `main` after the merge PRs land,
+or a fresh branch built from main + the desired sentinel
+backlog updates).
+
+The `--onto` argument lets us cleanly cut at the original
+divergence point even if the original sentinel HEAD has been
+rewritten or is no longer reachable from any branch. Without
+recording this hash, future-us would have to discover the
+anchor via reflog or git log archaeology, which gets harder
+as time passes and the branch graph gets more tangled.
+
+**To verify the anchor at any time:** `git rev-list
+refactor/ai-ecosystem-records | tail -N` where N is the
+number of commits on the refactor branch — the last commit
+listed is the anchor. Or look at `git log --format='%H %s'`
+on the refactor branch and find the first commit whose subject
+is `docs(refactor): seed ai-ecosystem-records refactor branch`
+(commit `ec9245e83e5198bb249209fa8a53a3c757f74e96`); its parent
+is the anchor.
+
 ## Priorities
 
 Three tiers:
