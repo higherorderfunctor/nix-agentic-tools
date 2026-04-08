@@ -114,8 +114,23 @@ types.nullOr (types.attrTag {
 # File-based
 settings.credentials.file = "/run/secrets/token";
 
-# Helper-based
-settings.credentials.helper = "${pkgs.pass}/bin/pass show token";
+# Helper-based — `helper` must be a path to an executable, not a
+# command string with arguments. Wrap multi-arg invocations in a
+# writeShellApplication:
+let
+  token-helper = pkgs.writeShellApplication {
+    name = "token-helper";
+    runtimeInputs = [pkgs.pass];
+    text = ''
+      #!/usr/bin/env bash
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      exec ${pkgs.pass}/bin/pass show token
+    '';
+  };
+in
+  settings.credentials.helper = "${token-helper}/bin/token-helper";
 
 # Disabled (default)
 settings.credentials = null;

@@ -2,9 +2,10 @@
 # Derivation: pkgs.fragments-docs
 # passthru.generators provides eval-time access to content generators.
 #
-# Snippets and pages are data-driven: they take description mappings
-# from dev/data.nix (passed through flake.nix) so the same data feeds
-# both the README and the doc site.
+# Snippets and pages are data-driven: each generator takes a `data`
+# attrset provided by the docsite consumer (typically the flake's
+# docsite chunks, when they land). The same data set can feed
+# multiple rendered outputs (e.g., README + docsite).
 _: final: _prev: let
   inherit (final) lib;
 
