@@ -13,6 +13,7 @@ cachix
 chonk
 clis
 convco
+creds
 deadnix
 dedup
 devenv
@@ -30,6 +31,7 @@ gitref
 gpgsign
 heredocs
 higherorderfunctor
+kagi
 kiro
 libgit
 lifecycles
@@ -40,6 +42,7 @@ nixos
 nixpkgs
 numtide
 nvfetcher
+openmemory
 partialclone
 passthru
 pasteable
@@ -65,6 +68,7 @@ smartlog
 statix
 stdenv
 substituters
+sympy
 taplo
 tinyduck
 tophat
