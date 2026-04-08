@@ -11,9 +11,17 @@
   };
 
   inputs = {
+    mcp-nixos = {
+      url = "github:utensils/mcp-nixos";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    serena = {
+      url = "github:oraios/serena";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -55,6 +63,7 @@
     fragmentsAiOverlay = import ./packages/fragments-ai {};
     fragmentsDocsOverlay = import ./packages/fragments-docs {};
     gitToolsOverlay = import ./packages/git-tools {inherit inputs;};
+    mcpServersOverlay = import ./packages/mcp-servers {inherit inputs;};
     stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
   in {
     overlays = {
@@ -67,11 +76,13 @@
         fragmentsAiOverlay
         fragmentsDocsOverlay
         gitToolsOverlay
+        mcpServersOverlay
         stackedWorkflowsOverlay
       ];
       fragments-ai = fragmentsAiOverlay;
       fragments-docs = fragmentsDocsOverlay;
       git-tools = gitToolsOverlay;
+      mcp-servers = mcpServersOverlay;
       stacked-workflows = stackedWorkflowsOverlay;
     };
 
@@ -142,6 +153,27 @@
       # regardless of the consumer's nixpkgs pin (see
       # `dev/fragments/overlays/cache-hit-parity.md` once it lands).
       inherit (pkgs) agnix git-absorb git-branchless git-revise;
+
+      # MCP server packages — exposed via the mcp-servers overlay
+      # under `pkgs.nix-mcp-servers.<name>`. Same `ourPkgs` cache
+      # hit parity pattern.
+      inherit
+        (pkgs.nix-mcp-servers)
+        context7-mcp
+        effect-mcp
+        fetch-mcp
+        git-intel-mcp
+        git-mcp
+        github-mcp
+        kagi-mcp
+        mcp-language-server
+        mcp-proxy
+        nixos-mcp
+        openmemory-mcp
+        sequential-thinking-mcp
+        serena-mcp
+        sympy-mcp
+        ;
 
       # Instruction file derivations (from dev/generate.nix).
       # Each ecosystem produces a content directory consumed by the
