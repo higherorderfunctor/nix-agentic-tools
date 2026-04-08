@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-2d2ab867.js";
+            window.path_to_searchindex_js = "searchindex-4292ce53.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-841f2094.js"></script>
@@ -1545,46 +1545,8 @@ package</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
-<h2 id="aiclaudebuddy"><a class="header" href="#aiclaudebuddy">ai.claude.buddy</a></h2>
-<p>Claude-specific buddy activation options.</p>
-<p><em>Type:</em>
-submodule</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">{
-  enable = false;
-}
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
-</ul>
-<h2 id="aiclaudebuddyenable"><a class="header" href="#aiclaudebuddyenable">ai.claude.buddy.enable</a></h2>
-<p>Whether to enable Claude buddy activation script.</p>
-<p><em>Type:</em>
-boolean</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">false
-</code></pre>
-<p><em>Example:</em></p>
-<pre><code class="language-nix">true
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
-</ul>
-<h2 id="aiclaudebuddystatepath"><a class="header" href="#aiclaudebuddystatepath">ai.claude.buddy.statePath</a></h2>
-<p>Relative path under $HOME for buddy state.</p>
-<p><em>Type:</em>
-string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">".local/state/claude-code-buddy"
-</code></pre>
-<p><em>Declared by:</em></p>
-<ul>
-<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
-</ul>
 <h2 id="aiclaudeinstructions"><a class="header" href="#aiclaudeinstructions">ai.claude.instructions</a></h2>
-<p>claude-specific instructions (appended to top-level ai.instructions).</p>
+<p>claude-specific instructions.</p>
 <p><em>Type:</em>
 list of (attribute set)</p>
 <p><em>Default:</em></p>
@@ -1595,7 +1557,7 @@ list of (attribute set)</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aiclaudemcpservers"><a class="header" href="#aiclaudemcpservers">ai.claude.mcpServers</a></h2>
-<p>claude-specific MCP servers (merged with top-level ai.mcpServers; per-app wins on conflict).</p>
+<p>claude-specific MCP servers.</p>
 <p><em>Type:</em>
 attribute set of (submodule)</p>
 <p><em>Default:</em></p>
@@ -1699,7 +1661,7 @@ attribute set of anything</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aiclaudeskills"><a class="header" href="#aiclaudeskills">ai.claude.skills</a></h2>
-<p>claude-specific skills (merged with top-level ai.skills; per-app wins).</p>
+<p>claude-specific skills.</p>
 <p><em>Type:</em>
 attribute set of absolute path</p>
 <p><em>Default:</em></p>
@@ -1735,7 +1697,7 @@ package</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aicopilotinstructions"><a class="header" href="#aicopilotinstructions">ai.copilot.instructions</a></h2>
-<p>copilot-specific instructions (appended to top-level ai.instructions).</p>
+<p>copilot-specific instructions.</p>
 <p><em>Type:</em>
 list of (attribute set)</p>
 <p><em>Default:</em></p>
@@ -1746,7 +1708,7 @@ list of (attribute set)</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aicopilotmcpservers"><a class="header" href="#aicopilotmcpservers">ai.copilot.mcpServers</a></h2>
-<p>copilot-specific MCP servers (merged with top-level ai.mcpServers; per-app wins on conflict).</p>
+<p>copilot-specific MCP servers.</p>
 <p><em>Type:</em>
 attribute set of (submodule)</p>
 <p><em>Default:</em></p>
@@ -1839,7 +1801,7 @@ attribute set of anything</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aicopilotskills"><a class="header" href="#aicopilotskills">ai.copilot.skills</a></h2>
-<p>copilot-specific skills (merged with top-level ai.skills; per-app wins).</p>
+<p>copilot-specific skills.</p>
 <p><em>Type:</em>
 attribute set of absolute path</p>
 <p><em>Default:</em></p>
@@ -1886,7 +1848,7 @@ package</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aikiroinstructions"><a class="header" href="#aikiroinstructions">ai.kiro.instructions</a></h2>
-<p>kiro-specific instructions (appended to top-level ai.instructions).</p>
+<p>kiro-specific instructions.</p>
 <p><em>Type:</em>
 list of (attribute set)</p>
 <p><em>Default:</em></p>
@@ -1897,7 +1859,7 @@ list of (attribute set)</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aikiromcpservers"><a class="header" href="#aikiromcpservers">ai.kiro.mcpServers</a></h2>
-<p>kiro-specific MCP servers (merged with top-level ai.mcpServers; per-app wins on conflict).</p>
+<p>kiro-specific MCP servers.</p>
 <p><em>Type:</em>
 attribute set of (submodule)</p>
 <p><em>Default:</em></p>
@@ -1990,7 +1952,7 @@ attribute set of anything</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aikiroskills"><a class="header" href="#aikiroskills">ai.kiro.skills</a></h2>
-<p>kiro-specific skills (merged with top-level ai.skills; per-app wins).</p>
+<p>kiro-specific skills.</p>
 <p><em>Type:</em>
 attribute set of absolute path</p>
 <p><em>Default:</em></p>
@@ -2189,8 +2151,8 @@ package</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
-<h2 id="aiclaudebuddy-1"><a class="header" href="#aiclaudebuddy-1">ai.claude.buddy</a></h2>
-<p>Claude-specific buddy activation options.</p>
+<h2 id="aiclaudebuddy"><a class="header" href="#aiclaudebuddy">ai.claude.buddy</a></h2>
+<p>Claude-specific buddy activation options (HM only).</p>
 <p><em>Type:</em>
 submodule</p>
 <p><em>Default:</em></p>
@@ -2202,7 +2164,7 @@ submodule</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
-<h2 id="aiclaudebuddyenable-1"><a class="header" href="#aiclaudebuddyenable-1">ai.claude.buddy.enable</a></h2>
+<h2 id="aiclaudebuddyenable"><a class="header" href="#aiclaudebuddyenable">ai.claude.buddy.enable</a></h2>
 <p>Whether to enable Claude buddy activation script.</p>
 <p><em>Type:</em>
 boolean</p>
@@ -2216,7 +2178,7 @@ boolean</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
-<h2 id="aiclaudebuddystatepath-1"><a class="header" href="#aiclaudebuddystatepath-1">ai.claude.buddy.statePath</a></h2>
+<h2 id="aiclaudebuddystatepath"><a class="header" href="#aiclaudebuddystatepath">ai.claude.buddy.statePath</a></h2>
 <p>Relative path under $HOME for buddy state.</p>
 <p><em>Type:</em>
 string</p>
