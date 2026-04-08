@@ -28,18 +28,19 @@ source can fan out to many different consumers without duplication:
    topic package (`packages/fragments-docs/`) lands with the
    docsite chunk; not present yet.
 
-3. **Content packages** (e.g. `packages/coding-standards/`,
-   `packages/stacked-workflows/`) — _future, not on this branch_.
-   These will ship markdown files in the store AND expose them as
-   typed fragments via `passthru.fragments` so consumers and the
-   dev generator both read from the same passthru surface.
+3. **Content packages (`packages/coding-standards/`,
+   `packages/stacked-workflows/`)** — derivations that ship
+   markdown files in the store AND expose the same files as typed
+   fragments via `passthru.fragments` (and, for stacked-workflows,
+   `passthru.skillsDir` + `passthru.referencesDir`). Consumers
+   and the dev generator read from the same passthru surface.
 
 4. **Orchestration (`dev/generate.nix`)** — composes dev-only
-   fragments and applies transforms to produce the final output
-   strings for each ecosystem + AGENTS.md. The full pipeline
-   merges content-package fragments on top of dev fragments; the
-   reduced form on this branch only handles dev fragments until
-   Layer 3 lands.
+   fragments together with content-package fragments
+   (`commonFragments` from coding-standards always-loaded;
+   `swsFragments` from stacked-workflows-content per
+   `extraPublishedFragments`), applies transforms, and produces
+   the final output strings for each ecosystem + AGENTS.md.
 
 ### Data flow for a scoped rule file
 
@@ -51,8 +52,9 @@ Concrete example: generating `.claude/rules/pipeline.md` from the
    `mkDevFragment` on each. The location discriminator
    (`"dev" | "package" | "module"`) controls where on disk the
    markdown is read from.
-2. `compose { fragments = devFrags; }` sorts by priority, dedupes
-   by SHA256, and concatenates.
+2. `compose { fragments = devFrags; }` sorts by priority
+   (descending), then deduplicates the sorted list by SHA256
+   (first occurrence wins), then concatenates.
 3. `mkEcosystemFile "pipeline"` looks up the path scope in
    `packagePaths.pipeline` and returns a set of per-ecosystem
    renderers. The claude renderer wraps `aiTransforms.claude
@@ -95,11 +97,13 @@ transforms, all curried as `(transform-args)` then `(fragment)`:
 
 ### Orchestration details worth knowing
 
-- **Reduced `mkDevComposed`.** On this branch `mkDevComposed`
-  composes only dev fragments. The full version (lands with
-  content packages) merges `commonFragments` from
-  `coding-standards.passthru.fragments` and
-  `extraPublishedFragments` per category on top.
+- **`mkDevComposed` profile semantics.** The monorepo (root)
+  profile prepends `commonFragments` (always-loaded coding
+  standards from `coding-standards.passthru.fragments`) plus any
+  `extraPublishedFragments` (e.g., the SWS routing-table
+  fragment). Scoped profiles include ONLY their dev fragments —
+  repeating the always-loaded set in scoped rule files would
+  amplify context rot.
 - **Dev fragment location discriminator.** Each entry in
   `devFragmentNames.<category>` may be either a bare string
   (legacy, reads `dev/fragments/<category>/<name>.md`) or an
@@ -114,9 +118,14 @@ transforms, all curried as `(transform-args)` then `(fragment)`:
   YAML for Claude and Kiro.
 - **Priority is for intra-composition ordering only.** Never
   emitted to frontmatter. Dev fragments default to priority 5,
-  published fragments typically 10.
-- **SHA256 dedup runs before priority sort.** Two fragments with
-  identical text are collapsed; the survivor's priority wins.
+  published fragments typically 10. Higher priority sorts
+  earlier (descending order).
+- **Sort runs BEFORE dedup.** `compose` sorts the input list by
+  priority descending, then walks the sorted list and skips any
+  fragment whose SHA256 has already been seen. So the
+  highest-priority occurrence of duplicated text is the one that
+  survives, not "whichever priority wins" — the sort order
+  determines who's first.
 
 ### Extension points (how to add things)
 
