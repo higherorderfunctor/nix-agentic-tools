@@ -72,6 +72,111 @@
     transform,
   }:
     transform composed;
+
+  # ── Node constructors ────────────────────────────────────────────
+  # Structured fragment content. Fragments may carry their `text`
+  # field as either a flat string (legacy) or a list of nodes
+  # constructed via these helpers. Nodes are pure data with a
+  # `__nodeKind` discriminator; renderers walk the list and dispatch
+  # via the active transformer's handler table. See
+  # `dev/notes/ai-transformer-design.md` Layer 1 for the full design.
+
+  mkRaw = text: {
+    __nodeKind = "raw";
+    inherit text;
+  };
+
+  mkLink = {
+    target,
+    label ? null,
+  }: {
+    __nodeKind = "link";
+    inherit target label;
+  };
+
+  mkInclude = path: {
+    __nodeKind = "include";
+    inherit path;
+  };
+
+  mkBlock = nodes: {
+    __nodeKind = "block";
+    inherit nodes;
+  };
+
+  # ── Default node handlers ────────────────────────────────────────
+  # Handler signature: ctx -> node -> string
+  # `ctx` is the rendering context produced by `mkRenderer`. It
+  # carries `handlers` (the active transformer's handler table) and
+  # `render` (a fixed-point reference to the renderer itself, used
+  # by handlers like `block` and `include` that need to recurse).
+  #
+  # Handlers for `link` and `include` are intentionally absent from
+  # the defaults — each transformer must provide them because the
+  # rendering policy is per-target (Claude `@import`, Kiro
+  # `#[[file:...]]`, README GitHub URL, etc.).
+  defaultHandlers = {
+    raw = _ctx: node: node.text;
+    block = ctx: node:
+      builtins.concatStringsSep "" (map (n: ctx.handlers.${n.__nodeKind} ctx n) node.nodes);
+  };
+
+  # ── Renderer ─────────────────────────────────────────────────────
+  # Build a render function from a transformer record + extra context.
+  #
+  # Returns a function `fragment -> string` that:
+  #   1. Normalizes fragment.text to a node list (bare strings get
+  #      wrapped as `[ (mkRaw text) ]` for backward compatibility)
+  #   2. Walks the node list, dispatching each node through
+  #      transformer.handlers.${kind} with the closed-over ctx
+  #   3. Calls transformer.frontmatter with fragment metadata + ctx
+  #      extras
+  #   4. Calls transformer.assemble { frontmatter, body }
+  #
+  # The fixed-point on `self` lets handlers recurse into nested
+  # nodes via ctx.render — used by `block`, `include`, and any
+  # downstream handler that needs to render sub-fragments.
+  mkRenderer = transformer: ctxExtras: let
+    self = ctxExtras // {
+      inherit (transformer) handlers;
+      render = fragment: let
+        rawText = fragment.text or "";
+        nodes =
+          if builtins.isString rawText
+          then [(mkRaw rawText)]
+          else rawText;
+        body = builtins.concatStringsSep "" (map (
+            node:
+              if !(node ? __nodeKind)
+              then throw "mkRenderer: node missing __nodeKind: ${builtins.toJSON node}"
+              else if !(self.handlers ? ${node.__nodeKind})
+              then throw "mkRenderer: no handler for node kind '${node.__nodeKind}' in transformer '${transformer.name or "(unnamed)"}'"
+              else self.handlers.${node.__nodeKind} self node
+          )
+          nodes);
+        frontmatterArgs =
+          {
+            description = fragment.description or null;
+            paths = fragment.paths or null;
+          }
+          // ctxExtras;
+        frontmatter = transformer.frontmatter frontmatterArgs;
+      in
+        transformer.assemble {inherit frontmatter body;};
+    };
+  in
+    self.render;
 in {
-  inherit compose mkFragment mkFrontmatter render;
+  inherit
+    compose
+    defaultHandlers
+    mkBlock
+    mkFragment
+    mkFrontmatter
+    mkInclude
+    mkLink
+    mkRaw
+    mkRenderer
+    render
+    ;
 }

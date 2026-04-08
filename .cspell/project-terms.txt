@@ -51,7 +51,10 @@ mystor
 nixos
 nixpkgs
 numtide
+Nuscht
 nvfetcher
+openclaw
+openhands
 openmemory
 oraios
 oxalica

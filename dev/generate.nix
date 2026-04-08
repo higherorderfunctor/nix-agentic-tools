@@ -177,6 +177,17 @@
 
   # ── Derived values ───────────────────────────────────────────────────
   nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") devFragmentNames;
+
+  # Bind composition ONCE per package at the top level. All three
+  # ecosystem consumers (claudeFiles, copilotFiles, kiroFiles)
+  # reference this binding via lazy eval, so composition runs
+  # exactly once per package regardless of consumer count.
+  #
+  # Anti-pattern: do NOT call mkDevComposed inside the per-ecosystem
+  # concatMapAttrs lambdas — that creates a fresh thunk per consumer
+  # and runs composition 3x.
+  composedByPackage = lib.mapAttrs (pkg: _: mkDevComposed pkg) nonRootPackages;
+
   rootComposed = mkDevComposed "monorepo";
   monorepoEco = mkEcosystemFile "monorepo";
 
@@ -191,26 +202,22 @@
   # Scoped rule files only. No common.md — the body content is
   # already loaded via CLAUDE.md (which @-imports AGENTS.md).
   claudeFiles =
-    lib.concatMapAttrs (pkg: _: let
-      composed = mkDevComposed pkg;
+    lib.mapAttrs' (pkg: composed: let
       pkgEco = mkEcosystemFile pkg;
-    in {
-      "${pkg}.md" = pkgEco.claude composed;
-    })
-    nonRootPackages;
+    in
+      lib.nameValuePair "${pkg}.md" (pkgEco.claude composed))
+    composedByPackage;
 
   # ── Copilot instruction files ────────────────────────────────────────
   copilotFiles =
     {
       "copilot-instructions.md" = monorepoEco.copilot rootComposed;
     }
-    // (lib.concatMapAttrs (pkg: _: let
-        composed = mkDevComposed pkg;
+    // (lib.mapAttrs' (pkg: composed: let
         pkgEco = mkEcosystemFile pkg;
-      in {
-        "${pkg}.instructions.md" = pkgEco.copilot composed;
-      })
-      nonRootPackages);
+      in
+        lib.nameValuePair "${pkg}.instructions.md" (pkgEco.copilot composed))
+      composedByPackage);
 
   # ── Kiro steering files ─────────────────────────────────────────────
   # `common.md` is always-loaded (no `paths`). Pass an explicit
@@ -225,13 +232,11 @@
             description = "Always-loaded monorepo orientation for Kiro.";
           });
     }
-    // (lib.concatMapAttrs (pkg: _: let
-        composed = mkDevComposed pkg;
+    // (lib.mapAttrs' (pkg: composed: let
         pkgEco = mkEcosystemFile pkg;
-      in {
-        "${pkg}.md" = pkgEco.kiro composed;
-      })
-      nonRootPackages);
+      in
+        lib.nameValuePair "${pkg}.md" (pkgEco.kiro composed))
+      composedByPackage);
 
   # ── Top-level markdown files ─────────────────────────────────────────
   agentsMd = ''

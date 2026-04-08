@@ -145,7 +145,15 @@
       # modules/stacked-workflows/git-config*.nix).
     };
 
-    checks = forAllSystems (_: {});
+    checks = forAllSystems (system: let
+      pkgs = pkgsFor system;
+      fragmentsChecks = import ./checks/fragments-eval.nix {inherit lib pkgs;};
+    in
+      fragmentsChecks);
+
+    # devShell provided by devenv CLI (devenv shell / devenv test)
+    # See devenv.nix for shell configuration.
+
     packages = forAllSystems (system: let
       pkgs = pkgsFor system;
     in {
