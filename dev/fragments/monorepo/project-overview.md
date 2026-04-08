@@ -20,20 +20,20 @@ and devshell integration.
 
 ```
 dev/
-  fragments/    Dev-only instruction fragments (not exported)
-  generate.nix  Fragment composition for instruction file generation
-  tasks/        DevEnv task wrappers
-devshell/       Standalone devshell modules (mkAgenticShell)
-lib/            Shared library: fragments, MCP helpers, devshell helpers
+  fragments/         Dev-only instruction fragments (not exported)
+  generate.nix       Fragment composition for instruction file generation
+  tasks/             DevEnv task wrappers
+devshell/            Standalone devshell modules (mkAgenticShell)
+lib/                 Shared library: fragments, MCP helpers, devshell helpers
 packages/
-  fragments-ai/ AI ecosystem transforms (fragment frontmatter)
+  coding-standards/  Content package: reusable coding standards
+  fragments-ai/      AI ecosystem transforms (fragment frontmatter)
+  stacked-workflows/ Content package: skills + references + routing fragment
 ```
 
 Future top-level directories (introduced in later chunks):
 
 - `modules/` — Home-manager modules
-- `packages/coding-standards/` — content package: reusable standards
-- `packages/stacked-workflows/` — content package: skills + routing
 - `packages/ai-clis/` — AI CLI overlays
 - `packages/git-tools/` — git tool overlays
 - `packages/mcp-servers/` — MCP server overlays

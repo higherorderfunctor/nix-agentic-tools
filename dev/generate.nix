@@ -4,7 +4,10 @@
 # ecosystem-specific instruction files. Consumed by both devenv tasks
 # and flake derivations.
 #
-# Takes { lib, pkgs } where pkgs has the fragments-ai overlay applied.
+# Takes { lib, pkgs } where pkgs has the content overlays applied:
+# - fragments-ai (transforms)
+# - coding-standards (commonFragments)
+# - stacked-workflows (swsFragments via stacked-workflows-content)
 #
 # Returns:
 #   agentsMd     — full AGENTS.md content string
@@ -13,14 +16,11 @@
 #   copilotFiles — { "filename.md" = content; } for Copilot files
 #   kiroFiles    — { "filename.md" = content; } for Kiro steering files
 #
-# This is the **reduced form** introduced in PR #5 (fragment-pipeline
-# chunk). Future chunks add:
-#   - Content packages (coding-standards, stacked-workflows-content)
-#     re-introduce commonFragments + extraPublishedFragments
+# Future chunks add:
 #   - Per-ecosystem dev fragments (ai-clis, claude-code, hm-modules,
 #     mcp-servers, overlays, devenv, stacked-workflows, ai-module,
 #     ai-skills) extend devFragmentNames and packagePaths
-#   - README.md / CONTRIBUTING.md generators add `repo-readme`
+#   - README.md / CONTRIBUTING.md generators add `repo-readme` /
 #     `repo-contributing` derivations alongside the existing
 #     `instructions-*` set
 {
@@ -30,11 +30,15 @@
   fragments = import ../lib/fragments.nix {inherit lib;};
 
   # ── Fragments from content packages (via overlay) ────────────────────
-  # commonFragments is the always-loaded coding standards set,
-  # merged into the monorepo profile only (scoped profiles are
-  # intentionally lean to avoid context-rot duplication against
-  # the always-loaded common.md / CLAUDE.md content).
+  # commonFragments is the always-loaded coding standards set, merged
+  # into the monorepo profile only (scoped profiles are intentionally
+  # lean to avoid context-rot duplication against the always-loaded
+  # common.md / CLAUDE.md content).
   commonFragments = builtins.attrValues pkgs.coding-standards.passthru.fragments;
+  # swsFragments is the published stacked-workflows content set
+  # (currently the routing-table fragment). Per category, callers
+  # opt in via extraPublishedFragments below.
+  swsFragments = builtins.attrValues pkgs.stacked-workflows-content.passthru.fragments;
 
   # ── Dev-only fragment reader ─────────────────────────────────────────
   # Each entry in devFragmentNames may be either:
@@ -125,24 +129,31 @@
     ];
   };
 
+  # ── Extra published fragments per package (beyond commonFragments) ───
+  # Categories may opt into additional published fragment sets on top of
+  # the dev fragments. The monorepo profile gets the SWS routing table
+  # so it shows up in always-loaded CLAUDE.md / common.md.
+  extraPublishedFragments = {
+    monorepo = swsFragments;
+  };
+
   # ── Compose fragments for a dev package profile ──────────────────────
   # The monorepo (root) profile prepends always-loaded coding standards
   # (commonFragments) so they appear in CLAUDE.md / common.md once.
   # Scoped profiles include ONLY their scope-specific content — repeating
   # commonFragments in every scoped rule file amplifies context rot
   # (duplicate tokens loaded when a scoped rule triggers alongside the
-  # always-loaded common.md). The full pipeline also merges
-  # extraPublishedFragments (stacked-workflows-content) — that lands in
-  # the next chunk.
+  # always-loaded common.md).
   mkDevComposed = package: let
     devFrags = map (mkDevFragment package) (devFragmentNames.${package} or []);
+    extraFrags = extraPublishedFragments.${package} or [];
     isRoot = package == "monorepo";
   in
     fragments.compose {
       fragments =
         if isRoot
-        then commonFragments ++ devFrags
-        else devFrags;
+        then commonFragments ++ extraFrags ++ devFrags
+        else extraFrags ++ devFrags;
     };
 
   # ── Ecosystem file transforms ────────────────────────────────────────
