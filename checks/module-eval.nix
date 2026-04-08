@@ -301,6 +301,63 @@
       };
     }
   ];
+
+  # Phase 2a isolation test: evaluate the adapter in isolation
+  # against the claude ecosystem record. Does NOT use the full ai
+  # module — just the adapter + claude record + a minimal fixture.
+  # Verifies the adapter produces a valid module that fans out
+  # correctly even without the surrounding inline blocks.
+  phase2aClaudeAdapterIsolation = let
+    mkAdapter = import ../lib/mk-ai-ecosystem-hm-module.nix {inherit lib;};
+    claudeRecord = import ../lib/ai-ecosystems/claude.nix {inherit lib;};
+    claudeModule = mkAdapter claudeRecord;
+    # The adapter references cfg.skills, cfg.instructions, etc.
+    # directly. In isolation, we need to stub those at the top
+    # level since the full ai module isn't loaded.
+    aiOptions = import ../lib/ai-options.nix {inherit lib;};
+    stubAiShared = _: {
+      options.ai = {
+        skills = aiOptions.skillsOption;
+        instructions = aiOptions.instructionsOption;
+        lspServers = aiOptions.lspServersOption;
+        environmentVariables = aiOptions.environmentVariablesOption;
+        settings = aiOptions.settingsOption;
+      };
+    };
+    # Loose buddy stub for programs.claude-code — the full ai
+    # module imports modules/claude-code-buddy which declares the
+    # canonical option; isolation-mode doesn't, so we emulate it
+    # with a permissive `nullOr anything` type. The adapter always
+    # emits `programs.claude-code.buddy = mkIf (ecoCfg.buddy != null)
+    # ecoCfg.buddy` so the option path has to be declared somewhere
+    # in the module set even when the inner mkIf condition is
+    # false; this stub satisfies that requirement.
+    stubClaudeBuddy = _: {
+      options.programs.claude-code.buddy = lib.mkOption {
+        type = lib.types.nullOr lib.types.anything;
+        default = null;
+      };
+    };
+  in
+    evalModule [
+      stubAiShared
+      stubClaudeBuddy
+      claudeModule
+      {
+        config = {
+          ai = {
+            claude.enable = true;
+            skills.stack-fix = /tmp/test-stack-fix-skill;
+            instructions.iso-rule = {
+              text = "Isolation test body";
+              paths = ["iso/**"];
+              description = "Isolation fixture";
+            };
+            settings.model = "isolation-test-model";
+          };
+        };
+      }
+    ];
 in {
   copilot-cli-eval = pkgs.runCommand "copilot-cli-eval" {} ''
     echo "copilot-cli module evaluation: ${
@@ -584,6 +641,49 @@ in {
       if phase2aKiroFixture.config.programs.kiro-cli.lspServers ? nixd
       then "echo ok > $out"
       else "echo 'FAIL: ai.lspServers.nixd did not reach programs.kiro-cli.lspServers' >&2; exit 1"
+    }
+  '';
+
+  # ── Phase 2a adapter isolation tests ───────────────────────────
+  phase2a-adapter-claude-isolation-enable = pkgs.runCommand "phase2a-adapter-claude-isolation-enable" {} ''
+    ${
+      if phase2aClaudeAdapterIsolation.config.programs.claude-code.enable
+      then "echo ok > $out"
+      else "echo 'FAIL: isolation adapter did not flip programs.claude-code.enable' >&2; exit 1"
+    }
+  '';
+
+  phase2a-adapter-claude-isolation-skills = pkgs.runCommand "phase2a-adapter-claude-isolation-skills" {} ''
+    ${
+      if phase2aClaudeAdapterIsolation.config.programs.claude-code.skills ? stack-fix
+      then "echo ok > $out"
+      else "echo 'FAIL: isolation adapter did not dispatch skills through upstream' >&2; exit 1"
+    }
+  '';
+
+  phase2a-adapter-claude-isolation-instruction = pkgs.runCommand "phase2a-adapter-claude-isolation-instruction" {} ''
+    ${
+      let
+        fileAttrs = phase2aClaudeAdapterIsolation.config.home.file;
+        hasFile = fileAttrs ? ".claude/rules/iso-rule.md";
+        text =
+          if hasFile
+          then fileAttrs.".claude/rules/iso-rule.md".text
+          else "";
+        hasBody = lib.hasInfix "Isolation test body" text;
+        hasFrontmatter = lib.hasInfix "Isolation fixture" text;
+      in
+        if hasFile && hasBody && hasFrontmatter
+        then "echo ok > $out"
+        else "echo 'FAIL: isolation adapter did not produce .claude/rules/iso-rule.md with expected content (hasFile=${toString hasFile}, hasBody=${toString hasBody}, hasFrontmatter=${toString hasFrontmatter})' >&2; exit 1"
+    }
+  '';
+
+  phase2a-adapter-claude-isolation-settings = pkgs.runCommand "phase2a-adapter-claude-isolation-settings" {} ''
+    ${
+      if phase2aClaudeAdapterIsolation.config.programs.claude-code.settings.model == "isolation-test-model"
+      then "echo ok > $out"
+      else "echo 'FAIL: isolation adapter did not dispatch settings.model through upstream' >&2; exit 1"
     }
   '';
 }
