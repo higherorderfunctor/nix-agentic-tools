@@ -70,6 +70,26 @@ in {
   };
 
   config = lib.mkIf (enabledServers != {}) {
+    assertions =
+      lib.mapAttrsToList (name: srv: {
+        assertion =
+          (srv.url != null && srv.command == null)
+          || (srv.url == null && srv.command != null);
+        message = ''
+          mcpServers.${name}: exactly one of `url` (HTTP) or `command`
+          (stdio) must be set when `enable = true`. Got url=${
+            if srv.url == null
+            then "null"
+            else "set"
+          }, command=${
+            if srv.command == null
+            then "null"
+            else "set"
+          }.
+        '';
+      })
+      enabledServers;
+
     files.".mcp.json".json = {
       mcpServers = mcpConfig;
     };
