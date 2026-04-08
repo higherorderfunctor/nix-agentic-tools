@@ -27,4 +27,5 @@ in
     build-system = with python314Packages; [setuptools];
     dependencies = with python314Packages; [mcp uvicorn] ++ [httpx-auth];
     doCheck = false;
+    meta.mainProgram = "mcp-proxy";
   }

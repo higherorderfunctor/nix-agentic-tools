@@ -38,4 +38,5 @@ in
         --add-flags "serve"
       runHook postInstall
     '';
+    meta.mainProgram = "openmemory-mcp";
   }

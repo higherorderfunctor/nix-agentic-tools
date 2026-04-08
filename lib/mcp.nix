@@ -211,9 +211,12 @@
   };
 
   # ── Convenience: multiple servers at once ──────────────────────────
+  # Takes a pkgs with the nix-agentic-tools overlay applied (exposes
+  # `pkgs.ai.<name>`) and an attrset of per-server config overrides.
+  # Each config may override the package or add args/env/settings.
   mkStdioConfig = pkgs: serverConfigs: {
     mcpServers = mapAttrs (name: cfg:
-      mkStdioEntry pkgs ({package = pkgs.nix-mcp-servers.${name};} // cfg))
+      mkStdioEntry pkgs ({package = pkgs.ai.${name};} // cfg))
     serverConfigs;
   };
 in {

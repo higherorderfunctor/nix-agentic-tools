@@ -31,4 +31,5 @@ in
       makeWrapper ${nodejs}/bin/node $out/bin/effect-mcp \
         --add-flags "$out/lib/effect-mcp/main.cjs"
     '';
+    meta.mainProgram = "effect-mcp";
   }

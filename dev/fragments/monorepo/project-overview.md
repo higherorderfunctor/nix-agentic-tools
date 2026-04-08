@@ -27,12 +27,12 @@ devshell/            Standalone devshell modules (mkAgenticShell)
 lib/                 Shared library: fragments, MCP helpers, devshell helpers
 packages/
   agnix/             Linter, LSP, and MCP server for AI config files
-  ai-clis/           AI CLI overlays (claude-code, copilot-cli, kiro-cli, kiro-gateway, any-buddy)
+  <per-package dirs>/ Bazel-style dirs for every published AI app + MCP server
+                     under pkgs.ai.* (claude-code/, copilot-cli/, kiro-cli/,
+                     context7-mcp/, github-mcp/, etc.)
   coding-standards/  Content package: reusable coding standards
   fragments-ai/      AI ecosystem transforms (fragment frontmatter)
   fragments-docs/    Doc site transforms and generators
-  git-tools/         Git tool overlays (git-absorb, git-branchless, git-revise)
-  mcp-servers/       MCP server overlays (14 servers under pkgs.nix-mcp-servers)
   stacked-workflows/ Content package: skills + references + routing fragment
 ```
 

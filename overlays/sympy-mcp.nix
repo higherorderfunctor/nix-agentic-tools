@@ -28,4 +28,7 @@
     text = ''exec mcp run "${nv.src}/server.py" "$@"'';
   };
 in
-  drv.overrideAttrs {passthru = (drv.passthru or {}) // {mcpName = "sympy-mcp";};}
+  drv.overrideAttrs {
+    meta = (drv.meta or {}) // {mainProgram = "sympy-mcp";};
+    passthru = (drv.passthru or {}) // {mcpName = "sympy-mcp";};
+  }

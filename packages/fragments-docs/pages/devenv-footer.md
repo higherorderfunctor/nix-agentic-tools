@@ -43,9 +43,11 @@ this branch — do not copy this snippet until the MCP packaging
 chunk lands.
 
 ```nix
-# Future example only — not available on this branch yet.
-mcpPkgs = pkgs.extend (import "${inputs.nix-agentic-tools}/packages/mcp-servers" {
-  inherit inputs;
-});
-# mcpPkgs.nix-mcp-servers.github-mcp, etc.
+# All AI binaries (CLIs + MCP servers) live under pkgs.ai.* after
+# the nix-agentic-tools overlay is composed.
+pkgs = import nixpkgs {
+  inherit system;
+  overlays = [inputs.nix-agentic-tools.overlays.default];
+};
+# pkgs.ai.github-mcp, pkgs.ai.claude-code, pkgs.ai.kiro-cli, etc.
 ```

@@ -34,4 +34,5 @@ in
         --add-flags "$out/lib/sequential-thinking-mcp/dist/index.js"
       runHook postInstall
     '';
+    meta.mainProgram = "sequential-thinking-mcp";
   }

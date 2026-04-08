@@ -137,8 +137,8 @@ mkStdioConfig :: pkgs -> attrsOf serverConfig -> { mcpServers :: attrsOf McpEntr
 ```
 
 Convenience wrapper: build multiple stdio entries at once. Server
-packages are looked up from `pkgs.nix-mcp-servers` (the overlay
-landing in a later chunk).
+packages are looked up from `pkgs.ai.*` (exposed by the
+nix-agentic-tools overlay).
 
 ### mkMcpConfig
 

@@ -149,7 +149,7 @@ _: final: _prev: let
 
     ### MCP Servers
 
-    Available under `pkgs.nix-mcp-servers.*`:
+    Available under `pkgs.ai.*`:
 
     | Package | Description | Credentials |
     | ------- | ----------- | ----------- |
@@ -204,7 +204,7 @@ _: final: _prev: let
     MCP server packages carry metadata for composing MCP entries:
 
     ```nix
-    pkgs.nix-mcp-servers.github-mcp.mcpName
+    pkgs.ai.github-mcp.mcpName
     # => "github-mcp"
 
     # Some packages carry mcpBinary (when it differs from mainProgram):
@@ -219,7 +219,7 @@ _: final: _prev: let
     Use `lib.mkPackageEntry` to derive a complete MCP config entry:
 
     ```nix
-    lib.mkPackageEntry pkgs.nix-mcp-servers.github-mcp
+    lib.mkPackageEntry pkgs.ai.github-mcp
     # => { type = "stdio"; command = "/nix/store/.../github-mcp-server"; args = [...]; }
     ```
   '';
@@ -272,7 +272,7 @@ _: final: _prev: let
     # DevEnv (inline per-CLI)
     claude.code.mcpServers.github-mcp =
       inputs.nix-agentic-tools.lib.mkStdioEntry pkgs {
-        package = pkgs.nix-mcp-servers.github-mcp;
+        package = pkgs.ai.github-mcp;
         settings.credentials.file = "/run/secrets/github-token";
       };
     ```
