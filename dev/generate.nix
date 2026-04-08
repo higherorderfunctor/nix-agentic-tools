@@ -4,7 +4,10 @@
 # ecosystem-specific instruction files. Consumed by both devenv tasks
 # and flake derivations.
 #
-# Takes { lib, pkgs } where pkgs has the fragments-ai overlay applied.
+# Takes { lib, pkgs } where pkgs has the content overlays applied:
+# - fragments-ai (transforms)
+# - coding-standards (commonFragments)
+# - stacked-workflows (swsFragments via stacked-workflows-content)
 #
 # Returns:
 #   agentsMd     — full AGENTS.md content string
@@ -13,14 +16,11 @@
 #   copilotFiles — { "filename.md" = content; } for Copilot files
 #   kiroFiles    — { "filename.md" = content; } for Kiro steering files
 #
-# This is the **reduced form** introduced in PR #5 (fragment-pipeline
-# chunk). Future chunks add:
-#   - Content packages (coding-standards, stacked-workflows-content)
-#     re-introduce commonFragments + extraPublishedFragments
+# Future chunks add:
 #   - Per-ecosystem dev fragments (ai-clis, claude-code, hm-modules,
 #     mcp-servers, overlays, devenv, stacked-workflows, ai-module,
 #     ai-skills) extend devFragmentNames and packagePaths
-#   - README.md / CONTRIBUTING.md generators add `repo-readme`
+#   - README.md / CONTRIBUTING.md generators add `repo-readme` /
 #     `repo-contributing` derivations alongside the existing
 #     `instructions-*` set
 {

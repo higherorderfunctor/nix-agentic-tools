@@ -112,8 +112,7 @@ that manual commands miss.
 
 ## Architecture Fragments
 
-> **Last verified:** 2026-04-08 (commit pending — follows the
-> monorepo fragment re-scope in a9f991b).
+> **Last verified:** 2026-04-08.
 
 This repo ships path-scoped architecture fragments as dev-only
 context for agents working on it. They are SEPARATE from the
