@@ -1,10 +1,10 @@
 ## Project Overview
 
-nix-agentic-tools is a Nix flake monorepo providing:
+nix-agentic-tools is a Nix flake monorepo that will provide:
 
 - **Stacked workflow skills** — SKILL.md files for stacked commit workflows
   using git-branchless, git-absorb, and git-revise
-- **MCP server packages** — 12+ Model Context Protocol servers packaged as
+- **MCP server packages** — Model Context Protocol servers packaged as
   Nix derivations with typed settings and credential handling
 - **Home-manager modules** — declarative configuration for Claude Code,
   Copilot CLI, Kiro CLI, stacked workflows, and MCP services
@@ -12,25 +12,29 @@ nix-agentic-tools is a Nix flake monorepo providing:
   home-manager (`mkAgenticShell`)
 - **Git tool overlays** — git-absorb, git-branchless, git-revise
 
-Skills work without Nix. Nix unlocks overlays, home-manager modules, and
-devshell integration.
+The monorepo is being assembled bottom-up across a sequence of PRs.
+Skills work without Nix. Nix unlocks overlays, home-manager modules,
+and devshell integration.
 
-### Key Directories
+### Current Branch Layout
 
 ```
-packages/
-  stacked-workflows/  Content package: skills, references, routing-table fragment
-  coding-standards/   Content package: reusable coding standard fragments
-  ai-clis/            Overlay: AI CLI packages
-  git-tools/          Overlay: git tools (agnix, git-absorb, etc.)
-  mcp-servers/        Overlay: MCP server packages
-modules/      Home-manager modules
-lib/          Shared library: fragments, MCP helpers, credentials, devshell
-devshell/     Standalone devshell modules (mkAgenticShell)
 dev/
   fragments/    Dev-only instruction fragments (not exported)
-  references/   Dev-only reference docs (not exported)
-  skills/       Dev-only skills (index-repo-docs, repo-review)
-apps/         Nix apps: generate, update, check-drift, check-health
-checks/       Flake checks
+  generate.nix  Fragment composition for instruction file generation
+  tasks/        DevEnv task wrappers
+devshell/       Standalone devshell modules (mkAgenticShell)
+lib/            Shared library: fragments, MCP helpers, devshell helpers
+packages/
+  fragments-ai/ AI ecosystem transforms (fragment frontmatter)
 ```
+
+Future top-level directories (introduced in later chunks):
+
+- `modules/` — Home-manager modules
+- `packages/coding-standards/` — content package: reusable standards
+- `packages/stacked-workflows/` — content package: skills + routing
+- `packages/ai-clis/` — AI CLI overlays
+- `packages/git-tools/` — git tool overlays
+- `packages/mcp-servers/` — MCP server overlays
+- `packages/fragments-docs/` — docsite transforms and generators

@@ -95,15 +95,14 @@ in {
               then ''"${builtins.head pathsAttr}"''
               else "[" + lib.concatMapStringsSep ", " (p: ''"${p}"'') pathsAttr + "]"
             else pathsAttr;
-          # Resolve description: non-empty explicit > null-default > omit for ""
+          # Resolve description: non-empty explicit > path-based default > omit
+          # for "" and for always-loaded files with no explicit description
+          # (callers can pass `description` if they want one for those).
           descStr =
             if descAttr != null && descAttr != ""
             then descAttr
-            else if descAttr == null
-            then
-              if pathsAttr == null
-              then "Shared coding standards and conventions"
-              else "Instructions for the ${name} package"
+            else if descAttr == null && pathsAttr != null
+            then "Instructions for the ${name} package"
             else null;
           fm =
             {

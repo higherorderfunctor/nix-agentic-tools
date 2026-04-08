@@ -180,9 +180,17 @@
       nonRootPackages);
 
   # ── Kiro steering files ─────────────────────────────────────────────
+  # `common.md` is always-loaded (no `paths`). Pass an explicit
+  # description so the transform doesn't omit it (per the transform's
+  # "no description for paths==null without explicit override" rule).
   kiroFiles =
     {
-      "common.md" = aiTransforms.kiro {name = "common";} rootComposed;
+      "common.md" =
+        aiTransforms.kiro {name = "common";}
+        (rootComposed
+          // {
+            description = "Always-loaded monorepo orientation for Kiro.";
+          });
     }
     // (lib.concatMapAttrs (pkg: _: let
         composed = mkDevComposed pkg;
