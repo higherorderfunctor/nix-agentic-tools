@@ -18,14 +18,14 @@ treating it as the central abstraction is too narrow.
 
 The actual transformation surface includes at least:
 
-| Axis | Today's example | Shape |
-|---|---|---|
-| Shared settings → ecosystem keys | `ai.settings.model` → `programs.kiro-cli.settings.chat.defaultModel` | data → data |
-| Shared LSP servers → ecosystem schema | `ai.lspServers.*` → `mkCopilotLspConfig` vs `mkLspConfig` | data → data (different shapes) |
-| Shared env vars → ecosystem options or skip | `ai.environmentVariables` → `programs.copilot-cli.environmentVariables` (Claude skips) | data → data (or noop) |
-| Shared instructions → markdown bytes | `ai.instructions` → `<frontmatter>` + body with link rewriting | data → bytes |
-| Markdown bytes → on-disk file | rendered string → `~/.claude/rules/foo.md` | bytes → file (per backend) |
-| Shared skills → on-disk dir layout | `ai.skills.foo = ./path` → `~/.claude/skills/foo/` (HM) vs `<project>/.claude/skills/foo/` (devenv) | path → file (per backend) |
+| Axis                                        | Today's example                                                                                     | Shape                          |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------ |
+| Shared settings → ecosystem keys            | `ai.settings.model` → `programs.kiro-cli.settings.chat.defaultModel`                                | data → data                    |
+| Shared LSP servers → ecosystem schema       | `ai.lspServers.*` → `mkCopilotLspConfig` vs `mkLspConfig`                                           | data → data (different shapes) |
+| Shared env vars → ecosystem options or skip | `ai.environmentVariables` → `programs.copilot-cli.environmentVariables` (Claude skips)              | data → data (or noop)          |
+| Shared instructions → markdown bytes        | `ai.instructions` → `<frontmatter>` + body with link rewriting                                      | data → bytes                   |
+| Markdown bytes → on-disk file               | rendered string → `~/.claude/rules/foo.md`                                                          | bytes → file (per backend)     |
+| Shared skills → on-disk dir layout          | `ai.skills.foo = ./path` → `~/.claude/skills/foo/` (HM) vs `<project>/.claude/skills/foo/` (devenv) | path → file (per backend)      |
 
 Markdown rendering is one row. The other rows are equally important
 and equally per-ecosystem. The right unifying abstraction is **an
@@ -57,7 +57,7 @@ fanout system without forking. Specifically:
   `mkIf cfg.copilot.enable`, `mkIf cfg.kiro.enable` branches and
   never iterates over the registry.
 - Fragments are flat strings. Each transform appends frontmatter
-  but cannot do per-target *body* transformations (link rewriting,
+  but cannot do per-target _body_ transformations (link rewriting,
   per-target include semantics, snippet resolution). This forces
   duplicate body content if two targets need to render the same
   source differently.
@@ -112,7 +112,7 @@ the existing Nix module system + a single evaluation discipline.
   transformer config. `recursiveUpdate` and attrset spread
   cover all needed override cases at zero infrastructure cost.
 - Not materializing composition to the Nix store via writeText
-  + IFD. Eval-time sharing via let-bindings is sufficient at
+  and IFD. Eval-time sharing via let-bindings is sufficient at
   the current scale (~50 fragments). Materialization is a
   flake-check killer (IFD) and not worth the complexity unless
   profiling shows compose is the bottleneck. It won't be.
@@ -122,13 +122,13 @@ the existing Nix module system + a single evaluation discipline.
 The design has three layered abstractions plus one cross-cutting
 discipline plus one new option-merging pattern:
 
-| Layer | Concept | Lives in |
-|---|---|---|
-| 1 | Structured fragment nodes (markdown content as AST) | `lib/fragments.nix` |
-| 2 | Ecosystem records (full per-ecosystem policy bundle, includes the markdown transformer as ONE field) | `lib/ai-ecosystems/<name>.nix`, downstream flakes |
-| 3 | Backend adapters (HM module generator, devenv module generator) | `lib/mk-ai-ecosystem-hm-module.nix`, `lib/mk-ai-ecosystem-devenv-module.nix` |
-| Cross-cutting | Single-binding shared composition (eval efficiency) | binding discipline + `passthru.composedByPackage` |
-| Option pattern | Layered option pools — shared `ai.<category>` + per-eco `ai.<eco>.<category>` with merge | declared by the backend adapters from a single source-of-truth in `lib/ai-options.nix` |
+| Layer          | Concept                                                                                              | Lives in                                                                               |
+| -------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 1              | Structured fragment nodes (markdown content as AST)                                                  | `lib/fragments.nix`                                                                    |
+| 2              | Ecosystem records (full per-ecosystem policy bundle, includes the markdown transformer as ONE field) | `lib/ai-ecosystems/<name>.nix`, downstream flakes                                      |
+| 3              | Backend adapters (HM module generator, devenv module generator)                                      | `lib/mk-ai-ecosystem-hm-module.nix`, `lib/mk-ai-ecosystem-devenv-module.nix`           |
+| Cross-cutting  | Single-binding shared composition (eval efficiency)                                                  | binding discipline + `passthru.composedByPackage`                                      |
+| Option pattern | Layered option pools — shared `ai.<category>` + per-eco `ai.<eco>.<category>` with merge             | declared by the backend adapters from a single source-of-truth in `lib/ai-options.nix` |
 
 Layer 2 is the unifying abstraction. The "markdown transformer
 record" from the first iteration of this note is **one field** of
@@ -681,13 +681,13 @@ have rich upstream modules).
 When you're adding a new option category, decide where it lives
 based on how the ecosystems handle the same concept:
 
-| Case | Where it lives | How |
-|---|---|---|
-| **Identity** — abstract type maps 1:1 to every ecosystem's shape | Shared `ai.<category>` with identity translators on every record | `translators.<category> = _name: value: value;` |
-| **Shape translation** — same concept, different on-disk shape per ecosystem | Shared `ai.<category>` with structural translators per record | `translators.<category> = name: abstract: { ... ecosystem shape ... };` |
-| **Key remap** — same content, different field names | Shared `ai.<category>` with translators that rename keys | Kiro: `settings = s: { chat.defaultModel = s.model; };` |
-| **Ecosystem-only feature** — concept exists in one ecosystem and doesn't make sense elsewhere | `extraOptions` field on the ecosystem record only | `ai.claude.buddy = { ... };` (never appears in shared `ai.*`) |
-| **Truly divergent** — same conceptual feature with shapes too incompatible to share an abstract type | Per-eco extension via layered pools, NOT in shared pool | `ai.claude.permissions = { ... }; ai.copilot.permissions = { ... };` (different shapes, both per-eco only) |
+| Case                                                                                                 | Where it lives                                                   | How                                                                                                        |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Identity** — abstract type maps 1:1 to every ecosystem's shape                                     | Shared `ai.<category>` with identity translators on every record | `translators.<category> = _name: value: value;`                                                            |
+| **Shape translation** — same concept, different on-disk shape per ecosystem                          | Shared `ai.<category>` with structural translators per record    | `translators.<category> = name: abstract: { ... ecosystem shape ... };`                                    |
+| **Key remap** — same content, different field names                                                  | Shared `ai.<category>` with translators that rename keys         | Kiro: `settings = s: { chat.defaultModel = s.model; };`                                                    |
+| **Ecosystem-only feature** — concept exists in one ecosystem and doesn't make sense elsewhere        | `extraOptions` field on the ecosystem record only                | `ai.claude.buddy = { ... };` (never appears in shared `ai.*`)                                              |
+| **Truly divergent** — same conceptual feature with shapes too incompatible to share an abstract type | Per-eco extension via layered pools, NOT in shared pool          | `ai.claude.permissions = { ... }; ai.copilot.permissions = { ... };` (different shapes, both per-eco only) |
 
 The general rule: **start by trying to put a new category in the
 shared pool with identity translators**. If a divergence emerges
@@ -737,9 +737,9 @@ entirely. This is the "per-eco only" row in the table above.
 This is also the answer to "what if `programs.copilot` isn't a
 strict superset of `programs.claude-code`?" — the answer is that
 `ai.*` was never meant to be the union of all ecosystems'
-options. It's the *intersection of conceptually-shared ones,
+options. It's the _intersection of conceptually-shared ones,
 expressed at an abstract type that translators can map onto each
-ecosystem's actual shape*. Anything that doesn't fit cleanly
+ecosystem's actual shape_. Anything that doesn't fit cleanly
 goes per-eco. The boundary moves over time as ecosystems
 converge or diverge.
 
@@ -792,7 +792,7 @@ ai = {
 **Effective sets per ecosystem**:
 
 - `claude`: `{ git-mcp, github-mcp }` (shared only)
-- `kiro`:   `{ git-mcp, github-mcp, aws-mcp }` (shared + kiro-specific)
+- `kiro`: `{ git-mcp, github-mcp, aws-mcp }` (shared + kiro-specific)
 
 The backend adapter computes these sets and dispatches each
 through `ecoRecord.translators.mcpServer` to produce the
@@ -1242,24 +1242,24 @@ Net new code: **~450-600 lines** across the following files
 (updated for the corrected ecosystem-record framing + layered
 option pools):
 
-| File | Estimated lines | Purpose |
-|---|---|---|
-| `lib/fragments.nix` | +120 (existing 78 → ~200) | node constructors, `mkRenderer`, default handlers |
-| `lib/ai-options.nix` | +120 (new) | source-of-truth option types: `skillsOption`, `instructionsOption`, `mcpServersOption`, `lspServersOption`, `envVarsOption`, `settingsOption` — referenced by both shared and per-eco option declarations |
-| `lib/mk-ai-ecosystem-hm-module.nix` | +120 (new) | HM backend adapter — declares per-eco options, computes effective sets, dispatches to ecosystem record |
-| `lib/mk-ai-ecosystem-devenv-module.nix` | +110 (new) | devenv backend adapter — same shape, different writer |
-| `lib/mk-raw-ecosystem.nix` | +30 (new) | helper for orphan ecosystems (identity translators, no-op markdown handlers, all upstream null) |
-| `lib/transformers/base.nix` | +30 (new) | base markdown transformer with default handlers |
-| `lib/ai-ecosystems/claude.nix` | +80 (new) | claude ecosystem record (markdownTransformer, translators, layout, upstream delegation) |
-| `lib/ai-ecosystems/copilot.nix` | +70 (new) | copilot ecosystem record |
-| `lib/ai-ecosystems/kiro.nix` | +80 (new) | kiro ecosystem record |
-| `lib/ai-ecosystems/agentsmd.nix` | +30 (new) | agentsmd ecosystem record (write-only, no fanout) |
-| `packages/fragments-docs/ecosystems/readme.nix` | +40 (new) | readme ecosystem record with GH URL link rewriting |
-| `packages/fragments-docs/ecosystems/mdbook.nix` | +30 (new) | mdbook ecosystem record with native include |
-| `modules/ai/default.nix` | -250 (replaced by adapter calls) | thin importer that wires ecosystem records through `mkAiEcosystemHmModule` |
-| `modules/devenv/ai.nix` | -200 (replaced by adapter calls) | thin importer that wires ecosystem records through `mkAiEcosystemDevenvModule` |
-| `dev/generate.nix` | -30 (3x → 1x compose, uses ecosystem records) | use shared composedByPackage and ecosystem records' markdownTransformer |
-| `packages/fragments-ai/default.nix` | -50 (records moved to lib/ai-ecosystems/) | thin shim providing `passthru.composedByPackage` + backward-compat transforms |
+| File                                            | Estimated lines                               | Purpose                                                                                                                                                                                                   |
+| ----------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lib/fragments.nix`                             | +120 (existing 78 → ~200)                     | node constructors, `mkRenderer`, default handlers                                                                                                                                                         |
+| `lib/ai-options.nix`                            | +120 (new)                                    | source-of-truth option types: `skillsOption`, `instructionsOption`, `mcpServersOption`, `lspServersOption`, `envVarsOption`, `settingsOption` — referenced by both shared and per-eco option declarations |
+| `lib/mk-ai-ecosystem-hm-module.nix`             | +120 (new)                                    | HM backend adapter — declares per-eco options, computes effective sets, dispatches to ecosystem record                                                                                                    |
+| `lib/mk-ai-ecosystem-devenv-module.nix`         | +110 (new)                                    | devenv backend adapter — same shape, different writer                                                                                                                                                     |
+| `lib/mk-raw-ecosystem.nix`                      | +30 (new)                                     | helper for orphan ecosystems (identity translators, no-op markdown handlers, all upstream null)                                                                                                           |
+| `lib/transformers/base.nix`                     | +30 (new)                                     | base markdown transformer with default handlers                                                                                                                                                           |
+| `lib/ai-ecosystems/claude.nix`                  | +80 (new)                                     | claude ecosystem record (markdownTransformer, translators, layout, upstream delegation)                                                                                                                   |
+| `lib/ai-ecosystems/copilot.nix`                 | +70 (new)                                     | copilot ecosystem record                                                                                                                                                                                  |
+| `lib/ai-ecosystems/kiro.nix`                    | +80 (new)                                     | kiro ecosystem record                                                                                                                                                                                     |
+| `lib/ai-ecosystems/agentsmd.nix`                | +30 (new)                                     | agentsmd ecosystem record (write-only, no fanout)                                                                                                                                                         |
+| `packages/fragments-docs/ecosystems/readme.nix` | +40 (new)                                     | readme ecosystem record with GH URL link rewriting                                                                                                                                                        |
+| `packages/fragments-docs/ecosystems/mdbook.nix` | +30 (new)                                     | mdbook ecosystem record with native include                                                                                                                                                               |
+| `modules/ai/default.nix`                        | -250 (replaced by adapter calls)              | thin importer that wires ecosystem records through `mkAiEcosystemHmModule`                                                                                                                                |
+| `modules/devenv/ai.nix`                         | -200 (replaced by adapter calls)              | thin importer that wires ecosystem records through `mkAiEcosystemDevenvModule`                                                                                                                            |
+| `dev/generate.nix`                              | -30 (3x → 1x compose, uses ecosystem records) | use shared composedByPackage and ecosystem records' markdownTransformer                                                                                                                                   |
+| `packages/fragments-ai/default.nix`             | -50 (records moved to lib/ai-ecosystems/)     | thin shim providing `passthru.composedByPackage` + backward-compat transforms                                                                                                                             |
 
 Net: ~860 lines added (new files) - ~530 lines removed (modules
 and packages shrink) = **~330 net lines added**, with significant
@@ -1318,7 +1318,7 @@ the time comes:
      test).
    - **Commit 6**: replace the Claude branch in
      `modules/ai/default.nix` with `mkAiEcosystemHmModule
-     claudeRecord`. Verify byte-identical output via the
+claudeRecord`. Verify byte-identical output via the
      existing module-eval check.
    - **Commit 7**: same for Copilot branch.
    - **Commit 8**: same for Kiro branch.
@@ -1371,11 +1371,13 @@ the time comes:
      engine.** Recorded as a feedback memory after the parallel
      sentinel-to-main merge worktree learned the same lesson
      from the same kind of bug.
+
    - **Commit 14**: update architecture fragments to document
      the new pattern (`dev/fragments/pipeline/`,
      `dev/fragments/ai-skills/`, plus a new
      `dev/fragments/ai-ecosystems/` if the topic is large
      enough).
+
 4. **Execute** via `subagent-driven-development` or
    `executing-plans` skill, one commit at a time, checkpoint
    review between each. The byte-identical output checks at
@@ -1420,10 +1422,10 @@ here so they don't get lost:
      (`markdownTransformer.snippets`)
    - As a separate ctx field (`ctx.snippets`)
    - As a top-level binding in `pkgs.fragments-ai.passthru`
-   The second option is most flexible (different consumers can
-   provide different snippet sets without forking the
-   transformer) but pushes more responsibility onto callers.
-   Defer until there's a concrete snippet use case.
+     The second option is most flexible (different consumers can
+     provide different snippet sets without forking the
+     transformer) but pushes more responsibility onto callers.
+     Defer until there's a concrete snippet use case.
 
 5. **Test surface**: should ecosystem records come with
    golden-output tests (fixture fragments + expected rendered
@@ -1471,10 +1473,10 @@ here so they don't get lost:
    - Bridge: `ai.mcpServers` accepts pointers like
      `{ from = config.services.mcp-servers.servers.github-mcp; }`
      that read from the system-wide registry.
-   Lean toward coexist initially. Users with rich credential
-   needs use `services.mcp-servers`; users with simple shared
-   MCP fanout use `ai.mcpServers`. Bridge pattern can be added
-   later if both ergonomics matter.
+     Lean toward coexist initially. Users with rich credential
+     needs use `services.mcp-servers`; users with simple shared
+     MCP fanout use `ai.mcpServers`. Bridge pattern can be added
+     later if both ergonomics matter.
 
 9. **Should ecosystem records be NixOS modules themselves**:
    the records as proposed are plain attrsets. They could
@@ -1500,9 +1502,9 @@ here so they don't get lost:
       (verbose, breaks current shape)
     - Have a parallel `disabledX` set per ecosystem
       (e.g., `ai.claude.disabledSkills = [ "stack-fix" ];`)
-    Lean: extend submodules where natural (mcpServers, lspServers
-    already do); use parallel disable sets for plain types
-    (skills, env vars).
+      Lean: extend submodules where natural (mcpServers, lspServers
+      already do); use parallel disable sets for plain types
+      (skills, env vars).
 
 11. **Layout policy granularity**: the ecosystem record's
     `layout` field has `instructionPath`, `skillPath`,

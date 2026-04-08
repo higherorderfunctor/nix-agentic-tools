@@ -137,33 +137,35 @@
   # nodes via ctx.render — used by `block`, `include`, and any
   # downstream handler that needs to render sub-fragments.
   mkRenderer = transformer: ctxExtras: let
-    self = ctxExtras // {
-      inherit (transformer) handlers;
-      render = fragment: let
-        rawText = fragment.text or "";
-        nodes =
-          if builtins.isString rawText
-          then [(mkRaw rawText)]
-          else rawText;
-        body = builtins.concatStringsSep "" (map (
-            node:
-              if !(node ? __nodeKind)
-              then throw "mkRenderer: node missing __nodeKind: ${builtins.toJSON node}"
-              else if !(self.handlers ? ${node.__nodeKind})
-              then throw "mkRenderer: no handler for node kind '${node.__nodeKind}' in transformer '${transformer.name or "(unnamed)"}'"
-              else self.handlers.${node.__nodeKind} self node
-          )
-          nodes);
-        frontmatterArgs =
-          {
-            description = fragment.description or null;
-            paths = fragment.paths or null;
-          }
-          // ctxExtras;
-        frontmatter = transformer.frontmatter frontmatterArgs;
-      in
-        transformer.assemble {inherit frontmatter body;};
-    };
+    self =
+      ctxExtras
+      // {
+        inherit (transformer) handlers;
+        render = fragment: let
+          rawText = fragment.text or "";
+          nodes =
+            if builtins.isString rawText
+            then [(mkRaw rawText)]
+            else rawText;
+          body = builtins.concatStringsSep "" (map (
+              node:
+                if !(node ? __nodeKind)
+                then throw "mkRenderer: node missing __nodeKind: ${builtins.toJSON node}"
+                else if !(self.handlers ? ${node.__nodeKind})
+                then throw "mkRenderer: no handler for node kind '${node.__nodeKind}' in transformer '${transformer.name or "(unnamed)"}'"
+                else self.handlers.${node.__nodeKind} self node
+            )
+            nodes);
+          frontmatterArgs =
+            {
+              description = fragment.description or null;
+              paths = fragment.paths or null;
+            }
+            // ctxExtras;
+          frontmatter = transformer.frontmatter frontmatterArgs;
+        in
+          transformer.assemble {inherit frontmatter body;};
+      };
   in
     self.render;
 in {

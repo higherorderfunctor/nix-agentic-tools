@@ -1,0 +1,19 @@
+[book]
+title = "nix-agentic-tools"
+description = "Stacked workflows, MCP servers, and declarative AI CLI configuration"
+authors = ["Christopher Aubut"]
+language = "en"
+src = "src"
+
+[output.html]
+default-theme = "coal"
+preferred-dark-theme = "coal"
+site-url = "/nix-agentic-tools/"
+git-repository-url = "https://github.com/higherorderfunctor/nix-agentic-tools"
+edit-url-template = "https://github.com/higherorderfunctor/nix-agentic-tools/edit/main/docs/{path}"
+
+[output.html.search]
+enable = true
+
+[build]
+build-dir = "../result-docs"

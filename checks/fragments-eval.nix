@@ -121,10 +121,12 @@ in {
 
   fragments-render-link = mkTest "render-link" (
     render {
-      text = [(mkLink {
-        target = "skills/foo";
-        label = "stack-fix";
-      })];
+      text = [
+        (mkLink {
+          target = "skills/foo";
+          label = "stack-fix";
+        })
+      ];
     }
     == "[stack-fix](skills/foo)"
   );
@@ -145,10 +147,12 @@ in {
 
   fragments-render-block = mkTest "render-block" (
     render {
-      text = [(mkBlock [
-        (mkRaw "outer-a ")
-        (mkRaw "outer-b")
-      ])];
+      text = [
+        (mkBlock [
+          (mkRaw "outer-a ")
+          (mkRaw "outer-b")
+        ])
+      ];
     }
     == "outer-a outer-b"
   );

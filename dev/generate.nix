@@ -201,12 +201,11 @@
   # ── Claude rule files ────────────────────────────────────────────────
   # Scoped rule files only. No common.md — the body content is
   # already loaded via CLAUDE.md (which @-imports AGENTS.md).
-  claudeFiles =
-    lib.mapAttrs' (pkg: composed: let
-      pkgEco = mkEcosystemFile pkg;
-    in
-      lib.nameValuePair "${pkg}.md" (pkgEco.claude composed))
-    composedByPackage;
+  claudeFiles = lib.mapAttrs' (pkg: composed: let
+    pkgEco = mkEcosystemFile pkg;
+  in
+    lib.nameValuePair "${pkg}.md" (pkgEco.claude composed))
+  composedByPackage;
 
   # ── Copilot instruction files ────────────────────────────────────────
   copilotFiles =
@@ -214,10 +213,10 @@
       "copilot-instructions.md" = monorepoEco.copilot rootComposed;
     }
     // (lib.mapAttrs' (pkg: composed: let
-        pkgEco = mkEcosystemFile pkg;
-      in
-        lib.nameValuePair "${pkg}.instructions.md" (pkgEco.copilot composed))
-      composedByPackage);
+      pkgEco = mkEcosystemFile pkg;
+    in
+      lib.nameValuePair "${pkg}.instructions.md" (pkgEco.copilot composed))
+    composedByPackage);
 
   # ── Kiro steering files ─────────────────────────────────────────────
   # `common.md` is always-loaded (no `paths`). Pass an explicit
@@ -233,10 +232,10 @@
           });
     }
     // (lib.mapAttrs' (pkg: composed: let
-        pkgEco = mkEcosystemFile pkg;
-      in
-        lib.nameValuePair "${pkg}.md" (pkgEco.kiro composed))
-      composedByPackage);
+      pkgEco = mkEcosystemFile pkg;
+    in
+      lib.nameValuePair "${pkg}.md" (pkgEco.kiro composed))
+    composedByPackage);
 
   # ── Top-level markdown files ─────────────────────────────────────────
   agentsMd = ''
