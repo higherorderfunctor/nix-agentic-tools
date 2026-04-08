@@ -30,7 +30,6 @@
 }: let
   inherit
     (lib)
-    concatMapAttrs
     mkDefault
     mkEnableOption
     mkIf
@@ -45,9 +44,9 @@
   inherit (aiCommon) mkCopilotLspConfig mkLspConfig;
   aiTransforms = pkgs.fragments-ai.passthru.transforms;
 
-  inherit (import ../../lib/buddy-types.nix {inherit lib;}) buddySubmodule;
-
   cfg = config.ai;
+
+  mkAiEcosystemHmModule = import ../../lib/mk-ai-ecosystem-hm-module.nix {inherit lib;};
 in {
   # Pull in the HM modules this one references inside its mkIf
   # blocks. Without these imports, consumers importing only
@@ -59,34 +58,21 @@ in {
     ../claude-code-buddy
     ../copilot-cli
     ../kiro-cli
+    # Record is imported directly from lib/ai-ecosystems/claude.nix
+    # rather than via pkgs.fragments-ai.passthru.records.claude: the
+    # module system evaluates `imports` before `_module.args.pkgs` is
+    # available, so reading `pkgs` here triggers infinite recursion
+    # through `_module.freeformType`. The file at that path is the
+    # same single source of truth that packages/fragments-ai/default.nix
+    # re-exports via passthru.records.claude.
+    (mkAiEcosystemHmModule (import ../../lib/ai-ecosystems/claude.nix {inherit lib;}))
   ];
 
   options.ai = {
-    claude = mkOption {
-      type = types.submodule {
-        options = {
-          enable = mkEnableOption "Fan out shared config to Claude Code";
-          package = mkOption {
-            type = types.package;
-            default = pkgs.claude-code;
-            defaultText = lib.literalExpression "pkgs.claude-code";
-            description = "Claude Code package.";
-          };
-          buddy = mkOption {
-            type = types.nullOr buddySubmodule;
-            default = null;
-            description = ''
-              Buddy companion customization. When set, fans out to
-              `programs.claude-code.buddy` which installs an
-              activation script to patch the buddy salt at activation
-              time. See modules/claude-code-buddy/ for details.
-            '';
-          };
-        };
-      };
-      default = {};
-      description = "Claude Code ecosystem configuration.";
-    };
+    # ai.claude options are now declared by the adapter-generated
+    # module in the imports list. See
+    # lib/mk-ai-ecosystem-hm-module.nix and
+    # pkgs.fragments-ai.passthru.records.claude.
 
     copilot = mkOption {
       type = types.submodule {
@@ -163,34 +149,10 @@ in {
     # Users configure programs.mcp.servers directly and each CLI's
     # enableMcpIntegration picks them up. This avoids double-injection.
 
-    # Claude Code — ai.claude.enable is the sole gate. It also flips
-    # programs.claude-code.enable so consumers don't set enable twice.
-    (mkIf cfg.claude.enable (mkMerge [
-      {
-        programs.claude-code.enable = mkDefault true;
-        programs.claude-code.skills = lib.mapAttrs (_: mkDefault) cfg.skills;
-        home.file =
-          # Instructions as Claude rules with frontmatter
-          concatMapAttrs (name: instr: {
-            ".claude/rules/${name}.md" = {
-              text = mkDefault (aiTransforms.claude {package = name;} instr);
-            };
-          })
-          cfg.instructions;
-      }
-      # Auto-set ENABLE_LSP_TOOL=1 when LSP servers are configured
-      (mkIf (cfg.lspServers != {}) {
-        programs.claude-code.settings.env.ENABLE_LSP_TOOL = mkDefault "1";
-      })
-      # Normalized model setting
-      (mkIf (cfg.settings.model != null) {
-        programs.claude-code.settings.model = mkDefault cfg.settings.model;
-      })
-      # Buddy fanout — sets the canonical programs.claude-code.buddy
-      (mkIf (cfg.claude.buddy != null) {
-        programs.claude-code.buddy = cfg.claude.buddy;
-      })
-    ]))
+    # Claude fanout is now handled by the adapter-generated module
+    # imported via lib/mk-ai-ecosystem-hm-module.nix. See
+    # pkgs.fragments-ai.passthru.records.claude for the per-ecosystem
+    # policy (markdownTransformer, translators, layout, upstream).
 
     # Copilot CLI — ai.copilot.enable also flips programs.copilot-cli.enable.
     (mkIf cfg.copilot.enable {
