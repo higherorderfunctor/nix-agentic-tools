@@ -103,9 +103,9 @@
     ];
     pipeline = [
       "lib/fragments.nix"
+      "lib/ai/transformers/**"
       "dev/generate.nix"
       "dev/tasks/generate.nix"
-      "packages/fragments-ai/**"
     ];
   };
 
@@ -161,7 +161,13 @@
     };
 
   # ── Ecosystem file transforms ────────────────────────────────────────
-  aiTransforms = pkgs.fragments-ai.passthru.transforms;
+  # Transformer functions now live in lib/ai/transformers/ (moved from
+  # packages/fragments-ai/default.nix passthru.transforms during
+  # Milestone 9 of the factory rollout). Each exposes a `render`
+  # function that takes a composed fragment (optionally merged with
+  # extra context like `package` for claude or `name` for kiro) and
+  # returns a rendered byte string.
+  aiTransforms = (import ../lib/ai {inherit lib;}).transformers;
   mkEcosystemFile = package: let
     paths = packagePaths.${package} or null;
     withPaths = composed:
@@ -169,10 +175,10 @@
       then composed // {inherit paths;}
       else composed;
   in {
-    agentsmd = composed: aiTransforms.agentsmd (withPaths composed);
-    claude = composed: aiTransforms.claude {inherit package;} (withPaths composed);
-    copilot = composed: aiTransforms.copilot (withPaths composed);
-    kiro = composed: aiTransforms.kiro {name = package;} (withPaths composed);
+    agentsmd = composed: aiTransforms.agentsmd.render (withPaths composed);
+    claude = composed: aiTransforms.claude.render (withPaths composed // {inherit package;});
+    copilot = composed: aiTransforms.copilot.render (withPaths composed);
+    kiro = composed: aiTransforms.kiro.render (withPaths composed // {name = package;});
   };
 
   # ── Derived values ───────────────────────────────────────────────────
@@ -224,12 +230,11 @@
   # "no description for paths==null without explicit override" rule).
   kiroFiles =
     {
-      "common.md" =
-        aiTransforms.kiro {name = "common";}
-        (rootComposed
-          // {
-            description = "Always-loaded monorepo orientation for Kiro.";
-          });
+      "common.md" = aiTransforms.kiro.render (rootComposed
+        // {
+          name = "common";
+          description = "Always-loaded monorepo orientation for Kiro.";
+        });
     }
     // (lib.mapAttrs' (pkg: composed: let
       pkgEco = mkEcosystemFile pkg;

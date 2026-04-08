@@ -60,7 +60,6 @@
     # `overlays.default` composition share the same import.
     aiOverlay = import ./overlays {inherit inputs;};
     codingStandardsOverlay = import ./packages/coding-standards {};
-    fragmentsAiOverlay = import ./packages/fragments-ai {};
     fragmentsDocsOverlay = import ./packages/fragments-docs {};
     stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
 
@@ -84,11 +83,9 @@
         nvSourcesOverlay
         aiOverlay
         codingStandardsOverlay
-        fragmentsAiOverlay
         fragmentsDocsOverlay
         stackedWorkflowsOverlay
       ];
-      fragments-ai = fragmentsAiOverlay;
       fragments-docs = fragmentsDocsOverlay;
       stacked-workflows = stackedWorkflowsOverlay;
     };

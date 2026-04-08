@@ -1,5 +1,5 @@
 ---
-applyTo: "lib/fragments.nix,dev/generate.nix,dev/tasks/generate.nix,packages/fragments-ai/**"
+applyTo: "lib/fragments.nix,lib/ai/transformers/**,dev/generate.nix,dev/tasks/generate.nix"
 ---
 
 ## Fragment Pipeline Architecture
