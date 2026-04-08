@@ -621,31 +621,55 @@ Everything else. Park these until TOP/MIDDLE are stable.
       catchup-to-main merge sequence completes; do as a single
       dedicated PR rather than a chunk so reviewer sees the full
       shape change.
-- [ ] **CI drift check for committed generated instruction
-      files** — `.github/copilot-instructions.md`,
-      `.github/instructions/*.instructions.md`, and `AGENTS.md`
-      are now committed (landed in PR #7). Add a CI step that
-      runs the canonical generators via the **devenv tasks**
-      (`devenv tasks run --mode before generate:instructions:copilot`
-      and `... generate:instructions:agents`) and diffs the
-      working tree against HEAD. Fails if there's any diff.
-      **Use the devenv tasks, not `nix build` directly** — per
-      user feedback on PR #8 (2026-04-08): running the tasks
-      exercises the entire generation pipeline (build + cp +
-      chmod), catching regressions in the task scripts that a
-      bare `nix build` would miss. This complements the
-      build-commands.md fragment that codifies devenv tasks as
-      the canonical regeneration UX. Could be a flake check
-      (`checks.instructions-drift`) or a separate CI job that
-      shells into devenv. Pre-commit hook is the wrong layer
-      because regenerating in pre-commit slows down every commit.
+- [ ] **Drift detection — agent or skill set covering multiple
+      categories**. Per user feedback on PR #8 (2026-04-08):
+      drift detection is broader than just generated instruction
+      files; we likely need a dedicated agent or set of skills
+      that periodically (or on-demand, or in CI) flag drift
+      across multiple categories. Categories to cover: - **Generated instruction files** — `.github/copilot-instructions.md`,
+      `.github/instructions/*.instructions.md`, `AGENTS.md`
+      (committed in PR #7). Run
+      `devenv tasks run --mode before generate:instructions:copilot`
+      and `... generate:instructions:agents`, then diff the
+      working tree against HEAD. **Use the devenv tasks, not
+      `nix build` directly** — running the tasks exercises the
+      entire generation pipeline (build + cp + chmod),
+      catching regressions in the task scripts that a bare
+      `nix build` would miss. Per the build-commands.md
+      fragment, devenv tasks are the canonical regeneration
+      UX. Could be a flake check (`checks.instructions-drift`)
+      or a separate CI job that shells into devenv. - **Stacking tool versions** — `git-absorb`, `git-branchless`,
+      `git-revise`, `agnix`. Detect upstream releases that
+      diverge from the pinned `nvfetcher` versions. Today this
+      is a manual `nix run .#update` cadence. A drift agent
+      could ping when upstream tags advance past our pin and
+      suggest the bump as a PR. - **LSP/MCP option surface** — when an upstream MCP server
+      (or LSP) adds/renames/removes settings, our typed
+      `services.mcp-servers.servers.<name>.settings` schema
+      falls behind silently. Drift detection should compare
+      our typed options against upstream README / OpenAPI /
+      config schema and flag mismatches. - **Any other upstream changes** — claude-code, copilot-cli,
+      kiro-cli, mcp servers, devenv itself. Anything tracked
+      via nvfetcher that has a settings/CLI/config surface
+      we mirror. - **Cross-config parity** — HM module ↔ devenv module
+      option parity (existing concept from
+      `feedback_consistency_and_discovery.md`). Could be
+      promoted from "manual review" to "drift agent flag".
+      Implementation shapes to consider: (a) a Claude Code
+      agent that runs daily, queries upstream sources, and
+      opens issues; (b) a set of `/drift-*` skills that human
+      contributors invoke on demand; (c) CI checks for the
+      strict drift cases (instruction files, nvfetcher pinned
+      versions). Probably a mix of all three. Pre-commit hook
+      is the wrong layer for any of these because regen/network
+      in pre-commit slows down every commit.
 - [ ] **Fragment assembler should leave inline source-path
       comments in generated outputs** — when `compose` produces
       a final file (CLAUDE.md, AGENTS.md, copilot-instructions.md,
       etc.), inject HTML comments at two levels:
       (1) top-of-file comment naming the source file that defines
       the composition (e.g., `<!-- generated from dev/generate.nix —
-  do not edit -->`); (2) above each composed fragment, a
+do not edit -->`); (2) above each composed fragment, a
       comment naming the source markdown path (e.g.,
       `<!-- packages/coding-standards/fragments/coding-standards.md -->`).
       Reasoning from user 2026-04-08 PR #7 review: makes it
@@ -683,7 +707,7 @@ Everything else. Park these until TOP/MIDDLE are stable.
       isn't a great place for AST parsing — better to do this
       via a string-template DSL where fragments declare
       `{ heading = "Coding Conventions"; level = 2; subsection
-  = "## Bash"; text = "..."; }`. (3) This crosses into
+= "## Bash"; text = "..."; }`. (3) This crosses into
       "fragment system as document model" territory which is
       a meaningful expansion of scope — counter-question is
       whether the docsite would benefit too (which would

@@ -102,6 +102,7 @@ PYTHONNOUSERSITE
 quickstarts
 readabilipy
 reauthor
+regen
 reflog
 Reftable
 reimplementation
