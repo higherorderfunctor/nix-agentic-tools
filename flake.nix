@@ -173,105 +173,83 @@
 
     packages = forAllSystems (system: let
       pkgs = pkgsFor system;
-    in {
-      # All AI packages — CLIs, git tools, and MCP servers — now live
-      # under pkgs.ai (unified overlay). The legacy pkgs.nix-mcp-servers
-      # namespace was dissolved as part of Milestone 5; the legacy
-      # pkgs.{agnix,git-*} flat entries were moved to pkgs.ai.* as part
-      # of Milestone 6.
-      # Note: github-copilot-cli has been renamed copilot-cli (dropped
-      # the "github-" prefix) as part of the Milestone 4 factory port.
-      inherit
-        (pkgs.ai)
-        agnix
-        any-buddy
-        claude-code
-        context7-mcp
-        copilot-cli
-        effect-mcp
-        fetch-mcp
-        git-absorb
-        git-branchless
-        git-intel-mcp
-        git-mcp
-        git-revise
-        github-mcp
-        kagi-mcp
-        kiro-cli
-        kiro-gateway
-        mcp-language-server
-        mcp-proxy
-        nixos-mcp
-        openmemory-mcp
-        sequential-thinking-mcp
-        serena-mcp
-        sympy-mcp
-        ;
+    in
+      # All AI packages — CLIs, git tools, and MCP servers — live
+      # under pkgs.ai (unified overlay) and are exposed flat at
+      # packages.<system>.<name> for CLI ergonomics (`nix build .#<name>`).
+      # Adding a new package to the overlay automatically adds it
+      # here; no flake.nix edit needed for new binaries.
+      #
+      # Legacy notes preserved for history:
+      # - pkgs.nix-mcp-servers namespace dissolved in Milestone 5
+      # - pkgs.{agnix,git-*} flat entries moved to pkgs.ai.* in Milestone 6
+      # - github-copilot-cli renamed to copilot-cli in Milestone 4
+      pkgs.ai
+      // {
+        # Instruction file derivations (from dev/generate.nix).
+        # Each ecosystem produces a content directory consumed by the
+        # `generate:instructions:*` devenv tasks.
+        instructions-agents = let
+          gen = import ./dev/generate.nix {inherit lib pkgs;};
+        in
+          pkgs.writeText "AGENTS.md" gen.agentsMd;
 
-      # Instruction file derivations (from dev/generate.nix).
-      # Each ecosystem produces a content directory consumed by the
-      # `generate:instructions:*` devenv tasks.
-      instructions-agents = let
-        gen = import ./dev/generate.nix {inherit lib pkgs;};
-      in
-        pkgs.writeText "AGENTS.md" gen.agentsMd;
-
-      instructions-claude = let
-        gen = import ./dev/generate.nix {inherit lib pkgs;};
-        files =
-          {"CLAUDE.md" = gen.claudeMd;}
-          // lib.mapAttrs' (
-            name: content: lib.nameValuePair "rules/${name}" content
-          )
-          gen.claudeFiles;
-      in
-        pkgs.runCommand "instructions-claude" {} (
-          "mkdir -p $out/rules\n"
-          + lib.concatStringsSep "\n" (
-            lib.mapAttrsToList (
-              name: content: "cp ${pkgs.writeText (baseNameOf name) content} $out/${name}"
+        instructions-claude = let
+          gen = import ./dev/generate.nix {inherit lib pkgs;};
+          files =
+            {"CLAUDE.md" = gen.claudeMd;}
+            // lib.mapAttrs' (
+              name: content: lib.nameValuePair "rules/${name}" content
             )
-            files
-          )
-        );
-
-      instructions-copilot = let
-        gen = import ./dev/generate.nix {inherit lib pkgs;};
-        files =
-          lib.mapAttrs' (
-            name: content:
-              lib.nameValuePair (
-                if name == "copilot-instructions.md"
-                then name
-                else "instructions/${name}"
+            gen.claudeFiles;
+        in
+          pkgs.runCommand "instructions-claude" {} (
+            "mkdir -p $out/rules\n"
+            + lib.concatStringsSep "\n" (
+              lib.mapAttrsToList (
+                name: content: "cp ${pkgs.writeText (baseNameOf name) content} $out/${name}"
               )
-              content
-          )
-          gen.copilotFiles;
-      in
-        pkgs.runCommand "instructions-copilot" {} (
-          "mkdir -p $out/instructions\n"
-          + lib.concatStringsSep "\n" (
-            lib.mapAttrsToList (
-              name: content: "cp ${pkgs.writeText (baseNameOf name) content} $out/${name}"
+              files
             )
-            files
-          )
-        );
+          );
 
-      instructions-kiro = let
-        gen = import ./dev/generate.nix {inherit lib pkgs;};
-      in
-        pkgs.runCommand "instructions-kiro" {} (
-          "mkdir -p $out\n"
-          + lib.concatStringsSep "\n" (
-            lib.mapAttrsToList (
-              name: content: "cp ${pkgs.writeText name content} $out/${name}"
+        instructions-copilot = let
+          gen = import ./dev/generate.nix {inherit lib pkgs;};
+          files =
+            lib.mapAttrs' (
+              name: content:
+                lib.nameValuePair (
+                  if name == "copilot-instructions.md"
+                  then name
+                  else "instructions/${name}"
+                )
+                content
             )
-            gen.kiroFiles
-          )
-        );
-    });
+            gen.copilotFiles;
+        in
+          pkgs.runCommand "instructions-copilot" {} (
+            "mkdir -p $out/instructions\n"
+            + lib.concatStringsSep "\n" (
+              lib.mapAttrsToList (
+                name: content: "cp ${pkgs.writeText (baseNameOf name) content} $out/${name}"
+              )
+              files
+            )
+          );
+
+        instructions-kiro = let
+          gen = import ./dev/generate.nix {inherit lib pkgs;};
+        in
+          pkgs.runCommand "instructions-kiro" {} (
+            "mkdir -p $out\n"
+            + lib.concatStringsSep "\n" (
+              lib.mapAttrsToList (
+                name: content: "cp ${pkgs.writeText name content} $out/${name}"
+              )
+              gen.kiroFiles
+            )
+          );
+      });
 
     # Standard flake outputs for `nix develop` and `nix fmt`.
     # Primary dev workflow is `devenv shell` / `devenv test` via
