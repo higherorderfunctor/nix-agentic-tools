@@ -46,7 +46,21 @@
     # Spelling
     cspell = {
       enable = true;
-      excludes = [".*-package-lock\\.json$" ".*\\.lock$"];
+      # `docs/plan.md` and everything under `docs/superpowers/`
+      # are sentinel-tip-only scratch — PR extraction filters
+      # them out so they never merge to main. No value gating
+      # every commit on their spelling. Excluding lets backlog
+      # entries, specs, and plans reference novel tool names,
+      # commit SHAs, nix store hashes, tool jargon, etc. without
+      # polluting `.cspell/project-terms.txt`. `docs/superpowers/`
+      # is recreated by the superpowers plugin's brainstorming /
+      # writing-plans skills whenever a new design session starts.
+      excludes = [
+        ".*-package-lock\\.json$"
+        ".*\\.lock$"
+        "^docs/plan\\.md$"
+        "^docs/superpowers/"
+      ];
     };
 
     # Commit message convention

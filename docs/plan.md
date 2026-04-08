@@ -1,29 +1,19 @@
 # nix-agentic-tools Plan
 
 > Living document. Single source of truth for remaining work.
-> Branch target: `sentinel/monorepo-plan`.
+> Lives on `sentinel/monorepo-plan` (and the current working
+> branch `refactor/ai-factory-architecture` that will take it
+> over). **Never merges to main** — PR extraction filters this
+> file out. Because of that, cspell is configured to skip it,
+> so backlog entries can reference novel tool names, commit
+> SHAs, nix store hashes, etc. without ceremony.
 >
-> **Priority rule:** work TOP to MIDDLE to LOWER. Top items
-> unblock middle and lower. Ecosystem expansion waits for the
-> factory architecture to solidify. Deprioritized items stay
-> parked until the architecture and nixos-config integration
-> are stable.
-
-## Authoring notes
-
-Pre-commit runs cspell over this file. When writing backlog
-entries, avoid strings that trip the spellchecker on every commit:
-
-- **No literal Nix store hashes.** Use `<HASH>-<name>-<version>`
-  or `/nix/store/...-name-version` as placeholders. Real 32-char
-  base32 store hashes will always contain novel letter runs cspell
-  flags.
-- **No raw narinfo URLs.** Describe the path
-  (`cachix.org/<hash>.narinfo`) or add the word to
-  `.cspell/project-terms.txt` once and reuse.
-- **Jargon goes in `.cspell/project-terms.txt`**, not the prose.
-  Words like `narinfo` should be added to the allowlist the first
-  time they appear. Keep the list alphabetical.
+> Structure is **sequential dependency**, not priority. Later
+> sections are blocked on earlier ones by a named dependency
+> (spec → implementation → expansion → polish). "Parallel"
+> sections are not blocked on the spec/implementation chain
+> and can be picked up between blocking steps when context
+> allows.
 
 ## Pivot decision (2026-04-08)
 
@@ -59,7 +49,7 @@ reshaped under the new contract.
   are logical, not package-derived.
 - **Typed extras contract.** CLI factories accept
   `extraOptions = { <name> = { type, default, description,
-  onSet }; };` — `onSet` is a lambda
+onSet }; };` — `onSet` is a lambda
   `{ value, cfg, pkgs, lib }: moduleConfigFragment` so extras
   contribute real module config fragments, not opaque
   attrsets. Claude's buddy support becomes an extra under the
@@ -76,10 +66,10 @@ reshaped under the new contract.
 
 **What survives from the records+adapter design:**
 
-- The *pattern* — records-as-data feeding a backend-agnostic
+- The _pattern_ — records-as-data feeding a backend-agnostic
   adapter — is right. It just needs to live on the package
   (`passthru.ecosystem = { transformer, layout, translators,
-  extraOptions, upstream }`) instead of being authored by hand
+extraOptions, upstream }`) instead of being authored by hand
   in `lib/ai-ecosystems/`.
 - The `markdownTransformer` + `translators` split survives.
 - The `pushDownProperties` trap lesson survives (dispatch must
@@ -120,28 +110,32 @@ get written.
   plus the mdbook contributing section. Always-loaded budget
   reduced ~27k → ~5k tokens across all four ecosystems.
 
-## Priorities
+## Sequence
 
-Three tiers:
+The blocking chain, with named dependencies:
 
-- **TOP** — Target-architecture spec + implementation plan +
-  port each existing package/module onto the new factory. Then
-  maintain the current fragment system, integrate nixos-config
-  (complete port to `ai.*`), and finish the unfinished chunks
-  from the paused sentinel→main merge loop.
-- **MIDDLE** — Bring Kiro online, bring Copilot online, add
-  OpenAI Codex as 4th ecosystem (in that order), each via the
-  new factory.
-- **LOWER** — CI polish (except cachix already done), agentic
-  tooling (check-drift, check-health, index-repo-docs),
-  PR/stack workflow, contributor docs and build-out, doc site
-  polish, misc backlog.
+1. **Now (blocking everything):** Target architecture spec —
+   answer Q1–Q8 below, write the design doc.
+2. **Next (blocked on spec):** Factory implementation sequence
+   — draft a plan against the spec, then land Steps 1–7 of the
+   factory rollout under this branch. Commits can be large;
+   end-state matters more than git history during this window
+   (user will re-chunk for the main merge next week).
+3. **Post-factory (blocked on rollout):** Ecosystem expansion
+   - nixos-config integration — bring Kiro/Copilot online via
+     the factory, add OpenAI Codex as 4th ecosystem, migrate
+     nixos-config off its vendored packages onto the factory.
+4. **Parallel (not blocked):** Fragment system maintenance,
+   repo hygiene, CI polish, doc site gaps. Pick from these
+   between blocking steps when context allows.
+5. **Backlog (defer):** Everything else. Park until the
+   blocking chain is stable.
 
 ---
 
-## TOP priority
+## Now: target architecture spec
 
-### Target architecture spec
+### Open questions
 
 These are the open questions from the pivot brainstorm. Each
 needs a written answer before the implementation plan gets
@@ -179,29 +173,36 @@ drafted. Extended context in
 - [ ] **Q6: Buddy as extra contract** — confirm buddy becomes
       `packages/ai/claude-code/extras/buddy.nix` registered
       via `extraOptions.buddy = { type = submodule …;
-      default = { }; description = "…"; onSet =
-      { value, cfg, pkgs, lib }: { … }; };`. Requires
+default = { }; description = "…"; onSet =
+{ value, cfg, pkgs, lib }: { … }; };`. Requires
       resolving whether extras can introduce activation
       scripts (buddy needs one) and if that changes the
       `onSet` return shape.
 - [ ] **Q7: Named MCP server duplication story** — naming
       rules (must be unique per-CLI? globally?), how the lib
       keys the set, and whether the `pkgs.ai.mcpServer.<name>`
-      overlay exposes a *factory* or an *instance*.
+      overlay exposes a _factory_ or an _instance_.
 - [ ] **Q8: Typed extras handler signature** — `onSet =
-      { value, cfg, pkgs, lib }: …` returning a module-config
+{ value, cfg, pkgs, lib }: …` returning a module-config
       attrset vs returning a free-form `{ hmConfig,
-      devenvConfig, packages }` trio. Ties to Q2.
+devenvConfig, packages }` trio. Ties to Q2.
 
-**Deliverable:** a written design doc under
+### Deliverable
+
+A written design doc under
 `docs/superpowers/specs/2026-04-??-ai-factory-architecture-design.md`
 answering Q1–Q8 with the brainstorming skill's usual
 approach-alternatives-and-decision format. Only after that
 does an implementation plan get drafted.
 
-### Target architecture implementation
+---
 
-Blocked on the spec above. Tentative shape, not yet detailed
+## Next: factory implementation sequence
+
+Blocked on the spec above. Commits during this sequence can
+be large — user cares about end state over clean git history
+during the rollout window; re-chunking for the main merge
+happens the week after. Tentative shape, not yet detailed
 enough for execution:
 
 - [ ] **Step 1: Land `lib/ai/` factory primitives** — minimum
@@ -235,7 +236,7 @@ enough for execution:
       becomes a registry walker that invokes each package's
       handler(s). Delete `lib/ai-ecosystems/`, re-introduce
       the safety-net fixtures from the archive (`checks/
-      module-eval.nix`, 22 tests) translated to the new
+module-eval.nix`, 22 tests) translated to the new
       registry shape.
 - [ ] **Step 7: Scope overlay under `pkgs.ai.*`.** Final
       restructure of `overlays.default`. Ripples through
@@ -243,45 +244,160 @@ enough for execution:
       nixos-config. Schedule for after Steps 1–6 are green so
       the rename is mechanical.
 
-### Sentinel → main catchup (finish what chunks 1–7 started)
+### Sentinel → main catchup leftovers
 
 Chunks 1–7 landed on main in PRs #3–#11 (see "Done" section
 below). Chunks 8–17 were paused pre-pivot. Under the pivot,
 most of those chunks get absorbed into the factory port; the
-items below are the ones that don't map cleanly and still need
-their own work.
+items below are the ones that don't map cleanly and still
+need their own work. They belong to the factory implementation
+sequence rather than the parallel track because they touch
+the same files.
 
 - [ ] **Kiro openmemory still raw npx** — not yet using
       `mkStdioEntry`. Fix as part of the MCP-server factory
       port.
-- [ ] **CI drift check for committed generated instruction
-      files** — `.github/copilot-instructions.md`,
-      `.github/instructions/*.instructions.md`, and
-      `AGENTS.md` are now committed (landed in PR #7). Add a
-      CI step that runs
-      `devenv tasks run --mode before generate:instructions:*`
-      and diffs the result against the committed files.
-      Fails if they drift. Per PR #8 user note, use the
-      devenv tasks (not `nix build` directly) so regressions
-      in the task scripts also get caught. Could be a flake
-      check (`checks.instructions-drift`) or a separate CI
-      job. Pre-commit hook is the wrong layer because
-      regenerating in pre-commit slows down every commit.
 - [ ] **Remaining merge-plan chunks (8–17)** — HM modules
       wave, devenv modules, devshell, dev/update, fragments,
-      docsite, checks. Under the pivot these become line items
-      within the factory-port steps above; most of chunk 8
-      (HM modules) disappears when `programs.{copilot,kiro}`
-      get dropped. Re-evaluate after the spec answers Q5
-      (big-bang vs sequenced). Backup of the original merge
-      plan is in `archive/sentinel-pre-takeover:docs/
-      superpowers/plans/2026-04-08-sentinel-to-main-merge.md`.
+      docsite, checks. Under the pivot these become line
+      items within the factory-port steps above; most of
+      chunk 8 (HM modules) disappears when
+      `programs.{copilot,kiro}` get dropped. Re-evaluate
+      after the spec answers Q5 (big-bang vs sequenced).
+      Backup of the original merge plan is in
+      `archive/sentinel-pre-takeover:docs/superpowers/plans/2026-04-08-sentinel-to-main-merge.md`.
 
-### Fragment system maintenance
+---
 
-These are the follow-ups from the Checkpoint 8 multi-reviewer
-audit of the steering-fragments work, plus Phase-1/2a
-carry-overs. Low individual risk, high cumulative value.
+## Post-factory: ecosystem expansion
+
+Blocked on the factory implementation sequence landing enough
+of Steps 1–7 to support a new CLI. Each item can then be
+scheduled independently.
+
+### Bring Kiro online (via factory)
+
+- [ ] **ai.kiro.\* full passthrough** — mirror every
+      `programs.kiro-cli.*` option via the factory's typed
+      extras contract. Separate plan to be drafted when the
+      claude-code port proves the pattern.
+- [ ] **nixos-config Kiro migration** — move the consumer's
+      Kiro config from direct `programs.kiro-cli.*` to the
+      new factory-fed surface.
+
+### Bring Copilot online (via factory)
+
+- [ ] **ai.copilot.\* full passthrough** — mirror every
+      `programs.copilot-cli.*` option via the factory's
+      typed extras contract. Separate plan to be drafted.
+- [ ] **nixos-config Copilot migration** — move consumer
+      config.
+- [ ] **copilot-cli / kiro-cli DRY** — 7 helpers copy-pasted
+      between the old modules. Absorbed into the factory
+      port automatically.
+- [ ] **MCP server submodule DRY** — duplicated in devenv
+      copilot/kiro modules. Absorbed into `mkMcpServer`.
+
+### Add OpenAI Codex (4th ecosystem, LAST)
+
+- [ ] **Package chatgpt-codex CLI + factory registration** —
+      follow whatever pattern the claude-code port
+      established. Add as 4th ecosystem record.
+- [ ] **Add Codex ecosystem transform to `fragments-ai`** —
+      curried frontmatter generator for Codex
+      steering/instructions format (verify what format Codex
+      uses; currently AGENTS.md standard is flat).
+- [ ] **Wire Codex into `modules/ai/default.nix`** — the
+      registry walker picks it up automatically once the
+      package is in place.
+- [ ] **Mirror in `modules/devenv/ai.nix`** per config
+      parity. Should be free via the factory.
+
+### nixos-config integration
+
+Goal: nixos-config fully ported to the new `ai.*` surface.
+
+- [ ] **Wire nix-agentic-tools into nixos-config** — HM
+      global + devshell per-repo. Flake input, overlay,
+      module imports. Has been partially done (HITL work
+      2026-04-06); verify current state and close any gaps.
+      During the factory rollout, nixos-config's flake input
+      can pin to `refactor/ai-factory-architecture` or
+      whatever branch is current — user has confirmed input
+      pin flexibility during this window. End-to-end
+      verification checklist the rewrite dropped: - [ ] `home-manager switch` runs cleanly end-to-end
+      on the real consumer (not just module-eval) - [ ] copilot-cli activation merge: settings.json
+      deep-merge preserves user runtime additions
+      across rebuilds - [ ] kiro-cli steering files generate with valid
+      YAML frontmatter (`inclusion`,
+      `fileMatchPattern`, etc.) - [ ] stacked-workflows integrations wire skill files
+      into all three ecosystems (Claude, Copilot,
+      Kiro) - [ ] Fresh-clone smoke test: `git clone` to /tmp,
+      `devenv test`, verify no rogue `.gitignore` or
+      generated files leak into the working tree
+- [ ] **Migrate nixos-config AI config to new factory-fed
+      `ai.*` module** — replace hardcoded
+      `programs.claude-code.*` / `copilot.*` / `kiro.*`
+      blocks. See `memory/project_nixos_config_integration.md`
+      for the 8 interface contracts and the current vendored
+      package list.
+- [ ] **Verify 8 interface contracts hold** — enumerated in
+      `memory/project_nixos_config_integration.md`. Refresh
+      the memory after integration lands.
+- [ ] **Remove vendored AI packages from nixos-config** —
+      copilot-cli, kiro-cli, kiro-gateway, ollama HM module
+      (TBD). Verify each one's migration path before
+      removal.
+- [ ] **Ollama ownership decision** — ollama HM module plus
+      model management currently in nixos-config
+      (GPU/host-specific). Decide: stay in nixos-config
+      (host-specific) or move to nix-agentic-tools
+      (reusable)?
+
+### Claude-code quality-of-life
+
+Items that were in the old "TOP leftovers" that are really
+ecosystem-level polish and fit here:
+
+- [ ] **Set `DISABLE_AUTOUPDATER=1` defensively in
+      claude-code wrapper env** — claude-code runs a
+      background autoupdater that downloads new binaries and
+      rewrites them at the install path. Inappropriate for a
+      nix-managed store path. Also set
+      `DISABLE_INSTALLATION_CHECKS=1` to silence the "Claude
+      Code has switched from npm to native installer"
+      snackbar. Design question during the claude-code
+      factory port: always-on (Bun wrapper) vs overridable
+      (HM settings)?
+- [ ] **Claude-code npm distribution removal contingency** —
+      monitor `@anthropic-ai/claude-code` publish frequency.
+      If Anthropic stops publishing to npm, follow the
+      migration plan in
+      `dev/notes/claude-code-npm-contingency.md` (nvfetcher
+      swap to binary fetch plus one of three buddy fallback
+      options; option 3 blocked by closed-source sourcemap
+      leak). Related fragment:
+      `packages/ai-clis/fragments/dev/buddy-activation.md`.
+- [ ] **Agentic UX: pre-approve nix-store reads for
+      HM-symlinked skills and references** — Claude Code
+      prompts for read permission on every resolved
+      `/nix/store` target when following symlinks from
+      `~/.claude/skills/`. Five fix options to research:
+      global allow rule for `/nix/store/**`, per-subtree
+      pre-approval, teach session shortcut, managed policy
+      CLAUDE.md, copy instead of symlink. Real-world
+      observed 2026-04-07: 10+ minute commit delay from
+      approval cycles.
+
+---
+
+## Parallel: fragment system maintenance
+
+Not blocked on the factory chain. Pick up between blocking
+steps when context allows. These are the follow-ups from the
+Checkpoint 8 multi-reviewer audit of the steering-fragments
+work, plus Phase-1/2a carry-overs. Low individual risk, high
+cumulative value.
 
 - [ ] **Consolidate fragment enumeration into single metadata
       table** — `devFragmentNames`, `packagePaths`, and
@@ -297,7 +413,7 @@ carry-overs. Low individual risk, high cumulative value.
       attr that `flake.nix` consumes to build
       `siteArchitecture`. Ideally `siteArchitecture` becomes
       fully auto-discovered. Pairs with the "Replace `isRoot
-      = package == "monorepo"` with category metadata" item
+= package == "monorepo"` with category metadata" item
       below.
 
 - [ ] **Codify gap: ai.skills layout** — create new scoped
@@ -380,146 +496,19 @@ carry-overs. Low individual risk, high cumulative value.
 - [ ] **`ai.skills` stacked-workflows special case** —
       currently consumers need
       `stacked-workflows.integrations.<ecosystem>.enable =
-      true` per ecosystem alongside `ai.skills`. Augment
+true` per ecosystem alongside `ai.skills`. Augment
       `ai.skills` to support
       `ai.skills.stackedWorkflows.enable = true` (or similar)
       that pulls SWS skills + routing table into every
       enabled ecosystem in one line. Keep raw
       `ai.skills.<name> = path` for bring-your-own.
 
-### nixos-config integration
-
-Goal: nixos-config fully ported to the new `ai.*` surface.
-Blocked on the factory rollout (Steps 1–7 above).
-
-- [ ] **Wire nix-agentic-tools into nixos-config** — HM
-      global + devshell per-repo. Flake input, overlay,
-      module imports. Has been partially done (HITL work
-      2026-04-06); verify current state and close any gaps.
-      End-to-end verification checklist that the rewrite
-      dropped:
-      - [ ] `home-manager switch` runs cleanly end-to-end on
-            the real consumer (not just module-eval)
-      - [ ] copilot-cli activation merge: settings.json
-            deep-merge preserves user runtime additions
-            across rebuilds
-      - [ ] kiro-cli steering files generate with valid
-            YAML frontmatter (`inclusion`,
-            `fileMatchPattern`, etc.)
-      - [ ] stacked-workflows integrations wire skill files
-            into all three ecosystems (Claude, Copilot,
-            Kiro)
-      - [ ] Fresh-clone smoke test: `git clone` to /tmp,
-            `devenv test`, verify no rogue `.gitignore` or
-            generated files leak into the working tree
-
-- [ ] **Migrate nixos-config AI config to new factory-fed
-      `ai.*` module** — replace hardcoded
-      `programs.claude-code.*` / `copilot.*` / `kiro.*`
-      blocks. See `memory/project_nixos_config_integration.md`
-      for the 8 interface contracts and the current vendored
-      package list.
-
-- [ ] **Verify 8 interface contracts hold** — enumerated in
-      `memory/project_nixos_config_integration.md`. Refresh
-      the memory after integration lands.
-
-- [ ] **Remove vendored AI packages from nixos-config** —
-      copilot-cli, kiro-cli, kiro-gateway, ollama HM module
-      (TBD). Verify each one's migration path before removal.
-
-- [ ] **Ollama ownership decision** — ollama HM module plus
-      model management currently in nixos-config
-      (GPU/host-specific). Decide: stay in nixos-config
-      (host-specific) or move to nix-agentic-tools
-      (reusable)?
-
-### Misc TOP leftovers
-
-- [ ] **Claude-code npm distribution removal contingency** —
-      monitor `@anthropic-ai/claude-code` publish frequency.
-      If Anthropic stops publishing to npm, follow the
-      migration plan in
-      `dev/notes/claude-code-npm-contingency.md` (nvfetcher
-      swap to binary fetch plus one of three buddy fallback
-      options; option 3 blocked by closed-source sourcemap
-      leak). Related fragment:
-      `packages/ai-clis/fragments/dev/buddy-activation.md`.
-
-- [ ] **Set `DISABLE_AUTOUPDATER=1` defensively in
-      claude-code wrapper env** — claude-code runs a
-      background autoupdater that downloads new binaries and
-      rewrites them at the install path. Inappropriate for a
-      nix-managed store path. Also set
-      `DISABLE_INSTALLATION_CHECKS=1` to silence the "Claude
-      Code has switched from npm to native installer"
-      snackbar. Design question during the claude-code
-      factory port: always-on (Bun wrapper) vs overridable
-      (HM settings)?
-
-- [ ] **Agentic UX: pre-approve nix-store reads for
-      HM-symlinked skills and references** — Claude Code
-      prompts for read permission on every resolved
-      `/nix/store` target when following symlinks from
-      `~/.claude/skills/`. Five fix options to research:
-      global allow rule for `/nix/store/**`, per-subtree
-      pre-approval, teach session shortcut, managed policy
-      CLAUDE.md, copy instead of symlink. Real-world observed
-      2026-04-07: 10+ minute commit delay from approval
-      cycles.
-
 ---
 
-## MIDDLE priority
+## Parallel: repo hygiene & CI polish
 
-After the factory architecture solidifies, bring the other
-ecosystems online through the new `ai.*` interface. Each item
-below blocks on the factory-port sequence landing enough to
-support a new CLI.
-
-### Bring Kiro online (via factory)
-
-- [ ] **ai.kiro.\* full passthrough** — mirror every
-      `programs.kiro-cli.*` option via the factory's typed
-      extras contract. Separate plan to be drafted when the
-      claude-code port proves the pattern.
-- [ ] **nixos-config Kiro migration** — move the consumer's
-      Kiro config from direct `programs.kiro-cli.*` to the
-      new factory-fed surface.
-
-### Bring Copilot online (via factory)
-
-- [ ] **ai.copilot.\* full passthrough** — mirror every
-      `programs.copilot-cli.*` option via the factory's typed
-      extras contract. Separate plan to be drafted.
-- [ ] **nixos-config Copilot migration** — move consumer
-      config.
-- [ ] **copilot-cli / kiro-cli DRY** — 7 helpers
-      copy-pasted between the old modules. Absorbed into the
-      factory port automatically.
-- [ ] **MCP server submodule DRY** — duplicated in devenv
-      copilot/kiro modules. Absorbed into `mkMcpServer`.
-
-### Add OpenAI Codex (4th ecosystem, LAST)
-
-- [ ] **Package chatgpt-codex CLI + factory registration** —
-      follow whatever pattern the claude-code port
-      established. Add as 4th ecosystem record.
-- [ ] **Add Codex ecosystem transform to `fragments-ai`** —
-      curried frontmatter generator for Codex
-      steering/instructions format (verify what format
-      Codex uses; currently AGENTS.md standard is flat).
-- [ ] **Wire Codex into `modules/ai/default.nix`** — the
-      registry walker picks it up automatically once the
-      package is in place.
-- [ ] **Mirror in `modules/devenv/ai.nix`** per config
-      parity. Should be free via the factory.
-
----
-
-## LOWER priority (deferred)
-
-Everything else. Park these until TOP/MIDDLE are stable.
+Not blocked on the factory chain. Pick up between blocking
+steps.
 
 ### CI (except cachix)
 
@@ -585,31 +574,26 @@ Everything else. Park these until TOP/MIDDLE are stable.
       generated instruction files; we likely need a
       dedicated agent or set of skills that periodically (or
       on-demand, or in CI) flag drift across multiple
-      categories:
-      - **Generated instruction files** — use the devenv
-        tasks pattern from the TOP backlog item.
-      - **Stacking tool versions** — `git-absorb`,
-        `git-branchless`, `git-revise`, `agnix`. Detect
-        upstream releases that diverge from the pinned
-        `nvfetcher` versions. Today this is a manual
-        `nix run .#update` cadence. A drift agent could
-        ping when upstream tags advance past our pin and
-        suggest the bump as a PR.
-      - **LSP/MCP option surface** — when an upstream MCP
-        server (or LSP) adds/renames/removes settings, our
-        typed `services.mcp-servers.servers.<name>.settings`
-        schema falls behind silently. Drift detection
-        should compare our typed options against upstream
-        README / OpenAPI / config schema and flag
-        mismatches.
-      - **Any other upstream changes** — claude-code,
-        copilot-cli, kiro-cli, mcp servers, devenv itself.
-        Anything tracked via nvfetcher that has a
-        settings/CLI/config surface we mirror.
-      - **Cross-config parity** — HM module ↔ devenv module
-        option parity (existing concept from
-        `feedback_consistency_and_discovery.md`). Could be
-        promoted from "manual review" to "drift agent flag".
+      categories: - **Generated instruction files** — use the devenv
+      tasks pattern from the TOP backlog item. - **Stacking tool versions** — `git-absorb`,
+      `git-branchless`, `git-revise`, `agnix`. Detect
+      upstream releases that diverge from the pinned
+      `nvfetcher` versions. Today this is a manual
+      `nix run .#update` cadence. A drift agent could
+      ping when upstream tags advance past our pin and
+      suggest the bump as a PR. - **LSP/MCP option surface** — when an upstream MCP
+      server (or LSP) adds/renames/removes settings, our
+      typed `services.mcp-servers.servers.<name>.settings`
+      schema falls behind silently. Drift detection
+      should compare our typed options against upstream
+      README / OpenAPI / config schema and flag
+      mismatches. - **Any other upstream changes** — claude-code,
+      copilot-cli, kiro-cli, mcp servers, devenv itself.
+      Anything tracked via nvfetcher that has a
+      settings/CLI/config surface we mirror. - **Cross-config parity** — HM module ↔ devenv module
+      option parity (existing concept from
+      `feedback_consistency_and_discovery.md`). Could be
+      promoted from "manual review" to "drift agent flag".
       Implementation shapes to consider: (a) a Claude Code
       agent that runs daily, queries upstream sources, and
       opens issues; (b) a set of `/drift-*` skills that
@@ -626,8 +610,7 @@ Everything else. Park these until TOP/MIDDLE are stable.
 - [ ] CONTRIBUTING.md content — dev workflow, package
       patterns, module patterns, `devenv up docs` for docs
       preview
-- [ ] Consumer migration guide — replace vendored packages
-      + nix-mcp-servers
+- [ ] Consumer migration guide — replace vendored packages + nix-mcp-servers
 - [ ] **Document binary cache for consumers** — current
       `nix-agentic-tools.cachix.org` substituter setup is
       documented internally (`memory/project_cachix_setup.md`)
@@ -654,37 +637,31 @@ Everything else. Park these until TOP/MIDDLE are stable.
       `memory/project_nuschtos_search.md`. **Chosen strategy
       (2026-04-07): (A)+(C) — wait on PR #280 upstream, file
       a small upstream PR ourselves for #244/#284 when
-      convenient. Not a fork.** Concrete in-repo work:
-      - [ ] Add a `lib` scope to `flake.nix` `optionsSearch`
-            (`lib/` API surface has no options-doc
-            representation today — needs a synthetic-module
-            wrapper or a static reference page in
-            `fragments-docs`)
-      - [ ] Link the options browser from README and
-            mdbook (`README.md` and `dev/docs/index.md`
-            both omit `/options/`); use `?scope=0`/
-            `?scope=1` query-param deep links per scope
-            (NuschtOS has no path-based per-scope URLs)
-      - [ ] Workaround the `All`-scope blending: change
-            the in-repo links to default-route to
-            `?scope=0` so visitors never see the blended
-            view unless they change the dropdown
-      - [ ] Investigate dark mode: open the deployed
-            `/options/index.html` in a
-            `prefers-color-scheme: dark` browser, see if
-            it flips; if not, fetch `@feel/style` from npm
-            and check whether `$theme-mode: dark` SCSS
-            override works
-      - [ ] (Optional, when budget allows) File the
-            combined #244+#284 upstream PR — ~25 lines,
-            single commit, patch shape documented in the
-            memory file; tag both issues
-      - [ ] (Optional, if package search becomes
-            critical-path before PR #280 merges) Generate
-            a static packages page from `fragments-docs`
-            and let pagefind index it — uses the overlay
-            package list we already evaluate for the
-            snippets pipeline
+      convenient. Not a fork.** Concrete in-repo work: - [ ] Add a `lib` scope to `flake.nix` `optionsSearch`
+      (`lib/` API surface has no options-doc
+      representation today — needs a synthetic-module
+      wrapper or a static reference page in
+      `fragments-docs`) - [ ] Link the options browser from README and
+      mdbook (`README.md` and `dev/docs/index.md`
+      both omit `/options/`); use `?scope=0`/
+      `?scope=1` query-param deep links per scope
+      (NuschtOS has no path-based per-scope URLs) - [ ] Workaround the `All`-scope blending: change
+      the in-repo links to default-route to
+      `?scope=0` so visitors never see the blended
+      view unless they change the dropdown - [ ] Investigate dark mode: open the deployed
+      `/options/index.html` in a
+      `prefers-color-scheme: dark` browser, see if
+      it flips; if not, fetch `@feel/style` from npm
+      and check whether `$theme-mode: dark` SCSS
+      override works - [ ] (Optional, when budget allows) File the
+      combined #244+#284 upstream PR — ~25 lines,
+      single commit, patch shape documented in the
+      memory file; tag both issues - [ ] (Optional, if package search becomes
+      critical-path before PR #280 merges) Generate
+      a static packages page from `fragments-docs`
+      and let pagefind index it — uses the overlay
+      package list we already evaluate for the
+      snippets pipeline
 
 ### Misc backlog (unsorted)
 
@@ -697,7 +674,7 @@ Everything else. Park these until TOP/MIDDLE are stable.
       `<!-- generated from dev/generate.nix — do not edit -->`);
       (2) above each composed fragment, a comment naming the
       source markdown path (e.g., `<!-- packages/
-      coding-standards/fragments/coding-standards.md -->`).
+coding-standards/fragments/coding-standards.md -->`).
       Reasoning from user 2026-04-08 PR #7 review: makes it
       obvious to a reviewer that (a) the file is generated
       and (b) they should review the fragment SOURCE rather
@@ -737,7 +714,7 @@ Everything else. Park these until TOP/MIDDLE are stable.
       place for AST parsing — better to do this via a
       string-template DSL where fragments declare
       `{ heading = "Coding Conventions"; level = 2;
-      subsection = "## Bash"; text = "…"; }`. (3) This
+subsection = "## Bash"; text = "…"; }`. (3) This
       crosses into "fragment system as document model"
       territory which is a meaningful expansion of scope —
       counter-question is whether the docsite would benefit
@@ -926,7 +903,7 @@ session memories.
   `dev/generate.nix` + fragments-ai + 11 dev fragments
   across 5 categories
 - **PR #6 chunk 4a** `coding-standards` — content package
-  + first `commonFragments` wiring
+  - first `commonFragments` wiring
 - **PR #7 chunk 4b** `stacked-workflows-content` — sws
   content + routing-table + un-gitignored AGENTS.md +
   `.github/copilot-instructions.md`
@@ -1002,9 +979,10 @@ session memories.
 
 ## Next action
 
-Answer Q1–Q8 in the "Target architecture spec" section
+Answer Q1–Q8 in the "Now: target architecture spec" section
 above (write the design doc under
 `docs/superpowers/specs/`), then draft the implementation
-plan for Steps 1–7 of the factory rollout. The spec work
-is blocked on user input; the implementation plan is
-blocked on the spec.
+plan for Steps 1–7 of the factory rollout under
+`docs/superpowers/plans/`. The spec work is blocked on user
+input; the implementation plan is blocked on the spec. Both
+directories are cspell-excluded and never merge to main.
