@@ -41,6 +41,48 @@
           default = {};
         };
       };
+      programs.claude-code = {
+        enable = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+        };
+        package = lib.mkOption {
+          type = lib.types.nullOr lib.types.package;
+          default = null;
+        };
+        settings = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+        };
+        skills = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+        };
+      };
+    };
+  };
+
+  # Stub devenv's files option + per-ecosystem upstream options so
+  # the config callbacks in the factory can set files.* /
+  # claude.code.* / copilot.* / kiro.* without importing devenv.
+  devenvStubs = {
+    options = {
+      files = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+      };
+      claude.code = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+      };
+      copilot = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+      };
+      kiro = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+      };
     };
   };
 
@@ -57,6 +99,22 @@
         ./../packages/copilot-cli/modules/homeManager
         ./../packages/kiro-cli/modules/homeManager
         hmStubs
+        {inherit config;}
+      ];
+    };
+
+  evalDevenv = config:
+    lib.evalModules {
+      specialArgs = {
+        lib = hmLib;
+        pkgs = pkgs // {ai = pkgs.ai or {};};
+      };
+      modules = [
+        ./../lib/ai/sharedOptions.nix
+        ./../packages/claude-code/modules/devenv
+        ./../packages/copilot-cli/modules/devenv
+        ./../packages/kiro-cli/modules/devenv
+        devenvStubs
         {inherit config;}
       ];
     };
@@ -209,6 +267,68 @@ in {
       file
       != null
       && lib.hasInfix "Claude-specific rule." file.text
+  );
+
+  # ── Task 3 (A2): Claude HM/devenv fanout absorption ────────────
+  module-claude-hm-delegates-programs-claude-code = mkTest "claude-hm-delegates-programs-claude-code" (
+    let
+      result = evalHm {
+        ai.claude.enable = true;
+      };
+    in
+      result.config.programs.claude-code.enable or false
+  );
+
+  module-claude-hm-writes-instruction-rule-file = mkTest "claude-hm-writes-instruction-rule-file" (
+    let
+      result = evalHm {
+        ai.claude.enable = true;
+        ai.instructions = [
+          {
+            name = "my-rule";
+            text = "Always use strict mode.";
+            paths = ["src/**"];
+          }
+        ];
+      };
+      ruleFile = result.config.home.file.".claude/rules/my-rule.md" or null;
+    in
+      ruleFile
+      != null
+      && lib.hasInfix "Always use strict mode" (ruleFile.text or "")
+  );
+
+  module-claude-hm-delegates-skills-to-upstream = mkTest "claude-hm-delegates-skills-to-upstream" (
+    let
+      result = evalHm {
+        ai.claude.enable = true;
+        ai.skills.stack-fix = ./../packages/stacked-workflows/skills/stack-fix;
+      };
+    in
+      result.config.programs.claude-code.skills ? stack-fix
+  );
+
+  module-claude-devenv-delegates-claude-code = mkTest "claude-devenv-delegates-claude-code" (
+    let
+      result = evalDevenv {
+        ai.claude.enable = true;
+      };
+    in
+      result.config.claude.code.enable or false
+  );
+
+  module-claude-hm-sets-lsp-env-when-servers-present = mkTest "claude-hm-sets-lsp-env-when-servers-present" (
+    let
+      result = evalHm {
+        ai.claude.enable = true;
+        ai.mcpServers.test-server = {
+          type = "stdio";
+          package = pkgs.hello;
+          command = "hello";
+        };
+      };
+    in
+      (result.config.programs.claude-code.settings.env.ENABLE_LSP_TOOL or null) == "1"
   );
 
   module-kiro-instructions-rendered = mkTest "kiro-instructions-rendered" (

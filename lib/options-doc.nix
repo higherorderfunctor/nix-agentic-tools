@@ -121,6 +121,11 @@
       # Stub: upstream programs.claude-code (not defined in this repo)
       programs.claude-code = {
         enable = lib.mkEnableOption "Claude Code (upstream HM module)";
+        package = lib.mkOption {
+          type = lib.types.nullOr lib.types.package;
+          default = null;
+          description = "Claude Code package (upstream HM stub).";
+        };
         settings = lib.mkOption {
           type = lib.types.submodule {
             freeformType = (pkgs.formats.json {}).type;
