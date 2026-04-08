@@ -12,6 +12,23 @@
 }: let
   ai = import ../lib/ai {inherit lib;};
 
+  # Stub HM option types so mkAiApp's baseline home.file render
+  # (introduced when the render pipeline was wired) can write to
+  # home.file.* without importing home-manager. Mirrors the
+  # hmStubs pattern in checks/module-eval.nix.
+  hmStubs = {
+    options.home = {
+      activation = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+      };
+      file = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+      };
+    };
+  };
+
   mkTest = name: assertion:
     pkgs.runCommand "factory-test-${name}" {} ''
       ${
@@ -244,6 +261,7 @@ in {
       evaluated = lib.evalModules {
         modules = [
           ai.sharedOptions
+          hmStubs
           module
           {config = {};}
         ];
@@ -269,6 +287,7 @@ in {
       evaluated = lib.evalModules {
         modules = [
           ai.sharedOptions
+          hmStubs
           module
           {config.ai.testapp.turboMode = true;}
         ];
@@ -299,6 +318,7 @@ in {
       evaluated = lib.evalModules {
         modules = [
           (import ../lib/ai/sharedOptions.nix)
+          hmStubs
           module
           {
             config = {

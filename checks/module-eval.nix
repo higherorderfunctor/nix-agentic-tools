@@ -152,4 +152,84 @@ in {
       && evaluated.config.ai.copilot.enable
       && evaluated.config.ai.kiro.enable
   );
+
+  # ── Baseline instruction rendering ──────────────────────────────
+  # Verify that mkAiApp's baseline render pipeline produces a
+  # home.file entry at the app's outputPath when instructions are
+  # merged from the shared pool. This covers the end-to-end path:
+  # sharedOptions.ai.instructions -> mkAiApp's mergedInstructions
+  # -> transformers.markdown.render -> home.file.<outputPath>.text
+  module-claude-instructions-rendered-to-home-file = mkTest "claude-instructions-rendered-to-home-file" (
+    let
+      evaluated = evalHm {
+        ai = {
+          claude.enable = true;
+          instructions = [
+            {
+              text = "Always use rg instead of grep.";
+              description = "Grep replacement";
+            }
+          ];
+        };
+      };
+      outputPath = ".claude/CLAUDE.md";
+      file = evaluated.config.home.file.${outputPath} or null;
+    in
+      file
+      != null
+      && file ? text
+      && lib.hasInfix "Always use rg instead of grep." file.text
+      && lib.hasInfix "description: Grep replacement" file.text
+  );
+
+  module-claude-no-instructions-no-file = mkTest "claude-no-instructions-no-file" (
+    let
+      evaluated = evalHm {ai.claude.enable = true;};
+      # With no instructions merged, mkAiApp should NOT write the
+      # baseline home.file entry for Claude's CLAUDE.md path.
+    in
+      !(evaluated.config.home.file ? ".claude/CLAUDE.md")
+  );
+
+  module-claude-per-app-instructions-rendered = mkTest "claude-per-app-instructions-rendered" (
+    let
+      evaluated = evalHm {
+        ai.claude = {
+          enable = true;
+          instructions = [
+            {
+              text = "Claude-specific rule.";
+              description = "Claude only";
+            }
+          ];
+        };
+      };
+      file = evaluated.config.home.file.".claude/CLAUDE.md" or null;
+    in
+      file
+      != null
+      && lib.hasInfix "Claude-specific rule." file.text
+  );
+
+  module-kiro-instructions-rendered = mkTest "kiro-instructions-rendered" (
+    let
+      evaluated = evalHm {
+        ai.kiro = {
+          enable = true;
+          instructions = [
+            {
+              text = "Kiro steering content.";
+              description = "Kiro steering";
+            }
+          ];
+        };
+      };
+      # Kiro's outputPath is ".config/kiro/steering/" (directory-ish
+      # but currently treated as a single path by the baseline).
+      file = evaluated.config.home.file.".config/kiro/steering/" or null;
+    in
+      file
+      != null
+      && lib.hasInfix "Kiro steering content." file.text
+  );
 }

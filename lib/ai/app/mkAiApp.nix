@@ -7,19 +7,22 @@
 # The inner module reads from sharedOptions
 # (ai.mcpServers, ai.instructions, ai.skills) AND from its own per-app
 # options (ai.<name>.mcpServers, etc.), merges them with per-app
-# winning on conflict, and threads the merged view into the factory's
-# custom config callback.
+# winning on conflict, and threads the merged view into both the
+# baseline rendering and the factory's custom config callback.
 #
-# DEFERRED: the `transformers` arg and `defaults.outputPath` are
-# captured into the option tree + `_module.args.aiTransformers` but
-# no rendering pipeline currently writes merged instructions to
-# home.file / files.*. Consumers enabling `ai.<name>.enable = true`
-# get the option tree (including mcpServers fanout) but NO instruction
-# file output until the rendering wiring lands in a follow-up. This
-# is a known gap — the factory IS correct for option composition and
-# MCP server fanout; it's just that the final "merge these fragments
-# and write them to CLAUDE.md / copilot-instructions.md / etc." step
-# is not yet done.
+# Baseline rendering pipeline:
+# When `defaults.outputPath` is set AND at least one instruction
+# fragment is merged, each fragment is passed through
+# `transformers.markdown.render` and the concatenated result is
+# written to `home.file.${defaults.outputPath}.text`. Consumers
+# enabling `ai.<name>.enable = true` and providing
+# `ai.instructions = [frag1 frag2 ...]` (or per-app
+# `ai.<name>.instructions`) get a real rule file at the output path.
+#
+# Custom config callbacks receive `{cfg, mergedServers,
+# mergedInstructions, mergedSkills}` and can do anything on top of
+# the baseline render — e.g., write per-scope rule files, generate
+# MCP server config, run activation scripts.
 {lib}: {
   name,
   transformers,
@@ -40,6 +43,26 @@ in
     customConfig = customConfigFn {
       inherit cfg mergedServers mergedInstructions mergedSkills;
     };
+
+    # Baseline render: walk mergedInstructions through
+    # transformers.markdown.render and join with double-newline.
+    # Each instruction fragment is an attrset like
+    # `{ text, description ? null, paths ? null, ... }`; the
+    # transformer reads those attrs to produce frontmatter + body.
+    renderedInstructions =
+      lib.concatMapStringsSep "\n\n" (
+        frag: transformers.markdown.render frag
+      )
+      mergedInstructions;
+
+    # Only emit home.file when the app declares an outputPath AND
+    # at least one instruction fragment was merged. Apps without an
+    # outputPath (daemon-only, binary-only) or with empty
+    # instructions produce no file output from the baseline. These
+    # let-bindings are consumed by the mkMerge list below to gate
+    # the optional baseline home.file element.
+    hasOutputPath = (defaults.outputPath or null) != null;
+    hasInstructions = mergedInstructions != [];
   in {
     options.ai.${name} =
       {
@@ -69,16 +92,24 @@ in
       }
       // customOptions;
 
-    config = lib.mkMerge [
-      # Thread the transformers record into module args so a future
-      # rendering wiring can read it without the factory needing a
-      # second binding cycle.
-      {_module.args.aiTransformers = transformers;}
-      # Option tree + fanout merge only — the custom config callback
-      # fires only when the app is enabled. Instruction file rendering
-      # (transformers.markdown over mergedInstructions → home.file at
-      # defaults.outputPath) is not yet wired; see the DEFERRED note
-      # at the top of this file.
-      (lib.mkIf cfg.enable customConfig)
-    ];
+    config = lib.mkMerge (
+      [
+        # Thread the transformers record into module args so consumers
+        # composing their own downstream modules can reach it.
+        {_module.args.aiTransformers = transformers;}
+        # Per-app custom config callback — fires only when enabled.
+        (lib.mkIf cfg.enable customConfig)
+      ]
+      # Baseline instruction rendering — ONLY included when the app
+      # has an outputPath declared (so binary-only factories don't
+      # drag home.file into contexts that don't have it). The
+      # `lib.mkIf cfg.enable` gates the actual write, so the home.file
+      # path stays inert until the app is enabled. Both hasOutputPath
+      # and hasInstructions are eval-time constants from the outer
+      # let-block, so this conditional is resolved BEFORE the module
+      # system type-checks option paths.
+      ++ lib.optional hasOutputPath (lib.mkIf (cfg.enable && hasInstructions) {
+        home.file.${defaults.outputPath}.text = renderedInstructions;
+      })
+    );
   }
