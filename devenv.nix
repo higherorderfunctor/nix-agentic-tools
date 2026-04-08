@@ -2,6 +2,9 @@
   # ── Binary Cache ──────────────────────────────────────────────────────
   cachix.pull = ["nix-agentic-tools"];
 
+  # ── Generation tasks ──────────────────────────────────────────────────
+  imports = [./dev/tasks/generate.nix];
+
   # ── Packages ──────────────────────────────────────────────────────────
   packages = with pkgs; [
     cspell
