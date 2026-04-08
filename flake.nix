@@ -140,8 +140,9 @@
       moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs self;};
       devshellChecks = import ./checks/devshell-eval.nix {inherit lib pkgs self;};
       parityChecks = import ./checks/cache-hit-parity.nix {inherit inputs lib pkgs self;};
+      fragmentsChecks = import ./checks/fragments-eval.nix {inherit lib pkgs self;};
     in
-      moduleChecks // devshellChecks // parityChecks);
+      moduleChecks // devshellChecks // parityChecks // fragmentsChecks);
 
     # devShell provided by devenv CLI (devenv shell / devenv test)
     # See devenv.nix for shell configuration.
