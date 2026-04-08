@@ -95,7 +95,7 @@ Three tiers:
       architecture-foundation plan) and `c082166` (dead-code
       cleanup follow-up). The ai module now declares
       `imports = [../claude-code-buddy ../copilot-cli
-    ../kiro-cli]`, so a single
+  ../kiro-cli]`, so a single
       `homeManagerModules.ai` import brings everything needed.
       Regression gated by the new `aiSelfContained`
       module-eval check. Dead `hasModule` guards + the
@@ -561,6 +561,34 @@ Everything else. Park these until TOP/MIDDLE are stable.
 
 ### Misc backlog (unsorted)
 
+- [ ] **Move `externalServers` registry out of root `flake.nix`** —
+      currently `lib.externalServers.aws-mcp` is hand-defined in
+      `flake.nix:128` (sentinel) / `flake.nix:49` (catchup). Adding
+      more remote servers there will bloat the flake. Two viable
+      shapes: (a) extract to `lib/external-servers.nix` keyed by
+      provider, imported into the flake `lib` output the same way
+      `fragments`/`devshell`/`mcp` are; or (b) ship as a content
+      package (`packages/external-servers/`) with `passthru.servers`
+      so consumers can pull just one provider's set. Caller flagged
+      the smell on PR #4 review (2026-04-08). Not blocking PR #4 —
+      backport when the registry grows past one entry, or when the
+      lib/devshell layout refactor below lands.
+- [ ] **Rename `devshell/` → `modules/devshell/` for layout
+      consistency** — top-level repo currently splits modules across
+      three locations: `lib/` (functions), `modules/` (HM modules + `modules/devenv/`), `devshell/` (standalone modules consumed
+      by `mkAgenticShell`). The `devshell/` and `modules/devenv/`
+      split is meaningful (`devshell/` modules feed a plain
+      `pkgs.mkShell`, `modules/devenv/` modules slot into a user's
+      existing devenv config) but the inconsistent root-level vs
+      `modules/`-nested placement obscures it. Proposal:
+      `modules/devshell/` for the standalone modules, leaving
+      `modules/devenv/` and `modules/<hm>/` peers. Caller flagged
+      this on PR #4 review (2026-04-08). Refactor cuts across most
+      flake outputs (`devenvModules` / `homeManagerModules` /
+      `mkAgenticShell` import paths) — defer until after the
+      catchup-to-main merge sequence completes; do as a single
+      dedicated PR rather than a chunk so reviewer sees the full
+      shape change.
 - [ ] **Fragment metadata consolidation follow-up** — after the
       TOP item lands, also reduce plan.md churn by having this
       file reference the metadata table instead of re-listing
