@@ -261,7 +261,7 @@
   # Anti-pattern: do NOT call mkDevComposed inside the per-ecosystem
   # concatMapAttrs lambdas — that creates a fresh thunk per consumer
   # and runs composition 3x.
-  composedByPkg = lib.mapAttrs (pkg: _: mkDevComposed pkg) nonRootPackages;
+  composedByPackage = lib.mapAttrs (pkg: _: mkDevComposed pkg) nonRootPackages;
 
   rootComposed = mkDevComposed "monorepo";
   monorepoEco = mkEcosystemFile "monorepo";
@@ -289,7 +289,7 @@
       pkgEco = mkEcosystemFile pkg;
     in
       lib.nameValuePair "${pkg}.md" (pkgEco.claude composed))
-    composedByPkg;
+    composedByPackage;
 
   # ── Copilot instruction files ────────────────────────────────────────
   copilotFiles =
@@ -300,7 +300,7 @@
         pkgEco = mkEcosystemFile pkg;
       in
         lib.nameValuePair "${pkg}.instructions.md" (pkgEco.copilot composed))
-      composedByPkg);
+      composedByPackage);
 
   # ── Kiro steering files ─────────────────────────────────────────────
   kiroFiles =
@@ -311,7 +311,7 @@
         pkgEco = mkEcosystemFile pkg;
       in
         lib.nameValuePair "${pkg}.md" (pkgEco.kiro composed))
-      composedByPkg);
+      composedByPackage);
 
   # ── Top-level markdown files ─────────────────────────────────────────
   agentsMd = ''
