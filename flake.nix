@@ -199,7 +199,6 @@
       # hit parity pattern.
       inherit
         (pkgs.nix-mcp-servers)
-        context7-mcp
         effect-mcp
         fetch-mcp
         git-intel-mcp
@@ -215,10 +214,10 @@
         sympy-mcp
         ;
 
-      # AI CLI packages — claude-code now lives under pkgs.ai
-      # (unified overlay); remaining clis still at top-level until
-      # Milestone 4 ports them over.
-      inherit (pkgs.ai) claude-code;
+      # AI CLI packages — claude-code and context7-mcp now live under
+      # pkgs.ai (unified overlay); remaining clis still at top-level
+      # until Milestone 4 ports them over.
+      inherit (pkgs.ai) claude-code context7-mcp;
       inherit
         (pkgs)
         any-buddy

@@ -1,4 +1,4 @@
-# MCP servers overlay — packages 14 Model Context Protocol servers
+# MCP servers overlay — packages 13 Model Context Protocol servers
 # under `pkgs.nix-mcp-servers.<name>`.
 #
 # 3-argument overlay shape (`{inputs, ...}: final: prev: ...`) per
@@ -39,7 +39,6 @@
     else fn (final // {inherit nv-sources;});
 
   # ── Raw packages ─────────────────────────────────────────────────────
-  context7-mcp = callPkg ./context7-mcp.nix;
   effect-mcp = callPkg ./effect-mcp.nix;
   fetch-mcp = callPkg ./fetch-mcp.nix;
   git-intel-mcp = callPkg ./git-intel-mcp.nix;
@@ -56,7 +55,6 @@
 in {
   nix-mcp-servers = {
     inherit
-      context7-mcp
       effect-mcp
       fetch-mcp
       git-intel-mcp

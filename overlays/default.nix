@@ -15,6 +15,7 @@
 
   nv = {
     claude-code = merge "claude-code";
+    context7-mcp = merge "context7-mcp";
   };
 
   aiDrvs = {
@@ -22,6 +23,10 @@
       inherit inputs final prev;
       nv = nv.claude-code;
       lockFile = ./locks/claude-code-package-lock.json;
+    };
+    context7-mcp = import ./context7-mcp.nix {
+      inherit inputs final;
+      nv = nv.context7-mcp;
     };
   };
 in {

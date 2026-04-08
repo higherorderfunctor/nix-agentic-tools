@@ -100,4 +100,30 @@ in {
     in
       evaluated.config.ai.mcpServers ? testServer
   );
+
+  module-context7-fanout-into-claude = mkTest "context7-fanout-into-claude" (
+    let
+      evaluated = evalHm {
+        ai.claude.enable = true;
+        ai.mcpServers.ctx = {
+          type = "stdio";
+          package = pkgs.ai.context7-mcp or pkgs.hello;
+          command = "context7-mcp";
+        };
+      };
+    in
+      evaluated.config.ai.mcpServers ? ctx
+      && evaluated.config.ai.claude.enable
+  );
+
+  module-context7-factory-call = mkTest "context7-factory-call" (
+    let
+      mkContext7 = import ./../packages/context7-mcp/lib/mkContext7.nix;
+      result = mkContext7 {
+        lib = hmLib;
+        pkgs = pkgs // {ai = pkgs.ai or {};};
+      } {};
+    in
+      result.type == "stdio"
+  );
 }

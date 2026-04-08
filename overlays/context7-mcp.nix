@@ -1,19 +1,21 @@
-# Instantiate `ourPkgs` from `inputs.nixpkgs` so every build input
-# (buildNpmPackage, nodejs, makeWrapper) routes through this repo's
-# pinned nixpkgs instead of the consumer's. This is what gives the
-# store path cache-hit parity against CI's standalone build — see
-# dev/fragments/overlays/overlay-pattern.md.
-{inputs}: {
-  nv-sources,
-  stdenv,
+# context7-mcp — builds the Context7 MCP server from the nvfetcher-tracked
+# source via buildNpmPackage.
+#
+# Instantiates `ourPkgs` from `inputs.nixpkgs` so buildNpmPackage, nodejs,
+# and makeWrapper all route through this repo's pinned nixpkgs instead of
+# the consumer's. This gives cache-hit parity against CI's standalone build
+# (see dev/fragments/overlays/overlay-pattern.md).
+{
+  inputs,
+  final,
+  nv,
   ...
 }: let
   ourPkgs = import inputs.nixpkgs {
-    inherit (stdenv.hostPlatform) system;
+    inherit (final.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
   inherit (ourPkgs) buildNpmPackage makeWrapper nodejs;
-  nv = nv-sources.context7-mcp;
 in
   buildNpmPackage {
     pname = "context7-mcp";

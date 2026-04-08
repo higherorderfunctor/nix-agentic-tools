@@ -3,5 +3,5 @@
 # devenvModules, and flake.lib contributions.
 {
   claude-code = import ./claude-code;
-  # Other packages added in subsequent milestones.
+  context7-mcp = import ./context7-mcp;
 }

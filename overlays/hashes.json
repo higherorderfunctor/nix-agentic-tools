@@ -2,5 +2,8 @@
   "claude-code": {
     "npmDepsHash": "sha256-5LvH7fG5pti2SiXHQqgRxfFpxaXxzrmGxIoPR4dGE+8=",
     "srcHash": "sha256-CLLCtVK3TeXFZ8wBnRRHNc2MoUt7lTdMJwz8sZHpkFM="
+  },
+  "context7-mcp": {
+    "npmDepsHash": "sha256-EniEHeNmeC2G7+dFp4zURttzc7SjcFiFbD6nvncSugI="
   }
 }
