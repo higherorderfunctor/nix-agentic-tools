@@ -31,14 +31,18 @@
         config.allowUnfree = true;
         overlays = [self.overlays.default];
       };
+    # Bind each overlay once so `overlays.<name>` and the
+    # `overlays.default` composition share the same import.
+    codingStandardsOverlay = import ./packages/coding-standards {};
+    fragmentsAiOverlay = import ./packages/fragments-ai {};
   in {
     overlays = {
-      coding-standards = import ./packages/coding-standards {};
+      coding-standards = codingStandardsOverlay;
       default = lib.composeManyExtensions [
-        (import ./packages/coding-standards {})
-        (import ./packages/fragments-ai {})
+        codingStandardsOverlay
+        fragmentsAiOverlay
       ];
-      fragments-ai = import ./packages/fragments-ai {};
+      fragments-ai = fragmentsAiOverlay;
     };
 
     # Scaffolding placeholders — subsequent PRs populate these.

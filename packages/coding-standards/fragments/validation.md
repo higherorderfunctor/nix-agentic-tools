@@ -1,3 +1,5 @@
+## Validation
+
 ### Formatting
 
 After editing any file — regardless of how it was modified (Edit, Write,
