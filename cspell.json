@@ -1,4 +1,6 @@
 {
+  "caseSensitive": false,
+  "dictionaries": ["bash", "git", "project-terms"],
   "dictionaryDefinitions": [
     {
       "addWords": true,
@@ -6,26 +8,23 @@
       "path": ".cspell/project-terms.txt"
     }
   ],
-  "dictionaries": [
-    "bash",
-    "fullstack",
-    "git",
-    "node",
-    "npm",
-    "project-terms",
-    "python",
-    "shellscript",
-    "typescript"
-  ],
   "ignorePaths": [
     ".direnv",
     ".git",
     ".nvfetcher",
     "*.lock",
     "*.png",
+    "docs/plan.md",
+    "docs/superpowers/**",
     "locks",
     "result"
   ],
   "language": "en",
+  "overrides": [
+    {
+      "dictionaries": ["python", "node", "npm", "rust"],
+      "filename": ["**/*.nix", "**/*.md", "nvfetcher.toml"]
+    }
+  ],
   "version": "0.2"
 }
