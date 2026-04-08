@@ -20,6 +20,36 @@
     },
     "version": "v0.18.0"
   },
+  "context7-mcp": {
+    "cargoLock": null,
+    "date": null,
+    "extract": null,
+    "name": "context7-mcp",
+    "passthru": null,
+    "pinned": false,
+    "src": {
+      "name": null,
+      "sha256": "sha256-IEgTf9uutHqXn9KBm8uVWN4YkFSkRj5/OhSaydRg7IQ=",
+      "type": "url",
+      "url": "https://registry.npmjs.org/@upstash/context7-mcp/-/context7-mcp-2.1.7.tgz"
+    },
+    "version": "2.1.7"
+  },
+  "effect-mcp": {
+    "cargoLock": null,
+    "date": null,
+    "extract": null,
+    "name": "effect-mcp",
+    "passthru": null,
+    "pinned": false,
+    "src": {
+      "name": null,
+      "sha256": "sha256-k36Ucri8CAw+xwVVKt58jwkjNlBF79KgHYr9v2lRvk8=",
+      "type": "url",
+      "url": "https://registry.npmjs.org/effect-mcp/-/effect-mcp-0.1.16.tgz"
+    },
+    "version": "0.1.16"
+  },
   "git-absorb": {
     "cargoLock": null,
     "date": null,
@@ -62,6 +92,26 @@
     },
     "version": "v0.10.0"
   },
+  "git-intel-mcp": {
+    "cargoLock": null,
+    "date": "2026-03-18",
+    "extract": null,
+    "name": "git-intel-mcp",
+    "passthru": null,
+    "pinned": false,
+    "src": {
+      "deepClone": false,
+      "fetchSubmodules": false,
+      "leaveDotGit": false,
+      "name": null,
+      "rev": "9f216bab8d6bc3a3b850ad77f27d02d63a71e10d",
+      "sha256": "sha256-UCIUmU6slN9EjL8Bf2JKfvyoVKE0jgUsfLd8OocdwNc=",
+      "sparseCheckout": [],
+      "type": "git",
+      "url": "https://github.com/hoangsonww/GitIntel-MCP-Server.git"
+    },
+    "version": "9f216bab8d6bc3a3b850ad77f27d02d63a71e10d"
+  },
   "git-revise": {
     "cargoLock": null,
     "date": null,
@@ -82,5 +132,173 @@
       "type": "github"
     },
     "version": "v0.8.0"
+  },
+  "github-mcp-server": {
+    "cargoLock": null,
+    "date": null,
+    "extract": null,
+    "name": "github-mcp-server",
+    "passthru": null,
+    "pinned": false,
+    "src": {
+      "deepClone": false,
+      "fetchSubmodules": false,
+      "leaveDotGit": false,
+      "name": null,
+      "owner": "github",
+      "repo": "github-mcp-server",
+      "rev": "v0.32.0",
+      "sha256": "sha256-BD/t3UBAvrzJpRI7b06FjE8c+vzdQiXsj6eiUGQX6uA=",
+      "sparseCheckout": [],
+      "type": "github"
+    },
+    "version": "v0.32.0"
+  },
+  "kagiapi": {
+    "cargoLock": null,
+    "date": null,
+    "extract": null,
+    "name": "kagiapi",
+    "passthru": null,
+    "pinned": false,
+    "src": {
+      "name": null,
+      "sha256": "sha256-NV/kB7TGg9bwhIJ+T4VP2VE03yhC8V0Inaz/Yg4/Sus=",
+      "type": "url",
+      "url": "https://pypi.org/packages/source/k/kagiapi/kagiapi-0.2.1.tar.gz"
+    },
+    "version": "0.2.1"
+  },
+  "kagimcp": {
+    "cargoLock": null,
+    "date": null,
+    "extract": null,
+    "name": "kagimcp",
+    "passthru": null,
+    "pinned": false,
+    "src": {
+      "name": null,
+      "sha256": "sha256-fCFmd6BKyyeggekFsJtno394ZeswTYSRELryHQQAcyY=",
+      "type": "url",
+      "url": "https://pypi.org/packages/source/k/kagimcp/kagimcp-0.1.4.tar.gz"
+    },
+    "version": "0.1.4"
+  },
+  "mcp-language-server": {
+    "cargoLock": null,
+    "date": null,
+    "extract": null,
+    "name": "mcp-language-server",
+    "passthru": null,
+    "pinned": false,
+    "src": {
+      "deepClone": false,
+      "fetchSubmodules": false,
+      "leaveDotGit": false,
+      "name": null,
+      "owner": "isaacphi",
+      "repo": "mcp-language-server",
+      "rev": "v0.1.1",
+      "sha256": "sha256-T0wuPSShJqVW+CcQHQuZnh3JOwqUxAKv1OCHwZMr7KM=",
+      "sparseCheckout": [],
+      "type": "github"
+    },
+    "version": "v0.1.1"
+  },
+  "mcp-proxy": {
+    "cargoLock": null,
+    "date": null,
+    "extract": null,
+    "name": "mcp-proxy",
+    "passthru": null,
+    "pinned": false,
+    "src": {
+      "name": null,
+      "sha256": "sha256-NCTssfV/gXRiXd/w3xW1NKCHGdh89fnWorHgON5pafE=",
+      "type": "url",
+      "url": "https://pypi.org/packages/source/m/mcp_proxy/mcp_proxy-0.11.0.tar.gz"
+    },
+    "version": "0.11.0"
+  },
+  "mcp-server-fetch": {
+    "cargoLock": null,
+    "date": null,
+    "extract": null,
+    "name": "mcp-server-fetch",
+    "passthru": null,
+    "pinned": false,
+    "src": {
+      "name": null,
+      "sha256": "sha256-VieePFXLHlBrlYypuyPtRBOUSm8jC8oh4ESu5Rc0/kc=",
+      "type": "url",
+      "url": "https://pypi.org/packages/source/m/mcp_server_fetch/mcp_server_fetch-2025.4.7.tar.gz"
+    },
+    "version": "2025.4.7"
+  },
+  "mcp-server-git": {
+    "cargoLock": null,
+    "date": null,
+    "extract": null,
+    "name": "mcp-server-git",
+    "passthru": null,
+    "pinned": false,
+    "src": {
+      "name": null,
+      "sha256": "sha256-LNdHBMeycase174mYSDCCuiufMAeUtxsVJeQQCutK0Q=",
+      "type": "url",
+      "url": "https://pypi.org/packages/source/m/mcp_server_git/mcp_server_git-2026.1.14.tar.gz"
+    },
+    "version": "2026.1.14"
+  },
+  "openmemory-mcp": {
+    "cargoLock": null,
+    "date": null,
+    "extract": null,
+    "name": "openmemory-mcp",
+    "passthru": null,
+    "pinned": false,
+    "src": {
+      "name": null,
+      "sha256": "sha256-cxtfM3NvWjH4Q5V0TiqpFdgzzAeuiV6uX+Zv70dHy9I=",
+      "type": "url",
+      "url": "https://registry.npmjs.org/openmemory-js/-/openmemory-js-1.3.3.tgz"
+    },
+    "version": "1.3.3"
+  },
+  "sequential-thinking-mcp": {
+    "cargoLock": null,
+    "date": null,
+    "extract": null,
+    "name": "sequential-thinking-mcp",
+    "passthru": null,
+    "pinned": false,
+    "src": {
+      "name": null,
+      "sha256": "sha256-WiHm+kc3IrjmIqm7vdcrxtvN30MPJqtZic0z3+XcdwM=",
+      "type": "url",
+      "url": "https://registry.npmjs.org/@modelcontextprotocol/server-sequential-thinking/-/server-sequential-thinking-2025.12.18.tgz"
+    },
+    "version": "2025.12.18"
+  },
+  "sympy-mcp": {
+    "cargoLock": null,
+    "date": "2026-03-18",
+    "extract": null,
+    "name": "sympy-mcp",
+    "passthru": null,
+    "pinned": false,
+    "src": {
+      "deepClone": false,
+      "fetchSubmodules": false,
+      "leaveDotGit": false,
+      "name": null,
+      "owner": "sdiehl",
+      "repo": "sympy-mcp",
+      "rev": "646c69558b622ab0e2814c58aa82143e56b76c33",
+      "sha256": "sha256-AjRdiBtsF/ZpAUt+TPhvkT8VQ3y7rcJSogSSyQQXytI=",
+      "sparseCheckout": [],
+      "type": "github"
+    },
+    "version": "646c69558b622ab0e2814c58aa82143e56b76c33"
   }
 }

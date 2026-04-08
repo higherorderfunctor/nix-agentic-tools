@@ -34,10 +34,15 @@ gpgsign
 heredocs
 higherorderfunctor
 indexedlog
+isaacphi
 kagi
+kagiapi
+kagimcp
 kiro
+ldflags
 libgit
 lifecycles
+markdownify
 mdbook
 mergetool
 mystor
@@ -46,6 +51,7 @@ nixpkgs
 numtide
 nvfetcher
 openmemory
+oraios
 oxalica
 partialclone
 passthru
@@ -55,6 +61,7 @@ pkgs
 pname
 PYTHONNOUSERSITE
 PYTHONPATH
+readabilipy
 reauthor
 reflog
 reftable
@@ -66,6 +73,8 @@ revset
 revsets
 revwalk
 scriptable
+sdiehl
+sequentialthinking
 shellharden
 smartlog
 statix

@@ -326,15 +326,16 @@ dev/
 devshell/            Standalone devshell modules (mkAgenticShell)
 lib/                 Shared library: fragments, MCP helpers, devshell helpers
 packages/
+  agnix/             Linter, LSP, and MCP server for AI config files
   coding-standards/  Content package: reusable coding standards
   fragments-ai/      AI ecosystem transforms (fragment frontmatter)
+  fragments-docs/    Doc site transforms and generators
+  git-tools/         Git tool overlays (git-absorb, git-branchless, git-revise)
+  mcp-servers/       MCP server overlays (14 servers under pkgs.nix-mcp-servers)
   stacked-workflows/ Content package: skills + references + routing fragment
 ```
 
 Future top-level directories (introduced in later chunks):
 
 - `modules/` — Home-manager modules
-- `packages/ai-clis/` — AI CLI overlays
-- `packages/git-tools/` — git tool overlays
-- `packages/mcp-servers/` — MCP server overlays
-- `packages/fragments-docs/` — docsite transforms and generators
+- `packages/ai-clis/` — AI CLI overlays (claude-code, copilot-cli, kiro-cli, etc.)
