@@ -70,6 +70,7 @@ ldflags
 libgit
 lifecycles
 lockdown
+lockfiles
 markdownify
 mdbook
 mergetool
