@@ -16,6 +16,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # NuschtOS options search — client-side search UI embedded at
+    # /options/ in the built doc site. Generates a multi-scope
+    # options browser from nixosOptionsDoc JSON output.
+    nuscht-search = {
+      url = "github:NuschtOS/search";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -60,6 +67,10 @@
     # `overlays.default` composition share the same import.
     aiOverlay = import ./overlays {inherit inputs;};
     codingStandardsOverlay = import ./packages/coding-standards {};
+    # Doc site generators — moved to devshell/docs-site/ in M10 but
+    # restored as an overlay entry in M15 because the doc site build
+    # (packages.docs) needs to read pkgs.fragments-docs.passthru.generators.
+    fragmentsDocsOverlay = import ./devshell/docs-site {};
     stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
 
     # Barrel walker — collects non-binary facets from packages/*/default.nix.
@@ -82,8 +93,10 @@
         nvSourcesOverlay
         aiOverlay
         codingStandardsOverlay
+        fragmentsDocsOverlay
         stackedWorkflowsOverlay
       ];
+      fragments-docs = fragmentsDocsOverlay;
       stacked-workflows = stackedWorkflowsOverlay;
     };
 
@@ -172,6 +185,142 @@
       # the file is read once, but a single explicit binding is
       # clearer and cheaper to extend when a 5th ecosystem lands.
       gen = import ./dev/generate.nix {inherit lib pkgs;};
+
+      # ── Doc site components ─────────────────────────────────────
+      # Generator helpers ported from sentinel in M15. Composed into
+      # the mdbook source tree under docs/src/ before `mdbook build`.
+      docGen = pkgs.fragments-docs.passthru.generators;
+      docData = import ./dev/data.nix {inherit lib;};
+
+      # Options documentation generated from actual module definitions.
+      # Walks homeManagerModules.nix-agentic-tools (the factory-built
+      # merged module) and devenvModules.nix-agentic-tools via
+      # nixosOptionsDoc to produce markdown + JSON.
+      optionsDocs = import ./lib/options-doc.nix {inherit lib pkgs self;};
+
+      # Assembled options pages: header + generated options + footer
+      docsOptionsHm =
+        pkgs.runCommand "docs-options-hm" {
+          header = ./devshell/docs-site/pages/home-manager-header.md;
+          optionsMd = optionsDocs.hmOptionsDoc.optionsCommonMark;
+          footer = ./devshell/docs-site/pages/home-manager-footer.md;
+        } ''
+          cat $header > $out
+          printf '\n' >> $out
+          cat $optionsMd >> $out
+          printf '\n' >> $out
+          cat $footer >> $out
+        '';
+
+      docsOptionsDevenv =
+        pkgs.runCommand "docs-options-devenv" {
+          header = ./devshell/docs-site/pages/devenv-header.md;
+          optionsMd = optionsDocs.devenvOptionsDoc.optionsCommonMark;
+          footer = ./devshell/docs-site/pages/devenv-footer.md;
+        } ''
+          cat $header > $out
+          printf '\n' >> $out
+          cat $optionsMd >> $out
+          printf '\n' >> $out
+          cat $footer >> $out
+        '';
+
+      siteProse = pkgs.runCommand "docs-site-prose" {} ''
+        cp -r ${./dev/docs} $out
+        chmod -R u+w $out
+      '';
+
+      siteSnippets =
+        pkgs.runCommand "docs-site-snippets" {
+          aiMappingTable = pkgs.writeText "ai-mapping-table.md" (docGen.snippets.aiMappingTable {});
+          cliTable = pkgs.writeText "cli-table.md" (docGen.snippets.cliTable {});
+          credentialsTable = pkgs.writeText "credentials-table.md" (docGen.snippets.credentialsTable {data = docData;});
+          overlayTable = pkgs.writeText "overlay-table.md" (docGen.snippets.overlayTable {data = docData;});
+          routingTable = pkgs.writeText "routing-table.md" (docGen.snippets.routingTable {});
+          skillTable = pkgs.writeText "skill-table.md" (docGen.snippets.skillTable {data = docData;});
+        } ''
+          mkdir -p $out/snippets
+          cp $aiMappingTable $out/snippets/ai-mapping-table.md
+          cp $cliTable $out/snippets/cli-table.md
+          cp $credentialsTable $out/snippets/credentials-table.md
+          cp $overlayTable $out/snippets/overlay-table.md
+          cp $routingTable $out/snippets/routing-table.md
+          cp $skillTable $out/snippets/skill-table.md
+        '';
+
+      siteReference =
+        pkgs.runCommand "docs-site-reference" {
+          overlayPackages = pkgs.writeText "overlays-packages.md" (docGen.overlayPackages {data = docData;});
+          inherit docsOptionsHm docsOptionsDevenv;
+          mcpServers = pkgs.writeText "mcp-servers.md" (docGen.mcpServers {data = docData;});
+          libApi = pkgs.writeText "lib-api.md" (docGen.libApi {});
+          typesRef = pkgs.writeText "types.md" (docGen.typesRef {});
+          aiMapping = pkgs.writeText "ai-mapping.md" (docGen.aiMapping {});
+        } ''
+          mkdir -p $out/{concepts,guides,reference}
+          cp $overlayPackages $out/concepts/overlays-packages.md
+          cp $docsOptionsHm $out/guides/home-manager.md
+          cp $docsOptionsDevenv $out/guides/devenv.md
+          cp $mcpServers $out/guides/mcp-servers.md
+          cp $libApi $out/reference/lib-api.md
+          cp $typesRef $out/reference/types.md
+          cp $aiMapping $out/reference/ai-mapping.md
+        '';
+
+      # Dev architecture fragments surfaced as mdbook contributing
+      # pages. Same markdown source that feeds the scoped
+      # .claude/rules, .github/instructions, and .kiro/steering files
+      # — single source of truth across steering + docsite.
+      siteArchitecture = pkgs.runCommand "docs-site-architecture" {} ''
+        mkdir -p $out/contributing/architecture
+        cp ${./dev/fragments/monorepo/architecture-fragments.md} \
+          $out/contributing/architecture/architecture-fragments.md
+        cp ${./dev/fragments/pipeline/fragment-pipeline.md} \
+          $out/contributing/architecture/fragment-pipeline.md
+        cp ${./dev/fragments/overlays/cache-hit-parity.md} \
+          $out/contributing/architecture/overlay-cache-hit-parity.md
+        cp ${./dev/fragments/hm-modules/module-conventions.md} \
+          $out/contributing/architecture/hm-module-conventions.md
+        cp ${./dev/fragments/ai-skills/skills-fanout-pattern.md} \
+          $out/contributing/architecture/ai-skills-fanout-pattern.md
+        cp ${./dev/fragments/devenv/files-internals.md} \
+          $out/contributing/architecture/devenv-files-internals.md
+        cp ${./packages/claude-code/docs/claude-code-wrapper.md} \
+          $out/contributing/architecture/claude-code-wrapper.md
+        cp ${./packages/claude-code/docs/buddy-activation.md} \
+          $out/contributing/architecture/buddy-activation.md
+        cp ${./modules/ai/fragments/dev/ai-module-fanout.md} \
+          $out/contributing/architecture/ai-module-fanout.md
+      '';
+
+      siteCombined = pkgs.runCommand "docs-site" {} ''
+        cp -r ${siteProse} $out
+        chmod -R u+w $out
+        mkdir -p $out/generated
+        cp -r ${siteSnippets}/* $out/generated/
+        cp -r ${siteReference}/concepts/* $out/concepts/
+        cp -r ${siteReference}/guides/* $out/guides/
+        mkdir -p $out/reference
+        cp -r ${siteReference}/reference/* $out/reference/
+        cp -r ${siteArchitecture}/* $out/
+      '';
+
+      # NuschtOS options search — static client-side options browser.
+      optionsSearch = inputs.nuscht-search.packages.${system}.mkMultiSearch {
+        title = "nix-agentic-tools Options";
+        scopes = [
+          {
+            name = "DevEnv";
+            optionsJSON = optionsDocs.devenvOptionsDoc.optionsJSON + /share/doc/nixos/options.json;
+            urlPrefix = "https://github.com/higherorderfunctor/nix-agentic-tools/tree/main/";
+          }
+          {
+            name = "Home-Manager";
+            optionsJSON = optionsDocs.hmOptionsDoc.optionsJSON + /share/doc/nixos/options.json;
+            urlPrefix = "https://github.com/higherorderfunctor/nix-agentic-tools/tree/main/";
+          }
+        ];
+      };
     in
       # All AI packages — CLIs, git tools, and MCP servers — live
       # under pkgs.ai (unified overlay) and are exposed flat at
@@ -240,6 +389,48 @@
             gen.kiroFiles
           )
         );
+
+        # ── Doc site outputs ────────────────────────────────────
+        # Intermediate derivations exposed for debugging / inspection.
+        # The top-level `docs` output is the built mdbook + NuschtOS
+        # options browser + pagefind index.
+        docs-options-devenv = docsOptionsDevenv;
+        docs-options-hm = docsOptionsHm;
+        docs-options-search = optionsSearch;
+        docs-site-architecture = siteArchitecture;
+        docs-site-prose = siteProse;
+        docs-site-reference = siteReference;
+        docs-site-snippets = siteSnippets;
+        docs-site = siteCombined;
+
+        # Documentation — built book with Pagefind and NuschtOS
+        # options search embedded at /options/.
+        docs =
+          pkgs.runCommand "nix-agentic-tools-docs" {
+            nativeBuildInputs = [pkgs.gnused pkgs.mdbook pkgs.pagefind];
+            src = ./docs;
+            site = siteCombined;
+            inherit optionsSearch;
+          } ''
+            cp -r $src docs
+            chmod -R u+w docs
+            rm -rf docs/src
+            cp -r $site docs/src
+            chmod -R u+w docs/src
+            # Favicon goes in theme/ for mdbook to pick up
+            mkdir -p docs/theme
+            cp docs/src/assets/favicon.png docs/theme/favicon.png
+            mdbook build docs
+            # Embed NuschtOS options search at /options/
+            cp -rL $optionsSearch result-docs/options
+            chmod -R u+w result-docs/options
+            sed -i 's|<base href="/">|<base href="/nix-agentic-tools/options/">|g' \
+              result-docs/options/index.html \
+              result-docs/options/index.csr.html
+            # Pagefind index
+            pagefind --site result-docs
+            mv result-docs $out
+          '';
       });
 
     # Standard flake outputs for `nix develop` and `nix fmt`.

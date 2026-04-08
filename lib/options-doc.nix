@@ -13,6 +13,25 @@
 }: let
   repoUrl = "https://github.com/nix-community/nix-agentic-tools/blob/main";
 
+  # Extended lib for module evaluation — the factory-built HM and
+  # devenv modules reference `lib.ai.*` (factory primitives from
+  # lib/ai/) AND `lib.hm.dag.*` (home-manager's activation ordering).
+  # Consumers normally compose this via
+  # `lib = nixpkgs.lib // home-manager.lib // nix-agentic-tools.lib`
+  # but inside the flake we have to inject it manually via
+  # specialArgs so the option walker sees the same lib the
+  # factories close over. hm.dag is stubbed (not real HM) because
+  # this is an option-enumeration eval, not an activation eval.
+  libWithAi =
+    lib
+    // {
+      ai = import ./ai {inherit lib;};
+      hm.dag = {
+        entryAfter = _: text: {inherit text;};
+        entryBefore = _: text: {inherit text;};
+      };
+    };
+
   # ── Declaration path cleanup ────────────────────────────────────────
   # Module declarations point to nix store paths or absolute local paths.
   # Rewrite them to relative repo paths with GitHub URLs.
@@ -159,6 +178,27 @@
         default = {};
         description = "Devenv managed files.";
       };
+      # Stub home.{file,activation} — mkAiApp's baseline instruction
+      # render writes to home.file.<outputPath> and some
+      # factory-of-factories write to home.activation.* regardless
+      # of backend. In a real devenv eval context these would be
+      # type errors; the stubs absorb the writes silently so the
+      # options-doc walker can enumerate the same option tree for
+      # the devenv module output. Future work: mkAiApp should
+      # dispatch HM vs devenv backends and write to the appropriate
+      # option path (home.file for HM, files.* for devenv).
+      home = {
+        file = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+          description = "Stub for HM-compat home.file writes in devenv module eval.";
+        };
+        activation = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+          description = "Stub for HM-compat home.activation writes in devenv module eval.";
+        };
+      };
       packages = lib.mkOption {
         type = lib.types.listOf lib.types.package;
         default = [];
@@ -168,9 +208,15 @@
   };
 
   # ── HM options doc ──────────────────────────────────────────────────
+  # Post-factory-rollout, the factory-built merged module is exposed
+  # at homeManagerModules.nix-agentic-tools (previously it was
+  # homeManagerModules.default or split across per-CLI outputs).
   hmEval = lib.evalModules {
+    specialArgs = {
+      lib = libWithAi;
+    };
     modules = [
-      self.homeManagerModules.default
+      self.homeManagerModules.nix-agentic-tools
       {
         config._module.args = {
           inherit pkgs;
@@ -196,12 +242,17 @@
   };
 
   # ── Devenv options doc ──────────────────────────────────────────────
+  # Post-factory-rollout, devenvModules.nix-agentic-tools is the
+  # merged devenv module output (factory-built). The legacy
+  # self.devenvModules.{ai,claude-code-skills,copilot,kiro} are kept
+  # in modules/devenv/ for pre-factory consumers but don't need to
+  # be enumerated here.
   devenvEval = lib.evalModules {
+    specialArgs = {
+      lib = libWithAi;
+    };
     modules = [
-      self.devenvModules.ai
-      self.devenvModules.claude-code-skills
-      self.devenvModules.copilot
-      self.devenvModules.kiro
+      self.devenvModules.nix-agentic-tools
       {
         config._module.args = {
           inherit pkgs;
