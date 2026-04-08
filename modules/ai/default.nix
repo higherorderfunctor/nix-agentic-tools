@@ -41,7 +41,8 @@
     ;
 
   aiCommon = import ../../lib/ai-common.nix {inherit lib;};
-  inherit (aiCommon) instructionModule lspServerModule mkCopilotLspConfig mkLspConfig;
+  aiOptions = import ../../lib/ai-options.nix {inherit lib;};
+  inherit (aiCommon) mkCopilotLspConfig mkLspConfig;
   aiTransforms = pkgs.fragments-ai.passthru.transforms;
 
   inherit (import ../../lib/buddy-types.nix {inherit lib;}) buddySubmodule;
@@ -119,64 +120,15 @@ in {
       description = "Kiro CLI ecosystem configuration.";
     };
 
-    skills = mkOption {
-      type = types.attrsOf types.path;
-      default = {};
-      description = ''
-        Shared skills (directory paths). Identical format across ecosystems.
-        Injected at mkDefault priority so per-CLI skills win.
-      '';
-    };
+    skills = aiOptions.skillsOption;
 
-    instructions = mkOption {
-      type = types.attrsOf instructionModule;
-      default = {};
-      description = ''
-        Shared instructions with optional path scoping. Body is shared;
-        frontmatter is generated per ecosystem.
-      '';
-    };
+    instructions = aiOptions.instructionsOption;
 
-    lspServers = mkOption {
-      type = types.attrsOf lspServerModule;
-      default = {};
-      description = ''
-        Typed LSP server definitions with explicit packages. Transformed
-        to per-ecosystem JSON (with full store paths) during fanout.
-        Each CLI writes the result to its own config path.
-      '';
-      example = lib.literalExpression ''
-        {
-          nixd = { package = pkgs.nixd; extensions = ["nix"]; };
-          marksman = { package = pkgs.marksman; extensions = ["md"]; };
-        }
-      '';
-    };
+    lspServers = aiOptions.lspServersOption;
 
-    environmentVariables = mkOption {
-      type = types.attrsOf types.str;
-      default = {};
-      description = "Shared environment variables for all enabled CLIs.";
-    };
+    environmentVariables = aiOptions.environmentVariablesOption;
 
-    settings = mkOption {
-      type = types.submodule {
-        options = {
-          model = mkOption {
-            type = types.nullOr types.str;
-            default = null;
-            description = "Default model -- translated per ecosystem.";
-          };
-          telemetry = mkOption {
-            type = types.nullOr types.bool;
-            default = null;
-            description = "Enable/disable telemetry -- translated per ecosystem.";
-          };
-        };
-      };
-      default = {};
-      description = "Normalized settings translated to ecosystem-specific keys.";
-    };
+    settings = aiOptions.settingsOption;
   };
 
   config = mkMerge [
