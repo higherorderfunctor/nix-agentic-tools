@@ -234,9 +234,17 @@ in {
   );
 
   # ── mkAiApp tests ───────────────────────────────────────────────
-  factory-mkAiApp-returns-module-function = mkTest "mkAiApp-returns-module-function" (
+  factory-mkAiApp-hmTransform-exists = mkTest "mkAiApp-hmTransform-exists" (
+    builtins.isFunction ai.app.hmTransform
+  );
+
+  factory-mkAiApp-devenvTransform-exists = mkTest "mkAiApp-devenvTransform-exists" (
+    builtins.isFunction ai.app.devenvTransform
+  );
+
+  factory-mkAiApp-returns-record = mkTest "mkAiApp-returns-record" (
     let
-      module = ai.app.mkAiApp {
+      record = ai.app.mkAiApp {
         name = "testapp";
         transformers.markdown = ai.transformers.claude;
         defaults = {
@@ -245,12 +253,12 @@ in {
         };
       };
     in
-      builtins.isFunction module
+      record ? name && record ? transformers && record ? defaults
   );
 
   factory-mkAiApp-builds-option-tree = mkTest "mkAiApp-builds-option-tree" (
     let
-      module = ai.app.mkAiApp {
+      record = ai.app.mkAiApp {
         name = "testapp";
         transformers.markdown = ai.transformers.claude;
         defaults = {
@@ -258,6 +266,7 @@ in {
           outputPath = ".config/test/CONFIG.md";
         };
       };
+      module = ai.app.hmTransform record;
       evaluated = lib.evalModules {
         modules = [
           ai.sharedOptions
@@ -273,7 +282,7 @@ in {
 
   factory-mkAiApp-custom-options-merged = mkTest "mkAiApp-custom-options-merged" (
     let
-      module = ai.app.mkAiApp {
+      record = ai.app.mkAiApp {
         name = "testapp";
         transformers.markdown = ai.transformers.claude;
         defaults = {package = pkgs.hello;};
@@ -284,6 +293,7 @@ in {
           };
         };
       };
+      module = ai.app.hmTransform record;
       evaluated = lib.evalModules {
         modules = [
           ai.sharedOptions
@@ -298,7 +308,7 @@ in {
 
   factory-mkAiApp-fanout-merges-shared-servers = mkTest "mkAiApp-fanout-merges-shared-servers" (
     let
-      module = ai.app.mkAiApp {
+      record = ai.app.mkAiApp {
         name = "testapp";
         transformers.markdown = ai.transformers.claude;
         defaults = {package = pkgs.hello;};
@@ -311,10 +321,13 @@ in {
             default = 0;
           };
         };
-        config = {mergedServers, ...}: {
-          ai.testapp._mergedServerCount = builtins.length (builtins.attrNames mergedServers);
+        hm = {
+          config = {mergedServers, ...}: {
+            ai.testapp._mergedServerCount = builtins.length (builtins.attrNames mergedServers);
+          };
         };
       };
+      module = ai.app.hmTransform record;
       evaluated = lib.evalModules {
         modules = [
           (import ../lib/ai/sharedOptions.nix)
@@ -343,5 +356,58 @@ in {
       };
     in
       evaluated.config.ai.testapp._mergedServerCount == 2
+  );
+
+  factory-hmTransform-applies-to-record = mkTest "hmTransform-applies-to-record" (
+    let
+      record = ai.app.mkAiApp {
+        name = "testapp";
+        transformers.markdown = ai.transformers.claude;
+        defaults = {
+          package = pkgs.hello;
+          outputPath = ".config/test/CONFIG.md";
+        };
+      };
+      module = ai.app.hmTransform record;
+      evaluated = lib.evalModules {
+        modules = [
+          ai.sharedOptions
+          hmStubs
+          module
+          {config = {};}
+        ];
+      };
+    in
+      !evaluated.config.ai.testapp.enable
+  );
+
+  factory-devenvTransform-applies-to-record = mkTest "devenvTransform-applies-to-record" (
+    let
+      record = ai.app.mkAiApp {
+        name = "testapp";
+        transformers.markdown = ai.transformers.claude;
+        defaults = {
+          package = pkgs.hello;
+          outputPath = ".config/test/CONFIG.md";
+        };
+      };
+      module = ai.app.devenvTransform record;
+      # devenv stub: `files` option instead of `home.file`
+      devenvStubs = {
+        options.files = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+        };
+      };
+      evaluated = lib.evalModules {
+        modules = [
+          ai.sharedOptions
+          devenvStubs
+          module
+          {config = {};}
+        ];
+      };
+    in
+      !evaluated.config.ai.testapp.enable
   );
 }

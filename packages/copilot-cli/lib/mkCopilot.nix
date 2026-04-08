@@ -1,13 +1,12 @@
 # Copilot-specific factory-of-factory.
 #
-# Imported at flake-eval time into lib.ai.apps.mkCopilot via the
-# packages/copilot-cli/default.nix barrel and flake.nix's barrel walker.
-# Callers (the HM module in ../modules/homeManager/default.nix) invoke
-# it once to produce a full NixOS module function.
+# Returns a backend-agnostic app record describing the Copilot AI app.
+# Backend-specific module functions are produced by applying
+# `hmTransform` (HM) or `devenvTransform` (devenv) to this record.
 #
-# Note: the mkAiApp config callback receives {cfg, mergedServers,
-# mergedInstructions, mergedSkills} — it does NOT receive lib or pkgs.
-# Those are closed over from the outer function arguments here.
+# For now this is a minimal shape preserving the current behavior.
+# Full fanout (settings.json writing, skills routing, mcp.json
+# generation, lsp config) is absorbed in Task 4 (A3).
 {
   lib,
   pkgs,
@@ -32,9 +31,12 @@ lib.ai.app.mkAiApp {
       description = "Freeform settings passed to Copilot's config file (rendering tracked in docs/plan.md absorption backlog).";
     };
   };
-  # Empty config callback — the factory currently only fans out
-  # instructions via the mkAiApp baseline render. Full fanout
-  # (settings.json writing, skills routing, mcp.json generation,
-  # lsp config) is tracked in docs/plan.md absorption backlog.
-  config = _: {};
+  hm = {
+    options = {};
+    config = _: {};
+  };
+  devenv = {
+    options = {};
+    config = _: {};
+  };
 }
