@@ -23,6 +23,8 @@
     ".nvfetcher",
     "*.lock",
     "*.png",
+    "docs/plan.md",
+    "docs/superpowers/**",
     "locks",
     "result"
   ],
