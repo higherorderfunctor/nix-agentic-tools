@@ -86,6 +86,8 @@ NuschtOS
 nvfetcher
 OLED
 Ollama
+openclaw
+openhands
 openmemory
 operationalizes
 oraios

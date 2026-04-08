@@ -45,6 +45,80 @@ entries, avoid strings that trip the spellchecker on every commit:
   markdown source feeds Claude/Copilot/Kiro/AGENTS.md + mdbook
   contributing section
 
+## Pending refactor: ai-ecosystem-records
+
+**Status:** design note at `dev/notes/ai-transformer-design.md`,
+implementation plan in progress under
+`docs/superpowers/plans/`. Branch
+`refactor/ai-ecosystem-records` (parallel to the
+sentinel→main merge work).
+
+A multi-commit refactor that introduces ecosystem records,
+layered option pools, and backend adapters. **Subsumes or
+simplifies several TOP and MIDDLE backlog items.** Should
+land BEFORE the MIDDLE-tier ecosystem-expansion work because
+it's a 3x multiplier on that work — doing Codex/Kiro/Copilot
+full passthroughs in the OLD pattern means doing 3x more work
+and then redoing it post-refactor.
+
+**Subsumed (no separate work needed once the refactor lands):**
+
+- Task 5: `ai.claude.mcpServers` + `enableMcpIntegration`
+  passthrough — the layered option pools pattern handles
+  `ai.mcpServers` (shared) + `ai.claude.mcpServers` (per-eco)
+  directly, and the "separate from cross-ecosystem bridge"
+  parenthetical disappears
+- Task D: Devenv ai module mirror — both modules generated
+  from the same ecosystem record via the two backend adapters,
+  parity by construction
+- HM ↔ devenv ai module parity test — drift structurally
+  impossible, the test becomes "verify both adapters consume
+  the same record file"
+- MCP server submodule DRY across devenv copilot/kiro modules
+  — single source-of-truth type in `lib/ai-options.nix`
+- HM/devenv modules as packages — FP composition research
+  (LOWER) — the refactor IS the answer
+
+**Bundled (land in the same commit stack as the refactor):**
+
+- Consolidate fragment enumeration into single metadata table
+- Drop standalone `claude-code-buddy` HM module (folds into
+  the claude ecosystem record's `extraOptions.buddy`)
+- `copilot-cli` / `kiro-cli` DRY: 7 helpers copy-pasted
+  (extracted into shared adapter helpers or `lib/ai-options.nix`)
+- Refactor `mkDevFragment` location discriminator as attrset
+  lookup
+- Replace `isRoot = package == "monorepo"` with category
+  metadata
+
+**Scope reduced (much smaller follow-ups post-refactor):**
+
+- Tasks 3, 4, 6, 7 of `ai.claude.*` full passthrough — each
+  becomes "add a category to `lib/ai-options.nix`" or "add to
+  `extraOptions` on the claude record"
+- `ai.kiro.*` full passthrough (MIDDLE) — becomes a small
+  ecosystem record file
+- `ai.copilot.*` full passthrough (MIDDLE) — same
+- Add OpenAI Codex (MIDDLE) — write one ecosystem record
+  file (~80 lines), wire in two places. Replaces 4 sub-tasks.
+- nixos-config migration to `ai.*` — currently blocked on
+  Tasks 3-7; unblocked once the refactor lands
+
+**Standalone fix worth landing now (independent of the
+refactor):**
+
+- `dev/generate.nix` 3x→1x compose: ~15 lines, no
+  architecture change required, can land in any session
+  before the refactor stack starts. Composition currently
+  runs three times per package (once per ecosystem) because
+  three separate `concatMapAttrs` lambdas each create their
+  own thunk. Bind once at module top level, all three
+  references share the same thunk via lazy eval.
+
+See `dev/notes/ai-transformer-design.md` for the full
+design space, the rejected alternatives, the 14-commit
+sequencing, and 12 open questions.
+
 ## Priorities
 
 Three tiers:
@@ -95,7 +169,7 @@ Three tiers:
       architecture-foundation plan) and `c082166` (dead-code
       cleanup follow-up). The ai module now declares
       `imports = [../claude-code-buddy ../copilot-cli
-    ../kiro-cli]`, so a single
+  ../kiro-cli]`, so a single
       `homeManagerModules.ai` import brings everything needed.
       Regression gated by the new `aiSelfContained`
       module-eval check. Dead `hasModule` guards + the
@@ -213,7 +287,11 @@ fresh plan from the memory when ready to execute the next chunk.
 
 - [ ] **Task 5: `ai.claude.mcpServers` + `enableMcpIntegration`
       passthrough** — separate from cross-ecosystem `ai.mcpServers`
-      bridge (different backlog item).
+      bridge (different backlog item). _**Subsumed by
+      ai-ecosystem-records refactor** — the layered option pools
+      pattern unifies these into `ai.mcpServers` (shared) +
+      `ai.claude.mcpServers` (per-eco). The "separate bridge"
+      framing goes away._
 
 - [ ] **Task 6: `ai.claude.skills` + `ai.claude.skillsDir`
       passthrough** — depends on Task 2. Uses `mkMerge` with
@@ -228,6 +306,10 @@ fresh plan from the memory when ready to execute the next chunk.
       on HM side, mirror each option on `modules/devenv/ai.nix`
       with identical types and fanout semantics, respecting
       devenv's `files.*` / `claude.code.*` native options.
+      _**Subsumed by ai-ecosystem-records refactor** — both modules
+      generated from the same ecosystem record via
+      `mkAiEcosystemHmModule` + `mkAiEcosystemDevenvModule`. Parity
+      by construction, no separate "mirror" work needed._
 
 - [ ] **`ai.claude.*` full passthrough: architectural gap** —
       overarching intent is that `ai.claude.*` mirrors EVERY option
@@ -320,6 +402,11 @@ cumulative value.
       `checks/module-eval.nix` that evaluates both modules with
       equivalent config and spot-checks that option paths match
       (minus intentional divergences like `ai.claude.buddy`).
+      _**Subsumed by ai-ecosystem-records refactor** — drift is
+      structurally impossible because both modules are generated
+      from the same ecosystem records. The test simplifies to
+      "verify both adapters consume the same record file" and
+      may not need to exist as a separate check at all._
 
 - [ ] **Fragment size reduction: `hm-modules` and
       `fragment-pipeline`** — 267 and 186 lines respectively, over
@@ -438,7 +525,11 @@ ecosystems online through the completed `ai.*` interface.
       full-passthrough work.
 
 - [ ] **MCP server submodule DRY** — duplicated in devenv
-      copilot/kiro modules. Consolidate.
+      copilot/kiro modules. Consolidate. _**Subsumed by
+      ai-ecosystem-records refactor** — single source-of-truth
+      MCP server type lives in `lib/ai-options.nix` and is
+      referenced by both backend adapters and all ecosystem
+      records._
 
 ### Add OpenAI Codex (4th ecosystem, LAST)
 
