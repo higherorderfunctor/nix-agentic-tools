@@ -252,6 +252,17 @@
 
   # ── Derived values ───────────────────────────────────────────────────
   nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") devFragmentNames;
+
+  # Bind composition ONCE per package at the top level. All three
+  # ecosystem consumers (claudeFiles, copilotFiles, kiroFiles)
+  # reference this binding via lazy eval, so composition runs
+  # exactly once per package regardless of consumer count.
+  #
+  # Anti-pattern: do NOT call mkDevComposed inside the per-ecosystem
+  # concatMapAttrs lambdas — that creates a fresh thunk per consumer
+  # and runs composition 3x.
+  composedByPkg = lib.mapAttrs (pkg: _: mkDevComposed pkg) nonRootPackages;
+
   rootComposed = mkDevComposed "monorepo";
   monorepoEco = mkEcosystemFile "monorepo";
 
@@ -274,39 +285,33 @@
   # was pure waste and triple-loaded orientation content at every
   # Claude session start.
   claudeFiles =
-    lib.concatMapAttrs (pkg: _: let
-      composed = mkDevComposed pkg;
+    lib.mapAttrs' (pkg: composed: let
       pkgEco = mkEcosystemFile pkg;
-    in {
-      "${pkg}.md" = pkgEco.claude composed;
-    })
-    nonRootPackages;
+    in
+      lib.nameValuePair "${pkg}.md" (pkgEco.claude composed))
+    composedByPkg;
 
   # ── Copilot instruction files ────────────────────────────────────────
   copilotFiles =
     {
       "copilot-instructions.md" = monorepoEco.copilot rootComposed;
     }
-    // (lib.concatMapAttrs (pkg: _: let
-        composed = mkDevComposed pkg;
+    // (lib.mapAttrs' (pkg: composed: let
         pkgEco = mkEcosystemFile pkg;
-      in {
-        "${pkg}.instructions.md" = pkgEco.copilot composed;
-      })
-      nonRootPackages);
+      in
+        lib.nameValuePair "${pkg}.instructions.md" (pkgEco.copilot composed))
+      composedByPkg);
 
   # ── Kiro steering files ─────────────────────────────────────────────
   kiroFiles =
     {
       "common.md" = aiTransforms.kiro {name = "common";} rootComposed;
     }
-    // (lib.concatMapAttrs (pkg: _: let
-        composed = mkDevComposed pkg;
+    // (lib.mapAttrs' (pkg: composed: let
         pkgEco = mkEcosystemFile pkg;
-      in {
-        "${pkg}.md" = pkgEco.kiro composed;
-      })
-      nonRootPackages);
+      in
+        lib.nameValuePair "${pkg}.md" (pkgEco.kiro composed))
+      composedByPkg);
 
   # ── Top-level markdown files ─────────────────────────────────────────
   agentsMd = ''

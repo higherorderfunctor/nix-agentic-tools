@@ -40,6 +40,18 @@ in {
         # New API: ecosystem records consumed by Phase 2 adapters.
         inherit records;
 
+        # Shared composition cache. Populated lazily by consumers
+        # that import dev/generate.nix's mkDevComposed logic.
+        # Phase 1 ships an empty default; the dev/generate.nix
+        # refactor in commit 4 binds the actual values at flake
+        # eval time and passes them through.
+        #
+        # The binding lives here so HM modules, devenv modules, and
+        # dev/generate.nix can all reference the same thunk via
+        # pkgs.fragments-ai.passthru.composedByPackage rather than
+        # each computing their own composition.
+        composedByPackage = {};
+
         # Back-compat API: function-based transforms preserving the
         # exact signatures from the old packages/fragments-ai/default.nix.
         transforms = {
