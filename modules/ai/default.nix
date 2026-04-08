@@ -25,24 +25,11 @@
 {
   config,
   lib,
-  pkgs,
   ...
 }: let
-  inherit
-    (lib)
-    mkDefault
-    mkEnableOption
-    mkIf
-    mkMerge
-    mkOption
-    optionals
-    types
-    ;
+  inherit (lib) mkMerge optionals;
 
-  aiCommon = import ../../lib/ai-common.nix {inherit lib;};
   aiOptions = import ../../lib/ai-options.nix {inherit lib;};
-  inherit (aiCommon) mkLspConfig;
-  aiTransforms = pkgs.fragments-ai.passthru.transforms;
 
   cfg = config.ai;
 
@@ -67,6 +54,7 @@ in {
     # re-exports via passthru.records.claude.
     (mkAiEcosystemHmModule (import ../../lib/ai-ecosystems/claude.nix {inherit lib;}))
     (mkAiEcosystemHmModule (import ../../lib/ai-ecosystems/copilot.nix {inherit lib;}))
+    (mkAiEcosystemHmModule (import ../../lib/ai-ecosystems/kiro.nix {inherit lib;}))
   ];
 
   options.ai = {
@@ -80,21 +68,10 @@ in {
     # lib/mk-ai-ecosystem-hm-module.nix and
     # lib/ai-ecosystems/copilot.nix.
 
-    kiro = mkOption {
-      type = types.submodule {
-        options = {
-          enable = mkEnableOption "Fan out shared config to Kiro CLI";
-          package = mkOption {
-            type = types.package;
-            default = pkgs.kiro-cli;
-            defaultText = lib.literalExpression "pkgs.kiro-cli";
-            description = "Kiro CLI package.";
-          };
-        };
-      };
-      default = {};
-      description = "Kiro CLI ecosystem configuration.";
-    };
+    # ai.kiro options are now declared by the adapter-generated
+    # module in the imports list. See
+    # lib/mk-ai-ecosystem-hm-module.nix and
+    # lib/ai-ecosystems/kiro.nix.
 
     skills = aiOptions.skillsOption;
 
@@ -148,28 +125,8 @@ in {
     # imported via lib/mk-ai-ecosystem-hm-module.nix. See
     # lib/ai-ecosystems/copilot.nix for the per-ecosystem policy.
 
-    # Kiro CLI — ai.kiro.enable also flips programs.kiro-cli.enable.
-    (mkIf cfg.kiro.enable {
-      programs.kiro-cli = {
-        enable = mkDefault true;
-        environmentVariables =
-          lib.mapAttrs (_: mkDefault) cfg.environmentVariables;
-        lspServers = lib.mapAttrs (name: server:
-          mkDefault (mkLspConfig name server))
-        cfg.lspServers;
-        settings = mkMerge [
-          (lib.optionalAttrs (cfg.settings.model != null) {
-            chat.defaultModel = mkDefault cfg.settings.model;
-          })
-          (lib.optionalAttrs (cfg.settings.telemetry != null) {
-            telemetry.enabled = mkDefault cfg.settings.telemetry;
-          })
-        ];
-        skills = lib.mapAttrs (_: mkDefault) cfg.skills;
-        steering = lib.mapAttrs (name: instr:
-          mkDefault (aiTransforms.kiro {inherit name;} instr))
-        cfg.instructions;
-      };
-    })
+    # Kiro fanout is now handled by the adapter-generated module
+    # imported via lib/mk-ai-ecosystem-hm-module.nix. See
+    # lib/ai-ecosystems/kiro.nix for the per-ecosystem policy.
   ];
 }

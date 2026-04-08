@@ -70,15 +70,21 @@ in {
     skills = _name: path: path;
     instructions = _name: instr: instr;
 
+    # Settings translator returns a plain attrset, not lib.mkMerge.
+    # The HM backend adapter (lib/mk-ai-ecosystem-hm-module.nix)
+    # calls lib.mapAttrsRecursive on the translator output to wrap
+    # leaves with mkDefault, which only works on plain attrsets;
+    # mkMerge sentinels would be mangled. Phase 2a Commit 6 changed
+    # this from lib.mkMerge [...] to plain // merge so the adapter
+    # can dispatch settings uniformly. Phase 1 final review M2 had
+    # already flagged this as a future cleanup.
     settings = sharedSettings:
-      lib.mkMerge [
-        (lib.optionalAttrs (sharedSettings.model != null) {
-          chat.defaultModel = sharedSettings.model;
-        })
-        (lib.optionalAttrs (sharedSettings.telemetry != null) {
-          telemetry.enabled = sharedSettings.telemetry;
-        })
-      ];
+      (lib.optionalAttrs (sharedSettings.model != null) {
+        chat.defaultModel = sharedSettings.model;
+      })
+      // (lib.optionalAttrs (sharedSettings.telemetry != null) {
+        telemetry.enabled = sharedSettings.telemetry;
+      });
     lspServer = _name: server: {
       inherit (server) name;
       command = "${server.package}/bin/${server.binary or server.name}";
