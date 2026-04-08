@@ -45,7 +45,26 @@
 
   aiCommon = import ../../lib/ai-common.nix {inherit lib;};
   inherit (aiCommon) instructionModule lspServerModule mkCopilotLspConfig mkLspConfig;
-  aiTransforms = pkgs.fragments-ai.passthru.transforms;
+
+  # Legacy `aiTransforms` shape compat. Pre-factory this was
+  # `pkgs.fragments-ai.passthru.transforms`, dissolved in M9 into
+  # `lib/ai/transformers/*.nix`. The new transformers export raw
+  # `{ <name>Transformer, render }` records where `render` has no
+  # curried package/name context. Rebuild the curried shape inline
+  # from `mkRenderer` + each ecosystem's transformer so the existing
+  # fanout call sites below keep working without a wholesale rewrite.
+  # This module is slated for absorption into
+  # `packages/<name>/lib/mk<Name>.nix` config callbacks — see
+  # `docs/plan.md` "Ideal architecture gate" for the backlog entry.
+  fragmentsLib = import ../../lib/fragments.nix {inherit lib;};
+  inherit (import ../../lib/ai/transformers/claude.nix {inherit lib;}) claudeTransformer;
+  inherit (import ../../lib/ai/transformers/copilot.nix {inherit lib;}) copilotTransformer;
+  inherit (import ../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
+  aiTransforms = {
+    claude = {package}: fragmentsLib.mkRenderer claudeTransformer {inherit package;};
+    copilot = fragmentsLib.mkRenderer copilotTransformer {};
+    kiro = {name}: fragmentsLib.mkRenderer kiroTransformer {inherit name;};
+  };
 
   cfg = config.ai;
 

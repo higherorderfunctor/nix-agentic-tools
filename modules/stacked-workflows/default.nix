@@ -1,9 +1,29 @@
-# Home-manager module for stacked-workflow-skills.
+# ============================================================================
+# REFERENCE ONLY — PRE-FACTORY STACKED-WORKFLOWS HM MODULE.
+#
+# This file is NOT imported by any flake output. It is kept in the tree
+# solely as source material for the stacked-workflows absorption work
+# tracked in `docs/plan.md` "Ideal architecture gate → Absorption backlog".
+#
+# Target: absorb into `packages/stacked-workflows-content/` as the
+# content package's factory contribution (modules.homeManager facet).
+# The factory walker will pick it up automatically once it lives under
+# `packages/stacked-workflows-content/modules/homeManager/default.nix`.
+#
+# Known stale references in this file:
+# - `pkgs.fragments-ai.passthru.transforms` — dissolved in M9, see
+#   `lib/ai/transformers/*.nix` for the replacement.
+# - `programs.claude-code.skills` / `programs.copilot-cli.*` fanout
+#   — the factory implements skills routing directly, not via
+#   upstream HM modules.
+# ============================================================================
+#
+# Home-manager module for stacked-workflow-skills (legacy).
 #
 # Convenience wrapper for global/per-user installation. Sets git config
 # presets and wires AI tool integrations (Claude Code, Kiro, Copilot).
 #
-# Usage:
+# Usage (legacy, pre-factory):
 #   imports = [ inputs.nix-agentic-tools.homeManagerModules.stacked-workflows ];
 #   stacked-workflows.enable = true;
 {

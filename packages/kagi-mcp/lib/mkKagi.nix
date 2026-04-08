@@ -4,9 +4,11 @@
 # to produce a typed attrset that conforms to the common MCP server
 # schema (type, package, command, args, env, settings, url).
 #
-# TODO(milestone-N): add a `apiKey` option for Kagi API authentication.
-# The KAGI_API_KEY env var will need a typed option surface once consumer
-# needs materialize.
+# Typed auth options (KAGI_API_KEY via `apiKey.file` / `apiKey.helper`
+# sops-nix pass-through) are tracked in docs/plan.md "Ideal
+# architecture gate → Absorption backlog" under the MCP server
+# typed-options absorption item. Source material:
+# modules/mcp-servers/servers/kagi-mcp.nix.
 {
   lib,
   pkgs,
@@ -20,6 +22,6 @@ lib.ai.mcpServer.mkMcpServer {
     command = "kagimcp";
     args = [];
   };
-  # No custom options in this milestone — auth options deferred.
+  # Auth options + typed settings tracked in docs/plan.md backlog.
   options = {};
 }

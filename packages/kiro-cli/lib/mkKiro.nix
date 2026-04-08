@@ -21,14 +21,20 @@ lib.ai.app.mkAiApp {
     outputPath = ".config/kiro/steering/";
   };
   options = {
-    # Kiro-specific freeform settings passthrough. Full option
-    # typing (editor integration, model selection, etc.)
-    # deferred to a later milestone when consumer needs emerge.
+    # Kiro-specific freeform settings. Full typed surface (editor
+    # integration, model selection, steering files, skills, mcpServers
+    # fanout, hooks, agents) is tracked in docs/plan.md "Ideal
+    # architecture gate → Absorption backlog" under the kiro-cli
+    # absorption item. Source material: modules/kiro-cli/default.nix.
     settings = lib.mkOption {
       type = lib.types.attrsOf lib.types.anything;
       default = {};
-      description = "Freeform settings passed to Kiro's config file (rendering deferred).";
+      description = "Freeform settings passed to Kiro's config file (rendering tracked in docs/plan.md absorption backlog).";
     };
   };
+  # Empty config callback — the factory currently only fans out
+  # instructions via the mkAiApp baseline render. Full fanout
+  # (steering file writing, skills routing, mcp.json generation,
+  # hooks/agents) is tracked in docs/plan.md absorption backlog.
   config = _: {};
 }

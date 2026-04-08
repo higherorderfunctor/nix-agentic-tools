@@ -1,4 +1,32 @@
-# Unified AI configuration module.
+# ============================================================================
+# REFERENCE ONLY — PRE-FACTORY FANOUT PATTERN.
+#
+# This file is NOT imported by any flake output. It is kept in the tree
+# solely as source material for the `ai.*` fanout absorption work tracked
+# in `docs/plan.md` "Ideal architecture gate → Absorption backlog".
+#
+# Do NOT import this into `homeManagerModules.nix-agentic-tools`. The
+# factory path for the same behavior is
+# `lib.ai.app.mkAiApp` + `packages/<name>/lib/mk<Name>.nix`, wired into
+# the module barrel via `flake.nix:collectFacet ["modules" "homeManager"]`.
+#
+# Known stale references in this file:
+# - `pkgs.fragments-ai.passthru.transforms` — package dissolved in M9;
+#   the equivalent live surface is `lib/ai/transformers/*.nix` consumed
+#   via `fragmentsLib.mkRenderer <transformer> <ctxExtras>`.
+# - `programs.{claude-code,copilot-cli,kiro-cli}.*` fanout — the
+#   factory does NOT delegate to those upstream modules anymore. The
+#   factory-of-factory callbacks implement the fanout directly under
+#   `home.file` / `files.*` / whatever backend is chosen in the
+#   "mkAiApp backend dispatch" backlog item.
+#
+# When absorbing this file's logic into the factory, port by chunk:
+# ai.claude.enable block → mkClaude config callback, etc. Preserve the
+# assertion semantics (outside mkIf) and the gating rules documented in
+# `.claude/rules/ai-module.md`.
+# ============================================================================
+#
+# Unified AI configuration module (legacy).
 #
 # Single source of truth for shared config across Claude Code, Copilot CLI,
 # and Kiro CLI. Fans out to individual CLI modules via mkDefault so
@@ -10,7 +38,7 @@
 # consumers don't need to set enable twice. There is no master ai.enable
 # switch; enabling at least one ecosystem sub-option is the activation.
 #
-# Usage:
+# Usage (legacy, pre-factory):
 #   ai = {
 #     claude.enable = true;   # also sets programs.claude-code.enable
 #     copilot.enable = true;  # also sets programs.copilot-cli.enable

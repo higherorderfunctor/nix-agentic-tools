@@ -1,4 +1,24 @@
-# programs.claude-code.buddy — activation-time buddy companion management.
+# ============================================================================
+# REFERENCE ONLY — PRE-FACTORY BUDDY HM MODULE.
+#
+# This file is NOT imported by any flake output. It is kept in the tree
+# solely as source material for the buddy absorption work tracked in
+# `docs/plan.md` "Ideal architecture gate → Absorption backlog".
+#
+# Target: absorb into `packages/claude-code/lib/mkClaude.nix` as a typed
+# extra under the `buddy` option submodule. The current mkClaude.nix
+# stubs `buddy = {enable, statePath}` with a `mkdir` placeholder in its
+# config callback — the real activation script, fingerprint scheme,
+# sops-nix userId reading, Bun wrapper cli.js patching, and companion
+# reset logic below need to be ported into that callback.
+#
+# See also `.claude/rules/claude-code.md` for the full activation
+# lifecycle invariants that any port MUST preserve (no `exit` in
+# activation scripts, Bun-vs-Node hash consistency, fingerprint
+# short-circuit via `if`/`fi`, companion reset on mismatch).
+# ============================================================================
+#
+# programs.claude-code.buddy — activation-time buddy companion management (legacy).
 #
 # Extends the upstream nixpkgs programs.claude-code module by adding a
 # `buddy` option. When set, an activation script:

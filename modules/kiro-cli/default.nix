@@ -1,4 +1,23 @@
-# programs.kiro-cli home-manager module.
+# ============================================================================
+# REFERENCE ONLY — PRE-FACTORY KIRO-CLI HM MODULE.
+#
+# This file is NOT imported by any flake output. It is kept in the tree
+# solely as source material for the kiro absorption work tracked in
+# `docs/plan.md` "Ideal architecture gate → Absorption backlog".
+#
+# Target: absorb into `packages/kiro-cli/lib/mkKiro.nix` as the
+# config callback body. The current mkKiro.nix has an empty
+# `config = _: {}` — the settings/mcp.json / steering / skills /
+# agents / hooks merge logic below needs to be ported there, writing
+# to `home.file.*` (HM) or `files.*` (devenv) via the mkAiApp backend
+# dispatch (another backlog item).
+#
+# Do NOT implement `programs.kiro-cli.*` as a target for fanout —
+# the factory architecture replaces that upstream-style delegation
+# with direct file writes from the factory config callback.
+# ============================================================================
+#
+# programs.kiro-cli home-manager module (legacy).
 # Mirrors upstream programs.claude-code conventions.
 #
 # Config directory: ~/.kiro/
