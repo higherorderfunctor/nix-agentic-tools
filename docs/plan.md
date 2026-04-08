@@ -733,6 +733,66 @@ do not edit -->`); (2) above each composed fragment, a
       string-concatenation and rely on convention). Don't
       build this until there's a concrete second use case
       driving the design, otherwise risk premature abstraction.
+- [ ] **LLM-friendly inline code commenting conventions** — author
+      a coding-standards fragment (or extend an existing one) that
+      codifies code-comment patterns specifically aimed at making
+      implementations traceable for LLMs as well as humans. Goal:
+      when an LLM (or human) is reading a derivation, override,
+      wrapper, or composed module, the comments should give it
+      enough breadcrumbs to find the canonical upstream source
+      without having to guess.
+
+      Concrete example from chunk 5/6 review feedback (2026-04-08):
+      when overriding a nixpkgs package in an overlay (e.g.,
+      `git-branchless = ourPkgs.git-branchless.override (...)`,
+      `github-mcp = ourPkgs.buildGoModule { ... }`), include an
+      inline comment with a permalink to the upstream nixpkgs
+      derivation we're overriding. Today an LLM trying to
+      understand "where does the actual buildPhase live?" has to
+      grep nixpkgs blindly; with a permalink it's one click.
+
+      Other rules to consider (not exhaustive):
+      - **Override comments** — link to the upstream derivation
+        being overridden (e.g.,
+        `# upstream: github.com/NixOS/nixpkgs/tree/<rev>/pkgs/...`).
+      - **Wrapper chain comments** — for Bun/Node wrapper chains
+        (claude-code), document the wrap order with a short ASCII
+        diagram of which derivation feeds which.
+      - **Function-arg destructuring shape** — when a per-package
+        overlay file uses a non-obvious function shape (e.g.,
+        `{inputs}: {nv-sources, ...}: ...`), comment why and link
+        to the `dev/fragments/overlays/overlay-pattern.md`
+        fragment that documents the convention.
+      - **passthru fields** — when a derivation exports
+        `passthru.<name>` for downstream consumers, include a
+        brief note ("consumed by `lib/mcp.nix:mkPackageEntry`",
+        etc.) so LLMs reading the consumer side can grep
+        backwards.
+      - **Sidecar files** — when a directory ships a sidecar
+        (`hashes.json`, `locks/*`, `*-package-lock.json`),
+        document the convention in the directory's `default.nix`
+        or a `README.md` so an LLM doesn't have to infer the
+        relationship.
+      - **`ourPkgs` instantiation reasoning** — already documented
+        in the cache-hit-parity fragment, but each per-package
+        overlay file should also have a terse comment pointing
+        back to the fragment so a reviewer scanning a single file
+        gets the cross-reference for free.
+
+      Output: a new dev fragment under
+      `dev/fragments/coding-standards/` (or similar) that lays
+      these out as a checklist contributors run through when
+      adding a new derivation/overlay/wrapper. Could also be a
+      `/comment-audit` skill that scans recently changed `.nix`
+      files and flags missing comments.
+
+      Caller flagged this 2026-04-08 during chunk 6 (PR #10):
+      *"add a TODO to the backlog to provide commenting
+      instructions to llms inline with code. like maybe when we
+      override in an overlay link to the original source in
+      github so llm thinking the build step is missing can
+      quickly find the base implementation."*
+
 - [ ] **Fragment metadata consolidation follow-up** — after the
       TOP item lands, also reduce plan.md churn by having this
       file reference the metadata table instead of re-listing
