@@ -95,7 +95,7 @@ Three tiers:
       architecture-foundation plan) and `c082166` (dead-code
       cleanup follow-up). The ai module now declares
       `imports = [../claude-code-buddy ../copilot-cli
-    ../kiro-cli]`, so a single
+  ../kiro-cli]`, so a single
       `homeManagerModules.ai` import brings everything needed.
       Regression gated by the new `aiSelfContained`
       module-eval check. Dead `hasModule` guards + the
@@ -349,6 +349,64 @@ module` works but extends linearly. Replace with
 true` (or similar) that pulls SWS skills + routing table into
       every enabled ecosystem in one line. Keep raw
       `ai.skills.<name> = path` for bring-your-own.
+
+- [ ] **Generate `.agnix.toml` from enabled ecosystems via fragment
+      pipeline** — `.agnix.toml` currently hardcodes its `[targets]`
+      table:
+
+      ```toml
+      [targets]
+      claude-code = true
+      copilot = true
+      kiro = true
+      ```
+
+      This is duplicate state of "which AI ecosystems does this
+      repo support" that already lives in the fragment pipeline
+      (`packages/fragments-ai/passthru.transforms.{claude,copilot,
+      kiro,agentsmd}`) and the `ai.*` modules. Adding Codex (or
+      removing one) means hand-editing TWO places: `.agnix.toml`
+      AND the fragment transforms.
+
+      Plan:
+
+      1. Extend the fragment pipeline so it can emit TOML in
+         addition to markdown. Either: (a) add a `toml` transform
+         function to `fragments-ai.passthru.transforms` that takes
+         a structured value and produces a TOML string via
+         `(pkgs.formats.toml {}).generate`, or (b) keep TOML
+         generation outside `fragments-ai` since it's not really
+         "fragment composition" — just data-to-file. Probably (b)
+         is cleaner.
+      2. Generate `.agnix.toml` from a single source of truth:
+         the list of enabled ecosystems (currently
+         `[claude-code copilot kiro]`, eventually `+ codex`).
+         Either feed from `dev/data.nix` or from the
+         `fragments-ai.passthru.transforms` attrset's keys
+         (since each transform corresponds to one ecosystem).
+      3. Decision: commit `.agnix.toml` to the repo OR generate
+         it on devenv activation only (gitignored). Both work:
+         - **Committed**: CI sees it directly, no devenv
+           dependency for non-devenv consumers, but devenv
+           activation would need to verify-no-drift on activation
+         - **Activation-generated**: gitignored, devenv writes
+           it via `files.".agnix.toml".source = ...`. Avoids
+           drift but breaks any tool that runs `agnix` outside
+           a devenv shell.
+
+         Lean toward committed + devenv-rewrite-on-activation
+         (matches how `flake.lock` works in CI vs devenv).
+
+      Touch points: `dev/generate.nix` (or new
+      `dev/agnix-targets.nix`), `devenv.nix` `files.*` block,
+      `.agnix.toml` itself, `.gitignore` if going gitignored.
+      Affects every chunk that adds `.agnix.toml` (currently
+      Chunk 1 of the sentinel-to-main merge — would be auto-
+      generated post-merge).
+
+      Surfaced 2026-04-08 during PR #3 review when noticing the
+      `.agnix.toml` `[targets]` table is hardcoded duplication
+      of "which ecosystems does this repo support".
 
 ### nixos-config integration
 
