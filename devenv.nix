@@ -109,7 +109,17 @@ in {
     # Spelling
     cspell = {
       enable = true;
-      excludes = [".*-package-lock\\.json$" ".*\\.lock$"];
+      # Mirror cspell.json ignorePaths at the pre-commit level.
+      # cspell exits 1 when all input files are filtered out by
+      # ignorePaths alone, so filtering here (before cspell is
+      # invoked) keeps commits that only touch excluded files from
+      # failing the hook.
+      excludes = [
+        ".*-package-lock\\.json$"
+        ".*\\.lock$"
+        "^docs/plan\\.md$"
+        "^docs/superpowers/"
+      ];
     };
 
     # Commit message convention
