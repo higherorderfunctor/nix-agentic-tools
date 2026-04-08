@@ -1,4 +1,8 @@
-{pkgs, ...}: {
+{
+  config,
+  pkgs,
+  ...
+}: {
   # ── Binary Cache ──────────────────────────────────────────────────────
   cachix.pull = ["nix-agentic-tools"];
 
@@ -19,8 +23,18 @@
   };
 
   # ── Git Hooks ─────────────────────────────────────────────────────────
-  # treefmt hook is auto-wired by treefmt.enable above
+  # `treefmt.enable = true` above turns on treefmt itself but does NOT
+  # install a pre-commit hook — that's a separate git-hooks.hooks entry
+  # below. Without it, files can get committed unformatted and the next
+  # `devenv shell` / `devenv test` / manual treefmt invocation picks
+  # them up as a working-tree diff, which shows up as unexplained
+  # "style" churn. Wiring the hook here forces formatting at commit
+  # time.
   git-hooks.hooks = {
+    treefmt = {
+      enable = true;
+      package = config.treefmt.build.wrapper;
+    };
     # Nix linting
     deadnix = {
       enable = true;
