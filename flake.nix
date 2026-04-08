@@ -35,14 +35,17 @@
     # `overlays.default` composition share the same import.
     codingStandardsOverlay = import ./packages/coding-standards {};
     fragmentsAiOverlay = import ./packages/fragments-ai {};
+    stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
   in {
     overlays = {
       coding-standards = codingStandardsOverlay;
       default = lib.composeManyExtensions [
         codingStandardsOverlay
         fragmentsAiOverlay
+        stackedWorkflowsOverlay
       ];
       fragments-ai = fragmentsAiOverlay;
+      stacked-workflows = stackedWorkflowsOverlay;
     };
 
     # Scaffolding placeholders — subsequent PRs populate these.
@@ -53,8 +56,39 @@
       fragments = import ./lib/fragments.nix {inherit lib;};
       devshellLib = import ./lib/devshell.nix {inherit lib;};
       mcpLib = import ./lib/mcp.nix {inherit lib;};
+
+      # Cross-package presets (compose fragments from multiple
+      # packages). Individual packages expose their own presets in
+      # passthru.presets; these combine across package boundaries.
+      #
+      # We invoke the overlay functions with a stub `final` that
+      # provides only `lib` and a fake `runCommand`. The overlay's
+      # `passthru.fragments` attrset doesn't depend on the
+      # derivation itself, only on `final.lib` (for the fragments
+      # library import), so this is enough to extract fragment data
+      # without instantiating a real pkgs set.
+      stubFinal = {
+        inherit lib;
+        runCommand = name: _: _: {
+          inherit name;
+          type = "derivation";
+        };
+      };
+      codingStdFragments =
+        (codingStandardsOverlay stubFinal {}).coding-standards.passthru.fragments;
+      swsContentFragments =
+        (stackedWorkflowsOverlay stubFinal {}).stacked-workflows-content.passthru.fragments;
+      presets = {
+        # Full dev environment — all coding standards + skill routing
+        nix-agentic-tools-dev = fragments.compose {
+          fragments =
+            builtins.attrValues codingStdFragments
+            ++ builtins.attrValues swsContentFragments;
+          description = "Full nix-agentic-tools dev standards";
+        };
+      };
     in {
-      inherit fragments;
+      inherit fragments presets;
       inherit (devshellLib) mkAgenticShell;
       inherit (fragments) compose mkFragment mkFrontmatter render;
       inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig;
@@ -66,8 +100,6 @@
           url = "https://knowledge-mcp.global.api.aws";
         };
       };
-      # `presets` defers to Chunk 4 (depends on coding-standards +
-      # stacked-workflows content packages).
       # `gitConfig` / `gitConfigFull` defer to Chunk 8 (depends on
       # modules/stacked-workflows/git-config*.nix).
     };
