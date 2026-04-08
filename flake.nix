@@ -14,7 +14,11 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   };
 
-  outputs = {nixpkgs, ...}: let
+  outputs = {
+    self,
+    nixpkgs,
+    ...
+  }: let
     inherit (nixpkgs) lib;
     supportedSystems = [
       "aarch64-darwin"
@@ -25,10 +29,14 @@
       import nixpkgs {
         inherit system;
         config.allowUnfree = true;
+        overlays = [self.overlays.default];
       };
   in {
     overlays = {
-      default = _final: _prev: {};
+      default = lib.composeManyExtensions [
+        (import ./packages/fragments-ai {})
+      ];
+      fragments-ai = import ./packages/fragments-ai {};
     };
 
     # Scaffolding placeholders — subsequent PRs populate these.
@@ -59,7 +67,73 @@
     };
 
     checks = forAllSystems (_: {});
-    packages = forAllSystems (_: {});
+    packages = forAllSystems (system: let
+      pkgs = pkgsFor system;
+    in {
+      # Instruction file derivations (from dev/generate.nix).
+      # Each ecosystem produces a content directory consumed by the
+      # `generate:instructions:*` devenv tasks.
+      instructions-agents = let
+        gen = import ./dev/generate.nix {inherit lib pkgs;};
+      in
+        pkgs.writeText "AGENTS.md" gen.agentsMd;
+
+      instructions-claude = let
+        gen = import ./dev/generate.nix {inherit lib pkgs;};
+        files =
+          {"CLAUDE.md" = gen.claudeMd;}
+          // lib.mapAttrs' (
+            name: content: lib.nameValuePair "rules/${name}" content
+          )
+          gen.claudeFiles;
+      in
+        pkgs.runCommand "instructions-claude" {} (
+          "mkdir -p $out/rules\n"
+          + lib.concatStringsSep "\n" (
+            lib.mapAttrsToList (
+              name: content: "cp ${pkgs.writeText (baseNameOf name) content} $out/${name}"
+            )
+            files
+          )
+        );
+
+      instructions-copilot = let
+        gen = import ./dev/generate.nix {inherit lib pkgs;};
+        files =
+          lib.mapAttrs' (
+            name: content:
+              lib.nameValuePair (
+                if name == "copilot-instructions.md"
+                then name
+                else "instructions/${name}"
+              )
+              content
+          )
+          gen.copilotFiles;
+      in
+        pkgs.runCommand "instructions-copilot" {} (
+          "mkdir -p $out/instructions\n"
+          + lib.concatStringsSep "\n" (
+            lib.mapAttrsToList (
+              name: content: "cp ${pkgs.writeText (baseNameOf name) content} $out/${name}"
+            )
+            files
+          )
+        );
+
+      instructions-kiro = let
+        gen = import ./dev/generate.nix {inherit lib pkgs;};
+      in
+        pkgs.runCommand "instructions-kiro" {} (
+          "mkdir -p $out\n"
+          + lib.concatStringsSep "\n" (
+            lib.mapAttrsToList (
+              name: content: "cp ${pkgs.writeText name content} $out/${name}"
+            )
+            gen.kiroFiles
+          )
+        );
+    });
 
     # Standard flake outputs for `nix develop` and `nix fmt`.
     # Primary dev workflow is `devenv shell` / `devenv test` via
