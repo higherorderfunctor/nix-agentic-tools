@@ -1,8 +1,4 @@
-{
-  config,
-  pkgs,
-  ...
-}: {
+{pkgs, ...}: {
   # ── Binary Cache ──────────────────────────────────────────────────────
   cachix.pull = ["nix-agentic-tools"];
 
@@ -23,18 +19,19 @@
   };
 
   # ── Git Hooks ─────────────────────────────────────────────────────────
-  # `treefmt.enable = true` above turns on treefmt itself but does NOT
-  # install a pre-commit hook — that's a separate git-hooks.hooks entry
-  # below. Without it, files can get committed unformatted and the next
-  # `devenv shell` / `devenv test` / manual treefmt invocation picks
-  # them up as a working-tree diff, which shows up as unexplained
-  # "style" churn. Wiring the hook here forces formatting at commit
-  # time.
+  # `treefmt.enable = true` above wires the treefmt wrapper as
+  # `git-hooks.hooks.treefmt.package` (via mkOverrideDefault) and
+  # registers a `devenv:treefmt:run` task that runs *before*
+  # `devenv:enterShell` — that's why files get reformatted on every
+  # `direnv reload` / `devenv shell` entry and show up as
+  # working-tree diffs. But devenv does NOT flip
+  # `git-hooks.hooks.treefmt.enable`, so the pre-commit hook stays
+  # inert and files can still be committed unformatted. The explicit
+  # enable below activates the hook so formatting is enforced at
+  # commit time, not just at shell-entry time.
   git-hooks.hooks = {
-    treefmt = {
-      enable = true;
-      package = config.treefmt.build.wrapper;
-    };
+    treefmt.enable = true;
+
     # Nix linting
     deadnix = {
       enable = true;
