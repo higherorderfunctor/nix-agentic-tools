@@ -621,6 +621,23 @@ Everything else. Park these until TOP/MIDDLE are stable.
       catchup-to-main merge sequence completes; do as a single
       dedicated PR rather than a chunk so reviewer sees the full
       shape change.
+- [ ] **CI drift check for committed generated instruction
+      files** (original, narrower scope) —
+      `.github/copilot-instructions.md`,
+      `.github/instructions/*.instructions.md`, and `AGENTS.md`
+      are now committed (landed in PR #7). Add a CI step that
+      runs `nix build .#instructions-{copilot,agents}` and diffs
+      the result against the committed files. Fails if they
+      drift. Same pattern for any other generated files we
+      decide to commit later (Claude rules, Kiro steering,
+      AGENTS.md). Could be a flake check
+      (`checks.instructions-drift`) or a separate CI job. Pre-commit
+      hook is the wrong layer because regenerating in pre-commit
+      slows down every commit. **Note:** the larger "Drift
+      detection — agent or skill set" item below subsumes this
+      and additionally specifies the use of devenv tasks (not
+      `nix build` directly) per a later PR #8 user note. Both
+      items are kept for context.
 - [ ] **Drift detection — agent or skill set covering multiple
       categories**. Per user feedback on PR #8 (2026-04-08):
       drift detection is broader than just generated instruction
