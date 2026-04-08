@@ -24,6 +24,8 @@ direnvrc
 docsite
 envrc
 fanout
+fetchgit
+fetchurl
 foldl
 frontloaded
 frontmatter
@@ -31,6 +33,7 @@ gitref
 gpgsign
 heredocs
 higherorderfunctor
+indexedlog
 kagi
 kiro
 libgit
@@ -43,6 +46,7 @@ nixpkgs
 numtide
 nvfetcher
 openmemory
+oxalica
 partialclone
 passthru
 pasteable
@@ -51,7 +55,9 @@ pkgs
 pname
 PYTHONNOUSERSITE
 PYTHONPATH
+pypi
 pyproject
+pytest
 reauthor
 reflog
 reftable
@@ -62,6 +68,7 @@ revertibility
 revset
 revsets
 revwalk
+rustc
 scriptable
 shellharden
 smartlog

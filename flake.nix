@@ -12,13 +12,17 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
     self,
     nixpkgs,
     ...
-  }: let
+  } @ inputs: let
     inherit (nixpkgs) lib;
     supportedSystems = [
       "aarch64-darwin"
@@ -36,6 +40,7 @@
     codingStandardsOverlay = import ./packages/coding-standards {};
     fragmentsAiOverlay = import ./packages/fragments-ai {};
     fragmentsDocsOverlay = import ./packages/fragments-docs {};
+    gitToolsOverlay = import ./packages/git-tools {inherit inputs;};
     stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
   in {
     overlays = {
@@ -44,10 +49,12 @@
         codingStandardsOverlay
         fragmentsAiOverlay
         fragmentsDocsOverlay
+        gitToolsOverlay
         stackedWorkflowsOverlay
       ];
       fragments-ai = fragmentsAiOverlay;
       fragments-docs = fragmentsDocsOverlay;
+      git-tools = gitToolsOverlay;
       stacked-workflows = stackedWorkflowsOverlay;
     };
 
@@ -111,6 +118,14 @@
     packages = forAllSystems (system: let
       pkgs = pkgsFor system;
     in {
+      # Git tool packages — exposed via the git-tools overlay so
+      # `nix build .#<name>` works for CI and consumers building
+      # directly. The overlay's `ourPkgs` cache-hit-parity pattern
+      # ensures these store paths match what CI pushes to cachix
+      # regardless of the consumer's nixpkgs pin (see
+      # `dev/fragments/overlays/cache-hit-parity.md` once it lands).
+      inherit (pkgs) agnix git-absorb git-branchless git-revise;
+
       # Instruction file derivations (from dev/generate.nix).
       # Each ecosystem produces a content directory consumed by the
       # `generate:instructions:*` devenv tasks.

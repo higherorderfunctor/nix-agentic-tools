@@ -1,0 +1,32 @@
+# Unified version tracking for all packages.
+# Run: nvfetcher (regenerates .nvfetcher/generated.{nix,json})
+#
+# This file is the source of truth for what versions to track. The
+# update task (Phase 4) handles invoking nvfetcher and committing
+# the regenerated files. Currently scoped to git-tools entries —
+# additional package groups (ai-clis, mcp-servers) get their own
+# entries when their overlay chunks land.
+
+# ── Dev tools ─────────────────────────────────────────────────────
+
+[agnix]
+src.github = "agent-sh/agnix"
+fetch.github = "agent-sh/agnix"
+
+# ── Git tools ─────────────────────────────────────────────────────
+
+[git-absorb]
+src.github = "tummychow/git-absorb"
+fetch.github = "tummychow/git-absorb"
+
+[git-branchless]
+src.github = "arxanas/git-branchless"
+fetch.github = "arxanas/git-branchless"
+
+[git-revise]
+# Track version from PyPI, fetch source from GitHub (includes tests).
+# from_pattern/to_pattern adds "v" prefix: PyPI "0.8.0" → GitHub tag "v0.8.0"
+src.pypi = "git-revise"
+src.from_pattern = "^(.*)$"
+src.to_pattern = "v\\1"
+fetch.github = "mystor/git-revise"
