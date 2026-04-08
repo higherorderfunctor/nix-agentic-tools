@@ -60,7 +60,6 @@
     # `overlays.default` composition share the same import.
     aiOverlay = import ./overlays {inherit inputs;};
     codingStandardsOverlay = import ./packages/coding-standards {};
-    fragmentsDocsOverlay = import ./packages/fragments-docs {};
     stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
 
     # Barrel walker — collects non-binary facets from packages/*/default.nix.
@@ -83,10 +82,8 @@
         nvSourcesOverlay
         aiOverlay
         codingStandardsOverlay
-        fragmentsDocsOverlay
         stackedWorkflowsOverlay
       ];
-      fragments-docs = fragmentsDocsOverlay;
       stacked-workflows = stackedWorkflowsOverlay;
     };
 
