@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main, sentinel/monorepo-plan]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# TODO: remove once DeterminateSystems/nix-installer-action ships node24
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: x86_64-linux
+            runner: ubuntu-latest
+          - system: aarch64-darwin
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+      - uses: cachix/cachix-action@v17
+        with:
+          name: nix-agentic-tools
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          # cachix-action pushes built paths automatically when
+          # authToken is set and the push target matches
+
+      - name: Check flake evaluation
+        run: nix flake check --no-build
+
+      - name: Install nix-fast-build
+        run: nix profile install nixpkgs#nix-fast-build
+
+      - name: Build all packages
+        run: |
+          nix-fast-build \
+            --flake ".#packages" \
+            --systems "${{ matrix.system }}" \
+            --skip-cached \
+            --cachix-cache nix-agentic-tools \
+            --no-nom \
+            --no-link
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+      - uses: cachix/cachix-action@v17
+        with:
+          name: nix-agentic-tools
+
+      - name: Install devenv
+        run: nix profile install nixpkgs#devenv
+
+      - name: Run devenv test
+        run: devenv test

@@ -1,0 +1,24 @@
+{
+  "caseSensitive": false,
+  "dictionaries": ["bash", "git", "project-terms"],
+  "dictionaryDefinitions": [
+    {
+      "addWords": true,
+      "name": "project-terms",
+      "path": ".cspell/project-terms.txt"
+    }
+  ],
+  "ignorePaths": [
+    ".direnv",
+    ".git",
+    ".nvfetcher",
+    "*.lock",
+    "*.png",
+    "docs/plan.md",
+    "docs/superpowers/**",
+    "locks",
+    "result"
+  ],
+  "language": "en",
+  "version": "0.2"
+}
