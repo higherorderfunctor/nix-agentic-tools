@@ -210,27 +210,54 @@ in {
   };
 
   # ── Per-axis translators (data → data) ───────────────────────
-  # Each takes a slice of the shared cfg and returns the
-  # ecosystem-specific shape. Pure functions, no config reads.
+  # Every shared category dispatches through a translator. The
+  # adapter NEVER does direct passthrough — even "trivial" categories
+  # like skills go through `translators.skills` so a future
+  # divergence (e.g., upstream programs.copilot.skills.<name> adding
+  # a `recursive` flag that programs.claude-code.skills doesn't have)
+  # has a place to live without forcing the adapter to special-case.
+  #
+  # Translator shape varies by category:
+  #   - Identity: abstract type maps 1:1 to ecosystem shape
+  #     (skills as paths today, env vars as strings)
+  #   - Shape translation: abstract → ecosystem-specific structure
+  #     (lspServer, mcpServer)
+  #   - Key remap: same content, different key path
+  #     (kiro's settings.model → settings.chat.defaultModel)
+  #   - null: ecosystem doesn't support this category at all
+  #     (Claude has no env var concept; the adapter skips dispatch)
+  #
+  # See the "When to share, when to per-eco" section below for
+  # how to decide whether a new option category belongs in the
+  # shared pool (with a translator) or only in per-eco extension.
   translators = {
-    # ai.settings.{model, telemetry} → ecosystem-shaped settings
+    # Identity: claude skills are paths today, no shape change.
+    skills = _name: path: path;
+
+    # Identity: instructions submodule passes through (markdown
+    # body rendering happens separately via markdownTransformer).
+    instructions = _name: instr: instr;
+
+    # Key remap: ai.settings.{model, telemetry} → claude shape.
     settings = sharedSettings:
       lib.optionalAttrs (sharedSettings.model != null) {
         model = sharedSettings.model;
       };
 
-    # ai.lspServers.<name> → ecosystem-specific LSP entry
+    # Shape translation: ai.lspServers.<name> → ecosystem-specific
+    # LSP entry with full store paths and ecosystem-specific keys.
     lspServer = name: server: {
       name = server.name;
       command = "${server.package}/bin/${server.binary}";
       filetypes = server.extensions;
     };
 
-    # ai.environmentVariables.<name> → ecosystem-shaped env entry
-    # null = ecosystem doesn't support env vars (Claude case)
+    # null = ecosystem doesn't support env vars (Claude case).
+    # Adapter checks for null and skips dispatch.
     envVar = null;
 
-    # ai.mcpServers.<name> → ecosystem-shaped MCP entry
+    # Shape translation: ai.mcpServers.<name> → ecosystem-shaped
+    # MCP entry.
     mcpServer = name: server: {
       type = if server ? url then "http" else "stdio";
       command = server.command or null;
@@ -493,7 +520,48 @@ let
                       (lib.recursiveUpdate cfg.mcpServers ecoCfg.mcpServers);
   };
 
+  # ── Translate every category through the ecosystem record ───
+  # The adapter NEVER does direct passthrough. Every effective
+  # set is dispatched through `ecoRecord.translators.<category>`
+  # before being written to the backend. For categories where
+  # the abstract type maps 1:1 to the ecosystem shape (skills,
+  # instructions, env vars), the translator is identity. For
+  # categories with shape divergence (lspServer, mcpServer,
+  # settings), the translator does the structural transformation.
+  #
+  # null translator = ecosystem doesn't support this category;
+  # the adapter skips dispatch for that category entirely.
+  translated = {
+    skills =
+      if ecoRecord.translators.skills != null
+      then lib.mapAttrs (n: v: ecoRecord.translators.skills n v) effective.skills
+      else null;
+    instructions =
+      if ecoRecord.translators.instructions != null
+      then lib.mapAttrs (n: v: ecoRecord.translators.instructions n v) effective.instructions
+      else null;
+    settings =
+      if ecoRecord.translators.settings != null
+      then ecoRecord.translators.settings effective.settings
+      else null;
+    lspServers =
+      if ecoRecord.translators.lspServer != null
+      then lib.mapAttrs (n: v: ecoRecord.translators.lspServer n v) effective.lspServers
+      else null;
+    environmentVariables =
+      if ecoRecord.translators.envVar != null
+      then lib.mapAttrs (n: v: ecoRecord.translators.envVar n v) effective.environmentVariables
+      else null;
+    mcpServers =
+      if ecoRecord.translators.mcpServer != null
+      then lib.mapAttrs (n: v: ecoRecord.translators.mcpServer n v) effective.mcpServers
+      else null;
+  };
+
   # ── Render markdown content for each instruction ─────────────
+  # Body rendering uses the markdownTransformer field. This is
+  # separate from the `instructions` translator above, which only
+  # translates the option-shape envelope around the body.
   T = ecoRecord.markdownTransformer;
   renderInstruction = name: instr:
     (mkRenderer T {
@@ -502,9 +570,11 @@ let
     }) instr;
 
   # ── Assemble the config block ────────────────────────────────
-  # Where each effective set lands depends on whether the
+  # Where each translated set lands depends on whether the
   # ecosystem record has an upstream HM module to delegate to,
   # or whether we write home.file directly (orphan ecosystem).
+  # Either way, the bytes/structure being placed have already
+  # been translated — the dispatch below is pure routing.
   fanoutBlock = lib.mkMerge [
     # Enable upstream module if specified
     (lib.optionalAttrs (ecoRecord.upstream.hm.enableOption != null)
@@ -512,14 +582,19 @@ let
         (lib.splitString "." ecoRecord.upstream.hm.enableOption)
         (lib.mkDefault true)))
 
-    # Skills: delegate if upstream supports it, else write home.file
-    (if ecoRecord.upstream.hm.skillsOption != null
-     then lib.setAttrByPath
-            (lib.splitString "." ecoRecord.upstream.hm.skillsOption)
-            (lib.mapAttrs (_: lib.mkDefault) effective.skills)
-     else { home.file = mkSkillFiles ecoRecord effective.skills; })
+    # Skills: delegate if upstream supports it, else write home.file.
+    # `translated.skills` has already been through the ecosystem's
+    # translator (identity for most ecosystems today).
+    (lib.optionalAttrs (translated.skills != null)
+      (if ecoRecord.upstream.hm.skillsOption != null
+       then lib.setAttrByPath
+              (lib.splitString "." ecoRecord.upstream.hm.skillsOption)
+              (lib.mapAttrs (_: lib.mkDefault) translated.skills)
+       else { home.file = mkSkillFiles ecoRecord translated.skills; }))
 
-    # Instructions: always rendered + placed
+    # Instructions: rendered via markdownTransformer, then placed.
+    # The markdown rendering is separate from the option-shape
+    # translation handled by `translated.instructions` above.
     {
       home.file = lib.concatMapAttrs (name: instr: {
         ${ecoRecord.layout.instructionPath name}.text =
@@ -527,21 +602,27 @@ let
       }) effective.instructions;
     }
 
-    # MCP servers: delegate if upstream supports it
-    (lib.optionalAttrs (ecoRecord.upstream.hm.mcpServersOption != null)
+    # MCP servers: delegate to upstream if supported, else write
+    # mcpConfigPath directly. translated.mcpServers has the
+    # ecosystem-shaped entries.
+    (lib.optionalAttrs (translated.mcpServers != null
+                        && ecoRecord.upstream.hm.mcpServersOption != null)
       (lib.setAttrByPath
         (lib.splitString "." ecoRecord.upstream.hm.mcpServersOption)
-        (lib.mapAttrs (n: s: ecoRecord.translators.mcpServer n s)
-          effective.mcpServers)))
+        translated.mcpServers))
 
-    # Settings: translate via ecosystem translator, then place
-    (lib.optionalAttrs (ecoRecord.upstream.hm.settingsOption != null)
+    # Settings: place the translated settings (already in ecosystem
+    # key shape — kiro's chat.defaultModel vs claude's model).
+    (lib.optionalAttrs (translated.settings != null
+                        && ecoRecord.upstream.hm.settingsOption != null)
       (lib.setAttrByPath
         (lib.splitString "." ecoRecord.upstream.hm.settingsOption)
-        (ecoRecord.translators.settings effective.settings)))
+        translated.settings))
 
-    # LSP servers, env vars: similar dispatch
-    # ...
+    # LSP servers, env vars: same dispatch shape — translated set
+    # routes through upstream.<category>Option if non-null, else
+    # written directly via layout.<category>Path.
+    # ... (omitted for brevity, same pattern)
   ];
 in {
   options.ai.${ecoRecord.name} = {
@@ -576,16 +657,91 @@ have rich upstream modules).
 
 - The merge logic (effective = shared `recursiveUpdate` per-eco)
   lives in **one place**, not per ecosystem.
+- **Translation is uniform**: every category dispatches through
+  `ecoRecord.translators.<category>` before being written. The
+  adapter never special-cases passthrough. Identity translators
+  (e.g., `_name: path: path` for skills today) reserve the slot
+  so a future divergence can override without changing the
+  adapter.
 - The "upstream delegation vs direct file write" decision is
   data on the ecosystem record (`upstream.hm.skillsOption`),
   not control flow in each module.
 - A new option category is added by: declaring it once in
-  `sharedOptions`, adding one line to the `effective` set, and
-  adding one dispatch block to `fanoutBlock`. Touches both
-  adapters once each, no per-ecosystem changes.
+  `sharedOptions`, adding one entry to the `translated` set,
+  and adding one dispatch block to `fanoutBlock`. Touches both
+  adapters once each, no per-ecosystem changes (each ecosystem
+  record adds its own translator entry, which is the per-ecosystem
+  shape decision).
 - Orphan ecosystems with no upstream module work uniformly —
   set `upstream.hm.* = null`, the adapter falls through to
   direct `home.file` writes via the layout policy.
+
+### When to share, when to per-eco
+
+When you're adding a new option category, decide where it lives
+based on how the ecosystems handle the same concept:
+
+| Case | Where it lives | How |
+|---|---|---|
+| **Identity** — abstract type maps 1:1 to every ecosystem's shape | Shared `ai.<category>` with identity translators on every record | `translators.<category> = _name: value: value;` |
+| **Shape translation** — same concept, different on-disk shape per ecosystem | Shared `ai.<category>` with structural translators per record | `translators.<category> = name: abstract: { ... ecosystem shape ... };` |
+| **Key remap** — same content, different field names | Shared `ai.<category>` with translators that rename keys | Kiro: `settings = s: { chat.defaultModel = s.model; };` |
+| **Ecosystem-only feature** — concept exists in one ecosystem and doesn't make sense elsewhere | `extraOptions` field on the ecosystem record only | `ai.claude.buddy = { ... };` (never appears in shared `ai.*`) |
+| **Truly divergent** — same conceptual feature with shapes too incompatible to share an abstract type | Per-eco extension via layered pools, NOT in shared pool | `ai.claude.permissions = { ... }; ai.copilot.permissions = { ... };` (different shapes, both per-eco only) |
+
+The general rule: **start by trying to put a new category in the
+shared pool with identity translators**. If a divergence emerges
+later, override the relevant ecosystem's translator (not the
+adapter, not the abstract type). If the divergence is so deep
+that the abstract type can't accommodate both ecosystems without
+information loss, drop the category from the shared pool entirely
+and let it live in per-eco extension only.
+
+**Hypothetical worked example: upstream HM ships
+`programs.copilot.skills.<name>.recursive`**
+
+Today both `programs.claude-code.skills.<name>` and (our) custom
+`programs.copilot-cli.skills.<name>` accept a path. Identity
+translators on both records. If upstream HM later adds
+`programs.copilot.skills.<name>.recursive = true`:
+
+1. Update copilot's translator: `skills = _name: path: { source = path; recursive = true; };`
+2. Claude's translator stays at identity: `skills = _name: path: path;`
+3. The abstract `ai.skills` type in `lib/ai-options.nix` doesn't change.
+4. The adapter doesn't change.
+5. Consumers who set `ai.skills.foo = ./skill-foo` get the right shape per ecosystem automatically.
+
+If a user wants to opt OUT of recursive on copilot specifically,
+they use the per-eco extension point: `ai.copilot.skills.foo = { source = ./skill-foo; recursive = false; };`. This requires the
+copilot translator to handle BOTH the bare-path form (from shared)
+and the attrset form (from per-eco). Or, more cleanly, the user
+shifts to the per-eco form for that one entry and the shared
+pool remains bare paths.
+
+**The hard case: `programs.claude-code.permissions = { allow, deny }`
+vs. hypothetical `programs.copilot.permissions.rules = [{ pattern, allow }]`**
+
+Both ecosystems have a "permissions" concept but the shapes are
+fundamentally different — one is a list of patterns split into
+allow/deny, the other is a list of objects with a per-rule allow
+flag. Trying to force a shared abstract type leads to information
+loss in one direction or both.
+
+**Decision: don't put `ai.permissions` in the shared pool.**
+Add `permissions` to each ecosystem's `extraOptions` instead, so
+consumers write `ai.claude.permissions = { ... }` and
+`ai.copilot.permissions = { ... }` with the ecosystem-native
+shape. The shared `ai.*` namespace stays free of permissions
+entirely. This is the "per-eco only" row in the table above.
+
+This is also the answer to "what if `programs.copilot` isn't a
+strict superset of `programs.claude-code`?" — the answer is that
+`ai.*` was never meant to be the union of all ecosystems'
+options. It's the *intersection of conceptually-shared ones,
+expressed at an abstract type that translators can map onto each
+ecosystem's actual shape*. Anything that doesn't fit cleanly
+goes per-eco. The boundary moves over time as ecosystems
+converge or diverge.
 
 ### Layered option pools (the new pattern)
 

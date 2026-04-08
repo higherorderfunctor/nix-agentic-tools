@@ -1039,6 +1039,20 @@ Files this plan does **not** touch (deferred to phase 2):
     configDir = ".claude";
 
     translators = {
+      # Skills: identity-style translation. Abstract type (path)
+      # maps 1:1 to the ecosystem's expected shape today, but the
+      # translator slot exists so divergent ecosystems (e.g., a
+      # future programs.copilot.skills.<name>.recursive flag) can
+      # override without forcing the adapter to special-case
+      # skills passthrough.
+      skills = _name: path: path;
+
+      # Instructions: identity-style translation of the abstract
+      # submodule shape. Markdown body rendering happens separately
+      # via markdownTransformer; this translator only handles
+      # option-shape translation, not content rendering.
+      instructions = _name: instr: instr;
+
       # Translates ai.settings.{model, telemetry} to claude shape.
       settings = sharedSettings:
         lib.optionalAttrs (sharedSettings.model != null) {
@@ -1162,6 +1176,12 @@ Files this plan does **not** touch (deferred to phase 2):
     configDir = ".github";
 
     translators = {
+      # Identity-style translators (see claude.nix for the rationale
+      # — every category dispatches through a translator so divergent
+      # shapes have a home).
+      skills = _name: path: path;
+      instructions = _name: instr: instr;
+
       settings = sharedSettings:
         lib.optionalAttrs (sharedSettings.model != null) {
           model = sharedSettings.model;
@@ -1296,6 +1316,12 @@ Files this plan does **not** touch (deferred to phase 2):
     configDir = ".kiro";
 
     translators = {
+      # Identity-style translators (see claude.nix for the rationale
+      # — every category dispatches through a translator so divergent
+      # shapes have a home).
+      skills = _name: path: path;
+      instructions = _name: instr: instr;
+
       settings = sharedSettings:
         lib.mkMerge [
           (lib.optionalAttrs (sharedSettings.model != null) {
@@ -1389,6 +1415,11 @@ Files this plan does **not** touch (deferred to phase 2):
     configDir = "."; # AGENTS.md lives at repo root
 
     translators = {
+      # AGENTS.md is a single flat file with no skills/settings/etc.
+      # All translators are no-ops, but the slots exist so the
+      # adapter dispatches uniformly without special-casing AGENTS.md.
+      skills = _name: _path: {};
+      instructions = _name: instr: instr;
       settings = _: {};
       lspServer = _: _: {};
       envVar = null;
