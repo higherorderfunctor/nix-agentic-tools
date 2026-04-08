@@ -32,6 +32,26 @@ that touches them.
 No forward references between chunks. No docs-only catchup
 commits — docs travel with their feature chunk.
 
+## Post-merge corrections (apply mid-loop)
+
+Things merged before review caught a content-separation issue:
+
+- **`lib/buddy-types.nix` relocation** — landed in Chunk 2 as a
+  shared lib primitive but is only consumed by `claude-code-buddy`
+  - `ai` modules and depends on the `any-buddy` overlay. Caller
+    flagged on PR #4 review. **Fix:** in Chunk 8 (the chunk that
+    introduces `modules/claude-code-buddy/`), `git rm
+lib/buddy-types.nix`, `git add modules/claude-code-buddy/types.nix`
+    (move file into the consumer's directory), update the import
+    in `modules/claude-code-buddy/default.nix` and
+    `modules/ai/default.nix`, and drop the
+    `inherit (import ./lib/buddy-types.nix ...)` re-export from
+    `flake.nix`'s `lib` output. Net effect on the lib API: types are
+    no longer re-exported from `lib.<...>` — consumers import
+    directly from the module directory. Verify no external repo
+    reaches into `pkgs.lib.buddyTypes` (if it does, leave a
+    passthru on the consumer module).
+
 ## Shared files that grow across chunks
 
 - `flake.nix` — edited by almost every chunk. Each chunk adds
@@ -396,6 +416,8 @@ claude-code github-copilot-cli kiro-cli kiro-gateway;`.
   largest contributor at ~1,200 lines via 12 server .nix files)
 - **Files added:**
   - `modules/claude-code-buddy/default.nix`
+  - `modules/claude-code-buddy/types.nix` (relocated from
+    `lib/buddy-types.nix`; see post-merge corrections above)
   - `modules/copilot-cli/default.nix`
   - `modules/kiro-cli/default.nix`
   - `modules/mcp-servers/default.nix`
@@ -419,7 +441,13 @@ claude-code github-copilot-cli kiro-cli kiro-gateway;`.
     `homeManagerModules.{claude-code-buddy, copilot-cli,
 kiro-cli, mcp-servers, stacked-workflows}`; add
     `lib.gitConfig`/`lib.gitConfigFull` re-exports (deferred
-    from Chunk 2 because they reference files in this chunk).
+    from Chunk 2 because they reference files in this chunk);
+    drop the `lib/buddy-types.nix` import + re-export (relocated
+    into `modules/claude-code-buddy/types.nix` — see post-merge
+    corrections above).
+- **Files removed:**
+  - `lib/buddy-types.nix` (relocated into
+    `modules/claude-code-buddy/types.nix`).
 
 ### Chunk 9: HM module — unified `ai` module
 
@@ -801,7 +829,7 @@ this merge at all.
 
 - [x] Every tracked file is assigned to exactly one chunk
       (verified via `diff /tmp/all-files-sorted.txt
-  /tmp/assigned-files.txt`). `LICENSE` is the only
+/tmp/assigned-files.txt`). `LICENSE` is the only
       exception and is already on `origin/main`.
 - [x] Dependencies are strictly bottom-up (chunk N only
       depends on chunks 1..N-1), modulo the Chunk 13 ordering
