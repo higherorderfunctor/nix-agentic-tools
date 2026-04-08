@@ -62,30 +62,19 @@ Three tiers:
 
 ## TOP priority
 
-### Commit generated Copilot instructions
+### Commit generated Copilot instructions + AGENTS.md (LANDED in chunk 4b)
 
-- [ ] **Un-gitignore + commit `.github/copilot-instructions.md`
-      and `.github/instructions/*.instructions.md`** so the
-      GitHub-hosted Copilot reviewer (used on every PR via
-      `gh pr edit --add-reviewer copilot-pull-request-reviewer`)
-      sees the project's instructions and produces project-aware
-      reviews instead of generic Nix concerns. Decision noted
-      2026-04-08 by user during chunk 4b execution: _"consider
-      committing in repo (this repo) fan out of copilot
-      instructions so the reviewer in github.com has access to
-      the instructions"_. Folding into chunk 4b because the
-      stacked-workflows routing table fragment landing in 4b
-      significantly changes the generated copilot-instructions
-      content and reviewers benefit from seeing it immediately.
-      Procedure: 1. Remove `.github/copilot-instructions.md` and
-      `.github/instructions/` from `.gitignore` 2. Run `devenv tasks run generate:instructions:copilot` 3. Stage and commit the materialized files alongside the
-      rest of chunk 4b 4. Backlog: CI drift check that fails if committed files
-      disagree with `nix build .#instructions-copilot`
-      Convention reference: GitHub Copilot custom instructions
-      docs specify `.github/copilot-instructions.md` (repo-wide)
-      and `.github/instructions/<name>.instructions.md` (path-
-      scoped via `applyTo:` frontmatter). User offered to verify
-      hosted reviewer pickup with local copilot-cli once landed.
+- [x] **Un-gitignore + commit `.github/copilot-instructions.md`,
+      `.github/instructions/*.instructions.md`, and `AGENTS.md`**
+      so the GitHub-hosted Copilot reviewer reads the project's
+      instructions and produces project-aware reviews. Landed in
+      PR #7 (chunk 4b) 2026-04-08. AGENTS.md scope confirmed by
+      <https://github.blog/changelog/2025-08-28-copilot-coding-agent-now-supports-agents-md-custom-instructions/>;
+      user verified locally with `copilot-cli` that all 6
+      instruction files load (2 repository, 4 working-directory).
+      Hosted reviewer behavior validated on PR #7 — produced 5
+      project-aware threads versus the generic-Nix-concerns
+      pattern of prior PRs.
 
 ### Architecture foundation
 
@@ -633,17 +622,68 @@ Everything else. Park these until TOP/MIDDLE are stable.
       dedicated PR rather than a chunk so reviewer sees the full
       shape change.
 - [ ] **CI drift check for committed generated instruction
-      files** — once `.github/copilot-instructions.md` and
-      `.github/instructions/*.instructions.md` are committed
-      (TOP priority above, lands in chunk 4b), add a CI step
-      that runs `nix build .#instructions-copilot` and diffs
+      files** — `.github/copilot-instructions.md`,
+      `.github/instructions/*.instructions.md`, and `AGENTS.md`
+      are now committed (landed in PR #7). Add a CI step that
+      runs `nix build .#instructions-{copilot,agents}` and diffs
       the result against the committed files. Fails if they
-      drift. Same pattern for any other generated files we
-      decide to commit later (Claude rules, Kiro steering,
-      AGENTS.md). Could be a flake check
-      (`checks.instructions-copilot-drift`) or a separate
-      CI job. Pre-commit hook is the wrong layer because
-      regenerating in pre-commit slows down every commit.
+      drift. Could be a flake check
+      (`checks.instructions-drift`) or a separate CI job.
+      Pre-commit hook is the wrong layer because regenerating
+      in pre-commit slows down every commit.
+- [ ] **Fragment assembler should leave inline source-path
+      comments in generated outputs** — when `compose` produces
+      a final file (CLAUDE.md, AGENTS.md, copilot-instructions.md,
+      etc.), inject HTML comments at two levels:
+      (1) top-of-file comment naming the source file that defines
+      the composition (e.g., `<!-- generated from dev/generate.nix —
+    do not edit -->`); (2) above each composed fragment, a
+      comment naming the source markdown path (e.g.,
+      `<!-- packages/coding-standards/fragments/coding-standards.md -->`).
+      Reasoning from user 2026-04-08 PR #7 review: makes it
+      obvious to a reviewer that (a) the file is generated and
+      (b) they should review the fragment SOURCE rather than the
+      composed output (except when there's an ordering/dedup
+      issue, in which case the source-path comments help locate
+      the offending fragments). Implementation likely lives in
+      `lib/fragments.nix` `compose` (interleave comments between
+      fragment text segments) and the four ecosystem transforms
+      in `packages/fragments-ai/` (top-of-file comments after
+      the YAML frontmatter). HTML comments are markdown-safe and
+      won't render visibly in mdbook or AI tool consumers.
+      Verify Copilot/Claude/Kiro tolerate the comments — none
+      should choke on `<!-- ... -->` but worth a quick check.
+- [ ] **Richer markdown fragment system: heading-aware merging**
+      — assess the value of a fragment system that knows about
+      markdown heading levels and can MERGE fragments under the
+      same heading rather than concatenating them as opaque
+      blobs. Use case from user 2026-04-08: combining "coding
+      conventions" sections from multiple packages
+      (coding-standards, ai-clis, mcp-servers, etc.) into a
+      single coherent `## Coding Conventions` section with
+      package-contributed `### <subsection>` blocks. Today, the
+      best you can do is structure each fragment to start at
+      the right heading level and rely on document order;
+      there's no compile-time merge or de-dup of headings
+      across fragments. **Honest assessment requested.**
+      Considerations: (1) markdown is a fundamentally
+      string-concatenation format — any "merge" requires either
+      a markdown AST parser at eval time (heavy, would need a
+      Nix-side parser since we don't have one) OR a strict
+      naming convention (each fragment names its parent heading
+      and the assembler groups by name). (2) The Nix evaluator
+      isn't a great place for AST parsing — better to do this
+      via a string-template DSL where fragments declare
+      `{ heading = "Coding Conventions"; level = 2; subsection
+    = "## Bash"; text = "..."; }`. (3) This crosses into
+      "fragment system as document model" territory which is
+      a meaningful expansion of scope — counter-question is
+      whether the docsite would benefit too (which would
+      justify it more) or whether it's only the AI instruction
+      pipeline (in which case maybe leave it as
+      string-concatenation and rely on convention). Don't
+      build this until there's a concrete second use case
+      driving the design, otherwise risk premature abstraction.
 - [ ] **Fragment metadata consolidation follow-up** — after the
       TOP item lands, also reduce plan.md churn by having this
       file reference the metadata table instead of re-listing
