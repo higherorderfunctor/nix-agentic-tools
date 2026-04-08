@@ -27,71 +27,100 @@ The rest (ecosystem records, HM adapter, `ai-options.nix`,
 inline fanout replacements, 22 safety-net fixtures) will be
 reshaped under the new contract.
 
-**New architectural north star:**
+**New architectural north star (post-factory-rollout):**
 
-- **Scoped overlay namespace** — `pkgs.ai.*` replaces today's
+- **Scoped overlay namespace** — `pkgs.ai.*` replaces the old
   flat top-level (`pkgs.claude-code`, `pkgs.any-buddy`,
   `pkgs.nix-mcp-servers.*`, `pkgs.agnix`, `pkgs.git-*`, …).
-  Everything AI-adjacent lives under `pkgs.ai.{cli,mcpServer,…}`.
-- **Drop `programs.{kiro-cli,copilot-cli}` HM modules entirely.**
-  The stand-alone HM modules were a bridging device while
-  upstream HM had no support; they add fanout duplication and
-  ceremony we no longer want. Consumers get a single unified
-  module surface.
-- **Typed factories.** `lib.ai.cli.mkCli`,
-  `lib.ai.mcpServer.mkMcpServer`, etc. return package+metadata
-  bundles that carry everything needed for fanout: package,
-  presets, instruction files, option contributions, ecosystem
-  transformers, MCP-server bindings.
+  Everything AI-adjacent lives under `pkgs.ai.*`.
+- **Drop `programs.{claude-code,copilot-cli,kiro-cli}` HM
+  modules as fanout targets entirely.** The stand-alone HM
+  modules were a bridging device while upstream HM had no
+  support; they added fanout duplication and ceremony we no
+  longer want. The factory IS the surface — it writes files
+  directly from its config callbacks under `home.file.*`
+  (HM) or `files.*` (devenv). No upstream module delegation.
+- **Generic AI-app factory.** `lib.ai.app.mkAiApp` is the
+  factory-of-factory — "app" deliberately chosen over "cli"
+  because the factory/transformer system handles daemons and
+  services (e.g. an open-claw-style background app with an
+  IPC interface), not just CLIs. Each concrete instance lives
+  as
+  `lib.ai.apps.mk<Name>` (e.g. `lib.ai.apps.mkClaude`,
+  `lib.ai.apps.mkCopilot`, `lib.ai.apps.mkKiro`), produced by
+  per-package `packages/<name>/lib/mk<Name>.nix` files that
+  get walked into `lib.ai.apps` via `collectFacet` + barrel
+  merge in flake.nix.
+- **Generic MCP-server factory.** `lib.ai.mcpServer.mkMcpServer`
+  is the sibling factory for MCP servers. Concrete instances
+  at `lib.ai.mcpServers.mk<Name>`.
 - **Named MCP servers allowing duplicates.** Multiple logical
   servers can wrap the same upstream package (e.g. two
   `github-mcp` instances against different endpoints). Names
   are logical, not package-derived.
-- **Typed extras contract.** CLI factories accept
-  `extraOptions = { <name> = { type, default, description,
-onSet }; };` — `onSet` is a lambda
-  `{ value, cfg, pkgs, lib }: moduleConfigFragment` so extras
-  contribute real module config fragments, not opaque
-  attrsets. Claude's buddy support becomes an extra under the
-  claude-code package, not a separate lib/HM module.
-- **Per-package directory layout.** `packages/ai/<name>/` holds
-  everything a single package owns: `default.nix`, sibling
-  files (`wrapper.nix`, `patching.nix`, `types.nix`),
-  `fragments/`, `hashes.json`, and any module/extras code.
+- **Per-package typed options (no dynamic extras contract).**
+  Each factory-of-factory declares its options as a plain Nix
+  submodule under `ai.<name>.*`. The current `mkClaude.nix`
+  declares `buddy` and `memory` + `settings` as submodule
+  options directly; no `extraOptions` / `onSet` lambda
+  contract. Single-consumer architecture — static options are
+  simpler.
+- **Shared cross-app options via `sharedOptions.nix`.** The
+  factory declares `ai.mcpServers`, `ai.instructions`,
+  `ai.skills` once in `lib/ai/sharedOptions.nix`; `mkAiApp`
+  merges per-app overrides on top and threads the merged view
+  into each factory's config callback.
+- **Per-package directory layout.** `packages/<name>/` holds
+  everything a single package owns: `default.nix`, `lib/`
+  (per-package factory-of-factory), `modules/homeManager/`,
+  `modules/devenv/`, `docs/` (per-package architecture
+  fragments), `hashes.json`, and any wrapper/patching code.
   Bazel-style: "everything about X lives under X".
 - **Single consumer, unstable interface.** User is the only
   consumer right now. Correctness of the design wins over
   consumer-stability. Breaking changes are fine during this
   window.
 
-**What survives from the records+adapter design:**
+**What survives from the Phase 2a records+adapter design:**
 
 - The _pattern_ — records-as-data feeding a backend-agnostic
-  adapter — is right. It just needs to live on the package
-  (`passthru.ecosystem = { transformer, layout, translators,
-extraOptions, upstream }`) instead of being authored by hand
-  in `lib/ai-ecosystems/`.
-- The `markdownTransformer` + `translators` split survives.
-- The `pushDownProperties` trap lesson survives (dispatch must
-  read from record, not from `cfg`).
+  adapter — survives in a simpler shape: each factory
+  exposes its transformer via
+  `transformers.markdown = lib.ai.transformers.<name>` and
+  writes files under its own config callback. No global
+  `passthru.ai.ecosystem` registry; the per-package factory
+  IS the registry entry via `collectFacet`.
+- The `markdownTransformer` + per-ecosystem split survives as
+  `lib/ai/transformers/{claude,copilot,kiro,agentsmd}.nix`.
+- The `pushDownProperties` trap lesson survives (dispatch
+  must read from record/cfg, not close over outer state).
 - The fragment-node + `mkRenderer` library is the transformer
   substrate every factory composes against.
 
-See the "Target architecture" section below for the open
-decisions that need to be resolved before implementation plans
-get written.
+The Q1-Q8 "Target architecture" section below is kept as
+historical context for the pivot brainstorm. All eight
+questions are ANSWERED by the landed M1-M16 factory rollout.
 
-## Architecture (current state — post-pivot)
+## Architecture (current state — post-rollout 2026-04-08)
 
 - **Standalone devenv CLI** for dev shell (not flake-based).
-- **`pkgs.ai.*` scoped overlay** — single scope for every
-  AI-adjacent package the monorepo ships. (Target; current state
-  is flat top-level — migration is a TOP item.)
-- **Top-level `ai` HM module** for unified config — delegates
-  to per-CLI factories' HM handlers.
+- **`pkgs.ai.*` scoped overlay** — LANDED in M7. All 24
+  binary packages under `pkgs.ai.*`. Overlay composition
+  walks `packages/*/default.nix` via flake.nix's barrel
+  walker.
+- **`ai.*` module surface** — LANDED as the factory barrel at
+  `homeManagerModules.nix-agentic-tools` and
+  `devenvModules.nix-agentic-tools`. Built by `collectFacet
+["modules" "homeManager"]` / `collectFacet ["modules"
+"devenv"]` walking `packages/*/modules/`. Shared options
+  declared once in `lib/ai/sharedOptions.nix`. Per-app
+  factories (`lib.ai.apps.mk<Name>`) close over the
+  per-ecosystem transformer and the baseline render pipeline.
+  **Each factory writes files DIRECTLY** — no delegation to
+  `programs.<cli>.*` upstream modules.
 - **Config parity** — lib, HM, and devenv must align in
-  capability. Parity is driven by the factories' records, not
-  duplicated by hand.
+  capability. Parity is driven by `sharedOptions.nix` +
+  each factory's config callback handling both backends.
 - **Content packages** — published content (skills, fragments)
   lives in `packages/` as derivations with `passthru` for
   eval-time composition.
@@ -102,9 +131,18 @@ get written.
 - **treefmt** via devenv built-in module.
 - **devenv MCP** uses public `mcp.devenv.sh` (local Boehm GC
   bug).
-- **Buddy** — activation-time HM module is LANDED and working
-  end-to-end. Target state folds it into the claude-code
-  package as a typed extra.
+- **Buddy** — the full activation-time HM module
+  (fingerprint caching, Bun wrapper cli.js patching, sops-nix
+  userId, companion reset) lives at
+  `modules/claude-code-buddy/default.nix` as REFERENCE ONLY.
+  It is NOT exposed by `homeManagerModules.nix-agentic-tools`
+  — the factory barrel only imports
+  `collectFacet ["modules" "homeManager"]` from per-package
+  dirs, and no package exports buddy yet. HM consumers that
+  want buddy currently get only the `mkClaude.nix` stub
+  (`mkdir -p $HOME/.local/state/claude-code-buddy`). Full
+  absorption into `packages/claude-code/lib/mkClaude.nix` is
+  tracked as A1 in the Ideal architecture gate below.
 - **Architecture fragments** — path-scoped per-ecosystem,
   single markdown source feeds Claude/Copilot/Kiro/AGENTS.md
   plus the mdbook contributing section. Always-loaded budget
@@ -114,21 +152,29 @@ get written.
 
 The blocking chain, with named dependencies:
 
-1. **Now (blocking everything):** Target architecture spec —
-   answer Q1–Q8 below, write the design doc.
-2. **Next (blocked on spec):** Factory implementation sequence
-   — draft a plan against the spec, then land Steps 1–7 of the
-   factory rollout under this branch. Commits can be large;
-   end-state matters more than git history during this window
-   (user will re-chunk for the main merge next week).
-3. **Post-factory (blocked on rollout):** Ecosystem expansion
-   - nixos-config integration — bring Kiro/Copilot online via
-     the factory, add OpenAI Codex as 4th ecosystem, migrate
-     nixos-config off its vendored packages onto the factory.
-4. **Parallel (not blocked):** Fragment system maintenance,
+1. **DONE — Target architecture spec.** Q1-Q8 answered in
+   `docs/superpowers/specs/2026-04-08-ai-factory-architecture-design.md`.
+2. **DONE — Factory implementation rollout M1-M16.** See
+   "Factory rollout status" below for the commit log.
+3. **Now (blocking main merge):** Ideal architecture gate —
+   land items A1-A10 to absorb the legacy `modules/` tree
+   into per-package factory callbacks, then delete `modules/`
+   entirely. See "Ideal architecture gate (blocks main merge)"
+   below. No new patterns; each item is a mechanical port
+   from a named source file to a named target.
+4. **Next (blocked on ideal architecture gate):** Re-chunk
+   the branch into PR-sized batches for the main merge.
+   Chunks 1-7 already landed; chunks 8-17 + factory + A/B
+   absorption commits get re-chunked under the factory
+   layout.
+5. **Post-merge (blocked on main merge):** Ecosystem
+   expansion — nixos-config integration, add OpenAI Codex
+   as 4th ecosystem, migrate nixos-config off its vendored
+   packages onto the factory surface.
+6. **Parallel (not blocked):** Fragment system maintenance,
    repo hygiene, CI polish, doc site gaps. Pick from these
    between blocking steps when context allows.
-5. **Backlog (defer):** Everything else. Park until the
+7. **Backlog (defer):** Everything else. Park until the
    blocking chain is stable.
 
 ---
@@ -213,31 +259,33 @@ restructure).
 
 **Content that survived the gap analysis and is now in-tree:**
 
-- `modules/ai/default.nix` (286 lines) — legacy HM module with
-  per-CLI gating and fanout; kept as reference, not consumed by
-  flake outputs.
-- `modules/claude-code-buddy/default.nix` (208 lines) — buddy
-  activation HM module with fingerprint caching, Bun wrapper
-  integration, sops-nix UUID file handling; still consumed by
-  `modules/ai/default.nix` and transitively by `devenv.nix`
-  via `modules/devenv/`.
-- `modules/copilot-cli/default.nix` (222 lines), `modules/kiro-cli/default.nix`
-  (272 lines) — legacy standalone HM modules for the per-CLI
-  surfaces. These were slated for deletion under Q5 of the spec
-  but are kept in-tree during the convergence window so nixos-config
-  can still pin against them until the factory migration.
+- `modules/ai/default.nix` (286 lines) — **DEAD** legacy HM
+  module (not imported by any flake output). Marked REFERENCE
+  ONLY in commit `23af2a1` with a header banner. Source
+  material for A2/A3/A4 absorption.
+- `modules/claude-code-buddy/default.nix` (208 lines) —
+  **DEAD** buddy activation HM module (fingerprint caching,
+  Bun wrapper integration, sops-nix UUID file handling).
+  Marked REFERENCE ONLY. Source material for A1 absorption.
+- `modules/copilot-cli/default.nix` (222 lines),
+  `modules/kiro-cli/default.nix` (272 lines) — **DEAD**
+  legacy standalone HM modules. Marked REFERENCE ONLY.
+  Source material for A3 and A4 absorption.
 - `modules/mcp-servers/servers/*.nix` (12 files, 1145 lines
   including `openmemory-mcp.nix` at 655 lines and
-  `github-mcp.nix` at 181 lines) — legacy per-server typed option
-  schemas. The factory's `mkMcpServer` uses simpler
-  `commonSchema`; absorbing the typed-options work into each
-  `packages/<mcp>/lib/mk<Name>.nix` is pending.
-- `modules/stacked-workflows/default.nix` (205 lines) — legacy HM
-  module for stacked-workflows skill/git-config fanout.
-- `modules/devenv/{ai,copilot,kiro}.nix` + `claude-code-skills/` —
-  legacy devenv modules still consumed by `devenv.nix` via
-  `imports = [ ./modules/devenv ]`. Pre-factory integration;
-  works in parallel with the factory devenv module barrel.
+  `github-mcp.nix` at 181 lines) — **LIVE** via
+  `lib/mcp.nix:loadServer` which dynamically imports each
+  file for consumers of `lib.mkStdioEntry` /
+  `lib.mkStdioConfig`. These are the typed options backend
+  for the `lib.mkStdioEntry` external API. A5 absorption
+  must keep that API working.
+- `modules/stacked-workflows/default.nix` (205 lines) —
+  **DEAD** legacy HM module. Marked REFERENCE ONLY. Source
+  material for A6 absorption.
+- `modules/devenv/{ai,copilot,kiro}.nix` + `claude-code-skills/`
+  — **LIVE** via `devenv.nix:imports = [./modules/devenv]`.
+  These implement the ai.\* fanout for devenv today. A8
+  absorption replaces them with the factory's devenv backend.
 - `dev/skills/` (index-repo-docs + repo-review) — consumer dev
   skills referenced by `devenv.nix`'s `ai.skills` config.
 - `dev/notes/ai-transformer-design.md` — the Phase 2a transformer
@@ -247,91 +295,278 @@ restructure).
 - Doc site infrastructure — mdbook + NuschtOS search +
   `lib/options-doc.nix` adapted for factory modules.
 
-The modules/ tree is **imported but not absorbed into factories**.
-Absorption is tracked as the "Future absorption backlog" section
-below. Until absorption lands, the factory's `mkAiApp` /
-`mkMcpServer` and the legacy `modules/` tree coexist: factories
-drive new code paths, `modules/` drives the pre-factory consumer
+The modules/ tree is **partly dead code, partly live via
+devenv.nix + lib/mcp.nix**. Absorption is tracked as items
+A1-A10 in the "Ideal architecture gate" section below. Until
+absorption lands, the factory's `mkAiApp` / `mkMcpServer` and
+the legacy `modules/` tree coexist: factories drive HM code
+paths, `modules/devenv/*` drives the live devenv consumer
 paths via `devenv.nix`. Cache-hit parity is preserved because
 both sides use the same `ourPkgs` overlay composition.
 
-### Future absorption backlog
+### Future absorption backlog — SUPERSEDED
 
-These items finish the factory architecture pivot. Each one
-absorbs legacy `modules/` content into the per-package factory
-directories, then deletes the corresponding legacy tree. Order
-doesn't matter — each is independent — but the `modules/` tree
-cannot be deleted until all sub-items land.
+> **Note (2026-04-08 afternoon):** the earlier framing of this
+> sub-section ("absorb modules/\* into the factory as typed
+> extras with `onSet` callbacks") was based on a stale reading
+> of the pivot spec that treated the factory as a wrapper around
+> upstream `programs.<cli>.*` modules. The actual north star is
+> the opposite: the factory IS the surface, writing files
+> directly, with no upstream delegation. The replacement
+> actionable list lives in **"Ideal architecture gate (blocks
+> main merge)"** below (items A1-A10 + B1-B3). Leaving this
+> subsection in place as historical context so the re-framing
+> is traceable — do NOT work from the items below; work from
+> the A/B items in the gate section.
 
-- [ ] **Absorb `modules/claude-code-buddy/` into
-      `packages/claude-code/lib/mkClaude.nix`** — port the 208-line
-      buddy HM module (fingerprint caching, Bun wrapper
-      integration, sops-nix UUID file handling, activation
-      script) into the claude-code factory as a typed extra.
-      Extras contract: `extraOptions.buddy = { type = submodule
-      …; onSet = { value, cfg, pkgs, lib }: { home.activation.…
-= …; }; };`. Resolves Q6 from the spec. Blocked on
-      confirming `onSet` can introduce activation scripts.
-- [ ] **Absorb `modules/copilot-cli/` + `modules/kiro-cli/`
-      into factory-of-factories** — 222 + 272 lines of HM
-      module surface ported to `packages/copilot-cli/lib/mkCopilot.nix`
-      and `packages/kiro-cli/lib/mkKiro.nix`. Resolves the
-      "Drop `programs.{copilot-cli,kiro-cli}` HM modules
-      entirely" directive from the pivot. Coordinate with the
-      nixos-config Kiro/Copilot migration below.
-- [ ] **Absorb `modules/mcp-servers/servers/*.nix` typed options
-      into each `packages/<mcp>/lib/mk<Name>.nix`** — 12 servers,
-      ~1145 lines total, with `openmemory-mcp.nix` at 655 lines
-      and `github-mcp.nix` at 181 lines being the largest.
-      Each server's typed option schema moves under its
-      per-package factory call. The factory's simpler
-      `commonSchema` stays as the default fallback; typed
-      options become per-server customizations.
-- [ ] **Absorb `modules/devenv/*` into per-package factory
-      devenv modules** — `ai.nix`, `copilot.nix`, `kiro.nix`,
-      `mcp-common.nix`, `claude-code-skills/` move under
-      `packages/<name>/modules/devenv/`. The factory's devenv
-      module barrel then walks packages instead of importing
-      a central `modules/devenv/default.nix`.
-- [ ] **Absorb `modules/stacked-workflows/` into
-      `packages/stacked-workflows-content/`** — 205-line HM
-      module for stacked-workflows skill/git-config fanout
-      moves under the content package. The content package
-      becomes a full factory participant.
-- [ ] **Delete `modules/` tree entirely once all absorptions
-      land** — with all content ported, `modules/` can be
-      removed. `devenv.nix` stops importing `./modules/devenv`
-      and switches to `devenvModules.nix-agentic-tools` from
-      the factory. `lib/{ai-common,buddy-types,hm-helpers}.nix`
-      can also be removed (they were only restored to keep
-      `modules/` evaluating).
+The original items were:
 
-Additional factory-architecture work that isn't tied to the
-modules/ tree:
+- ~~Absorb `modules/claude-code-buddy/` into
+  `packages/claude-code/lib/mkClaude.nix`~~ → A1
+- ~~Absorb `modules/copilot-cli/` + `modules/kiro-cli/`
+  into factory-of-factories~~ → A3 + A4
+- ~~Absorb `modules/mcp-servers/servers/*.nix` typed options
+  into each `packages/<mcp>/lib/mk<Name>.nix`~~ → A5
+- ~~Absorb `modules/devenv/*` into per-package factory
+  devenv modules~~ → A8 (after A7 backend dispatch)
+- ~~Absorb `modules/stacked-workflows/` into
+  `packages/stacked-workflows-content/`~~ → A6
+- ~~Delete `modules/` tree entirely once all absorptions
+  land~~ → A10
+- ~~`mkAiApp` HM vs devenv backend dispatch~~ → A7
+- ~~`github-mcp` + `kagi-mcp` auth option schemas~~ → A9
+- ~~Backend-specific render outputs for
+  `ai.instructions`~~ → folded into A2 + A3 + A4
 
-- [ ] **`mkAiApp` HM vs devenv backend dispatch** — the current
-      render wiring writes to `home.file` regardless of backend.
-      In a real devenv context this is a type error absorbed by
-      stubs in `lib/options-doc.nix:devenvStubModule`. The
-      factory should dispatch: `home.file.<outputPath>` for HM
-      backends, `files.<outputPath>` for devenv backends. The
-      factory captures the render output via
-      `_module.args.aiTransformers` so the dispatch can happen
-      after the fact. Marked DEFERRED in `lib/ai/app/mkAiApp.nix`.
-- [ ] **`github-mcp` + `kagi-mcp` auth option schemas** —
-      TODO comments in `packages/github-mcp/lib/mkGithubMcp.nix`
-      and `packages/kagi-mcp/lib/mkKagiMcp.nix`. Needs concrete
-      option schemas + credential handling (sops-nix pass-through).
-- [ ] **Backend-specific render outputs for
-      `ai.instructions`** — today the baseline wires every
-      ecosystem's rendered instructions into one home.file
-      path per app. Per-ecosystem fanout (e.g.,
-      `.claude/CLAUDE.md`, `.github/copilot-instructions.md`,
-      `.kiro/steering/*.md`, `AGENTS.md`) still lives in
-      `modules/ai/default.nix` and should be ported into
-      `mkAiApp` once the backend dispatch above lands. The
-      `lib/ai/transformers/{claude,copilot,kiro,agentsmd}.nix`
-      per-ecosystem transformers are ready and waiting.
+---
+
+## Ideal architecture gate (blocks main merge)
+
+**Goal:** before any commit from this branch is chunked into PRs
+for the main merge, the architecture must be ideal — no legacy
+`modules/` tree as a live consumer path, no stale `pkgs.fragments-ai`
+references, no "deferred to later milestone" stubs. The factory
+is the SINGLE fanout path; legacy modules live on as reference
+content only until absorbed.
+
+### What "ideal" means post-pivot (north star clarifications)
+
+The factory architecture does NOT implement ecosystem fanout by
+delegating to `programs.{claude-code,copilot-cli,kiro-cli}.*`
+upstream modules. That was the pre-factory bridging pattern
+captured on the legacy `modules/{ai,copilot-cli,kiro-cli,
+claude-code-buddy,stacked-workflows}/*` files and is going away.
+
+The ideal pattern is:
+
+1. **`ai.*` is the sole consumer-facing surface.** Consumers set
+   `ai.claude.enable` / `ai.skills` / `ai.instructions` /
+   `ai.mcpServers` / per-app overrides (`ai.<name>.skills`,
+   `ai.<name>.mcpServers`, etc.). There is NO master `ai.enable`
+   switch; each per-app enable is the sole gate. `programs.<cli>.*`
+   are NOT used as fanout targets — the factory writes files
+   directly.
+2. **Factory-of-factories implement fanout in their config
+   callbacks.** `packages/<name>/lib/mk<Name>.nix` owns writing
+   ecosystem-specific files (settings JSON, skills dirs, mcp
+   JSON, steering files, rule files) under the appropriate
+   backend (`home.file.*` for HM, `files.*` for devenv). Any
+   capability that the pre-factory `programs.<cli>.*` module
+   provided becomes a direct file write inside the factory
+   callback — no upstream module delegation.
+3. **Per-package typed extras.** Each factory declares its own
+   extras (buddy for claude-code, settings schema for each CLI,
+   auth options for each MCP server) as Nix submodule options
+   under `ai.<name>.*`. No dynamic extras contract — extras are
+   static module options because we only have one consumer.
+4. **Shared cross-app options fan out via `mkAiApp`.** The
+   `sharedOptions.nix` declares `ai.skills`, `ai.instructions`,
+   `ai.mcpServers` once; `mkAiApp` merges per-app overrides on
+   top and threads the merged view into each factory's config
+   callback for fanout.
+5. **HM vs devenv backend dispatch is a single decision.**
+   `mkAiApp` currently writes `home.file.${outputPath}` for the
+   baseline instruction render. The backend dispatch chooses
+   between `home.file.*` (HM) and `files.*` (devenv) — same
+   option tree, different write target. This is a narrow,
+   single-point dispatch, not a per-factory divergence.
+
+### Blocking absorption work
+
+Each item below must land before this branch is re-chunked for
+main. Order is flexible — all six are independent and can be
+worked on in any sequence — but the `modules/` tree cannot be
+deleted (the final gate) until every item above it lands. All
+items preserve the existing factory scaffolding; nothing
+introduces a new architectural pattern.
+
+- [ ] **A1: Port buddy activation into `mkClaude.nix` config
+      callback.** Source: `modules/claude-code-buddy/default.nix`
+      (208 lines). Target: expand `mkClaude.nix`'s `buddy`
+      submodule from `{enable, statePath}` to the full surface
+      (`species`, `rarity`, `eyes`, `hat`, `shiny`, `peak`,
+      `dump`, `userId.text`, `userId.file`, `outputLogs`) and
+      replace the `mkdir -p` stub with the full fingerprint
+      + Bun wrapper cli.js patch + companion reset activation
+      script. Invariants to preserve (from
+      `.claude/rules/claude-code.md`): no `exit` in activation
+      blocks, Bun-vs-Node hash consistency, `if`/`fi`
+      short-circuit for fingerprint match, companion reset on
+      fingerprint mismatch. Drop `ai.claude.buddy.enable` into
+      mkClaude's options submodule. Add `checks/factory-eval.nix`
+      test cases for the buddy option shape and the activation
+      script content.
+- [ ] **A2: Port claude-code settings + skills + mcpServers +
+      instructions fanout into `mkClaude.nix` config callback.**
+      Source: `modules/ai/default.nix` claude branch (lines
+      ~217-244 plus mcpServers helpers). Target: write
+      `home.file.".claude/settings.json"` from `ai.claude.settings`
+      (JSON serialize), write `.claude/rules/<name>.md` per
+      `mergedInstructions` entry using
+      `fragmentsLib.mkRenderer claudeTransformer {package = name;}`
+      for curried frontmatter (the baseline mkAiApp render path
+      only emits a single concatenated file — per-instruction
+      rule files need the callback), write
+      `.claude/skills/<name>` per `mergedSkills` entry, write
+      `.claude/mcp.json` from `mergedServers`. Delete
+      `modules/ai/default.nix` claude branch source material
+      from the absorption source list in this plan when done.
+- [ ] **A3: Port copilot fanout into `mkCopilot.nix` config
+      callback.** Source: `modules/copilot-cli/default.nix`
+      (222 lines) plus `modules/ai/default.nix` copilot branch
+      (lines ~246-265). Target: write
+      `.config/github-copilot/settings.json`,
+      `.config/github-copilot/mcp-config.json`,
+      `.config/github-copilot/lsp-config.json`,
+      `.config/github-copilot/skills/<name>`, and the
+      per-instruction files under
+      `.github/instructions/<name>.instructions.md` using
+      `copilotTransformer`. Preserve the settings.json
+      runtime-merge pattern (`jq -s '.[0] * .[1]'`) from the
+      legacy module as an activation script.
+- [ ] **A4: Port kiro fanout into `mkKiro.nix` config
+      callback.** Source: `modules/kiro-cli/default.nix`
+      (272 lines) plus `modules/ai/default.nix` kiro branch
+      (lines ~267-286). Target: write `.kiro/settings/cli.json`,
+      `.kiro/settings/mcp.json`, `.kiro/steering/<name>.md`,
+      `.kiro/skills/<name>`, `.kiro/agents/`, `.kiro/hooks/`.
+      Preserve the steering file YAML frontmatter semantics
+      (`inclusion: always|fileMatch`, `fileMatchPattern` as a
+      YAML list — regressions here silently nuke fragment
+      scoping).
+- [ ] **A5: Port typed MCP server option schemas into
+      `packages/<mcp>/lib/mk<Name>.nix` files.** Source:
+      `modules/mcp-servers/servers/*.nix` (12 files, ~1145
+      lines — openmemory-mcp 655, github-mcp 181, the rest
+      short). Target: each server's typed options (auth,
+      endpoint, settings) move under the factory's `options = {};`
+      slot, which is already passed to `mkMcpServer`. Migrate
+      `lib/mcp.nix:loadServer` from
+      `../modules/mcp-servers/servers/${name}.nix` to
+      `../packages/${name}-mcp/lib/mk${Name}.nix` OR keep
+      `loadServer` as a compat shim that re-exports the new
+      per-package factories (whichever is cleaner to land).
+      External consumers of `lib.mkStdioEntry` MUST keep working
+      unchanged — this is the one place where the factory has
+      to be backward compatible.
+- [ ] **A6: Port stacked-workflows HM module into
+      `packages/stacked-workflows-content/modules/homeManager/default.nix`.**
+      Source: `modules/stacked-workflows/default.nix` (205
+      lines). Target: the content package becomes a full factory
+      participant via the `modules.homeManager` facet walked by
+      `collectFacet ["modules" "homeManager"]` in flake.nix.
+      Port git-config-full / git-config-minimal presets +
+      skill fanout to the factory path (Claude / Copilot / Kiro
+      branches each write their own skill files directly, no
+      `programs.<cli>.skills` delegation).
+- [ ] **A7: Implement `mkAiApp` HM vs devenv backend dispatch.**
+      Today `mkAiApp` writes `home.file.${outputPath}` regardless
+      of backend; in `lib/options-doc.nix:devenvStubModule` the
+      `home.file` path is stubbed so devenv module eval absorbs
+      the write silently. The dispatch should switch to
+      `files.${outputPath}` when running under a devenv module
+      eval. One option: pass a `backend = "home-manager" | "devenv"`
+      specialArg into each factory module eval and branch inside
+      `mkAiApp` on it. Another: two sibling mkAiApp wrappers
+      (`mkAiHomeApp` / `mkAiDevenvApp`) that close over the
+      backend. Whichever is picked, the A2-A4 factory callbacks
+      must use the same dispatch so `home.file` vs `files.*`
+      choice is centralized, not duplicated per factory. This
+      gates the modules/devenv tree absorption, since today
+      modules/devenv/*.nix writes `files.*` directly.
+- [ ] **A8: Port modules/devenv/*.nix fanout into the per-package
+      factory callbacks (devenv half).** Source:
+      `modules/devenv/{ai,copilot,kiro}.nix`,
+      `modules/devenv/claude-code-skills/`,
+      `modules/devenv/mcp-common.nix`. Target: the same factory
+      callbacks A2-A4 write `files.*` instead of `home.file.*`
+      via A7's backend dispatch. Delete the legacy `modules/devenv/`
+      tree, then rewire `devenv.nix` to import
+      `devenvModules.nix-agentic-tools` instead of
+      `./modules/devenv`.
+- [ ] **A9: Add typed auth options to `mkGitHub.nix` +
+      `mkKagi.nix`.** Source: `modules/mcp-servers/servers/github-mcp.nix`
+      (already has typed PAT handling) + a new apiKey schema
+      for kagi. Add `token.file` / `token.helper` (sops-nix
+      pass-through) for github-mcp and `apiKey.file` /
+      `apiKey.helper` for kagi-mcp under each factory's
+      `options` slot. Fold in as part of A5 (same file touch)
+      or ship separately — either works.
+- [ ] **A10: Delete `modules/` tree entirely.** Once A1-A9 land,
+      `modules/` holds nothing that isn't duplicated under
+      `packages/<name>/`. `lib/{ai-common,buddy-types,hm-helpers}.nix`
+      can also be deleted (they exist solely to keep modules/
+      evaluating). Final verification: `git grep -l
+"modules/\|ai-common\|buddy-types\|hm-helpers"` returns
+      nothing under the active source tree (tests, docs, and
+      plan.md itself may keep historical references). At this
+      point the branch is ready for main-merge re-chunking.
+
+### Self-contained quick-win extras
+
+Items not on the A1-A10 critical path but worth landing in the
+same architectural pass, while the factory code is still hot in
+memory:
+
+- [ ] **B1: Verify each mkMcpServer instance gets a fanout
+      path.** Today the factory's `sharedOptions.mcpServers`
+      gets merged per-app and threaded into `mergedServers`,
+      but each factory's config callback has to actually
+      serialize that to disk. A2-A4 cover claude/copilot/kiro;
+      B1 is the test harness verifying all three produce a
+      valid JSON shape per ecosystem (claude mcp.json format,
+      copilot mcp-config.json format, kiro settings/mcp.json
+      format).
+- [ ] **B2: `checks/factory-eval.nix` coverage expansion.**
+      Add tests asserting that (a) `ai.claude.enable + ai.skills`
+      produces the expected `home.file.".claude/skills/..."`
+      entries, (b) `ai.copilot.enable + ai.instructions`
+      produces `.github/instructions/<name>.instructions.md`
+      with copilot frontmatter, (c) `ai.kiro.enable +
+ai.instructions` produces `.kiro/steering/<name>.md`
+      with kiro frontmatter + valid YAML
+      `fileMatchPattern`. These prevent regressions during
+      A1-A10 and after.
+- [ ] **B3: Drop the `lib/ai-common.nix` + `lib/buddy-types.nix`
+      + `lib/hm-helpers.nix` shim files.** These were restored
+      in M14 only so `modules/` evaluates. After A10 deletes
+      `modules/`, these can go too. Verify nothing under
+      `packages/` / `lib/ai/` / `devshell/` imports them.
+
+### Ordering notes
+
+Sensible sequence (each step is independent but shares context):
+A5 first (mcp typed options, biggest grep-and-replace surface)
+→ A7 (backend dispatch, unblocks A2-A4 + A8 writing to both
+backends) → A2/A3/A4 in parallel (each factory gets its fanout)
+→ A1 (buddy, benefits from A2 establishing the mkClaude config
+callback shape) → A6 (stacked-workflows, pure content package)
+→ A8 (devenv wire-up, depends on A7) → A9 (auth options) →
+A10 (final delete). B1/B2/B3 can interleave wherever.
+
+Any item in this list that grows beyond mechanical work (new
+option shapes not derivable from the source, new pattern
+invention) should stop and be escalated before continuing.
 
 ---
 
@@ -405,52 +640,49 @@ does an implementation plan get drafted.
 
 ---
 
-## Next: factory implementation sequence
+## Next: factory implementation sequence — SUPERSEDED
 
-Blocked on the spec above. Commits during this sequence can
-be large — user cares about end state over clean git history
-during the rollout window; re-chunking for the main merge
-happens the week after. Tentative shape, not yet detailed
-enough for execution:
+> **Note (2026-04-08 afternoon):** Steps 1-7 below are the
+> pre-rollout tentative sketch. All seven steps landed as
+> milestones M1-M15 (see "Factory rollout status" above for the
+> commit log). Remaining factory work lives in the "Ideal
+> architecture gate" section under items A1-A10. Leaving the
+> steps in place as historical context. Steps marked [x] are
+> done; the pre-factory framing of Step 6 (registry walker
+> built around `modules/ai/default.nix` as a live file) was
+> abandoned in favor of the `collectFacet` walker over
+> `packages/*/modules/` which is now how the barrel is wired.
 
-- [ ] **Step 1: Land `lib/ai/` factory primitives** — minimum
-      viable `mkCli` + `mkMcpServer` in `lib/ai/` + the typed
-      extras contract + golden tests that exercise the return
-      shape chosen in Q1 and the handler-split chosen in Q2.
-- [ ] **Step 2: Port one CLI package as proof** — claude-code
-      first (biggest test case: wrapper chain, activation-time
-      buddy, presets, fragments, HM module, devenv module).
-      Target directory: `packages/ai/claude-code/`. Delete
-      `packages/ai-clis/claude-code.nix`,
-      `packages/ai-clis/any-buddy.nix`, `lib/buddy-types.nix`,
-      `modules/claude-code-buddy/` in the same PR.
-- [ ] **Step 3: Port one MCP server as proof** — pick one with
-      no credential/bridge overhead first (e.g. `fetch-mcp`
-      or `context7-mcp`). Validates `mkMcpServer` +
-      named-duplicate story + fragment attach.
-- [ ] **Step 4: Drop `programs.{copilot-cli,kiro-cli}` HM
-      modules.** Port copilot-cli and kiro-cli under
-      `packages/ai/` using the factory; verify parity with
-      existing options via a one-shot diff test; then delete
-      the stand-alone HM modules. This is the
-      biggest-blast-radius change of the pivot.
-- [ ] **Step 5: Port everything else** — remaining MCP
-      servers, remaining AI CLIs, re-home `any-buddy` under
-      claude-code, move external servers registry out of
-      `flake.nix`.
-- [ ] **Step 6: Flatten `ai-ecosystems/` away.** Each CLI
-      package carries its own ecosystem record in
-      `passthru.ai.ecosystem`. `modules/ai/default.nix`
-      becomes a registry walker that invokes each package's
-      handler(s). Delete `lib/ai-ecosystems/`, re-introduce
-      the safety-net fixtures from the archive (`checks/
-module-eval.nix`, 22 tests) translated to the new
-      registry shape.
-- [ ] **Step 7: Scope overlay under `pkgs.ai.*`.** Final
-      restructure of `overlays.default`. Ripples through
-      every consumer reference in this repo and in
-      nixos-config. Schedule for after Steps 1–6 are green so
-      the rename is mechanical.
+- [x] **Step 1: Land `lib/ai/` factory primitives** — landed in
+      M1 (`13fe3a3`). Factory primitives live in `lib/ai/`.
+- [x] **Step 2: Port one CLI package as proof** — landed in M2
+      (`b9620d7`). claude-code under `packages/claude-code/`.
+      `packages/ai-clis/claude-code.nix` + `any-buddy.nix`
+      deleted as part of the port. `modules/claude-code-buddy/`
+      kept as REFERENCE ONLY pending A1.
+- [x] **Step 3: Port one MCP server as proof** — landed in M3
+      (`c3b171d`). context7-mcp under `packages/context7-mcp/`.
+- [x] **Step 4: Drop `programs.{copilot-cli,kiro-cli}` HM
+      modules.** Partially landed — the factory-of-factories
+      `mkCopilot.nix` / `mkKiro.nix` exist at
+      `packages/{copilot-cli,kiro-cli}/lib/` with empty config
+      callbacks. Full fanout (writing files directly, no
+      `programs.<cli>.*` delegation) is tracked as A3 + A4
+      in the Ideal architecture gate.
+- [x] **Step 5: Port everything else** — landed in M4-M6
+      (`64791af`, `5ec4587`, `dae9cdf`). All 24 binaries under
+      `pkgs.ai.*`.
+- [x] **Step 6: Flatten `ai-ecosystems/` away.** Landed as
+      `collectFacet ["modules" "homeManager"]` +
+      `collectFacet ["modules" "devenv"]` walkers over
+      `packages/*/modules/` in `flake.nix`. The pre-factory
+      framing around "`modules/ai/default.nix` becomes a
+      registry walker" was abandoned — that file is dead
+      reference content, and the walker lives in flake.nix
+      directly.
+- [x] **Step 7: Scope overlay under `pkgs.ai.*`.** Landed in
+      M7 (`87d1ce8`). Overlay composition walks `packages/*/`
+      and publishes under `pkgs.ai.*`.
 
 ### Sentinel → main catchup leftovers
 
@@ -495,41 +727,66 @@ scheduled independently.
 
 ### Bring Kiro online (via factory)
 
-- [ ] **ai.kiro.\* full passthrough** — mirror every
-      `programs.kiro-cli.*` option via the factory's typed
-      extras contract. Separate plan to be drafted when the
-      claude-code port proves the pattern.
-- [ ] **nixos-config Kiro migration** — move the consumer's
-      Kiro config from direct `programs.kiro-cli.*` to the
-      new factory-fed surface.
+**Stale language note:** the earlier items in this section
+talked about "passthrough to `programs.kiro-cli.*`" which is no
+longer the factory pattern. The factory writes Kiro's files
+directly from `mkKiro.nix`'s config callback — no
+`programs.kiro-cli` delegation. The relevant absorption work is
+tracked as item A4 in the "Ideal architecture gate" section
+above.
+
+- [ ] **~~ai.kiro.\* full passthrough~~** → replaced by A4
+      (port kiro fanout into `mkKiro.nix` config callback).
+      The factory is the surface, not a wrapper around
+      `programs.kiro-cli.*`.
+- [ ] **nixos-config Kiro migration** — once A4 lands, move
+      the consumer's Kiro config to the `ai.kiro.*` surface
+      and remove any direct `programs.kiro-cli.*` references.
 
 ### Bring Copilot online (via factory)
 
-- [ ] **ai.copilot.\* full passthrough** — mirror every
-      `programs.copilot-cli.*` option via the factory's
-      typed extras contract. Separate plan to be drafted.
-- [ ] **nixos-config Copilot migration** — move consumer
-      config.
-- [ ] **copilot-cli / kiro-cli DRY** — 7 helpers copy-pasted
-      between the old modules. Absorbed into the factory
-      port automatically.
-- [ ] **MCP server submodule DRY** — duplicated in devenv
-      copilot/kiro modules. Absorbed into `mkMcpServer`.
+**Stale language note:** same as Kiro — the factory writes
+Copilot's files directly from `mkCopilot.nix`'s config callback;
+no `programs.copilot-cli` delegation.
+
+- [ ] **~~ai.copilot.\* full passthrough~~** → replaced by A3
+      (port copilot fanout into `mkCopilot.nix` config
+      callback). The factory is the surface, not a wrapper.
+- [ ] **nixos-config Copilot migration** — once A3 lands,
+      move the consumer's Copilot config to the `ai.copilot.*`
+      surface and remove any direct `programs.copilot-cli.*`
+      references.
+- [x] **copilot-cli / kiro-cli DRY** — obsoleted by A3 + A4.
+      The 7 helpers copy-pasted between the old modules get
+      absorbed into the per-package factory callbacks directly,
+      not "the factory port" as previously framed.
+- [x] **MCP server submodule DRY** — obsoleted by A5. The
+      duplicated devenv copilot/kiro MCP submodule logic
+      becomes a single per-mcp-server factory declaration.
 
 ### Add OpenAI Codex (4th ecosystem, LAST)
 
+Blocked on A1-A10 completing — the factory shape must be stable
+before adding a 4th ecosystem.
+
 - [ ] **Package chatgpt-codex CLI + factory registration** —
-      follow whatever pattern the claude-code port
-      established. Add as 4th ecosystem record.
-- [ ] **Add Codex ecosystem transform to `fragments-ai`** —
-      curried frontmatter generator for Codex
-      steering/instructions format (verify what format Codex
-      uses; currently AGENTS.md standard is flat).
-- [ ] **Wire Codex into `modules/ai/default.nix`** — the
-      registry walker picks it up automatically once the
-      package is in place.
-- [ ] **Mirror in `modules/devenv/ai.nix`** per config
-      parity. Should be free via the factory.
+      add `packages/chatgpt-codex/` following the
+      claude-code/copilot-cli/kiro-cli pattern: overlay
+      contribution + `lib/mkCodex.nix` factory-of-factory
+      that calls `lib.ai.app.mkAiApp`. Instance lib gets
+      walked into `lib.ai.apps.mkCodex` automatically by
+      `collectFacet` in flake.nix.
+- [ ] **Add Codex transformer under `lib/ai/transformers/`** —
+      new `codex.nix` following the same shape as
+      `claude.nix` / `copilot.nix` / `kiro.nix`. Verify what
+      scoping format Codex uses (currently the AGENTS.md
+      standard is flat, so it may fall through to `agentsmd`).
+- [ ] **Wire Codex factory into the module barrel.** The
+      `collectFacet ["modules" "homeManager"]` +
+      `collectFacet ["modules" "devenv"]` walkers pick it up
+      automatically once `packages/chatgpt-codex/modules/`
+      exists. No edits to `modules/ai/default.nix` (which is
+      dead code reference material by then).
 
 ### nixos-config integration
 
@@ -553,12 +810,14 @@ Goal: nixos-config fully ported to the new `ai.*` surface.
       Kiro) - [ ] Fresh-clone smoke test: `git clone` to /tmp,
       `devenv test`, verify no rogue `.gitignore` or
       generated files leak into the working tree
-- [ ] **Migrate nixos-config AI config to new factory-fed
-      `ai.*` module** — replace hardcoded
-      `programs.claude-code.*` / `copilot.*` / `kiro.*`
-      blocks. See `memory/project_nixos_config_integration.md`
-      for the 8 interface contracts and the current vendored
-      package list.
+- [ ] **Migrate nixos-config AI config to the `ai.*` surface**
+      — replace hardcoded `programs.claude-code.*` /
+      `copilot.*` / `kiro.*` blocks with `ai.<name>.*`
+      (consumer now uses the factory's direct file writes, no
+      upstream module delegation). See
+      `memory/project_nixos_config_integration.md` for the 8
+      interface contracts and the current vendored package
+      list.
 - [ ] **Verify 8 interface contracts hold** — enumerated in
       `memory/project_nixos_config_integration.md`. Refresh
       the memory after integration lands.
@@ -635,14 +894,18 @@ cumulative value.
       below.
 
 - [ ] **Codify gap: ai.skills layout** — create new scoped
-      architecture fragment documenting the "all three
-      branches delegate through `programs.<cli>.skills`, no
-      direct home.file writes" decision plus the 2026-04-06
-      consumer clobber story. Source content:
+      architecture fragment documenting the post-factory
+      skills fanout pattern (each factory writes its own
+      `.claude/skills/<name>`, `.github/copilot/skills/<name>`,
+      `.kiro/skills/<name>` directly from its config callback
+      — no `programs.<cli>.skills` delegation) plus the
+      2026-04-06 consumer clobber story for the Layout A → B
+      transition. Source content:
       `memory/project_ai_skills_layout.md`. Scope to
-      `modules/ai/**`, `packages/**/fragments/**`, and
-      `lib/hm-helpers.nix`. Lets fresh clones understand the
-      constraint without needing memory access.
+      `packages/*/lib/mk*.nix` + `packages/*/modules/`. Lets
+      fresh clones understand the constraint without needing
+      memory access. Dependent on A2/A3/A4 landing so the
+      documented pattern matches reality.
 
 - [ ] **Codify gap: devenv files internals** — create new
       scoped architecture fragment documenting the devenv
@@ -1197,41 +1460,55 @@ session memories.
 
 ## Next action
 
-**Factory rollout M1–M16 landed** (see "Factory rollout
-status" above). Branch `refactor/ai-factory-architecture` is
-content-complete: factory primitives + all 24 binary packages
-under `pkgs.ai.*` + chunks 8–17 imported from sentinel +
-transformers wired + doc site build restored + `nix flake
-check` and `nix build .#docs` green. Branch has been pushed
-to origin along with `archive/phase-2a-refactor` and
-`archive/sentinel-pre-takeover` backups.
+**Factory rollout M1–M16 landed**, plus convergence cleanup
+(commits `23af2a1` legacy-module REFERENCE ONLY banners +
+devenv transformer compat fix, `da5dc20` M16 plan update).
+Branch `refactor/ai-factory-architecture` is architecturally
+content-complete but NOT yet ready for main merge — the
+modules/ tree still contains pre-factory fanout logic that
+must be absorbed into the per-package factories before
+chunking. User directive (2026-04-08): "I dont want to merge
+to main non-absorbed things into the current architecture."
+**Re-chunking will NOT happen this week** — targeted for
+late next week, only after the ideal architecture gate below
+is fully landed.
 
-Two parallel next steps:
+**Sequential next steps (this order):**
 
-1. **Re-chunk for main merge.** User will drive the
-   re-chunking into PR-sized batches next week. Milestone
-   commit messages (`M1..M16`) provide grouping anchors.
-   Chunks 1–7 already landed on main in PRs #3–#11; chunks
-   8–17 are now in this branch ready to be re-chunked under
-   the factory layout. The merge strategy: stack from main
-   with lazy PR extraction + copilot review loops (see
+1. **Work items A1-A10 in "Ideal architecture gate (blocks
+   main merge)"** above. These are ten mechanical absorption
+   tasks that move fanout logic from `modules/` into each
+   package's `lib/mk<Name>.nix` config callback, plus the
+   backend dispatch in `mkAiApp`, plus the final `modules/`
+   tree deletion. No new architectural patterns — each item
+   is a directed port from a known source file to a known
+   target. Sensible ordering:
+   A5 (mcp typed options, biggest grep-and-replace surface)
+   → A7 (backend dispatch, unblocks A2-A4 writing to both
+   backends) → A2/A3/A4 in parallel (per-factory fanout)
+   → A1 (buddy, benefits from A2 callback shape) →
+   A6 (stacked-workflows content package) →
+   A8 (devenv wire-up, depends on A7) →
+   A9 (mcp auth options) → A10 (final delete).
+2. **B1-B3 interleave wherever.** Self-contained quick wins
+   that pair well with the A items touching the same files.
+3. **Re-chunk for main merge — targeted late next week,
+   NOT this week.** Once A1-A10 + B1-B3 land, the branch is
+   ready for PR-sized chunking. Milestone commit messages
+   (`M1..M16`, plus the A/B commits) provide grouping
+   anchors. Chunks 1–7 already landed on main in PRs #3–#11;
+   chunks 8–17 content + factory + absorption gets re-chunked
+   under the factory layout. Strategy: stack from main with
+   lazy PR extraction + copilot review loops (see
    `project_merge_to_main_strategy.md`).
-2. **Start the modules/ tree absorption backlog** (see
-   "Future absorption backlog" above). Each sub-item is
-   independent and can proceed in parallel with re-chunking.
-   The modules/ tree cannot be deleted until all 6
-   absorptions land, but individual absorptions unblock
-   deletion incrementally. Start with
-   `modules/claude-code-buddy/` since it has the clearest
-   factory target (`packages/claude-code/lib/mkClaude.nix`)
-   and resolves spec question Q6 about extras + activation
-   scripts.
 
 The original "Answer Q1–Q8" next action is kept as historical
 context in the "Now: target architecture spec" section above;
 Q1–Q8 are all answered in
 `docs/superpowers/specs/2026-04-08-ai-factory-architecture-design.md`
-and implemented across M1–M16.
+and implemented across M1–M16. The "Next: factory
+implementation sequence" Steps 1-7 section below is also
+superseded — marked [x] with final landing commits.
 
 Both `docs/superpowers/specs/` and `docs/superpowers/plans/`
 remain cspell-excluded and never merge to main.
