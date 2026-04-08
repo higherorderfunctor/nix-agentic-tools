@@ -29,6 +29,13 @@
 }: let
   fragments = import ../lib/fragments.nix {inherit lib;};
 
+  # ── Fragments from content packages (via overlay) ────────────────────
+  # commonFragments is the always-loaded coding standards set,
+  # merged into the monorepo profile only (scoped profiles are
+  # intentionally lean to avoid context-rot duplication against
+  # the always-loaded common.md / CLAUDE.md content).
+  commonFragments = builtins.attrValues pkgs.coding-standards.passthru.fragments;
+
   # ── Dev-only fragment reader ─────────────────────────────────────────
   # Each entry in devFragmentNames may be either:
   #   - A bare string "name" (legacy form, equivalent to location = "dev")
@@ -119,13 +126,24 @@
   };
 
   # ── Compose fragments for a dev package profile ──────────────────────
-  # Reduced form: only dev fragments. The full pipeline merges
-  # commonFragments (coding-standards) and extraPublishedFragments
-  # (stacked-workflows-content) on top — those land with Chunk 4.
+  # The monorepo (root) profile prepends always-loaded coding standards
+  # (commonFragments) so they appear in CLAUDE.md / common.md once.
+  # Scoped profiles include ONLY their scope-specific content — repeating
+  # commonFragments in every scoped rule file amplifies context rot
+  # (duplicate tokens loaded when a scoped rule triggers alongside the
+  # always-loaded common.md). The full pipeline also merges
+  # extraPublishedFragments (stacked-workflows-content) — that lands in
+  # the next chunk.
   mkDevComposed = package: let
     devFrags = map (mkDevFragment package) (devFragmentNames.${package} or []);
+    isRoot = package == "monorepo";
   in
-    fragments.compose {fragments = devFrags;};
+    fragments.compose {
+      fragments =
+        if isRoot
+        then commonFragments ++ devFrags
+        else devFrags;
+    };
 
   # ── Ecosystem file transforms ────────────────────────────────────────
   aiTransforms = pkgs.fragments-ai.passthru.transforms;
