@@ -1143,6 +1143,24 @@ steps.
 
 ### Repo hygiene
 
+- [ ] **Single-source cspell excludes** — today there are two
+      parallel exclude lists for cspell:
+      (a) `cspell.json` `ignorePaths` (static config, used by
+          direct cspell invocations and IDE extensions)
+      (b) `devenv.nix` `git-hooks.hooks.cspell.excludes`
+          (pre-commit regex filter, prevents cspell from even
+          being invoked on matched files)
+      Both lists must stay in sync. The duplication exists
+      because cspell exits 1 with "no files matched" when its
+      entire input list is filtered by `ignorePaths` alone —
+      hitting this bug needs the pre-commit layer to pre-filter
+      too. Seen while committing `docs/superpowers/plans/*.md`
+      which are excluded in both. Rectify by having `devenv.nix`
+      own the authoritative exclude list and generate
+      `cspell.json` (via `pkgs.writeText` or similar), mirroring
+      the `treefmt.nix` + devenv treefmt pattern. Single source
+      of truth, zero drift possible. Spotted 2026-04-08 during
+      the ideal-architecture-gate plan commit.
 - [ ] **Declutter root dotfiles** — root currently holds
       `.cspell/`, `.nvfetcher/`, `.agnix.toml`, plus other
       tool configs. Move whatever can be moved into a
