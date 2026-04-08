@@ -60,19 +60,35 @@
     # `overlays.default` composition share the same import.
     agnixOverlay = import ./packages/agnix {inherit inputs;};
     aiClisOverlay = import ./packages/ai-clis {inherit inputs;};
+    aiOverlay = import ./overlays {inherit inputs;};
     codingStandardsOverlay = import ./packages/coding-standards {};
     fragmentsAiOverlay = import ./packages/fragments-ai {};
     fragmentsDocsOverlay = import ./packages/fragments-docs {};
     gitToolsOverlay = import ./packages/git-tools {inherit inputs;};
     mcpServersOverlay = import ./packages/mcp-servers {inherit inputs;};
     stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
+
+    # Barrel walker — collects non-binary facets from packages/*/default.nix.
+    packagesBarrel = import ./packages;
+
+    collectFacet = attrPath:
+      lib.pipe packagesBarrel [
+        (lib.filterAttrs (_: p: lib.hasAttrByPath attrPath p))
+        (lib.mapAttrsToList (_: p: lib.getAttrFromPath attrPath p))
+      ];
+
+    packageLibContributions = lib.foldl' lib.recursiveUpdate {} (
+      lib.mapAttrsToList (_: p: p.lib or {}) packagesBarrel
+    );
   in {
     overlays = {
       agnix = agnixOverlay;
+      ai = aiOverlay;
       ai-clis = aiClisOverlay;
       coding-standards = codingStandardsOverlay;
       default = lib.composeManyExtensions [
         nvSourcesOverlay
+        aiOverlay
         agnixOverlay
         aiClisOverlay
         codingStandardsOverlay
@@ -89,9 +105,17 @@
       stacked-workflows = stackedWorkflowsOverlay;
     };
 
-    # Scaffolding placeholders — subsequent PRs populate these.
-    devenvModules = {};
-    homeManagerModules = {};
+    homeManagerModules.nix-agentic-tools = {
+      imports =
+        [./lib/ai/sharedOptions.nix]
+        ++ collectFacet ["modules" "homeManager"];
+    };
+
+    devenvModules.nix-agentic-tools = {
+      imports =
+        [./lib/ai/sharedOptions.nix]
+        ++ collectFacet ["modules" "devenv"];
+    };
 
     lib = let
       fragments = import ./lib/fragments.nix {inherit lib;};
@@ -129,29 +153,32 @@
           description = "Full nix-agentic-tools dev standards";
         };
       };
-    in {
-      inherit ai fragments presets;
-      inherit (devshellLib) mkAgenticShell;
-      inherit (fragments) compose mkFragment mkFrontmatter render;
-      inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig;
-      mkMcpConfig = entries: {mcpServers = entries;};
-      mapTools = f: lib.concatLists (lib.mapAttrsToList (server: tools: map (tool: f server tool) tools));
-      externalServers = {
-        aws-mcp = {
-          type = "http";
-          url = "https://knowledge-mcp.global.api.aws";
+      baseLib = {
+        inherit ai fragments presets;
+        inherit (devshellLib) mkAgenticShell;
+        inherit (fragments) compose mkFragment mkFrontmatter render;
+        inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig;
+        mkMcpConfig = entries: {mcpServers = entries;};
+        mapTools = f: lib.concatLists (lib.mapAttrsToList (server: tools: map (tool: f server tool) tools));
+        externalServers = {
+          aws-mcp = {
+            type = "http";
+            url = "https://knowledge-mcp.global.api.aws";
+          };
         };
+        # `gitConfig` / `gitConfigFull` defer to Chunk 8 (depends on
+        # modules/stacked-workflows/git-config*.nix).
       };
-      # `gitConfig` / `gitConfigFull` defer to Chunk 8 (depends on
-      # modules/stacked-workflows/git-config*.nix).
-    };
+    in
+      lib.recursiveUpdate baseLib packageLibContributions;
 
     checks = forAllSystems (system: let
       pkgs = pkgsFor system;
       factoryChecks = import ./checks/factory-eval.nix {inherit lib pkgs;};
       fragmentsChecks = import ./checks/fragments-eval.nix {inherit lib pkgs;};
+      moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs;};
     in
-      fragmentsChecks // factoryChecks);
+      fragmentsChecks // factoryChecks // moduleChecks);
 
     # devShell provided by devenv CLI (devenv shell / devenv test)
     # See devenv.nix for shell configuration.
@@ -188,14 +215,13 @@
         sympy-mcp
         ;
 
-      # AI CLI packages — exposed at top-level via the ai-clis
-      # overlay (claude-code, github-copilot-cli, kiro-cli,
-      # kiro-gateway) plus the any-buddy source tree consumed by
-      # the buddy activation script in modules/claude-code-buddy/.
+      # AI CLI packages — claude-code now lives under pkgs.ai
+      # (unified overlay); remaining clis still at top-level until
+      # Milestone 4 ports them over.
+      inherit (pkgs.ai) claude-code;
       inherit
         (pkgs)
         any-buddy
-        claude-code
         github-copilot-cli
         kiro-cli
         kiro-gateway

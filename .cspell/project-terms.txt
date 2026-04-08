@@ -21,6 +21,7 @@ deadnix
 dedup
 devenv
 devshell
+Drvs
 difftool
 direnv
 direnvrc

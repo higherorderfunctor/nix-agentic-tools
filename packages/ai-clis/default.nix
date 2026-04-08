@@ -33,7 +33,6 @@
 
   nv = {
     any-buddy = merge "any-buddy";
-    claude-code = merge "claude-code";
     copilot-cli = merge "github-copilot-cli";
     kiro-cli = merge "kiro-cli";
     kiro-cli-darwin = merge "kiro-cli-darwin";
@@ -43,11 +42,6 @@ in {
   any-buddy = import ./any-buddy.nix {
     inherit inputs final;
     nv = nv.any-buddy;
-  };
-  claude-code = import ./claude-code.nix {
-    inherit inputs final prev;
-    nv = nv.claude-code;
-    lockFile = ./locks/claude-code-package-lock.json;
   };
   github-copilot-cli = import ./copilot-cli.nix {
     inherit inputs final prev;
