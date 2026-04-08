@@ -93,6 +93,9 @@
     ];
     monorepo = null;
     nix-standards = ["**/*.nix"];
+    # overlays: cross-cutting overlay conventions (lambda signature,
+    # bind-once composition). Scoped to every overlay package file.
+    overlays = ["packages/**/*.nix"];
     packaging = [
       "nvfetcher.toml"
       "packages/**/*.nix"
@@ -119,6 +122,7 @@
       "project-overview"
     ];
     nix-standards = ["nix-standards"];
+    overlays = ["overlay-pattern"];
     packaging = [
       "naming-conventions"
       "platforms"

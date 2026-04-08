@@ -35,6 +35,7 @@
     # `overlays.default` composition share the same import.
     codingStandardsOverlay = import ./packages/coding-standards {};
     fragmentsAiOverlay = import ./packages/fragments-ai {};
+    fragmentsDocsOverlay = import ./packages/fragments-docs {};
     stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
   in {
     overlays = {
@@ -42,9 +43,11 @@
       default = lib.composeManyExtensions [
         codingStandardsOverlay
         fragmentsAiOverlay
+        fragmentsDocsOverlay
         stackedWorkflowsOverlay
       ];
       fragments-ai = fragmentsAiOverlay;
+      fragments-docs = fragmentsDocsOverlay;
       stacked-workflows = stackedWorkflowsOverlay;
     };
 
