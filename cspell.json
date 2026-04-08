@@ -1,21 +1,12 @@
 {
+  "caseSensitive": false,
+  "dictionaries": ["bash", "git", "project-terms"],
   "dictionaryDefinitions": [
     {
       "addWords": true,
       "name": "project-terms",
       "path": ".cspell/project-terms.txt"
     }
-  ],
-  "dictionaries": [
-    "bash",
-    "fullstack",
-    "git",
-    "node",
-    "npm",
-    "project-terms",
-    "python",
-    "shellscript",
-    "typescript"
   ],
   "ignorePaths": [
     ".direnv",

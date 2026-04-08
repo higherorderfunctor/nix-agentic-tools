@@ -1,8 +1,6 @@
-Agentic
 agentic
 agnix
 cachix
-CACHIX
 convco
 deadnix
 devenv
@@ -14,6 +12,7 @@ nixos
 nixpkgs
 numtide
 nvfetcher
+pkgs
 statix
 substituters
 taplo
