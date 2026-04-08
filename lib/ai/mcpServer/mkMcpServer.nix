@@ -28,7 +28,8 @@
         # options.
         _module.args.mcpServerName = name;
       }
-      {config = defaults // consumerArgs;}
+      {config = defaults;}
+      {config = consumerArgs;}
     ];
   };
 in

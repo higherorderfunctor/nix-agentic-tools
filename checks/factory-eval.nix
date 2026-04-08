@@ -99,7 +99,19 @@ in {
       && evaluated.config.command == "hello"
   );
 
-  factory-mcpServer-commonSchema-type-enforced = mkTest "mcpServer-commonSchema-type-enforced" true;
+  factory-mcpServer-commonSchema-type-enforced = mkTest "mcpServer-commonSchema-type-enforced" (
+    let
+      result =
+        builtins.tryEval
+        (lib.evalModules {
+          modules = [
+            ai.mcpServer.commonSchema
+            {config = {package = pkgs.hello;};} # type intentionally omitted — required field
+          ];
+        }).config.type;
+    in
+      !result.success
+  );
 
   # ── mcpServer.mkMcpServer tests ─────────────────────────────────
   factory-mcpServer-mkMcpServer-returns-function = mkTest "mkMcpServer-returns-function" (
@@ -149,6 +161,25 @@ in {
       instance = factory {turboMode = true;};
     in
       instance.turboMode or false
+  );
+
+  factory-mcpServer-mkMcpServer-list-merge = mkTest "mkMcpServer-list-merge" (
+    let
+      factory = ai.mcpServer.mkMcpServer {
+        name = "test";
+        defaults = {
+          package = pkgs.hello;
+          type = "stdio";
+          command = "hello";
+          args = ["--from-defaults"];
+        };
+      };
+      instance = factory {args = ["--from-consumer"];};
+    in
+      # With module-system merge on listOf: ["--from-defaults" "--from-consumer"]
+      # Both values must be present (concatenation semantics).
+      builtins.elem "--from-defaults" instance.args
+      && builtins.elem "--from-consumer" instance.args
   );
 
   # ── sharedOptions tests ─────────────────────────────────────────
@@ -252,10 +283,22 @@ in {
         name = "testapp";
         transformers.markdown = ai.transformers.claude;
         defaults = {package = pkgs.hello;};
+        options = {
+          # Synthetic introspection option — NOT part of the real mkAiApp contract,
+          # only used here to prove mergedServers is computed and accessible to
+          # the config callback.
+          _mergedServerCount = lib.mkOption {
+            type = lib.types.int;
+            default = 0;
+          };
+        };
+        config = {mergedServers, ...}: {
+          ai.testapp._mergedServerCount = builtins.length (builtins.attrNames mergedServers);
+        };
       };
       evaluated = lib.evalModules {
         modules = [
-          ai.sharedOptions
+          (import ../lib/ai/sharedOptions.nix)
           module
           {
             config = {
@@ -279,8 +322,6 @@ in {
         ];
       };
     in
-      evaluated.config.ai.mcpServers
-      ? shared
-      && evaluated.config.ai.testapp.mcpServers ? local
+      evaluated.config.ai.testapp._mergedServerCount == 2
   );
 }

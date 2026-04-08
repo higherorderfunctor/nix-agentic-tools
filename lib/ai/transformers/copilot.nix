@@ -14,7 +14,7 @@ in rec {
       fragments.defaultHandlers
       // {
         link = _ctx: node: "[${node.label or node.target}](${node.target})";
-        include = _ctx: node: "@${node.path}";
+        include = _ctx: node: throw "Copilot transformer: include nodes not supported (path=${node.path}); inline the fragment instead";
       };
     frontmatter = {paths ? null, ...}: let
       applyTo =
