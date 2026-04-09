@@ -1143,6 +1143,36 @@ steps.
 
 ### Repo hygiene
 
+- [ ] **Integration test: Copilot CLI end-to-end** — the
+      factory port in Task 4 (A3) + the gap-fill in Task 4b
+      (lspServers, environmentVariables, agents, symlinkJoin
+      wrapper with `--additional-mcp-config` flag injection)
+      landed without a real consumer driving it. User does
+      not currently run Copilot CLI via Nix, so Task 4 + 4b
+      were effectively unverified. Write an integration test
+      that either:
+      (a) Spins up a scratch HM profile with
+          `ai.copilot.enable = true` + a concrete mcpServers
+          / lspServers / agents config, runs
+          `home-manager build`, and asserts the on-disk tree
+          matches the expected `.config/github-copilot/`
+          layout (mcp-config.json, lsp-config.json,
+          skills/*/, agents/*.md) + the wrapped `copilot`
+          binary in `$PATH` exports env vars and injects
+          `--additional-mcp-config` correctly.
+      (b) OR dispatches a real copilot invocation in a
+          sandbox (e.g., `copilot --help` under the wrapped
+          bin) and asserts the env + args are what the
+          wrapper intended.
+      Version (a) is nix flake check-friendly; (b) requires
+      the binary to actually run (network / auth / OS
+      constraints). Start with (a). User noted 2026-04-08:
+      "if you dont get it quite right we can fix later" —
+      this backlog item is the safety net for catching it
+      later. Related: the `modules/copilot-cli/default.nix`
+      legacy module had zero integration tests either, so
+      parity is preserved.
+
 - [ ] **Single source of truth for tool exclude lists (cspell,
       treefmt, agnix, etc.) with file-category classification**
       — today exclude lists for generated/scratch files are
