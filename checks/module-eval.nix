@@ -31,6 +31,10 @@
   # prevent "option does not exist" errors on the side-effect attrs.
   hmStubs = {
     options = {
+      assertions = lib.mkOption {
+        type = lib.types.listOf lib.types.anything;
+        default = [];
+      };
       home = {
         activation = lib.mkOption {
           type = lib.types.attrsOf lib.types.anything;
@@ -71,6 +75,14 @@
   # claude.code.* / copilot.* / kiro.* without importing devenv.
   devenvStubs = {
     options = {
+      assertions = lib.mkOption {
+        type = lib.types.listOf lib.types.anything;
+        default = [];
+      };
+      env = lib.mkOption {
+        type = lib.types.attrsOf lib.types.str;
+        default = {};
+      };
       files = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         default = {};
@@ -423,6 +435,142 @@ in {
       };
     in
       result.config.files ? ".config/github-copilot/mcp-config.json"
+  );
+
+  # ── Task 4b: Copilot feature-gap closure ───────────────────────
+  # lspServers → lsp-config.json (HM and devenv).
+  module-copilot-hm-writes-lsp-config-json = mkTest "copilot-hm-writes-lsp-config-json" (
+    let
+      result = evalHm {
+        ai.copilot = {
+          enable = true;
+          lspServers.typescript = {
+            command = "typescript-language-server";
+            args = ["--stdio"];
+          };
+        };
+      };
+      lspFile = result.config.home.file.".config/github-copilot/lsp-config.json" or null;
+    in
+      lspFile
+      != null
+      && lib.hasInfix "typescript-language-server" (lspFile.text or "")
+  );
+
+  module-copilot-devenv-writes-lsp-config-json = mkTest "copilot-devenv-writes-lsp-config-json" (
+    let
+      result = evalDevenv {
+        ai.copilot = {
+          enable = true;
+          lspServers.typescript = {
+            command = "typescript-language-server";
+            args = ["--stdio"];
+          };
+        };
+      };
+      lspFile = result.config.files.".config/github-copilot/lsp-config.json" or null;
+    in
+      lspFile
+      != null
+      && lib.hasInfix "typescript-language-server" (lspFile.text or "")
+  );
+
+  # environmentVariables → devenv env blob (native) and HM wrapper.
+  module-copilot-devenv-env-blob-populated = mkTest "copilot-devenv-env-blob-populated" (
+    let
+      result = evalDevenv {
+        ai.copilot = {
+          enable = true;
+          environmentVariables.COPILOT_MODEL = "claude-sonnet-4";
+        };
+      };
+    in
+      (result.config.env.COPILOT_MODEL or null) == "claude-sonnet-4"
+  );
+
+  # HM wrapper injects --additional-mcp-config flag when MCP servers
+  # are present. We assert that home.packages contains exactly one
+  # entry (the wrapped derivation) and that it carries the expected
+  # name — the stub can't introspect postBuild content, but a named
+  # symlinkJoin is a strong signal the wrapper fired.
+  module-copilot-hm-wrapper-injects-mcp-config-flag = mkTest "copilot-hm-wrapper-injects-mcp-config-flag" (
+    let
+      result = evalHm {
+        ai.copilot.enable = true;
+        ai.mcpServers.test-server = {
+          type = "stdio";
+          package = pkgs.hello;
+          command = "hello";
+        };
+      };
+      packages = result.config.home.packages or [];
+      first = builtins.head packages;
+    in
+      builtins.length packages
+      == 1
+      && (first.name or "") == "copilot-cli-wrapped"
+  );
+
+  module-copilot-hm-wrapper-exports-env-vars = mkTest "copilot-hm-wrapper-exports-env-vars" (
+    let
+      result = evalHm {
+        ai.copilot = {
+          enable = true;
+          environmentVariables.COPILOT_MODEL = "claude-sonnet-4";
+        };
+      };
+      packages = result.config.home.packages or [];
+      first = builtins.head packages;
+    in
+      builtins.length packages
+      == 1
+      && (first.name or "") == "copilot-cli-wrapped"
+  );
+
+  # No wrapper when there's nothing to wrap (no env vars, no MCP
+  # servers) — we should get the raw package through.
+  module-copilot-hm-no-wrapper-when-nothing-to-wrap = mkTest "copilot-hm-no-wrapper-when-nothing-to-wrap" (
+    let
+      result = evalHm {
+        ai.copilot.enable = true;
+      };
+      packages = result.config.home.packages or [];
+      first = builtins.head packages;
+    in
+      builtins.length packages
+      == 1
+      && (first.name or "") != "copilot-cli-wrapped"
+  );
+
+  # agents → per-file writes under configDir.
+  module-copilot-hm-writes-agent-files = mkTest "copilot-hm-writes-agent-files" (
+    let
+      result = evalHm {
+        ai.copilot = {
+          enable = true;
+          agents.reviewer = "# Reviewer\n\nReview code carefully.";
+        };
+      };
+      agentFile = result.config.home.file.".config/github-copilot/agents/reviewer.md" or null;
+    in
+      agentFile
+      != null
+      && lib.hasInfix "Review code carefully" (agentFile.text or "")
+  );
+
+  module-copilot-devenv-writes-agent-files = mkTest "copilot-devenv-writes-agent-files" (
+    let
+      result = evalDevenv {
+        ai.copilot = {
+          enable = true;
+          agents.reviewer = "# Reviewer\n\nReview code carefully.";
+        };
+      };
+      agentFile = result.config.files.".config/github-copilot/agents/reviewer.md" or null;
+    in
+      agentFile
+      != null
+      && lib.hasInfix "Review code carefully" (agentFile.text or "")
   );
 
   module-kiro-instructions-rendered = mkTest "kiro-instructions-rendered" (

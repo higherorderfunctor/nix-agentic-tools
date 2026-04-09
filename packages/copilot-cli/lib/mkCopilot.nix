@@ -7,9 +7,14 @@
 # Fanout absorbed in Task 4 (A3): settings.json activation merge,
 # mcp-config.json static write, per-instruction rule files under
 # `.github/instructions/`, skills routing to `.config/github-copilot/skills/`.
-# Still tracked under the absorption backlog: LSP config, symlinkJoin
-# wrapper with env exports + --additional-mcp-config flag injection,
-# typed settings schema, agents directory.
+#
+# Fanout absorbed in Task 4b (A3 gap-fill): lspServers typed LSP
+# config write, environmentVariables fed into the HM symlinkJoin
+# wrapper (export) and the devenv `env` blob, agents + agentsDir
+# option pair writing under `${configDir}/agents/`, and the HM
+# symlinkJoin wrapper that injects `--additional-mcp-config` so the
+# rendered mcp-config.json actually gets loaded by the copilot
+# binary at runtime.
 {
   lib,
   pkgs,
@@ -23,6 +28,18 @@ lib.ai.app.mkAiApp {
     outputPath = ".config/github-copilot/copilot-instructions.md";
   };
   options = {
+    # Config directory (HOME-relative). Used by both backends as the
+    # root for mcp-config.json / lsp-config.json / settings.json /
+    # agents/. The legacy HM module defaulted to `.copilot`; Task 4
+    # standardized on `.config/github-copilot` for all writes and the
+    # wrapper arg targets the same path. Exposed as an option so
+    # consumers who need the legacy layout (or a custom XDG setup)
+    # can override without forking the factory.
+    configDir = lib.mkOption {
+      type = lib.types.str;
+      default = ".config/github-copilot";
+      description = "Config directory relative to HOME / devenv root.";
+    };
     # Copilot-specific freeform settings. Consumed by the settings.json
     # activation merge in `hm.config` (runtime-merge via `jq -s '.[0] * .[1]'`
     # to preserve user-added `trusted_folders` across rebuilds) and by
@@ -35,6 +52,43 @@ lib.ai.app.mkAiApp {
       default = {};
       description = "Freeform settings merged into ~/.config/github-copilot/settings.json (HM: via activation script; devenv: via static write).";
     };
+    # Typed LSP server definitions for lsp-config.json. Freeform
+    # attrs-of-anything (matching the legacy `attrsOf jsonFormat.type`)
+    # — consumers pass the JSON shape copilot expects. A richer typed
+    # schema shared with kiro lives in `lib/ai-common.nix`
+    # (`lspServerModule` + `mkCopilotLspConfig`) and is a pattern
+    # expansion deferred until the cross-ecosystem `ai.lspServers`
+    # surface lands; per-app options are fine for now.
+    lspServers = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.attrsOf lib.types.anything);
+      default = {};
+      description = "LSP server definitions written to lsp-config.json.";
+    };
+    # Env vars exported when launching copilot. In HM they're baked
+    # into the symlinkJoin wrapper's `export FOO=bar` lines; in
+    # devenv they populate the native `env` attrset. `attrsOf str` —
+    # matching the legacy surface exactly.
+    environmentVariables = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = {};
+      description = "Environment variables exported when launching copilot (HM: via wrapper; devenv: via native env).";
+    };
+    # Inline agent markdown content. Written under
+    # `<configDir>/agents/<name>.md` in both backends. Mutually
+    # exclusive with `agentsDir` (enforced by assertion below).
+    agents = lib.mkOption {
+      type = lib.types.attrsOf lib.types.lines;
+      default = {};
+      description = "Inline agent markdown (written to <configDir>/agents/<name>.md).";
+    };
+    # External agents directory. Symlinked at `<configDir>/agents`
+    # when set; walked recursively in devenv (via the same walker as
+    # skills) because devenv's `files.*.source` can't recurse.
+    agentsDir = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "External directory of agent markdown files (symlinked into <configDir>/agents).";
+    };
   };
   hm = {
     options = {};
@@ -43,22 +97,107 @@ lib.ai.app.mkAiApp {
       mergedServers,
       mergedInstructions,
       mergedSkills,
-    }:
+    }: let
+      # symlinkJoin + makeWrapper wrapper that exports
+      # `environmentVariables` and prepends `--additional-mcp-config
+      # <path>` to every copilot invocation. Without this, the
+      # `mcp-config.json` written below would sit on disk and never
+      # be read — copilot only loads additional MCP config via the
+      # explicit CLI flag. Conditional on there being something to
+      # wrap; the raw `cfg.package` is used otherwise so consumers
+      # with no env vars / no MCP servers don't pay for a rebuild.
+      #
+      # We use `wrapProgram` (from `makeWrapper`) rather than the
+      # legacy inline bash heredoc. The legacy wrote `$out` into
+      # the generated wrapper via a quoted `<< 'WRAPPER'` heredoc
+      # and relied on `$out` being set at runtime, which it isn't
+      # outside the nix build sandbox — that was a latent bug.
+      # `wrapProgram` resolves the target path at wrap time
+      # (substituting the real store path), which is the
+      # conventional correct shape and matches the rest of the
+      # ai-clis overlay.
+      hasMcp = mergedServers != {};
+      hasEnv = cfg.environmentVariables != {};
+      needsWrapper = hasMcp || hasEnv;
+      # `--add-flags` takes a single string; `makeWrapper` splices
+      # it verbatim into the generated wrapper so shell variables
+      # (`$HOME`) are expanded by bash at runtime. The mcp-config
+      # path therefore refers to whatever `$HOME/${configDir}`
+      # resolves to when copilot is launched, matching the
+      # on-disk write above.
+      mcpConfigPath = "$HOME/${cfg.configDir}/mcp-config.json";
+      addFlagsArg =
+        lib.optionalString hasMcp
+        ''--add-flags "--additional-mcp-config ${mcpConfigPath}"'';
+      setEnvArgs =
+        lib.concatStringsSep " "
+        (lib.mapAttrsToList
+          (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}")
+          cfg.environmentVariables);
+      wrappedPackage = pkgs.symlinkJoin {
+        name = "copilot-cli-wrapped";
+        paths = [cfg.package];
+        nativeBuildInputs = [pkgs.makeWrapper];
+        postBuild = ''
+          wrapProgram $out/bin/copilot \
+            ${addFlagsArg} \
+            ${setEnvArgs}
+        '';
+      };
+      copilotPackage =
+        if needsWrapper
+        then wrappedPackage
+        else cfg.package;
+    in
       lib.mkMerge [
-        # Package installation (no wrapper yet — wrapper pattern from
-        # legacy modules/copilot-cli/default.nix is tracked under
-        # docs/plan.md "Ideal architecture gate → Absorption backlog".
-        # The minimum here installs the binary; env/wrapper-args
-        # fanout lands when `ai.copilot.environmentVariables` and the
-        # shared MCP-config CLI-arg surface come in).
-        {home.packages = [cfg.package];}
+        # Package installation — wrapped with symlinkJoin when env
+        # vars or MCP servers are configured so the binary picks up
+        # `--additional-mcp-config` and the requested env. Matches
+        # the legacy modules/copilot-cli/default.nix wrapper shape.
+        {home.packages = [copilotPackage];}
+        # Assertions: agents and agentsDir are mutually exclusive
+        # (matches legacy `mkExclusiveAssertion`).
+        {
+          assertions = [
+            {
+              assertion = !(cfg.agents != {} && cfg.agentsDir != null);
+              message = "ai.copilot: cannot set both `agents` and `agentsDir` — choose one.";
+            }
+          ];
+        }
+        # lsp-config.json — typed LSP server definitions for the
+        # copilot CLI. Inlined via `text` so module-eval can assert
+        # on content and we don't pay for a store build per eval.
+        (lib.mkIf (cfg.lspServers != {}) {
+          home.file."${cfg.configDir}/lsp-config.json".text =
+            builtins.toJSON cfg.lspServers;
+        })
+        # Inline agent .md files. Mirrors the legacy
+        # `mkMarkdownEntries` shape — one entry per agent, written
+        # under `${configDir}/agents/<name>.md`.
+        (lib.mkIf (cfg.agents != {}) {
+          home.file = lib.mapAttrs' (name: content:
+            lib.nameValuePair "${cfg.configDir}/agents/${name}.md" {
+              text = content;
+            })
+          cfg.agents;
+        })
+        # External agents directory — symlinked wholesale via
+        # `recursive = true` so each file inside gets its own
+        # store symlink (Layout B).
+        (lib.mkIf (cfg.agentsDir != null) {
+          home.file."${cfg.configDir}/agents" = {
+            source = cfg.agentsDir;
+            recursive = true;
+          };
+        })
         # mcp-config.json — static write of the merged MCP server
-        # pool. Copilot's CLI reads this via its
-        # --additional-mcp-config flag (wiring tracked in the wrapper
-        # absorption backlog item). Inlined as `text` so module-eval
-        # can assert on content without a store build.
+        # pool. The symlinkJoin wrapper above points
+        # `--additional-mcp-config` at this exact path so copilot
+        # loads these servers at runtime. Inlined as `text` so
+        # module-eval can assert on content without a store build.
         (lib.mkIf (mergedServers != {}) {
-          home.file.".config/github-copilot/mcp-config.json".text =
+          home.file."${cfg.configDir}/mcp-config.json".text =
             builtins.toJSON {mcpServers = mergedServers;};
         })
         # Per-instruction files — write
@@ -80,15 +219,15 @@ lib.ai.app.mkAiApp {
             named);
         })
         # Skills fanout — copilot has no upstream HM skills option, so
-        # we write `home.file.".config/github-copilot/skills/<name>"`
-        # entries directly via `mkSkillEntries`, which uses
-        # `recursive = true` to produce Layout B (a real directory with
-        # per-file symlinks) and is path-type-agnostic (accepts both
-        # Nix path literals and absolute string paths).
+        # we write `home.file."${configDir}/skills/<name>"` entries
+        # directly via `mkSkillEntries`, which uses `recursive = true`
+        # to produce Layout B (a real directory with per-file
+        # symlinks) and is path-type-agnostic (accepts both Nix path
+        # literals and absolute string paths).
         (let
           helpers = import ../../../lib/hm-helpers.nix {inherit lib;};
         in {
-          home.file = helpers.mkSkillEntries ".config/github-copilot" mergedSkills;
+          home.file = helpers.mkSkillEntries cfg.configDir mergedSkills;
         })
         # Settings.json activation merge. Preserves user-added runtime
         # keys (e.g. `trusted_folders`) by merging Nix-declared values
@@ -108,7 +247,7 @@ lib.ai.app.mkAiApp {
         in {
           home.activation.copilotSettingsMerge = lib.hm.dag.entryAfter ["writeBoundary"] ''
             set -eu
-            SETTINGS_DIR="$HOME/.config/github-copilot"
+            SETTINGS_DIR="$HOME/${cfg.configDir}"
             mkdir -p "$SETTINGS_DIR"
             NIX_SETTINGS=$(mktemp)
             cat > "$NIX_SETTINGS" <<'COPILOT_SETTINGS_EOF'
@@ -139,10 +278,61 @@ lib.ai.app.mkAiApp {
     }:
       lib.mkMerge [
         # Package installation — devenv projects are shell-scoped, so
-        # env exports + wrapper args go in the devenv env blob rather
+        # env exports go in the devenv `env` attrset directly rather
         # than an HM-style symlinkJoin wrapper. The binary is enough
-        # here; env wiring lands with the environmentVariables fanout.
+        # here; env wiring is handled by the `env = ...` merge below.
         {packages = [cfg.package];}
+        # Assertions: agents and agentsDir are mutually exclusive.
+        {
+          assertions = [
+            {
+              assertion = !(cfg.agents != {} && cfg.agentsDir != null);
+              message = "ai.copilot: cannot set both `agents` and `agentsDir` — choose one.";
+            }
+          ];
+        }
+        # Environment variables — devenv has a native `env` attrset
+        # so no wrapper is required. `mkDefault` lets consumers
+        # override per-project via explicit `env.FOO = ...`.
+        (lib.mkIf (cfg.environmentVariables != {}) {
+          env = lib.mapAttrs (_: lib.mkDefault) cfg.environmentVariables;
+        })
+        # lsp-config.json — typed LSP server definitions. Inlined
+        # as `text` for parity with the HM side.
+        (lib.mkIf (cfg.lspServers != {}) {
+          files."${cfg.configDir}/lsp-config.json".text =
+            builtins.toJSON cfg.lspServers;
+        })
+        # Inline agent .md files — one devenv `files.*` entry per
+        # agent under `${configDir}/agents/<name>.md`.
+        (lib.mkIf (cfg.agents != {}) {
+          files = lib.mapAttrs' (name: content:
+            lib.nameValuePair "${cfg.configDir}/agents/${name}.md" {
+              text = content;
+            })
+          cfg.agents;
+        })
+        # External agents directory — devenv's `files.*.source`
+        # can't recurse, so we reuse `mkDevenvSkillEntries`' walker
+        # to produce one `files.*` entry per leaf file under the
+        # agents tree. The walker is generic over subdirectory
+        # names (it just writes into `<prefix>/skills/<name>` by
+        # convention); we adapt here by re-walking manually to keep
+        # the path shape at `${configDir}/agents/...`.
+        (lib.mkIf (cfg.agentsDir != null) (let
+          walkDir = prefix: dir:
+            lib.concatMapAttrs (
+              name: kind:
+                if kind == "directory"
+                then walkDir "${prefix}/${name}" (dir + "/${name}")
+                else if kind == "regular" || kind == "symlink"
+                then {"${prefix}/${name}".source = dir + "/${name}";}
+                else {}
+            )
+            (builtins.readDir dir);
+        in {
+          files = walkDir "${cfg.configDir}/agents" cfg.agentsDir;
+        }))
         # Skills via the user-space walker. devenv's `files.*.source`
         # cannot walk a directory recursively (see the devenv files
         # internals fragment), so we enumerate leaves at eval time
@@ -151,12 +341,12 @@ lib.ai.app.mkAiApp {
         (let
           helpers = import ../../../lib/hm-helpers.nix {inherit lib;};
         in {
-          files = helpers.mkDevenvSkillEntries ".config/github-copilot" mergedSkills;
+          files = helpers.mkDevenvSkillEntries cfg.configDir mergedSkills;
         })
         # mcp-config.json — static write of the merged MCP server
         # pool. Inlined as `text` for consistency with the HM side.
         (lib.mkIf (mergedServers != {}) {
-          files.".config/github-copilot/mcp-config.json".text =
+          files."${cfg.configDir}/mcp-config.json".text =
             builtins.toJSON {mcpServers = mergedServers;};
         })
         # Per-instruction files under `.github/instructions/`. Same
@@ -180,7 +370,7 @@ lib.ai.app.mkAiApp {
         # there's no `trusted_folders` preservation problem to solve
         # here. Static JSON write is sufficient.
         {
-          files.".config/github-copilot/settings.json".text =
+          files."${cfg.configDir}/settings.json".text =
             builtins.toJSON cfg.settings;
         }
       ];

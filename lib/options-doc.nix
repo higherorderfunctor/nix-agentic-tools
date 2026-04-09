@@ -155,6 +155,11 @@
   # ── Devenv stub module ──────────────────────────────────────────────
   devenvStubModule = {lib, ...}: {
     options = {
+      assertions = lib.mkOption {
+        type = lib.types.listOf lib.types.anything;
+        default = [];
+        description = "Module assertions.";
+      };
       claude.code = {
         enable = lib.mkEnableOption "Claude Code devenv integration";
         env = lib.mkOption {
