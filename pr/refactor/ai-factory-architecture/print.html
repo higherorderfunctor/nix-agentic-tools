@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-4292ce53.js";
+            window.path_to_searchindex_js = "searchindex-0b74268b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-841f2094.js"></script>
@@ -1696,12 +1696,67 @@ package</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
+<h2 id="aicopilotagents"><a class="header" href="#aicopilotagents">ai.copilot.agents</a></h2>
+<p>Inline agent markdown (written to &lt;configDir&gt;/agents/&lt;name&gt;.md).</p>
+<p><em>Type:</em>
+attribute set of strings concatenated with “\n”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aicopilotagentsdir"><a class="header" href="#aicopilotagentsdir">ai.copilot.agentsDir</a></h2>
+<p>External directory of agent markdown files (symlinked into &lt;configDir&gt;/agents).</p>
+<p><em>Type:</em>
+null or absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aicopilotconfigdir"><a class="header" href="#aicopilotconfigdir">ai.copilot.configDir</a></h2>
+<p>Config directory relative to HOME / devenv root.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">".config/github-copilot"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aicopilotenvironmentvariables"><a class="header" href="#aicopilotenvironmentvariables">ai.copilot.environmentVariables</a></h2>
+<p>Environment variables exported when launching copilot (HM: via wrapper; devenv: via native env).</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
 <h2 id="aicopilotinstructions"><a class="header" href="#aicopilotinstructions">ai.copilot.instructions</a></h2>
 <p>copilot-specific instructions.</p>
 <p><em>Type:</em>
 list of (attribute set)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aicopilotlspservers"><a class="header" href="#aicopilotlspservers">ai.copilot.lspServers</a></h2>
+<p>LSP server definitions written to lsp-config.json.</p>
+<p><em>Type:</em>
+attribute set of attribute set of anything</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -1790,7 +1845,7 @@ null or string</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aicopilotsettings"><a class="header" href="#aicopilotsettings">ai.copilot.settings</a></h2>
-<p>Freeform settings passed to Copilot’s config file (rendering tracked in docs/plan.md absorption backlog).</p>
+<p>Freeform settings merged into ~/.config/github-copilot/settings.json (HM: via activation script; devenv: via static write).</p>
 <p><em>Type:</em>
 attribute set of anything</p>
 <p><em>Default:</em></p>
@@ -2340,12 +2395,67 @@ package</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
+<h2 id="aicopilotagents-1"><a class="header" href="#aicopilotagents-1">ai.copilot.agents</a></h2>
+<p>Inline agent markdown (written to &lt;configDir&gt;/agents/&lt;name&gt;.md).</p>
+<p><em>Type:</em>
+attribute set of strings concatenated with “\n”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aicopilotagentsdir-1"><a class="header" href="#aicopilotagentsdir-1">ai.copilot.agentsDir</a></h2>
+<p>External directory of agent markdown files (symlinked into &lt;configDir&gt;/agents).</p>
+<p><em>Type:</em>
+null or absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aicopilotconfigdir-1"><a class="header" href="#aicopilotconfigdir-1">ai.copilot.configDir</a></h2>
+<p>Config directory relative to HOME / devenv root.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">".config/github-copilot"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aicopilotenvironmentvariables-1"><a class="header" href="#aicopilotenvironmentvariables-1">ai.copilot.environmentVariables</a></h2>
+<p>Environment variables exported when launching copilot (HM: via wrapper; devenv: via native env).</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
 <h2 id="aicopilotinstructions-1"><a class="header" href="#aicopilotinstructions-1">ai.copilot.instructions</a></h2>
 <p>copilot-specific instructions (appended to top-level ai.instructions).</p>
 <p><em>Type:</em>
 list of (attribute set)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aicopilotlspservers-1"><a class="header" href="#aicopilotlspservers-1">ai.copilot.lspServers</a></h2>
+<p>LSP server definitions written to lsp-config.json.</p>
+<p><em>Type:</em>
+attribute set of attribute set of anything</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -2434,7 +2544,7 @@ null or string</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
 <h2 id="aicopilotsettings-1"><a class="header" href="#aicopilotsettings-1">ai.copilot.settings</a></h2>
-<p>Freeform settings passed to Copilot’s config file (rendering tracked in docs/plan.md absorption backlog).</p>
+<p>Freeform settings merged into ~/.config/github-copilot/settings.json (HM: via activation script; devenv: via static write).</p>
 <p><em>Type:</em>
 attribute set of anything</p>
 <p><em>Default:</em></p>
