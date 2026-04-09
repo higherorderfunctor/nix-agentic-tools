@@ -40,6 +40,10 @@
           type = lib.types.attrsOf lib.types.anything;
           default = {};
         };
+        packages = lib.mkOption {
+          type = lib.types.listOf lib.types.package;
+          default = [];
+        };
       };
       programs.claude-code = {
         enable = lib.mkOption {
@@ -70,6 +74,10 @@
       files = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         default = {};
+      };
+      packages = lib.mkOption {
+        type = lib.types.listOf lib.types.package;
+        default = [];
       };
       claude.code = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
@@ -329,6 +337,92 @@ in {
       };
     in
       (result.config.programs.claude-code.settings.env.ENABLE_LSP_TOOL or null) == "1"
+  );
+
+  # ── Task 4 (A3): Copilot HM/devenv fanout absorption ──────────
+  module-copilot-hm-wraps-package = mkTest "copilot-hm-wraps-package" (
+    let
+      result = evalHm {
+        ai.copilot.enable = true;
+      };
+      packages = result.config.home.packages or [];
+    in
+      builtins.length packages >= 1
+  );
+
+  module-copilot-hm-writes-settings-json-activation = mkTest "copilot-hm-writes-settings-json-activation" (
+    let
+      result = evalHm {
+        ai.copilot.enable = true;
+        ai.copilot.settings.model = "gpt-4";
+      };
+      activation = result.config.home.activation.copilotSettingsMerge or null;
+    in
+      activation
+      != null
+      && lib.hasInfix "gpt-4" (activation.text or "")
+      && lib.hasInfix "jq" (activation.text or "")
+  );
+
+  module-copilot-hm-writes-mcp-config-json = mkTest "copilot-hm-writes-mcp-config-json" (
+    let
+      result = evalHm {
+        ai.copilot.enable = true;
+        ai.mcpServers.test-server = {
+          type = "stdio";
+          package = pkgs.hello;
+          command = "hello";
+        };
+      };
+      mcpFile = result.config.home.file.".config/github-copilot/mcp-config.json" or null;
+    in
+      mcpFile
+      != null
+      && lib.hasInfix "test-server" (mcpFile.text or "")
+  );
+
+  module-copilot-hm-writes-instruction-files = mkTest "copilot-hm-writes-instruction-files" (
+    let
+      result = evalHm {
+        ai.copilot.enable = true;
+        ai.instructions = [
+          {
+            name = "my-rule";
+            text = "Be concise.";
+            paths = ["src/**"];
+          }
+        ];
+      };
+      instrFile = result.config.home.file.".github/instructions/my-rule.instructions.md" or null;
+    in
+      instrFile
+      != null
+      && lib.hasInfix "Be concise" (instrFile.text or "")
+  );
+
+  module-copilot-hm-writes-skills = mkTest "copilot-hm-writes-skills" (
+    let
+      result = evalHm {
+        ai.copilot.enable = true;
+        ai.skills.stack-fix = ./../packages/stacked-workflows/skills/stack-fix;
+      };
+      skillEntry = result.config.home.file.".config/github-copilot/skills/stack-fix" or null;
+    in
+      skillEntry != null
+  );
+
+  module-copilot-devenv-writes-mcp-config = mkTest "copilot-devenv-writes-mcp-config" (
+    let
+      result = evalDevenv {
+        ai.copilot.enable = true;
+        ai.mcpServers.test-server = {
+          type = "stdio";
+          package = pkgs.hello;
+          command = "hello";
+        };
+      };
+    in
+      result.config.files ? ".config/github-copilot/mcp-config.json"
   );
 
   module-kiro-instructions-rendered = mkTest "kiro-instructions-rendered" (
