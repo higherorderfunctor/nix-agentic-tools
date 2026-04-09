@@ -30,8 +30,8 @@ This plan touches the following files. Each task lists its own subset; this is t
 - `packages/sequential-thinking-mcp/modules/mcp-server.nix` — relocated typed settings
 - `packages/serena-mcp/modules/mcp-server.nix` — relocated typed settings
 - `packages/sympy-mcp/modules/mcp-server.nix` — relocated typed settings
-- `packages/stacked-workflows-content/modules/homeManager/default.nix` — absorbed stacked-workflows HM module
-- `packages/stacked-workflows-content/modules/devenv/default.nix` — absorbed stacked-workflows devenv module
+- `packages/stacked-workflows/modules/homeManager/default.nix` — absorbed stacked-workflows HM module
+- `packages/stacked-workflows/modules/devenv/default.nix` — absorbed stacked-workflows devenv module
 
 **Modified:**
 
@@ -47,7 +47,7 @@ This plan touches the following files. Each task lists its own subset; this is t
 - `packages/kiro-cli/lib/mkKiro.nix` — returns record; both projections absorb full fanout
 - `packages/kiro-cli/modules/homeManager/default.nix` — applies hmTransform
 - `packages/kiro-cli/modules/devenv/default.nix` — applies devenvTransform
-- `packages/stacked-workflows-content/default.nix` — add modules facet
+- `packages/stacked-workflows/default.nix` — add modules facet
 - `devenv.nix` — swap `imports = [./modules/devenv]` for `devenvModules.nix-agentic-tools`
 - `checks/factory-eval.nix` — adapt existing tests to record shape
 - `checks/module-eval.nix` — add `evalDevenv` helper + devenv-backend coverage
@@ -1074,7 +1074,7 @@ module-claude-hm-delegates-skills-to-upstream = mkTest "claude-hm-delegates-skil
   let
     result = evalHm {
       ai.claude.enable = true;
-      ai.skills.stack-fix = ./../packages/stacked-workflows-content/skills/stack-fix;
+      ai.skills.stack-fix = ./../packages/stacked-workflows/skills/stack-fix;
     };
   in
     (result.config.programs.claude-code.skills ? stack-fix)
@@ -1389,7 +1389,7 @@ module-copilot-hm-writes-skills = mkTest "copilot-hm-writes-skills" (
   let
     result = evalHm {
       ai.copilot.enable = true;
-      ai.skills.stack-fix = ./../packages/stacked-workflows-content/skills/stack-fix;
+      ai.skills.stack-fix = ./../packages/stacked-workflows/skills/stack-fix;
     };
     skillFile = result.config.home.file.".config/github-copilot/skills/stack-fix/SKILL.md" or null;
   in
@@ -1598,7 +1598,7 @@ module-kiro-hm-writes-skills = mkTest "kiro-hm-writes-skills" (
   let
     result = evalHm {
       ai.kiro.enable = true;
-      ai.skills.stack-fix = ./../packages/stacked-workflows-content/skills/stack-fix;
+      ai.skills.stack-fix = ./../packages/stacked-workflows/skills/stack-fix;
     };
     skillFile = result.config.home.file.".kiro/skills/stack-fix/SKILL.md" or null;
   in
@@ -2073,13 +2073,13 @@ git commit -m "feat(claude-code): absorb buddy activation into mkClaude hm proje
 
 ### Task 7: A6 — Absorb stacked-workflows HM module into content package
 
-**Goal:** Port `modules/stacked-workflows/default.nix` + `git-config.nix` + `git-config-full.nix` into `packages/stacked-workflows-content/modules/homeManager/default.nix` and (new) `packages/stacked-workflows-content/modules/devenv/default.nix`. The content package becomes a full factory participant via `collectFacet ["modules" "homeManager"]` + `collectFacet ["modules" "devenv"]` in flake.nix. Git config presets (minimal/full) become options under `ai.stackedWorkflows.*` or stay under a top-level `stacked-workflows.*` namespace — verify what the legacy module exposes and preserve the name.
+**Goal:** Port `modules/stacked-workflows/default.nix` + `git-config.nix` + `git-config-full.nix` into `packages/stacked-workflows/modules/homeManager/default.nix` and (new) `packages/stacked-workflows/modules/devenv/default.nix`. The content package becomes a full factory participant via `collectFacet ["modules" "homeManager"]` + `collectFacet ["modules" "devenv"]` in flake.nix. Git config presets (minimal/full) become options under `ai.stackedWorkflows.*` or stay under a top-level `stacked-workflows.*` namespace — verify what the legacy module exposes and preserve the name.
 
 **Files:**
 
-- Create: `packages/stacked-workflows-content/modules/homeManager/default.nix`
-- Create: `packages/stacked-workflows-content/modules/devenv/default.nix`
-- Modify: `packages/stacked-workflows-content/default.nix` (add modules facet)
+- Create: `packages/stacked-workflows/modules/homeManager/default.nix`
+- Create: `packages/stacked-workflows/modules/devenv/default.nix`
+- Modify: `packages/stacked-workflows/default.nix` (add modules facet)
 - Reference only (read): `modules/stacked-workflows/default.nix`, `modules/stacked-workflows/git-config.nix`, `modules/stacked-workflows/git-config-full.nix`
 
 - [ ] **Step 1: Read the legacy module and record its option surface**
@@ -2092,7 +2092,7 @@ Read `modules/stacked-workflows/default.nix` top to bottom. Record:
 
 - [ ] **Step 2: Create the HM module file**
 
-Create `packages/stacked-workflows-content/modules/homeManager/default.nix` with the ported content. The file should:
+Create `packages/stacked-workflows/modules/homeManager/default.nix` with the ported content. The file should:
 
 ```nix
 # Stacked-workflows HM module.
@@ -2145,15 +2145,15 @@ inherit (import ../../../../lib/ai/transformers/claude.nix {inherit lib;}) claud
 - [ ] **Step 3: Copy git-config.nix and git-config-full.nix into the new location**
 
 ```bash
-cp modules/stacked-workflows/git-config.nix packages/stacked-workflows-content/modules/homeManager/git-config.nix
-cp modules/stacked-workflows/git-config-full.nix packages/stacked-workflows-content/modules/homeManager/git-config-full.nix
+cp modules/stacked-workflows/git-config.nix packages/stacked-workflows/modules/homeManager/git-config.nix
+cp modules/stacked-workflows/git-config-full.nix packages/stacked-workflows/modules/homeManager/git-config-full.nix
 ```
 
 (Use `cp` first to verify they work at the new location; delete originals in Task 9.)
 
 - [ ] **Step 4: Create the devenv module file**
 
-Create `packages/stacked-workflows-content/modules/devenv/default.nix`. Port the relevant parts of `modules/stacked-workflows/default.nix` that apply to devenv context (skills fanout via `files.*`, git config if applicable). Devenv does not typically manage user-level git config — verify whether the legacy module has devenv-specific logic at all. If there's nothing devenv-specific in the legacy module, this file can be a minimal stub:
+Create `packages/stacked-workflows/modules/devenv/default.nix`. Port the relevant parts of `modules/stacked-workflows/default.nix` that apply to devenv context (skills fanout via `files.*`, git config if applicable). Devenv does not typically manage user-level git config — verify whether the legacy module has devenv-specific logic at all. If there's nothing devenv-specific in the legacy module, this file can be a minimal stub:
 
 ```nix
 # Stacked-workflows devenv module.
@@ -2174,7 +2174,7 @@ Create `packages/stacked-workflows-content/modules/devenv/default.nix`. Port the
 
 - [ ] **Step 5: Wire the modules facet into the package barrel**
 
-Modify `packages/stacked-workflows-content/default.nix` to add a `modules` attribute:
+Modify `packages/stacked-workflows/default.nix` to add a `modules` attribute:
 
 ```nix
 # Current content (inferred — verify first):
@@ -2211,7 +2211,7 @@ Expected: all tests pass.
 - [ ] **Step 8: Commit Task 7**
 
 ```bash
-git add packages/stacked-workflows-content/ checks/module-eval.nix
+git add packages/stacked-workflows/ checks/module-eval.nix
 git commit -m "feat(stacked-workflows): absorb HM module into content package (A6)"
 ```
 
