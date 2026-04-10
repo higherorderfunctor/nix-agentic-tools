@@ -296,7 +296,42 @@ Blocked on factory shape being stable and verified by nixos-config.
 
 Items preserved from previous sessions. May need triage.
 
-- [ ] Claude-code npm distribution removal contingency
+- [ ] **Claude-code npm→binary migration + buddy salt patching** —
+      Anthropic soft-deprecated npm 2026 in favor of Bun-compiled
+      single-exec from GPG-signed manifest. nvfetcher migration is
+      straightforward (copy `kiro-cli.nix` binary-fetch pattern).
+      Buddy patching requires extracting/modifying embedded JS inside
+      the Bun single-exec binary's `.bun` ELF section (Linux) or
+      `__BUN,__bun` Mach-O section (macOS).
+
+      **Preferred approach (option 2): same-length in-place binary patch.**
+      The buddy salt is a fixed 15-byte marker (`friend-2026-401`).
+      The Bun module graph payload has NO checksums or signatures —
+      locate the salt bytes in the embedded `cli.js` contents via
+      the `StandaloneModuleGraph` format (trailer `"\n---- Bun! ----\n"`
+      → Offsets struct → CompiledModuleGraphFile[] → StringPointer to
+      contents), overwrite in-place, re-codesign on macOS. No pointer
+      or offset changes needed for same-length replacement.
+
+      Existing tooling: `lafkpages/bun-decompile` (TypeScript,
+      handles old/new format), `@shepherdjerred/bun-decompile` (npm).
+      Could also write a minimal Nix-native extractor since the format
+      is well-documented (48-byte Offsets struct + 28-byte per-module
+      metadata).
+
+      If bytecode is present for the patched module, strip the
+      StringPointer (zero it) — Bun falls back to source parsing.
+
+      **Deep technical reference:** `memory/reference_bun_binary_patching.md`
+
+      **Monitoring signal:** check `@anthropic-ai/claude-code` npm
+      publish frequency. If Anthropic stops npm while native channel
+      keeps updating, that's the trigger.
+
+      **Touch points:** nvfetcher.toml, claude-code.nix (buildNpmPackage
+      → binary fetch), hashes.json (per-platform binary hashes),
+      claude-code-buddy module, buddy-customization.md, delete
+      claude-code-package-lock.json
 - [ ] Agentic UX: pre-approve nix-store reads for HM-symlinked skills
 - [ ] Richer markdown fragment system: heading-aware merging
 - [ ] LLM-friendly inline code commenting conventions fragment

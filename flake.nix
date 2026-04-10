@@ -451,8 +451,10 @@
         name = "nix-agentic-tools-ci";
         packages = with pkgs; [
           devenv
+          jq
           nodejs
           nvfetcher
+          prefetch-npm-deps
         ];
       };
     });

@@ -74,18 +74,20 @@ jobs:
         with:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: Install devenv
-        run: nix profile add nixpkgs#devenv
-      # Pre-evaluate devenv shell once — caches eval for subsequent tasks
-      - name: Evaluate devenv shell
-        run: devenv print-dev-env > /dev/null
+      # Compute hashes BEFORE devenv eval — stale hashes break the
+      # devenv shell because overlay packages are in its packages list.
+      # The CI shell has nix/jq/bash which is all the script needs.
       - name: Compute dep hashes
-        run: devenv tasks run update:hashes --show-output
+        run: nix develop .#ci -c bash dev/scripts/update-hashes.sh
       - name: Upload hashes
         uses: actions/upload-artifact@v4
         with:
           name: hashes-${{ matrix.system }}
           path: overlays/sources/hashes.json
+      - name: Install devenv
+        run: nix profile add nixpkgs#devenv
+      - name: Evaluate devenv shell
+        run: devenv print-dev-env
       - name: Build all packages
         continue-on-error: true
         run: devenv tasks run build:all --show-output

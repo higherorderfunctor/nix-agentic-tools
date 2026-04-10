@@ -76,8 +76,9 @@ detect_hash_field() {
 if [ $# -gt 0 ]; then
 	packages=("$@")
 else
+	system=$(nix eval --impure --raw --expr 'builtins.currentSystem')
 	mapfile -t packages < <(
-		nix eval .#packages.x86_64-linux --apply 'builtins.attrNames' --json 2>/dev/null |
+		nix eval ".#packages.${system}" --apply 'builtins.attrNames' --json 2>/dev/null |
 			jq -r '.[]' |
 			grep -vE "^(instructions-|docs)"
 	)
