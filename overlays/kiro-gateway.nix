@@ -12,7 +12,6 @@
 }: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
-    config.allowUnfree = true;
   };
   python = ourPkgs.python314;
   pythonEnv = python.withPackages (ps:

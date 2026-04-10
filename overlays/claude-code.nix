@@ -3,30 +3,16 @@
 # hashes tracked in the sidecar (not hardcoded).
 #
 # nixpkgs' postPatch copies its own lockfile into src. We must override
-# postPatch to use our lockfile so npmDepsHash stays consistent.
+# postPatch to use OUR lockfile (locks/claude-code-package-lock.json) because
+# when our version is newer than nixpkgs' version, the upstream lockfile in
+# nixpkgs' source won't satisfy the newer package.json.
 #
-# This package also wraps `bin/claude` with a Bun-runtime wrapper that
-# prefers a writable cli.js at $XDG_STATE_HOME/claude-code-buddy/lib/cli.js
-# (used by the buddy HM module) and falls back to the store cli.js
-# otherwise. The wrapper is harmless when no buddy is configured —
-# claude-code just runs the store cli.js under Bun.
+# Unfree: wrapped by `wrapUnfree` in default.nix so the consumer's
+# allowUnfree config is respected. See overlays/README.md.
 #
-# Why Bun: claude-code's buddy hash uses Bun.hash (wyhash) when Bun is
-# available, otherwise fnv1a. Running under Bun lets the buddy salt
-# search use the simpler wyhash path. Startup overhead is negligible.
-#
-# Buddy user-facing options live in packages/claude-code/lib/mkClaude.nix
-# (inside the factory's `options.buddy` submodule). The actual buddy
-# activation script that consumes `$XDG_STATE_HOME/claude-code-buddy/lib/cli.js`
-# lives in the consumer repo (nixos-config's own modules/claude-code-buddy/
-# HM module) — this overlay just prepares the wrapper that supports it.
-#
-# Instantiates `ourPkgs` from `inputs.nixpkgs` so the base claude-code
-# derivation, buildNpmPackage, fetchzip, bun, writeShellScript,
-# symlinkJoin all route through this repo's pinned nixpkgs instead of
-# the consumer's. `passthru.baseClaudeCode` exposes OUR pinned
-# claude-code so a consumer-side buddy activation script can close over
-# the same store paths CI builds and pushes to cachix.
+# Instantiates `ourPkgs` from `inputs.nixpkgs` for cache-hit parity.
+# `passthru.baseClaudeCode` exposes the pinned derivation so buddy
+# activation scripts can close over the same store paths CI builds.
 # See dev/fragments/overlays/overlay-pattern.md
 {
   inputs,
@@ -80,6 +66,8 @@
     exec ${ourPkgs.bun}/bin/bun run "$CLI" "$@"
   '';
 in
+  # Inner build: ourPkgs for cache-hit parity. wrapUnfree in default.nix
+  # adds the consumer-facing unfree check on top.
   ourPkgs.symlinkJoin {
     inherit (baseClaudeCode) name version;
     paths = [baseClaudeCode];

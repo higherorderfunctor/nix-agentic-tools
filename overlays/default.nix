@@ -21,6 +21,34 @@
   hashes = builtins.fromJSON (builtins.readFile ./hashes.json);
   merge = name: (final.nv-sources.${name} or {}) // (hashes.${name} or {});
 
+  # Unfree guard. Checks if the derivation has an unfree license and
+  # wraps it so the consumer's allowUnfree config is respected. If the
+  # package is free, returns the original derivation unwrapped.
+  #
+  # Why: ourPkgs builds with allowUnfree (internal to the overlay for
+  # cache-hit parity). Without this guard, unfree derivations produced
+  # by ourPkgs would silently bypass the consumer's unfree preference.
+  # The wrapper uses final.symlinkJoin (consumer's nixpkgs) with the
+  # unfree meta.license, triggering the standard check at eval time.
+  # See memory/project_nvfetcher_overlay_pattern.md for rationale.
+  isUnfree = drv: let
+    license = drv.meta.license or {};
+  in
+    if builtins.isList license
+    then builtins.any (l: !(l.free or true)) license
+    else !(license.free or true);
+
+  ensureUnfreeCheck = drv:
+    if isUnfree drv
+    then
+      final.symlinkJoin {
+        inherit (drv) name version;
+        paths = [drv];
+        meta = drv.meta or {};
+        passthru = drv.passthru or {};
+      }
+    else drv;
+
   nv = {
     # AI CLIs
     agnix = merge "agnix";
@@ -159,12 +187,16 @@
       nv = nv.git-revise;
     };
   };
+  # Apply ensureUnfreeCheck to every package at the output level.
+  # No manual per-package wrapping needed — if a package has an unfree
+  # license, it gets the symlinkJoin wrapper automatically.
+  guard = builtins.mapAttrs (_: ensureUnfreeCheck);
 in {
   ai =
-    flatDrvs
+    guard flatDrvs
     // {
-      mcpServers = mcpServerDrvs // {agnix-mcp = agnixMcp;};
-      lspServers = {agnix-lsp = agnixLsp;};
+      mcpServers = guard (mcpServerDrvs // {agnix-mcp = agnixMcp;});
+      lspServers = guard {agnix-lsp = agnixLsp;};
     };
-  gitTools = gitToolDrvs;
+  gitTools = guard gitToolDrvs;
 }

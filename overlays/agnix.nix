@@ -23,7 +23,6 @@
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
     overlays = [inputs.rust-overlay.overlays.default];
-    config.allowUnfree = true;
   };
 
   # agnix requires Rust edition 2024 (>= 1.91)

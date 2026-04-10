@@ -19,8 +19,8 @@
     "npmDepsHash": "sha256-/HN6Ylrow/v7ssWb0oIYJD5cTV8RWH8ipmDtfAUY9zc="
   },
   "github-copilot-cli": {
-    "aarch64-darwin": "sha256-0hvupLiJbzc89Pw5u8DS9MS+1N4LEjkR3nx6U+AN78w=",
-    "x86_64-linux": "sha256-8ZlmXw8lIuTDFf59nl65g+Yg7CvJeyJJ1pGMaARz+bg="
+    "aarch64-darwin": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "x86_64-linux": "sha256-2h40sQXtHPpftSz0MQg98PVW078PLMyPmZ+wwAMxQIE="
   },
   "github-mcp-server": {
     "vendorHash": "sha256-q21hnMnWOzfg7BGDl4KM1I3v0wwS5sSxzLA++L6jO4s="

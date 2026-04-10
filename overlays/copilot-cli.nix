@@ -1,11 +1,8 @@
 # GitHub Copilot CLI — pre-built binary from GitHub releases.
 # Platform-specific tarballs: copilot-{linux-x64,darwin-arm64}.tar.gz
 #
-# Instantiates `ourPkgs` from `inputs.nixpkgs` so the base derivation
-# (github-copilot-cli) and every build input (fetchurl) route through
-# this repo's pinned nixpkgs instead of the consumer's. This is what
-# gives the store path cache-hit parity against CI's standalone build
-# — see dev/fragments/overlays/overlay-pattern.md
+# Unfree (proprietary). ensureUnfreeCheck in default.nix wraps the
+# output so the consumer's allowUnfree config is respected.
 {
   inputs,
   final,

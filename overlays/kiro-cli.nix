@@ -2,11 +2,8 @@
 # x86_64-linux: tarball from nvfetcher (kiro-cli)
 # aarch64-darwin: .dmg from nvfetcher (kiro-cli-darwin), extracted by nixpkgs undmg
 #
-# Instantiates `ourPkgs` from `inputs.nixpkgs` so the base derivation
-# (kiro-cli) and every build input (makeWrapper) route through this
-# repo's pinned nixpkgs instead of the consumer's. This is what gives
-# the store path cache-hit parity against CI's standalone build —
-# see dev/fragments/overlays/overlay-pattern.md
+# Unfree: wrapped by `wrapUnfree` in default.nix so the consumer's
+# allowUnfree config is respected. See overlays/README.md.
 {
   inputs,
   final,
@@ -27,6 +24,8 @@
     else throw "kiro-cli: unsupported system ${system}";
   inherit (nv) version;
 in
+  # Inner build: ourPkgs for cache-hit parity. wrapUnfree in default.nix
+  # adds the consumer-facing unfree check on top.
   ourPkgs.kiro-cli.overrideAttrs (attrs: {
     inherit src version;
 

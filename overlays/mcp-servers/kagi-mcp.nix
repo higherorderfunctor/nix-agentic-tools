@@ -18,7 +18,6 @@
 }: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
-    config.allowUnfree = true;
   };
   inherit (ourPkgs) python314Packages;
   nv_kagiapi = final.nv-sources.kagiapi;

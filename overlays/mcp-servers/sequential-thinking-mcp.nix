@@ -15,7 +15,6 @@
 }: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
-    config.allowUnfree = true;
   };
   inherit (ourPkgs) buildNpmPackage makeWrapper nodejs;
 in

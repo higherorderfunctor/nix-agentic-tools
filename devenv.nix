@@ -16,10 +16,20 @@
       inherit (final) fetchurl fetchgit fetchFromGitHub dockerTools;
     };
   };
-  aiPkgs = pkgs.extend (lib.composeManyExtensions [
-    nvSourcesOverlay
-    (import ./overlays {inherit inputs;})
-  ]);
+  # Unfree predicate for this repo's devenv only. The overlay's
+  # ensureUnfreeCheck guard wraps unfree packages so consumers must
+  # opt in. Here we allow the 3 unfree packages for development.
+  # Note: nixpkgs `copilot-cli` is AWS Copilot (free, Apache-2.0).
+  # Our package is `github-copilot-cli` (GitHub Copilot, unfree).
+  aiPkgs =
+    (import inputs.nixpkgs {
+      inherit (pkgs.stdenv.hostPlatform) system;
+      config.allowUnfreePredicate = pkg:
+        builtins.elem (pkg.pname or "") ["claude-code" "github-copilot-cli" "kiro-cli"];
+    }).extend (lib.composeManyExtensions [
+      nvSourcesOverlay
+      (import ./overlays {inherit inputs;})
+    ]);
   inherit (aiPkgs.ai) agnix;
   agnixMcp = aiPkgs.ai.mcpServers.agnix-mcp;
 
