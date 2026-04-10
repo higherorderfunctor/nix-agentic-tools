@@ -38,6 +38,15 @@ Backup branches (DO NOT GC):
 
 High confidence, small scope. Good for review sessions.
 
+- [ ] **Review devenv overlay wiring** — devenv.nix currently does
+      hacky inline overlay composition (`aiPkgs = (import
+      inputs.nixpkgs {...}).extend (lib.composeManyExtensions [...])`
+      + `contentPkgs = pkgs.extend (import ./packages/stacked-workflows/overlay.nix {})`).
+      Explore whether devenv supports overlays natively (similar
+      to NixOS `nixpkgs.overlays`) so we can drop the manual
+      composition. May simplify the `wrapFactory` lib/pkgs injection
+      pattern too.
+
 - [x] **Move `lib/hm-helpers.nix` + `lib/ai-common.nix` into `lib/ai/`**
 - [x] **Group overlay packages under `pkgs.ai.{mcpServers,lspServers}`
       + `pkgs.gitTools`**
