@@ -1,5 +1,7 @@
 <!-- TODO: remove this file before merging to main -->
 
+NEXT - knock out AI script
+
 effect-ts
 switch to github and to build with pnpm
 
