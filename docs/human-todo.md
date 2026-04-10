@@ -10,7 +10,7 @@ ME: test in nixos-config
 - Update overlays/README.md table to reflect all the source changes made tonight
 - Document the unfree guard pattern as an architecture fragment
 
------------------
+---
 
 Some other moves if possible (will have to update scripts most likely to find these files or other config files).
 
@@ -31,7 +31,7 @@ overlays/
     locks/\*.json # may be removed but we aren't redoing locks anymore so may be gone
 ```
 
------------------
+---
 
 Are we (and this may be tricky) able to warn if someone overrides
 this flakes input nixpkgs or any other inputs, and, if possible check if cachix is set, then

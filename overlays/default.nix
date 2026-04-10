@@ -37,6 +37,10 @@
     pnpmDepsHash = dummyHash;
     srcHash = dummyHash;
     vendorHash = dummyHash;
+    # Platform-specific hashes for pre-built binaries (copilot-cli, kiro-cli).
+    # Overlays read nv.${system} for per-platform fetchurl hashes.
+    "x86_64-linux" = dummyHash;
+    "aarch64-darwin" = dummyHash;
   };
   merge = name: hashDefaults // nvSrc name // (hashes.${name} or {});
 
@@ -171,11 +175,11 @@
         nv = nv.openmemory-mcp;
       };
       serena-mcp = import ./mcp-servers/serena-mcp.nix {inherit inputs final;};
-    sympy-mcp = import ./mcp-servers/sympy-mcp.nix {
-      inherit inputs final;
-      nv = nv.sympy-mcp;
+      sympy-mcp = import ./mcp-servers/sympy-mcp.nix {
+        inherit inputs final;
+        nv = nv.sympy-mcp;
+      };
     };
-  };
 
   # ── agnix multi-binary overrides ────────────────────────────────────
   # agnix builds three binaries (agnix, agnix-lsp, agnix-mcp) from one

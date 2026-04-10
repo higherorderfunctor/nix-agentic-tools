@@ -3,21 +3,23 @@
     "cargoHash": "sha256-wlKyY26kryzhoARuh/FY7+NF3dfip4NiZOK8MtDDveI="
   },
   "claude-code": {
-    "npmDepsHash": "sha256-5LvH7fG5pti2SiXHQqgRxfFpxaXxzrmGxIoPR4dGE+8=",
-    "srcHash": "sha256-7/Rhk1z3Us2vOYGa85lkVIzzqdQFmfmAxrT39a7D27Y="
+    "srcHash": "sha256-7/Rhk1z3Us2vOYGa85lkVIzzqdQFmfmAxrT39a7D27Y=",
+    "npmDepsHash": "sha256-5LvH7fG5pti2SiXHQqgRxfFpxaXxzrmGxIoPR4dGE+8="
   },
   "context7-mcp": {
     "pnpmDepsHash": "sha256-8RRHfCTZVC91T1Qx+ACCo2oG4ZwMNy5WYakCjmBhe3Q="
   },
   "copilot-cli": {
-    "aarch64-darwin": "sha256-uIuUUmwxWe9yt/4Eh9h2OXVwb5+QfWeWe0XvXVIBpu4=",
     "x86_64-linux": "sha256-2h40sQXtHPpftSz0MQg98PVW078PLMyPmZ+wwAMxQIE="
+  },
+  "filesystem-mcp": {
+    "npmDepsHash": "sha256-Xt+ILpA6Pj2SKngv1zM5G/1L42pLTjMcciT0XZyQK9M="
   },
   "git-absorb": {
     "cargoHash": "sha256-8uCXk5bXn/x4QXbGOROGlWYMSqIv+/7dBGZKbYkLfF4="
   },
   "git-branchless": {
-    "cargoHash": "sha256-i7KpTd4fX3PrhDjj3R9u98rdI0uHkpQCxSmEF+Gu7yk="
+    "cargoHash": "sha256-vLm/RuOc7K0YRvFvrA356OmcmLYzdpBjETsSCn+KyT4="
   },
   "git-intel-mcp": {
     "npmDepsHash": "sha256-/HN6Ylrow/v7ssWb0oIYJD5cTV8RWH8ipmDtfAUY9zc="
@@ -26,18 +28,15 @@
     "vendorHash": "sha256-q21hnMnWOzfg7BGDl4KM1I3v0wwS5sSxzLA++L6jO4s="
   },
   "mcp-language-server": {
-    "vendorHash": "sha256-niDJB3QhZjz9qIGSjUEcghRpEbPUgsSuK52ncZ21DS8="
+    "vendorHash": "sha256-5YUI1IujtJJBfxsT9KZVVFVib1cK/Alk73y5tqxi6pQ="
+  },
+  "memory-mcp": {
+    "npmDepsHash": "sha256-x7Kvc+bu+u+Vok3ZCpS3uE9ht5pHLUR5SrEmxJ3L2eU="
   },
   "openmemory-mcp": {
     "npmDepsHash": "sha256-jHs7NOn85SFoEeqcTxxftKyf/3dG1OWgOmrMHEdfnGM="
   },
   "sequential-thinking-mcp": {
     "npmDepsHash": "sha256-CnPjLNC893jVRYWNJzm14jaJx8/U1oDftyFSrpvkDZQ="
-  },
-  "filesystem-mcp": {
-    "npmDepsHash": "sha256-Xt+ILpA6Pj2SKngv1zM5G/1L42pLTjMcciT0XZyQK9M="
-  },
-  "memory-mcp": {
-    "npmDepsHash": "sha256-x7Kvc+bu+u+Vok3ZCpS3uE9ht5pHLUR5SrEmxJ3L2eU="
   }
 }

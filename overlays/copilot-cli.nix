@@ -23,9 +23,7 @@
     or (throw "copilot-cli: unsupported system ${system}");
   src = ourPkgs.fetchurl {
     url = "https://github.com/github/copilot-cli/releases/download/v${nv.version}/copilot-${suffix}.tar.gz";
-    hash =
-      nv.${system}
-      or (throw "copilot-cli: no hash for ${system}");
+    hash = nv.${system};
   };
 in
   ourPkgs.github-copilot-cli.overrideAttrs (_: {
