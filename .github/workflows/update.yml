@@ -28,22 +28,27 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
-      - name: Install devenv
-        run: nix profile install nixpkgs#devenv
+      # Run directly — no devenv shell eval needed for phase 1.
+      # Saves 7+ min of module system eval overhead.
+      - name: Install tools
+        run: nix profile add nixpkgs#devenv nixpkgs#nvfetcher nixpkgs#nodejs
       - name: Update flake inputs
-        run: devenv tasks run update:flake
+        run: nix flake update
       - name: Update devenv lock
-        run: devenv tasks run update:devenv
+        run: devenv update
       - name: Update nvfetcher sources
-        run: devenv tasks run update:sources
+        run: nvfetcher -o .nvfetcher
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Regenerate npm lockfiles
+        run: bash dev/scripts/update-locks.sh
       - name: Upload updated sources
         uses: actions/upload-artifact@v4
         with:
           name: updated-sources
           path: |
             .nvfetcher/
+            overlays/locks/
             flake.lock
             devenv.lock
 
@@ -73,7 +78,7 @@ jobs:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Install devenv
-        run: nix profile install nixpkgs#devenv
+        run: nix profile add nixpkgs#devenv
       - name: Compute dep hashes
         run: devenv tasks run update:hashes
       - name: Upload hashes

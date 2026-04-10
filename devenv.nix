@@ -236,9 +236,14 @@ in {
         description = "Update package sources (nvfetcher)";
         exec = ''nvfetcher -o .nvfetcher'';
       };
+      "update:locks" = {
+        description = "Regenerate npm lockfiles from updated sources";
+        after = ["update:sources"];
+        exec = ''bash dev/scripts/update-locks.sh'';
+      };
       "update:hashes" = {
         description = "Auto-discover and compute dep hashes";
-        after = ["update:sources"];
+        after = ["update:locks"];
         exec = ''bash dev/scripts/update-hashes.sh'';
       };
       "update:all" = {

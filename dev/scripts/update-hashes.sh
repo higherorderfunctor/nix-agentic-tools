@@ -14,6 +14,12 @@ shopt -s inherit_errexit 2>/dev/null || :
 
 HASHES_FILE="overlays/hashes.json"
 
+# Start fresh — hashes.json is pure output, rebuilt from scratch.
+# Stale entries from removed packages are automatically cleaned.
+if [ $# -eq 0 ]; then
+	echo '{}' >"$HASHES_FILE"
+fi
+
 # Dep attribute → hashes.json field name mapping
 declare -A DEP_ATTRS=(
 	[pnpmDeps]=pnpmDepsHash

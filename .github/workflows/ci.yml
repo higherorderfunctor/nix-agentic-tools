@@ -44,7 +44,7 @@ jobs:
         run: nix flake check --no-build
 
       - name: Install nix-fast-build
-        run: nix profile install nixpkgs#nix-fast-build
+        run: nix profile add nixpkgs#nix-fast-build
 
       - name: Build all packages
         run: |
@@ -69,7 +69,7 @@ jobs:
           name: nix-agentic-tools
 
       - name: Install devenv
-        run: nix profile install nixpkgs#devenv
+        run: nix profile add nixpkgs#devenv
 
       - name: Run devenv test
         run: devenv test

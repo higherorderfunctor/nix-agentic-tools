@@ -77,6 +77,7 @@ libgit
 lifecycles
 llms
 lockdown
+lockfiles
 markdownify
 mdbook
 mergetool
