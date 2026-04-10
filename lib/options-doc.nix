@@ -252,11 +252,8 @@
   };
 
   # ── Devenv options doc ──────────────────────────────────────────────
-  # Post-factory-rollout, devenvModules.nix-agentic-tools is the
-  # merged devenv module output (factory-built). The legacy
-  # self.devenvModules.{ai,claude-code-skills,copilot,kiro} are kept
-  # in modules/devenv/ for pre-factory consumers but don't need to
-  # be enumerated here.
+  # devenvModules.nix-agentic-tools is the merged devenv module
+  # output (factory-built from packages/*/modules/devenv).
   devenvEval = lib.evalModules {
     specialArgs = {
       lib = libWithAi;

@@ -162,7 +162,7 @@
           };
         };
         # `gitConfig` / `gitConfigFull` defer to Chunk 8 (depends on
-        # modules/stacked-workflows/git-config*.nix).
+        # packages/stacked-workflows/modules/homeManager/git-config*.nix).
       };
     in
       lib.recursiveUpdate baseLib packageLibContributions;
@@ -289,7 +289,7 @@
           $out/contributing/architecture/claude-code-wrapper.md
         cp ${./packages/claude-code/docs/buddy-activation.md} \
           $out/contributing/architecture/buddy-activation.md
-        cp ${./modules/ai/fragments/dev/ai-module-fanout.md} \
+        cp ${./dev/fragments/ai-module/ai-module-fanout.md} \
           $out/contributing/architecture/ai-module-fanout.md
       '';
 

@@ -29,11 +29,10 @@
   #   - An attrset { location, name, dir ? pkg } for co-located fragments:
   #     - location = "dev" (default): ./fragments/<dir>/<name>.md
   #     - location = "package": ../packages/<dir>/docs/<name>.md
-  #     - location = "module":  ../modules/<dir>/fragments/dev/<name>.md
   #     - location = "devshell": ../devshell/<dir>/docs/<name>.md
   #     The `dir` field defaults to `pkg` (the devFragmentNames key) but can
   #     be set explicitly when the category name differs from the directory
-  #     name (e.g., category "ai-module" pointing at modules/ai/).
+  #     name.
   #
   #     Post-factory rollout, "package" location now reads from
   #     packages/<name>/docs/ (the Bazel-style per-package docs dir)
@@ -57,11 +56,9 @@
       then ./fragments + "/${dir}/${name}.md"
       else if location == "package"
       then ../packages + "/${dir}/docs/${name}.md"
-      else if location == "module"
-      then ../modules + "/${dir}/fragments/dev/${name}.md"
       else if location == "devshell"
       then ../devshell + "/${dir}/docs/${name}.md"
-      else throw "mkDevFragment: unknown location '${location}' (expected dev|package|module|devshell)";
+      else throw "mkDevFragment: unknown location '${location}' (expected dev|package|devshell)";
   in
     fragments.mkFragment {
       text = builtins.readFile fragmentPath;
@@ -77,38 +74,42 @@
   # null means "always-loaded" (no scoping).
   packagePaths = {
     ai-clis = [
-      "modules/copilot-cli/**"
-      "modules/kiro-cli/**"
       "packages/ai-clis/**"
+      "packages/copilot-cli/**"
+      "packages/kiro-cli/**"
     ];
     # ai-module: fanout semantics and per-CLI enable-as-sole-gate.
-    # Scoped tightly to modules/ai/ because that's where the fanout
-    # logic lives; consumers touching the upstream programs.*-cli
-    # modules don't need this loaded.
-    ai-module = ["modules/ai/**"];
+    # Post-factory, the fanout logic lives in each per-package factory
+    # (packages/*/lib/mk*.nix + packages/*/modules/) and the shared
+    # options barrel (lib/ai/sharedOptions.nix).
+    ai-module = [
+      "lib/ai/sharedOptions.nix"
+      "packages/claude-code/modules/**"
+      "packages/copilot-cli/modules/**"
+      "packages/kiro-cli/modules/**"
+    ];
     # ai-skills: uniform delegation pattern (all branches go through
-    # programs.<cli>.skills, no direct home.file). Scoped to ai
-    # module + the skill helper + ecosystem CLI modules.
+    # programs.<cli>.skills, no direct home.file). Scoped to the
+    # per-package factory modules + the skill helper.
     ai-skills = [
-      "modules/ai/**"
-      "modules/copilot-cli/**"
-      "modules/kiro-cli/**"
       "lib/hm-helpers.nix"
+      "packages/claude-code/modules/**"
+      "packages/copilot-cli/modules/**"
+      "packages/kiro-cli/modules/**"
     ];
     # claude-code: wrapper chain + buddy activation lifecycle.
-    # Spans the claude-code package and the buddy HM module because
-    # the two are tightly coupled (Bun wrapper picks writable cli.js
-    # from buddy state, activation script patches that cli.js).
+    # Spans the claude-code overlay package and the factory-built
+    # module (buddy activation is now in packages/claude-code/).
     claude-code = [
       "packages/ai-clis/claude-code.nix"
       "packages/ai-clis/any-buddy.nix"
-      "modules/claude-code-buddy/**"
+      "packages/claude-code/**"
     ];
     # devenv: devenv files.* internals + skills layout walker. Scoped
-    # to devenv modules and the helper file.
+    # to per-package devenv modules and the helper file.
     devenv = [
-      "modules/devenv/**"
       "lib/hm-helpers.nix"
+      "packages/*/modules/devenv/**"
     ];
     # flake: binary cache config + flake-level settings. Scoped to
     # files that touch nixConfig or cachix settings so consumers
@@ -120,19 +121,12 @@
     ];
     # hm-modules: cross-cutting module conventions. Scoped to every
     # HM module file so conventions load whenever a contributor is
-    # touching any module. Excludes modules/devenv/ because devenv
-    # modules have different conventions (per-project files rather
-    # than home-manager activation).
+    # touching any module. Post-factory, HM modules live in
+    # packages/*/modules/homeManager/.
     hm-modules = [
-      "modules/ai/**"
-      "modules/claude-code-buddy/**"
-      "modules/copilot-cli/**"
-      "modules/kiro-cli/**"
-      "modules/mcp-servers/**"
-      "modules/stacked-workflows/**"
+      "packages/*/modules/homeManager/**"
     ];
     mcp-servers = [
-      "modules/mcp-servers/**"
       "packages/mcp-servers/**"
     ];
     monorepo = null;
@@ -174,13 +168,7 @@
   # ── Dev fragment names per package ───────────────────────────────────
   devFragmentNames = {
     ai-clis = ["packaging-guide"];
-    ai-module = [
-      {
-        location = "module";
-        name = "ai-module-fanout";
-        dir = "ai";
-      }
-    ];
+    ai-module = ["ai-module-fanout"];
     ai-skills = ["skills-fanout-pattern"];
     claude-code = [
       {
@@ -747,7 +735,7 @@
     3. Create `packages/<group>/<name>.nix` using the appropriate builder
     4. Register in `packages/<group>/default.nix`
     5. Export in `flake.nix` under `packages`
-    6. Add a module under `modules/` (HM) and `modules/devenv/` (devenv)
+    6. Add HM and devenv modules in `packages/<name>/modules/`
     7. Run `nix flake check` to verify
 
     See [Change Propagation](AGENTS.md#change-propagation) — when removing

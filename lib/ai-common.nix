@@ -1,12 +1,8 @@
 # Shared content generation logic for AI CLI modules.
 #
 # Consumed by:
-# - modules/ai/default.nix (HM unified AI config)
-# - modules/devenv/ai.nix (devenv unified AI config)
-# - modules/devenv/mcp-common.nix (devenv MCP server transform)
+# - packages/*/lib/mk*.nix (factory-built HM + devenv modules)
 # - lib/hm-helpers.nix (filterNulls re-export)
-# - modules/devenv/copilot.nix (filterNulls via hm-helpers)
-# - modules/devenv/kiro.nix (filterNulls via hm-helpers)
 {lib}: {
   # ── LSP server submodule type ──────────────────────────────────────
   # Typed LSP server definition. The ai.* module holds these; fanout

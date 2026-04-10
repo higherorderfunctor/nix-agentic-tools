@@ -139,8 +139,6 @@ lib.ai.app.mkAiApp {
       mergedInstructions,
       mergedSkills,
     }: let
-      # TODO: Task 9 (A10) deletes lib/hm-helpers.nix and lib/ai-common.nix.
-      # These imports will move to lib/ai/ at that point.
       helpers = import ../../../lib/hm-helpers.nix {inherit lib;};
       aiCommon = import ../../../lib/ai-common.nix {inherit lib;};
 
@@ -299,7 +297,6 @@ lib.ai.app.mkAiApp {
       mergedInstructions,
       mergedSkills,
     }: let
-      # TODO: Task 9 (A10) deletes lib/hm-helpers.nix and lib/ai-common.nix.
       helpers = import ../../../lib/hm-helpers.nix {inherit lib;};
       aiCommon = import ../../../lib/ai-common.nix {inherit lib;};
 

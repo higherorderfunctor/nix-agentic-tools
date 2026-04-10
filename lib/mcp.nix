@@ -13,8 +13,8 @@
 
   # ── Load a server definition by name ───────────────────────────────
   # Loads on demand — no centralized server list needed in lib.
-  # The server list lives in modules/home-manager.nix (for HM) or is
-  # implicit from the caller's attrset keys (for standalone mkStdioConfig).
+  # The server list is implicit from the caller's attrset keys (for
+  # standalone mkStdioConfig) or from the factory-built HM module.
   #
   # Resolve the per-package typed MCP server module. Each MCP package
   # under packages/<name>/ owns its typed settings schema at

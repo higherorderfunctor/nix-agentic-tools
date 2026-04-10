@@ -1,9 +1,11 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-04-07 (commit f2e911c). If you change the
-> gating, the `programs.*.enable` flipping, or the cross-ecosystem
-> data flow in `modules/ai/default.nix` and this fragment isn't
-> updated in the same commit, stop and fix it.
+> **Last verified:** 2026-04-08 (commit pending — A10 delete
+> modules/ tree). If you change the gating, the
+> `programs.*.enable` flipping, or the cross-ecosystem data flow
+> in the per-package factories (`packages/*/lib/mk*.nix`) or
+> shared options (`lib/ai/sharedOptions.nix`) and this fragment
+> isn't updated in the same commit, stop and fix it.
 
 The `ai.*` HM module provides a unified interface that fans out
 shared AI-CLI configuration to each enabled ecosystem (Claude,
@@ -68,8 +70,8 @@ The ai module fans out TWO kinds of configuration:
 - `ai.claude.package` / `ai.copilot.package` / `ai.kiro.package`
   — package override, fans out to `programs.<cli>.package`
 - `ai.claude.buddy` — fans out to `programs.claude-code.buddy`
-  (which is declared by `modules/claude-code-buddy/`, a separate
-  HM module that must also be imported)
+  (which is declared by the claude-code factory in
+  `packages/claude-code/modules/homeManager/`)
 
 **Cross-ecosystem options** (live at `ai.*` top level, fan out
 to every enabled ecosystem simultaneously):
@@ -121,8 +123,8 @@ Plus buddy-specific assertions (gated on
 ### What's NOT in the ai module
 
 - The actual `programs.claude-code.buddy` OPTION — declared by
-  `modules/claude-code-buddy/default.nix`. The ai module just
-  fans VALUES into it.
+  `packages/claude-code/modules/homeManager/`. The ai module
+  just fans VALUES into it.
 - The package wrapping (Bun runtime) for claude-code — handled
   in `packages/ai-clis/claude-code.nix` at overlay level.
 - MCP server config — ai has no `mcpServers` option. Consumers
@@ -138,9 +140,8 @@ ongoing work to expose more `programs.claude-code.*` options via
 
 ### Config parity
 
-Every option on the HM `ai` module (`modules/ai/default.nix`)
-must have a matching option on the devenv `ai` module
-(`modules/devenv/ai.nix`) with the same semantics. If you add
+Every option on the HM ai module must have a matching option on
+the devenv ai module with the same semantics. If you add
 an option to one, add it to the other in the same commit.
 This is enforced by convention, not by the module system.
 
