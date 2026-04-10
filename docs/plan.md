@@ -94,6 +94,16 @@ High confidence, small scope. Good for review sessions.
         (see `memory/project_factory_architecture.md`)
       - Claude delegation model: upstream programs.claude-code.* for
         HM capabilities, direct writes for gaps
+      - Flake-first source preference: if upstream repo has a nix flake
+        that outputs the package (not just devShell), add it as a flake
+        input (NOT nvfetcher) and consume
+        `inputs.<name>.packages.${system}.default`. Let upstream own
+        their build. nvfetcher is for packages without flakes or where
+        we override nixpkgs.
+      - Build tool must match source: if source has pnpm-lock.yaml,
+        build with pnpm (not npm). If source has Cargo.lock, build
+        with cargo. Don't force a different tool than what upstream
+        uses.
 
 - [ ] **Update script: automated dep hash computation** — the update
       pipeline should compute pnpmDepsHash / vendorHash / npmDepsHash
