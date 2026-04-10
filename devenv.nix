@@ -88,6 +88,8 @@ in {
     ++ [
       # Overlay packages (built from repo sources, not in devenv's pkgs)
       agnix
+      # Flake input — latest from upstream
+      inputs.nix-fast-build.packages.${pkgs.stdenv.hostPlatform.system}.default
     ];
 
   # ── Unified AI Config ─────────────────────────────────────────────────
