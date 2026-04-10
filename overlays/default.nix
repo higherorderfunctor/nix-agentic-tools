@@ -19,7 +19,26 @@
 # needs — claude-code needs lockFile, kiro-cli needs nv-darwin, etc.
 {inputs, ...}: final: prev: let
   hashes = builtins.fromJSON (builtins.readFile ./hashes.json);
-  merge = name: (final.nv-sources.${name} or {}) // (hashes.${name} or {});
+  # Dummy hash for auto-discovery: overlay defaults missing hashes to
+  # this value. The update:hashes task builds each package, captures
+  # "got:" from the hash mismatch, and writes the real hash to hashes.json.
+  dummyHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+
+  # hashes.json is keyed by PACKAGE name (flake output name).
+  # nvfetcher sources are keyed by nvfetcher name (may differ).
+  # `merge` handles the common case (same key); inline for exceptions.
+  # Every dep hash field defaults to dummyHash so overlays can use
+  # `inherit (nv) cargoHash;` without failing when hashes.json doesn't
+  # have the entry yet. The update:hashes task auto-discovers and fills.
+  nvSrc = name: final.nv-sources.${name} or {};
+  hashDefaults = {
+    cargoHash = dummyHash;
+    npmDepsHash = dummyHash;
+    pnpmDepsHash = dummyHash;
+    srcHash = dummyHash;
+    vendorHash = dummyHash;
+  };
+  merge = name: hashDefaults // nvSrc name // (hashes.${name} or {});
 
   # Unfree guard. Checks if the derivation has an unfree license and
   # wraps it so the consumer's allowUnfree config is respected. If the
@@ -54,7 +73,7 @@
     agnix = merge "agnix";
     any-buddy = merge "any-buddy";
     claude-code = merge "claude-code";
-    copilot-cli = merge "github-copilot-cli"; # nvfetcher key
+    copilot-cli = hashDefaults // nvSrc "github-copilot-cli" // (hashes."copilot-cli" or {});
     kiro-cli = merge "kiro-cli";
     kiro-cli-darwin = merge "kiro-cli-darwin";
     kiro-gateway = merge "kiro-gateway";
@@ -68,8 +87,8 @@
     context7-mcp = merge "context7-mcp";
     effect-mcp = merge "effect-mcp";
     git-intel-mcp = merge "git-intel-mcp";
-    github-mcp = merge "github-mcp-server"; # nvfetcher key
-    kagi-mcp = merge "kagimcp"; # nvfetcher key
+    github-mcp = hashDefaults // nvSrc "github-mcp-server" // (hashes."github-mcp" or {});
+    kagi-mcp = hashDefaults // nvSrc "kagimcp" // (hashes."kagi-mcp" or {});
     mcp-language-server = merge "mcp-language-server";
     mcp-proxy = merge "mcp-proxy";
     # modelcontextprotocol/servers mono-repo — shared source, per-package version

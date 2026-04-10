@@ -9,6 +9,10 @@
   "context7-mcp": {
     "pnpmDepsHash": "sha256-8RRHfCTZVC91T1Qx+ACCo2oG4ZwMNy5WYakCjmBhe3Q="
   },
+  "copilot-cli": {
+    "aarch64-darwin": "sha256-uIuUUmwxWe9yt/4Eh9h2OXVwb5+QfWeWe0XvXVIBpu4=",
+    "x86_64-linux": "sha256-2h40sQXtHPpftSz0MQg98PVW078PLMyPmZ+wwAMxQIE="
+  },
   "git-absorb": {
     "cargoHash": "sha256-8uCXk5bXn/x4QXbGOROGlWYMSqIv+/7dBGZKbYkLfF4="
   },
@@ -18,11 +22,7 @@
   "git-intel-mcp": {
     "npmDepsHash": "sha256-/HN6Ylrow/v7ssWb0oIYJD5cTV8RWH8ipmDtfAUY9zc="
   },
-  "github-copilot-cli": {
-    "aarch64-darwin": "sha256-uIuUUmwxWe9yt/4Eh9h2OXVwb5+QfWeWe0XvXVIBpu4=",
-    "x86_64-linux": "sha256-2h40sQXtHPpftSz0MQg98PVW078PLMyPmZ+wwAMxQIE="
-  },
-  "github-mcp-server": {
+  "github-mcp": {
     "vendorHash": "sha256-q21hnMnWOzfg7BGDl4KM1I3v0wwS5sSxzLA++L6jO4s="
   },
   "mcp-language-server": {

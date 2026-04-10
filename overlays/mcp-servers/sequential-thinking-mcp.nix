@@ -21,7 +21,7 @@ in
     inherit (nv) src;
     sourceRoot = "source/src/sequentialthinking";
     postPatch = "cp ${../locks/sequential-thinking-mcp-package-lock.json} package-lock.json";
-    npmDepsHash = nv.npmDepsHash or (builtins.fromJSON (builtins.readFile ../hashes.json)).sequential-thinking-mcp.npmDepsHash or "";
+    inherit (nv) npmDepsHash;
     dontNpmBuild = true;
     nativeBuildInputs = [makeWrapper];
     installPhase = ''

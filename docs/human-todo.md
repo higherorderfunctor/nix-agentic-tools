@@ -1,4 +1,19 @@
 <!-- TODO: remove this file before merging to main -->
+● Here's what's left:
+
+  Only 1 package still on npm (justified):
+
+- openmemory-mcp — no GitHub releases, no tags. npm is the only versioned source.
+
+  Everything else is on GitHub source or flake input. The full overlay source audit is complete.
+
+  Remaining backlog items (non-overlay):
+
+- Update overlays/README.md table to reflect all the source changes made tonight
+- Document the unfree guard pattern as an architecture fragment
+- Update script automation for dep hash computation
+
+  Want me to update the README table now, or save it for next session?
 
 NEXT - knock out AI script
 

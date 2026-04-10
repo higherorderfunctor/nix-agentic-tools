@@ -305,10 +305,35 @@ in {
     updateTasks
     // generateTasks
     // {
-      # Meta task: runs entire update pipeline
+      # ── Update pipeline tasks ──────────────────────────────────────
+      "update:flake" = {
+        description = "Update flake.lock (nix flake update)";
+        exec = ''
+          nix flake update
+        '';
+      };
+      "update:devenv" = {
+        description = "Update devenv.lock";
+        exec = ''
+          devenv update
+        '';
+      };
+      "update:sources" = {
+        description = "Update package sources (nvfetcher)";
+        exec = ''
+          nvfetcher -o .nvfetcher
+        '';
+      };
+      "update:hashes" = {
+        description = "Auto-discover and compute dep hashes for overlay packages";
+        after = ["update:sources"];
+        exec = ''
+          bash dev/scripts/update-hashes.sh
+        '';
+      };
       "update:all" = {
-        description = "Run full update pipeline";
-        after = ["update:verify"];
+        description = "Run full update pipeline (flake → devenv → sources → hashes)";
+        after = ["update:flake" "update:devenv" "update:hashes"];
         exec = ''
           echo "Update pipeline complete"
         '';
