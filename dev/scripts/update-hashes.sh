@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Auto-discover and compute dep hashes for overlay packages.
 #
-# Walks all flake packages. If a build fails with a hash mismatch
-# ("got: sha256-..."), captures the correct hash and writes it to
-# overlays/hashes.json. No hardcoded package list — new packages
-# are discovered automatically via the hashDefaults dummy pattern.
+# Probes each flake package for dep derivation attributes (.pnpmDeps,
+# .goModules, .cargoDeps) and builds them to discover the correct hash.
+# No hardcoded package list. hashes.json is pure OUTPUT — never read
+# for discovery. The overlay's hashDefaults provide dummies for missing
+# entries, so new packages are discovered automatically.
 #
 # Usage: dev/scripts/update-hashes.sh [package ...]
 #   No args → all packages. With args → only those packages.
@@ -12,13 +13,19 @@ set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 
 HASHES_FILE="overlays/hashes.json"
-DUMMY_HASH="sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+
+# Dep attribute → hashes.json field name mapping
+# Order matters: try specific dep attrs first, fall back to full build
+declare -A DEP_ATTRS=(
+	[pnpmDeps]=pnpmDepsHash
+	[goModules]=vendorHash
+	[cargoDeps]=cargoHash
+)
 
 # Get package list
 if [ $# -gt 0 ]; then
 	packages=("$@")
 else
-	# All flake packages except non-buildable derivations (docs, instructions)
 	mapfile -t packages < <(
 		nix eval .#packages.x86_64-linux --apply 'builtins.attrNames' --json 2>/dev/null |
 			jq -r '.[]' |
@@ -26,86 +33,93 @@ else
 	)
 fi
 
-echo "Checking ${#packages[@]} packages for hash mismatches..."
+echo "Checking ${#packages[@]} packages for dep hashes..."
 
 updated=0
 for pkg in "${packages[@]}"; do
-	# Try building. Capture stderr for hash mismatch detection.
-	output=$(nix build ".#${pkg}" --no-link 2>&1) && continue
+	found_dep=false
 
-	# Check for hash mismatch
-	got_hash=$(echo "$output" | grep "got:" | head -1 | awk '{print $2}')
-	if [ -z "$got_hash" ]; then
-		echo "FAIL: $pkg (not a hash mismatch)"
-		echo "$output" | tail -5
-		continue
-	fi
+	# Probe for known dep derivation attributes
+	for dep_attr in "${!DEP_ATTRS[@]}"; do
+		hash_field="${DEP_ATTRS[$dep_attr]}"
 
-	# Determine which hash field by checking the derivation name in the error.
-	# The "hash mismatch" line has the specific deps drv name.
-	drv_name=$(echo "$output" | grep "hash mismatch" | head -1 | sed -e "s/.*\/nix\/store\/[a-z0-9]*-//" -e "s/\.drv.*//" -e "s/'//g")
-
-	hash_field=""
-	if echo "$drv_name" | grep -qi "pnpm-deps"; then
-		hash_field="pnpmDepsHash"
-	elif echo "$drv_name" | grep -qi "vendor\|go-modules"; then
-		hash_field="vendorHash"
-	elif echo "$drv_name" | grep -qi "npm-deps"; then
-		hash_field="npmDepsHash"
-	elif echo "$drv_name" | grep -qi "cargo-deps\|crate"; then
-		hash_field="cargoHash"
-	else
-		# Could be srcHash or a platform-specific hash — try to detect
-		specified=$(echo "$output" | grep "specified:" | head -1 | awk '{print $2}')
-		if [ "$specified" = "$DUMMY_HASH" ]; then
-			# It's using our dummy — but we can't determine the field name
-			# from the drv name alone. Fall back to checking which field in
-			# hashes.json has the dummy for this package.
-			for field in srcHash pnpmDepsHash vendorHash npmDepsHash cargoHash; do
-				current=$(jq -r ".\"${pkg}\".\"${field}\" // empty" "$HASHES_FILE" 2>/dev/null)
-				if [ "$current" = "$DUMMY_HASH" ] || [ -z "$current" ]; then
-					hash_field="$field"
-					break
-				fi
-			done
-		fi
-		if [ -z "$hash_field" ]; then
-			echo "UNKNOWN: $pkg → got $got_hash (drv: $drv_name)"
-			echo "  Cannot determine hash field. Add manually to $HASHES_FILE"
+		# Check if the attribute exists on the package
+		if ! nix eval ".#${pkg}.${dep_attr}" --apply 'x: true' >/dev/null 2>&1; then
 			continue
 		fi
-	fi
 
-	echo "UPDATE: $pkg.$hash_field → $got_hash"
+		found_dep=true
 
-	# Write to hashes.json
-	tmp=$(mktemp)
-	jq --arg pkg "$pkg" --arg field "$hash_field" --arg hash "$got_hash" \
-		'.[$pkg][$field] = $hash' "$HASHES_FILE" >"$tmp"
-	mv "$tmp" "$HASHES_FILE"
+		# Build just the dep derivation (fast — no compilation)
+		output=$(nix build ".#${pkg}.${dep_attr}" --no-link 2>&1) && continue
 
-	((updated++)) || true
-
-	# Rebuild to check if there's a second hash needed (e.g., srcHash then npmDepsHash)
-	output2=$(nix build ".#${pkg}" --no-link 2>&1) || true
-	got_hash2=$(echo "$output2" | grep "got:" | head -1 | awk '{print $2}')
-	if [ -n "$got_hash2" ] && [ "$got_hash2" != "$got_hash" ]; then
-		drv_name2=$(echo "$output2" | grep "hash mismatch" | head -1 | sed -e "s/.*\/nix\/store\/[a-z0-9]*-//" -e "s/\.drv.*//" -e "s/'//g")
-		hash_field2=""
-		if echo "$drv_name2" | grep -qi "npm-deps"; then
-			hash_field2="npmDepsHash"
-		elif echo "$drv_name2" | grep -qi "pnpm-deps"; then
-			hash_field2="pnpmDepsHash"
-		elif echo "$drv_name2" | grep -qi "vendor\|go-modules"; then
-			hash_field2="vendorHash"
+		got_hash=$(echo "$output" | grep "got:" | head -1 | awk '{print $2}')
+		if [ -z "$got_hash" ]; then
+			echo "FAIL: $pkg.$dep_attr (build error, not hash mismatch)"
+			echo "$output" | tail -3
+			continue
 		fi
-		if [ -n "$hash_field2" ]; then
-			echo "UPDATE: $pkg.$hash_field2 → $got_hash2"
-			tmp=$(mktemp)
-			jq --arg pkg "$pkg" --arg field "$hash_field2" --arg hash "$got_hash2" \
-				'.[$pkg][$field] = $hash' "$HASHES_FILE" >"$tmp"
-			mv "$tmp" "$HASHES_FILE"
-			((updated++)) || true
+
+		echo "UPDATE: $pkg.$hash_field → $got_hash"
+		tmp=$(mktemp)
+		jq --arg pkg "$pkg" --arg field "$hash_field" --arg hash "$got_hash" \
+			'.[$pkg][$field] = $hash' "$HASHES_FILE" >"$tmp"
+		mv "$tmp" "$HASHES_FILE"
+		((updated++)) || true
+	done
+
+	# For npm packages: no standalone dep attr — buildNpmPackage embeds
+	# the FOD internally. Fall back to full build to catch npmDepsHash.
+	if ! $found_dep; then
+		output=$(nix build ".#${pkg}" --no-link 2>&1) && continue
+
+		got_hash=$(echo "$output" | grep "got:" | head -1 | awk '{print $2}')
+		if [ -z "$got_hash" ]; then
+			# Not a hash mismatch — some other build error or no hash needed
+			continue
+		fi
+
+		# Detect hash field from the failing derivation name
+		drv_name=$(echo "$output" | grep "hash mismatch" | head -1 |
+			sed -e "s/.*\/nix\/store\/[a-z0-9]*-//" -e "s/\.drv.*//" -e "s/'//g")
+
+		hash_field=""
+		if echo "$drv_name" | grep -qi "npm-deps"; then
+			hash_field="npmDepsHash"
+		elif echo "$drv_name" | grep -qi "pnpm-deps"; then
+			hash_field="pnpmDepsHash"
+		elif echo "$drv_name" | grep -qi "vendor\|go-modules"; then
+			hash_field="vendorHash"
+		elif echo "$drv_name" | grep -qi "cargo"; then
+			hash_field="cargoHash"
+		else
+			hash_field="srcHash"
+		fi
+
+		echo "UPDATE: $pkg.$hash_field → $got_hash"
+		tmp=$(mktemp)
+		jq --arg pkg "$pkg" --arg field "$hash_field" --arg hash "$got_hash" \
+			'.[$pkg][$field] = $hash' "$HASHES_FILE" >"$tmp"
+		mv "$tmp" "$HASHES_FILE"
+		((updated++)) || true
+
+		# Check for a second hash (e.g., srcHash then npmDepsHash)
+		output2=$(nix build ".#${pkg}" --no-link 2>&1) || true
+		got_hash2=$(echo "$output2" | grep "got:" | head -1 | awk '{print $2}')
+		if [ -n "$got_hash2" ] && [ "$got_hash2" != "$got_hash" ]; then
+			drv_name2=$(echo "$output2" | grep "hash mismatch" | head -1 |
+				sed -e "s/.*\/nix\/store\/[a-z0-9]*-//" -e "s/\.drv.*//" -e "s/'//g")
+			hash_field2=""
+			if echo "$drv_name2" | grep -qi "npm-deps"; then hash_field2="npmDepsHash"; fi
+			if echo "$drv_name2" | grep -qi "pnpm-deps"; then hash_field2="pnpmDepsHash"; fi
+			if [ -n "$hash_field2" ]; then
+				echo "UPDATE: $pkg.$hash_field2 → $got_hash2"
+				tmp=$(mktemp)
+				jq --arg pkg "$pkg" --arg field "$hash_field2" --arg hash "$got_hash2" \
+					'.[$pkg][$field] = $hash' "$HASHES_FILE" >"$tmp"
+				mv "$tmp" "$HASHES_FILE"
+				((updated++)) || true
+			fi
 		fi
 	fi
 done
