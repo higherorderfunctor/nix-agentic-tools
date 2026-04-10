@@ -442,18 +442,11 @@
     # Primary dev workflow is `devenv shell` / `devenv test` via
     # devenv.nix; these outputs preserve flake UX for users who
     # prefer plain Nix CLI.
+    # Primary dev shell is devenv (devenv.nix). This only provides
+    # the lightweight CI shell for the update pipeline.
     devShells = forAllSystems (system: let
       pkgs = pkgsFor system;
     in {
-      default = pkgs.mkShell {
-        name = "nix-agentic-tools";
-        packages = with pkgs; [
-          alejandra
-          treefmt
-        ];
-      };
-      # Lightweight CI shell for the update pipeline (phase 1).
-      # No devenv module eval — just the tools needed for source updates.
       ci = pkgs.mkShell {
         name = "nix-agentic-tools-ci";
         packages = with pkgs; [
