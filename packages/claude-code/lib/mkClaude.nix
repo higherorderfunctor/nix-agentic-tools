@@ -453,7 +453,7 @@ lib.ai.app.mkAiApp {
         # walker mirrors HM `recursive = true` in user space because
         # devenv `files.*.source` cannot recurse a directory itself.
         (let
-          helpers = import ../../../lib/hm-helpers.nix {inherit lib;};
+          helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
         in {
           files = helpers.mkDevenvSkillEntries ".claude" mergedSkills;
         })

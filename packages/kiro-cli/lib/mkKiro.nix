@@ -139,8 +139,8 @@ lib.ai.app.mkAiApp {
       mergedInstructions,
       mergedSkills,
     }: let
-      helpers = import ../../../lib/hm-helpers.nix {inherit lib;};
-      aiCommon = import ../../../lib/ai-common.nix {inherit lib;};
+      helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+      aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
 
       filteredSettings = aiCommon.filterNulls cfg.settings;
 
@@ -297,8 +297,8 @@ lib.ai.app.mkAiApp {
       mergedInstructions,
       mergedSkills,
     }: let
-      helpers = import ../../../lib/hm-helpers.nix {inherit lib;};
-      aiCommon = import ../../../lib/ai-common.nix {inherit lib;};
+      helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+      aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
 
       filteredSettings = aiCommon.filterNulls cfg.settings;
     in

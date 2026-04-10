@@ -92,7 +92,7 @@
     # programs.<cli>.skills, no direct home.file). Scoped to the
     # per-package factory modules + the skill helper.
     ai-skills = [
-      "lib/hm-helpers.nix"
+      "lib/ai/hm-helpers.nix"
       "packages/claude-code/modules/**"
       "packages/copilot-cli/modules/**"
       "packages/kiro-cli/modules/**"
@@ -108,7 +108,7 @@
     # devenv: devenv files.* internals + skills layout walker. Scoped
     # to per-package devenv modules and the helper file.
     devenv = [
-      "lib/hm-helpers.nix"
+      "lib/ai/hm-helpers.nix"
       "packages/*/modules/devenv/**"
     ];
     # flake: binary cache config + flake-level settings. Scoped to

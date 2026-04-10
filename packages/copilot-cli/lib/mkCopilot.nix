@@ -225,7 +225,7 @@ lib.ai.app.mkAiApp {
         # symlinks) and is path-type-agnostic (accepts both Nix path
         # literals and absolute string paths).
         (let
-          helpers = import ../../../lib/hm-helpers.nix {inherit lib;};
+          helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
         in {
           home.file = helpers.mkSkillEntries cfg.configDir mergedSkills;
         })
@@ -339,7 +339,7 @@ lib.ai.app.mkAiApp {
         # via `mkDevenvSkillEntries`. Produces one `files.<path>`
         # entry per leaf file under the skill dir.
         (let
-          helpers = import ../../../lib/hm-helpers.nix {inherit lib;};
+          helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
         in {
           files = helpers.mkDevenvSkillEntries cfg.configDir mergedSkills;
         })
