@@ -67,6 +67,7 @@ isaacphi
 kagi
 kagiapi
 kagimcp
+kagisearch
 kanagawa
 kiro
 kirocli
@@ -78,6 +79,7 @@ lockdown
 markdownify
 mdbook
 mergetool
+modelcontextprotocol
 mystor
 narinfo
 nixd
@@ -135,6 +137,7 @@ shellharden
 sigtool
 sixel
 smartlog
+sparfenyuk
 sshsign
 statix
 stdenv

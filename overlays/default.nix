@@ -1,6 +1,9 @@
 # overlays/default.nix
 # Unified binary-package overlay.
 #
+# Package index: see overlays/README.md for a table of every package's
+# source method, build tool, nixpkgs status, dep hashes, and TODOs.
+#
 # Aggregates derivations into grouped namespaces:
 #   pkgs.ai.*                — flat AI CLIs and unique tools
 #   pkgs.ai.mcpServers.*     — MCP server packages + proxies
