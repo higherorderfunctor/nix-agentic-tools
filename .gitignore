@@ -18,6 +18,7 @@ packages/stacked-workflows/skills/*/[0-9a-z]*-*
 .claude/settings.json
 .claude/settings.local.json
 .claude/skills/
+.config/github-copilot/
 .copilot/
 .github/copilot-instructions.md
 .github/instructions/
