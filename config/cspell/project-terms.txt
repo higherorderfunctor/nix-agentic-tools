@@ -6,6 +6,7 @@ agentskills
 agentsmd
 agnix
 applyto
+argjson
 arxanas
 attrset
 attrsets

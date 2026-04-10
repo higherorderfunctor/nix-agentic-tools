@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Regenerate npm lockfiles in overlays/locks/ from overlay package sources.
+# Regenerate npm lockfiles in overlays/sources/locks/ from overlay package sources.
 #
 # Auto-discovers: probes each flake package for a package.json in its
-# source. If found, generates a lockfile. Rebuilds from scratch when
-# run without args — stale lockfiles from removed packages are cleaned.
+# source. If found, generates a lockfile. Keeps existing lockfiles for
+# unchanged packages (fast no-op). Prunes lockfiles for removed packages
+# or packages that no longer need npm.
 #
 # Usage: dev/scripts/update-locks.sh [package ...]
-#   No args → all packages (rebuild from scratch). With args → only those.
+#   No args → all packages. With args → only those.
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 
@@ -15,10 +16,9 @@ LOCKS_DIR="overlays/sources/locks"
 if [ $# -gt 0 ]; then
 	packages=("$@")
 else
-	# Rebuild from scratch — remove all existing lockfiles, discover fresh
-	rm -f "$LOCKS_DIR"/*-package-lock.json
+	system=$(nix eval --impure --raw --expr 'builtins.currentSystem')
 	mapfile -t packages < <(
-		nix eval .#packages.x86_64-linux --apply 'builtins.attrNames' --json 2>/dev/null |
+		nix eval ".#packages.${system}" --apply 'builtins.attrNames' --json 2>/dev/null |
 			jq -r '.[]' |
 			grep -vE "^(instructions-|docs)"
 	)
@@ -27,6 +27,8 @@ fi
 echo "Checking ${#packages[@]} packages for npm lockfiles..."
 
 updated=0
+declare -A has_lockfile
+
 for pkg in "${packages[@]}"; do
 	# Get the package source path
 	src=$(nix eval ".#${pkg}.src" --raw 2>/dev/null) || continue
@@ -46,6 +48,7 @@ for pkg in "${packages[@]}"; do
 
 	[ -z "$pkg_json" ] && continue
 
+	has_lockfile[$pkg]=1
 	pkg_dir=$(dirname "$pkg_json")
 	lockfile="$LOCKS_DIR/${pkg}-package-lock.json"
 
@@ -62,6 +65,18 @@ for pkg in "${packages[@]}"; do
 
 	rm -rf "$tmp"
 done
+
+# Prune lockfiles for packages removed or no longer needing npm
+if [ $# -eq 0 ]; then
+	for lockfile in "$LOCKS_DIR"/*-package-lock.json; do
+		[ -f "$lockfile" ] || continue
+		name=$(basename "$lockfile" -package-lock.json)
+		if [ -z "${has_lockfile[$name]+x}" ]; then
+			echo "PRUNE: $lockfile"
+			rm -f "$lockfile"
+		fi
+	done
+fi
 
 if [ "$updated" -gt 0 ]; then
 	echo ""

@@ -14,9 +14,12 @@ shopt -s inherit_errexit 2>/dev/null || :
 
 HASHES_FILE="overlays/sources/hashes.json"
 
-# Start fresh — hashes.json is pure output, rebuilt from scratch.
-# Stale entries from removed packages are automatically cleaned.
-if [ $# -eq 0 ]; then
+# Seed from existing hashes.json if present — packages with unchanged
+# deps succeed immediately (nix build passes), skipping recomputation.
+# Only packages with changed deps trigger the hash mismatch → extract
+# flow. Stale entries from removed packages are harmless (unused by
+# the overlay). When run with args, we only update those packages.
+if [ ! -f "$HASHES_FILE" ]; then
 	echo '{}' >"$HASHES_FILE"
 fi
 
@@ -140,6 +143,15 @@ for pkg in "${packages[@]}"; do
 		write_hash "$pkg" "$hash_field2" "$got_hash2"
 	fi
 done
+
+# Prune entries for packages no longer in flake outputs
+if [ $# -eq 0 ]; then
+	pkg_json=$(printf '%s\n' "${packages[@]}" | jq -R . | jq -s .)
+	tmp=$(mktemp)
+	jq --argjson keep "$pkg_json" 'with_entries(select(.key as $k | $keep | index($k)))' \
+		"$HASHES_FILE" >"$tmp"
+	mv "$tmp" "$HASHES_FILE"
+fi
 
 if [ "$updated" -gt 0 ]; then
 	echo ""

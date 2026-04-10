@@ -36,7 +36,6 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
-            print-build-logs = true
       # Phase 1 uses the lightweight CI shell (flake.nix devShells.ci)
       # instead of the full devenv shell — avoids 7+ min module eval.
       - name: Update flake inputs
@@ -79,16 +78,16 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
-            print-build-logs = true
       - uses: cachix/cachix-action@v17
         with:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       # Compute hashes BEFORE devenv eval — stale hashes break the
       # devenv shell because overlay packages are in its packages list.
-      # The CI shell has nix/jq/bash which is all the script needs.
+      # Uses the lightweight CI shell (no overlay deps). -L prints
+      # build logs (CLI-only flag, no nix.conf equivalent).
       - name: Compute dep hashes
-        run: nix develop .#ci -c bash dev/scripts/update-hashes.sh
+        run: nix develop -L .#ci -c bash dev/scripts/update-hashes.sh
       - name: Upload hashes
         uses: actions/upload-artifact@v4
         with:
@@ -96,11 +95,17 @@ jobs:
           path: overlays/sources/hashes.json
       - name: Install devenv
         run: nix profile add nixpkgs#devenv
+      # devenv 2.x uses Nix FFI (not CLI), so -L/--log-format cannot
+      # be injected. --verbose enables devenv's own tracing.
       - name: Evaluate devenv shell
-        run: devenv print-dev-env > /dev/null
+        run: devenv print-dev-env --verbose > /dev/null
+        env:
+          DEVENV_TUI: "false"
       - name: Build all packages
         continue-on-error: true
-        run: devenv tasks run build:all --show-output
+        run: devenv tasks run build:all --verbose --show-output
+        env:
+          DEVENV_TUI: "false"
 
   # ── Phase 3: merge hashes + commit ───────────────────────────────
   commit:
