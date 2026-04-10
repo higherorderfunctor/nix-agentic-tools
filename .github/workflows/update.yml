@@ -19,16 +19,25 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # Phase 1: update sources + compute hashes (linux only — hashes are
-  # platform-independent since nvfetcher tracks per-platform entries)
-  update:
-    runs-on: ubuntu-latest
-    env:
-      BRANCH_NAME: refactor/ai-factory-architecture
+  # Phase 1: update sources, compute hashes, build per-platform.
+  # Each runner handles its own platform's builds. Hash computation
+  # is platform-independent (fetchNpmDeps fetches all platform
+  # variants) so any runner can do it — linux runs it since it's
+  # the fastest.
+  update-and-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: x86_64-linux
+            runner: ubuntu-latest
+            update: true
+          - system: aarch64-darwin
+            runner: macos-latest
+            update: false
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: cachix/install-nix-action@v31
         with:
@@ -40,16 +49,65 @@ jobs:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
+      # Update step — only on the designated runner
       - name: Install devenv
+        if: matrix.update
         run: nix profile install nixpkgs#devenv
 
       - name: Run update pipeline
+        if: matrix.update
         run: devenv tasks run --mode before update:all
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Upload updated files
+        if: matrix.update
+        uses: actions/upload-artifact@v4
+        with:
+          name: updated-sources
+          path: |
+            .nvfetcher/
+            overlays/hashes.json
+            overlays/locks/
+            flake.lock
+            devenv.lock
+
+      # Build step — all runners. Darwin waits for update artifact.
+      - name: Download updated files
+        if: "!matrix.update"
+        uses: actions/download-artifact@v4
+        with:
+          name: updated-sources
+
       - name: Verify
         run: nix flake check --no-build
+
+      - name: Build all packages (populates cachix)
+        run: |
+          nix profile install nixpkgs#nix-fast-build
+          nix-fast-build \
+            --flake ".#packages" \
+            --systems "${{ matrix.system }}" \
+            --skip-cached \
+            --cachix-cache nix-agentic-tools \
+            --no-nom \
+            --no-link
+
+  # Phase 2: commit changes after both platforms build successfully.
+  commit:
+    needs: update-and-build
+    runs-on: ubuntu-latest
+    env:
+      BRANCH_NAME: refactor/ai-factory-architecture
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download updated files
+        uses: actions/download-artifact@v4
+        with:
+          name: updated-sources
 
       - name: Commit updates
         run: |
@@ -63,43 +121,3 @@ jobs:
             git pull --rebase origin "$BRANCH_NAME" || true
             git push origin "HEAD:$BRANCH_NAME"
           fi
-
-  # Phase 2: build all packages per-platform and push to cachix.
-  # Runs AFTER update so builds use the latest sources + hashes.
-  build:
-    needs: update
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - system: x86_64-linux
-            runner: ubuntu-latest
-          - system: aarch64-darwin
-            runner: macos-latest
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          # Re-checkout to pick up any commits from the update job
-          ref: refactor/ai-factory-architecture
-
-      - uses: cachix/install-nix-action@v31
-        with:
-          extra_nix_config: |
-            accept-flake-config = true
-
-      - uses: cachix/cachix-action@v17
-        with:
-          name: nix-agentic-tools
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-
-      - name: Build all packages (populates cachix)
-        run: |
-          nix profile install nixpkgs#nix-fast-build
-          nix-fast-build \
-            --flake ".#packages" \
-            --systems "${{ matrix.system }}" \
-            --skip-cached \
-            --cachix-cache nix-agentic-tools \
-            --no-nom \
-            --no-link
