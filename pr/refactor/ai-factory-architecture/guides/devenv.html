@@ -34,7 +34,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-0b74268b.js";
+            window.path_to_searchindex_js = "../searchindex-413ef5e8.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-841f2094.js"></script>
@@ -580,12 +580,89 @@ package</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
+<h2 id="aikiroagents"><a class="header" href="#aikiroagents">ai.kiro.agents</a></h2>
+<p>Agent JSON definitions (written to &lt;configDir&gt;/agents/&lt;name&gt;.json).</p>
+<p><em>Type:</em>
+attribute set of (strings concatenated with “\n” or absolute path)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aikiroagentsdir"><a class="header" href="#aikiroagentsdir">ai.kiro.agentsDir</a></h2>
+<p>External directory of agent JSON files (symlinked into &lt;configDir&gt;/agents).</p>
+<p><em>Type:</em>
+null or absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aikiroconfigdir"><a class="header" href="#aikiroconfigdir">ai.kiro.configDir</a></h2>
+<p>Config directory relative to HOME / devenv root.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">".kiro"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aikiroenvironmentvariables"><a class="header" href="#aikiroenvironmentvariables">ai.kiro.environmentVariables</a></h2>
+<p>Environment variables exported when launching kiro (HM: via wrapper; devenv: via native env).</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aikirohooks"><a class="header" href="#aikirohooks">ai.kiro.hooks</a></h2>
+<p>Hook JSON definitions (written to &lt;configDir&gt;/hooks/&lt;name&gt;.json).</p>
+<p><em>Type:</em>
+attribute set of (strings concatenated with “\n” or absolute path)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aikirohooksdir"><a class="header" href="#aikirohooksdir">ai.kiro.hooksDir</a></h2>
+<p>External directory of hook JSON files (symlinked into &lt;configDir&gt;/hooks).</p>
+<p><em>Type:</em>
+null or absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
 <h2 id="aikiroinstructions"><a class="header" href="#aikiroinstructions">ai.kiro.instructions</a></h2>
 <p>kiro-specific instructions.</p>
 <p><em>Type:</em>
 list of (attribute set)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aikirolspservers"><a class="header" href="#aikirolspservers">ai.kiro.lspServers</a></h2>
+<p>LSP server definitions written to settings/lsp.json.</p>
+<p><em>Type:</em>
+attribute set of attribute set of anything</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -674,11 +751,68 @@ null or string</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aikirosettings"><a class="header" href="#aikirosettings">ai.kiro.settings</a></h2>
-<p>Freeform settings passed to Kiro’s config file (rendering tracked in docs/plan.md absorption backlog).</p>
+<p>JSON settings merged into ~/.kiro/settings/cli.json on activation (HM)
+or written statically (devenv). Runtime-mutated keys are preserved in HM.
+Known keys are typed; unknown keys are accepted via freeformType.</p>
 <p><em>Type:</em>
-attribute set of anything</p>
+open submodule of (JSON value)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aikirosettingschat"><a class="header" href="#aikirosettingschat">ai.kiro.settings.chat</a></h2>
+<p>Chat-related settings.</p>
+<p><em>Type:</em>
+open submodule of (JSON value)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aikirosettingschatenablethinking"><a class="header" href="#aikirosettingschatenablethinking">ai.kiro.settings.chat.enableThinking</a></h2>
+<p>Enable thinking/reasoning mode.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aikirosettingschatdefaultmodel"><a class="header" href="#aikirosettingschatdefaultmodel">ai.kiro.settings.chat.defaultModel</a></h2>
+<p>Default chat model.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aikirosettingstelemetry"><a class="header" href="#aikirosettingstelemetry">ai.kiro.settings.telemetry</a></h2>
+<p>Telemetry settings.</p>
+<p><em>Type:</em>
+open submodule of (JSON value)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aikirosettingstelemetryenabled"><a class="header" href="#aikirosettingstelemetryenabled">ai.kiro.settings.telemetry.enabled</a></h2>
+<p>Enable telemetry reporting.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
