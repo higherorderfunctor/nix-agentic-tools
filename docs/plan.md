@@ -45,11 +45,24 @@ High confidence, small scope. Good for review sessions.
       update all import paths in `packages/*/lib/mk*.nix`. ~10 files to
       touch. See `memory/project_factory_known_gaps.md`.
 
-- [ ] **Group MCP server overlays** — user wants MCP overlay files
-      organized (maybe under `overlays/mcp-servers/` or grouped in the
-      flat overlay with clear section headers). Currently 14 MCP .nix
-      files are interleaved with CLI and git-tool overlays in
-      `overlays/`. Light file-structure move.
+- [ ] **Group overlay packages under `pkgs.ai.{mcpServers,lspServers}`**
+      — currently all 24 packages live flat under `pkgs.ai.*`. User
+      wants sub-grouping:
+      `pkgs.ai.mcpServers.agnix-mcp`, `pkgs.ai.mcpServers.context7-mcp`,
+      etc. `pkgs.ai.lspServers.agnix-lsp`, etc.
+      Proxies from grouped packages: `pkgs.ai.agnix` remains the CLI
+      (default `mainProgram`, used via `lib.getExe`).
+      `lib.getExe' pkgs.ai.agnix "agnix-mcp"` accesses the MCP binary;
+      `lib.getExe' pkgs.ai.agnix "agnix-lsp"` accesses the LSP binary.
+      The grouped attrs are convenience proxies pointing at the real
+      packages, not separate derivations. Implementation: update
+      `overlays/default.nix` aggregator to produce the sub-attrsets.
+      May also involve moving 14 MCP overlay .nix files into
+      `overlays/mcp-servers/` subdirectory (optional, discuss).
+      Also: `overlays/agnix.nix` passthru should set mainProgram to
+      `agnix` or `agnix-cli` so `lib.getExe` returns the CLI binary
+      by default. See `memory/project_factory_known_gaps.md` for
+      the `pkgs.ai.*` namespace structure discussion.
 
 - [ ] **Regenerate instruction files** — after the factory refactor,
       the dev instruction files (.claude/rules/*.md, .github/instructions/,
