@@ -21,7 +21,7 @@ in
   buildNpmPackage {
     pname = "git-intel-mcp";
     inherit (nv) version src npmDepsHash;
-    postPatch = "cp ${../locks/git-intel-mcp-package-lock.json} package-lock.json";
+    postPatch = "cp ${../sources/locks/git-intel-mcp-package-lock.json} package-lock.json";
     nativeBuildInputs = [makeWrapper];
     installPhase = ''
       runHook preInstall

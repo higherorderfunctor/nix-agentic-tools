@@ -18,7 +18,7 @@
 # {nv-sources, ...} callers) because different packages have different
 # needs — claude-code needs lockFile, kiro-cli needs nv-darwin, etc.
 {inputs, ...}: final: prev: let
-  hashes = builtins.fromJSON (builtins.readFile ./hashes.json);
+  hashes = builtins.fromJSON (builtins.readFile ./sources/hashes.json);
   # Dummy hash for auto-discovery: overlay defaults missing hashes to
   # this value. The update:hashes task builds each package, captures
   # "got:" from the hash mismatch, and writes the real hash to hashes.json.
@@ -111,7 +111,7 @@
     claude-code = import ./claude-code.nix {
       inherit inputs final prev;
       nv = nv.claude-code;
-      lockFile = ./locks/claude-code-package-lock.json;
+      lockFile = ./sources/locks/claude-code-package-lock.json;
     };
     copilot-cli = import ./copilot-cli.nix {
       inherit inputs final;

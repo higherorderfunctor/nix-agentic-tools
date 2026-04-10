@@ -22,7 +22,7 @@ in {
   overlays = [
     # nvfetcher sources
     (final: _prev: {
-      nv-sources = import ./.nvfetcher/generated.nix {
+      nv-sources = import ./overlays/sources/generated.nix {
         inherit (final) fetchurl fetchgit fetchFromGitHub dockerTools;
       };
     })
@@ -88,17 +88,18 @@ in {
   git-hooks.hooks = {
     deadnix = {
       enable = true;
-      excludes = [".*\\.nvfetcher/.*"];
+      excludes = ["overlays/sources/.*"];
     };
     statix = {
       enable = true;
-      excludes = [".*\\.nvfetcher/.*"];
+      excludes = ["overlays/sources/.*"];
     };
     cspell = {
       enable = true;
       excludes = [
         ".*-package-lock\\.json$"
         ".*\\.lock$"
+        "^config/cspell/"
         "^docs/human-todo\\.md$"
         "^docs/plan\\.md$"
         "^docs/superpowers/"
@@ -234,7 +235,7 @@ in {
       };
       "update:sources" = {
         description = "Update package sources (nvfetcher)";
-        exec = ''nvfetcher -o .nvfetcher'';
+        exec = ''nvfetcher -c config/nvfetcher/nvfetcher.toml -o overlays/sources'';
       };
       "update:locks" = {
         description = "Regenerate npm lockfiles from updated sources";

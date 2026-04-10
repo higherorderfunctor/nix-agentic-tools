@@ -19,7 +19,7 @@ in
     inherit (packageJson) version;
     inherit (nv) src;
     sourceRoot = "source/packages/openmemory-js";
-    postPatch = "cp ${../locks/openmemory-mcp-package-lock.json} package-lock.json";
+    postPatch = "cp ${../sources/locks/openmemory-mcp-package-lock.json} package-lock.json";
     inherit (nv) npmDepsHash;
     # Source needs building (tsc). npm tarball had pre-built dist/.
     nativeBuildInputs = [makeWrapper];

@@ -12,7 +12,7 @@
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 
-HASHES_FILE="overlays/hashes.json"
+HASHES_FILE="overlays/sources/hashes.json"
 
 # Start fresh — hashes.json is pure output, rebuilt from scratch.
 # Stale entries from removed packages are automatically cleaned.

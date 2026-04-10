@@ -31,7 +31,7 @@ in {
     version = readJsVersion "sequentialthinking";
     inherit (nv) src;
     sourceRoot = "source/src/sequentialthinking";
-    postPatch = "cp ${../locks/sequential-thinking-mcp-package-lock.json} package-lock.json";
+    postPatch = "cp ${../sources/locks/sequential-thinking-mcp-package-lock.json} package-lock.json";
     inherit (nv) npmDepsHash;
     dontNpmBuild = true;
     nativeBuildInputs = [makeWrapper];
@@ -51,7 +51,7 @@ in {
     version = readJsVersion "filesystem";
     inherit (nv) src;
     sourceRoot = "source/src/filesystem";
-    postPatch = "cp ${../locks/filesystem-mcp-package-lock.json} package-lock.json";
+    postPatch = "cp ${../sources/locks/filesystem-mcp-package-lock.json} package-lock.json";
     npmDepsHash = nv.filesystemMcpNpmDepsHash or nv.npmDepsHash or "";
     npmBuildScript = "build";
     nativeBuildInputs = [makeWrapper];
@@ -71,7 +71,7 @@ in {
     version = readJsVersion "memory";
     inherit (nv) src;
     sourceRoot = "source/src/memory";
-    postPatch = "cp ${../locks/memory-mcp-package-lock.json} package-lock.json";
+    postPatch = "cp ${../sources/locks/memory-mcp-package-lock.json} package-lock.json";
     npmDepsHash = nv.memoryMcpNpmDepsHash or nv.npmDepsHash or "";
     npmBuildScript = "build";
     nativeBuildInputs = [makeWrapper];

@@ -10,7 +10,7 @@
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 
-LOCKS_DIR="overlays/locks"
+LOCKS_DIR="overlays/sources/locks"
 
 if [ $# -gt 0 ]; then
 	packages=("$@")

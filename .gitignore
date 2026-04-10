@@ -35,4 +35,4 @@ CLAUDE.md
 docs/src/
 
 # nvfetcher shake database (not the generated output)
-/.nvfetcher/.shake.*
+/overlays/sources/.shake.*

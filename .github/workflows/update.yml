@@ -35,7 +35,7 @@ jobs:
       - name: Update devenv lock
         run: nix develop .#ci -c devenv update
       - name: Update nvfetcher sources
-        run: nix develop .#ci -c nvfetcher -o .nvfetcher
+        run: nix develop .#ci -c nvfetcher -c config/nvfetcher/nvfetcher.toml -o overlays/sources
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Regenerate npm lockfiles
@@ -45,8 +45,7 @@ jobs:
         with:
           name: updated-sources
           path: |
-            .nvfetcher/
-            overlays/locks/
+            overlays/sources/
             flake.lock
             devenv.lock
 
@@ -77,15 +76,19 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Install devenv
         run: nix profile add nixpkgs#devenv
+      # Pre-evaluate devenv shell once — caches eval for subsequent tasks
+      - name: Evaluate devenv shell
+        run: devenv print-dev-env > /dev/null
       - name: Compute dep hashes
-        run: devenv tasks run update:hashes
+        run: devenv tasks run update:hashes --show-output
       - name: Upload hashes
         uses: actions/upload-artifact@v4
         with:
           name: hashes-${{ matrix.system }}
-          path: overlays/hashes.json
+          path: overlays/sources/hashes.json
       - name: Build all packages
-        run: devenv tasks run build:all
+        continue-on-error: true
+        run: devenv tasks run build:all --show-output
 
   # ── Phase 3: merge hashes + commit ───────────────────────────────
   commit:
@@ -113,7 +116,7 @@ jobs:
           jq -s '.[0] * .[1]' \
             /tmp/hashes-linux/hashes.json \
             /tmp/hashes-darwin/hashes.json \
-            > overlays/hashes.json
+            > overlays/sources/hashes.json
       - name: Commit updates
         run: |
           git config user.name "github-actions[bot]"

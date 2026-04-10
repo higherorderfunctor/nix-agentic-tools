@@ -1,12 +1,12 @@
 # dev/update.nix — Update task definitions with auto-discovery.
 #
-# Reads packages/*/hashes.json and .nvfetcher/generated.json at eval
+# Reads packages/*/hashes.json and overlays/sources/generated.json at eval
 # time. Produces devenv task attrsets with Nix-interpolated exec strings.
 # No hardcoded package lists — adding a package to hashes.json is
 # sufficient for the update pipeline to discover it.
 {lib, ...}: let
   packagesDir = ./../packages;
-  nvfetcherDir = ./../.nvfetcher;
+  nvfetcherDir = ./../overlays/sources;
 
   # ── Discovery: overlay groups with hashes ──────────────────────────
   dirs = lib.filterAttrs (_: t: t == "directory") (builtins.readDir packagesDir);
@@ -239,7 +239,7 @@ in {
         nvfetcher -c nvfetcher.toml -o .nvfetcher
 
         log "Formatting generated files"
-        treefmt .nvfetcher/generated.nix
+        treefmt overlays/sources/generated.nix
 
         log "Staging nvfetcher output"
         git add .nvfetcher

@@ -59,7 +59,7 @@
     # sidecar values for cargoHash etc. that nvfetcher can't
     # produce itself.
     nvSourcesOverlay = final: _prev: {
-      nv-sources = import ./.nvfetcher/generated.nix {
+      nv-sources = import ./overlays/sources/generated.nix {
         inherit (final) fetchurl fetchgit fetchFromGitHub dockerTools;
       };
     };

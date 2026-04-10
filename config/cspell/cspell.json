@@ -1,0 +1,31 @@
+{
+  "caseSensitive": false,
+  "dictionaries": ["bash", "git", "project-terms"],
+  "dictionaryDefinitions": [
+    {
+      "addWords": true,
+      "name": "project-terms",
+      "path": "config/cspell/project-terms.txt"
+    }
+  ],
+  "ignorePaths": [
+    ".direnv",
+    ".git",
+    "config/cspell",
+    "*.lock",
+    "*.png",
+    "docs/human-todo.md",
+    "docs/plan.md",
+    "docs/superpowers/**",
+    "overlays/sources",
+    "result"
+  ],
+  "language": "en",
+  "overrides": [
+    {
+      "dictionaries": ["python", "node", "npm", "rust"],
+      "filename": ["**/*.nix", "**/*.md", "config/nvfetcher/nvfetcher.toml"]
+    }
+  ],
+  "version": "0.2"
+}
