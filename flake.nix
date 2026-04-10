@@ -71,7 +71,7 @@
     # restored as an overlay entry in M15 because the doc site build
     # (packages.docs) needs to read pkgs.fragments-docs.passthru.generators.
     fragmentsDocsOverlay = import ./devshell/docs-site {};
-    stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
+    stackedWorkflowsOverlay = import ./packages/stacked-workflows/overlay.nix {};
 
     # Barrel walker — collects non-binary facets from packages/*/default.nix.
     packagesBarrel = import ./packages;

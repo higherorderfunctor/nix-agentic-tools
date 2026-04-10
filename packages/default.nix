@@ -24,5 +24,6 @@
   openmemory-mcp = import ./openmemory-mcp;
   sequential-thinking-mcp = import ./sequential-thinking-mcp;
   serena-mcp = import ./serena-mcp;
+  stacked-workflows = import ./stacked-workflows;
   sympy-mcp = import ./sympy-mcp;
 }

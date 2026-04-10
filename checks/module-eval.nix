@@ -49,6 +49,10 @@
           default = [];
         };
       };
+      programs.git.settings = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+      };
       programs.claude-code = {
         enable = lib.mkOption {
           type = lib.types.bool;
@@ -132,6 +136,7 @@
         ./../packages/claude-code/modules/homeManager
         ./../packages/copilot-cli/modules/homeManager
         ./../packages/kiro-cli/modules/homeManager
+        ./../packages/stacked-workflows/modules/homeManager
         hmStubs
         {inherit config;}
       ];
@@ -148,6 +153,7 @@
         ./../packages/claude-code/modules/devenv
         ./../packages/copilot-cli/modules/devenv
         ./../packages/kiro-cli/modules/devenv
+        ./../packages/stacked-workflows/modules/devenv
         devenvStubs
         {inherit config;}
       ];
@@ -1043,5 +1049,96 @@ in {
     in
       lib.hasInfix "/run/secrets/claude-uuid" script
       && lib.hasInfix "tr -d" script
+  );
+
+  # ── Task 7 (A6): Stacked-workflows HM module absorption ────────
+
+  # Default disabled — stacked-workflows.enable defaults to false.
+  module-sws-default-disabled = mkTest "sws-default-disabled" (
+    let
+      result = evalHm {};
+    in
+      !(result.config.stacked-workflows.enable or true)
+  );
+
+  # When enabled, skills are contributed to the shared ai.skills pool.
+  module-sws-enable-sets-ai-skills = mkTest "sws-enable-sets-ai-skills" (
+    let
+      result = evalHm {stacked-workflows.enable = true;};
+    in
+      result.config.ai.skills ? sws-stack-fix
+      && result.config.ai.skills ? sws-stack-plan
+      && result.config.ai.skills ? sws-stack-split
+      && result.config.ai.skills ? sws-stack-submit
+      && result.config.ai.skills ? sws-stack-summary
+      && result.config.ai.skills ? sws-stack-test
+  );
+
+  # When enabled, instructions are contributed to the shared pool.
+  module-sws-enable-sets-ai-instructions = mkTest "sws-enable-sets-ai-instructions" (
+    let
+      result = evalHm {stacked-workflows.enable = true;};
+      inherit (result.config.ai) instructions;
+      swsEntries = builtins.filter (i: (i.name or "") == "stacked-workflows") instructions;
+    in
+      builtins.length swsEntries == 1
+  );
+
+  # Git config applies when preset is "minimal".
+  module-sws-git-config-minimal = mkTest "sws-git-config-minimal" (
+    let
+      result = evalHm {
+        stacked-workflows = {
+          enable = true;
+          gitPreset = "minimal";
+        };
+      };
+      gitSettings = result.config.programs.git.settings;
+    in
+      (gitSettings ? branchless)
+      && (gitSettings ? pull)
+      && (gitSettings ? rebase)
+  );
+
+  # Git config applies when preset is "full" (includes extended settings).
+  module-sws-git-config-full = mkTest "sws-git-config-full" (
+    let
+      result = evalHm {
+        stacked-workflows = {
+          enable = true;
+          gitPreset = "full";
+        };
+      };
+      gitSettings = result.config.programs.git.settings;
+    in
+      (gitSettings ? branchless)
+      && (gitSettings ? diff)
+      && (gitSettings ? fetch)
+      && (gitSettings ? push)
+      && (gitSettings ? revise)
+  );
+
+  # Git config NOT set when preset is "none".
+  module-sws-git-config-none = mkTest "sws-git-config-none" (
+    let
+      result = evalHm {
+        stacked-workflows = {
+          enable = true;
+          gitPreset = "none";
+        };
+      };
+      gitSettings = result.config.programs.git.settings;
+    in
+      !(gitSettings ? branchless)
+  );
+
+  # Reference files are symlinked under .claude/references/.
+  module-sws-reference-files-written = mkTest "sws-reference-files-written" (
+    let
+      result = evalHm {stacked-workflows.enable = true;};
+      files = result.config.home.file;
+    in
+      files ? ".claude/references/philosophy.md"
+      && files ? ".claude/references/git-absorb.md"
   );
 }
