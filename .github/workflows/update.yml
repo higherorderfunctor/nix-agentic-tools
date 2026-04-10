@@ -19,9 +19,8 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # ── Phase 1: system-agnostic source updates ──────────────────────
-  # nvfetcher, flake update, hash computation. All platform-independent.
-  update:
+  # ── Phase 1: system-agnostic source updates (no building) ────────
+  update-sources:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -31,26 +30,23 @@ jobs:
             accept-flake-config = true
       - name: Install devenv
         run: nix profile install nixpkgs#devenv
-      - name: Run update pipeline
-        run: devenv tasks run --mode before update:all
+      - name: Update flake inputs
+        run: devenv tasks run update:flake
+      - name: Update nvfetcher sources
+        run: devenv tasks run update:sources
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Verify eval
-        run: nix flake check --no-build
       - name: Upload updated sources
         uses: actions/upload-artifact@v4
         with:
           name: updated-sources
           path: |
             .nvfetcher/
-            overlays/hashes.json
-            overlays/locks/
             flake.lock
-            devenv.lock
 
-  # ── Phase 2: per-platform build + cachix push ────────────────────
+  # ── Phase 2: per-platform hash computation + build + cachix ──────
   build:
-    needs: update
+    needs: update-sources
     strategy:
       fail-fast: false
       matrix:
@@ -73,6 +69,13 @@ jobs:
         with:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Compute dep hashes
+        run: bash dev/scripts/update-hashes.sh
+      - name: Upload hashes
+        uses: actions/upload-artifact@v4
+        with:
+          name: hashes-${{ matrix.system }}
+          path: overlays/hashes.json
       - name: Build all packages
         run: |
           nix profile install nixpkgs#nix-fast-build
@@ -84,7 +87,7 @@ jobs:
             --no-nom \
             --no-link
 
-  # ── Phase 3: commit after all platforms build ────────────────────
+  # ── Phase 3: merge hashes + commit ───────────────────────────────
   commit:
     needs: build
     runs-on: ubuntu-latest
@@ -97,6 +100,24 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: updated-sources
+      # Download hashes from all platforms and merge
+      - uses: actions/download-artifact@v4
+        with:
+          name: hashes-x86_64-linux
+          path: /tmp/hashes-linux
+      - uses: actions/download-artifact@v4
+        with:
+          name: hashes-aarch64-darwin
+          path: /tmp/hashes-darwin
+      - name: Merge platform hashes
+        run: |
+          # Deep merge: linux hashes + darwin hashes → overlays/hashes.json
+          # jq '*' does recursive merge; darwin values override linux on conflict
+          # (shouldn't conflict since dep hashes are platform-independent)
+          jq -s '.[0] * .[1]' \
+            /tmp/hashes-linux/hashes.json \
+            /tmp/hashes-darwin/hashes.json \
+            > overlays/hashes.json
       - name: Commit updates
         run: |
           git config user.name "github-actions[bot]"
