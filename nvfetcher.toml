@@ -92,6 +92,13 @@ fetch.github = "sdiehl/sympy-mcp"
 
 # Upstream: https://github.com/upstash/context7
 [context7-mcp]
+# Version from npm. nvfetcher tracks the npm tarball for version automation,
+# but the overlay fetches from GitHub via fetchFromGitHub (has pnpm-lock.yaml
+# for nixpkgs pnpm override). The scoped tag `@upstash/context7-mcp@<ver>`
+# has `@` that nvfetcher's fetchgit can't handle. GitHub source hash is
+# stored in hashes.json under `context7-mcp.srcHash` and maintained manually
+# via `nix-prefetch-url --unpack` or by copying from nixpkgs when versions
+# align. The npm tarball hash (`src` field) is unused by the overlay.
 src.cmd = "curl -s https://registry.npmjs.org/@upstash/context7-mcp/latest | jq -r .version"
 fetch.url = "https://registry.npmjs.org/@upstash/context7-mcp/-/context7-mcp-$ver.tgz"
 

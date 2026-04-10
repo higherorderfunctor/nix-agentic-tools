@@ -7,7 +7,8 @@
     "srcHash": "sha256-CLLCtVK3TeXFZ8wBnRRHNc2MoUt7lTdMJwz8sZHpkFM="
   },
   "context7-mcp": {
-    "npmDepsHash": "sha256-EniEHeNmeC2G7+dFp4zURttzc7SjcFiFbD6nvncSugI="
+    "srcHash": "sha256-u0sFNX19ZBWvA7HYWdM4iI9AvEVz/CK6dLfZ80Rxa9c=",
+    "pnpmDepsHash": "sha256-8RRHfCTZVC91T1Qx+ACCo2oG4ZwMNy5WYakCjmBhe3Q="
   },
   "git-absorb": {
     "cargoHash": "sha256-8uCXk5bXn/x4QXbGOROGlWYMSqIv+/7dBGZKbYkLfF4="

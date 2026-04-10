@@ -38,33 +38,48 @@ Backup branches (DO NOT GC):
 
 High confidence, small scope. Good for review sessions.
 
-- [ ] **Move `lib/hm-helpers.nix` + `lib/ai-common.nix` into `lib/ai/`**
-      — these are live library files (mkSkillEntries, mkDevenvSkillEntries,
-      filterNulls, lspServerModule, etc.) kept at the old path because
-      Task 9 (A10) didn't have time to migrate them. Mechanical rename +
-      update all import paths in `packages/*/lib/mk*.nix`. ~10 files to
-      touch. See `memory/project_factory_known_gaps.md`.
+- [x] **Move `lib/hm-helpers.nix` + `lib/ai-common.nix` into `lib/ai/`**
 
-- [ ] **Group overlay packages under `pkgs.ai.{mcpServers,lspServers}`**
-      — currently all 24 packages live flat under `pkgs.ai.*`. User
-      wants sub-grouping:
-      `pkgs.ai.mcpServers.agnix-mcp`, `pkgs.ai.mcpServers.context7-mcp`,
+- [x] **Group overlay packages under `pkgs.ai.{mcpServers,lspServers}`
+      + `pkgs.gitTools`** — DONE in `46adc29` + `6cc3189`.
+
+- [ ] **Convert 7 from-scratch overlays to nixpkgs overrides** —
+      anti-pattern: these packages exist in nixpkgs but we build from
+      scratch instead of overriding. Should be
+      `prev.<pkg>.overrideAttrs` to inherit upstream build logic and
+      just pin src + version from nvfetcher. Packages to convert:
+      context7-mcp (nixpkgs: `context7-mcp`),
+      fetch-mcp (`mcp-server-fetch`),
+      github-mcp (`github-mcp-server`),
+      git-mcp (`mcp-server-git`),
+      git-revise (`git-revise`),
+      mcp-language-server (`mcp-language-server`),
+      mcp-proxy (`mcp-proxy`).
+      May require hash recalculation if nixpkgs uses a different
+      build system (e.g., pnpm vs our npm). Also strip `allowUnfree`
+      from overlays that don't need it — anti-pattern forcing it
+      globally without user awareness.
+
+- [ ] **Audit all overlay build tools against upstream** — MANUAL
+      USER REVIEW REQUIRED. After the override conversions above,
+      validate that each package's source + build tool matches
+      upstream intent. Examples: effect-mcp should source from GitHub
+      main and build with pnpm (like nixpkgs context7-mcp pattern),
+      not our current npm approach. For packages not in nixpkgs, verify
+      we're using the upstream-recommended build tool. User prefers
+      pnpm over npm when upstream uses pnpm — don't force pnpm sources
+      through npm. This may require new hash calculations (npmDepsHash →
+      pnpmDeps) and lock file changes. Each package needs individual
+      attention. User will manually review each one.
+
+- [ ] **Regenerate instruction files** — after the factory refactor,
       etc. `pkgs.ai.lspServers.agnix-lsp`, etc.
       Proxies from grouped packages: `pkgs.ai.agnix` remains the CLI
       (default `mainProgram`, used via `lib.getExe`).
       `lib.getExe' pkgs.ai.agnix "agnix-mcp"` accesses the MCP binary;
-      `lib.getExe' pkgs.ai.agnix "agnix-lsp"` accesses the LSP binary.
-      The grouped attrs are convenience proxies pointing at the real
-      packages, not separate derivations. Implementation: update
-      `overlays/default.nix` aggregator to produce the sub-attrsets.
-      May also involve moving 14 MCP overlay .nix files into
-      `overlays/mcp-servers/` subdirectory (optional, discuss).
-      Also: `overlays/agnix.nix` passthru should set mainProgram to
-      `agnix` or `agnix-cli` so `lib.getExe` returns the CLI binary
-      by default. See `memory/project_factory_known_gaps.md` for
-      the `pkgs.ai.*` namespace structure discussion.
+- [x] **Regenerate instruction files** — verified up-to-date, no changes.
 
-- [ ] **Regenerate instruction files** — after the factory refactor,
+- [ ] **Regenerate instruction files (re-verify)** — after the overlay grouping refactor,
       the dev instruction files (.claude/rules/*.md, .github/instructions/,
       .kiro/steering/) may be stale. Run
       `devenv tasks run --mode before generate:instructions` and commit

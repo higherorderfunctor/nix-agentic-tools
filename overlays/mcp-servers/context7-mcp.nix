@@ -1,9 +1,15 @@
-# context7-mcp — builds the Context7 MCP server from the nvfetcher-tracked
-# source via buildNpmPackage.
+# context7-mcp — override nixpkgs to pin nvfetcher-tracked version.
 #
-# Instantiates `ourPkgs` from `inputs.nixpkgs` so buildNpmPackage, nodejs,
-# and makeWrapper all route through this repo's pinned nixpkgs instead of
-# the consumer's. This gives cache-hit parity against CI's standalone build
+# nixpkgs uses finalAttrs pattern (stdenv.mkDerivation finalAttrs: { ... })
+# where pnpmDeps reads from finalAttrs.{pname, version, src}. We override
+# version + src + pnpmDeps hash; the fixed-point re-derives the rest.
+#
+# Source is fetched via fetchFromGitHub (not nvfetcher) because the scoped
+# npm tag `@upstash/context7-mcp@<ver>` has `@` characters that nvfetcher's
+# fetchgit can't handle. Hashes are in hashes.json (srcHash, pnpmDepsHash).
+# nvfetcher tracks the version from npm.
+#
+# Instantiates `ourPkgs` from `inputs.nixpkgs` for cache-hit parity
 # (see dev/fragments/overlays/overlay-pattern.md).
 {
   inputs,
@@ -13,23 +19,23 @@
 }: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
-    config.allowUnfree = true;
   };
-  inherit (ourPkgs) buildNpmPackage makeWrapper nodejs;
 in
-  buildNpmPackage {
-    pname = "context7-mcp";
-    inherit (nv) version src npmDepsHash;
-    sourceRoot = "package";
-    postPatch = "cp ${../locks/context7-mcp-package-lock.json} package-lock.json";
-    dontNpmBuild = true;
-    nativeBuildInputs = [makeWrapper];
-    installPhase = ''
-      runHook preInstall
-      mkdir -p $out/lib/context7-mcp $out/bin
-      cp -r dist node_modules package.json $out/lib/context7-mcp/
-      makeWrapper ${nodejs}/bin/node $out/bin/context7-mcp \
-        --add-flags "$out/lib/context7-mcp/dist/index.js"
-      runHook postInstall
-    '';
-  }
+  # Two-arg overrideAttrs: finalAttrs is the new fixed-point (sees
+  # overridden version + src), old is the previous attrs.
+  ourPkgs.context7-mcp.overrideAttrs (finalAttrs: _old: {
+    inherit (nv) version;
+    src = ourPkgs.fetchFromGitHub {
+      owner = "upstash";
+      repo = "context7";
+      rev = "refs/tags/@upstash/context7-mcp@${finalAttrs.version}";
+      hash = nv.srcHash;
+    };
+    # fetchPnpmDeps reads finalAttrs.src (the overridden GitHub source).
+    # Same function call as nixpkgs — just our hash.
+    pnpmDeps = ourPkgs.fetchPnpmDeps {
+      inherit (finalAttrs) pname version src;
+      fetcherVersion = 3;
+      hash = nv.pnpmDepsHash;
+    };
+  })
