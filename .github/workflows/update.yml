@@ -19,49 +19,25 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # Phase 1: update sources, compute hashes, build per-platform.
-  # Each runner handles its own platform's builds. Hash computation
-  # is platform-independent (fetchNpmDeps fetches all platform
-  # variants) so any runner can do it — linux runs it since it's
-  # the fastest.
-  update-and-build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - system: x86_64-linux
-            runner: ubuntu-latest
-            update: true
-          - system: aarch64-darwin
-            runner: macos-latest
-            update: false
-    runs-on: ${{ matrix.runner }}
+  # ── Phase 1: system-agnostic source updates ──────────────────────
+  # nvfetcher, flake update, hash computation. All platform-independent.
+  update:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
       - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             accept-flake-config = true
-
-      - uses: cachix/cachix-action@v17
-        with:
-          name: nix-agentic-tools
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-
-      # Update step — only on the designated runner
       - name: Install devenv
-        if: matrix.update
         run: nix profile install nixpkgs#devenv
-
       - name: Run update pipeline
-        if: matrix.update
         run: devenv tasks run --mode before update:all
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload updated files
-        if: matrix.update
+      - name: Verify eval
+        run: nix flake check --no-build
+      - name: Upload updated sources
         uses: actions/upload-artifact@v4
         with:
           name: updated-sources
@@ -72,17 +48,32 @@ jobs:
             flake.lock
             devenv.lock
 
-      # Build step — all runners. Darwin waits for update artifact.
-      - name: Download updated files
-        if: "!matrix.update"
-        uses: actions/download-artifact@v4
+  # ── Phase 2: per-platform build + cachix push ────────────────────
+  build:
+    needs: update
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: x86_64-linux
+            runner: ubuntu-latest
+          - system: aarch64-darwin
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
         with:
           name: updated-sources
-
-      - name: Verify
-        run: nix flake check --no-build
-
-      - name: Build all packages (populates cachix)
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+      - uses: cachix/cachix-action@v17
+        with:
+          name: nix-agentic-tools
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Build all packages
         run: |
           nix profile install nixpkgs#nix-fast-build
           nix-fast-build \
@@ -93,9 +84,9 @@ jobs:
             --no-nom \
             --no-link
 
-  # Phase 2: commit changes after both platforms build successfully.
+  # ── Phase 3: commit after all platforms build ────────────────────
   commit:
-    needs: update-and-build
+    needs: build
     runs-on: ubuntu-latest
     env:
       BRANCH_NAME: refactor/ai-factory-architecture
@@ -103,12 +94,9 @@ jobs:
       - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Download updated files
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: updated-sources
-
       - name: Commit updates
         run: |
           git config user.name "github-actions[bot]"
