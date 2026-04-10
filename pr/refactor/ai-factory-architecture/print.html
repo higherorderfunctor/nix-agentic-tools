@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-413ef5e8.js";
+            window.path_to_searchindex_js = "searchindex-c54abf81.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-841f2094.js"></script>
@@ -2341,7 +2341,12 @@ package</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
 <h2 id="aiclaudebuddy"><a class="header" href="#aiclaudebuddy">ai.claude.buddy</a></h2>
-<p>Claude-specific buddy activation options (HM only).</p>
+<p>Buddy companion customization for claude-code. When enabled, an
+activation script patches a writable cli.js with a buddy salt
+computed from the configured options and Claude account UUID.</p>
+<p>State is stored in $XDG_STATE_HOME/claude-code-buddy/. The
+~/.claude.json companion field is reset whenever buddy options
+change so the new buddy hatches on next claude run.</p>
 <p><em>Type:</em>
 submodule</p>
 <p><em>Default:</em></p>
@@ -2367,6 +2372,110 @@ boolean</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
+<h2 id="aiclaudebuddydump"><a class="header" href="#aiclaudebuddydump">ai.claude.buddy.dump</a></h2>
+<p>Preferred lowest stat. Must differ from peak when both are
+set. null = accept whatever the salt produces.</p>
+<p><em>Type:</em>
+null or one of “CHAOS”, “DEBUGGING”, “PATIENCE”, “SNARK”, “WISDOM”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudebuddyeyes"><a class="header" href="#aiclaudebuddyeyes">ai.claude.buddy.eyes</a></h2>
+<p>Eye character.</p>
+<p><em>Type:</em>
+one of “·”, “✦”, “×”, “◉”, “@”, “°”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"·"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudebuddyhat"><a class="header" href="#aiclaudebuddyhat">ai.claude.buddy.hat</a></h2>
+<p>Hat accessory. Must be “none” for common rarity (assertion
+enforced at module evaluation).</p>
+<p><em>Type:</em>
+one of “beanie”, “crown”, “halo”, “none”, “propeller”, “tinyduck”, “tophat”, “wizard”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"none"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudebuddyoutputlogs"><a class="header" href="#aiclaudebuddyoutputlogs">ai.claude.buddy.outputLogs</a></h2>
+<p>Write buddy activation logs to a file.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudebuddypeak"><a class="header" href="#aiclaudebuddypeak">ai.claude.buddy.peak</a></h2>
+<p>Preferred highest stat. null = accept whatever the salt
+produces. Increases search time ~5x.</p>
+<p><em>Type:</em>
+null or one of “CHAOS”, “DEBUGGING”, “PATIENCE”, “SNARK”, “WISDOM”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudebuddyrarity"><a class="header" href="#aiclaudebuddyrarity">ai.claude.buddy.rarity</a></h2>
+<p>Rarity tier. Higher rarities take longer to compute at
+activation time:</p>
+<ul>
+<li>common: instant (~180 attempts)</li>
+<li>uncommon/rare: &lt;1s</li>
+<li>epic: ~1s</li>
+<li>legendary: ~1s (or ~30s shiny, minutes shiny+stats)</li>
+</ul>
+<p>The salt search is cached by a fingerprint of buddy options</p>
+<ul>
+<li>claude-code version + userId — only re-runs when something
+changes.</li>
+</ul>
+<p><em>Type:</em>
+one of “common”, “epic”, “legendary”, “rare”, “uncommon”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"common"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudebuddyshiny"><a class="header" href="#aiclaudebuddyshiny">ai.claude.buddy.shiny</a></h2>
+<p>Rainbow shimmer variant. Significantly increases salt search
+time (~100x more attempts).</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudebuddyspecies"><a class="header" href="#aiclaudebuddyspecies">ai.claude.buddy.species</a></h2>
+<p>Buddy species (one of 18).</p>
+<p><em>Type:</em>
+one of “axolotl”, “blob”, “cactus”, “capybara”, “cat”, “chonk”, “dragon”, “duck”, “ghost”, “goose”, “mushroom”, “octopus”, “owl”, “penguin”, “rabbit”, “robot”, “snail”, “turtle”</p>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">"duck"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
 <h2 id="aiclaudebuddystatepath"><a class="header" href="#aiclaudebuddystatepath">ai.claude.buddy.statePath</a></h2>
 <p>Relative path under $HOME for buddy state.</p>
 <p><em>Type:</em>
@@ -2377,6 +2486,41 @@ string</p>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudebuddyuserid"><a class="header" href="#aiclaudebuddyuserid">ai.claude.buddy.userId</a></h2>
+<p>Claude account UUID source. Provide exactly one of <code>text</code>
+(literal string) or <code>file</code> (path to file read at activation).</p>
+<p><em>Type:</em>
+attribute-tagged union with choices: file, text</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudebuddyuseridfile"><a class="header" href="#aiclaudebuddyuseridfile">ai.claude.buddy.userId.file</a></h2>
+<p>Path to a file containing the Claude account UUID.
+Read at activation time, so sops-nix and agenix paths
+work. Trailing whitespace is stripped.</p>
+<p><em>Type:</em>
+absolute path</p>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">config.sops.secrets."${username}-claude-uuid".path
+
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/mkClaude.nix">lib/mkClaude.nix</a></li>
+</ul>
+<h2 id="aiclaudebuddyuseridtext"><a class="header" href="#aiclaudebuddyuseridtext">ai.claude.buddy.userId.text</a></h2>
+<p>Literal Claude account UUID string. Get it from
+~/.claude.json under oauthAccount.accountUuid.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">"ebd8b240-9b28-44b1-a4bf-da487d9f111f"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/mkClaude.nix">lib/mkClaude.nix</a></li>
 </ul>
 <h2 id="aiclaudeinstructions-1"><a class="header" href="#aiclaudeinstructions-1">ai.claude.instructions</a></h2>
 <p>claude-specific instructions (appended to top-level ai.instructions).</p>
