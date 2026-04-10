@@ -14,6 +14,7 @@
     ".nvfetcher",
     "*.lock",
     "*.png",
+    "docs/human-todo.md",
     "docs/plan.md",
     "docs/superpowers/**",
     "locks",

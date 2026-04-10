@@ -139,6 +139,7 @@ in {
       excludes = [
         ".*-package-lock\\.json$"
         ".*\\.lock$"
+        "^docs/human-todo\\.md$"
         "^docs/plan\\.md$"
         "^docs/superpowers/"
       ];
