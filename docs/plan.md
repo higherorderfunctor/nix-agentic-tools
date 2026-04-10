@@ -94,6 +94,13 @@ High confidence, small scope. Good for review sessions.
         (see `memory/project_factory_architecture.md`)
       - Claude delegation model: upstream programs.claude-code.* for
         HM capabilities, direct writes for gaps
+      - Unfree guard pattern: `ensureUnfreeCheck` wraps unfree packages
+        via `final.symlinkJoin` with `meta` so consumer's allowUnfree
+        is respected while ourPkgs cache-hit parity is preserved. Novel
+        pattern not seen elsewhere in Nix ecosystem. Document heavily:
+        why it exists, how it works, the eval-time-only nature of the
+        unfree check, the symlinkJoin wrapper mechanics, CI implications.
+        (see `memory/project_unfree_guard_pattern.md`)
       - Flake-first source preference: if upstream repo has a nix flake
         that outputs the package (not just devShell), add it as a flake
         input (NOT nvfetcher) and consume
