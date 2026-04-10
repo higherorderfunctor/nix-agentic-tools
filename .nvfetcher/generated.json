@@ -79,12 +79,18 @@
         "passthru": null,
         "pinned": false,
         "src": {
+            "deepClone": false,
+            "fetchSubmodules": false,
+            "leaveDotGit": false,
             "name": null,
-            "sha256": "sha256-k36Ucri8CAw+xwVVKt58jwkjNlBF79KgHYr9v2lRvk8=",
-            "type": "url",
-            "url": "https://registry.npmjs.org/effect-mcp/-/effect-mcp-0.1.16.tgz"
+            "owner": "tim-smart",
+            "repo": "effect-mcp",
+            "rev": "v0.1.16",
+            "sha256": "sha256-KRE/5TzAoghBayNrnKtocYHE/vmFQraZfkS7CKN2E5c=",
+            "sparseCheckout": [],
+            "type": "github"
         },
-        "version": "0.1.16"
+        "version": "v0.1.16"
     },
     "git-absorb": {
         "cargoLock": null,
@@ -222,18 +228,24 @@
     },
     "kagimcp": {
         "cargoLock": null,
-        "date": null,
+        "date": "2026-04-08",
         "extract": null,
         "name": "kagimcp",
         "passthru": null,
         "pinned": false,
         "src": {
+            "deepClone": false,
+            "fetchSubmodules": false,
+            "leaveDotGit": false,
             "name": null,
-            "sha256": "sha256-jpBMSOEQkDrywEWFEGRQ1o+Ljq3+mhJOXhAOfrmHkZM=",
-            "type": "url",
-            "url": "https://pypi.org/packages/source/k/kagimcp/kagimcp-0.1.5.tar.gz"
+            "owner": "kagisearch",
+            "repo": "kagimcp",
+            "rev": "933e3384e9b1f34ebcc84b85310be7a6548900db",
+            "sha256": "sha256-jTxmn6H0SPV/vwDW+4tQiTXceVJZwwVgLXsF9bjSPS8=",
+            "sparseCheckout": [],
+            "type": "github"
         },
-        "version": "0.1.5"
+        "version": "933e3384e9b1f34ebcc84b85310be7a6548900db"
     },
     "kiro-cli": {
         "cargoLock": null,
@@ -314,12 +326,18 @@
         "passthru": null,
         "pinned": false,
         "src": {
+            "deepClone": false,
+            "fetchSubmodules": false,
+            "leaveDotGit": false,
             "name": null,
-            "sha256": "sha256-NCTssfV/gXRiXd/w3xW1NKCHGdh89fnWorHgON5pafE=",
-            "type": "url",
-            "url": "https://pypi.org/packages/source/m/mcp_proxy/mcp_proxy-0.11.0.tar.gz"
+            "owner": "sparfenyuk",
+            "repo": "mcp-proxy",
+            "rev": "v0.11.0",
+            "sha256": "sha256-oSRchkCnPoQ3KZXPW49O2yTgNRi9aJbKki3z9BxBPhA=",
+            "sparseCheckout": [],
+            "type": "github"
         },
-        "version": "0.11.0"
+        "version": "v0.11.0"
     },
     "mcp-server-fetch": {
         "cargoLock": null,

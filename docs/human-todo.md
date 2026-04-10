@@ -2,10 +2,11 @@
 
 NEXT - knock out AI script
 
-effect-ts
-switch to github and to build with pnpm
-
-drop allowFree and handle properly
+  1. effect-mcp — switch from npm to GitHub (tim-smart/effect-mcp), build with pnpm (has pnpm-lock.yaml)
+  2. openmemory-mcp — switch from npm to GitHub (openmemory/openmemory)
+  3. sequential-thinking-mcp — switch from npm to GitHub (modelcontextprotocol/servers mono-repo)
+  4. kagi-mcp — switch from PyPI to GitHub (kagisearch/kagimcp)
+  5. mcp-proxy — switch from PyPI to GitHub (sparfenyuk/mcp-proxy)
 
 Some other moves if possible (will have to update scripts most likely to find these files or other config files).
 

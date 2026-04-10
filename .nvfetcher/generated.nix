@@ -47,10 +47,13 @@
   };
   effect-mcp = {
     pname = "effect-mcp";
-    version = "0.1.16";
-    src = fetchurl {
-      url = "https://registry.npmjs.org/effect-mcp/-/effect-mcp-0.1.16.tgz";
-      sha256 = "sha256-k36Ucri8CAw+xwVVKt58jwkjNlBF79KgHYr9v2lRvk8=";
+    version = "v0.1.16";
+    src = fetchFromGitHub {
+      owner = "tim-smart";
+      repo = "effect-mcp";
+      rev = "v0.1.16";
+      fetchSubmodules = false;
+      sha256 = "sha256-KRE/5TzAoghBayNrnKtocYHE/vmFQraZfkS7CKN2E5c=";
     };
   };
   git-absorb = {
@@ -129,11 +132,15 @@
   };
   kagimcp = {
     pname = "kagimcp";
-    version = "0.1.5";
-    src = fetchurl {
-      url = "https://pypi.org/packages/source/k/kagimcp/kagimcp-0.1.5.tar.gz";
-      sha256 = "sha256-jpBMSOEQkDrywEWFEGRQ1o+Ljq3+mhJOXhAOfrmHkZM=";
+    version = "933e3384e9b1f34ebcc84b85310be7a6548900db";
+    src = fetchFromGitHub {
+      owner = "kagisearch";
+      repo = "kagimcp";
+      rev = "933e3384e9b1f34ebcc84b85310be7a6548900db";
+      fetchSubmodules = false;
+      sha256 = "sha256-jTxmn6H0SPV/vwDW+4tQiTXceVJZwwVgLXsF9bjSPS8=";
     };
+    date = "2026-04-08";
   };
   kiro-cli = {
     pname = "kiro-cli";
@@ -179,10 +186,13 @@
   };
   mcp-proxy = {
     pname = "mcp-proxy";
-    version = "0.11.0";
-    src = fetchurl {
-      url = "https://pypi.org/packages/source/m/mcp_proxy/mcp_proxy-0.11.0.tar.gz";
-      sha256 = "sha256-NCTssfV/gXRiXd/w3xW1NKCHGdh89fnWorHgON5pafE=";
+    version = "v0.11.0";
+    src = fetchFromGitHub {
+      owner = "sparfenyuk";
+      repo = "mcp-proxy";
+      rev = "v0.11.0";
+      fetchSubmodules = false;
+      sha256 = "sha256-oSRchkCnPoQ3KZXPW49O2yTgNRi9aJbKki3z9BxBPhA=";
     };
   };
   mcp-server-fetch = {

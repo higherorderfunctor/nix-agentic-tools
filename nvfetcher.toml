@@ -98,35 +98,48 @@ fetch.github = "sdiehl/sympy-mcp"
 # where possible (see context7-mcp pattern above). Each needs manual
 # review to find the upstream repo + check for GitHub releases.
 
+# Upstream: https://github.com/tim-smart/effect-mcp (tagged releases)
 [effect-mcp]
-src.cmd = "curl -s https://registry.npmjs.org/effect-mcp/latest | jq -r .version"
-fetch.url = "https://registry.npmjs.org/effect-mcp/-/effect-mcp-$ver.tgz"
+src.github = "tim-smart/effect-mcp"
+fetch.github = "tim-smart/effect-mcp"
 
+# Upstream: https://github.com/openmemory/openmemory
+# STAYS npm: no GitHub releases or tags. npm is the only versioned source.
+# TODO: revisit when upstream adds releases.
 [openmemory-mcp]
 src.cmd = "curl -s https://registry.npmjs.org/openmemory-js/latest | jq -r .version"
 fetch.url = "https://registry.npmjs.org/openmemory-js/-/openmemory-js-$ver.tgz"
 
+# Upstream: https://github.com/modelcontextprotocol/servers (mono-repo)
+# STAYS npm: mono-repo tags are `typescript-servers-X.Y.Z` not per-package.
+# Individual package versions track npm, not GitHub releases.
+# TODO: revisit when/if upstream adds per-package tags.
 [sequential-thinking-mcp]
 src.cmd = "curl -s https://registry.npmjs.org/@modelcontextprotocol/server-sequential-thinking/latest | jq -r .version"
 fetch.url = "https://registry.npmjs.org/@modelcontextprotocol/server-sequential-thinking/-/server-sequential-thinking-$ver.tgz"
 
 # ── MCP servers: PyPI ─────────────────────────────────────────────
-# TODO: these fetch from PyPI. Check if nixpkgs uses PyPI or
-# GitHub source for its build, and match. If no nixpkgs package,
-# prefer GitHub source with releases over PyPI where available.
 
+# Upstream: https://github.com/kagisearch/kagimcp (tagged releases)
+# kagiapi is a dependency — no GitHub releases, stays PyPI.
 [kagiapi]
 src.pypi = "kagiapi"
 fetch.pypi = "kagiapi"
 
 [kagimcp]
-src.pypi = "kagimcp"
-fetch.pypi = "kagimcp"
+# Has tags (v0.1.5) but no GitHub Releases — use git tag tracking
+src.git = "https://github.com/kagisearch/kagimcp.git"
+src.branch = "main"
+src.use_max_tag = true
+fetch.github = "kagisearch/kagimcp"
 
+# Upstream: https://github.com/sparfenyuk/mcp-proxy (tagged releases)
 [mcp-proxy]
-src.pypi = "mcp-proxy"
-fetch.pypi = "mcp_proxy"
+src.github = "sparfenyuk/mcp-proxy"
+fetch.github = "sparfenyuk/mcp-proxy"
 
+# Upstream: https://github.com/modelcontextprotocol/servers (mono-repo)
+# STAYS PyPI: mono-repo, no per-package GitHub tags.
 [mcp-server-fetch]
 src.pypi = "mcp-server-fetch"
 fetch.pypi = "mcp_server_fetch"
