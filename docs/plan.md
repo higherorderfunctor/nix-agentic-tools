@@ -289,6 +289,12 @@ Blocked on factory shape being stable and verified by nixos-config.
 - [ ] Remove `update.yml` push trigger, keep schedule + dispatch
 - [ ] CUDA build verification
 - [ ] Review cachix push strategy
+- [ ] **Split CI into update + build workflows** —
+      Current: single `update.yml` runs full pipeline (update → build → commit)
+      on every push to feature branch. Target: `update.yml` on main schedule
+      opens PR with updated sources+hashes; `build.yml` triggers on PR open,
+      builds per-platform, pushes to cachix. The three-job structure already
+      maps to this split. Blocked on: merging to main + stable CI.
 
 ---
 

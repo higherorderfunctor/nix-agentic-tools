@@ -1,3 +1,11 @@
+# CI pipeline: update sources → build per-platform → commit hashes.
+#
+# Current: full pipeline on every push to feature branch.
+# Future:  split into two workflows:
+#   1. update.yml — schedule on main, opens PR with updated sources+hashes
+#   2. build.yml  — on PR, builds + pushes to cachix
+# The three jobs below map to that split: update-sources → (future workflow 1),
+# build + commit → (future workflow 2, triggered by PR).
 name: Update
 
 on:
