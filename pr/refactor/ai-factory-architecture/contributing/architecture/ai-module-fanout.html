@@ -34,7 +34,7 @@
             const path_to_root = "../../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../../searchindex-185fa753.js";
+            window.path_to_searchindex_js = "../../searchindex-cf14695c.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../../toc-841f2094.js"></script>
@@ -181,10 +181,12 @@
                     <main>
                         <h2 id="ai-module-fanout-semantics"><a class="header" href="#ai-module-fanout-semantics">ai Module Fanout Semantics</a></h2>
 <blockquote>
-<p><strong>Last verified:</strong> 2026-04-07 (commit f2e911c). If you change the
-gating, the <code>programs.*.enable</code> flipping, or the cross-ecosystem
-data flow in <code>modules/ai/default.nix</code> and this fragment isn’t
-updated in the same commit, stop and fix it.</p>
+<p><strong>Last verified:</strong> 2026-04-08 (commit pending — A10 delete
+modules/ tree). If you change the gating, the
+<code>programs.*.enable</code> flipping, or the cross-ecosystem data flow
+in the per-package factories (<code>packages/*/lib/mk*.nix</code>) or
+shared options (<code>lib/ai/sharedOptions.nix</code>) and this fragment
+isn’t updated in the same commit, stop and fix it.</p>
 </blockquote>
 <p>The <code>ai.*</code> HM module provides a unified interface that fans out
 shared AI-CLI configuration to each enabled ecosystem (Claude,
@@ -244,8 +246,8 @@ over the per-CLI enables.</p>
 <li><code>ai.claude.package</code> / <code>ai.copilot.package</code> / <code>ai.kiro.package</code>
 — package override, fans out to <code>programs.&lt;cli&gt;.package</code></li>
 <li><code>ai.claude.buddy</code> — fans out to <code>programs.claude-code.buddy</code>
-(which is declared by <code>modules/claude-code-buddy/</code>, a separate
-HM module that must also be imported)</li>
+(which is declared by the claude-code factory in
+<code>packages/claude-code/modules/homeManager/</code>)</li>
 </ul>
 <p><strong>Cross-ecosystem options</strong> (live at <code>ai.*</code> top level, fan out
 to every enabled ecosystem simultaneously):</p>
@@ -295,8 +297,8 @@ environmentVariables), at least one ecosystem must be enabled
 <h3 id="whats-not-in-the-ai-module"><a class="header" href="#whats-not-in-the-ai-module">What’s NOT in the ai module</a></h3>
 <ul>
 <li>The actual <code>programs.claude-code.buddy</code> OPTION — declared by
-<code>modules/claude-code-buddy/default.nix</code>. The ai module just
-fans VALUES into it.</li>
+<code>packages/claude-code/modules/homeManager/</code>. The ai module
+just fans VALUES into it.</li>
 <li>The package wrapping (Bun runtime) for claude-code — handled
 in <code>packages/ai-clis/claude-code.nix</code> at overlay level.</li>
 <li>MCP server config — ai has no <code>mcpServers</code> option. Consumers
@@ -310,9 +312,8 @@ have been more pain than value.</li>
 ongoing work to expose more <code>programs.claude-code.*</code> options via
 <code>ai.claude.*</code>.</p>
 <h3 id="config-parity"><a class="header" href="#config-parity">Config parity</a></h3>
-<p>Every option on the HM <code>ai</code> module (<code>modules/ai/default.nix</code>)
-must have a matching option on the devenv <code>ai</code> module
-(<code>modules/devenv/ai.nix</code>) with the same semantics. If you add
+<p>Every option on the HM ai module must have a matching option on
+the devenv ai module with the same semantics. If you add
 an option to one, add it to the other in the same commit.
 This is enforced by convention, not by the module system.</p>
 <h3 id="verifying-fanout-works"><a class="header" href="#verifying-fanout-works">Verifying fanout works</a></h3>
