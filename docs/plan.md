@@ -120,6 +120,10 @@ High confidence, small scope. Good for review sessions.
       extract to `lib/external-servers.nix` or a content package.
       Currently `lib.externalServers.aws-mcp` is hand-defined inline.
 
+- [ ] **Pre-main-merge cleanup: remove `docs/human-todo.md`** —
+      scratch file for user notes during dev. Also remove its entry
+      from `cspell.json` ignorePaths + `devenv.nix` cspell excludes.
+
 - [ ] **Rename `devshell/` → `modules/devshell/`** — top-level
       splits modules across `lib/`, `devshell/`, and per-package
       `modules/`. Move `devshell/` for layout consistency. Flagged on
