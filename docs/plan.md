@@ -39,78 +39,69 @@ Backup branches (DO NOT GC):
 High confidence, small scope. Good for review sessions.
 
 - [x] **Move `lib/hm-helpers.nix` + `lib/ai-common.nix` into `lib/ai/`**
-
 - [x] **Group overlay packages under `pkgs.ai.{mcpServers,lspServers}`
-      + `pkgs.gitTools`** — DONE in `46adc29` + `6cc3189`.
+      + `pkgs.gitTools`**
+- [x] **Refactor `mkDevFragment` location discriminator as attrset
+      lookup**
+- [x] **context7-mcp: override nixpkgs instead of from-scratch build**
+      — proof case for the overlay override pattern. Uses nvfetcher
+      GitHub source + runCommandLocal unpack + fetchPnpmDeps.
 
-- [ ] **Convert 7 from-scratch overlays to nixpkgs overrides** —
-      anti-pattern: these packages exist in nixpkgs but we build from
-      scratch instead of overriding. Should be
-      `prev.<pkg>.overrideAttrs` to inherit upstream build logic and
-      just pin src + version from nvfetcher. Packages to convert:
-      context7-mcp (nixpkgs: `context7-mcp`),
-      fetch-mcp (`mcp-server-fetch`),
-      github-mcp (`github-mcp-server`),
-      git-mcp (`mcp-server-git`),
-      git-revise (`git-revise`),
-      mcp-language-server (`mcp-language-server`),
-      mcp-proxy (`mcp-proxy`).
-      May require hash recalculation if nixpkgs uses a different
-      build system (e.g., pnpm vs our npm). Also strip `allowUnfree`
-      from overlays that don't need it — anti-pattern forcing it
-      globally without user awareness.
+- [ ] **Convert remaining 6 from-scratch overlays to nixpkgs
+      overrides** — same pattern as context7-mcp. Switch nvfetcher
+      from npm/PyPI tarballs to GitHub source, override nixpkgs
+      derivation, compute dep hashes. Match build tool to source
+      (e.g., pnpm lockfile → pnpm build, not npm). Strip
+      `allowUnfree` where not needed. Packages:
+      fetch-mcp (`mcp-server-fetch`), github-mcp
+      (`github-mcp-server`), git-mcp (`mcp-server-git`),
+      git-revise (`git-revise`), mcp-language-server
+      (`mcp-language-server`), mcp-proxy (`mcp-proxy`).
+      Pattern: `memory/project_nvfetcher_overlay_pattern.md`.
 
-- [ ] **Audit all overlay build tools against upstream** — MANUAL
-      USER REVIEW REQUIRED. After the override conversions above,
-      validate that each package's source + build tool matches
-      upstream intent. Examples: effect-mcp should source from GitHub
-      main and build with pnpm (like nixpkgs context7-mcp pattern),
-      not our current npm approach. For packages not in nixpkgs, verify
-      we're using the upstream-recommended build tool. User prefers
-      pnpm over npm when upstream uses pnpm — don't force pnpm sources
-      through npm. This may require new hash calculations (npmDepsHash →
-      pnpmDeps) and lock file changes. Each package needs individual
-      attention. User will manually review each one.
+- [ ] **Audit all overlay source + build tools against upstream** —
+      MANUAL USER REVIEW REQUIRED. For each package, verify:
+      (a) nvfetcher fetches from GitHub (not npm/PyPI) unless no
+      GitHub source exists (flag to user), (b) build tool matches
+      source lockfile (pnpm lockfile → pnpm build, not npm),
+      (c) allowUnfree stripped unless actually needed. For packages
+      NOT in nixpkgs, prefer GitHub source with releases over
+      registry tarballs. User will inspect each one.
 
-- [ ] **Regenerate instruction files** — after the factory refactor,
-      etc. `pkgs.ai.lspServers.agnix-lsp`, etc.
-      Proxies from grouped packages: `pkgs.ai.agnix` remains the CLI
-      (default `mainProgram`, used via `lib.getExe`).
-      `lib.getExe' pkgs.ai.agnix "agnix-mcp"` accesses the MCP binary;
-- [x] **Regenerate instruction files** — verified up-to-date, no changes.
+- [ ] **Regenerate instruction files** — run
+      `devenv tasks run --mode before generate:instructions` and
+      commit any changes after overlay/factory refactors.
 
-- [ ] **Regenerate instruction files (re-verify)** — after the overlay grouping refactor,
-      the dev instruction files (.claude/rules/*.md, .github/instructions/,
-      .kiro/steering/) may be stale. Run
-      `devenv tasks run --mode before generate:instructions` and commit
-      any changes. Quick verification task.
+- [ ] **Update architecture fragments for factory structure** —
+      `.claude/rules/*.md` may reference deleted `modules/` paths.
+      Audit each fragment and fix stale prose.
 
-- [ ] **Update architecture fragments for factory structure** — several
-      `.claude/rules/*.md` files reference `modules/ai/default.nix` and
-      `modules/copilot-cli/default.nix` (now deleted). The Task 9
-      subagent updated some path scoping but the text content may still
-      describe the pre-factory pattern. Audit each fragment under
-      `.claude/rules/` and fix stale prose. Related:
-      `memory/project_factory_known_gaps.md` open question #3.
+- [ ] **Clean up `lib/options-doc.nix` stubs** — consolidate ad-hoc
+      stub extensions from Tasks 3-6.
 
-- [ ] **Clean up `lib/options-doc.nix` stubs** — the HM stub module
-      and devenv stub module have been extended multiple times during
-      Tasks 3-6 with ad-hoc `programs.claude-code.*`, `assertions`,
-      etc. Review and consolidate. The stubs exist solely for the
-      options-doc `evalModules` walker.
+- [ ] **Verify cspell project-terms.txt** — audit for stale terms.
 
-- [ ] **Verify cspell project-terms.txt** — the dictionary was
-      bulk-merged from main in commit `4aeab7b`. Some terms may be
-      stale (references to dissolved packages or modules). Quick audit.
+- [ ] **Update AI instruction fragments with architecture decisions**
+      — small decisions made during implementation should be codified
+      into dev fragments so they fan out to all ecosystems. Decisions
+      to document:
+      - nvfetcher pattern: GitHub source over npm/PyPI, scoped-tag
+        workaround, runCommandLocal unpack, fetchPnpmDeps with
+        finalAttrs (see `memory/project_nvfetcher_overlay_pattern.md`)
+      - overlay grouping: `pkgs.ai.{mcpServers,lspServers}` +
+        `pkgs.gitTools`, agnix mainProgram overrides
+      - factory composition: mkAiApp record + hmTransform/devenvTransform
+        (see `memory/project_factory_architecture.md`)
+      - Claude delegation model: upstream programs.claude-code.* for
+        HM capabilities, direct writes for gaps
 
-- [ ] **Delete `docs/superpowers/` directory** — already dissolved
-      (contents moved to memory + this backlog). The directory should
-      be physically removed in the commit that lands this plan rewrite.
-
-- [ ] **Refactor `mkDevFragment` location discriminator as attrset
-      lookup** — current if/else-if branching on location strings
-      works but extends linearly. Replace with
-      `locationBases.${location} or (throw ...)`. ~10 lines.
+- [ ] **Update script: automated dep hash computation** — the update
+      pipeline should compute pnpmDepsHash / vendorHash / npmDepsHash
+      without manual copy-paste. Pattern: set hash to dummy → `nix
+      build .#<pkg>.pnpmDeps 2>&1 | grep "got:" | awk '{print $2}'`
+      → write to hashes.json. Target: fully automated hourly GitHub
+      Actions (Copilot-driven). No AI needed.
+      See `memory/project_nvfetcher_overlay_pattern.md` for details.
 
 - [ ] **Replace `isRoot = package == "monorepo"` with category
       metadata** — `mkDevComposed` hardcodes a string match. Should

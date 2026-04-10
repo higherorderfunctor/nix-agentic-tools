@@ -50,11 +50,11 @@
         "pinned": false,
         "src": {
             "name": null,
-            "sha256": "sha256-//iF+Rbms6cYU1WWAa8Sq7G2RxTPwvBjWiVhO5Z0k0c=",
+            "sha256": "sha256-Dkip2mnbcvks8SbZVBqXajaRi1SQEemN2IDiHxlaqbA=",
             "type": "url",
-            "url": "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.92.tgz"
+            "url": "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.100.tgz"
         },
-        "version": "2.1.92"
+        "version": "2.1.100"
     },
     "context7-mcp": {
         "cargoLock": null,
@@ -64,10 +64,10 @@
         "passthru": null,
         "pinned": false,
         "src": {
-            "name": null,
-            "sha256": "sha256-IEgTf9uutHqXn9KBm8uVWN4YkFSkRj5/OhSaydRg7IQ=",
+            "name": "context7--upstash-context7-mcp_2.1.7.tar.gz",
+            "sha256": "sha256-0l42zdVNiyAQei9Fl29xNLBl74u74UA4zf7jZzsB7ME=",
             "type": "url",
-            "url": "https://registry.npmjs.org/@upstash/context7-mcp/-/context7-mcp-2.1.7.tgz"
+            "url": "https://github.com/upstash/context7/archive/refs/tags/@upstash/context7-mcp@2.1.7.tar.gz"
         },
         "version": "2.1.7"
     },
@@ -178,11 +178,11 @@
         "pinned": false,
         "src": {
             "name": null,
-            "sha256": "sha256-8ZlmXw8lIuTDFf59nl65g+Yg7CvJeyJJ1pGMaARz+bg=",
+            "sha256": "sha256-2h40sQXtHPpftSz0MQg98PVW078PLMyPmZ+wwAMxQIE=",
             "type": "url",
-            "url": "https://github.com/github/copilot-cli/releases/download/v1.0.19/copilot-linux-x64.tar.gz"
+            "url": "https://github.com/github/copilot-cli/releases/download/v1.0.22/copilot-linux-x64.tar.gz"
         },
-        "version": "1.0.19"
+        "version": "1.0.22"
     },
     "github-mcp-server": {
         "cargoLock": null,
@@ -229,11 +229,11 @@
         "pinned": false,
         "src": {
             "name": null,
-            "sha256": "sha256-fCFmd6BKyyeggekFsJtno394ZeswTYSRELryHQQAcyY=",
+            "sha256": "sha256-jpBMSOEQkDrywEWFEGRQ1o+Ljq3+mhJOXhAOfrmHkZM=",
             "type": "url",
-            "url": "https://pypi.org/packages/source/k/kagimcp/kagimcp-0.1.4.tar.gz"
+            "url": "https://pypi.org/packages/source/k/kagimcp/kagimcp-0.1.5.tar.gz"
         },
-        "version": "0.1.4"
+        "version": "0.1.5"
     },
     "kiro-cli": {
         "cargoLock": null,
@@ -244,11 +244,11 @@
         "pinned": false,
         "src": {
             "name": null,
-            "sha256": "sha256-UH6uVmDS7FKWUGotH4yPVoVnzSHBMfz5rTaMkXl4ztM=",
+            "sha256": "sha256-6FZgHdKBDz8zrrJf0MgGtzKz279j4X3H/B6tW+0WlZ8=",
             "type": "url",
-            "url": "https://desktop-release.q.us-east-1.amazonaws.com/1.29.4/kirocli-x86_64-linux.tar.gz"
+            "url": "https://desktop-release.q.us-east-1.amazonaws.com/1.29.6/kirocli-x86_64-linux.tar.gz"
         },
-        "version": "1.29.4"
+        "version": "1.29.6"
     },
     "kiro-cli-darwin": {
         "cargoLock": null,
@@ -259,11 +259,11 @@
         "pinned": false,
         "src": {
             "name": "kiro-cli.dmg",
-            "sha256": "sha256-qFd2TRIknjMgg+Dpf3MwWzoCtkjEcaJulo2n+B+T4zY=",
+            "sha256": "sha256-qe9svpw3ngk9EU12woeMXW8+gTNYxGfzdePVUgodUWY=",
             "type": "url",
-            "url": "https://desktop-release.q.us-east-1.amazonaws.com/1.29.4/Kiro%20CLI.dmg"
+            "url": "https://desktop-release.q.us-east-1.amazonaws.com/1.29.6/Kiro%20CLI.dmg"
         },
-        "version": "1.29.4"
+        "version": "1.29.6"
     },
     "kiro-gateway": {
         "cargoLock": null,

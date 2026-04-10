@@ -1,10 +1,13 @@
 # Unified version tracking for all packages.
-# Run: nvfetcher (regenerates per-package .nvfetcher/generated.nix)
+# Run: nvfetcher -o .nvfetcher -k ~/.config/nvfetcher/keyfile.toml
 #
-# Note: nvfetcher output is currently per-package (.nvfetcher/ in each
-# package group). This unified config is the source of truth for what
-# versions to track. The update app (Phase 4) will handle routing
-# nvfetcher output to the correct per-package directory.
+# Pattern: prefer GitHub source over npm/PyPI tarballs so the build
+# starts from the same source tree as nixpkgs. When the repo uses
+# scoped tags (e.g. @upstash/context7-mcp@<ver>), use github_tag +
+# include_regex + from_pattern to extract the version, and fetch.url
+# with url.name to dodge @ in Nix store paths. The overlay unpacks
+# fetchurl tarballs via runCommandLocal when nixpkgs expects a
+# directory-type $src.
 
 # ── Dev tools ─────────────────────────────────────────────────────
 
@@ -55,8 +58,6 @@ src.github = "arxanas/git-branchless"
 fetch.github = "arxanas/git-branchless"
 
 [git-revise]
-# Track version from PyPI, fetch source from GitHub (includes tests).
-# from_pattern/to_pattern adds "v" prefix: PyPI "0.8.0" → GitHub tag "v0.8.0"
 src.pypi = "git-revise"
 src.from_pattern = "^(.*)$"
 src.to_pattern = "v\\1"
@@ -64,24 +65,28 @@ fetch.github = "mystor/git-revise"
 
 # ── MCP servers: GitHub ───────────────────────────────────────────
 
-# Upstream: https://github.com/github/github-mcp-server (tagged releases)
+[context7-mcp]
+src.github_tag = "upstash/context7"
+src.include_regex = "^@upstash/context7-mcp@[0-9]+\\.[0-9]+\\.[0-9]+$"
+src.from_pattern = "^@upstash/context7-mcp@([0-9]+\\.[0-9]+\\.[0-9]+)$"
+src.to_pattern = "\\1"
+fetch.url = "https://github.com/upstash/context7/archive/refs/tags/@upstash/context7-mcp@$ver.tar.gz"
+url.name = "context7--upstash-context7-mcp_$ver.tar.gz"
+
 [github-mcp-server]
 src.github = "github/github-mcp-server"
 fetch.github = "github/github-mcp-server"
 
-# Upstream: https://github.com/hoangsonww/GitIntel-MCP-Server (no releases)
 [git-intel-mcp]
 src.git = "https://github.com/hoangsonww/GitIntel-MCP-Server.git"
 src.use_commit = true
 src.branch = "master"
 fetch.git = "https://github.com/hoangsonww/GitIntel-MCP-Server.git"
 
-# Upstream: https://github.com/isaacphi/mcp-language-server (tagged releases)
 [mcp-language-server]
 src.github = "isaacphi/mcp-language-server"
 fetch.github = "isaacphi/mcp-language-server"
 
-# Upstream: https://github.com/sdiehl/sympy-mcp (no releases)
 [sympy-mcp]
 src.git = "https://github.com/sdiehl/sympy-mcp.git"
 src.use_commit = true
@@ -89,57 +94,43 @@ src.branch = "main"
 fetch.github = "sdiehl/sympy-mcp"
 
 # ── MCP servers: npm ──────────────────────────────────────────────
+# TODO: these fetch from npm registry tarballs. Prefer GitHub source
+# where possible (see context7-mcp pattern above). Each needs manual
+# review to find the upstream repo + check for GitHub releases.
 
-# Upstream: https://github.com/upstash/context7
-[context7-mcp]
-# Version from npm. nvfetcher tracks the npm tarball for version automation,
-# but the overlay fetches from GitHub via fetchFromGitHub (has pnpm-lock.yaml
-# for nixpkgs pnpm override). The scoped tag `@upstash/context7-mcp@<ver>`
-# has `@` that nvfetcher's fetchgit can't handle. GitHub source hash is
-# stored in hashes.json under `context7-mcp.srcHash` and maintained manually
-# via `nix-prefetch-url --unpack` or by copying from nixpkgs when versions
-# align. The npm tarball hash (`src` field) is unused by the overlay.
-src.cmd = "curl -s https://registry.npmjs.org/@upstash/context7-mcp/latest | jq -r .version"
-fetch.url = "https://registry.npmjs.org/@upstash/context7-mcp/-/context7-mcp-$ver.tgz"
-
-# Upstream: https://github.com/tim-smart/effect-mcp
 [effect-mcp]
 src.cmd = "curl -s https://registry.npmjs.org/effect-mcp/latest | jq -r .version"
 fetch.url = "https://registry.npmjs.org/effect-mcp/-/effect-mcp-$ver.tgz"
 
-# Upstream: https://github.com/openmemory/openmemory
 [openmemory-mcp]
 src.cmd = "curl -s https://registry.npmjs.org/openmemory-js/latest | jq -r .version"
 fetch.url = "https://registry.npmjs.org/openmemory-js/-/openmemory-js-$ver.tgz"
 
-# Upstream: https://github.com/modelcontextprotocol/servers (sequentialthinking)
 [sequential-thinking-mcp]
 src.cmd = "curl -s https://registry.npmjs.org/@modelcontextprotocol/server-sequential-thinking/latest | jq -r .version"
 fetch.url = "https://registry.npmjs.org/@modelcontextprotocol/server-sequential-thinking/-/server-sequential-thinking-$ver.tgz"
 
 # ── MCP servers: PyPI ─────────────────────────────────────────────
+# TODO: these fetch from PyPI. Check if nixpkgs uses PyPI or
+# GitHub source for its build, and match. If no nixpkgs package,
+# prefer GitHub source with releases over PyPI where available.
 
-# Upstream: https://github.com/kagisearch/kagimcp (dependency)
 [kagiapi]
 src.pypi = "kagiapi"
 fetch.pypi = "kagiapi"
 
-# Upstream: https://github.com/kagisearch/kagimcp
 [kagimcp]
 src.pypi = "kagimcp"
 fetch.pypi = "kagimcp"
 
-# Upstream: https://github.com/modelcontextprotocol/python-sdk (mcp-proxy CLI)
 [mcp-proxy]
 src.pypi = "mcp-proxy"
 fetch.pypi = "mcp_proxy"
 
-# Upstream: https://github.com/modelcontextprotocol/servers (src/fetch)
 [mcp-server-fetch]
 src.pypi = "mcp-server-fetch"
 fetch.pypi = "mcp_server_fetch"
 
-# Upstream: https://github.com/modelcontextprotocol/servers (src/git)
 [mcp-server-git]
 src.pypi = "mcp-server-git"
 fetch.pypi = "mcp_server_git"

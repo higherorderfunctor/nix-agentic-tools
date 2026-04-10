@@ -30,18 +30,19 @@
   };
   claude-code = {
     pname = "claude-code";
-    version = "2.1.92";
+    version = "2.1.100";
     src = fetchurl {
-      url = "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.92.tgz";
-      sha256 = "sha256-//iF+Rbms6cYU1WWAa8Sq7G2RxTPwvBjWiVhO5Z0k0c=";
+      url = "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.100.tgz";
+      sha256 = "sha256-Dkip2mnbcvks8SbZVBqXajaRi1SQEemN2IDiHxlaqbA=";
     };
   };
   context7-mcp = {
     pname = "context7-mcp";
     version = "2.1.7";
     src = fetchurl {
-      url = "https://registry.npmjs.org/@upstash/context7-mcp/-/context7-mcp-2.1.7.tgz";
-      sha256 = "sha256-IEgTf9uutHqXn9KBm8uVWN4YkFSkRj5/OhSaydRg7IQ=";
+      url = "https://github.com/upstash/context7/archive/refs/tags/@upstash/context7-mcp@2.1.7.tar.gz";
+      name = "context7--upstash-context7-mcp_2.1.7.tar.gz";
+      sha256 = "sha256-0l42zdVNiyAQei9Fl29xNLBl74u74UA4zf7jZzsB7ME=";
     };
   };
   effect-mcp = {
@@ -101,10 +102,10 @@
   };
   github-copilot-cli = {
     pname = "github-copilot-cli";
-    version = "1.0.19";
+    version = "1.0.22";
     src = fetchurl {
-      url = "https://github.com/github/copilot-cli/releases/download/v1.0.19/copilot-linux-x64.tar.gz";
-      sha256 = "sha256-8ZlmXw8lIuTDFf59nl65g+Yg7CvJeyJJ1pGMaARz+bg=";
+      url = "https://github.com/github/copilot-cli/releases/download/v1.0.22/copilot-linux-x64.tar.gz";
+      sha256 = "sha256-2h40sQXtHPpftSz0MQg98PVW078PLMyPmZ+wwAMxQIE=";
     };
   };
   github-mcp-server = {
@@ -128,27 +129,27 @@
   };
   kagimcp = {
     pname = "kagimcp";
-    version = "0.1.4";
+    version = "0.1.5";
     src = fetchurl {
-      url = "https://pypi.org/packages/source/k/kagimcp/kagimcp-0.1.4.tar.gz";
-      sha256 = "sha256-fCFmd6BKyyeggekFsJtno394ZeswTYSRELryHQQAcyY=";
+      url = "https://pypi.org/packages/source/k/kagimcp/kagimcp-0.1.5.tar.gz";
+      sha256 = "sha256-jpBMSOEQkDrywEWFEGRQ1o+Ljq3+mhJOXhAOfrmHkZM=";
     };
   };
   kiro-cli = {
     pname = "kiro-cli";
-    version = "1.29.4";
+    version = "1.29.6";
     src = fetchurl {
-      url = "https://desktop-release.q.us-east-1.amazonaws.com/1.29.4/kirocli-x86_64-linux.tar.gz";
-      sha256 = "sha256-UH6uVmDS7FKWUGotH4yPVoVnzSHBMfz5rTaMkXl4ztM=";
+      url = "https://desktop-release.q.us-east-1.amazonaws.com/1.29.6/kirocli-x86_64-linux.tar.gz";
+      sha256 = "sha256-6FZgHdKBDz8zrrJf0MgGtzKz279j4X3H/B6tW+0WlZ8=";
     };
   };
   kiro-cli-darwin = {
     pname = "kiro-cli-darwin";
-    version = "1.29.4";
+    version = "1.29.6";
     src = fetchurl {
-      url = "https://desktop-release.q.us-east-1.amazonaws.com/1.29.4/Kiro%20CLI.dmg";
+      url = "https://desktop-release.q.us-east-1.amazonaws.com/1.29.6/Kiro%20CLI.dmg";
       name = "kiro-cli.dmg";
-      sha256 = "sha256-qFd2TRIknjMgg+Dpf3MwWzoCtkjEcaJulo2n+B+T4zY=";
+      sha256 = "sha256-qe9svpw3ngk9EU12woeMXW8+gTNYxGfzdePVUgodUWY=";
     };
   };
   kiro-gateway = {
