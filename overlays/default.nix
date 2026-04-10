@@ -67,15 +67,14 @@
     # MCP servers
     context7-mcp = merge "context7-mcp";
     effect-mcp = merge "effect-mcp";
-    fetch-mcp = merge "mcp-server-fetch"; # nvfetcher key
     git-intel-mcp = merge "git-intel-mcp";
-    git-mcp = merge "mcp-server-git"; # nvfetcher key
     github-mcp = merge "github-mcp-server"; # nvfetcher key
     kagi-mcp = merge "kagimcp"; # nvfetcher key
     mcp-language-server = merge "mcp-language-server";
     mcp-proxy = merge "mcp-proxy";
+    # modelcontextprotocol/servers mono-repo — shared source, per-package version
+    mcp-servers-mono = merge "modelcontextprotocol-servers";
     openmemory-mcp = merge "openmemory-mcp";
-    sequential-thinking-mcp = merge "sequential-thinking-mcp";
     sympy-mcp = merge "sympy-mcp";
   };
 
@@ -121,7 +120,7 @@
     };
     fetch-mcp = import ./mcp-servers/fetch-mcp.nix {
       inherit inputs final;
-      nv = nv.fetch-mcp;
+      nv = nv.mcp-servers-mono;
     };
     git-intel-mcp = import ./mcp-servers/git-intel-mcp.nix {
       inherit inputs final;
@@ -129,7 +128,7 @@
     };
     git-mcp = import ./mcp-servers/git-mcp.nix {
       inherit inputs final;
-      nv = nv.git-mcp;
+      nv = nv.mcp-servers-mono;
     };
     github-mcp = import ./mcp-servers/github-mcp.nix {
       inherit inputs final;
@@ -154,7 +153,7 @@
     };
     sequential-thinking-mcp = import ./mcp-servers/sequential-thinking-mcp.nix {
       inherit inputs final;
-      nv = nv.sequential-thinking-mcp;
+      nv = nv.mcp-servers-mono;
     };
     serena-mcp = import ./mcp-servers/serena-mcp.nix {inherit inputs final;};
     sympy-mcp = import ./mcp-servers/sympy-mcp.nix {

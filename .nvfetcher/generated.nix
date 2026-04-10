@@ -195,21 +195,17 @@
       sha256 = "sha256-oSRchkCnPoQ3KZXPW49O2yTgNRi9aJbKki3z9BxBPhA=";
     };
   };
-  mcp-server-fetch = {
-    pname = "mcp-server-fetch";
-    version = "2025.4.7";
-    src = fetchurl {
-      url = "https://pypi.org/packages/source/m/mcp_server_fetch/mcp_server_fetch-2025.4.7.tar.gz";
-      sha256 = "sha256-VieePFXLHlBrlYypuyPtRBOUSm8jC8oh4ESu5Rc0/kc=";
+  modelcontextprotocol-servers = {
+    pname = "modelcontextprotocol-servers";
+    version = "f4244583a6af9425633e433a3eec000d23f4e011";
+    src = fetchFromGitHub {
+      owner = "modelcontextprotocol";
+      repo = "servers";
+      rev = "f4244583a6af9425633e433a3eec000d23f4e011";
+      fetchSubmodules = false;
+      sha256 = "sha256-bHknioQu8i5RcFlBBdXUQjsV4WN1IScnwohGRxXgGDk=";
     };
-  };
-  mcp-server-git = {
-    pname = "mcp-server-git";
-    version = "2026.1.14";
-    src = fetchurl {
-      url = "https://pypi.org/packages/source/m/mcp_server_git/mcp_server_git-2026.1.14.tar.gz";
-      sha256 = "sha256-LNdHBMeycase174mYSDCCuiufMAeUtxsVJeQQCutK0Q=";
-    };
+    date = "2026-03-17";
   };
   openmemory-mcp = {
     pname = "openmemory-mcp";
@@ -217,14 +213,6 @@
     src = fetchurl {
       url = "https://registry.npmjs.org/openmemory-js/-/openmemory-js-1.3.3.tgz";
       sha256 = "sha256-cxtfM3NvWjH4Q5V0TiqpFdgzzAeuiV6uX+Zv70dHy9I=";
-    };
-  };
-  sequential-thinking-mcp = {
-    pname = "sequential-thinking-mcp";
-    version = "2025.12.18";
-    src = fetchurl {
-      url = "https://registry.npmjs.org/@modelcontextprotocol/server-sequential-thinking/-/server-sequential-thinking-2025.12.18.tgz";
-      sha256 = "sha256-WiHm+kc3IrjmIqm7vdcrxtvN30MPJqtZic0z3+XcdwM=";
     };
   };
   sympy-mcp = {

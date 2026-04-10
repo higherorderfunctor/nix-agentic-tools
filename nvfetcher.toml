@@ -111,12 +111,13 @@ src.cmd = "curl -s https://registry.npmjs.org/openmemory-js/latest | jq -r .vers
 fetch.url = "https://registry.npmjs.org/openmemory-js/-/openmemory-js-$ver.tgz"
 
 # Upstream: https://github.com/modelcontextprotocol/servers (mono-repo)
-# STAYS npm: mono-repo tags are `typescript-servers-X.Y.Z` not per-package.
-# Individual package versions track npm, not GitHub releases.
-# TODO: revisit when/if upstream adds per-package tags.
-[sequential-thinking-mcp]
-src.cmd = "curl -s https://registry.npmjs.org/@modelcontextprotocol/server-sequential-thinking/latest | jq -r .version"
-fetch.url = "https://registry.npmjs.org/@modelcontextprotocol/server-sequential-thinking/-/server-sequential-thinking-$ver.tgz"
+# Single nvfetcher entry tracks the repo on main. Each overlay reads its
+# own version from the source (package.json or pyproject.toml) at eval time.
+[modelcontextprotocol-servers]
+src.git = "https://github.com/modelcontextprotocol/servers.git"
+src.use_commit = true
+src.branch = "main"
+fetch.github = "modelcontextprotocol/servers"
 
 # ── MCP servers: PyPI ─────────────────────────────────────────────
 
@@ -140,12 +141,5 @@ fetch.github = "kagisearch/kagimcp"
 src.github = "sparfenyuk/mcp-proxy"
 fetch.github = "sparfenyuk/mcp-proxy"
 
-# Upstream: https://github.com/modelcontextprotocol/servers (mono-repo)
-# STAYS PyPI: mono-repo, no per-package GitHub tags.
-[mcp-server-fetch]
-src.pypi = "mcp-server-fetch"
-fetch.pypi = "mcp_server_fetch"
-
-[mcp-server-git]
-src.pypi = "mcp-server-git"
-fetch.pypi = "mcp_server_git"
+# mcp-server-fetch and mcp-server-git are in the modelcontextprotocol-servers
+# mono-repo above. No separate nvfetcher entries needed — they share the source.

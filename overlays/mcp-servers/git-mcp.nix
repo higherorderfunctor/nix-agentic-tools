@@ -1,11 +1,6 @@
-# git-mcp — builds the MCP git server from the nvfetcher-tracked source
-# via buildPythonApplication.
-#
-# Cannot override nixpkgs — mcp-server-git is not in this project's
-# pinned nixpkgs revision. Will convert once nixpkgs is bumped.
-#
-# Instantiates `ourPkgs` from `inputs.nixpkgs` for cache-hit parity
-# (see dev/fragments/overlays/overlay-pattern.md).
+# git-mcp — builds from modelcontextprotocol/servers mono-repo.
+# Source: nv.src is the full mono-repo at HEAD. Version read from
+# src/git/pyproject.toml at eval time.
 {
   inputs,
   final,
@@ -16,10 +11,17 @@
     inherit (final.stdenv.hostPlatform) system;
   };
   inherit (ourPkgs) python314Packages;
+
+  # Read version from pyproject.toml via regex
+  tomlContent = builtins.readFile "${nv.src}/src/git/pyproject.toml";
+  tomlLines = builtins.filter (l: builtins.isString l && l != "") (builtins.split "\n" tomlContent);
+  versionLine = builtins.head (builtins.filter (l: builtins.match "^version = .*" l != null) tomlLines);
+  version = builtins.head (builtins.match "^version = \"(.*)\"$" versionLine);
 in
   python314Packages.buildPythonApplication {
     pname = "git-mcp";
-    inherit (nv) version src;
+    inherit version;
+    src = "${nv.src}/src/git";
     pyproject = true;
     build-system = with python314Packages; [hatchling];
     dependencies = with python314Packages; [click gitpython mcp pydantic];

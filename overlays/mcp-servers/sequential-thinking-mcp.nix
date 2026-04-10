@@ -1,12 +1,6 @@
-# sequential-thinking-mcp — builds the Sequential Thinking MCP server from
-# the nvfetcher-tracked source via buildNpmPackage.
-#
-# Instantiates `ourPkgs` from `inputs.nixpkgs` so every build input
-# (buildNpmPackage, nodejs, makeWrapper) routes through this repo's pinned
-# nixpkgs instead of the consumer's. This gives cache-hit parity against
-# CI's standalone build (see dev/fragments/overlays/overlay-pattern.md).
-#
-# Argument shape adapted from legacy curried pattern during Milestone 5 port.
+# sequential-thinking-mcp — builds from modelcontextprotocol/servers mono-repo.
+# Source: nv.src is the full mono-repo at HEAD. Version read from
+# src/sequentialthinking/package.json at eval time.
 {
   inputs,
   final,
@@ -17,12 +11,17 @@
     inherit (final.stdenv.hostPlatform) system;
   };
   inherit (ourPkgs) buildNpmPackage makeWrapper nodejs;
+
+  # Read version from the mono-repo source at eval time
+  packageJson = builtins.fromJSON (builtins.readFile "${nv.src}/src/sequentialthinking/package.json");
 in
   buildNpmPackage {
     pname = "sequential-thinking-mcp";
-    inherit (nv) version src npmDepsHash;
-    sourceRoot = "package";
+    inherit (packageJson) version;
+    inherit (nv) src;
+    sourceRoot = "source/src/sequentialthinking";
     postPatch = "cp ${../locks/sequential-thinking-mcp-package-lock.json} package-lock.json";
+    npmDepsHash = nv.npmDepsHash or (builtins.fromJSON (builtins.readFile ../hashes.json)).sequential-thinking-mcp.npmDepsHash or "";
     dontNpmBuild = true;
     nativeBuildInputs = [makeWrapper];
     installPhase = ''

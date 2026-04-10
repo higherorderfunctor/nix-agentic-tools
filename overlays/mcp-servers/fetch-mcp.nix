@@ -1,11 +1,6 @@
-# fetch-mcp — builds the MCP fetch server from the nvfetcher-tracked source
-# via buildPythonApplication.
-#
-# Cannot override nixpkgs — mcp-server-fetch is not in this project's
-# pinned nixpkgs revision. Will convert once nixpkgs is bumped.
-#
-# Instantiates `ourPkgs` from `inputs.nixpkgs` for cache-hit parity
-# (see dev/fragments/overlays/overlay-pattern.md).
+# fetch-mcp — builds from modelcontextprotocol/servers mono-repo.
+# Source: nv.src is the full mono-repo at HEAD. Version read from
+# src/fetch/pyproject.toml at eval time.
 {
   inputs,
   final,
@@ -16,10 +11,17 @@
     inherit (final.stdenv.hostPlatform) system;
   };
   inherit (ourPkgs) python314Packages;
+
+  # Read version from pyproject.toml via regex (no TOML parser in Nix)
+  tomlContent = builtins.readFile "${nv.src}/src/fetch/pyproject.toml";
+  tomlLines = builtins.filter (l: builtins.isString l && l != "") (builtins.split "\n" tomlContent);
+  versionLine = builtins.head (builtins.filter (l: builtins.match "^version = .*" l != null) tomlLines);
+  version = builtins.head (builtins.match "^version = \"(.*)\"$" versionLine);
 in
   python314Packages.buildPythonApplication {
     pname = "fetch-mcp";
-    inherit (nv) version src;
+    inherit version;
+    src = "${nv.src}/src/fetch";
     pyproject = true;
     build-system = with python314Packages; [hatchling];
     dependencies = with python314Packages; [
