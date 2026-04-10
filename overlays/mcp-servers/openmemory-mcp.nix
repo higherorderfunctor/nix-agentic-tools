@@ -1,12 +1,6 @@
-# openmemory-mcp — builds the OpenMemory MCP server from the nvfetcher-tracked
-# source via buildNpmPackage.
-#
-# Instantiates `ourPkgs` from `inputs.nixpkgs` so every build input
-# (buildNpmPackage, nodejs, makeWrapper) routes through this repo's pinned
-# nixpkgs instead of the consumer's. This gives cache-hit parity against
-# CI's standalone build (see dev/fragments/overlays/overlay-pattern.md).
-#
-# Argument shape adapted from legacy curried pattern during Milestone 5 port.
+# openmemory-mcp — builds from CaviraOSS/OpenMemory mono-repo.
+# Source: nv.src is the full mono-repo at HEAD. Version read from
+# packages/openmemory-js/package.json at eval time.
 {
   inputs,
   final,
@@ -17,13 +11,17 @@
     inherit (final.stdenv.hostPlatform) system;
   };
   inherit (ourPkgs) buildNpmPackage makeWrapper nodejs;
+
+  packageJson = builtins.fromJSON (builtins.readFile "${nv.src}/packages/openmemory-js/package.json");
 in
   buildNpmPackage {
     pname = "openmemory-mcp";
-    inherit (nv) version src npmDepsHash;
-    sourceRoot = "package";
+    inherit (packageJson) version;
+    inherit (nv) src;
+    sourceRoot = "source/packages/openmemory-js";
     postPatch = "cp ${../locks/openmemory-mcp-package-lock.json} package-lock.json";
-    dontNpmBuild = true;
+    inherit (nv) npmDepsHash;
+    # Source needs building (tsc). npm tarball had pre-built dist/.
     nativeBuildInputs = [makeWrapper];
     installPhase = ''
       runHook preInstall

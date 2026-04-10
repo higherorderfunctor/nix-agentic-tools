@@ -103,12 +103,13 @@ fetch.github = "sdiehl/sympy-mcp"
 src.github = "tim-smart/effect-mcp"
 fetch.github = "tim-smart/effect-mcp"
 
-# Upstream: https://github.com/openmemory/openmemory
-# STAYS npm: no GitHub releases or tags. npm is the only versioned source.
-# TODO: revisit when upstream adds releases.
+# Upstream: https://github.com/CaviraOSS/OpenMemory (mono-repo)
+# No releases/tags. Track main, read version from packages/openmemory-js/package.json.
 [openmemory-mcp]
-src.cmd = "curl -s https://registry.npmjs.org/openmemory-js/latest | jq -r .version"
-fetch.url = "https://registry.npmjs.org/openmemory-js/-/openmemory-js-$ver.tgz"
+src.git = "https://github.com/CaviraOSS/OpenMemory.git"
+src.use_commit = true
+src.branch = "main"
+fetch.github = "CaviraOSS/OpenMemory"
 
 # Upstream: https://github.com/modelcontextprotocol/servers (mono-repo)
 # Single nvfetcher entry tracks the repo on main. Each overlay reads its

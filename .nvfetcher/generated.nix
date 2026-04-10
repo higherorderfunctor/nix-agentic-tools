@@ -209,11 +209,15 @@
   };
   openmemory-mcp = {
     pname = "openmemory-mcp";
-    version = "1.3.3";
-    src = fetchurl {
-      url = "https://registry.npmjs.org/openmemory-js/-/openmemory-js-1.3.3.tgz";
-      sha256 = "sha256-cxtfM3NvWjH4Q5V0TiqpFdgzzAeuiV6uX+Zv70dHy9I=";
+    version = "a65c920636b1b39618e833f1a0f8494aebccafcd";
+    src = fetchFromGitHub {
+      owner = "CaviraOSS";
+      repo = "OpenMemory";
+      rev = "a65c920636b1b39618e833f1a0f8494aebccafcd";
+      fetchSubmodules = false;
+      sha256 = "sha256-cXbftztatmbYPv4uYh3YVpXS65yHzs+D6EOR5Y7x9rw=";
     };
+    date = "2026-04-08";
   };
   sympy-mcp = {
     pname = "sympy-mcp";
