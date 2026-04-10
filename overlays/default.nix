@@ -132,12 +132,14 @@
     };
   };
 
-  # ── Proxies ────────────────────────────────────────────────────────
-  # agnix is a multi-binary package. Proxies make it discoverable
-  # under the mcpServers/lspServers namespaces — same derivation,
-  # consumers use lib.getExe' for the specific binary.
-  mcpProxies = {agnix-mcp = flatDrvs.agnix;};
-  lspProxies = {agnix-lsp = flatDrvs.agnix;};
+  # ── agnix multi-binary overrides ────────────────────────────────────
+  # agnix builds three binaries (agnix, agnix-lsp, agnix-mcp) from one
+  # crate workspace. The base derivation (flatDrvs.agnix) has
+  # mainProgram = "agnix" (the CLI). These overrides produce derivations
+  # with mainProgram pointing at the MCP / LSP binaries so
+  # `lib.getExe pkgs.ai.mcpServers.agnix-mcp` returns the right binary.
+  agnixMcp = import ./mcp-servers/agnix-mcp.nix {inherit (flatDrvs) agnix;};
+  agnixLsp = import ./lsp-servers/agnix-lsp.nix {inherit (flatDrvs) agnix;};
 
   # ── Git tools ──────────────────────────────────────────────────────
   gitToolDrvs = {
@@ -158,8 +160,8 @@ in {
   ai =
     flatDrvs
     // {
-      mcpServers = mcpServerDrvs // mcpProxies;
-      lspServers = lspProxies;
+      mcpServers = mcpServerDrvs // {agnix-mcp = agnixMcp;};
+      lspServers = {agnix-lsp = agnixLsp;};
     };
   gitTools = gitToolDrvs;
 }

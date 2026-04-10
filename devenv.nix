@@ -21,6 +21,7 @@
     (import ./overlays {inherit inputs;})
   ]);
   inherit (aiPkgs.ai) agnix;
+  agnixMcp = aiPkgs.ai.mcpServers.agnix-mcp;
 
   # Content packages — apply stacked-workflows overlay for skills passthru.
   # overlay.nix is the overlay function (3-arg: inputs: final: prev:).
@@ -210,7 +211,7 @@ in {
     env.ENABLE_LSP_TOOL = "1";
 
     mcpServers = {
-      agnix = mkPackageEntry agnix;
+      agnix = mkPackageEntry agnixMcp;
 
       devenv = {
         type = "http";
@@ -229,13 +230,13 @@ in {
   # submodule — see docs/plan.md absorption backlog).
   ai.copilot.mcpServers.agnix = {
     type = "stdio";
-    package = agnix;
-    command = "${agnix}/bin/agnix-mcp";
+    package = agnixMcp;
+    command = "${agnixMcp}/bin/agnix-mcp";
   };
   ai.kiro.mcpServers.agnix = {
     type = "stdio";
-    package = agnix;
-    command = "${agnix}/bin/agnix-mcp";
+    package = agnixMcp;
+    command = "${agnixMcp}/bin/agnix-mcp";
   };
 
   # ── Processes (`devenv up`) ────────────────────────────────────────────
