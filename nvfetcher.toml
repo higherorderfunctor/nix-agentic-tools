@@ -1,30 +1,32 @@
 # Unified version tracking for all packages.
 # Run: nvfetcher -o .nvfetcher -k ~/.config/nvfetcher/keyfile.toml
 #
-# Pattern: prefer GitHub source over npm/PyPI tarballs so the build
-# starts from the same source tree as nixpkgs. When the repo uses
-# scoped tags (e.g. @upstash/context7-mcp@<ver>), use github_tag +
-# include_regex + from_pattern to extract the version, and fetch.url
-# with url.name to dodge @ in Nix store paths. The overlay unpacks
-# fetchurl tarballs via runCommandLocal when nixpkgs expects a
-# directory-type $src.
+# Pattern: GitHub source, track main branch unless there's a specific
+# reason for releases/tags (proprietary binaries, scoped npm tags).
+# Overlays read version from source at eval time where possible.
 
 # ── Dev tools ─────────────────────────────────────────────────────
 
 [agnix]
-src.github = "agent-sh/agnix"
+src.git = "https://github.com/agent-sh/agnix.git"
+src.use_commit = true
+src.branch = "main"
 fetch.github = "agent-sh/agnix"
 
 # ── AI CLIs ──────────────────────────────────────────────────────
 
 [any-buddy]
-src.github = "cpaczek/any-buddy"
+src.git = "https://github.com/cpaczek/any-buddy.git"
+src.use_commit = true
+src.branch = "main"
 fetch.github = "cpaczek/any-buddy"
 
+# Proprietary — npm IS the primary distribution
 [claude-code]
 src.cmd = "curl -s https://registry.npmjs.org/@anthropic-ai/claude-code/latest | jq -r .version"
 fetch.url = "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-$ver.tgz"
 
+# Proprietary pre-built binary
 [github-copilot-cli]
 src.github = "github/copilot-cli"
 src.from_pattern = "v([0-9]+\\.[0-9]+\\.[0-9]+)$"
@@ -32,6 +34,7 @@ src.exclude_regex = ".*-[0-9]+$"
 src.to_pattern = "\\1"
 fetch.url = "https://github.com/github/copilot-cli/releases/download/v$ver/copilot-linux-x64.tar.gz"
 
+# Proprietary pre-built binary
 [kiro-cli]
 src.cmd = "curl -s https://desktop-release.q.us-east-1.amazonaws.com/latest/manifest.json | jq -r '.version'"
 fetch.url = "https://desktop-release.q.us-east-1.amazonaws.com/$ver/kirocli-x86_64-linux.tar.gz"
@@ -50,21 +53,26 @@ fetch.git = "https://github.com/jwadow/kiro-gateway.git"
 # ── Git tools ─────────────────────────────────────────────────────
 
 [git-absorb]
-src.github = "tummychow/git-absorb"
+src.git = "https://github.com/tummychow/git-absorb.git"
+src.use_commit = true
+src.branch = "master"
 fetch.github = "tummychow/git-absorb"
 
 [git-branchless]
-src.github = "arxanas/git-branchless"
+src.git = "https://github.com/arxanas/git-branchless.git"
+src.use_commit = true
+src.branch = "master"
 fetch.github = "arxanas/git-branchless"
 
 [git-revise]
-src.pypi = "git-revise"
-src.from_pattern = "^(.*)$"
-src.to_pattern = "v\\1"
+src.git = "https://github.com/mystor/git-revise.git"
+src.use_commit = true
+src.branch = "main"
 fetch.github = "mystor/git-revise"
 
-# ── MCP servers: GitHub ───────────────────────────────────────────
+# ── MCP servers ───────────────────────────────────────────────────
 
+# Scoped npm tags — needs url.name workaround for @ in store paths
 [context7-mcp]
 src.github_tag = "upstash/context7"
 src.include_regex = "^@upstash/context7-mcp@[0-9]+\\.[0-9]+\\.[0-9]+$"
@@ -73,9 +81,11 @@ src.to_pattern = "\\1"
 fetch.url = "https://github.com/upstash/context7/archive/refs/tags/@upstash/context7-mcp@$ver.tar.gz"
 url.name = "context7--upstash-context7-mcp_$ver.tar.gz"
 
-[github-mcp-server]
-src.github = "github/github-mcp-server"
-fetch.github = "github/github-mcp-server"
+[effect-mcp]
+src.git = "https://github.com/tim-smart/effect-mcp.git"
+src.use_commit = true
+src.branch = "main"
+fetch.github = "tim-smart/effect-mcp"
 
 [git-intel-mcp]
 src.git = "https://github.com/hoangsonww/GitIntel-MCP-Server.git"
@@ -83,9 +93,40 @@ src.use_commit = true
 src.branch = "master"
 fetch.git = "https://github.com/hoangsonww/GitIntel-MCP-Server.git"
 
+[github-mcp-server]
+src.github = "github/github-mcp-server"
+fetch.github = "github/github-mcp-server"
+
+[kagimcp]
+src.git = "https://github.com/kagisearch/kagimcp.git"
+src.use_commit = true
+src.branch = "main"
+fetch.github = "kagisearch/kagimcp"
+
 [mcp-language-server]
-src.github = "isaacphi/mcp-language-server"
+src.git = "https://github.com/isaacphi/mcp-language-server.git"
+src.use_commit = true
+src.branch = "main"
 fetch.github = "isaacphi/mcp-language-server"
+
+[mcp-proxy]
+src.git = "https://github.com/sparfenyuk/mcp-proxy.git"
+src.use_commit = true
+src.branch = "main"
+fetch.github = "sparfenyuk/mcp-proxy"
+
+# Mono-repo: sequential-thinking-mcp, fetch-mcp, git-mcp
+[modelcontextprotocol-servers]
+src.git = "https://github.com/modelcontextprotocol/servers.git"
+src.use_commit = true
+src.branch = "main"
+fetch.github = "modelcontextprotocol/servers"
+
+[openmemory-mcp]
+src.git = "https://github.com/CaviraOSS/OpenMemory.git"
+src.use_commit = true
+src.branch = "main"
+fetch.github = "CaviraOSS/OpenMemory"
 
 [sympy-mcp]
 src.git = "https://github.com/sdiehl/sympy-mcp.git"
@@ -93,54 +134,9 @@ src.use_commit = true
 src.branch = "main"
 fetch.github = "sdiehl/sympy-mcp"
 
-# ── MCP servers: npm ──────────────────────────────────────────────
-# TODO: these fetch from npm registry tarballs. Prefer GitHub source
-# where possible (see context7-mcp pattern above). Each needs manual
-# review to find the upstream repo + check for GitHub releases.
+# ── Dependencies (PyPI) ──────────────────────────────────────────
 
-# Upstream: https://github.com/tim-smart/effect-mcp (tagged releases)
-[effect-mcp]
-src.github = "tim-smart/effect-mcp"
-fetch.github = "tim-smart/effect-mcp"
-
-# Upstream: https://github.com/CaviraOSS/OpenMemory (mono-repo)
-# No releases/tags. Track main, read version from packages/openmemory-js/package.json.
-[openmemory-mcp]
-src.git = "https://github.com/CaviraOSS/OpenMemory.git"
-src.use_commit = true
-src.branch = "main"
-fetch.github = "CaviraOSS/OpenMemory"
-
-# Upstream: https://github.com/modelcontextprotocol/servers (mono-repo)
-# Single nvfetcher entry tracks the repo on main. Each overlay reads its
-# own version from the source (package.json or pyproject.toml) at eval time.
-[modelcontextprotocol-servers]
-src.git = "https://github.com/modelcontextprotocol/servers.git"
-src.use_commit = true
-src.branch = "main"
-fetch.github = "modelcontextprotocol/servers"
-
-# ── MCP servers: PyPI ─────────────────────────────────────────────
-
-# Upstream: https://github.com/kagisearch/kagimcp (tagged releases)
-# kagiapi is a dependency — no GitHub releases, stays PyPI.
+# kagiapi: GitHub repo (kagisearch/kagiapi) is behind PyPI. Stays PyPI.
 [kagiapi]
-# STAYS PyPI: GitHub repo (kagisearch/kagiapi) is behind PyPI (v0.1.0 vs
-# v0.2.1). Maintainer publishes to PyPI but doesn't update GitHub.
 src.pypi = "kagiapi"
 fetch.pypi = "kagiapi"
-
-[kagimcp]
-# Has tags (v0.1.5) but no GitHub Releases — use git tag tracking
-src.git = "https://github.com/kagisearch/kagimcp.git"
-src.branch = "main"
-src.use_max_tag = true
-fetch.github = "kagisearch/kagimcp"
-
-# Upstream: https://github.com/sparfenyuk/mcp-proxy (tagged releases)
-[mcp-proxy]
-src.github = "sparfenyuk/mcp-proxy"
-fetch.github = "sparfenyuk/mcp-proxy"
-
-# mcp-server-fetch and mcp-server-git are in the modelcontextprotocol-servers
-# mono-repo above. No separate nvfetcher entries needed — they share the source.

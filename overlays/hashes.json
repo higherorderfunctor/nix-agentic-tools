@@ -33,5 +33,11 @@
   },
   "sequential-thinking-mcp": {
     "npmDepsHash": "sha256-CnPjLNC893jVRYWNJzm14jaJx8/U1oDftyFSrpvkDZQ="
+  },
+  "filesystem-mcp": {
+    "npmDepsHash": "sha256-Xt+ILpA6Pj2SKngv1zM5G/1L42pLTjMcciT0XZyQK9M="
+  },
+  "memory-mcp": {
+    "npmDepsHash": "sha256-x7Kvc+bu+u+Vok3ZCpS3uE9ht5pHLUR5SrEmxJ3L2eU="
   }
 }

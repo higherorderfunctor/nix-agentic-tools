@@ -18,13 +18,11 @@ DUMMY_HASH="sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 if [ $# -gt 0 ]; then
 	packages=("$@")
 else
-	# All flake packages except instruction derivations
+	# All flake packages except non-buildable derivations (docs, instructions)
 	mapfile -t packages < <(
-		nix eval .#packages.x86_64-linux --apply '
-      pkgs: builtins.filter (n:
-        !(builtins.hasPrefix "instructions-" n)
-      ) (builtins.attrNames pkgs)
-    ' --json 2>/dev/null | jq -r '.[]'
+		nix eval .#packages.x86_64-linux --apply 'builtins.attrNames' --json 2>/dev/null |
+			jq -r '.[]' |
+			grep -vE "^(instructions-|docs)"
 	)
 fi
 
@@ -43,8 +41,9 @@ for pkg in "${packages[@]}"; do
 		continue
 	fi
 
-	# Determine which hash field by checking the derivation name in the error
-	drv_name=$(echo "$output" | grep -oP '/nix/store/[a-z0-9]+-\K[^.]+(?=\.drv)' | head -1)
+	# Determine which hash field by checking the derivation name in the error.
+	# The "hash mismatch" line has the specific deps drv name.
+	drv_name=$(echo "$output" | grep "hash mismatch" | head -1 | sed -e "s/.*\/nix\/store\/[a-z0-9]*-//" -e "s/\.drv.*//" -e "s/'//g")
 
 	hash_field=""
 	if echo "$drv_name" | grep -qi "pnpm-deps"; then
@@ -91,7 +90,7 @@ for pkg in "${packages[@]}"; do
 	output2=$(nix build ".#${pkg}" --no-link 2>&1) || true
 	got_hash2=$(echo "$output2" | grep "got:" | head -1 | awk '{print $2}')
 	if [ -n "$got_hash2" ] && [ "$got_hash2" != "$got_hash" ]; then
-		drv_name2=$(echo "$output2" | grep -oP '/nix/store/[a-z0-9]+-\K[^.]+(?=\.drv)' | head -1)
+		drv_name2=$(echo "$output2" | grep "hash mismatch" | head -1 | sed -e "s/.*\/nix\/store\/[a-z0-9]*-//" -e "s/\.drv.*//" -e "s/'//g")
 		hash_field2=""
 		if echo "$drv_name2" | grep -qi "npm-deps"; then
 			hash_field2="npmDepsHash"

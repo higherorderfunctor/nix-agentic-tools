@@ -1,27 +1,16 @@
 <!-- TODO: remove this file before merging to main -->
-● Here's what's left:
 
-  Only 1 package still on npm (justified):
+update script caches (<REPO>/.cache?</REPO>
 
-- openmemory-mcp — no GitHub releases, no tags. npm is the only versioned source.
+why update script takes so much cpu, did direnv fire maybe?
 
-  Everything else is on GitHub source or flake input. The full overlay source audit is complete.
-
-  Remaining backlog items (non-overlay):
+ME: doub;e check work
+ME: test in nixos-config
 
 - Update overlays/README.md table to reflect all the source changes made tonight
 - Document the unfree guard pattern as an architecture fragment
-- Update script automation for dep hash computation
 
-  Want me to update the README table now, or save it for next session?
-
-NEXT - knock out AI script
-
-  1. effect-mcp — switch from npm to GitHub (tim-smart/effect-mcp), build with pnpm (has pnpm-lock.yaml)
-  2. openmemory-mcp — switch from npm to GitHub (openmemory/openmemory)
-  3. sequential-thinking-mcp — switch from npm to GitHub (modelcontextprotocol/servers mono-repo)
-  4. kagi-mcp — switch from PyPI to GitHub (kagisearch/kagimcp)
-  5. mcp-proxy — switch from PyPI to GitHub (sparfenyuk/mcp-proxy)
+-----------------
 
 Some other moves if possible (will have to update scripts most likely to find these files or other config files).
 
@@ -41,6 +30,8 @@ overlays/
     hashes.json # for the ones you have to compute yourself like dep hashes
     locks/\*.json # may be removed but we aren't redoing locks anymore so may be gone
 ```
+
+-----------------
 
 Are we (and this may be tricky) able to warn if someone overrides
 this flakes input nixpkgs or any other inputs, and, if possible check if cachix is set, then

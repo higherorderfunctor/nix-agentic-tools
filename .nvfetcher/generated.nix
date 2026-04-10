@@ -8,25 +8,27 @@
 {
   agnix = {
     pname = "agnix";
-    version = "v0.18.0";
+    version = "2c8f259f036660c477a420ff9ba7260116a78451";
     src = fetchFromGitHub {
       owner = "agent-sh";
       repo = "agnix";
-      rev = "v0.18.0";
+      rev = "2c8f259f036660c477a420ff9ba7260116a78451";
       fetchSubmodules = false;
-      sha256 = "sha256-R7luTBydtj8H8L/rRXYvWEy45Krg+lL9gTeJL4j/0uA=";
+      sha256 = "sha256-LV9/pII/Ffap9w+SBR7Pf/lMfePCyokL8hIzdD63tyk=";
     };
+    date = "2026-04-10";
   };
   any-buddy = {
     pname = "any-buddy";
-    version = "v2.2.0";
+    version = "861f0dfea1674dcff9a72390143fc64d026c95ed";
     src = fetchFromGitHub {
       owner = "cpaczek";
       repo = "any-buddy";
-      rev = "v2.2.0";
+      rev = "861f0dfea1674dcff9a72390143fc64d026c95ed";
       fetchSubmodules = false;
       sha256 = "sha256-nkAeA2MuBmiDcBjIGzIbfxt0nvkHC++OSD+OWWwQ/e0=";
     };
+    date = "2026-04-06";
   };
   claude-code = {
     pname = "claude-code";
@@ -47,36 +49,39 @@
   };
   effect-mcp = {
     pname = "effect-mcp";
-    version = "v0.1.16";
+    version = "83a768303839b9e125f6c286369a5d9cc26c666e";
     src = fetchFromGitHub {
       owner = "tim-smart";
       repo = "effect-mcp";
-      rev = "v0.1.16";
+      rev = "83a768303839b9e125f6c286369a5d9cc26c666e";
       fetchSubmodules = false;
-      sha256 = "sha256-KRE/5TzAoghBayNrnKtocYHE/vmFQraZfkS7CKN2E5c=";
+      sha256 = "sha256-okTpUZnYUfIuZThnqDKJ+FGImIeRLY2DMiS6HEQBoTQ=";
     };
+    date = "2026-02-24";
   };
   git-absorb = {
     pname = "git-absorb";
-    version = "0.9.0";
+    version = "debdcd28d9db2ac6b36205bda307b6693a6a91e7";
     src = fetchFromGitHub {
       owner = "tummychow";
       repo = "git-absorb";
-      rev = "0.9.0";
+      rev = "debdcd28d9db2ac6b36205bda307b6693a6a91e7";
       fetchSubmodules = false;
       sha256 = "sha256-jAR+Vq6SZZXkseOxZVJSjsQOStIip8ThiaLroaJcIfc=";
     };
+    date = "2026-02-13";
   };
   git-branchless = {
     pname = "git-branchless";
-    version = "v0.10.0";
+    version = "f238c0993fea69700b56869b3ee9fd03178c6e32";
     src = fetchFromGitHub {
       owner = "arxanas";
       repo = "git-branchless";
-      rev = "v0.10.0";
+      rev = "f238c0993fea69700b56869b3ee9fd03178c6e32";
       fetchSubmodules = false;
-      sha256 = "sha256-8uv+sZRr06K42hmxgjrKk6FDEngUhN/9epixRYKwE3U=";
+      sha256 = "sha256-ar2168yI3OgNMwqrzilKK9QORKbe1QtHVe88JkS7EOs=";
     };
+    date = "2026-03-01";
   };
   git-intel-mcp = {
     pname = "git-intel-mcp";
@@ -94,14 +99,15 @@
   };
   git-revise = {
     pname = "git-revise";
-    version = "v0.8.0";
+    version = "a5bdbe420521a7784dd16c8f22b374b2f1d2d167";
     src = fetchFromGitHub {
       owner = "mystor";
       repo = "git-revise";
-      rev = "v0.8.0";
+      rev = "a5bdbe420521a7784dd16c8f22b374b2f1d2d167";
       fetchSubmodules = false;
-      sha256 = "sha256-OdkhYEq30RtDOeCQWl/L9FMgCttznzihbYgT8B6KYuY=";
+      sha256 = "sha256-D3MicmtruCNiW/WI37y18XDXAl7J9oJdJnDY4Ohj+rE=";
     };
+    date = "2026-03-02";
   };
   github-copilot-cli = {
     pname = "github-copilot-cli";
@@ -175,25 +181,27 @@
   };
   mcp-language-server = {
     pname = "mcp-language-server";
-    version = "v0.1.1";
+    version = "e4395849a52e18555361abab60a060802c06bf50";
     src = fetchFromGitHub {
       owner = "isaacphi";
       repo = "mcp-language-server";
-      rev = "v0.1.1";
+      rev = "e4395849a52e18555361abab60a060802c06bf50";
       fetchSubmodules = false;
-      sha256 = "sha256-T0wuPSShJqVW+CcQHQuZnh3JOwqUxAKv1OCHwZMr7KM=";
+      sha256 = "sha256-INyzT/8UyJfg1PW5+PqZkIy/MZrDYykql0rD2Sl97Gg=";
     };
+    date = "2025-06-03";
   };
   mcp-proxy = {
     pname = "mcp-proxy";
-    version = "v0.11.0";
+    version = "a6720cc4f0bb3a09748d61207fb33f3c7c8a88e4";
     src = fetchFromGitHub {
       owner = "sparfenyuk";
       repo = "mcp-proxy";
-      rev = "v0.11.0";
+      rev = "a6720cc4f0bb3a09748d61207fb33f3c7c8a88e4";
       fetchSubmodules = false;
-      sha256 = "sha256-oSRchkCnPoQ3KZXPW49O2yTgNRi9aJbKki3z9BxBPhA=";
+      sha256 = "sha256-Sx0YrCwTCV8wGmwzJPiEhOkHy4CcaKW4mtnLntE7qYU=";
     };
+    date = "2026-03-14";
   };
   modelcontextprotocol-servers = {
     pname = "modelcontextprotocol-servers";

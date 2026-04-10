@@ -128,53 +128,49 @@
   };
 
   # ── MCP servers ────────────────────────────────────────────────────
-  mcpServerDrvs = {
-    context7-mcp = import ./mcp-servers/context7-mcp.nix {
-      inherit inputs final;
-      nv = nv.context7-mcp;
-    };
-    effect-mcp = import ./mcp-servers/effect-mcp.nix {
-      inherit inputs final;
-      nv = nv.effect-mcp;
-    };
-    fetch-mcp = import ./mcp-servers/fetch-mcp.nix {
-      inherit inputs final;
-      nv = nv.mcp-servers-mono;
-    };
-    git-intel-mcp = import ./mcp-servers/git-intel-mcp.nix {
-      inherit inputs final;
-      nv = nv.git-intel-mcp;
-    };
-    git-mcp = import ./mcp-servers/git-mcp.nix {
-      inherit inputs final;
-      nv = nv.mcp-servers-mono;
-    };
-    github-mcp = import ./mcp-servers/github-mcp.nix {
-      inherit inputs final;
-      nv = nv.github-mcp;
-    };
-    kagi-mcp = import ./mcp-servers/kagi-mcp.nix {
-      inherit inputs final;
-      nv = nv.kagi-mcp;
-    };
-    mcp-language-server = import ./mcp-servers/mcp-language-server.nix {
-      inherit inputs final;
-      nv = nv.mcp-language-server;
-    };
-    mcp-proxy = import ./mcp-servers/mcp-proxy.nix {
-      inherit inputs final;
-      nv = nv.mcp-proxy;
-    };
-    nixos-mcp = import ./mcp-servers/nixos-mcp.nix {inherit inputs final;};
-    openmemory-mcp = import ./mcp-servers/openmemory-mcp.nix {
-      inherit inputs final;
-      nv = nv.openmemory-mcp;
-    };
-    sequential-thinking-mcp = import ./mcp-servers/sequential-thinking-mcp.nix {
-      inherit inputs final;
-      nv = nv.mcp-servers-mono;
-    };
-    serena-mcp = import ./mcp-servers/serena-mcp.nix {inherit inputs final;};
+  # modelcontextprotocol/servers mono-repo packages (combined overlay)
+  mcpMonoRepoDrvs = import ./mcp-servers/modelcontextprotocol-servers.nix {
+    inherit inputs final;
+    nv = nv.mcp-servers-mono;
+  };
+
+  mcpServerDrvs =
+    mcpMonoRepoDrvs
+    // {
+      context7-mcp = import ./mcp-servers/context7-mcp.nix {
+        inherit inputs final;
+        nv = nv.context7-mcp;
+      };
+      effect-mcp = import ./mcp-servers/effect-mcp.nix {
+        inherit inputs final;
+        nv = nv.effect-mcp;
+      };
+      git-intel-mcp = import ./mcp-servers/git-intel-mcp.nix {
+        inherit inputs final;
+        nv = nv.git-intel-mcp;
+      };
+      github-mcp = import ./mcp-servers/github-mcp.nix {
+        inherit inputs final;
+        nv = nv.github-mcp;
+      };
+      kagi-mcp = import ./mcp-servers/kagi-mcp.nix {
+        inherit inputs final;
+        nv = nv.kagi-mcp;
+      };
+      mcp-language-server = import ./mcp-servers/mcp-language-server.nix {
+        inherit inputs final;
+        nv = nv.mcp-language-server;
+      };
+      mcp-proxy = import ./mcp-servers/mcp-proxy.nix {
+        inherit inputs final;
+        nv = nv.mcp-proxy;
+      };
+      nixos-mcp = import ./mcp-servers/nixos-mcp.nix {inherit inputs final;};
+      openmemory-mcp = import ./mcp-servers/openmemory-mcp.nix {
+        inherit inputs final;
+        nv = nv.openmemory-mcp;
+      };
+      serena-mcp = import ./mcp-servers/serena-mcp.nix {inherit inputs final;};
     sympy-mcp = import ./mcp-servers/sympy-mcp.nix {
       inherit inputs final;
       nv = nv.sympy-mcp;
