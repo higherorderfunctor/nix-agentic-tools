@@ -123,6 +123,8 @@ fetch.url = "https://registry.npmjs.org/@modelcontextprotocol/server-sequential-
 # Upstream: https://github.com/kagisearch/kagimcp (tagged releases)
 # kagiapi is a dependency — no GitHub releases, stays PyPI.
 [kagiapi]
+# STAYS PyPI: GitHub repo (kagisearch/kagiapi) is behind PyPI (v0.1.0 vs
+# v0.2.1). Maintainer publishes to PyPI but doesn't update GitHub.
 src.pypi = "kagiapi"
 fetch.pypi = "kagiapi"
 
