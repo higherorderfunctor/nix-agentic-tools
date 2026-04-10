@@ -2,20 +2,17 @@ name: Update
 
 on:
   push:
-    paths:
-      - .github/workflows/update.yml
-      - dev/update.nix
+    branches: [refactor/ai-factory-architecture]
   schedule:
-    - cron: "0 6 * * *" # daily at 06:00 UTC
+    - cron: "0 */1 * * *" # hourly
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: update-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: write
-  pull-requests: write
 
 # TODO: remove once DeterminateSystems/nix-installer-action ships node24
 env:
@@ -23,15 +20,27 @@ env:
 
 jobs:
   update:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: x86_64-linux
+            runner: ubuntu-latest
+          - system: aarch64-darwin
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
     env:
-      DRY_RUN: ${{ github.ref_name != github.event.repository.default_branch }}
+      BRANCH_NAME: refactor/ai-factory-architecture
     steps:
       - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             accept-flake-config = true
+
       - uses: cachix/cachix-action@v17
         with:
           name: nix-agentic-tools
@@ -40,28 +49,36 @@ jobs:
       - name: Install devenv
         run: nix profile install nixpkgs#devenv
 
-      - name: Run update
+      - name: Run update pipeline
         run: devenv tasks run --mode before update:all
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Dry run summary
-        if: env.DRY_RUN == 'true'
+      - name: Verify
+        run: nix flake check --no-build
+
+      - name: Build all packages (populates cachix)
         run: |
-          echo "::notice::Dry run on branch ${{ github.ref_name }} — skipping PR creation"
-          git diff --stat || echo "No changes"
+          nix profile install nixpkgs#nix-fast-build
+          nix-fast-build \
+            --flake ".#packages" \
+            --systems "${{ matrix.system }}" \
+            --skip-cached \
+            --cachix-cache nix-agentic-tools \
+            --no-nom \
+            --no-link
 
-      - name: Create or update PR
-        if: env.DRY_RUN == 'false'
-        uses: peter-evans/create-pull-request@v8
-        with:
-          branch: auto/update
-          commit-message: "chore: update flake inputs and upstream versions"
-          title: "chore: update flake inputs and upstream versions"
-          body: |
-            Automated update via `devenv tasks run update`:
-            - Flake inputs updated
-            - nvfetcher sources refreshed
-            - Lock files regenerated
-            - Hashes prefetched
-
-            Verified with `nix flake check` for all packages.
-          labels: automated
+      # Only commit from linux runner to avoid race conditions
+      - name: Commit updates
+        if: matrix.system == 'x86_64-linux'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: automated update (sources + hashes)"
+            git pull --rebase origin "$BRANCH_NAME" || true
+            git push origin "HEAD:$BRANCH_NAME"
+          fi
