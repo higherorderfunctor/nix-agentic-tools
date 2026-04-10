@@ -59,7 +59,7 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "chore: automated update (sources + hashes)"
+            git commit -m "chore: automated update (sources + hashes) [skip ci]"
             git pull --rebase origin "$BRANCH_NAME" || true
             git push origin "HEAD:$BRANCH_NAME"
           fi
