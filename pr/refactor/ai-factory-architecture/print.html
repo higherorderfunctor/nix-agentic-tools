@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-cf14695c.js";
+            window.path_to_searchindex_js = "searchindex-171c3091.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-841f2094.js"></script>
@@ -960,7 +960,7 @@ your nixpkgs, and the packages become available in <code>pkgs</code>.</p>
 </table>
 </div>
 <h3 id="mcp-servers"><a class="header" href="#mcp-servers">MCP Servers</a></h3>
-<p>Available under <code>pkgs.ai.*</code>:</p>
+<p>Available under <code>pkgs.ai.mcpServers.*</code>:</p>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -1027,19 +1027,19 @@ pkgs.stacked-workflows-content.passthru.skillsDir
 </code></pre>
 <h2 id="mcp-package-passthru"><a class="header" href="#mcp-package-passthru">MCP Package passthru</a></h2>
 <p>MCP server packages carry metadata for composing MCP entries:</p>
-<pre><code class="language-nix">pkgs.ai.github-mcp.mcpName
+<pre><code class="language-nix">pkgs.ai.mcpServers.github-mcp.mcpName
 # =&gt; "github-mcp"
 
 # Some packages carry mcpBinary (when it differs from mainProgram):
-pkgs.agnix.mcpBinary
+pkgs.ai.agnix.mcpBinary
 # =&gt; "agnix-mcp"
 
 # Or mcpArgs (for subcommand-based servers):
-pkgs.serena-mcp.mcpArgs
+pkgs.ai.mcpServers.serena-mcp.mcpArgs
 # =&gt; ["start-mcp-server"]
 </code></pre>
 <p>Use <code>lib.mkPackageEntry</code> to derive a complete MCP config entry:</p>
-<pre><code class="language-nix">lib.mkPackageEntry pkgs.ai.github-mcp
+<pre><code class="language-nix">lib.mkPackageEntry pkgs.ai.mcpServers.github-mcp
 # =&gt; { type = "stdio"; command = "/nix/store/.../github-mcp-server"; args = [...]; }
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div>
@@ -2285,13 +2285,16 @@ in {
 <code>packages/mcp-servers</code> overlay, but that path does not yet exist on
 this branch — do not copy this snippet until the MCP packaging
 chunk lands.</p>
-<pre><code class="language-nix"># All AI binaries (CLIs + MCP servers) live under pkgs.ai.* after
-# the nix-agentic-tools overlay is composed.
+<pre><code class="language-nix"># AI binaries live under grouped namespaces after the overlay:
+#   pkgs.ai.*              — CLIs (claude-code, copilot-cli, etc.)
+#   pkgs.ai.mcpServers.*   — MCP servers
+#   pkgs.ai.lspServers.*   — LSP server proxies
+#   pkgs.gitTools.*         — git workflow tools
 pkgs = import nixpkgs {
   inherit system;
   overlays = [inputs.nix-agentic-tools.overlays.default];
 };
-# pkgs.ai.github-mcp, pkgs.ai.claude-code, pkgs.ai.kiro-cli, etc.
+# pkgs.ai.mcpServers.github-mcp, pkgs.ai.claude-code, pkgs.gitTools.git-absorb, etc.
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="home-manager-options-reference"><a class="header" href="#home-manager-options-reference">Home-Manager Options Reference</a></h1>
@@ -3285,7 +3288,7 @@ services.mcp-servers.servers = {
 # DevEnv (inline per-CLI)
 claude.code.mcpServers.github-mcp =
   inputs.nix-agentic-tools.lib.mkStdioEntry pkgs {
-    package = pkgs.ai.github-mcp;
+    package = pkgs.ai.mcpServers.github-mcp;
     settings.credentials.file = "/run/secrets/github-token";
   };
 </code></pre>

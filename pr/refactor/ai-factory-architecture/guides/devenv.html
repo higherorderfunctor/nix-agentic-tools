@@ -34,7 +34,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-cf14695c.js";
+            window.path_to_searchindex_js = "../searchindex-171c3091.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-841f2094.js"></script>
@@ -963,13 +963,16 @@ in {
 <code>packages/mcp-servers</code> overlay, but that path does not yet exist on
 this branch — do not copy this snippet until the MCP packaging
 chunk lands.</p>
-<pre><code class="language-nix"># All AI binaries (CLIs + MCP servers) live under pkgs.ai.* after
-# the nix-agentic-tools overlay is composed.
+<pre><code class="language-nix"># AI binaries live under grouped namespaces after the overlay:
+#   pkgs.ai.*              — CLIs (claude-code, copilot-cli, etc.)
+#   pkgs.ai.mcpServers.*   — MCP servers
+#   pkgs.ai.lspServers.*   — LSP server proxies
+#   pkgs.gitTools.*         — git workflow tools
 pkgs = import nixpkgs {
   inherit system;
   overlays = [inputs.nix-agentic-tools.overlays.default];
 };
-# pkgs.ai.github-mcp, pkgs.ai.claude-code, pkgs.ai.kiro-cli, etc.
+# pkgs.ai.mcpServers.github-mcp, pkgs.ai.claude-code, pkgs.gitTools.git-absorb, etc.
 </code></pre>
 
                     </main>
