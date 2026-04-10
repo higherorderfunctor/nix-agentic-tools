@@ -135,6 +135,7 @@ shellharden
 sigtool
 sixel
 smartlog
+sshsign
 statix
 stdenv
 subkeys

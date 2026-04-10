@@ -1,12 +1,12 @@
-# mcp-proxy — builds the MCP proxy server from the nvfetcher-tracked source
-# via buildPythonApplication.
+# mcp-proxy — override nixpkgs to pin nvfetcher-tracked version.
 #
-# Instantiates `ourPkgs` from `inputs.nixpkgs` so every build input
-# (python interpreter + python packages) routes through this repo's pinned
-# nixpkgs instead of the consumer's. This gives cache-hit parity against
-# CI's standalone build (see dev/fragments/overlays/overlay-pattern.md).
+# nixpkgs uses python3Packages.buildPythonApplication with finalAttrs
+# and GitHub source. Our nvfetcher currently fetches from PyPI (flagged
+# for migration to GitHub — see /tmp/nvfetcher-changes-needed.txt).
+# The PyPI sdist works fine as src for the override.
 #
-# Argument shape adapted from legacy curried pattern during Milestone 5 port.
+# Instantiates `ourPkgs` from `inputs.nixpkgs` for cache-hit parity
+# (see dev/fragments/overlays/overlay-pattern.md).
 {
   inputs,
   final,
@@ -15,17 +15,16 @@
 }: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
-    config.allowUnfree = true;
   };
-  inherit (ourPkgs) python314Packages;
-  httpx-auth = python314Packages.httpx-auth.overridePythonAttrs {doCheck = false;};
+  # httpx-auth has test failures in nixpkgs (jwt InsecureKeyLengthWarning)
+  httpx-auth = ourPkgs.python3Packages.httpx-auth.overridePythonAttrs {doCheck = false;};
 in
-  python314Packages.buildPythonApplication {
-    pname = "mcp-proxy";
+  ourPkgs.mcp-proxy.overridePythonAttrs (old: {
     inherit (nv) version src;
-    pyproject = true;
-    build-system = with python314Packages; [setuptools];
-    dependencies = with python314Packages; [mcp uvicorn] ++ [httpx-auth];
+    # v0.11.0 added httpx-auth dependency (not in nixpkgs' v0.10.0)
+    dependencies =
+      (old.dependencies or [])
+      ++ [httpx-auth];
+    # Disable tests — PyPI sdist may lack test fixtures from GitHub repo.
     doCheck = false;
-    meta.mainProgram = "mcp-proxy";
-  }
+  })

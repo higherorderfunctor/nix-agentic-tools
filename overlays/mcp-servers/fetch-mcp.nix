@@ -1,12 +1,11 @@
 # fetch-mcp — builds the MCP fetch server from the nvfetcher-tracked source
 # via buildPythonApplication.
 #
-# Instantiates `ourPkgs` from `inputs.nixpkgs` so every build input
-# (python interpreter + python packages) routes through this repo's pinned
-# nixpkgs instead of the consumer's. This gives cache-hit parity against
-# CI's standalone build (see dev/fragments/overlays/overlay-pattern.md).
+# Cannot override nixpkgs — mcp-server-fetch is not in this project's
+# pinned nixpkgs revision. Will convert once nixpkgs is bumped.
 #
-# Argument shape adapted from legacy curried pattern during Milestone 5 port.
+# Instantiates `ourPkgs` from `inputs.nixpkgs` for cache-hit parity
+# (see dev/fragments/overlays/overlay-pattern.md).
 {
   inputs,
   final,
@@ -15,7 +14,6 @@
 }: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
-    config.allowUnfree = true;
   };
   inherit (ourPkgs) python314Packages;
 in

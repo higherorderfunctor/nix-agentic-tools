@@ -14,7 +14,6 @@
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
     overlays = [inputs.rust-overlay.overlays.default];
-    config.allowUnfree = true;
   };
 
   rust = ourPkgs.rust-bin.stable.latest.default;

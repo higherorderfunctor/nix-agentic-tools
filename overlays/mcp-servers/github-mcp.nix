@@ -1,12 +1,11 @@
-# github-mcp — builds the GitHub MCP server from the nvfetcher-tracked source
-# via buildGoModule.
+# github-mcp — override nixpkgs to pin nvfetcher-tracked version.
 #
-# Instantiates `ourPkgs` from `inputs.nixpkgs` so every build input
-# (go toolchain + buildGoModule) routes through this repo's pinned nixpkgs
-# instead of the consumer's. This gives cache-hit parity against CI's
-# standalone build (see dev/fragments/overlays/overlay-pattern.md).
+# nixpkgs uses finalAttrs pattern with buildGoModule. We override
+# version + src + vendorHash; the fixed-point re-derives ldflags
+# and the rest.
 #
-# Argument shape adapted from legacy curried pattern during Milestone 5 port.
+# Instantiates `ourPkgs` from `inputs.nixpkgs` for cache-hit parity
+# (see dev/fragments/overlays/overlay-pattern.md).
 {
   inputs,
   final,
@@ -15,14 +14,11 @@
 }: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
-    config.allowUnfree = true;
   };
-  inherit (ourPkgs) buildGoModule;
+  # nvfetcher gives "v0.32.0"; nixpkgs expects "0.32.0"
+  version = ourPkgs.lib.removePrefix "v" nv.version;
 in
-  buildGoModule {
-    pname = "github-mcp";
-    inherit (nv) version src vendorHash;
-    subPackages = ["cmd/github-mcp-server"];
-    ldflags = ["-s" "-w" "-X main.version=${nv.version}"];
-    meta.mainProgram = "github-mcp-server";
-  }
+  ourPkgs.github-mcp-server.overrideAttrs (_finalAttrs: _old: {
+    inherit version;
+    inherit (nv) src vendorHash;
+  })

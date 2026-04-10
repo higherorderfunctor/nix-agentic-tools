@@ -14,7 +14,6 @@
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
     overlays = [inputs.rust-overlay.overlays.default];
-    config.allowUnfree = true;
   };
 
   # Pin to 1.88.0 — git-branchless v0.10.0 has esl01-indexedlog build

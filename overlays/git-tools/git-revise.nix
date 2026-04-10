@@ -1,12 +1,12 @@
-# Instantiate `ourPkgs` from `inputs.nixpkgs` so every build input
-# (python interpreter, hatchling, pytest/git/openssh/gnupg check deps)
-# routes through this repo's pinned nixpkgs instead of the consumer's.
-# This is what gives the store path cache-hit parity against CI's
-# standalone build — see dev/fragments/overlays/overlay-pattern.md
+# git-revise — override nixpkgs to pin nvfetcher-tracked version.
 #
-# No rust-overlay here — git-revise is a pure-python build.
+# nixpkgs uses buildPythonPackage with format = "setuptools" for
+# an older unstable commit. v0.8.0+ switched to pyproject.toml with
+# hatchling, so we override src/version AND the build system via
+# overridePythonAttrs (which re-evaluates format handling).
 #
-# Argument shape adapted from legacy 3-layer curried pattern during Milestone 6 port.
+# Instantiates `ourPkgs` from `inputs.nixpkgs` for cache-hit parity
+# (see dev/fragments/overlays/overlay-pattern.md).
 {
   inputs,
   final,
@@ -15,29 +15,18 @@
 }: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
-    config.allowUnfree = true;
   };
-  inherit (ourPkgs) lib stdenv;
+  # nvfetcher gives "v0.8.0"; nixpkgs expects "0.8.0"
+  version = ourPkgs.lib.removePrefix "v" nv.version;
 in
-  ourPkgs.python3Packages.buildPythonApplication {
-    pname = "git-revise";
-    inherit (nv) version src;
+  ourPkgs.git-revise.overridePythonAttrs (old: {
+    inherit version;
+    inherit (nv) src;
     pyproject = true;
-
+    format = null;
     build-system = [ourPkgs.python3Packages.hatchling];
-
+    # v0.8.0 added test_sshsign which needs openssh (not in nixpkgs' v0.7.0 check deps)
     nativeCheckInputs =
-      [ourPkgs.git ourPkgs.openssh ourPkgs.python3Packages.pytestCheckHook]
-      ++ lib.optionals (!stdenv.hostPlatform.isDarwin) [ourPkgs.gnupg];
-
-    disabledTests = lib.optionals stdenv.hostPlatform.isDarwin [
-      "test_gpgsign"
-    ];
-
-    meta = {
-      description = "Efficiently update, split, and rearrange git commits";
-      homepage = "https://github.com/mystor/git-revise";
-      license = lib.licenses.mit;
-      mainProgram = "git-revise";
-    };
-  }
+      (old.nativeCheckInputs or [])
+      ++ [ourPkgs.openssh];
+  })

@@ -16,7 +16,6 @@
 }: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
-    config.allowUnfree = true;
   };
   inherit (ourPkgs) python314 writeShellApplication;
   python =
