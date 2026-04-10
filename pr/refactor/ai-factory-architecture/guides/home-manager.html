@@ -34,7 +34,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-c54abf81.js";
+            window.path_to_searchindex_js = "../searchindex-185fa753.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-841f2094.js"></script>
@@ -1106,6 +1106,38 @@ attribute set of absolute path</p>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
+<h2 id="stacked-workflowsenable"><a class="header" href="#stacked-workflowsenable">stacked-workflows.enable</a></h2>
+<p>Whether to enable stacked workflow skills and references.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="stacked-workflowsgitpreset"><a class="header" href="#stacked-workflowsgitpreset">stacked-workflows.gitPreset</a></h2>
+<p>Git configuration preset for stacked workflows.</p>
+<ul>
+<li><code>"minimal"</code> – required + strongly recommended settings</li>
+<li><code>"full"</code> – all recommended settings (branchless, revise, general git)</li>
+<li><code>"none"</code> – no git configuration changes</li>
+</ul>
+<p>All values are set at <code>mkDefault</code> priority so you can override
+individual keys at normal priority in <code>programs.git.settings</code>.</p>
+<p><em>Type:</em>
+one of “full”, “minimal”, “none”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"none"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
 <h2 id="priority-and-override-patterns"><a class="header" href="#priority-and-override-patterns">Priority and Override Patterns</a></h2>
 <p>All <code>ai.*</code> values are injected at <code>mkDefault</code> priority (1000). To
