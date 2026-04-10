@@ -22,15 +22,35 @@
   inherit (aiPkgs.ai) agnix;
 
   # Content packages — apply stacked-workflows overlay for skills passthru.
-  contentPkgs = pkgs.extend (import ./packages/stacked-workflows {});
+  # overlay.nix is the overlay function (3-arg: inputs: final: prev:).
+  # default.nix became a barrel ({ modules = ... }) during factory rollout.
+  contentPkgs = pkgs.extend (import ./packages/stacked-workflows/overlay.nix {});
 
   # ── MCP entry helper ─────────────────────────────────────────────────
   # Derive stdio MCP entry from package passthru (single source of truth).
   mcpLib = import ./lib/mcp.nix {inherit lib;};
   inherit (mcpLib) mkPackageEntry;
+
+  # ── Factory lib/pkgs injection ───────────────────────────────────────
+  # Factory devenv modules (packages/*/modules/devenv/) call
+  # lib.ai.app.devenvTransform and reference pkgs.ai.* for default
+  # packages. devenv's module system provides nixpkgs lib (no lib.ai)
+  # and un-overlaid pkgs. Wrap each factory import to inject the
+  # extended lib and overlay-enriched pkgs.
+  aiLib = lib // {ai = import ./lib/ai {inherit lib;};};
+  wrapFactory = path: args:
+    (import path) (args
+      // {
+        lib = aiLib;
+        pkgs = aiPkgs;
+      });
 in {
   imports = [
-    ./modules/devenv
+    ./lib/ai/sharedOptions.nix
+    (wrapFactory ./packages/claude-code/modules/devenv)
+    (wrapFactory ./packages/copilot-cli/modules/devenv)
+    (wrapFactory ./packages/kiro-cli/modules/devenv)
+    ./packages/stacked-workflows/modules/devenv
   ];
 
   # ── Binary Cache ──────────────────────────────────────────────────────
@@ -134,26 +154,14 @@ in {
     check-toml.enable = true;
   };
 
-  # ── Copilot ────────────────────────────────────────────────────────────
-  copilot = {
-    enable = true;
-    mcpServers = {
-      agnix = mkPackageEntry agnix;
-    };
-  };
-
-  # ── Kiro ──────────────────────────────────────────────────────────────
-  kiro = {
-    enable = true;
-    mcpServers = {
-      agnix = mkPackageEntry agnix;
-    };
-  };
-
-  # ── Claude Code ───────────────────────────────────────────────────────
+  # ── Claude Code (upstream devenv options) ───────────────────────────
+  # The factory's mkClaude devenv.config sets claude.code.enable =
+  # mkDefault true when ai.claude.enable is on. Claude-specific
+  # upstream options (permissions, env, mcpServers) are set here
+  # directly — the factory does not yet transform these typed fields
+  # through the ai.* pool (tracked by the commonSchema/upstream parity
+  # gap in docs/plan.md).
   claude.code = {
-    enable = true;
-
     permissions.rules = {
       Bash = {
         allow = [
@@ -210,6 +218,25 @@ in {
     };
   };
 
+  # ── Copilot / Kiro MCP (factory ai.* namespace) ──────────────────────
+  # Per-CLI MCP servers use the factory's typed schema (with package
+  # field). These flow through devenvTransform → per-app config
+  # callbacks → files.*/mcp-config.json. The shared ai.mcpServers pool
+  # is NOT used here because it would also flow to Claude's
+  # claude.code.mcpServers, hitting an upstream schema mismatch (the
+  # commonSchema `package` field is not in devenv's claude.code.mcpServers
+  # submodule — see docs/plan.md absorption backlog).
+  ai.copilot.mcpServers.agnix = {
+    type = "stdio";
+    package = agnix;
+    command = "${agnix}/bin/agnix-mcp";
+  };
+  ai.kiro.mcpServers.agnix = {
+    type = "stdio";
+    package = agnix;
+    command = "${agnix}/bin/agnix-mcp";
+  };
+
   # ── Processes (`devenv up`) ────────────────────────────────────────────
   processes.docs.exec = ''
     set -euETo pipefail
@@ -228,7 +255,7 @@ in {
   # store hash changes, the old symlink target is a read-only directory
   # and devenv tries to create inside it instead of replacing it.
   enterShell = ''
-    for dir in .claude/skills .github/skills .kiro/skills; do
+    for dir in .claude/skills .config/github-copilot/skills .kiro/skills; do
       if [ -d "$dir" ]; then
         find "$dir" -maxdepth 1 -type l | while read -r link; do
           if [ ! -e "$link" ]; then
@@ -248,7 +275,7 @@ in {
     # on disk; SKILL.md inside is a store symlink.
     test -f .claude/skills/sws-stack-fix/SKILL.md || { echo "FAIL: .claude/skills/sws-stack-fix/SKILL.md missing"; exit 1; }
     test -f .claude/skills/repo-review/SKILL.md || { echo "FAIL: .claude/skills/repo-review/SKILL.md missing"; exit 1; }
-    test -f .github/skills/sws-stack-fix/SKILL.md || { echo "FAIL: .github/skills/sws-stack-fix/SKILL.md missing"; exit 1; }
+    test -f .config/github-copilot/skills/sws-stack-fix/SKILL.md || { echo "FAIL: .config/github-copilot/skills/sws-stack-fix/SKILL.md missing"; exit 1; }
     test -f .kiro/skills/sws-stack-fix/SKILL.md || { echo "FAIL: .kiro/skills/sws-stack-fix/SKILL.md missing"; exit 1; }
 
     # Check Claude settings generated
