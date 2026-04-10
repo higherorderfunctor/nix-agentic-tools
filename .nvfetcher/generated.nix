@@ -109,8 +109,16 @@
     };
     date = "2026-03-02";
   };
-  github-copilot-cli = {
-    pname = "github-copilot-cli";
+  github-copilot-cli-darwin-arm64 = {
+    pname = "github-copilot-cli-darwin-arm64";
+    version = "1.0.22";
+    src = fetchurl {
+      url = "https://github.com/github/copilot-cli/releases/download/v1.0.22/copilot-darwin-arm64.tar.gz";
+      sha256 = "sha256-uIuUUmwxWe9yt/4Eh9h2OXVwb5+QfWeWe0XvXVIBpu4=";
+    };
+  };
+  github-copilot-cli-linux-x64 = {
+    pname = "github-copilot-cli-linux-x64";
     version = "1.0.22";
     src = fetchurl {
       url = "https://github.com/github/copilot-cli/releases/download/v1.0.22/copilot-linux-x64.tar.gz";
@@ -148,21 +156,21 @@
     };
     date = "2026-04-08";
   };
-  kiro-cli = {
-    pname = "kiro-cli";
-    version = "1.29.6";
-    src = fetchurl {
-      url = "https://desktop-release.q.us-east-1.amazonaws.com/1.29.6/kirocli-x86_64-linux.tar.gz";
-      sha256 = "sha256-6FZgHdKBDz8zrrJf0MgGtzKz279j4X3H/B6tW+0WlZ8=";
-    };
-  };
-  kiro-cli-darwin = {
-    pname = "kiro-cli-darwin";
+  kiro-cli-darwin-arm64 = {
+    pname = "kiro-cli-darwin-arm64";
     version = "1.29.6";
     src = fetchurl {
       url = "https://desktop-release.q.us-east-1.amazonaws.com/1.29.6/Kiro%20CLI.dmg";
       name = "kiro-cli.dmg";
       sha256 = "sha256-qe9svpw3ngk9EU12woeMXW8+gTNYxGfzdePVUgodUWY=";
+    };
+  };
+  kiro-cli-linux-x64 = {
+    pname = "kiro-cli-linux-x64";
+    version = "1.29.6";
+    src = fetchurl {
+      url = "https://desktop-release.q.us-east-1.amazonaws.com/1.29.6/kirocli-x86_64-linux.tar.gz";
+      sha256 = "sha256-6FZgHdKBDz8zrrJf0MgGtzKz279j4X3H/B6tW+0WlZ8=";
     };
   };
   kiro-gateway = {

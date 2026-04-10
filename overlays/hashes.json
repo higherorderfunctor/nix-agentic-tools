@@ -9,9 +9,6 @@
   "context7-mcp": {
     "pnpmDepsHash": "sha256-8RRHfCTZVC91T1Qx+ACCo2oG4ZwMNy5WYakCjmBhe3Q="
   },
-  "copilot-cli": {
-    "x86_64-linux": "sha256-2h40sQXtHPpftSz0MQg98PVW078PLMyPmZ+wwAMxQIE="
-  },
   "filesystem-mcp": {
     "npmDepsHash": "sha256-Xt+ILpA6Pj2SKngv1zM5G/1L42pLTjMcciT0XZyQK9M="
   },

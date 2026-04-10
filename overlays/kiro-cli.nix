@@ -1,14 +1,13 @@
 # Kiro CLI — pre-built binary from AWS release channel.
-# x86_64-linux: tarball from nvfetcher (kiro-cli)
-# aarch64-darwin: .dmg from nvfetcher (kiro-cli-darwin), extracted by nixpkgs undmg
+# Per-platform nvfetcher entries: kiro-cli-linux-x64, kiro-cli-darwin-arm64.
 #
-# Unfree: wrapped by `wrapUnfree` in default.nix so the consumer's
-# allowUnfree config is respected. See overlays/README.md.
+# Unfree: wrapped by ensureUnfreeCheck in default.nix so the consumer's
+# allowUnfree config is respected.
 {
   inputs,
   final,
-  nv,
-  nv-darwin,
+  nv-linux-x64,
+  nv-darwin-arm64,
   ...
 }: let
   ourPkgs = import inputs.nixpkgs {
@@ -16,18 +15,14 @@
     config.allowUnfree = true;
   };
   inherit (ourPkgs.stdenv.hostPlatform) system;
-  src =
-    if system == "x86_64-linux"
-    then nv.src
-    else if system == "aarch64-darwin"
-    then nv-darwin.src
-    else throw "kiro-cli: unsupported system ${system}";
-  inherit (nv) version;
+  platformSrc = {
+    "x86_64-linux" = nv-linux-x64;
+    "aarch64-darwin" = nv-darwin-arm64;
+  };
+  nv = platformSrc.${system} or (throw "kiro-cli: unsupported system ${system}");
 in
-  # Inner build: ourPkgs for cache-hit parity. wrapUnfree in default.nix
-  # adds the consumer-facing unfree check on top.
   ourPkgs.kiro-cli.overrideAttrs (attrs: {
-    inherit src version;
+    inherit (nv) src version;
 
     nativeBuildInputs = (attrs.nativeBuildInputs or []) ++ [ourPkgs.makeWrapper];
 
@@ -41,6 +36,6 @@ in
     meta =
       ourPkgs.kiro-cli.meta
       // {
-        changelog = builtins.replaceStrings [ourPkgs.kiro-cli.version] [version] ourPkgs.kiro-cli.meta.changelog;
+        changelog = builtins.replaceStrings [ourPkgs.kiro-cli.version] [nv.version] ourPkgs.kiro-cli.meta.changelog;
       };
   })

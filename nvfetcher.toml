@@ -26,20 +26,27 @@ fetch.github = "cpaczek/any-buddy"
 src.cmd = "curl -s https://registry.npmjs.org/@anthropic-ai/claude-code/latest | jq -r .version"
 fetch.url = "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-$ver.tgz"
 
-# Proprietary pre-built binary
-[github-copilot-cli]
+# Proprietary pre-built binary — per-platform entries
+[github-copilot-cli-linux-x64]
 src.github = "github/copilot-cli"
 src.from_pattern = "v([0-9]+\\.[0-9]+\\.[0-9]+)$"
 src.exclude_regex = ".*-[0-9]+$"
 src.to_pattern = "\\1"
 fetch.url = "https://github.com/github/copilot-cli/releases/download/v$ver/copilot-linux-x64.tar.gz"
 
-# Proprietary pre-built binary
-[kiro-cli]
+[github-copilot-cli-darwin-arm64]
+src.github = "github/copilot-cli"
+src.from_pattern = "v([0-9]+\\.[0-9]+\\.[0-9]+)$"
+src.exclude_regex = ".*-[0-9]+$"
+src.to_pattern = "\\1"
+fetch.url = "https://github.com/github/copilot-cli/releases/download/v$ver/copilot-darwin-arm64.tar.gz"
+
+# Proprietary pre-built binary — per-platform entries
+[kiro-cli-linux-x64]
 src.cmd = "curl -s https://desktop-release.q.us-east-1.amazonaws.com/latest/manifest.json | jq -r '.version'"
 fetch.url = "https://desktop-release.q.us-east-1.amazonaws.com/$ver/kirocli-x86_64-linux.tar.gz"
 
-[kiro-cli-darwin]
+[kiro-cli-darwin-arm64]
 src.cmd = "curl -s https://desktop-release.q.us-east-1.amazonaws.com/latest/manifest.json | jq -r '.version'"
 fetch.url = "https://desktop-release.q.us-east-1.amazonaws.com/$ver/Kiro%20CLI.dmg"
 url.name = "kiro-cli.dmg"

@@ -60,15 +60,9 @@ detect_hash_field() {
 		echo "cargoHash"
 		return
 	fi
-	# Platform-specific fetchurl (pre-built binaries): detect from drv name
-	if echo "$drv_name" | grep -qi "linux.*x64\|x86_64.*linux"; then
-		echo "x86_64-linux"
-		return
-	fi
-	if echo "$drv_name" | grep -qi "darwin.*arm64\|aarch64.*darwin"; then
-		echo "aarch64-darwin"
-		return
-	fi
+	# Platform-specific hashes are now handled by nvfetcher per-platform
+	# entries (e.g., copilot-cli-linux-x64, kiro-cli-darwin-arm64).
+	# No platform detection needed in the script.
 	echo "srcHash"
 }
 

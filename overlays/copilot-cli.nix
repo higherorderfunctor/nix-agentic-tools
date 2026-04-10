@@ -1,32 +1,26 @@
 # GitHub Copilot CLI — pre-built binary from GitHub releases.
-# Platform-specific tarballs: copilot-{linux-x64,darwin-arm64}.tar.gz
+# Per-platform nvfetcher entries: copilot-cli-linux-x64, copilot-cli-darwin-arm64.
 #
 # Unfree (proprietary). ensureUnfreeCheck in default.nix wraps the
 # output so the consumer's allowUnfree config is respected.
 {
   inputs,
   final,
-  nv,
+  nv-linux-x64,
+  nv-darwin-arm64,
   ...
 }: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
-  platformMap = {
-    "aarch64-darwin" = "darwin-arm64";
-    "x86_64-linux" = "linux-x64";
-  };
   inherit (ourPkgs.stdenv.hostPlatform) system;
-  suffix =
-    platformMap.${system}
-    or (throw "copilot-cli: unsupported system ${system}");
-  src = ourPkgs.fetchurl {
-    url = "https://github.com/github/copilot-cli/releases/download/v${nv.version}/copilot-${suffix}.tar.gz";
-    hash = nv.${system};
+  platformSrc = {
+    "x86_64-linux" = nv-linux-x64;
+    "aarch64-darwin" = nv-darwin-arm64;
   };
+  nv = platformSrc.${system} or (throw "copilot-cli: unsupported system ${system}");
 in
   ourPkgs.github-copilot-cli.overrideAttrs (_: {
-    inherit src;
-    inherit (nv) version;
+    inherit (nv) src version;
   })

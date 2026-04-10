@@ -37,10 +37,6 @@
     pnpmDepsHash = dummyHash;
     srcHash = dummyHash;
     vendorHash = dummyHash;
-    # Platform-specific hashes for pre-built binaries (copilot-cli, kiro-cli).
-    # Overlays read nv.${system} for per-platform fetchurl hashes.
-    "x86_64-linux" = dummyHash;
-    "aarch64-darwin" = dummyHash;
   };
   merge = name: hashDefaults // nvSrc name // (hashes.${name} or {});
 
@@ -77,9 +73,10 @@
     agnix = merge "agnix";
     any-buddy = merge "any-buddy";
     claude-code = merge "claude-code";
-    copilot-cli = hashDefaults // nvSrc "github-copilot-cli" // (hashes."copilot-cli" or {});
-    kiro-cli = merge "kiro-cli";
-    kiro-cli-darwin = merge "kiro-cli-darwin";
+    copilot-cli-linux-x64 = merge "github-copilot-cli-linux-x64";
+    copilot-cli-darwin-arm64 = merge "github-copilot-cli-darwin-arm64";
+    kiro-cli-linux-x64 = merge "kiro-cli-linux-x64";
+    kiro-cli-darwin-arm64 = merge "kiro-cli-darwin-arm64";
     kiro-gateway = merge "kiro-gateway";
 
     # Git tools
@@ -118,12 +115,13 @@
     };
     copilot-cli = import ./copilot-cli.nix {
       inherit inputs final;
-      nv = nv.copilot-cli;
+      nv-linux-x64 = nv.copilot-cli-linux-x64;
+      nv-darwin-arm64 = nv.copilot-cli-darwin-arm64;
     };
     kiro-cli = import ./kiro-cli.nix {
       inherit inputs final;
-      nv = nv.kiro-cli;
-      nv-darwin = nv.kiro-cli-darwin;
+      nv-linux-x64 = nv.kiro-cli-linux-x64;
+      nv-darwin-arm64 = nv.kiro-cli-darwin-arm64;
     };
     kiro-gateway = import ./kiro-gateway.nix {
       inherit inputs final;

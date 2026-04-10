@@ -175,11 +175,26 @@
         },
         "version": "a5bdbe420521a7784dd16c8f22b374b2f1d2d167"
     },
-    "github-copilot-cli": {
+    "github-copilot-cli-darwin-arm64": {
         "cargoLock": null,
         "date": null,
         "extract": null,
-        "name": "github-copilot-cli",
+        "name": "github-copilot-cli-darwin-arm64",
+        "passthru": null,
+        "pinned": false,
+        "src": {
+            "name": null,
+            "sha256": "sha256-uIuUUmwxWe9yt/4Eh9h2OXVwb5+QfWeWe0XvXVIBpu4=",
+            "type": "url",
+            "url": "https://github.com/github/copilot-cli/releases/download/v1.0.22/copilot-darwin-arm64.tar.gz"
+        },
+        "version": "1.0.22"
+    },
+    "github-copilot-cli-linux-x64": {
+        "cargoLock": null,
+        "date": null,
+        "extract": null,
+        "name": "github-copilot-cli-linux-x64",
         "passthru": null,
         "pinned": false,
         "src": {
@@ -247,26 +262,11 @@
         },
         "version": "933e3384e9b1f34ebcc84b85310be7a6548900db"
     },
-    "kiro-cli": {
+    "kiro-cli-darwin-arm64": {
         "cargoLock": null,
         "date": null,
         "extract": null,
-        "name": "kiro-cli",
-        "passthru": null,
-        "pinned": false,
-        "src": {
-            "name": null,
-            "sha256": "sha256-6FZgHdKBDz8zrrJf0MgGtzKz279j4X3H/B6tW+0WlZ8=",
-            "type": "url",
-            "url": "https://desktop-release.q.us-east-1.amazonaws.com/1.29.6/kirocli-x86_64-linux.tar.gz"
-        },
-        "version": "1.29.6"
-    },
-    "kiro-cli-darwin": {
-        "cargoLock": null,
-        "date": null,
-        "extract": null,
-        "name": "kiro-cli-darwin",
+        "name": "kiro-cli-darwin-arm64",
         "passthru": null,
         "pinned": false,
         "src": {
@@ -274,6 +274,21 @@
             "sha256": "sha256-qe9svpw3ngk9EU12woeMXW8+gTNYxGfzdePVUgodUWY=",
             "type": "url",
             "url": "https://desktop-release.q.us-east-1.amazonaws.com/1.29.6/Kiro%20CLI.dmg"
+        },
+        "version": "1.29.6"
+    },
+    "kiro-cli-linux-x64": {
+        "cargoLock": null,
+        "date": null,
+        "extract": null,
+        "name": "kiro-cli-linux-x64",
+        "passthru": null,
+        "pinned": false,
+        "src": {
+            "name": null,
+            "sha256": "sha256-6FZgHdKBDz8zrrJf0MgGtzKz279j4X3H/B6tW+0WlZ8=",
+            "type": "url",
+            "url": "https://desktop-release.q.us-east-1.amazonaws.com/1.29.6/kirocli-x86_64-linux.tar.gz"
         },
         "version": "1.29.6"
     },
