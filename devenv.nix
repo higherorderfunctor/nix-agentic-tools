@@ -7,9 +7,10 @@
   # ── Overlay packages ─────────────────────────────────────────────────
   # devenv's pkgs lacks the flake overlay. Compose nvSourcesOverlay
   # (exposes final.nv-sources from .nvfetcher/generated.nix) + the
-  # unified ai overlay (post-factory-rollout, all binaries live under
-  # pkgs.ai.*). Mirrors the composition in flake.nix so devenv sees
-  # the same pkgs.ai.* namespace as consumers.
+  # unified ai overlay (post-factory-rollout, binaries live under
+  # pkgs.ai.*, pkgs.ai.mcpServers.*, pkgs.ai.lspServers.*, and
+  # pkgs.gitTools.*). Mirrors the composition in flake.nix so devenv
+  # sees the same namespace as consumers.
   nvSourcesOverlay = final: _prev: {
     nv-sources = import ./.nvfetcher/generated.nix {
       inherit (final) fetchurl fetchgit fetchFromGitHub dockerTools;

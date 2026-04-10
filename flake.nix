@@ -322,9 +322,9 @@
         ];
       };
     in
-      # All AI packages — CLIs, git tools, and MCP servers — live
-      # under pkgs.ai (unified overlay) and are exposed flat at
-      # packages.<system>.<name> for CLI ergonomics (`nix build .#<name>`).
+      # Grouped namespaces (pkgs.ai.mcpServers.*, pkgs.ai.lspServers.*,
+      # pkgs.gitTools.*) are flattened here for CLI ergonomics so
+      # `nix build .#context7-mcp` works without knowing the group.
       # Adding a new package to the overlay automatically adds it
       # here; no flake.nix edit needed for new binaries.
       #
@@ -332,7 +332,12 @@
       # - pkgs.nix-mcp-servers namespace dissolved in Milestone 5
       # - pkgs.{agnix,git-*} flat entries moved to pkgs.ai.* in Milestone 6
       # - github-copilot-cli renamed to copilot-cli in Milestone 4
-      pkgs.ai
+      # - pkgs.ai.* grouped into mcpServers/lspServers/gitTools (factory arch)
+      # Flat AI CLIs (strip nested groups which aren't derivations)
+      builtins.removeAttrs pkgs.ai ["mcpServers" "lspServers"]
+      // pkgs.ai.mcpServers
+      // pkgs.ai.lspServers
+      // pkgs.gitTools
       // {
         # Instruction file derivations (from dev/generate.nix).
         # Each ecosystem produces a content directory consumed by the

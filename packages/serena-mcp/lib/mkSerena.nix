@@ -15,7 +15,7 @@
 lib.ai.mcpServer.mkMcpServer {
   name = "serena";
   defaults = {
-    package = pkgs.ai.serena-mcp;
+    package = pkgs.ai.mcpServers.serena-mcp;
     type = "stdio";
     command = "serena";
     args = ["start-mcp-server"];

@@ -1,5 +1,5 @@
-# sequential-thinking-mcp — builds the Sequential Thinking MCP server from
-# the nvfetcher-tracked source via buildNpmPackage.
+# openmemory-mcp — builds the OpenMemory MCP server from the nvfetcher-tracked
+# source via buildNpmPackage.
 #
 # Instantiates `ourPkgs` from `inputs.nixpkgs` so every build input
 # (buildNpmPackage, nodejs, makeWrapper) routes through this repo's pinned
@@ -20,19 +20,23 @@
   inherit (ourPkgs) buildNpmPackage makeWrapper nodejs;
 in
   buildNpmPackage {
-    pname = "sequential-thinking-mcp";
+    pname = "openmemory-mcp";
     inherit (nv) version src npmDepsHash;
     sourceRoot = "package";
-    postPatch = "cp ${./locks/sequential-thinking-mcp-package-lock.json} package-lock.json";
+    postPatch = "cp ${../locks/openmemory-mcp-package-lock.json} package-lock.json";
     dontNpmBuild = true;
     nativeBuildInputs = [makeWrapper];
     installPhase = ''
       runHook preInstall
-      mkdir -p $out/lib/sequential-thinking-mcp $out/bin
-      cp -r dist node_modules package.json $out/lib/sequential-thinking-mcp/
-      makeWrapper ${nodejs}/bin/node $out/bin/sequential-thinking-mcp \
-        --add-flags "$out/lib/sequential-thinking-mcp/dist/index.js"
+      mkdir -p $out/lib/openmemory-mcp $out/bin
+      cp -r bin dist node_modules package.json $out/lib/openmemory-mcp/
+      makeWrapper ${nodejs}/bin/node $out/bin/openmemory-mcp \
+        --add-flags "$out/lib/openmemory-mcp/bin/opm.js" \
+        --add-flags "mcp"
+      makeWrapper ${nodejs}/bin/node $out/bin/openmemory-mcp-serve \
+        --add-flags "$out/lib/openmemory-mcp/bin/opm.js" \
+        --add-flags "serve"
       runHook postInstall
     '';
-    meta.mainProgram = "sequential-thinking-mcp";
+    meta.mainProgram = "openmemory-mcp";
   }

@@ -11,7 +11,7 @@
 lib.ai.mcpServer.mkMcpServer {
   name = "openmemory";
   defaults = {
-    package = pkgs.ai.openmemory-mcp;
+    package = pkgs.ai.mcpServers.openmemory-mcp;
     type = "stdio";
     command = "openmemory-mcp";
     args = [];

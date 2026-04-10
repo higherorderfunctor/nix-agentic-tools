@@ -11,7 +11,7 @@
 lib.ai.mcpServer.mkMcpServer {
   name = "git";
   defaults = {
-    package = pkgs.ai.git-mcp;
+    package = pkgs.ai.mcpServers.git-mcp;
     type = "stdio";
     command = "mcp-server-git";
     args = [];

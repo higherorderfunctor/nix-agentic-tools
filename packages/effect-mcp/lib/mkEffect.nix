@@ -11,7 +11,7 @@
 lib.ai.mcpServer.mkMcpServer {
   name = "effect";
   defaults = {
-    package = pkgs.ai.effect-mcp;
+    package = pkgs.ai.mcpServers.effect-mcp;
     type = "stdio";
     command = "effect-mcp";
     args = [];

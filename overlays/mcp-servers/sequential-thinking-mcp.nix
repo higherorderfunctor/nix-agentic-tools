@@ -1,5 +1,5 @@
-# git-intel-mcp — builds the Git Intel MCP server from the nvfetcher-tracked
-# source via buildNpmPackage.
+# sequential-thinking-mcp — builds the Sequential Thinking MCP server from
+# the nvfetcher-tracked source via buildNpmPackage.
 #
 # Instantiates `ourPkgs` from `inputs.nixpkgs` so every build input
 # (buildNpmPackage, nodejs, makeWrapper) routes through this repo's pinned
@@ -20,17 +20,19 @@
   inherit (ourPkgs) buildNpmPackage makeWrapper nodejs;
 in
   buildNpmPackage {
-    pname = "git-intel-mcp";
+    pname = "sequential-thinking-mcp";
     inherit (nv) version src npmDepsHash;
-    postPatch = "cp ${./locks/git-intel-mcp-package-lock.json} package-lock.json";
+    sourceRoot = "package";
+    postPatch = "cp ${../locks/sequential-thinking-mcp-package-lock.json} package-lock.json";
+    dontNpmBuild = true;
     nativeBuildInputs = [makeWrapper];
     installPhase = ''
       runHook preInstall
-      mkdir -p $out/lib/git-intel-mcp $out/bin
-      cp -r dist node_modules package.json $out/lib/git-intel-mcp/
-      makeWrapper ${nodejs}/bin/node $out/bin/git-intel-mcp \
-        --add-flags "$out/lib/git-intel-mcp/dist/index.js"
+      mkdir -p $out/lib/sequential-thinking-mcp $out/bin
+      cp -r dist node_modules package.json $out/lib/sequential-thinking-mcp/
+      makeWrapper ${nodejs}/bin/node $out/bin/sequential-thinking-mcp \
+        --add-flags "$out/lib/sequential-thinking-mcp/dist/index.js"
       runHook postInstall
     '';
-    meta.mainProgram = "git-intel-mcp";
+    meta.mainProgram = "sequential-thinking-mcp";
   }

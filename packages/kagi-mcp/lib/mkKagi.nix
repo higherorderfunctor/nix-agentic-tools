@@ -28,7 +28,7 @@
 lib.ai.mcpServer.mkMcpServer {
   name = "kagi";
   defaults = {
-    package = pkgs.ai.kagi-mcp;
+    package = pkgs.ai.mcpServers.kagi-mcp;
     type = "stdio";
     command = "kagimcp";
     args = [];

@@ -43,11 +43,14 @@ this branch — do not copy this snippet until the MCP packaging
 chunk lands.
 
 ```nix
-# All AI binaries (CLIs + MCP servers) live under pkgs.ai.* after
-# the nix-agentic-tools overlay is composed.
+# AI binaries live under grouped namespaces after the overlay:
+#   pkgs.ai.*              — CLIs (claude-code, copilot-cli, etc.)
+#   pkgs.ai.mcpServers.*   — MCP servers
+#   pkgs.ai.lspServers.*   — LSP server proxies
+#   pkgs.gitTools.*         — git workflow tools
 pkgs = import nixpkgs {
   inherit system;
   overlays = [inputs.nix-agentic-tools.overlays.default];
 };
-# pkgs.ai.github-mcp, pkgs.ai.claude-code, pkgs.ai.kiro-cli, etc.
+# pkgs.ai.mcpServers.github-mcp, pkgs.ai.claude-code, pkgs.gitTools.git-absorb, etc.
 ```

@@ -32,7 +32,7 @@
 lib.ai.mcpServer.mkMcpServer {
   name = "github";
   defaults = {
-    package = pkgs.ai.github-mcp;
+    package = pkgs.ai.mcpServers.github-mcp;
     type = "stdio";
     command = "github-mcp-server";
     args = [];

@@ -11,7 +11,7 @@
 lib.ai.mcpServer.mkMcpServer {
   name = "fetch";
   defaults = {
-    package = pkgs.ai.fetch-mcp;
+    package = pkgs.ai.mcpServers.fetch-mcp;
     type = "stdio";
     command = "mcp-server-fetch";
     args = [];

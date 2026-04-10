@@ -11,7 +11,7 @@
 lib.ai.mcpServer.mkMcpServer {
   name = "sequential-thinking";
   defaults = {
-    package = pkgs.ai.sequential-thinking-mcp;
+    package = pkgs.ai.mcpServers.sequential-thinking-mcp;
     type = "stdio";
     command = "sequential-thinking-mcp";
     args = [];

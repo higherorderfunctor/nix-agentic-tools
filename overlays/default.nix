@@ -1,10 +1,15 @@
 # overlays/default.nix
 # Unified binary-package overlay.
 #
-# Aggregates derivations exposed under pkgs.ai.* from individual
-# overlays/<name>.nix files. Shared nvfetcher data comes from
-# final.nv-sources (populated by nvSourcesOverlay in flake.nix),
-# merged with sidecar hashes from ./hashes.json.
+# Aggregates derivations into grouped namespaces:
+#   pkgs.ai.*                — flat AI CLIs and unique tools
+#   pkgs.ai.mcpServers.*     — MCP server packages + proxies
+#   pkgs.ai.lspServers.*     — LSP server proxies
+#   pkgs.gitTools.*           — git workflow tools
+#
+# Shared nvfetcher data comes from final.nv-sources (populated by
+# nvSourcesOverlay in flake.nix), merged with sidecar hashes from
+# ./hashes.json.
 #
 # Per-package files take custom argument sets (NOT uniform
 # {nv-sources, ...} callers) because different packages have different
@@ -14,23 +19,28 @@
   merge = name: (final.nv-sources.${name} or {}) // (hashes.${name} or {});
 
   nv = {
+    # AI CLIs
     agnix = merge "agnix";
     any-buddy = merge "any-buddy";
     claude-code = merge "claude-code";
-    context7-mcp = merge "context7-mcp";
     copilot-cli = merge "github-copilot-cli"; # nvfetcher key
-    effect-mcp = merge "effect-mcp";
-    fetch-mcp = merge "mcp-server-fetch"; # nvfetcher key
-    git-absorb = merge "git-absorb";
-    git-branchless = merge "git-branchless";
-    git-intel-mcp = merge "git-intel-mcp";
-    git-mcp = merge "mcp-server-git"; # nvfetcher key
-    git-revise = merge "git-revise";
-    github-mcp = merge "github-mcp-server"; # nvfetcher key
-    kagi-mcp = merge "kagimcp"; # nvfetcher key
     kiro-cli = merge "kiro-cli";
     kiro-cli-darwin = merge "kiro-cli-darwin";
     kiro-gateway = merge "kiro-gateway";
+
+    # Git tools
+    git-absorb = merge "git-absorb";
+    git-branchless = merge "git-branchless";
+    git-revise = merge "git-revise";
+
+    # MCP servers
+    context7-mcp = merge "context7-mcp";
+    effect-mcp = merge "effect-mcp";
+    fetch-mcp = merge "mcp-server-fetch"; # nvfetcher key
+    git-intel-mcp = merge "git-intel-mcp";
+    git-mcp = merge "mcp-server-git"; # nvfetcher key
+    github-mcp = merge "github-mcp-server"; # nvfetcher key
+    kagi-mcp = merge "kagimcp"; # nvfetcher key
     mcp-language-server = merge "mcp-language-server";
     mcp-proxy = merge "mcp-proxy";
     openmemory-mcp = merge "openmemory-mcp";
@@ -38,7 +48,8 @@
     sympy-mcp = merge "sympy-mcp";
   };
 
-  aiDrvs = {
+  # ── Flat AI CLIs and unique tools ──────────────────────────────────
+  flatDrvs = {
     agnix = import ./agnix.nix {
       inherit inputs final;
       nv = nv.agnix;
@@ -52,49 +63,9 @@
       nv = nv.claude-code;
       lockFile = ./locks/claude-code-package-lock.json;
     };
-    context7-mcp = import ./context7-mcp.nix {
-      inherit inputs final;
-      nv = nv.context7-mcp;
-    };
     copilot-cli = import ./copilot-cli.nix {
       inherit inputs final;
       nv = nv.copilot-cli;
-    };
-    effect-mcp = import ./effect-mcp.nix {
-      inherit inputs final;
-      nv = nv.effect-mcp;
-    };
-    fetch-mcp = import ./fetch-mcp.nix {
-      inherit inputs final;
-      nv = nv.fetch-mcp;
-    };
-    git-absorb = import ./git-absorb.nix {
-      inherit inputs final;
-      nv = nv.git-absorb;
-    };
-    git-branchless = import ./git-branchless.nix {
-      inherit inputs final;
-      nv = nv.git-branchless;
-    };
-    git-intel-mcp = import ./git-intel-mcp.nix {
-      inherit inputs final;
-      nv = nv.git-intel-mcp;
-    };
-    git-mcp = import ./git-mcp.nix {
-      inherit inputs final;
-      nv = nv.git-mcp;
-    };
-    git-revise = import ./git-revise.nix {
-      inherit inputs final;
-      nv = nv.git-revise;
-    };
-    github-mcp = import ./github-mcp.nix {
-      inherit inputs final;
-      nv = nv.github-mcp;
-    };
-    kagi-mcp = import ./kagi-mcp.nix {
-      inherit inputs final;
-      nv = nv.kagi-mcp;
     };
     kiro-cli = import ./kiro-cli.nix {
       inherit inputs final;
@@ -105,29 +76,90 @@
       inherit inputs final;
       nv = nv.kiro-gateway;
     };
-    mcp-language-server = import ./mcp-language-server.nix {
+  };
+
+  # ── MCP servers ────────────────────────────────────────────────────
+  mcpServerDrvs = {
+    context7-mcp = import ./mcp-servers/context7-mcp.nix {
+      inherit inputs final;
+      nv = nv.context7-mcp;
+    };
+    effect-mcp = import ./mcp-servers/effect-mcp.nix {
+      inherit inputs final;
+      nv = nv.effect-mcp;
+    };
+    fetch-mcp = import ./mcp-servers/fetch-mcp.nix {
+      inherit inputs final;
+      nv = nv.fetch-mcp;
+    };
+    git-intel-mcp = import ./mcp-servers/git-intel-mcp.nix {
+      inherit inputs final;
+      nv = nv.git-intel-mcp;
+    };
+    git-mcp = import ./mcp-servers/git-mcp.nix {
+      inherit inputs final;
+      nv = nv.git-mcp;
+    };
+    github-mcp = import ./mcp-servers/github-mcp.nix {
+      inherit inputs final;
+      nv = nv.github-mcp;
+    };
+    kagi-mcp = import ./mcp-servers/kagi-mcp.nix {
+      inherit inputs final;
+      nv = nv.kagi-mcp;
+    };
+    mcp-language-server = import ./mcp-servers/mcp-language-server.nix {
       inherit inputs final;
       nv = nv.mcp-language-server;
     };
-    mcp-proxy = import ./mcp-proxy.nix {
+    mcp-proxy = import ./mcp-servers/mcp-proxy.nix {
       inherit inputs final;
       nv = nv.mcp-proxy;
     };
-    nixos-mcp = import ./nixos-mcp.nix {inherit inputs final;};
-    openmemory-mcp = import ./openmemory-mcp.nix {
+    nixos-mcp = import ./mcp-servers/nixos-mcp.nix {inherit inputs final;};
+    openmemory-mcp = import ./mcp-servers/openmemory-mcp.nix {
       inherit inputs final;
       nv = nv.openmemory-mcp;
     };
-    sequential-thinking-mcp = import ./sequential-thinking-mcp.nix {
+    sequential-thinking-mcp = import ./mcp-servers/sequential-thinking-mcp.nix {
       inherit inputs final;
       nv = nv.sequential-thinking-mcp;
     };
-    serena-mcp = import ./serena-mcp.nix {inherit inputs final;};
-    sympy-mcp = import ./sympy-mcp.nix {
+    serena-mcp = import ./mcp-servers/serena-mcp.nix {inherit inputs final;};
+    sympy-mcp = import ./mcp-servers/sympy-mcp.nix {
       inherit inputs final;
       nv = nv.sympy-mcp;
     };
   };
+
+  # ── Proxies ────────────────────────────────────────────────────────
+  # agnix is a multi-binary package. Proxies make it discoverable
+  # under the mcpServers/lspServers namespaces — same derivation,
+  # consumers use lib.getExe' for the specific binary.
+  mcpProxies = {agnix-mcp = flatDrvs.agnix;};
+  lspProxies = {agnix-lsp = flatDrvs.agnix;};
+
+  # ── Git tools ──────────────────────────────────────────────────────
+  gitToolDrvs = {
+    git-absorb = import ./git-tools/git-absorb.nix {
+      inherit inputs final;
+      nv = nv.git-absorb;
+    };
+    git-branchless = import ./git-tools/git-branchless.nix {
+      inherit inputs final;
+      nv = nv.git-branchless;
+    };
+    git-revise = import ./git-tools/git-revise.nix {
+      inherit inputs final;
+      nv = nv.git-revise;
+    };
+  };
 in {
-  ai = aiDrvs;
+  ai =
+    flatDrvs
+    // {
+      mcpServers = mcpServerDrvs // mcpProxies;
+      lspServers = lspProxies;
+    };
+  gitTools = gitToolDrvs;
 }

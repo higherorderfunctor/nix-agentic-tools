@@ -1,4 +1,4 @@
-# openmemory-mcp — builds the OpenMemory MCP server from the nvfetcher-tracked
+# git-intel-mcp — builds the Git Intel MCP server from the nvfetcher-tracked
 # source via buildNpmPackage.
 #
 # Instantiates `ourPkgs` from `inputs.nixpkgs` so every build input
@@ -20,23 +20,17 @@
   inherit (ourPkgs) buildNpmPackage makeWrapper nodejs;
 in
   buildNpmPackage {
-    pname = "openmemory-mcp";
+    pname = "git-intel-mcp";
     inherit (nv) version src npmDepsHash;
-    sourceRoot = "package";
-    postPatch = "cp ${./locks/openmemory-mcp-package-lock.json} package-lock.json";
-    dontNpmBuild = true;
+    postPatch = "cp ${../locks/git-intel-mcp-package-lock.json} package-lock.json";
     nativeBuildInputs = [makeWrapper];
     installPhase = ''
       runHook preInstall
-      mkdir -p $out/lib/openmemory-mcp $out/bin
-      cp -r bin dist node_modules package.json $out/lib/openmemory-mcp/
-      makeWrapper ${nodejs}/bin/node $out/bin/openmemory-mcp \
-        --add-flags "$out/lib/openmemory-mcp/bin/opm.js" \
-        --add-flags "mcp"
-      makeWrapper ${nodejs}/bin/node $out/bin/openmemory-mcp-serve \
-        --add-flags "$out/lib/openmemory-mcp/bin/opm.js" \
-        --add-flags "serve"
+      mkdir -p $out/lib/git-intel-mcp $out/bin
+      cp -r dist node_modules package.json $out/lib/git-intel-mcp/
+      makeWrapper ${nodejs}/bin/node $out/bin/git-intel-mcp \
+        --add-flags "$out/lib/git-intel-mcp/dist/index.js"
       runHook postInstall
     '';
-    meta.mainProgram = "openmemory-mcp";
+    meta.mainProgram = "git-intel-mcp";
   }

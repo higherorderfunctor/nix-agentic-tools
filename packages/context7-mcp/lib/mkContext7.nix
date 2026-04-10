@@ -11,7 +11,7 @@
 lib.ai.mcpServer.mkMcpServer {
   name = "context7";
   defaults = {
-    package = pkgs.ai.context7-mcp;
+    package = pkgs.ai.mcpServers.context7-mcp;
     type = "stdio";
     command = "context7-mcp";
     args = [];

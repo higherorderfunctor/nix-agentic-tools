@@ -11,7 +11,7 @@
 lib.ai.mcpServer.mkMcpServer {
   name = "language-server";
   defaults = {
-    package = pkgs.ai.mcp-language-server;
+    package = pkgs.ai.mcpServers.mcp-language-server;
     type = "stdio";
     command = "mcp-language-server";
     args = [];

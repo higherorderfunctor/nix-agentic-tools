@@ -21,7 +21,7 @@ in
     pname = "context7-mcp";
     inherit (nv) version src npmDepsHash;
     sourceRoot = "package";
-    postPatch = "cp ${./locks/context7-mcp-package-lock.json} package-lock.json";
+    postPatch = "cp ${../locks/context7-mcp-package-lock.json} package-lock.json";
     dontNpmBuild = true;
     nativeBuildInputs = [makeWrapper];
     installPhase = ''

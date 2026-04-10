@@ -11,7 +11,7 @@
 lib.ai.mcpServer.mkMcpServer {
   name = "proxy";
   defaults = {
-    package = pkgs.ai.mcp-proxy;
+    package = pkgs.ai.mcpServers.mcp-proxy;
     type = "stdio";
     command = "mcp-proxy";
     args = [];

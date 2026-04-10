@@ -11,7 +11,7 @@
 lib.ai.mcpServer.mkMcpServer {
   name = "sympy";
   defaults = {
-    package = pkgs.ai.sympy-mcp;
+    package = pkgs.ai.mcpServers.sympy-mcp;
     type = "stdio";
     command = "sympy-mcp";
     args = [];

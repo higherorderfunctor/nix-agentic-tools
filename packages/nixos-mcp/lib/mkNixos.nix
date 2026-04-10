@@ -13,7 +13,7 @@
 lib.ai.mcpServer.mkMcpServer {
   name = "nixos";
   defaults = {
-    package = pkgs.ai.nixos-mcp;
+    package = pkgs.ai.mcpServers.nixos-mcp;
     type = "stdio";
     command = "mcp-nixos";
     args = [];

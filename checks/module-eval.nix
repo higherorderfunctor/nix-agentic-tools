@@ -122,6 +122,8 @@
       claude-code = pkgs.ai.claude-code or pkgs.hello;
       copilot-cli = pkgs.ai.copilot-cli or pkgs.hello;
       kiro-cli = pkgs.ai.kiro-cli or pkgs.hello;
+      mcpServers = pkgs.ai.mcpServers or {};
+      lspServers = pkgs.ai.lspServers or {};
     };
 
   evalHm = config:
@@ -213,7 +215,7 @@ in {
         ai.claude.enable = true;
         ai.mcpServers.ctx = {
           type = "stdio";
-          package = pkgs.ai.context7-mcp or pkgs.hello;
+          package = pkgs.ai.mcpServers.context7-mcp or pkgs.hello;
           command = "context7-mcp";
         };
       };
