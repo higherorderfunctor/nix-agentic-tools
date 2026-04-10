@@ -36,6 +36,7 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
+            print-build-logs = true
       # Phase 1 uses the lightweight CI shell (flake.nix devShells.ci)
       # instead of the full devenv shell — avoids 7+ min module eval.
       - name: Update flake inputs
@@ -78,6 +79,7 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
+            print-build-logs = true
       - uses: cachix/cachix-action@v17
         with:
           name: nix-agentic-tools
@@ -95,7 +97,7 @@ jobs:
       - name: Install devenv
         run: nix profile add nixpkgs#devenv
       - name: Evaluate devenv shell
-        run: devenv print-dev-env
+        run: devenv print-dev-env > /dev/null
       - name: Build all packages
         continue-on-error: true
         run: devenv tasks run build:all --show-output
