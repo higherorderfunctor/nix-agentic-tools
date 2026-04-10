@@ -15,10 +15,6 @@
       url = "github:utensils/mcp-nixos";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nix-fast-build = {
-      url = "github:Mic92/nix-fast-build";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     # NuschtOS options search — client-side search UI embedded at
     # /options/ in the built doc site. Generates a multi-scope
