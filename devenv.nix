@@ -338,5 +338,23 @@ in {
           echo "Update pipeline complete"
         '';
       };
+
+      # ── Build tasks ────────────────────────────────────────────────
+      "build:all" = {
+        description = "Build all packages for the current system and push to cachix";
+        exec = ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          system=$(nix eval --raw nixpkgs#system 2>/dev/null || nix eval --impure --raw --expr 'builtins.currentSystem')
+          echo "Building for $system..."
+          nix-fast-build \
+            --flake ".#packages" \
+            --systems "$system" \
+            --skip-cached \
+            --cachix-cache nix-agentic-tools \
+            --no-nom \
+            --no-link
+        '';
+      };
     };
 }

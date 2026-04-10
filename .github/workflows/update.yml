@@ -32,6 +32,8 @@ jobs:
         run: nix profile install nixpkgs#devenv
       - name: Update flake inputs
         run: devenv tasks run update:flake
+      - name: Update devenv lock
+        run: devenv tasks run update:devenv
       - name: Update nvfetcher sources
         run: devenv tasks run update:sources
         env:
@@ -43,8 +45,9 @@ jobs:
           path: |
             .nvfetcher/
             flake.lock
+            devenv.lock
 
-  # ── Phase 2: per-platform hash computation + build + cachix ──────
+  # ── Phase 2: per-platform hashes + build + cachix ────────────────
   build:
     needs: update-sources
     strategy:
@@ -69,23 +72,17 @@ jobs:
         with:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Install devenv + nix-fast-build
+        run: nix profile install nixpkgs#devenv nixpkgs#nix-fast-build
       - name: Compute dep hashes
-        run: bash dev/scripts/update-hashes.sh
+        run: devenv tasks run update:hashes
       - name: Upload hashes
         uses: actions/upload-artifact@v4
         with:
           name: hashes-${{ matrix.system }}
           path: overlays/hashes.json
       - name: Build all packages
-        run: |
-          nix profile install nixpkgs#nix-fast-build
-          nix-fast-build \
-            --flake ".#packages" \
-            --systems "${{ matrix.system }}" \
-            --skip-cached \
-            --cachix-cache nix-agentic-tools \
-            --no-nom \
-            --no-link
+        run: devenv tasks run build:all
 
   # ── Phase 3: merge hashes + commit ───────────────────────────────
   commit:
@@ -100,7 +97,6 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: updated-sources
-      # Download hashes from all platforms and merge
       - uses: actions/download-artifact@v4
         with:
           name: hashes-x86_64-linux
@@ -111,9 +107,6 @@ jobs:
           path: /tmp/hashes-darwin
       - name: Merge platform hashes
         run: |
-          # Deep merge: linux hashes + darwin hashes → overlays/hashes.json
-          # jq '*' does recursive merge; darwin values override linux on conflict
-          # (shouldn't conflict since dep hashes are platform-independent)
           jq -s '.[0] * .[1]' \
             /tmp/hashes-linux/hashes.json \
             /tmp/hashes-darwin/hashes.json \
