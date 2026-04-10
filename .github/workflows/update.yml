@@ -28,20 +28,18 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
-      # Run directly — no devenv shell eval needed for phase 1.
-      # Saves 7+ min of module system eval overhead.
-      - name: Install tools
-        run: nix profile add nixpkgs#devenv nixpkgs#nvfetcher nixpkgs#nodejs
+      # Phase 1 uses the lightweight CI shell (flake.nix devShells.ci)
+      # instead of the full devenv shell — avoids 7+ min module eval.
       - name: Update flake inputs
-        run: nix flake update
+        run: nix develop .#ci -c nix flake update
       - name: Update devenv lock
-        run: devenv update
+        run: nix develop .#ci -c devenv update
       - name: Update nvfetcher sources
-        run: nvfetcher -o .nvfetcher
+        run: nix develop .#ci -c nvfetcher -o .nvfetcher
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Regenerate npm lockfiles
-        run: bash dev/scripts/update-locks.sh
+        run: nix develop .#ci -c bash dev/scripts/update-locks.sh
       - name: Upload updated sources
         uses: actions/upload-artifact@v4
         with:

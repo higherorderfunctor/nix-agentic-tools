@@ -452,6 +452,16 @@
           treefmt
         ];
       };
+      # Lightweight CI shell for the update pipeline (phase 1).
+      # No devenv module eval — just the tools needed for source updates.
+      ci = pkgs.mkShell {
+        name = "nix-agentic-tools-ci";
+        packages = with pkgs; [
+          devenv
+          nodejs
+          nvfetcher
+        ];
+      };
     });
 
     formatter = forAllSystems (system: (pkgsFor system).alejandra);
