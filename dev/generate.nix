@@ -51,14 +51,18 @@
         dir = entry.dir or pkg;
       };
     inherit (normalized) location name dir;
+    locationBases = {
+      dev = ./fragments;
+      package = ../packages;
+      devshell = ../devshell;
+    };
+    base =
+      locationBases.${location}
+        or (throw "mkDevFragment: unknown location '${location}' (expected ${builtins.concatStringsSep "|" (builtins.attrNames locationBases)})");
     fragmentPath =
       if location == "dev"
-      then ./fragments + "/${dir}/${name}.md"
-      else if location == "package"
-      then ../packages + "/${dir}/docs/${name}.md"
-      else if location == "devshell"
-      then ../devshell + "/${dir}/docs/${name}.md"
-      else throw "mkDevFragment: unknown location '${location}' (expected dev|package|devshell)";
+      then base + "/${dir}/${name}.md"
+      else base + "/${dir}/docs/${name}.md";
   in
     fragments.mkFragment {
       text = builtins.readFile fragmentPath;
