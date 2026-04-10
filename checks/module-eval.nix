@@ -594,4 +594,267 @@ in {
       != null
       && lib.hasInfix "Kiro steering content." file.text
   );
+
+  # ── Task 5 (A4): Kiro HM/devenv fanout absorption ────────────
+
+  # HM: package installation — verify home.packages populated.
+  module-kiro-hm-wraps-package = mkTest "kiro-hm-wraps-package" (
+    let
+      result = evalHm {
+        ai.kiro.enable = true;
+      };
+      packages = result.config.home.packages or [];
+    in
+      builtins.length packages >= 1
+  );
+
+  # HM: settings activation merge — verify activation script
+  # contains jq merge and settings content.
+  module-kiro-hm-writes-settings-activation = mkTest "kiro-hm-writes-settings-activation" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          settings.chat.defaultModel = "claude-sonnet-4";
+        };
+      };
+      activation = result.config.home.activation.kiroSettingsMerge or null;
+    in
+      activation
+      != null
+      && lib.hasInfix "claude-sonnet-4" (activation.text or "")
+      && lib.hasInfix "jq" (activation.text or "")
+  );
+
+  # HM: mcp.json — verify mergedServers writes mcp config.
+  module-kiro-hm-writes-mcp-json = mkTest "kiro-hm-writes-mcp-json" (
+    let
+      result = evalHm {
+        ai.kiro.enable = true;
+        ai.mcpServers.test-server = {
+          type = "stdio";
+          package = pkgs.hello;
+          command = "hello";
+        };
+      };
+      mcpFile = result.config.home.file.".kiro/settings/mcp.json" or null;
+    in
+      mcpFile
+      != null
+      && lib.hasInfix "test-server" (mcpFile.text or "")
+  );
+
+  # HM: lsp.json — verify LSP server config write.
+  module-kiro-hm-writes-lsp-json = mkTest "kiro-hm-writes-lsp-json" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          lspServers.nix = {
+            command = "nixd";
+            args = [];
+          };
+        };
+      };
+      lspFile = result.config.home.file.".kiro/settings/lsp.json" or null;
+    in
+      lspFile
+      != null
+      && lib.hasInfix "nixd" (lspFile.text or "")
+  );
+
+  # HM: per-instruction steering files with kiro transformer frontmatter.
+  # Verifies the kiro transformer emits `inclusion:` and `name:` fields.
+  module-kiro-hm-writes-steering-files = mkTest "kiro-hm-writes-steering-files" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          instructions = [
+            {
+              name = "my-steering";
+              text = "Use strict mode always.";
+              paths = ["src/**" "tests/**"];
+            }
+          ];
+        };
+      };
+      steeringFile = result.config.home.file.".kiro/steering/my-steering.md" or null;
+    in
+      steeringFile
+      != null
+      && lib.hasInfix "Use strict mode always" (steeringFile.text or "")
+      && lib.hasInfix "inclusion: fileMatch" (steeringFile.text or "")
+      && lib.hasInfix "name: my-steering" (steeringFile.text or "")
+      # CRITICAL: fileMatchPattern MUST be a YAML array for multi-element
+      # paths, not a comma-joined string.
+      && lib.hasInfix "fileMatchPattern: [" (steeringFile.text or "")
+  );
+
+  # HM: skills fanout via mkSkillEntries.
+  module-kiro-hm-writes-skills = mkTest "kiro-hm-writes-skills" (
+    let
+      result = evalHm {
+        ai.kiro.enable = true;
+        ai.skills.stack-fix = ./../packages/stacked-workflows/skills/stack-fix;
+      };
+      skillEntry = result.config.home.file.".kiro/skills/stack-fix" or null;
+    in
+      skillEntry != null
+  );
+
+  # HM: wrapper injects env vars. When env vars are set, the
+  # installed package should be the wrapped derivation.
+  module-kiro-hm-wrapper-exports-env-vars = mkTest "kiro-hm-wrapper-exports-env-vars" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          environmentVariables.KIRO_LOG_LEVEL = "debug";
+        };
+      };
+      packages = result.config.home.packages or [];
+      first = builtins.head packages;
+    in
+      builtins.length packages
+      == 1
+      && (first.name or "") == "kiro-cli-wrapped"
+  );
+
+  # HM: no wrapper when nothing to wrap.
+  module-kiro-hm-no-wrapper-when-nothing-to-wrap = mkTest "kiro-hm-no-wrapper-when-nothing-to-wrap" (
+    let
+      result = evalHm {
+        ai.kiro.enable = true;
+      };
+      packages = result.config.home.packages or [];
+      first = builtins.head packages;
+    in
+      builtins.length packages
+      == 1
+      && (first.name or "") != "kiro-cli-wrapped"
+  );
+
+  # HM: agent JSON files written under configDir/agents/.
+  module-kiro-hm-writes-agent-files = mkTest "kiro-hm-writes-agent-files" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          agents.reviewer = ''{"role": "reviewer"}'';
+        };
+      };
+      agentFile = result.config.home.file.".kiro/agents/reviewer.json" or null;
+    in
+      agentFile != null
+  );
+
+  # HM: hook JSON files written under configDir/hooks/.
+  module-kiro-hm-writes-hook-files = mkTest "kiro-hm-writes-hook-files" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          hooks.pre-commit = ''{"event": "pre-commit"}'';
+        };
+      };
+      hookFile = result.config.home.file.".kiro/hooks/pre-commit.json" or null;
+    in
+      hookFile != null
+  );
+
+  # Devenv: mcp.json write.
+  module-kiro-devenv-writes-mcp-json = mkTest "kiro-devenv-writes-mcp-json" (
+    let
+      result = evalDevenv {
+        ai.kiro.enable = true;
+        ai.mcpServers.test-server = {
+          type = "stdio";
+          package = pkgs.hello;
+          command = "hello";
+        };
+      };
+    in
+      result.config.files ? ".kiro/settings/mcp.json"
+  );
+
+  # Devenv: lsp.json write.
+  module-kiro-devenv-writes-lsp-json = mkTest "kiro-devenv-writes-lsp-json" (
+    let
+      result = evalDevenv {
+        ai.kiro = {
+          enable = true;
+          lspServers.nix = {
+            command = "nixd";
+            args = [];
+          };
+        };
+      };
+      lspFile = result.config.files.".kiro/settings/lsp.json" or null;
+    in
+      lspFile
+      != null
+      && lib.hasInfix "nixd" (lspFile.text or "")
+  );
+
+  # Devenv: environment variables populate the env blob.
+  module-kiro-devenv-env-blob-populated = mkTest "kiro-devenv-env-blob-populated" (
+    let
+      result = evalDevenv {
+        ai.kiro = {
+          enable = true;
+          environmentVariables.KIRO_LOG_LEVEL = "debug";
+        };
+      };
+    in
+      (result.config.env.KIRO_LOG_LEVEL or null) == "debug"
+  );
+
+  # Devenv: settings/cli.json static write.
+  module-kiro-devenv-writes-settings-json = mkTest "kiro-devenv-writes-settings-json" (
+    let
+      result = evalDevenv {
+        ai.kiro = {
+          enable = true;
+          settings.telemetry.enabled = false;
+        };
+      };
+      settingsFile = result.config.files.".kiro/settings/cli.json" or null;
+    in
+      settingsFile
+      != null
+      && lib.hasInfix "telemetry" (settingsFile.text or "")
+  );
+
+  # Devenv: agent files written.
+  module-kiro-devenv-writes-agent-files = mkTest "kiro-devenv-writes-agent-files" (
+    let
+      result = evalDevenv {
+        ai.kiro = {
+          enable = true;
+          agents.reviewer = ''{"role": "reviewer"}'';
+        };
+      };
+      agentFile = result.config.files.".kiro/agents/reviewer.json" or null;
+    in
+      agentFile
+      != null
+      && lib.hasInfix "reviewer" (agentFile.text or "")
+  );
+
+  # Devenv: hook files written.
+  module-kiro-devenv-writes-hook-files = mkTest "kiro-devenv-writes-hook-files" (
+    let
+      result = evalDevenv {
+        ai.kiro = {
+          enable = true;
+          hooks.pre-commit = ''{"event": "pre-commit"}'';
+        };
+      };
+      hookFile = result.config.files.".kiro/hooks/pre-commit.json" or null;
+    in
+      hookFile
+      != null
+      && lib.hasInfix "pre-commit" (hookFile.text or "")
+  );
 }
