@@ -11,16 +11,8 @@
   };
 
   inputs = {
-    devenv = {
-      url = "github:cachix/devenv";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     git-branchless = {
       url = "github:arxanas/git-branchless";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    git-hooks = {
-      url = "github:cachix/git-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     mcp-nixos = {
@@ -51,10 +43,6 @@
     };
     serena = {
       url = "github:oraios/serena";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    treefmt-nix = {
-      url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -456,8 +444,9 @@
           '';
       });
 
-    # Dev shells: `default` is the full devenv shell (devenv.nix),
-    # `ci` is a lightweight shell for the update pipeline.
+    # devShells.default provided by devenv CLI (devenv shell / devenv test)
+    # See devenv.nix for shell configuration.
+    # devShells.ci is a lightweight shell for the CI update pipeline.
     devShells = forAllSystems (system: let
       pkgs = pkgsFor system;
     in {
@@ -469,10 +458,6 @@
           nodejs
           prefetch-npm-deps
         ];
-      };
-      default = inputs.devenv.lib.mkShell {
-        inherit inputs pkgs;
-        modules = [./devenv.nix];
       };
     });
 
