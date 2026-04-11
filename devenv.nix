@@ -217,11 +217,23 @@ in {
     // {
       "update:flake" = {
         description = "Update flake.lock (nix flake update)";
-        exec = ''nix flake update'';
+        exec = ''
+          nix flake update
+          git add flake.lock
+          if ! git diff --staged --quiet; then
+            git commit -m "chore(flake): update flake.lock"
+          fi
+        '';
       };
       "update:devenv" = {
         description = "Update devenv.lock";
-        exec = ''devenv update'';
+        exec = ''
+          devenv update
+          git add devenv.lock
+          if ! git diff --staged --quiet; then
+            git commit -m "chore(devenv): update devenv.lock"
+          fi
+        '';
       };
       "update:nix-update" = {
         description = "Update all package versions and hashes via nix-update";
