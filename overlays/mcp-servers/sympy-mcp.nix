@@ -1,11 +1,8 @@
-# sympy-mcp — builds the SymPy MCP server with inline fetchFromGitHub source
-# via writeShellApplication wrapping a python environment.
+# sympy-mcp — SymPy MCP server.
 #
-# Instantiates `ourPkgs` from `inputs.nixpkgs` so every build input
-# (python interpreter + python packages + writeShellApplication) routes
-# through this repo's pinned nixpkgs instead of the consumer's. This gives
-# cache-hit parity against CI's standalone build (see
-# dev/fragments/overlays/overlay-pattern.md).
+# Wraps a Python environment with sympy + mcp dependencies.
+# Uses mkDerivation (not writeShellApplication) so nix-update can
+# find and manage the version + src attributes.
 {
   inputs,
   final,
@@ -14,8 +11,8 @@
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
   };
-  inherit (ourPkgs) fetchFromGitHub python314 writeShellApplication;
-  vu = import ../version-utils.nix;
+  inherit (ourPkgs) fetchFromGitHub makeWrapper python314;
+  vu = import ../lib.nix;
 
   rev = "646c69558b622ab0e2814c58aa82143e56b76c33";
   src = fetchFromGitHub {
@@ -24,21 +21,27 @@
     inherit rev;
     hash = "sha256-AjRdiBtsF/ZpAUt+TPhvkT8VQ3y7rcJSogSSyQQXytI=";
   };
-  version = vu.mkVersion {
-    upstream = vu.readPyprojectVersion "${src}/pyproject.toml";
-    inherit rev;
-  };
-  python =
-    python314.withPackages (ps:
-      with ps; [mcp typer python-dotenv sympy]);
-  drv = writeShellApplication {
-    name = "sympy-mcp";
-    runtimeInputs = [python];
-    text = ''exec mcp run "${src}/server.py" "$@"'';
-  };
+
+  pythonEnv = python314.withPackages (ps:
+    with ps; [mcp typer python-dotenv sympy]);
 in
-  drv.overrideAttrs {
-    inherit version;
-    meta = (drv.meta or {}) // {mainProgram = "sympy-mcp";};
-    passthru = (drv.passthru or {}) // {mcpName = "sympy-mcp";};
+  ourPkgs.stdenv.mkDerivation {
+    pname = "sympy-mcp";
+    version = vu.mkVersion {
+      upstream = vu.readPyprojectVersion "${src}/pyproject.toml";
+      inherit rev;
+    };
+    inherit src;
+    dontUnpack = true;
+    dontBuild = true;
+    nativeBuildInputs = [makeWrapper];
+    installPhase = ''
+      runHook preInstall
+      mkdir -p $out/bin
+      makeWrapper ${pythonEnv}/bin/python $out/bin/sympy-mcp \
+        --add-flags "-m mcp run $src/server.py"
+      runHook postInstall
+    '';
+    passthru.mcpName = "sympy-mcp";
+    meta.mainProgram = "sympy-mcp";
   }

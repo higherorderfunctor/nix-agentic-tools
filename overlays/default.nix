@@ -51,7 +51,7 @@
     };
     claude-code = import ./claude-code.nix {
       inherit inputs final prev;
-      lockFile = ./sources/locks/claude-code-package-lock.json;
+      lockFile = ./locks/claude-code-package-lock.json;
     };
     copilot-cli = import ./copilot-cli.nix {
       inherit inputs final;

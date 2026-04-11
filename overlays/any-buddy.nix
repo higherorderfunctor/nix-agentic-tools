@@ -7,7 +7,7 @@
 # source-only so it never needs `ourPkgs`; dropping `inputs` on
 # the floor here is the intent.
 {final, ...}: let
-  vu = import ./version-utils.nix;
+  vu = import ./lib.nix;
   rev = "861f0dfea1674dcff9a72390143fc64d026c95ed";
 in
   final.stdenvNoCC.mkDerivation {

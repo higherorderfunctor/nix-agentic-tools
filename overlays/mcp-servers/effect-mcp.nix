@@ -13,7 +13,7 @@
     inherit (final.stdenv.hostPlatform) system;
   };
   inherit (ourPkgs) fetchPnpmDeps makeWrapper nodejs pnpm pnpmConfigHook;
-  vu = import ../version-utils.nix;
+  vu = import ../lib.nix;
 
   rev = "83a768303839b9e125f6c286369a5d9cc26c666e";
   src = ourPkgs.fetchFromGitHub {

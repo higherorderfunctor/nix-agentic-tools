@@ -16,7 +16,7 @@
   };
   inherit (ourPkgs) fetchFromGitHub;
 
-  vu = import ../version-utils.nix;
+  vu = import ../lib.nix;
 
   # Pin to 1.88.0 — git-branchless v0.10.0 has esl01-indexedlog build
   # failure on Rust 1.89+ (arxanas/git-branchless#1585). Update this

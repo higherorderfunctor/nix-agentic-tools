@@ -13,7 +13,7 @@
     inherit (final.stdenv.hostPlatform) system;
   };
   inherit (ourPkgs) buildNpmPackage fetchgit makeWrapper nodejs;
-  vu = import ../version-utils.nix;
+  vu = import ../lib.nix;
 
   rev = "9f216bab8d6bc3a3b850ad77f27d02d63a71e10d";
   src = fetchgit {

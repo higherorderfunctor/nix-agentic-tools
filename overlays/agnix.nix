@@ -25,7 +25,7 @@
   };
   inherit (ourPkgs) fetchFromGitHub;
 
-  vu = import ./version-utils.nix;
+  vu = import ./lib.nix;
 
   # agnix requires Rust edition 2024 (>= 1.91)
   rust = ourPkgs.rust-bin.stable.latest.default;

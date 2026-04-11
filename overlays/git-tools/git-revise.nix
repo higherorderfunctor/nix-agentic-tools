@@ -16,7 +16,7 @@
     inherit (final.stdenv.hostPlatform) system;
   };
   inherit (ourPkgs) fetchFromGitHub;
-  vu = import ../version-utils.nix;
+  vu = import ../lib.nix;
 
   rev = "a5bdbe420521a7784dd16c8f22b374b2f1d2d167";
   src = fetchFromGitHub {

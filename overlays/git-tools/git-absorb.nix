@@ -16,7 +16,7 @@
   };
   inherit (ourPkgs) fetchFromGitHub;
 
-  vu = import ../version-utils.nix;
+  vu = import ../lib.nix;
 
   rust = ourPkgs.rust-bin.stable.latest.default;
   rustPlatform = ourPkgs.makeRustPlatform {

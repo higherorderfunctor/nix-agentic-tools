@@ -14,7 +14,7 @@
     inherit (final.stdenv.hostPlatform) system;
   };
   inherit (ourPkgs) fetchFromGitHub;
-  vu = import ../version-utils.nix;
+  vu = import ../lib.nix;
   # httpx-auth has test failures in nixpkgs (jwt InsecureKeyLengthWarning)
   httpx-auth = ourPkgs.python3Packages.httpx-auth.overridePythonAttrs {doCheck = false;};
 

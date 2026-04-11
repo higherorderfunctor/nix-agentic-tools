@@ -11,7 +11,7 @@
     inherit (final.stdenv.hostPlatform) system;
   };
   inherit (ourPkgs) buildNpmPackage fetchFromGitHub makeWrapper nodejs python314Packages;
-  vu = import ../../version-utils.nix;
+  vu = import ../../lib.nix;
 
   rev = "f4244583a6af9425633e433a3eec000d23f4e011";
   src = fetchFromGitHub {

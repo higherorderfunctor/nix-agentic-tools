@@ -14,7 +14,7 @@
     inherit (final.stdenv.hostPlatform) system;
   };
   python = ourPkgs.python314;
-  vu = import ./version-utils.nix;
+  vu = import ./lib.nix;
   pythonEnv = python.withPackages (ps:
     with ps; [
       fastapi

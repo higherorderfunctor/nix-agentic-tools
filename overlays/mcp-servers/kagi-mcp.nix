@@ -15,7 +15,7 @@
     inherit (final.stdenv.hostPlatform) system;
   };
   inherit (ourPkgs) fetchFromGitHub fetchurl python314Packages;
-  vu = import ../version-utils.nix;
+  vu = import ../lib.nix;
 
   rev = "933e3384e9b1f34ebcc84b85310be7a6548900db";
   src = fetchFromGitHub {

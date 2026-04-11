@@ -14,7 +14,7 @@
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
   };
-  vu = import ../version-utils.nix;
+  vu = import ../lib.nix;
 
   rev = "e4395849a52e18555361abab60a060802c06bf50";
   src = ourPkgs.fetchFromGitHub {

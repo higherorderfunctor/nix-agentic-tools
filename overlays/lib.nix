@@ -1,4 +1,4 @@
-# overlays/version-utils.nix — DRY version extraction from source trees.
+# overlays/lib.nix — DRY version extraction from source trees.
 #
 # Each helper reads a manifest from a Nix store path (src) at eval
 # time and returns the upstream version string. Callers combine it
