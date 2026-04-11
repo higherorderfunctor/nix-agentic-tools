@@ -45,6 +45,10 @@
       url = "github:oraios/serena";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
@@ -461,6 +465,8 @@
       };
     });
 
-    formatter = forAllSystems (system: (pkgsFor system).alejandra);
+    formatter =
+      forAllSystems (system:
+        (inputs.treefmt-nix.lib.evalModule (pkgsFor system) (import ./treefmt.nix)).config.build.wrapper);
   };
 }

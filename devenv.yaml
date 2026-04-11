@@ -4,8 +4,18 @@
 allowUnfree: true
 
 inputs:
+  git-branchless:
+    url: github:arxanas/git-branchless
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
   git-hooks:
     url: github:cachix/git-hooks.nix
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
+  mcp-nixos:
+    url: github:utensils/mcp-nixos
     inputs:
       nixpkgs:
         follows: nixpkgs
