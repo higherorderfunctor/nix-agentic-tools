@@ -107,13 +107,14 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       # Build ALL packages directly — no devenv eval needed. Hashes
       # were already computed in Phase 1 and are in the sources artifact.
-      # --inputs-from . pins nix-fast-build to the flake's nixpkgs.
+      # --inputs-from . resolves nix-fast-build from the flake input
+      # (github:Mic92/nix-fast-build), not the nixpkgs-packaged version.
       # --skip-cached checks cachix substituter, skips cached packages.
       # No --cachix-cache: the daemon handles push (avoids double-push).
       # No continue-on-error: failures must block commit.
       - name: Build all packages
         run: |
-          nix run --inputs-from . nixpkgs#nix-fast-build -- \
+          nix run --inputs-from . nix-fast-build -- \
             --skip-cached \
             --no-nom \
             --no-link \

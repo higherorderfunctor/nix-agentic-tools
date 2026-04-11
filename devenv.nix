@@ -46,7 +46,6 @@ in {
 
     # Overlay packages — available via pkgs.ai.* after overlay
     pkgs.ai.agnix
-    pkgs.nix-fast-build
   ];
 
   # ── Unified AI Config ─────────────────────────────────────────────────
@@ -232,13 +231,13 @@ in {
           system=$(nix eval --impure --raw --expr 'builtins.currentSystem')
           for pkg in $(nix eval ".#packages.''${system}" --apply 'builtins.attrNames' --json | jq -r '.[]' | grep -vE '^(instructions-|docs)'); do
             echo "Updating $pkg..."
-            nix run nixpkgs#nix-update -- --flake "$pkg" --commit || echo "SKIP: $pkg"
+            nix run --inputs-from . nix-update -- --flake "$pkg" --commit || echo "SKIP: $pkg"
           done
         '';
       };
       "update:all" = {
         description = "Run full update pipeline";
-        after = ["update:flake" "update:devenv" "update:nix-update"];
+        after = ["update:flake" "update:devenv" "update:nix-update" "build:all"];
         exec = ''echo "Update pipeline complete"'';
       };
       "build:all" = {
@@ -248,11 +247,10 @@ in {
           shopt -s inherit_errexit 2>/dev/null || :
           system=$(nix eval --impure --raw --expr 'builtins.currentSystem')
           echo "Building for $system..."
-          nix-fast-build \
-            --flake ".#packages" \
-            --systems "$system" \
+          # TODO: add .env-based cachix push for local builds
+          nix run --inputs-from . nix-fast-build -- \
+            --flake ".#packages.$system" \
             --skip-cached \
-            --cachix-cache nix-agentic-tools \
             --no-nom \
             --no-link
         '';

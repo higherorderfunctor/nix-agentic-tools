@@ -9,6 +9,16 @@ inputs:
     inputs:
       nixpkgs:
         follows: nixpkgs
+  nix-fast-build:
+    url: github:Mic92/nix-fast-build
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
+  nix-update:
+    url: github:Mic92/nix-update
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
   rust-overlay:
     url: github:oxalica/rust-overlay
     inputs:
