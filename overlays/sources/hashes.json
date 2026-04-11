@@ -9,8 +9,11 @@
   "context7-mcp": {
     "pnpmDepsHash": "sha256-8RRHfCTZVC91T1Qx+ACCo2oG4ZwMNy5WYakCjmBhe3Q="
   },
+  "effect-mcp": {
+    "pnpmDepsHash": "sha256-8VCbs1gEKWGUD7nKxDL48RErzY0KW5k4fcW+chnAJ70="
+  },
   "filesystem-mcp": {
-    "npmDepsHash": "sha256-Xt+ILpA6Pj2SKngv1zM5G/1L42pLTjMcciT0XZyQK9M="
+    "npmDepsHash": "sha256-cnP+HyIRvSBzqPMbm7PvC+1ozR36lnTmNpqPblQY0yc="
   },
   "git-absorb": {
     "cargoHash": "sha256-8uCXk5bXn/x4QXbGOROGlWYMSqIv+/7dBGZKbYkLfF4="
@@ -19,7 +22,7 @@
     "cargoHash": "sha256-vLm/RuOc7K0YRvFvrA356OmcmLYzdpBjETsSCn+KyT4="
   },
   "git-intel-mcp": {
-    "npmDepsHash": "sha256-/HN6Ylrow/v7ssWb0oIYJD5cTV8RWH8ipmDtfAUY9zc="
+    "npmDepsHash": "sha256-v3b05ZPeUzmweTen/bzsBDUsuNur8+KbKmYXw2vh8do="
   },
   "github-mcp": {
     "vendorHash": "sha256-q21hnMnWOzfg7BGDl4KM1I3v0wwS5sSxzLA++L6jO4s="
@@ -28,12 +31,12 @@
     "vendorHash": "sha256-5YUI1IujtJJBfxsT9KZVVFVib1cK/Alk73y5tqxi6pQ="
   },
   "memory-mcp": {
-    "npmDepsHash": "sha256-x7Kvc+bu+u+Vok3ZCpS3uE9ht5pHLUR5SrEmxJ3L2eU="
+    "npmDepsHash": "sha256-cnP+HyIRvSBzqPMbm7PvC+1ozR36lnTmNpqPblQY0yc="
   },
   "openmemory-mcp": {
-    "npmDepsHash": "sha256-jHs7NOn85SFoEeqcTxxftKyf/3dG1OWgOmrMHEdfnGM="
+    "npmDepsHash": "sha256-1V0U86HsQL+auSVrlEPF9GAnE2LYSb78tfcoTmCitOU="
   },
   "sequential-thinking-mcp": {
-    "npmDepsHash": "sha256-CnPjLNC893jVRYWNJzm14jaJx8/U1oDftyFSrpvkDZQ="
+    "npmDepsHash": "sha256-cnP+HyIRvSBzqPMbm7PvC+1ozR36lnTmNpqPblQY0yc="
   }
 }

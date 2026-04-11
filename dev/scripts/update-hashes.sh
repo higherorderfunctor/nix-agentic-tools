@@ -13,6 +13,7 @@ set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 
 HASHES_FILE="overlays/sources/hashes.json"
+DUMMY_HASH="sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 
 # Seed from existing hashes.json if present — packages with unchanged
 # deps succeed immediately (nix build passes), skipping recomputation.
@@ -25,9 +26,10 @@ fi
 
 # Dep attribute → hashes.json field name mapping
 declare -A DEP_ATTRS=(
-	[pnpmDeps]=pnpmDepsHash
-	[goModules]=vendorHash
 	[cargoDeps]=cargoHash
+	[goModules]=vendorHash
+	[npmDeps]=npmDepsHash
+	[pnpmDeps]=pnpmDepsHash
 )
 
 write_hash() {
@@ -41,9 +43,10 @@ write_hash() {
 	((updated++)) || true
 }
 
-# Extract hash from build output (grep may return no match — || true prevents set -e abort)
+# Extract hash from build output. Matches the actual sha256 token on
+# "got:" lines, ignoring instruction text like "Copy the 'got: sha256-'".
 extract_got_hash() {
-	grep "got:" <<<"$1" | head -1 | awk '{print $2}' || true
+	grep 'got:' <<<"$1" | grep -o 'sha256-[A-Za-z0-9+/=]*' | head -1 || true
 }
 
 extract_drv_name() {
@@ -116,7 +119,31 @@ for pkg in "${packages[@]}"; do
 		write_hash "$pkg" "$hash_field" "$got_hash"
 	done
 
-	if $found_dep; then continue; fi
+	if $found_dep; then
+		# Dep probes passed, but the full package might still fail if
+		# a lockfile changed without the hash being reset (mismatch).
+		# Quick validation: try the full build. If cached → instant skip.
+		# If it fails with "out of date" → dep hash is stale, recompute.
+		if ! output=$(nix build ".#${pkg}" --no-link 2>&1); then
+			if echo "$output" | grep -q "out of date"; then
+				echo "STALE: $pkg — lockfile/hash mismatch, recomputing deps"
+				for dep_attr in "${!DEP_ATTRS[@]}"; do
+					hash_field="${DEP_ATTRS[$dep_attr]}"
+					if ! nix eval ".#${pkg}.${dep_attr}" --apply 'x: true' >/dev/null 2>&1; then
+						continue
+					fi
+					# Force recompute: write dummy hash, then build to get real hash
+					write_hash "$pkg" "$hash_field" "$DUMMY_HASH"
+					reout=$(nix build ".#${pkg}.${dep_attr}" --no-link 2>&1) || true
+					got_hash=$(extract_got_hash "$reout")
+					if [ -n "$got_hash" ]; then
+						write_hash "$pkg" "$hash_field" "$got_hash"
+					fi
+				done
+			fi
+		fi
+		continue
+	fi
 
 	# No dep attr found — try full build (npm packages, pre-built binaries)
 	output=$(nix build ".#${pkg}" --no-link 2>&1) && continue

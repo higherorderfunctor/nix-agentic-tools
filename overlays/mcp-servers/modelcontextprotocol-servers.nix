@@ -37,9 +37,10 @@ in {
     version = readJsVersion "sequentialthinking";
     inherit (nv) src;
     sourceRoot = "source/src/sequentialthinking";
+    postUnpack = "chmod -R u+w source";
     postPatch = "cp ${../sources/locks/sequential-thinking-mcp-package-lock.json} package-lock.json";
     npmDepsHash = hashFor "sequential-thinking-mcp" "npmDepsHash";
-    dontNpmBuild = true;
+    npmBuildScript = "build";
     nativeBuildInputs = [makeWrapper];
     installPhase = ''
       runHook preInstall
@@ -57,6 +58,7 @@ in {
     version = readJsVersion "filesystem";
     inherit (nv) src;
     sourceRoot = "source/src/filesystem";
+    postUnpack = "chmod -R u+w source";
     postPatch = "cp ${../sources/locks/filesystem-mcp-package-lock.json} package-lock.json";
     npmDepsHash = hashFor "filesystem-mcp" "npmDepsHash";
     npmBuildScript = "build";
@@ -77,6 +79,7 @@ in {
     version = readJsVersion "memory";
     inherit (nv) src;
     sourceRoot = "source/src/memory";
+    postUnpack = "chmod -R u+w source";
     postPatch = "cp ${../sources/locks/memory-mcp-package-lock.json} package-lock.json";
     npmDepsHash = hashFor "memory-mcp" "npmDepsHash";
     npmBuildScript = "build";
