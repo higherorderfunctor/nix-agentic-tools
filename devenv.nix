@@ -324,20 +324,23 @@ in {
           task = mkNixUpdateTask name nixUpdatePkgs.${name};
         }) (builtins.attrNames nixUpdatePkgs))
         ++ (map (name: {
-          inherit name;
-          task = mkUpdateScriptTask name;
-        }) updateScriptPkgs);
+            inherit name;
+            task = mkUpdateScriptTask name;
+          })
+          updateScriptPkgs);
 
       # Chain each task after the previous one for sequential execution.
       chainedTasks = let
-        indexed = lib.imap0 (i: entry: {
-          name = "update:pkg:${entry.name}";
-          value =
-            entry.task
-            // lib.optionalAttrs (i > 0) {
-              after = ["update:pkg:${(builtins.elemAt orderedPkgs (i - 1)).name}"];
-            };
-        }) orderedPkgs;
+        indexed =
+          lib.imap0 (i: entry: {
+            name = "update:pkg:${entry.name}";
+            value =
+              entry.task
+              // lib.optionalAttrs (i > 0) {
+                after = ["update:pkg:${(builtins.elemAt orderedPkgs (i - 1)).name}"];
+              };
+          })
+          orderedPkgs;
       in
         builtins.listToAttrs indexed;
 
