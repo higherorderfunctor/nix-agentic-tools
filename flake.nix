@@ -331,7 +331,7 @@
       # - pkgs.ai.* grouped into mcpServers/lspServers/gitTools (factory arch)
       # Flat AI CLIs (strip nested groups which aren't derivations)
       builtins.removeAttrs pkgs.ai ["mcpServers" "lspServers"]
-      // pkgs.ai.mcpServers
+      // builtins.removeAttrs pkgs.ai.mcpServers ["modelContextProtocol"]
       // pkgs.ai.lspServers
       // pkgs.gitTools
       // {

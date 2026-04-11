@@ -236,7 +236,11 @@ in {
           fi
 
           system=$(nix eval --impure --raw --expr 'builtins.currentSystem')
-          for pkg in $(nix eval ".#packages.''${system}" --apply 'builtins.attrNames' --json | jq -r '.[]' | grep -vE '^(instructions-|docs)'); do
+          # Excluded from nix-update loop:
+          #   instructions-*, docs*  — generated, not versioned packages
+          #   agnix-lsp, agnix-mcp   — mainProgram proxies (share agnix source)
+          exclude='^(instructions-|docs|agnix-lsp$|agnix-mcp$)'
+          for pkg in $(nix eval ".#packages.''${system}" --apply 'builtins.attrNames' --json | jq -r '.[]' | grep -vE "$exclude"); do
             echo "=== $pkg ==="
             nix run --inputs-from . nix-update -- --flake "$pkg" --commit
           done

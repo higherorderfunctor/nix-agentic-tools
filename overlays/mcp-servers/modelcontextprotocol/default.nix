@@ -1,5 +1,5 @@
 # modelcontextprotocol/servers — mono-repo with JS + Python servers.
-# Source hash and npmDepsHash managed by nix-update.
+# Source hash and npmDepsHash managed by nix-update via all-mcps.
 # Uses npm workspaces with the upstream package-lock.json directly —
 # no lockfiles shipped in this repo.
 {
@@ -28,13 +28,6 @@
       inherit rev;
     };
 
-  # Helper: read version from a sub-package's package.json and append +shortrev
-  readJsVersion = subdir:
-    vu.mkVersion {
-      upstream = vu.readPackageJsonVersion "${src}/src/${subdir}/package.json";
-      inherit rev;
-    };
-
   # Shared npm deps from the upstream mono-repo lockfile.
   # npmDepsFetcherVersion = 2 enables workspace support.
   # Hash managed by nix-update.
@@ -47,7 +40,10 @@
   }:
     buildNpmPackage {
       inherit pname src;
-      version = readJsVersion subdir;
+      version = vu.mkVersion {
+        upstream = vu.readPackageJsonVersion "${src}/src/${subdir}/package.json";
+        inherit rev;
+      };
       sourceRoot = "source";
       postUnpack = "chmod -R u+w source";
       inherit npmDepsHash;
@@ -79,27 +75,22 @@
       '';
       meta.mainProgram = pname;
     };
-in {
-  # ── JS packages (npm workspaces) ──────────────────────────────
 
-  filesystem-mcp = mkJsPackage {
+  # ── Individual sub-packages ──────────────────────────────────────
+  fsMcp = mkJsPackage {
     pname = "filesystem-mcp";
     subdir = "filesystem";
   };
-
-  memory-mcp = mkJsPackage {
+  memMcp = mkJsPackage {
     pname = "memory-mcp";
     subdir = "memory";
   };
-
-  sequential-thinking-mcp = mkJsPackage {
+  seqMcp = mkJsPackage {
     pname = "sequential-thinking-mcp";
     subdir = "sequentialthinking";
   };
 
-  # ── Python packages (buildPythonApplication) ───────────────────
-
-  fetch-mcp = python314Packages.buildPythonApplication {
+  fetchMcp = python314Packages.buildPythonApplication {
     pname = "fetch-mcp";
     version = readPyVersion "fetch";
     src = "${src}/src/fetch";
@@ -114,13 +105,12 @@ in {
       readabilipy
       requests
     ];
-    # Upstream main already fixed proxies= -> proxy= (was needed for older releases).
     pythonRelaxDeps = ["httpx"];
     meta.mainProgram = "mcp-server-fetch";
     doCheck = false;
   };
 
-  git-mcp = python314Packages.buildPythonApplication {
+  gitMcp = python314Packages.buildPythonApplication {
     pname = "git-mcp";
     version = readPyVersion "git";
     src = "${src}/src/git";
@@ -131,7 +121,7 @@ in {
     doCheck = false;
   };
 
-  time-mcp = python314Packages.buildPythonApplication {
+  timeMcp = python314Packages.buildPythonApplication {
     pname = "time-mcp";
     version = readPyVersion "time";
     src = "${src}/src/time";
@@ -141,4 +131,36 @@ in {
     meta.mainProgram = "mcp-server-time";
     doCheck = false;
   };
+in {
+  # ── Combined package: nix-update target ──────────────────────────
+  # Contains all server binaries. Use lib.getExe' for individual ones.
+  all-mcps = ourPkgs.stdenv.mkDerivation {
+    pname = "modelcontextprotocol-all-mcps";
+    version = vu.mkVersion {
+      upstream = vu.readPackageJsonVersion "${src}/src/sequentialthinking/package.json";
+      inherit rev;
+    };
+    inherit src;
+    dontUnpack = true;
+    dontBuild = true;
+    nativeBuildInputs = [makeWrapper];
+    installPhase = ''
+      runHook preInstall
+      mkdir -p $out/bin
+      for pkg in ${fsMcp} ${memMcp} ${seqMcp} ${fetchMcp} ${gitMcp} ${timeMcp}; do
+        for bin in $pkg/bin/*; do
+          ln -s "$bin" "$out/bin/$(basename "$bin")"
+        done
+      done
+      runHook postInstall
+    '';
+  };
+
+  # ── Per-server packages ──────────────────────────────────────────
+  filesystem-mcp = fsMcp;
+  memory-mcp = memMcp;
+  sequential-thinking-mcp = seqMcp;
+  fetch-mcp = fetchMcp;
+  git-mcp = gitMcp;
+  time-mcp = timeMcp;
 }

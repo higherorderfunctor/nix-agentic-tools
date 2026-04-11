@@ -43,9 +43,9 @@ difftool
 direnv
 direnvrc
 docsite
-dunder
 drvs
 dsolve
+dunder
 envrc
 fanout
 fanouts
@@ -82,6 +82,7 @@ llms
 lockdown
 lockfiles
 markdownify
+mcps
 mdbook
 mergetool
 modelcontextprotocol
@@ -138,8 +139,8 @@ scriptable
 sdiehl
 sequentialthinking
 serena
-shortrev
 shellharden
+shortrev
 sigtool
 sixel
 smartlog
