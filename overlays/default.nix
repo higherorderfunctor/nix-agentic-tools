@@ -141,11 +141,9 @@
     // {
       context7-mcp = import ./mcp-servers/context7-mcp.nix {
         inherit inputs final;
-        nv = nv.context7-mcp;
       };
       effect-mcp = import ./mcp-servers/effect-mcp.nix {
         inherit inputs final;
-        nv = nv.effect-mcp;
       };
       git-intel-mcp = import ./mcp-servers/git-intel-mcp.nix {
         inherit inputs final;
