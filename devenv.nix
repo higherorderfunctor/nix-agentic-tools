@@ -242,7 +242,7 @@ in {
           exclude='^(instructions-|docs|agnix-lsp$|agnix-mcp$)'
           for pkg in $(nix eval ".#packages.''${system}" --apply 'builtins.attrNames' --json | jq -r '.[]' | grep -vE "$exclude"); do
             echo "=== $pkg ==="
-            nix run --inputs-from . nix-update -- --flake "$pkg" --commit
+            nix run --inputs-from . nix-update -- --flake "$pkg" --commit --system "$system"
           done
         '';
       };
