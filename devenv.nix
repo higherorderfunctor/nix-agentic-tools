@@ -240,12 +240,13 @@ in {
           #   instructions-*, docs*     — generated, not versioned packages
           #   agnix-lsp, agnix-mcp      — mainProgram proxies (share agnix source)
           #   nixos-mcp, serena-mcp     — flake inputs (updated by nix flake update)
-          exclude='^(instructions-|docs|agnix-lsp$|agnix-mcp$|nixos-mcp$|serena-mcp$)'
+          #   copilot-cli, kiro-cli     — nixpkgs overrides with per-platform fetchurl;
+          #                               nix-update eval traces position to nixpkgs, not our file
+          exclude='^(instructions-|docs|agnix-lsp$|agnix-mcp$|nixos-mcp$|serena-mcp$|copilot-cli$|kiro-cli$)'
 
-          # fetchurl packages: nix-update can't auto-discover versions from
-          # fetchurl (no GitHub owner/repo metadata). Use --version skip to
-          # recompute hashes only. Version bumps come from passthru.updateScript.
-          version_skip='^(claude-code|copilot-cli|kiro-cli|context7-mcp)$'
+          # fetchurl packages where nix-update eval works but can't auto-discover
+          # versions. Use --version skip to recompute hashes only.
+          version_skip='^(claude-code|context7-mcp)$'
 
           for pkg in $(nix eval ".#packages.''${system}" --apply 'builtins.attrNames' --json | jq -r '.[]' | grep -vE "$exclude"); do
             echo "=== $pkg ==="
