@@ -109,7 +109,6 @@
     };
     claude-code = import ./claude-code.nix {
       inherit inputs final prev;
-      nv = nv.claude-code;
       lockFile = ./sources/locks/claude-code-package-lock.json;
     };
     copilot-cli = import ./copilot-cli.nix {
@@ -150,7 +149,6 @@
       };
       git-intel-mcp = import ./mcp-servers/git-intel-mcp.nix {
         inherit inputs final;
-        nv = nv.git-intel-mcp;
       };
       github-mcp = import ./mcp-servers/github-mcp.nix {
         inherit inputs final;
@@ -169,7 +167,6 @@
       nixos-mcp = import ./mcp-servers/nixos-mcp.nix {inherit inputs final;};
       openmemory-mcp = import ./mcp-servers/openmemory-mcp.nix {
         inherit inputs final;
-        nv = nv.openmemory-mcp;
       };
       serena-mcp = import ./mcp-servers/serena-mcp.nix {inherit inputs final;};
       sympy-mcp = import ./mcp-servers/sympy-mcp.nix {
