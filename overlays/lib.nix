@@ -65,19 +65,20 @@
       ${pkgs.jq}/bin/jq -n --arg v "$latest" '{version: $v}' > "$tmp"
 
       ${builtins.concatStringsSep "\n" (builtins.attrValues (builtins.mapAttrs (system: mkUrl: let
-        url = mkUrl "$latest";
-        # URLs with %20 need --name to avoid illegal store name
-        nameArg =
-          if builtins.match ".*%20.*" url != null
-          then "--name ${pname}.dmg"
-          else "";
-      in ''
-        url="${mkUrl "\$latest"}"
-        hash=$(${pkgs.nix}/bin/nix hash convert --to sri --hash-algo sha256 \
-          "$(${pkgs.nix}/bin/nix-prefetch-url --type sha256 ${nameArg} "$url" 2>/dev/null)")
-        ${pkgs.jq}/bin/jq --arg sys "${system}" --arg u "$url" --arg h "$hash" \
-          '. + {($sys): {url: $u, hash: $h}}' "$tmp" > "''${tmp}.new" && mv "''${tmp}.new" "$tmp"
-      '') platforms))}
+          url = mkUrl "$latest";
+          # URLs with %20 need --name to avoid illegal store name
+          nameArg =
+            if builtins.match ".*%20.*" url != null
+            then "--name ${pname}.dmg"
+            else "";
+        in ''
+          url="${mkUrl "\$latest"}"
+          hash=$(${pkgs.nix}/bin/nix hash convert --to sri --hash-algo sha256 \
+            "$(${pkgs.nix}/bin/nix-prefetch-url --type sha256 ${nameArg} "$url" 2>/dev/null)")
+          ${pkgs.jq}/bin/jq --arg sys "${system}" --arg u "$url" --arg h "$hash" \
+            '. + {($sys): {url: $u, hash: $h}}' "$tmp" > "''${tmp}.new" && mv "''${tmp}.new" "$tmp"
+        '')
+        platforms))}
 
       mv "$tmp" "${sourcesFile}"
       echo "Updated ${sourcesFile}"
