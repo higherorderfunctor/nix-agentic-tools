@@ -19,7 +19,7 @@
   };
   inherit (ourPkgs) autoPatchelfHook bun fetchurl lib makeWrapper stdenv writeShellScript;
 
-  version = "2.1.100";
+  version = "2.1.101";
 
   # Manifest base URL for version checks and binary downloads.
   manifestBase = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases";
@@ -76,8 +76,7 @@ in
     '';
     passthru.updateScript = writeShellScript "update-claude-code" ''
       set -eu
-      version=$(${ourPkgs.curl}/bin/curl -s "${manifestBase}/latest/manifest.json" \
-        | ${ourPkgs.jq}/bin/jq -r '.version')
+      version=$(${ourPkgs.curl}/bin/curl -s "${manifestBase}/latest")
       update-source-version claude-code "$version" --ignore-same-version
     '';
     meta = {
