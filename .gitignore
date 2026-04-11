@@ -36,3 +36,4 @@ docs/src/
 
 # nvfetcher shake database (not the generated output)
 /overlays/sources/.shake.*
+.worktrees/
