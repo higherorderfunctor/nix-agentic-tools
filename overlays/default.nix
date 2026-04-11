@@ -154,7 +154,6 @@
       };
       github-mcp = import ./mcp-servers/github-mcp.nix {
         inherit inputs final;
-        nv = nv.github-mcp;
       };
       kagi-mcp = import ./mcp-servers/kagi-mcp.nix {
         inherit inputs final;
@@ -162,7 +161,6 @@
       };
       mcp-language-server = import ./mcp-servers/mcp-language-server.nix {
         inherit inputs final;
-        nv = nv.mcp-language-server;
       };
       mcp-proxy = import ./mcp-servers/mcp-proxy.nix {
         inherit inputs final;

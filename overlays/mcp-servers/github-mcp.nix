@@ -1,4 +1,4 @@
-# github-mcp — override nixpkgs to pin nvfetcher-tracked version.
+# github-mcp — override nixpkgs to pin inline-sourced version.
 #
 # nixpkgs uses finalAttrs pattern with buildGoModule. We override
 # version + src + vendorHash; the fixed-point re-derives ldflags
@@ -9,16 +9,19 @@
 {
   inputs,
   final,
-  nv,
   ...
 }: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
   };
-  # nvfetcher gives "v0.32.0"; nixpkgs expects "0.32.0"
-  version = ourPkgs.lib.removePrefix "v" nv.version;
 in
-  ourPkgs.github-mcp-server.overrideAttrs (_finalAttrs: _old: {
-    inherit version;
-    inherit (nv) src vendorHash;
+  ourPkgs.github-mcp-server.overrideAttrs (finalAttrs: _old: {
+    version = "0.32.0";
+    src = ourPkgs.fetchFromGitHub {
+      owner = "github";
+      repo = "github-mcp-server";
+      rev = "v${finalAttrs.version}";
+      hash = "sha256-BD/t3UBAvrzJpRI7b06FjE8c+vzdQiXsj6eiUGQX6uA=";
+    };
+    vendorHash = "sha256-q21hnMnWOzfg7BGDl4KM1I3v0wwS5sSxzLA++L6jO4s=";
   })
