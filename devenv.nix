@@ -20,12 +20,6 @@ in {
   # pkgs.stacked-workflows-content are available everywhere. No manual
   # overlay composition needed.
   overlays = [
-    # nvfetcher sources
-    (final: _prev: {
-      nv-sources = import ./overlays/sources/generated.nix {
-        inherit (final) fetchurl fetchgit fetchFromGitHub dockerTools;
-      };
-    })
     # Unified AI overlay (pkgs.ai.*, pkgs.gitTools.*)
     (import ./overlays {inherit inputs;})
     # Content packages (pkgs.stacked-workflows-content)
@@ -41,7 +35,6 @@ in {
     cspell
     deadnix
     mdbook
-    nvfetcher
     pagefind
     prefetch-npm-deps
     statix
@@ -233,24 +226,18 @@ in {
         description = "Update devenv.lock";
         exec = ''devenv update'';
       };
-      "update:sources" = {
-        description = "Update package sources (nvfetcher)";
-        exec = ''nvfetcher -c config/nvfetcher/nvfetcher.toml -o overlays/sources'';
-      };
-      "update:locks" = {
-        description = "Regenerate npm lockfiles from updated sources";
-        after = ["update:sources"];
-        exec = ''bash dev/scripts/update-locks.sh'';
-      };
-      "update:hashes" = {
-        description = "Auto-discover and compute dep hashes";
-        after = ["update:locks"];
-        exec = ''bash dev/scripts/update-hashes.sh'';
-      };
       "update:all" = {
-        description = "Run full update pipeline";
-        after = ["update:flake" "update:devenv" "update:hashes"];
-        exec = ''echo "Update pipeline complete"'';
+        description = "Update all packages via nix-update";
+        after = ["update:flake" "update:devenv"];
+        exec = ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          system=$(nix eval --impure --raw --expr 'builtins.currentSystem')
+          for pkg in $(nix eval ".#packages.''${system}" --apply 'builtins.attrNames' --json | jq -r '.[]' | grep -vE '^(instructions-|docs)'); do
+            echo "Updating $pkg..."
+            nix run nixpkgs#nix-update -- --flake "$pkg" --commit || echo "SKIP: $pkg"
+          done
+        '';
       };
       "build:all" = {
         description = "Build all packages for the current system";
