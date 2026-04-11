@@ -277,7 +277,7 @@ in {
           # These use sources.json for per-platform hashes, not nix-update.
           for pkg in claude-code copilot-cli kiro-cli; do
             echo "=== $pkg (updateScript) ==="
-            script=$(nix eval --raw ".#$pkg.passthru.updateScript" 2>/dev/null) || continue
+            script=$(nix build --no-link --print-out-paths ".#$pkg.passthru.updateScript" 2>/dev/null) || continue
             bash "$script"
             git add overlays/
             if ! git diff --staged --quiet; then
