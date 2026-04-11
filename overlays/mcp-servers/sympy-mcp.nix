@@ -15,12 +15,18 @@
     inherit (final.stdenv.hostPlatform) system;
   };
   inherit (ourPkgs) fetchFromGitHub python314 writeShellApplication;
-  version = "unstable-2026-03-18";
+  vu = import ../version-utils.nix;
+
+  rev = "646c69558b622ab0e2814c58aa82143e56b76c33";
   src = fetchFromGitHub {
     owner = "sdiehl";
     repo = "sympy-mcp";
-    rev = "646c69558b622ab0e2814c58aa82143e56b76c33";
+    inherit rev;
     hash = "sha256-AjRdiBtsF/ZpAUt+TPhvkT8VQ3y7rcJSogSSyQQXytI=";
+  };
+  version = vu.mkVersion {
+    upstream = vu.readPyprojectVersion "${src}/pyproject.toml";
+    inherit rev;
   };
   python =
     python314.withPackages (ps:

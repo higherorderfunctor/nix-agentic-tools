@@ -14,6 +14,7 @@
     inherit (final.stdenv.hostPlatform) system;
   };
   python = ourPkgs.python314;
+  vu = import ./version-utils.nix;
   pythonEnv = python.withPackages (ps:
     with ps; [
       fastapi
@@ -23,15 +24,22 @@
       tiktoken
       uvicorn
     ]);
+
+  rev = "e6f23c22fc5e9aa7a22e4c31af56cdc6f859afbd";
+  src = ourPkgs.fetchgit {
+    url = "https://github.com/jwadow/kiro-gateway.git";
+    inherit rev;
+    hash = "sha256-V9sS82Jwx5y03ojNueHr+0qfp87fkACrdr7iP78Yxeo=";
+  };
 in
   ourPkgs.stdenvNoCC.mkDerivation {
     pname = "kiro-gateway";
-    version = "unstable-2026-02-12";
-    src = ourPkgs.fetchgit {
-      url = "https://github.com/jwadow/kiro-gateway.git";
-      rev = "e6f23c22fc5e9aa7a22e4c31af56cdc6f859afbd";
-      hash = "sha256-V9sS82Jwx5y03ojNueHr+0qfp87fkACrdr7iP78Yxeo=";
+    # No pyproject.toml or package.json with version in upstream source
+    version = vu.mkVersion {
+      upstream = "0.0.0";
+      inherit rev;
     };
+    inherit src;
 
     dontBuild = true;
 

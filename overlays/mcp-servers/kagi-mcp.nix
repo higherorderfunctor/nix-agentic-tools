@@ -15,6 +15,16 @@
     inherit (final.stdenv.hostPlatform) system;
   };
   inherit (ourPkgs) fetchFromGitHub fetchurl python314Packages;
+  vu = import ../version-utils.nix;
+
+  rev = "933e3384e9b1f34ebcc84b85310be7a6548900db";
+  src = fetchFromGitHub {
+    owner = "kagisearch";
+    repo = "kagimcp";
+    inherit rev;
+    hash = "sha256-jTxmn6H0SPV/vwDW+4tQiTXceVJZwwVgLXsF9bjSPS8=";
+  };
+
   kagiapi = python314Packages.buildPythonPackage {
     pname = "kagiapi";
     version = "0.2.1";
@@ -30,13 +40,11 @@
 in
   python314Packages.buildPythonApplication {
     pname = "kagi-mcp";
-    version = "unstable-2026-04-08";
-    src = fetchFromGitHub {
-      owner = "kagisearch";
-      repo = "kagimcp";
-      rev = "933e3384e9b1f34ebcc84b85310be7a6548900db";
-      hash = "sha256-jTxmn6H0SPV/vwDW+4tQiTXceVJZwwVgLXsF9bjSPS8=";
+    version = vu.mkVersion {
+      upstream = vu.readPyprojectVersion "${src}/pyproject.toml";
+      inherit rev;
     };
+    inherit src;
     pyproject = true;
     build-system = with python314Packages; [hatchling];
     dependencies = with python314Packages; [kagiapi mcp pydantic];

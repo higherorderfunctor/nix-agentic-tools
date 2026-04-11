@@ -13,15 +13,22 @@
     inherit (final.stdenv.hostPlatform) system;
   };
   inherit (ourPkgs) buildNpmPackage fetchgit makeWrapper nodejs;
+  vu = import ../version-utils.nix;
+
+  rev = "9f216bab8d6bc3a3b850ad77f27d02d63a71e10d";
+  src = fetchgit {
+    url = "https://github.com/hoangsonww/GitIntel-MCP-Server.git";
+    inherit rev;
+    hash = "sha256-UCIUmU6slN9EjL8Bf2JKfvyoVKE0jgUsfLd8OocdwNc=";
+  };
 in
   buildNpmPackage {
     pname = "git-intel-mcp";
-    version = "unstable-2026-03-18";
-    src = fetchgit {
-      url = "https://github.com/hoangsonww/GitIntel-MCP-Server.git";
-      rev = "9f216bab8d6bc3a3b850ad77f27d02d63a71e10d";
-      hash = "sha256-UCIUmU6slN9EjL8Bf2JKfvyoVKE0jgUsfLd8OocdwNc=";
+    version = vu.mkVersion {
+      upstream = vu.readPackageJsonVersion "${src}/package.json";
+      inherit rev;
     };
+    inherit src;
     npmDepsHash = "sha256-v3b05ZPeUzmweTen/bzsBDUsuNur8+KbKmYXw2vh8do=";
     postPatch = "cp ${../sources/locks/git-intel-mcp-package-lock.json} package-lock.json";
     nativeBuildInputs = [makeWrapper];

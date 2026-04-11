@@ -8,21 +8,26 @@
     inherit (final.stdenv.hostPlatform) system;
   };
   inherit (ourPkgs) buildNpmPackage fetchFromGitHub makeWrapper nodejs;
+  vu = import ../version-utils.nix;
 
+  rev = "a65c920636b1b39618e833f1a0f8494aebccafcd";
   src = fetchFromGitHub {
     owner = "CaviraOSS";
     repo = "OpenMemory";
-    rev = "a65c920636b1b39618e833f1a0f8494aebccafcd";
+    inherit rev;
     hash = "sha256-cXbftztatmbYPv4uYh3YVpXS65yHzs+D6EOR5Y7x9rw=";
   };
 in
   buildNpmPackage {
     pname = "openmemory-mcp";
-    version = "unstable-2026-04-08";
+    version = vu.mkVersion {
+      upstream = vu.readPackageJsonVersion "${src}/packages/openmemory-js/package.json";
+      inherit rev;
+    };
     inherit src;
     sourceRoot = "source/packages/openmemory-js";
-    postPatch = "cp ${../sources/locks/openmemory-mcp-package-lock.json} package-lock.json";
-    npmDepsHash = "sha256-1V0U86HsQL+auSVrlEPF9GAnE2LYSb78tfcoTmCitOU=";
+    postUnpack = "chmod -R u+w source";
+    npmDepsHash = "sha256-ZL+/UtzRohRVU4OeSSSHm7A6Dxut22LQ5VGfPOaNsm8=";
     # Source needs building (tsc). npm tarball had pre-built dist/.
     nativeBuildInputs = [makeWrapper];
     installPhase = ''

@@ -11,22 +11,29 @@
     inherit (final.stdenv.hostPlatform) system;
   };
   inherit (ourPkgs) buildNpmPackage fetchFromGitHub makeWrapper nodejs python314Packages;
+  vu = import ../../version-utils.nix;
 
-  version = "unstable-2026-03-17";
+  rev = "f4244583a6af9425633e433a3eec000d23f4e011";
   src = fetchFromGitHub {
     owner = "modelcontextprotocol";
     repo = "servers";
-    rev = "f4244583a6af9425633e433a3eec000d23f4e011";
+    inherit rev;
     hash = "sha256-bHknioQu8i5RcFlBBdXUQjsV4WN1IScnwohGRxXgGDk=";
   };
 
-  # Helper: read version from pyproject.toml
-  readPyVersion = subdir: let
-    content = builtins.readFile "${src}/src/${subdir}/pyproject.toml";
-    lines = builtins.filter (l: builtins.isString l && l != "") (builtins.split "\n" content);
-    vLine = builtins.head (builtins.filter (l: builtins.match "^version = .*" l != null) lines);
-  in
-    builtins.head (builtins.match "^version = \"(.*)\"$" vLine);
+  # Helper: read version from a sub-package's pyproject.toml and append +shortrev
+  readPyVersion = subdir:
+    vu.mkVersion {
+      upstream = vu.readPyprojectVersion "${src}/src/${subdir}/pyproject.toml";
+      inherit rev;
+    };
+
+  # Helper: read version from a sub-package's package.json and append +shortrev
+  readJsVersion = subdir:
+    vu.mkVersion {
+      upstream = vu.readPackageJsonVersion "${src}/src/${subdir}/package.json";
+      inherit rev;
+    };
 
   # Shared npm deps from the upstream mono-repo lockfile.
   # npmDepsFetcherVersion = 2 enables workspace support.
@@ -39,7 +46,8 @@
     subdir,
   }:
     buildNpmPackage {
-      inherit pname version src;
+      inherit pname src;
+      version = readJsVersion subdir;
       sourceRoot = "source";
       postUnpack = "chmod -R u+w source";
       inherit npmDepsHash;

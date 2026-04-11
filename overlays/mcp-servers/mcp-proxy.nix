@@ -14,17 +14,24 @@
     inherit (final.stdenv.hostPlatform) system;
   };
   inherit (ourPkgs) fetchFromGitHub;
+  vu = import ../version-utils.nix;
   # httpx-auth has test failures in nixpkgs (jwt InsecureKeyLengthWarning)
   httpx-auth = ourPkgs.python3Packages.httpx-auth.overridePythonAttrs {doCheck = false;};
+
+  rev = "a6720cc4f0bb3a09748d61207fb33f3c7c8a88e4";
+  src = fetchFromGitHub {
+    owner = "sparfenyuk";
+    repo = "mcp-proxy";
+    inherit rev;
+    hash = "sha256-Sx0YrCwTCV8wGmwzJPiEhOkHy4CcaKW4mtnLntE7qYU=";
+  };
 in
   ourPkgs.mcp-proxy.overridePythonAttrs (old: {
-    version = "unstable-2026-03-14";
-    src = fetchFromGitHub {
-      owner = "sparfenyuk";
-      repo = "mcp-proxy";
-      rev = "a6720cc4f0bb3a09748d61207fb33f3c7c8a88e4";
-      hash = "sha256-Sx0YrCwTCV8wGmwzJPiEhOkHy4CcaKW4mtnLntE7qYU=";
+    version = vu.mkVersion {
+      upstream = vu.readPyprojectVersion "${src}/pyproject.toml";
+      inherit rev;
     };
+    inherit src;
     # v0.11.0 added httpx-auth dependency (not in nixpkgs' v0.10.0)
     dependencies =
       (old.dependencies or [])

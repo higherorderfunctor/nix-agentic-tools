@@ -6,30 +6,36 @@
 # architecture-foundation plan (cache-hit parity). any-buddy is
 # source-only so it never needs `ourPkgs`; dropping `inputs` on
 # the floor here is the intent.
-{final, ...}:
-final.stdenvNoCC.mkDerivation {
-  pname = "any-buddy";
-  version = "unstable-2026-04-06";
-  src = final.fetchFromGitHub {
-    owner = "cpaczek";
-    repo = "any-buddy";
-    rev = "861f0dfea1674dcff9a72390143fc64d026c95ed";
-    hash = "sha256-nkAeA2MuBmiDcBjIGzIbfxt0nvkHC++OSD+OWWwQ/e0=";
-  };
+{final, ...}: let
+  vu = import ./version-utils.nix;
+  rev = "861f0dfea1674dcff9a72390143fc64d026c95ed";
+in
+  final.stdenvNoCC.mkDerivation {
+    pname = "any-buddy";
+    version = vu.mkVersion {
+      upstream = "0.0.0";
+      inherit rev;
+    };
+    src = final.fetchFromGitHub {
+      owner = "cpaczek";
+      repo = "any-buddy";
+      inherit rev;
+      hash = "sha256-nkAeA2MuBmiDcBjIGzIbfxt0nvkHC++OSD+OWWwQ/e0=";
+    };
 
-  dontBuild = true;
-  dontFixup = true;
+    dontBuild = true;
+    dontFixup = true;
 
-  installPhase = ''
-    runHook preInstall
-    mkdir -p $out
-    cp -r . $out/
-    runHook postInstall
-  '';
+    installPhase = ''
+      runHook preInstall
+      mkdir -p $out
+      cp -r . $out/
+      runHook postInstall
+    '';
 
-  meta = {
-    description = "Source tree for any-buddy salt search worker";
-    homepage = "https://github.com/cpaczek/any-buddy";
-    license = final.lib.licenses.wtfpl;
-  };
-}
+    meta = {
+      description = "Source tree for any-buddy salt search worker";
+      homepage = "https://github.com/cpaczek/any-buddy";
+      license = final.lib.licenses.wtfpl;
+    };
+  }

@@ -43,6 +43,7 @@ difftool
 direnv
 direnvrc
 docsite
+dunder
 drvs
 dsolve
 envrc
@@ -56,6 +57,7 @@ frontloaded
 frontmatter
 gitbook
 gitref
+gitrevise
 gnused
 gpgsign
 heredocs
@@ -136,6 +138,7 @@ scriptable
 sdiehl
 sequentialthinking
 serena
+shortrev
 shellharden
 sigtool
 sixel

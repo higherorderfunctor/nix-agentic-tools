@@ -25,22 +25,30 @@
   };
   inherit (ourPkgs) fetchFromGitHub;
 
+  vu = import ./version-utils.nix;
+
   # agnix requires Rust edition 2024 (>= 1.91)
   rust = ourPkgs.rust-bin.stable.latest.default;
   rustPlatform = ourPkgs.makeRustPlatform {
     cargo = rust;
     rustc = rust;
   };
+
+  rev = "2c8f259f036660c477a420ff9ba7260116a78451";
+  src = fetchFromGitHub {
+    owner = "agent-sh";
+    repo = "agnix";
+    inherit rev;
+    hash = "sha256-LV9/pII/Ffap9w+SBR7Pf/lMfePCyokL8hIzdD63tyk=";
+  };
 in
   rustPlatform.buildRustPackage {
     pname = "agnix";
-    version = "unstable-2026-04-10";
-    src = fetchFromGitHub {
-      owner = "agent-sh";
-      repo = "agnix";
-      rev = "2c8f259f036660c477a420ff9ba7260116a78451";
-      hash = "sha256-LV9/pII/Ffap9w+SBR7Pf/lMfePCyokL8hIzdD63tyk=";
+    version = vu.mkVersion {
+      upstream = vu.readCargoWorkspaceVersion "${src}/Cargo.toml";
+      inherit rev;
     };
+    inherit src;
     cargoHash = "sha256-wlKyY26kryzhoARuh/FY7+NF3dfip4NiZOK8MtDDveI=";
 
     nativeBuildInputs = [ourPkgs.pkg-config];

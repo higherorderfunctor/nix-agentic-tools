@@ -16,10 +16,20 @@
   };
   inherit (ourPkgs) fetchFromGitHub;
 
+  vu = import ../version-utils.nix;
+
   rust = ourPkgs.rust-bin.stable.latest.default;
   rustPlatform = ourPkgs.makeRustPlatform {
     cargo = rust;
     rustc = rust;
+  };
+
+  rev = "debdcd28d9db2ac6b36205bda307b6693a6a91e7";
+  src = fetchFromGitHub {
+    owner = "tummychow";
+    repo = "git-absorb";
+    inherit rev;
+    hash = "sha256-jAR+Vq6SZZXkseOxZVJSjsQOStIip8ThiaLroaJcIfc=";
   };
 in
   ourPkgs.git-absorb.override (_: {
@@ -29,13 +39,11 @@ in
       in
         a
         // {
-          version = "unstable-2026-02-13";
-          src = fetchFromGitHub {
-            owner = "tummychow";
-            repo = "git-absorb";
-            rev = "debdcd28d9db2ac6b36205bda307b6693a6a91e7";
-            hash = "sha256-jAR+Vq6SZZXkseOxZVJSjsQOStIip8ThiaLroaJcIfc=";
+          version = vu.mkVersion {
+            upstream = vu.readCargoVersion "${src}/Cargo.toml";
+            inherit rev;
           };
+          inherit src;
           cargoHash = "sha256-8uCXk5bXn/x4QXbGOROGlWYMSqIv+/7dBGZKbYkLfF4=";
         });
   })
