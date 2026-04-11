@@ -16,12 +16,12 @@
   };
 in
   ourPkgs.github-mcp-server.overrideAttrs (finalAttrs: _old: {
-    version = "0.32.0";
+    version = "0.33.0";
     src = ourPkgs.fetchFromGitHub {
       owner = "github";
       repo = "github-mcp-server";
       rev = "v${finalAttrs.version}";
-      hash = "sha256-BD/t3UBAvrzJpRI7b06FjE8c+vzdQiXsj6eiUGQX6uA=";
+      hash = "sha256-FNSwZTz0RDP/BH2k66SBridiAZwAtuKsZaQgb/2jScA=";
     };
     vendorHash = "sha256-q21hnMnWOzfg7BGDl4KM1I3v0wwS5sSxzLA++L6jO4s=";
   })

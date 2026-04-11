@@ -22,8 +22,9 @@
     hash = "sha256-AjRdiBtsF/ZpAUt+TPhvkT8VQ3y7rcJSogSSyQQXytI=";
   };
 
-  pythonEnv = python314.withPackages (ps:
-    with ps; [mcp typer python-dotenv sympy]);
+  pythonEnv =
+    python314.withPackages (ps:
+      with ps; [mcp typer python-dotenv sympy]);
 in
   ourPkgs.stdenv.mkDerivation {
     pname = "sympy-mcp";
