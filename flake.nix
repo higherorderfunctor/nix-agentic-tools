@@ -96,6 +96,10 @@
       stacked-workflows = stackedWorkflowsOverlay;
     };
 
+    # Update matrix: single source of truth for per-package update config.
+    # CI consumes via `nix eval --json .#updateMatrix` to generate GHA matrix.
+    updateMatrix = import ./config/update-matrix.nix;
+
     homeManagerModules.nix-agentic-tools = {
       imports =
         [./lib/ai/sharedOptions.nix]

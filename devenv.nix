@@ -266,28 +266,10 @@ in {
         fi
       '';
 
-      # nix-update packages: per-package flags
-      nixUpdatePkgs = {
-        agnix = "";
-        any-buddy = "";
-        context7-mcp = "--url https://github.com/upstash/context7 --version-regex '@upstash/context7-mcp@(.*)' --override-filename overlays/mcp-servers/context7-mcp.nix";
-        effect-mcp = "";
-        git-absorb = "";
-        git-branchless = "";
-        git-intel-mcp = "";
-        git-revise = "";
-        github-mcp = "";
-        kagi-mcp = "";
-        kiro-gateway = "";
-        mcp-language-server = "";
-        mcp-proxy = "";
-        modelcontextprotocol-all-mcps = "";
-        openmemory-mcp = "";
-        sympy-mcp = "";
-      };
-
-      # sources.json packages: use passthru.updateScript
-      updateScriptPkgs = ["claude-code" "copilot-cli" "kiro-cli"];
+      # Package update config from shared matrix (single source of truth).
+      # CI consumes the same data via nix eval .#updateMatrix.
+      updateMatrix = import ./config/update-matrix.nix;
+      inherit (updateMatrix) nixUpdate updateScript;
 
       mkNixUpdateTask = name: extraArgs: {
         description = "Update ${name} via nix-update";
@@ -297,7 +279,7 @@ in {
           ${tokenPreamble}
           ${dirtyGuard}
           # shellcheck disable=SC2086
-          nix run --inputs-from . nix-update -- --flake ${name} --commit --system ${system} ${extraArgs}
+          nix run --inputs-from . nix-update -- --flake "${name}" --commit --system "${system}" ${extraArgs}
         '';
       };
 
@@ -321,13 +303,13 @@ in {
       orderedPkgs =
         (map (name: {
           inherit name;
-          task = mkNixUpdateTask name nixUpdatePkgs.${name};
-        }) (builtins.attrNames nixUpdatePkgs))
+          task = mkNixUpdateTask name nixUpdate.${name};
+        }) (builtins.attrNames nixUpdate))
         ++ (map (name: {
             inherit name;
             task = mkUpdateScriptTask name;
           })
-          updateScriptPkgs);
+          updateScript);
 
       # Chain each task after the previous one for sequential execution.
       chainedTasks = let
