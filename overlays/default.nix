@@ -72,8 +72,6 @@
 
   mcpServerDrvs = {
       inherit modelContextProtocol;
-      # Flattened alias for nix-update + nix build .#modelcontextprotocol-all-mcps
-      modelcontextprotocol-all-mcps = modelContextProtocol.all-mcps;
       context7-mcp = import ./mcp-servers/context7-mcp.nix {
         inherit inputs final;
       };

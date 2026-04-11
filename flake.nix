@@ -335,6 +335,8 @@
       // pkgs.ai.lspServers
       // pkgs.gitTools
       // {
+        # mono-repo combined package (nix-update target)
+        modelcontextprotocol-all-mcps = pkgs.ai.mcpServers.modelContextProtocol.all-mcps;
         # Instruction file derivations (from dev/generate.nix).
         # Each ecosystem produces a content directory consumed by the
         # `generate:instructions:*` devenv tasks.
