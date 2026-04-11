@@ -23,10 +23,13 @@
   # Manifest base URL for version checks and binary downloads.
   manifestBase = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases";
 
-  platformKey = {
-    "x86_64-linux" = "linux-x64";
-    "aarch64-darwin" = "darwin-arm64";
-  }.${stdenv.hostPlatform.system};
+  platformKey =
+    {
+      "x86_64-linux" = "linux-x64";
+      "aarch64-darwin" = "darwin-arm64";
+    }.${
+      stdenv.hostPlatform.system
+    };
 
   platformSrc = {
     "x86_64-linux" = fetchurl {

@@ -70,37 +70,37 @@
   modelContextProtocol = import ./mcp-servers/modelcontextprotocol {inherit inputs final;};
 
   mcpServerDrvs = {
-      inherit modelContextProtocol;
-      context7-mcp = import ./mcp-servers/context7-mcp.nix {
-        inherit inputs final;
-      };
-      effect-mcp = import ./mcp-servers/effect-mcp.nix {
-        inherit inputs final;
-      };
-      git-intel-mcp = import ./mcp-servers/git-intel-mcp.nix {
-        inherit inputs final;
-      };
-      github-mcp = import ./mcp-servers/github-mcp.nix {
-        inherit inputs final;
-      };
-      kagi-mcp = import ./mcp-servers/kagi-mcp.nix {
-        inherit inputs final;
-      };
-      mcp-language-server = import ./mcp-servers/mcp-language-server.nix {
-        inherit inputs final;
-      };
-      mcp-proxy = import ./mcp-servers/mcp-proxy.nix {
-        inherit inputs final;
-      };
-      nixos-mcp = import ./mcp-servers/nixos-mcp.nix {inherit inputs final;};
-      openmemory-mcp = import ./mcp-servers/openmemory-mcp.nix {
-        inherit inputs final;
-      };
-      serena-mcp = import ./mcp-servers/serena-mcp.nix {inherit inputs final;};
-      sympy-mcp = import ./mcp-servers/sympy-mcp.nix {
-        inherit inputs final;
-      };
+    inherit modelContextProtocol;
+    context7-mcp = import ./mcp-servers/context7-mcp.nix {
+      inherit inputs final;
     };
+    effect-mcp = import ./mcp-servers/effect-mcp.nix {
+      inherit inputs final;
+    };
+    git-intel-mcp = import ./mcp-servers/git-intel-mcp.nix {
+      inherit inputs final;
+    };
+    github-mcp = import ./mcp-servers/github-mcp.nix {
+      inherit inputs final;
+    };
+    kagi-mcp = import ./mcp-servers/kagi-mcp.nix {
+      inherit inputs final;
+    };
+    mcp-language-server = import ./mcp-servers/mcp-language-server.nix {
+      inherit inputs final;
+    };
+    mcp-proxy = import ./mcp-servers/mcp-proxy.nix {
+      inherit inputs final;
+    };
+    nixos-mcp = import ./mcp-servers/nixos-mcp.nix {inherit inputs final;};
+    openmemory-mcp = import ./mcp-servers/openmemory-mcp.nix {
+      inherit inputs final;
+    };
+    serena-mcp = import ./mcp-servers/serena-mcp.nix {inherit inputs final;};
+    sympy-mcp = import ./mcp-servers/sympy-mcp.nix {
+      inherit inputs final;
+    };
+  };
 
   # ── agnix multi-binary overrides ────────────────────────────────────
   # agnix builds three binaries (agnix, agnix-lsp, agnix-mcp) from one

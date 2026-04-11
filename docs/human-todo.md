@@ -1,5 +1,6 @@
 <!-- TODO: remove this file before merging to main -->
 
+FINISH CI
 parallel nix update and github api key
 SWITCH MCPS OR NODE BASED PACKAGES TO BUN
 
