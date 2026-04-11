@@ -240,21 +240,32 @@ in {
           #   instructions-*, docs*     — generated, not versioned packages
           #   agnix-lsp, agnix-mcp      — mainProgram proxies (share agnix source)
           #   nixos-mcp, serena-mcp     — flake inputs (updated by nix flake update)
-          #   copilot-cli, kiro-cli     — nixpkgs overrides with per-platform fetchurl;
-          #                               nix-update eval traces position to nixpkgs, not our file
-          exclude='^(instructions-|docs|agnix-lsp$|agnix-mcp$|nixos-mcp$|serena-mcp$|copilot-cli$|kiro-cli$)'
+          exclude='^(instructions-|docs|agnix-lsp$|agnix-mcp$|nixos-mcp$|serena-mcp$)'
 
-          # fetchurl packages where nix-update eval works but can't auto-discover
-          # versions. Use --version skip to recompute hashes only.
-          version_skip='^(claude-code|context7-mcp)$'
+          # nix-update can't auto-discover versions from fetchurl. --version skip.
+          version_skip='^(claude-code|context7-mcp|copilot-cli|kiro-cli)$'
+
+          # nix-update position detection fails for nixpkgs overrides with
+          # per-platform fetchurl. --override-filename tells it where to edit.
+          override_file() {
+            case "$1" in
+              copilot-cli) echo "overlays/copilot-cli.nix" ;;
+              kiro-cli) echo "overlays/kiro-cli.nix" ;;
+              *) echo "" ;;
+            esac
+          }
 
           for pkg in $(nix eval ".#packages.''${system}" --apply 'builtins.attrNames' --json | jq -r '.[]' | grep -vE "$exclude"); do
             echo "=== $pkg ==="
+            args=(--flake "$pkg" --commit --system "$system")
             if echo "$pkg" | grep -qE "$version_skip"; then
-              nix run --inputs-from . nix-update -- --flake "$pkg" --commit --system "$system" --version skip
-            else
-              nix run --inputs-from . nix-update -- --flake "$pkg" --commit --system "$system"
+              args+=(--version skip)
             fi
+            ofile=$(override_file "$pkg")
+            if [ -n "$ofile" ]; then
+              args+=(--override-filename "$ofile")
+            fi
+            nix run --inputs-from . nix-update -- "''${args[@]}"
           done
         '';
       };

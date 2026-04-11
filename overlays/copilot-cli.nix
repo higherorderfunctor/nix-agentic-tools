@@ -27,7 +27,8 @@
     };
   };
 in
-  ourPkgs.github-copilot-cli.overrideAttrs (_: {
-    inherit version;
+  ourPkgs.github-copilot-cli.overrideAttrs (_: let
     src = platformSrc.${system} or (throw "copilot-cli: unsupported system ${system}");
+  in {
+    inherit version src;
   })
