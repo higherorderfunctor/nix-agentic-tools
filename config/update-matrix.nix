@@ -17,7 +17,6 @@
     context7-mcp = "--url https://github.com/upstash/context7 --version-regex '@upstash/context7-mcp@(.*)' --override-filename overlays/mcp-servers/context7-mcp.nix";
     effect-mcp = "";
     git-absorb = "";
-    git-branchless = "";
     git-intel-mcp = "";
     git-revise = "";
     github-mcp = "";

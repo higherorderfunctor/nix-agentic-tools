@@ -1,59 +1,50 @@
-# Instantiate `ourPkgs` from `inputs.nixpkgs` so every build input
-# (rust toolchain, makeRustPlatform, base derivation) routes through
-# this repo's pinned nixpkgs instead of the consumer's. This is what
-# gives the store path cache-hit parity against CI's standalone build
-# — see dev/fragments/overlays/overlay-pattern.md
+# Thin wrapper over upstream flake overlay.
 #
-# Argument shape adapted from legacy 3-layer curried pattern during Milestone 6 port.
+# The upstream flake (github:arxanas/git-branchless) provides an overlay
+# that overrideAttrs nixpkgs' git-branchless with HEAD source and
+# importCargoLock. We layer two adjustments on top:
+#
+# 1. Rust 1.88.0 pin — esl01-indexedlog workaround (arxanas/git-branchless#1585).
+#    NOTE: upstream master replaced esl01-indexedlog with sapling-indexedlog,
+#    so this pin may be removable once confirmed safe on Rust 1.89+.
+#
+# 2. Null postPatch — nixpkgs base has a postPatch that patches the vendored
+#    esl01-indexedlog crate, but upstream's Cargo.lock no longer includes it.
+#    Without nulling this, the build fails trying to cd into a non-existent dir.
+#
+# 3. Strip versionCheckHook — upstream overlay sets name but not version in
+#    overrideAttrs, so the binary version string may not match the derivation
+#    version. Disable the install check to avoid false failures.
+#
+# Updated via `nix flake update git-branchless` (not nix-update).
 {
   inputs,
   final,
   ...
 }: let
+  # Apply upstream's overlay to get their overridden git-branchless.
+  upstreamPkgs = inputs.git-branchless.overlays.default final final;
+
+  # Rust 1.88.0 pin for cache-hit parity — see dev/fragments/overlays/cache-hit-parity.md
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
     overlays = [inputs.rust-overlay.overlays.default];
   };
-  inherit (ourPkgs) fetchFromGitHub;
-
-  vu = import ../lib.nix;
-
-  # Pin to 1.88.0 — git-branchless v0.10.0 has esl01-indexedlog build
-  # failure on Rust 1.89+ (arxanas/git-branchless#1585). Update this
-  # when upstream fixes the issue or a new release ships.
   rust = ourPkgs.rust-bin.stable."1.88.0".default;
   rustPlatform = ourPkgs.makeRustPlatform {
     cargo = rust;
     rustc = rust;
   };
-
-  rev = "f238c0993fea69700b56869b3ee9fd03178c6e32";
-  src = fetchFromGitHub {
-    owner = "arxanas";
-    repo = "git-branchless";
-    inherit rev;
-    hash = "sha256-ar2168yI3OgNMwqrzilKK9QORKbe1QtHVe88JkS7EOs=";
-  };
 in
-  ourPkgs.git-branchless.override (_: {
-    rustPlatform.buildRustPackage = args:
-      rustPlatform.buildRustPackage (finalAttrs: let
-        a = (ourPkgs.lib.toFunction args) finalAttrs;
-      in
-        a
-        // {
-          version = vu.mkVersion {
-            upstream = vu.readCargoVersion "${src}/git-branchless/Cargo.toml";
-            inherit rev;
-          };
-          inherit src;
-          cargoHash = "sha256-vLm/RuOc7K0YRvFvrA356OmcmLYzdpBjETsSCn+KyT4=";
-          postPatch = null;
-          # Strip versionCheckHook — binary reports Cargo.toml version
-          # which won't match our computed version with +shortrev suffix.
-          nativeInstallCheckInputs =
-            builtins.filter
-            (p: (p.pname or "") != "version-check-hook")
-            (a.nativeInstallCheckInputs or []);
-        });
+  (upstreamPkgs.git-branchless.override {
+    inherit rustPlatform;
+  })
+  .overrideAttrs (prev: {
+    # Null nixpkgs' esl01-indexedlog patch — upstream no longer vendors it.
+    postPatch = "";
+    # Strip versionCheckHook to avoid version string mismatch.
+    nativeInstallCheckInputs =
+      builtins.filter
+      (p: (p.pname or "") != "version-check-hook")
+      (prev.nativeInstallCheckInputs or []);
   })

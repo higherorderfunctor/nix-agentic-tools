@@ -11,6 +11,18 @@
   };
 
   inputs = {
+    devenv = {
+      url = "github:cachix/devenv";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    git-branchless = {
+      url = "github:arxanas/git-branchless";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    git-hooks = {
+      url = "github:cachix/git-hooks.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     mcp-nixos = {
       url = "github:utensils/mcp-nixos";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -39,6 +51,10 @@
     };
     serena = {
       url = "github:oraios/serena";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -175,8 +191,8 @@
     in
       fragmentsChecks // factoryChecks // moduleChecks);
 
-    # devShell provided by devenv CLI (devenv shell / devenv test)
-    # See devenv.nix for shell configuration.
+    # devShells.default provided by devenv.lib.mkShell (see devenv.nix).
+    # devShells.ci is a lightweight shell for the CI update pipeline.
 
     packages = forAllSystems (system: let
       pkgs = pkgsFor system;
@@ -440,12 +456,8 @@
           '';
       });
 
-    # Standard flake outputs for `nix develop` and `nix fmt`.
-    # Primary dev workflow is `devenv shell` / `devenv test` via
-    # devenv.nix; these outputs preserve flake UX for users who
-    # prefer plain Nix CLI.
-    # Primary dev shell is devenv (devenv.nix). This only provides
-    # the lightweight CI shell for the update pipeline.
+    # Dev shells: `default` is the full devenv shell (devenv.nix),
+    # `ci` is a lightweight shell for the update pipeline.
     devShells = forAllSystems (system: let
       pkgs = pkgsFor system;
     in {
@@ -457,6 +469,10 @@
           nodejs
           prefetch-npm-deps
         ];
+      };
+      default = inputs.devenv.lib.mkShell {
+        inherit inputs pkgs;
+        modules = [./devenv.nix];
       };
     });
 
