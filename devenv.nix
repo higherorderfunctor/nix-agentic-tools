@@ -235,10 +235,14 @@ in {
           done
         '';
       };
+      "update:build" = {
+        description = "Build all packages (update pipeline verification)";
+        after = ["update:flake" "update:devenv" "update:nix-update"];
+        exec = ''devenv tasks run build:all'';
+      };
       "update:all" = {
         description = "Run full update pipeline";
-        after = ["update:flake" "update:devenv" "update:nix-update" "build:all"];
-        exec = ''echo "Update pipeline complete"'';
+        exec = ''devenv tasks run --mode before update:build'';
       };
       "build:all" = {
         description = "Build all packages for the current system";

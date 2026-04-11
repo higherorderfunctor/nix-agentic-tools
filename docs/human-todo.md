@@ -1,5 +1,14 @@
 <!-- TODO: remove this file before merging to main -->
 
+SWITCH MCPS OR NODE BASED PACKAGES TO BUN
+
+SINGLE SOURCER OF YRUTH FOR FLAKE INPUTS KINDA NUTS NEED EXPLAIN
+
+● Resume prompt:
+
+▎ Continue the nix-update migration on refactor/ai-factory-architecture. Check
+.remember/remember.md for the remaining work list. Start with item 1 (replace custom TOML parser
+with builtins.fromTOML) and work through the list. Don't push until everything builds end-to-end.
 update script caches (<REPO>/.cache?</REPO>
 
 why update script takes so much cpu, did direnv fire maybe?
