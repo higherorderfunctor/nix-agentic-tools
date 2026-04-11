@@ -8,13 +8,13 @@
 {
   inputs,
   final,
-  nv,
   ...
 }: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
     overlays = [inputs.rust-overlay.overlays.default];
   };
+  inherit (ourPkgs) fetchFromGitHub;
 
   # Pin to 1.88.0 — git-branchless v0.10.0 has esl01-indexedlog build
   # failure on Rust 1.89+ (arxanas/git-branchless#1585). Update this
@@ -32,11 +32,14 @@ in
       in
         a
         // {
-          # Strip "v" prefix — nvfetcher gives "v0.10.0" from the tag
-          # but the binary prints "0.10.0" in --version output.
-          version = ourPkgs.lib.removePrefix "v" nv.version;
-          inherit (nv) src;
-          inherit (nv) cargoHash;
+          version = "unstable-2026-03-01";
+          src = fetchFromGitHub {
+            owner = "arxanas";
+            repo = "git-branchless";
+            rev = "f238c0993fea69700b56869b3ee9fd03178c6e32";
+            hash = "sha256-ar2168yI3OgNMwqrzilKK9QORKbe1QtHVe88JkS7EOs=";
+          };
+          cargoHash = "sha256-vLm/RuOc7K0YRvFvrA356OmcmLYzdpBjETsSCn+KyT4=";
           postPatch = null;
         });
   })

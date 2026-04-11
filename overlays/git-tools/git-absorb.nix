@@ -8,13 +8,13 @@
 {
   inputs,
   final,
-  nv,
   ...
 }: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
     overlays = [inputs.rust-overlay.overlays.default];
   };
+  inherit (ourPkgs) fetchFromGitHub;
 
   rust = ourPkgs.rust-bin.stable.latest.default;
   rustPlatform = ourPkgs.makeRustPlatform {
@@ -29,7 +29,13 @@ in
       in
         a
         // {
-          inherit (nv) version src;
-          inherit (nv) cargoHash;
+          version = "unstable-2026-02-13";
+          src = fetchFromGitHub {
+            owner = "tummychow";
+            repo = "git-absorb";
+            rev = "debdcd28d9db2ac6b36205bda307b6693a6a91e7";
+            hash = "sha256-jAR+Vq6SZZXkseOxZVJSjsQOStIip8ThiaLroaJcIfc=";
+          };
+          cargoHash = "sha256-8uCXk5bXn/x4QXbGOROGlWYMSqIv+/7dBGZKbYkLfF4=";
         });
   })

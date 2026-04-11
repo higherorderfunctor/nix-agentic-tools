@@ -102,7 +102,6 @@
   flatDrvs = {
     agnix = import ./agnix.nix {
       inherit inputs final;
-      nv = nv.agnix;
     };
     any-buddy = import ./any-buddy.nix {
       inherit inputs final;
@@ -193,11 +192,9 @@
   gitToolDrvs = {
     git-absorb = import ./git-tools/git-absorb.nix {
       inherit inputs final;
-      nv = nv.git-absorb;
     };
     git-branchless = import ./git-tools/git-branchless.nix {
       inherit inputs final;
-      nv = nv.git-branchless;
     };
     git-revise = import ./git-tools/git-revise.nix {
       inherit inputs final;

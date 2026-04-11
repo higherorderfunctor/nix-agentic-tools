@@ -17,13 +17,13 @@
 {
   inputs,
   final,
-  nv,
   ...
 }: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
     overlays = [inputs.rust-overlay.overlays.default];
   };
+  inherit (ourPkgs) fetchFromGitHub;
 
   # agnix requires Rust edition 2024 (>= 1.91)
   rust = ourPkgs.rust-bin.stable.latest.default;
@@ -34,7 +34,14 @@
 in
   rustPlatform.buildRustPackage {
     pname = "agnix";
-    inherit (nv) version src cargoHash;
+    version = "unstable-2026-04-10";
+    src = fetchFromGitHub {
+      owner = "agent-sh";
+      repo = "agnix";
+      rev = "2c8f259f036660c477a420ff9ba7260116a78451";
+      hash = "sha256-LV9/pII/Ffap9w+SBR7Pf/lMfePCyokL8hIzdD63tyk=";
+    };
+    cargoHash = "sha256-wlKyY26kryzhoARuh/FY7+NF3dfip4NiZOK8MtDDveI=";
 
     nativeBuildInputs = [ourPkgs.pkg-config];
     buildInputs = ourPkgs.lib.optionals ourPkgs.stdenv.hostPlatform.isDarwin [
