@@ -10,9 +10,9 @@
 # See docs/superpowers/specs/2026-04-10-ci-update-pipeline-design.md
 name: Update
 
+# Disabled: pipeline needs rewrite for nix-update era (see CI v3 spec).
+# Re-enable after CI v3 implementation.
 on:
-  push:
-    branches: [refactor/ai-factory-architecture]
   workflow_dispatch:
 
 concurrency:
