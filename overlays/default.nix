@@ -177,7 +177,6 @@
       serena-mcp = import ./mcp-servers/serena-mcp.nix {inherit inputs final;};
       sympy-mcp = import ./mcp-servers/sympy-mcp.nix {
         inherit inputs final;
-        nv = nv.sympy-mcp;
       };
     };
 
