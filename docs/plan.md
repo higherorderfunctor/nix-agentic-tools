@@ -9,7 +9,66 @@
 > where noted — `memory/<name>.md` references are relative to
 > `~/.claude/projects/-home-caubut-Documents-projects-nix-agentic-tools/memory/`.
 
-## Current status (2026-04-10)
+## Current status (2026-04-11)
+
+**nix-update migration ~95% complete.** nvfetcher deleted. All overlay
+packages have inline hashes managed by nix-update. Auto-computed
+versions from source (`overlays/lib.nix`). 40/42 packages build.
+CI pipeline restructured (build outside devenv, warm cache last) but
+NOT pushed — testing locally first.
+
+**Remaining before push:**
+- End-to-end `devenv tasks run update:all` test (running now)
+- Verify devenv shell works
+
+---
+
+## Backlog: nvfetcher reference cleanup
+
+55 stale references across the repo after nix-update migration.
+Fix fragments first → regenerate → cascade fixes 40+ generated files.
+
+### Dead code (fix directly)
+- [ ] `overlays/default.nix:25` — comment references deleted `memory/project_nvfetcher_overlay_pattern.md`
+- [ ] `config/cspell/cspell.json:27` — filename glob references deleted `config/nvfetcher/nvfetcher.toml`
+- [ ] `config/cspell/project-terms.txt:98` — `nvfetcher` in dictionary (keep if historical docs mention it)
+- [ ] `.gitignore:37-38` — shake database glob for deleted nvfetcher output
+- [ ] `dev/generate.nix:150-153` — `nvfetcher.toml` in path scope
+- [ ] `dev/generate.nix:695,705,732,737-738` — CONTRIBUTING.md template nvfetcher workflow text
+
+### Stale docs (fix directly)
+- [ ] `overlays/README.md` — entire file describes nvfetcher pattern, needs full rewrite
+- [ ] `overlays/mcp-servers/serena-mcp.nix:8`, `nixos-mcp.nix:8` — "No nvfetcher entry" comments
+- [ ] `packages/kiro-cli/default.nix:5` — "nvfetcher-only entry" comment
+- [ ] `packages/serena-mcp/lib/mkSerena.nix:7`, `packages/nixos-mcp/lib/mkNixos.nix:7` — "not nvfetcher-tracked"
+- [ ] `packages/claude-code/docs/buddy-activation.md:77` — "pins via nvfetcher"
+- [ ] `packages/stacked-workflows/references/nix-workflow.md:38-67` — nvfetcher workflow steps
+- [ ] `dev/references/agnix.md:8` — "tracking latest via nvfetcher"
+- [ ] `dev/notes/overlay-cache-hit-parity-fix.md` — nv.version references
+- [ ] `dev/notes/claude-code-npm-contingency.md` — nvfetcher migration plan (done)
+- [ ] `dev/skills/repo-review/personalities/nix-expert.md:33` — "Is nvfetcher integration correct?"
+
+### Fragment source files (fix → regenerate → cascades to 16 steering files)
+- [ ] `dev/fragments/mcp-servers/overlay-guide.md` — entire file is nvfetcher + hashes.json pattern
+- [ ] `dev/fragments/ai-clis/packaging-guide.md:21-62` — nvfetcher version tracking section
+- [ ] `dev/fragments/overlays/overlay-pattern.md:41` — `nvSourcesOverlay` reference
+- [ ] `dev/fragments/overlays/cache-hit-parity.md:44` — `nv.version` in code example
+- [ ] `dev/fragments/nix-standards/nix-standards.md:5-7` — `nv-sources.<key>` and `hashes.json` rules
+- [ ] `dev/fragments/packaging/naming-conventions.md:8` — "nvfetcher keys use upstream project names"
+- [ ] `dev/fragments/packaging/platforms.md:10-21` — nvfetcher nightly pattern
+- [ ] `dev/fragments/monorepo/change-propagation.md:11` — `nvfetcher.toml keys` in checklist
+
+### New backlog items
+- [ ] Bun overlay for node-based binaries (port from `nixos-config/overlays/bun-overlay.nix`, publish in `ai.*`)
+- [ ] Switch node-based MCP servers and tools to run with bun
+- [ ] Single source of truth for `flake.nix` + `devenv.yaml` inputs (DRY)
+- [ ] Document unfree guard pattern as architecture fragment fanned out to ecosystem docs + contributing
+- [ ] Update overlays/README.md table for nix-update migration
+- [ ] Garnix CI exploration — garnix for builds, GHA for orchestration, cachix for distribution (see `memory/project_garnix_exploration.md`)
+
+---
+
+## Previous status (2026-04-10, pre-migration)
 
 **CI pipeline (`update.yml`) debugging in progress.** Waiting for a
 clean run before further tweaks. Recent fixes:
