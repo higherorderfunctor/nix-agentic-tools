@@ -6,14 +6,16 @@
 # architecture-foundation plan (cache-hit parity). any-buddy is
 # source-only so it never needs `ourPkgs`; dropping `inputs` on
 # the floor here is the intent.
-{
-  final,
-  nv,
-  ...
-}:
+{final, ...}:
 final.stdenvNoCC.mkDerivation {
   pname = "any-buddy";
-  inherit (nv) version src;
+  version = "unstable-2026-04-06";
+  src = final.fetchFromGitHub {
+    owner = "cpaczek";
+    repo = "any-buddy";
+    rev = "861f0dfea1674dcff9a72390143fc64d026c95ed";
+    hash = "sha256-nkAeA2MuBmiDcBjIGzIbfxt0nvkHC++OSD+OWWwQ/e0=";
+  };
 
   dontBuild = true;
   dontFixup = true;

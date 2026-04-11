@@ -8,7 +8,7 @@
 {
   inputs,
   final,
-  nv,
+  ...
 }: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
@@ -26,7 +26,12 @@
 in
   ourPkgs.stdenvNoCC.mkDerivation {
     pname = "kiro-gateway";
-    inherit (nv) src version;
+    version = "unstable-2026-02-12";
+    src = ourPkgs.fetchgit {
+      url = "https://github.com/jwadow/kiro-gateway.git";
+      rev = "e6f23c22fc5e9aa7a22e4c31af56cdc6f859afbd";
+      hash = "sha256-V9sS82Jwx5y03ojNueHr+0qfp87fkACrdr7iP78Yxeo=";
+    };
 
     dontBuild = true;
 

@@ -1,29 +1,27 @@
-# kagi-mcp — builds the Kagi MCP server from the nvfetcher-tracked source
+# kagi-mcp — builds the Kagi MCP server from GitHub source
 # via buildPythonApplication. Includes an inline build of the kagiapi helper
-# package (also nvfetcher-tracked under the "kagiapi" key).
+# package (PyPI source).
 #
 # Instantiates `ourPkgs` from `inputs.nixpkgs` so every build input
 # (python interpreter + python packages) routes through this repo's pinned
 # nixpkgs instead of the consumer's. This gives cache-hit parity against
 # CI's standalone build (see dev/fragments/overlays/overlay-pattern.md).
-#
-# Argument shape adapted from legacy curried pattern during Milestone 5 port.
-# `nv` is the merged kagimcp entry; `nv_kagiapi` is read directly from
-# final.nv-sources for the companion kagiapi package.
 {
   inputs,
   final,
-  nv,
   ...
 }: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
   };
-  inherit (ourPkgs) python314Packages;
-  nv_kagiapi = final.nv-sources.kagiapi;
+  inherit (ourPkgs) fetchFromGitHub fetchurl python314Packages;
   kagiapi = python314Packages.buildPythonPackage {
     pname = "kagiapi";
-    inherit (nv_kagiapi) version src;
+    version = "0.2.1";
+    src = fetchurl {
+      url = "https://pypi.org/packages/source/k/kagiapi/kagiapi-0.2.1.tar.gz";
+      hash = "sha256-NV/kB7TGg9bwhIJ+T4VP2VE03yhC8V0Inaz/Yg4/Sus=";
+    };
     pyproject = true;
     build-system = with python314Packages; [setuptools];
     dependencies = with python314Packages; [requests typing-extensions];
@@ -32,7 +30,13 @@
 in
   python314Packages.buildPythonApplication {
     pname = "kagi-mcp";
-    inherit (nv) version src;
+    version = "unstable-2026-04-08";
+    src = fetchFromGitHub {
+      owner = "kagisearch";
+      repo = "kagimcp";
+      rev = "933e3384e9b1f34ebcc84b85310be7a6548900db";
+      hash = "sha256-jTxmn6H0SPV/vwDW+4tQiTXceVJZwwVgLXsF9bjSPS8=";
+    };
     pyproject = true;
     build-system = with python314Packages; [hatchling];
     dependencies = with python314Packages; [kagiapi mcp pydantic];

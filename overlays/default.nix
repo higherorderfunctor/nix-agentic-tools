@@ -105,7 +105,6 @@
     };
     any-buddy = import ./any-buddy.nix {
       inherit inputs final;
-      nv = nv.any-buddy;
     };
     claude-code = import ./claude-code.nix {
       inherit inputs final prev;
@@ -113,17 +112,12 @@
     };
     copilot-cli = import ./copilot-cli.nix {
       inherit inputs final;
-      nv-linux-x64 = nv.copilot-cli-linux-x64;
-      nv-darwin-arm64 = nv.copilot-cli-darwin-arm64;
     };
     kiro-cli = import ./kiro-cli.nix {
       inherit inputs final;
-      nv-linux-x64 = nv.kiro-cli-linux-x64;
-      nv-darwin-arm64 = nv.kiro-cli-darwin-arm64;
     };
     kiro-gateway = import ./kiro-gateway.nix {
       inherit inputs final;
-      nv = nv.kiro-gateway;
     };
   };
 
@@ -153,14 +147,12 @@
       };
       kagi-mcp = import ./mcp-servers/kagi-mcp.nix {
         inherit inputs final;
-        nv = nv.kagi-mcp;
       };
       mcp-language-server = import ./mcp-servers/mcp-language-server.nix {
         inherit inputs final;
       };
       mcp-proxy = import ./mcp-servers/mcp-proxy.nix {
         inherit inputs final;
-        nv = nv.mcp-proxy;
       };
       nixos-mcp = import ./mcp-servers/nixos-mcp.nix {inherit inputs final;};
       openmemory-mcp = import ./mcp-servers/openmemory-mcp.nix {
@@ -191,7 +183,6 @@
     };
     git-revise = import ./git-tools/git-revise.nix {
       inherit inputs final;
-      nv = nv.git-revise;
     };
   };
   # Apply ensureUnfreeCheck to every package at the output level.
