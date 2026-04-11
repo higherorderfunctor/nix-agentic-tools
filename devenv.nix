@@ -228,6 +228,13 @@ in {
         exec = ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
+
+          # Use GitHub token if available (5000 req/hr vs 60 unauthenticated)
+          if [ -z "''${GITHUB_TOKEN:-}" ] && command -v gh &>/dev/null; then
+            GITHUB_TOKEN=$(gh auth token 2>/dev/null) || true
+            [ -n "''${GITHUB_TOKEN:-}" ] && export GITHUB_TOKEN && echo "Using gh auth token"
+          fi
+
           system=$(nix eval --impure --raw --expr 'builtins.currentSystem')
           for pkg in $(nix eval ".#packages.''${system}" --apply 'builtins.attrNames' --json | jq -r '.[]' | grep -vE '^(instructions-|docs)'); do
             echo "Updating $pkg..."
