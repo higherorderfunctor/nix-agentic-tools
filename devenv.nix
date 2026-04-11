@@ -316,17 +316,34 @@ in {
         '';
       };
 
-      perPkgTasks =
-        lib.mapAttrs' (name: args:
-          lib.nameValuePair "update:pkg:${name}" (mkNixUpdateTask name args))
-        nixUpdatePkgs
-        // lib.listToAttrs (map (name:
-          lib.nameValuePair "update:pkg:${name}" (mkUpdateScriptTask name))
-        updateScriptPkgs);
+      # Ordered list: nix-update packages then updateScript packages.
+      # Sequential via after chains (parallel is unsafe without worktrees).
+      orderedPkgs =
+        (map (name: {
+          inherit name;
+          task = mkNixUpdateTask name nixUpdatePkgs.${name};
+        }) (builtins.attrNames nixUpdatePkgs))
+        ++ (map (name: {
+          inherit name;
+          task = mkUpdateScriptTask name;
+        }) updateScriptPkgs);
 
-      allPkgTaskNames = builtins.attrNames perPkgTasks;
+      # Chain each task after the previous one for sequential execution.
+      chainedTasks = let
+        indexed = lib.imap0 (i: entry: {
+          name = "update:pkg:${entry.name}";
+          value =
+            entry.task
+            // lib.optionalAttrs (i > 0) {
+              after = ["update:pkg:${(builtins.elemAt orderedPkgs (i - 1)).name}"];
+            };
+        }) orderedPkgs;
+      in
+        builtins.listToAttrs indexed;
+
+      allPkgTaskNames = builtins.attrNames chainedTasks;
     in
-      perPkgTasks
+      chainedTasks
       // {
         # Meta task: all per-package updates complete
         "update:nix-update" = {
