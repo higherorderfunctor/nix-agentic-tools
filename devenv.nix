@@ -212,11 +212,9 @@ in {
 
   # ── Tasks ─────────────────────────────────────────────────────────────
   tasks = let
-    updateTasks = (import ./dev/update.nix {inherit lib pkgs;}).tasks;
     generateTasks = (import ./dev/tasks/generate.nix {inherit lib;}).tasks;
   in
-    updateTasks
-    // generateTasks
+    generateTasks
     // {
       "update:flake" = {
         description = "Update flake.lock (nix flake update)";
