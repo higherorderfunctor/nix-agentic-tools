@@ -5,8 +5,14 @@
   inputs,
   final,
   nv,
+  hashes,
+  dummyHash,
   ...
 }: let
+  # Per-package hash lookup: the hash script writes under flake output
+  # names (pname), so each mono-repo sub-package reads its own entry.
+  hashFor = pname: field:
+    (hashes.${pname} or {}).${field} or dummyHash;
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
   };
@@ -32,7 +38,7 @@ in {
     inherit (nv) src;
     sourceRoot = "source/src/sequentialthinking";
     postPatch = "cp ${../sources/locks/sequential-thinking-mcp-package-lock.json} package-lock.json";
-    inherit (nv) npmDepsHash;
+    npmDepsHash = hashFor "sequential-thinking-mcp" "npmDepsHash";
     dontNpmBuild = true;
     nativeBuildInputs = [makeWrapper];
     installPhase = ''
@@ -52,7 +58,7 @@ in {
     inherit (nv) src;
     sourceRoot = "source/src/filesystem";
     postPatch = "cp ${../sources/locks/filesystem-mcp-package-lock.json} package-lock.json";
-    npmDepsHash = nv.filesystemMcpNpmDepsHash or nv.npmDepsHash or "";
+    npmDepsHash = hashFor "filesystem-mcp" "npmDepsHash";
     npmBuildScript = "build";
     nativeBuildInputs = [makeWrapper];
     installPhase = ''
@@ -72,7 +78,7 @@ in {
     inherit (nv) src;
     sourceRoot = "source/src/memory";
     postPatch = "cp ${../sources/locks/memory-mcp-package-lock.json} package-lock.json";
-    npmDepsHash = nv.memoryMcpNpmDepsHash or nv.npmDepsHash or "";
+    npmDepsHash = hashFor "memory-mcp" "npmDepsHash";
     npmBuildScript = "build";
     nativeBuildInputs = [makeWrapper];
     installPhase = ''

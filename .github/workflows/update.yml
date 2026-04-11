@@ -1,8 +1,8 @@
 # CI pipeline: update sources → build per-platform → commit.
 #
-# Phase 1: update source files (ubuntu-only, no building)
-# Phase 2: compute hashes + build packages + warm devenv cache (per-platform)
-# Phase 3: merge hashes + commit (only if ALL builds pass)
+# Phase 1: update sources + compute dep hashes (ubuntu-only)
+# Phase 2: build packages + warm devenv cache (per-platform)
+# Phase 3: commit (only if ALL builds pass)
 #
 # Packages are built directly with nix-fast-build (no devenv eval).
 # cachix-action daemon pushes every completed derivation immediately.
@@ -27,7 +27,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # ── Phase 1: system-agnostic source updates (no building) ────────
+  # ── Phase 1: update sources + compute hashes (ubuntu-only) ───────
   update-sources:
     runs-on: ubuntu-latest
     steps:
@@ -36,6 +36,13 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
+      # Daemon mode here too: dep derivations built during hash
+      # computation (pnpmDeps, cargoDeps, etc.) get pushed to cachix
+      # so Phase 2 runners don't rebuild them.
+      - uses: cachix/cachix-action@v17
+        with:
+          name: nix-agentic-tools
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - name: Update flake inputs
         run: nix develop .#ci -c nix flake update
       - name: Update devenv lock
@@ -46,6 +53,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Regenerate npm lockfiles
         run: nix develop .#ci -c bash dev/scripts/update-locks.sh
+      # Dep hashes (cargoHash, npmDepsHash, pnpmDepsHash, vendorHash)
+      # are platform-independent — compute once on Linux. -L prints
+      # build logs (CLI-only flag, no nix.conf equivalent).
+      - name: Compute dep hashes
+        run: nix develop -L .#ci -c bash dev/scripts/update-hashes.sh
       - name: Upload updated sources
         uses: actions/upload-artifact@v4
         with:
@@ -55,7 +67,7 @@ jobs:
             flake.lock
             devenv.lock
 
-  # ── Phase 2: per-platform hashes + build + devenv cache ──────────
+  # ── Phase 2: per-platform build + devenv cache ───────────────────
   build:
     needs: update-sources
     strategy:
@@ -83,16 +95,8 @@ jobs:
         with:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      # Compute hashes with the lightweight CI shell. -L prints build
-      # logs (CLI-only flag, no nix.conf equivalent).
-      - name: Compute dep hashes
-        run: nix develop -L .#ci -c bash dev/scripts/update-hashes.sh
-      - name: Upload hashes
-        uses: actions/upload-artifact@v4
-        with:
-          name: hashes-${{ matrix.system }}
-          path: overlays/sources/hashes.json
-      # Build ALL packages directly — no devenv eval needed.
+      # Build ALL packages directly — no devenv eval needed. Hashes
+      # were already computed in Phase 1 and are in the sources artifact.
       # --inputs-from . pins nix-fast-build to the flake's nixpkgs.
       # --skip-cached checks cachix substituter, skips cached packages.
       # No --cachix-cache: the daemon handles push (avoids double-push).
@@ -127,23 +131,10 @@ jobs:
       - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+      # Sources artifact includes hashes.json (computed in Phase 1).
       - uses: actions/download-artifact@v4
         with:
           name: updated-sources
-      - uses: actions/download-artifact@v4
-        with:
-          name: hashes-x86_64-linux
-          path: /tmp/hashes-linux
-      - uses: actions/download-artifact@v4
-        with:
-          name: hashes-aarch64-darwin
-          path: /tmp/hashes-darwin
-      - name: Merge platform hashes
-        run: |
-          jq -s '.[0] * .[1]' \
-            /tmp/hashes-linux/hashes.json \
-            /tmp/hashes-darwin/hashes.json \
-            > overlays/sources/hashes.json
       - name: Commit updates
         run: |
           git config user.name "github-actions[bot]"

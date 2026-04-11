@@ -130,9 +130,11 @@
   };
 
   # ── MCP servers ────────────────────────────────────────────────────
-  # modelcontextprotocol/servers mono-repo packages (combined overlay)
+  # modelcontextprotocol/servers mono-repo packages (combined overlay).
+  # Passes hashes + dummyHash so each sub-package can look up its own
+  # dep hash by pname (the hash script writes per-flake-output keys).
   mcpMonoRepoDrvs = import ./mcp-servers/modelcontextprotocol-servers.nix {
-    inherit inputs final;
+    inherit inputs final hashes dummyHash;
     nv = nv.mcp-servers-mono;
   };
 
