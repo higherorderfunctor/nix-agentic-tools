@@ -1,5 +1,5 @@
 # Kiro CLI — override nixpkgs with nightly version.
-# Per-platform inline sources with hashes.
+# Per-platform sources in kiro-cli-sources.json, managed by updateScript.
 #
 # Unfree: wrapped by ensureUnfreeCheck in default.nix so the consumer's
 # allowUnfree config is respected.
@@ -12,25 +12,15 @@
     inherit (final.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
-  inherit (ourPkgs) fetchurl makeWrapper;
+  inherit (ourPkgs) fetchurl makeWrapper writeShellScript;
   inherit (ourPkgs.stdenv.hostPlatform) system;
 
-  version = "1.29.6";
-  platformSrc = {
-    "x86_64-linux" = fetchurl {
-      url = "https://desktop-release.q.us-east-1.amazonaws.com/${version}/kirocli-x86_64-linux.tar.gz";
-      hash = "sha256-6FZgHdKBDz8zrrJf0MgGtzKz279j4X3H/B6tW+0WlZ8=";
-    };
-    "aarch64-darwin" = fetchurl {
-      url = "https://desktop-release.q.us-east-1.amazonaws.com/${version}/Kiro%20CLI.dmg";
-      name = "kiro-cli.dmg";
-      hash = "sha256-qe9svpw3ngk9EU12woeMXW8+gTNYxGfzdePVUgodUWY=";
-    };
-  };
+  sources = builtins.fromJSON (builtins.readFile ./kiro-cli-sources.json);
+  platformSrc = sources.${system} or (throw "kiro-cli: unsupported system ${system}");
 in
   ourPkgs.kiro-cli.overrideAttrs (attrs: {
-    inherit version;
-    src = platformSrc.${system} or (throw "kiro-cli: unsupported system ${system}");
+    inherit (sources) version;
+    src = fetchurl {inherit (platformSrc) url hash;};
 
     nativeBuildInputs = (attrs.nativeBuildInputs or []) ++ [makeWrapper];
 
@@ -40,4 +30,37 @@ in
         wrapProgram $out/bin/kiro-cli --set-default TERM xterm-256color
         wrapProgram $out/bin/kiro-cli-chat --set-default TERM xterm-256color
       '';
+
+    passthru.updateScript = writeShellScript "update-kiro-cli" ''
+      set -eu
+      latest=$(${ourPkgs.curl}/bin/curl -s \
+        https://desktop-release.q.us-east-1.amazonaws.com/latest/manifest.json \
+        | ${ourPkgs.jq}/bin/jq -r '.version')
+      [ -z "$latest" ] && echo "Failed to fetch latest version" >&2 && exit 1
+
+      sources="overlays/kiro-cli-sources.json"
+      current=$(${ourPkgs.jq}/bin/jq -r '.version' "$sources")
+      if [ "$latest" = "$current" ]; then
+        echo "kiro-cli: already at $current"
+        exit 0
+      fi
+
+      echo "kiro-cli: $current -> $latest"
+      tmp=$(mktemp)
+      ${ourPkgs.jq}/bin/jq -n --arg v "$latest" '{version: $v}' > "$tmp"
+
+      for platform in x86_64-linux aarch64-darwin; do
+        case "$platform" in
+          x86_64-linux) url="https://desktop-release.q.us-east-1.amazonaws.com/''${latest}/kirocli-x86_64-linux.tar.gz" ;;
+          aarch64-darwin) url="https://desktop-release.q.us-east-1.amazonaws.com/''${latest}/Kiro%20CLI.dmg" ;;
+        esac
+        hash=$(nix hash convert --to sri --hash-algo sha256 \
+          "$(nix-prefetch-url --type sha256 "$url" 2>/dev/null)")
+        ${ourPkgs.jq}/bin/jq --arg sys "$platform" --arg u "$url" --arg h "$hash" \
+          '. + {($sys): {url: $u, hash: $h}}' "$tmp" > "''${tmp}.new" && mv "''${tmp}.new" "$tmp"
+      done
+
+      mv "$tmp" "$sources"
+      echo "Updated $sources"
+    '';
   })

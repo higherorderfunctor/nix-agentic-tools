@@ -81,6 +81,7 @@ lifecycles
 llms
 lockdown
 lockfiles
+ltrimstr
 markdownify
 mcps
 mdbook
