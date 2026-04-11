@@ -236,23 +236,25 @@ in {
           fi
 
           system=$(nix eval --impure --raw --expr 'builtins.currentSystem')
-          # Excluded from nix-update loop:
-          #   instructions-*, docs*  — generated, not versioned packages
-          #   agnix-lsp, agnix-mcp   — mainProgram proxies (share agnix source)
-          exclude='^(instructions-|docs|agnix-lsp$|agnix-mcp$)'
-          failed=""
+          # Excluded entirely:
+          #   instructions-*, docs*     — generated, not versioned packages
+          #   agnix-lsp, agnix-mcp      — mainProgram proxies (share agnix source)
+          #   nixos-mcp, serena-mcp     — flake inputs (updated by nix flake update)
+          exclude='^(instructions-|docs|agnix-lsp$|agnix-mcp$|nixos-mcp$|serena-mcp$)'
+
+          # fetchurl packages: nix-update can't auto-discover versions from
+          # fetchurl (no GitHub owner/repo metadata). Use --version skip to
+          # recompute hashes only. Version bumps come from passthru.updateScript.
+          version_skip='^(claude-code|copilot-cli|kiro-cli|context7-mcp)$'
+
           for pkg in $(nix eval ".#packages.''${system}" --apply 'builtins.attrNames' --json | jq -r '.[]' | grep -vE "$exclude"); do
             echo "=== $pkg ==="
-            if ! nix run --inputs-from . nix-update -- --flake "$pkg" --commit --system "$system"; then
-              echo "FAILED: $pkg"
-              failed="$failed $pkg"
+            if echo "$pkg" | grep -qE "$version_skip"; then
+              nix run --inputs-from . nix-update -- --flake "$pkg" --commit --system "$system" --version skip
+            else
+              nix run --inputs-from . nix-update -- --flake "$pkg" --commit --system "$system"
             fi
           done
-          if [ -n "$failed" ]; then
-            echo ""
-            echo "FAILED packages:$failed"
-            exit 1
-          fi
         '';
       };
       "update:build" = {
