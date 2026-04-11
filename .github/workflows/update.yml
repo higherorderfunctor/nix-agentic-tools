@@ -1,18 +1,18 @@
-# CI pipeline: update sources → build per-platform → commit hashes.
+# CI pipeline: update sources → build per-platform → commit.
 #
-# Current: full pipeline on every push to feature branch.
-# Future:  split into two workflows:
-#   1. update.yml — schedule on main, opens PR with updated sources+hashes
-#   2. build.yml  — on PR, builds + pushes to cachix
-# The three jobs below map to that split: update-sources → (future workflow 1),
-# build + commit → (future workflow 2, triggered by PR).
+# Phase 1: update source files (ubuntu-only, no building)
+# Phase 2: compute hashes + build packages + warm devenv cache (per-platform)
+# Phase 3: merge hashes + commit (only if ALL builds pass)
+#
+# Packages are built directly with nix-fast-build (no devenv eval).
+# cachix-action daemon pushes every completed derivation immediately.
+# devenv cache is warmed LAST — overlay packages are cachix hits by then.
+# See docs/superpowers/specs/2026-04-10-ci-update-pipeline-design.md
 name: Update
 
 on:
   push:
     branches: [refactor/ai-factory-architecture]
-  schedule:
-    - cron: "0 */1 * * *" # hourly
   workflow_dispatch:
 
 concurrency:
@@ -36,8 +36,6 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
-      # Phase 1 uses the lightweight CI shell (flake.nix devShells.ci)
-      # instead of the full devenv shell — avoids 7+ min module eval.
       - name: Update flake inputs
         run: nix develop .#ci -c nix flake update
       - name: Update devenv lock
@@ -57,7 +55,7 @@ jobs:
             flake.lock
             devenv.lock
 
-  # ── Phase 2: per-platform hashes + build + cachix ────────────────
+  # ── Phase 2: per-platform hashes + build + devenv cache ──────────
   build:
     needs: update-sources
     strategy:
@@ -78,14 +76,15 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
+      # Daemon mode: pushes every completed derivation to cachix
+      # immediately via post-build-hook. Even if a later step fails,
+      # successful builds are already in the cache for next run.
       - uses: cachix/cachix-action@v17
         with:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      # Compute hashes BEFORE devenv eval — stale hashes break the
-      # devenv shell because overlay packages are in its packages list.
-      # Uses the lightweight CI shell (no overlay deps). -L prints
-      # build logs (CLI-only flag, no nix.conf equivalent).
+      # Compute hashes with the lightweight CI shell. -L prints build
+      # logs (CLI-only flag, no nix.conf equivalent).
       - name: Compute dep hashes
         run: nix develop -L .#ci -c bash dev/scripts/update-hashes.sh
       - name: Upload hashes
@@ -93,23 +92,34 @@ jobs:
         with:
           name: hashes-${{ matrix.system }}
           path: overlays/sources/hashes.json
-      - name: Install devenv
-        run: nix profile add nixpkgs#devenv
-      # devenv 2.x uses Nix FFI (not CLI), so -L/--log-format cannot
-      # be injected. --verbose enables devenv's own tracing.
-      - name: Evaluate devenv shell
-        run: devenv print-dev-env --verbose > /dev/null
-        env:
-          DEVENV_TUI: "false"
+      # Build ALL packages directly — no devenv eval needed.
+      # --inputs-from . pins nix-fast-build to the flake's nixpkgs.
+      # --skip-cached checks cachix substituter, skips cached packages.
+      # No --cachix-cache: the daemon handles push (avoids double-push).
+      # No continue-on-error: failures must block commit.
       - name: Build all packages
-        continue-on-error: true
-        run: devenv tasks run build:all --verbose --show-output
+        run: |
+          nix run --inputs-from . nixpkgs#nix-fast-build -- \
+            --skip-cached \
+            --no-nom \
+            --no-link \
+            --flake ".#packages.${{ matrix.system }}"
+      # Warm devenv cache AFTER building packages. Overlay packages
+      # are cachix hits from the build step; only devenv-specific
+      # glue (profile, shell-env, git-hook wrappers) builds locally.
+      # Pushes devenv profile to cachix so `devenv shell` is instant
+      # for consumers on all platforms.
+      - name: Warm devenv cache
+        run: |
+          nix profile install --inputs-from . nixpkgs#devenv
+          devenv print-dev-env --verbose > /dev/null
         env:
           DEVENV_TUI: "false"
 
   # ── Phase 3: merge hashes + commit ───────────────────────────────
+  # Only runs if ALL Phase 2 jobs succeed (default needs: behavior).
   commit:
-    needs: build
+    needs: [update-sources, build]
     runs-on: ubuntu-latest
     env:
       BRANCH_NAME: refactor/ai-factory-architecture

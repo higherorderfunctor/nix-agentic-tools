@@ -9,6 +9,37 @@
 > where noted — `memory/<name>.md` references are relative to
 > `~/.claude/projects/-home-caubut-Documents-projects-nix-agentic-tools/memory/`.
 
+## Current status (2026-04-10)
+
+**CI pipeline (`update.yml`) debugging in progress.** Waiting for a
+clean run before further tweaks. Recent fixes:
+
+- **File reorganization landed** (`babab01`): config files →
+  `config/`, generated files → `overlays/sources/`. cspell dictionary
+  path resolved (CWD-relative, `config/cspell/` excluded from
+  spell checking to avoid nested config auto-discovery collision).
+
+- **Hash chicken-and-egg fixed** (`c399f79`): stale dep hashes
+  (e.g. agnix cargoHash) broke `devenv print-dev-env` because overlay
+  packages are in the shell's packages list. Hash computation now
+  runs BEFORE devenv eval using the lightweight CI shell (`nix develop
+  .#ci`). `update-hashes.sh` also fixed to use `builtins.currentSystem`
+  instead of hardcoded x86_64-linux.
+
+- **CI logging enabled** (`affd2ca`): `print-build-logs = true` in
+  nix config so nix emits fetch/build progress to stderr in non-TTY
+  CI. `devenv print-dev-env > /dev/null` keeps stderr visible while
+  suppressing the giant env dump.
+
+- **Workflow split planned**: current single workflow runs full cycle
+  on every push to feature branch. Backlog item added to split into
+  update-on-main-schedule + build-on-PR after merge.
+
+**Next**: wait for CI run to complete, review logs, fix any remaining
+issues. Then: overlays/README.md table update, darwin hash verification.
+
+---
+
 ## Architecture summary
 
 Factory rollout + ideal-architecture gate COMPLETE (2026-04-08/09).
@@ -38,14 +69,9 @@ Backup branches (DO NOT GC):
 
 High confidence, small scope. Good for review sessions.
 
-- [ ] **Review devenv overlay wiring** — devenv.nix currently does
-      hacky inline overlay composition (`aiPkgs = (import
-      inputs.nixpkgs {...}).extend (lib.composeManyExtensions [...])`
-      + `contentPkgs = pkgs.extend (import ./packages/stacked-workflows/overlay.nix {})`).
-      Explore whether devenv supports overlays natively (similar
-      to NixOS `nixpkgs.overlays`) so we can drop the manual
-      composition. May simplify the `wrapFactory` lib/pkgs injection
-      pattern too.
+- [x] **Review devenv overlay wiring** — devenv.nix now uses native
+      `overlays = [...]` instead of manual aiPkgs/contentPkgs
+      composition. allowUnfree via devenv.yaml.
 
 - [x] **Move `lib/hm-helpers.nix` + `lib/ai-common.nix` into `lib/ai/`**
 - [x] **Group overlay packages under `pkgs.ai.{mcpServers,lspServers}`
@@ -121,13 +147,11 @@ High confidence, small scope. Good for review sessions.
         with cargo. Don't force a different tool than what upstream
         uses.
 
-- [ ] **Update script: automated dep hash computation** — the update
-      pipeline should compute pnpmDepsHash / vendorHash / npmDepsHash
-      without manual copy-paste. Pattern: set hash to dummy → `nix
-      build .#<pkg>.pnpmDeps 2>&1 | grep "got:" | awk '{print $2}'`
-      → write to hashes.json. Target: fully automated hourly GitHub
-      Actions (Copilot-driven). No AI needed.
-      See `memory/project_nvfetcher_overlay_pattern.md` for details.
+- [x] **Update script: automated dep hash computation** — implemented
+      as `dev/scripts/update-hashes.sh` with auto-discovery via
+      `.pnpmDeps`/`.goModules`/`.cargoDeps` nix eval probing. Wired
+      into CI phase 2 via `nix develop .#ci`. hashes.json is pure
+      output, rebuilt from scratch on each run.
 
 - [ ] **Replace `isRoot = package == "monorepo"` with category
       metadata** — `mkDevComposed` hardcodes a string match. Should
