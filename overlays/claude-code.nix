@@ -3,9 +3,8 @@
 # Per-platform binaries fetched from Google Cloud Storage. Version
 # checked against manifest.json. nix-update manages version + hashes.
 #
-# Buddy wrapper: if $XDG_STATE_HOME/claude-code-buddy/lib/cli.js
-# exists, runs it via bun (for buddy salt patching). Otherwise
-# runs the native binary directly.
+# This is the raw package. The HM module adds the buddy wrapper on
+# top for users who configure buddy salt patching.
 #
 # Unfree: wrapped by `ensureUnfreeCheck` in default.nix.
 {
@@ -17,7 +16,7 @@
     inherit (final.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
-  inherit (ourPkgs) autoPatchelfHook bun fetchurl lib makeWrapper stdenv writeShellScript;
+  inherit (ourPkgs) autoPatchelfHook fetchurl lib makeWrapper stdenv writeShellScript;
 
   version = "2.1.101";
 
@@ -39,19 +38,6 @@
       hash = "sha256-DE1Yv97jONpHNT6v2fDbd+x8SjDmxb6mKcU1+RzrpiQ=";
     };
   };
-
-  buddyWrapper = writeShellScript "claude-buddy-wrapper" ''
-    set -euETo pipefail
-    shopt -s inherit_errexit 2>/dev/null || :
-
-    USER_LIB="''${XDG_STATE_HOME:-$HOME/.local/state}/claude-code-buddy/lib"
-
-    if [ -f "$USER_LIB/cli.js" ]; then
-      exec ${bun}/bin/bun run "$USER_LIB/cli.js" "$@"
-    else
-      exec @out@/bin/.claude-unwrapped "$@"
-    fi
-  '';
 in
   stdenv.mkDerivation {
     pname = "claude-code";
@@ -68,10 +54,7 @@ in
     installPhase = ''
       runHook preInstall
       mkdir -p $out/bin
-      install -Dm755 $src $out/bin/.claude-unwrapped
-      substitute ${buddyWrapper} $out/bin/claude \
-        --subst-var out
-      chmod +x $out/bin/claude
+      install -Dm755 $src $out/bin/claude
       runHook postInstall
     '';
     passthru.updateScript = writeShellScript "update-claude-code" ''

@@ -225,13 +225,8 @@ lib.ai.app.mkAiApp {
     }: let
       # ── Buddy activation helpers (lazy, only forced when buddy.enable) ──
       mkBuddyActivationScript = buddyCfg: let
-        # Use the unwrapped baseClaudeCode if available (our overlay
-        # exposes it as passthru.baseClaudeCode), so the cli.js path
-        # points at the real claude-code package, not the wrapper.
-        baseClaudeCode =
-          cfg.package.passthru.baseClaudeCode
-          or cfg.package;
-        storeLib = "${baseClaudeCode}/lib/node_modules/@anthropic-ai/claude-code";
+        # Store binary path — the pre-built binary from the overlay.
+        storeBinary = "${cfg.package}/bin/claude";
         workerScript = "${pkgs.ai.any-buddy}/src/finder/worker.ts";
         shinyArg =
           if buddyCfg.shiny
@@ -255,7 +250,7 @@ lib.ai.app.mkAiApp {
         shopt -s inherit_errexit 2>/dev/null || :
 
         STATE_DIR="''${XDG_STATE_HOME:-$HOME/.local/state}/claude-code-buddy"
-        STORE_LIB="${storeLib}"
+        STORE_BINARY="${storeBinary}"
         WORKER="${workerScript}"
 
         # Resolve userId source
@@ -277,7 +272,7 @@ lib.ai.app.mkAiApp {
 
         # Compute fingerprint
         NEW_FP=$(${pkgs.coreutils}/bin/printf '%s\n' \
-          "$STORE_LIB" \
+          "$STORE_BINARY" \
           "$USER_ID" \
           "${buddyCfg.species}" \
           "${buddyCfg.rarity}" \
@@ -299,16 +294,10 @@ lib.ai.app.mkAiApp {
         if [ "$NEW_FP" != "$OLD_FP" ]; then
           echo "==> Updating claude-code buddy (${buddyCfg.species}, ${buddyCfg.rarity})"
 
-          # Refresh writable lib tree (symlinks to store, except cli.js which is real)
-          ${pkgs.coreutils}/bin/rm -rf "$STATE_DIR/lib"
-          ${pkgs.coreutils}/bin/mkdir -p "$STATE_DIR/lib"
-          ${pkgs.coreutils}/bin/cp -rs "$STORE_LIB"/* "$STATE_DIR/lib/"
-          ${pkgs.coreutils}/bin/chmod -R u+w "$STATE_DIR/lib"
-
-          # Replace cli.js symlink with a real writable copy
-          ${pkgs.coreutils}/bin/rm "$STATE_DIR/lib/cli.js"
-          ${pkgs.coreutils}/bin/cp -L "$STORE_LIB/cli.js" "$STATE_DIR/lib/cli.js"
-          ${pkgs.coreutils}/bin/chmod u+w "$STATE_DIR/lib/cli.js"
+          # Copy the pre-built binary to a writable location for patching
+          ${pkgs.coreutils}/bin/mkdir -p "$STATE_DIR"
+          ${pkgs.coreutils}/bin/cp "$STORE_BINARY" "$STATE_DIR/claude"
+          ${pkgs.coreutils}/bin/chmod u+w "$STATE_DIR/claude"
 
           # Run salt search via Bun (wyhash, no --fnv1a needed since claude-code
           # also runs under Bun via our wrapper)
@@ -328,17 +317,25 @@ lib.ai.app.mkAiApp {
             exit 1
           fi
 
-          # Patch cli.js
+          # Patch salt in the binary (3 occurrences in compiled Bun binary)
           ${pkgs.python3}/bin/python3 -c "
         import sys
-        path = '$STATE_DIR/lib/cli.js'
+        path = '$STATE_DIR/claude'
         data = open(path, 'rb').read()
         old = b'friend-2026-401'
         new = b'$SALT'
-        if old not in data:
-            sys.exit('ERROR: salt marker not found in cli.js')
+        count = data.count(old)
+        if count == 0:
+            sys.exit('ERROR: salt marker not found in binary')
+        if count != 3:
+            print(f'WARNING: expected 3 salt occurrences, found {count}', file=sys.stderr)
         open(path, 'wb').write(data.replace(old, new))
         "
+
+          # macOS: re-codesign after binary modification (ad-hoc signature)
+          if [ "$(${pkgs.coreutils}/bin/uname -s)" = "Darwin" ]; then
+            /usr/bin/codesign --force --sign - "$STATE_DIR/claude"
+          fi
 
           # Reset companion field in ~/.claude.json (if file exists)
           if [ -f "$HOME/.claude.json" ]; then
@@ -383,6 +380,27 @@ lib.ai.app.mkAiApp {
           };
         }
         (lib.mkIf cfg.buddy.enable {
+          # Wrap the package so `claude` checks for a patched binary first.
+          # The activation script copies + patches the store binary to the
+          # buddy state dir. The wrapper runs the patched copy if it exists.
+          programs.claude-code.package = let
+            wrapped = pkgs.writeShellScriptBin "claude" ''
+              set -euETo pipefail
+              shopt -s inherit_errexit 2>/dev/null || :
+              BUDDY_BIN="''${XDG_STATE_HOME:-$HOME/.local/state}/claude-code-buddy/claude"
+              if [ -x "$BUDDY_BIN" ]; then
+                exec "$BUDDY_BIN" "$@"
+              else
+                exec ${cfg.package}/bin/claude "$@"
+              fi
+            '';
+          in
+            pkgs.symlinkJoin {
+              inherit (cfg.package) name version;
+              paths = [wrapped cfg.package];
+              meta = cfg.package.meta or {};
+              passthru = cfg.package.passthru or {};
+            };
           home.activation.claudeBuddy = lib.hm.dag.entryAfter ["writeBoundary"] (mkBuddyActivationScript cfg.buddy);
         })
         (lib.mkIf (cfg.memory != null) {
