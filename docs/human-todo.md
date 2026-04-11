@@ -1,5 +1,6 @@
 <!-- TODO: remove this file before merging to main -->
 
+parallel nix update and github api key
 SWITCH MCPS OR NODE BASED PACKAGES TO BUN
 
 SINGLE SOURCER OF YRUTH FOR FLAKE INPUTS KINDA NUTS NEED EXPLAIN
@@ -18,27 +19,6 @@ ME: test in nixos-config
 
 - Update overlays/README.md table to reflect all the source changes made tonight
 - Document the unfree guard pattern as an architecture fragment
-
----
-
-Some other moves if possible (will have to update scripts most likely to find these files or other config files).
-
-```
-config/ # new directory
-  cspell/
-    cspell.json
-  project-terms.txt - break this file up into sections, it supports comments
-                      easier to audit later to remove stale terms
-  nvfetcher/
-    nvfetcher.toml
-  agnix/
-    agnix.toml
-overlays/
-  sources/ # move all generated files (was .nvfetcher)
-    generated.{nix.json}
-    hashes.json # for the ones you have to compute yourself like dep hashes
-    locks/\*.json # may be removed but we aren't redoing locks anymore so may be gone
-```
 
 ---
 
