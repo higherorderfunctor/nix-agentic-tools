@@ -245,9 +245,9 @@ in {
           # Per-package nix-update flags. Packages not listed here use defaults.
           pkg_args() {
             case "$1" in
-              # claude-code: binary manifest, use passthru.updateScript for version
+              # claude-code: binary manifest, no forge URL for version discovery
               claude-code)
-                echo "--use-update-script" ;;
+                echo "--version skip" ;;
               # context7-mcp: scoped GitHub tag, --url + --version-regex for discovery
               context7-mcp)
                 echo "--url https://github.com/upstash/context7 --version-regex @upstash/context7-mcp@(.*) --override-filename overlays/mcp-servers/context7-mcp.nix" ;;
