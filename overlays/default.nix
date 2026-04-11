@@ -10,36 +10,9 @@
 #   pkgs.ai.lspServers.*     — LSP server proxies
 #   pkgs.gitTools.*           — git workflow tools
 #
-# Shared nvfetcher data comes from final.nv-sources (populated by
-# nvSourcesOverlay in flake.nix), merged with sidecar hashes from
-# ./hashes.json.
-#
-# Per-package files take custom argument sets (NOT uniform
-# {nv-sources, ...} callers) because different packages have different
-# needs — claude-code needs lockFile, kiro-cli needs nv-darwin, etc.
+# Each per-package file takes {inputs, final, ...} and manages its
+# own source via fetchFromGitHub with inline hashes.
 {inputs, ...}: final: prev: let
-  hashes = builtins.fromJSON (builtins.readFile ./sources/hashes.json);
-  # Dummy hash for auto-discovery: overlay defaults missing hashes to
-  # this value. The update:hashes task builds each package, captures
-  # "got:" from the hash mismatch, and writes the real hash to hashes.json.
-  dummyHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-
-  # hashes.json is keyed by PACKAGE name (flake output name).
-  # nvfetcher sources are keyed by nvfetcher name (may differ).
-  # `merge` handles the common case (same key); inline for exceptions.
-  # Every dep hash field defaults to dummyHash so overlays can use
-  # `inherit (nv) cargoHash;` without failing when hashes.json doesn't
-  # have the entry yet. The update:hashes task auto-discovers and fills.
-  nvSrc = name: final.nv-sources.${name} or {};
-  hashDefaults = {
-    cargoHash = dummyHash;
-    npmDepsHash = dummyHash;
-    pnpmDepsHash = dummyHash;
-    srcHash = dummyHash;
-    vendorHash = dummyHash;
-  };
-  merge = name: hashDefaults // nvSrc name // (hashes.${name} or {});
-
   # Unfree guard. Checks if the derivation has an unfree license and
   # wraps it so the consumer's allowUnfree config is respected. If the
   # package is free, returns the original derivation unwrapped.
@@ -68,36 +41,6 @@
       }
     else drv;
 
-  nv = {
-    # AI CLIs
-    agnix = merge "agnix";
-    any-buddy = merge "any-buddy";
-    claude-code = merge "claude-code";
-    copilot-cli-linux-x64 = merge "github-copilot-cli-linux-x64";
-    copilot-cli-darwin-arm64 = merge "github-copilot-cli-darwin-arm64";
-    kiro-cli-linux-x64 = merge "kiro-cli-linux-x64";
-    kiro-cli-darwin-arm64 = merge "kiro-cli-darwin-arm64";
-    kiro-gateway = merge "kiro-gateway";
-
-    # Git tools
-    git-absorb = merge "git-absorb";
-    git-branchless = merge "git-branchless";
-    git-revise = merge "git-revise";
-
-    # MCP servers
-    context7-mcp = merge "context7-mcp";
-    effect-mcp = merge "effect-mcp";
-    git-intel-mcp = merge "git-intel-mcp";
-    github-mcp = hashDefaults // nvSrc "github-mcp-server" // (hashes."github-mcp" or {});
-    kagi-mcp = hashDefaults // nvSrc "kagimcp" // (hashes."kagi-mcp" or {});
-    mcp-language-server = merge "mcp-language-server";
-    mcp-proxy = merge "mcp-proxy";
-    # modelcontextprotocol/servers mono-repo — shared source, per-package version
-    mcp-servers-mono = merge "modelcontextprotocol-servers";
-    openmemory-mcp = merge "openmemory-mcp";
-    sympy-mcp = merge "sympy-mcp";
-  };
-
   # ── Flat AI CLIs and unique tools ──────────────────────────────────
   flatDrvs = {
     agnix = import ./agnix.nix {
@@ -122,17 +65,15 @@
   };
 
   # ── MCP servers ────────────────────────────────────────────────────
-  # modelcontextprotocol/servers mono-repo packages (combined overlay).
-  # Passes hashes + dummyHash so each sub-package can look up its own
-  # dep hash by pname (the hash script writes per-flake-output keys).
-  mcpMonoRepoDrvs = import ./mcp-servers/modelcontextprotocol-servers.nix {
-    inherit inputs final hashes dummyHash;
-    nv = nv.mcp-servers-mono;
-  };
+  # modelcontextprotocol/servers mono-repo — directory with shared
+  # source, per-package JS builds for parallelism, independent Python
+  # builds. Namespaced under modelContextProtocol.
+  modelContextProtocol = import ./mcp-servers/modelcontextprotocol {inherit inputs final;};
 
   mcpServerDrvs =
-    mcpMonoRepoDrvs
+    modelContextProtocol
     // {
+      inherit modelContextProtocol;
       context7-mcp = import ./mcp-servers/context7-mcp.nix {
         inherit inputs final;
       };
