@@ -45,8 +45,8 @@ in
           aarch64-darwin) name="copilot-darwin-arm64" ;;
         esac
         url="https://github.com/github/copilot-cli/releases/download/v''${latest}/''${name}.tar.gz"
-        hash=$(nix hash convert --to sri --hash-algo sha256 \
-          "$(nix-prefetch-url --type sha256 "$url" 2>/dev/null)")
+        hash=$(${ourPkgs.nix}/bin/nix hash convert --to sri --hash-algo sha256 \
+          "$(${ourPkgs.nix}/bin/nix-prefetch-url --type sha256 "$url" 2>/dev/null)")
         ${ourPkgs.jq}/bin/jq --arg sys "$platform" --arg u "$url" --arg h "$hash" \
           '. + {($sys): {url: $u, hash: $h}}' "$tmp" > "''${tmp}.new" && mv "''${tmp}.new" "$tmp"
       done
