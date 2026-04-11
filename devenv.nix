@@ -224,9 +224,8 @@ in {
         description = "Update devenv.lock";
         exec = ''devenv update'';
       };
-      "update:all" = {
-        description = "Update all packages via nix-update";
-        after = ["update:flake" "update:devenv"];
+      "update:nix-update" = {
+        description = "Update all package versions and hashes via nix-update";
         exec = ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
@@ -236,6 +235,11 @@ in {
             nix run nixpkgs#nix-update -- --flake "$pkg" --commit || echo "SKIP: $pkg"
           done
         '';
+      };
+      "update:all" = {
+        description = "Run full update pipeline";
+        after = ["update:flake" "update:devenv" "update:nix-update"];
+        exec = ''echo "Update pipeline complete"'';
       };
       "build:all" = {
         description = "Build all packages for the current system";
