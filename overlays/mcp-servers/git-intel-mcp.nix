@@ -29,8 +29,7 @@ in
       inherit rev;
     };
     inherit src;
-    npmDepsHash = "sha256-v3b05ZPeUzmweTen/bzsBDUsuNur8+KbKmYXw2vh8do=";
-    postPatch = "cp ${../sources/locks/git-intel-mcp-package-lock.json} package-lock.json";
+    npmDepsHash = "sha256-/HN6Ylrow/v7ssWb0oIYJD5cTV8RWH8ipmDtfAUY9zc=";
     nativeBuildInputs = [makeWrapper];
     installPhase = ''
       runHook preInstall
