@@ -53,9 +53,19 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Regenerate npm lockfiles
         run: nix develop .#ci -c bash dev/scripts/update-locks.sh
+      # Restore hashes from previous runs so unchanged packages skip
+      # instantly. save-always persists even when later steps fail,
+      # so a failed build doesn't force full recomputation next run.
+      - name: Restore cached hashes
+        uses: actions/cache@v4
+        with:
+          path: overlays/sources/hashes.json
+          key: dep-hashes-${{ hashFiles('overlays/sources/generated.nix') }}
+          restore-keys: dep-hashes-
+          save-always: true
       # Dep hashes (cargoHash, npmDepsHash, pnpmDepsHash, vendorHash)
-      # are platform-independent — compute once on Linux. -L prints
-      # build logs (CLI-only flag, no nix.conf equivalent).
+      # are platform-independent — compute once on Linux. Only packages
+      # with changed sources get recomputed; cached hashes pass through.
       - name: Compute dep hashes
         run: nix develop -L .#ci -c bash dev/scripts/update-hashes.sh
       - name: Upload updated sources
