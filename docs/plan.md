@@ -11,10 +11,12 @@
 
 ## Current status (2026-04-11)
 
-**nix-update migration ~95% complete.** nvfetcher deleted. All overlay
-packages have inline hashes managed by nix-update. Auto-computed
-versions from source (`overlays/lib.nix`). 40/42 packages build.
-CI pipeline restructured (build outside devenv, warm cache last) but
+**nix-update migration complete.** nvfetcher deleted. All overlay
+packages have inline hashes managed by nix-update + sources.json
+updateScripts for per-platform binaries. Auto-computed versions
+from source (`overlays/lib.nix`). Full pipeline passes (0 failures).
+NOT pushed yet. CI pipeline restructured (build outside devenv,
+warm cache last) but
 NOT pushed — testing locally first.
 
 **Remaining before push:**
@@ -65,6 +67,15 @@ Fix fragments first → regenerate → cascade fixes 40+ generated files.
 - [ ] Document unfree guard pattern as architecture fragment fanned out to ecosystem docs + contributing
 - [ ] Update overlays/README.md table for nix-update migration
 - [ ] Garnix CI exploration — garnix for builds, GHA for orchestration, cachix for distribution (see `memory/project_garnix_exploration.md`)
+
+### Update pipeline improvements
+
+- [ ] Fix pre-commit hook to re-stage formatted files (treefmt formats but doesn't re-add)
+- [ ] Dirty tree guard at start of update:nix-update
+- [ ] Split update:nix-update into per-package devenv tasks (update:pkg:agnix etc.)
+- [ ] Audit main-branch packages: nix-update release check is wrong for main-tracking packages (reports e.g., 0.10.0+shortrev → 0.11.0 when main hasn't bumped yet). Use --version skip for main-tracking, release check only for release-tracking packages.
+- [ ] Parallel per-package updates via git worktrees + octopus merge
+- [ ] Per-package tasks as devenv DAG so devenv parallelizes automatically
 
 ---
 

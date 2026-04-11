@@ -97,6 +97,16 @@ in {
         "^docs/superpowers/"
       ];
     };
+    # Re-stage files modified by formatters (treefmt, shfmt, etc.)
+    # Without this, formatters modify staged files but the formatted
+    # version isn't re-added — leaving dirty tree after commit.
+    treefmt-restage = {
+      enable = true;
+      name = "treefmt-restage";
+      entry = "${pkgs.bash}/bin/bash -c 'git diff --name-only | xargs -r git add'";
+      pass_filenames = false;
+      stages = ["pre-commit"];
+    };
     convco.enable = true;
     shellcheck.enable = true;
     shfmt.enable = true;
@@ -235,57 +245,97 @@ in {
           fi
         '';
       };
-      "update:nix-update" = {
-        description = "Update all package versions and hashes via nix-update";
+      # ── Per-package update tasks ──────────────────────────────────────
+      # Each package gets its own task so failures are visible and
+      # the DAG can parallelize them in the future (via git worktrees).
+    }
+    // (let
+      system = builtins.currentSystem;
+      # Shared preamble for GitHub token
+      tokenPreamble = ''
+        if [ -z "''${GITHUB_TOKEN:-}" ] && command -v gh &>/dev/null; then
+          GITHUB_TOKEN=$(gh auth token 2>/dev/null) || true
+          [ -n "''${GITHUB_TOKEN:-}" ] && export GITHUB_TOKEN
+        fi
+      '';
+      dirtyGuard = ''
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "ERROR: working tree is dirty. Commit or stash changes first." >&2
+          git status --short >&2
+          exit 1
+        fi
+      '';
+
+      # nix-update packages: per-package flags
+      nixUpdatePkgs = {
+        agnix = "";
+        any-buddy = "";
+        context7-mcp = "--url https://github.com/upstash/context7 --version-regex '@upstash/context7-mcp@(.*)' --override-filename overlays/mcp-servers/context7-mcp.nix";
+        effect-mcp = "";
+        git-absorb = "";
+        git-branchless = "";
+        git-intel-mcp = "";
+        git-revise = "";
+        github-mcp = "";
+        kagi-mcp = "";
+        kiro-gateway = "";
+        mcp-language-server = "";
+        mcp-proxy = "";
+        modelcontextprotocol-all-mcps = "";
+        openmemory-mcp = "";
+        sympy-mcp = "";
+      };
+
+      # sources.json packages: use passthru.updateScript
+      updateScriptPkgs = ["claude-code" "copilot-cli" "kiro-cli"];
+
+      mkNixUpdateTask = name: extraArgs: {
+        description = "Update ${name} via nix-update";
         exec = ''
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
-
-          # Use GitHub token if available (5000 req/hr vs 60 unauthenticated)
-          if [ -z "''${GITHUB_TOKEN:-}" ] && command -v gh &>/dev/null; then
-            GITHUB_TOKEN=$(gh auth token 2>/dev/null) || true
-            [ -n "''${GITHUB_TOKEN:-}" ] && export GITHUB_TOKEN && echo "Using gh auth token"
-          fi
-
-          system=$(nix eval --impure --raw --expr 'builtins.currentSystem')
-          # Excluded from nix-update loop:
-          #   instructions-*, docs*           — generated, not versioned packages
-          #   agnix-lsp, agnix-mcp            — mainProgram proxies (share agnix source)
-          #   nixos-mcp, serena-mcp           — flake inputs (updated by nix flake update)
-          #   claude-code, copilot-cli, kiro-cli — per-platform binaries with sources.json
-          #     (updated by passthru.updateScript, run separately below)
-          exclude='^(instructions-|docs|agnix-lsp$|agnix-mcp$|nixos-mcp$|serena-mcp$|claude-code$|copilot-cli$|kiro-cli$)'
-
-          # Per-package nix-update flags. Packages not listed here use defaults.
-          pkg_args() {
-            case "$1" in
-              # context7-mcp: scoped GitHub tag, --url + --version-regex for discovery
-              context7-mcp)
-                echo "--url https://github.com/upstash/context7 --version-regex @upstash/context7-mcp@(.*) --override-filename overlays/mcp-servers/context7-mcp.nix" ;;
-            esac
-          }
-
-          # nix-update loop for packages with fetchFromGitHub / single src
-          for pkg in $(nix eval ".#packages.''${system}" --apply 'builtins.attrNames' --json | jq -r '.[]' | grep -vE "$exclude"); do
-            echo "=== $pkg ==="
-            extra=$(pkg_args "$pkg")
-            # shellcheck disable=SC2086
-            nix run --inputs-from . nix-update -- --flake "$pkg" --commit --system "$system" $extra
-          done
-
-          # Per-platform binary packages: run their passthru.updateScript directly.
-          # These use sources.json for per-platform hashes, not nix-update.
-          for pkg in claude-code copilot-cli kiro-cli; do
-            echo "=== $pkg (updateScript) ==="
-            script=$(nix build --no-link --print-out-paths ".#$pkg.passthru.updateScript" 2>/dev/null) || continue
-            bash "$script"
-            git add overlays/
-            if ! git diff --staged --quiet; then
-              git commit -m "chore: update $pkg sources"
-            fi
-          done
+          ${tokenPreamble}
+          ${dirtyGuard}
+          # shellcheck disable=SC2086
+          nix run --inputs-from . nix-update -- --flake ${name} --commit --system ${system} ${extraArgs}
         '';
       };
+
+      mkUpdateScriptTask = name: {
+        description = "Update ${name} via sources.json updateScript";
+        exec = ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          ${dirtyGuard}
+          script=$(nix build --no-link --print-out-paths ".#${name}.passthru.updateScript" 2>/dev/null)
+          bash "$script"
+          git add overlays/
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: update ${name} sources"
+          fi
+        '';
+      };
+
+      perPkgTasks =
+        lib.mapAttrs' (name: args:
+          lib.nameValuePair "update:pkg:${name}" (mkNixUpdateTask name args))
+        nixUpdatePkgs
+        // lib.listToAttrs (map (name:
+          lib.nameValuePair "update:pkg:${name}" (mkUpdateScriptTask name))
+        updateScriptPkgs);
+
+      allPkgTaskNames = builtins.attrNames perPkgTasks;
+    in
+      perPkgTasks
+      // {
+        # Meta task: all per-package updates complete
+        "update:nix-update" = {
+          description = "Update all package versions and hashes";
+          after = allPkgTaskNames;
+          exec = ''echo "All packages updated"'';
+        };
+      })
+    // {
       "update:build" = {
         description = "Build all packages (update pipeline verification)";
         after = ["update:flake" "update:devenv" "update:nix-update"];

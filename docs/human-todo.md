@@ -1,5 +1,12 @@
 <!-- TODO: remove this file before merging to main -->
+❯ add it as a short backlog item.
 
+knock out 1-3 so we can ypdate specific packages as a single task.
+
+then debug which version checking is really needed, if doesn't make sense for main then adjust the logic not to
+grab release version.
+
+then parallel updates using worktree hack.
 FINISH CI
 parallel nix update and github api key
 SWITCH MCPS OR NODE BASED PACKAGES TO BUN
