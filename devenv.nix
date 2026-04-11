@@ -236,22 +236,10 @@ in {
           fi
 
           system=$(nix eval --impure --raw --expr 'builtins.currentSystem')
-          pkgs=$(nix eval ".#packages.''${system}" --apply 'builtins.attrNames' --json | jq -r '.[]' | grep -vE '^(instructions-|docs)')
-
-          # Run nix-update in parallel (no --commit, files only).
-          # Each package modifies a different .nix file — no conflicts.
-          echo "$pkgs" | xargs -P4 -I{} sh -c '
-            echo "Updating {}..."
-            nix run --inputs-from . nix-update -- --flake {} 2>&1 | tail -1 || echo "SKIP: {}"
-          '
-
-          # Single commit for all updates
-          git add overlays/
-          if ! git diff --staged --quiet; then
-            git commit -m "chore: update package versions and hashes"
-          else
-            echo "No package updates"
-          fi
+          for pkg in $(nix eval ".#packages.''${system}" --apply 'builtins.attrNames' --json | jq -r '.[]' | grep -vE '^(instructions-|docs)'); do
+            echo "=== $pkg ==="
+            nix run --inputs-from . nix-update -- --flake "$pkg" --commit
+          done
         '';
       };
       "update:build" = {
