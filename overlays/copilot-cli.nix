@@ -30,7 +30,6 @@ in
         "x86_64-linux" = ver: "https://github.com/github/copilot-cli/releases/download/v${ver}/copilot-linux-x64.tar.gz";
         "aarch64-darwin" = ver: "https://github.com/github/copilot-cli/releases/download/v${ver}/copilot-darwin-arm64.tar.gz";
       };
-      sourcesFile = "overlays/copilot-cli-sources.json";
       pkgs = ourPkgs;
     };
   })

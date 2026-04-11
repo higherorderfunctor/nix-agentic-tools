@@ -46,7 +46,7 @@
     pname,
     versionCheck,
     platforms,
-    sourcesFile,
+    sourcesFile ? "overlays/${pname}-sources.json",
     pkgs,
   }:
     pkgs.writeShellScript "update-${pname}" ''

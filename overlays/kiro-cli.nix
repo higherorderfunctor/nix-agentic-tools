@@ -39,7 +39,6 @@ in
         "x86_64-linux" = ver: "https://desktop-release.q.us-east-1.amazonaws.com/${ver}/kirocli-x86_64-linux.tar.gz";
         "aarch64-darwin" = ver: "https://desktop-release.q.us-east-1.amazonaws.com/${ver}/Kiro%20CLI.dmg";
       };
-      sourcesFile = "overlays/kiro-cli-sources.json";
       pkgs = ourPkgs;
     };
   })

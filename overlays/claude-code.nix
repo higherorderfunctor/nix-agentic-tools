@@ -46,7 +46,6 @@ in
         "x86_64-linux" = ver: "${manifestBase}/${ver}/linux-x64/claude";
         "aarch64-darwin" = ver: "${manifestBase}/${ver}/darwin-arm64/claude";
       };
-      sourcesFile = "overlays/claude-code-sources.json";
       pkgs = ourPkgs;
     };
     meta = {
