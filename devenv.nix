@@ -240,10 +240,19 @@ in {
           #   instructions-*, docs*  — generated, not versioned packages
           #   agnix-lsp, agnix-mcp   — mainProgram proxies (share agnix source)
           exclude='^(instructions-|docs|agnix-lsp$|agnix-mcp$)'
+          failed=""
           for pkg in $(nix eval ".#packages.''${system}" --apply 'builtins.attrNames' --json | jq -r '.[]' | grep -vE "$exclude"); do
             echo "=== $pkg ==="
-            nix run --inputs-from . nix-update -- --flake "$pkg" --commit --system "$system"
+            if ! nix run --inputs-from . nix-update -- --flake "$pkg" --commit --system "$system"; then
+              echo "FAILED: $pkg"
+              failed="$failed $pkg"
+            fi
           done
+          if [ -n "$failed" ]; then
+            echo ""
+            echo "FAILED packages:$failed"
+            exit 1
+          fi
         '';
       };
       "update:build" = {
