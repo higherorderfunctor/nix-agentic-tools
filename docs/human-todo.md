@@ -56,8 +56,7 @@ ME: test in nixos-config
   For parallel with worktrees: wrap each exec in git worktree add /tmp/update-${name} && cd ... && nix-update ...
   && git worktree remove.
 
-  The update:nix-update meta task has after = [all per-package task names].
-  4. Worktree parallel pattern
+  The update:nix-update meta task has after = [all per-package task names]. 4. Worktree parallel pattern
 
   # Per task exec
 
