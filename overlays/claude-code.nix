@@ -14,7 +14,8 @@
     inherit (final.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
-  inherit (ourPkgs) autoPatchelfHook fetchurl lib stdenv writeShellScript;
+  inherit (ourPkgs) autoPatchelfHook fetchurl lib stdenv;
+  vu = import ./lib.nix;
 
   manifestBase = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases";
 
@@ -38,37 +39,16 @@ in
       install -Dm755 $src $out/bin/claude
       runHook postInstall
     '';
-    passthru.updateScript = writeShellScript "update-claude-code" ''
-      set -eu
-      latest=$(${ourPkgs.curl}/bin/curl -s "${manifestBase}/latest")
-      [ -z "$latest" ] && echo "Failed to fetch latest version" >&2 && exit 1
-
-      sources="overlays/claude-code-sources.json"
-      current=$(${ourPkgs.jq}/bin/jq -r '.version' "$sources")
-      if [ "$latest" = "$current" ]; then
-        echo "claude-code: already at $current"
-        exit 0
-      fi
-
-      echo "claude-code: $current -> $latest"
-      tmp=$(mktemp)
-      ${ourPkgs.jq}/bin/jq -n --arg v "$latest" '{version: $v}' > "$tmp"
-
-      for platform in x86_64-linux aarch64-darwin; do
-        case "$platform" in
-          x86_64-linux) key="linux-x64" ;;
-          aarch64-darwin) key="darwin-arm64" ;;
-        esac
-        url="${manifestBase}/''${latest}/''${key}/claude"
-        hash=$(${ourPkgs.nix}/bin/nix hash convert --to sri --hash-algo sha256 \
-          "$(${ourPkgs.nix}/bin/nix-prefetch-url --type sha256 "$url" 2>/dev/null)")
-        ${ourPkgs.jq}/bin/jq --arg sys "$platform" --arg u "$url" --arg h "$hash" \
-          '. + {($sys): {url: $u, hash: $h}}' "$tmp" > "''${tmp}.new" && mv "''${tmp}.new" "$tmp"
-      done
-
-      mv "$tmp" "$sources"
-      echo "Updated $sources"
-    '';
+    passthru.updateScript = vu.mkUpdateScript {
+      pname = "claude-code";
+      versionCheck.cmd = "${ourPkgs.curl}/bin/curl -s ${manifestBase}/latest";
+      platforms = {
+        "x86_64-linux" = ver: "${manifestBase}/${ver}/linux-x64/claude";
+        "aarch64-darwin" = ver: "${manifestBase}/${ver}/darwin-arm64/claude";
+      };
+      sourcesFile = "overlays/claude-code-sources.json";
+      pkgs = ourPkgs;
+    };
     meta = {
       mainProgram = "claude";
       license = lib.licenses.unfree;

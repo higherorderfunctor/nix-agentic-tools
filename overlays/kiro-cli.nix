@@ -12,8 +12,9 @@
     inherit (final.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
-  inherit (ourPkgs) fetchurl makeWrapper writeShellScript;
+  inherit (ourPkgs) fetchurl makeWrapper;
   inherit (ourPkgs.stdenv.hostPlatform) system;
+  vu = import ./lib.nix;
 
   sources = builtins.fromJSON (builtins.readFile ./kiro-cli-sources.json);
   platformSrc = sources.${system} or (throw "kiro-cli: unsupported system ${system}");
@@ -31,41 +32,14 @@ in
         wrapProgram $out/bin/kiro-cli-chat --set-default TERM xterm-256color
       '';
 
-    passthru.updateScript = writeShellScript "update-kiro-cli" ''
-      set -eu
-      latest=$(${ourPkgs.curl}/bin/curl -s \
-        https://desktop-release.q.us-east-1.amazonaws.com/latest/manifest.json \
-        | ${ourPkgs.jq}/bin/jq -r '.version')
-      [ -z "$latest" ] && echo "Failed to fetch latest version" >&2 && exit 1
-
-      sources="overlays/kiro-cli-sources.json"
-      current=$(${ourPkgs.jq}/bin/jq -r '.version' "$sources")
-      if [ "$latest" = "$current" ]; then
-        echo "kiro-cli: already at $current"
-        exit 0
-      fi
-
-      echo "kiro-cli: $current -> $latest"
-      tmp=$(mktemp)
-      ${ourPkgs.jq}/bin/jq -n --arg v "$latest" '{version: $v}' > "$tmp"
-
-      for platform in x86_64-linux aarch64-darwin; do
-        case "$platform" in
-          x86_64-linux) url="https://desktop-release.q.us-east-1.amazonaws.com/''${latest}/kirocli-x86_64-linux.tar.gz" ;;
-          aarch64-darwin) url="https://desktop-release.q.us-east-1.amazonaws.com/''${latest}/Kiro%20CLI.dmg" ;;
-        esac
-        prefetch_args=(--type sha256 "$url")
-        # DMG URL has spaces that nix-prefetch-url can't handle without --name
-        if [[ "$url" == *%20* ]]; then
-          prefetch_args+=(--name "kiro-cli.dmg")
-        fi
-        hash=$(${ourPkgs.nix}/bin/nix hash convert --to sri --hash-algo sha256 \
-          "$(${ourPkgs.nix}/bin/nix-prefetch-url "''${prefetch_args[@]}" 2>/dev/null)")
-        ${ourPkgs.jq}/bin/jq --arg sys "$platform" --arg u "$url" --arg h "$hash" \
-          '. + {($sys): {url: $u, hash: $h}}' "$tmp" > "''${tmp}.new" && mv "''${tmp}.new" "$tmp"
-      done
-
-      mv "$tmp" "$sources"
-      echo "Updated $sources"
-    '';
+    passthru.updateScript = vu.mkUpdateScript {
+      pname = "kiro-cli";
+      versionCheck.cmd = "${ourPkgs.curl}/bin/curl -s https://desktop-release.q.us-east-1.amazonaws.com/latest/manifest.json | ${ourPkgs.jq}/bin/jq -r '.version'";
+      platforms = {
+        "x86_64-linux" = ver: "https://desktop-release.q.us-east-1.amazonaws.com/${ver}/kirocli-x86_64-linux.tar.gz";
+        "aarch64-darwin" = ver: "https://desktop-release.q.us-east-1.amazonaws.com/${ver}/Kiro%20CLI.dmg";
+      };
+      sourcesFile = "overlays/kiro-cli-sources.json";
+      pkgs = ourPkgs;
+    };
   })
