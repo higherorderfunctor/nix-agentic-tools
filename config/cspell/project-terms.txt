@@ -111,6 +111,7 @@ partialclone
 passthroughs
 passthru
 pasteable
+Patchelf
 pathspec
 pdsolve
 peaceiris

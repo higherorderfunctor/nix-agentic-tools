@@ -12,7 +12,7 @@
 #
 # Each per-package file takes {inputs, final, ...} and manages its
 # own source via fetchFromGitHub with inline hashes.
-{inputs, ...}: final: prev: let
+{inputs, ...}: final: _prev: let
   # Unfree guard. Checks if the derivation has an unfree license and
   # wraps it so the consumer's allowUnfree config is respected. If the
   # package is free, returns the original derivation unwrapped.
@@ -50,8 +50,7 @@
       inherit inputs final;
     };
     claude-code = import ./claude-code.nix {
-      inherit inputs final prev;
-      lockFile = ./locks/claude-code-package-lock.json;
+      inherit inputs final;
     };
     copilot-cli = import ./copilot-cli.nix {
       inherit inputs final;
