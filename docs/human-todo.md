@@ -1,4 +1,5 @@
 <!-- TODO: remove this file before merging to main -->
+
 ❯ add it as a short backlog item.
 
 knock out 1-3 so we can ypdate specific packages as a single task.
@@ -27,6 +28,61 @@ ME: test in nixos-config
 
 - Update overlays/README.md table to reflect all the source changes made tonight
 - Document the unfree guard pattern as an architecture fragment
+  ● Here's my plan for the remaining items:
+  1. Pre-commit hook fix
+     devenv's git-hooks.hooks config has a treefmt entry but no re-staging. Options:
+  - Add a custom hook that runs AFTER treefmt: git diff --name-only | xargs git add
+  - Or configure treefmt hook's pass_filenames + post-run staging
+  - Need to check if devenv/prek supports entry overrides or post-hook commands
+  2. Dirty tree guard in update:nix-update
+     Add at the top of the task exec:
+     if [ -n "$(git status --porcelain)" ]; then
+     echo "ERROR: working tree is dirty. Commit or stash changes first." >&2
+     git status --short >&2
+     exit 1
+     fi
+
+  3. Per-package tasks (sequential → parallel)
+     Generate from the package set at eval time:
+
+  # Build task attrset from flake packages
+
+  updatePkgTasks = lib.mapAttrs' (name: \_: lib.nameValuePair "update:pkg:${name}" {
+  description = "Update ${name}";
+  exec = ''...''; # nix-update call for this package
+  }) filteredPackages;
+
+  For sequential: chain with after (each depends on previous).
+  For parallel with worktrees: wrap each exec in git worktree add /tmp/update-${name} && cd ... && nix-update ...
+  && git worktree remove.
+
+  The update:nix-update meta task has after = [all per-package task names].
+  4. Worktree parallel pattern
+
+  # Per task exec
+
+  wt="/tmp/nix-update-${name}"
+  git worktree add "$wt" HEAD --detach
+  cd "$wt"
+  nix run --inputs-from . nix-update -- --flake ${name} --commit --system "$system"
+  cd -
+
+  # Cherry-pick the commit back
+
+  git cherry-pick "$(git -C "$wt" rev-parse HEAD)"
+  git worktree remove "$wt"
+
+  Risk: cherry-pick conflicts if two packages modify the same file (shouldn't happen — each writes to its own .nix
+  file). The meta task would need to handle the cherry-picks sequentially after all parallel tasks complete.
+
+  Actually simpler: don't cherry-pick. Each worktree commits on a detached HEAD. After all parallel tasks, collect
+  the patches and apply them:
+  git -C "$wt" format-patch HEAD~1 --stdout | git am
+
+  This is the pattern but it adds real complexity. Worth implementing after the basics are solid.
+
+❯ git cant do like 3 way merges, fail if its cannot automatically do (shouldn't be the case since none touch the
+same file). just a thought, im guessing.
 
 ---
 
