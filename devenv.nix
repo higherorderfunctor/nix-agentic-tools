@@ -242,30 +242,29 @@ in {
           #   nixos-mcp, serena-mcp     — flake inputs (updated by nix flake update)
           exclude='^(instructions-|docs|agnix-lsp$|agnix-mcp$|nixos-mcp$|serena-mcp$)'
 
-          # nix-update can't auto-discover versions from fetchurl. --version skip.
-          version_skip='^(claude-code|context7-mcp|copilot-cli|kiro-cli)$'
-
-          # nix-update position detection fails for nixpkgs overrides with
-          # per-platform fetchurl. --override-filename tells it where to edit.
-          override_file() {
+          # Per-package nix-update flags. Packages not listed here use defaults.
+          pkg_args() {
             case "$1" in
-              copilot-cli) echo "overlays/copilot-cli.nix" ;;
-              kiro-cli) echo "overlays/kiro-cli.nix" ;;
-              *) echo "" ;;
+              # claude-code: binary manifest, use passthru.updateScript for version
+              claude-code)
+                echo "--use-update-script" ;;
+              # context7-mcp: scoped GitHub tag, --url + --version-regex for discovery
+              context7-mcp)
+                echo "--url https://github.com/upstash/context7 --version-regex @upstash/context7-mcp@(.*) --override-filename overlays/mcp-servers/context7-mcp.nix" ;;
+              # copilot-cli: GitHub releases + nixpkgs override needs --override-filename
+              copilot-cli)
+                echo "--url https://github.com/github/copilot-cli --override-filename overlays/copilot-cli.nix" ;;
+              # kiro-cli: AWS CDN, no forge URL. --version skip + override-filename
+              kiro-cli)
+                echo "--version skip --override-filename overlays/kiro-cli.nix" ;;
             esac
           }
 
           for pkg in $(nix eval ".#packages.''${system}" --apply 'builtins.attrNames' --json | jq -r '.[]' | grep -vE "$exclude"); do
             echo "=== $pkg ==="
-            args=(--flake "$pkg" --commit --system "$system")
-            if echo "$pkg" | grep -qE "$version_skip"; then
-              args+=(--version skip)
-            fi
-            ofile=$(override_file "$pkg")
-            if [ -n "$ofile" ]; then
-              args+=(--override-filename "$ofile")
-            fi
-            nix run --inputs-from . nix-update -- "''${args[@]}"
+            extra=$(pkg_args "$pkg")
+            # shellcheck disable=SC2086
+            nix run --inputs-from . nix-update -- --flake "$pkg" --commit --system "$system" $extra
           done
         '';
       };
