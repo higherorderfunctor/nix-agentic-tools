@@ -58,8 +58,12 @@ setup_worktree() {
 	base=$(git rev-parse HEAD)
 
 	if [ -d "$wt" ]; then
+		# Clean any stuck git state from prior crashed runs
+		git -C "$wt" cherry-pick --abort 2>/dev/null || true
+		git -C "$wt" rebase --abort 2>/dev/null || true
 		git -C "$wt" checkout --detach HEAD >&2 || true
 		git -C "$wt" reset --hard "$BRANCH" >&2
+		git -C "$wt" clean -fd >&2
 	else
 		mkdir -p "$WORKTREES_DIR"
 		git worktree add --detach "$wt" "$BRANCH" >&2

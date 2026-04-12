@@ -56,6 +56,10 @@
   # Ninja rules
   rules = ''
     # Rules
+    rule pipeline-init
+      command = bash dev/scripts/update-init.sh
+      description = Pipeline init
+
     rule update-input
       command = bash dev/scripts/update-input.sh $name
       description = Updating input: $name
@@ -77,17 +81,20 @@
       description = Final build verification (should be cached)
 
     rule report
-      command = bash -c 'echo "=== Update Report ===" && cat .update-report.txt 2>/dev/null || echo "No updates"'
+      command = bash dev/scripts/update-report.sh
       description = Update report
   '';
 
-  # Input targets
+  # Init target — runs once before anything else
+  initTarget = ''
+    build update-init: pipeline-init
+  '';
+
+  # Input targets (all depend on init)
   inputTargets = builtins.concatStringsSep "\n" (map (name: let
     deps = inputDeps.${name} or [];
-    depStr =
-      if deps == []
-      then ""
-      else " | ${builtins.concatStringsSep " " deps}";
+    allDeps = ["update-init"] ++ deps;
+    depStr = " | ${builtins.concatStringsSep " " allDeps}";
   in ''
     build update-${name}: update-input${depStr}
       name = ${name}
@@ -110,7 +117,7 @@
 
   # Combo target (any-buddy + claude-code)
   comboTarget = ''
-    build update-any-buddy-claude-code: update-combo | update-nixpkgs update-nix-update
+    build update-any-buddy-claude-code: update-combo | update-init update-nixpkgs update-nix-update
   '';
 
   # treefmt last, then full format, then final build
@@ -142,6 +149,9 @@
     "# Regenerate: nix run .#generate-update-ninja"
     ""
     rules
+    "# Pipeline init"
+    initTarget
+    ""
     "# Input updates"
     inputTargets
     ""
