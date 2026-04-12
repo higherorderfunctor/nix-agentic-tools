@@ -42,6 +42,20 @@ in
     inherit src;
 
     dontBuild = true;
+    doCheck = true;
+
+    nativeCheckInputs = let
+      ps = ourPkgs.python314Packages;
+    in [
+      ps.pytest
+      ps.pytest-asyncio
+      ps.hypothesis
+    ];
+    checkPhase = ''
+      runHook preCheck
+      ${pythonEnv}/bin/python -m pytest tests/ -v
+      runHook postCheck
+    '';
 
     installPhase = ''
       runHook preInstall

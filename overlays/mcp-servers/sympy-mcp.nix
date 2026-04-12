@@ -33,9 +33,17 @@ in
       inherit rev;
     };
     inherit src;
-    dontUnpack = true;
     dontBuild = true;
     nativeBuildInputs = [makeWrapper];
+    doCheck = true;
+    nativeCheckInputs = [python314.pkgs.pytest];
+    checkPhase = ''
+      runHook preCheck
+      # Upstream pyproject.toml has python_files as string, not list (pytest >=9 requires list).
+      # Override with -o to work around.
+      ${pythonEnv}/bin/python -m pytest tests/ -v -o "python_files=test_*.py"
+      runHook postCheck
+    '';
     installPhase = ''
       runHook preInstall
       mkdir -p $out/bin

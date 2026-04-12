@@ -12,7 +12,7 @@
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
   };
-  inherit (ourPkgs) buildNpmPackage fetchgit makeWrapper nodejs;
+  inherit (ourPkgs) buildNpmPackage fetchgit git makeWrapper nodejs;
   vu = import ../lib.nix;
 
   rev = "9f216bab8d6bc3a3b850ad77f27d02d63a71e10d";
@@ -31,7 +31,13 @@ in
     inherit src;
     npmDepsHash = "sha256-/HN6Ylrow/v7ssWb0oIYJD5cTV8RWH8ipmDtfAUY9zc=";
     nativeBuildInputs = [makeWrapper];
-    # Tests require git repo creation (createTestRepo) which fails in nix sandbox.
+    nativeCheckInputs = [git];
+    doCheck = true;
+    checkPhase = ''
+      runHook preCheck
+      HOME="$TMPDIR" node_modules/.bin/vitest run
+      runHook postCheck
+    '';
     installPhase = ''
       runHook preInstall
       mkdir -p $out/lib/git-intel-mcp $out/bin
