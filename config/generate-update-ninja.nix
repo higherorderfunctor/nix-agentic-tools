@@ -73,7 +73,7 @@
       description = Full treefmt (formatter config may have changed)
 
     rule final-build
-      command = bash -c 'nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --log-format bar-with-logs --flake ".#packages.$$(nix eval --impure --raw --expr builtins.currentSystem)"'
+      command = bash -c 'nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --flake ".#packages.$$(nix eval --impure --raw --expr builtins.currentSystem)"'
       description = Final build verification (should be cached)
 
     rule report

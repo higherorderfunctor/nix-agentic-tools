@@ -109,7 +109,10 @@ in {
       stages = ["pre-commit"];
     };
     convco.enable = true;
-    shellcheck.enable = true;
+    shellcheck = {
+      enable = true;
+      args = ["-x"];
+    };
     shfmt.enable = true;
     check-json.enable = true;
     check-toml.enable = true;

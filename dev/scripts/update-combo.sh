@@ -4,7 +4,7 @@
 # If either fails, don't cherry-pick — worktree is disposable.
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
-# shellcheck source=dev/scripts/update-common.sh
+# shellcheck source-path=SCRIPTDIR
 source "$(dirname "$0")/update-common.sh"
 
 log_header "Combo: any-buddy + claude-code"

@@ -3,7 +3,7 @@
 # Update a single package in a worktree, verify build, merge back.
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
-# shellcheck source=dev/scripts/update-common.sh
+# shellcheck source-path=SCRIPTDIR
 source "$(dirname "$0")/update-common.sh"
 
 name="$1"

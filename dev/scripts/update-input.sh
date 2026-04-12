@@ -3,7 +3,7 @@
 # Update a single flake input in a worktree, verify build, merge back.
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
-# shellcheck source=dev/scripts/update-common.sh
+# shellcheck source-path=SCRIPTDIR
 source "$(dirname "$0")/update-common.sh"
 
 name="$1"
@@ -31,7 +31,7 @@ if ! (
 
 	# Phase 2: Build verification (runs derivation-level tests)
 	# TODO: additional checks, smoke tests (future validation phase)
-	nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --log-format bar-with-logs --flake ".#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem')"
+	nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --flake ".#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem')"
 
 	# Phase 3: Commit only after build passes
 	git commit -m "chore: update input $name"
