@@ -30,9 +30,11 @@ if [ -n "$git_url" ]; then
   log_info "Fetching latest rev from $git_url..."
   new_rev=$(git ls-remote "$git_url" HEAD | cut -f1)
   if [ -n "$new_rev" ]; then
-    # Find the overlay file that references this repo URL (scoped to one file)
-    repo_pattern=$(echo "$git_url" | sed 's|\.git$||' | sed 's|https://github.com/||')
-    target_file=$(grep -rl "$repo_pattern" "$wt/overlays" --include='*.nix' | head -1)
+    # Find the overlay file that references this repo (scoped to one file).
+    # fetchFromGitHub splits owner/repo; fetchgit uses the full URL.
+    # Search for the repo name (last path component) which appears in both patterns.
+    repo_name=$(echo "$git_url" | sed 's|\.git$||' | grep -oP '[^/]+$')
+    target_file=$(grep -rl "\"$repo_name\"" "$wt/overlays" --include='*.nix' | head -1)
     if [ -n "$target_file" ]; then
       old_rev=$(grep -oP 'rev = "\K[a-f0-9]{40}' "$target_file" | head -1 || true)
       if [ -n "$old_rev" ] && [ "$old_rev" != "$new_rev" ]; then
