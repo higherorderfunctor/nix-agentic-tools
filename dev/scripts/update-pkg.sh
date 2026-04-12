@@ -32,9 +32,9 @@ if ! (
 	# TODO: additional checks, smoke tests (future validation phase)
 	nix build ".#$name" --no-link
 
-	# Phase 3: Commit only after build passes (--no-verify: worktree has no pre-commit config)
+	# Phase 3: Commit only after build passes
 	git -C "$wt" add -A
-	git -C "$wt" commit --no-verify -m "chore(overlays): update $name"
+	git -C "$wt" commit -m "chore(overlays): update $name"
 ); then
 	report_held_back "$name" "nix-update or build failed"
 	exit 0

@@ -33,9 +33,9 @@ if ! (
 	# TODO: additional checks, smoke tests (future validation phase)
 	nix build ".#any-buddy" ".#claude-code" --no-link
 
-	# Phase 3: Commit only after build passes (--no-verify: worktree has no pre-commit config)
+	# Phase 3: Commit only after build passes
 	git -C "$wt" add -A
-	git -C "$wt" commit --no-verify -m "chore(overlays): update any-buddy + claude-code"
+	git -C "$wt" commit -m "chore(overlays): update any-buddy + claude-code"
 ); then
 	report_held_back "any-buddy+claude-code" "combo update or build failed"
 	exit 0

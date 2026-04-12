@@ -33,8 +33,8 @@ if ! (
 	# TODO: additional checks, smoke tests (future validation phase)
 	nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --flake ".#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem')"
 
-	# Phase 3: Commit only after build passes (--no-verify: worktree has no pre-commit config)
-	git commit --no-verify -m "chore: update input $name"
+	# Phase 3: Commit only after build passes
+	git commit -m "chore: update input $name"
 ); then
 	report_held_back "$name" "update or build failed"
 	exit 0
