@@ -34,6 +34,36 @@
   in
     builtins.head (builtins.match "^__version__ = \"(.*)\"$" vLine);
 
+  # Generate an updateScript for main-tracking packages that use a bare
+  # `rev = "..."` in their overlay .nix file. Fetches the latest commit
+  # SHA from the default branch via git ls-remote, then sed-replaces the
+  # rev line. nix-update --version skip handles hash updates afterward.
+  #
+  # url: git remote URL (e.g., "https://github.com/owner/repo.git")
+  # file: overlay .nix file path relative to repo root
+  # rev: current rev string (used as the old value to replace)
+  # pkgs: nixpkgs set (for git)
+  mkGitRevUpdateScript = {
+    url,
+    file,
+    rev,
+    pkgs,
+  }:
+    pkgs.writeShellScript "update-rev" ''
+      set -eu
+      new_rev=$(${pkgs.git}/bin/git ls-remote "${url}" HEAD | cut -f1)
+      if [ -z "$new_rev" ]; then
+        echo "Failed to fetch latest rev from ${url}" >&2
+        exit 1
+      fi
+      if [ "$new_rev" = "${rev}" ]; then
+        echo "Already at latest rev"
+        exit 0
+      fi
+      ${pkgs.gnused}/bin/sed -i "s|${rev}|$new_rev|" "${file}"
+      echo "Updated rev: ${rev} -> $new_rev"
+    '';
+
   # Generate an updateScript for per-platform binary packages that use
   # sources.json. Fetches the latest version, prefetches each platform's
   # binary, writes version + per-platform hashes to sourcesFile.

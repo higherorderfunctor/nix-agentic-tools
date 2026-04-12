@@ -65,7 +65,7 @@
       description = Updating input: $name
 
     rule update-pkg
-      command = bash dev/scripts/update-pkg.sh $name $flags
+      command = bash dev/scripts/update-pkg.sh $name $flags $git
       description = Updating package: $name
 
     rule update-combo
@@ -101,9 +101,10 @@
   '') (builtins.filter (n: n != "treefmt-nix") inputNames));
 
   # Package targets
-  pkgTargets = builtins.concatStringsSep "\n" (builtins.attrValues (builtins.mapAttrs (name: flags: let
+  pkgTargets = builtins.concatStringsSep "\n" (builtins.attrValues (builtins.mapAttrs (name: cfg: let
     deps = pkgDeps name;
     depStr = " | ${builtins.concatStringsSep " " deps}";
+    gitUrl = cfg.git or "";
   in
     # Skip any-buddy and claude-code (handled by combo target)
     if builtins.elem name ["any-buddy" "claude-code"]
@@ -111,7 +112,8 @@
     else ''
       build update-${name}: update-pkg${depStr}
         name = ${name}
-        flags = ${flags}
+        flags = ${cfg.flags}
+        git = ${gitUrl}
     '')
   updateMatrix.nixUpdate));
 

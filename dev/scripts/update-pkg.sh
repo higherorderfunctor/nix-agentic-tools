@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# dev/scripts/update-pkg.sh <package-name> [extra-nix-update-flags...]
+# dev/scripts/update-pkg.sh <package-name> <nix-update-flags> [git-url]
 # Update a single package in a worktree, verify build, merge back.
+# If git-url is provided, bumps rev to latest default branch commit first.
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 # shellcheck source-path=SCRIPTDIR
@@ -8,7 +9,15 @@ source "$(dirname "$0")/update-common.sh"
 
 name="$1"
 shift
-extra_flags="$*"
+
+# Parse args: flags are everything except a trailing .git URL
+git_url=""
+args=("$@")
+if [ ${#args[@]} -gt 0 ] && [[ ${args[-1]} == *.git ]]; then
+  git_url="${args[-1]}"
+  unset 'args[-1]'
+fi
+extra_flags="${args[*]:-}"
 system=$(nix eval --impure --raw --expr 'builtins.currentSystem')
 
 log_header "Package: $name"
@@ -16,31 +25,50 @@ log_header "Package: $name"
 wt=$(setup_worktree "$name")
 version_file="$wt/.update-version"
 
-# Phase 1: Update (--no-commit: we commit after build validation)
+# Phase 0: Bump rev to latest default branch commit (main-tracking packages)
+if [ -n "$git_url" ]; then
+  log_info "Fetching latest rev from $git_url..."
+  new_rev=$(git ls-remote "$git_url" HEAD | cut -f1)
+  if [ -n "$new_rev" ]; then
+    # Find the current rev in the worktree's overlay files and replace
+    # shellcheck disable=SC2044
+    for f in $(find "$wt/overlays" -name '*.nix' -type f); do
+      if grep -q 'rev = "' "$f"; then
+        old_rev=$(grep -oP 'rev = "\K[a-f0-9]{40}' "$f" || true)
+        if [ -n "$old_rev" ] && [ "$old_rev" != "$new_rev" ]; then
+          sed -i "s|$old_rev|$new_rev|g" "$f"
+          log_info "Rev: ${old_rev:0:7} -> ${new_rev:0:7}"
+        fi
+      fi
+    done
+  fi
+fi
+
+# Phase 1: Update hashes (nix-update --version skip for main-tracking)
 log_info "Running nix-update..."
 if ! (
-	cd "$wt"
+  cd "$wt"
 
-	# Capture nix-update output for version reporting
-	# shellcheck disable=SC2086
-	nix run --inputs-from . nix-update -- --flake "$name" --system "$system" $extra_flags 2>&1 | tee "$version_file"
+  # Capture nix-update output for version reporting
+  # shellcheck disable=SC2086
+  nix run --inputs-from . nix-update -- --flake "$name" --system "$system" $extra_flags 2>&1 | tee "$version_file"
 
-	# Check if nix-update made any changes
-	if git -C "$wt" diff --quiet && git -C "$wt" diff --staged --quiet; then
-		exit 0
-	fi
+  # Check if anything changed (rev bump + hash updates)
+  if git -C "$wt" diff --quiet && git -C "$wt" diff --staged --quiet; then
+    exit 0
+  fi
 
-	# Phase 2: Build verification (runs derivation-level tests)
-	# TODO: additional checks, smoke tests (future validation phase)
-	nix build ".#$name" --no-link --log-format bar-with-logs
+  # Phase 2: Build verification (runs derivation-level tests)
+  # TODO: additional checks, smoke tests (future validation phase)
+  nix build ".#$name" --no-link --log-format bar-with-logs
 
-	# Phase 3: Commit only after build passes
-	git -C "$wt" add -A
-	git -C "$wt" commit -m "chore(overlays): update $name"
+  # Phase 3: Commit only after build passes
+  git -C "$wt" add -A
+  git -C "$wt" commit -m "chore(overlays): update $name"
 ); then
-	version_detail=$(parse_pkg_version "$version_file")
-	report_held_back "$name" "nix-update or build failed" "$version_detail"
-	exit 0
+  version_detail=$(parse_pkg_version "$version_file")
+  report_held_back "$name" "nix-update or build failed" "$version_detail"
+  exit 0
 fi
 
 # Extract version info
@@ -50,17 +78,17 @@ version_detail=$(parse_pkg_version "$version_file")
 wt_head=$(git -C "$wt" rev-parse HEAD)
 base=$(cat "$wt/.update-base")
 if [ "$wt_head" = "$base" ]; then
-	report_unchanged "$name"
-	exit 0
+  report_unchanged "$name"
+  exit 0
 fi
 
 merge_to_branch "$wt" "$name" || rc=$?
 rc=${rc:-0}
 if [ "$rc" -eq 1 ]; then
-	report_held_back "$name" "cherry-pick conflict" "$version_detail"
-	exit 0
+  report_held_back "$name" "cherry-pick conflict" "$version_detail"
+  exit 0
 elif [ "$rc" -eq 2 ]; then
-	report_unchanged "$name"
-	exit 0
+  report_unchanged "$name"
+  exit 0
 fi
 report_updated "$name" "$version_detail"
