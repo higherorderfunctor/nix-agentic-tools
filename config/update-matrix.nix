@@ -10,24 +10,29 @@
   # Packages updated via `nix run nix-update -- --flake <name> --commit`.
   # Value is extra flags string (empty = defaults).
   nixUpdate = {
-    agnix = "";
-    any-buddy = "";
-    claude-code = "--use-update-script";
+    # ── Main-tracking (--version skip: version computed from source + rev) ──
+    agnix = "--version skip";
+    any-buddy = "--version skip";
+    effect-mcp = "--version skip";
+    git-absorb = "--version skip";
+    git-intel-mcp = "--version skip";
+    git-revise = "--version skip";
+    kagi-mcp = "--version skip";
+    kiro-gateway = "--version skip";
+    mcp-language-server = "--version skip";
+    mcp-proxy = "--version skip";
+    modelcontextprotocol-all-mcps = "--version skip";
+    openmemory-mcp = "--version skip";
+    sympy-mcp = "--version skip";
+
+    # ── Release-tracking (nix-update discovers version from tags) ──
     context7-mcp = "--url https://github.com/upstash/context7 --version-regex '@upstash/context7-mcp@(.*)' --override-filename overlays/mcp-servers/context7-mcp.nix";
-    copilot-cli = "--use-update-script --override-filename overlays/copilot-cli.nix";
-    effect-mcp = "";
-    git-absorb = "";
-    git-intel-mcp = "";
-    git-revise = "";
     github-mcp = "";
-    kagi-mcp = "";
+
+    # ── Binary packages (custom updateScript handles per-platform fetches) ──
+    claude-code = "--use-update-script";
+    copilot-cli = "--use-update-script --override-filename overlays/copilot-cli.nix";
     kiro-cli = "--use-update-script --override-filename overlays/kiro-cli.nix";
-    kiro-gateway = "";
-    mcp-language-server = "";
-    mcp-proxy = "";
-    modelcontextprotocol-all-mcps = "";
-    openmemory-mcp = "";
-    sympy-mcp = "";
   };
 
   # Packages excluded from the update loop entirely.
