@@ -36,6 +36,8 @@ docs/src/
 
 # nvfetcher shake database (not the generated output)
 /overlays/sources/.shake.*
+.ninja_lock
+.ninja_log
 .update.ninja
 .update-report.txt
 .worktrees/
