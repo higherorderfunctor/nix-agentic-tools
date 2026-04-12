@@ -25,11 +25,11 @@ setup_worktree() {
 	base=$(git rev-parse HEAD)
 
 	if [ -d "$wt" ]; then
-		git -C "$wt" checkout --detach HEAD 2>/dev/null || true
-		git -C "$wt" reset --hard "$BRANCH" 2>/dev/null
+		git -C "$wt" checkout --detach HEAD >&2 || true
+		git -C "$wt" reset --hard "$BRANCH" >&2
 	else
 		mkdir -p "$WORKTREES_DIR"
-		git worktree add --detach "$wt" "$BRANCH" 2>/dev/null
+		git worktree add --detach "$wt" "$BRANCH" >&2
 	fi
 
 	# Stash base commit for range cherry-pick
