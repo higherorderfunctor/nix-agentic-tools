@@ -7,11 +7,12 @@ shopt -s inherit_errexit 2>/dev/null || :
 source "$(dirname "$0")/update-common.sh"
 
 name="$1"
-echo "=== Updating input: $name ==="
+log_header "Input: $name"
 
 wt=$(setup_worktree "$name")
 
-# Update the input in the worktree
+# Phase 1: Update the input in the worktree
+log_info "Updating flake input..."
 if ! (
 	cd "$wt"
 	nix flake update "$name"
@@ -22,19 +23,28 @@ if ! (
 	# Sync devenv.lock
 	devenv update
 
-	# Commit atomically in worktree
+	# Check if anything changed
 	git add flake.lock devenv.yaml devenv.lock
 	if git diff --staged --quiet; then
-		echo "$name: already up to date"
 		exit 0
 	fi
-	git commit -m "chore: update input $name"
 
-	# Build verification (runs derivation-level tests)
+	# Phase 2: Build verification (runs derivation-level tests)
 	# TODO: additional checks, smoke tests (future validation phase)
 	nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --flake ".#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem')"
+
+	# Phase 3: Commit only after build passes (--no-verify: worktree has no pre-commit config)
+	git commit --no-verify -m "chore: update input $name"
 ); then
-	report_skipped "$name" "build failed after input update"
+	report_held_back "$name" "update or build failed"
+	exit 0
+fi
+
+# Check if the worktree actually made commits
+wt_head=$(git -C "$wt" rev-parse HEAD)
+base=$(cat "$wt/.update-base")
+if [ "$wt_head" = "$base" ]; then
+	report_unchanged "$name"
 	exit 0
 fi
 

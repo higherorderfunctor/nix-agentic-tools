@@ -11,21 +11,40 @@ shift
 extra_flags="$*"
 system=$(nix eval --impure --raw --expr 'builtins.currentSystem')
 
-echo "=== Updating package: $name ==="
+log_header "Package: $name"
 
 wt=$(setup_worktree "$name")
 
+# Phase 1: Update (--no-commit: we commit after build validation)
+log_info "Running nix-update..."
 if ! (
 	cd "$wt"
 
 	# shellcheck disable=SC2086
-	nix run --inputs-from . nix-update -- --flake "$name" --commit --system "$system" $extra_flags
+	nix run --inputs-from . nix-update -- --flake "$name" --system "$system" $extra_flags
 
-	# Build verification (runs derivation-level tests)
+	# Check if nix-update made any changes
+	if git -C "$wt" diff --quiet && git -C "$wt" diff --staged --quiet; then
+		exit 0
+	fi
+
+	# Phase 2: Build verification (runs derivation-level tests)
 	# TODO: additional checks, smoke tests (future validation phase)
 	nix build ".#$name" --no-link
+
+	# Phase 3: Commit only after build passes (--no-verify: worktree has no pre-commit config)
+	git -C "$wt" add -A
+	git -C "$wt" commit --no-verify -m "chore(overlays): update $name"
 ); then
-	report_skipped "$name" "nix-update or build failed"
+	report_held_back "$name" "nix-update or build failed"
+	exit 0
+fi
+
+# Check if the worktree actually made commits
+wt_head=$(git -C "$wt" rev-parse HEAD)
+base=$(cat "$wt/.update-base")
+if [ "$wt_head" = "$base" ]; then
+	report_unchanged "$name"
 	exit 0
 fi
 
