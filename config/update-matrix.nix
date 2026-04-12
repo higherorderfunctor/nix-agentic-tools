@@ -4,23 +4,24 @@
 #   - devenv.nix: generates per-package update tasks
 #   - flake.nix: exposes as updateMatrix output for CI matrix generation
 #
-# Three categories:
-#   nixUpdate: packages managed by nix-update (version + hash inline in .nix)
-#   updateScript: per-platform binary packages with sources.json
-#   exclude: packages NOT in the update loop (generated, proxies, flake inputs)
+# All non-flake-input packages go through nix-update. No exceptions.
+# Per-platform binary packages use --use-update-script flag.
 {
   # Packages updated via `nix run nix-update -- --flake <name> --commit`.
   # Value is extra flags string (empty = defaults).
   nixUpdate = {
     agnix = "";
     any-buddy = "";
+    claude-code = "--use-update-script";
     context7-mcp = "--url https://github.com/upstash/context7 --version-regex '@upstash/context7-mcp@(.*)' --override-filename overlays/mcp-servers/context7-mcp.nix";
+    copilot-cli = "--use-update-script --override-filename overlays/copilot-cli.nix";
     effect-mcp = "";
     git-absorb = "";
     git-intel-mcp = "";
     git-revise = "";
     github-mcp = "";
     kagi-mcp = "";
+    kiro-cli = "--use-update-script --override-filename overlays/kiro-cli.nix";
     kiro-gateway = "";
     mcp-language-server = "";
     mcp-proxy = "";
@@ -28,14 +29,6 @@
     openmemory-mcp = "";
     sympy-mcp = "";
   };
-
-  # Per-platform binary packages updated via passthru.updateScript.
-  # These write to overlays/<name>-sources.json.
-  updateScript = [
-    "claude-code"
-    "copilot-cli"
-    "kiro-cli"
-  ];
 
   # Packages excluded from the update loop entirely.
   # Regex patterns matched against flake package names.

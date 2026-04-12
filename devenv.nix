@@ -268,10 +268,12 @@ in {
 
       # Package update config from shared matrix (single source of truth).
       # CI consumes the same data via nix eval .#updateMatrix.
+      # All packages go through nix-update. --use-update-script for
+      # per-platform binaries (sources.json). One loop, one mechanism.
       updateMatrix = import ./config/update-matrix.nix;
-      inherit (updateMatrix) nixUpdate updateScript;
+      inherit (updateMatrix) nixUpdate;
 
-      mkNixUpdateTask = name: extraArgs: {
+      mkPkgUpdateTask = name: extraArgs: {
         description = "Update ${name} via nix-update";
         exec = ''
           set -euETo pipefail
@@ -283,33 +285,11 @@ in {
         '';
       };
 
-      mkUpdateScriptTask = name: {
-        description = "Update ${name} via sources.json updateScript";
-        exec = ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          ${dirtyGuard}
-          script=$(nix build --no-link --print-out-paths ".#${name}.passthru.updateScript" 2>/dev/null)
-          bash "$script"
-          git add overlays/
-          if ! git diff --staged --quiet; then
-            git commit -m "chore: update ${name} sources"
-          fi
-        '';
-      };
-
-      # Ordered list: nix-update packages then updateScript packages.
       # Sequential via after chains (parallel is unsafe without worktrees).
-      orderedPkgs =
-        (map (name: {
-          inherit name;
-          task = mkNixUpdateTask name nixUpdate.${name};
-        }) (builtins.attrNames nixUpdate))
-        ++ (map (name: {
-            inherit name;
-            task = mkUpdateScriptTask name;
-          })
-          updateScript);
+      orderedPkgs = map (name: {
+        inherit name;
+        task = mkPkgUpdateTask name nixUpdate.${name};
+      }) (builtins.attrNames nixUpdate);
 
       # Chain each task after the previous one for sequential execution.
       chainedTasks = let
