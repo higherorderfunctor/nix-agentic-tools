@@ -244,7 +244,7 @@ in {
           fi
 
           # Regenerate ninja build file from flake.lock + update matrix
-          nix eval --raw --impure --expr 'import ./config/generate-update-ninja.nix {}' > .update.ninja
+          nix run .#generate-update-ninja
 
           # Clear previous report
           rm -f .update-report.txt

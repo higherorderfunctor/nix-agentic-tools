@@ -473,6 +473,23 @@
       };
     });
 
+    # ── Apps ──────────────────────────────────────────────────────────
+    apps = forAllSystems (system: let
+      pkgs = pkgsFor system;
+      ninjaFile = pkgs.writeText "update.ninja" (import ./config/generate-update-ninja.nix {});
+    in {
+      generate-update-ninja = {
+        type = "app";
+        program = "${pkgs.writeShellApplication {
+          name = "generate-update-ninja";
+          text = ''
+            cp "${ninjaFile}" .update.ninja
+            echo "Generated .update.ninja"
+          '';
+        }}/bin/generate-update-ninja";
+      };
+    });
+
     formatter =
       forAllSystems (system:
         (inputs.treefmt-nix.lib.evalModule (pkgsFor system) (import ./treefmt.nix)).config.build.wrapper);
