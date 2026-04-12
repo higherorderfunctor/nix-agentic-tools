@@ -106,8 +106,8 @@
       requests
     ];
     pythonRelaxDeps = ["httpx"];
+    nativeCheckInputs = with python314Packages; [pytest pytest-asyncio];
     meta.mainProgram = "mcp-server-fetch";
-    doCheck = false;
   };
 
   gitMcp = python314Packages.buildPythonApplication {
@@ -117,8 +117,8 @@
     pyproject = true;
     build-system = with python314Packages; [hatchling];
     dependencies = with python314Packages; [click gitpython mcp pydantic];
+    nativeCheckInputs = with python314Packages; [pytest pytest-asyncio];
     meta.mainProgram = "mcp-server-git";
-    doCheck = false;
   };
 
   timeMcp = python314Packages.buildPythonApplication {
@@ -128,8 +128,8 @@
     pyproject = true;
     build-system = with python314Packages; [hatchling];
     dependencies = with python314Packages; [mcp pydantic tzdata tzlocal];
+    nativeCheckInputs = with python314Packages; [pytest pytest-asyncio];
     meta.mainProgram = "mcp-server-time";
-    doCheck = false;
   };
 in {
   # ── Combined package: nix-update target ──────────────────────────

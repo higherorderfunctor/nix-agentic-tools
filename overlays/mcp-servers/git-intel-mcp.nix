@@ -31,6 +31,7 @@ in
     inherit src;
     npmDepsHash = "sha256-/HN6Ylrow/v7ssWb0oIYJD5cTV8RWH8ipmDtfAUY9zc=";
     nativeBuildInputs = [makeWrapper];
+    # Tests require git repo creation (createTestRepo) which fails in nix sandbox.
     installPhase = ''
       runHook preInstall
       mkdir -p $out/lib/git-intel-mcp $out/bin

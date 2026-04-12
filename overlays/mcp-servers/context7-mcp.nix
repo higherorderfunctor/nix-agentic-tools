@@ -32,6 +32,7 @@
 in
   ourPkgs.context7-mcp.overrideAttrs (finalAttrs: _old: {
     inherit src version;
+    # Tests require full pnpm workspace root; nixpkgs base has no checkPhase.
     pnpmDeps = ourPkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
       fetcherVersion = 3;

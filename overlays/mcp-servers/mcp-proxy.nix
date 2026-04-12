@@ -36,6 +36,5 @@ in
     dependencies =
       (old.dependencies or [])
       ++ [httpx-auth];
-    # Disable tests — PyPI sdist may lack test fixtures from GitHub repo.
-    doCheck = false;
+    nativeCheckInputs = with ourPkgs.python3Packages; [pytest pytest-asyncio];
   })
