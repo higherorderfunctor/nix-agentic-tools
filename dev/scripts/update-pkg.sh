@@ -30,17 +30,16 @@ if [ -n "$git_url" ]; then
   log_info "Fetching latest rev from $git_url..."
   new_rev=$(git ls-remote "$git_url" HEAD | cut -f1)
   if [ -n "$new_rev" ]; then
-    # Find the current rev in the worktree's overlay files and replace
-    # shellcheck disable=SC2044
-    for f in $(find "$wt/overlays" -name '*.nix' -type f); do
-      if grep -q 'rev = "' "$f"; then
-        old_rev=$(grep -oP 'rev = "\K[a-f0-9]{40}' "$f" || true)
-        if [ -n "$old_rev" ] && [ "$old_rev" != "$new_rev" ]; then
-          sed -i "s|$old_rev|$new_rev|g" "$f"
-          log_info "Rev: ${old_rev:0:7} -> ${new_rev:0:7}"
-        fi
+    # Find the overlay file that references this repo URL (scoped to one file)
+    repo_pattern=$(echo "$git_url" | sed 's|\.git$||' | sed 's|https://github.com/||')
+    target_file=$(grep -rl "$repo_pattern" "$wt/overlays" --include='*.nix' | head -1)
+    if [ -n "$target_file" ]; then
+      old_rev=$(grep -oP 'rev = "\K[a-f0-9]{40}' "$target_file" | head -1 || true)
+      if [ -n "$old_rev" ] && [ "$old_rev" != "$new_rev" ]; then
+        sed -i "s|$old_rev|$new_rev|g" "$target_file"
+        log_info "Rev: ${old_rev:0:7} -> ${new_rev:0:7} in $(basename "$target_file")"
       fi
-    done
+    fi
   fi
 fi
 
