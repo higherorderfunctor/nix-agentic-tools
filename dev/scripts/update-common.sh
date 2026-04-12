@@ -114,25 +114,53 @@ merge_to_branch() {
 	log_success "$name: cherry-picked to $BRANCH"
 }
 
+# ── Version parsing ───────────────────────────────────────────────────────────
+
+# Parse nix-update output for "Update X -> Y" lines
+parse_pkg_version() {
+	local version_file="$1"
+	if [ -f "$version_file" ]; then
+		grep -oP 'Update \K\S+ -> \S+' "$version_file" | paste -sd', ' || true
+	fi
+}
+
+# Parse nix flake update output for "Updated input 'name'" lines
+# Extracts the date portion: (YYYY-MM-DD) → (YYYY-MM-DD)
+parse_input_version() {
+	local version_file="$1"
+	local name="$2"
+	if [ -f "$version_file" ]; then
+		grep "Updated input '$name'" "$version_file" |
+			grep -oP '\(\K[0-9-]+(?=\))' |
+			paste -sd' → ' || true
+	fi
+}
+
 # ── Report helpers ────────────────────────────────────────────────────────────
 # Every target must write exactly one report entry before exiting.
+# Format: STATUS: name [| version_detail] [(reason)]
 
 report_updated() {
 	local name="$1"
 	local detail="${2:-}"
-	echo "UPDATED: $name ${detail}" >>"$REPORT_FILE"
-	log_success "UPDATED: $name ${detail}"
+	local line="UPDATED: $name"
+	[ -n "$detail" ] && line="$line | $detail"
+	echo "$line" >>"$REPORT_FILE"
+	log_success "$line"
 }
 
 report_unchanged() {
 	local name="$1"
-	echo "NO UPDATES: $name (already up to date)" >>"$REPORT_FILE"
-	log_info "NO UPDATES: $name (already up to date)"
+	echo "NO UPDATES: $name" >>"$REPORT_FILE"
+	log_info "NO UPDATES: $name"
 }
 
 report_held_back() {
 	local name="$1"
 	local reason="$2"
-	echo "HELD BACK: $name ($reason)" >>"$REPORT_FILE"
-	log_failure "HELD BACK: $name — $reason"
+	local detail="${3:-}"
+	local line="HELD BACK: $name ($reason)"
+	[ -n "$detail" ] && line="HELD BACK: $name | $detail ($reason)"
+	echo "$line" >>"$REPORT_FILE"
+	log_failure "$line"
 }

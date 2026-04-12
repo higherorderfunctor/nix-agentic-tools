@@ -10,12 +10,15 @@ name="$1"
 log_header "Input: $name"
 
 wt=$(setup_worktree "$name")
+version_file="$wt/.update-version"
 
 # Phase 1: Update the input in the worktree
 log_info "Updating flake input..."
 if ! (
 	cd "$wt"
-	nix flake update "$name"
+
+	# Capture nix flake update output for version reporting
+	nix flake update "$name" 2>&1 | tee "$version_file"
 
 	# Regenerate devenv.yaml from updated flake.lock
 	nix eval --raw --impure --expr 'import ./config/generate-devenv-yaml.nix {}' >devenv.yaml
@@ -36,9 +39,13 @@ if ! (
 	# Phase 3: Commit only after build passes
 	git commit -m "chore: update input $name"
 ); then
-	report_held_back "$name" "update or build failed"
+	version_detail=$(parse_input_version "$version_file" "$name")
+	report_held_back "$name" "update or build failed" "$version_detail"
 	exit 0
 fi
+
+# Extract version info
+version_detail=$(parse_input_version "$version_file" "$name")
 
 # Check if the worktree actually made commits
 wt_head=$(git -C "$wt" rev-parse HEAD)
@@ -51,10 +58,10 @@ fi
 merge_to_branch "$wt" "$name" || rc=$?
 rc=${rc:-0}
 if [ "$rc" -eq 1 ]; then
-	report_held_back "$name" "cherry-pick conflict"
+	report_held_back "$name" "cherry-pick conflict" "$version_detail"
 	exit 0
 elif [ "$rc" -eq 2 ]; then
 	report_unchanged "$name"
 	exit 0
 fi
-report_updated "$name"
+report_updated "$name" "$version_detail"

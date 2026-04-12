@@ -11,18 +11,18 @@ log_header "Combo: any-buddy + claude-code"
 
 system=$(nix eval --impure --raw --expr 'builtins.currentSystem')
 wt=$(setup_worktree "any-buddy-claude-code")
+version_file="$wt/.update-version"
 
 # Phase 1: Update both (--no-commit: we commit after build validation)
-log_info "Running nix-update for any-buddy..."
+log_info "Running nix-update for any-buddy + claude-code..."
 if ! (
 	cd "$wt"
 
-	# Update any-buddy
-	nix run --inputs-from . nix-update -- --flake any-buddy --system "$system"
-
-	# Update claude-code
-	log_info "Running nix-update for claude-code..."
-	nix run --inputs-from . nix-update -- --flake claude-code --system "$system" --use-update-script
+	# Capture nix-update output for version reporting
+	{
+		nix run --inputs-from . nix-update -- --flake any-buddy --system "$system"
+		nix run --inputs-from . nix-update -- --flake claude-code --system "$system" --use-update-script
+	} 2>&1 | tee "$version_file"
 
 	# Check if either made changes
 	if git -C "$wt" diff --quiet && git -C "$wt" diff --staged --quiet; then
@@ -37,9 +37,13 @@ if ! (
 	git -C "$wt" add -A
 	git -C "$wt" commit -m "chore(overlays): update any-buddy + claude-code"
 ); then
-	report_held_back "any-buddy+claude-code" "combo update or build failed"
+	version_detail=$(parse_pkg_version "$version_file")
+	report_held_back "any-buddy+claude-code" "combo update or build failed" "$version_detail"
 	exit 0
 fi
+
+# Extract version info
+version_detail=$(parse_pkg_version "$version_file")
 
 # Check if the worktree actually made commits
 wt_head=$(git -C "$wt" rev-parse HEAD)
@@ -52,10 +56,10 @@ fi
 merge_to_branch "$wt" "any-buddy+claude-code" || rc=$?
 rc=${rc:-0}
 if [ "$rc" -eq 1 ]; then
-	report_held_back "any-buddy+claude-code" "cherry-pick conflict"
+	report_held_back "any-buddy+claude-code" "cherry-pick conflict" "$version_detail"
 	exit 0
 elif [ "$rc" -eq 2 ]; then
 	report_unchanged "any-buddy+claude-code"
 	exit 0
 fi
-report_updated "any-buddy+claude-code"
+report_updated "any-buddy+claude-code" "$version_detail"
