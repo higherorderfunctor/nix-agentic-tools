@@ -24,6 +24,7 @@ cavira
 cclsp
 chafa
 chonk
+clicolor
 clis
 codepaths
 codesign

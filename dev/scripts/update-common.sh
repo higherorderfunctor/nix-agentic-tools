@@ -4,10 +4,13 @@
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 
-WORKTREES_DIR=".worktrees"
+WORKTREES_DIR="$PWD/.worktrees"
 MERGE_LOCK="/run/user/$(id -u)/nix-update-merge"
-REPORT_FILE=".update-report.txt"
+REPORT_FILE="$PWD/.update-report.txt"
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+# Force color output from subcommands (ninja buffers output, tools lose TTY detection)
+export CLICOLOR_FORCE=1
 
 # ── ANSI colors (forced on — ninja passes through when stdout is a terminal) ──
 RED=$'\033[0;31m'

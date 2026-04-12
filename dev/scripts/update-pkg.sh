@@ -30,7 +30,7 @@ if ! (
 
 	# Phase 2: Build verification (runs derivation-level tests)
 	# TODO: additional checks, smoke tests (future validation phase)
-	nix build ".#$name" --no-link
+	nix build ".#$name" --no-link --log-format bar-with-logs
 
 	# Phase 3: Commit only after build passes
 	git -C "$wt" add -A
