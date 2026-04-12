@@ -238,16 +238,17 @@ in {
 
       # Extract follows deps for DAG ordering
       inputDeps = builtins.listToAttrs (map (name: let
-        nodeName = rootInputs.${name};
-        node = lockNodes.${nodeName};
-        inputs = node.inputs or {};
-      in {
-        inherit name;
-        value =
-          if (inputs.nixpkgs or null) == ["nixpkgs"]
-          then ["update:input:nixpkgs"]
-          else [];
-      }) inputNames);
+          nodeName = rootInputs.${name};
+          node = lockNodes.${nodeName};
+          inputs = node.inputs or {};
+        in {
+          inherit name;
+          value =
+            if (inputs.nixpkgs or null) == ["nixpkgs"]
+            then ["update:input:nixpkgs"]
+            else [];
+        })
+        inputNames);
 
       dirtyGuard = ''
         if [ -n "$(git status --porcelain)" ]; then
@@ -284,10 +285,27 @@ in {
         '';
       };
 
-      inputTasks = builtins.listToAttrs (map (name: {
-        name = "update:input:${name}";
-        value = mkInputUpdateTask name;
-      }) inputNames);
+      # Input tasks must be sequential — all write to flake.lock.
+      # Order: nixpkgs first (everything follows it), then the rest.
+      sortedInputs = let
+        noDeps = builtins.filter (n: inputDeps.${n} == []) inputNames;
+        hasDeps = builtins.filter (n: inputDeps.${n} != []) inputNames;
+      in
+        noDeps ++ hasDeps;
+
+      inputTasks = let
+        indexed =
+          lib.imap0 (i: name: {
+            name = "update:input:${name}";
+            value =
+              mkInputUpdateTask name
+              // lib.optionalAttrs (i > 0) {
+                after = ["update:input:${builtins.elemAt sortedInputs (i - 1)}"];
+              };
+          })
+          sortedInputs;
+      in
+        builtins.listToAttrs indexed;
 
       allInputTaskNames = builtins.attrNames inputTasks;
     in
