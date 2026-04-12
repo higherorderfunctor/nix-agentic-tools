@@ -1,12 +1,8 @@
-# context7-mcp — override nixpkgs to pin version with inline hashes.
+# context7-mcp — override nixpkgs to track main branch.
 #
 # nixpkgs uses finalAttrs pattern where pnpmDeps reads from
 # finalAttrs.{pname, version, src}. We override version + src +
 # pnpmDeps hash; the fixed-point re-derives the rest.
-#
-# The tarball is unpacked into a directory via runCommandLocal so $src
-# matches nixpkgs' fetchFromGitHub shape (the upstream installPhase
-# references $src/skills). pnpmDepsHash is inlined.
 #
 # Instantiates `ourPkgs` from `inputs.nixpkgs` for cache-hit parity
 # (see dev/fragments/overlays/overlay-pattern.md).
@@ -18,21 +14,39 @@
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
   };
-  version = "2.1.7";
-  # Unpack fetchurl tarball into a directory so $src is a directory
-  # (matching nixpkgs' fetchFromGitHub shape).
-  src = ourPkgs.runCommandLocal "context7-mcp-src-${version}" {} ''
-    tar xf ${ourPkgs.fetchurl {
-      url = "https://github.com/upstash/context7/archive/refs/tags/@upstash/context7-mcp@${version}.tar.gz";
-      name = "context7--upstash-context7-mcp_${version}.tar.gz";
-      hash = "sha256-0l42zdVNiyAQei9Fl29xNLBl74u74UA4zf7jZzsB7ME=";
-    }}
-    mv context7-* $out
-  '';
+  vu = import ../lib.nix;
+
+  rev = "7454002b374569475d41bdcb1c7e09951ddedeaf";
+  src = ourPkgs.fetchFromGitHub {
+    owner = "upstash";
+    repo = "context7";
+    inherit rev;
+    hash = "sha256-u0sFNX19ZBWvA7HYWdM4iI9AvEVz/CK6dLfZ80Rxa9c=";
+  };
 in
-  ourPkgs.context7-mcp.overrideAttrs (finalAttrs: _old: {
-    inherit src version;
-    # Tests require full pnpm workspace root; nixpkgs base has no checkPhase.
+  ourPkgs.context7-mcp.overrideAttrs (finalAttrs: _prev: {
+    version = vu.mkVersion {
+      upstream = vu.readPackageJsonVersion "${src}/packages/mcp/package.json";
+      inherit rev;
+    };
+    inherit src;
+    # Override version check — binary reports upstream version without our +shortRev suffix
+    installCheckPhase = let
+      upstreamVersion = vu.readPackageJsonVersion "${src}/packages/mcp/package.json";
+    in ''
+      runHook preInstallCheck
+      echo "Executing custom version check for MCP stdio server..."
+      output=$(< /dev/null $out/bin/context7-mcp 2>&1 || true)
+      if echo "$output" | grep -Fq "v${upstreamVersion}"; then
+        echo "versionCheckPhase: found version v${upstreamVersion}"
+      else
+        echo "versionCheckPhase: failed to find version v${upstreamVersion}"
+        echo "Output was:"
+        echo "$output"
+        exit 1
+      fi
+      runHook postInstallCheck
+    '';
     pnpmDeps = ourPkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
       fetcherVersion = 3;

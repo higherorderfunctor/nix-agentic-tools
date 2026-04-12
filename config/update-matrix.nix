@@ -25,9 +25,8 @@
     openmemory-mcp = "--version skip";
     sympy-mcp = "--version skip";
 
-    # ── Release-tracking (nix-update discovers version from tags) ──
-    context7-mcp = "--url https://github.com/upstash/context7 --version-regex '@upstash/context7-mcp@(.*)' --override-filename overlays/mcp-servers/context7-mcp.nix";
-    github-mcp = "";
+    context7-mcp = "--version skip";
+    github-mcp = "--version skip";
 
     # ── Binary packages (custom updateScript handles per-platform fetches) ──
     claude-code = "--use-update-script";
