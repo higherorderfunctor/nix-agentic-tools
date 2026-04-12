@@ -30,6 +30,12 @@ in
       inherit rev;
     };
     inherit src;
+    doCheck = true;
+    checkPhase = ''
+      runHook preCheck
+      pnpm --filter @upstash/context7-mcp run test
+      runHook postCheck
+    '';
     # Override version check — binary reports upstream version without our +shortRev suffix
     installCheckPhase = let
       upstreamVersion = vu.readPackageJsonVersion "${src}/packages/mcp/package.json";
