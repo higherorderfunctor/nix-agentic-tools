@@ -62,9 +62,9 @@ setup_worktree() {
 		git worktree add --detach "$wt" "$BRANCH" >&2
 	fi
 
-	# Copy pre-commit config (devenv-generated, gitignored — worktrees don't have it)
+	# Symlink pre-commit config (devenv-generated, gitignored — worktrees don't have it).
 	# Tools are nix store paths baked into the config, so no devenv activation needed.
-	cp .pre-commit-config.yaml "$wt/.pre-commit-config.yaml"
+	ln -sf "$PWD/.pre-commit-config.yaml" "$wt/.pre-commit-config.yaml"
 
 	# Stash base commit for range cherry-pick
 	echo "$base" >"$wt/.update-base"
