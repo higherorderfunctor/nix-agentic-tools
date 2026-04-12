@@ -16,7 +16,7 @@
   };
   vu = import ../lib.nix;
 
-  rev = "646c69558b622ab0e2814c58aa82143e56b76c33";
+  rev = "c5ea8d32426c4cc55c75c305175fe2f6a39005ec";
   src = ourPkgs.fetchFromGitHub {
     owner = "github";
     repo = "github-mcp-server";

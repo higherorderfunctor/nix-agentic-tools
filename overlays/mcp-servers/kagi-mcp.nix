@@ -17,7 +17,7 @@
   inherit (ourPkgs) fetchFromGitHub fetchurl python314Packages;
   vu = import ../lib.nix;
 
-  rev = "646c69558b622ab0e2814c58aa82143e56b76c33";
+  rev = "933e3384e9b1f34ebcc84b85310be7a6548900db";
   src = fetchFromGitHub {
     owner = "kagisearch";
     repo = "kagimcp";

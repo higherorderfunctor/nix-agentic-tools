@@ -15,7 +15,7 @@
   inherit (ourPkgs) fetchPnpmDeps makeWrapper nodejs pnpm pnpmConfigHook;
   vu = import ../lib.nix;
 
-  rev = "646c69558b622ab0e2814c58aa82143e56b76c33";
+  rev = "83a768303839b9e125f6c286369a5d9cc26c666e";
   src = ourPkgs.fetchFromGitHub {
     owner = "tim-smart";
     repo = "effect-mcp";

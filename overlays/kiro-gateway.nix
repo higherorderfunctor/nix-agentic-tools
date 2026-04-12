@@ -25,7 +25,7 @@
       uvicorn
     ]);
 
-  rev = "646c69558b622ab0e2814c58aa82143e56b76c33";
+  rev = "e6f23c22fc5e9aa7a22e4c31af56cdc6f859afbd";
   src = ourPkgs.fetchgit {
     url = "https://github.com/jwadow/kiro-gateway.git";
     inherit rev;
