@@ -11,6 +11,7 @@
       enable = true;
       settings.proseWrap = "preserve";
     };
+    shfmt.enable = true;
     taplo.enable = true;
   };
 
