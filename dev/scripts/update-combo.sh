@@ -49,5 +49,8 @@ if [ "$wt_head" = "$base" ]; then
 	exit 0
 fi
 
-merge_to_branch "$wt" "any-buddy+claude-code"
+if ! merge_to_branch "$wt" "any-buddy+claude-code"; then
+	report_held_back "any-buddy+claude-code" "cherry-pick failed"
+	exit 0
+fi
 report_updated "any-buddy+claude-code"

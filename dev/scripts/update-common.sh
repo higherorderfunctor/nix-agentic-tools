@@ -91,9 +91,13 @@ merge_to_branch() {
 		return 0
 	fi
 
-	# flock serializes cherry-picks from parallel targets
-	# Cherry-pick the full range of commits made in the worktree
-	flock "$MERGE_LOCK" git cherry-pick "$base".."$wt_head"
+	# flock serializes cherry-picks from parallel targets.
+	# If cherry-pick fails (empty, conflict), abort and report — don't poison the branch.
+	if ! flock "$MERGE_LOCK" git cherry-pick "$base".."$wt_head"; then
+		git cherry-pick --abort 2>/dev/null || true
+		log_failure "$name: cherry-pick failed"
+		return 1
+	fi
 	log_success "$name: cherry-picked to $BRANCH"
 }
 

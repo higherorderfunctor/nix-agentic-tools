@@ -38,6 +38,7 @@ docs/src/
 /overlays/sources/.shake.*
 .ninja_lock
 .ninja_log
+.update-base
 .update.ninja
 .update-report.txt
 .worktrees/
