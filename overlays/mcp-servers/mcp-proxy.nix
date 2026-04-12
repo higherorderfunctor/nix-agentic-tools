@@ -18,7 +18,7 @@
   # httpx-auth has test failures in nixpkgs (jwt InsecureKeyLengthWarning)
   httpx-auth = ourPkgs.python3Packages.httpx-auth.overridePythonAttrs {doCheck = false;};
 
-  rev = "a6720cc4f0bb3a09748d61207fb33f3c7c8a88e4";
+  rev = "646c69558b622ab0e2814c58aa82143e56b76c33";
   src = fetchFromGitHub {
     owner = "sparfenyuk";
     repo = "mcp-proxy";

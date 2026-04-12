@@ -15,7 +15,7 @@
   inherit (ourPkgs) buildNpmPackage fetchgit git makeWrapper nodejs;
   vu = import ../lib.nix;
 
-  rev = "9f216bab8d6bc3a3b850ad77f27d02d63a71e10d";
+  rev = "646c69558b622ab0e2814c58aa82143e56b76c33";
   src = fetchgit {
     url = "https://github.com/hoangsonww/GitIntel-MCP-Server.git";
     inherit rev;

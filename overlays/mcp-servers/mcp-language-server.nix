@@ -16,7 +16,7 @@
   };
   vu = import ../lib.nix;
 
-  rev = "e4395849a52e18555361abab60a060802c06bf50";
+  rev = "646c69558b622ab0e2814c58aa82143e56b76c33";
   src = ourPkgs.fetchFromGitHub {
     owner = "isaacphi";
     repo = "mcp-language-server";

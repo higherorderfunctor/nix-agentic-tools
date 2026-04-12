@@ -13,7 +13,7 @@
   inherit (ourPkgs) buildNpmPackage fetchFromGitHub makeWrapper nodejs python314Packages;
   vu = import ../../lib.nix;
 
-  rev = "f4244583a6af9425633e433a3eec000d23f4e011";
+  rev = "646c69558b622ab0e2814c58aa82143e56b76c33";
   src = fetchFromGitHub {
     owner = "modelcontextprotocol";
     repo = "servers";

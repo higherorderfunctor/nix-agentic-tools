@@ -24,7 +24,7 @@
     rustc = rust;
   };
 
-  rev = "debdcd28d9db2ac6b36205bda307b6693a6a91e7";
+  rev = "646c69558b622ab0e2814c58aa82143e56b76c33";
   src = fetchFromGitHub {
     owner = "tummychow";
     repo = "git-absorb";

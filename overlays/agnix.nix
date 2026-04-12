@@ -34,7 +34,7 @@
     rustc = rust;
   };
 
-  rev = "2c8f259f036660c477a420ff9ba7260116a78451";
+  rev = "646c69558b622ab0e2814c58aa82143e56b76c33";
   src = fetchFromGitHub {
     owner = "agent-sh";
     repo = "agnix";

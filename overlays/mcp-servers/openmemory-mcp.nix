@@ -10,7 +10,7 @@
   inherit (ourPkgs) buildNpmPackage fetchFromGitHub makeWrapper nodejs;
   vu = import ../lib.nix;
 
-  rev = "a65c920636b1b39618e833f1a0f8494aebccafcd";
+  rev = "646c69558b622ab0e2814c58aa82143e56b76c33";
   src = fetchFromGitHub {
     owner = "CaviraOSS";
     repo = "OpenMemory";

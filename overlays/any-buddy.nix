@@ -8,7 +8,7 @@
 # the floor here is the intent.
 {final, ...}: let
   vu = import ./lib.nix;
-  rev = "861f0dfea1674dcff9a72390143fc64d026c95ed";
+  rev = "646c69558b622ab0e2814c58aa82143e56b76c33";
 in
   final.stdenvNoCC.mkDerivation {
     pname = "any-buddy";

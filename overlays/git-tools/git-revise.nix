@@ -18,7 +18,7 @@
   inherit (ourPkgs) fetchFromGitHub;
   vu = import ../lib.nix;
 
-  rev = "a5bdbe420521a7784dd16c8f22b374b2f1d2d167";
+  rev = "646c69558b622ab0e2814c58aa82143e56b76c33";
   src = fetchFromGitHub {
     owner = "mystor";
     repo = "git-revise";
