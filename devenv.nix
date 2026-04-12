@@ -225,37 +225,82 @@ in {
   in
     generateTasks
     // {
-      "update:flake" = {
-        description = "Update flake.lock (nix flake update)";
+      # ── Per-input update tasks ──────────────────────────────────────
+      # Generated from flake.lock. DAG from follows relationships.
+      # Each: nix flake update <input> → regenerate devenv.yaml →
+      # devenv update → commit atomically → build + test.
+    }
+    // (let
+      flakeLock = builtins.fromJSON (builtins.readFile ./flake.lock);
+      lockNodes = flakeLock.nodes;
+      rootInputs = lockNodes.root.inputs;
+      inputNames = builtins.attrNames rootInputs;
+
+      # Extract follows deps for DAG ordering
+      inputDeps = builtins.listToAttrs (map (name: let
+        nodeName = rootInputs.${name};
+        node = lockNodes.${nodeName};
+        inputs = node.inputs or {};
+      in {
+        inherit name;
+        value =
+          if (inputs.nixpkgs or null) == ["nixpkgs"]
+          then ["update:input:nixpkgs"]
+          else [];
+      }) inputNames);
+
+      dirtyGuard = ''
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "ERROR: working tree is dirty. Commit or stash changes first." >&2
+          git status --short >&2
+          exit 1
+        fi
+      '';
+
+      mkInputUpdateTask = name: {
+        description = "Update flake input: ${name}";
+        after = inputDeps.${name} or [];
         exec = ''
-          nix flake update
-          git add flake.lock
-          if ! git diff --staged --quiet; then
-            git commit -m "chore(flake): update flake.lock"
-          fi
-        '';
-      };
-      "generate:devenv-yaml" = {
-        description = "Regenerate devenv.yaml from flake.nix + flake.lock";
-        exec = ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          ${dirtyGuard}
+
+          echo "Updating input: ${name}"
+          nix flake update ${name}
+
+          # Regenerate devenv.yaml with new rev from flake.lock
           nix eval --raw --impure --expr 'import ./config/generate-devenv-yaml.nix {}' > devenv.yaml
-          git add devenv.yaml
-          if ! git diff --staged --quiet; then
-            git commit -m "chore: regenerate devenv.yaml from flake.lock"
-          fi
-        '';
-      };
-      "update:devenv" = {
-        description = "Sync devenv.lock after yaml regeneration";
-        after = ["generate:devenv-yaml"];
-        exec = ''
+
+          # Sync devenv.lock
           devenv update
-          git add devenv.lock
+
+          # Atomic commit: flake.lock + devenv.yaml + devenv.lock
+          git add flake.lock devenv.yaml devenv.lock
           if ! git diff --staged --quiet; then
-            git commit -m "chore(devenv): update devenv.lock"
+            git commit -m "chore: update input ${name}"
+          else
+            echo "${name}: already up to date"
           fi
         '';
       };
+
+      inputTasks = builtins.listToAttrs (map (name: {
+        name = "update:input:${name}";
+        value = mkInputUpdateTask name;
+      }) inputNames);
+
+      allInputTaskNames = builtins.attrNames inputTasks;
+    in
+      inputTasks
+      // {
+        # Meta task: all input updates complete
+        "update:inputs" = {
+          description = "Update all flake inputs";
+          after = allInputTaskNames;
+          exec = ''echo "All inputs updated"'';
+        };
+      })
+    // {
       # ── Per-package update tasks ──────────────────────────────────────
       # Each package gets its own task so failures are visible and
       # the DAG can parallelize them in the future (via git worktrees).
@@ -302,15 +347,18 @@ in {
         task = mkPkgUpdateTask name nixUpdate.${name};
       }) (builtins.attrNames nixUpdate);
 
-      # Chain each task after the previous one for sequential execution.
+      # Chain: first pkg waits for inputs, each subsequent waits for previous.
       chainedTasks = let
         indexed =
           lib.imap0 (i: entry: {
             name = "update:pkg:${entry.name}";
             value =
               entry.task
-              // lib.optionalAttrs (i > 0) {
-                after = ["update:pkg:${(builtins.elemAt orderedPkgs (i - 1)).name}"];
+              // {
+                after =
+                  if i == 0
+                  then ["update:inputs"]
+                  else ["update:pkg:${(builtins.elemAt orderedPkgs (i - 1)).name}"];
               };
           })
           orderedPkgs;
@@ -331,7 +379,7 @@ in {
     // {
       "update:build" = {
         description = "Build all packages (update pipeline verification)";
-        after = ["update:flake" "update:devenv" "update:nix-update"];
+        after = ["update:inputs" "update:nix-update"];
         exec = ''devenv tasks run build:all'';
       };
       "update:all" = {
