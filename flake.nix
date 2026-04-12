@@ -3,16 +3,24 @@
 
   nixConfig = {
     extra-substituters = [
+      "https://devenv.cachix.org"
       "https://nix-agentic-tools.cachix.org"
     ];
     extra-trusted-public-keys = [
+      "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw="
       "nix-agentic-tools.cachix.org-1:0jFprh5fkDez9mk6prYisYxzalr0hn78kyywGPXvOn0="
     ];
   };
 
   inputs = {
+    # devenv — NO follows. Uses upstream cache (devenv.cachix.org).
+    devenv.url = "github:cachix/devenv";
     git-branchless = {
       url = "github:arxanas/git-branchless";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    git-hooks = {
+      url = "github:cachix/git-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     mcp-nixos = {

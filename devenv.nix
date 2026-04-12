@@ -235,8 +235,19 @@ in {
           fi
         '';
       };
+      "generate:devenv-yaml" = {
+        description = "Regenerate devenv.yaml from flake.nix + flake.lock";
+        exec = ''
+          nix eval --raw --impure --expr 'import ./config/generate-devenv-yaml.nix {}' > devenv.yaml
+          git add devenv.yaml
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: regenerate devenv.yaml from flake.lock"
+          fi
+        '';
+      };
       "update:devenv" = {
-        description = "Update devenv.lock";
+        description = "Sync devenv.lock after yaml regeneration";
+        after = ["generate:devenv-yaml"];
         exec = ''
           devenv update
           git add devenv.lock
