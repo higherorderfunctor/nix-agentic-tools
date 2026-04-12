@@ -965,7 +965,7 @@ in {
     in
       lib.hasInfix "sha256sum" script
       && lib.hasInfix "fingerprint" script
-      && lib.hasInfix "cli.js" script
+      && lib.hasInfix "STORE_BINARY" script
       && lib.hasInfix "friend-2026-401" script
       && lib.hasInfix "companion" script
   );

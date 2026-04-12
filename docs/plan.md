@@ -67,6 +67,7 @@ Fix fragments first → regenerate → cascade fixes 40+ generated files.
 - [ ] Document unfree guard pattern as architecture fragment fanned out to ecosystem docs + contributing
 - [ ] Update overlays/README.md table for nix-update migration
 - [ ] Garnix CI exploration — garnix for builds, GHA for orchestration, cachix for distribution (see `memory/project_garnix_exploration.md`)
+- [ ] Update `.claude/rules/claude-code.md` buddy-activation fragment — still describes old `cli.js` symlink-tree patching approach; code now patches the compiled `claude` binary directly (since `e6768fa`). Steps 2-3 (writable lib tree, real cli.js copy) and verification section are stale.
 
 ### Update pipeline improvements
 

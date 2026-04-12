@@ -35,6 +35,7 @@ in {
     cspell
     deadnix
     mdbook
+    ninja
     pagefind
     prefetch-npm-deps
     statix
@@ -225,184 +226,32 @@ in {
   in
     generateTasks
     // {
-      # ── Per-input update tasks ──────────────────────────────────────
-      # Generated from flake.lock. DAG from follows relationships.
-      # Each: nix flake update <input> → regenerate devenv.yaml →
-      # devenv update → commit atomically → build + test.
-    }
-    // (let
-      flakeLock = builtins.fromJSON (builtins.readFile ./flake.lock);
-      lockNodes = flakeLock.nodes;
-      rootInputs = lockNodes.root.inputs;
-      inputNames = builtins.attrNames rootInputs;
-
-      # Extract follows deps for DAG ordering
-      inputDeps = builtins.listToAttrs (map (name: let
-          nodeName = rootInputs.${name};
-          node = lockNodes.${nodeName};
-          inputs = node.inputs or {};
-        in {
-          inherit name;
-          value =
-            if (inputs.nixpkgs or null) == ["nixpkgs"]
-            then ["update:input:nixpkgs"]
-            else [];
-        })
-        inputNames);
-
-      dirtyGuard = ''
-        if [ -n "$(git status --porcelain)" ]; then
-          echo "ERROR: working tree is dirty. Commit or stash changes first." >&2
-          git status --short >&2
-          exit 1
-        fi
-      '';
-
-      mkInputUpdateTask = name: {
-        description = "Update flake input: ${name}";
-        after = inputDeps.${name} or [];
-        exec = ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          ${dirtyGuard}
-
-          echo "Updating input: ${name}"
-          nix flake update ${name}
-
-          # Regenerate devenv.yaml with new rev from flake.lock
-          nix eval --raw --impure --expr 'import ./config/generate-devenv-yaml.nix {}' > devenv.yaml
-
-          # Sync devenv.lock
-          devenv update
-
-          # Atomic commit: flake.lock + devenv.yaml + devenv.lock
-          git add flake.lock devenv.yaml devenv.lock
-          if ! git diff --staged --quiet; then
-            git commit -m "chore: update input ${name}"
-          else
-            echo "${name}: already up to date"
-          fi
-        '';
-      };
-
-      # Input tasks must be sequential — all write to flake.lock.
-      # Order: nixpkgs first (everything follows it), then the rest.
-      sortedInputs = let
-        noDeps = builtins.filter (n: inputDeps.${n} == []) inputNames;
-        hasDeps = builtins.filter (n: inputDeps.${n} != []) inputNames;
-      in
-        noDeps ++ hasDeps;
-
-      inputTasks = let
-        indexed =
-          lib.imap0 (i: name: {
-            name = "update:input:${name}";
-            value =
-              mkInputUpdateTask name
-              // lib.optionalAttrs (i > 0) {
-                after = ["update:input:${builtins.elemAt sortedInputs (i - 1)}"];
-              };
-          })
-          sortedInputs;
-      in
-        builtins.listToAttrs indexed;
-
-      allInputTaskNames = builtins.attrNames inputTasks;
-    in
-      inputTasks
-      // {
-        # Meta task: all input updates complete
-        "update:inputs" = {
-          description = "Update all flake inputs";
-          after = allInputTaskNames;
-          exec = ''echo "All inputs updated"'';
-        };
-      })
-    // {
-      # ── Per-package update tasks ──────────────────────────────────────
-      # Each package gets its own task so failures are visible and
-      # the DAG can parallelize them in the future (via git worktrees).
-    }
-    // (let
-      system = builtins.currentSystem;
-      # Shared preamble for GitHub token
-      tokenPreamble = ''
-        if [ -z "''${GITHUB_TOKEN:-}" ] && command -v gh &>/dev/null; then
-          GITHUB_TOKEN=$(gh auth token 2>/dev/null) || true
-          [ -n "''${GITHUB_TOKEN:-}" ] && export GITHUB_TOKEN
-        fi
-      '';
-      dirtyGuard = ''
-        if [ -n "$(git status --porcelain)" ]; then
-          echo "ERROR: working tree is dirty. Commit or stash changes first." >&2
-          git status --short >&2
-          exit 1
-        fi
-      '';
-
-      # Package update config from shared matrix (single source of truth).
-      # CI consumes the same data via nix eval .#updateMatrix.
-      # All packages go through nix-update. --use-update-script for
-      # per-platform binaries (sources.json). One loop, one mechanism.
-      updateMatrix = import ./config/update-matrix.nix;
-      inherit (updateMatrix) nixUpdate;
-
-      mkPkgUpdateTask = name: extraArgs: {
-        description = "Update ${name} via nix-update";
-        exec = ''
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          ${tokenPreamble}
-          ${dirtyGuard}
-          # shellcheck disable=SC2086
-          nix run --inputs-from . nix-update -- --flake "${name}" --commit --system "${system}" ${extraArgs}
-        '';
-      };
-
-      # Sequential via after chains (parallel is unsafe without worktrees).
-      orderedPkgs = map (name: {
-        inherit name;
-        task = mkPkgUpdateTask name nixUpdate.${name};
-      }) (builtins.attrNames nixUpdate);
-
-      # Chain: first pkg waits for inputs, each subsequent waits for previous.
-      chainedTasks = let
-        indexed =
-          lib.imap0 (i: entry: {
-            name = "update:pkg:${entry.name}";
-            value =
-              entry.task
-              // {
-                after =
-                  if i == 0
-                  then ["update:inputs"]
-                  else ["update:pkg:${(builtins.elemAt orderedPkgs (i - 1)).name}"];
-              };
-          })
-          orderedPkgs;
-      in
-        builtins.listToAttrs indexed;
-
-      allPkgTaskNames = builtins.attrNames chainedTasks;
-    in
-      chainedTasks
-      // {
-        # Meta task: all per-package updates complete
-        "update:nix-update" = {
-          description = "Update all package versions and hashes";
-          after = allPkgTaskNames;
-          exec = ''echo "All packages updated"'';
-        };
-      })
-    // {
-      "update:build" = {
-        description = "Build all packages (update pipeline verification)";
-        after = ["update:inputs" "update:nix-update"];
-        exec = ''devenv tasks run build:all'';
-      };
+      # ── Update pipeline (ninja DAG) ──────────────────────────────────
+      # ninja handles the full dependency graph with -j4 concurrency.
+      # Each target runs in a git worktree, cherry-picks to branch on
+      # success, rolls back on failure. See scripts/update-*.sh.
+      # Targeted updates: ninja -j4 -f .update.ninja update-agnix
       "update:all" = {
-        description = "Run full update pipeline";
-        exec = ''devenv tasks run --mode before update:build'';
+        description = "Run full update pipeline (ninja DAG)";
+        exec = ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "ERROR: working tree is dirty. Commit or stash changes first." >&2
+            git status --short >&2
+            exit 1
+          fi
+
+          # Regenerate ninja build file from flake.lock + update matrix
+          nix eval --raw --impure --expr 'import ./config/generate-update-ninja.nix {}' > .update.ninja
+
+          # Clear previous report
+          rm -f .update-report.txt
+
+          # Run the DAG
+          ninja -j4 -f .update.ninja update-report
+        '';
       };
       "build:all" = {
         description = "Build all packages for the current system";
