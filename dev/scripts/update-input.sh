@@ -48,8 +48,13 @@ if [ "$wt_head" = "$base" ]; then
 	exit 0
 fi
 
-if ! merge_to_branch "$wt" "$name"; then
-	report_held_back "$name" "cherry-pick failed"
+merge_to_branch "$wt" "$name" || rc=$?
+rc=${rc:-0}
+if [ "$rc" -eq 1 ]; then
+	report_held_back "$name" "cherry-pick conflict"
+	exit 0
+elif [ "$rc" -eq 2 ]; then
+	report_unchanged "$name"
 	exit 0
 fi
 report_updated "$name"

@@ -96,11 +96,20 @@ merge_to_branch() {
 	fi
 
 	# flock serializes cherry-picks from parallel targets.
-	# If cherry-pick fails (empty, conflict), abort and report — don't poison the branch.
+	# Empty cherry-picks (change already on branch) are skipped, not failures.
+	# Returns: 0 = merged, 2 = already on branch (empty), 1 = conflict
 	if ! flock "$MERGE_LOCK" git cherry-pick "$base".."$wt_head"; then
-		git cherry-pick --abort 2>/dev/null || true
-		log_failure "$name: cherry-pick failed"
-		return 1
+		if git diff --staged --quiet 2>/dev/null; then
+			# Empty cherry-pick — change already on branch
+			git cherry-pick --skip 2>/dev/null || git cherry-pick --abort 2>/dev/null || true
+			log_info "$name: already on branch (skipped)"
+			return 2
+		else
+			# Real conflict
+			git cherry-pick --abort 2>/dev/null || true
+			log_failure "$name: cherry-pick conflict"
+			return 1
+		fi
 	fi
 	log_success "$name: cherry-picked to $BRANCH"
 }
