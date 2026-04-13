@@ -44,9 +44,12 @@ log_info "Running nix-update for any-buddy + claude-code..."
 if ! (
   cd "$wt"
 
+  # Disable eval cache: worktree flake source differs from main
   {
-    nix run --inputs-from . nix-update -- --flake any-buddy --system "$system" --version skip
-    nix run --inputs-from . nix-update -- --flake claude-code --system "$system" --use-update-script
+    NIX_CONFIG="eval-cache = false" \
+      nix run --inputs-from . nix-update -- --flake any-buddy --system "$system" --version skip
+    NIX_CONFIG="eval-cache = false" \
+      nix run --inputs-from . nix-update -- --flake claude-code --system "$system" --use-update-script
   } 2>&1 | tee "$version_file"
   nix_update_status=${PIPESTATUS[0]}
   if [ "$nix_update_status" -ne 0 ]; then

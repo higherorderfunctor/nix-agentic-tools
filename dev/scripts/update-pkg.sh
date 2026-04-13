@@ -62,8 +62,11 @@ log_info "Running nix-update..."
 if ! (
   cd "$wt"
 
+  # Disable eval cache: worktree flake source differs from main, cached
+  # derivation references from prior evaluations cause "path is not valid".
   # shellcheck disable=SC2086
-  nix run --inputs-from . nix-update -- --flake "$name" --system "$system" $extra_flags 2>&1 | tee "$version_file"
+  NIX_CONFIG="eval-cache = false" \
+    nix run --inputs-from . nix-update -- --flake "$name" --system "$system" $extra_flags 2>&1 | tee "$version_file"
   # pipefail propagates nix-update failures through tee
   nix_update_status=${PIPESTATUS[0]}
   if [ "$nix_update_status" -ne 0 ]; then
