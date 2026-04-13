@@ -34,7 +34,6 @@ docs/src/
 
 .ninja_lock
 .ninja_log
-.update-base
 .update-version
 .update.ninja
 .update-report.txt

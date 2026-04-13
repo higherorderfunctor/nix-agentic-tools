@@ -32,11 +32,10 @@ if ! (
     exit 0
   fi
 
-  # Phase 2: Build verification (runs derivation-level tests)
-  # TODO: additional checks, smoke tests (future validation phase)
-  nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --flake ".#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem')"
+  # Phase 2: Build verification (skipped in CI mode)
+  run_build nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --flake ".#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem')"
 
-  # Phase 3: Commit only after build passes
+  # Phase 3: Commit only after build passes (or skipped in CI)
   git commit -m "chore: update input $name"
 ); then
   version_detail=$(parse_input_version "$version_file" "$name")
@@ -49,8 +48,8 @@ version_detail=$(parse_input_version "$version_file" "$name")
 
 # Check if the worktree actually made commits
 wt_head=$(git -C "$wt" rev-parse HEAD)
-base=$(cat "$wt/.update-base")
-if [ "$wt_head" = "$base" ]; then
+base_head=$(git rev-parse "$BRANCH")
+if [ "$wt_head" = "$base_head" ]; then
   report_unchanged "$name"
   exit 0
 fi

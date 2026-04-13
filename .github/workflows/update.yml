@@ -1,25 +1,20 @@
-# CI pipeline v4: ninja-based DAG update pipeline.
+# CI pipeline v4: Renovate-style per-dependency PRs.
 #
-# Renovate-style: each dependency update gets its own PR against the
-# working branch. PRs trigger ci.yml which builds on both platforms.
-# Only PRs that pass both x86_64-linux and aarch64-darwin can merge.
+# Runs the ninja update pipeline in CI mode (UPDATE_CI=1):
+#   - Builds are skipped (PR pipeline validates)
+#   - Cherry-picks are skipped (worktree branches pushed as PRs)
+#   - Each dependency gets its own branch + PR
 #
-# Phase 1 (ubuntu): run ninja pipeline (cherry-picks to local branch)
-# Phase 2 (ubuntu): for each update commit, push to update/<name>
-#   branch and create/update a PR
+# ci.yml validates PRs on both platforms (linux + darwin).
+# PRs that pass both can be merged.
 #
-# On re-run, existing update branches are rebased on the current
-# branch tip and the update is redone.
-#
-# See: config/generate-update-ninja.nix, dev/scripts/update-*.sh
+# Uses a GitHub App token so PRs trigger ci.yml's pull_request event.
 name: Update
 
 on:
   push:
     branches: [refactor/ai-factory-architecture]
   workflow_dispatch:
-  schedule:
-    - cron: "0 6 * * *"
 
 concurrency:
   group: update-${{ github.ref }}
@@ -38,14 +33,20 @@ jobs:
     runs-on: ubuntu-latest
     # Skip if this push was made by the bot (prevents self-triggering).
     if: >-
-      github.actor != 'github-actions[bot]'
+      github.actor != 'nix-agentic-tools-bot[bot]'
       || github.event_name == 'workflow_dispatch'
-      || github.event_name == 'schedule'
     steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - uses: cachix/install-nix-action@v31
         with:
@@ -59,8 +60,8 @@ jobs:
 
       - name: Configure git
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "nix-agentic-tools-bot[bot]"
+          git config user.email "nix-agentic-tools-bot[bot]@users.noreply.github.com"
 
       - name: Install pipeline tools
         run: |
@@ -70,107 +71,71 @@ jobs:
           nix profile install --inputs-from . nixpkgs#devenv
           nix profile install ".#formatter.x86_64-linux"
 
-      # Record the base commit before the pipeline runs.
-      # Update commits will be between base and HEAD after the pipeline.
-      - name: Record base commit
-        id: base
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      # Run the ninja pipeline. Each target cherry-picks to the local
-      # branch on success. After this step, HEAD has all update commits.
+      # Run ninja pipeline in CI mode:
+      # - UPDATE_CI=1: skip builds, skip cherry-picks
+      # - Each target creates a worktree branch (update/<name>)
+      # - Branches are pushed and PRs created after ninja completes
       - name: Run ninja update pipeline
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           mkdir -p "$RUNNER_TEMP"
           export MERGE_LOCK="$RUNNER_TEMP/nix-update-merge"
+          export UPDATE_CI=1
           nix run .#generate-update-ninja
           ninja -j4 -v -k0 -f .update.ninja update-report
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
-      # For each update commit (between base and HEAD), create or
-      # update a branch and PR. Each PR targets the working branch.
-      # ci.yml will validate on both platforms.
-      #
-      # Branch naming: update/<sanitized-commit-subject>
-      # Existing branches are force-updated (rebased implicitly since
-      # the base moved and the update was redone).
+      # Push worktree branches and create/update PRs.
+      # Each update/<name> branch with commits gets a PR.
       - name: Create per-dependency PRs
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
 
-          base="${{ steps.base.outputs.sha }}"
-          head=$(git rev-parse HEAD)
+          base_head=$(git rev-parse "$BRANCH_NAME")
 
-          if [ "$base" = "$head" ]; then
-            echo "No update commits — nothing to PR"
-            exit 0
-          fi
+          # Find all update/* branches with commits ahead of base
+          git branch --list 'update/*' | while read -r branch; do
+            branch=$(echo "$branch" | tr -d ' *')
+            wt_head=$(git rev-parse "$branch")
 
-          # Iterate each commit between base and HEAD
-          git rev-list --reverse "$base".."$head" | while read -r sha; do
-            subject=$(git log -1 --format='%s' "$sha")
-
-            # Extract dependency name from commit subject
-            # Formats: "chore: update input <name>" or "chore(overlays): update <name>"
-            dep_name=$(echo "$subject" | sed -E 's/^chore(\([^)]*\))?: update (input )?//' | tr ' +' '-')
-
-            # Skip non-update commits (treefmt, etc.)
-            if [[ ! "$subject" =~ ^chore ]]; then
-              echo "Skipping non-update commit: $subject"
+            if [ "$wt_head" = "$base_head" ]; then
+              echo "Skipping $branch (no changes)"
               continue
             fi
 
-            branch_name="update/$dep_name"
-            echo "Processing: $subject -> $branch_name"
-
-            # Create branch from the base with just this commit
-            git checkout -B "$branch_name" "$base"
-            git cherry-pick "$sha" || {
-              echo "Cherry-pick failed for $dep_name, skipping"
-              git cherry-pick --abort 2>/dev/null || true
-              git checkout "$BRANCH_NAME"
-              continue
-            }
-
-            # Push branch (force update if it exists from a prior run)
-            git push -f origin "$branch_name"
+            echo "Pushing $branch..."
+            git push -f origin "$branch"
 
             # Create or update PR
-            existing_pr=$(gh pr list --base "$BRANCH_NAME" --head "$branch_name" --json number --jq '.[0].number // empty' || true)
+            existing_pr=$(gh pr list --base "$BRANCH_NAME" --head "$branch" --json number --jq '.[0].number // empty' 2>/dev/null || true)
+            subject=$(git log -1 --format='%s' "$branch")
+
             if [ -n "$existing_pr" ]; then
-              echo "PR #$existing_pr already exists for $branch_name — updated branch"
+              echo "PR #$existing_pr exists for $branch — branch updated"
             else
               gh pr create \
                 --base "$BRANCH_NAME" \
-                --head "$branch_name" \
+                --head "$branch" \
                 --title "$subject" \
                 --body "$(cat <<EOF
 Automated dependency update.
 
-**Commit:** \`$sha\`
-**Branch:** \`$branch_name\`
+**Branch:** \`$branch\`
 
-This PR will be validated on both x86_64-linux and aarch64-darwin via CI.
+Validated on both x86_64-linux and aarch64-darwin via CI.
 Merge when checks pass.
 
 ---
-Generated by the update pipeline. See \`.github/workflows/update.yml\`.
+Generated by the update pipeline.
 EOF
-              )" || echo "PR creation failed for $branch_name"
+              )" || echo "PR creation failed for $branch"
             fi
-
-            # Return to the main branch for the next iteration
-            git checkout "$BRANCH_NAME"
           done
-
-          # Reset to HEAD (the full accumulated state) for the report
-          git checkout "$BRANCH_NAME"
-          git reset --hard "$head"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
       - name: Upload update report
         if: always()

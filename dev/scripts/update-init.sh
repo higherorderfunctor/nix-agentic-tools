@@ -13,8 +13,24 @@ echo "${BOLD}${CYAN}════════════════════
 echo "${BOLD}${CYAN}  Pipeline init${RESET}"
 echo "${BOLD}${CYAN}══════════════════════════════════════════════════${RESET}"
 
-# Abort any stuck cherry-pick from a prior crashed run
+# Abort any stuck git state on the main branch
 git cherry-pick --abort 2>/dev/null || true
+git merge --abort 2>/dev/null || true
+git rebase --abort 2>/dev/null || true
+
+# Detach worktrees so their branches can be deleted.
+# setup_worktree will re-checkout the named branch.
+if [ -d ".worktrees" ]; then
+	for wt in .worktrees/update-*; do
+		[ -d "$wt" ] && git -C "$wt" checkout --detach HEAD 2>/dev/null || true
+	done
+fi
+
+# Clean up stale update/* local branches from prior runs
+git branch --list 'update/*' | while read -r branch; do
+	branch=$(echo "$branch" | tr -d ' *')
+	git branch -D "$branch" 2>/dev/null || true
+done
 
 # Clear report from prior runs
 rm -f .update-report.txt
