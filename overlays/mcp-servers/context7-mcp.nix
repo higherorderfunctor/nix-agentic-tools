@@ -16,7 +16,7 @@
   };
   vu = import ../lib.nix;
 
-  rev = "00833f92623032dd643974048f9817dd0f1694cc";
+  rev = "c31528d0cde3d00cbb542ae44fde59f3fd7144dc";
   src = ourPkgs.fetchFromGitHub {
     owner = "upstash";
     repo = "context7";
