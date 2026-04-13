@@ -48,6 +48,8 @@ in
     pyproject = true;
     build-system = with python314Packages; [hatchling];
     dependencies = with python314Packages; [kagiapi mcp pydantic];
+    doInstallCheck = true;
+    installCheckPhase = vu.mkMcpSmokeTest {bin = "kagimcp";};
     meta.mainProgram = "kagimcp";
     doCheck = false;
   }

@@ -32,4 +32,5 @@ in
     };
     inherit src;
     vendorHash = "sha256-5YUI1IujtJJBfxsT9KZVVFVib1cK/Alk73y5tqxi6pQ=";
+    installCheckPhase = vu.mkMcpSmokeTest {bin = "mcp-language-server";};
   })

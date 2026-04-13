@@ -45,5 +45,11 @@ in
           };
           inherit src;
           cargoHash = "sha256-8uCXk5bXn/x4QXbGOROGlWYMSqIv+/7dBGZKbYkLfF4=";
+          doInstallCheck = true;
+          installCheckPhase = ''
+            runHook preInstallCheck
+            $out/bin/git-absorb --version
+            runHook postInstallCheck
+          '';
         });
   })

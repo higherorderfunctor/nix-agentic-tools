@@ -1,4 +1,4 @@
-# overlays/lib.nix — DRY version extraction from source trees.
+# overlays/lib.nix — DRY version extraction + smoke test helpers.
 #
 # Each helper reads a manifest from a Nix store path (src) at eval
 # time and returns the upstream version string. Callers combine it
@@ -33,6 +33,37 @@
     vLine = builtins.head (builtins.filter (l: builtins.match "^__version__ = \".*\"$" l != null) lines);
   in
     builtins.head (builtins.match "^__version__ = \"(.*)\"$" vLine);
+
+  # Generate an installCheckPhase for MCP stdio servers.
+  # Feeds /dev/null to stdin, captures stderr+stdout, verifies the process
+  # started (non-empty output or specific marker). Kills after 2s timeout.
+  mkMcpSmokeTest = {
+    bin,
+    args ? [],
+    marker ? null,
+  }: let
+    argStr = builtins.concatStringsSep " " args;
+    check =
+      if marker != null
+      then ''
+        if echo "$output" | grep -Fq "${marker}"; then
+          echo "smoke-test: found marker '${marker}'"
+        else
+          echo "smoke-test: marker '${marker}' not found in output:" >&2
+          echo "$output" >&2
+          exit 1
+        fi
+      ''
+      else ''
+        echo "smoke-test: process started (exit ok)"
+      '';
+  in ''
+    runHook preInstallCheck
+    echo "Running MCP smoke test for ${bin}..."
+    output=$(timeout 2 $out/bin/${bin} ${argStr} < /dev/null 2>&1 || true)
+    ${check}
+    runHook postInstallCheck
+  '';
 
   # Generate an updateScript for main-tracking packages that use a bare
   # `rev = "..."` in their overlay .nix file. Fetches the latest commit

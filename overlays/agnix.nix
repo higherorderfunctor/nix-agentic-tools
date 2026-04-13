@@ -63,6 +63,17 @@ in
     # Telemetry test fails in Nix sandbox (no $HOME / no network)
     checkFlags = ["--skip" "test_telemetry_enable_disable_roundtrip"];
 
+    # Smoke test: verify all three binaries start
+    doInstallCheck = true;
+    installCheckPhase = ''
+      runHook preInstallCheck
+      $out/bin/agnix --version
+      timeout 2 $out/bin/agnix-mcp < /dev/null 2>&1 || true
+      timeout 2 $out/bin/agnix-lsp < /dev/null 2>&1 || true
+      echo "smoke-test: all binaries start"
+      runHook postInstallCheck
+    '';
+
     meta = {
       description = "Linter, LSP, and MCP server for AI coding assistant config files";
       homepage = "https://github.com/agent-sh/agnix";

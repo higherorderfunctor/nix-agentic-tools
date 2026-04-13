@@ -51,6 +51,8 @@ in
         --add-flags "-m mcp run $src/server.py"
       runHook postInstall
     '';
+    doInstallCheck = true;
+    installCheckPhase = vu.mkMcpSmokeTest {bin = "sympy-mcp";};
     passthru.mcpName = "sympy-mcp";
     meta.mainProgram = "sympy-mcp";
   }

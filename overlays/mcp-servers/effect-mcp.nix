@@ -49,5 +49,7 @@ in
         --add-flags "$out/lib/effect-mcp/main.cjs"
       runHook postInstall
     '';
+    doInstallCheck = true;
+    installCheckPhase = vu.mkMcpSmokeTest {bin = "effect-mcp";};
     meta.mainProgram = "effect-mcp";
   })

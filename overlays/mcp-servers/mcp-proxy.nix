@@ -37,4 +37,6 @@ in
       (old.dependencies or [])
       ++ [httpx-auth];
     nativeCheckInputs = with ourPkgs.python3Packages; [pytest pytest-asyncio];
+    doInstallCheck = true;
+    installCheckPhase = vu.mkMcpSmokeTest {bin = "mcp-proxy";};
   })

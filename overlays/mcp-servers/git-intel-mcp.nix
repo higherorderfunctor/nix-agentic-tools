@@ -46,5 +46,7 @@ in
         --add-flags "$out/lib/git-intel-mcp/dist/index.js"
       runHook postInstall
     '';
+    doInstallCheck = true;
+    installCheckPhase = vu.mkMcpSmokeTest {bin = "git-intel-mcp";};
     meta.mainProgram = "git-intel-mcp";
   }

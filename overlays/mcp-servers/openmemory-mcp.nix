@@ -42,5 +42,7 @@ in
         --add-flags "serve"
       runHook postInstall
     '';
+    doInstallCheck = true;
+    installCheckPhase = vu.mkMcpSmokeTest {bin = "openmemory-mcp";};
     meta.mainProgram = "openmemory-mcp";
   }

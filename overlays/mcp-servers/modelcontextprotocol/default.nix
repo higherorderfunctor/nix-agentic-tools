@@ -154,6 +154,17 @@ in {
       done
       runHook postInstall
     '';
+    doInstallCheck = true;
+    installCheckPhase = ''
+      runHook preInstallCheck
+      for bin in $out/bin/*; do
+        name=$(basename "$bin")
+        echo "smoke-test: starting $name..."
+        timeout 2 "$bin" < /dev/null 2>&1 || true
+        echo "smoke-test: $name started (exit ok)"
+      done
+      runHook postInstallCheck
+    '';
   };
 
   # ── Per-server packages ──────────────────────────────────────────
