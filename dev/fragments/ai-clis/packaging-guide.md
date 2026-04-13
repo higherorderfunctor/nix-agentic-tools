@@ -18,35 +18,39 @@ Packages are exposed at top-level (`pkgs.github-copilot-cli`,
 
 **Binary fetch** (copilot-cli, kiro-cli): These packages use
 `overrideAttrs` on the existing nixpkgs derivation to pin the version
-and source from nvfetcher. The overlay fetches the pre-built tarball
-and overrides `src` and `version`.
+and source from a per-platform `sources.json` file. The overlay reads
+the JSON at eval time and overrides `src` and `version`.
 
 **Python application** (kiro-gateway): Built with `mkDerivation` using
-a `python.withPackages` environment. The source is fetched via
-nvfetcher from a git repository.
+a `python.withPackages` environment. The source is fetched via inline
+`rev` + `hash` with `fetchFromGitHub`.
 
-### nvfetcher Version Tracking
+### Version Tracking
 
-All three packages are tracked in the root `nvfetcher.toml`. Each uses
-a different source strategy:
+All three packages pin versions inline in their overlay `.nix` files.
+Each uses a different update strategy managed by `config/update-matrix.nix`:
 
-- `github-copilot-cli` — GitHub releases with version pattern matching
-- `kiro-cli` — AWS manifest endpoint (`curl` + `jq`)
-- `kiro-gateway` — git commit tracking on the main branch
+- `copilot-cli` — per-platform `sources.json` + `mkUpdateScript` fetches
+  latest GitHub release and prefetches per-platform binaries
+- `kiro-cli` — per-platform `sources.json` + `mkUpdateScript` fetches
+  latest version from AWS manifest endpoint
+- `kiro-gateway` — inline `rev` + `hash` with `mkGitRevUpdateScript`
+  for main-branch tracking; version via `mkVersion`
 
-The `sources.nix` file maps nvfetcher output keys to package names
-consumed by each `<package>.nix` file.
+The `overlays/lib.nix` file provides `mkVersion`, `mkUpdateScript`,
+and `mkGitRevUpdateScript` helpers consumed by each overlay file.
 
 ### The overrideAttrs Pattern
 
 copilot-cli and kiro-cli override existing nixpkgs packages rather
 than defining new derivations from scratch. This inherits upstream
 build logic (install phases, meta, dependencies) while pinning to
-nvfetcher-tracked versions:
+inline versions and per-platform sources:
 
 ```nix
-prev.<package>.overrideAttrs (_: {
-  inherit (nv) src version;
+ourPkgs.<package>.overrideAttrs (_: {
+  inherit (sources) version;
+  src = fetchurl { inherit (platformSrc) url hash; };
 })
 ```
 
@@ -59,5 +63,5 @@ fixes) are picked up automatically on nixpkgs bumps.
 nix build .#github-copilot-cli  # Build Copilot CLI
 nix build .#kiro-cli            # Build Kiro CLI
 nix build .#kiro-gateway        # Build Kiro Gateway
-nvfetcher                       # Update all source versions
+nix run .#update                # Update all source versions via update matrix
 ```

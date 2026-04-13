@@ -2,63 +2,81 @@
 
 ### Overlay Architecture
 
-MCP servers are packaged as a Nix overlay in `packages/mcp-servers/`.
-The overlay exposes all servers under `pkgs.nix-mcp-servers.*`.
+MCP servers are packaged as Nix overlay files in `overlays/mcp-servers/`.
+The unified overlay in `overlays/default.nix` exposes all servers under
+`pkgs.ai.mcpServers.*`.
 
-- `default.nix` — overlay entry point, calls each server package via
-  `callPkg` which auto-injects `nv-sources` and optional `inputs`
-- `sources.nix` — merges nvfetcher `generated.nix` with `hashes.json`
-  sidecar, producing `nv-sources.<name>` with version, src, and
-  optional dependency hashes
-- `<server>.nix` — individual server derivation (npm, Python, or Go)
+- `overlays/default.nix` — unified overlay entry point, imports each
+  per-package `.nix` file with `{inputs, final, ...}`
+- `overlays/lib.nix` — shared helpers: `mkVersion`, `mkGitRevUpdateScript`,
+  `mkUpdateScript`, `mkMcpSmokeTest`, version readers
+- `overlays/mcp-servers/<server>.nix` — individual server derivation
+  (npm, Python, or Go) with inline `rev` + `hash`
 
 ### Build Patterns
 
 Servers use one of three Nix builders depending on upstream language:
 
-- **npm** (`buildNpmPackage`) — context7-mcp, effect-mcp, git-intel-mcp,
-  openmemory-mcp, sequential-thinking-mcp. Require `npmDepsHash` in
-  `hashes.json` and a lockfile in `locks/`
-- **Python** (`buildPythonApplication`) — fetch-mcp, git-mcp, kagi-mcp,
-  mcp-proxy, sympy-mcp. Some use `pyproject = true` with hatchling or
-  setuptools
-- **Go** (`buildGoModule`) — github-mcp. Requires `vendorHash` in
-  `hashes.json`
+- **npm** (`buildNpmPackage` / pnpm override) — context7-mcp, effect-mcp,
+  git-intel-mcp, openmemory-mcp. Require `pnpmDeps` or `npmDeps` hash
+  inline in the overlay file
+- **Python** (`buildPythonApplication`) — kagi-mcp, mcp-proxy, sympy-mcp.
+  Some use `pyproject = true` with hatchling or setuptools
+- **Go** (`buildGoModule`) — github-mcp. Requires `vendorHash` inline in
+  the overlay file
 
-### hashes.json Sidecar Pattern
+### Inline Hash Pattern
 
-nvfetcher tracks source tarballs but cannot compute dependency hashes
-(npmDepsHash, vendorHash). These are stored in `hashes.json` alongside
-`generated.nix`. The `sources.nix` file merges both at evaluation time:
+Each package pins `rev` and `hash` directly in its overlay `.nix` file.
+No sidecar files or generated sources — everything is visible in one place:
 
+```nix
+# overlays/mcp-servers/context7-mcp.nix
+rev = "c31528d...";
+src = ourPkgs.fetchFromGitHub {
+  owner = "upstash";
+  repo = "context7";
+  inherit rev;
+  hash = "sha256-TMvDzD...";
+};
 ```
-generated.nix  →  { pname, version, src }
-hashes.json    →  { npmDepsHash } or { vendorHash }
-merged         →  nv-sources.<name> = { pname, version, src, npmDepsHash, ... }
+
+Version is computed at eval time from the source manifest via `mkVersion`:
+
+```nix
+version = vu.mkVersion {
+  upstream = vu.readPackageJsonVersion "${src}/packages/mcp/package.json";
+  inherit rev;
+};
+# → "1.2.3+c31528d"
 ```
 
-To update a dependency hash: build the package, copy the hash from the
-error message, and update `hashes.json`.
+Dependency hashes (pnpmDeps, vendorHash) are also inline in the same file.
 
 ### Adding a New Server
 
-1. Add an nvfetcher entry in the root `nvfetcher.toml`
-2. Run `nvfetcher` to regenerate `packages/mcp-servers/.nvfetcher/generated.nix`
-3. Create `packages/mcp-servers/<name>.nix` using the appropriate builder
-4. If the builder needs dependency hashes, add them to `hashes.json`
-5. For npm packages, add a lockfile to `packages/mcp-servers/locks/`
-6. Register the package in `packages/mcp-servers/default.nix` (both
-   `callPkg` and the `nix-mcp-servers` attrset)
-7. Export it in `flake.nix` under `packages`
-8. Add a server module in `modules/mcp-servers/servers/<name>.nix`
+1. Create `overlays/mcp-servers/<name>.nix` using the appropriate builder,
+   with inline `rev`, `hash`, and any dependency hashes
+2. Import it in `overlays/default.nix` under `mcpServerDrvs`
+3. For npm/pnpm packages, lockfiles go in `overlays/mcp-servers/locks/`
+   if not in the upstream repo
+4. Export it in `flake.nix` under `packages`
+5. Add a server module in `modules/mcp-servers/servers/<name>.nix`
+6. Register it in `config/update-matrix.nix` under `nixUpdate` with
+   the git remote URL for automated rev bumping
 
-### Building and Updating
+### Updating
 
 ```bash
 nix build .#<server-name>       # Build a single server
-nvfetcher                       # Update all source versions
+nix run .#update                # Run all updates via update matrix
 nix flake check                 # Verify evaluation
 ```
 
-After `nvfetcher` updates versions, rebuild to check for hash mismatches.
-Fix any broken hashes in `hashes.json`, then rebuild again.
+Updates use two mechanisms depending on package type:
+
+- **Main-tracking packages**: `mkGitRevUpdateScript` fetches the latest
+  commit via `git ls-remote`, then `nix-update --version skip` refreshes
+  all hashes
+- **Per-platform binaries**: `mkUpdateScript` fetches the latest release
+  version, prefetches each platform's binary, and writes to `sources.json`

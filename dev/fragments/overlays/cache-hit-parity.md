@@ -1,8 +1,8 @@
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-04-08 (commit pending — full rollout
+> **Last verified:** 2026-04-12 (commit pending — full rollout
 > across git-tools, mcp-servers, and ai-clis). If you touch any
-> `packages/<group>/*.nix` overlay file or the overlay composition
+> `overlays/<name>.nix` overlay file or the overlay composition
 > machinery and this fragment isn't updated in the same commit,
 > stop and fix it. Regressions are gated by the
 > `checks.cache-hit-parity` flake check (see "Verification" below).
@@ -24,39 +24,53 @@ every consumer rebuild.
 ### The pattern
 
 ```nix
-# packages/git-tools/git-branchless.nix — CORRECT
-{inputs}: sources: final: _prev: let
+# overlays/git-tools/git-branchless.nix — CORRECT
+{inputs, final, ...}: let
   ourPkgs = import inputs.nixpkgs {
-    inherit (final) system;
+    inherit (final.stdenv.hostPlatform) system;
     overlays = [(import inputs.rust-overlay)];
     config.allowUnfree = true;
   };
-  nv = sources.git-branchless;
+  vu = import ../lib.nix;
+
+  rev = "abc1234...";
+  src = ourPkgs.fetchFromGitHub {
+    owner = "arxanas";
+    repo = "git-branchless";
+    inherit rev;
+    hash = "sha256-...";
+  };
   rust = ourPkgs.rust-bin.stable."1.88.0".default;
   rustPlatform = ourPkgs.makeRustPlatform { cargo = rust; rustc = rust; };
-in {
-  git-branchless = ourPkgs.git-branchless.override (_: {
+in
+  ourPkgs.git-branchless.override (_: {
     rustPlatform.buildRustPackage = args:
       rustPlatform.buildRustPackage (finalAttrs: let
         a = (ourPkgs.lib.toFunction args) finalAttrs;
       in a // {
-        inherit (nv) src cargoHash;
-        version = ourPkgs.lib.removePrefix "v" nv.version;
+        inherit src;
+        version = vu.mkVersion {
+          upstream = vu.readCargoWorkspaceVersion "${src}/Cargo.toml";
+          inherit rev;
+        };
+        cargoHash = "sha256-...";
       });
-  });
-}
+  })
 ```
 
-- `final.system` is the only thing we read from the consumer —
-  we need it to know which platform to instantiate `ourPkgs` for.
+- `final.stdenv.hostPlatform.system` is the only thing we read from
+  the consumer — we need it to know which platform to instantiate
+  `ourPkgs` for.
 - `ourPkgs` is built from THIS repo's `inputs.nixpkgs` plus any
   sub-overlays the package needs (rust-overlay here).
 - Every downstream reference (`ourPkgs.git-branchless`,
   `ourPkgs.rust-bin`, `ourPkgs.makeRustPlatform`, `ourPkgs.lib`)
   routes through `ourPkgs`, not `final`/`prev`.
-- The package function still takes `final: prev:` because the
-  overlay protocol requires it and consumers expect
-  `pkgs.git-branchless` to be available on their pkgs set.
+- Version is computed at eval time from the source via `mkVersion`,
+  producing `"x.y.z+abc1234"` (upstream version + short rev).
+- The per-package file takes `{inputs, final, ...}` and is imported
+  by `overlays/default.nix` which composes all packages into the
+  unified overlay.
 
 ### The trade-off (accepted in commit e5406977)
 

@@ -33,13 +33,12 @@ all overlays remain uniformly callable from `flake.nix`'s
 
 ```nix
 # flake.nix
-aiOverlay = import ./overlays {inherit inputs;};           # NEW — all binary drvs under pkgs.ai.*
+aiOverlay = import ./overlays {inherit inputs;};           # all binary drvs under pkgs.ai.*
 codingStandardsOverlay = import ./packages/coding-standards {};
 stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
 
 overlays.default = lib.composeManyExtensions [
-  nvSourcesOverlay          # exposes `final.nv-sources` from nvfetcher
-  aiOverlay                 # 24 binary packages under pkgs.ai.*
+  aiOverlay                 # 24+ binary packages under pkgs.ai.* and pkgs.gitTools.*
   codingStandardsOverlay    # content package
   stackedWorkflowsOverlay   # content package
 ];
