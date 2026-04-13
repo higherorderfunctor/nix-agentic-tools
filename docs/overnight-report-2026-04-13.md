@@ -339,3 +339,155 @@ fragments. Edit the source, not this file. -->` that only appears in
    which adds ~2-5s to every commit. Consider caching/fingerprinting to
    skip when fragments haven't changed. Currently devenv files.\* handles
    generation on shell entry; treefmt-restage handles re-staging.
+
+---
+
+## Addendum: 2026-04-13 daytime session
+
+### CI workflow first run results
+
+The update workflow (`update.yml`) ran on push. Setup steps all passed
+(App token, checkout, nix, cachix, tools). The ninja pipeline ran but
+had errors. PR creation step failed.
+
+**Fixes applied:**
+- `nix profile install` → `nix profile add` (deprecated alias warning)
+- Heredoc in YAML broke GHA parser → replaced with `--body-file`
+- `git branch --list` output has `+` markers for worktree branches →
+  strip with `tr -d ' *+'`
+- `NIX_PATH=nixpkgs=flake:nixpkgs` added (nix-update uses `import <nixpkgs>`)
+
+**After fixes:** Workflow YAML parsed correctly (name "Update" shown).
+Pipeline ran. PR creation step still failed due to the `+` marker
+issue (fixed in second push).
+
+### Known bug: two-phase commit eval cache staleness (NOT FIXED)
+
+**Severity:** Affects packages with upstream changes. No impact when
+packages are already at latest.
+
+**Symptoms:** `error: path '/nix/store/...-source.drv' is not valid`
+during nix-update evaluation in worktrees.
+
+**Root cause analysis:**
+
+The update flow for main-tracking packages:
+1. `git ls-remote` gets new rev
+2. `sed` replaces rev in the `.nix` file
+3. `nix flake prefetch` gets new src hash
+4. `sed` replaces hash in the `.nix` file
+5. `git commit --no-verify` (wip commit with rev + src hash)
+6. `nix-update --version skip` runs to update dep hashes (cargo, pnpm, vendor, etc.)
+
+Step 6 fails because nix-update evaluates the package via:
+```
+nix-instantiate --eval ... --argstr flakeImportPath /nix/store/<hash>-source ...
+```
+
+The `flakeImportPath` is a nix store copy of the worktree's flake source.
+After the wip commit (step 5), the store copy SHOULD reflect the new state.
+But nix's eval cache may serve a stale store path that references the OLD
+src hash derivation. The old derivation's output path doesn't exist in the
+store (it was for the old rev), causing the `path is not valid` error.
+
+**Why it works sometimes:** When there are no upstream changes (rev
+unchanged), steps 1-5 are skipped entirely. nix-update evaluates against
+the unchanged flake source, which is fully cached and valid.
+
+**Why it worked before the overnight session:** Before the two-phase
+commit was added, nix-update ran with `--commit` (which it handled
+internally). The two-phase approach was added to fix the pre-commit hook
+crash in worktrees (worktrees lack `.pre-commit-config.yaml`). The fix
+introduced the eval cache staleness as a side effect.
+
+**Possible fixes (not implemented, needs HITL):**
+
+1. **Delete the worktree's eval cache before nix-update:**
+   `rm -f ~/.cache/nix/eval-cache-v6/*.sqlite` — nuclear, affects all
+   evaluations, not just this worktree.
+
+2. **Use `--no-eval-cache` flag on nix-update's internal nix calls:**
+   nix-update doesn't expose this. Would need a patch or wrapper.
+
+3. **Force nix to re-evaluate the flake source:**
+   After the wip commit, run `nix flake metadata --json .` in the worktree
+   to force the flake source to be re-imported into the store. This should
+   populate the new store path before nix-update tries to use it.
+
+4. **Revert to single-commit approach with --no-verify:**
+   The pre-commit hook issue was the original reason for two-phase. But
+   we now symlink `.pre-commit-config.yaml` into worktrees. We could go
+   back to a single commit approach and let hooks run (they have the
+   config now). This would avoid the eval cache issue entirely.
+
+5. **Skip nix-update for dep hashes when rev changed:**
+   If the rev+hash was bumped, just commit that. Dep hash mismatches
+   will be caught by the build step (local) or CI (remote). The build
+   failure gets reported as HELD BACK with the version info. Next run,
+   if dep hashes need updating, nix-update can handle it from a clean
+   committed state.
+
+**Recommendation:** Option 4 (revert to single commit) is simplest.
+The pre-commit config symlink was added specifically to enable hooks in
+worktrees. The two-phase approach was a workaround for missing hooks —
+now that hooks work, the workaround is unnecessary. But this needs user
+review since the original two-phase design was explicitly approved.
+
+### OOM during local pipeline run
+
+**Symptoms:** System OOM killer invoked during `ninja -j4` local run.
+Killed Slack (pid 2385923) and Chromium (pid 2313660).
+
+**Root cause:** Not a regression — the pipeline always used `-j4` for
+parallel nix evaluations. Each flake eval uses 1-2GB. Four concurrent
+evals + desktop apps exhausted system memory.
+
+**Contributing factors from overnight work:**
+- any-buddy converted from `dontBuild` to full pnpm build + 203 tests
+- kiro-gateway gained 1413 pytest tests
+- These are the first builds of these new derivations (not cached)
+- The final `nix-fast-build` step evaluates all packages
+
+**Mitigation:** Use `-j2` or `-j1` for reduced memory pressure. Or
+close heavy apps before running. After the first successful build,
+derivations are cached and subsequent runs use much less memory.
+
+### CI workflow redesign (implemented, pushed)
+
+Redesigned from "Stage, Validate, Push" to Renovate-style per-dependency
+PRs. Key changes:
+
+**Scripts (`update-common.sh`):**
+- `UPDATE_CI=1` env var enables CI mode
+- `setup_worktree`: always uses named branch `update/<name>` (unified
+  with local — no more detached HEAD)
+- `run_build`: wrapper that skips in CI mode
+- `merge_to_branch`: skips cherry-pick in CI mode
+- `update-init.sh`: cleans up stale `update/*` branches, strips `+`
+
+**Workflow (`update.yml`):**
+- GitHub App token (`nix-agentic-tools-bot`) for PR creation
+- Triggers: push + manual dispatch (no schedule)
+- Runs ninja with `UPDATE_CI=1` (no builds, no cherry-picks)
+- After ninja: iterates `update/*` branches, pushes each, opens PRs
+- Self-trigger guard: `github.actor != 'nix-agentic-tools-bot[bot]'`
+
+**GITHUB_TOKEN gap resolved:** Using GitHub App token. PRs created by
+the app DO trigger `pull_request` events in ci.yml (confirmed from
+GitHub docs: only `GITHUB_TOKEN` has the recursive prevention, not
+app installation tokens).
+
+### GitHub instruction files tracking
+
+Fixed: removed `.github/instructions/` and `.github/copilot-instructions.md`
+from `.gitignore`. These are generated by devenv but must be committed
+for Copilot auto-review. 8 previously-ignored files now tracked.
+
+### treefmt drift (devenv shell vs commit hook)
+
+`devenv shell` entry runs treefmt on ALL files. Pre-commit hook runs
+treefmt only on staged files. This causes drift when shfmt settings
+change (files committed with old formatting get reformatted on shell
+entry). No clean fix found — formatting all files in the hook would
+stage unrelated changes. Accepted as a known quirk. Workaround: commit
+the reformatted file when it appears.
