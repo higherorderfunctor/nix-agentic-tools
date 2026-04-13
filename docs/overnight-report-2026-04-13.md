@@ -313,6 +313,26 @@ Documentation (not fragment candidates):
 - `packages/stacked-workflows/skills/**/*.md` (20+ files) — published skills
 - `packages/stacked-workflows/references/*.md` (5 files) — published references
 
-Some `.github/instructions/*.md` files are SOURCE (not generated) — these
-may be manually created and not yet migrated to the fragment pipeline.
-Worth auditing.
+Some `.github/instructions/*.md` files are tracked SOURCE — they must stay
+committed because Copilot auto-review reads from the repo. devenv generates
+them on shell entry; the commit hook guards staleness.
+
+## Open ideas from user (captured for next session)
+
+1. **Ecosystem-specific instructions in fragment comments** — the Claude
+   transform could inject a note like `<!-- This file is generated from
+   fragments. Edit the source, not this file. -->` that only appears in
+   Claude rule files. Could tell Claude to `git add` these files. Research:
+   how do other projects handle generated-but-committed file instructions?
+
+2. **Code to markdown flows** — overlays/README.md package table should be
+   inferred from overlay metadata at eval time (reflection pattern).
+   String-interpolate into a fragment, fan out to README.
+
+3. **Doc comments as fragments** — RFC 145 `/**` comments in `.nix` files
+   extracted into the fragment pipeline. See Nix doc tooling research above.
+
+4. **devenv generates + commit hook guards** — universal pattern. devenv
+   shell entry produces the files, commit hook validates they are fresh.
+   Already partially implemented (devenv files.* for instruction files).
+   Could extend to all generated-but-committed files.
