@@ -76,8 +76,13 @@ jobs:
       # compute versions at eval time. Fresh CI runners don't have these
       # sources realized. nix flake check --no-build triggers eval which
       # fetches all sources as a side effect. Cachix daemon pushes them.
+      # Warm the flake eval cache BEFORE the ninja pipeline.
+      # Our overlays use IFD (builtins.readFile on fetchFromGitHub) to
+      # compute versions at eval time. Fresh CI runners don't have these
+      # sources realized. nix flake check --no-build triggers eval which
+      # fetches all sources as a side effect. Cachix daemon pushes them.
       - name: Warm flake eval (prefetch all sources)
-        run: nix flake check --no-build || true
+        run: nix flake check --no-build
 
       # Run ninja pipeline in CI mode:
       # - UPDATE_CI=1: skip builds, skip cherry-picks
