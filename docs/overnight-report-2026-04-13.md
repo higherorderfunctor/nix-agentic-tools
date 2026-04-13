@@ -497,3 +497,72 @@ change (files committed with old formatting get reformatted on shell
 entry). No clean fix found — formatting all files in the hook would
 stage unrelated changes. Accepted as a known quirk. Workaround: commit
 the reformatted file when it appears.
+
+### CI eval failure on update PRs (NOT FIXED — needs design decision)
+
+**Severity:** Blocks ALL update PRs from passing CI.
+
+**Symptoms:** Every update PR fails ci.yml at "Check flake evaluation"
+with `error: path '...-source.drv' is not valid`. Fails on both
+x86_64-linux and aarch64-darwin.
+
+**Root cause: Import From Derivation (IFD) during eval.**
+
+Our overlays compute version at eval time from the fetched source:
+```nix
+version = vu.mkVersion {
+  upstream = vu.readPackageJsonVersion "${src}/package.json";
+  inherit rev;
+};
+```
+
+`builtins.readFile "${src}/package.json"` is IFD — nix must realize
+(fetch) the `fetchFromGitHub` derivation before evaluation can continue.
+On the CI runner evaluating a PR branch:
+1. PR has new rev + new src hash
+2. CI runner does `nix flake check` or `nix eval`
+3. Nix tries to realize `fetchFromGitHub { rev = "newrev"; hash = "newhash"; }`
+4. The source derivation (`.drv`) doesn't exist in the runner's store
+5. It's not in cachix (update pipeline skipped builds in CI mode)
+6. Nix errors with `path is not valid` instead of fetching from GitHub
+
+**Why it worked locally:** Local machine has sources cached from
+prior builds. CI runners start fresh.
+
+**Fix options:**
+
+1. **Stop computing version from source at eval time.** Use literal
+   version strings written by the update script. Eliminates IFD. Loses
+   auto-computed version feature. Update script already has version info
+   from nix-update output.
+
+2. **Prefetch sources before pushing PR branches.** Add a step to the
+   update workflow that runs `nix build .#<pkg>.src --no-link` for each
+   updated package. Fetches the source, cachix daemon pushes it. CI
+   runner substitutes during eval. One extra GitHub tarball fetch per
+   updated package — fast.
+
+3. **Run `nix build .#<pkg>.src` in the update script** (even in CI
+   mode). Similar to option 2 but inside the script instead of workflow.
+
+4. **Change ci.yml to allow IFD / use `--impure`.** Weakens eval purity.
+   Not recommended.
+
+**Recommendation:** Option 2 or 3. Prefetch the source so it's in
+cachix for the CI runner. Minimal change, doesn't alter architecture.
+Option 1 is cleaner long-term but larger refactor of the version
+computation pattern.
+
+### Docs workflow scope fix
+
+Fixed: `branches: ["**"]` → `[main, refactor/ai-factory-architecture]`.
+Was triggering docs builds on every `update/*` branch push, causing
+Pages deployment races and unnecessary builds.
+
+### Eval cache fix (single commit + amend)
+
+Implemented option 4 from the analysis: replaced two-phase wip commits
+with single real commit + amend for dep hashes. Hooks run on the first
+commit (pre-commit config symlinked). Dep hash changes amend into same
+commit. Eliminates the eval cache staleness issue for local runs.
+CI eval failure is a separate issue (IFD, see above).
