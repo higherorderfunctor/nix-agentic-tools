@@ -28,13 +28,18 @@ if [ -n "$new_rev" ]; then
       new_hash=$(nix flake prefetch --json "github:cpaczek/any-buddy/$new_rev" 2>/dev/null | jq -r '.hash // empty')
       if [ -n "$new_hash" ]; then
         sed -i "s|$old_hash|$new_hash|" "$target_file"
+        log_info "Hash updated in any-buddy.nix"
       fi
     fi
     log_info "any-buddy rev: ${old_rev:0:7} -> ${new_rev:0:7}"
+
+    # Commit rev + src hash so nix-update has a clean tree to evaluate against.
+    git -C "$wt" add -A
+    git -C "$wt" commit --no-verify -m "wip: bump rev any-buddy"
   fi
 fi
 
-# Phase 1: Update hashes for both
+# Phase 1: Update dep hashes via nix-update (needs clean committed state)
 log_info "Running nix-update for any-buddy + claude-code..."
 if ! (
   cd "$wt"
@@ -45,18 +50,27 @@ if ! (
     nix run --inputs-from . nix-update -- --flake claude-code --system "$system" --use-update-script
   } 2>&1 | tee "$version_file"
 
-  # Check if either made changes
-  if git -C "$wt" diff --quiet && git -C "$wt" diff --staged --quiet; then
+  # Check if nix-update made any dep hash changes
+  if ! git -C "$wt" diff --quiet || ! git -C "$wt" diff --staged --quiet; then
+    git -C "$wt" add -A
+    git -C "$wt" commit --no-verify -m "wip: update dep hashes any-buddy + claude-code"
+  fi
+
+  # Squash all worktree commits into one
+  base=$(cat "$wt/.update-base")
+  if [ "$(git -C "$wt" rev-parse HEAD)" != "$base" ]; then
+    git -C "$wt" reset --soft "$base"
+    git -C "$wt" commit -m "chore(overlays): update any-buddy + claude-code"
+  fi
+
+  # Check if anything actually changed from base
+  if [ "$(git -C "$wt" rev-parse HEAD)" = "$base" ]; then
     exit 0
   fi
 
   # Phase 2: Both must build (runs derivation-level tests)
   # TODO: additional checks, smoke tests (future validation phase)
   nix build ".#any-buddy" ".#claude-code" --no-link --log-format bar-with-logs
-
-  # Phase 3: Commit only after build passes
-  git -C "$wt" add -A
-  git -C "$wt" commit -m "chore(overlays): update any-buddy + claude-code"
 ); then
   version_detail=$(parse_pkg_version "$version_file")
   report_held_back "any-buddy+claude-code" "combo update or build failed" "$version_detail"
