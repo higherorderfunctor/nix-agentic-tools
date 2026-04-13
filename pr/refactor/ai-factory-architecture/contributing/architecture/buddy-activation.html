@@ -34,7 +34,7 @@
             const path_to_root = "../../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../../searchindex-0acf684b.js";
+            window.path_to_searchindex_js = "../../searchindex-176dcccb.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../../toc-841f2094.js"></script>
@@ -181,24 +181,24 @@
                     <main>
                         <h2 id="buddy-activation-lifecycle"><a class="header" href="#buddy-activation-lifecycle">Buddy Activation Lifecycle</a></h2>
 <blockquote>
-<p><strong>Last verified:</strong> 2026-04-08 (pending — fixes silent-activation-abort bug). If you touch
-<code>modules/claude-code-buddy/default.nix</code>, the any-buddy worker
-invocation, the fingerprint scheme, or how cli.js gets patched
-and this fragment isn’t updated in the same commit, stop and
-fix it.</p>
+<p><strong>Last verified:</strong> 2026-04-12 (commit 0f8ad25). If you touch
+the buddy activation script in <code>packages/claude-code/lib/mkClaude.nix</code>,
+the any-buddy worker invocation, the fingerprint scheme, or how
+the binary gets patched and this fragment isn’t updated in the
+same commit, stop and fix it.</p>
 </blockquote>
 <p>When a user configures <code>programs.claude-code.buddy = { ... }</code>
 (canonical) or <code>ai.claude.buddy = { ... }</code> (fanout from
 <code>modules/ai/default.nix</code>), an HM activation script runs on every
 <code>home-manager switch</code>. It computes a fingerprint, compares to the
-stored one, and on mismatch: refreshes a writable cli.js copy,
-runs the any-buddy worker, patches the salt into cli.js, and
+stored one, and on mismatch: copies the binary to a writable location,
+runs the any-buddy worker, patches the salt into the binary, and
 resets the companion field in <code>~/.claude.json</code>.</p>
 <h3 id="fingerprint-inputs"><a class="header" href="#fingerprint-inputs">Fingerprint inputs</a></h3>
 <p>The fingerprint is <code>sha256sum</code> of a newline-separated concatenation
 of:</p>
 <ol>
-<li>The store path of <code>baseClaudeCode/lib/node_modules/@anthropic-ai/claude-code</code>
+<li>The store path of the claude binary (<code>cfg.package/bin/claude</code>)
 (so a claude-code version bump invalidates)</li>
 <li>The resolved <code>$USER_ID</code> (from <code>userId.text</code> or
 <code>cat $USER_ID_FILE</code>)</li>
@@ -213,7 +213,7 @@ of:</p>
 <p>Only the first 16 hex chars of the sha256 are stored. Stored at
 <code>$XDG_STATE_HOME/claude-code-buddy/fingerprint</code>.</p>
 <p><strong>If fingerprint matches, the update block is skipped via an
-<code>if</code>/<code>fi</code> guard.</strong> The entire update pipeline (cli.js rewrite,
+<code>if</code>/<code>fi</code> guard.</strong> The entire update pipeline (binary copy,
 salt patch, companion reset, fingerprint save) is gated so
 re-running <code>home-manager switch</code> with unchanged config is fast.</p>
 <p><strong>CRITICAL — do NOT use <code>exit 0</code> for the short-circuit.</strong> HM
@@ -248,7 +248,7 @@ Always use <code>if [ "$NEW_FP" != "$OLD_FP" ]; then ... fi</code> — never
 </div>
 <p>Explicitly NOT triggering:</p>
 <ul>
-<li>User manually edits <code>cli.js</code> in the state dir (fingerprint only
+<li>User manually edits the binary in the state dir (fingerprint only
 tracks inputs, not outputs)</li>
 <li>User manually edits <code>~/.claude.json</code> <code>companion</code> field (runtime
 state, not tracked)</li>
@@ -262,21 +262,22 @@ normally happen</li>
 <code>userId.file</code> (sops path). File case uses <code>tr -d '\n\r'</code> to
 strip trailing whitespace. If file doesn’t exist, errors out
 with a pointer to sops-nix ordering.</li>
-<li><strong>Fresh writable lib tree</strong>: <code>rm -rf $STATE_DIR/lib</code>, <code>mkdir</code>,
-<code>cp -rs $STORE_LIB/* $STATE_DIR/lib/</code> (symlink tree to store),
-<code>chmod -R u+w</code>. Most files stay as symlinks into the nix store
-(read-only but discoverable).</li>
-<li><strong>Real cli.js copy</strong>: <code>rm $STATE_DIR/lib/cli.js</code> (the symlink
-created in step 2), <code>cp -L $STORE_LIB/cli.js $STATE_DIR/lib/cli.js</code>
-(real file), <code>chmod u+w</code>. Now cli.js is a writable copy, siblings
-are still store symlinks.</li>
+<li><strong>Copy binary</strong>: <code>mkdir -p $STATE_DIR</code>,
+<code>cp $STORE_BINARY $STATE_DIR/claude</code>, <code>chmod u+w</code>. The store
+binary is a Bun-compiled single-exec; the copy is the only
+mutable file in the state dir.</li>
 <li><strong>Salt search</strong>: <code>bun ${any-buddy}/src/finder/worker.ts "$USER_ID" species rarity eyes hat shiny peak dump | jq -r .salt</code>.
 Worker brute-forces a 15-char salt that hashes (via wyhash under
 Bun) to the desired traits. Validates output is 15 chars matching
 <code>[a-zA-Z0-9_-]</code>.</li>
-<li><strong>Patch cli.js</strong>: python3 binary-safe replace of <code>b'friend-2026-401'</code>
-with the new salt. The marker is 15 bytes, the salt is 15 bytes
-(constrained by the regex validation), so byte length is preserved.</li>
+<li><strong>Patch the binary</strong>: python3 binary-safe replace of
+<code>b'friend-2026-401'</code> with the new salt (3 occurrences in the
+compiled Bun binary). The marker is 15 bytes, the salt is 15
+bytes (constrained by the regex validation), so byte length is
+preserved. The script warns if the occurrence count is not
+exactly 3.</li>
+<li><strong>macOS: re-codesign</strong>: on Darwin, <code>/usr/bin/codesign --force --sign -</code> re-applies an ad-hoc code signature after binary
+modification. Skipped on Linux.</li>
 <li><strong>Reset companion</strong>: if <code>~/.claude.json</code> exists, <code>jq 'del(.companion)'</code>
 through a temp file. Otherwise skipped (first-run case).</li>
 <li><strong>Save fingerprint</strong>: write the new 16-char hash to
@@ -313,25 +314,24 @@ runs under Bun (wyhash). Runtime must ALSO run under Bun (via the
 wrapper chain — see <code>claude-code-wrapper</code> fragment). If the wrapper
 got bypassed and claude ran under Node, the runtime uses fnv1a and
 the salt produces a different buddy.</p>
-<p><strong>State dir corruption</strong>: <code>cp -rs</code> leaves a symlink tree into the
-store. If the underlying store paths get GC’d (rare, only if
-<code>claude-code</code> is uninstalled then a GC runs), the symlinks break.
-<code>rm -rf $XDG_STATE_HOME/claude-code-buddy/</code> and re-run
+<p><strong>State dir corruption</strong>: the state dir contains a real binary
+copy (not symlinks). If the binary gets corrupted or manually
+truncated, <code>rm -rf $XDG_STATE_HOME/claude-code-buddy/</code> and re-run
 <code>home-manager switch</code> — activation script rebuilds from scratch.</p>
 <h3 id="verifying-activation-worked"><a class="header" href="#verifying-activation-worked">Verifying activation worked</a></h3>
 <p>After <code>home-manager switch</code>:</p>
 <ol>
 <li><code>ls $XDG_STATE_HOME/claude-code-buddy/fingerprint</code> — exists</li>
-<li><code>cat $XDG_STATE_HOME/claude-code-buddy/lib/cli.js | head -1</code> —
-real file, not a broken symlink</li>
-<li><code>grep -c friend-2026-401 $XDG_STATE_HOME/claude-code-buddy/lib/cli.js</code>
+<li><code>file $XDG_STATE_HOME/claude-code-buddy/claude</code> — should show
+an executable binary, not a broken symlink</li>
+<li><code>grep -c friend-2026-401 $XDG_STATE_HOME/claude-code-buddy/claude</code>
 — should be 0 (old marker replaced with new salt)</li>
 <li><code>jq .companion ~/.claude.json</code> — should be <code>null</code> until next
 claude launch</li>
 <li>Launch claude. <code>/buddy</code> should show the configured species.</li>
 </ol>
 <h3 id="not-here"><a class="header" href="#not-here">Not here</a></h3>
-<p>Wrapper chain, why Bun, <code>baseClaudeCode</code> passthru: see
+<p>Wrapper chain and buddy binary resolution: see
 <code>claude-code-wrapper</code> fragment in this same directory.</p>
 <p><code>ai.claude.buddy</code> fanout mechanics and the ai module’s per-CLI
 gating: see <code>ai-module-fanout</code> fragment under <code>modules/ai/</code>.</p>

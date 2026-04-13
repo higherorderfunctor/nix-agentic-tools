@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-0acf684b.js";
+            window.path_to_searchindex_js = "searchindex-176dcccb.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-841f2094.js"></script>
@@ -4496,128 +4496,127 @@ passthrough plan that operationalize this</li>
 <h1 id="claude-code-wrapper-chain-1"><a href="#claude-code-wrapper-chain-1" class="header">claude-code Wrapper Chain</a></h1>
 <h2 id="claude-code-wrapper-chain"><a class="header" href="#claude-code-wrapper-chain">claude-code Wrapper Chain</a></h2>
 <blockquote>
-<p><strong>Last verified:</strong> 2026-04-07 (commit a56b8d4). If you touch
-<code>packages/ai-clis/claude-code.nix</code>, the buddy activation script,
-or the HM plugin wrapper integration and this fragment isn’t
-updated in the same commit, stop and fix it.</p>
+<p><strong>Last verified:</strong> 2026-04-12 (commit 0f8ad25). If you touch
+<code>overlays/claude-code.nix</code>, the buddy wrapper in
+<code>packages/claude-code/lib/mkClaude.nix</code>, or the HM plugin
+wrapper integration and this fragment isn’t updated in the same
+commit, stop and fix it.</p>
 </blockquote>
-<p>The <code>claude</code> binary a user invokes goes through <strong>two wrappers</strong>
-before reaching the actual JavaScript CLI. Debugging any runtime
-oddity (missing env vars, wrong cli.js being run, broken
-<code>--plugin-dir</code>) requires knowing the full chain.</p>
-<h3 id="the-chain"><a class="header" href="#the-chain">The chain</a></h3>
+<p>Claude Code ships as a <strong>pre-built compiled binary</strong> (a Bun
+single-exec). The base package (<code>overlays/claude-code.nix</code>)
+installs it directly as <code>$out/bin/claude</code>. When buddy is enabled,
+a thin wrapper is layered on top at the HM module level.</p>
+<h3 id="the-chain-no-buddy"><a class="header" href="#the-chain-no-buddy">The chain (no buddy)</a></h3>
 <pre><code>claude             (HM plugin wrapper, from nixpkgs claude-code module)
-  → .claude-wrapped  (our Bun runtime wrapper, added by claude-code.nix)
-    → bun run cli.js  (the actual CLI under Bun runtime)
+  → $out/bin/claude  (pre-built binary from overlays/claude-code.nix)
 </code></pre>
 <ol>
 <li><strong>HM plugin wrapper</strong> (<code>$out/bin/claude</code>): a short bash script
 produced by nixpkgs’ <code>programs.claude-code</code> module. It execs
-<code>.claude-wrapped</code> with a <code>--plugin-dir &lt;store-path&gt;</code> argument
-pointing at a generated plugin store path.</li>
-<li><strong>Our Bun wrapper</strong> (<code>$out/bin/.claude-wrapped</code>): a bash script
-generated inside <code>packages/ai-clis/claude-code.nix</code> by the
-<code>symlinkJoin</code> postBuild. Always installed, whether or not a
-buddy is configured. Its job is to pick which <code>cli.js</code> to run
-(user state or store) and exec it under Bun.</li>
-<li><strong>Bun runtime</strong> (<code>${bun}/bin/bun run $CLI</code>): the actual JS
-executor. Under Bun, <code>typeof Bun !== "undefined"</code> in the
-process, which claude-code’s buddy hashing detects and uses
-to route to wyhash (instead of fnv1a on Node).</li>
+the underlying binary with a <code>--plugin-dir &lt;store-path&gt;</code>
+argument pointing at a generated plugin store path.</li>
+<li><strong>Pre-built binary</strong>: the compiled Bun single-exec fetched from
+Anthropic’s GPG-signed manifest. Bun is embedded in the
+binary — no external Bun dependency needed at runtime.</li>
 </ol>
-<h3 id="why-bun-1"><a class="header" href="#why-bun-1">Why Bun</a></h3>
-<p>The any-buddy worker computes a 15-char salt that hashes, together
-with the user’s UUID, to the desired buddy traits. Claude-code’s
-runtime buddy hash function is <code>wyhash</code> when <code>typeof Bun !== "u"</code>
-and <code>fnv1a</code> otherwise. If the salt is computed under wyhash and
-the runtime uses fnv1a (or vice versa), the buddy you asked for
-is NOT what hatches. Running under <code>bun run</code> ensures both the
-worker AND the runtime use wyhash. This is why the Bun wrapper
-is installed unconditionally, even when no buddy is configured —
-the wrapper is cheap insurance against accidental Node execution
-breaking a future buddy config.</p>
-<p>Bun adds ~95 MB to the runtime closure. Acceptable trade-off for
-the hash-consistency guarantee.</p>
-<h3 id="passthrubaseclaudecode"><a class="header" href="#passthrubaseclaudecode">passthru.baseClaudeCode</a></h3>
-<p><code>packages/ai-clis/claude-code.nix</code> builds a <code>symlinkJoin</code> around
-the base nixpkgs <code>claude-code</code> derivation, replacing <code>bin/claude</code>
-with the Bun wrapper. The wrapped join is <code>pkgs.claude-code</code> (what
-consumers get). The unwrapped base is exposed as
-<code>pkgs.claude-code.passthru.baseClaudeCode</code>.</p>
-<p>The buddy activation script in <code>modules/claude-code-buddy/</code> needs
-to find the store’s actual <code>cli.js</code> at the nixpkgs-managed path
-(under <code>lib/node_modules/@anthropic-ai/claude-code/cli.js</code>), not
-the wrapped binary. It does:</p>
-<pre><code class="language-nix">baseClaudeCode =
-  config.programs.claude-code.package.passthru.baseClaudeCode
-  or config.programs.claude-code.package;
-storeLib = "${baseClaudeCode}/lib/node_modules/@anthropic-ai/claude-code";
+<h3 id="the-chain-with-buddy"><a class="header" href="#the-chain-with-buddy">The chain (with buddy)</a></h3>
+<p>When <code>ai.claude.buddy.enable = true</code>, <code>mkClaude.nix</code> replaces
+<code>programs.claude-code.package</code> with a <code>symlinkJoin</code> that layers
+a buddy-dispatching wrapper script on top:</p>
+<pre><code>claude             (HM plugin wrapper, from nixpkgs claude-code module)
+  → $out/bin/claude  (buddy wrapper, from writeShellScriptBin in mkClaude.nix)
+    → $STATE_DIR/claude  (patched binary copy, if activation has run)
+    → cfg.package/bin/claude  (store binary fallback)
 </code></pre>
-<p>The <code>or</code> fallback handles the case where a user swaps out
-<code>programs.claude-code.package</code> with a non-nix-agentic-tools
-package that doesn’t have this passthru. The activation script
-still works — it just points at whatever <code>package</code> the HM config
-is using and hopes the <code>lib/node_modules/...</code> layout exists.</p>
-<h3 id="clijs-resolution-in-the-wrapper"><a class="header" href="#clijs-resolution-in-the-wrapper">cli.js resolution in the wrapper</a></h3>
-<p>The Bun wrapper has two code paths:</p>
-<pre><code class="language-bash">USER_LIB="${XDG_STATE_HOME:-$HOME/.local/state}/claude-code-buddy/lib"
-if [ -f "$USER_LIB/cli.js" ]; then
-  CLI="$USER_LIB/cli.js"          # buddy state copy (patched)
+<ol>
+<li><strong>HM plugin wrapper</strong>: same as above — <code>--plugin-dir</code> injection.</li>
+<li><strong>Buddy wrapper</strong> (<code>$out/bin/claude</code> from the <code>symlinkJoin</code>):
+a bash script generated by <code>writeShellScriptBin</code> inside
+<code>mkClaude.nix</code> (only when buddy is enabled). Checks for a
+patched binary at <code>$XDG_STATE_HOME/claude-code-buddy/claude</code>.</li>
+<li><strong>Patched binary or store fallback</strong>: the wrapper execs the
+patched copy if it exists (<code>-x</code> check), otherwise falls back
+to the unmodified store binary.</li>
+</ol>
+<h3 id="why-no-separate-bun-wrapper"><a class="header" href="#why-no-separate-bun-wrapper">Why no separate Bun wrapper</a></h3>
+<p>Claude Code migrated from a JavaScript <code>cli.js</code> entry point to a
+pre-compiled Bun single-exec binary. The binary embeds the Bun
+runtime, so there is no need for an external Bun wrapper. The old
+two-wrapper chain (<code>HM plugin → .claude-wrapped → bun run cli.js</code>)
+no longer exists.</p>
+<h3 id="hash-consistency"><a class="header" href="#hash-consistency">Hash consistency</a></h3>
+<p>The any-buddy worker still runs under Bun (via <code>${pkgs.bun}/bin/bun</code>
+in the activation script) to compute the salt using wyhash. The
+pre-built binary also uses wyhash because it IS a compiled Bun
+executable. Hash function parity between the worker and the
+runtime is guaranteed by the binary format — no wrapper needed.</p>
+<h3 id="the-base-package"><a class="header" href="#the-base-package">The base package</a></h3>
+<p><code>overlays/claude-code.nix</code> builds a <code>stdenv.mkDerivation</code> that
+fetches the platform-specific pre-built binary from Anthropic’s
+manifest and installs it as <code>$out/bin/claude</code>. Per-platform sources
+are tracked in <code>overlays/claude-code-sources.json</code>, managed by
+the package’s <code>updateScript</code>. No <code>symlinkJoin</code>, no
+<code>passthru.baseClaudeCode</code> — the overlay output is the raw binary
+package.</p>
+<p>The buddy activation script in <code>mkClaude.nix</code> references the
+store binary directly via <code>${cfg.package}/bin/claude</code> and copies
+it to the writable state directory for patching.</p>
+<h3 id="binary-resolution-in-the-buddy-wrapper"><a class="header" href="#binary-resolution-in-the-buddy-wrapper">Binary resolution in the buddy wrapper</a></h3>
+<p>The buddy wrapper has two code paths:</p>
+<pre><code class="language-bash">BUDDY_BIN="${XDG_STATE_HOME:-$HOME/.local/state}/claude-code-buddy/claude"
+if [ -x "$BUDDY_BIN" ]; then
+  exec "$BUDDY_BIN" "$@"          # patched binary copy
 else
-  CLI="$STORE_LIB/cli.js"         # store fallback (unpatched)
+  exec ${cfg.package}/bin/claude "$@"  # store binary fallback
 fi
-exec ${bun}/bin/bun run "$CLI" "$@"
 </code></pre>
 <p>When the buddy activation script has run at least once, a writable
-<code>cli.js</code> exists at <code>$XDG_STATE_HOME/claude-code-buddy/lib/cli.js</code>
-with the salt patched into it. The wrapper picks that up. Before
-first activation (or if the state dir is wiped), the wrapper falls
-back to the store cli.js, which runs claude-code normally without
-the custom buddy. No breakage either way — this is the “always
-wrapped, gracefully degrades” design.</p>
+binary exists at <code>$XDG_STATE_HOME/claude-code-buddy/claude</code> with
+the salt patched into it (3 occurrences of the <code>friend-2026-401</code>
+marker replaced). The wrapper picks that up. Before first
+activation (or if the state dir is wiped), the wrapper falls back
+to the store binary, which runs claude-code normally without the
+custom buddy. No breakage either way — the “gracefully degrades”
+design is preserved.</p>
 <h3 id="symptoms-and-what-they-mean"><a class="header" href="#symptoms-and-what-they-mean">Symptoms and what they mean</a></h3>
 <ul>
 <li><strong><code>claude</code> launches but the buddy is wrong</strong>: activation script
 probably didn’t run (check <code>$XDG_STATE_HOME/claude-code-buddy/fingerprint</code>
 exists) OR the salt the worker computed doesn’t match the
-claude-code runtime’s hash function (verify both are under Bun)</li>
-<li><strong>“Claude Code has switched from npm to native installer”</strong>
-snackbar warning every launch: the <code>Zj()</code> check in cli.js looks
-for <code>Bun.embeddedFiles.length &gt; 0</code>, which is true only for
-<code>bun build --compile</code> single-execs. We run a plain cli.js under
-<code>bun run</code> so embeddedFiles is empty. Suppressible via
-<code>DISABLE_INSTALLATION_CHECKS=1</code> env var — see the backlog.</li>
+runtime’s hash function (both should use wyhash via Bun)</li>
 <li><strong><code>cat $(which claude)</code> shows the HM plugin wrapper, not our
-Bun wrapper</strong>: expected. The HM plugin wrapper execs <code>.claude-wrapped</code>
-which IS our wrapper. Inspect <code>bin/.claude-wrapped</code> in the
-claude-code store path to see the Bun wrapper source.</li>
+buddy wrapper</strong>: expected. The HM plugin wrapper execs the
+underlying package’s <code>claude</code> binary. When buddy is enabled,
+that binary is actually the buddy wrapper script from the
+<code>symlinkJoin</code>. Inspect <code>bin/claude</code> in the symlinkJoin store
+path to see the buddy wrapper source.</li>
 </ul>
 <h3 id="not-here"><a class="header" href="#not-here">Not here</a></h3>
 <p>Buddy activation lifecycle (fingerprint semantics, salt search,
-cli.js patching, companion reset): see
+binary patching, companion reset): see
 <code>buddy-activation</code> fragment in this same directory.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="buddy-activation"><a href="#buddy-activation" class="header">Buddy Activation</a></h1>
 <h2 id="buddy-activation-lifecycle"><a class="header" href="#buddy-activation-lifecycle">Buddy Activation Lifecycle</a></h2>
 <blockquote>
-<p><strong>Last verified:</strong> 2026-04-08 (pending — fixes silent-activation-abort bug). If you touch
-<code>modules/claude-code-buddy/default.nix</code>, the any-buddy worker
-invocation, the fingerprint scheme, or how cli.js gets patched
-and this fragment isn’t updated in the same commit, stop and
-fix it.</p>
+<p><strong>Last verified:</strong> 2026-04-12 (commit 0f8ad25). If you touch
+the buddy activation script in <code>packages/claude-code/lib/mkClaude.nix</code>,
+the any-buddy worker invocation, the fingerprint scheme, or how
+the binary gets patched and this fragment isn’t updated in the
+same commit, stop and fix it.</p>
 </blockquote>
 <p>When a user configures <code>programs.claude-code.buddy = { ... }</code>
 (canonical) or <code>ai.claude.buddy = { ... }</code> (fanout from
 <code>modules/ai/default.nix</code>), an HM activation script runs on every
 <code>home-manager switch</code>. It computes a fingerprint, compares to the
-stored one, and on mismatch: refreshes a writable cli.js copy,
-runs the any-buddy worker, patches the salt into cli.js, and
+stored one, and on mismatch: copies the binary to a writable location,
+runs the any-buddy worker, patches the salt into the binary, and
 resets the companion field in <code>~/.claude.json</code>.</p>
 <h3 id="fingerprint-inputs"><a class="header" href="#fingerprint-inputs">Fingerprint inputs</a></h3>
 <p>The fingerprint is <code>sha256sum</code> of a newline-separated concatenation
 of:</p>
 <ol>
-<li>The store path of <code>baseClaudeCode/lib/node_modules/@anthropic-ai/claude-code</code>
+<li>The store path of the claude binary (<code>cfg.package/bin/claude</code>)
 (so a claude-code version bump invalidates)</li>
 <li>The resolved <code>$USER_ID</code> (from <code>userId.text</code> or
 <code>cat $USER_ID_FILE</code>)</li>
@@ -4632,7 +4631,7 @@ of:</p>
 <p>Only the first 16 hex chars of the sha256 are stored. Stored at
 <code>$XDG_STATE_HOME/claude-code-buddy/fingerprint</code>.</p>
 <p><strong>If fingerprint matches, the update block is skipped via an
-<code>if</code>/<code>fi</code> guard.</strong> The entire update pipeline (cli.js rewrite,
+<code>if</code>/<code>fi</code> guard.</strong> The entire update pipeline (binary copy,
 salt patch, companion reset, fingerprint save) is gated so
 re-running <code>home-manager switch</code> with unchanged config is fast.</p>
 <p><strong>CRITICAL — do NOT use <code>exit 0</code> for the short-circuit.</strong> HM
@@ -4667,7 +4666,7 @@ Always use <code>if [ "$NEW_FP" != "$OLD_FP" ]; then ... fi</code> — never
 </div>
 <p>Explicitly NOT triggering:</p>
 <ul>
-<li>User manually edits <code>cli.js</code> in the state dir (fingerprint only
+<li>User manually edits the binary in the state dir (fingerprint only
 tracks inputs, not outputs)</li>
 <li>User manually edits <code>~/.claude.json</code> <code>companion</code> field (runtime
 state, not tracked)</li>
@@ -4681,21 +4680,22 @@ normally happen</li>
 <code>userId.file</code> (sops path). File case uses <code>tr -d '\n\r'</code> to
 strip trailing whitespace. If file doesn’t exist, errors out
 with a pointer to sops-nix ordering.</li>
-<li><strong>Fresh writable lib tree</strong>: <code>rm -rf $STATE_DIR/lib</code>, <code>mkdir</code>,
-<code>cp -rs $STORE_LIB/* $STATE_DIR/lib/</code> (symlink tree to store),
-<code>chmod -R u+w</code>. Most files stay as symlinks into the nix store
-(read-only but discoverable).</li>
-<li><strong>Real cli.js copy</strong>: <code>rm $STATE_DIR/lib/cli.js</code> (the symlink
-created in step 2), <code>cp -L $STORE_LIB/cli.js $STATE_DIR/lib/cli.js</code>
-(real file), <code>chmod u+w</code>. Now cli.js is a writable copy, siblings
-are still store symlinks.</li>
+<li><strong>Copy binary</strong>: <code>mkdir -p $STATE_DIR</code>,
+<code>cp $STORE_BINARY $STATE_DIR/claude</code>, <code>chmod u+w</code>. The store
+binary is a Bun-compiled single-exec; the copy is the only
+mutable file in the state dir.</li>
 <li><strong>Salt search</strong>: <code>bun ${any-buddy}/src/finder/worker.ts "$USER_ID" species rarity eyes hat shiny peak dump | jq -r .salt</code>.
 Worker brute-forces a 15-char salt that hashes (via wyhash under
 Bun) to the desired traits. Validates output is 15 chars matching
 <code>[a-zA-Z0-9_-]</code>.</li>
-<li><strong>Patch cli.js</strong>: python3 binary-safe replace of <code>b'friend-2026-401'</code>
-with the new salt. The marker is 15 bytes, the salt is 15 bytes
-(constrained by the regex validation), so byte length is preserved.</li>
+<li><strong>Patch the binary</strong>: python3 binary-safe replace of
+<code>b'friend-2026-401'</code> with the new salt (3 occurrences in the
+compiled Bun binary). The marker is 15 bytes, the salt is 15
+bytes (constrained by the regex validation), so byte length is
+preserved. The script warns if the occurrence count is not
+exactly 3.</li>
+<li><strong>macOS: re-codesign</strong>: on Darwin, <code>/usr/bin/codesign --force --sign -</code> re-applies an ad-hoc code signature after binary
+modification. Skipped on Linux.</li>
 <li><strong>Reset companion</strong>: if <code>~/.claude.json</code> exists, <code>jq 'del(.companion)'</code>
 through a temp file. Otherwise skipped (first-run case).</li>
 <li><strong>Save fingerprint</strong>: write the new 16-char hash to
@@ -4732,25 +4732,24 @@ runs under Bun (wyhash). Runtime must ALSO run under Bun (via the
 wrapper chain — see <code>claude-code-wrapper</code> fragment). If the wrapper
 got bypassed and claude ran under Node, the runtime uses fnv1a and
 the salt produces a different buddy.</p>
-<p><strong>State dir corruption</strong>: <code>cp -rs</code> leaves a symlink tree into the
-store. If the underlying store paths get GC’d (rare, only if
-<code>claude-code</code> is uninstalled then a GC runs), the symlinks break.
-<code>rm -rf $XDG_STATE_HOME/claude-code-buddy/</code> and re-run
+<p><strong>State dir corruption</strong>: the state dir contains a real binary
+copy (not symlinks). If the binary gets corrupted or manually
+truncated, <code>rm -rf $XDG_STATE_HOME/claude-code-buddy/</code> and re-run
 <code>home-manager switch</code> — activation script rebuilds from scratch.</p>
 <h3 id="verifying-activation-worked"><a class="header" href="#verifying-activation-worked">Verifying activation worked</a></h3>
 <p>After <code>home-manager switch</code>:</p>
 <ol>
 <li><code>ls $XDG_STATE_HOME/claude-code-buddy/fingerprint</code> — exists</li>
-<li><code>cat $XDG_STATE_HOME/claude-code-buddy/lib/cli.js | head -1</code> —
-real file, not a broken symlink</li>
-<li><code>grep -c friend-2026-401 $XDG_STATE_HOME/claude-code-buddy/lib/cli.js</code>
+<li><code>file $XDG_STATE_HOME/claude-code-buddy/claude</code> — should show
+an executable binary, not a broken symlink</li>
+<li><code>grep -c friend-2026-401 $XDG_STATE_HOME/claude-code-buddy/claude</code>
 — should be 0 (old marker replaced with new salt)</li>
 <li><code>jq .companion ~/.claude.json</code> — should be <code>null</code> until next
 claude launch</li>
 <li>Launch claude. <code>/buddy</code> should show the configured species.</li>
 </ol>
 <h3 id="not-here-1"><a class="header" href="#not-here-1">Not here</a></h3>
-<p>Wrapper chain, why Bun, <code>baseClaudeCode</code> passthru: see
+<p>Wrapper chain and buddy binary resolution: see
 <code>claude-code-wrapper</code> fragment in this same directory.</p>
 <p><code>ai.claude.buddy</code> fanout mechanics and the ai module’s per-CLI
 gating: see <code>ai-module-fanout</code> fragment under <code>modules/ai/</code>.</p>
