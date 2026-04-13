@@ -25,10 +25,11 @@ NOT pushed — testing locally first.
 
 ---
 
-## Backlog: nvfetcher reference cleanup
+## Backlog: nvfetcher reference cleanup — COMPLETE (2026-04-12)
 
-55 stale references across the repo after nix-update migration.
-Fix fragments first → regenerate → cascade fixes 40+ generated files.
+55 stale references fixed. Fragments updated, instruction files
+regenerated, dead code removed. 1 reference kept (cspell dictionary).
+Items below marked for historical record.
 
 ### Dead code (fix directly)
 - [ ] `overlays/default.nix:25` — comment references deleted `memory/project_nvfetcher_overlay_pattern.md`
@@ -72,12 +73,15 @@ Fix fragments first → regenerate → cascade fixes 40+ generated files.
 
 ### Update pipeline improvements
 
-- [ ] Fix pre-commit hook to re-stage formatted files (treefmt formats but doesn't re-add)
-- [ ] Dirty tree guard at start of update:nix-update
-- [ ] Split update:nix-update into per-package devenv tasks (update:pkg:agnix etc.)
-- [ ] Audit main-branch packages: nix-update release check is wrong for main-tracking packages (reports e.g., 0.10.0+shortrev → 0.11.0 when main hasn't bumped yet). Use --version skip for main-tracking, release check only for release-tracking packages.
-- [ ] Parallel per-package updates via git worktrees + octopus merge
-- [ ] Per-package tasks as devenv DAG so devenv parallelizes automatically
+- [x] Fix pre-commit hook to re-stage formatted files — treefmt-restage hook added
+- [x] Dirty tree guard at start of pipeline — ninja init step
+- [x] Per-package ninja targets (replaced devenv DAG with ninja DAG)
+- [x] Audit main-branch packages — all use --version skip, context7 + github converted
+- [x] Parallel per-package updates via git worktrees + flock merge
+- [x] Version tracking in update report (old → new in UPDATED/HELD BACK entries)
+- [x] Smoke tests on all packages with binaries
+- [x] Unit/integration tests enabled on 7+ packages (~1720 tests total)
+- [ ] CI v4 "Stage, Validate, Push" — cross-platform validation before commit (designed, not pushed)
 
 ---
 
@@ -175,13 +179,12 @@ High confidence, small scope. Good for review sessions.
       NOT in nixpkgs, prefer GitHub source with releases over
       registry tarballs. User will inspect each one.
 
-- [ ] **Regenerate instruction files** — run
-      `devenv tasks run --mode before generate:instructions` and
-      commit any changes after overlay/factory refactors.
+- [x] **Regenerate instruction files** — now auto-generated via
+      devenv files.* on shell entry (2026-04-12).
 
-- [ ] **Update architecture fragments for factory structure** —
-      `.claude/rules/*.md` may reference deleted `modules/` paths.
-      Audit each fragment and fix stale prose.
+- [x] **Update architecture fragments for factory structure** —
+      buddy-activation + wrapper-chain fragments updated for binary
+      patching. nvfetcher refs removed from all fragments.
 
 - [ ] **Clean up `lib/options-doc.nix` stubs** — consolidate ad-hoc
       stub extensions from Tasks 3-6.

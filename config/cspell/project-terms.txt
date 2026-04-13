@@ -30,7 +30,6 @@ codepaths
 codesign
 contentpkgs
 convco
-endgroup
 coreutils
 cpaczek
 creds
@@ -48,6 +47,7 @@ docsite
 drvs
 dsolve
 dunder
+endgroup
 envrc
 fanout
 fanouts
