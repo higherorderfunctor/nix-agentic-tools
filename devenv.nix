@@ -6,6 +6,10 @@
 }: let
   mcpLib = import ./lib/mcp.nix {inherit lib;};
   inherit (mcpLib) mkPackageEntry;
+
+  # Fragment composition — same import as flake.nix, single source of truth.
+  # Returns { agentsMd, claudeFiles, claudeMd, copilotFiles, kiroFiles }.
+  gen = import ./dev/generate.nix {inherit lib pkgs;};
 in {
   imports = [
     ./lib/ai/sharedOptions.nix
@@ -22,7 +26,8 @@ in {
   overlays = [
     # Unified AI overlay (pkgs.ai.*, pkgs.gitTools.*)
     (import ./overlays {inherit inputs;})
-    # Content packages (pkgs.stacked-workflows-content)
+    # Content packages (pkgs.coding-standards, pkgs.stacked-workflows-content)
+    (import ./packages/coding-standards {})
     (import ./packages/stacked-workflows/overlay.nix {})
   ];
 
@@ -197,6 +202,31 @@ in {
     chmod -R u+w docs/src
     ${pkgs.mdbook}/bin/mdbook serve docs/ --open
   '';
+
+  # ── Generated Instruction Files ─────────────────────────────────────────
+  # Materialized from dev/generate.nix (same import as flake.nix).
+  # devenv files.* produces symlinks to nix store — auto-updated when
+  # fragment sources change and devenv re-evaluates.
+  files =
+    # CLAUDE.md + .claude/rules/*.md
+    {"CLAUDE.md".text = gen.claudeMd;}
+    // lib.mapAttrs' (name: content:
+      lib.nameValuePair ".claude/rules/${name}" {text = content;})
+    gen.claudeFiles
+    # AGENTS.md
+    // {"AGENTS.md".text = gen.agentsMd;}
+    # .github/copilot-instructions.md + .github/instructions/*.md
+    // lib.mapAttrs' (name: content:
+      lib.nameValuePair (
+        if name == "copilot-instructions.md"
+        then ".github/${name}"
+        else ".github/instructions/${name}"
+      ) {text = content;})
+    gen.copilotFiles
+    # .kiro/steering/*.md
+    // lib.mapAttrs' (name: content:
+      lib.nameValuePair ".kiro/steering/${name}" {text = content;})
+    gen.kiroFiles;
 
   # ── Shell Init ──────────────────────────────────────────────────────────
   enterShell = ''
