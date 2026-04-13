@@ -18,9 +18,18 @@ ANY_BUDDY_GIT="https://github.com/cpaczek/any-buddy.git"
 log_info "Fetching latest any-buddy rev..."
 new_rev=$(git ls-remote "$ANY_BUDDY_GIT" HEAD | cut -f1)
 if [ -n "$new_rev" ]; then
-  old_rev=$(grep -oP 'rev = "\K[a-f0-9]{40}' "$wt/overlays/any-buddy.nix" || true)
+  target_file="$wt/overlays/any-buddy.nix"
+  old_rev=$(grep -oP 'rev = "\K[a-f0-9]{40}' "$target_file" || true)
   if [ -n "$old_rev" ] && [ "$old_rev" != "$new_rev" ]; then
-    sed -i "s|$old_rev|$new_rev|g" "$wt/overlays/any-buddy.nix"
+    sed -i "s|$old_rev|$new_rev|g" "$target_file"
+    # Prefetch new source hash
+    old_hash=$(grep -oP 'hash = "\Ksha256-[^"]+' "$target_file" | head -1 || true)
+    if [ -n "$old_hash" ]; then
+      new_hash=$(nix flake prefetch --json "github:cpaczek/any-buddy/$new_rev" 2>/dev/null | jq -r '.hash // empty')
+      if [ -n "$new_hash" ]; then
+        sed -i "s|$old_hash|$new_hash|" "$target_file"
+      fi
+    fi
     log_info "any-buddy rev: ${old_rev:0:7} -> ${new_rev:0:7}"
   fi
 fi

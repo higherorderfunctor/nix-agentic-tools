@@ -21,7 +21,7 @@
     owner = "upstash";
     repo = "context7";
     inherit rev;
-    hash = "sha256-ML6yCceOPlX8pcDeUPfnSkzfJwMB4oScZgulXh6CgrA=";
+    hash = "sha256-TMvDzDcZd9hoYI84x+jewOJYkSrb1qwVRTdzD2SwG4U=";
   };
 in
   ourPkgs.context7-mcp.overrideAttrs (finalAttrs: _prev: {

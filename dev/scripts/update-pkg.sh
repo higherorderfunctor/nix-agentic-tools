@@ -31,14 +31,25 @@ if [ -n "$git_url" ]; then
   new_rev=$(git ls-remote "$git_url" HEAD | cut -f1)
   if [ -n "$new_rev" ]; then
     # Find the overlay file that references this repo (scoped to one file).
-    # fetchFromGitHub splits owner/repo; fetchgit uses the full URL.
-    # Search for the repo name (last path component) which appears in both patterns.
+    # Handles both fetchFromGitHub (repo = "name") and fetchgit (url = "...name...").
     repo_name=$(echo "$git_url" | sed 's|\.git$||' | grep -oP '[^/]+$')
-    target_file=$(grep -rl "\"$repo_name\"" "$wt/overlays" --include='*.nix' | head -1)
+    target_file=$(grep -rl "$repo_name" "$wt/overlays" --include='*.nix' | head -1)
     if [ -n "$target_file" ]; then
       old_rev=$(grep -oP 'rev = "\K[a-f0-9]{40}' "$target_file" | head -1 || true)
       if [ -n "$old_rev" ] && [ "$old_rev" != "$new_rev" ]; then
         sed -i "s|$old_rev|$new_rev|g" "$target_file"
+        # Also update the src hash — nix-update can't evaluate with a mismatched hash.
+        # Extract owner/repo for nix-prefetch-github, or use nix-prefetch-git for fetchgit.
+        old_hash=$(grep -oP 'hash = "\Ksha256-[^"]+' "$target_file" | head -1 || true)
+        if [ -n "$old_hash" ]; then
+          # Prefetch new source hash using nix flake prefetch (no extra tools needed)
+          flake_ref="github:$(echo "$git_url" | sed 's|\.git$||' | grep -oP 'github\.com/\K.*')/$new_rev"
+          new_hash=$(nix flake prefetch --json "$flake_ref" 2>/dev/null | jq -r '.hash // empty')
+          if [ -n "$new_hash" ]; then
+            sed -i "s|$old_hash|$new_hash|" "$target_file"
+            log_info "Hash updated in $(basename "$target_file")"
+          fi
+        fi
         log_info "Rev: ${old_rev:0:7} -> ${new_rev:0:7} in $(basename "$target_file")"
       fi
     fi
