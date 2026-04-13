@@ -64,6 +64,12 @@ if ! (
 
   # shellcheck disable=SC2086
   nix run --inputs-from . nix-update -- --flake "$name" --system "$system" $extra_flags 2>&1 | tee "$version_file"
+  # pipefail propagates nix-update failures through tee
+  nix_update_status=${PIPESTATUS[0]}
+  if [ "$nix_update_status" -ne 0 ]; then
+    log_failure "nix-update exited $nix_update_status"
+    exit 1
+  fi
 
   # Amend dep hash changes into the existing commit if any
   if ! git -C "$wt" diff --quiet || ! git -C "$wt" diff --staged --quiet; then

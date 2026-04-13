@@ -19,6 +19,10 @@ if ! (
 
   # Capture nix flake update output for version reporting
   nix flake update "$name" 2>&1 | tee "$version_file"
+  if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+    log_failure "nix flake update failed"
+    exit 1
+  fi
 
   # Regenerate devenv.yaml from updated flake.lock
   nix eval --raw --impure --expr 'import ./config/generate-devenv-yaml.nix {}' >devenv.yaml

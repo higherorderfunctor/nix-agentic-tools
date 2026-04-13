@@ -48,6 +48,11 @@ if ! (
     nix run --inputs-from . nix-update -- --flake any-buddy --system "$system" --version skip
     nix run --inputs-from . nix-update -- --flake claude-code --system "$system" --use-update-script
   } 2>&1 | tee "$version_file"
+  nix_update_status=${PIPESTATUS[0]}
+  if [ "$nix_update_status" -ne 0 ]; then
+    log_failure "nix-update exited $nix_update_status"
+    exit 1
+  fi
 
   # Amend dep hash changes into the existing commit if any
   if ! git -C "$wt" diff --quiet || ! git -C "$wt" diff --staged --quiet; then
