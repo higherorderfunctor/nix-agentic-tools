@@ -332,7 +332,10 @@ them on shell entry; the commit hook guards staleness.
 3. **Doc comments as fragments** — RFC 145 `/**` comments in `.nix` files
    extracted into the fragment pipeline. See Nix doc tooling research above.
 
-4. **devenv generates + commit hook guards** — universal pattern. devenv
-   shell entry produces the files, commit hook validates they are fresh.
-   Already partially implemented (devenv files.* for instruction files).
-   Could extend to all generated-but-committed files.
+4. **devenv generates + commit hook ALSO generates** — both trigger same
+   generation logic (DRY). devenv shell entry produces files; commit hook
+   also regenerates and re-stages. Catches edits to fragments without
+   re-entering devenv. Implementation note: hook would need `nix build`
+   which adds ~2-5s to every commit. Consider caching/fingerprinting to
+   skip when fragments haven't changed. Currently devenv files.* handles
+   generation on shell entry; treefmt-restage handles re-staging.
