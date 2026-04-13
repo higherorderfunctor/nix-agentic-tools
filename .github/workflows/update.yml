@@ -81,10 +81,17 @@ jobs:
       # compute versions at eval time. Fresh CI runners don't have these
       # sources. Evaluating the packages attrset triggers IFD fetches.
       # --allow-import-from-derivation is required for the eval to fetch.
+      # Warm: evaluate all package versions to trigger IFD source fetches.
+      # builtins.attrNames is lazy — doesn't trigger IFD. We need to force
+      # evaluation of each package's version (which reads from fetchFromGitHub
+      # sources). mapAttrs + version produces { name = "version-string"; }
+      # which forces full eval. Cachix daemon pushes fetched sources.
       - name: Warm flake eval (prefetch all sources)
         run: |
-          nix eval .#packages.x86_64-linux --apply builtins.attrNames --json \
-            --option allow-import-from-derivation true > /dev/null
+          nix eval --json \
+            --option allow-import-from-derivation true \
+            --apply 'pkgs: builtins.mapAttrs (n: p: p.version or p.name or "unknown") pkgs' \
+            .#packages.x86_64-linux > /dev/null
 
       # Run ninja pipeline in CI mode:
       # - UPDATE_CI=1: skip builds, skip cherry-picks
