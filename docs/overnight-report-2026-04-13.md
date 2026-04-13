@@ -351,6 +351,7 @@ The update workflow (`update.yml`) ran on push. Setup steps all passed
 had errors. PR creation step failed.
 
 **Fixes applied:**
+
 - `nix profile install` → `nix profile add` (deprecated alias warning)
 - Heredoc in YAML broke GHA parser → replaced with `--body-file`
 - `git branch --list` output has `+` markers for worktree branches →
@@ -372,6 +373,7 @@ during nix-update evaluation in worktrees.
 **Root cause analysis:**
 
 The update flow for main-tracking packages:
+
 1. `git ls-remote` gets new rev
 2. `sed` replaces rev in the `.nix` file
 3. `nix flake prefetch` gets new src hash
@@ -380,6 +382,7 @@ The update flow for main-tracking packages:
 6. `nix-update --version skip` runs to update dep hashes (cargo, pnpm, vendor, etc.)
 
 Step 6 fails because nix-update evaluates the package via:
+
 ```
 nix-instantiate --eval ... --argstr flakeImportPath /nix/store/<hash>-source ...
 ```
@@ -443,6 +446,7 @@ parallel nix evaluations. Each flake eval uses 1-2GB. Four concurrent
 evals + desktop apps exhausted system memory.
 
 **Contributing factors from overnight work:**
+
 - any-buddy converted from `dontBuild` to full pnpm build + 203 tests
 - kiro-gateway gained 1413 pytest tests
 - These are the first builds of these new derivations (not cached)
@@ -458,6 +462,7 @@ Redesigned from "Stage, Validate, Push" to Renovate-style per-dependency
 PRs. Key changes:
 
 **Scripts (`update-common.sh`):**
+
 - `UPDATE_CI=1` env var enables CI mode
 - `setup_worktree`: always uses named branch `update/<name>` (unified
   with local — no more detached HEAD)
@@ -466,6 +471,7 @@ PRs. Key changes:
 - `update-init.sh`: cleans up stale `update/*` branches, strips `+`
 
 **Workflow (`update.yml`):**
+
 - GitHub App token (`nix-agentic-tools-bot`) for PR creation
 - Triggers: push + manual dispatch (no schedule)
 - Runs ninja with `UPDATE_CI=1` (no builds, no cherry-picks)
