@@ -31,7 +31,6 @@ if [ -n "$git_url" ]; then
   log_info "Fetching latest rev from $git_url..."
   new_rev=$(git ls-remote "$git_url" HEAD | cut -f1)
   if [ -n "$new_rev" ]; then
-    # Find the overlay file that references this repo (scoped to one file).
     repo_name=$(echo "$git_url" | sed 's|\.git$||' | grep -oP '[^/]+$')
     target_file=$(grep -rl "$repo_name" "$wt/overlays" --include='*.nix' | head -1)
     if [ -n "$target_file" ]; then
@@ -52,7 +51,7 @@ if [ -n "$git_url" ]; then
 
         # Commit rev + src hash so nix-update has a clean tree to evaluate
         git -C "$wt" add -A
-        git -C "$wt" commit --no-verify -m "wip: bump rev $name"
+        git -C "$wt" commit -m "chore(overlays): update $name"
       fi
     fi
   fi
@@ -66,19 +65,13 @@ if ! (
   # shellcheck disable=SC2086
   nix run --inputs-from . nix-update -- --flake "$name" --system "$system" $extra_flags 2>&1 | tee "$version_file"
 
-  # Commit dep hash changes if any
+  # Amend dep hash changes into the existing commit if any
   if ! git -C "$wt" diff --quiet || ! git -C "$wt" diff --staged --quiet; then
     git -C "$wt" add -A
-    git -C "$wt" commit --no-verify -m "wip: update dep hashes $name"
+    git -C "$wt" commit --amend --no-edit
   fi
 
-  # Squash all worktree commits into one clean commit
-  if [ "$(git -C "$wt" rev-parse HEAD)" != "$base_head" ]; then
-    git -C "$wt" reset --soft "$base_head"
-    git -C "$wt" commit -m "chore(overlays): update $name"
-  fi
-
-  # Nothing changed
+  # Nothing changed from base
   if [ "$(git -C "$wt" rev-parse HEAD)" = "$base_head" ]; then
     exit 0
   fi

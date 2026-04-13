@@ -33,8 +33,9 @@ if [ -n "$new_rev" ]; then
     fi
     log_info "any-buddy rev: ${old_rev:0:7} -> ${new_rev:0:7}"
 
+    # Commit rev + src hash so nix-update has a clean tree to evaluate
     git -C "$wt" add -A
-    git -C "$wt" commit --no-verify -m "wip: bump rev any-buddy"
+    git -C "$wt" commit -m "chore(overlays): update any-buddy + claude-code"
   fi
 fi
 
@@ -48,19 +49,13 @@ if ! (
     nix run --inputs-from . nix-update -- --flake claude-code --system "$system" --use-update-script
   } 2>&1 | tee "$version_file"
 
-  # Commit dep hash changes if any
+  # Amend dep hash changes into the existing commit if any
   if ! git -C "$wt" diff --quiet || ! git -C "$wt" diff --staged --quiet; then
     git -C "$wt" add -A
-    git -C "$wt" commit --no-verify -m "wip: update dep hashes any-buddy + claude-code"
+    git -C "$wt" commit --amend --no-edit
   fi
 
-  # Squash all worktree commits into one clean commit
-  if [ "$(git -C "$wt" rev-parse HEAD)" != "$base_head" ]; then
-    git -C "$wt" reset --soft "$base_head"
-    git -C "$wt" commit -m "chore(overlays): update any-buddy + claude-code"
-  fi
-
-  # Nothing changed
+  # Nothing changed from base
   if [ "$(git -C "$wt" rev-parse HEAD)" = "$base_head" ]; then
     exit 0
   fi
