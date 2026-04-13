@@ -40,9 +40,6 @@ jobs:
           # cachix-action pushes built paths automatically when
           # authToken is set and the push target matches
 
-      - name: Check flake evaluation
-        run: nix flake check --no-build --option allow-import-from-derivation true
-
       - name: Install nix-fast-build
         run: nix profile add nixpkgs#nix-fast-build
 
