@@ -70,6 +70,12 @@ Items below marked for historical record.
 - [ ] Garnix CI exploration — garnix for builds, GHA for orchestration, cachix for distribution (see `memory/project_garnix_exploration.md`)
 - [x] Update `.claude/rules/claude-code.md` buddy-activation fragment — updated for binary patching
 - [ ] Fragment source linter — verify that every `<!-- Fragment: path -->` comment in generated files points to a source file that exists. Catch stale generated files, missing regen, or deleted sources.
+- [ ] CI GITHUB_TOKEN workaround — PRs by `github-actions[bot]` don't trigger `pull_request` events in ci.yml. Need PAT, GitHub App token, or `workflow_dispatch` bridge. See `memory/project_ci_v4_design.md`.
+- [ ] Commit hook regeneration — pre-commit hook should regenerate instruction files (same as devenv shell entry) and re-stage. DRY with `dev/generate.nix`. May need fingerprint cache to avoid ~2-5s nix build on every commit. See `docs/overnight-report-2026-04-13.md`.
+- [ ] Nix doc comments as fragments — extract RFC 145 `/**` comments from `.nix` source files into the fragment pipeline. Custom extractor needed (nixdoc expects flat attrsets, our overlays are functions). See `memory/reference_nix_doc_tooling.md`.
+- [ ] overlays/README.md table from nix eval — reflect overlay metadata at eval time, string-interpolate into a fragment. See `docs/overnight-report-2026-04-13.md` "code→markdown" section.
+- [ ] Ecosystem-specific instructions in fragment comments — Claude transform injects `<!-- This file is generated. Edit the source fragment. -->` or similar. Research how other projects handle generated-but-committed file instructions.
+- [ ] Code→markdown reflection pattern — general approach for inferring documentation from nix eval data instead of hand-maintained markdown. overlays/README.md is the first candidate.
 
 ### Update pipeline improvements
 
