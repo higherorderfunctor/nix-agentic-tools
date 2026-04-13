@@ -20,8 +20,6 @@ packages/stacked-workflows/skills/*/[0-9a-z]*-*
 .claude/skills/
 .config/github-copilot/
 .copilot/
-.github/copilot-instructions.md
-.github/instructions/
 .github/skills/
 .kiro/settings/
 .kiro/skills/

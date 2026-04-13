@@ -1,0 +1,64 @@
+---
+applyTo: "packages/stacked-workflows/**"
+---
+
+## Skill Routing — MANDATORY
+
+When the user is working with stacked commits, use the appropriate skill
+instead of running commands manually via Bash.
+
+<!-- prettier-ignore -->
+| Operation                                               | Skill            | Use INSTEAD of                                                 |
+| ------------------------------------------------------- | ---------------- | -------------------------------------------------------------- |
+| Audit stack quality before restructure                  | `/stack-summary` | Manual `git log` inspection                                    |
+| Commit uncommitted work as an atomic stack              | `/stack-plan`    | `git add -A && git commit` (single monolithic commit)          |
+| Edit earlier commit (content moves, structural changes) | `/stack-fix`     | Manual `git prev` + edit + `git amend` + `git restack --merge` |
+| Fix lines in earlier commit                             | `/stack-fix`     | `git absorb`, `git commit --fixup`, manual checkout + amend    |
+| Plan and build a commit stack from a description        | `/stack-plan`    | Ad-hoc `git record` / `git commit` without a plan              |
+| Push stack for review                                   | `/stack-submit`  | Manual `git sync` + `git submit` + `gh pr create`              |
+| Restructure/reorder existing commits                    | `/stack-plan`    | `git rebase -i`, `git reset --soft`, `git move` sequences      |
+| Split a large commit                                    | `/stack-split`   | `git rebase -i` + edit, `git reset HEAD^`                      |
+| Test across stack                                       | `/stack-test`    | Manual `git test run` or looping `git checkout` + test         |
+
+**RULE: Before running any git-branchless, git-absorb, or git-revise command
+via Bash, check if a skill covers the operation.** Skills include pre-flight
+checks, dry-run previews, conflict guidance, and post-operation verification
+that manual commands miss.
+
+## Stacked Workflows Development
+
+### Package Structure
+
+Stacked workflow content lives in `packages/stacked-workflows/` as a
+published content package. The home-manager module is in
+`modules/stacked-workflows/`.
+
+- `packages/stacked-workflows/skills/<name>/SKILL.md` — consumer-facing skill definitions
+- `packages/stacked-workflows/references/*.md` — tool reference docs shared by all skills
+- `dev/fragments/stacked-workflows/` — dev-only routing table and development guide
+- `modules/stacked-workflows/` — HM module with git config presets
+  and AI tool integrations
+- `packages/git-tools/` — overlay for git-absorb, git-branchless,
+  git-revise
+
+### Git Config Presets
+
+Two preset levels are exported via `lib.gitConfig` (essential aliases)
+and `lib.gitConfigFull` (extended configuration). The HM module wires
+these into `programs.git.extraConfig`.
+
+### AI Tool Integrations
+
+The `stacked-workflows.integrations` option generates skill routing
+instructions for each AI CLI ecosystem (Claude, Copilot, Kiro). When
+`integrations.<ecosystem>.enable = true`, the module writes the
+routing table fragment into the appropriate config path.
+
+### Building and Testing
+
+```bash
+nix build .#git-absorb          # Build git-absorb overlay
+nix build .#git-branchless      # Build git-branchless overlay
+nix build .#git-revise          # Build git-revise overlay
+nix flake check                 # Run module eval checks
+```

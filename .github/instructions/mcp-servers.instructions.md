@@ -1,0 +1,86 @@
+---
+applyTo: "packages/mcp-servers/**"
+---
+
+## MCP Server Packages
+
+### Overlay Architecture
+
+MCP servers are packaged as Nix overlay files in `overlays/mcp-servers/`.
+The unified overlay in `overlays/default.nix` exposes all servers under
+`pkgs.ai.mcpServers.*`.
+
+- `overlays/default.nix` — unified overlay entry point, imports each
+  per-package `.nix` file with `{inputs, final, ...}`
+- `overlays/lib.nix` — shared helpers: `mkVersion`, `mkGitRevUpdateScript`,
+  `mkUpdateScript`, `mkMcpSmokeTest`, version readers
+- `overlays/mcp-servers/<server>.nix` — individual server derivation
+  (npm, Python, or Go) with inline `rev` + `hash`
+
+### Build Patterns
+
+Servers use one of three Nix builders depending on upstream language:
+
+- **npm** (`buildNpmPackage` / pnpm override) — context7-mcp, effect-mcp,
+  git-intel-mcp, openmemory-mcp. Require `pnpmDeps` or `npmDeps` hash
+  inline in the overlay file
+- **Python** (`buildPythonApplication`) — kagi-mcp, mcp-proxy, sympy-mcp.
+  Some use `pyproject = true` with hatchling or setuptools
+- **Go** (`buildGoModule`) — github-mcp. Requires `vendorHash` inline in
+  the overlay file
+
+### Inline Hash Pattern
+
+Each package pins `rev` and `hash` directly in its overlay `.nix` file.
+No sidecar files or generated sources — everything is visible in one place:
+
+```nix
+# overlays/mcp-servers/context7-mcp.nix
+rev = "c31528d...";
+src = ourPkgs.fetchFromGitHub {
+  owner = "upstash";
+  repo = "context7";
+  inherit rev;
+  hash = "sha256-TMvDzD...";
+};
+```
+
+Version is computed at eval time from the source manifest via `mkVersion`:
+
+```nix
+version = vu.mkVersion {
+  upstream = vu.readPackageJsonVersion "${src}/packages/mcp/package.json";
+  inherit rev;
+};
+# → "1.2.3+c31528d"
+```
+
+Dependency hashes (pnpmDeps, vendorHash) are also inline in the same file.
+
+### Adding a New Server
+
+1. Create `overlays/mcp-servers/<name>.nix` using the appropriate builder,
+   with inline `rev`, `hash`, and any dependency hashes
+2. Import it in `overlays/default.nix` under `mcpServerDrvs`
+3. For npm/pnpm packages, lockfiles go in `overlays/mcp-servers/locks/`
+   if not in the upstream repo
+4. Export it in `flake.nix` under `packages`
+5. Add a server module in `modules/mcp-servers/servers/<name>.nix`
+6. Register it in `config/update-matrix.nix` under `nixUpdate` with
+   the git remote URL for automated rev bumping
+
+### Updating
+
+```bash
+nix build .#<server-name>       # Build a single server
+nix run .#update                # Run all updates via update matrix
+nix flake check                 # Verify evaluation
+```
+
+Updates use two mechanisms depending on package type:
+
+- **Main-tracking packages**: `mkGitRevUpdateScript` fetches the latest
+  commit via `git ls-remote`, then `nix-update --version skip` refreshes
+  all hashes
+- **Per-platform binaries**: `mkUpdateScript` fetches the latest release
+  version, prefetches each platform's binary, and writes to `sources.json`
