@@ -4,7 +4,7 @@
 # to produce a typed attrset that conforms to the common MCP server
 # schema (type, package, command, args, env, settings, url).
 #
-# This server is sourced from inputs.mcp-nixos (not nvfetcher-tracked).
+# This server is sourced from inputs.mcp-nixos (flake input).
 {
   lib,
   pkgs,

@@ -4,7 +4,7 @@
 # to produce a typed attrset that conforms to the common MCP server
 # schema (type, package, command, args, env, settings, url).
 #
-# This server is sourced from inputs.serena (not nvfetcher-tracked).
+# This server is sourced from inputs.serena (flake input).
 # The upstream package's main binary takes "start-mcp-server" as an arg
 # to run in MCP mode (see passthru.mcpArgs in the overlay).
 {

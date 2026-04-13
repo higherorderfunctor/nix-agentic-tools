@@ -74,7 +74,7 @@ Explicitly NOT triggering:
 - User manually edits `~/.claude.json` `companion` field (runtime
   state, not tracked)
 - claude-code autoupdate (if enabled) replaces the store — would
-  trigger, but our package pins via nvfetcher so autoupdate doesn't
+  trigger, but our package pins via nix-update so autoupdate doesn't
   normally happen
 
 ### What the activation script does on re-run

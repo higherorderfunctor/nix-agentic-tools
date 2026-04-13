@@ -2,8 +2,8 @@
 #
 # The binary derivation itself lives in overlays/kiro-cli.nix
 # (not here — binaries are the flat-overlay exception to Bazel-style).
-# The darwin platform variant (kiro-cli-darwin) is an nvfetcher-only
-# entry; the single kiro-cli package handles both platforms internally.
+# The single kiro-cli package handles both platforms internally
+# via per-platform sources.json.
 # This file exposes the non-binary facets: modules, fragments, docs,
 # and factory-of-factory contribution to lib.ai.apps.mkKiro.
 {
