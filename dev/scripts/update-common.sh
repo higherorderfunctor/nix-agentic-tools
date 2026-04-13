@@ -5,7 +5,7 @@ set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 
 WORKTREES_DIR="$PWD/.worktrees"
-MERGE_LOCK="/run/user/$(id -u)/nix-update-merge"
+MERGE_LOCK="${MERGE_LOCK:-/run/user/$(id -u)/nix-update-merge}"
 REPORT_FILE="$PWD/.update-report.txt"
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 

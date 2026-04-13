@@ -1,19 +1,25 @@
-# CI pipeline: update sources → build per-platform → commit.
+# CI pipeline v4: ninja-based DAG update pipeline.
 #
-# Phase 1: update sources + compute dep hashes (ubuntu-only)
-# Phase 2: build packages + warm devenv cache (per-platform)
-# Phase 3: commit (only if ALL builds pass)
+# Runs the same ninja update pipeline used locally:
+#   init → input updates (parallel) → package updates (parallel, -j4)
+#   → treefmt → final build → report
 #
-# Packages are built directly with nix-fast-build (no devenv eval).
-# cachix-action daemon pushes every completed derivation immediately.
-# devenv cache is warmed LAST — overlay packages are cachix hits by then.
-# See docs/superpowers/specs/2026-04-10-ci-update-pipeline-design.md
+# Phase 1 (ubuntu): run ninja pipeline, push per-target commits
+# Phase 2 (per-platform matrix): build all packages, warm devenv cache
+#
+# Each ninja target runs in a git worktree, builds to validate,
+# and cherry-picks commits to the branch on success. Failed targets
+# are reported but don't block other updates.
+#
+# See: config/generate-update-ninja.nix, dev/scripts/update-*.sh
 name: Update
 
-# Disabled: pipeline needs rewrite for nix-update era (see CI v3 spec).
-# Re-enable after CI v3 implementation.
 on:
+  push:
+    branches: [refactor/ai-factory-architecture]
   workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * *"
 
 concurrency:
   group: update-${{ github.ref }}
@@ -22,64 +28,115 @@ concurrency:
 permissions:
   contents: write
 
-# TODO: remove once DeterminateSystems/nix-installer-action ships node24
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  BRANCH_NAME: refactor/ai-factory-architecture
 
 jobs:
-  # ── Phase 1: update sources + compute hashes (ubuntu-only) ───────
-  update-sources:
+  # ── Phase 1: ninja update pipeline (ubuntu-only) ─────────────────
+  update:
     runs-on: ubuntu-latest
+    # Skip if this push was made by the bot (prevents self-triggering).
+    # Manual dispatch and schedule always run.
+    if: >-
+      github.actor != 'github-actions[bot]'
+      || github.event_name == 'workflow_dispatch'
+      || github.event_name == 'schedule'
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             accept-flake-config = true
-      # Daemon mode here too: dep derivations built during hash
-      # computation (pnpmDeps, cargoDeps, etc.) get pushed to cachix
-      # so Phase 2 runners don't rebuild them.
+
+      # Daemon mode: derivations built during nix-update get pushed
+      # to cachix immediately. Phase 2 runners fetch as substitutions.
       - uses: cachix/cachix-action@v17
         with:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: Update flake inputs
-        run: nix develop .#ci -c nix flake update
-      - name: Update devenv lock
-        run: nix develop .#ci -c devenv update
-      - name: Update nvfetcher sources
-        run: nix develop .#ci -c nvfetcher -c config/nvfetcher/nvfetcher.toml -o overlays/sources
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # Install tools the ninja pipeline needs in PATH.
+      # nix-fast-build and nix-update resolve via `nix run --inputs-from .`
+      - name: Install pipeline tools
+        run: |
+          nix profile install \
+            nixpkgs#ninja \
+            nixpkgs#jq
+          nix profile install --inputs-from . nixpkgs#devenv
+          nix profile install ".#formatter.x86_64-linux"
+
+      # Generate ninja build file and run the full DAG.
+      # MERGE_LOCK overridden: /run/user/$UID/ may not exist on GHA.
+      - name: Run ninja update pipeline
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          mkdir -p "$RUNNER_TEMP"
+          export MERGE_LOCK="$RUNNER_TEMP/nix-update-merge"
+          nix run .#generate-update-ninja
+          ninja -j4 -v -k0 -f .update.ninja update-report
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Regenerate npm lockfiles
-        run: nix develop .#ci -c bash dev/scripts/update-locks.sh
-      # Restore hashes from previous runs so unchanged packages skip
-      # instantly. save-always persists even when later steps fail,
-      # so a failed build doesn't force full recomputation next run.
-      - name: Restore cached hashes
-        uses: actions/cache@v4
-        with:
-          path: overlays/sources/hashes.json
-          key: dep-hashes-${{ hashFiles('overlays/sources/generated.nix') }}
-          restore-keys: dep-hashes-
-          save-always: true
-      # Dep hashes (cargoHash, npmDepsHash, pnpmDepsHash, vendorHash)
-      # are platform-independent — compute once on Linux. Only packages
-      # with changed sources get recomputed; cached hashes pass through.
-      - name: Compute dep hashes
-        run: nix develop -L .#ci -c bash dev/scripts/update-hashes.sh
-      - name: Upload updated sources
+
+      # Push commits from the ninja pipeline.
+      # Rebase on remote if it moved during the run. Never force push.
+      - name: Push updates
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          local_head=$(git rev-parse HEAD)
+          remote_head=$(git rev-parse "origin/$BRANCH_NAME" 2>/dev/null || echo "none")
+          if [ "$local_head" = "$remote_head" ]; then
+            echo "No changes to push"
+            exit 0
+          fi
+          git fetch origin "$BRANCH_NAME"
+          max_retries=3
+          for attempt in $(seq 1 $max_retries); do
+            if git pull --rebase origin "$BRANCH_NAME"; then
+              if git push origin "HEAD:$BRANCH_NAME"; then
+                echo "Pushed successfully (attempt $attempt)"
+                exit 0
+              fi
+            fi
+            echo "Push attempt $attempt failed, retrying..."
+            git fetch origin "$BRANCH_NAME"
+          done
+          echo "::error::Failed to push after $max_retries attempts"
+          exit 1
+
+      - name: Upload update report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: updated-sources
-          path: |
-            overlays/sources/
-            flake.lock
-            devenv.lock
+          name: update-report
+          path: .update-report.txt
+          if-no-files-found: ignore
 
-  # ── Phase 2: per-platform build + devenv cache ───────────────────
+      - name: Print update report
+        if: always()
+        run: |
+          if [ -f .update-report.txt ]; then
+            echo "::group::Update Report"
+            bash dev/scripts/update-report.sh
+            echo "::endgroup::"
+          else
+            echo "No report generated"
+          fi
+
+  # ── Phase 2: per-platform build + cache warm ────────────────────
   build:
-    needs: update-sources
+    needs: update
     strategy:
       fail-fast: false
       matrix:
@@ -91,27 +148,22 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/download-artifact@v4
         with:
-          name: updated-sources
+          ref: ${{ env.BRANCH_NAME }}
+
       - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             accept-flake-config = true
-      # Daemon mode: pushes every completed derivation to cachix
-      # immediately via post-build-hook. Even if a later step fails,
-      # successful builds are already in the cache for next run.
+
+      # Daemon mode: pushes every completed derivation to cachix.
       - uses: cachix/cachix-action@v17
         with:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      # Build ALL packages directly — no devenv eval needed. Hashes
-      # were already computed in Phase 1 and are in the sources artifact.
-      # --inputs-from . resolves nix-fast-build from the flake input
-      # (github:Mic92/nix-fast-build), not the nixpkgs-packaged version.
-      # --skip-cached checks cachix substituter, skips cached packages.
-      # No --cachix-cache: the daemon handles push (avoids double-push).
-      # No continue-on-error: failures must block commit.
+
+      # Build ALL packages. Most x86_64-linux packages cached from
+      # Phase 1 ninja builds. aarch64-darwin builds fresh here.
       - name: Build all packages
         run: |
           nix run --inputs-from . nix-fast-build -- \
@@ -119,42 +171,12 @@ jobs:
             --no-nom \
             --no-link \
             --flake ".#packages.${{ matrix.system }}"
-      # Warm devenv cache AFTER building packages. Overlay packages
-      # are cachix hits from the build step; only devenv-specific
-      # glue (profile, shell-env, git-hook wrappers) builds locally.
-      # Pushes devenv profile to cachix so `devenv shell` is instant
-      # for consumers on all platforms.
+
+      # Warm devenv cache. Overlay packages are cachix hits from the
+      # build step; only devenv-specific glue builds locally.
       - name: Warm devenv cache
         run: |
           nix profile install --inputs-from . nixpkgs#devenv
           devenv print-dev-env --verbose > /dev/null
         env:
           DEVENV_TUI: "false"
-
-  # ── Phase 3: merge hashes + commit ───────────────────────────────
-  # Only runs if ALL Phase 2 jobs succeed (default needs: behavior).
-  commit:
-    needs: [update-sources, build]
-    runs-on: ubuntu-latest
-    env:
-      BRANCH_NAME: refactor/ai-factory-architecture
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-      # Sources artifact includes hashes.json (computed in Phase 1).
-      - uses: actions/download-artifact@v4
-        with:
-          name: updated-sources
-      - name: Commit updates
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "chore: automated update (sources + hashes) [skip ci]"
-            git pull --rebase origin "$BRANCH_NAME" || true
-            git push origin "HEAD:$BRANCH_NAME"
-          fi

@@ -30,6 +30,7 @@ codepaths
 codesign
 contentpkgs
 convco
+endgroup
 coreutils
 cpaczek
 creds
