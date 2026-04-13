@@ -35,18 +35,16 @@ devenv shell    # or: direnv allow (auto-activates on cd)
 ```
 
 This provides all tools: git-branchless, git-absorb, git-revise, agnix,
-treefmt (alejandra, prettier, taplo, biome), cspell, nvfetcher.
+treefmt (alejandra, prettier, taplo, biome), cspell.
 
 ## Adding a Package
 
-1. **Add to `nvfetcher.toml`** — track upstream version
-2. **Run `nvfetcher -o overlays/.nvfetcher`** — regenerate sources
-3. **Create `overlays/<name>.nix`** — build recipe (see existing overlays
-   for Rust, Python, and npm patterns)
-4. **Add hash to `overlays/hashes.json`** — `cargoHash` for Rust,
-   `npmDepsHash` for npm (use empty string, build to get correct hash)
-5. **Wire into `flake.nix`** — dev-only tools go in devShell overlays,
+1. **Create `overlays/<name>.nix`** — build recipe using `fetchFromGitHub`
+   with inline hashes (see existing overlays for Rust, Python, and npm
+   patterns)
+2. **Wire into `flake.nix`** — dev-only tools go in devShell overlays,
    consumer packages go in default overlay + packages output
+3. **Run `nix-update`** — to track and bump upstream versions
 
 ### Patterns by language
 
@@ -64,7 +62,7 @@ treefmt --fail-on-change  # check without modifying (CI mode)
 treefmt orchestrates per-language formatters: alejandra (Nix), prettier
 (markdown), biome (JSON), taplo (TOML). Config is in `treefmt.nix`,
 consumed by devenv's built-in treefmt module. Generated dirs
-(`.nvfetcher/`, `locks/`) are excluded.
+(`locks/`) are excluded.
 
 ## Linting
 

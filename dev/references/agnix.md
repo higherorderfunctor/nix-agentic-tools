@@ -5,7 +5,7 @@ files. It validates SKILL.md, CLAUDE.md, AGENTS.md, Kiro steering files,
 Copilot instructions, MCP configs, and more.
 
 - **Repo**: https://github.com/agent-sh/agnix
-- **Version in devShell**: tracking latest GitHub release via nvfetcher
+- **Version in devShell**: tracking latest GitHub release via nix-update
 
 ## CLI
 

@@ -22,7 +22,7 @@
   # by ourPkgs would silently bypass the consumer's unfree preference.
   # The wrapper uses final.symlinkJoin (consumer's nixpkgs) with the
   # unfree meta.license, triggering the standard check at eval time.
-  # See memory/project_nvfetcher_overlay_pattern.md for rationale.
+  # See memory/project_unfree_guard_pattern.md for rationale.
   isUnfree = drv: let
     license = drv.meta.license or {};
   in

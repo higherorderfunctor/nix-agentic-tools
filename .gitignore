@@ -34,8 +34,6 @@ CLAUDE.md
 # Generated doc site (mdbook source, built from dev/docs/ + nix eval)
 docs/src/
 
-# nvfetcher shake database (not the generated output)
-/overlays/sources/.shake.*
 .ninja_lock
 .ninja_log
 .update-base

@@ -30,7 +30,7 @@ current best practices and idiomatic patterns.
 ### Overlay Patterns
 
 - Are overlays composable? (per-package overlays vs default)
-- Is nvfetcher integration correct?
+- Is nix-update integration correct?
 - Are package derivations pinned to specific versions?
 
 ### DevShell

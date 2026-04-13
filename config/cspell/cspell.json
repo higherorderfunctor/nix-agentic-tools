@@ -24,7 +24,7 @@
   "overrides": [
     {
       "dictionaries": ["python", "node", "npm", "rust"],
-      "filename": ["**/*.nix", "**/*.md", "config/nvfetcher/nvfetcher.toml"]
+      "filename": ["**/*.nix", "**/*.md"]
     }
   ],
   "version": "0.2"

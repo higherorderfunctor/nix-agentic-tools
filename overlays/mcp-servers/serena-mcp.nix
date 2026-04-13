@@ -5,8 +5,7 @@
 # from final.stdenv.hostPlatform.system for consistency with the rest of the
 # aggregator (dev/fragments/overlays/overlay-pattern.md).
 #
-# No nvfetcher entry — this server is consumed from a flake input.
-# Argument shape adapted from legacy curried pattern during Milestone 5 port.
+# Consumed from flake input (not built locally).
 {
   inputs,
   final,
