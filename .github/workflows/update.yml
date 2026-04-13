@@ -135,12 +135,12 @@ jobs:
               continue
             fi
 
-            echo "Pushing $branch..."
+            subject=$(git log "$base_head".."$branch" --format='%s' | head -1)
+            echo "Pushing $branch (subject: $subject, wt_head: $wt_head, base: $base_head)..."
             git push -f origin "$branch"
 
             # Create or update PR
             existing_pr=$(gh pr list --base "$BRANCH_NAME" --head "$branch" --json number --jq '.[0].number // empty' 2>/dev/null || true)
-            subject=$(git log "$base_head".."$branch" --format='%s' | head -1)
 
             if [ -n "$existing_pr" ]; then
               gh pr edit "$existing_pr" --title "$subject"
