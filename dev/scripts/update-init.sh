@@ -28,7 +28,7 @@ fi
 
 # Clean up stale update/* local branches from prior runs
 git branch --list 'update/*' | while read -r branch; do
-	branch=$(echo "$branch" | tr -d ' *')
+	branch=$(echo "$branch" | tr -d ' *+')
 	git branch -D "$branch" 2>/dev/null || true
 done
 
