@@ -34,7 +34,7 @@
             const path_to_root = "../../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../../searchindex-2f3c4d3f.js";
+            window.path_to_searchindex_js = "../../searchindex-0acf684b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../../toc-841f2094.js"></script>
@@ -181,9 +181,9 @@
                     <main>
                         <h2 id="overlay-cache-hit-parity"><a class="header" href="#overlay-cache-hit-parity">Overlay Cache-Hit Parity</a></h2>
 <blockquote>
-<p><strong>Last verified:</strong> 2026-04-08 (commit pending — full rollout
+<p><strong>Last verified:</strong> 2026-04-12 (commit pending — full rollout
 across git-tools, mcp-servers, and ai-clis). If you touch any
-<code>packages/&lt;group&gt;/*.nix</code> overlay file or the overlay composition
+<code>overlays/&lt;name&gt;.nix</code> overlay file or the overlay composition
 machinery and this fragment isn’t updated in the same commit,
 stop and fix it. Regressions are gated by the
 <code>checks.cache-hit-parity</code> flake check (see “Verification” below).</p>
@@ -200,39 +200,53 @@ own nixpkgs pin. Different pins → different store paths →
 the hash they’re asking for was never computed. Cache miss on
 every consumer rebuild.</p>
 <h3 id="the-pattern"><a class="header" href="#the-pattern">The pattern</a></h3>
-<pre><code class="language-nix"># packages/git-tools/git-branchless.nix — CORRECT
-{inputs}: sources: final: _prev: let
+<pre><code class="language-nix"># overlays/git-tools/git-branchless.nix — CORRECT
+{inputs, final, ...}: let
   ourPkgs = import inputs.nixpkgs {
-    inherit (final) system;
+    inherit (final.stdenv.hostPlatform) system;
     overlays = [(import inputs.rust-overlay)];
     config.allowUnfree = true;
   };
-  nv = sources.git-branchless;
+  vu = import ../lib.nix;
+
+  rev = "abc1234...";
+  src = ourPkgs.fetchFromGitHub {
+    owner = "arxanas";
+    repo = "git-branchless";
+    inherit rev;
+    hash = "sha256-...";
+  };
   rust = ourPkgs.rust-bin.stable."1.88.0".default;
   rustPlatform = ourPkgs.makeRustPlatform { cargo = rust; rustc = rust; };
-in {
-  git-branchless = ourPkgs.git-branchless.override (_: {
+in
+  ourPkgs.git-branchless.override (_: {
     rustPlatform.buildRustPackage = args:
       rustPlatform.buildRustPackage (finalAttrs: let
         a = (ourPkgs.lib.toFunction args) finalAttrs;
       in a // {
-        inherit (nv) src cargoHash;
-        version = ourPkgs.lib.removePrefix "v" nv.version;
+        inherit src;
+        version = vu.mkVersion {
+          upstream = vu.readCargoWorkspaceVersion "${src}/Cargo.toml";
+          inherit rev;
+        };
+        cargoHash = "sha256-...";
       });
-  });
-}
+  })
 </code></pre>
 <ul>
-<li><code>final.system</code> is the only thing we read from the consumer —
-we need it to know which platform to instantiate <code>ourPkgs</code> for.</li>
+<li><code>final.stdenv.hostPlatform.system</code> is the only thing we read from
+the consumer — we need it to know which platform to instantiate
+<code>ourPkgs</code> for.</li>
 <li><code>ourPkgs</code> is built from THIS repo’s <code>inputs.nixpkgs</code> plus any
 sub-overlays the package needs (rust-overlay here).</li>
 <li>Every downstream reference (<code>ourPkgs.git-branchless</code>,
 <code>ourPkgs.rust-bin</code>, <code>ourPkgs.makeRustPlatform</code>, <code>ourPkgs.lib</code>)
 routes through <code>ourPkgs</code>, not <code>final</code>/<code>prev</code>.</li>
-<li>The package function still takes <code>final: prev:</code> because the
-overlay protocol requires it and consumers expect
-<code>pkgs.git-branchless</code> to be available on their pkgs set.</li>
+<li>Version is computed at eval time from the source via <code>mkVersion</code>,
+producing <code>"x.y.z+abc1234"</code> (upstream version + short rev).</li>
+<li>The per-package file takes <code>{inputs, final, ...}</code> and is imported
+by <code>overlays/default.nix</code> which composes all packages into the
+unified overlay.</li>
 </ul>
 <h3 id="the-trade-off-accepted-in-commit-e5406977"><a class="header" href="#the-trade-off-accepted-in-commit-e5406977">The trade-off (accepted in commit e5406977)</a></h3>
 <p>This pattern means <strong>consumers get TWO nixpkgs evaluations in
