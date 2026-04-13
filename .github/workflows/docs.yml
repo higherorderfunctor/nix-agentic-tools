@@ -2,7 +2,9 @@ name: Docs
 
 on:
   push:
-    branches: ["**"]
+    branches:
+      - main
+      - refactor/ai-factory-architecture
   delete:
 
 concurrency:
