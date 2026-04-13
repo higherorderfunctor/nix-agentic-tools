@@ -51,12 +51,17 @@ if [ -n "$git_url" ]; then
           fi
         fi
         log_info "Rev: ${old_rev:0:7} -> ${new_rev:0:7} in $(basename "$target_file")"
+
+        # Commit rev + src hash so nix-update has a clean tree to evaluate against.
+        # nix-update needs committed state to resolve flake paths.
+        git -C "$wt" add -A
+        git -C "$wt" commit --no-verify -m "wip: bump rev $name"
       fi
     fi
   fi
 fi
 
-# Phase 1: Update hashes (nix-update --version skip for main-tracking)
+# Phase 1: Update dep hashes via nix-update (needs clean committed state)
 log_info "Running nix-update..."
 if ! (
   cd "$wt"
@@ -65,18 +70,27 @@ if ! (
   # shellcheck disable=SC2086
   nix run --inputs-from . nix-update -- --flake "$name" --system "$system" $extra_flags 2>&1 | tee "$version_file"
 
-  # Check if anything changed (rev bump + hash updates)
-  if git -C "$wt" diff --quiet && git -C "$wt" diff --staged --quiet; then
+  # Check if nix-update made any dep hash changes
+  if ! git -C "$wt" diff --quiet || ! git -C "$wt" diff --staged --quiet; then
+    git -C "$wt" add -A
+    git -C "$wt" commit --no-verify -m "wip: update dep hashes $name"
+  fi
+
+  # Squash all worktree commits into one
+  base=$(cat "$wt/.update-base")
+  if [ "$(git -C "$wt" rev-parse HEAD)" != "$base" ]; then
+    git -C "$wt" reset --soft "$base"
+    git -C "$wt" commit -m "chore(overlays): update $name"
+  fi
+
+  # Check if anything actually changed from base
+  if [ "$(git -C "$wt" rev-parse HEAD)" = "$base" ]; then
     exit 0
   fi
 
   # Phase 2: Build verification (runs derivation-level tests)
   # TODO: additional checks, smoke tests (future validation phase)
   nix build ".#$name" --no-link --log-format bar-with-logs
-
-  # Phase 3: Commit only after build passes
-  git -C "$wt" add -A
-  git -C "$wt" commit -m "chore(overlays): update $name"
 ); then
   version_detail=$(parse_pkg_version "$version_file")
   report_held_back "$name" "nix-update or build failed" "$version_detail"
