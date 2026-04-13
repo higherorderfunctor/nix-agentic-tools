@@ -15,33 +15,33 @@ version_file="$wt/.update-version"
 # Phase 1: Update the input in the worktree
 log_info "Updating flake input..."
 if ! (
-	cd "$wt"
+  cd "$wt"
 
-	# Capture nix flake update output for version reporting
-	nix flake update "$name" 2>&1 | tee "$version_file"
+  # Capture nix flake update output for version reporting
+  nix flake update "$name" 2>&1 | tee "$version_file"
 
-	# Regenerate devenv.yaml from updated flake.lock
-	nix eval --raw --impure --expr 'import ./config/generate-devenv-yaml.nix {}' >devenv.yaml
+  # Regenerate devenv.yaml from updated flake.lock
+  nix eval --raw --impure --expr 'import ./config/generate-devenv-yaml.nix {}' >devenv.yaml
 
-	# Sync devenv.lock
-	devenv update
+  # Sync devenv.lock
+  devenv update
 
-	# Check if anything changed
-	git add flake.lock devenv.yaml devenv.lock
-	if git diff --staged --quiet; then
-		exit 0
-	fi
+  # Check if anything changed
+  git add flake.lock devenv.yaml devenv.lock
+  if git diff --staged --quiet; then
+    exit 0
+  fi
 
-	# Phase 2: Build verification (runs derivation-level tests)
-	# TODO: additional checks, smoke tests (future validation phase)
-	nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --flake ".#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem')"
+  # Phase 2: Build verification (runs derivation-level tests)
+  # TODO: additional checks, smoke tests (future validation phase)
+  nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --flake ".#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem')"
 
-	# Phase 3: Commit only after build passes
-	git commit -m "chore: update input $name"
+  # Phase 3: Commit only after build passes
+  git commit -m "chore: update input $name"
 ); then
-	version_detail=$(parse_input_version "$version_file" "$name")
-	report_held_back "$name" "update or build failed" "$version_detail"
-	exit 0
+  version_detail=$(parse_input_version "$version_file" "$name")
+  report_held_back "$name" "update or build failed" "$version_detail"
+  exit 0
 fi
 
 # Extract version info
@@ -51,17 +51,17 @@ version_detail=$(parse_input_version "$version_file" "$name")
 wt_head=$(git -C "$wt" rev-parse HEAD)
 base=$(cat "$wt/.update-base")
 if [ "$wt_head" = "$base" ]; then
-	report_unchanged "$name"
-	exit 0
+  report_unchanged "$name"
+  exit 0
 fi
 
 merge_to_branch "$wt" "$name" || rc=$?
 rc=${rc:-0}
 if [ "$rc" -eq 1 ]; then
-	report_held_back "$name" "cherry-pick conflict" "$version_detail"
-	exit 0
+  report_held_back "$name" "cherry-pick conflict" "$version_detail"
+  exit 0
 elif [ "$rc" -eq 2 ]; then
-	report_unchanged "$name"
-	exit 0
+  report_unchanged "$name"
+  exit 0
 fi
 report_updated "$name" "$version_detail"

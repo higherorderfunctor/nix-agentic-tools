@@ -22,28 +22,28 @@ RESET=$'\033[0m'
 
 # GitHub token for nix-update rate limits
 if [ -z "${GITHUB_TOKEN:-}" ] && command -v gh &>/dev/null; then
-	GITHUB_TOKEN=$(gh auth token 2>/dev/null) || true
-	[ -n "${GITHUB_TOKEN:-}" ] && export GITHUB_TOKEN
+  GITHUB_TOKEN=$(gh auth token 2>/dev/null) || true
+  [ -n "${GITHUB_TOKEN:-}" ] && export GITHUB_TOKEN
 fi
 
 # ── Output helpers ────────────────────────────────────────────────────────────
 
 log_header() {
-	echo "${BOLD}${CYAN}══════════════════════════════════════════════════${RESET}"
-	echo "${BOLD}${CYAN}  $1${RESET}"
-	echo "${BOLD}${CYAN}══════════════════════════════════════════════════${RESET}"
+  echo "${BOLD}${CYAN}══════════════════════════════════════════════════${RESET}"
+  echo "${BOLD}${CYAN}  $1${RESET}"
+  echo "${BOLD}${CYAN}══════════════════════════════════════════════════${RESET}"
 }
 
 log_success() {
-	echo "${GREEN}  ✓ $1${RESET}"
+  echo "${GREEN}  ✓ $1${RESET}"
 }
 
 log_failure() {
-	echo "${RED}  ✗ $1${RESET}" >&2
+  echo "${RED}  ✗ $1${RESET}" >&2
 }
 
 log_info() {
-	echo "${YELLOW}  … $1${RESET}"
+  echo "${YELLOW}  … $1${RESET}"
 }
 
 # ── Worktree management ──────────────────────────────────────────────────────
@@ -51,89 +51,89 @@ log_info() {
 # Create or reset a worktree at the current branch HEAD.
 # Stores the base commit so merge_to_branch can cherry-pick the full range.
 setup_worktree() {
-	local name="$1"
-	local wt="$WORKTREES_DIR/update-$name"
-	local base
+  local name="$1"
+  local wt="$WORKTREES_DIR/update-$name"
+  local base
 
-	base=$(git rev-parse HEAD)
+  base=$(git rev-parse HEAD)
 
-	if [ -d "$wt" ]; then
-		# Clean any stuck git state from prior crashed runs
-		git -C "$wt" cherry-pick --abort 2>/dev/null || true
-		git -C "$wt" rebase --abort 2>/dev/null || true
-		git -C "$wt" checkout --detach HEAD >&2 || true
-		git -C "$wt" reset --hard "$BRANCH" >&2
-		git -C "$wt" clean -fd >&2
-	else
-		mkdir -p "$WORKTREES_DIR"
-		git worktree add --detach "$wt" "$BRANCH" >&2
-	fi
+  if [ -d "$wt" ]; then
+    # Clean any stuck git state from prior crashed runs
+    git -C "$wt" cherry-pick --abort 2>/dev/null || true
+    git -C "$wt" rebase --abort 2>/dev/null || true
+    git -C "$wt" checkout --detach HEAD >&2 || true
+    git -C "$wt" reset --hard "$BRANCH" >&2
+    git -C "$wt" clean -fd >&2
+  else
+    mkdir -p "$WORKTREES_DIR"
+    git worktree add --detach "$wt" "$BRANCH" >&2
+  fi
 
-	# Symlink pre-commit config (devenv-generated, gitignored — worktrees don't have it).
-	# Tools are nix store paths baked into the config, so no devenv activation needed.
-	ln -sf "$PWD/.pre-commit-config.yaml" "$wt/.pre-commit-config.yaml"
+  # Symlink pre-commit config (devenv-generated, gitignored — worktrees don't have it).
+  # Tools are nix store paths baked into the config, so no devenv activation needed.
+  ln -sf "$PWD/.pre-commit-config.yaml" "$wt/.pre-commit-config.yaml"
 
-	# Stash base commit for range cherry-pick
-	echo "$base" >"$wt/.update-base"
-	echo "$wt"
+  # Stash base commit for range cherry-pick
+  echo "$base" >"$wt/.update-base"
+  echo "$wt"
 }
 
 # Acquire merge lock, cherry-pick all worktree commits to main branch, release.
 # Handles targets that produce multiple commits (e.g., combo updates).
 merge_to_branch() {
-	local wt="$1"
-	local name="$2"
-	local wt_head
-	local base
+  local wt="$1"
+  local name="$2"
+  local wt_head
+  local base
 
-	wt_head=$(git -C "$wt" rev-parse HEAD)
-	base=$(cat "$wt/.update-base")
+  wt_head=$(git -C "$wt" rev-parse HEAD)
+  base=$(cat "$wt/.update-base")
 
-	# Only merge if worktree has new commits
-	if [ "$wt_head" = "$base" ]; then
-		log_info "$name: no new commits to merge"
-		return 0
-	fi
+  # Only merge if worktree has new commits
+  if [ "$wt_head" = "$base" ]; then
+    log_info "$name: no new commits to merge"
+    return 0
+  fi
 
-	# flock serializes cherry-picks from parallel targets.
-	# Empty cherry-picks (change already on branch) are skipped, not failures.
-	# Returns: 0 = merged, 2 = already on branch (empty), 1 = conflict
-	if ! flock "$MERGE_LOCK" git cherry-pick "$base".."$wt_head"; then
-		if git diff --staged --quiet 2>/dev/null; then
-			# Empty cherry-pick — change already on branch
-			git cherry-pick --skip 2>/dev/null || git cherry-pick --abort 2>/dev/null || true
-			log_info "$name: already on branch (skipped)"
-			return 2
-		else
-			# Real conflict
-			git cherry-pick --abort 2>/dev/null || true
-			log_failure "$name: cherry-pick conflict"
-			return 1
-		fi
-	fi
-	log_success "$name: cherry-picked to $BRANCH"
+  # flock serializes cherry-picks from parallel targets.
+  # Empty cherry-picks (change already on branch) are skipped, not failures.
+  # Returns: 0 = merged, 2 = already on branch (empty), 1 = conflict
+  if ! flock "$MERGE_LOCK" git cherry-pick "$base".."$wt_head"; then
+    if git diff --staged --quiet 2>/dev/null; then
+      # Empty cherry-pick — change already on branch
+      git cherry-pick --skip 2>/dev/null || git cherry-pick --abort 2>/dev/null || true
+      log_info "$name: already on branch (skipped)"
+      return 2
+    else
+      # Real conflict
+      git cherry-pick --abort 2>/dev/null || true
+      log_failure "$name: cherry-pick conflict"
+      return 1
+    fi
+  fi
+  log_success "$name: cherry-picked to $BRANCH"
 }
 
 # ── Version parsing ───────────────────────────────────────────────────────────
 
 # Parse nix-update output for "Update X -> Y" lines
 parse_pkg_version() {
-	local version_file="$1"
-	if [ -f "$version_file" ]; then
-		grep -oP 'Update \K\S+ -> \S+' "$version_file" | paste -sd', ' || true
-	fi
+  local version_file="$1"
+  if [ -f "$version_file" ]; then
+    grep -oP 'Update \K\S+ -> \S+' "$version_file" | paste -sd', ' || true
+  fi
 }
 
 # Parse nix flake update output for "Updated input 'name'" lines
 # Extracts the date portion: (YYYY-MM-DD) → (YYYY-MM-DD)
 parse_input_version() {
-	local version_file="$1"
-	local name="$2"
-	if [ -f "$version_file" ]; then
-		grep "Updated input '$name'" "$version_file" |
-			grep -oP '\(\K[0-9-]+(?=\))' |
-			paste -sd' → ' || true
-	fi
+  local version_file="$1"
+  local name="$2"
+  if [ -f "$version_file" ]; then
+    grep "Updated input '$name'" "$version_file" |
+      grep -oP '\(\K[0-9-]+(?=\))' |
+      paste -sd' → ' || true
+  fi
 }
 
 # ── Report helpers ────────────────────────────────────────────────────────────
@@ -141,26 +141,26 @@ parse_input_version() {
 # Format: STATUS: name [| version_detail] [(reason)]
 
 report_updated() {
-	local name="$1"
-	local detail="${2:-}"
-	local line="UPDATED: $name"
-	[ -n "$detail" ] && line="$line | $detail"
-	echo "$line" >>"$REPORT_FILE"
-	log_success "$line"
+  local name="$1"
+  local detail="${2:-}"
+  local line="UPDATED: $name"
+  [ -n "$detail" ] && line="$line | $detail"
+  echo "$line" >>"$REPORT_FILE"
+  log_success "$line"
 }
 
 report_unchanged() {
-	local name="$1"
-	echo "NO UPDATES: $name" >>"$REPORT_FILE"
-	log_info "NO UPDATES: $name"
+  local name="$1"
+  echo "NO UPDATES: $name" >>"$REPORT_FILE"
+  log_info "NO UPDATES: $name"
 }
 
 report_held_back() {
-	local name="$1"
-	local reason="$2"
-	local detail="${3:-}"
-	local line="HELD BACK: $name ($reason)"
-	[ -n "$detail" ] && line="HELD BACK: $name | $detail ($reason)"
-	echo "$line" >>"$REPORT_FILE"
-	log_failure "$line"
+  local name="$1"
+  local reason="$2"
+  local detail="${3:-}"
+  local line="HELD BACK: $name ($reason)"
+  [ -n "$detail" ] && line="HELD BACK: $name | $detail ($reason)"
+  echo "$line" >>"$REPORT_FILE"
+  log_failure "$line"
 }

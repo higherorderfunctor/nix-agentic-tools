@@ -1,5 +1,12 @@
 <!-- TODO: remove this file before merging to main -->
 
+● This is source-only with stdenvNoCC — no node, no npm, no build. The tests need vitest + npm deps. Since we use final (consumer's nixpkgs), we have access to node/npm. But adding a full npm install + test phase to a source-only
+package changes its nature significantly.
+
+Actually, the tests are CLI integration tests that run dist/cli.js. Even with vitest transpilation, they exec node dist/cli.js --help which requires the build step. This isn't just "vitest transpiles imports" — the tests
+literally invoke the built CLI binary.
+
+Let me verify by looking at the test:
 ❯ add it as a short backlog item.
 
 knock out 1-3 so we can ypdate specific packages as a single task.

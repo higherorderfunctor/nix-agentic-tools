@@ -18,9 +18,9 @@ echo "${BOLD}${CYAN}  Update Report${RESET}"
 echo "${BOLD}${CYAN}══════════════════════════════════════════════════${RESET}"
 
 if [ ! -f "$REPORT_FILE" ] || [ ! -s "$REPORT_FILE" ]; then
-	echo ""
-	echo "  No updates were attempted."
-	exit 0
+  echo ""
+  echo "  No updates were attempted."
+  exit 0
 fi
 
 # Count each category
@@ -30,29 +30,29 @@ held_back=$(grep -c '^HELD BACK:' "$REPORT_FILE" 2>/dev/null || true)
 
 # Updated
 if [ "$updated" -gt 0 ]; then
-	echo ""
-	echo "  ${BOLD}${GREEN}UPDATED ($updated):${RESET}"
-	grep '^UPDATED:' "$REPORT_FILE" | sed 's/^UPDATED: //' | sort -u | while read -r line; do
-		echo "    ${GREEN}✓ $line${RESET}"
-	done
+  echo ""
+  echo "  ${BOLD}${GREEN}UPDATED ($updated):${RESET}"
+  grep '^UPDATED:' "$REPORT_FILE" | sed 's/^UPDATED: //' | sort -u | while read -r line; do
+    echo "    ${GREEN}✓ $line${RESET}"
+  done
 fi
 
 # Held back
 if [ "$held_back" -gt 0 ]; then
-	echo ""
-	echo "  ${BOLD}${RED}HELD BACK ($held_back):${RESET}"
-	grep '^HELD BACK:' "$REPORT_FILE" | sed 's/^HELD BACK: //' | sort -u | while read -r line; do
-		echo "    ${RED}✗ $line${RESET}"
-	done
+  echo ""
+  echo "  ${BOLD}${RED}HELD BACK ($held_back):${RESET}"
+  grep '^HELD BACK:' "$REPORT_FILE" | sed 's/^HELD BACK: //' | sort -u | while read -r line; do
+    echo "    ${RED}✗ $line${RESET}"
+  done
 fi
 
 # Unchanged
 if [ "$unchanged" -gt 0 ]; then
-	echo ""
-	echo "  ${BOLD}${YELLOW}NO UPDATES ($unchanged):${RESET}"
-	grep '^NO UPDATES:' "$REPORT_FILE" | sed 's/^NO UPDATES: //' | sed 's/ (already up to date)//' | sort -u | paste -sd', ' | fold -s -w 60 | while read -r line; do
-		echo "    $line"
-	done
+  echo ""
+  echo "  ${BOLD}${YELLOW}NO UPDATES ($unchanged):${RESET}"
+  grep '^NO UPDATES:' "$REPORT_FILE" | sed 's/^NO UPDATES: //' | sed 's/ (already up to date)//' | sort -u | paste -sd', ' | fold -s -w 60 | while read -r line; do
+    echo "    $line"
+  done
 fi
 
 echo ""
