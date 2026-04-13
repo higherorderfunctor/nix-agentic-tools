@@ -566,3 +566,28 @@ with single real commit + amend for dep hashes. Hooks run on the first
 commit (pre-commit config symlinked). Dep hash changes amend into same
 commit. Eliminates the eval cache staleness issue for local runs.
 CI eval failure is a separate issue (IFD, see above).
+
+### treefmt-restage failure in ci.yml PR pipeline (NOT FIXED)
+
+`devenv test` in ci.yml runs pre-commit hooks. `treefmt-restage` fails
+because treefmt formats files differently on the CI runner than how
+they were committed locally. This is the same treefmt drift issue
+(devenv shell formats all, commit hook formats staged only). In CI
+the "test" context has no staged files, so restage sees modified files
+and fails.
+
+This affects ALL PRs, not just update PRs. Needs a fix in ci.yml or
+in how `devenv test` handles formatting hooks.
+
+### nix-update silent failure fixed
+
+nix-update crashes were masked by pipe to tee + early exit. Added
+explicit PIPESTATUS check — failures now report HELD BACK.
+
+### IFD warm step: chicken-and-egg problem (IN PROGRESS)
+
+`nix flake check --no-build` also fails on IFD — it IS an eval.
+Trying `nix eval` with `--option allow-import-from-derivation true`
+to explicitly permit source fetches during evaluation. If this works,
+sources get fetched into the store + cachix, and subsequent evals
+(nix-update, ci.yml) can use them.
