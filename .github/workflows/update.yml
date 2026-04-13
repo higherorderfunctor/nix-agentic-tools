@@ -71,6 +71,14 @@ jobs:
           nix profile add --inputs-from . nixpkgs#devenv
           nix profile add ".#formatter.x86_64-linux"
 
+      # Warm the flake eval cache BEFORE the ninja pipeline.
+      # Our overlays use IFD (builtins.readFile on fetchFromGitHub) to
+      # compute versions at eval time. Fresh CI runners don't have these
+      # sources realized. nix flake check --no-build triggers eval which
+      # fetches all sources as a side effect. Cachix daemon pushes them.
+      - name: Warm flake eval (prefetch all sources)
+        run: nix flake check --no-build || true
+
       # Run ninja pipeline in CI mode:
       # - UPDATE_CI=1: skip builds, skip cherry-picks
       # - Each target creates a worktree branch (update/<name>)
@@ -86,23 +94,7 @@ jobs:
           ninja -j4 -v -k0 -f .update.ninja update-report
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-          # nix-update internally uses `import <nixpkgs>` which needs NIX_PATH
           NIX_PATH: nixpkgs=flake:nixpkgs
-
-      # Prefetch ALL package sources so CI runners can eval.
-      # IFD (builtins.readFile on fetchFromGitHub) requires sources
-      # to be realized. Cachix daemon pushes them for PR runners.
-      - name: Prefetch all package sources
-        run: |
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-          system=$(nix eval --impure --raw --expr 'builtins.currentSystem')
-          # Eval all package names, prefetch each .src
-          nix eval --json ".#packages.$system" --apply 'builtins.attrNames' 2>/dev/null | \
-            jq -r '.[]' | while read -r pkg; do
-              nix build ".#$pkg.src" --no-link 2>/dev/null || true
-            done
-          echo "All package sources prefetched"
 
       # Push worktree branches and create/update PRs.
       # Each update/<name> branch with commits gets a PR.
