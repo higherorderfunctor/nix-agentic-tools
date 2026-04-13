@@ -1,22 +1,16 @@
 # CI pipeline v4: ninja-based DAG update pipeline.
 #
-# Runs the same ninja update pipeline used locally:
-#   init → input updates (parallel) → package updates (parallel, -j4)
-#   → treefmt → final build → report
+# "Stage, Validate, Push" — updates only land on the branch after
+# BOTH x86_64-linux and aarch64-darwin builds pass.
 #
-# Phase 1 (ubuntu): run ninja pipeline, push per-target commits
-# Phase 2 (per-platform matrix): build all packages, warm devenv cache
-#
-# Each ninja target runs in a git worktree, builds to validate,
-# and cherry-picks commits to the branch on success. Failed targets
-# are reported but don't block other updates.
+# Phase 1 (ubuntu): run ninja pipeline, push to staging ref
+# Phase 2 (per-platform matrix): build all packages from staging ref
+# Phase 3 (ubuntu): fast-forward real branch to staging ref
 #
 # See: config/generate-update-ninja.nix, dev/scripts/update-*.sh
 name: Update
 
 on:
-  push:
-    branches: [refactor/ai-factory-architecture]
   workflow_dispatch:
   schedule:
     - cron: "0 6 * * *"
@@ -36,12 +30,9 @@ jobs:
   # ── Phase 1: ninja update pipeline (ubuntu-only) ─────────────────
   update:
     runs-on: ubuntu-latest
-    # Skip if this push was made by the bot (prevents self-triggering).
-    # Manual dispatch and schedule always run.
-    if: >-
-      github.actor != 'github-actions[bot]'
-      || github.event_name == 'workflow_dispatch'
-      || github.event_name == 'schedule'
+    outputs:
+      staging-ref: ${{ steps.push-staging.outputs.staging-ref }}
+      has-changes: ${{ steps.push-staging.outputs.has-changes }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -77,6 +68,7 @@ jobs:
 
       # Generate ninja build file and run the full DAG.
       # MERGE_LOCK overridden: /run/user/$UID/ may not exist on GHA.
+      # -k0: continue all targets regardless of failures.
       - name: Run ninja update pipeline
         run: |
           set -euETo pipefail
@@ -88,9 +80,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Push commits from the ninja pipeline.
-      # Rebase on remote if it moved during the run. Never force push.
-      - name: Push updates
+      # Push to a staging ref instead of the real branch.
+      # Phase 2 validates on both platforms before the real branch moves.
+      - name: Push staging ref
+        id: push-staging
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
@@ -98,22 +91,13 @@ jobs:
           remote_head=$(git rev-parse "origin/$BRANCH_NAME" 2>/dev/null || echo "none")
           if [ "$local_head" = "$remote_head" ]; then
             echo "No changes to push"
+            echo "has-changes=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          git fetch origin "$BRANCH_NAME"
-          max_retries=3
-          for attempt in $(seq 1 $max_retries); do
-            if git pull --rebase origin "$BRANCH_NAME"; then
-              if git push origin "HEAD:$BRANCH_NAME"; then
-                echo "Pushed successfully (attempt $attempt)"
-                exit 0
-              fi
-            fi
-            echo "Push attempt $attempt failed, retrying..."
-            git fetch origin "$BRANCH_NAME"
-          done
-          echo "::error::Failed to push after $max_retries attempts"
-          exit 1
+          staging_ref="refs/staging/update-${{ github.run_id }}"
+          git push origin "HEAD:$staging_ref"
+          echo "staging-ref=$staging_ref" >> "$GITHUB_OUTPUT"
+          echo "has-changes=true" >> "$GITHUB_OUTPUT"
 
       - name: Upload update report
         if: always()
@@ -134,9 +118,10 @@ jobs:
             echo "No report generated"
           fi
 
-  # ── Phase 2: per-platform build + cache warm ────────────────────
-  build:
+  # ── Phase 2: cross-platform build validation ───────────────────
+  validate:
     needs: update
+    if: needs.update.outputs.has-changes == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -149,7 +134,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ env.BRANCH_NAME }}
+          ref: ${{ needs.update.outputs.staging-ref }}
 
       - uses: cachix/install-nix-action@v31
         with:
@@ -162,8 +147,9 @@ jobs:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      # Build ALL packages. Most x86_64-linux packages cached from
-      # Phase 1 ninja builds. aarch64-darwin builds fresh here.
+      # Build ALL packages. x86_64-linux is ~100% cache hits from
+      # Phase 1 (cachix daemon pushed during ninja builds).
+      # aarch64-darwin builds fresh here.
       - name: Build all packages
         run: |
           nix run --inputs-from . nix-fast-build -- \
@@ -180,3 +166,51 @@ jobs:
           devenv print-dev-env --verbose > /dev/null
         env:
           DEVENV_TUI: "false"
+
+  # ── Phase 3: promote staging ref to real branch ────────────────
+  # Only runs if BOTH Phase 2 jobs succeed (default needs: behavior).
+  promote:
+    needs: [update, validate]
+    if: needs.update.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # Fast-forward the real branch to the staging ref.
+      # Rebases on remote if the branch moved during the run.
+      - name: Promote staging to branch
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          staging_ref="${{ needs.update.outputs.staging-ref }}"
+          git fetch origin "$staging_ref"
+          staging_sha=$(git rev-parse FETCH_HEAD)
+          git fetch origin "$BRANCH_NAME"
+          git checkout "origin/$BRANCH_NAME"
+          max_retries=3
+          for attempt in $(seq 1 $max_retries); do
+            if git cherry-pick "origin/$BRANCH_NAME".."$staging_sha"; then
+              if git push origin "HEAD:$BRANCH_NAME"; then
+                echo "Promoted staging ref to $BRANCH_NAME (attempt $attempt)"
+                break
+              fi
+            fi
+            echo "Attempt $attempt failed, retrying..."
+            git cherry-pick --abort 2>/dev/null || true
+            git fetch origin "$BRANCH_NAME"
+            git checkout "origin/$BRANCH_NAME"
+          done
+
+      # Clean up the staging ref regardless of success/failure.
+      - name: Cleanup staging ref
+        if: always()
+        run: |
+          git push origin --delete "${{ needs.update.outputs.staging-ref }}" 2>/dev/null || true
