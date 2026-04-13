@@ -147,12 +147,10 @@
       "packages/mcp-servers/*.nix"
     ];
     # packaging: naming conventions + platform handling for overlay
-    # packages. Scoped to the packages tree plus nvfetcher.toml
-    # (source tracking).
+    # packages. Scoped to the packages tree plus update-matrix.nix.
     packaging = [
-      "nvfetcher.toml"
+      "config/update-matrix.nix"
       "packages/**/*.nix"
-      "packages/**/sources.nix"
     ];
     # pipeline: fragment composition + ecosystem transforms + docsite
     # generators. Scoped to every file that participates in the dev
@@ -692,7 +690,7 @@
     ## Updating Dependencies
 
     ```bash
-    devenv tasks run update:all   # update all nvfetcher sources and lock files
+    devenv tasks run update:all   # update all inputs and packages via ninja DAG
     ```
 
     After updating, rebuild affected packages to verify hashes:
@@ -729,18 +727,17 @@
     ### AI CLI or MCP Server
 
     See the **AI CLI Packages** and **MCP Server Packages** sections in
-    [AGENTS.md](AGENTS.md) for the full overlay pattern, nvfetcher
-    integration, and step-by-step instructions.
+    [AGENTS.md](AGENTS.md) for the full overlay pattern and step-by-step
+    instructions.
 
     ### General pattern
 
-    1. Add an nvfetcher entry in `nvfetcher.toml`
-    2. Run `nvfetcher` to update the generated sources
-    3. Create `packages/<group>/<name>.nix` using the appropriate builder
-    4. Register in `packages/<group>/default.nix`
-    5. Export in `flake.nix` under `packages`
-    6. Add HM and devenv modules in `packages/<name>/modules/`
-    7. Run `nix flake check` to verify
+    1. Create `overlays/<name>.nix` with inline `rev` + `hash`
+    2. Register in `overlays/default.nix`
+    3. Add to `config/update-matrix.nix` with appropriate flags
+    4. Export in `flake.nix` under `packages`
+    5. Add HM and devenv modules in `packages/<name>/modules/`
+    6. Run `nix flake check` to verify
 
     See [Change Propagation](AGENTS.md#change-propagation) — when removing
     or renaming a concept, all surfaces must be updated in the same commit.
