@@ -1,5 +1,5 @@
 ---
-applyTo: "nvfetcher.toml,packages/**/*.nix,packages/**/sources.nix"
+applyTo: "config/update-matrix.nix,packages/**/*.nix"
 ---
 
 ## Naming Conventions
@@ -9,7 +9,7 @@ applyTo: "nvfetcher.toml,packages/**/*.nix,packages/**/sources.nix"
 - Skills: `packages/stacked-workflows/skills/<name>/SKILL.md`
 - Published fragments: `packages/<pkg>/fragments/<name>.md`
 - Dev fragments: `dev/fragments/<pkg>/<name>.md`
-- nvfetcher keys use upstream project names (may differ from exported package names)
+- update-matrix.nix keys use exported package names (matching the overlay attrset key)
 - Exported packages: lowercase with hyphens
 
 ## Target Platforms
@@ -21,20 +21,21 @@ applyTo: "nvfetcher.toml,packages/**/*.nix,packages/**/sources.nix"
 
 ### Nightly Packaging Pattern
 
-All binary packages are tracked via nvfetcher for nightly/latest
-versions. Never defer to nixpkgs upstream — always override `src`
-and `version` from nvfetcher.
+All binary packages track nightly/latest versions via inline hashes
+and `config/update-matrix.nix`. Never defer to nixpkgs upstream —
+always override `src` and `version` from the overlay's inline source.
 
 When a package provides different artifacts per platform (e.g.,
 `.tar.gz` on Linux, `.dmg` on Darwin):
 
-1. Add separate nvfetcher entries per platform (e.g., `kiro-cli` +
-   `kiro-cli-darwin`) tracking the same version but different URLs
+1. Create a `<name>-sources.json` sidecar with version and
+   per-platform `{url, hash}` entries keyed by Nix system string
 2. Select the correct source in the `.nix` overlay via
-   `final.stdenv.hostPlatform.system`
-3. Store per-platform hashes in `hashes.json` keyed by system
+   `ourPkgs.stdenv.hostPlatform.system`
+3. Use `mkUpdateScript` from `overlays/lib.nix` to automate
+   version bumps and hash prefetching for all platforms
 
 Examples:
 
-- `kiro-cli`: Linux tarball + Darwin `.dmg` (via `undmg`)
-- `copilot-cli`: per-platform tarballs from GitHub releases
+- `kiro-cli`: `kiro-cli-sources.json` with Linux tarball + Darwin `.dmg`
+- `copilot-cli`: `copilot-cli-sources.json` with per-platform GitHub release tarballs

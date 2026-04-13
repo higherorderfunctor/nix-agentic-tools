@@ -234,7 +234,7 @@ it in the same commit:
 - Routing tables in skills
 - README feature matrix and server reference
 - flake.nix output lists
-- nvfetcher.toml keys
+- config/update-matrix.nix entries
 - CI workflow matrices
 - Home-manager module registrations
 - Overlay export lists

@@ -17,28 +17,28 @@ Versions computed at eval time via `overlays/lib.nix:mkVersion`
 
 ## Package table
 
-| Package | Group | Source | Build | nixpkgs | Tests | Smoke |
-|---|---|---|---|---|---|---|
-| agnix | root | GitHub main | cargo | — | cargo test | --version + MCP/LSP |
-| any-buddy | root | GitHub main | pnpm | — | vitest (203) | — |
-| claude-code | root | GCS manifest | pre-built binary | — | — | binary |
-| copilot-cli | root | GitHub releases | pre-built binary | `github-copilot-cli` | — | binary |
-| kiro-cli | root | AWS manifest | pre-built binary | `kiro-cli` | — | binary |
-| kiro-gateway | root | GitHub main | python | — | pytest (1413) | — |
-| context7-mcp | mcpServers | GitHub main | pnpm (nixpkgs override) | `context7-mcp` | vitest (2) | version check |
-| effect-mcp | mcpServers | GitHub main | pnpm | — | — | MCP stdin |
-| git-intel-mcp | mcpServers | GitHub main | npm | — | vitest (40) | MCP stdin |
-| github-mcp | mcpServers | GitHub main | go (nixpkgs override) | `github-mcp-server` | go test | MCP stdin |
-| kagi-mcp | mcpServers | GitHub main | python | — | — | MCP stdin |
-| mcp-language-server | mcpServers | GitHub main | go (nixpkgs override) | `mcp-language-server` | go test | MCP stdin |
-| mcp-proxy | mcpServers | GitHub main | python (nixpkgs override) | `mcp-proxy` | pytest | MCP stdin |
-| nixos-mcp | mcpServers | flake input | — | — | upstream | MCP stdin |
-| openmemory-mcp | mcpServers | GitHub main | npm | — | — | MCP stdin |
-| serena-mcp | mcpServers | flake input | — | — | — | MCP stdin |
-| sympy-mcp | mcpServers | GitHub main | python | — | pytest (62) | MCP stdin |
-| modelcontextprotocol | mcpServers | GitHub main | npm + python | — | pytest | all 6 bins |
-| git-absorb | gitTools | GitHub main | cargo (nixpkgs override) | `git-absorb` | cargo test | --version |
-| git-branchless | gitTools | flake input | cargo (upstream overlay) | — | upstream | — |
-| git-revise | gitTools | GitHub main | python (nixpkgs override) | `git-revise` | pytest | nixpkgs |
-| agnix-mcp | mcpServers | mainProgram override | — | — | — | — |
-| agnix-lsp | lspServers | mainProgram override | — | — | — | — |
+| Package              | Group      | Source               | Build                     | nixpkgs               | Tests         | Smoke               |
+| -------------------- | ---------- | -------------------- | ------------------------- | --------------------- | ------------- | ------------------- |
+| agnix                | root       | GitHub main          | cargo                     | —                     | cargo test    | --version + MCP/LSP |
+| any-buddy            | root       | GitHub main          | pnpm                      | —                     | vitest (203)  | —                   |
+| claude-code          | root       | GCS manifest         | pre-built binary          | —                     | —             | binary              |
+| copilot-cli          | root       | GitHub releases      | pre-built binary          | `github-copilot-cli`  | —             | binary              |
+| kiro-cli             | root       | AWS manifest         | pre-built binary          | `kiro-cli`            | —             | binary              |
+| kiro-gateway         | root       | GitHub main          | python                    | —                     | pytest (1413) | —                   |
+| context7-mcp         | mcpServers | GitHub main          | pnpm (nixpkgs override)   | `context7-mcp`        | vitest (2)    | version check       |
+| effect-mcp           | mcpServers | GitHub main          | pnpm                      | —                     | —             | MCP stdin           |
+| git-intel-mcp        | mcpServers | GitHub main          | npm                       | —                     | vitest (40)   | MCP stdin           |
+| github-mcp           | mcpServers | GitHub main          | go (nixpkgs override)     | `github-mcp-server`   | go test       | MCP stdin           |
+| kagi-mcp             | mcpServers | GitHub main          | python                    | —                     | —             | MCP stdin           |
+| mcp-language-server  | mcpServers | GitHub main          | go (nixpkgs override)     | `mcp-language-server` | go test       | MCP stdin           |
+| mcp-proxy            | mcpServers | GitHub main          | python (nixpkgs override) | `mcp-proxy`           | pytest        | MCP stdin           |
+| nixos-mcp            | mcpServers | flake input          | —                         | —                     | upstream      | MCP stdin           |
+| openmemory-mcp       | mcpServers | GitHub main          | npm                       | —                     | —             | MCP stdin           |
+| serena-mcp           | mcpServers | flake input          | —                         | —                     | —             | MCP stdin           |
+| sympy-mcp            | mcpServers | GitHub main          | python                    | —                     | pytest (62)   | MCP stdin           |
+| modelcontextprotocol | mcpServers | GitHub main          | npm + python              | —                     | pytest        | all 6 bins          |
+| git-absorb           | gitTools   | GitHub main          | cargo (nixpkgs override)  | `git-absorb`          | cargo test    | --version           |
+| git-branchless       | gitTools   | flake input          | cargo (upstream overlay)  | —                     | upstream      | —                   |
+| git-revise           | gitTools   | GitHub main          | python (nixpkgs override) | `git-revise`          | pytest        | nixpkgs             |
+| agnix-mcp            | mcpServers | mainProgram override | —                         | —                     | —             | —                   |
+| agnix-lsp            | lspServers | mainProgram override | —                         | —                     | —             | —                   |
