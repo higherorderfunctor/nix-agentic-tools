@@ -81,6 +81,12 @@ jobs:
       # compute versions at eval time. Fresh CI runners don't have these
       # sources. Evaluating the packages attrset triggers IFD fetches.
       # --allow-import-from-derivation is required for the eval to fetch.
+      # Record base commit before pipeline runs.
+      # Used to identify which worktree branches have actual updates.
+      - name: Record base commit
+        id: base
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       # Warm: evaluate all package versions to trigger IFD source fetches.
       # builtins.attrNames is lazy — doesn't trigger IFD. We need to force
       # evaluation of each package's version (which reads from fetchFromGitHub
@@ -117,7 +123,7 @@ jobs:
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
 
-          base_head=$(git rev-parse "$BRANCH_NAME")
+          base_head="${{ steps.base.outputs.sha }}"
 
           # Find all update/* branches with commits ahead of base
           git branch --list 'update/*' | while read -r branch; do
@@ -134,7 +140,7 @@ jobs:
 
             # Create or update PR
             existing_pr=$(gh pr list --base "$BRANCH_NAME" --head "$branch" --json number --jq '.[0].number // empty' 2>/dev/null || true)
-            subject=$(git log -1 --format='%s' "$branch")
+            subject=$(git log "$base_head".."$branch" --format='%s' | head -1)
 
             if [ -n "$existing_pr" ]; then
               echo "PR #$existing_pr exists for $branch — branch updated"
