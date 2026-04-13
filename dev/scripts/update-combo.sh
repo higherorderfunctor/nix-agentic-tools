@@ -60,6 +60,9 @@ if ! (
     exit 0
   fi
 
+  # Prefetch sources for cachix (CI only — enables eval on PR runners)
+  prefetch_sources "any-buddy" "claude-code"
+
   # Phase 2: Build verification (skipped in CI mode)
   run_build nix build ".#any-buddy" ".#claude-code" --no-link --log-format bar-with-logs
 ); then

@@ -76,6 +76,9 @@ if ! (
     exit 0
   fi
 
+  # Prefetch source for cachix (CI only — enables eval on PR runners)
+  prefetch_sources "$name"
+
   # Phase 2: Build verification (skipped in CI mode)
   run_build nix build ".#$name" --no-link --log-format bar-with-logs
 ); then

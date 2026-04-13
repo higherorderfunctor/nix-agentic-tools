@@ -79,13 +79,26 @@ setup_worktree() {
   echo "$wt"
 }
 
-# Build verification. No-op in CI mode (PR pipeline handles builds).
+# Build verification. In CI mode, prefetch sources instead of full build.
+# Sources must be in cachix for CI eval (IFD: readFile on fetchFromGitHub).
 run_build() {
   if [ -n "$CI_MODE" ]; then
-    log_info "CI mode: skipping build (PR pipeline validates)"
+    log_info "CI mode: skipping full build (PR pipeline validates)"
     return 0
   fi
   "$@"
+}
+
+# Prefetch package sources so they're in cachix for CI eval.
+# Only needed in CI mode — local builds realize sources as a side effect.
+prefetch_sources() {
+  if [ -z "$CI_MODE" ]; then
+    return 0
+  fi
+  for pkg in "$@"; do
+    log_info "Prefetching source: $pkg"
+    nix build ".#$pkg.src" --no-link 2>/dev/null || true
+  done
 }
 
 # Cherry-pick worktree commits to main branch. No-op in CI mode.
