@@ -7,6 +7,7 @@ _: final: _prev: let
     fragmentsLib.mkFragment {
       text = builtins.readFile ./fragments/${name}.md;
       description = "coding-standards/${name}";
+      source = "packages/coding-standards/fragments/${name}.md";
       priority = 10;
     };
 in {

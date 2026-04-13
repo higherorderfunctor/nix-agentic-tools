@@ -63,10 +63,20 @@
       if location == "dev"
       then base + "/${dir}/${name}.md"
       else base + "/${dir}/docs/${name}.md";
+    # Repo-relative source path for provenance comments
+    repoRelative =
+      if location == "dev"
+      then "dev/fragments/${dir}/${name}.md"
+      else if location == "package"
+      then "packages/${dir}/docs/${name}.md"
+      else if location == "devshell"
+      then "devshell/${dir}/docs/${name}.md"
+      else "${location}/${dir}/${name}.md";
   in
     fragments.mkFragment {
       text = builtins.readFile fragmentPath;
       description = "${location}:${dir}/${name}";
+      source = repoRelative;
       priority = 5;
     };
 
@@ -232,6 +242,7 @@
         if isRoot
         then commonFragments ++ extraFrags ++ devFrags
         else extraFrags ++ devFrags;
+      generator = "dev/generate.nix";
     };
 
   # ── Ecosystem file transforms ────────────────────────────────────────

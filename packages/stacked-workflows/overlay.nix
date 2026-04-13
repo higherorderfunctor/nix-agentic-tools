@@ -34,6 +34,7 @@ in {
           routing-table = fragmentsLib.mkFragment {
             text = builtins.readFile ./fragments/routing-table.md;
             description = "Stacked workflow skill routing table";
+            source = "packages/stacked-workflows/fragments/routing-table.md";
             priority = 10;
           };
         };
