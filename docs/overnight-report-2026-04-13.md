@@ -321,7 +321,7 @@ them on shell entry; the commit hook guards staleness.
 
 1. **Ecosystem-specific instructions in fragment comments** — the Claude
    transform could inject a note like `<!-- This file is generated from
-   fragments. Edit the source, not this file. -->` that only appears in
+fragments. Edit the source, not this file. -->` that only appears in
    Claude rule files. Could tell Claude to `git add` these files. Research:
    how do other projects handle generated-but-committed file instructions?
 
@@ -337,5 +337,5 @@ them on shell entry; the commit hook guards staleness.
    also regenerates and re-stages. Catches edits to fragments without
    re-entering devenv. Implementation note: hook would need `nix build`
    which adds ~2-5s to every commit. Consider caching/fingerprinting to
-   skip when fragments haven't changed. Currently devenv files.* handles
+   skip when fragments haven't changed. Currently devenv files.\* handles
    generation on shell entry; treefmt-restage handles re-staging.
