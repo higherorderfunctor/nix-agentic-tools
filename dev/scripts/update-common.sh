@@ -89,18 +89,6 @@ run_build() {
   "$@"
 }
 
-# Prefetch package sources so they're in cachix for CI eval.
-# Only needed in CI mode — local builds realize sources as a side effect.
-prefetch_sources() {
-  if [ -z "$CI_MODE" ]; then
-    return 0
-  fi
-  for pkg in "$@"; do
-    log_info "Prefetching source: $pkg"
-    nix build ".#$pkg.src" --no-link 2>/dev/null || true
-  done
-}
-
 # Cherry-pick worktree commits to main branch. No-op in CI mode.
 # In CI, the worktree branch is pushed by the workflow after ninja completes.
 merge_to_branch() {

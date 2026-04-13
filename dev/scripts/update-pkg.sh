@@ -62,11 +62,8 @@ log_info "Running nix-update..."
 if ! (
   cd "$wt"
 
-  # Disable eval cache: worktree flake source differs from main, cached
-  # derivation references from prior evaluations cause "path is not valid".
   # shellcheck disable=SC2086
-  NIX_CONFIG="eval-cache = false" \
-    nix run --inputs-from . nix-update -- --flake "$name" --system "$system" $extra_flags 2>&1 | tee "$version_file"
+  nix run --inputs-from . nix-update -- --flake "$name" --system "$system" $extra_flags 2>&1 | tee "$version_file"
   # pipefail propagates nix-update failures through tee
   nix_update_status=${PIPESTATUS[0]}
   if [ "$nix_update_status" -ne 0 ]; then
@@ -84,9 +81,6 @@ if ! (
   if [ "$(git -C "$wt" rev-parse HEAD)" = "$base_head" ]; then
     exit 0
   fi
-
-  # Prefetch source for cachix (CI only — enables eval on PR runners)
-  prefetch_sources "$name"
 
   # Phase 2: Build verification (skipped in CI mode)
   run_build nix build ".#$name" --no-link --log-format bar-with-logs

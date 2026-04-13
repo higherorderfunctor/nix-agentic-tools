@@ -44,12 +44,9 @@ log_info "Running nix-update for any-buddy + claude-code..."
 if ! (
   cd "$wt"
 
-  # Disable eval cache: worktree flake source differs from main
   {
-    NIX_CONFIG="eval-cache = false" \
-      nix run --inputs-from . nix-update -- --flake any-buddy --system "$system" --version skip
-    NIX_CONFIG="eval-cache = false" \
-      nix run --inputs-from . nix-update -- --flake claude-code --system "$system" --use-update-script
+    nix run --inputs-from . nix-update -- --flake any-buddy --system "$system" --version skip
+    nix run --inputs-from . nix-update -- --flake claude-code --system "$system" --use-update-script
   } 2>&1 | tee "$version_file"
   nix_update_status=${PIPESTATUS[0]}
   if [ "$nix_update_status" -ne 0 ]; then
@@ -67,9 +64,6 @@ if ! (
   if [ "$(git -C "$wt" rev-parse HEAD)" = "$base_head" ]; then
     exit 0
   fi
-
-  # Prefetch sources for cachix (CI only — enables eval on PR runners)
-  prefetch_sources "any-buddy" "claude-code"
 
   # Phase 2: Build verification (skipped in CI mode)
   run_build nix build ".#any-buddy" ".#claude-code" --no-link --log-format bar-with-logs
