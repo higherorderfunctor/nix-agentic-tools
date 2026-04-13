@@ -13,6 +13,7 @@
   ...
 }: let
   upstream = inputs.serena.packages.${final.stdenv.hostPlatform.system}.default;
+  vu = import ../lib.nix;
 in
   upstream.overrideAttrs {
     passthru =
@@ -21,4 +22,9 @@ in
         mcpArgs = ["start-mcp-server"];
         mcpName = "serena-mcp";
       };
+    doInstallCheck = true;
+    installCheckPhase = vu.mkMcpSmokeTest {
+      bin = "serena";
+      args = ["start-mcp-server"];
+    };
   }

@@ -13,5 +13,10 @@
   ...
 }: let
   upstream = inputs.mcp-nixos.packages.${final.stdenv.hostPlatform.system}.default;
+  vu = import ../lib.nix;
 in
-  upstream.overrideAttrs {passthru = (upstream.passthru or {}) // {mcpName = "nixos-mcp";};}
+  upstream.overrideAttrs {
+    passthru = (upstream.passthru or {}) // {mcpName = "nixos-mcp";};
+    doInstallCheck = true;
+    installCheckPhase = vu.mkMcpSmokeTest {bin = "mcp-nixos";};
+  }
