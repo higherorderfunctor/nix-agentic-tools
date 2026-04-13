@@ -26,6 +26,7 @@ chafa
 chonk
 clicolor
 clis
+codemod
 codepaths
 codesign
 contentpkgs
@@ -43,6 +44,7 @@ devshell
 difftool
 direnv
 direnvrc
+docnix
 docsite
 drvs
 dsolve
@@ -65,6 +67,7 @@ gpgsign
 heredocs
 higherorderfunctor
 hitl
+hsjobeki
 hostable
 hotspots
 indexedlog
@@ -79,6 +82,7 @@ kiro
 kirocli
 ldflags
 libgit
+libsets
 lifecycles
 llms
 lockdown
@@ -92,6 +96,7 @@ modelcontextprotocol
 mystor
 narinfo
 nixd
+nixdoc
 nixos
 nixpkgs
 nixvim
@@ -130,6 +135,7 @@ reftable
 regen
 reimplementation
 relpath
+rnix
 reparent
 rerere
 revertibility

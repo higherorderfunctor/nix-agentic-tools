@@ -99,6 +99,7 @@ in {
         ".*\\.lock$"
         "^config/cspell/"
         "^docs/human-todo\\.md$"
+        "^docs/overnight-.*\\.md$"
         "^docs/plan\\.md$"
         "^docs/superpowers/"
       ];
