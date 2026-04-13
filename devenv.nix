@@ -84,6 +84,7 @@ in {
 
   # ── Git Hooks ─────────────────────────────────────────────────────────
   git-hooks.hooks = {
+    treefmt.enable = true;
     deadnix = {
       enable = true;
       excludes = ["overlays/sources/.*"];

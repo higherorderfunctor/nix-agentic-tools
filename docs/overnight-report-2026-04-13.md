@@ -509,6 +509,7 @@ x86_64-linux and aarch64-darwin.
 **Root cause: Import From Derivation (IFD) during eval.**
 
 Our overlays compute version at eval time from the fetched source:
+
 ```nix
 version = vu.mkVersion {
   upstream = vu.readPackageJsonVersion "${src}/package.json";
@@ -519,6 +520,7 @@ version = vu.mkVersion {
 `builtins.readFile "${src}/package.json"` is IFD — nix must realize
 (fetch) the `fetchFromGitHub` derivation before evaluation can continue.
 On the CI runner evaluating a PR branch:
+
 1. PR has new rev + new src hash
 2. CI runner does `nix flake check` or `nix eval`
 3. Nix tries to realize `fetchFromGitHub { rev = "newrev"; hash = "newhash"; }`
