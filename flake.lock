@@ -1213,11 +1213,11 @@
         "uv2nix": "uv2nix"
       },
       "locked": {
-        "lastModified": 1776184243,
-        "narHash": "sha256-DR6YpiFVA5sCrB24UPs9ZMhPZ5om6Nck0QtLlyIOl2E=",
+        "lastModified": 1776190512,
+        "narHash": "sha256-qgAk8/KBRctpjzkx3x2g2oImBoHL+yni44OSRI0Z4yQ=",
         "owner": "oraios",
         "repo": "serena",
-        "rev": "94bd2e52b6c2be4f869d3b19484af77c00aa7e43",
+        "rev": "d6ea5bffdef86bb432f9a0a93ae27814ad35c742",
         "type": "github"
       },
       "original": {
