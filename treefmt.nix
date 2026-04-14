@@ -36,6 +36,5 @@
     # hand-formatted lists. These files are cspell-excluded
     # and never merge to main — leave them as-authored.
     "docs/plan.md"
-    "docs/superpowers/**"
   ];
 }

@@ -20,10 +20,10 @@
 # threading through the consumer's `final`/`prev`. If A != B
 # for any package, that package will cache-miss for consumers.
 #
-# Phase 3.2-3.7 of docs/superpowers/plans/2026-04-08-architecture
-# -foundation.md fix each affected overlay package. This check
-# is the regression gate — landed in a failing state (TDD red),
-# turns green when every package routes through `ourPkgs`.
+# The architecture foundation work fixed each affected overlay
+# package. This check is the regression gate — landed in a
+# failing state (TDD red), turns green when every package
+# routes through `ourPkgs`.
 {
   inputs,
   lib,

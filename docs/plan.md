@@ -9,64 +9,22 @@
 > where noted — `memory/<name>.md` references are relative to
 > `~/.claude/projects/-home-caubut-Documents-projects-nix-agentic-tools/memory/`.
 
-## Current status (2026-04-11)
+## Current status (2026-04-13)
 
-**nix-update migration complete.** nvfetcher deleted. All overlay
-packages have inline hashes managed by nix-update + sources.json
-updateScripts for per-platform binaries. Auto-computed versions
-from source (`overlays/lib.nix`). Full pipeline passes (0 failures).
-NOT pushed yet. CI pipeline restructured (build outside devenv,
-warm cache last) but
-NOT pushed — testing locally first.
-
-**Remaining before push:**
-- End-to-end `devenv tasks run update:all` test (running now)
-- Verify devenv shell works
+**nix-update migration complete and pushed.** nvfetcher deleted. All
+overlay packages have inline hashes managed by nix-update + ninja
+DAG pipeline. Auto-computed versions from source (`overlays/lib.nix`).
+CI pipeline restructured and actively running. Update pipeline uses
+git worktrees + flock merge for parallel per-package updates.
 
 ---
 
-## Backlog: nvfetcher reference cleanup — COMPLETE (2026-04-12)
-
-55 stale references fixed. Fragments updated, instruction files
-regenerated, dead code removed. 1 reference kept (cspell dictionary).
-Items below marked for historical record.
-
-### Dead code (fix directly)
-- [ ] `overlays/default.nix:25` — comment references deleted `memory/project_nvfetcher_overlay_pattern.md`
-- [ ] `config/cspell/cspell.json:27` — filename glob references deleted `config/nvfetcher/nvfetcher.toml`
-- [ ] `config/cspell/project-terms.txt:98` — `nvfetcher` in dictionary (keep if historical docs mention it)
-- [ ] `.gitignore:37-38` — shake database glob for deleted nvfetcher output
-- [ ] `dev/generate.nix:150-153` — `nvfetcher.toml` in path scope
-- [ ] `dev/generate.nix:695,705,732,737-738` — CONTRIBUTING.md template nvfetcher workflow text
-
-### Stale docs (fix directly)
-- [ ] `overlays/README.md` — entire file describes nvfetcher pattern, needs full rewrite
-- [ ] `overlays/mcp-servers/serena-mcp.nix:8`, `nixos-mcp.nix:8` — "No nvfetcher entry" comments
-- [ ] `packages/kiro-cli/default.nix:5` — "nvfetcher-only entry" comment
-- [ ] `packages/serena-mcp/lib/mkSerena.nix:7`, `packages/nixos-mcp/lib/mkNixos.nix:7` — "not nvfetcher-tracked"
-- [ ] `packages/claude-code/docs/buddy-activation.md:77` — "pins via nvfetcher"
-- [ ] `packages/stacked-workflows/references/nix-workflow.md:38-67` — nvfetcher workflow steps
-- [ ] `dev/references/agnix.md:8` — "tracking latest via nvfetcher"
-- [ ] `dev/notes/overlay-cache-hit-parity-fix.md` — nv.version references
-- [ ] `dev/notes/claude-code-npm-contingency.md` — nvfetcher migration plan (done)
-- [ ] `dev/skills/repo-review/personalities/nix-expert.md:33` — "Is nvfetcher integration correct?"
-
-### Fragment source files (fix → regenerate → cascades to 16 steering files)
-- [ ] `dev/fragments/mcp-servers/overlay-guide.md` — entire file is nvfetcher + hashes.json pattern
-- [ ] `dev/fragments/ai-clis/packaging-guide.md:21-62` — nvfetcher version tracking section
-- [ ] `dev/fragments/overlays/overlay-pattern.md:41` — `nvSourcesOverlay` reference
-- [ ] `dev/fragments/overlays/cache-hit-parity.md:44` — `nv.version` in code example
-- [ ] `dev/fragments/nix-standards/nix-standards.md:5-7` — `nv-sources.<key>` and `hashes.json` rules
-- [ ] `dev/fragments/packaging/naming-conventions.md:8` — "nvfetcher keys use upstream project names"
-- [ ] `dev/fragments/packaging/platforms.md:10-21` — nvfetcher nightly pattern
-- [ ] `dev/fragments/monorepo/change-propagation.md:11` — `nvfetcher.toml keys` in checklist
-
-### New backlog items
+### Backlog items
 - [ ] Bun overlay for node-based binaries (port from `nixos-config/overlays/bun-overlay.nix`, publish in `ai.*`)
 - [ ] Switch node-based MCP servers and tools to run with bun
 - [ ] Single source of truth for `flake.nix` + `devenv.yaml` inputs (DRY)
 - [ ] Document unfree guard pattern as architecture fragment fanned out to ecosystem docs + contributing
-- [ ] Update overlays/README.md table for nix-update migration
+- [x] Update overlays/README.md table for nix-update migration
 - [ ] Garnix CI exploration — garnix for builds, GHA for orchestration, cachix for distribution (see `memory/project_garnix_exploration.md`)
 - [x] Update `.claude/rules/claude-code.md` buddy-activation fragment — updated for binary patching
 - [ ] Fragment source linter — verify that every `<!-- Fragment: path -->` comment in generated files points to a source file that exists. Catch stale generated files, missing regen, or deleted sources.
@@ -88,37 +46,6 @@ Items below marked for historical record.
 - [x] Smoke tests on all packages with binaries
 - [x] Unit/integration tests enabled on 7+ packages (~1720 tests total)
 - [ ] CI v4 "Stage, Validate, Push" — cross-platform validation before commit (designed, not pushed)
-
----
-
-## Previous status (2026-04-10, pre-migration)
-
-**CI pipeline (`update.yml`) debugging in progress.** Waiting for a
-clean run before further tweaks. Recent fixes:
-
-- **File reorganization landed** (`babab01`): config files →
-  `config/`, generated files → `overlays/sources/`. cspell dictionary
-  path resolved (CWD-relative, `config/cspell/` excluded from
-  spell checking to avoid nested config auto-discovery collision).
-
-- **Hash chicken-and-egg fixed** (`c399f79`): stale dep hashes
-  (e.g. agnix cargoHash) broke `devenv print-dev-env` because overlay
-  packages are in the shell's packages list. Hash computation now
-  runs BEFORE devenv eval using the lightweight CI shell (`nix develop
-  .#ci`). `update-hashes.sh` also fixed to use `builtins.currentSystem`
-  instead of hardcoded x86_64-linux.
-
-- **CI logging enabled** (`affd2ca`): `print-build-logs = true` in
-  nix config so nix emits fetch/build progress to stderr in non-TTY
-  CI. `devenv print-dev-env > /dev/null` keeps stderr visible while
-  suppressing the giant env dump.
-
-- **Workflow split planned**: current single workflow runs full cycle
-  on every push to feature branch. Backlog item added to split into
-  update-on-main-schedule + build-on-PR after merge.
-
-**Next**: wait for CI run to complete, review logs, fix any remaining
-issues. Then: overlays/README.md table update, darwin hash verification.
 
 ---
 
@@ -161,24 +88,22 @@ High confidence, small scope. Good for review sessions.
 - [x] **Refactor `mkDevFragment` location discriminator as attrset
       lookup**
 - [x] **context7-mcp: override nixpkgs instead of from-scratch build**
-      — proof case for the overlay override pattern. Uses nvfetcher
-      GitHub source + runCommandLocal unpack + fetchPnpmDeps.
+      — proof case for the overlay override pattern. Uses inline
+      GitHub source + nixpkgs override + fetchPnpmDeps.
 
 - [ ] **Convert remaining 6 from-scratch overlays to nixpkgs
-      overrides** — same pattern as context7-mcp. Switch nvfetcher
-      from npm/PyPI tarballs to GitHub source, override nixpkgs
-      derivation, compute dep hashes. Match build tool to source
-      (e.g., pnpm lockfile → pnpm build, not npm). Strip
-      `allowUnfree` where not needed. Packages:
-      fetch-mcp (`mcp-server-fetch`), github-mcp
+      overrides** — same pattern as context7-mcp. Override nixpkgs
+      derivation with inline GitHub source, compute dep hashes.
+      Match build tool to source (e.g., pnpm lockfile → pnpm
+      build, not npm). Strip `allowUnfree` where not needed.
+      Packages: fetch-mcp (`mcp-server-fetch`), github-mcp
       (`github-mcp-server`), git-mcp (`mcp-server-git`),
       git-revise (`git-revise`), mcp-language-server
       (`mcp-language-server`), mcp-proxy (`mcp-proxy`).
-      Pattern: `memory/project_nvfetcher_overlay_pattern.md`.
 
 - [ ] **Audit all overlay source + build tools against upstream** —
       MANUAL USER REVIEW REQUIRED. For each package, verify:
-      (a) nvfetcher fetches from GitHub (not npm/PyPI) unless no
+      (a) source fetches from GitHub (not npm/PyPI) unless no
       GitHub source exists (flag to user), (b) build tool matches
       source lockfile (pnpm lockfile → pnpm build, not npm),
       (c) allowUnfree stripped unless actually needed. For packages
@@ -192,6 +117,24 @@ High confidence, small scope. Good for review sessions.
       buddy-activation + wrapper-chain fragments updated for binary
       patching. nvfetcher refs removed from all fragments.
 
+- [ ] **Cachix/substituter override warnings for consumers** — warn
+      when a consumer overrides this flake's nixpkgs or other inputs,
+      causing cachix cache misses. If cachix is not in substitutors,
+      warn about available prebuilt binaries. Only warn if cachix is
+      configured but inputs are overridden (not if cachix is absent
+      entirely). Warnings only, never break builds. Optionally provide
+      a way to disable warnings. Tricky across module systems
+      (HM, devenv, overlay-only).
+
+- [ ] **Migrate git-branchless from custom overlay to upstream flake
+      input** — consume `inputs.git-branchless.overlays.default`
+      instead of standalone `overlays/git-tools/git-branchless.nix`.
+      Thin wrapper for Rust 1.88.0 pin + versionCheckHook strip
+      (needed until arxanas/git-branchless#1585 is fixed upstream).
+      Remove from nix-update matrix, update via `nix flake update
+      git-branchless`. Flake input already added. Design written up in
+      a prior spec (deleted during backlog consolidation).
+
 - [ ] **Clean up `lib/options-doc.nix` stubs** — consolidate ad-hoc
       stub extensions from Tasks 3-6.
 
@@ -201,9 +144,8 @@ High confidence, small scope. Good for review sessions.
       — small decisions made during implementation should be codified
       into dev fragments so they fan out to all ecosystems. Decisions
       to document:
-      - nvfetcher pattern: GitHub source over npm/PyPI, scoped-tag
-        workaround, runCommandLocal unpack, fetchPnpmDeps with
-        finalAttrs (see `memory/project_nvfetcher_overlay_pattern.md`)
+      - Overlay source pattern: inline GitHub source + hash, nix-update
+        pipeline, nixpkgs overrides with fetchPnpmDeps/finalAttrs
       - overlay grouping: `pkgs.ai.{mcpServers,lspServers}` +
         `pkgs.gitTools`, agnix mainProgram overrides
       - factory composition: mkAiApp record + hmTransform/devenvTransform
@@ -219,10 +161,9 @@ High confidence, small scope. Good for review sessions.
         (see `memory/project_unfree_guard_pattern.md`)
       - Flake-first source preference: if upstream repo has a nix flake
         that outputs the package (not just devShell), add it as a flake
-        input (NOT nvfetcher) and consume
-        `inputs.<name>.packages.${system}.default`. Let upstream own
-        their build. nvfetcher is for packages without flakes or where
-        we override nixpkgs.
+        input and consume `inputs.<name>.packages.${system}.default`.
+        Let upstream own their build. Inline source + overlay is for
+        packages without flakes or where we override nixpkgs.
       - Build tool must match source: if source has pnpm-lock.yaml,
         build with pnpm (not npm). If source has Cargo.lock, build
         with cargo. Don't force a different tool than what upstream
@@ -251,9 +192,10 @@ High confidence, small scope. Good for review sessions.
       extract to `lib/external-servers.nix` or a content package.
       Currently `lib.externalServers.aws-mcp` is hand-defined inline.
 
-- [ ] **Pre-main-merge cleanup: remove `docs/human-todo.md`** —
-      scratch file for user notes during dev. Also remove its entry
-      from `cspell.json` ignorePaths + `devenv.nix` cspell excludes.
+- [x] **Pre-main-merge cleanup: remove `docs/human-todo.md`** —
+      scratch file for user notes during dev. Removed along with
+      `docs/superpowers/` directory. cspell + treefmt + devenv
+      excludes cleaned up.
 
 - [ ] **Rename `devshell/` → `modules/devshell/`** — top-level
       splits modules across `lib/`, `devshell/`, and per-package
@@ -386,7 +328,7 @@ Blocked on factory shape being stable and verified by nixos-config.
       versions, option surface, cross-config parity)
 - [ ] `apps/check-drift` — detect config parity gaps
 - [ ] `apps/check-health` — validate cross-references
-- [ ] Structural checks (symlinks, fragments, nvfetcher keys)
+- [ ] Structural checks (symlinks, fragments, cross-references)
 
 ### CI
 
@@ -409,11 +351,11 @@ Items preserved from previous sessions. May need triage.
 
 - [ ] **Claude-code npm→binary migration + buddy salt patching** —
       Anthropic soft-deprecated npm 2026 in favor of Bun-compiled
-      single-exec from GPG-signed manifest. nvfetcher migration is
-      straightforward (copy `kiro-cli.nix` binary-fetch pattern).
-      Buddy patching requires extracting/modifying embedded JS inside
-      the Bun single-exec binary's `.bun` ELF section (Linux) or
-      `__BUN,__bun` Mach-O section (macOS).
+      single-exec from GPG-signed manifest. Migration uses the same
+      binary-fetch pattern as kiro-cli (inline source + per-platform
+      `sources.json`). Buddy patching requires extracting/modifying
+      embedded JS inside the Bun single-exec binary's `.bun` ELF
+      section (Linux) or `__BUN,__bun` Mach-O section (macOS).
 
       **Preferred approach (option 2): same-length in-place binary patch.**
       The buddy salt is a fixed 15-byte marker (`friend-2026-401`).
@@ -439,10 +381,9 @@ Items preserved from previous sessions. May need triage.
       publish frequency. If Anthropic stops npm while native channel
       keeps updating, that's the trigger.
 
-      **Touch points:** nvfetcher.toml, claude-code.nix (buildNpmPackage
-      → binary fetch), hashes.json (per-platform binary hashes),
-      claude-code-buddy module, buddy-customization.md, delete
-      claude-code-package-lock.json
+      **Touch points:** claude-code.nix (buildNpmPackage → binary
+      fetch), per-platform sources.json, claude-code-buddy module,
+      buddy-customization.md, delete claude-code-package-lock.json
 - [ ] Agentic UX: pre-approve nix-store reads for HM-symlinked skills
 - [ ] Richer markdown fragment system: heading-aware merging
 - [ ] LLM-friendly inline code commenting conventions fragment
@@ -468,5 +409,5 @@ Items preserved from previous sessions. May need triage.
 - [ ] Rolling stack workflow skill
 - [ ] claude-code build approach consumer docs
 - [ ] Declutter root dotfiles
-- [ ] Fragment metadata consolidation follow-up
+- [ ] Fragment metadata consolidation follow-up (see also: Medium effort "Consolidate fragment enumeration")
 - [ ] Document hm-modules / claude-code scope overlap (moot post-buddy-absorption)

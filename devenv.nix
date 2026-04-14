@@ -99,10 +99,8 @@ in {
         ".*-package-lock\\.json$"
         ".*\\.lock$"
         "^config/cspell/"
-        "^docs/human-todo\\.md$"
         "^docs/overnight-.*\\.md$"
         "^docs/plan\\.md$"
-        "^docs/superpowers/"
       ];
     };
     # Re-stage files modified by formatters (treefmt, shfmt, etc.)

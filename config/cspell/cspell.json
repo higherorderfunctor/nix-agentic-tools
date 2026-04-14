@@ -14,9 +14,7 @@
     "config/cspell",
     "*.lock",
     "*.png",
-    "docs/human-todo.md",
     "docs/plan.md",
-    "docs/superpowers/**",
     "overlays/sources",
     "result"
   ],

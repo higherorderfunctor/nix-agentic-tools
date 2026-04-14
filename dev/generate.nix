@@ -147,11 +147,12 @@
     # nix-standards: broad Nix code conventions. Applies to any
     # .nix file in the tree.
     nix-standards = ["**/*.nix"];
-    # overlays: cross-cutting cache-hit parity rule. Scoped to every
-    # overlay package file in packages/, excluding the content-only
-    # fragments dirs (which ship markdown, no compilation, so the
-    # rule doesn't apply).
+    # overlays: cache-hit parity + IFD patterns. Scoped to overlay
+    # package files and overlays/ (version helpers that trigger IFD).
+    # Excludes content-only fragments dirs.
     overlays = [
+      "overlays/*.nix"
+      "overlays/**/*.nix"
       "packages/ai-clis/*.nix"
       "packages/git-tools/*.nix"
       "packages/mcp-servers/*.nix"
@@ -162,17 +163,20 @@
       "config/update-matrix.nix"
       "packages/**/*.nix"
     ];
-    # pipeline: fragment composition + ecosystem transforms + docsite
-    # generators. Scoped to every file that participates in the dev
-    # fragment and instruction generation chain. Post-factory rollout,
-    # transformers live in lib/ai/transformers/ and the doc site
-    # generators live in devshell/docs-site/.
+    # pipeline: fragment composition, ecosystem transforms, update
+    # pipeline, CI workflow, and docsite generators. Scoped to every
+    # file in the dev fragment chain, update scripts, CI workflow,
+    # and ninja DAG generation.
     pipeline = [
-      "lib/fragments.nix"
-      "lib/ai/transformers/**"
+      ".github/workflows/update.yml"
+      "config/generate-update-ninja.nix"
+      "config/update-matrix.nix"
       "dev/generate.nix"
+      "dev/scripts/update-*.sh"
       "dev/tasks/generate.nix"
       "devshell/docs-site/**"
+      "lib/ai/transformers/**"
+      "lib/fragments.nix"
     ];
     stacked-workflows = ["packages/stacked-workflows/**"];
   };
@@ -206,14 +210,21 @@
       "project-overview"
     ];
     nix-standards = ["nix-standards"];
-    overlays = ["cache-hit-parity"];
+    overlays = [
+      "cache-hit-parity"
+      "ifd-patterns"
+      "overlay-pattern"
+      "unfree-guard"
+    ];
     packaging = [
       "naming-conventions"
       "platforms"
     ];
     pipeline = [
+      "ci-update-workflow"
       "fragment-pipeline"
       "generation-architecture"
+      "update-pipeline"
     ];
     stacked-workflows = ["development"];
   };
