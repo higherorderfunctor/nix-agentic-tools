@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-176dcccb.js";
+            window.path_to_searchindex_js = "searchindex-29c7141c.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-841f2094.js"></script>
@@ -5090,11 +5090,13 @@ rely on that when the value might flow further.</p>
 <h1 id="devenv-files-internals"><a href="#devenv-files-internals" class="header">devenv files Internals</a></h1>
 <h2 id="devenv-files-option-internals"><a class="header" href="#devenv-files-option-internals">devenv <code>files</code> Option Internals</a></h2>
 <blockquote>
-<p><strong>Last verified:</strong> 2026-04-08 (commit 03af9d3 — feat(lib): add <code>mkDevenvSkillEntries</code> walker for devenv <code>files.*</code> parity). devenv internals
-are pinned to whatever version is in flake.lock; if you touch
+<p><strong>Last verified:</strong> 2026-04-13 (commit pending — adds
+auto-regeneration via <code>gen</code> import). devenv internals are pinned
+to whatever version is in flake.lock; if you touch
 <code>modules/devenv/**</code>, <code>lib/hm-helpers.nix:mkDevenvSkillEntries</code>,
-or anywhere that uses <code>files.*.source</code> and this fragment isn’t
-updated in the same commit, stop and fix it.</p>
+<code>devenv.nix</code> <code>files</code> block, or anywhere that uses
+<code>files.*.source</code> and this fragment isn’t updated in the same
+commit, stop and fix it.</p>
 </blockquote>
 <p>devenv’s <code>files</code> option is structurally simpler than HM’s
 <code>home.file</code>. Specifically, <strong>it cannot walk a source directory
@@ -5212,15 +5214,37 @@ restores parity at the cost of eval-time directory walks.</p>
 <code>createFileScript</code> generator would benefit every devenv user, not
 just us. Not blocking any current work — the user-space walker is
 a viable fix while waiting for upstream.</p>
+<h3 id="instruction-file-auto-regeneration-via-gen-import"><a class="header" href="#instruction-file-auto-regeneration-via-gen-import">Instruction file auto-regeneration via <code>gen</code> import</a></h3>
+<p><code>devenv.nix</code> imports <code>dev/generate.nix</code> as <code>gen</code> (the same import
+<code>flake.nix</code> uses — single source of truth). The <code>gen</code> output feeds
+<code>files.*</code> entries that materialize all instruction files on every
+shell entry:</p>
+<pre><code class="language-nix">gen = import ./dev/generate.nix {inherit lib pkgs;};
+
+files =
+  {"CLAUDE.md".text = gen.claudeMd;}
+  // lib.mapAttrs' (name: content:
+    lib.nameValuePair ".claude/rules/${name}" {text = content;})
+  gen.claudeFiles
+  // {"AGENTS.md".text = gen.agentsMd;}
+  // ...copilotFiles, kiroFiles
+</code></pre>
+<p>This means <code>.claude/rules/*.md</code>, <code>.github/instructions/*.md</code>,
+<code>.kiro/steering/*.md</code>, <code>CLAUDE.md</code>, and <code>AGENTS.md</code> are
+automatically regenerated whenever fragment sources change and
+devenv re-evaluates. No manual <code>devenv tasks run generate:instructions</code> needed for the common case.</p>
+<p><strong>Prerequisite:</strong> the <code>coding-standards</code> overlay must be applied to
+devenv’s pkgs (was added alongside this feature) because <code>gen</code>
+reads <code>pkgs.coding-standards.passthru.fragments</code>.</p>
+<p><strong>Note:</strong> files materialized this way may not appear in devenv’s
+<code>files.json</code> managed files list. This is a tracking gap, not a
+functional issue — the files exist with correct content and
+permissions.</p>
 <h3 id="related-1"><a class="header" href="#related-1">Related</a></h3>
 <ul>
 <li><code>dev/fragments/ai-skills/skills-fanout-pattern.md</code> — the
 uniform <code>programs.&lt;cli&gt;.skills</code> delegation pattern that this
 walker enables on devenv side</li>
-<li><code>memory/project_devenv_files_internals.md</code> — original deep-dive
-source content</li>
-<li><code>memory/project_ai_claude_passthrough.md</code> — Task 2b (devenv
-parity decision: Option A recommended uses this walker)</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="overlay-cache-hit-parity-1"><a href="#overlay-cache-hit-parity-1" class="header">Overlay Cache-Hit Parity</a></h1>
