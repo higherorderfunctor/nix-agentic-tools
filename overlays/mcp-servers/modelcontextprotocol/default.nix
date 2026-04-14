@@ -10,7 +10,7 @@
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
   };
-  inherit (ourPkgs) buildNpmPackage fetchFromGitHub makeWrapper nodejs python314Packages;
+  inherit (ourPkgs) buildNpmPackage bun fetchFromGitHub makeWrapper python314Packages;
   vu = import ../../lib.nix;
 
   rev = "f4244583a6af9425633e433a3eec000d23f4e011";
@@ -69,7 +69,7 @@
         cp -r src/${subdir}/dist $out/lib/${pname}/
         cp -r node_modules $out/lib/${pname}/
         cp src/${subdir}/package.json $out/lib/${pname}/
-        makeWrapper ${nodejs}/bin/node $out/bin/${pname} \
+        makeWrapper ${bun}/bin/bun $out/bin/${pname} \
           --add-flags "$out/lib/${pname}/dist/index.js"
         runHook postInstall
       '';

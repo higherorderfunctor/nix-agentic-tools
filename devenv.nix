@@ -118,6 +118,13 @@ in {
       enable = true;
       args = ["-x"];
     };
+    gitleaks = {
+      enable = true;
+      name = "gitleaks";
+      entry = "${pkgs.gitleaks}/bin/gitleaks protect --staged --verbose --redact";
+      pass_filenames = false;
+      stages = ["pre-commit"];
+    };
     check-json.enable = true;
     check-toml.enable = true;
   };

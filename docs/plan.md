@@ -21,7 +21,7 @@ git worktrees + flock merge for parallel per-package updates.
 
 ### Backlog items
 - [ ] Bun overlay for node-based binaries (port from `nixos-config/overlays/bun-overlay.nix`, publish in `ai.*`)
-- [ ] Switch node-based MCP servers and tools to run with bun
+- [x] Switch node-based MCP servers and tools to run with bun (runtime wrappers switched, build still npm/pnpm)
 - [x] Single source of truth for `flake.nix` + `devenv.yaml` inputs — `config/generate-devenv-yaml.nix`
 - [x] Document unfree guard pattern as architecture fragment — `dev/fragments/overlays/unfree-guard.md`
 - [x] Update overlays/README.md table for nix-update migration
@@ -387,9 +387,9 @@ Items preserved from previous sessions. May need triage.
 - [ ] Agentic UX: pre-approve nix-store reads for HM-symlinked skills
 - [ ] Richer markdown fragment system: heading-aware merging
 - [ ] LLM-friendly inline code commenting conventions fragment
-- [ ] Research cspell plural/inflection syntax
+- [x] Research cspell plural/inflection syntax — no support, must add both forms explicitly
 - [ ] `outOfStoreSymlink` helper for Claude's `~/.claude/projects`
-- [ ] Secret scanning (gitleaks)
+- [x] Secret scanning (gitleaks) — `gitleaks protect --staged` pre-commit hook added
 - [ ] SecretSpec for MCP credentials
 - [ ] cclsp — Claude Code LSP integration
 - [ ] claude-code-nix review (github.com/sadjow/claude-code-nix)

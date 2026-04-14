@@ -12,7 +12,7 @@
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
   };
-  inherit (ourPkgs) fetchPnpmDeps makeWrapper nodejs pnpm pnpmConfigHook;
+  inherit (ourPkgs) bun fetchPnpmDeps makeWrapper nodejs pnpm pnpmConfigHook;
   vu = import ../lib.nix;
 
   rev = "83a768303839b9e125f6c286369a5d9cc26c666e";
@@ -45,7 +45,7 @@ in
       runHook preInstall
       mkdir -p $out/lib/effect-mcp $out/bin
       cp -r dist/* $out/lib/effect-mcp/
-      makeWrapper ${nodejs}/bin/node $out/bin/effect-mcp \
+      makeWrapper ${bun}/bin/bun $out/bin/effect-mcp \
         --add-flags "$out/lib/effect-mcp/main.cjs"
       runHook postInstall
     '';

@@ -7,7 +7,7 @@
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
   };
-  inherit (ourPkgs) buildNpmPackage fetchFromGitHub makeWrapper nodejs;
+  inherit (ourPkgs) buildNpmPackage bun fetchFromGitHub makeWrapper;
   vu = import ../lib.nix;
 
   rev = "4409b402c5e45da431ffc0b425262615ac453b70";
@@ -34,10 +34,10 @@ in
       runHook preInstall
       mkdir -p $out/lib/openmemory-mcp $out/bin
       cp -r bin dist node_modules package.json $out/lib/openmemory-mcp/
-      makeWrapper ${nodejs}/bin/node $out/bin/openmemory-mcp \
+      makeWrapper ${bun}/bin/bun $out/bin/openmemory-mcp \
         --add-flags "$out/lib/openmemory-mcp/bin/opm.js" \
         --add-flags "mcp"
-      makeWrapper ${nodejs}/bin/node $out/bin/openmemory-mcp-serve \
+      makeWrapper ${bun}/bin/bun $out/bin/openmemory-mcp-serve \
         --add-flags "$out/lib/openmemory-mcp/bin/opm.js" \
         --add-flags "serve"
       runHook postInstall

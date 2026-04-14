@@ -12,7 +12,7 @@
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
   };
-  inherit (ourPkgs) buildNpmPackage fetchgit git makeWrapper nodejs;
+  inherit (ourPkgs) buildNpmPackage bun fetchgit git makeWrapper;
   vu = import ../lib.nix;
 
   rev = "9f216bab8d6bc3a3b850ad77f27d02d63a71e10d";
@@ -42,7 +42,7 @@ in
       runHook preInstall
       mkdir -p $out/lib/git-intel-mcp $out/bin
       cp -r dist node_modules package.json $out/lib/git-intel-mcp/
-      makeWrapper ${nodejs}/bin/node $out/bin/git-intel-mcp \
+      makeWrapper ${bun}/bin/bun $out/bin/git-intel-mcp \
         --add-flags "$out/lib/git-intel-mcp/dist/index.js"
       runHook postInstall
     '';
