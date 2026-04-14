@@ -447,9 +447,8 @@
             # Embed NuschtOS options search at /options/
             cp -rL $optionsSearch result-docs/options
             chmod -R u+w result-docs/options
-            for f in result-docs/options/index.html result-docs/options/index.csr.html; do
-              [ -f "$f" ] && sed -i 's|<base href="/">|<base href="/nix-agentic-tools/options/">|g' "$f" || true
-            done
+            sed -i 's|<base href="/">|<base href="/nix-agentic-tools/options/">|g' \
+              result-docs/options/index.html
             # Pagefind index
             pagefind --site result-docs
             mv result-docs $out
