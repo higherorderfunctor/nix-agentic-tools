@@ -448,7 +448,7 @@
             cp -rL $optionsSearch result-docs/options
             chmod -R u+w result-docs/options
             for f in result-docs/options/index.html result-docs/options/index.csr.html; do
-              [ -f "$f" ] && sed -i 's|<base href="/">|<base href="/nix-agentic-tools/options/">|g' "$f"
+              [ -f "$f" ] && sed -i 's|<base href="/">|<base href="/nix-agentic-tools/options/">|g' "$f" || true
             done
             # Pagefind index
             pagefind --site result-docs

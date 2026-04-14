@@ -82,7 +82,7 @@ jobs:
             sed -i "s|/nix-agentic-tools/|${BASE}/|g" {} +
           # Rewrite NuschtOS options-search base href (single pass).
           for f in docs-out/options/index.html docs-out/options/index.csr.html; do
-            [ -f "$f" ] && sed -i "s|/nix-agentic-tools/options/|${BASE}/options/|g" "$f"
+            [ -f "$f" ] && sed -i "s|/nix-agentic-tools/options/|${BASE}/options/|g" "$f" || true
           done
 
       - name: Deploy preview
