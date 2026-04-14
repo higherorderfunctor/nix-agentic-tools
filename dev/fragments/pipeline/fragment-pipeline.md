@@ -128,7 +128,7 @@ transforms, all curried as `(transform-args)` then `(fragment)`:
 It exposes `passthru.generators`:
 
 - `snippets.*` — small tables embedded in prose pages via
-  `{{#include ../generated/snippets/<name>.md}}`. Data-driven
+  `\{{#include ../generated/snippets/<name>.md}}`. Data-driven
   from `dev/data.nix`.
 - Full-page generators (`overlayPackages`, `mcpServers`,
   `libApi`, `typesRef`, `aiMapping`) — emit complete mdbook
