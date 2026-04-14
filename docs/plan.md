@@ -21,6 +21,7 @@ git worktrees + flock merge for parallel per-package updates.
 
 ### Backlog items
 - [ ] Bun overlay for node-based binaries (port from `nixos-config/overlays/bun-overlay.nix`, publish in `ai.*`)
+- [ ] DRY docs base-href rewriting — flake.nix hardcodes `/nix-agentic-tools/options/` for NuschtOS, docs.yml rewrites for previews. Make base configurable so local `nix build .#docs` works without wrong paths. Consider parameterizing the derivation or moving all path rewriting to deployment.
 - [x] Switch node-based MCP servers and tools to run with bun (runtime wrappers switched, build still npm/pnpm)
 - [x] Single source of truth for `flake.nix` + `devenv.yaml` inputs — `config/generate-devenv-yaml.nix`
 - [x] Document unfree guard pattern as architecture fragment — `dev/fragments/overlays/unfree-guard.md`
