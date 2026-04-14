@@ -54,10 +54,14 @@ if ! (
     exit 1
   fi
 
-  # Amend dep hash changes into the existing commit if any
+  # Commit dep hash changes (amend if update commit exists, new commit otherwise)
   if ! git -C "$wt" diff --quiet || ! git -C "$wt" diff --staged --quiet; then
     git -C "$wt" add -A
-    git -C "$wt" commit --amend --no-edit
+    if [ "$(git -C "$wt" rev-parse HEAD)" != "$base_head" ]; then
+      git -C "$wt" commit --amend --no-edit
+    else
+      git -C "$wt" commit -m "chore(overlays): update any-buddy + claude-code"
+    fi
   fi
 
   # Nothing changed from base

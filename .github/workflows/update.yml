@@ -136,7 +136,7 @@ jobs:
             fi
 
             subject=$(git log "$base_head".."$branch" --format='%s' | head -1)
-            echo "Pushing $branch (subject: $subject, wt_head: $wt_head, base: $base_head)..."
+            echo "Pushing $branch ($subject)..."
             git push -f origin "$branch"
 
             # Create or update PR
