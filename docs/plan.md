@@ -22,14 +22,14 @@ git worktrees + flock merge for parallel per-package updates.
 ### Backlog items
 - [ ] Bun overlay for node-based binaries (port from `nixos-config/overlays/bun-overlay.nix`, publish in `ai.*`)
 - [ ] Switch node-based MCP servers and tools to run with bun
-- [ ] Single source of truth for `flake.nix` + `devenv.yaml` inputs (DRY)
-- [ ] Document unfree guard pattern as architecture fragment fanned out to ecosystem docs + contributing
+- [x] Single source of truth for `flake.nix` + `devenv.yaml` inputs — `config/generate-devenv-yaml.nix`
+- [x] Document unfree guard pattern as architecture fragment — `dev/fragments/overlays/unfree-guard.md`
 - [x] Update overlays/README.md table for nix-update migration
 - [ ] Garnix CI exploration — garnix for builds, GHA for orchestration, cachix for distribution (see `memory/project_garnix_exploration.md`)
 - [x] Update `.claude/rules/claude-code.md` buddy-activation fragment — updated for binary patching
 - [ ] Fragment source linter — verify that every `<!-- Fragment: path -->` comment in generated files points to a source file that exists. Catch stale generated files, missing regen, or deleted sources.
-- [ ] CI GITHUB_TOKEN workaround — PRs by `github-actions[bot]` don't trigger `pull_request` events in ci.yml. Need PAT, GitHub App token, or `workflow_dispatch` bridge. See `memory/project_ci_v4_design.md`.
-- [ ] Commit hook regeneration — pre-commit hook should regenerate instruction files (same as devenv shell entry) and re-stage. DRY with `dev/generate.nix`. May need fingerprint cache to avoid ~2-5s nix build on every commit. See `docs/overnight-report-2026-04-13.md`.
+- [x] CI GITHUB_TOKEN workaround — resolved via `nix-agentic-tools-bot` GitHub App
+- [ ] Commit hook regeneration — pre-commit hook should regenerate instruction files (same as devenv shell entry) and re-stage. DRY with `dev/generate.nix`. May need fingerprint cache to avoid ~2-5s nix build on every commit.
 - [ ] Nix doc comments as fragments — extract RFC 145 `/**` comments from `.nix` source files into the fragment pipeline. Custom extractor needed (nixdoc expects flat attrsets, our overlays are functions). See `memory/reference_nix_doc_tooling.md`.
 - [ ] overlays/README.md table from nix eval — reflect overlay metadata at eval time, string-interpolate into a fragment. See `docs/overnight-report-2026-04-13.md` "code→markdown" section.
 - [ ] Ecosystem-specific instructions in fragment comments — Claude transform injects `<!-- This file is generated. Edit the source fragment. -->` or similar. Research how other projects handle generated-but-committed file instructions.
@@ -45,7 +45,7 @@ git worktrees + flock merge for parallel per-package updates.
 - [x] Version tracking in update report (old → new in UPDATED/HELD BACK entries)
 - [x] Smoke tests on all packages with binaries
 - [x] Unit/integration tests enabled on 7+ packages (~1720 tests total)
-- [ ] CI v4 "Stage, Validate, Push" — cross-platform validation before commit (designed, not pushed)
+- [x] CI v4 — implemented as Renovate-style per-dependency PRs (pivoted from Stage/Validate/Push)
 
 ---
 
