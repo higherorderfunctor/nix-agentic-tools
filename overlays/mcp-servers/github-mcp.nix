@@ -32,4 +32,5 @@ in
     inherit src;
     vendorHash = "sha256-q21hnMnWOzfg7BGDl4KM1I3v0wwS5sSxzLA++L6jO4s=";
     installCheckPhase = vu.mkMcpSmokeTest {bin = "github-mcp-server";};
+    passthru = {mcpName = "github-mcp";};
   })
