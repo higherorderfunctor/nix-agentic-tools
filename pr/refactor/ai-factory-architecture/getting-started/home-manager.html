@@ -34,7 +34,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-d873a563.js";
+            window.path_to_searchindex_js = "../searchindex-27b05951.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-841f2094.js"></script>
@@ -244,13 +244,8 @@ imports = [
   inputs.nix-agentic-tools.homeManagerModules.default
 ];
 </code></pre>
-<p>This imports all modules: <code>ai</code>, <code>copilot-cli</code>, <code>kiro-cli</code>, <code>mcp-servers</code>,
-<code>stacked-workflows</code>. Import individual modules if you prefer:</p>
-<pre><code class="language-nix">imports = [
-  inputs.nix-agentic-tools.homeManagerModules.ai
-  inputs.nix-agentic-tools.homeManagerModules.stacked-workflows
-];
-</code></pre>
+<p>This imports the unified module with all AI CLI, MCP server, and
+stacked-workflow options.</p>
 <h2 id="4-minimal-configuration"><a class="header" href="#4-minimal-configuration">4. Minimal configuration</a></h2>
 <pre><code class="language-nix"># Enable the unified AI module for Claude Code.
 # ai.claude.enable is the sole gate — it also flips

@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-d873a563.js";
+            window.path_to_searchindex_js = "searchindex-27b05951.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-841f2094.js"></script>
@@ -363,13 +363,8 @@ imports = [
   inputs.nix-agentic-tools.homeManagerModules.default
 ];
 </code></pre>
-<p>This imports all modules: <code>ai</code>, <code>copilot-cli</code>, <code>kiro-cli</code>, <code>mcp-servers</code>,
-<code>stacked-workflows</code>. Import individual modules if you prefer:</p>
-<pre><code class="language-nix">imports = [
-  inputs.nix-agentic-tools.homeManagerModules.ai
-  inputs.nix-agentic-tools.homeManagerModules.stacked-workflows
-];
-</code></pre>
+<p>This imports the unified module with all AI CLI, MCP server, and
+stacked-workflow options.</p>
 <h2 id="4-minimal-configuration"><a class="header" href="#4-minimal-configuration">4. Minimal configuration</a></h2>
 <pre><code class="language-nix"># Enable the unified AI module for Claude Code.
 # ai.claude.enable is the sole gate — it also flips
@@ -2301,22 +2296,11 @@ pkgs = import nixpkgs {
 <p>Auto-generated from module definitions via <code>nixosOptionsDoc</code>. See
 <a href="#home-manager-setup">Home-Manager Setup</a> for
 installation and quickstart.</p>
-<h2 id="module-index-1"><a class="header" href="#module-index-1">Module Index</a></h2>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Module</th><th>Import path</th><th>Purpose</th></tr>
-</thead>
-<tbody>
-<tr><td><code>ai</code></td><td><code>homeManagerModules.ai</code></td><td>Unified config fanout</td></tr>
-<tr><td><code>copilot-cli</code></td><td><code>homeManagerModules.copilot-cli</code></td><td>Copilot CLI config</td></tr>
-<tr><td><code>kiro-cli</code></td><td><code>homeManagerModules.kiro-cli</code></td><td>Kiro CLI config</td></tr>
-<tr><td><code>mcp-servers</code></td><td><code>homeManagerModules.mcp-servers</code></td><td>MCP server management</td></tr>
-<tr><td><code>stacked-workflows</code></td><td><code>homeManagerModules.stacked-workflows</code></td><td>Git presets + skills</td></tr>
-<tr><td><code>default</code></td><td><code>homeManagerModules.default</code></td><td>All of the above</td></tr>
-</tbody>
-</table>
-</div>
+<h2 id="import"><a class="header" href="#import">Import</a></h2>
+<pre><code class="language-nix">imports = [inputs.nix-agentic-tools.homeManagerModules.default];
+</code></pre>
+<p>The single module includes AI CLI config (Claude, Copilot, Kiro),
+MCP server management, and stacked-workflow presets.</p>
 <h2 id="options-1"><a class="header" href="#options-1">Options</a></h2>
 <h2 id="aiclaudeenable-1"><a class="header" href="#aiclaudeenable-1">ai.claude.enable</a></h2>
 <p>Whether to enable claude.</p>
