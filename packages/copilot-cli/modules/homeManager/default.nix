@@ -11,5 +11,11 @@
   lib,
   pkgs,
   ...
-} @ args:
-(lib.ai.app.hmTransform (import ../../lib/mkCopilot.nix {inherit lib pkgs;})) args
+} @ args: let
+  extLib = lib.extend (_: _: {ai = import ../../../../lib/ai {lib = extLib;};});
+in
+  (extLib.ai.app.hmTransform (import ../../lib/mkCopilot.nix {
+    lib = extLib;
+    inherit pkgs;
+  }))
+  args

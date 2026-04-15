@@ -116,10 +116,7 @@
     # CI consumes via `nix eval --json .#updateMatrix` to generate GHA matrix.
     updateMatrix = import ./config/update-matrix.nix;
 
-    homeManagerModules.default = {lib, ...}: {
-      _module.args.lib = lib.extend (_: _: {
-        ai = import ./lib/ai {inherit lib;};
-      });
+    homeManagerModules.default = {
       imports =
         [./lib/ai/sharedOptions.nix]
         ++ collectFacet ["modules" "homeManager"];
