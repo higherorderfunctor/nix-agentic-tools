@@ -397,7 +397,7 @@ lib.ai.app.mkAiApp {
           in
             pkgs.symlinkJoin {
               inherit (cfg.package) name version;
-              paths = [wrapped cfg.package];
+              paths = [cfg.package wrapped];
               meta = cfg.package.meta or {};
               passthru = cfg.package.passthru or {};
             };
