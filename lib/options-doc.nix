@@ -219,14 +219,13 @@
 
   # ── HM options doc ──────────────────────────────────────────────────
   # Post-factory-rollout, the factory-built merged module is exposed
-  # at homeManagerModules.nix-agentic-tools (previously it was
-  # homeManagerModules.default or split across per-CLI outputs).
+  # at homeManagerModules.default.
   hmEval = lib.evalModules {
     specialArgs = {
       lib = libWithAi;
     };
     modules = [
-      self.homeManagerModules.nix-agentic-tools
+      self.homeManagerModules.default
       {
         config._module.args = {
           inherit pkgs;

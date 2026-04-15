@@ -75,15 +75,8 @@ imports = [
 ];
 ```
 
-This imports all modules: `ai`, `copilot-cli`, `kiro-cli`, `mcp-servers`,
-`stacked-workflows`. Import individual modules if you prefer:
-
-```nix
-imports = [
-  inputs.nix-agentic-tools.homeManagerModules.ai
-  inputs.nix-agentic-tools.homeManagerModules.stacked-workflows
-];
-```
+This imports the unified module with all AI CLI, MCP server, and
+stacked-workflow options.
 
 ## 4. Minimal configuration
 

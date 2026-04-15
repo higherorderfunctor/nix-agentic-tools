@@ -116,7 +116,7 @@
     # CI consumes via `nix eval --json .#updateMatrix` to generate GHA matrix.
     updateMatrix = import ./config/update-matrix.nix;
 
-    homeManagerModules.nix-agentic-tools = {
+    homeManagerModules.default = {
       imports =
         [./lib/ai/sharedOptions.nix]
         ++ collectFacet ["modules" "homeManager"];
@@ -209,7 +209,7 @@
       docData = import ./dev/data.nix {inherit lib;};
 
       # Options documentation generated from actual module definitions.
-      # Walks homeManagerModules.nix-agentic-tools (the factory-built
+      # Walks homeManagerModules.default (the factory-built
       # merged module) and devenvModules.nix-agentic-tools via
       # nixosOptionsDoc to produce markdown + JSON.
       optionsDocs = import ./lib/options-doc.nix {inherit lib pkgs self;};
