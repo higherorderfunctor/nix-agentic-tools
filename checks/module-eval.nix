@@ -53,6 +53,10 @@
         type = lib.types.attrsOf lib.types.anything;
         default = {};
       };
+      systemd.user.services = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+      };
       programs.claude-code = {
         enable = lib.mkOption {
           type = lib.types.bool;
@@ -138,6 +142,7 @@
         ./../packages/claude-code/modules/homeManager
         ./../packages/copilot-cli/modules/homeManager
         ./../packages/kiro-cli/modules/homeManager
+        ./../packages/mcp-services/modules/homeManager
         ./../packages/stacked-workflows/modules/homeManager
         hmStubs
         {inherit config;}
@@ -1142,5 +1147,54 @@ in {
     in
       files ? ".claude/references/philosophy.md"
       && files ? ".claude/references/git-absorb.md"
+  );
+
+  # ── services.mcp-servers module ──────────────────────────────────
+
+  # Default: all servers are disabled.
+  module-mcp-services-default-disabled = mkTest "mcp-services-default-disabled" (
+    let
+      result = evalHm {};
+      inherit (result.config.services.mcp-servers) servers;
+    in
+      !(servers.context7-mcp.enable or true)
+      && !(servers.github-mcp.enable or true)
+      && !(servers.serena-mcp.enable or true)
+  );
+
+  # Server option tree has expected structure.
+  module-mcp-services-option-tree = mkTest "mcp-services-option-tree" (
+    let
+      result = evalHm {};
+      inherit (result.config.services.mcp-servers) servers;
+    in
+      servers ? context7-mcp
+      && servers ? effect-mcp
+      && servers ? fetch-mcp
+      && servers ? git-intel-mcp
+      && servers ? git-mcp
+      && servers ? github-mcp
+      && servers ? kagi-mcp
+      && servers ? nixos-mcp
+      && servers ? openmemory-mcp
+      && servers ? sequential-thinking-mcp
+      && servers ? serena-mcp
+      && servers ? sympy-mcp
+  );
+
+  # tools output is empty when no servers enabled.
+  module-mcp-services-tools-empty-when-disabled = mkTest "mcp-services-tools-empty-when-disabled" (
+    let
+      result = evalHm {};
+    in
+      result.config.services.mcp-servers.tools == {}
+  );
+
+  # mcpConfig output is empty when no servers enabled.
+  module-mcp-services-mcpconfig-empty-when-disabled = mkTest "mcp-services-mcpconfig-empty-when-disabled" (
+    let
+      result = evalHm {};
+    in
+      result.config.services.mcp-servers.mcpConfig.mcpServers == {}
   );
 }

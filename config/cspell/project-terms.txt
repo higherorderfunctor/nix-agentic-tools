@@ -89,6 +89,7 @@ lockdown
 lockfiles
 ltrimstr
 markdownify
+mcpconfig
 mcps
 mdbook
 mergetool

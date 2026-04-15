@@ -20,14 +20,13 @@ git worktrees + flock merge for parallel per-package updates.
 ---
 
 ### Backlog items
-- [ ] **Restore services.mcp-servers HM module** — REGRESSION from factory
-      refactor. The typed per-server options (enable, settings, credentials,
-      service.port/host), mcpConfig output, tools registry, and systemd user
-      services were dropped in A5. Must be restored using factory pattern:
-      each package contributes server metadata via mk*.nix, a shared module
-      aggregates via collectFacet, produces mcpConfig + systemd services.
-      Old module at `git show 8c9d71b~1:modules/mcp-servers/default.nix`.
-      Blocks consumer (nixos-config) upgrade to this branch.
+- [x] **Restore services.mcp-servers HM module** — REGRESSION from factory
+      refactor. Restored via `packages/mcp-services/` virtual package with
+      HM module picked up by collectFacet. Per-server submodules built by
+      `lib/ai/mcpServer/mkServiceModule.nix` using predicates from
+      `lib/ai/mcpServer/serviceSchema.nix`. All 12 servers (including
+      serena-mcp as stdio-only). mcpConfig, tools, systemd services, and
+      credential assertions all restored.
 - [ ] Bun overlay for node-based binaries (port from `nixos-config/overlays/bun-overlay.nix`, publish in `ai.*`)
 - [ ] DRY docs base-href rewriting — flake.nix hardcodes `/nix-agentic-tools/options/` for NuschtOS, docs.yml rewrites for previews. Make base configurable so local `nix build .#docs` works without wrong paths. Consider parameterizing the derivation or moving all path rewriting to deployment.
 - [x] Switch node-based MCP servers and tools to run with bun (runtime wrappers switched, build still npm/pnpm)

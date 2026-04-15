@@ -18,6 +18,7 @@
   kagi-mcp = import ./kagi-mcp;
   kiro-cli = import ./kiro-cli;
   kiro-gateway = import ./kiro-gateway;
+  mcp-services = import ./mcp-services;
   mcp-language-server = import ./mcp-language-server;
   mcp-proxy = import ./mcp-proxy;
   nixos-mcp = import ./nixos-mcp;
