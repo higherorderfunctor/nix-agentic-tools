@@ -34,7 +34,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-27b05951.js";
+            window.path_to_searchindex_js = "../searchindex-97e10a41.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-841f2094.js"></script>
@@ -1095,6 +1095,2351 @@ attribute set of absolute path</p>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcp"><a class="header" href="#servicesmcp-serversserverscontext7-mcp">services.mcp-servers.servers.context7-mcp</a></h2>
+<p>Configuration for the context7-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpenable"><a class="header" href="#servicesmcp-serversserverscontext7-mcpenable">services.mcp-servers.servers.context7-mcp.enable</a></h2>
+<p>Whether to enable the context7-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcppackage"><a class="header" href="#servicesmcp-serversserverscontext7-mcppackage">services.mcp-servers.servers.context7-mcp.package</a></h2>
+<p>The context7-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.ai.mcpServers.context7-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpargs"><a class="header" href="#servicesmcp-serversserverscontext7-mcpargs">services.mcp-servers.servers.context7-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpenv"><a class="header" href="#servicesmcp-serversserverscontext7-mcpenv">services.mcp-servers.servers.context7-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store – use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpservicehost"><a class="header" href="#servicesmcp-serversserverscontext7-mcpservicehost">services.mcp-servers.servers.context7-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpserviceport"><a class="header" href="#servicesmcp-serversserverscontext7-mcpserviceport">services.mcp-servers.servers.context7-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19750
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpsettings"><a class="header" href="#servicesmcp-serversserverscontext7-mcpsettings">services.mcp-servers.servers.context7-mcp.settings</a></h2>
+<p>Server-specific configuration for context7-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpsettingsapiurl"><a class="header" href="#servicesmcp-serversserverscontext7-mcpsettingsapiurl">services.mcp-servers.servers.context7-mcp.settings.apiUrl</a></h2>
+<p>Override the base URL for the Context7 API.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpsettingscredentials"><a class="header" href="#servicesmcp-serversserverscontext7-mcpsettingscredentials">services.mcp-servers.servers.context7-mcp.settings.credentials</a></h2>
+<p>Credential mapped to CONTEXT7_API_KEY. Set exactly one of file or helper.</p>
+<p><em>Type:</em>
+null or attribute-tagged union with choices: file, helper</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpsettingscredentialsfile"><a class="header" href="#servicesmcp-serversserverscontext7-mcpsettingscredentialsfile">services.mcp-servers.servers.context7-mcp.settings.credentials.file</a></h2>
+<p>Path to a file containing the raw secret value, read at runtime.
+Not stored in the Nix store. Works with sops-nix, agenix, or any
+tool that decrypts secrets to files. Mapped to CONTEXT7_API_KEY.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpsettingscredentialshelper"><a class="header" href="#servicesmcp-serversserverscontext7-mcpsettingscredentialshelper">services.mcp-servers.servers.context7-mcp.settings.credentials.helper</a></h2>
+<p>Path to an executable that outputs the raw secret value on stdout.
+Executed at service start. Mapped to CONTEXT7_API_KEY.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverscontext7-mcpsettingspath"><a class="header" href="#servicesmcp-serversserverscontext7-mcpsettingspath">services.mcp-servers.servers.context7-mcp.settings.path</a></h2>
+<p>HTTP endpoint path. Only used in HTTP mode.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"/mcp"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverseffect-mcp"><a class="header" href="#servicesmcp-serversserverseffect-mcp">services.mcp-servers.servers.effect-mcp</a></h2>
+<p>Configuration for the effect-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverseffect-mcpenable"><a class="header" href="#servicesmcp-serversserverseffect-mcpenable">services.mcp-servers.servers.effect-mcp.enable</a></h2>
+<p>Whether to enable the effect-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverseffect-mcppackage"><a class="header" href="#servicesmcp-serversserverseffect-mcppackage">services.mcp-servers.servers.effect-mcp.package</a></h2>
+<p>The effect-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.ai.mcpServers.effect-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverseffect-mcpargs"><a class="header" href="#servicesmcp-serversserverseffect-mcpargs">services.mcp-servers.servers.effect-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverseffect-mcpenv"><a class="header" href="#servicesmcp-serversserverseffect-mcpenv">services.mcp-servers.servers.effect-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store – use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverseffect-mcpservicehost"><a class="header" href="#servicesmcp-serversserverseffect-mcpservicehost">services.mcp-servers.servers.effect-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverseffect-mcpserviceport"><a class="header" href="#servicesmcp-serversserverseffect-mcpserviceport">services.mcp-servers.servers.effect-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19754
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverseffect-mcpsettings"><a class="header" href="#servicesmcp-serversserverseffect-mcpsettings">services.mcp-servers.servers.effect-mcp.settings</a></h2>
+<p>Server-specific configuration for effect-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcp"><a class="header" href="#servicesmcp-serversserversfetch-mcp">services.mcp-servers.servers.fetch-mcp</a></h2>
+<p>Configuration for the fetch-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcpenable"><a class="header" href="#servicesmcp-serversserversfetch-mcpenable">services.mcp-servers.servers.fetch-mcp.enable</a></h2>
+<p>Whether to enable the fetch-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcppackage"><a class="header" href="#servicesmcp-serversserversfetch-mcppackage">services.mcp-servers.servers.fetch-mcp.package</a></h2>
+<p>The fetch-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.ai.mcpServers.fetch-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcpargs"><a class="header" href="#servicesmcp-serversserversfetch-mcpargs">services.mcp-servers.servers.fetch-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcpenv"><a class="header" href="#servicesmcp-serversserversfetch-mcpenv">services.mcp-servers.servers.fetch-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store – use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcpservicehost"><a class="header" href="#servicesmcp-serversserversfetch-mcpservicehost">services.mcp-servers.servers.fetch-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcpserviceport"><a class="header" href="#servicesmcp-serversserversfetch-mcpserviceport">services.mcp-servers.servers.fetch-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19755
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcpsettings"><a class="header" href="#servicesmcp-serversserversfetch-mcpsettings">services.mcp-servers.servers.fetch-mcp.settings</a></h2>
+<p>Server-specific configuration for fetch-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcpsettingsignorerobotstxt"><a class="header" href="#servicesmcp-serversserversfetch-mcpsettingsignorerobotstxt">services.mcp-servers.servers.fetch-mcp.settings.ignoreRobotsTxt</a></h2>
+<p>Whether to ignore robots.txt restrictions.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcpsettingsproxyurl"><a class="header" href="#servicesmcp-serversserversfetch-mcpsettingsproxyurl">services.mcp-servers.servers.fetch-mcp.settings.proxyUrl</a></h2>
+<p>Proxy URL for outbound HTTP requests.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversfetch-mcpsettingsuseragent"><a class="header" href="#servicesmcp-serversserversfetch-mcpsettingsuseragent">services.mcp-servers.servers.fetch-mcp.settings.userAgent</a></h2>
+<p>Custom User-Agent string for HTTP requests.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-intel-mcp"><a class="header" href="#servicesmcp-serversserversgit-intel-mcp">services.mcp-servers.servers.git-intel-mcp</a></h2>
+<p>Configuration for the git-intel-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-intel-mcpenable"><a class="header" href="#servicesmcp-serversserversgit-intel-mcpenable">services.mcp-servers.servers.git-intel-mcp.enable</a></h2>
+<p>Whether to enable the git-intel-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-intel-mcppackage"><a class="header" href="#servicesmcp-serversserversgit-intel-mcppackage">services.mcp-servers.servers.git-intel-mcp.package</a></h2>
+<p>The git-intel-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.ai.mcpServers.git-intel-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-intel-mcpargs"><a class="header" href="#servicesmcp-serversserversgit-intel-mcpargs">services.mcp-servers.servers.git-intel-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-intel-mcpenv"><a class="header" href="#servicesmcp-serversserversgit-intel-mcpenv">services.mcp-servers.servers.git-intel-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store – use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-intel-mcpservicehost"><a class="header" href="#servicesmcp-serversserversgit-intel-mcpservicehost">services.mcp-servers.servers.git-intel-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-intel-mcpserviceport"><a class="header" href="#servicesmcp-serversserversgit-intel-mcpserviceport">services.mcp-servers.servers.git-intel-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19756
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-intel-mcpsettings"><a class="header" href="#servicesmcp-serversserversgit-intel-mcpsettings">services.mcp-servers.servers.git-intel-mcp.settings</a></h2>
+<p>Server-specific configuration for git-intel-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-intel-mcpsettingsrepository"><a class="header" href="#servicesmcp-serversserversgit-intel-mcpsettingsrepository">services.mcp-servers.servers.git-intel-mcp.settings.repository</a></h2>
+<p>Default git repository path for analysis.
+Resolution order: this option &gt; GIT_INTEL_REPO env &gt; cwd.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-mcp"><a class="header" href="#servicesmcp-serversserversgit-mcp">services.mcp-servers.servers.git-mcp</a></h2>
+<p>Configuration for the git-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-mcpenable"><a class="header" href="#servicesmcp-serversserversgit-mcpenable">services.mcp-servers.servers.git-mcp.enable</a></h2>
+<p>Whether to enable the git-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-mcppackage"><a class="header" href="#servicesmcp-serversserversgit-mcppackage">services.mcp-servers.servers.git-mcp.package</a></h2>
+<p>The git-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.ai.mcpServers.git-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-mcpargs"><a class="header" href="#servicesmcp-serversserversgit-mcpargs">services.mcp-servers.servers.git-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-mcpenv"><a class="header" href="#servicesmcp-serversserversgit-mcpenv">services.mcp-servers.servers.git-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store – use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-mcpservicehost"><a class="header" href="#servicesmcp-serversserversgit-mcpservicehost">services.mcp-servers.servers.git-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-mcpserviceport"><a class="header" href="#servicesmcp-serversserversgit-mcpserviceport">services.mcp-servers.servers.git-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19757
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-mcpsettings"><a class="header" href="#servicesmcp-serversserversgit-mcpsettings">services.mcp-servers.servers.git-mcp.settings</a></h2>
+<p>Server-specific configuration for git-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgit-mcpsettingsrepository"><a class="header" href="#servicesmcp-serversserversgit-mcpsettingsrepository">services.mcp-servers.servers.git-mcp.settings.repository</a></h2>
+<p>Git repository path. When set, restricts all operations to this path.
+When unset, the server accepts any repo path via tool arguments and
+discovers repos from MCP client roots.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcp"><a class="header" href="#servicesmcp-serversserversgithub-mcp">services.mcp-servers.servers.github-mcp</a></h2>
+<p>Configuration for the github-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpenable"><a class="header" href="#servicesmcp-serversserversgithub-mcpenable">services.mcp-servers.servers.github-mcp.enable</a></h2>
+<p>Whether to enable the github-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcppackage"><a class="header" href="#servicesmcp-serversserversgithub-mcppackage">services.mcp-servers.servers.github-mcp.package</a></h2>
+<p>The github-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.ai.mcpServers.github-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpargs"><a class="header" href="#servicesmcp-serversserversgithub-mcpargs">services.mcp-servers.servers.github-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpenv"><a class="header" href="#servicesmcp-serversserversgithub-mcpenv">services.mcp-servers.servers.github-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store – use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpservicehost"><a class="header" href="#servicesmcp-serversserversgithub-mcpservicehost">services.mcp-servers.servers.github-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpserviceport"><a class="header" href="#servicesmcp-serversserversgithub-mcpserviceport">services.mcp-servers.servers.github-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19751
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettings"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettings">services.mcp-servers.servers.github-mcp.settings</a></h2>
+<p>Server-specific configuration for github-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingsenablecommandlogging"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingsenablecommandlogging">services.mcp-servers.servers.github-mcp.settings.enableCommandLogging</a></h2>
+<p>Log all command requests and responses.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingscontentwindowsize"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingscontentwindowsize">services.mcp-servers.servers.github-mcp.settings.contentWindowSize</a></h2>
+<p>Content window size. Server default is 5000.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingscredentials"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingscredentials">services.mcp-servers.servers.github-mcp.settings.credentials</a></h2>
+<p>Credential mapped to GITHUB_PERSONAL_ACCESS_TOKEN. Set exactly one of file or helper.</p>
+<p><em>Type:</em>
+null or attribute-tagged union with choices: file, helper</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingscredentialsfile"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingscredentialsfile">services.mcp-servers.servers.github-mcp.settings.credentials.file</a></h2>
+<p>Path to a file containing the raw secret value, read at runtime.
+Not stored in the Nix store. Works with sops-nix, agenix, or any
+tool that decrypts secrets to files. Mapped to GITHUB_PERSONAL_ACCESS_TOKEN.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingscredentialshelper"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingscredentialshelper">services.mcp-servers.servers.github-mcp.settings.credentials.helper</a></h2>
+<p>Path to an executable that outputs the raw secret value on stdout.
+Executed at service start. Mapped to GITHUB_PERSONAL_ACCESS_TOKEN.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingsdynamictoolsets"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingsdynamictoolsets">services.mcp-servers.servers.github-mcp.settings.dynamicToolsets</a></h2>
+<p>Enable dynamic toolsets discovery. When false (default), all tools from configured toolsets are available at startup. When true, only meta-tools are advertised initially and toolsets must be enabled at runtime — requires client support for tools/list_changed notifications.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingsexcludetools"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingsexcludetools">services.mcp-servers.servers.github-mcp.settings.excludeTools</a></h2>
+<p>Tool names to forcibly disable regardless of other settings.</p>
+<p><em>Type:</em>
+list of (one of “add_issue_comment”, “create_branch”, “create_or_update_file”, “create_pull_request”, “create_repository”, “delete_file”, “fork_repository”, “get_code_scanning_alert”, “get_commit”, “get_file_contents”, “get_issue”, “get_latest_release”, “get_me”, “get_release_by_tag”, “get_tag”, “list_branches”, “list_code_scanning_alerts”, “list_commits”, “list_issues”, “list_pull_requests”, “list_releases”, “list_tags”, “merge_pull_request”, “push_files”, “search_code”, “search_issues”, “search_pull_requests”, “search_repositories”, “search_users”, “update_pull_request”, “update_pull_request_branch” or string)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingsghhost"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingsghhost">services.mcp-servers.servers.github-mcp.settings.ghHost</a></h2>
+<p>GitHub hostname for GHE Server or data residency (e.g. https://ghes.example.com). Defaults to public github.com when unset.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingsinsiders"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingsinsiders">services.mcp-servers.servers.github-mcp.settings.insiders</a></h2>
+<p>Enable experimental/insiders features.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingslockdownmode"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingslockdownmode">services.mcp-servers.servers.github-mcp.settings.lockdownMode</a></h2>
+<p>Filter public repository content by push access. Only shows repos the token can push to.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingslogfile"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingslogfile">services.mcp-servers.servers.github-mcp.settings.logFile</a></h2>
+<p>Path to a log file.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingsreadonly"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingsreadonly">services.mcp-servers.servers.github-mcp.settings.readOnly</a></h2>
+<p>Restrict to read-only operations.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingsrepoaccesscachettl"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingsrepoaccesscachettl">services.mcp-servers.servers.github-mcp.settings.repoAccessCacheTtl</a></h2>
+<p>Cache duration for repository access checks (e.g. “5m”, “1h”). Server default is used when unset.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingstools"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingstools">services.mcp-servers.servers.github-mcp.settings.tools</a></h2>
+<p>Individual tool names to enable (additive with toolsets).</p>
+<p><em>Type:</em>
+list of (one of “add_issue_comment”, “create_branch”, “create_or_update_file”, “create_pull_request”, “create_repository”, “delete_file”, “fork_repository”, “get_code_scanning_alert”, “get_commit”, “get_file_contents”, “get_issue”, “get_latest_release”, “get_me”, “get_release_by_tag”, “get_tag”, “list_branches”, “list_code_scanning_alerts”, “list_commits”, “list_issues”, “list_pull_requests”, “list_releases”, “list_tags”, “merge_pull_request”, “push_files”, “search_code”, “search_issues”, “search_pull_requests”, “search_repositories”, “search_users”, “update_pull_request”, “update_pull_request_branch” or string)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversgithub-mcpsettingstoolsets"><a class="header" href="#servicesmcp-serversserversgithub-mcpsettingstoolsets">services.mcp-servers.servers.github-mcp.settings.toolsets</a></h2>
+<p>Toolset groups to enable. Each group activates a related set of tools.</p>
+<p><em>Type:</em>
+list of (one of “actions”, “all”, “code_security”, “context”, “default”, “discussions”, “gists”, “issues”, “notifications”, “orgs”, “packages”, “pages”, “projects”, “pull_requests”, “releases”, “repos”, “search”, “secret_protection”, “stargazers”, “sub_issues”, “users” or string)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[
+  "all"
+]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcp"><a class="header" href="#servicesmcp-serversserverskagi-mcp">services.mcp-servers.servers.kagi-mcp</a></h2>
+<p>Configuration for the kagi-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpenable"><a class="header" href="#servicesmcp-serversserverskagi-mcpenable">services.mcp-servers.servers.kagi-mcp.enable</a></h2>
+<p>Whether to enable the kagi-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcppackage"><a class="header" href="#servicesmcp-serversserverskagi-mcppackage">services.mcp-servers.servers.kagi-mcp.package</a></h2>
+<p>The kagi-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.ai.mcpServers.kagi-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpargs"><a class="header" href="#servicesmcp-serversserverskagi-mcpargs">services.mcp-servers.servers.kagi-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpenv"><a class="header" href="#servicesmcp-serversserverskagi-mcpenv">services.mcp-servers.servers.kagi-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store – use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpservicehost"><a class="header" href="#servicesmcp-serversserverskagi-mcpservicehost">services.mcp-servers.servers.kagi-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpserviceport"><a class="header" href="#servicesmcp-serversserverskagi-mcpserviceport">services.mcp-servers.servers.kagi-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19753
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpsettings"><a class="header" href="#servicesmcp-serversserverskagi-mcpsettings">services.mcp-servers.servers.kagi-mcp.settings</a></h2>
+<p>Server-specific configuration for kagi-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpsettingscredentials"><a class="header" href="#servicesmcp-serversserverskagi-mcpsettingscredentials">services.mcp-servers.servers.kagi-mcp.settings.credentials</a></h2>
+<p>Credential mapped to KAGI_API_KEY. Set exactly one of file or helper.</p>
+<p><em>Type:</em>
+null or attribute-tagged union with choices: file, helper</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpsettingscredentialsfile"><a class="header" href="#servicesmcp-serversserverskagi-mcpsettingscredentialsfile">services.mcp-servers.servers.kagi-mcp.settings.credentials.file</a></h2>
+<p>Path to a file containing the raw secret value, read at runtime.
+Not stored in the Nix store. Works with sops-nix, agenix, or any
+tool that decrypts secrets to files. Mapped to KAGI_API_KEY.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpsettingscredentialshelper"><a class="header" href="#servicesmcp-serversserverskagi-mcpsettingscredentialshelper">services.mcp-servers.servers.kagi-mcp.settings.credentials.helper</a></h2>
+<p>Path to an executable that outputs the raw secret value on stdout.
+Executed at service start. Mapped to KAGI_API_KEY.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpsettingspath"><a class="header" href="#servicesmcp-serversserverskagi-mcpsettingspath">services.mcp-servers.servers.kagi-mcp.settings.path</a></h2>
+<p>HTTP endpoint path. Only used in HTTP mode.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"/mcp"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverskagi-mcpsettingssummarizerengine"><a class="header" href="#servicesmcp-serversserverskagi-mcpsettingssummarizerengine">services.mcp-servers.servers.kagi-mcp.settings.summarizerEngine</a></h2>
+<p>Summarization engine to use. Defaults to cecil.</p>
+<p><em>Type:</em>
+null or one of “cecil”, “agnes”, “daphne”, “muriel”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcp"><a class="header" href="#servicesmcp-serversserversnixos-mcp">services.mcp-servers.servers.nixos-mcp</a></h2>
+<p>Configuration for the nixos-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcpenable"><a class="header" href="#servicesmcp-serversserversnixos-mcpenable">services.mcp-servers.servers.nixos-mcp.enable</a></h2>
+<p>Whether to enable the nixos-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcppackage"><a class="header" href="#servicesmcp-serversserversnixos-mcppackage">services.mcp-servers.servers.nixos-mcp.package</a></h2>
+<p>The nixos-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.ai.mcpServers.nixos-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcpargs"><a class="header" href="#servicesmcp-serversserversnixos-mcpargs">services.mcp-servers.servers.nixos-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcpenv"><a class="header" href="#servicesmcp-serversserversnixos-mcpenv">services.mcp-servers.servers.nixos-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store – use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcpservicehost"><a class="header" href="#servicesmcp-serversserversnixos-mcpservicehost">services.mcp-servers.servers.nixos-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcpserviceport"><a class="header" href="#servicesmcp-serversserversnixos-mcpserviceport">services.mcp-servers.servers.nixos-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19752
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcpsettings"><a class="header" href="#servicesmcp-serversserversnixos-mcpsettings">services.mcp-servers.servers.nixos-mcp.settings</a></h2>
+<p>Server-specific configuration for nixos-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcpsettingspath"><a class="header" href="#servicesmcp-serversserversnixos-mcpsettingspath">services.mcp-servers.servers.nixos-mcp.settings.path</a></h2>
+<p>HTTP endpoint path (must start with /). Only used in HTTP mode.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"/mcp"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversnixos-mcpsettingsstatelesshttp"><a class="header" href="#servicesmcp-serversserversnixos-mcpsettingsstatelesshttp">services.mcp-servers.servers.nixos-mcp.settings.statelessHttp</a></h2>
+<p>Enable stateless HTTP mode (disables per-client session state).</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcp"><a class="header" href="#servicesmcp-serversserversopenmemory-mcp">services.mcp-servers.servers.openmemory-mcp</a></h2>
+<p>Configuration for the openmemory-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpenable"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpenable">services.mcp-servers.servers.openmemory-mcp.enable</a></h2>
+<p>Whether to enable the openmemory-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcppackage"><a class="header" href="#servicesmcp-serversserversopenmemory-mcppackage">services.mcp-servers.servers.openmemory-mcp.package</a></h2>
+<p>The openmemory-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.ai.mcpServers.openmemory-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpargs"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpargs">services.mcp-servers.servers.openmemory-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpenv"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpenv">services.mcp-servers.servers.openmemory-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store – use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpservicehost"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpservicehost">services.mcp-servers.servers.openmemory-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpserviceport"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpserviceport">services.mcp-servers.servers.openmemory-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19758
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettings"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettings">services.mcp-servers.servers.openmemory-mcp.settings</a></h2>
+<p>Server-specific configuration for openmemory-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsadvembedparallel"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsadvembedparallel">services.mcp-servers.servers.openmemory-mcp.settings.advEmbedParallel</a></h2>
+<p>Enable advanced parallel embedding.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingscachesegments"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingscachesegments">services.mcp-servers.servers.openmemory-mcp.settings.cacheSegments</a></h2>
+<p>Number of cache segments. Auto-detected by tier when null.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingscompression"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingscompression">services.mcp-servers.servers.openmemory-mcp.settings.compression</a></h2>
+<p>Memory compression configuration.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingscompressionenabled"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingscompressionenabled">services.mcp-servers.servers.openmemory-mcp.settings.compression.enabled</a></h2>
+<p>Enable compression.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingscompressionalgorithm"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingscompressionalgorithm">services.mcp-servers.servers.openmemory-mcp.settings.compression.algorithm</a></h2>
+<p>Compression algorithm. Default: auto.</p>
+<p><em>Type:</em>
+null or value “auto” (singular enum)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingscompressionminlength"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingscompressionminlength">services.mcp-servers.servers.openmemory-mcp.settings.compression.minLength</a></h2>
+<p>Minimum length to compress. Default: 100.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingscredentials"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingscredentials">services.mcp-servers.servers.openmemory-mcp.settings.credentials</a></h2>
+<p>Credential mapped to OM_API_KEY. Set exactly one of file or helper.</p>
+<p><em>Type:</em>
+null or attribute-tagged union with choices: file, helper</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingscredentialsfile"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingscredentialsfile">services.mcp-servers.servers.openmemory-mcp.settings.credentials.file</a></h2>
+<p>Path to a file containing the raw secret value, read at runtime.
+Not stored in the Nix store. Works with sops-nix, agenix, or any
+tool that decrypts secrets to files. Mapped to OM_API_KEY.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingscredentialshelper"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingscredentialshelper">services.mcp-servers.servers.openmemory-mcp.settings.credentials.helper</a></h2>
+<p>Path to an executable that outputs the raw secret value on stdout.
+Executed at service start. Mapped to OM_API_KEY.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsdecay"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsdecay">services.mcp-servers.servers.openmemory-mcp.settings.decay</a></h2>
+<p>Memory decay configuration.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsdecaycoldthreshold"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsdecaycoldthreshold">services.mcp-servers.servers.openmemory-mcp.settings.decay.coldThreshold</a></h2>
+<p>Cold memory threshold. Default: 0.25.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsdecayintervalminutes"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsdecayintervalminutes">services.mcp-servers.servers.openmemory-mcp.settings.decay.intervalMinutes</a></h2>
+<p>Decay interval in minutes. Default: 1440 (24h).</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsdecaylambda"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsdecaylambda">services.mcp-servers.servers.openmemory-mcp.settings.decay.lambda</a></h2>
+<p>Decay lambda parameter. Default: 0.02.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsdecayratio"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsdecayratio">services.mcp-servers.servers.openmemory-mcp.settings.decay.ratio</a></h2>
+<p>Decay ratio. Default: 0.03.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsdecayreinforceonquery"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsdecayreinforceonquery">services.mcp-servers.servers.openmemory-mcp.settings.decay.reinforceOnQuery</a></h2>
+<p>Reinforce decay on query. Default: true.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsdecaysleepms"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsdecaysleepms">services.mcp-servers.servers.openmemory-mcp.settings.decay.sleepMs</a></h2>
+<p>Sleep interval between decay operations in milliseconds. Default: 200.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsdecaythreads"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsdecaythreads">services.mcp-servers.servers.openmemory-mcp.settings.decay.threads</a></h2>
+<p>Number of decay worker threads. Default: 3.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddelayms"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddelayms">services.mcp-servers.servers.openmemory-mcp.settings.embedDelayMs</a></h2>
+<p>Delay between embedding requests in milliseconds. Default: 200.</p>
+<p><em>Type:</em>
+null or (unsigned integer, meaning &gt;=0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembedfallback"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembedfallback">services.mcp-servers.servers.openmemory-mcp.settings.embedFallback</a></h2>
+<p>Fallback embedding strategy when primary fails. Default: synthetic.</p>
+<p><em>Type:</em>
+null or value “synthetic” (singular enum)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembedmode"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembedmode">services.mcp-servers.servers.openmemory-mcp.settings.embedMode</a></h2>
+<p>Embedding mode. Default: simple.</p>
+<p><em>Type:</em>
+null or value “simple” (singular enum)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembedtimeoutms"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembedtimeoutms">services.mcp-servers.servers.openmemory-mcp.settings.embedTimeoutMs</a></h2>
+<p>Embedding timeout in milliseconds. Default: 30000.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddings"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddings">services.mcp-servers.servers.openmemory-mcp.settings.embeddings</a></h2>
+<p>Embedding provider. Set exactly one.</p>
+<p><em>Type:</em>
+attribute-tagged union with choices: aws, gemini, local, ollama, openai, synthetic</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{
+  synthetic = { };
+}
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingsaws"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingsaws">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.aws</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/mcp-server.nix">modules/mcp-server.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingsgemini"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingsgemini">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.gemini</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/mcp-server.nix">modules/mcp-server.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingslocal"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingslocal">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.local</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/mcp-server.nix">modules/mcp-server.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingslocalmodelpath"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingslocalmodelpath">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.local.modelPath</a></h2>
+<p>Path to local embedding model file.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingsollama"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingsollama">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.ollama</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/mcp-server.nix">modules/mcp-server.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingsollamamodel"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingsollamamodel">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.ollama.model</a></h2>
+<p>Ollama embedding model.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"nomic-embed-text"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingsollamaurl"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingsollamaurl">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.ollama.url</a></h2>
+<p>Ollama server URL.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"http://localhost:11434"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingsopenai"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingsopenai">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.openai</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/mcp-server.nix">modules/mcp-server.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingsopenaibaseurl"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingsopenaibaseurl">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.openai.baseUrl</a></h2>
+<p>OpenAI base URL override (for compatible APIs).</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingsopenaimodel"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingsopenaimodel">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.openai.model</a></h2>
+<p>OpenAI embedding model name.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsembeddingssynthetic"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsembeddingssynthetic">services.mcp-servers.servers.openmemory-mcp.settings.embeddings.synthetic</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/mcp-server.nix">modules/mcp-server.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsideallowedorigins"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsideallowedorigins">services.mcp-servers.servers.openmemory-mcp.settings.ideAllowedOrigins</a></h2>
+<p>Allowed CORS origins for IDE mode. Default: localhost:5173, localhost:3000.</p>
+<p><em>Type:</em>
+null or (list of string)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsidemode"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsidemode">services.mcp-servers.servers.openmemory-mcp.settings.ideMode</a></h2>
+<p>Enable IDE integration mode.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingskeywordboost"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingskeywordboost">services.mcp-servers.servers.openmemory-mcp.settings.keywordBoost</a></h2>
+<p>Keyword boost multiplier. Default: 2.5.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingskeywordminlength"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingskeywordminlength">services.mcp-servers.servers.openmemory-mcp.settings.keywordMinLength</a></h2>
+<p>Minimum keyword length. Default: 3.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingslanggraph"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingslanggraph">services.mcp-servers.servers.openmemory-mcp.settings.langGraph</a></h2>
+<p>LangGraph integration configuration.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingslanggraphmaxcontext"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingslanggraphmaxcontext">services.mcp-servers.servers.openmemory-mcp.settings.langGraph.maxContext</a></h2>
+<p>LangGraph max context. Default: 50.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingslanggraphnamespace"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingslanggraphnamespace">services.mcp-servers.servers.openmemory-mcp.settings.langGraph.namespace</a></h2>
+<p>LangGraph namespace. Default: default.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingslanggraphreflective"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingslanggraphreflective">services.mcp-servers.servers.openmemory-mcp.settings.langGraph.reflective</a></h2>
+<p>Enable LangGraph reflective mode. Default: true.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingslogauth"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingslogauth">services.mcp-servers.servers.openmemory-mcp.settings.logAuth</a></h2>
+<p>Enable authentication logging.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmaxactive"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmaxactive">services.mcp-servers.servers.openmemory-mcp.settings.maxActive</a></h2>
+<p>Maximum active memory items. Auto-detected by tier when null.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmaxpayloadsize"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmaxpayloadsize">services.mcp-servers.servers.openmemory-mcp.settings.maxPayloadSize</a></h2>
+<p>Maximum payload size in bytes. Default: 1000000.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmaxvectordim"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmaxvectordim">services.mcp-servers.servers.openmemory-mcp.settings.maxVectorDim</a></h2>
+<p>Maximum allowed vector dimension. Auto-detected by tier when null.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackend"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackend">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend</a></h2>
+<p>Metadata storage backend. Set exactly one of sqlite or postgres.</p>
+<p><em>Type:</em>
+attribute-tagged union with choices: postgres, sqlite</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{
+  sqlite = { };
+}
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgres"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgres">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.postgres</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/mcp-server.nix">modules/mcp-server.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresdb"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresdb">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.postgres.db</a></h2>
+<p>PostgreSQL database name.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"openmemory"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgreshost"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgreshost">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.postgres.host</a></h2>
+<p>PostgreSQL host.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"localhost"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgrespassword"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgrespassword">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.postgres.password</a></h2>
+<p>PostgreSQL password. Prefer credentials option for secrets.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresport"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresport">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.postgres.port</a></h2>
+<p>PostgreSQL port.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">5432
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresschema"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresschema">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.postgres.schema</a></h2>
+<p>PostgreSQL schema.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"public"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresssl"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresssl">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.postgres.ssl</a></h2>
+<p>PostgreSQL SSL mode.</p>
+<p><em>Type:</em>
+null or one of “disable”, “require”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgrestable"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgrestable">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.postgres.table</a></h2>
+<p>PostgreSQL memories table name.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"openmemory_memories"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresuser"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendpostgresuser">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.postgres.user</a></h2>
+<p>PostgreSQL user. Defaults to current system user.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendsqlite"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendsqlite">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.sqlite</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/mcp-server.nix">modules/mcp-server.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendsqlitepath"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmetadatabackendsqlitepath">services.mcp-servers.servers.openmemory-mcp.settings.metadataBackend.sqlite.path</a></h2>
+<p>SQLite database file path.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"./data/openmemory.sqlite"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsminscore"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsminscore">services.mcp-servers.servers.openmemory-mcp.settings.minScore</a></h2>
+<p>Minimum relevance score threshold. Default: 0.3.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsminvectordim"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsminvectordim">services.mcp-servers.servers.openmemory-mcp.settings.minVectorDim</a></h2>
+<p>Minimum allowed vector dimension. Default: 64.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsmode"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsmode">services.mcp-servers.servers.openmemory-mcp.settings.mode</a></h2>
+<p>Server mode. Default: standard.</p>
+<p><em>Type:</em>
+null or value “standard” (singular enum)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsopenaicredentials"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsopenaicredentials">services.mcp-servers.servers.openmemory-mcp.settings.openaiCredentials</a></h2>
+<p>Credential mapped to OPENAI_API_KEY. Set exactly one of file or helper.</p>
+<p><em>Type:</em>
+null or attribute-tagged union with choices: file, helper</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsopenaicredentialsfile"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsopenaicredentialsfile">services.mcp-servers.servers.openmemory-mcp.settings.openaiCredentials.file</a></h2>
+<p>Path to a file containing the raw secret value, read at runtime.
+Not stored in the Nix store. Works with sops-nix, agenix, or any
+tool that decrypts secrets to files. Mapped to OPENAI_API_KEY.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsopenaicredentialshelper"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsopenaicredentialshelper">services.mcp-servers.servers.openmemory-mcp.settings.openaiCredentials.helper</a></h2>
+<p>Path to an executable that outputs the raw secret value on stdout.
+Executed at service start. Mapped to OPENAI_API_KEY.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/mcp.nix">lib/mcp.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingspath"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingspath">services.mcp-servers.servers.openmemory-mcp.settings.path</a></h2>
+<p>HTTP endpoint path. Only used in HTTP mode.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"/mcp"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsratelimit"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsratelimit">services.mcp-servers.servers.openmemory-mcp.settings.rateLimit</a></h2>
+<p>Rate limiting configuration.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsratelimitenabled"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsratelimitenabled">services.mcp-servers.servers.openmemory-mcp.settings.rateLimit.enabled</a></h2>
+<p>Enable rate limiting.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsratelimitmaxrequests"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsratelimitmaxrequests">services.mcp-servers.servers.openmemory-mcp.settings.rateLimit.maxRequests</a></h2>
+<p>Max requests per window. Default: 100.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsratelimitwindowms"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsratelimitwindowms">services.mcp-servers.servers.openmemory-mcp.settings.rateLimit.windowMs</a></h2>
+<p>Rate limit window in milliseconds. Default: 60000.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsreflection"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsreflection">services.mcp-servers.servers.openmemory-mcp.settings.reflection</a></h2>
+<p>Memory reflection and regeneration configuration.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsreflectionautoreflect"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsreflectionautoreflect">services.mcp-servers.servers.openmemory-mcp.settings.reflection.autoReflect</a></h2>
+<p>Enable automatic memory reflection.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsreflectioninterval"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsreflectioninterval">services.mcp-servers.servers.openmemory-mcp.settings.reflection.interval</a></h2>
+<p>Reflection interval (number of operations between reflections). Default: 10.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsreflectionminmemories"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsreflectionminmemories">services.mcp-servers.servers.openmemory-mcp.settings.reflection.minMemories</a></h2>
+<p>Minimum memories required before reflection triggers. Default: 20.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsreflectionregenerationenabled"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsreflectionregenerationenabled">services.mcp-servers.servers.openmemory-mcp.settings.reflection.regenerationEnabled</a></h2>
+<p>Enable memory regeneration. Default: true.</p>
+<p><em>Type:</em>
+null or boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsreflectionusersummaryinterval"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsreflectionusersummaryinterval">services.mcp-servers.servers.openmemory-mcp.settings.reflection.userSummaryInterval</a></h2>
+<p>User summary update interval. Default: 30.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingssegsize"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingssegsize">services.mcp-servers.servers.openmemory-mcp.settings.segSize</a></h2>
+<p>Segment size. Default: 10000.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingssummarylayers"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingssummarylayers">services.mcp-servers.servers.openmemory-mcp.settings.summaryLayers</a></h2>
+<p>Number of summary layers (1-3). Default: 3.</p>
+<p><em>Type:</em>
+null or integer between 1 and 3 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingssummarymaxlength"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingssummarymaxlength">services.mcp-servers.servers.openmemory-mcp.settings.summaryMaxLength</a></h2>
+<p>Maximum summary length in characters. Default: 200.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingstelemetry"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingstelemetry">services.mcp-servers.servers.openmemory-mcp.settings.telemetry</a></h2>
+<p>Enable anonymous telemetry.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingstier"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingstier">services.mcp-servers.servers.openmemory-mcp.settings.tier</a></h2>
+<p>Performance tier. Affects defaults for vector dimensions, cache segments, and active memory limits.</p>
+<p><em>Type:</em>
+one of “hybrid”, “fast”, “smart”, “deep”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"hybrid"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsusesummaryonly"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsusesummaryonly">services.mcp-servers.servers.openmemory-mcp.settings.useSummaryOnly</a></h2>
+<p>Use only summary for reflection instead of full content.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvecdim"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvecdim">services.mcp-servers.servers.openmemory-mcp.settings.vecDim</a></h2>
+<p>Vector dimension. Must match the embedding model (e.g., 768 for nomic-embed-text). Auto-detected by tier when null.</p>
+<p><em>Type:</em>
+null or (positive integer, meaning &gt;0)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvectorbackend"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvectorbackend">services.mcp-servers.servers.openmemory-mcp.settings.vectorBackend</a></h2>
+<p>Vector storage backend. Set exactly one of sqlite, postgres, or valkey.</p>
+<p><em>Type:</em>
+attribute-tagged union with choices: postgres, sqlite, valkey</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{
+  sqlite = { };
+}
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendpostgres"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendpostgres">services.mcp-servers.servers.openmemory-mcp.settings.vectorBackend.postgres</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/mcp-server.nix">modules/mcp-server.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendpostgrestable"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendpostgrestable">services.mcp-servers.servers.openmemory-mcp.settings.vectorBackend.postgres.table</a></h2>
+<p>PostgreSQL vector table name.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"openmemory_vectors"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendsqlite"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendsqlite">services.mcp-servers.servers.openmemory-mcp.settings.vectorBackend.sqlite</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/mcp-server.nix">modules/mcp-server.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendsqlitetable"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendsqlitetable">services.mcp-servers.servers.openmemory-mcp.settings.vectorBackend.sqlite.table</a></h2>
+<p>SQLite vector table name.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"vectors"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendvalkey"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendvalkey">services.mcp-servers.servers.openmemory-mcp.settings.vectorBackend.valkey</a></h2>
+<p>This option has no description.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/mcp-server.nix">modules/mcp-server.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendvalkeyhost"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendvalkeyhost">services.mcp-servers.servers.openmemory-mcp.settings.vectorBackend.valkey.host</a></h2>
+<p>Valkey/Redis host.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"localhost"
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendvalkeypassword"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendvalkeypassword">services.mcp-servers.servers.openmemory-mcp.settings.vectorBackend.valkey.password</a></h2>
+<p>Valkey/Redis password.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<h2 id="servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendvalkeyport"><a class="header" href="#servicesmcp-serversserversopenmemory-mcpsettingsvectorbackendvalkeyport">services.mcp-servers.servers.openmemory-mcp.settings.vectorBackend.valkey.port</a></h2>
+<p>Valkey/Redis port.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">6379
+</code></pre>
+<h2 id="servicesmcp-serversserverssequential-thinking-mcp"><a class="header" href="#servicesmcp-serversserverssequential-thinking-mcp">services.mcp-servers.servers.sequential-thinking-mcp</a></h2>
+<p>Configuration for the sequential-thinking-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssequential-thinking-mcpenable"><a class="header" href="#servicesmcp-serversserverssequential-thinking-mcpenable">services.mcp-servers.servers.sequential-thinking-mcp.enable</a></h2>
+<p>Whether to enable the sequential-thinking-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssequential-thinking-mcppackage"><a class="header" href="#servicesmcp-serversserverssequential-thinking-mcppackage">services.mcp-servers.servers.sequential-thinking-mcp.package</a></h2>
+<p>The sequential-thinking-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.ai.mcpServers.sequential-thinking-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssequential-thinking-mcpargs"><a class="header" href="#servicesmcp-serversserverssequential-thinking-mcpargs">services.mcp-servers.servers.sequential-thinking-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssequential-thinking-mcpenv"><a class="header" href="#servicesmcp-serversserverssequential-thinking-mcpenv">services.mcp-servers.servers.sequential-thinking-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store – use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssequential-thinking-mcpservicehost"><a class="header" href="#servicesmcp-serversserverssequential-thinking-mcpservicehost">services.mcp-servers.servers.sequential-thinking-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssequential-thinking-mcpserviceport"><a class="header" href="#servicesmcp-serversserverssequential-thinking-mcpserviceport">services.mcp-servers.servers.sequential-thinking-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19759
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssequential-thinking-mcpsettings"><a class="header" href="#servicesmcp-serversserverssequential-thinking-mcpsettings">services.mcp-servers.servers.sequential-thinking-mcp.settings</a></h2>
+<p>Server-specific configuration for sequential-thinking-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversserena-mcp"><a class="header" href="#servicesmcp-serversserversserena-mcp">services.mcp-servers.servers.serena-mcp</a></h2>
+<p>Configuration for the serena-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversserena-mcpenable"><a class="header" href="#servicesmcp-serversserversserena-mcpenable">services.mcp-servers.servers.serena-mcp.enable</a></h2>
+<p>Whether to enable the serena-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversserena-mcppackage"><a class="header" href="#servicesmcp-serversserversserena-mcppackage">services.mcp-servers.servers.serena-mcp.package</a></h2>
+<p>The serena-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.ai.mcpServers.serena-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversserena-mcpargs"><a class="header" href="#servicesmcp-serversserversserena-mcpargs">services.mcp-servers.servers.serena-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversserena-mcpenv"><a class="header" href="#servicesmcp-serversserversserena-mcpenv">services.mcp-servers.servers.serena-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store – use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserversserena-mcpsettings"><a class="header" href="#servicesmcp-serversserversserena-mcpsettings">services.mcp-servers.servers.serena-mcp.settings</a></h2>
+<p>Server-specific configuration for serena-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssympy-mcp"><a class="header" href="#servicesmcp-serversserverssympy-mcp">services.mcp-servers.servers.sympy-mcp</a></h2>
+<p>Configuration for the sympy-mcp MCP server.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssympy-mcpenable"><a class="header" href="#servicesmcp-serversserverssympy-mcpenable">services.mcp-servers.servers.sympy-mcp.enable</a></h2>
+<p>Whether to enable the sympy-mcp MCP server.</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">true
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssympy-mcppackage"><a class="header" href="#servicesmcp-serversserverssympy-mcppackage">services.mcp-servers.servers.sympy-mcp.package</a></h2>
+<p>The sympy-mcp package to use.</p>
+<p><em>Type:</em>
+package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">pkgs.ai.mcpServers.sympy-mcp
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssympy-mcpargs"><a class="header" href="#servicesmcp-serversserverssympy-mcpargs">services.mcp-servers.servers.sympy-mcp.args</a></h2>
+<p>Extra CLI arguments (escape hatch for options not yet in settings).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssympy-mcpenv"><a class="header" href="#servicesmcp-serversserverssympy-mcpenv">services.mcp-servers.servers.sympy-mcp.env</a></h2>
+<p>Extra environment variables (escape hatch for options not yet in settings). Values end up in the Nix store – use credentials for secrets.</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssympy-mcpservicehost"><a class="header" href="#servicesmcp-serversserverssympy-mcpservicehost">services.mcp-servers.servers.sympy-mcp.service.host</a></h2>
+<p>Host/address to bind for the HTTP service.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"127.0.0.1"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssympy-mcpserviceport"><a class="header" href="#servicesmcp-serversserverssympy-mcpserviceport">services.mcp-servers.servers.sympy-mcp.service.port</a></h2>
+<p>Port to bind for the HTTP service.</p>
+<p><em>Type:</em>
+16 bit unsigned integer; between 0 and 65535 (both inclusive)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">19760
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serversserverssympy-mcpsettings"><a class="header" href="#servicesmcp-serversserverssympy-mcpsettings">services.mcp-servers.servers.sympy-mcp.settings</a></h2>
+<p>Server-specific configuration for sympy-mcp.</p>
+<p><em>Type:</em>
+submodule</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
+</ul>
+<h2 id="servicesmcp-serverstools"><a class="header" href="#servicesmcp-serverstools">services.mcp-servers.tools</a></h2>
+<p>Tool names exposed by each enabled server (from upstream metadata).
+Use this to build client-specific auto-approval configs by filtering
+and formatting with standard Nix functions.</p>
+<p><em>Type:</em>
+attribute set of list of string <em>(read only)</em></p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
 </ul>
 <h2 id="stacked-workflowsenable"><a class="header" href="#stacked-workflowsenable">stacked-workflows.enable</a></h2>
 <p>Whether to enable stacked workflow skills and references.</p>
