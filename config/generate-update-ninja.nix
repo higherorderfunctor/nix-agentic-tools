@@ -46,12 +46,7 @@
   allPkgTargets =
     builtins.attrValues
     (builtins.mapAttrs (name: _: "update-${name}") updateMatrix.nixUpdate);
-  # Remove any-buddy and claude-code from individual targets (handled by combo)
-  filteredPkgTargets =
-    builtins.filter
-    (t: t != "update-any-buddy" && t != "update-claude-code")
-    allPkgTargets;
-  allNonTreefmtTargets = allInputTargets ++ filteredPkgTargets ++ ["update-any-buddy-claude-code"];
+  allNonTreefmtTargets = allInputTargets ++ allPkgTargets;
 
   # Ninja rules
   rules = ''
@@ -67,10 +62,6 @@
     rule update-pkg
       command = bash dev/scripts/update-pkg.sh $name $flags $git
       description = Updating package: $name
-
-    rule update-combo
-      command = bash dev/scripts/update-combo.sh
-      description = Updating combo: any-buddy + claude-code
 
     rule full-format
       command = bash -c 'treefmt && git add -A && git diff --staged --quiet || git commit -m "style: treefmt full reformat after updates"'
@@ -102,25 +93,16 @@
 
   # Package targets
   pkgTargets = builtins.concatStringsSep "\n" (builtins.attrValues (builtins.mapAttrs (name: cfg: let
-    deps = pkgDeps name;
-    depStr = " | ${builtins.concatStringsSep " " deps}";
-    gitUrl = cfg.git or "";
-  in
-    # Skip any-buddy and claude-code (handled by combo target)
-    if builtins.elem name ["any-buddy" "claude-code"]
-    then ""
-    else ''
+      deps = pkgDeps name;
+      depStr = " | ${builtins.concatStringsSep " " deps}";
+      gitUrl = cfg.git or "";
+    in ''
       build update-${name}: update-pkg${depStr}
         name = ${name}
         flags = ${cfg.flags}
         git = ${gitUrl}
     '')
-  updateMatrix.nixUpdate));
-
-  # Combo target (any-buddy + claude-code)
-  comboTarget = ''
-    build update-any-buddy-claude-code: update-combo | update-init update-nixpkgs update-nix-update
-  '';
+    updateMatrix.nixUpdate));
 
   # treefmt last, then full format, then final build
   treefmtTarget = let
@@ -159,9 +141,6 @@
     ""
     "# Package updates"
     pkgTargets
-    ""
-    "# Combo: any-buddy + claude-code"
-    comboTarget
     ""
     "# treefmt last (isolation)"
     treefmtTarget

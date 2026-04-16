@@ -1,9 +1,6 @@
 # Claude Code — pre-built binary from Anthropic's GPG-signed manifest.
 # Per-platform sources in claude-code-sources.json, managed by updateScript.
 #
-# This is the raw package. The HM module adds the buddy wrapper on
-# top for users who configure buddy salt patching.
-#
 # IMPORTANT: The binary is a Bun single-exec with the application
 # embedded via a trailer after the ELF data.
 #

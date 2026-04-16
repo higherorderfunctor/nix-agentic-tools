@@ -43,20 +43,16 @@ when the ai-level enable is on.
 The original design had `config = mkIf cfg.enable (mkMerge [...])`
 wrapping everything, requiring BOTH `ai.enable = true` AND
 `ai.claude.enable = true` to fan out. This caused a silent no-op:
-a consumer who set `ai.claude = { enable = true; buddy = { ... }; }`
-without `ai.enable = true` got no fanout at all —
-`programs.claude-code.buddy` stayed null, the activation script
-was never installed, the buddy silently hatched as the default
-(capybara/penguin) instead of the configured value.
+a consumer who set `ai.claude.enable = true` without `ai.enable = true`
+got no fanout at all — `programs.claude-code` options stayed at
+defaults, configuration was stored in the option but never fanned out.
 
-Surfaced 2026-04-07 during HITL integration. Debugged by evaluating
-the HM config and finding `programs.claude-code.buddy = null`
-despite `ai.claude.buddy.species = "duck"`. Root cause: the outer
+Surfaced 2026-04-07 during HITL integration. Root cause: the outer
 `mkIf cfg.enable` gate was false.
 
 Four fix options were considered; option (b) was chosen:
 
-1. Move buddy fanout outside the mkIf (kept rest of gating)
+1. Move per-CLI fanout outside the mkIf (kept rest of gating)
 2. **Drop `ai.enable` as a master switch entirely** ← chosen
 3. Magic-default `ai.enable` from sub-options (opaque)
 4. Document the requirement loudly with an assertion
@@ -76,12 +72,8 @@ The ai module fans out TWO kinds of configuration:
 
 - `ai.claude.package` / `ai.copilot.package` / `ai.kiro.package`
   — package override, fans out to `programs.<cli>.package`
-- `ai.claude.buddy` — fans out to `programs.claude-code.buddy`
-  (which is declared by the claude-code factory in
-  `packages/claude-code/modules/homeManager/`)
-
-**Cross-ecosystem options** (live at `ai.*` top level, fan out
-to every enabled ecosystem simultaneously):
+  **Cross-ecosystem options** (live at `ai.*` top level, fan out
+  to every enabled ecosystem simultaneously):
 
 - `ai.skills` — attrset of name → directory path. Each enabled
   ecosystem gets its native representation (Claude:
@@ -121,17 +113,8 @@ mkIf gate to skip them):
    environmentVariables), at least one ecosystem must be enabled
    — otherwise the config does nothing and the user didn't notice
 
-Plus buddy-specific assertions (gated on
-`cfg.claude.buddy != null`):
-
-4. `buddy.peak != buddy.dump` (or both null)
-5. `buddy.rarity == "common" -> buddy.hat == "none"`
-
 ### What's NOT in the ai module
 
-- The actual `programs.claude-code.buddy` OPTION — declared by
-  `packages/claude-code/modules/homeManager/`. The ai module
-  just fans VALUES into it.
 - The package wrapping (Bun runtime) for claude-code — handled
   in `packages/ai-clis/claude-code.nix` at overlay level.
 - MCP server config — ai has no `mcpServers` option. Consumers
@@ -160,16 +143,7 @@ From a consumer repo with the module imported:
 nix eval --impure --json \
   '.#homeConfigurations."<host>".config.programs.claude-code.enable'
 # Should be true if ai.claude.enable = true
-
-nix eval --impure --json \
-  '.#homeConfigurations."<host>".config.programs.claude-code.buddy.species'
-# Should be the configured species, not null
-
-nix eval --impure --json \
-  '.#homeConfigurations."<host>".config.ai.claude.buddy.species'
-# Should match (same value stored on the ai side)
 ```
 
-If `programs.claude-code.buddy` is null but `ai.claude.buddy.species`
-is set, the fanout is broken — fix the module, not the consumer.
-This is exactly how the dropped `ai.enable` bug was caught.
+If the option stays false despite `ai.claude.enable = true`, the
+fanout is broken — fix the module, not the consumer.

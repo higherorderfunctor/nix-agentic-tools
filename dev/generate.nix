@@ -111,12 +111,10 @@
       "packages/copilot-cli/modules/**"
       "packages/kiro-cli/modules/**"
     ];
-    # claude-code: wrapper chain + buddy activation lifecycle.
-    # Spans the claude-code overlay package and the factory-built
-    # module (buddy activation is now in packages/claude-code/).
+    # claude-code: wrapper chain. Spans the claude-code overlay
+    # package and the factory-built module.
     claude-code = [
       "packages/ai-clis/claude-code.nix"
-      "packages/ai-clis/any-buddy.nix"
       "packages/claude-code/**"
     ];
     # devenv: devenv files.* internals + skills layout walker. Scoped
@@ -187,11 +185,6 @@
     ai-module = ["ai-module-fanout"];
     ai-skills = ["skills-fanout-pattern"];
     claude-code = [
-      {
-        location = "package";
-        name = "buddy-activation";
-        dir = "claude-code";
-      }
       {
         location = "package";
         name = "claude-code-wrapper";
@@ -344,8 +337,8 @@
     support the [AGENTS.md standard](https://agents.md).
 
     Deep-dive architecture documentation (fanout semantics, wrapper chains,
-    buddy activation, fragment pipeline, overlay cache-hit parity, HM module
-    conventions, etc.) lives in the mdbook contributing section and in
+    fragment pipeline, overlay cache-hit parity, HM module conventions,
+    etc.) lives in the mdbook contributing section and in
     path-scoped per-ecosystem files (`.claude/rules/<name>.md`,
     `.github/instructions/<name>.instructions.md`,
     `.kiro/steering/<name>.md`). Those files load on demand when editing

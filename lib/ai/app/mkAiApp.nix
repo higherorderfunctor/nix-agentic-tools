@@ -16,7 +16,7 @@
 #     defaults ? {};                 # {package?, outputPath?} — shared across backends
 #     options ? {};                  # shared option declarations (both backends see these)
 #     hm = {
-#       options ? {};                # HM-only option additions (e.g. buddy)
+#       options ? {};                # HM-only option additions
 #       defaults ? {};               # HM-only default overrides
 #       config ? _: {};              # consumer callback projecting merged view → module attrs
 #     };

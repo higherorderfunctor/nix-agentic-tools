@@ -17,10 +17,6 @@
       flags = "--version skip";
       git = "https://github.com/agent-sh/agnix.git";
     };
-    any-buddy = {
-      flags = "--version skip";
-      git = "https://github.com/cpaczek/any-buddy.git";
-    };
     context7-mcp = {
       flags = "--version skip";
       git = "https://github.com/upstash/context7.git";

@@ -325,8 +325,6 @@
           $out/contributing/architecture/devenv-files-internals.md
         cp ${./packages/claude-code/docs/claude-code-wrapper.md} \
           $out/contributing/architecture/claude-code-wrapper.md
-        cp ${./packages/claude-code/docs/buddy-activation.md} \
-          $out/contributing/architecture/buddy-activation.md
         cp ${./dev/fragments/ai-module/ai-module-fanout.md} \
           $out/contributing/architecture/ai-module-fanout.md
       '';

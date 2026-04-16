@@ -12,7 +12,7 @@
 #     defaults ? {package, outputPath?};
 #     options ? {};          # shared across backends
 #     hm ? {
-#       options ? {};        # HM-only option additions (e.g. buddy)
+#       options ? {};        # HM-only option additions
 #       defaults ? {};       # HM-only default overrides
 #       config ? _: {};      # consumer callback: {cfg, mergedServers, mergedInstructions, mergedSkills} → module attrs
 #     };

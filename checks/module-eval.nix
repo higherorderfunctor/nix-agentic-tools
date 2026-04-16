@@ -115,14 +115,12 @@
   };
 
   # Stub pkgs.ai with minimal placeholders so factory defaults that
-  # reference pkgs.ai.claude-code (default package) and the buddy
-  # activation script's pkgs.ai.any-buddy can resolve at eval time.
-  # The real derivations live in the overlay; here we only need values
-  # that stringify cleanly and support passthru access.
+  # reference pkgs.ai.claude-code (default package) can resolve at
+  # eval time. The real derivations live in the overlay; here we only
+  # need values that stringify cleanly and support passthru access.
   aiStubs =
     (pkgs.ai or {})
     // {
-      any-buddy = pkgs.ai.any-buddy or pkgs.hello;
       claude-code = pkgs.ai.claude-code or pkgs.hello;
       copilot-cli = pkgs.ai.copilot-cli or pkgs.hello;
       kiro-cli = pkgs.ai.kiro-cli or pkgs.hello;
@@ -183,8 +181,6 @@ in {
     in
       ev.config.ai.claude.enable
   );
-
-  module-claude-buddy-submodule-default = mkTest "claude-buddy-submodule-default" (!(evalHm {}).config.ai.claude.buddy.enable);
 
   # NOTE: this test verifies that the shared ai.mcpServers pool ACCEPTS
   # an entry when a package module (claude) is also loaded — i.e. no type
@@ -883,179 +879,6 @@ in {
       hookFile
       != null
       && lib.hasInfix "pre-commit" (hookFile.text or "")
-  );
-
-  # ── Task 6 (A1): Buddy activation absorption ──────────────────
-
-  # Full option shape — set all buddy sub-options, verify they evaluate.
-  module-claude-buddy-option-shape = mkTest "claude-buddy-option-shape" (
-    let
-      result = evalHm {
-        ai.claude = {
-          enable = true;
-          buddy = {
-            enable = true;
-            species = "duck";
-            rarity = "rare";
-            eyes = "✦";
-            hat = "wizard";
-            shiny = true;
-            peak = "WISDOM";
-            dump = "CHAOS";
-            outputLogs = true;
-            statePath = ".local/state/my-buddy";
-            userId.text = "ebd8b240-9b28-44b1-a4bf-da487d9f111f";
-          };
-        };
-      };
-    in
-      result.config.ai.claude.buddy.enable
-      && result.config.ai.claude.buddy.species == "duck"
-      && result.config.ai.claude.buddy.rarity == "rare"
-      && result.config.ai.claude.buddy.eyes == "✦"
-      && result.config.ai.claude.buddy.hat == "wizard"
-      && result.config.ai.claude.buddy.shiny
-      && result.config.ai.claude.buddy.peak == "WISDOM"
-      && result.config.ai.claude.buddy.dump == "CHAOS"
-      && result.config.ai.claude.buddy.outputLogs
-      && result.config.ai.claude.buddy.statePath == ".local/state/my-buddy"
-  );
-
-  # Activation script uses if-guard for fingerprint cache check.
-  # The script MUST NOT contain a bare `exit 0` as a statement (which
-  # would abort HM activation). `exit 0` may appear inside comments
-  # warning about this invariant, so we check that no line starts
-  # with (optional whitespace +) `exit 0`. Error-path `exit 1` is
-  # acceptable — aborting on real errors is correct behavior.
-  module-claude-buddy-activation-uses-if-not-exit = mkTest "claude-buddy-activation-uses-if-not-exit" (
-    let
-      result = evalHm {
-        ai.claude = {
-          enable = true;
-          buddy = {
-            enable = true;
-            species = "duck";
-            userId.text = "test-uuid-1234";
-          };
-        };
-      };
-      script = result.config.home.activation.claudeBuddy.text or "";
-      lines = lib.splitString "\n" script;
-      # A line is a bare `exit 0` statement if, after trimming leading
-      # whitespace, it equals "exit 0" exactly.
-      isBareExit0 = line: let
-        trimmed = lib.removePrefix " " (lib.removePrefix "  " (lib.removePrefix "    " line));
-      in
-        trimmed == "exit 0";
-      hasBareExit0 = builtins.any isBareExit0 lines;
-    in
-      lib.hasInfix "if [ \"$NEW_FP\" != \"$OLD_FP\" ]; then" script
-      && !hasBareExit0
-  );
-
-  # Activation script has fingerprint inputs and key markers.
-  module-claude-buddy-activation-has-fingerprint-inputs = mkTest "claude-buddy-activation-has-fingerprint-inputs" (
-    let
-      result = evalHm {
-        ai.claude = {
-          enable = true;
-          buddy = {
-            enable = true;
-            species = "owl";
-            userId.text = "test-uuid-5678";
-          };
-        };
-      };
-      script = result.config.home.activation.claudeBuddy.text or "";
-    in
-      lib.hasInfix "sha256sum" script
-      && lib.hasInfix "fingerprint" script
-      && lib.hasInfix "STORE_BINARY" script
-      && lib.hasInfix "friend-2026-401" script
-      && lib.hasInfix "companion" script
-  );
-
-  # Assertion: common rarity requires hat = "none".
-  module-claude-buddy-common-rarity-requires-no-hat = mkTest "claude-buddy-common-rarity-requires-no-hat" (
-    let
-      result = evalHm {
-        ai.claude = {
-          enable = true;
-          buddy = {
-            enable = true;
-            species = "duck";
-            rarity = "common";
-            hat = "wizard";
-            userId.text = "test-uuid";
-          };
-        };
-      };
-      assertions = result.config.assertions or [];
-      hatAssertion = builtins.filter (a: lib.hasInfix "common rarity" (a.message or "")) assertions;
-    in
-      builtins.length hatAssertion
-      == 1
-      && !(builtins.head hatAssertion).assertion
-  );
-
-  # Assertion: peak and dump must differ.
-  module-claude-buddy-peak-dump-must-differ = mkTest "claude-buddy-peak-dump-must-differ" (
-    let
-      result = evalHm {
-        ai.claude = {
-          enable = true;
-          buddy = {
-            enable = true;
-            species = "duck";
-            peak = "WISDOM";
-            dump = "WISDOM";
-            userId.text = "test-uuid";
-          };
-        };
-      };
-      assertions = result.config.assertions or [];
-      peakAssertion = builtins.filter (a: lib.hasInfix "peak and dump" (a.message or "")) assertions;
-    in
-      builtins.length peakAssertion
-      == 1
-      && !(builtins.head peakAssertion).assertion
-  );
-
-  # Text userId appears as a literal in the fingerprint input.
-  module-claude-buddy-text-userid-in-script = mkTest "claude-buddy-text-userid-in-script" (
-    let
-      result = evalHm {
-        ai.claude = {
-          enable = true;
-          buddy = {
-            enable = true;
-            species = "cat";
-            userId.text = "my-unique-test-uuid-abc";
-          };
-        };
-      };
-      script = result.config.home.activation.claudeBuddy.text or "";
-    in
-      lib.hasInfix "my-unique-test-uuid-abc" script
-  );
-
-  # File userId inserts a cat command in the script.
-  module-claude-buddy-file-userid-in-script = mkTest "claude-buddy-file-userid-in-script" (
-    let
-      result = evalHm {
-        ai.claude = {
-          enable = true;
-          buddy = {
-            enable = true;
-            species = "cat";
-            userId.file = "/run/secrets/claude-uuid";
-          };
-        };
-      };
-      script = result.config.home.activation.claudeBuddy.text or "";
-    in
-      lib.hasInfix "/run/secrets/claude-uuid" script
-      && lib.hasInfix "tr -d" script
   );
 
   # ── Task 7 (A6): Stacked-workflows HM module absorption ────────

@@ -5,6 +5,7 @@ agentic
 agentskills
 agentsmd
 agnix
+anthropics
 applyto
 argjson
 arxanas

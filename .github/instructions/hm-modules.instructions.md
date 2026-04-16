@@ -24,9 +24,8 @@ under `modules/**`.
 **Use explicit types.** Rare `types.anything` appears only as an
 `internal = true` escape hatch in the MCP module's `mcpConfig`.
 Everywhere else, declare the real type: `types.submodule`,
-`types.nullOr`, `types.attrsOf`, `types.enum`, `types.attrTag`
-(for mutually exclusive variants like the buddy `userId.text`
-XOR `userId.file` discriminated union), `types.listOf`, etc.
+`types.nullOr`, `types.attrsOf`, `types.enum`, `types.attrTag`,
+`types.listOf`, etc.
 
 **Submodules as containers.** Per-ecosystem config lives in a
 submodule: `ai.claude`, `ai.copilot`, `ai.kiro` are each a
@@ -130,24 +129,6 @@ config = mkMerge [
 error" or "configuration invalid." Say
 `ai.copilot.enable requires programs.copilot-cli to be available`.
 
-**Data-dependent assertions use lib.optionals + implication.**
-Example from the buddy assertions:
-
-```nix
-assertions =
-  [{ assertion = ...; message = ...; }]
-  ++ (optionals (cfg.claude.buddy != null) [
-    { assertion = cfg.claude.buddy.peak != cfg.claude.buddy.dump || cfg.claude.buddy.peak == null;
-      message = "ai.claude.buddy: peak and dump stats must differ"; }
-    { assertion = cfg.claude.buddy.rarity == "common" -> cfg.claude.buddy.hat == "none";
-      message = "ai.claude.buddy: common rarity forces hat = \"none\""; }
-  ]);
-```
-
-The `optionals` wrapper only runs the inner assertions when
-`buddy != null`, so the per-field references don't fail on
-unset buddy config.
-
 ### Package override pattern
 
 **Every per-CLI submodule exposes a `package` option.** Consumers
@@ -171,12 +152,6 @@ pkgs.symlinkJoin {
   '';
 }
 ```
-
-**passthru.baseClaudeCode escape hatch.** The claude-code wrap
-exposes the unwrapped nixpkgs derivation as
-`passthru.baseClaudeCode` so downstream modules (buddy activation
-script) can find the real `cli.js` in the store. See
-`claude-code-wrapper` fragment for the full chain.
 
 ### Activation script patterns
 
@@ -215,19 +190,7 @@ fi
 
 Reserve `exit 1` for cases where you actually want to abort the
 whole activation on an error. Never `exit 0` for a cache-hit
-fast path. Surfaced 2026-04-08 in the buddy activation script
-during skills-fanout-fix Task 3 — the outer activation stopped
-at `Activating claudeBuddy` with no error, and every post-buddy
-hook (including the home.file rewrites for the skill symlinks we
-were trying to verify) silently never ran. Fixed in commit
-`1695263` by replacing the `exit 0` with an `if`/`fi` guard.
-
-**Fingerprint caching pattern** (buddy activation, see
-`buddy-activation` fragment): compute sha256 of inputs, compare
-to stored marker, short-circuit via `if`/`fi` (NOT `exit`) when
-unchanged. Re-running `home-manager switch` with unchanged
-config becomes a no-op — the update block is skipped, but every
-subsequent activation hook continues to run.
+fast path.
 
 **Settings merge pattern** (copilot-cli, kiro-cli): runtime
 config.json files are merged with Nix-declared values using
@@ -260,11 +223,6 @@ runtime-mutable config files, resetting cached state.
 the backlog item about runtime state dirs for Claude's
 `~/.claude/projects`, which would need it.
 
-**Runtime-mutable files** like `~/.claude.json` (buddy companion
-field written by claude at runtime) are NOT managed by HM. The
-buddy activation script only RESETS the companion field on
-fingerprint mismatch, letting claude re-hatch on next launch.
-
 ### Config parity rule (HM ↔ devenv)
 
 **Every option on an HM module under `modules/<subdir>/` MUST
@@ -275,15 +233,12 @@ the other in the same commit. Enforced by convention, checked
 at code review.
 
 **Shared types live in `lib/`.** Both HM and devenv modules import
-types from `lib/buddy-types.nix` (`buddySubmodule`) and
-`lib/ai-common.nix` (`instructionModule`, `lspServerModule`,
-`mkCopilotLspConfig`, `mkLspConfig`) so the surfaces stay in
-sync by construction.
+types from `lib/ai-common.nix` (`instructionModule`,
+`lspServerModule`, `mkCopilotLspConfig`, `mkLspConfig`) so the
+surfaces stay in sync by construction.
 
 **Intentional differences** exist and are NOT parity gaps:
 
-- `ai.claude.buddy` is HM-only (per-user, needs ~/.claude.json
-  which devenv doesn't touch)
 - Activation scripts are HM-only (devenv lifecycle is different)
 - HM uses `home.file` / `home.activation`; devenv uses `files.*`
   (per-project writable tree, not home dir)
@@ -300,8 +255,7 @@ Add test cases there whenever you add new module behavior —
 especially for:
 
 - Option discoverability (set an option, verify it evaluates)
-- Fanout correctness (set `ai.claude.buddy`, verify
-  `programs.claude-code.buddy` becomes non-null)
+- Fanout correctness (set an option, verify it propagates)
 - Assertion firing (intentionally misconfigure, verify the
   right assertion triggers)
 
@@ -311,8 +265,8 @@ the f2e911c fix because the post-fix tests didn't reference
 
 **Eval-only checks DON'T catch everything.** Some bugs only
 manifest during real HM activation against real consumer
-state (e.g., the buddy activation `exit` bug, the Nix path
-type strictness bug below). When touching anything that
+state (e.g., the Nix path type strictness bug below). When
+touching anything that
 affects activation scripts or on-disk layout, verify
 end-to-end against a consumer (`home-manager switch` on a
 real system), not just `nix flake check`.

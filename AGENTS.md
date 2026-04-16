@@ -5,8 +5,8 @@ Read by Claude Code, Kiro, GitHub Copilot, Codex, and other tools that
 support the [AGENTS.md standard](https://agents.md).
 
 Deep-dive architecture documentation (fanout semantics, wrapper chains,
-buddy activation, fragment pipeline, overlay cache-hit parity, HM module
-conventions, etc.) lives in the mdbook contributing section and in
+fragment pipeline, overlay cache-hit parity, HM module conventions,
+etc.) lives in the mdbook contributing section and in
 path-scoped per-ecosystem files (`.claude/rules/<name>.md`,
 `.github/instructions/<name>.instructions.md`,
 `.kiro/steering/<name>.md`). Those files load on demand when editing

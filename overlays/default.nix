@@ -46,9 +46,6 @@
     agnix = import ./agnix.nix {
       inherit inputs final;
     };
-    any-buddy = import ./any-buddy.nix {
-      inherit inputs final;
-    };
     claude-code = import ./claude-code.nix {
       inherit inputs final;
     };

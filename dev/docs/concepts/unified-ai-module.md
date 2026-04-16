@@ -146,9 +146,3 @@ on any enable):
 - `copilot.enable` requires `programs.copilot-cli` to be available
 - `kiro.enable` requires `programs.kiro-cli` to be available
 - Claude has no upstream-module assertion — it uses `home.file` directly
-
-When `ai.claude.buddy` is set (see Buddy Customization guide), two
-additional assertions apply:
-
-- `buddy.peak != buddy.dump` (or both null)
-- `buddy.rarity == "common" -> buddy.hat == "none"`

@@ -369,11 +369,8 @@ Targets fall into three categories:
 - **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs
   `nix-update` in a worktree, optionally preceded by a rev bump
   for main-tracking packages.
-- **Combos** (`update-combo.sh`) — packages that must be updated
-  together (e.g., `any-buddy` + `claude-code` share a source).
-
-The final target `update-report` runs `update-report.sh` to print
-a summary grouped by status.
+  The final target `update-report` runs `update-report.sh` to print
+  a summary grouped by status.
 
 ### Worktree isolation
 
@@ -431,6 +428,5 @@ Every target writes exactly one line to `.update-report.txt`:
 | `dev/scripts/update-init.sh`       | Pipeline initialization (clean stale state)            |
 | `dev/scripts/update-input.sh`      | Per-input update script                                |
 | `dev/scripts/update-pkg.sh`        | Per-package update script (rev bump + nix-update)      |
-| `dev/scripts/update-combo.sh`      | Multi-package combo update script                      |
 | `dev/scripts/update-report.sh`     | Report printer                                         |
 | `.github/workflows/update.yml`     | CI workflow (Renovate-style per-dependency PRs)        |
