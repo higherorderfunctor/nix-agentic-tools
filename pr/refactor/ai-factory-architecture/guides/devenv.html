@@ -34,7 +34,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-f1645e56.js";
+            window.path_to_searchindex_js = "../searchindex-79ac0bf4.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-e2aa3dc8.js"></script>
@@ -223,6 +223,23 @@ package</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
+<h2 id="aiclaudecontext"><a class="header" href="#aiclaudecontext">ai.claude.context</a></h2>
+<p>Global Claude context. Inline string or path to a file.
+Passed through to programs.claude-code.context (which writes
+to ~/.claude/CLAUDE.md). Replaces the deprecated upstream
+<code>memory.text</code> option.</p>
+<p><em>Type:</em>
+strings concatenated with “\n” or absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">""
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">./claude-memory.md
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
 <h2 id="aiclaudeinstructions"><a class="header" href="#aiclaudeinstructions">ai.claude.instructions</a></h2>
 <p>claude-specific instructions.</p>
 <p><em>Type:</em>
@@ -316,19 +333,23 @@ null or string</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
-<h2 id="aiclaudememory"><a class="header" href="#aiclaudememory">ai.claude.memory</a></h2>
-<p>Path to a file used as Claude’s memory.</p>
+<h2 id="aiclaudeplugins"><a class="header" href="#aiclaudeplugins">ai.claude.plugins</a></h2>
+<p>Claude plugin directories or packages. Each entry is either
+a path to a plugin directory or a package derivation. Passed
+through to programs.claude-code.plugins; each produces a
+–plugin-dir argument in the claude wrapper.</p>
 <p><em>Type:</em>
-null or absolute path</p>
+list of (package or absolute path)</p>
 <p><em>Default:</em></p>
-<pre><code class="language-nix">null
+<pre><code class="language-nix">[ ]
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aiclaudesettings"><a class="header" href="#aiclaudesettings">ai.claude.settings</a></h2>
-<p>Freeform settings passed to Claude’s config file (rendering tracked in docs/plan.md absorption backlog).</p>
+<p>Freeform settings merged into programs.claude-code.settings
+(written to ~/.claude/settings.json by upstream).</p>
 <p><em>Type:</em>
 attribute set of anything</p>
 <p><em>Default:</em></p>
