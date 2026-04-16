@@ -34,10 +34,10 @@
             const path_to_root = "../../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../../searchindex-97e10a41.js";
+            window.path_to_searchindex_js = "../../searchindex-3567f4ba.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../../toc-841f2094.js"></script>
+        <script src="../../toc-e2aa3dc8.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -196,9 +196,8 @@ under <code>modules/**</code>.</p>
 <p><strong>Use explicit types.</strong> Rare <code>types.anything</code> appears only as an
 <code>internal = true</code> escape hatch in the MCP module’s <code>mcpConfig</code>.
 Everywhere else, declare the real type: <code>types.submodule</code>,
-<code>types.nullOr</code>, <code>types.attrsOf</code>, <code>types.enum</code>, <code>types.attrTag</code>
-(for mutually exclusive variants like the buddy <code>userId.text</code>
-XOR <code>userId.file</code> discriminated union), <code>types.listOf</code>, etc.</p>
+<code>types.nullOr</code>, <code>types.attrsOf</code>, <code>types.enum</code>, <code>types.attrTag</code>,
+<code>types.listOf</code>, etc.</p>
 <p><strong>Submodules as containers.</strong> Per-ecosystem config lives in a
 submodule: <code>ai.claude</code>, <code>ai.copilot</code>, <code>ai.kiro</code> are each a
 <code>types.submodule { options = { enable; package; ... }; }</code>. The
@@ -275,20 +274,6 @@ even when the feature itself isn’t enabled:</p>
 <p><strong>Precise messages naming the option path.</strong> Don’t say “module
 error” or “configuration invalid.” Say
 <code>ai.copilot.enable requires programs.copilot-cli to be available</code>.</p>
-<p><strong>Data-dependent assertions use lib.optionals + implication.</strong>
-Example from the buddy assertions:</p>
-<pre><code class="language-nix">assertions =
-  [{ assertion = ...; message = ...; }]
-  ++ (optionals (cfg.claude.buddy != null) [
-    { assertion = cfg.claude.buddy.peak != cfg.claude.buddy.dump || cfg.claude.buddy.peak == null;
-      message = "ai.claude.buddy: peak and dump stats must differ"; }
-    { assertion = cfg.claude.buddy.rarity == "common" -&gt; cfg.claude.buddy.hat == "none";
-      message = "ai.claude.buddy: common rarity forces hat = \"none\""; }
-  ]);
-</code></pre>
-<p>The <code>optionals</code> wrapper only runs the inner assertions when
-<code>buddy != null</code>, so the per-field references don’t fail on
-unset buddy config.</p>
 <h3 id="package-override-pattern"><a class="header" href="#package-override-pattern">Package override pattern</a></h3>
 <p><strong>Every per-CLI submodule exposes a <code>package</code> option.</strong> Consumers
 can swap out the package entirely. Wrapping pattern (claude-code,
@@ -309,11 +294,6 @@ copilot-cli, kiro-cli):</p>
   '';
 }
 </code></pre>
-<p><strong>passthru.baseClaudeCode escape hatch.</strong> The claude-code wrap
-exposes the unwrapped nixpkgs derivation as
-<code>passthru.baseClaudeCode</code> so downstream modules (buddy activation
-script) can find the real <code>cli.js</code> in the store. See
-<code>claude-code-wrapper</code> fragment for the full chain.</p>
 <h3 id="activation-script-patterns"><a class="header" href="#activation-script-patterns">Activation script patterns</a></h3>
 <p><strong>Location and ordering:</strong></p>
 <pre><code class="language-nix">home.activation.&lt;name&gt; = lib.hm.dag.entryAfter ["writeBoundary"] (script);
@@ -342,18 +322,7 @@ fi
 </code></pre>
 <p>Reserve <code>exit 1</code> for cases where you actually want to abort the
 whole activation on an error. Never <code>exit 0</code> for a cache-hit
-fast path. Surfaced 2026-04-08 in the buddy activation script
-during skills-fanout-fix Task 3 — the outer activation stopped
-at <code>Activating claudeBuddy</code> with no error, and every post-buddy
-hook (including the home.file rewrites for the skill symlinks we
-were trying to verify) silently never ran. Fixed in commit
-<code>1695263</code> by replacing the <code>exit 0</code> with an <code>if</code>/<code>fi</code> guard.</p>
-<p><strong>Fingerprint caching pattern</strong> (buddy activation, see
-<code>buddy-activation</code> fragment): compute sha256 of inputs, compare
-to stored marker, short-circuit via <code>if</code>/<code>fi</code> (NOT <code>exit</code>) when
-unchanged. Re-running <code>home-manager switch</code> with unchanged
-config becomes a no-op — the update block is skipped, but every
-subsequent activation hook continues to run.</p>
+fast path.</p>
 <p><strong>Settings merge pattern</strong> (copilot-cli, kiro-cli): runtime
 config.json files are merged with Nix-declared values using
 <code>jq -s '.[0] * .[1]'</code> so user runtime edits (e.g.,
@@ -378,10 +347,6 @@ runtime-mutable config files, resetting cached state.</p>
 <p><strong><code>outOfStoreSymlink</code></strong> is NOT used in this repo’s modules. See
 the backlog item about runtime state dirs for Claude’s
 <code>~/.claude/projects</code>, which would need it.</p>
-<p><strong>Runtime-mutable files</strong> like <code>~/.claude.json</code> (buddy companion
-field written by claude at runtime) are NOT managed by HM. The
-buddy activation script only RESETS the companion field on
-fingerprint mismatch, letting claude re-hatch on next launch.</p>
 <h3 id="config-parity-rule-hm--devenv"><a class="header" href="#config-parity-rule-hm--devenv">Config parity rule (HM ↔ devenv)</a></h3>
 <p><strong>Every option on an HM module under <code>modules/&lt;subdir&gt;/</code> MUST
 have a matching option on the corresponding devenv module under
@@ -390,14 +355,11 @@ same fanout behavior. If you add an option to one, add it to
 the other in the same commit. Enforced by convention, checked
 at code review.</p>
 <p><strong>Shared types live in <code>lib/</code>.</strong> Both HM and devenv modules import
-types from <code>lib/buddy-types.nix</code> (<code>buddySubmodule</code>) and
-<code>lib/ai-common.nix</code> (<code>instructionModule</code>, <code>lspServerModule</code>,
-<code>mkCopilotLspConfig</code>, <code>mkLspConfig</code>) so the surfaces stay in
-sync by construction.</p>
+types from <code>lib/ai-common.nix</code> (<code>instructionModule</code>,
+<code>lspServerModule</code>, <code>mkCopilotLspConfig</code>, <code>mkLspConfig</code>) so the
+surfaces stay in sync by construction.</p>
 <p><strong>Intentional differences</strong> exist and are NOT parity gaps:</p>
 <ul>
-<li><code>ai.claude.buddy</code> is HM-only (per-user, needs ~/.claude.json
-which devenv doesn’t touch)</li>
 <li>Activation scripts are HM-only (devenv lifecycle is different)</li>
 <li>HM uses <code>home.file</code> / <code>home.activation</code>; devenv uses <code>files.*</code>
 (per-project writable tree, not home dir)</li>
@@ -412,8 +374,7 @@ Add test cases there whenever you add new module behavior —
 especially for:</p>
 <ul>
 <li>Option discoverability (set an option, verify it evaluates)</li>
-<li>Fanout correctness (set <code>ai.claude.buddy</code>, verify
-<code>programs.claude-code.buddy</code> becomes non-null)</li>
+<li>Fanout correctness (set an option, verify it propagates)</li>
 <li>Assertion firing (intentionally misconfigure, verify the
 right assertion triggers)</li>
 </ul>
@@ -422,8 +383,8 @@ the f2e911c fix because the post-fix tests didn’t reference
 <code>ai.enable</code> anymore. Regression protection via the eval harness.</p>
 <p><strong>Eval-only checks DON’T catch everything.</strong> Some bugs only
 manifest during real HM activation against real consumer
-state (e.g., the buddy activation <code>exit</code> bug, the Nix path
-type strictness bug below). When touching anything that
+state (e.g., the Nix path type strictness bug below). When
+touching anything that
 affects activation scripts or on-disk layout, verify
 end-to-end against a consumer (<code>home-manager switch</code> on a
 real system), not just <code>nix flake check</code>.</p>
@@ -515,7 +476,7 @@ rely on that when the value might flow further.</p>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../../contributing/architecture/buddy-activation.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../../contributing/architecture/claude-code-wrapper.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
@@ -529,7 +490,7 @@ rely on that when the value might flow further.</p>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../../contributing/architecture/buddy-activation.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../../contributing/architecture/claude-code-wrapper.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 

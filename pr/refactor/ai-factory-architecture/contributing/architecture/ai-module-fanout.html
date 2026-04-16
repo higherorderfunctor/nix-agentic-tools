@@ -34,10 +34,10 @@
             const path_to_root = "../../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../../searchindex-97e10a41.js";
+            window.path_to_searchindex_js = "../../searchindex-3567f4ba.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="../../toc-841f2094.js"></script>
+        <script src="../../toc-e2aa3dc8.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -218,18 +218,14 @@ when the ai-level enable is on.</p>
 <p>The original design had <code>config = mkIf cfg.enable (mkMerge [...])</code>
 wrapping everything, requiring BOTH <code>ai.enable = true</code> AND
 <code>ai.claude.enable = true</code> to fan out. This caused a silent no-op:
-a consumer who set <code>ai.claude = { enable = true; buddy = { ... }; }</code>
-without <code>ai.enable = true</code> got no fanout at all —
-<code>programs.claude-code.buddy</code> stayed null, the activation script
-was never installed, the buddy silently hatched as the default
-(capybara/penguin) instead of the configured value.</p>
-<p>Surfaced 2026-04-07 during HITL integration. Debugged by evaluating
-the HM config and finding <code>programs.claude-code.buddy = null</code>
-despite <code>ai.claude.buddy.species = "duck"</code>. Root cause: the outer
+a consumer who set <code>ai.claude.enable = true</code> without <code>ai.enable = true</code>
+got no fanout at all — <code>programs.claude-code</code> options stayed at
+defaults, configuration was stored in the option but never fanned out.</p>
+<p>Surfaced 2026-04-07 during HITL integration. Root cause: the outer
 <code>mkIf cfg.enable</code> gate was false.</p>
 <p>Four fix options were considered; option (b) was chosen:</p>
 <ol>
-<li>Move buddy fanout outside the mkIf (kept rest of gating)</li>
+<li>Move per-CLI fanout outside the mkIf (kept rest of gating)</li>
 <li><strong>Drop <code>ai.enable</code> as a master switch entirely</strong> ← chosen</li>
 <li>Magic-default <code>ai.enable</code> from sub-options (opaque)</li>
 <li>Document the requirement loudly with an assertion</li>
@@ -243,36 +239,43 @@ over the per-CLI enables.</p>
 <p>The ai module fans out TWO kinds of configuration:</p>
 <p><strong>Per-CLI options</strong> (live inside <code>ai.{claude,copilot,kiro}.*</code>):</p>
 <ul>
-<li><code>ai.claude.package</code> / <code>ai.copilot.package</code> / <code>ai.kiro.package</code>
-— package override, fans out to <code>programs.&lt;cli&gt;.package</code></li>
-<li><code>ai.claude.buddy</code> — fans out to <code>programs.claude-code.buddy</code>
-(which is declared by the claude-code factory in
-<code>packages/claude-code/modules/homeManager/</code>)</li>
-</ul>
-<p><strong>Cross-ecosystem options</strong> (live at <code>ai.*</code> top level, fan out
+<li>
+<p><code>ai.claude.package</code> / <code>ai.copilot.package</code> / <code>ai.kiro.package</code>
+— package override, fans out to <code>programs.&lt;cli&gt;.package</code>
+<strong>Cross-ecosystem options</strong> (live at <code>ai.*</code> top level, fan out
 to every enabled ecosystem simultaneously):</p>
-<ul>
-<li><code>ai.skills</code> — attrset of name → directory path. Each enabled
+</li>
+<li>
+<p><code>ai.skills</code> — attrset of name → directory path. Each enabled
 ecosystem gets its native representation (Claude:
 <code>.claude/skills/&lt;name&gt;</code> symlink; Copilot and Kiro: native
-<code>skills</code> option on their module).</li>
-<li><code>ai.instructions</code> — attrset of name → <code>instructionModule</code>
+<code>skills</code> option on their module).</p>
+</li>
+<li>
+<p><code>ai.instructions</code> — attrset of name → <code>instructionModule</code>
 (text + optional path scoping + description). Transformed per
 ecosystem via <code>fragments-ai.passthru.transforms</code>: Claude gets
 <code>.claude/rules/&lt;name&gt;.md</code> with YAML frontmatter; Copilot gets
 <code>.github/instructions/&lt;name&gt;.instructions.md</code>; Kiro gets
-<code>.kiro/steering/&lt;name&gt;.md</code> (via the CLI module).</li>
-<li><code>ai.lspServers</code> — typed LSP definitions, translated to each
+<code>.kiro/steering/&lt;name&gt;.md</code> (via the CLI module).</p>
+</li>
+<li>
+<p><code>ai.lspServers</code> — typed LSP definitions, translated to each
 ecosystem’s native LSP config format (Claude via
-<code>ENABLE_LSP_TOOL=1</code>; Copilot has <code>lspServers</code> option; Kiro too).</li>
-<li><code>ai.settings.{model,telemetry}</code> — normalized settings; each
+<code>ENABLE_LSP_TOOL=1</code>; Copilot has <code>lspServers</code> option; Kiro too).</p>
+</li>
+<li>
+<p><code>ai.settings.{model,telemetry}</code> — normalized settings; each
 ecosystem has a different native option path (Claude has no
 model setting; Copilot has <code>settings.model</code>; Kiro has
-<code>settings.chat.defaultModel</code>).</li>
-<li><code>ai.environmentVariables</code> — shared env vars; Copilot and Kiro
+<code>settings.chat.defaultModel</code>).</p>
+</li>
+<li>
+<p><code>ai.environmentVariables</code> — shared env vars; Copilot and Kiro
 fan out directly, Claude has no native option so Claude itself
 receives nothing from this (intentional — Claude env goes via
-<code>programs.claude-code.settings.env</code> directly).</li>
+<code>programs.claude-code.settings.env</code> directly).</p>
+</li>
 </ul>
 <p>All cross-ecosystem fanouts use <code>mkDefault</code> so per-CLI overrides
 take precedence.</p>
@@ -288,17 +291,8 @@ imported</li>
 environmentVariables), at least one ecosystem must be enabled
 — otherwise the config does nothing and the user didn’t notice</li>
 </ol>
-<p>Plus buddy-specific assertions (gated on
-<code>cfg.claude.buddy != null</code>):</p>
-<ol start="4">
-<li><code>buddy.peak != buddy.dump</code> (or both null)</li>
-<li><code>buddy.rarity == "common" -&gt; buddy.hat == "none"</code></li>
-</ol>
 <h3 id="whats-not-in-the-ai-module"><a class="header" href="#whats-not-in-the-ai-module">What’s NOT in the ai module</a></h3>
 <ul>
-<li>The actual <code>programs.claude-code.buddy</code> OPTION — declared by
-<code>packages/claude-code/modules/homeManager/</code>. The ai module
-just fans VALUES into it.</li>
 <li>The package wrapping (Bun runtime) for claude-code — handled
 in <code>packages/ai-clis/claude-code.nix</code> at overlay level.</li>
 <li>MCP server config — ai has no <code>mcpServers</code> option. Consumers
@@ -321,18 +315,9 @@ This is enforced by convention, not by the module system.</p>
 <pre><code class="language-bash">nix eval --impure --json \
   '.#homeConfigurations."&lt;host&gt;".config.programs.claude-code.enable'
 # Should be true if ai.claude.enable = true
-
-nix eval --impure --json \
-  '.#homeConfigurations."&lt;host&gt;".config.programs.claude-code.buddy.species'
-# Should be the configured species, not null
-
-nix eval --impure --json \
-  '.#homeConfigurations."&lt;host&gt;".config.ai.claude.buddy.species'
-# Should match (same value stored on the ai side)
 </code></pre>
-<p>If <code>programs.claude-code.buddy</code> is null but <code>ai.claude.buddy.species</code>
-is set, the fanout is broken — fix the module, not the consumer.
-This is exactly how the dropped <code>ai.enable</code> bug was caught.</p>
+<p>If the option stays false despite <code>ai.claude.enable = true</code>, the
+fanout is broken — fix the module, not the consumer.</p>
 
                     </main>
 
