@@ -143,6 +143,16 @@
           default = {};
           description = "Claude Code skills.";
         };
+        context = lib.mkOption {
+          type = lib.types.either lib.types.lines lib.types.path;
+          default = "";
+          description = "Claude Code global context (upstream HM stub).";
+        };
+        plugins = lib.mkOption {
+          type = with lib.types; listOf (either package path);
+          default = [];
+          description = "Claude Code plugins (upstream HM stub).";
+        };
       };
       systemd.user.services = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;

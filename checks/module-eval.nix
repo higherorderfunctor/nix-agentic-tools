@@ -74,6 +74,14 @@
           type = lib.types.attrsOf lib.types.anything;
           default = {};
         };
+        context = lib.mkOption {
+          type = lib.types.either lib.types.lines lib.types.path;
+          default = "";
+        };
+        plugins = lib.mkOption {
+          type = with lib.types; listOf (either package path);
+          default = [];
+        };
       };
     };
   };

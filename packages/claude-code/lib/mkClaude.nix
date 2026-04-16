@@ -20,21 +20,34 @@ lib.ai.app.mkAiApp {
   };
   # Shared options (present in both backends)
   options = {
-    memory = lib.mkOption {
-      type = lib.types.nullOr lib.types.path;
-      default = null;
-      description = "Path to a file used as Claude's memory.";
+    context = lib.mkOption {
+      type = lib.types.either lib.types.lines lib.types.path;
+      default = "";
+      description = ''
+        Global Claude context. Inline string or path to a file.
+        Passed through to programs.claude-code.context (which writes
+        to ~/.claude/CLAUDE.md). Replaces the deprecated upstream
+        `memory.text` option.
+      '';
+      example = lib.literalExpression "./claude-memory.md";
     };
-    # NOTE: `settings` is declared here but NOT yet rendered to disk.
-    # Writing settings JSON to ~/.claude/settings.json requires a
-    # backend-specific write (home.file for HM, files.* for devenv)
-    # which is tracked by the `mkAiApp backend dispatch` backlog item
-    # in docs/plan.md. Values assigned to ai.claude.settings are
-    # accepted without error but silently ignored until that lands.
+    plugins = lib.mkOption {
+      type = with lib.types; listOf (either package path);
+      default = [];
+      description = ''
+        Claude plugin directories or packages. Each entry is either
+        a path to a plugin directory or a package derivation. Passed
+        through to programs.claude-code.plugins; each produces a
+        --plugin-dir argument in the claude wrapper.
+      '';
+    };
     settings = lib.mkOption {
       type = lib.types.attrsOf lib.types.anything;
       default = {};
-      description = "Freeform settings passed to Claude's config file (rendering tracked in docs/plan.md absorption backlog).";
+      description = ''
+        Freeform settings merged into programs.claude-code.settings
+        (written to ~/.claude/settings.json by upstream).
+      '';
     };
   };
   # HM-specific projection
@@ -54,15 +67,14 @@ lib.ai.app.mkAiApp {
             enable = lib.mkDefault true;
             package = lib.mkDefault cfg.package;
             skills = lib.mapAttrs (_: lib.mkDefault) mergedSkills;
+            context = lib.mkDefault cfg.context;
+            plugins = lib.mkDefault cfg.plugins;
             settings = lib.mkMerge [
               cfg.settings
               (lib.optionalAttrs (mergedServers != {}) {mcpServers = mergedServers;})
             ];
           };
         }
-        (lib.mkIf (cfg.memory != null) {
-          home.file.".claude/memory".source = cfg.memory;
-        })
         # Per-instruction rule files — write .claude/rules/<name>.md
         # for each instruction entry that carries a `name` field. This
         # is a gap in upstream programs.claude-code (no per-rule file
