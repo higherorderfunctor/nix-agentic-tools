@@ -123,3 +123,16 @@ pkg.overrideAttrs (_finalAttrs: _old: {
 helpers to `passthru` (e.g., `overrideModAttrs`,
 `overridePythonAttrs`). Replacing `passthru` entirely drops these,
 triggering evaluation warnings and breaking downstream overrides.
+
+### Flake Source Visibility
+
+Nix flakes only see git-tracked files. `src = ../.` in a
+derivation copies only tracked files into the build sandbox —
+untracked files do not exist inside the build. This affects any
+check or derivation that scans the source tree (e.g., linting,
+grep-based checks).
+
+**Implication:** always `git add` new files before running
+`nix flake check` or `nix build` that needs to see them. A
+flake check that passes locally may simply not be seeing the
+file you just created.
