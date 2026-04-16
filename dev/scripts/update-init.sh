@@ -18,6 +18,22 @@ git cherry-pick --abort 2>/dev/null || true
 git merge --abort 2>/dev/null || true
 git rebase --abort 2>/dev/null || true
 
+# Remove orphaned worktrees whose target no longer exists in the
+# current ninja file. Targets can disappear when packages or combo
+# scripts are removed (e.g., any-buddy/claude-code combo target).
+# Leaving orphans around eats disk and confuses new contributors.
+if [ -d ".worktrees" ] && [ -f ".update.ninja" ]; then
+  for wt in .worktrees/update-*; do
+    [ -d "$wt" ] || continue
+    name="${wt#.worktrees/update-}"
+    if ! grep -q "update-${name}\b" .update.ninja 2>/dev/null; then
+      echo "  Pruning orphaned worktree: $name"
+      git worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
+      git branch -D "update/$name" 2>/dev/null || true
+    fi
+  done
+fi
+
 # Detach worktrees so their branches can be deleted.
 # setup_worktree will re-checkout the named branch.
 if [ -d ".worktrees" ]; then

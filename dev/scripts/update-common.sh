@@ -65,6 +65,10 @@ setup_worktree() {
     git -C "$wt" cherry-pick --abort 2>/dev/null || true
     git -C "$wt" rebase --abort 2>/dev/null || true
     git -C "$wt" merge --abort 2>/dev/null || true
+    # Discard modified tracked files (e.g. devenv.lock/flake.lock left
+    # dirty from a prior crashed run) before the checkout — otherwise
+    # `checkout -B` fails with "local changes would be overwritten".
+    git -C "$wt" reset --hard HEAD >&2
     git -C "$wt" checkout -B "$wt_branch" "$BRANCH" >&2
     git -C "$wt" clean -fd >&2
   else
