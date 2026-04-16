@@ -108,41 +108,19 @@ specific to how Claude Code spawns them.
     - **No upstream PR for RFC 9728 PRM discovery.** PR #128 author noted it as "could be expanded later" but nobody has implemented it. Months away realistically.
   - **Consumer workaround (current).** Bypass mcp-proxy entirely by running affected servers as stdio directly in the consumer's mcp.json. sympy-mcp is single-consumer (kiro-only) so the bridge added no value anyway. nixos-config switched 2026-04-16.
   - **TODO when upstream lands PRM discovery (or another viable auth):** revert the consumer back to using `services.mcp-servers.servers.sympy-mcp.enable = true` + the inherited HTTP entry. Bump mcp-proxy in this repo. Verify with kiro-cli 2.x. The bridge model is preferable when multiple CLIs share the server (single running process, lower startup overhead).
-- [x] **Restore services.mcp-servers HM module** — REGRESSION from factory
-      refactor. Restored via `packages/mcp-services/` virtual package with
-      HM module picked up by collectFacet. Per-server submodules built by
-      `lib/ai/mcpServer/mkServiceModule.nix` using predicates from
-      `lib/ai/mcpServer/serviceSchema.nix`. All 12 servers (including
-      serena-mcp as stdio-only). mcpConfig, tools, systemd services, and
-      credential assertions all restored.
 - [ ] Bun overlay for node-based binaries (port from `nixos-config/overlays/bun-overlay.nix`, publish in `ai.*`)
 - [ ] DRY docs base-href rewriting — flake.nix hardcodes `/nix-agentic-tools/options/` for NuschtOS, docs.yml rewrites for previews. Make base configurable so local `nix build .#docs` works without wrong paths. Consider parameterizing the derivation or moving all path rewriting to deployment.
-- [x] Switch node-based MCP servers and tools to run with bun (runtime wrappers switched, build still npm/pnpm)
-- [x] Single source of truth for `flake.nix` + `devenv.yaml` inputs — `config/generate-devenv-yaml.nix`
-- [x] Document unfree guard pattern as architecture fragment — `dev/fragments/overlays/unfree-guard.md`
-- [x] Update overlays/README.md table for nix-update migration
 - [ ] Garnix CI exploration — garnix for builds, GHA for orchestration, cachix for distribution (see `memory/project_garnix_exploration.md`)
-- [x] Update `.claude/rules/claude-code.md` buddy-activation fragment — updated for binary patching
 - [ ] Fragment source linter — verify that every `<!-- Fragment: path -->` comment in generated files points to a source file that exists. Catch stale generated files, missing regen, or deleted sources.
-- [x] CI GITHUB_TOKEN workaround — resolved via `nix-agentic-tools-bot` GitHub App
 - [ ] End-to-end formatting audit — review all generated content flows to ensure treefmt coverage. Questions: does the flake formatter cover all file types we generate? Are there generated non-markdown files that lack formatters? Should treefmt.nix add formatters for YAML, HTML, or other types? Also: bare-commands check only sees git-tracked files (untracked .nix files bypass it until `git add`) — consider a pre-commit hook version.
 - [ ] Commit hook regeneration — pre-commit hook should regenerate instruction files (same as devenv shell entry) and re-stage. DRY with `dev/generate.nix`. May need fingerprint cache to avoid ~2-5s nix build on every commit.
 - [ ] Nix doc comments as fragments — extract RFC 145 `/**` comments from `.nix` source files into the fragment pipeline. Custom extractor needed (nixdoc expects flat attrsets, our overlays are functions). See `memory/reference_nix_doc_tooling.md`.
-- [ ] overlays/README.md table from nix eval — reflect overlay metadata at eval time, string-interpolate into a fragment. See `docs/overnight-report-2026-04-13.md` "code→markdown" section.
+- [ ] overlays/README.md table from nix eval — reflect overlay metadata at eval time, string-interpolate into a fragment. Pattern: infer documentation tables from nix eval data instead of hand-maintained markdown. overlays/README.md is the first candidate.
 - [ ] Ecosystem-specific instructions in fragment comments — Claude transform injects `<!-- This file is generated. Edit the source fragment. -->` or similar. Research how other projects handle generated-but-committed file instructions.
 - [ ] Code→markdown reflection pattern — general approach for inferring documentation from nix eval data instead of hand-maintained markdown. overlays/README.md is the first candidate.
 
 ### Update pipeline improvements
 
-- [x] Fix pre-commit hook to re-stage formatted files — treefmt-restage hook added
-- [x] Dirty tree guard at start of pipeline — ninja init step
-- [x] Per-package ninja targets (replaced devenv DAG with ninja DAG)
-- [x] Audit main-branch packages — all use --version skip, context7 + github converted
-- [x] Parallel per-package updates via git worktrees + flock merge
-- [x] Version tracking in update report (old → new in UPDATED/HELD BACK entries)
-- [x] Smoke tests on all packages with binaries
-- [x] Unit/integration tests enabled on 7+ packages (~1720 tests total)
-- [x] CI v4 — implemented as Renovate-style per-dependency PRs (pivoted from Stage/Validate/Push)
 
 ---
 
@@ -175,18 +153,7 @@ Backup branches (DO NOT GC):
 
 High confidence, small scope. Good for review sessions.
 
-- [x] **Review devenv overlay wiring** — devenv.nix now uses native
-      `overlays = [...]` instead of manual aiPkgs/contentPkgs
-      composition. allowUnfree via devenv.yaml.
 
-- [x] **Move `lib/hm-helpers.nix` + `lib/ai-common.nix` into `lib/ai/`**
-- [x] **Group overlay packages under `pkgs.ai.{mcpServers,lspServers}`
-      + `pkgs.gitTools`**
-- [x] **Refactor `mkDevFragment` location discriminator as attrset
-      lookup**
-- [x] **context7-mcp: override nixpkgs instead of from-scratch build**
-      — proof case for the overlay override pattern. Uses inline
-      GitHub source + nixpkgs override + fetchPnpmDeps.
 
 - [ ] **Convert remaining 6 from-scratch overlays to nixpkgs
       overrides** — same pattern as context7-mcp. Override nixpkgs
@@ -207,12 +174,7 @@ High confidence, small scope. Good for review sessions.
       NOT in nixpkgs, prefer GitHub source with releases over
       registry tarballs. User will inspect each one.
 
-- [x] **Regenerate instruction files** — now auto-generated via
-      devenv files.* on shell entry (2026-04-12).
 
-- [x] **Update architecture fragments for factory structure** —
-      buddy-activation + wrapper-chain fragments updated for binary
-      patching. nvfetcher refs removed from all fragments.
 
 - [ ] **Cachix/substituter override warnings for consumers** — warn
       when a consumer overrides this flake's nixpkgs or other inputs,
@@ -266,11 +228,6 @@ High confidence, small scope. Good for review sessions.
         with cargo. Don't force a different tool than what upstream
         uses.
 
-- [x] **Update script: automated dep hash computation** — implemented
-      as `dev/scripts/update-hashes.sh` with auto-discovery via
-      `.pnpmDeps`/`.goModules`/`.cargoDeps` nix eval probing. Wired
-      into CI phase 2 via `nix develop .#ci`. hashes.json is pure
-      output, rebuilt from scratch on each run.
 
 - [ ] **Replace `isRoot = package == "monorepo"` with category
       metadata** — `mkDevComposed` hardcodes a string match. Should
@@ -289,10 +246,6 @@ High confidence, small scope. Good for review sessions.
       extract to `lib/external-servers.nix` or a content package.
       Currently `lib.externalServers.aws-mcp` is hand-defined inline.
 
-- [x] **Pre-main-merge cleanup: remove `docs/human-todo.md`** —
-      scratch file for user notes during dev. Removed along with
-      `docs/superpowers/` directory. cspell + treefmt + devenv
-      excludes cleaned up.
 
 - [ ] **Rename `devshell/` → `modules/devshell/`** — top-level
       splits modules across `lib/`, `devshell/`, and per-package
@@ -484,9 +437,7 @@ Items preserved from previous sessions. May need triage.
 - [ ] Agentic UX: pre-approve nix-store reads for HM-symlinked skills
 - [ ] Richer markdown fragment system: heading-aware merging
 - [ ] LLM-friendly inline code commenting conventions fragment
-- [x] Research cspell plural/inflection syntax — no support, must add both forms explicitly
 - [ ] `outOfStoreSymlink` helper for Claude's `~/.claude/projects`
-- [x] Secret scanning (gitleaks) — `gitleaks protect --staged` pre-commit hook added
 - [ ] SecretSpec for MCP credentials
 - [ ] cclsp — Claude Code LSP integration
 - [ ] claude-code-nix review (github.com/sadjow/claude-code-nix)
