@@ -143,19 +143,20 @@ in rec {
     configFile,
     nixSettingsPath,
     jq,
+    coreutils,
     ...
   }: let
     parentDir = builtins.dirOf configFile;
   in ''
     TARGET_DIR="$HOME/${parentDir}"
     CONFIG_FILE="$HOME/${configFile}"
-    mkdir -p "$TARGET_DIR"
+    ${coreutils}/bin/mkdir -p "$TARGET_DIR"
     if [ -f "$CONFIG_FILE" ]; then
       ${jq} -s '.[0] * .[1]' "$CONFIG_FILE" "${nixSettingsPath}" > "$CONFIG_FILE.tmp"
-      mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+      ${coreutils}/bin/mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
     else
-      cp "${nixSettingsPath}" "$CONFIG_FILE"
-      chmod 644 "$CONFIG_FILE"
+      ${coreutils}/bin/cp "${nixSettingsPath}" "$CONFIG_FILE"
+      ${coreutils}/bin/chmod 644 "$CONFIG_FILE"
     fi
   '';
 }

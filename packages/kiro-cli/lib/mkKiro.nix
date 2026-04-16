@@ -269,22 +269,22 @@ lib.ai.app.mkAiApp {
           home.activation.kiroSettingsMerge = lib.hm.dag.entryAfter ["writeBoundary"] ''
             set -eu
             SETTINGS_DIR="$HOME/${cfg.configDir}/settings"
-            mkdir -p "$SETTINGS_DIR"
-            NIX_SETTINGS=$(mktemp)
-            cat > "$NIX_SETTINGS" <<'KIRO_SETTINGS_EOF'
+            ${pkgs.coreutils}/bin/mkdir -p "$SETTINGS_DIR"
+            NIX_SETTINGS=$(${pkgs.coreutils}/bin/mktemp)
+            ${pkgs.coreutils}/bin/cat > "$NIX_SETTINGS" <<'KIRO_SETTINGS_EOF'
             ${settingsJsonText}
             KIRO_SETTINGS_EOF
             if [ ! -f "$SETTINGS_DIR/cli.json" ]; then
-              cp "$NIX_SETTINGS" "$SETTINGS_DIR/cli.json"
+              ${pkgs.coreutils}/bin/cp "$NIX_SETTINGS" "$SETTINGS_DIR/cli.json"
             else
               # Merge Nix-declared settings on top of user runtime settings;
               # Nix values override on conflict, user additions pass through.
-              TMP=$(mktemp)
+              TMP=$(${pkgs.coreutils}/bin/mktemp)
               ${pkgs.jq}/bin/jq -s '.[0] * .[1]' "$SETTINGS_DIR/cli.json" "$NIX_SETTINGS" > "$TMP"
-              mv "$TMP" "$SETTINGS_DIR/cli.json"
+              ${pkgs.coreutils}/bin/mv "$TMP" "$SETTINGS_DIR/cli.json"
             fi
-            rm -f "$NIX_SETTINGS"
-            chmod 644 "$SETTINGS_DIR/cli.json"
+            ${pkgs.coreutils}/bin/rm -f "$NIX_SETTINGS"
+            ${pkgs.coreutils}/bin/chmod 644 "$SETTINGS_DIR/cli.json"
           '';
         })
       ];

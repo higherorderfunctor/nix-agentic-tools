@@ -248,22 +248,22 @@ lib.ai.app.mkAiApp {
           home.activation.copilotSettingsMerge = lib.hm.dag.entryAfter ["writeBoundary"] ''
             set -eu
             SETTINGS_DIR="$HOME/${cfg.configDir}"
-            mkdir -p "$SETTINGS_DIR"
-            NIX_SETTINGS=$(mktemp)
-            cat > "$NIX_SETTINGS" <<'COPILOT_SETTINGS_EOF'
+            ${pkgs.coreutils}/bin/mkdir -p "$SETTINGS_DIR"
+            NIX_SETTINGS=$(${pkgs.coreutils}/bin/mktemp)
+            ${pkgs.coreutils}/bin/cat > "$NIX_SETTINGS" <<'COPILOT_SETTINGS_EOF'
             ${settingsJsonText}
             COPILOT_SETTINGS_EOF
             if [ ! -f "$SETTINGS_DIR/settings.json" ]; then
-              cp "$NIX_SETTINGS" "$SETTINGS_DIR/settings.json"
+              ${pkgs.coreutils}/bin/cp "$NIX_SETTINGS" "$SETTINGS_DIR/settings.json"
             else
               # Merge Nix-declared settings on top of user runtime settings;
               # Nix values override on conflict, user additions pass through.
-              TMP=$(mktemp)
+              TMP=$(${pkgs.coreutils}/bin/mktemp)
               ${pkgs.jq}/bin/jq -s '.[0] * .[1]' "$SETTINGS_DIR/settings.json" "$NIX_SETTINGS" > "$TMP"
-              mv "$TMP" "$SETTINGS_DIR/settings.json"
+              ${pkgs.coreutils}/bin/mv "$TMP" "$SETTINGS_DIR/settings.json"
             fi
-            rm -f "$NIX_SETTINGS"
-            chmod 644 "$SETTINGS_DIR/settings.json"
+            ${pkgs.coreutils}/bin/rm -f "$NIX_SETTINGS"
+            ${pkgs.coreutils}/bin/chmod 644 "$SETTINGS_DIR/settings.json"
           '';
         })
       ];
