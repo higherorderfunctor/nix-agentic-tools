@@ -46,12 +46,13 @@ if [ "$held_back" -gt 0 ]; then
   done
 fi
 
-# Unchanged
+# Unchanged — listed one-per-line for parity with UPDATED/HELD BACK.
+# Marker is ✗ (in yellow, not red — it means "no change", not "failed").
 if [ "$unchanged" -gt 0 ]; then
   echo ""
   echo "  ${BOLD}${YELLOW}NO UPDATES ($unchanged):${RESET}"
-  grep '^NO UPDATES:' "$REPORT_FILE" | sed 's/^NO UPDATES: //' | sed 's/ (already up to date)//' | sort -u | paste -sd', ' | fold -s -w 60 | while read -r line; do
-    echo "    $line"
+  grep '^NO UPDATES:' "$REPORT_FILE" | sed 's/^NO UPDATES: //' | sed 's/ (already up to date)//' | sort -u | while read -r line; do
+    echo "    ${YELLOW}✗ $line${RESET}"
   done
 fi
 

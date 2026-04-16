@@ -189,19 +189,24 @@ jobs:
           touched="$RUNNER_TEMP/touched-branches"
 
           # Allowlist of "non-human" actors. Any review or comment from
-          # one of these still counts as untouched-by-humans. The bot's
-          # own login is `nix-agentic-tools-bot[bot]` (App installation);
-          # GitHub's auto-reviewer appears as `Copilot` or `copilot[bot]`;
-          # any github-actions[bot] activity (status updates etc.) is
-          # also non-human.
+          # one of these still counts as untouched-by-humans.
           #
-          # Implemented as a startswith/exact match in jq.
+          # Login surface is inconsistent across `gh pr view` fields:
+          #   .author.login         → "app/nix-agentic-tools-bot"  (App slug)
+          #   .commits[].authors[]  → "nix-agentic-tools-bot[bot]" (User login)
+          #   .reviews[].author     → "nix-agentic-tools-bot[bot]" (User login)
+          #   .comments[].author    → same
+          # So the allowlist needs BOTH forms for our bot, plus the
+          # equivalent for GitHub's Copilot reviewer and github-actions.
           allowed_logins='[
+            "app/nix-agentic-tools-bot",
             "nix-agentic-tools-bot",
             "nix-agentic-tools-bot[bot]",
+            "app/copilot-swe-agent",
             "Copilot",
             "copilot",
             "copilot[bot]",
+            "app/github-actions",
             "github-actions[bot]"
           ]'
 
@@ -210,10 +215,9 @@ jobs:
             local data
             data=$(gh pr view "$pr" --json author,commits,reviews,comments)
 
-            # Author must be a known bot login
+            # Author must be a known bot login (exact match on allowlist)
             jq -e --argjson allow "$allowed_logins" \
-              '(.author.login // "") as $a
-               | $allow | any(. == $a or ($a | startswith(. + "[bot]")))' \
+              '(.author.login // "") as $a | $allow | any(. == $a)' \
               <<<"$data" >/dev/null || return 1
 
             # No commits authored by anyone outside the allowlist
