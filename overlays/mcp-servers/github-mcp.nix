@@ -24,7 +24,7 @@
     hash = "sha256-+351ua42EMz0tRxsbrGkARiE8aXMobTym3Yzh1rp8To=";
   };
 in
-  ourPkgs.github-mcp-server.overrideAttrs (_finalAttrs: _old: {
+  ourPkgs.github-mcp-server.overrideAttrs (_finalAttrs: old: {
     version = vu.mkVersion {
       upstream = "0.33.0";
       inherit rev;
@@ -32,5 +32,5 @@ in
     inherit src;
     vendorHash = "sha256-q21hnMnWOzfg7BGDl4KM1I3v0wwS5sSxzLA++L6jO4s=";
     installCheckPhase = vu.mkMcpSmokeTest {bin = "github-mcp-server";};
-    passthru = {mcpName = "github-mcp";};
+    passthru = (old.passthru or {}) // {mcpName = "github-mcp";};
   })
