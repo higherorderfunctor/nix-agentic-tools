@@ -134,48 +134,88 @@
     '';
   in "${drv}";
 
-  # ── mcp.json entry builders ─────────────────────────────────────
-  mkStdioEntry = pkgs: {
+  # ── Typed-shape constructor (ai.mcpServers.<name> values) ────────
+  # Returns the typed shape declared in
+  # `lib/ai/mcpServer/commonSchema.nix`. The per-ecosystem
+  # `renderServer` is what turns this into the freeform JSON each CLI
+  # consumes. Users may write the typed attrset directly in
+  # `ai.mcpServers.<name>` or use this helper for symmetry with
+  # `mkHttpEntry` / `mkPackageEntry`.
+  mkStdioEntry = {
     package,
-    name ? package.passthru.mcpName or package.pname,
     settings ? {},
     env ? {},
     args ? [],
-  }: let
-    serverDef = loadServer name;
-    # Mode string is e.g. "github-mcp-server stdio" — split into parts,
-    # drop the binary name (first element), keep only subcommand/flags
-    stdioParts = lib.splitString " " serverDef.meta.modes.stdio;
-    stdioArgs = builtins.tail stdioParts;
-    evaluatedSettings = evalSettings name settings;
-    cfgShim = mkCfgShim {inherit evaluatedSettings;};
-    srvEnv = effectiveEnv name cfgShim "stdio" env;
-    srvArgs = effectiveArgs name cfgShim "stdio" args;
-    credentialVars = serverDef.meta.credentialVars or {};
-    needsWrapper = hasCredentials credentialVars evaluatedSettings;
-    wrappedCommand = mkSecretsWrapper {
-      inherit pkgs name package credentialVars;
-      settings = evaluatedSettings;
-    };
-  in
-    {
+  }: {
+    type = "stdio";
+    inherit package settings env args;
+  };
+
+  # ── Render typed entry → freeform JSON shape ────────────────────
+  # Translates a typed `commonSchema` entry into the freeform shape
+  # consumed by `programs.claude-code.mcpServers`, `.kiro/settings/
+  # mcp.json`, etc. Discriminates on which fields are set, in order:
+  #
+  #   url != null        → HTTP pass-through
+  #   command != null    → raw pass-through (no wrapping)
+  #                        Explicit command always wins so users can
+  #                        override or skip the server-module pipeline.
+  #   package != null    → typed-via-package — runs the
+  #                        server-module machinery (credentials
+  #                        wrapper, mode args, settings → env)
+  #
+  # Called by per-ecosystem factories to produce the on-disk JSON.
+  renderServer = pkgs: name: srv:
+    if srv.url != null
+    then {
+      type = "http";
+      inherit (srv) url;
+    }
+    else if srv.command != null
+    then {
+      type =
+        if srv.type != null
+        then srv.type
+        else "stdio";
+      inherit (srv) command args env;
+    }
+    else if srv.package != null
+    then let
+      serverDef = loadServer name;
+      # Mode string is e.g. "github-mcp-server stdio" — split into
+      # parts, drop the binary name (first element), keep only
+      # subcommand/flags.
+      stdioParts = lib.splitString " " serverDef.meta.modes.stdio;
+      stdioArgs = builtins.tail stdioParts;
+      evaluatedSettings = evalSettings name srv.settings;
+      cfgShim = mkCfgShim {inherit evaluatedSettings;};
+      srvEnv = effectiveEnv name cfgShim "stdio" srv.env;
+      srvArgs = effectiveArgs name cfgShim "stdio" srv.args;
+      credentialVars = serverDef.meta.credentialVars or {};
+      needsWrapper = hasCredentials credentialVars evaluatedSettings;
+      wrappedCommand = mkSecretsWrapper {
+        inherit pkgs name credentialVars;
+        inherit (srv) package;
+        settings = evaluatedSettings;
+      };
+    in {
       type = "stdio";
       command =
         if needsWrapper
         then wrappedCommand
-        else getExe package;
+        else getExe srv.package;
       args = stdioArgs ++ srvArgs;
-    }
-    # Prevent Python path pollution from parent process (e.g., nixos-mcp
-    # sets PYTHONPATH for Python 3.13 which breaks Python 3.14 servers)
-    // {
+      # Prevent Python path pollution from parent process (e.g.,
+      # nixos-mcp sets PYTHONPATH for Python 3.13 which breaks
+      # Python 3.14 servers).
       env =
         srvEnv
         // {
           PYTHONPATH = "";
           PYTHONNOUSERSITE = "true";
         };
-    };
+    }
+    else throw "renderServer: server '${name}' must specify one of: package, command, or url";
 
   mkHttpEntry = {
     name,
@@ -221,10 +261,15 @@
   # Takes a pkgs with the nix-agentic-tools overlay applied (exposes
   # `pkgs.ai.mcpServers.<name>`) and an attrset of per-server config
   # overrides. Each config may override the package or add
-  # args/env/settings.
+  # args/env/settings. Produces the freeform mcp.json shape directly —
+  # use this for ad-hoc consumers that write mcp.json themselves.
+  # For the ai.* module path, write typed entries to ai.mcpServers and
+  # let the per-ecosystem factory translate.
   mkStdioConfig = pkgs: serverConfigs: {
-    mcpServers = mapAttrs (name: cfg:
-      mkStdioEntry pkgs ({package = pkgs.ai.mcpServers.${name};} // cfg))
+    mcpServers = mapAttrs (name: cfg: let
+      typed = mkStdioEntry ({package = pkgs.ai.mcpServers.${name};} // cfg);
+    in
+      renderServer pkgs name typed)
     serverConfigs;
   };
 in {
@@ -243,5 +288,6 @@ in {
     mkSecretsWrapper
     mkStdioConfig
     mkStdioEntry
+    renderServer
     ;
 }

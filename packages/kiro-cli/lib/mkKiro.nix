@@ -201,10 +201,12 @@ lib.ai.app.mkAiApp {
             builtins.toJSON cfg.lspServers;
         })
         # settings/mcp.json — merged MCP server pool. Kiro reads this
-        # natively from its config dir.
+        # natively from its config dir. Render typed entries into the
+        # freeform shape Kiro expects in mcp.json.
         (lib.mkIf (mergedServers != {}) {
-          home.file."${cfg.configDir}/settings/mcp.json".text =
-            builtins.toJSON {mcpServers = mergedServers;};
+          home.file."${cfg.configDir}/settings/mcp.json".text = builtins.toJSON {
+            mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
+          };
         })
         # Inline agent JSON files.
         (lib.mkIf (cfg.agents != {}) {
@@ -330,10 +332,12 @@ lib.ai.app.mkAiApp {
           files."${cfg.configDir}/settings/lsp.json".text =
             builtins.toJSON cfg.lspServers;
         })
-        # settings/mcp.json — merged MCP server pool.
+        # settings/mcp.json — merged MCP server pool. Render typed
+        # entries into the freeform shape Kiro expects.
         (lib.mkIf (mergedServers != {}) {
-          files."${cfg.configDir}/settings/mcp.json".text =
-            builtins.toJSON {mcpServers = mergedServers;};
+          files."${cfg.configDir}/settings/mcp.json".text = builtins.toJSON {
+            mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
+          };
         })
         # Inline agent JSON files.
         (lib.mkIf (cfg.agents != {}) {

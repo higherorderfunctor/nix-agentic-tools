@@ -22,6 +22,7 @@
   # specialArgs so the option walker sees the same lib the
   # factories close over. hm.dag is stubbed (not real HM) because
   # this is an option-enumeration eval, not an activation eval.
+  mcpLib = import ./mcp.nix {inherit lib;};
   libWithAi =
     lib
     // {
@@ -30,6 +31,7 @@
         entryAfter = _: text: {inherit text;};
         entryBefore = _: text: {inherit text;};
       };
+      inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig renderServer;
     };
 
   # ── Declaration path cleanup ────────────────────────────────────────
@@ -152,6 +154,11 @@
           type = with lib.types; listOf (either package path);
           default = [];
           description = "Claude Code plugins (upstream HM stub).";
+        };
+        mcpServers = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+          description = "Claude Code MCP servers (upstream HM stub).";
         };
       };
       systemd.user.services = lib.mkOption {

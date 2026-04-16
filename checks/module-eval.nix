@@ -12,7 +12,10 @@
   # the option tree + config block assemble correctly.
   #
   # Also extend lib with lib.ai so mkClaude.nix can call
-  # lib.ai.app.mkAiApp and lib.ai.transformers.claude.
+  # lib.ai.app.mkAiApp and lib.ai.transformers.claude. mcpLib is
+  # exported as top-level helpers (lib.mkStdioEntry, lib.renderServer)
+  # to mirror the flake's `baseLib` shape.
+  mcpLib = import ./../lib/mcp.nix {inherit lib;};
   hmLib =
     lib
     // {
@@ -23,6 +26,7 @@
           entryBefore = _: text: {inherit text;};
         };
       };
+      inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig renderServer;
     };
 
   # Stub HM options so the config callback in mkClaude.nix can set
@@ -81,6 +85,10 @@
         plugins = lib.mkOption {
           type = with lib.types; listOf (either package path);
           default = [];
+        };
+        mcpServers = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
         };
       };
     };

@@ -69,10 +69,10 @@ lib.ai.app.mkAiApp {
             skills = lib.mapAttrs (_: lib.mkDefault) mergedSkills;
             context = lib.mkDefault cfg.context;
             plugins = lib.mkDefault cfg.plugins;
-            settings = lib.mkMerge [
-              cfg.settings
-              (lib.optionalAttrs (mergedServers != {}) {mcpServers = mergedServers;})
-            ];
+            inherit (cfg) settings;
+            # Render typed ai.mcpServers / ai.claude.mcpServers entries
+            # into the freeform shape upstream's HM module expects.
+            mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
           };
         }
         # Per-instruction rule files — write .claude/rules/<name>.md

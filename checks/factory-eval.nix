@@ -117,13 +117,17 @@ in {
   );
 
   factory-mcpServer-commonSchema-type-enforced = mkTest "mcpServer-commonSchema-type-enforced" (
+    # `type` is nullable in the new schema (renderServer infers from
+    # which other fields are set), but the enum constraint still
+    # applies when a value is provided. Setting an invalid type must
+    # fail evaluation.
     let
       result =
         builtins.tryEval
         (lib.evalModules {
           modules = [
             ai.mcpServer.commonSchema
-            {config = {package = pkgs.hello;};} # type intentionally omitted — required field
+            {config.type = "BOGUS_TRANSPORT";}
           ];
         }).config.type;
     in

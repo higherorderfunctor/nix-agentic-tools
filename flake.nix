@@ -168,7 +168,7 @@
         inherit ai fragments presets;
         inherit (devshellLib) mkAgenticShell;
         inherit (fragments) compose mkFragment mkFrontmatter render;
-        inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig;
+        inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig renderServer;
         mkMcpConfig = entries: {mcpServers = entries;};
         mapTools = f: lib.concatLists (lib.mapAttrsToList (server: tools: map (tool: f server tool) tools));
         externalServers = {

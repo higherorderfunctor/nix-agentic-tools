@@ -8,4 +8,14 @@
   # to `lib.evalModules { modules = [ lib.ai.sharedOptions ... ]; }`.
   sharedOptions = import ./sharedOptions.nix;
   transformers = import ./transformers {inherit lib;};
+  # Re-export selected mcp helpers under lib.ai.* so per-package factory
+  # `lib.extend (...: prev: {ai = ...;})` makes them visible to the
+  # module config functions without requiring a separate extend.
+  inherit
+    (import ../mcp.nix {inherit lib;})
+    mkHttpEntry
+    mkPackageEntry
+    mkStdioEntry
+    renderServer
+    ;
 }

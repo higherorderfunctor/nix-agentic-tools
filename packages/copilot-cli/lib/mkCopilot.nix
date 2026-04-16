@@ -197,8 +197,9 @@ lib.ai.app.mkAiApp {
         # loads these servers at runtime. Inlined as `text` so
         # module-eval can assert on content without a store build.
         (lib.mkIf (mergedServers != {}) {
-          home.file."${cfg.configDir}/mcp-config.json".text =
-            builtins.toJSON {mcpServers = mergedServers;};
+          home.file."${cfg.configDir}/mcp-config.json".text = builtins.toJSON {
+            mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
+          };
         })
         # Per-instruction files — write
         # `.github/instructions/<name>.instructions.md` for each
@@ -346,8 +347,9 @@ lib.ai.app.mkAiApp {
         # mcp-config.json — static write of the merged MCP server
         # pool. Inlined as `text` for consistency with the HM side.
         (lib.mkIf (mergedServers != {}) {
-          files."${cfg.configDir}/mcp-config.json".text =
-            builtins.toJSON {mcpServers = mergedServers;};
+          files."${cfg.configDir}/mcp-config.json".text = builtins.toJSON {
+            mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
+          };
         })
         # Per-instruction files under `.github/instructions/`. Same
         # transformer as HM, same filter-by-name pattern — nameless
