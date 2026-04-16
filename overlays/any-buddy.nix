@@ -13,12 +13,12 @@
   inherit (ourPkgs) fetchFromGitHub fetchPnpmDeps nodejs pnpm stdenv;
   vu = import ./lib.nix;
 
-  rev = "861f0dfea1674dcff9a72390143fc64d026c95ed";
+  rev = "b5e7eb083bb5b36b808cda87eac3f3a88f5f1a61";
   src = fetchFromGitHub {
     owner = "cpaczek";
     repo = "any-buddy";
     inherit rev;
-    hash = "sha256-nkAeA2MuBmiDcBjIGzIbfxt0nvkHC++OSD+OWWwQ/e0=";
+    hash = "sha256-x8ZIjuuVBEBp8bU3zTAAQUkNM3xd//yt8k0D9xriTFg=";
   };
 in
   stdenv.mkDerivation (finalAttrs: {
