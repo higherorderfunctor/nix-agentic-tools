@@ -24,9 +24,11 @@
     hash = "sha256-TMvDzDcZd9hoYI84x+jewOJYkSrb1qwVRTdzD2SwG4U=";
   };
 in
-  ourPkgs.context7-mcp.overrideAttrs (finalAttrs: _prev: {
+  ourPkgs.context7-mcp.overrideAttrs (finalAttrs: _prev: let
+    upstreamVersion = vu.readPackageJsonVersion "${src}/packages/mcp/package.json";
+  in {
     version = vu.mkVersion {
-      upstream = vu.readPackageJsonVersion "${src}/packages/mcp/package.json";
+      upstream = upstreamVersion;
       inherit rev;
     };
     inherit src;
@@ -36,22 +38,13 @@ in
       pnpm --filter @upstash/context7-mcp run test
       runHook postCheck
     '';
-    # Override version check — binary reports upstream version without our +shortRev suffix
-    installCheckPhase = let
-      upstreamVersion = vu.readPackageJsonVersion "${src}/packages/mcp/package.json";
-    in ''
-      runHook preInstallCheck
-      echo "Executing custom version check for MCP stdio server..."
-      output=$(< /dev/null $out/bin/context7-mcp 2>&1 || true)
-      if echo "$output" | grep -Fq "v${upstreamVersion}"; then
-        echo "versionCheckPhase: found version v${upstreamVersion}"
-      else
-        echo "versionCheckPhase: failed to find version v${upstreamVersion}"
-        echo "Output was:"
-        echo "$output"
-        exit 1
-      fi
-      runHook postInstallCheck
+    # Patch versionCheckHook's $version to drop our +<shortRev> suffix.
+    # The upstream binary reports just "2.1.8", so matching against
+    # our "2.1.8+c31528d" fails. preVersionCheck fires inside the hook
+    # before the comparison — override $version there to the upstream
+    # portion so the check still runs (just against the right string).
+    preVersionCheck = ''
+      version="${upstreamVersion}"
     '';
     pnpmDeps = ourPkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
