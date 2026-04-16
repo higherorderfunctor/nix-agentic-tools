@@ -9,13 +9,62 @@
 > where noted — `memory/<name>.md` references are relative to
 > `~/.claude/projects/-home-caubut-Documents-projects-nix-agentic-tools/memory/`.
 
-## Current status (2026-04-13)
+## Current status (2026-04-15)
 
 **nix-update migration complete and pushed.** nvfetcher deleted. All
 overlay packages have inline hashes managed by nix-update + ninja
 DAG pipeline. Auto-computed versions from source (`overlays/lib.nix`).
 CI pipeline restructured and actively running. Update pipeline uses
 git worktrees + flock merge for parallel per-package updates.
+
+### Consumer integration (nixos-config) — in progress
+
+Major fixes landed on `refactor/ai-factory-architecture` (not yet on main):
+
+- **claude-code binary fix** — `autoPatchelfHook` corrupted Bun single-exec
+  trailer. Replaced with manual `patchelf --set-interpreter` + `makeWrapper`
+  for `LD_LIBRARY_PATH`. See `overlays/claude-code.nix`.
+- **homeManagerModules.default** — renamed from `.nix-agentic-tools` to
+  standard `.default` convention.
+- **lib.ai + lib.hm.dag** — each HM module entry point uses `lib.extend` to
+  inject these, avoiding chicken-and-egg with `_module.args.lib`.
+  `lib/hm-dag.nix` provides a stub for `nix flake check` outside HM context.
+- **services.mcp-servers restored** — regression from factory refactor.
+  Restored via `packages/mcp-services/` virtual package.
+- **github-mcp mcpName passthru** — `pname` is `github-mcp-server` but
+  directory is `github-mcp`; added `passthru.mcpName`.
+- **Buddy disabled** — upstream removed `/buddy` (anthropics/claude-code#45596).
+  User disabled buddy config in nixos-config pending upstream resolution.
+
+### Active investigation: MCP server startup failures
+
+`github-mcp` and `kagi-mcp` show `✘ failed` in Claude Code session startup.
+Both servers **work fine when run manually** — the secrets wrappers execute
+correctly, the binaries start, and MCP handshake succeeds. The failure is
+specific to how Claude Code spawns them.
+
+**What we know:**
+- Secret files exist and are readable at `/run/user/1000/secrets/`
+- Wrapper scripts (`/nix/store/*-github-mcp-env`, `/nix/store/*-kagi-mcp-env`)
+  work correctly when invoked from the shell
+- The `.mcp.json` in the HM plugin has correct `command`, `args`, `env` fields
+- Other MCP servers (context7, effect, fetch, nixos, sequential-thinking) work
+  — but those are HTTP type (connecting to already-running services), not stdio
+- `git-mcp` (stdio, no credentials) works
+- `aihubmix-mcp` (stdio, credentials, hand-rolled wrapper) status unknown
+- The `env` field sets `PYTHONPATH=""` + `PYTHONNOUSERSITE=true` — tested
+  manually, doesn't cause issues
+- This is a regression — these servers used to work before the factory refactor
+
+**Hypotheses to test next session:**
+1. The `type: "stdio"` + `env` + secrets-wrapper combination causes a race
+   or timeout during Claude Code's MCP initialization
+2. Something in how `programs.claude-code.settings.mcpServers` (factory path)
+   vs `programs.claude-code.mcpServers` (direct path) gets rendered differs
+3. Claude Code's process spawning handles the wrapper differently (e.g.,
+   env replacement vs merge)
+4. Check if `aihubmix-mcp` also fails — if yes, it's all secrets wrappers;
+   if no, it's the `env` field interaction
 
 ---
 
