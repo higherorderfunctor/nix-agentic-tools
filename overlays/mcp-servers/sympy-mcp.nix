@@ -47,8 +47,11 @@ in
     installPhase = ''
       runHook preInstall
       mkdir -p $out/bin
-      makeWrapper ${pythonEnv}/bin/python $out/bin/sympy-mcp \
-        --add-flags "-m mcp run $src/server.py"
+      # `python -m mcp run …` doesn't work because the `mcp` package
+      # has no `__main__.py`. Use the `mcp` console script directly,
+      # which is the canonical entry point provided by mcp[cli].
+      makeWrapper ${pythonEnv}/bin/mcp $out/bin/sympy-mcp \
+        --add-flags "run $src/server.py"
       runHook postInstall
     '';
     doInstallCheck = true;
