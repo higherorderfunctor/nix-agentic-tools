@@ -98,7 +98,10 @@
       (cred.file or null) != null || (cred.helper or null) != null)
     (builtins.attrNames credentialVars);
 
-  mkCredentialsSnippet = credentialVars: settings:
+  # Use absolute paths for all commands — Claude Code's MCP `env` field
+  # replaces the process environment (no PATH inheritance), so bare
+  # command names like `cat` fail with "command not found".
+  mkCredentialsSnippet = pkgs: credentialVars: settings:
     concatStringsSep "\n" (mapAttrsToList (optName: spec: let
       cred = settings.${optName};
       inherit (spec) envVar;
@@ -109,7 +112,7 @@
         export ${envVar}''
       else if cred.file or null != null
       then ''
-        ${envVar}="$(cat "${cred.file}")"
+        ${envVar}="$(${pkgs.coreutils}/bin/cat "${cred.file}")"
         export ${envVar}''
       else "")
     credentialVars);
@@ -126,7 +129,7 @@
     drv = pkgs.writeShellScript (name + "-env") ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
-      ${mkCredentialsSnippet credentialVars settings}
+      ${mkCredentialsSnippet pkgs credentialVars settings}
       exec "${getExe package}" "$@"
     '';
   in "${drv}";

@@ -133,7 +133,7 @@
 
     credSnippet =
       if hasCreds
-      then mcpLib.mkCredentialsSnippet credVars evaluatedSettings
+      then mcpLib.mkCredentialsSnippet pkgs credVars evaluatedSettings
       else "";
 
     rawCmd =
