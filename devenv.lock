@@ -1221,17 +1221,17 @@
         "uv2nix": "uv2nix"
       },
       "locked": {
-        "lastModified": 1776190512,
-        "narHash": "sha256-qgAk8/KBRctpjzkx3x2g2oImBoHL+yni44OSRI0Z4yQ=",
+        "lastModified": 1776262090,
+        "narHash": "sha256-V/VErNHg1nk0iw2c+BYynSdm6+5tcaP0yapCZa1FLco=",
         "owner": "oraios",
         "repo": "serena",
-        "rev": "d6ea5bffdef86bb432f9a0a93ae27814ad35c742",
+        "rev": "9ff2c765a9ca03b72a5b59d5c3a54d9ac28293fa",
         "type": "github"
       },
       "original": {
         "owner": "oraios",
         "repo": "serena",
-        "rev": "d6ea5bffdef86bb432f9a0a93ae27814ad35c742",
+        "rev": "9ff2c765a9ca03b72a5b59d5c3a54d9ac28293fa",
         "type": "github"
       }
     },
