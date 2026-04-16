@@ -127,6 +127,7 @@ pdsolve
 peaceiris
 pkgs
 pname
+prek
 pythonnousersite
 pythonpath
 quickstarts

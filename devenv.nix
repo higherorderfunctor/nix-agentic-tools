@@ -1,4 +1,5 @@
 {
+  config,
   pkgs,
   lib,
   inputs,
@@ -131,6 +132,15 @@ in {
 
   # ── Claude Code (upstream devenv options) ───────────────────────────
   claude.code = {
+    # Override the auto-generated git-hooks-run hook to use an absolute
+    # store path. Upstream devenv emits the bare binary name (`prek`)
+    # via `git-hooks.package.meta.mainProgram`, which fails when Claude
+    # Code spawns the hook with a stripped PATH. Bug:
+    # https://github.com/cachix/devenv/blob/main/src/modules/integrations/claude.nix#L249
+    hooks.git-hooks-run.command = ''
+      cd "$DEVENV_ROOT" && ${lib.getExe config.git-hooks.package} run
+    '';
+
     permissions.rules = {
       Bash = {
         allow = [
