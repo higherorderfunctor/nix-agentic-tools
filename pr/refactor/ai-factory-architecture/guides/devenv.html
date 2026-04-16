@@ -34,7 +34,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-79ac0bf4.js";
+            window.path_to_searchindex_js = "../searchindex-d2ef0cff.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-e2aa3dc8.js"></script>
@@ -263,9 +263,13 @@ attribute set of (submodule)</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aiclaudemcpserversnamepackage"><a class="header" href="#aiclaudemcpserversnamepackage">ai.claude.mcpServers.&lt;name&gt;.package</a></h2>
-<p>The MCP server package (derivation).</p>
+<p>MCP server package (derivation). Required for shape (A).
+Null for raw command (B) and external HTTP ©.</p>
 <p><em>Type:</em>
-package</p>
+null or package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
@@ -282,7 +286,9 @@ list of string</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aiclaudemcpserversnamecommand"><a class="header" href="#aiclaudemcpserversnamecommand">ai.claude.mcpServers.&lt;name&gt;.command</a></h2>
-<p>The executable name inside <code>package</code>.</p>
+<p>Absolute command path. Set this for shape (B) — raw
+pass-through, no wrapping. Leave null for shape (A) where the
+renderer derives the command from the package.</p>
 <p><em>Type:</em>
 null or string</p>
 <p><em>Default:</em></p>
@@ -304,7 +310,9 @@ attribute set of string</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aiclaudemcpserversnamesettings"><a class="header" href="#aiclaudemcpserversnamesettings">ai.claude.mcpServers.&lt;name&gt;.settings</a></h2>
-<p>Server-specific settings passed through to the CLI config file.</p>
+<p>Server-specific settings — typed by the server module’s
+settingsOptions. Credentials (file/helper) flow through here
+and the renderer materializes them into a wrapper script.</p>
 <p><em>Type:</em>
 attribute set of anything</p>
 <p><em>Default:</em></p>
@@ -315,15 +323,19 @@ attribute set of anything</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aiclaudemcpserversnametype"><a class="header" href="#aiclaudemcpserversnametype">ai.claude.mcpServers.&lt;name&gt;.type</a></h2>
-<p>Transport type for the MCP server.</p>
+<p>Transport type. Inferred from other fields when null:
+<code>url</code> set → http, <code>package</code> set → stdio, <code>command</code> set → stdio.</p>
 <p><em>Type:</em>
-one of “http”, “stdio”</p>
+null or one of “http”, “stdio”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aiclaudemcpserversnameurl"><a class="header" href="#aiclaudemcpserversnameurl">ai.claude.mcpServers.&lt;name&gt;.url</a></h2>
-<p>HTTP endpoint URL (only for type = “http”).</p>
+<p>HTTP endpoint URL. Required for shape ©.</p>
 <p><em>Type:</em>
 null or string</p>
 <p><em>Default:</em></p>
@@ -473,9 +485,13 @@ attribute set of (submodule)</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aicopilotmcpserversnamepackage"><a class="header" href="#aicopilotmcpserversnamepackage">ai.copilot.mcpServers.&lt;name&gt;.package</a></h2>
-<p>The MCP server package (derivation).</p>
+<p>MCP server package (derivation). Required for shape (A).
+Null for raw command (B) and external HTTP ©.</p>
 <p><em>Type:</em>
-package</p>
+null or package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
@@ -492,7 +508,9 @@ list of string</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aicopilotmcpserversnamecommand"><a class="header" href="#aicopilotmcpserversnamecommand">ai.copilot.mcpServers.&lt;name&gt;.command</a></h2>
-<p>The executable name inside <code>package</code>.</p>
+<p>Absolute command path. Set this for shape (B) — raw
+pass-through, no wrapping. Leave null for shape (A) where the
+renderer derives the command from the package.</p>
 <p><em>Type:</em>
 null or string</p>
 <p><em>Default:</em></p>
@@ -514,7 +532,9 @@ attribute set of string</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aicopilotmcpserversnamesettings"><a class="header" href="#aicopilotmcpserversnamesettings">ai.copilot.mcpServers.&lt;name&gt;.settings</a></h2>
-<p>Server-specific settings passed through to the CLI config file.</p>
+<p>Server-specific settings — typed by the server module’s
+settingsOptions. Credentials (file/helper) flow through here
+and the renderer materializes them into a wrapper script.</p>
 <p><em>Type:</em>
 attribute set of anything</p>
 <p><em>Default:</em></p>
@@ -525,15 +545,19 @@ attribute set of anything</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aicopilotmcpserversnametype"><a class="header" href="#aicopilotmcpserversnametype">ai.copilot.mcpServers.&lt;name&gt;.type</a></h2>
-<p>Transport type for the MCP server.</p>
+<p>Transport type. Inferred from other fields when null:
+<code>url</code> set → http, <code>package</code> set → stdio, <code>command</code> set → stdio.</p>
 <p><em>Type:</em>
-one of “http”, “stdio”</p>
+null or one of “http”, “stdio”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aicopilotmcpserversnameurl"><a class="header" href="#aicopilotmcpserversnameurl">ai.copilot.mcpServers.&lt;name&gt;.url</a></h2>
-<p>HTTP endpoint URL (only for type = “http”).</p>
+<p>HTTP endpoint URL. Required for shape ©.</p>
 <p><em>Type:</em>
 null or string</p>
 <p><em>Default:</em></p>
@@ -701,9 +725,13 @@ attribute set of (submodule)</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aikiromcpserversnamepackage"><a class="header" href="#aikiromcpserversnamepackage">ai.kiro.mcpServers.&lt;name&gt;.package</a></h2>
-<p>The MCP server package (derivation).</p>
+<p>MCP server package (derivation). Required for shape (A).
+Null for raw command (B) and external HTTP ©.</p>
 <p><em>Type:</em>
-package</p>
+null or package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
@@ -720,7 +748,9 @@ list of string</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aikiromcpserversnamecommand"><a class="header" href="#aikiromcpserversnamecommand">ai.kiro.mcpServers.&lt;name&gt;.command</a></h2>
-<p>The executable name inside <code>package</code>.</p>
+<p>Absolute command path. Set this for shape (B) — raw
+pass-through, no wrapping. Leave null for shape (A) where the
+renderer derives the command from the package.</p>
 <p><em>Type:</em>
 null or string</p>
 <p><em>Default:</em></p>
@@ -742,7 +772,9 @@ attribute set of string</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aikiromcpserversnamesettings"><a class="header" href="#aikiromcpserversnamesettings">ai.kiro.mcpServers.&lt;name&gt;.settings</a></h2>
-<p>Server-specific settings passed through to the CLI config file.</p>
+<p>Server-specific settings — typed by the server module’s
+settingsOptions. Credentials (file/helper) flow through here
+and the renderer materializes them into a wrapper script.</p>
 <p><em>Type:</em>
 attribute set of anything</p>
 <p><em>Default:</em></p>
@@ -753,15 +785,19 @@ attribute set of anything</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aikiromcpserversnametype"><a class="header" href="#aikiromcpserversnametype">ai.kiro.mcpServers.&lt;name&gt;.type</a></h2>
-<p>Transport type for the MCP server.</p>
+<p>Transport type. Inferred from other fields when null:
+<code>url</code> set → http, <code>package</code> set → stdio, <code>command</code> set → stdio.</p>
 <p><em>Type:</em>
-one of “http”, “stdio”</p>
+null or one of “http”, “stdio”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aikiromcpserversnameurl"><a class="header" href="#aikiromcpserversnameurl">ai.kiro.mcpServers.&lt;name&gt;.url</a></h2>
-<p>HTTP endpoint URL (only for type = “http”).</p>
+<p>HTTP endpoint URL. Required for shape ©.</p>
 <p><em>Type:</em>
 null or string</p>
 <p><em>Default:</em></p>
@@ -863,9 +899,13 @@ attribute set of (submodule)</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
 </ul>
 <h2 id="aimcpserversnamepackage"><a class="header" href="#aimcpserversnamepackage">ai.mcpServers.&lt;name&gt;.package</a></h2>
-<p>The MCP server package (derivation).</p>
+<p>MCP server package (derivation). Required for shape (A).
+Null for raw command (B) and external HTTP ©.</p>
 <p><em>Type:</em>
-package</p>
+null or package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
@@ -882,7 +922,9 @@ list of string</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
 </ul>
 <h2 id="aimcpserversnamecommand"><a class="header" href="#aimcpserversnamecommand">ai.mcpServers.&lt;name&gt;.command</a></h2>
-<p>The executable name inside <code>package</code>.</p>
+<p>Absolute command path. Set this for shape (B) — raw
+pass-through, no wrapping. Leave null for shape (A) where the
+renderer derives the command from the package.</p>
 <p><em>Type:</em>
 null or string</p>
 <p><em>Default:</em></p>
@@ -904,7 +946,9 @@ attribute set of string</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
 </ul>
 <h2 id="aimcpserversnamesettings"><a class="header" href="#aimcpserversnamesettings">ai.mcpServers.&lt;name&gt;.settings</a></h2>
-<p>Server-specific settings passed through to the CLI config file.</p>
+<p>Server-specific settings — typed by the server module’s
+settingsOptions. Credentials (file/helper) flow through here
+and the renderer materializes them into a wrapper script.</p>
 <p><em>Type:</em>
 attribute set of anything</p>
 <p><em>Default:</em></p>
@@ -915,15 +959,19 @@ attribute set of anything</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
 </ul>
 <h2 id="aimcpserversnametype"><a class="header" href="#aimcpserversnametype">ai.mcpServers.&lt;name&gt;.type</a></h2>
-<p>Transport type for the MCP server.</p>
+<p>Transport type. Inferred from other fields when null:
+<code>url</code> set → http, <code>package</code> set → stdio, <code>command</code> set → stdio.</p>
 <p><em>Type:</em>
-one of “http”, “stdio”</p>
+null or one of “http”, “stdio”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
 </ul>
 <h2 id="aimcpserversnameurl"><a class="header" href="#aimcpserversnameurl">ai.mcpServers.&lt;name&gt;.url</a></h2>
-<p>HTTP endpoint URL (only for type = “http”).</p>
+<p>HTTP endpoint URL. Required for shape ©.</p>
 <p><em>Type:</em>
 null or string</p>
 <p><em>Default:</em></p>
