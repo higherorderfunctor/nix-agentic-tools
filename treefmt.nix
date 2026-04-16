@@ -1,17 +1,23 @@
 # Shared treefmt config — consumed by devenv.nix treefmt module.
+# Each formatter handles specific file types (see inline comments).
 {
   programs = {
+    # Nix: *.nix
     alejandra.enable = true;
+    # JSON: *.json (via settings.formatter.biome.includes)
     biome = {
       enable = true;
       settings.formatter.indentStyle = "space";
       settings.formatter.indentWidth = 2;
     };
+    # Markdown: *.md (via settings.formatter.prettier.includes)
     prettier = {
       enable = true;
       settings.proseWrap = "preserve";
     };
+    # Shell: *.sh, *.bash
     shfmt.enable = true;
+    # TOML: *.toml
     taplo.enable = true;
   };
 

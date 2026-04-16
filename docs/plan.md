@@ -86,6 +86,7 @@ specific to how Claude Code spawns them.
 - [x] Update `.claude/rules/claude-code.md` buddy-activation fragment — updated for binary patching
 - [ ] Fragment source linter — verify that every `<!-- Fragment: path -->` comment in generated files points to a source file that exists. Catch stale generated files, missing regen, or deleted sources.
 - [x] CI GITHUB_TOKEN workaround — resolved via `nix-agentic-tools-bot` GitHub App
+- [ ] End-to-end formatting audit — review all generated content flows to ensure treefmt coverage. Questions: does the flake formatter cover all file types we generate? Are there generated non-markdown files that lack formatters? Should treefmt.nix add formatters for YAML, HTML, or other types? Also: bare-commands check only sees git-tracked files (untracked .nix files bypass it until `git add`) — consider a pre-commit hook version.
 - [ ] Commit hook regeneration — pre-commit hook should regenerate instruction files (same as devenv shell entry) and re-stage. DRY with `dev/generate.nix`. May need fingerprint cache to avoid ~2-5s nix build on every commit.
 - [ ] Nix doc comments as fragments — extract RFC 145 `/**` comments from `.nix` source files into the fragment pipeline. Custom extractor needed (nixdoc expects flat attrsets, our overlays are functions). See `memory/reference_nix_doc_tooling.md`.
 - [ ] overlays/README.md table from nix eval — reflect overlay metadata at eval time, string-interpolate into a fragment. See `docs/overnight-report-2026-04-13.md` "code→markdown" section.

@@ -66,7 +66,7 @@ in {
         ${log}
         log "Building AGENTS.md"
         src=$(nix build .#instructions-agents --no-link --print-out-paths)
-        cp -f "$src" AGENTS.md
+        cp -f "$src/AGENTS.md" AGENTS.md
         log "AGENTS.md updated"
       '';
     };
@@ -132,6 +132,8 @@ in {
       exec = ''
         ${bashPreamble}
         ${log}
+        # Formatting happens inside the nix derivation (treefmt in
+        # runCommand). The task just copies pre-formatted store output.
         log "All instruction files generated"
       '';
     };

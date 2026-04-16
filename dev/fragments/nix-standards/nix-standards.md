@@ -7,3 +7,119 @@ use external source generators. Dependency hashes (`pnpmDeps`,
 `vendorHash`, `cargoHash`) are also inline. Per-platform binary
 packages store versions and hashes in a `<name>-sources.json` sidecar
 managed by `mkUpdateScript`.
+
+### Shell Wrappers: Absolute Paths Required
+
+> **Last verified:** 2026-04-15 (commit 11a0dec). If you add a
+> new `writeShellScript`, `writeShellScriptBin`, or inline shell
+> snippet in any `.nix` file and this section isn't consulted,
+> stop and read it.
+
+**Every command in generated shell wrapper scripts MUST use an
+absolute Nix store path.** Never use bare command names like `cat`,
+`mkdir`, `cp`, `mv`, `rm`, `chmod`, `mktemp`, `tr`, `head`,
+`curl`, `grep`, `sed`, `wc`, `basename`, `dirname`, `readlink`,
+or `uname`.
+
+Use `${pkgs.coreutils}/bin/<cmd>` (or the appropriate package)
+for every external command. Bash builtins (`echo`, `printf`,
+`test`, `[`, `export`, `set`, `exec`, `read`, `if`, `while`)
+are fine — they don't need PATH.
+
+**Why:** Claude Code's MCP `env` field **replaces** the process
+environment entirely rather than merging with the parent. When a
+wrapper script is spawned with `env: {"PYTHONPATH": ""}`, the
+process has no PATH. Bare `cat` becomes `command not found`,
+credentials fail silently, and the server starts without auth.
+This caused github-mcp and kagi-mcp to fail at session startup
+for weeks before root-causing.
+
+**Contexts where this matters most (high risk):**
+
+- `writeShellScript` wrappers used as MCP server commands
+- Any script that reads secrets (`cat <file>`, credential helpers)
+- Wrappers spawned by external tools (Claude Code, Copilot, IDE)
+
+**Contexts where it's defensive but still required:**
+
+- HM activation scripts (`home.activation.*`) — run with PATH
+  from the activation environment, but should still be explicit
+- `writeShellApplication` — gets `runtimeInputs` which provides
+  PATH, but the scripts it generates should still prefer explicit
+  paths for commands not in `runtimeInputs`
+- `installPhase` / `buildPhase` — run inside `stdenv` with full
+  PATH from build inputs; absolute paths optional but acceptable
+
+**Pattern:**
+
+```nix
+mkSecretsWrapper = { pkgs, ... }:
+  pkgs.writeShellScript "my-wrapper" ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    MY_TOKEN="$(${pkgs.coreutils}/bin/cat "/run/secrets/token")"
+    export MY_TOKEN
+    exec "${lib.getExe package}" "$@"
+  '';
+```
+
+**Anti-pattern (NEVER do this):**
+
+```nix
+pkgs.writeShellScript "my-wrapper" ''
+    MY_TOKEN="$(cat "/run/secrets/token")"  # BROKEN: no PATH
+    export MY_TOKEN
+    exec "${lib.getExe package}" "$@"
+  '';
+```
+
+### Never Modify Nix Store Paths
+
+**Never `chmod`, `sed`, `cp --remove-destination`, or otherwise
+modify files under `/nix/store/`.** Store paths are immutable by
+design. If a generated file needs formatting or post-processing,
+do it on the working tree copy, not the store original.
+
+**Pattern (generation tasks):**
+
+```bash
+src=$(nix build .#my-output --no-link --print-out-paths)
+cp -f "$src/file.md" ./output/file.md   # copy to working tree
+treefmt ./output/file.md                 # format the copy
+```
+
+**Anti-pattern:**
+
+```bash
+src=$(nix build .#my-output --no-link --print-out-paths)
+chmod u+w "$src/file.md"  # NEVER: modifies store path
+prettier --write "$src/file.md"
+cp "$src/file.md" ./output/
+```
+
+If the output needs to be formatted, either:
+
+1. Format inside the nix derivation (add formatter to build inputs)
+2. Format the working tree copy after `cp`
+
+### overrideAttrs: Preserve passthru
+
+When using `overrideAttrs` on nixpkgs packages, **merge passthru
+instead of replacing it**:
+
+```nix
+# CORRECT — preserves overrideModAttrs, updateScript, etc.
+pkg.overrideAttrs (_finalAttrs: old: {
+  passthru = (old.passthru or {}) // { mcpName = "my-server"; };
+})
+
+# WRONG — drops buildGoModule's overrideModAttrs, causes warnings
+pkg.overrideAttrs (_finalAttrs: _old: {
+  passthru = { mcpName = "my-server"; };
+})
+```
+
+`buildGoModule`, `buildPythonPackage`, and other builders attach
+helpers to `passthru` (e.g., `overrideModAttrs`,
+`overridePythonAttrs`). Replacing `passthru` entirely drops these,
+triggering evaluation warnings and breaking downstream overrides.

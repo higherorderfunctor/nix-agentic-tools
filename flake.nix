@@ -185,11 +185,12 @@
 
     checks = forAllSystems (system: let
       pkgs = pkgsFor system;
+      bareCommandsCheck = {bare-commands = import ./checks/bare-commands.nix {inherit pkgs;};};
       factoryChecks = import ./checks/factory-eval.nix {inherit lib pkgs;};
       fragmentsChecks = import ./checks/fragments-eval.nix {inherit lib pkgs;};
       moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs;};
     in
-      fragmentsChecks // factoryChecks // moduleChecks);
+      bareCommandsCheck // fragmentsChecks // factoryChecks // moduleChecks);
 
     # devShells.default provided by devenv.lib.mkShell (see devenv.nix).
     # devShells.ci is a lightweight shell for the CI update pipeline.
@@ -201,6 +202,28 @@
       # the file is read once, but a single explicit binding is
       # clearer and cheaper to extend when a 5th ecosystem lands.
       gen = import ./dev/generate.nix {inherit lib pkgs;};
+      # treefmt for use inside derivations. Same config as treefmt.nix
+      # but with projectRootFile disabled — no .git in nix sandbox.
+      fmtDrv =
+        (inputs.treefmt-nix.lib.evalModule pkgs (
+          lib.recursiveUpdate (import ./treefmt.nix) {projectRootFile = null;}
+        ))
+        .config
+        .build
+        .wrapper;
+      # Helper: runCommand that formats $out with treefmt before finishing.
+      # All generated content derivations should use this instead of bare
+      # runCommand to ensure store output is pre-formatted.
+      # $out files are cp'd from writeText store paths (read-only).
+      # chmod makes the build output writable so treefmt can format
+      # in place. This is the derivation's own $out being constructed,
+      # not an existing store path — safe and expected.
+      runFmt = name: attrs: script:
+        pkgs.runCommand name (attrs // {nativeBuildInputs = (attrs.nativeBuildInputs or []) ++ [fmtDrv];}) ''
+          ${script}
+          chmod -R u+w $out
+          treefmt --no-cache --walk filesystem --tree-root $out
+        '';
 
       # ── Doc site components ─────────────────────────────────────
       # Generator helpers ported from sentinel in M15. Composed into
@@ -243,11 +266,10 @@
 
       siteProse = pkgs.runCommand "docs-site-prose" {} ''
         cp -r ${./dev/docs} $out
-        chmod -R u+w $out
       '';
 
       siteSnippets =
-        pkgs.runCommand "docs-site-snippets" {
+        runFmt "docs-site-snippets" {
           aiMappingTable = pkgs.writeText "ai-mapping-table.md" (docGen.snippets.aiMappingTable {});
           cliTable = pkgs.writeText "cli-table.md" (docGen.snippets.cliTable {});
           credentialsTable = pkgs.writeText "credentials-table.md" (docGen.snippets.credentialsTable {data = docData;});
@@ -265,7 +287,7 @@
         '';
 
       siteReference =
-        pkgs.runCommand "docs-site-reference" {
+        runFmt "docs-site-reference" {
           overlayPackages = pkgs.writeText "overlays-packages.md" (docGen.overlayPackages {data = docData;});
           inherit docsOptionsHm docsOptionsDevenv;
           mcpServers = pkgs.writeText "mcp-servers.md" (docGen.mcpServers {data = docData;});
@@ -287,7 +309,7 @@
       # pages. Same markdown source that feeds the scoped
       # .claude/rules, .github/instructions, and .kiro/steering files
       # — single source of truth across steering + docsite.
-      siteArchitecture = pkgs.runCommand "docs-site-architecture" {} ''
+      siteArchitecture = runFmt "docs-site-architecture" {} ''
         mkdir -p $out/contributing/architecture
         cp ${./dev/fragments/monorepo/architecture-fragments.md} \
           $out/contributing/architecture/architecture-fragments.md
@@ -360,7 +382,10 @@
         # Instruction file derivations (from dev/generate.nix).
         # Each ecosystem produces a content directory consumed by the
         # `generate:instructions:*` devenv tasks.
-        instructions-agents = pkgs.writeText "AGENTS.md" gen.agentsMd;
+        instructions-agents = runFmt "instructions-agents" {} ''
+          mkdir -p $out
+          cp ${pkgs.writeText "AGENTS.md" gen.agentsMd} $out/AGENTS.md
+        '';
 
         instructions-claude = let
           files =
@@ -370,7 +395,7 @@
             )
             gen.claudeFiles;
         in
-          pkgs.runCommand "instructions-claude" {} (
+          runFmt "instructions-claude" {} (
             "mkdir -p $out/rules\n"
             + lib.concatStringsSep "\n" (
               lib.mapAttrsToList (
@@ -393,7 +418,7 @@
             )
             gen.copilotFiles;
         in
-          pkgs.runCommand "instructions-copilot" {} (
+          runFmt "instructions-copilot" {} (
             "mkdir -p $out/instructions\n"
             + lib.concatStringsSep "\n" (
               lib.mapAttrsToList (
@@ -403,7 +428,7 @@
             )
           );
 
-        instructions-kiro = pkgs.runCommand "instructions-kiro" {} (
+        instructions-kiro = runFmt "instructions-kiro" {} (
           "mkdir -p $out\n"
           + lib.concatStringsSep "\n" (
             lib.mapAttrsToList (
