@@ -118,12 +118,17 @@ jobs:
 
       # Push worktree branches and create/update PRs.
       # Each update/<name> branch with commits gets a PR.
+      # Records every touched branch in $RUNNER_TEMP/touched-branches
+      # so the next step can identify untouched (stale) PRs. Writes a
+      # ninja-completed.flag sentinel only if the loop completes
+      # cleanly — the close step refuses to act without it.
       - name: Create per-dependency PRs
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
 
           base_head="${{ steps.base.outputs.sha }}"
+          : >"$RUNNER_TEMP/touched-branches"
 
           # Find all update/* branches with commits ahead of base
           git branch --list 'update/*' | while read -r branch; do
@@ -154,7 +159,108 @@ jobs:
                 --title "$subject" \
                 --body-file "$RUNNER_TEMP/pr-body.md" || echo "PR creation failed for $branch"
             fi
+
+            echo "$branch" >>"$RUNNER_TEMP/touched-branches"
           done
+
+          # Sentinel — only written on clean loop exit. The close step
+          # below refuses to act without this file (defense in depth on
+          # top of `if: success()`).
+          touch "$RUNNER_TEMP/ninja-completed.flag"
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      # Close stale dependency PRs that were not touched this run.
+      # Renovate-style policy: only auto-close PRs with NO human activity
+      # (author=bot, all commits=bot, all reviews=bot/copilot, all
+      # comments=bot/copilot). Anything with human touches is preserved.
+      # `gh pr close --delete-branch` removes the remote branch in one call.
+      - name: Close stale dependency PRs
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+
+          # Refuse to act if the previous step didn't complete.
+          if [ ! -f "$RUNNER_TEMP/ninja-completed.flag" ]; then
+            echo "Pipeline did not complete cleanly — skipping stale PR cleanup."
+            exit 0
+          fi
+
+          touched="$RUNNER_TEMP/touched-branches"
+
+          # Allowlist of "non-human" actors. Any review or comment from
+          # one of these still counts as untouched-by-humans. The bot's
+          # own login is `nix-agentic-tools-bot[bot]` (App installation);
+          # GitHub's auto-reviewer appears as `Copilot` or `copilot[bot]`;
+          # any github-actions[bot] activity (status updates etc.) is
+          # also non-human.
+          #
+          # Implemented as a startswith/exact match in jq.
+          allowed_logins='[
+            "nix-agentic-tools-bot",
+            "nix-agentic-tools-bot[bot]",
+            "Copilot",
+            "copilot",
+            "copilot[bot]",
+            "github-actions[bot]"
+          ]'
+
+          is_bot_only_pr() {
+            local pr=$1
+            local data
+            data=$(gh pr view "$pr" --json author,commits,reviews,comments)
+
+            # Author must be a known bot login
+            jq -e --argjson allow "$allowed_logins" \
+              '(.author.login // "") as $a
+               | $allow | any(. == $a or ($a | startswith(. + "[bot]")))' \
+              <<<"$data" >/dev/null || return 1
+
+            # No commits authored by anyone outside the allowlist
+            jq -e --argjson allow "$allowed_logins" \
+              '[.commits[].authors[]?.login // empty]
+               | all(. as $u | $allow | any(. == $u))' \
+              <<<"$data" >/dev/null || return 1
+
+            # No reviews by anyone outside the allowlist
+            jq -e --argjson allow "$allowed_logins" \
+              '[.reviews[]?.author.login // empty]
+               | all(. as $u | $allow | any(. == $u))' \
+              <<<"$data" >/dev/null || return 1
+
+            # No comments by anyone outside the allowlist
+            jq -e --argjson allow "$allowed_logins" \
+              '[.comments[]?.author.login // empty]
+               | all(. as $u | $allow | any(. == $u))' \
+              <<<"$data" >/dev/null || return 1
+
+            return 0
+          }
+
+          echo "Touched this run:"
+          if [ -s "$touched" ]; then
+            sed 's/^/  /' "$touched"
+          else
+            echo "  (none)"
+          fi
+
+          gh pr list --base "$BRANCH_NAME" --state open \
+            --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("update/")) | "\(.number)|\(.headRefName)"' \
+          | while IFS='|' read -r pr_num pr_branch; do
+              if grep -qxF "$pr_branch" "$touched"; then
+                echo "PR #$pr_num ($pr_branch): TOUCHED — keep"
+                continue
+              fi
+              if is_bot_only_pr "$pr_num"; then
+                echo "PR #$pr_num ($pr_branch): BOT-ONLY, untouched — closing + deleting branch"
+                gh pr close "$pr_num" --delete-branch \
+                  --comment "Auto-closed: dependency no longer needs updating (removed from matrix or merged into base). No human activity on the PR." \
+                  || echo "  WARN: close failed for #$pr_num"
+              else
+                echo "PR #$pr_num ($pr_branch): HUMAN ACTIVITY — preserving"
+              fi
+            done
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 

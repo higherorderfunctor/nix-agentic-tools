@@ -158,6 +158,7 @@ sixel
 smartlog
 sparfenyuk
 sshsign
+startswith
 statix
 stdenv
 subkeys
