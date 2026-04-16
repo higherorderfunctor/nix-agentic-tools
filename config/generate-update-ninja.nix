@@ -64,7 +64,7 @@
       description = Updating package: $name
 
     rule full-format
-      command = bash -c 'treefmt && git add -A && git diff --staged --quiet || git commit -m "style: treefmt full reformat after updates"'
+      command = bash -c 'nix fmt && git add -A && git diff --staged --quiet || git commit -m "style: treefmt full reformat after updates"'
       description = Full treefmt (formatter config may have changed)
 
     rule final-build
