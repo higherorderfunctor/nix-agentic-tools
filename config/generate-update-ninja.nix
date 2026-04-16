@@ -125,6 +125,15 @@
     build update-all: phony | ${allList}
     build update-report: report | update-all
 
+    # Finalize-only targets — run format + final-build + report
+    # WITHOUT requiring the full package update chain. Use after
+    # retrying a single failed package:
+    #   ninja -f .update.ninja update-<pkg> update-finalize
+    build update-format-only: full-format
+    build update-final-build-only: final-build | update-format-only
+    build update-report-only: report | update-final-build-only
+    build update-finalize: phony | update-report-only
+
     default update-report
   '';
 
