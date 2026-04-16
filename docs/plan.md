@@ -82,14 +82,23 @@ specific to how Claude Code spawns them.
     - **(A) Typed stdio via package**: `{package, settings, env, args}` — factory calls `mkStdioEntry` to render the wrapper + freeform entry. Covers all modules-registered servers (github-mcp, kagi-mcp, context7-mcp, etc.).
     - **(B) Raw pass-through**: `{type="stdio", command=<abs-path>, args, env}` — freeform entry written as-is. Escape hatch for ad-hoc wrappers like aihubmix-mcp.
     - **(C) External HTTP**: `{type="http", url}` — freeform entry for services.mcp-servers outputs and externalServers.
+  - **Architecture.**
+    - The **typed schema** (`lib/ai/mcpServer/commonSchema.nix`) is the authoritative surface — it's what `ai.mcpServers.<name>` and `ai.<ecosystem>.mcpServers.<name>` accept, and it's what `lib.mkStdioEntry` returns (refactored from its current freeform output). Users can write the typed attrset directly OR use `mkStdioEntry` as a typed-constructor helper.
+    - All **rendering** (wrapper script generation, credential snippet, stdio-arg composition from `serverDef.meta.modes.stdio`, env var wiring from the server module) moves OUT of `mkStdioEntry` and into per-ecosystem translators.
+    - Each ecosystem's factory owns a `renderServer` that consumes the typed shape and emits the ecosystem-native representation:
+      - **Claude**: typed → freeform `{type, command=<abs-path>, args, env}` → `programs.claude-code.mcpServers.<name>`
+      - **Kiro**: typed → freeform → `home.file."${cfg.configDir}/settings/mcp.json".text = toJSON {mcpServers = ...;}`
+      - **Copilot**: typed → copilot-native surface (TBD)
+    - Shared internal helpers (`mkSecretsWrapper`, `mkCredentialsSnippet`, `evalSettings`, `effectiveEnv`, `effectiveArgs`) stay in `lib/mcp.nix` and are called by whichever translator needs them.
   - **Work items.**
-    - [ ] Update `lib/ai/mcpServer/commonSchema.nix`: make `package` optional, document the three shapes, add discriminator logic.
-    - [ ] Add `renderServer` helper (lib/mcp.nix or lib/ai/mcpServer/): routes typed → mkStdioEntry, raw → identity, http → identity.
-    - [ ] `mkClaude.nix` HM config: map `mergedServers` through `renderServer` and write to `programs.claude-code.mcpServers` (top-level, not under settings).
-    - [ ] `mkKiro.nix` HM config: map `mergedServers` through `renderServer` and write to `home.file."${cfg.configDir}/settings/mcp.json".text` directly (kiro has no upstream HM option for MCP).
-    - [ ] `mkCopilot.nix`: same translation pattern (target depends on copilot's native MCP surface).
+    - [ ] Update `lib/ai/mcpServer/commonSchema.nix`: make `package` optional so the three shapes coexist; document discriminator rules (url → http, package → typed stdio, raw command → pass-through).
+    - [ ] Refactor `lib.mkStdioEntry` to return the typed schema shape instead of the current freeform output. Keep internal helpers intact.
+    - [ ] Add `renderServer` as a shared library helper OR as a method on each ecosystem factory (TBD — probably per-ecosystem since Claude and Kiro have different target shapes).
+    - [ ] `mkClaude.nix` HM config: map `mergedServers` through Claude's `renderServer` and write to `programs.claude-code.mcpServers` (top-level, not under settings).
+    - [ ] `mkKiro.nix` HM config: map `mergedServers` through Kiro's `renderServer` and write to `home.file."${cfg.configDir}/settings/mcp.json".text`.
+    - [ ] `mkCopilot.nix`: same pattern adapted to Copilot's surface.
     - [ ] Update module-eval tests + any consumers of the schema.
-    - [ ] Migrate nixos-config consumer: move everything from `programs.claude-code.mcpServers` and `kiro/default.nix`'s mcp.json block to `ai.mcpServers` + per-ecosystem additions.
+    - [ ] Migrate nixos-config consumer: move everything from `programs.claude-code.mcpServers` and `kiro/default.nix`'s `mcp.json` block to `ai.mcpServers` + per-ecosystem additions. Delete consumer's bespoke `mkStdioEntry`-into-freeform wiring.
   - **Why option 2 over option 1 (freeform passthrough).** Option 1 would accept anything and rely on upstream to validate. Option 2 keeps a single typed surface across all ecosystems, enables mkStdioEntry's credential-wrapper and server-module metadata (toolsets, modes, etc.) for all CLIs uniformly, and still has an escape hatch via shape (B) for ad-hoc cases.
 - [x] **Restore services.mcp-servers HM module** — REGRESSION from factory
       refactor. Restored via `packages/mcp-services/` virtual package with
