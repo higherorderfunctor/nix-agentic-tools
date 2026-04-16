@@ -69,6 +69,12 @@ specific to how Claude Code spawns them.
 ---
 
 ### Backlog items
+- [ ] **ai.claude.mcpServers passthrough** — HIGH priority. Consumer (nixos-config ai/default.nix lines 92-130) has 9 MCP servers configured directly on `programs.claude-code.mcpServers`. Add `ai.claude.mcpServers` option to `mkClaude.nix` that fans out to `programs.claude-code.mcpServers`. Blocks consumer migration.
+- [ ] **ai.claude.settings rendering** — HIGH priority. `mkClaude.nix:34-38` declares `ai.claude.settings` but silently ignores it (noted in the mkAiApp backend dispatch backlog). Consumer has `effortLevel`, `enableAllProjectMcpServers`, `permissions` set directly on `programs.claude-code.settings`. Implement HM projection that writes to `~/.claude/settings.json`.
+- [ ] **ai.kiro.mcpServers passthrough** — HIGH priority. Mirror ai.claude.mcpServers for Kiro (consumer kiro/default.nix lines 92-122).
+- [ ] **ai.claude.memory migration** — already supported in mkClaude.nix, consumer just needs to switch from `programs.claude-code.memory.text = builtins.readFile ./path` to `ai.claude.memory = ./path`. Low-risk migration.
+- [ ] **Expose upstream HM claude-code options on ai.claude** — upstream `programs.claude-code` now has `plugins`, `marketplaces`, `agents`, `commands`, `rules`, `hooks`, `outputStyles`, `context`, `lspServers`. Our `mkClaude.nix` only delegates `enable`, `package`, `skills`, `settings`. Add passthrough for the missing options (skip `*Dir` variants — `ai.claude` should be additive with upstream, not directory-symlink overrides). Replaces the bespoke `installClaudePlugins` activation script in nixos-config with declarative `plugins`/`marketplaces` options.
+- [ ] **ai.kiro.trustedMcpTools** — MEDIUM priority. Consumer kiro/default.nix uses manual kiro-cli wrapper at lines 198-208 with `--trust-tools` flag. Expose as declarative ai.kiro option.
 - [x] **Restore services.mcp-servers HM module** — REGRESSION from factory
       refactor. Restored via `packages/mcp-services/` virtual package with
       HM module picked up by collectFacet. Per-server submodules built by
