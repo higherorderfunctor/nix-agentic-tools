@@ -165,21 +165,32 @@
   #                        wrapper, mode args, settings → env)
   #
   # Called by per-ecosystem factories to produce the on-disk JSON.
-  renderServer = pkgs: name: srv:
-    if srv.url != null
+  # Defensive against entries that haven't been through commonSchema
+  # (use `or` defaults) so consumers can call this on a hand-built
+  # typed attrset directly, not just on `config.ai.*.mcpServers`.
+  renderServer = pkgs: name: srv: let
+    url = srv.url or null;
+    command = srv.command or null;
+    package = srv.package or null;
+    args = srv.args or [];
+    env = srv.env or {};
+    settings = srv.settings or {};
+    type = srv.type or null;
+  in
+    if url != null
     then {
       type = "http";
-      inherit (srv) url;
+      inherit url;
     }
-    else if srv.command != null
+    else if command != null
     then {
       type =
-        if srv.type != null
-        then srv.type
+        if type != null
+        then type
         else "stdio";
-      inherit (srv) command args env;
+      inherit command args env;
     }
-    else if srv.package != null
+    else if package != null
     then let
       serverDef = loadServer name;
       # Mode string is e.g. "github-mcp-server stdio" — split into
@@ -187,15 +198,14 @@
       # subcommand/flags.
       stdioParts = lib.splitString " " serverDef.meta.modes.stdio;
       stdioArgs = builtins.tail stdioParts;
-      evaluatedSettings = evalSettings name srv.settings;
+      evaluatedSettings = evalSettings name settings;
       cfgShim = mkCfgShim {inherit evaluatedSettings;};
-      srvEnv = effectiveEnv name cfgShim "stdio" srv.env;
-      srvArgs = effectiveArgs name cfgShim "stdio" srv.args;
+      srvEnv = effectiveEnv name cfgShim "stdio" env;
+      srvArgs = effectiveArgs name cfgShim "stdio" args;
       credentialVars = serverDef.meta.credentialVars or {};
       needsWrapper = hasCredentials credentialVars evaluatedSettings;
       wrappedCommand = mkSecretsWrapper {
-        inherit pkgs name credentialVars;
-        inherit (srv) package;
+        inherit pkgs name credentialVars package;
         settings = evaluatedSettings;
       };
     in {
@@ -203,7 +213,7 @@
       command =
         if needsWrapper
         then wrappedCommand
-        else getExe srv.package;
+        else getExe package;
       args = stdioArgs ++ srvArgs;
       # Prevent Python path pollution from parent process (e.g.,
       # nixos-mcp sets PYTHONPATH for Python 3.13 which breaks
