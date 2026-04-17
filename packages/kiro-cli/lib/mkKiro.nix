@@ -265,7 +265,13 @@ lib.ai.app.mkAiApp {
         # `jq -s '.[0] * .[1]'`. On first activation (no existing
         # file) the Nix-rendered JSON is written as-is. Ported from
         # legacy modules/kiro-cli/default.nix.
-        (let
+        #
+        # HM-only: gated on non-empty settings so consumers who enable
+        # ai.kiro just for MCP fanout don't clobber an externally-
+        # managed cli.json. Matches upstream Claude HM behavior
+        # (settings.json only written when cfg.settings != {}).
+        # Devenv-side is unconditional (project-local, harmless).
+        (lib.mkIf (filteredSettings != {}) (let
           settingsJsonText = builtins.toJSON filteredSettings;
         in {
           home.activation.kiroSettingsMerge = lib.hm.dag.entryAfter ["writeBoundary"] ''
@@ -288,7 +294,7 @@ lib.ai.app.mkAiApp {
             ${pkgs.coreutils}/bin/rm -f "$NIX_SETTINGS"
             ${pkgs.coreutils}/bin/chmod 644 "$SETTINGS_DIR/cli.json"
           '';
-        })
+        }))
       ];
   };
   devenv = {

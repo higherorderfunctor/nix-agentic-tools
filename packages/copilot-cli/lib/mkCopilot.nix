@@ -243,7 +243,12 @@ lib.ai.app.mkAiApp {
         # `theme`) appear literally in the script text. This keeps the
         # activation atomic — no separate store-path read required at
         # runtime — and lets module-eval tests assert on the content.
-        (let
+        #
+        # HM-only: gated on non-empty settings so consumers who enable
+        # ai.copilot just for MCP/skills fanout don't clobber an
+        # externally-managed settings.json. Matches upstream Claude HM
+        # behavior. Devenv-side is unconditional (project-local).
+        (lib.mkIf (cfg.settings != {}) (let
           settingsJsonText = builtins.toJSON cfg.settings;
         in {
           home.activation.copilotSettingsMerge = lib.hm.dag.entryAfter ["writeBoundary"] ''
@@ -266,7 +271,7 @@ lib.ai.app.mkAiApp {
             ${pkgs.coreutils}/bin/rm -f "$NIX_SETTINGS"
             ${pkgs.coreutils}/bin/chmod 644 "$SETTINGS_DIR/settings.json"
           '';
-        })
+        }))
       ];
   };
   devenv = {
