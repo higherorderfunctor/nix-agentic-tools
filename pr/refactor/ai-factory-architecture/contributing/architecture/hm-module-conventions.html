@@ -34,7 +34,7 @@
             const path_to_root = "../../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../../searchindex-4c83374a.js";
+            window.path_to_searchindex_js = "../../searchindex-26e1e64c.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../../toc-e2aa3dc8.js"></script>
@@ -328,6 +328,19 @@ config.json files are merged with Nix-declared values using
 <code>jq -s '.[0] * .[1]'</code> so user runtime edits (e.g.,
 <code>trusted_folders</code>) are preserved across rebuilds. The Nix
 settings override on conflict, user-added keys pass through.</p>
+<p><strong>HM settings writes are conditional; devenv writes are not.</strong>
+The HM activation merge (copilot <code>copilotSettingsMerge</code>, kiro
+<code>kiroSettingsMerge</code>) is gated on non-empty settings — if the
+consumer enables the ecosystem just for MCP/skills fanout and
+doesn’t set any <code>ai.&lt;cli&gt;.settings</code>, the activation script
+doesn’t fire and an externally-managed settings file is left
+untouched. Matches upstream Claude HM behavior where
+<code>settings.json</code> is only written when <code>cfg.settings != {}</code>.</p>
+<p>Devenv-side writes are unconditional (always write the file
+when <code>enable = true</code>). This is intentional: devenv files are
+project-local symlinks, not home-dir writes. An empty <code>{}</code>
+settings file is harmless — the CLI merges it with global
+config. Upstream devenv claude does the same (unconditional).</p>
 <p><strong>Secrets at activation time, not eval time.</strong> Sops-nix paths
 (<code>cfg.userId.file</code>) are read by the activation script at run
 time via <code>cat "$path"</code>. Do NOT <code>builtins.readFile</code> them at
