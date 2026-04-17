@@ -34,7 +34,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-26e1e64c.js";
+            window.path_to_searchindex_js = "../searchindex-670ef962.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-e2aa3dc8.js"></script>
@@ -881,6 +881,35 @@ null or boolean</p>
 attribute set of absolute path</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aikirotrustedmcptools"><a class="header" href="#aikirotrustedmcptools">ai.kiro.trustedMcpTools</a></h2>
+<p>List of MCP tool patterns to auto-approve via –trust-tools on kiro-cli-chat (HM only).</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">[
+  "@context7-mcp"
+  "@git-mcp/git_diff"
+  "subagent"
+]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aikirotui"><a class="header" href="#aikirotui">ai.kiro.tui</a></h2>
+<p>Append –tui flag to the kiro-cli wrapper (HM only — devenv doesn’t wrap the binary).</p>
+<p><em>Type:</em>
+boolean</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">false
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
