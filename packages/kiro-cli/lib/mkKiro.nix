@@ -143,6 +143,10 @@ lib.ai.app.mkAiApp {
       aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
 
       filteredSettings = aiCommon.filterNulls cfg.settings;
+      # Kiro cli.json uses flat dot-notation keys ("chat.enableTangentMode")
+      # not nested JSON. Flatten so consumers can write clean Nix:
+      #   settings.chat.enableTangentMode = true;
+      flatSettings = aiCommon.flattenDotKeys filteredSettings;
 
       # symlinkJoin wrapper that exports environmentVariables when
       # launching kiro. Unlike copilot, kiro reads mcp.json from its
@@ -272,7 +276,7 @@ lib.ai.app.mkAiApp {
         # (settings.json only written when cfg.settings != {}).
         # Devenv-side is unconditional (project-local, harmless).
         (lib.mkIf (filteredSettings != {}) (let
-          settingsJsonText = builtins.toJSON filteredSettings;
+          settingsJsonText = builtins.toJSON flatSettings;
         in {
           home.activation.kiroSettingsMerge = lib.hm.dag.entryAfter ["writeBoundary"] ''
             set -eu
@@ -309,6 +313,7 @@ lib.ai.app.mkAiApp {
       aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
 
       filteredSettings = aiCommon.filterNulls cfg.settings;
+      flatSettings = aiCommon.flattenDotKeys filteredSettings;
     in
       lib.mkMerge [
         # Package installation — devenv projects are shell-scoped, so
@@ -417,7 +422,7 @@ lib.ai.app.mkAiApp {
         # JSON write is sufficient.
         (lib.mkIf (filteredSettings != {}) {
           files."${cfg.configDir}/settings/cli.json".text =
-            builtins.toJSON filteredSettings;
+            builtins.toJSON flatSettings;
         })
       ];
   };

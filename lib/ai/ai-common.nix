@@ -112,6 +112,32 @@
     else throw "Invalid MCP server type: ${server.type}";
 
   # ── Settings utilities ──────────────────────────────────────────────
+
+  # Flatten nested Nix attrsets into dot-notation keys for CLIs that
+  # expect flat JSON (e.g., Kiro's cli.json uses `"chat.enableTangentMode"`
+  # not `{"chat":{"enableTangentMode":...}}`). Supports grouping:
+  #
+  #   { mcp.loadedBefore = true; chat = { enableTangentMode = true; enableCheckpoint = true; }; }
+  #   → { "mcp.loadedBefore" = true; "chat.enableTangentMode" = true; "chat.enableCheckpoint" = true; }
+  #
+  # Leaf values (non-attrset, or attrsets with `_type` like mkOption
+  # results) are kept as-is. Only plain nested attrsets are flattened.
+  flattenDotKeys = let
+    go = prefix: attrs:
+      lib.foldlAttrs (acc: name: value: let
+        key =
+          if prefix == ""
+          then name
+          else "${prefix}.${name}";
+      in
+        if lib.isAttrs value && !(value ? _type)
+        then acc // (go key value)
+        else acc // {${key} = value;})
+      {}
+      attrs;
+  in
+    go "";
+
   # Recursively filter null values from an attrset (for typed settings
   # with freeformType where defaults are null). Also removes empty
   # sub-attrsets left after filtering.
