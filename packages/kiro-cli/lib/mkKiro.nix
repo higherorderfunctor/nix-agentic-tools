@@ -101,6 +101,21 @@ lib.ai.app.mkAiApp {
       default = {};
       description = "Environment variables exported when launching kiro (HM: via wrapper; devenv: via native env).";
     };
+    # Enable TUI mode — appends `--tui` to `kiro-cli`.
+    tui = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Append --tui flag to the kiro-cli wrapper (HM only — devenv doesn't wrap the binary).";
+    };
+    # MCP tools to auto-approve — appends `--trust-tools='<csv>'`
+    # to `kiro-cli-chat`. Eliminates the need for a bespoke
+    # symlinkJoin wrapper in the consumer.
+    trustedMcpTools = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [];
+      description = "List of MCP tool patterns to auto-approve via --trust-tools on kiro-cli-chat (HM only).";
+      example = ["@context7-mcp" "@git-mcp/git_diff" "subagent"];
+    };
     # Inline agent JSON content. Written under
     # `<configDir>/agents/<name>.json` in both backends.
     agents = lib.mkOption {
@@ -148,24 +163,33 @@ lib.ai.app.mkAiApp {
       #   settings.chat.enableTangentMode = true;
       flatSettings = aiCommon.flattenDotKeys filteredSettings;
 
-      # symlinkJoin wrapper that exports environmentVariables when
-      # launching kiro. Unlike copilot, kiro reads mcp.json from its
-      # config dir natively, so no --additional-mcp-config injection.
-      # Conditional: raw package when nothing to wrap.
+      # symlinkJoin wrapper for environmentVariables, --tui, and
+      # --trust-tools. Conditional: raw package when nothing to wrap.
       hasEnv = cfg.environmentVariables != {};
-      needsWrapper = hasEnv;
+      hasTui = cfg.tui;
+      hasTrust = cfg.trustedMcpTools != [];
+      needsWrapper = hasEnv || hasTui || hasTrust;
       setEnvArgs =
         lib.concatStringsSep " "
         (lib.mapAttrsToList
           (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}")
           cfg.environmentVariables);
+      trustToolsCsv = lib.concatStringsSep "," cfg.trustedMcpTools;
       wrappedPackage = pkgs.symlinkJoin {
         name = "kiro-cli-wrapped";
         paths = [cfg.package];
         nativeBuildInputs = [pkgs.makeWrapper];
         postBuild = ''
-          wrapProgram $out/bin/kiro-cli \
-            ${setEnvArgs}
+          ${lib.optionalString (hasEnv || hasTui) ''
+            wrapProgram $out/bin/kiro-cli \
+              ${setEnvArgs} \
+              ${lib.optionalString hasTui ''--append-flags "--tui"''}
+          ''}
+          ${lib.optionalString (hasEnv || hasTrust) ''
+            wrapProgram $out/bin/kiro-cli-chat \
+              ${setEnvArgs} \
+              ${lib.optionalString hasTrust ''--append-flags "--trust-tools='${trustToolsCsv}'"''}
+          ''}
         '';
       };
       kiroPackage =
