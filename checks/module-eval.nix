@@ -1727,4 +1727,37 @@ in {
     in
       (upstream.fix-issue or null) == "# Fix issue\n\nSteps…"
   );
+
+  # HM: ai.claude.hooks routes to programs.claude-code.hooks via
+  # identity translation.
+  module-claude-hm-hooks-route-to-upstream = mkTest "claude-hm-hooks-route-to-upstream" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          hooks.pre-edit = "#!/usr/bin/env bash\necho edit\n";
+        };
+      };
+      upstream = result.config.programs.claude-code.hooks or {};
+    in
+      (upstream.pre-edit or null) == "#!/usr/bin/env bash\necho edit\n"
+  );
+
+  # Devenv: ai.claude.hooks merges into claude.code.hooks alongside
+  # the legacy settings.hooks route. ai.claude.hooks wins on collision.
+  module-claude-devenv-hooks-merge = mkTest "claude-devenv-hooks-merge" (
+    let
+      result = evalDevenv {
+        ai.claude = {
+          enable = true;
+          settings.hooks.from-settings = "#!/usr/bin/env bash\necho from-settings\n";
+          hooks.from-top = "#!/usr/bin/env bash\necho from-top\n";
+        };
+      };
+      upstream = result.config.claude.code.hooks or {};
+    in
+      (upstream.from-settings or null)
+      != null
+      && (upstream.from-top or null) != null
+  );
 }

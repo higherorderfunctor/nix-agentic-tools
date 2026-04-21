@@ -121,6 +121,24 @@ lib.ai.app.mkAiApp {
         }
       '';
     };
+    hooks = lib.mkOption {
+      type = lib.types.attrsOf lib.types.lines;
+      default = {};
+      description = ''
+        Claude hook shell scripts. Attribute name becomes the hook
+        filename; value is the script body. Routed to
+        `programs.claude-code.hooks` (HM) and merged into
+        `claude.code.hooks` (devenv, where existing
+        `settings.hooks` continues to work for backward compat but
+        this option is the authoritative route going forward).
+        Claude-only — Kiro's `ai.kiro.hooks` takes JSON-shaped hook
+        definitions (different file format, different semantics),
+        so no top-level `ai.hooks` fanout.
+      '';
+      example = lib.literalExpression ''
+        { pre-edit = "#!/usr/bin/env bash\nexec :\n"; }
+      '';
+    };
   };
   # HM-specific projection
   hm = {
@@ -162,7 +180,7 @@ lib.ai.app.mkAiApp {
             skills = lib.mapAttrs (_: lib.mkDefault) mergedSkills;
             context = lib.mkDefault effectiveContext;
             plugins = lib.mkDefault cfg.plugins;
-            inherit (cfg) marketplaces outputStyles commands;
+            inherit (cfg) marketplaces outputStyles commands hooks;
             lspServers = lib.mapAttrs aiCommon.mkClaudeLspConfig mergedLspServers;
             agents = mergedClaudeCopilotAgents;
             # Transitional raw inherit. End state mirrors the devenv
@@ -268,7 +286,9 @@ lib.ai.app.mkAiApp {
           claude.code = {
             enable = lib.mkDefault true;
             mcpServers = mergedServers;
-            hooks = cfg.settings.hooks or {};
+            # Merge cfg.hooks (authoritative) with legacy cfg.settings.hooks
+            # (backward-compat). ai.claude.hooks wins on collision.
+            hooks = (cfg.settings.hooks or {}) // cfg.hooks;
             settingsPath = lib.mkDefault ".claude/settings.json";
           };
         }
