@@ -49,6 +49,37 @@ lib.ai.app.mkAiApp {
         (written to ~/.claude/settings.json by upstream).
       '';
     };
+    marketplaces = lib.mkOption {
+      type = with lib.types; attrsOf (either package path);
+      default = {};
+      description = ''
+        Claude plugin marketplaces. Each entry is either a path to a
+        marketplace directory or a package derivation. Routed to
+        programs.claude-code.marketplaces; upstream writes them into
+        ~/.claude/settings.json under extraKnownMarketplaces.
+      '';
+      example = lib.literalExpression ''
+        {
+          my-marketplace = ./my-marketplace;
+        }
+      '';
+    };
+    outputStyles = lib.mkOption {
+      type = with lib.types; attrsOf (either lines path);
+      default = {};
+      description = ''
+        Claude custom output styles. Attribute name becomes the style
+        filename stem; value is inline markdown or a path to a .md
+        file. Routed to programs.claude-code.outputStyles; upstream
+        writes them under ~/.claude/output-styles/<name>.md.
+      '';
+      example = lib.literalExpression ''
+        {
+          concise = "Keep answers under 3 sentences.";
+          tutorial = ./styles/tutorial.md;
+        }
+      '';
+    };
   };
   # HM-specific projection
   hm = {
@@ -86,6 +117,7 @@ lib.ai.app.mkAiApp {
             skills = lib.mapAttrs (_: lib.mkDefault) mergedSkills;
             context = lib.mkDefault effectiveContext;
             plugins = lib.mkDefault cfg.plugins;
+            inherit (cfg) marketplaces outputStyles;
             # Transitional raw inherit. End state mirrors the devenv
             # side in this file: route `cfg.settings.hooks` to
             # upstream's hooks option and gap-write the rest via

@@ -160,6 +160,16 @@
           default = {};
           description = "Claude Code MCP servers (upstream HM stub).";
         };
+        marketplaces = lib.mkOption {
+          type = with lib.types; attrsOf (either package path);
+          default = {};
+          description = "Claude Code plugin marketplaces (upstream HM stub).";
+        };
+        outputStyles = lib.mkOption {
+          type = with lib.types; attrsOf (either lines path);
+          default = {};
+          description = "Claude Code custom output styles (upstream HM stub).";
+        };
       };
       systemd.user.services = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;

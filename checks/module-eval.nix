@@ -90,6 +90,14 @@
           type = lib.types.attrsOf lib.types.anything;
           default = {};
         };
+        marketplaces = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+        };
+        outputStyles = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+        };
       };
     };
   };
@@ -1370,5 +1378,34 @@ in {
       contextFile
       != null
       && lib.hasInfix "Copilot devenv context" (contextFile.text or "")
+  );
+
+  # HM: ai.claude.marketplaces routes to programs.claude-code.marketplaces
+  # via identity translation. Regression guard.
+  module-claude-hm-marketplaces-route-to-upstream = mkTest "claude-hm-marketplaces-route-to-upstream" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          marketplaces.my-shelf = ./../packages/stacked-workflows/skills/stack-fix;
+        };
+      };
+      upstream = result.config.programs.claude-code.marketplaces or {};
+    in
+      upstream ? my-shelf
+  );
+
+  # HM: ai.claude.outputStyles routes to programs.claude-code.outputStyles.
+  module-claude-hm-output-styles-route-to-upstream = mkTest "claude-hm-output-styles-route-to-upstream" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          outputStyles.concise = "Keep answers under 3 sentences.";
+        };
+      };
+      upstream = result.config.programs.claude-code.outputStyles or {};
+    in
+      (upstream.concise or null) == "Keep answers under 3 sentences."
   );
 }
