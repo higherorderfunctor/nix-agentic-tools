@@ -44,7 +44,7 @@
   outputPath = hmDefaults.outputPath or defaults.outputPath or null;
 
   customConfig = hmConfigFn {
-    inherit cfg mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables mergedClaudeCopilotAgents topContext;
+    inherit cfg config mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables mergedClaudeCopilotAgents topContext;
   };
 
   # Baseline render — concatenate rendered instructions into one

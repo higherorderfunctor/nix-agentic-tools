@@ -185,8 +185,27 @@
         '';
       };
       text = lib.mkOption {
-        type = lib.types.either lib.types.lines lib.types.path;
-        description = "Rule body (inline markdown or path to a .md file).";
+        type = lib.types.nullOr (lib.types.either lib.types.lines lib.types.path);
+        default = null;
+        description = ''
+          Rule body (inline markdown or Nix path to a `.md` file).
+          Content is baked into the nix store at eval time; transformer
+          frontmatter IS injected on emission. Mutually exclusive with
+          `sourcePath`.
+        '';
+      };
+      sourcePath = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          Absolute filesystem path for out-of-store symlink emission.
+          Preserves live-edit — edits to the source `.md` are visible
+          immediately without `home-manager switch`. When set, `text`
+          must be null and transformer frontmatter is NOT injected;
+          manage `inclusion:` / `applyTo:` / `paths:` frontmatter in
+          the source file directly. Mutually exclusive with `text`.
+        '';
+        example = "/home/user/.config/kiro/steering/foo.md";
       };
     };
   };

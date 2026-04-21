@@ -163,6 +163,7 @@ sigtool
 sixel
 skillname
 smartlog
+sourcepath
 sparfenyuk
 sshsign
 startswith

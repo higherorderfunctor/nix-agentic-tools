@@ -61,6 +61,17 @@
         type = lib.types.attrsOf lib.types.anything;
         default = {};
       };
+      # Stub config.lib so factory code using config.lib.file.mkOutOfStoreSymlink
+      # doesn't error at eval time. Real HM injects this; the module-eval
+      # harness otherwise has no config.lib. Identity: the mkOutOfStoreSymlink
+      # stub returns its input unchanged — tests assert on .source-vs-.text
+      # structure, not the exact symlink-marker shape.
+      lib = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {
+          file.mkOutOfStoreSymlink = path: path;
+        };
+      };
       # programs.claude-code is collapsed to attrsOf anything —
       # upstream options aren't in our doc scope (options-doc filters
       # to `ai.*` prefixes), and the stub's only job is to absorb
@@ -1793,5 +1804,71 @@ in {
       (upstream.from-settings or null)
       != null
       && (upstream.from-top or null) != null
+  );
+
+  # HM: rule with sourcePath emits home.file.<path>.source (out-of-store
+  # symlink) instead of baking content into the store. Note: the
+  # module-eval harness stubs home.file as attrsOf anything, so the
+  # actual source value is a raw path string (the harness's
+  # config.lib.file.mkOutOfStoreSymlink stub is a no-op identity —
+  # see hmLib below if the test fails). We assert presence of
+  # `source` and absence of `text`.
+  module-kiro-hm-rule-sourcepath-emits-source = mkTest "kiro-hm-rule-sourcepath-emits-source" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          rules.my-rule.sourcePath = "/abs/path/to/my-rule.md";
+        };
+      };
+      entry = result.config.home.file.".kiro/steering/my-rule.md" or null;
+    in
+      entry != null && (entry ? source) && !(entry ? text)
+  );
+
+  # HM: rule with text (no sourcePath) keeps baking behavior.
+  module-kiro-hm-rule-text-still-bakes = mkTest "kiro-hm-rule-text-still-bakes" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          rules.my-rule.text = "Inline content";
+        };
+      };
+      entry = result.config.home.file.".kiro/steering/my-rule.md" or null;
+    in
+      entry
+      != null
+      && (entry ? text)
+      && !(entry ? source)
+      && lib.hasInfix "Inline content" entry.text
+  );
+
+  # Devenv: rule with sourcePath emits files.<path>.source verbatim.
+  module-kiro-devenv-rule-sourcepath = mkTest "kiro-devenv-rule-sourcepath" (
+    let
+      result = evalDevenv {
+        ai.kiro = {
+          enable = true;
+          rules.my-rule.sourcePath = "/abs/path/to/my-rule.md";
+        };
+      };
+      entry = result.config.files.".kiro/steering/my-rule.md" or null;
+    in
+      entry != null && (entry.source or null) == "/abs/path/to/my-rule.md"
+  );
+
+  # HM: Claude rules sourcePath emits source, not text.
+  module-claude-hm-rule-sourcepath-emits-source = mkTest "claude-hm-rule-sourcepath-emits-source" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          rules.my-rule.sourcePath = "/abs/path/to/my-rule.md";
+        };
+      };
+      entry = result.config.home.file.".claude/rules/my-rule.md" or null;
+    in
+      entry != null && (entry ? source) && !(entry ? text)
   );
 }
