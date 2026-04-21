@@ -116,6 +116,7 @@ lib.ai.app.mkAiApp {
       mergedInstructions,
       mergedSkills,
       mergedRules,
+      mergedLspServers,
       topContext,
     }: let
       # Resolve effective context: per-CLI wins when set, else top-level.
@@ -198,9 +199,9 @@ lib.ai.app.mkAiApp {
         # lsp-config.json — typed LSP server definitions for the
         # copilot CLI. Inlined via `text` so module-eval can assert
         # on content and we don't pay for a store build per eval.
-        (lib.mkIf (cfg.lspServers != {}) {
+        (lib.mkIf (mergedLspServers != {}) {
           home.file."${cfg.configDir}/lsp-config.json".text =
-            builtins.toJSON cfg.lspServers;
+            builtins.toJSON mergedLspServers;
         })
         # Inline agent .md files. Mirrors the legacy
         # `mkMarkdownEntries` shape — one entry per agent, written
@@ -348,6 +349,7 @@ lib.ai.app.mkAiApp {
       mergedInstructions,
       mergedSkills,
       mergedRules,
+      mergedLspServers,
       topContext,
     }: let
       # Resolve effective context: per-CLI wins when set, else top-level.
@@ -384,9 +386,9 @@ lib.ai.app.mkAiApp {
         })
         # lsp-config.json — typed LSP server definitions. Inlined
         # as `text` for parity with the HM side.
-        (lib.mkIf (cfg.lspServers != {}) {
+        (lib.mkIf (mergedLspServers != {}) {
           files."${cfg.configDir}/lsp-config.json".text =
-            builtins.toJSON cfg.lspServers;
+            builtins.toJSON mergedLspServers;
         })
         # Inline agent .md files — one devenv `files.*` entry per
         # agent under `${configDir}/agents/<name>.md`.

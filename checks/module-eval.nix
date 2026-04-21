@@ -1408,4 +1408,95 @@ in {
     in
       (upstream.concise or null) == "Keep answers under 3 sentences."
   );
+
+  # HM: top-level ai.lspServers fans out to Kiro's settings/lsp.json.
+  module-kiro-hm-top-level-lsp-fanout = mkTest "kiro-hm-top-level-lsp-fanout" (
+    let
+      result = evalHm {
+        ai.kiro.enable = true;
+        ai.lspServers.nixd = {
+          command = "nixd";
+          args = [];
+        };
+      };
+      lspFile = result.config.home.file.".kiro/settings/lsp.json" or null;
+    in
+      lspFile
+      != null
+      && lib.hasInfix "nixd" (lspFile.text or "")
+  );
+
+  # Devenv: top-level ai.lspServers fans out to Kiro's settings/lsp.json.
+  module-kiro-devenv-top-level-lsp-fanout = mkTest "kiro-devenv-top-level-lsp-fanout" (
+    let
+      result = evalDevenv {
+        ai.kiro.enable = true;
+        ai.lspServers.nixd = {
+          command = "nixd";
+          args = [];
+        };
+      };
+      lspFile = result.config.files.".kiro/settings/lsp.json" or null;
+    in
+      lspFile
+      != null
+      && lib.hasInfix "nixd" (lspFile.text or "")
+  );
+
+  # HM: top-level ai.lspServers fans out to Copilot's lsp-config.json.
+  module-copilot-hm-top-level-lsp-fanout = mkTest "copilot-hm-top-level-lsp-fanout" (
+    let
+      result = evalHm {
+        ai.copilot.enable = true;
+        ai.lspServers.typescript = {
+          command = "typescript-language-server";
+          args = ["--stdio"];
+        };
+      };
+      lspFile = result.config.home.file.".copilot/lsp-config.json" or null;
+    in
+      lspFile
+      != null
+      && lib.hasInfix "typescript-language-server" (lspFile.text or "")
+  );
+
+  # Devenv: top-level ai.lspServers fans out to Copilot's lsp-config.json.
+  module-copilot-devenv-top-level-lsp-fanout = mkTest "copilot-devenv-top-level-lsp-fanout" (
+    let
+      result = evalDevenv {
+        ai.copilot.enable = true;
+        ai.lspServers.typescript = {
+          command = "typescript-language-server";
+          args = ["--stdio"];
+        };
+      };
+      lspFile = result.config.files.".config/github-copilot/lsp-config.json" or null;
+    in
+      lspFile
+      != null
+      && lib.hasInfix "typescript-language-server" (lspFile.text or "")
+  );
+
+  # HM: per-CLI ai.kiro.lspServers overrides top-level ai.lspServers on
+  # name collision. Kiro-specific override wins.
+  module-kiro-hm-per-cli-lsp-overrides-top-level = mkTest "kiro-hm-per-cli-lsp-overrides-top-level" (
+    let
+      result = evalHm {
+        ai = {
+          kiro.enable = true;
+          lspServers.nixd = {
+            command = "nixd-top-level";
+          };
+          kiro.lspServers.nixd = {
+            command = "nixd-kiro-specific";
+          };
+        };
+      };
+      lspFile = result.config.home.file.".kiro/settings/lsp.json" or null;
+    in
+      lspFile
+      != null
+      && lib.hasInfix "nixd-kiro-specific" (lspFile.text or "")
+      && !(lib.hasInfix "nixd-top-level" (lspFile.text or ""))
+  );
 }

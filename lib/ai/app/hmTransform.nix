@@ -29,6 +29,7 @@
   mergedInstructions = config.ai.instructions ++ cfg.instructions;
   mergedSkills = config.ai.skills // cfg.skills;
   mergedRules = config.ai.rules // cfg.rules;
+  mergedLspServers = config.ai.lspServers // (cfg.lspServers or {});
   topContext = config.ai.context;
 
   hmSpec = appRecord.hm or {};
@@ -41,7 +42,7 @@
   outputPath = hmDefaults.outputPath or defaults.outputPath or null;
 
   customConfig = hmConfigFn {
-    inherit cfg mergedServers mergedInstructions mergedSkills mergedRules topContext;
+    inherit cfg mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers topContext;
   };
 
   # Baseline render — concatenate rendered instructions into one

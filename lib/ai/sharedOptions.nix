@@ -60,6 +60,15 @@ in {
       '';
     };
 
+    lspServers = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.attrsOf lib.types.anything);
+      default = {};
+      description = ''
+        LSP servers fanned out to every enabled AI app. Per-app overrides
+        (ai.<name>.lspServers) merge on top and win on conflict.
+      '';
+    };
+
     skills = lib.mkOption {
       type = lib.types.attrsOf lib.types.path;
       default = {};

@@ -179,6 +179,7 @@ lib.ai.app.mkAiApp {
       mergedInstructions,
       mergedSkills,
       mergedRules,
+      mergedLspServers,
       topContext,
     }: let
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
@@ -264,9 +265,9 @@ lib.ai.app.mkAiApp {
           ];
         }
         # settings/lsp.json — typed LSP server definitions.
-        (lib.mkIf (cfg.lspServers != {}) {
+        (lib.mkIf (mergedLspServers != {}) {
           home.file."${cfg.configDir}/settings/lsp.json".text =
-            builtins.toJSON cfg.lspServers;
+            builtins.toJSON mergedLspServers;
         })
         # settings/mcp.json — merged MCP server pool. Kiro reads this
         # natively from its config dir. Render typed entries into the
@@ -398,6 +399,7 @@ lib.ai.app.mkAiApp {
       mergedInstructions,
       mergedSkills,
       mergedRules,
+      mergedLspServers,
       topContext,
     }: let
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
@@ -441,9 +443,9 @@ lib.ai.app.mkAiApp {
           env = lib.mapAttrs (_: lib.mkDefault) cfg.environmentVariables;
         })
         # settings/lsp.json — typed LSP server definitions.
-        (lib.mkIf (cfg.lspServers != {}) {
+        (lib.mkIf (mergedLspServers != {}) {
           files."${cfg.configDir}/settings/lsp.json".text =
-            builtins.toJSON cfg.lspServers;
+            builtins.toJSON mergedLspServers;
         })
         # settings/mcp.json — merged MCP server pool. Render typed
         # entries into the freeform shape Kiro expects.

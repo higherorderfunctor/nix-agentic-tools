@@ -91,6 +91,7 @@ lib.ai.app.mkAiApp {
       mergedSkills,
       mergedRules,
       topContext,
+      ...
     }: let
       # Resolve effective context: per-CLI wins when set (non-empty);
       # else top-level `ai.context`; else empty (upstream default).
