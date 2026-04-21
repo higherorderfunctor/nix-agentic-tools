@@ -81,6 +81,7 @@ kagisearch
 kanagawa
 kiro
 kirocli
+landable
 ldflags
 libgit
 libsets
