@@ -69,6 +69,19 @@ in {
       '';
     };
 
+    environmentVariables = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = {};
+      description = ''
+        Environment variables fanned out to every enabled AI app that
+        supports a wrapper/env surface (Kiro, Copilot). Per-app overrides
+        (ai.<name>.environmentVariables) merge on top and win on conflict.
+        Claude does NOT currently consume this pool — Claude env vars
+        should be set via `ai.claude.settings.env` instead (upstream
+        writes them into `~/.claude/settings.json`).
+      '';
+    };
+
     skills = lib.mkOption {
       type = lib.types.attrsOf lib.types.path;
       default = {};

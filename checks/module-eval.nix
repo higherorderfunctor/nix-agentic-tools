@@ -1540,4 +1540,70 @@ in {
     in
       (upstream.nixd.command or null) == "nixd-claude-specific"
   );
+
+  # HM: top-level ai.environmentVariables fans out to Kiro wrapper + Copilot wrapper.
+  module-kiro-hm-top-level-env-fanout = mkTest "kiro-hm-top-level-env-fanout" (
+    let
+      result = evalHm {
+        ai.kiro.enable = true;
+        ai.environmentVariables.KIRO_FOO = "bar";
+      };
+      packages = result.config.home.packages or [];
+      first = builtins.head packages;
+    in
+      builtins.length packages
+      == 1
+      && (first.name or "") == "kiro-cli-wrapped"
+  );
+
+  # Devenv: top-level ai.environmentVariables fans to Kiro env blob.
+  module-kiro-devenv-top-level-env-fanout = mkTest "kiro-devenv-top-level-env-fanout" (
+    let
+      result = evalDevenv {
+        ai.kiro.enable = true;
+        ai.environmentVariables.KIRO_DEBUG = "1";
+      };
+    in
+      (result.config.env.KIRO_DEBUG or null) == "1"
+  );
+
+  # HM: top-level ai.environmentVariables triggers Copilot wrapper.
+  module-copilot-hm-top-level-env-fanout = mkTest "copilot-hm-top-level-env-fanout" (
+    let
+      result = evalHm {
+        ai.copilot.enable = true;
+        ai.environmentVariables.COPILOT_FOO = "bar";
+      };
+      packages = result.config.home.packages or [];
+      first = builtins.head packages;
+    in
+      builtins.length packages
+      == 1
+      && (first.name or "") == "copilot-cli-wrapped"
+  );
+
+  # Devenv: top-level ai.environmentVariables fans to Copilot env blob.
+  module-copilot-devenv-top-level-env-fanout = mkTest "copilot-devenv-top-level-env-fanout" (
+    let
+      result = evalDevenv {
+        ai.copilot.enable = true;
+        ai.environmentVariables.COPILOT_DEBUG = "1";
+      };
+    in
+      (result.config.env.COPILOT_DEBUG or null) == "1"
+  );
+
+  # Devenv: per-CLI ai.kiro.environmentVariables wins over top-level on name collision.
+  module-kiro-devenv-per-cli-env-wins = mkTest "kiro-devenv-per-cli-env-wins" (
+    let
+      result = evalDevenv {
+        ai = {
+          kiro.enable = true;
+          environmentVariables.SHARED = "top-level";
+          kiro.environmentVariables.SHARED = "kiro-specific";
+        };
+      };
+    in
+      (result.config.env.SHARED or null) == "kiro-specific"
+  );
 }

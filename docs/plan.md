@@ -281,13 +281,16 @@ Moderate confidence, needs some investigation or design.
       the category intersection it cares about. See detailed writeup
       in `memory/project_factory_known_gaps.md` open question #6.
 
-- [ ] **Extend `sharedOptions.nix` with `ai.lspServers` +
-      `ai.environmentVariables`** — currently per-app only (DRY loss
-      between copilot and kiro). The legacy `modules/ai/default.nix`
-      had these as cross-ecosystem shared options. Extending
-      `sharedOptions.nix` is mechanically the same as the existing
-      `ai.skills` / `ai.instructions` / `ai.mcpServers` pattern.
-      See `memory/project_factory_known_gaps.md` open question #1.
+- [x] **Extend `sharedOptions.nix` with `ai.lspServers` +
+      `ai.environmentVariables`** — SHIPPED 2026-04-21 across
+      commits bba4f3e (`ai.lspServers` + Kiro/Copilot fanout),
+      46638e6 (`ai.claude.lspServers` + Claude routing), and the
+      `ai.environmentVariables` commit following this bullet update
+      (Kiro + Copilot fanout; Claude excluded because its env path
+      is via `ai.claude.settings.env`, not a wrapper). Both now
+      follow the `ai.skills` / `ai.instructions` / `ai.mcpServers`
+      pattern. `memory/project_factory_known_gaps.md` open question
+      \#1 closed.
 
 - [ ] **Consolidate fragment enumeration into single metadata table**
       — `devFragmentNames`, `packagePaths`, and `flake.nix`'s

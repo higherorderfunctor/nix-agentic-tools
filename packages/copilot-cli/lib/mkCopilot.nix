@@ -117,6 +117,7 @@ lib.ai.app.mkAiApp {
       mergedSkills,
       mergedRules,
       mergedLspServers,
+      mergedEnvironmentVariables,
       topContext,
     }: let
       # Resolve effective context: per-CLI wins when set, else top-level.
@@ -148,7 +149,7 @@ lib.ai.app.mkAiApp {
       # conventional correct shape and matches the rest of the
       # ai-clis overlay.
       hasMcp = mergedServers != {};
-      hasEnv = cfg.environmentVariables != {};
+      hasEnv = mergedEnvironmentVariables != {};
       needsWrapper = hasMcp || hasEnv;
       # `--add-flags` takes a single string; `makeWrapper` splices
       # it verbatim into the generated wrapper so shell variables
@@ -164,7 +165,7 @@ lib.ai.app.mkAiApp {
         lib.concatStringsSep " "
         (lib.mapAttrsToList
           (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}")
-          cfg.environmentVariables);
+          mergedEnvironmentVariables);
       wrappedPackage = pkgs.symlinkJoin {
         name = "copilot-cli-wrapped";
         paths = [cfg.package];
@@ -350,6 +351,7 @@ lib.ai.app.mkAiApp {
       mergedSkills,
       mergedRules,
       mergedLspServers,
+      mergedEnvironmentVariables,
       topContext,
     }: let
       # Resolve effective context: per-CLI wins when set, else top-level.
@@ -381,8 +383,8 @@ lib.ai.app.mkAiApp {
         # Environment variables — devenv has a native `env` attrset
         # so no wrapper is required. `mkDefault` lets consumers
         # override per-project via explicit `env.FOO = ...`.
-        (lib.mkIf (cfg.environmentVariables != {}) {
-          env = lib.mapAttrs (_: lib.mkDefault) cfg.environmentVariables;
+        (lib.mkIf (mergedEnvironmentVariables != {}) {
+          env = lib.mapAttrs (_: lib.mkDefault) mergedEnvironmentVariables;
         })
         # lsp-config.json — typed LSP server definitions. Inlined
         # as `text` for parity with the HM side.

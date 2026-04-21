@@ -17,6 +17,7 @@
   mergedSkills = config.ai.skills // cfg.skills;
   mergedRules = config.ai.rules // cfg.rules;
   mergedLspServers = config.ai.lspServers // (cfg.lspServers or {});
+  mergedEnvironmentVariables = config.ai.environmentVariables // (cfg.environmentVariables or {});
   topContext = config.ai.context;
 
   devenvSpec = appRecord.devenv or {};
@@ -29,7 +30,7 @@
   outputPath = devenvDefaults.outputPath or defaults.outputPath or null;
 
   customConfig = devenvConfigFn {
-    inherit cfg mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers topContext;
+    inherit cfg mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables topContext;
   };
 
   renderedInstructions =

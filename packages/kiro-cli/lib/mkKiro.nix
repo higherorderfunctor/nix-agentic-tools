@@ -180,6 +180,7 @@ lib.ai.app.mkAiApp {
       mergedSkills,
       mergedRules,
       mergedLspServers,
+      mergedEnvironmentVariables,
       topContext,
     }: let
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
@@ -206,7 +207,7 @@ lib.ai.app.mkAiApp {
 
       # symlinkJoin wrapper for environmentVariables, --tui, and
       # --trust-tools. Conditional: raw package when nothing to wrap.
-      hasEnv = cfg.environmentVariables != {};
+      hasEnv = mergedEnvironmentVariables != {};
       hasTui = cfg.tui;
       hasTrust = cfg.trustedMcpTools != [];
       needsWrapper = hasEnv || hasTui || hasTrust;
@@ -214,7 +215,7 @@ lib.ai.app.mkAiApp {
         lib.concatStringsSep " "
         (lib.mapAttrsToList
           (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}")
-          cfg.environmentVariables);
+          mergedEnvironmentVariables);
       trustToolsCsv = lib.concatStringsSep "," cfg.trustedMcpTools;
       wrappedPackage = pkgs.symlinkJoin {
         name = "kiro-cli-wrapped";
@@ -400,6 +401,7 @@ lib.ai.app.mkAiApp {
       mergedSkills,
       mergedRules,
       mergedLspServers,
+      mergedEnvironmentVariables,
       topContext,
     }: let
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
@@ -439,8 +441,8 @@ lib.ai.app.mkAiApp {
         }
         # Environment variables — devenv has a native `env` attrset
         # so no wrapper is required.
-        (lib.mkIf (cfg.environmentVariables != {}) {
-          env = lib.mapAttrs (_: lib.mkDefault) cfg.environmentVariables;
+        (lib.mkIf (mergedEnvironmentVariables != {}) {
+          env = lib.mapAttrs (_: lib.mkDefault) mergedEnvironmentVariables;
         })
         # settings/lsp.json — typed LSP server definitions.
         (lib.mkIf (mergedLspServers != {}) {
