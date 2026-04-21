@@ -120,61 +120,15 @@
           };
         };
       };
-      # Stub: upstream programs.claude-code (not defined in this repo)
-      programs.claude-code = {
-        enable = lib.mkEnableOption "Claude Code (upstream HM module)";
-        package = lib.mkOption {
-          type = lib.types.nullOr lib.types.package;
-          default = null;
-          description = "Claude Code package (upstream HM stub).";
-        };
-        settings = lib.mkOption {
-          type = lib.types.submodule {
-            freeformType = (pkgs.formats.json {}).type;
-            options.model = lib.mkOption {
-              type = lib.types.nullOr lib.types.str;
-              default = null;
-              description = "Claude Code model.";
-            };
-          };
-          default = {};
-          description = "Claude Code settings.";
-        };
-        skills = lib.mkOption {
-          type = lib.types.attrsOf lib.types.anything;
-          default = {};
-          description = "Claude Code skills.";
-        };
-        context = lib.mkOption {
-          type = lib.types.either lib.types.lines lib.types.path;
-          default = "";
-          description = "Claude Code global context (upstream HM stub).";
-        };
-        plugins = lib.mkOption {
-          type = with lib.types; listOf (either package path);
-          default = [];
-          description = "Claude Code plugins (upstream HM stub).";
-        };
-        mcpServers = lib.mkOption {
-          type = lib.types.attrsOf lib.types.anything;
-          default = {};
-          description = "Claude Code MCP servers (upstream HM stub).";
-        };
-        lspServers = lib.mkOption {
-          type = lib.types.attrsOf (lib.types.attrsOf lib.types.anything);
-          default = {};
-          description = "Claude Code LSP servers (upstream HM stub).";
-        };
-        marketplaces = lib.mkOption {
-          type = with lib.types; attrsOf (either package path);
-          default = {};
-          description = "Claude Code plugin marketplaces (upstream HM stub).";
-        };
-        outputStyles = lib.mkOption {
-          type = with lib.types; attrsOf (either lines path);
-          default = {};
-          description = "Claude Code custom output styles (upstream HM stub).";
-        };
+      # Stub: upstream programs.claude-code (not defined in this repo).
+      # Collapsed to attrsOf anything because options-doc filters to
+      # `ai.*` prefixes anyway — per-option typed stubs here produce
+      # no doc output, just maintenance churn each time a new
+      # `ai.claude.*` route lands. Freeform absorbs everything.
+      programs.claude-code = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+        description = "Upstream programs.claude-code stub (out of doc scope).";
       };
       systemd.user.services = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
@@ -192,33 +146,12 @@
         default = [];
         description = "Module assertions.";
       };
-      claude.code = {
-        enable = lib.mkEnableOption "Claude Code devenv integration";
-        env = lib.mkOption {
-          type = lib.types.attrsOf lib.types.str;
-          default = {};
-          description = "Claude Code environment variables.";
-        };
-        hooks = lib.mkOption {
-          type = lib.types.attrsOf lib.types.anything;
-          default = {};
-          description = "Claude Code hooks (routed from ai.claude.settings.hooks).";
-        };
-        mcpServers = lib.mkOption {
-          type = lib.types.attrsOf (lib.types.attrsOf lib.types.anything);
-          default = {};
-          description = "Claude Code MCP servers.";
-        };
-        model = lib.mkOption {
-          type = lib.types.nullOr lib.types.str;
-          default = null;
-          description = "Claude Code model.";
-        };
-        settingsPath = lib.mkOption {
-          type = lib.types.str;
-          default = ".claude/settings.json";
-          description = "Path to Claude Code settings.json (pinned by our factory for file-merge).";
-        };
+      # Stub: upstream devenv claude.code (not defined in this repo).
+      # Collapsed per the same rationale as programs.claude-code above.
+      claude.code = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+        description = "Upstream devenv claude.code stub (out of doc scope).";
       };
       env = lib.mkOption {
         type = lib.types.attrsOf lib.types.str;

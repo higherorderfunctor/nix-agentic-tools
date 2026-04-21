@@ -61,47 +61,15 @@
         type = lib.types.attrsOf lib.types.anything;
         default = {};
       };
-      programs.claude-code = {
-        enable = lib.mkOption {
-          type = lib.types.bool;
-          default = false;
-        };
-        package = lib.mkOption {
-          type = lib.types.nullOr lib.types.package;
-          default = null;
-        };
-        settings = lib.mkOption {
-          type = lib.types.attrsOf lib.types.anything;
-          default = {};
-        };
-        skills = lib.mkOption {
-          type = lib.types.attrsOf lib.types.anything;
-          default = {};
-        };
-        context = lib.mkOption {
-          type = lib.types.either lib.types.lines lib.types.path;
-          default = "";
-        };
-        plugins = lib.mkOption {
-          type = with lib.types; listOf (either package path);
-          default = [];
-        };
-        mcpServers = lib.mkOption {
-          type = lib.types.attrsOf lib.types.anything;
-          default = {};
-        };
-        lspServers = lib.mkOption {
-          type = lib.types.attrsOf lib.types.anything;
-          default = {};
-        };
-        marketplaces = lib.mkOption {
-          type = lib.types.attrsOf lib.types.anything;
-          default = {};
-        };
-        outputStyles = lib.mkOption {
-          type = lib.types.attrsOf lib.types.anything;
-          default = {};
-        };
+      # programs.claude-code is collapsed to attrsOf anything —
+      # upstream options aren't in our doc scope (options-doc filters
+      # to `ai.*` prefixes), and the stub's only job is to absorb
+      # whatever our factory writes. Per-option typed stubs had to be
+      # extended every time we added a new `ai.claude.*` route; this
+      # freeform form is future-proof.
+      programs.claude-code = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
       };
     };
   };
