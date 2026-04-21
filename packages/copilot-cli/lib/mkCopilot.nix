@@ -118,6 +118,7 @@ lib.ai.app.mkAiApp {
       mergedRules,
       mergedLspServers,
       mergedEnvironmentVariables,
+      mergedClaudeCopilotAgents,
       topContext,
     }: let
       aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
@@ -208,12 +209,12 @@ lib.ai.app.mkAiApp {
         # Inline agent .md files. Mirrors the legacy
         # `mkMarkdownEntries` shape — one entry per agent, written
         # under `${configDir}/agents/<name>.md`.
-        (lib.mkIf (cfg.agents != {}) {
+        (lib.mkIf (mergedClaudeCopilotAgents != {}) {
           home.file = lib.mapAttrs' (name: content:
             lib.nameValuePair "${cfg.configDir}/agents/${name}.md" {
               text = content;
             })
-          cfg.agents;
+          mergedClaudeCopilotAgents;
         })
         # External agents directory — symlinked wholesale via
         # `recursive = true` so each file inside gets its own
@@ -365,6 +366,7 @@ lib.ai.app.mkAiApp {
       mergedRules,
       mergedLspServers,
       mergedEnvironmentVariables,
+      mergedClaudeCopilotAgents,
       topContext,
     }: let
       aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
@@ -409,12 +411,12 @@ lib.ai.app.mkAiApp {
         # Inline agent files — one devenv `files.*` entry per agent
         # under `${projectDir}/agents/<name>.agent.md`. Copilot's
         # native agent filename convention is `.agent.md` suffix.
-        (lib.mkIf (cfg.agents != {}) {
+        (lib.mkIf (mergedClaudeCopilotAgents != {}) {
           files = lib.mapAttrs' (name: content:
             lib.nameValuePair "${cfg.projectDir}/agents/${name}.agent.md" {
               text = content;
             })
-          cfg.agents;
+          mergedClaudeCopilotAgents;
         })
         # External agents directory — devenv's `files.*.source`
         # can't recurse, so we walk the tree at eval time and produce

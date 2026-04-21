@@ -1641,4 +1641,74 @@ in {
       != null
       && lib.hasInfix "/bin/hello" (lspFile.text or "")
   );
+
+  # HM: top-level ai.agents fans out to Claude's programs.claude-code.agents.
+  module-claude-hm-top-level-agents-fanout = mkTest "claude-hm-top-level-agents-fanout" (
+    let
+      result = evalHm {
+        ai.claude.enable = true;
+        ai.agents.reviewer = "# Reviewer\n\nReview carefully.";
+      };
+      upstream = result.config.programs.claude-code.agents or {};
+    in
+      (upstream.reviewer or null)
+      == "# Reviewer\n\nReview carefully."
+  );
+
+  # HM: top-level ai.agents fans out to Copilot's agents file write.
+  module-copilot-hm-top-level-agents-fanout = mkTest "copilot-hm-top-level-agents-fanout" (
+    let
+      result = evalHm {
+        ai.copilot.enable = true;
+        ai.agents.reviewer = "# Reviewer";
+      };
+      agentFile = result.config.home.file.".copilot/agents/reviewer.md" or null;
+    in
+      agentFile
+      != null
+      && lib.hasInfix "Reviewer" (agentFile.text or "")
+  );
+
+  # Devenv: top-level ai.agents fans out to Copilot's .github/agents.
+  module-copilot-devenv-top-level-agents-fanout = mkTest "copilot-devenv-top-level-agents-fanout" (
+    let
+      result = evalDevenv {
+        ai.copilot.enable = true;
+        ai.agents.reviewer = "# Reviewer";
+      };
+      agentFile = result.config.files.".github/agents/reviewer.agent.md" or null;
+    in
+      agentFile
+      != null
+      && lib.hasInfix "Reviewer" (agentFile.text or "")
+  );
+
+  # Precedence: ai.claude.agents wins over ai.agents on name collision.
+  module-claude-hm-per-cli-agents-wins = mkTest "claude-hm-per-cli-agents-wins" (
+    let
+      result = evalHm {
+        ai = {
+          claude.enable = true;
+          agents.reviewer = "# Top-level";
+          claude.agents.reviewer = "# Claude-specific";
+        };
+      };
+      upstream = result.config.programs.claude-code.agents or {};
+    in
+      (upstream.reviewer or null) == "# Claude-specific"
+  );
+
+  # Kiro independence: top-level ai.agents is markdown-shape, Kiro agents
+  # are JSON-shape. Setting ai.agents.foo when ai.kiro.enable = true
+  # must NOT produce a .kiro/agents/foo file.
+  module-kiro-ignores-top-level-agents = mkTest "kiro-ignores-top-level-agents" (
+    let
+      result = evalHm {
+        ai.kiro.enable = true;
+        ai.agents.reviewer = "# Reviewer markdown";
+      };
+    in
+      !(result.config.home.file ? ".kiro/agents/reviewer.json")
+      && !(result.config.home.file ? ".kiro/agents/reviewer.md")
+  );
 }

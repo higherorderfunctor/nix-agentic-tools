@@ -72,6 +72,22 @@ in {
       '';
     };
 
+    agents = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.either lib.types.lines lib.types.path);
+      default = {};
+      description = ''
+        Markdown+frontmatter agent definitions fanned out to Claude
+        and Copilot. Each entry becomes a file:
+        - Claude  → ~/.claude/agents/<name>.md
+        - Copilot → .github/agents/<name>.agent.md (devenv) or
+                    ~/.copilot/agents/<name>.agent.md (HM)
+        Kiro intentionally excluded — Kiro's agent format is JSON
+        with different semantic fields; use `ai.kiro.agents`
+        directly for that ecosystem. Per-app overrides
+        (ai.<cli>.agents) merge on top and win on conflict.
+      '';
+    };
+
     environmentVariables = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
       default = {};

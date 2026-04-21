@@ -31,6 +31,7 @@
   mergedRules = config.ai.rules // cfg.rules;
   mergedLspServers = config.ai.lspServers // (cfg.lspServers or {});
   mergedEnvironmentVariables = config.ai.environmentVariables // (cfg.environmentVariables or {});
+  mergedClaudeCopilotAgents = config.ai.agents // (cfg.agents or {});
   topContext = config.ai.context;
 
   hmSpec = appRecord.hm or {};
@@ -43,7 +44,7 @@
   outputPath = hmDefaults.outputPath or defaults.outputPath or null;
 
   customConfig = hmConfigFn {
-    inherit cfg mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables topContext;
+    inherit cfg mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables mergedClaudeCopilotAgents topContext;
   };
 
   # Baseline render — concatenate rendered instructions into one

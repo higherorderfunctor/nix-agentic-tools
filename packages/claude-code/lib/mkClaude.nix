@@ -93,6 +93,17 @@ lib.ai.app.mkAiApp {
         }
       '';
     };
+    agents = lib.mkOption {
+      type = with lib.types; attrsOf (either lines path);
+      default = {};
+      description = ''
+        Claude-specific agent markdown (merged with top-level
+        `ai.agents`; per-CLI wins on conflict). Routed to
+        `programs.claude-code.agents`; upstream writes them under
+        `~/.claude/agents/<name>.md`. HM only — upstream devenv
+        `claude.code` has no agents surface.
+      '';
+    };
   };
   # HM-specific projection
   hm = {
@@ -104,6 +115,7 @@ lib.ai.app.mkAiApp {
       mergedSkills,
       mergedRules,
       mergedLspServers,
+      mergedClaudeCopilotAgents,
       topContext,
       ...
     }: let
@@ -135,6 +147,7 @@ lib.ai.app.mkAiApp {
             plugins = lib.mkDefault cfg.plugins;
             inherit (cfg) marketplaces outputStyles;
             lspServers = lib.mapAttrs aiCommon.mkClaudeLspConfig mergedLspServers;
+            agents = mergedClaudeCopilotAgents;
             # Transitional raw inherit. End state mirrors the devenv
             # side in this file: route `cfg.settings.hooks` to
             # upstream's hooks option and gap-write the rest via

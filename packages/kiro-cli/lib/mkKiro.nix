@@ -182,6 +182,7 @@ lib.ai.app.mkAiApp {
       mergedLspServers,
       mergedEnvironmentVariables,
       topContext,
+      ...
     }: let
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
       aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
@@ -403,6 +404,7 @@ lib.ai.app.mkAiApp {
       mergedLspServers,
       mergedEnvironmentVariables,
       topContext,
+      ...
     }: let
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
       aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
