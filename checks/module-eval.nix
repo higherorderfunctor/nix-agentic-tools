@@ -1234,4 +1234,53 @@ in {
       != null
       && lib.hasInfix "Write tests" (ruleFile.text or "")
   );
+
+  # Copilot HM: per-CLI context → `<configDir>/<contextFilename>`.
+  module-copilot-hm-writes-context = mkTest "copilot-hm-writes-context" (
+    let
+      result = evalHm {
+        ai.copilot = {
+          enable = true;
+          context = "Copilot-specific context.";
+        };
+      };
+      contextFile =
+        result.config.home.file.".config/github-copilot/copilot-instructions.md" or null;
+    in
+      contextFile
+      != null
+      && lib.hasInfix "Copilot-specific context" (contextFile.text or "")
+  );
+
+  # Copilot HM: top-level ai.context fans out when per-CLI unset.
+  module-copilot-hm-top-level-context-fallback = mkTest "copilot-hm-top-level-context-fallback" (
+    let
+      result = evalHm {
+        ai.copilot.enable = true;
+        ai.context = "Top-level context flows everywhere.";
+      };
+      contextFile =
+        result.config.home.file.".config/github-copilot/copilot-instructions.md" or null;
+    in
+      contextFile
+      != null
+      && lib.hasInfix "Top-level context" (contextFile.text or "")
+  );
+
+  # Copilot devenv parity.
+  module-copilot-devenv-writes-context = mkTest "copilot-devenv-writes-context" (
+    let
+      result = evalDevenv {
+        ai.copilot = {
+          enable = true;
+          context = "Copilot devenv context.";
+        };
+      };
+      contextFile =
+        result.config.files.".config/github-copilot/copilot-instructions.md" or null;
+    in
+      contextFile
+      != null
+      && lib.hasInfix "Copilot devenv context" (contextFile.text or "")
+  );
 }

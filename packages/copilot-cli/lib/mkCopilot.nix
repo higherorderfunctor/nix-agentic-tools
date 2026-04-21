@@ -40,6 +40,27 @@ lib.ai.app.mkAiApp {
       default = ".config/github-copilot";
       description = "Config directory relative to HOME / devenv root.";
     };
+    # Copilot-scope global context. When set, takes precedence over
+    # top-level `ai.context`. Written without frontmatter to
+    # `<configDir>/<contextFilename>` — Copilot's native global-scope
+    # single-file convention.
+    context = lib.mkOption {
+      type = lib.types.nullOr (lib.types.either lib.types.lines lib.types.path);
+      default = null;
+      description = ''
+        Copilot-scope global context. Inline string or path to a file.
+        Written to `<configDir>/<contextFilename>` with no frontmatter.
+        When null, falls back to top-level `ai.context`.
+      '';
+      example = lib.literalExpression "./copilot-context.md";
+    };
+    # Filename under `<configDir>/` for the context file. Defaults to
+    # `copilot-instructions.md` to match Copilot CLI's native convention.
+    contextFilename = lib.mkOption {
+      type = lib.types.str;
+      default = "copilot-instructions.md";
+      description = "Filename for the context file inside `<configDir>/`.";
+    };
     # Copilot-specific freeform settings. Consumed by the settings.json
     # activation merge in `hm.config` (runtime-merge via `jq -s '.[0] * .[1]'`
     # to preserve user-added `trusted_folders` across rebuilds) and by
@@ -92,17 +113,20 @@ lib.ai.app.mkAiApp {
   };
   hm = {
     options = {};
-    # `...` absorbs topContext passed by the transforms; Copilot's
-    # global-context path is TBD (ai.copilot.context not yet wired),
-    # so no consumer here today.
     config = {
       cfg,
       mergedServers,
       mergedInstructions,
       mergedSkills,
       mergedRules,
-      ...
+      topContext,
     }: let
+      # Resolve effective context: per-CLI wins when set, else top-level.
+      effectiveContext =
+        if cfg.context != null
+        then cfg.context
+        else topContext;
+      hasContext = effectiveContext != null && effectiveContext != "";
       resolveRuleText = rule:
         if builtins.isPath rule.text
         then builtins.readFile rule.text
@@ -244,6 +268,16 @@ lib.ai.app.mkAiApp {
             })
           mergedRules;
         })
+        # Global context → `<configDir>/<contextFilename>`. Written
+        # without frontmatter; precedence is per-CLI > top-level. Conflicts
+        # with the baseline instructions-concat when both are set — eval-time
+        # error signals the user to pick one pathway.
+        (lib.mkIf hasContext {
+          home.file."${cfg.configDir}/${cfg.contextFilename}" =
+            if builtins.isPath effectiveContext
+            then {source = effectiveContext;}
+            else {text = effectiveContext;};
+        })
         # Skills fanout — copilot has no upstream HM skills option, so
         # we write `home.file."${configDir}/skills/<name>"` entries
         # directly via `mkSkillEntries`, which uses `recursive = true`
@@ -301,17 +335,20 @@ lib.ai.app.mkAiApp {
   };
   devenv = {
     options = {};
-    # `...` absorbs topContext passed by the transforms; Copilot's
-    # global-context path is TBD (ai.copilot.context not yet wired),
-    # so no consumer here today.
     config = {
       cfg,
       mergedServers,
       mergedInstructions,
       mergedSkills,
       mergedRules,
-      ...
+      topContext,
     }: let
+      # Resolve effective context: per-CLI wins when set, else top-level.
+      effectiveContext =
+        if cfg.context != null
+        then cfg.context
+        else topContext;
+      hasContext = effectiveContext != null && effectiveContext != "";
       resolveRuleText = rule:
         if builtins.isPath rule.text
         then builtins.readFile rule.text
@@ -419,6 +456,13 @@ lib.ai.app.mkAiApp {
                 });
             })
           mergedRules;
+        })
+        # Global context → `<configDir>/<contextFilename>` (parity with HM).
+        (lib.mkIf hasContext {
+          files."${cfg.configDir}/${cfg.contextFilename}" =
+            if builtins.isPath effectiveContext
+            then {source = effectiveContext;}
+            else {text = effectiveContext;};
         })
         # settings.json — devenv does NOT support HM-style activation
         # scripts, so the runtime-merge story is different. Devenv
