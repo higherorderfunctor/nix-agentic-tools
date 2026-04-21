@@ -1,12 +1,33 @@
 # `ai.claude.settings` — Translation + Gap Fill
 
-> **Status:** plan only, awaiting review. Not implemented.
+> **Status:** devenv side shipped in commit 796677d (2026-04-21). HM
+> translation refactor tracked as separate plan doc.
 >
 > **Goal:** close the `ai.claude.settings` backlog item by making the
 > factory translate our input to each backend's native surface
 > (upstream where available, direct file write where not). Matches the
 > transformer-pattern principle — our optionset is OUR design, the
 > factory translates to each backend's shape on emission.
+
+## Implementation notes (deltas from plan)
+
+- **Options-doc stub discovery (fixed in same commit).** The plan
+  anticipated that `checks/module-eval.nix`'s `devenvStubs` would
+  absorb the new `claude.code.hooks` / `claude.code.settingsPath`
+  writes (it uses `attrsOf anything`, so it does). It did not account
+  for the SEPARATE `devenvStubModule` in `lib/options-doc.nix`, which
+  declares a TYPED subset of `claude.code` options (`enable`, `env`,
+  `mcpServers`, `model`). Our new writes hit
+  `"option does not exist"` errors in the `docs-options-devenv`
+  derivation. Fixed by extending the options-doc stub with `hooks`
+  (attrs-of-anything) and `settingsPath` (str, default
+  `.claude/settings.json`).
+- **Takeaway for future factory changes:** when adding writes to
+  `claude.code.*`, `copilot.*`, or `kiro.*` (stubbed-upstream
+  options), check BOTH stubs — `devenvStubs` in `checks/module-eval.nix`
+  and `devenvStubModule` in `lib/options-doc.nix`. Same for the HM
+  side: `hmStubs` (module-eval) and `hmStubModule` (options-doc).
+  Consider consolidating the two stubs in a future cleanup pass.
 
 ## Current state audit
 
@@ -133,19 +154,32 @@ devenv translation + tests.
 
 ## Out of scope (flagged follow-ups)
 
-- **HM explicit-translation refactor.** Replace `inherit (cfg) settings;`
-  with the same hooks-routing + gap-write pattern used on the devenv
-  side, so HM and devenv share one translation shape. Deferred because
-  today's inherit works; no behavior change needed to close the
-  immediate backlog item.
+- **HM explicit-translation refactor. ~~Anti-pattern~~ → identity
+  translation.** _Correction (2026-04-21):_ initial scoping
+  flagged the HM `inherit (cfg) settings;` as raw inherit needing
+  the same refactor as devenv. On further research this is wrong —
+  upstream HM's `programs.claude-code.settings` accepts
+  `attrsOf anything` and writes the full attrs to
+  `.claude/settings.json` via `home.file.<path>.source`. Our schema
+  declares the same shape, so `inherit (cfg) settings;` is IDENTITY
+  translation, not a mirror. Translation happens; it just has
+  nothing to do. No refactor needed until the schema diverges
+  (see typed-schema bullet below). The HM upstream `home.file.source`
+  path-typed write also means the module-merge trick we used on
+  devenv would NOT work on HM — two `.source` setters conflict.
+  If/when typed schema lands, HM would need `mkForce` + our own
+  JSON render, different strategy than devenv.
 - **Typed `ai.claude.settings` schema.** Opinionated submodule with
   known keys (`effortLevel`, `enableAllProjectMcpServers`,
   `permissions`, `env`, `hooks`, `outputStyle`) + freeformType escape
-  hatch. Matches how Kiro's settings are typed today. Separate design
-  pass.
-- **Same treatment for `ai.claude.plugins`.** Another `inherit (cfg) plugins;`
-  raw-inherit in the HM block. Same anti-pattern. Flagged for a
-  follow-up plan doc.
+  hatch. Matches how Kiro's settings are typed today. Becomes the
+  trigger for an actual HM translation refactor (see above). Separate
+  design pass.
+- **`ai.claude.plugins` — same story as settings.** Upstream HM's
+  `plugins` option is `listOf (either package path)` matching our
+  declaration exactly. `inherit (cfg) plugins;` is identity
+  translation. Not an anti-pattern. Flagged in plan.md as a
+  typed-schema follow-up only.
 - **Any upstream engagement.** Not on the table.
 
 ## Size estimate
