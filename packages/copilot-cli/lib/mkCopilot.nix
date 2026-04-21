@@ -334,14 +334,26 @@ lib.ai.app.mkAiApp {
   };
   devenv = {
     options = {
-      # Project-scope config dir relative to devenv root. Preserves
-      # the legacy path. A separate design question (tracked in
-      # plan.md follow-ups) is whether devenv should target Copilot's
-      # native `.github/*` project layout — not in scope here.
+      # Wrapper-aimed config dir — holds files pointed at by CLI
+      # wrapper flags (mcp-config.json) and files Copilot doesn't
+      # auto-read at project scope (lsp-config.json, settings.json).
+      # Project-scope files Copilot DOES auto-read live under
+      # `projectDir` (default `.github`) instead.
       configDir = lib.mkOption {
         type = lib.types.str;
         default = ".config/github-copilot";
-        description = "Project-scope config dir relative to devenv root.";
+        description = "Wrapper-aimed config dir (mcp-config, lsp-config, settings). Relative to devenv root.";
+      };
+      # Project-scope dir Copilot actually reads at project level:
+      # `.github/copilot-instructions.md`, `.github/instructions/`,
+      # `.github/agents/`, `.github/skills/`. Moving these out of
+      # `configDir` matches Copilot's documented conventions — both
+      # cloud Copilot (coding agent, Copilot Workspace) and local
+      # Copilot CLI read from this layout.
+      projectDir = lib.mkOption {
+        type = lib.types.str;
+        default = ".github";
+        description = "Project-scope dir Copilot reads (context, rules, agents, skills). Relative to devenv root.";
       };
     };
     config = {
@@ -392,22 +404,22 @@ lib.ai.app.mkAiApp {
           files."${cfg.configDir}/lsp-config.json".text =
             builtins.toJSON mergedLspServers;
         })
-        # Inline agent .md files — one devenv `files.*` entry per
-        # agent under `${configDir}/agents/<name>.md`.
+        # Inline agent files — one devenv `files.*` entry per agent
+        # under `${projectDir}/agents/<name>.agent.md`. Copilot's
+        # native agent filename convention is `.agent.md` suffix.
         (lib.mkIf (cfg.agents != {}) {
           files = lib.mapAttrs' (name: content:
-            lib.nameValuePair "${cfg.configDir}/agents/${name}.md" {
+            lib.nameValuePair "${cfg.projectDir}/agents/${name}.agent.md" {
               text = content;
             })
           cfg.agents;
         })
         # External agents directory — devenv's `files.*.source`
-        # can't recurse, so we reuse `mkDevenvSkillEntries`' walker
-        # to produce one `files.*` entry per leaf file under the
-        # agents tree. The walker is generic over subdirectory
-        # names (it just writes into `<prefix>/skills/<name>` by
-        # convention); we adapt here by re-walking manually to keep
-        # the path shape at `${configDir}/agents/...`.
+        # can't recurse, so we walk the tree at eval time and produce
+        # one `files.*` entry per leaf under `${projectDir}/agents/`.
+        # Filenames in the external dir are preserved as-is (user
+        # supplies `.agent.md`-suffixed files if they want that
+        # convention).
         (lib.mkIf (cfg.agentsDir != null) (let
           walkDir = prefix: dir:
             lib.concatMapAttrs (
@@ -420,17 +432,17 @@ lib.ai.app.mkAiApp {
             )
             (builtins.readDir dir);
         in {
-          files = walkDir "${cfg.configDir}/agents" cfg.agentsDir;
+          files = walkDir "${cfg.projectDir}/agents" cfg.agentsDir;
         }))
         # Skills via the user-space walker. devenv's `files.*.source`
         # cannot walk a directory recursively (see the devenv files
         # internals fragment), so we enumerate leaves at eval time
         # via `mkDevenvSkillEntries`. Produces one `files.<path>`
-        # entry per leaf file under the skill dir.
+        # entry per leaf file under `${projectDir}/skills/<skill>/`.
         (let
           helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
         in {
-          files = helpers.mkDevenvSkillEntries cfg.configDir mergedSkills;
+          files = helpers.mkDevenvSkillEntries cfg.projectDir mergedSkills;
         })
         # mcp-config.json — static write of the merged MCP server
         # pool. Inlined as `text` for consistency with the HM side.
@@ -468,9 +480,11 @@ lib.ai.app.mkAiApp {
             })
           mergedRules;
         })
-        # Global context → `<configDir>/<contextFilename>` (parity with HM).
+        # Global context → `<projectDir>/<contextFilename>` (project-scope).
+        # Default lands at `.github/copilot-instructions.md`, which
+        # Copilot reads natively as project-scope context.
         (lib.mkIf hasContext {
-          files."${cfg.configDir}/${cfg.contextFilename}" =
+          files."${cfg.projectDir}/${cfg.contextFilename}" =
             if builtins.isPath effectiveContext
             then {source = effectiveContext;}
             else {text = effectiveContext;};

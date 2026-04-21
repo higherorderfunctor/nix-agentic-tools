@@ -673,7 +673,7 @@ in {
           agents.reviewer = "# Reviewer\n\nReview code carefully.";
         };
       };
-      agentFile = result.config.files.".config/github-copilot/agents/reviewer.md" or null;
+      agentFile = result.config.files.".github/agents/reviewer.agent.md" or null;
     in
       agentFile
       != null
@@ -1345,7 +1345,7 @@ in {
         };
       };
       contextFile =
-        result.config.files.".config/github-copilot/copilot-instructions.md" or null;
+        result.config.files.".github/copilot-instructions.md" or null;
     in
       contextFile
       != null
