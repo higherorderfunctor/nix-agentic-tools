@@ -10,10 +10,12 @@
 # record apply to both backends; `devenv.options` adds
 # devenv-specific options.
 {lib}: appRecord: {config, ...}: let
+  aiCommon = import ../ai-common.nix {inherit lib;};
   cfg = config.ai.${appRecord.name};
   mergedServers = config.ai.mcpServers // cfg.mcpServers;
   mergedInstructions = config.ai.instructions ++ cfg.instructions;
   mergedSkills = config.ai.skills // cfg.skills;
+  mergedRules = config.ai.rules // cfg.rules;
   topContext = config.ai.context;
 
   devenvSpec = appRecord.devenv or {};
@@ -26,7 +28,7 @@
   outputPath = devenvDefaults.outputPath or defaults.outputPath or null;
 
   customConfig = devenvConfigFn {
-    inherit cfg mergedServers mergedInstructions mergedSkills topContext;
+    inherit cfg mergedServers mergedInstructions mergedSkills mergedRules topContext;
   };
 
   renderedInstructions =
@@ -57,6 +59,11 @@ in {
         type = lib.types.listOf lib.types.attrs;
         default = [];
         description = "${appRecord.name}-specific instructions.";
+      };
+      rules = lib.mkOption {
+        type = lib.types.attrsOf aiCommon.ruleModule;
+        default = {};
+        description = "${appRecord.name}-specific rules (merged with top-level ai.rules; per-app wins on conflict).";
       };
       skills = lib.mkOption {
         type = lib.types.attrsOf lib.types.path;

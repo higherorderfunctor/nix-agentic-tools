@@ -92,6 +92,42 @@
     };
   };
 
+  # ── Rule submodule type ────────────────────────────────────────────
+  # Attrs-shaped analog of instructionModule. Each entry becomes one file
+  # in the per-ecosystem rules directory (.claude/rules/<name>.md,
+  # .kiro/steering/<name>.md, .github/instructions/<name>.instructions.md).
+  # The attribute name becomes the filename stem. `text` accepts either
+  # inline markdown lines or a path to a file.
+  #
+  # Graduated shape replacing the list-of-attrs `instructions` pattern —
+  # attrs let per-CLI overrides win on name collision and produce
+  # deterministic ordering. List shape is kept for back-compat; rules
+  # and instructions coexist in the factory emission.
+  ruleModule = lib.types.submodule {
+    options = {
+      description = lib.mkOption {
+        type = lib.types.str;
+        default = "";
+        description = "Short description (used by Claude and Kiro frontmatter).";
+      };
+      paths = lib.mkOption {
+        type = lib.types.nullOr (lib.types.listOf lib.types.str);
+        default = null;
+        description = ''
+          File path globs this rule applies to. null = always loaded.
+          Translated per ecosystem:
+          - Claude: paths: frontmatter
+          - Kiro: inclusion: fileMatch + fileMatchPattern:
+          - Copilot: applyTo: glob
+        '';
+      };
+      text = lib.mkOption {
+        type = lib.types.either lib.types.lines lib.types.path;
+        description = "Rule body (inline markdown or path to a .md file).";
+      };
+    };
+  };
+
   # ── MCP server transform ───────────────────────────────────────────
   # Transform a typed MCP server submodule value into the JSON structure
   # expected by target ecosystems (VS Code mcp.json / Kiro mcp.json).

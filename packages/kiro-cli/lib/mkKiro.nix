@@ -178,6 +178,7 @@ lib.ai.app.mkAiApp {
       mergedServers,
       mergedInstructions,
       mergedSkills,
+      mergedRules,
       topContext,
     }: let
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
@@ -189,6 +190,12 @@ lib.ai.app.mkAiApp {
         then cfg.context
         else topContext;
       hasContext = effectiveContext != null && effectiveContext != "";
+
+      # Resolve rule body: path → readFile; string → passthrough.
+      resolveRuleText = rule:
+        if builtins.isPath rule.text
+        then builtins.readFile rule.text
+        else rule.text;
 
       filteredSettings = aiCommon.filterNulls cfg.settings;
       # Kiro cli.json uses flat dot-notation keys ("chat.enableTangentMode")
@@ -314,6 +321,22 @@ lib.ai.app.mkAiApp {
             })
             named);
         })
+        # Attrs-shape ai.rules / ai.kiro.rules → <configDir>/steering/<name>.md.
+        # Each entry becomes one steering file, translated through
+        # kiroTransformer (inclusion: + fileMatchPattern: frontmatter).
+        (let
+          fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
+          inherit (import ../../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
+        in {
+          home.file = lib.mapAttrs' (name: rule:
+            lib.nameValuePair "${cfg.configDir}/steering/${name}.md" {
+              text = fragmentsLib.mkRenderer kiroTransformer {inherit name;} (rule
+                // {
+                  text = resolveRuleText rule;
+                });
+            })
+          mergedRules;
+        })
         # Global context → `<configDir>/steering/<contextFilename>`. Kiro
         # reads AGENTS.md (default) natively as always-included content.
         # Written without frontmatter; precedence is per-CLI > top-level.
@@ -374,6 +397,7 @@ lib.ai.app.mkAiApp {
       mergedServers,
       mergedInstructions,
       mergedSkills,
+      mergedRules,
       topContext,
     }: let
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
@@ -384,6 +408,11 @@ lib.ai.app.mkAiApp {
         then cfg.context
         else topContext;
       hasContext = effectiveContext != null && effectiveContext != "";
+
+      resolveRuleText = rule:
+        if builtins.isPath rule.text
+        then builtins.readFile rule.text
+        else rule.text;
 
       filteredSettings = aiCommon.filterNulls cfg.settings;
       flatSettings = aiCommon.flattenDotKeys filteredSettings;
@@ -482,6 +511,20 @@ lib.ai.app.mkAiApp {
               value.text = fragmentsLib.mkRenderer kiroTransformer {inherit (instr) name;} instr;
             })
             named);
+        })
+        # Attrs-shape ai.rules / ai.kiro.rules → steering files (parity with HM).
+        (let
+          fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
+          inherit (import ../../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
+        in {
+          files = lib.mapAttrs' (name: rule:
+            lib.nameValuePair "${cfg.configDir}/steering/${name}.md" {
+              text = fragmentsLib.mkRenderer kiroTransformer {inherit name;} (rule
+                // {
+                  text = resolveRuleText rule;
+                });
+            })
+          mergedRules;
         })
         # Global context → `<configDir>/steering/<contextFilename>`.
         # Mirrors HM side; no frontmatter, per-CLI wins over top-level.

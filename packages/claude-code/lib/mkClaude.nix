@@ -58,6 +58,7 @@ lib.ai.app.mkAiApp {
       mergedServers,
       mergedInstructions,
       mergedSkills,
+      mergedRules,
       topContext,
     }: let
       # Resolve effective context: per-CLI wins when set (non-empty);
@@ -68,6 +69,12 @@ lib.ai.app.mkAiApp {
         else if topContext != null
         then topContext
         else "";
+
+      # Resolve rule body: path → readFile; string → passthrough.
+      resolveRuleText = rule:
+        if builtins.isPath rule.text
+        then builtins.readFile rule.text
+        else rule.text;
     in
       lib.mkMerge [
         # Delegate to upstream programs.claude-code.* where upstream
@@ -102,6 +109,24 @@ lib.ai.app.mkAiApp {
             })
             named);
         })
+        # Attrs-shape ai.rules / ai.claude.rules → .claude/rules/<name>.md.
+        # Each entry becomes one file, translated through claudeTransformer
+        # (paths: frontmatter). Parallel emission to the legacy instructions
+        # path above; name collisions between the two would raise a
+        # home.file conflict at eval time (intentional — user fix).
+        (let
+          fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
+          inherit (import ../../../lib/ai/transformers/claude.nix {inherit lib;}) claudeTransformer;
+        in {
+          home.file = lib.mapAttrs' (name: rule:
+            lib.nameValuePair ".claude/rules/${name}.md" {
+              text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
+                // {
+                  text = resolveRuleText rule;
+                });
+            })
+          mergedRules;
+        })
         # Auto-set ENABLE_LSP_TOOL=1 when MCP servers are present.
         # Mirrors the legacy modules/ai/default.nix behavior where
         # any populated server pool implied LSP-tool wiring.
@@ -121,8 +146,14 @@ lib.ai.app.mkAiApp {
       mergedServers,
       mergedInstructions,
       mergedSkills,
+      mergedRules,
       ...
-    }:
+    }: let
+      resolveRuleText = rule:
+        if builtins.isPath rule.text
+        then builtins.readFile rule.text
+        else rule.text;
+    in
       lib.mkMerge [
         # Delegate to upstream devenv claude.code.* where upstream
         # provides the capability.
@@ -147,6 +178,20 @@ lib.ai.app.mkAiApp {
               value.text = fragmentsLib.mkRenderer claudeTransformer {package = instr.name;} instr;
             })
             named);
+        })
+        # Attrs-shape ai.rules / ai.claude.rules → .claude/rules/<name>.md.
+        (let
+          fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
+          inherit (import ../../../lib/ai/transformers/claude.nix {inherit lib;}) claudeTransformer;
+        in {
+          files = lib.mapAttrs' (name: rule:
+            lib.nameValuePair ".claude/rules/${name}.md" {
+              text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
+                // {
+                  text = resolveRuleText rule;
+                });
+            })
+          mergedRules;
         })
         # Skills — devenv has no upstream skills option on
         # claude.code (cachix/devenv#2441), so we write per-leaf

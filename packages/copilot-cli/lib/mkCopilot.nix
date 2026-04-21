@@ -100,8 +100,13 @@ lib.ai.app.mkAiApp {
       mergedServers,
       mergedInstructions,
       mergedSkills,
+      mergedRules,
       ...
     }: let
+      resolveRuleText = rule:
+        if builtins.isPath rule.text
+        then builtins.readFile rule.text
+        else rule.text;
       # symlinkJoin + makeWrapper wrapper that exports
       # `environmentVariables` and prepends `--additional-mcp-config
       # <path>` to every copilot invocation. Without this, the
@@ -223,6 +228,22 @@ lib.ai.app.mkAiApp {
             })
             named);
         })
+        # Attrs-shape ai.rules / ai.copilot.rules → instruction files.
+        # Each entry becomes .github/instructions/<name>.instructions.md
+        # with copilotTransformer's applyTo: frontmatter.
+        (let
+          fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
+          inherit (import ../../../lib/ai/transformers/copilot.nix {inherit lib;}) copilotTransformer;
+        in {
+          home.file = lib.mapAttrs' (name: rule:
+            lib.nameValuePair ".github/instructions/${name}.instructions.md" {
+              text = fragmentsLib.mkRenderer copilotTransformer {} (rule
+                // {
+                  text = resolveRuleText rule;
+                });
+            })
+          mergedRules;
+        })
         # Skills fanout — copilot has no upstream HM skills option, so
         # we write `home.file."${configDir}/skills/<name>"` entries
         # directly via `mkSkillEntries`, which uses `recursive = true`
@@ -288,8 +309,14 @@ lib.ai.app.mkAiApp {
       mergedServers,
       mergedInstructions,
       mergedSkills,
+      mergedRules,
       ...
-    }:
+    }: let
+      resolveRuleText = rule:
+        if builtins.isPath rule.text
+        then builtins.readFile rule.text
+        else rule.text;
+    in
       lib.mkMerge [
         # Package installation — devenv projects are shell-scoped, so
         # env exports go in the devenv `env` attrset directly rather
@@ -378,6 +405,20 @@ lib.ai.app.mkAiApp {
               value.text = fragmentsLib.mkRenderer copilotTransformer {} instr;
             })
             named);
+        })
+        # Attrs-shape ai.rules / ai.copilot.rules → instruction files (parity with HM).
+        (let
+          fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
+          inherit (import ../../../lib/ai/transformers/copilot.nix {inherit lib;}) copilotTransformer;
+        in {
+          files = lib.mapAttrs' (name: rule:
+            lib.nameValuePair ".github/instructions/${name}.instructions.md" {
+              text = fragmentsLib.mkRenderer copilotTransformer {} (rule
+                // {
+                  text = resolveRuleText rule;
+                });
+            })
+          mergedRules;
         })
         # settings.json — devenv does NOT support HM-style activation
         # scripts, so the runtime-merge story is different. Devenv

@@ -1130,4 +1130,108 @@ in {
     in
       result.config.services.mcp-servers.mcpConfig.mcpServers == {}
   );
+
+  # ── Attrs-shape ai.rules / ai.<cli>.rules (unified transformer) ───
+
+  # Claude HM: top-level ai.rules → .claude/rules/<name>.md with paths frontmatter.
+  module-claude-hm-writes-rules-from-top-level = mkTest "claude-hm-writes-rules-from-top-level" (
+    let
+      result = evalHm {
+        ai.claude.enable = true;
+        ai.rules.code-style = {
+          text = "Use consistent formatting.";
+          paths = ["src/**"];
+        };
+      };
+      ruleFile = result.config.home.file.".claude/rules/code-style.md" or null;
+    in
+      ruleFile
+      != null
+      && lib.hasInfix "Use consistent formatting" (ruleFile.text or "")
+      && lib.hasInfix "paths:" (ruleFile.text or "")
+      && lib.hasInfix "src/**" (ruleFile.text or "")
+  );
+
+  # Kiro HM: top-level ai.rules → .kiro/steering/<name>.md with inclusion frontmatter.
+  module-kiro-hm-writes-rules-from-top-level = mkTest "kiro-hm-writes-rules-from-top-level" (
+    let
+      result = evalHm {
+        ai.kiro.enable = true;
+        ai.rules.testing = {
+          text = "Write tests for all new features.";
+          paths = ["**/*.test.*"];
+        };
+      };
+      ruleFile = result.config.home.file.".kiro/steering/testing.md" or null;
+    in
+      ruleFile
+      != null
+      && lib.hasInfix "Write tests for all new features" (ruleFile.text or "")
+      && lib.hasInfix "inclusion: fileMatch" (ruleFile.text or "")
+  );
+
+  # Copilot HM: top-level ai.rules → .github/instructions/<name>.instructions.md.
+  module-copilot-hm-writes-rules-from-top-level = mkTest "copilot-hm-writes-rules-from-top-level" (
+    let
+      result = evalHm {
+        ai.copilot.enable = true;
+        ai.rules.security = {
+          text = "Validate all user input.";
+          paths = ["**/*.ts"];
+        };
+      };
+      ruleFile = result.config.home.file.".github/instructions/security.instructions.md" or null;
+    in
+      ruleFile
+      != null
+      && lib.hasInfix "Validate all user input" (ruleFile.text or "")
+      && lib.hasInfix "applyTo:" (ruleFile.text or "")
+  );
+
+  # Per-CLI rules merge with top-level; per-CLI wins on collision.
+  module-kiro-hm-per-cli-rules-wins = mkTest "kiro-hm-per-cli-rules-wins" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          rules.same-name.text = "Per-CLI wins.";
+        };
+        ai.rules.same-name.text = "Top-level loses.";
+      };
+      ruleFile = result.config.home.file.".kiro/steering/same-name.md" or null;
+    in
+      ruleFile
+      != null
+      && lib.hasInfix "Per-CLI wins" (ruleFile.text or "")
+      && !(lib.hasInfix "Top-level loses" (ruleFile.text or ""))
+  );
+
+  # Rules with null paths → unconditional (no frontmatter scoping).
+  module-claude-hm-rules-null-paths-no-frontmatter = mkTest "claude-hm-rules-null-paths-no-frontmatter" (
+    let
+      result = evalHm {
+        ai.claude.enable = true;
+        ai.rules.always-on.text = "Loaded unconditionally.";
+      };
+      ruleFile = result.config.home.file.".claude/rules/always-on.md" or null;
+    in
+      ruleFile != null && !(lib.hasInfix "paths:" (ruleFile.text or ""))
+  );
+
+  # Devenv parity: Kiro devenv emits ai.rules to steering files.
+  module-kiro-devenv-writes-rules = mkTest "kiro-devenv-writes-rules" (
+    let
+      result = evalDevenv {
+        ai.kiro.enable = true;
+        ai.rules.testing = {
+          text = "Write tests.";
+          paths = ["**/*.test.*"];
+        };
+      };
+      ruleFile = result.config.files.".kiro/steering/testing.md" or null;
+    in
+      ruleFile
+      != null
+      && lib.hasInfix "Write tests" (ruleFile.text or "")
+  );
 }
