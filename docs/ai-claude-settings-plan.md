@@ -27,7 +27,14 @@
   options), check BOTH stubs — `devenvStubs` in `checks/module-eval.nix`
   and `devenvStubModule` in `lib/options-doc.nix`. Same for the HM
   side: `hmStubs` (module-eval) and `hmStubModule` (options-doc).
-  Consider consolidating the two stubs in a future cleanup pass.
+- **Update (2026-04-21, commit 732ca51):** stub churn for Claude
+  upstream options (`programs.claude-code` in HM, `claude.code` in
+  devenv) eliminated by collapsing the per-option typed stubs to
+  `attrsOf anything`. Upstream options were never in the doc scope
+  (options-doc filters to `ai.*`), so the typed stubs produced no
+  output — only maintenance cost. Future `ai.claude.*` additions
+  no longer require stub extensions. Copilot + Kiro stubs were
+  already freeform; Claude was the outlier.
 
 ## Current state audit
 
