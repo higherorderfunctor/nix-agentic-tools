@@ -1069,10 +1069,13 @@ in {
       !(result.config.stacked-workflows.enable or true)
   );
 
-  # When enabled, skills are contributed to the shared ai.skills pool.
-  module-sws-enable-sets-ai-skills = mkTest "sws-enable-sets-ai-skills" (
+  # Devenv scope: when stacked-workflows is enabled IN THE DEVENV MODULE,
+  # skills contribute to ai.skills (which each enabled CLI fans out at
+  # project-local scope). Must be evalDevenv — the HM module no longer
+  # contributes skills (they leaked to personal ~/.claude/skills/*).
+  module-sws-devenv-enable-sets-ai-skills = mkTest "sws-devenv-enable-sets-ai-skills" (
     let
-      result = evalHm {stacked-workflows.enable = true;};
+      result = evalDevenv {stacked-workflows.enable = true;};
     in
       result.config.ai.skills ? sws-stack-fix
       && result.config.ai.skills ? sws-stack-plan
@@ -1082,14 +1085,34 @@ in {
       && result.config.ai.skills ? sws-stack-test
   );
 
-  # When enabled, instructions are contributed to the shared pool.
-  module-sws-enable-sets-ai-instructions = mkTest "sws-enable-sets-ai-instructions" (
+  # Devenv scope: instructions landed in the devenv pool.
+  module-sws-devenv-enable-sets-ai-instructions = mkTest "sws-devenv-enable-sets-ai-instructions" (
+    let
+      result = evalDevenv {stacked-workflows.enable = true;};
+      inherit (result.config.ai) instructions;
+      swsEntries = builtins.filter (i: (i.name or "") == "stacked-workflows") instructions;
+    in
+      builtins.length swsEntries == 1
+  );
+
+  # Regression guard: HM scope MUST NOT contribute sws skills.
+  # The earlier HM contribution leaked to ~/.claude/skills/sws-*.
+  module-sws-hm-no-skills-leak = mkTest "sws-hm-no-skills-leak" (
+    let
+      result = evalHm {stacked-workflows.enable = true;};
+    in
+      !(result.config.ai.skills ? sws-stack-fix)
+      && !(result.config.ai.skills ? sws-stack-plan)
+  );
+
+  # Regression guard: HM scope MUST NOT contribute sws instructions.
+  module-sws-hm-no-instructions-leak = mkTest "sws-hm-no-instructions-leak" (
     let
       result = evalHm {stacked-workflows.enable = true;};
       inherit (result.config.ai) instructions;
       swsEntries = builtins.filter (i: (i.name or "") == "stacked-workflows") instructions;
     in
-      builtins.length swsEntries == 1
+      builtins.length swsEntries == 0
   );
 
   # Git config applies when preset is "minimal".
@@ -1140,14 +1163,25 @@ in {
       !(gitSettings ? branchless)
   );
 
-  # Reference files are symlinked under .claude/references/.
-  module-sws-reference-files-written = mkTest "sws-reference-files-written" (
+  # Devenv scope: reference files written under .claude/references/.
+  # Were previously written at HM scope (~/.claude/references/), leaked
+  # to personal scope — moved to devenv alongside skills/instructions.
+  module-sws-devenv-reference-files-written = mkTest "sws-devenv-reference-files-written" (
+    let
+      result = evalDevenv {stacked-workflows.enable = true;};
+      inherit (result.config) files;
+    in
+      files ? ".claude/references/philosophy.md"
+      && files ? ".claude/references/git-absorb.md"
+  );
+
+  # Regression guard: HM scope MUST NOT write sws reference files.
+  module-sws-hm-no-reference-leak = mkTest "sws-hm-no-reference-leak" (
     let
       result = evalHm {stacked-workflows.enable = true;};
       files = result.config.home.file;
     in
-      files ? ".claude/references/philosophy.md"
-      && files ? ".claude/references/git-absorb.md"
+      !(files ? ".claude/references/philosophy.md")
   );
 
   # ── services.mcp-servers module ──────────────────────────────────

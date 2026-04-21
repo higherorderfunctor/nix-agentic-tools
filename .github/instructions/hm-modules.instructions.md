@@ -198,6 +198,21 @@ config.json files are merged with Nix-declared values using
 `trusted_folders`) are preserved across rebuilds. The Nix
 settings override on conflict, user-added keys pass through.
 
+**HM settings writes are conditional; devenv writes are not.**
+The HM activation merge (copilot `copilotSettingsMerge`, kiro
+`kiroSettingsMerge`) is gated on non-empty settings — if the
+consumer enables the ecosystem just for MCP/skills fanout and
+doesn't set any `ai.<cli>.settings`, the activation script
+doesn't fire and an externally-managed settings file is left
+untouched. Matches upstream Claude HM behavior where
+`settings.json` is only written when `cfg.settings != {}`.
+
+Devenv-side writes are unconditional (always write the file
+when `enable = true`). This is intentional: devenv files are
+project-local symlinks, not home-dir writes. An empty `{}`
+settings file is harmless — the CLI merges it with global
+config. Upstream devenv claude does the same (unconditional).
+
 **Secrets at activation time, not eval time.** Sops-nix paths
 (`cfg.userId.file`) are read by the activation script at run
 time via `cat "$path"`. Do NOT `builtins.readFile` them at

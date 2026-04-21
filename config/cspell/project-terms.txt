@@ -183,6 +183,7 @@ unskipped
 unstages
 unstash
 valkey
+watchlist
 worktree
 worktrees
 wyhash

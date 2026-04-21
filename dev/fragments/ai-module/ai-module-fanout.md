@@ -140,3 +140,41 @@ nix eval --impure --json \
 
 If the option stays false despite `ai.claude.enable = true`, the
 fanout is broken — fix the module, not the consumer.
+
+### Shared-pool is per-evaluation, NOT cross-backend
+
+`lib/ai/sharedOptions.nix` declares cross-app pools (`ai.skills`,
+`ai.instructions`, `ai.rules`, `ai.mcpServers`, `ai.lspServers`,
+`ai.environmentVariables`, `ai.agents`, `ai.context`). It's
+imported by BOTH `hmTransform.nix` and `devenvTransform.nix`.
+
+**The option declarations are shared. The values are NOT.**
+
+HM and devenv run separate `evalModules` invocations with
+independent config trees. A value set in the HM-imported copy
+of a module is visible only to HM's eval. Devenv's eval has a
+completely separate `config.ai.skills` (etc.) that doesn't see
+the HM contribution.
+
+**Consequence for "plain modules"** (not `mkAiApp` participants,
+like `packages/stacked-workflows/modules/`): when a plain module
+contributes to `ai.skills` / `ai.instructions` / etc., the
+contribution MUST happen in the module's appropriate backend
+sibling. If the content is HM-scope (personal user config), put it
+in the HM module. If it's project-scope (devenv-only), put it in
+the devenv module. Contributing in one and expecting the other to
+pick it up will silently fail — the contribution just doesn't land
+in the other eval.
+
+This is a different discipline from the AI CLI factories
+(`mkAiApp`), which have structural `hm = { config = …; }` /
+`devenv = { config = …; }` blocks that force per-backend
+separation by construction. Plain modules have no such guardrail —
+authors must decide scope consciously.
+
+**Historical bug this caused:** the stacked-workflows HM module
+contributed `ai.skills.sws-*` from its HM scope, intending devenv
+to "share" the pool. HM's Claude consumer wrote
+`~/.claude/skills/sws-*` (leaking personal-scope files), and
+devenv never saw the skills at all. Fix: move the contribution to
+the devenv module. See `docs/stacked-workflows-scope-fix-plan.md`.

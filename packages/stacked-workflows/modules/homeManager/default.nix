@@ -1,36 +1,24 @@
-# Stacked-workflows home-manager module (factory participant).
+# Stacked-workflows home-manager module.
 #
-# Plain HM module (approach B) — does NOT use mkAiApp because
-# stacked-workflows is a content package, not an AI CLI app. It has
-# no binary, no settings, no MCP servers. It contributes:
-#   - Skills to the shared ai.skills pool (consumed by all enabled CLIs)
-#   - Instructions to the shared ai.instructions pool
-#   - Git config presets to programs.git.settings
+# HM scope is git-config only. Skills, instructions, and reference
+# docs moved to the devenv module (project-local scope) because
+# sws-prefixed skills leaking into `~/.claude/skills/` collided with
+# the user's personal-scope `stack-*` skills.
 #
-# Picked up by collectFacet ["modules" "homeManager"] in flake.nix.
+# See `docs/stacked-workflows-scope-fix-plan.md` for the scope-fix
+# root cause: shared-option pools (`ai.skills`, `ai.instructions`)
+# are per-`evalModules`, NOT cross-backend. A value set in the HM
+# module is only visible to HM's eval; devenv has a separate eval.
+# Placing contributions in the HM module meant they landed in
+# personal HM scope and were missing from devenv entirely.
+#
+# Picked up by `collectFacet ["modules" "homeManager"]` in flake.nix.
 {
   config,
   lib,
-  pkgs,
   ...
 }: let
   cfg = config.stacked-workflows;
-
-  fragments = import ../../../../lib/fragments.nix {inherit lib;};
-
-  swsContent = pkgs.stacked-workflows-content;
-
-  composed = fragments.compose {
-    fragments = builtins.attrValues swsContent.passthru.fragments;
-    description = "Stacked workflow routing table and skill usage";
-  };
-
-  # Module-relative path literal for the source skills directory.
-  # This MUST be a `./` path literal — see `.claude/rules/hm-modules.md`
-  # "Nix path types" section. `builtins.path`, `filterSource`, and
-  # `lib.cleanSourceWith` all return store-path *strings*, which fail
-  # upstream HM's `mkSkillEntry` `lib.isPath` guard.
-  skillsRepo = ../../skills;
 
   # Apply mkDefault to every leaf value in a nested attrset so users can
   # override individual keys at normal priority.
@@ -46,7 +34,7 @@
   };
 in {
   options.stacked-workflows = {
-    enable = lib.mkEnableOption "stacked workflow skills and references";
+    enable = lib.mkEnableOption "stacked workflow git config presets (skills/instructions/refs live in the devenv module — project-local scope)";
 
     gitPreset = lib.mkOption {
       type = lib.types.enum ["full" "minimal" "none"];
@@ -91,46 +79,6 @@ in {
     # ── Git configuration ──────────────────────────────────────────────
     (lib.mkIf (cfg.gitPreset != "none") {
       programs.git.settings = mkDefaultRecursive gitSettings.${cfg.gitPreset};
-    })
-
-    # ── Skills fanout to shared pool ───────────────────────────────────
-    # Each enabled CLI picks up these skills via the ai.skills merge in
-    # mkAiApp's hmTransform / devenvTransform.
-    {
-      ai.skills = lib.mapAttrs (_: lib.mkDefault) {
-        sws-stack-fix = skillsRepo + "/stack-fix";
-        sws-stack-plan = skillsRepo + "/stack-plan";
-        sws-stack-split = skillsRepo + "/stack-split";
-        sws-stack-submit = skillsRepo + "/stack-submit";
-        sws-stack-summary = skillsRepo + "/stack-summary";
-        sws-stack-test = skillsRepo + "/stack-test";
-      };
-    }
-
-    # ── Instructions fanout to shared pool ─────────────────────────────
-    # Each enabled CLI renders these via its own transformer.
-    {
-      ai.instructions = [
-        {
-          name = "stacked-workflows";
-          inherit (composed) text;
-          description = "Stacked workflow routing table and skill usage";
-        }
-      ];
-    }
-
-    # ── Reference directory ────────────────────────────────────────────
-    # Symlink tool reference docs so CLIs can discover them.
-    (let
-      refFiles =
-        lib.filterAttrs (n: _: lib.hasSuffix ".md" n)
-        (builtins.readDir swsContent.passthru.referencesDir);
-    in {
-      home.file = lib.mapAttrs' (name: _:
-        lib.nameValuePair
-        ".claude/references/${name}"
-        {source = "${swsContent.passthru.referencesDir}/${name}";})
-      refFiles;
     })
   ]);
 }
