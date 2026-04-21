@@ -28,18 +28,6 @@ lib.ai.app.mkAiApp {
     outputPath = ".config/github-copilot/copilot-instructions.md";
   };
   options = {
-    # Config directory (HOME-relative). Used by both backends as the
-    # root for mcp-config.json / lsp-config.json / settings.json /
-    # agents/. The legacy HM module defaulted to `.copilot`; Task 4
-    # standardized on `.config/github-copilot` for all writes and the
-    # wrapper arg targets the same path. Exposed as an option so
-    # consumers who need the legacy layout (or a custom XDG setup)
-    # can override without forking the factory.
-    configDir = lib.mkOption {
-      type = lib.types.str;
-      default = ".config/github-copilot";
-      description = "Config directory relative to HOME / devenv root.";
-    };
     # Copilot-scope global context. When set, takes precedence over
     # top-level `ai.context`. Written without frontmatter to
     # `<configDir>/<contextFilename>` — Copilot's native global-scope
@@ -112,7 +100,16 @@ lib.ai.app.mkAiApp {
     };
   };
   hm = {
-    options = {};
+    options = {
+      # Personal config dir relative to HOME. Default `.copilot`
+      # matches Copilot CLI's canonical location (COPILOT_HOME).
+      # Override if the CLI is configured to read elsewhere.
+      configDir = lib.mkOption {
+        type = lib.types.str;
+        default = ".copilot";
+        description = "Personal config dir relative to HOME (Copilot CLI's canonical location).";
+      };
+    };
     config = {
       cfg,
       mergedServers,
@@ -334,7 +331,17 @@ lib.ai.app.mkAiApp {
       ];
   };
   devenv = {
-    options = {};
+    options = {
+      # Project-scope config dir relative to devenv root. Preserves
+      # the legacy path. A separate design question (tracked in
+      # plan.md follow-ups) is whether devenv should target Copilot's
+      # native `.github/*` project layout — not in scope here.
+      configDir = lib.mkOption {
+        type = lib.types.str;
+        default = ".config/github-copilot";
+        description = "Project-scope config dir relative to devenv root.";
+      };
+    };
     config = {
       cfg,
       mergedServers,

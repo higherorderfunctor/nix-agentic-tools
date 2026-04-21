@@ -513,7 +513,7 @@ in {
           command = "hello";
         };
       };
-      mcpFile = result.config.home.file.".config/github-copilot/mcp-config.json" or null;
+      mcpFile = result.config.home.file.".copilot/mcp-config.json" or null;
     in
       mcpFile
       != null
@@ -545,7 +545,7 @@ in {
         ai.copilot.enable = true;
         ai.skills.stack-fix = ./../packages/stacked-workflows/skills/stack-fix;
       };
-      skillEntry = result.config.home.file.".config/github-copilot/skills/stack-fix" or null;
+      skillEntry = result.config.home.file.".copilot/skills/stack-fix" or null;
     in
       skillEntry != null
   );
@@ -577,7 +577,7 @@ in {
           };
         };
       };
-      lspFile = result.config.home.file.".config/github-copilot/lsp-config.json" or null;
+      lspFile = result.config.home.file.".copilot/lsp-config.json" or null;
     in
       lspFile
       != null
@@ -678,7 +678,7 @@ in {
           agents.reviewer = "# Reviewer\n\nReview code carefully.";
         };
       };
-      agentFile = result.config.home.file.".config/github-copilot/agents/reviewer.md" or null;
+      agentFile = result.config.home.file.".copilot/agents/reviewer.md" or null;
     in
       agentFile
       != null
@@ -1333,7 +1333,7 @@ in {
         };
       };
       contextFile =
-        result.config.home.file.".config/github-copilot/copilot-instructions.md" or null;
+        result.config.home.file.".copilot/copilot-instructions.md" or null;
     in
       contextFile
       != null
@@ -1348,7 +1348,7 @@ in {
         ai.context = "Top-level context flows everywhere.";
       };
       contextFile =
-        result.config.home.file.".config/github-copilot/copilot-instructions.md" or null;
+        result.config.home.file.".copilot/copilot-instructions.md" or null;
     in
       contextFile
       != null
