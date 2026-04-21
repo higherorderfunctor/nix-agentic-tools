@@ -1,6 +1,9 @@
 # Unified Instructions Surface — Research & Design
 
-> **Status:** design complete, implementation deferred. Research captured 2026-04-17.
+> **Status:** context + rules shipped across Claude / Kiro / Copilot
+> (HM + devenv). Codex factory + size guard deferred. Research
+> captured 2026-04-17; implementation commits 8f0c16b, 7dad0b8,
+> 419010a (2026-04-21).
 >
 > **Goal:** add a unified `ai.<cli>.{context,rules}` surface to the factory
 > that fans out personal/global instruction content to every enabled
@@ -323,22 +326,49 @@ bugs don't ship silently.
 - Rationale: Codex silently truncates overflow. An eval error is the
   only way to surface the problem before a surprise in production.
 
-## Implementation order
+## Implementation status
 
-1. **Transformers** — extend `lib/ai/transformers/` with `claude.nix`,
-   `copilot.nix`, `codex.nix` alongside existing `kiro.nix`. Each consumes
-   the shared `{name, text, paths?, description?}` shape and emits
-   ecosystem-native. Copilot/Codex transformers wrap path-scoped rules
-   with the prose prefix when native frontmatter isn't available.
-2. **Factory HM transform** — add `context` + `rules` options at both
-   top-level (`ai.*`) and per-CLI (`ai.<cli>.*`), merge, route to
-   transformers.
-3. **Per-CLI factories** — `mkClaude`, `mkKiro`, `mkCopilot`, `mkCodex`
-   consume transformer output and write to native disk paths.
-4. **Codex size guard** — eval-time assertion in the Codex factory.
-5. **Consumer migration (`nixos-config`)** — drop `kiroSymlinkSteering`
-   helper, replace with `ai.kiro.rules = builtins.mapAttrs (…) (builtins.readDir …)`
-   auto-loading the existing steering dir.
+1. **Transformers** — claude, copilot, kiro, agentsmd already shipped in
+   `lib/ai/transformers/` before this work; reused as-is. Codex maps to
+   `agentsmd` (flat body, no frontmatter) when `mkCodex` lands.
+2. **Factory HM + devenv transform** — `context` + `rules` top-level and
+   per-CLI options added; merge + pass-through landed.
+   **Shipped:** commits 8f0c16b, 7dad0b8.
+3. **Per-CLI factories.**
+   - **Claude:** context delegates to `programs.claude-code.context`;
+     rules emit to `.claude/rules/<name>.md` via `claudeTransformer`.
+     Shipped 8f0c16b, 7dad0b8.
+   - **Kiro:** context → `<configDir>/steering/<contextFilename>`
+     (AGENTS.md default); rules → `<configDir>/steering/<name>.md` via
+     `kiroTransformer`. Shipped 8f0c16b, 7dad0b8.
+   - **Copilot:** context → `<configDir>/<contextFilename>`
+     (copilot-instructions.md default); rules →
+     `.github/instructions/<name>.instructions.md` via
+     `copilotTransformer`. Shipped 7dad0b8, 419010a.
+   - **Codex:** `mkCodex` factory not yet landed (deferred with Codex
+     ecosystem work — see plan.md "Add OpenAI Codex").
+4. **Codex size guard** — eval-time assertion. **Deferred** with (3)
+   Codex.
+5. **Consumer migration (`nixos-config`)** — out of scope for this repo.
+   Consumer can now use `ai.kiro.rules = builtins.mapAttrs (…) (builtins.readDir …)`
+   on their own steering directory.
+
+### Not yet shipped
+
+- **Path-scope prose degradation for Codex / Copilot-global concat** — the
+  design specifies a prose prefix when a scoped rule fans to an
+  ecosystem without native frontmatter. Not wired; today
+  `ai.copilot.rules` emits to `.github/instructions/` (project-scope
+  with native `applyTo:`), not a Copilot-global concat. Codex has no
+  factory yet.
+- **`skipIfUnsupported` rule option** — design called for eval-time
+  error when a path-scoped rule targets an ecosystem without native
+  path scoping, with opt-out. Not implemented; no target ecosystem
+  currently requires it (Claude / Kiro / Copilot-project all support
+  native path scoping).
+- **Deprecation of legacy `ai.instructions` list-shape** — `instructions`
+  and `rules` coexist today. Deprecation warning and migration guide not
+  yet added.
 
 ## Scope & non-goals (intentionally deferred)
 
