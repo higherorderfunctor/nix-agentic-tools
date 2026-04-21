@@ -188,4 +188,4 @@ callback after deadnix flag).
 ## Uncommitted state at handoff
 
 Working tree clean. All changes committed. Branch ahead of origin
-by 26 commits.
+by 27 commits (this handoff + follow-up doc touch-ups).
