@@ -102,32 +102,35 @@ CORRECT now, matching user's original intent:
 
 User's own `stack-*` skills (not sws-prefixed) are untouched.
 
-### Unfinished: live-edit rules
+### ~~Unfinished: live-edit rules~~ SHIPPED `fab4e5c`
 
-The 15 kiro steering files (`kiro-config/steering/*.md`) still use
-`mkOutOfStoreSymlink` because `ai.kiro.rules` would bake content into
-the store on switch. User wants live-edit — edit the source `.md`
-and see it without rebuild.
+Added `ai.<cli>.rules.<name>.sourcePath` (nullable str) —
+mutually exclusive with `text`. When set, HM emits
+`home.file.<path>.source = config.lib.file.mkOutOfStoreSymlink
+rule.sourcePath` and skips transformer frontmatter. Devenv emits
+`files.<path>.source = rule.sourcePath` verbatim.
 
-**Options for next session:**
+Trade-off: users who want live-edit manage `inclusion:` / `applyTo:`
+/ `paths:` frontmatter in their source files directly. Acceptable
+for the driving use case (most always-on steering files don't
+need frontmatter).
 
-1. **Add `symlink = true` flag on rule entries** + require `.text`
-   to be a path. Emission uses
-   `config.lib.file.mkOutOfStoreSymlink <path>`; transformer
-   frontmatter is NOT injected — user embeds `inclusion: always`
-   etc. at the top of their own source file. Cleanest for the
-   user's case (most of their 15 files are always-on).
-2. **Add `.sourcePath = "/abs/path"` alternative to `.text`** that
-   implies mkOutOfStoreSymlink + no transformer. Similar
-   trade-off; different spelling.
-3. **Accept bake-to-store**: rebuild to see edits. Fine for
-   rarely-changed rules; painful for iteratively-tweaked steering.
-   Don't recommend.
+Consumer migration preview (next session, for `nixos-config`):
 
-**My lean:** option 1. Factory change is ~20 lines. Consumer
-migration is ~20 lines (swap `kiroSymlinkSteering` helper +
-`kiroSteeringFiles` list for `ai.kiro.rules = builtins.mapAttrs (...)
-(builtins.readDir ./kiro-config/steering)`).
+```nix
+# Replace the kiroSymlinkSteering helper + kiroSteeringFiles list with:
+ai.kiro.rules =
+  lib.mapAttrs
+  (name: _: { sourcePath = "${kiroConfigPath}/steering/${name}"; })
+  (lib.filterAttrs
+    (n: _: lib.hasSuffix ".md" n)
+    (builtins.readDir (kiroConfigPath + "/steering")));
+```
+
+~20 lines in consumer swapped for auto-discovery of the steering
+dir. Factory handles the rest. Live-edit preserved.
+
+Design journal (with pivot notes): `docs/ai-rules-livelink-plan.md`.
 
 ## Backlog status
 
@@ -153,17 +156,16 @@ See `docs/plan.md` for the full tree. Summary of top bullets:
 
 ## Next session suggested priorities
 
-1. **Live-edit rules support** (the scope miss). Factory change +
-   consumer migration of 15 kiro steering files in one pass.
-   Closes the original goal that drove the unified instructions
-   work in the first place.
-2. **Bump consumer pin** — trivial, depends on (1) landing first
-   if they want the kiro steering migration in the same switch.
-3. Consumer-repo-side cleanup in `nixos-config`: remove
-   `kiroSymlinkSteering` helper + `kiroSteeringFiles` list if (1)
-   happened. Commit message needs to reflect BOTH the factory
-   bump AND the scope-fix breaking change (sws skills disappear
-   from HM).
+1. **Bump consumer pin** in `nixos-config` — trivial; no
+   `ai/default.nix` edits required for MVP.
+2. **Migrate 15 kiro steering files to `ai.kiro.rules`** using the
+   `sourcePath` pattern shipped in `fab4e5c`. Replaces the
+   `kiroSymlinkSteering` helper + `kiroSteeringFiles` list with
+   auto-discovery. Live-edit preserved.
+3. Consumer commit message should reflect the factory bump,
+   the kiro-steering migration, AND the scope-fix breaking
+   change (sws skills / instructions / references disappear from
+   HM scope — bug fix).
 
 ## Working-style memory captured this session
 
@@ -175,7 +177,15 @@ See `docs/plan.md` for the full tree. Summary of top bullets:
   reality diverges.
 - Existing memories unchanged.
 
+### Live-edit rules (`fab4e5c`)
+
+Shipped after the initial handoff. `ai.<cli>.rules.<name>.sourcePath`
+unblocks clean migration of the consumer's 15 kiro steering files.
+Two pivots from the plan captured in `docs/ai-rules-livelink-plan.md`
+(test-harness `config.lib` stub + dropping `config` from devenv
+callback after deadnix flag).
+
 ## Uncommitted state at handoff
 
 Working tree clean. All changes committed. Branch ahead of origin
-by 24 commits.
+by 26 commits.

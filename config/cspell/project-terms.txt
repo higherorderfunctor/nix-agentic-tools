@@ -88,6 +88,7 @@ ldflags
 libgit
 libsets
 lifecycles
+livelink
 llms
 lockdown
 lockfiles
