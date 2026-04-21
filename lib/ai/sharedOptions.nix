@@ -61,10 +61,13 @@ in {
     };
 
     lspServers = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.attrsOf lib.types.anything);
+      type = lib.types.attrsOf aiCommon.lspServerModule;
       default = {};
       description = ''
-        LSP servers fanned out to every enabled AI app. Per-app overrides
+        Typed LSP server declarations fanned out to every enabled AI app.
+        Each per-ecosystem translator renders the native JSON shape on
+        emission (Kiro: command/args; Copilot: + fileExtensions;
+        Claude: + extensionToLanguage). Per-app overrides
         (ai.<name>.lspServers) merge on top and win on conflict.
       '';
     };

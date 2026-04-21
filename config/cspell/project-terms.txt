@@ -64,6 +64,7 @@ gitbook
 gitref
 gitrevise
 gnused
+gopls
 gpgsign
 heredocs
 higherorderfunctor

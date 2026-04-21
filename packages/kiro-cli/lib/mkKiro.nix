@@ -114,9 +114,9 @@ lib.ai.app.mkAiApp {
     # Typed LSP server definitions for settings/lsp.json. Freeform
     # attrs-of-anything matching the legacy `attrsOf jsonFormat.type`.
     lspServers = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.attrsOf lib.types.anything);
+      type = lib.types.attrsOf (import ../../../lib/ai/ai-common.nix {inherit lib;}).lspServerModule;
       default = {};
-      description = "LSP server definitions written to settings/lsp.json.";
+      description = "Typed LSP server definitions; translated via `mkLspConfig` into settings/lsp.json on emission.";
     };
     # Env vars exported when launching kiro. In HM they're baked into
     # the symlinkJoin wrapper; in devenv they populate the native
@@ -268,7 +268,7 @@ lib.ai.app.mkAiApp {
         # settings/lsp.json — typed LSP server definitions.
         (lib.mkIf (mergedLspServers != {}) {
           home.file."${cfg.configDir}/settings/lsp.json".text =
-            builtins.toJSON mergedLspServers;
+            builtins.toJSON (lib.mapAttrs aiCommon.mkLspConfig mergedLspServers);
         })
         # settings/mcp.json — merged MCP server pool. Kiro reads this
         # natively from its config dir. Render typed entries into the
@@ -447,7 +447,7 @@ lib.ai.app.mkAiApp {
         # settings/lsp.json — typed LSP server definitions.
         (lib.mkIf (mergedLspServers != {}) {
           files."${cfg.configDir}/settings/lsp.json".text =
-            builtins.toJSON mergedLspServers;
+            builtins.toJSON (lib.mapAttrs aiCommon.mkLspConfig mergedLspServers);
         })
         # settings/mcp.json — merged MCP server pool. Render typed
         # entries into the freeform shape Kiro expects.

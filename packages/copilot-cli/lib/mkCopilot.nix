@@ -69,9 +69,9 @@ lib.ai.app.mkAiApp {
     # expansion deferred until the cross-ecosystem `ai.lspServers`
     # surface lands; per-app options are fine for now.
     lspServers = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.attrsOf lib.types.anything);
+      type = lib.types.attrsOf (import ../../../lib/ai/ai-common.nix {inherit lib;}).lspServerModule;
       default = {};
-      description = "LSP server definitions written to lsp-config.json.";
+      description = "Typed LSP server definitions; translated via `mkCopilotLspConfig` into lsp-config.json on emission (adds fileExtensions mapping).";
     };
     # Env vars exported when launching copilot. In HM they're baked
     # into the symlinkJoin wrapper's `export FOO=bar` lines; in
@@ -120,6 +120,7 @@ lib.ai.app.mkAiApp {
       mergedEnvironmentVariables,
       topContext,
     }: let
+      aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
       # Resolve effective context: per-CLI wins when set, else top-level.
       effectiveContext =
         if cfg.context != null
@@ -202,7 +203,7 @@ lib.ai.app.mkAiApp {
         # on content and we don't pay for a store build per eval.
         (lib.mkIf (mergedLspServers != {}) {
           home.file."${cfg.configDir}/lsp-config.json".text =
-            builtins.toJSON mergedLspServers;
+            builtins.toJSON (lib.mapAttrs aiCommon.mkCopilotLspConfig mergedLspServers);
         })
         # Inline agent .md files. Mirrors the legacy
         # `mkMarkdownEntries` shape — one entry per agent, written
@@ -366,6 +367,7 @@ lib.ai.app.mkAiApp {
       mergedEnvironmentVariables,
       topContext,
     }: let
+      aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
       # Resolve effective context: per-CLI wins when set, else top-level.
       effectiveContext =
         if cfg.context != null
@@ -402,7 +404,7 @@ lib.ai.app.mkAiApp {
         # as `text` for parity with the HM side.
         (lib.mkIf (mergedLspServers != {}) {
           files."${cfg.configDir}/lsp-config.json".text =
-            builtins.toJSON mergedLspServers;
+            builtins.toJSON (lib.mapAttrs aiCommon.mkCopilotLspConfig mergedLspServers);
         })
         # Inline agent files — one devenv `files.*` entry per agent
         # under `${projectDir}/agents/<name>.agent.md`. Copilot's

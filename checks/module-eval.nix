@@ -1574,4 +1574,71 @@ in {
     in
       (result.config.env.SHARED or null) == "kiro-specific"
   );
+
+  # Copilot HM: typed LSP with `extensions` emits fileExtensions
+  # mapping. Per-ecosystem Copilot translator (mkCopilotLspConfig).
+  module-copilot-hm-lsp-file-extensions = mkTest "copilot-hm-lsp-file-extensions" (
+    let
+      result = evalHm {
+        ai.copilot = {
+          enable = true;
+          lspServers.typescript = {
+            command = "typescript-language-server";
+            args = ["--stdio"];
+            extensions = ["ts" "tsx"];
+          };
+        };
+      };
+      lspFile = result.config.home.file.".copilot/lsp-config.json" or null;
+    in
+      lspFile
+      != null
+      && lib.hasInfix "fileExtensions" (lspFile.text or "")
+      && lib.hasInfix "\".ts\"" (lspFile.text or "")
+      && lib.hasInfix "\".tsx\"" (lspFile.text or "")
+  );
+
+  # Claude HM: typed LSP with `extensions` emits extensionToLanguage
+  # mapping via mkClaudeLspConfig.
+  module-claude-hm-lsp-extension-to-language = mkTest "claude-hm-lsp-extension-to-language" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          lspServers.go = {
+            command = "gopls";
+            args = ["serve"];
+            extensions = ["go"];
+          };
+        };
+      };
+      upstream = result.config.programs.claude-code.lspServers or {};
+      entry = upstream.go or {};
+    in
+      (entry.command or null)
+      == "gopls"
+      && ((entry.extensionToLanguage or {}).".go" or null)
+      == "go"
+  );
+
+  # Kiro HM: package-based declaration renders `${package}/bin/${binary}`.
+  # Exercises the package+binary resolution branch.
+  module-kiro-hm-lsp-package-command-rendering = mkTest "kiro-hm-lsp-package-command-rendering" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          lspServers.hello-lsp = {
+            package = pkgs.hello;
+            binary = "hello";
+            args = [];
+          };
+        };
+      };
+      lspFile = result.config.home.file.".kiro/settings/lsp.json" or null;
+    in
+      lspFile
+      != null
+      && lib.hasInfix "/bin/hello" (lspFile.text or "")
+  );
 }
