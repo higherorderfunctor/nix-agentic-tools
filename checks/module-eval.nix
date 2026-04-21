@@ -90,6 +90,10 @@
           type = lib.types.attrsOf lib.types.anything;
           default = {};
         };
+        lspServers = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+        };
         marketplaces = lib.mkOption {
           type = lib.types.attrsOf lib.types.anything;
           default = {};
@@ -1498,5 +1502,42 @@ in {
       != null
       && lib.hasInfix "nixd-kiro-specific" (lspFile.text or "")
       && !(lib.hasInfix "nixd-top-level" (lspFile.text or ""))
+  );
+
+  # HM: top-level ai.lspServers fans out to Claude's programs.claude-code.lspServers.
+  # Closes the LSP fanout story — Claude now receives the merged pool via
+  # upstream HM's own surface (upstream writes into ~/.claude/settings.json).
+  module-claude-hm-top-level-lsp-fanout = mkTest "claude-hm-top-level-lsp-fanout" (
+    let
+      result = evalHm {
+        ai.claude.enable = true;
+        ai.lspServers.nixd = {
+          command = "nixd";
+          args = [];
+        };
+      };
+      upstream = result.config.programs.claude-code.lspServers or {};
+    in
+      (upstream.nixd.command or null) == "nixd"
+  );
+
+  # HM: ai.claude.lspServers per-CLI overrides top-level ai.lspServers on
+  # name collision. Claude-specific override wins.
+  module-claude-hm-per-cli-lsp-overrides-top-level = mkTest "claude-hm-per-cli-lsp-overrides-top-level" (
+    let
+      result = evalHm {
+        ai = {
+          claude.enable = true;
+          lspServers.nixd = {
+            command = "nixd-top-level";
+          };
+          claude.lspServers.nixd = {
+            command = "nixd-claude-specific";
+          };
+        };
+      };
+      upstream = result.config.programs.claude-code.lspServers or {};
+    in
+      (upstream.nixd.command or null) == "nixd-claude-specific"
   );
 }

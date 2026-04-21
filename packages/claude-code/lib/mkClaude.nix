@@ -49,6 +49,17 @@ lib.ai.app.mkAiApp {
         (written to ~/.claude/settings.json by upstream).
       '';
     };
+    lspServers = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.attrsOf lib.types.anything);
+      default = {};
+      description = ''
+        Claude-specific LSP server declarations. Merged with top-level
+        `ai.lspServers`; per-CLI wins on name conflict. Routed to
+        `programs.claude-code.lspServers` which upstream writes into
+        `~/.claude/settings.json`. Upstream devenv `claude.code` has
+        no LSP surface — devenv ignores this option.
+      '';
+    };
     marketplaces = lib.mkOption {
       type = with lib.types; attrsOf (either package path);
       default = {};
@@ -90,8 +101,8 @@ lib.ai.app.mkAiApp {
       mergedInstructions,
       mergedSkills,
       mergedRules,
+      mergedLspServers,
       topContext,
-      ...
     }: let
       # Resolve effective context: per-CLI wins when set (non-empty);
       # else top-level `ai.context`; else empty (upstream default).
@@ -119,6 +130,7 @@ lib.ai.app.mkAiApp {
             context = lib.mkDefault effectiveContext;
             plugins = lib.mkDefault cfg.plugins;
             inherit (cfg) marketplaces outputStyles;
+            lspServers = mergedLspServers;
             # Transitional raw inherit. End state mirrors the devenv
             # side in this file: route `cfg.settings.hooks` to
             # upstream's hooks option and gap-write the rest via

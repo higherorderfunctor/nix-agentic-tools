@@ -160,6 +160,11 @@
           default = {};
           description = "Claude Code MCP servers (upstream HM stub).";
         };
+        lspServers = lib.mkOption {
+          type = lib.types.attrsOf (lib.types.attrsOf lib.types.anything);
+          default = {};
+          description = "Claude Code LSP servers (upstream HM stub).";
+        };
         marketplaces = lib.mkOption {
           type = with lib.types; attrsOf (either package path);
           default = {};
