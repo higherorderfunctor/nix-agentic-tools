@@ -184,6 +184,11 @@
           default = {};
           description = "Claude Code environment variables.";
         };
+        hooks = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+          description = "Claude Code hooks (routed from ai.claude.settings.hooks).";
+        };
         mcpServers = lib.mkOption {
           type = lib.types.attrsOf (lib.types.attrsOf lib.types.anything);
           default = {};
@@ -193,6 +198,11 @@
           type = lib.types.nullOr lib.types.str;
           default = null;
           description = "Claude Code model.";
+        };
+        settingsPath = lib.mkOption {
+          type = lib.types.str;
+          default = ".claude/settings.json";
+          description = "Path to Claude Code settings.json (pinned by our factory for file-merge).";
         };
       };
       env = lib.mkOption {

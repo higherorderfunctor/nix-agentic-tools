@@ -86,6 +86,13 @@ lib.ai.app.mkAiApp {
             skills = lib.mapAttrs (_: lib.mkDefault) mergedSkills;
             context = lib.mkDefault effectiveContext;
             plugins = lib.mkDefault cfg.plugins;
+            # Transitional raw inherit. End state mirrors the devenv
+            # side in this file: route `cfg.settings.hooks` to
+            # upstream's hooks option and gap-write the rest via
+            # `home.file.".claude/settings.json".text`. Deferred
+            # because today's inherit works end-to-end; migration is
+            # tracked in docs/plan.md under the settings/plugins
+            # translation-refactor bullets.
             inherit (cfg) settings;
             # Render typed ai.mcpServers / ai.claude.mcpServers entries
             # into the freeform shape upstream's HM module expects.
@@ -149,21 +156,50 @@ lib.ai.app.mkAiApp {
       mergedRules,
       ...
     }: let
+      aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
       resolveRuleText = rule:
         if builtins.isPath rule.text
         then builtins.readFile rule.text
         else rule.text;
+
+      # Translate cfg.settings → backend surfaces.
+      #
+      # - `hooks` routes to upstream `claude.code.hooks` since upstream
+      #   already writes them into settings.json.
+      # - `mcpServers` belongs in `.mcp.json`, not settings.json;
+      #   filtered out defensively in case a user mis-assigns it
+      #   (the authoritative path is the top-level ai.mcpServers pool).
+      # - Everything else (effortLevel, permissions, env, outputStyle,
+      #   …) is gap-written directly to `.claude/settings.json`.
+      #
+      # Pin settingsPath so our relative-key gap write and upstream's
+      # own write hit the same `files.*` attr and the module system
+      # deep-merges them into one settings.json. Upstream's default is
+      # `${devenv.root}/.claude/settings.json` (absolute) which would
+      # otherwise produce a separate files.* entry.
+      upstreamOwnedSettingsKeys = ["hooks" "mcpServers"];
+      gapSettings =
+        aiCommon.filterNulls
+        (removeAttrs cfg.settings upstreamOwnedSettingsKeys);
+      hasGapSettings = gapSettings != {};
     in
       lib.mkMerge [
-        # Delegate to upstream devenv claude.code.* where upstream
-        # provides the capability.
+        # Translate upstream-owned keys + pin the settings file path.
         {
           claude.code = {
             enable = lib.mkDefault true;
             mcpServers = mergedServers;
-            env = cfg.settings.env or {};
+            hooks = cfg.settings.hooks or {};
+            settingsPath = lib.mkDefault ".claude/settings.json";
           };
         }
+        # Gap write — everything in cfg.settings that upstream doesn't
+        # already handle. Uses `.json` format so module-system merges
+        # our attrs with upstream's hook-only write into a single
+        # settings.json on disk.
+        (lib.mkIf hasGapSettings {
+          files.".claude/settings.json".json = gapSettings;
+        })
         # Gap writes — per-instruction rule files. devenv has no
         # per-rule option, so we write files.* directly. Entries
         # without a `name` field flow into the baseline aggregate

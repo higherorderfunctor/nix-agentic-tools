@@ -338,6 +338,28 @@ in {
       result.config.programs.claude-code.enable or false
   );
 
+  # HM: ai.claude.settings.<key> reaches programs.claude-code.settings.<key>
+  # via the transitional raw-inherit in mkClaude.nix. Regression guard for
+  # the inherit; will update to assert translation semantics when HM migrates
+  # to the devenv pattern.
+  module-claude-hm-settings-reach-upstream = mkTest "claude-hm-settings-reach-upstream" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          settings = {
+            effortLevel = "medium";
+            permissions.allow = ["Read"];
+          };
+        };
+      };
+      upstreamSettings = result.config.programs.claude-code.settings or {};
+    in
+      (upstreamSettings.effortLevel or null)
+      == "medium"
+      && ((upstreamSettings.permissions.allow or []) == ["Read"])
+  );
+
   module-claude-hm-writes-instruction-rule-file = mkTest "claude-hm-writes-instruction-rule-file" (
     let
       result = evalHm {
@@ -374,6 +396,72 @@ in {
       };
     in
       result.config.claude.code.enable or false
+  );
+
+  # Devenv: cfg.settings gap write — non-hook/non-mcpServers keys land
+  # in files.".claude/settings.json".json. Module-system attrs merge with
+  # upstream's hook write (not exercised here; upstream claude.code is
+  # stubbed to `attrsOf anything`) produces a single settings.json on
+  # disk in production.
+  module-claude-devenv-settings-gap-writes-effort-level = mkTest "claude-devenv-settings-gap-writes-effort-level" (
+    let
+      result = evalDevenv {
+        ai.claude = {
+          enable = true;
+          settings.effortLevel = "medium";
+        };
+      };
+      settingsFile = result.config.files.".claude/settings.json" or null;
+    in
+      settingsFile
+      != null
+      && (settingsFile.json.effortLevel or null) == "medium"
+  );
+
+  # Devenv: `env` flows through the gap write (no longer short-circuited
+  # to a non-existent claude.code.env option).
+  module-claude-devenv-settings-gap-writes-env = mkTest "claude-devenv-settings-gap-writes-env" (
+    let
+      result = evalDevenv {
+        ai.claude = {
+          enable = true;
+          settings.env.FOO = "bar";
+        };
+      };
+      settingsFile = result.config.files.".claude/settings.json" or null;
+    in
+      settingsFile
+      != null
+      && (settingsFile.json.env.FOO or null) == "bar"
+  );
+
+  # Devenv: `hooks` routes to claude.code.hooks (upstream-owned) and is
+  # excluded from the gap write.
+  module-claude-devenv-settings-hooks-route-to-upstream = mkTest "claude-devenv-settings-hooks-route-to-upstream" (
+    let
+      result = evalDevenv {
+        ai.claude = {
+          enable = true;
+          settings.hooks.PreToolUse = [{matcher = "Bash";}];
+        };
+      };
+      upstreamHooks = result.config.claude.code.hooks or {};
+      gapJson = (result.config.files.".claude/settings.json" or {}).json or null;
+    in
+      (upstreamHooks.PreToolUse or null)
+      != null
+      && (gapJson == null || !(gapJson ? hooks))
+  );
+
+  # Devenv: empty ai.claude.settings produces no gap file (lib.mkIf
+  # gate on hasGapSettings).
+  module-claude-devenv-settings-empty-no-gap-file = mkTest "claude-devenv-settings-empty-no-gap-file" (
+    let
+      result = evalDevenv {
+        ai.claude.enable = true;
+      };
+    in
+      !(result.config.files ? ".claude/settings.json")
   );
 
   module-claude-hm-sets-lsp-env-when-servers-present = mkTest "claude-hm-sets-lsp-env-when-servers-present" (
