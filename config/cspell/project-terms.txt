@@ -30,6 +30,7 @@ clis
 codemod
 codepaths
 codesign
+configdir
 contentpkgs
 convco
 coreutils
@@ -90,6 +91,7 @@ lifecycles
 llms
 lockdown
 lockfiles
+lspservers
 ltrimstr
 markdownify
 mcpconfig
