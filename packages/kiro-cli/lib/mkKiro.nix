@@ -35,6 +35,31 @@ lib.ai.app.mkAiApp {
       default = ".kiro";
       description = "Config directory relative to HOME / devenv root.";
     };
+    # Kiro-scope global context (single always-on steering file). Kiro is
+    # directory-native (no single-file convention), but reads AGENTS.md
+    # inside `~/.kiro/steering/` as always-included content per
+    # https://kiro.dev/blog/stop-repeating-yourself/. When set, this
+    # option takes precedence over the top-level `ai.context`. Written
+    # without frontmatter (flat always-on).
+    context = lib.mkOption {
+      type = lib.types.nullOr (lib.types.either lib.types.lines lib.types.path);
+      default = null;
+      description = ''
+        Kiro-scope global context. Inline string or path to a file.
+        Written to `<configDir>/steering/<contextFilename>` with no frontmatter.
+        When null, falls back to top-level `ai.context`.
+      '';
+      example = lib.literalExpression "./kiro-context.md";
+    };
+    # Filename under `<configDir>/steering/` for the context file. Defaults
+    # to AGENTS.md since Kiro reads it natively and it's the cross-ecosystem
+    # convention (shared with Codex and Copilot). Override if you want a
+    # Kiro-specific filename.
+    contextFilename = lib.mkOption {
+      type = lib.types.str;
+      default = "AGENTS.md";
+      description = "Filename for the context file inside `<configDir>/steering/`.";
+    };
     # Kiro-specific freeform settings with typed subkeys for known
     # knobs. Consumed by the settings/cli.json activation merge in
     # `hm.config` (runtime-merge via `jq -s '.[0] * .[1]'` to
@@ -153,9 +178,17 @@ lib.ai.app.mkAiApp {
       mergedServers,
       mergedInstructions,
       mergedSkills,
+      topContext,
     }: let
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
       aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
+
+      # Resolve effective context: per-CLI wins when set, else top-level.
+      effectiveContext =
+        if cfg.context != null
+        then cfg.context
+        else topContext;
+      hasContext = effectiveContext != null && effectiveContext != "";
 
       filteredSettings = aiCommon.filterNulls cfg.settings;
       # Kiro cli.json uses flat dot-notation keys ("chat.enableTangentMode")
@@ -281,6 +314,15 @@ lib.ai.app.mkAiApp {
             })
             named);
         })
+        # Global context → `<configDir>/steering/<contextFilename>`. Kiro
+        # reads AGENTS.md (default) natively as always-included content.
+        # Written without frontmatter; precedence is per-CLI > top-level.
+        (lib.mkIf hasContext {
+          home.file."${cfg.configDir}/steering/${cfg.contextFilename}" =
+            if builtins.isPath effectiveContext
+            then {source = effectiveContext;}
+            else {text = effectiveContext;};
+        })
         # Skills fanout via mkSkillEntries, which uses
         # `recursive = true` to produce Layout B (a real directory with
         # per-file symlinks) and is path-type-agnostic.
@@ -332,9 +374,16 @@ lib.ai.app.mkAiApp {
       mergedServers,
       mergedInstructions,
       mergedSkills,
+      topContext,
     }: let
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
       aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
+
+      effectiveContext =
+        if cfg.context != null
+        then cfg.context
+        else topContext;
+      hasContext = effectiveContext != null && effectiveContext != "";
 
       filteredSettings = aiCommon.filterNulls cfg.settings;
       flatSettings = aiCommon.flattenDotKeys filteredSettings;
@@ -433,6 +482,14 @@ lib.ai.app.mkAiApp {
               value.text = fragmentsLib.mkRenderer kiroTransformer {inherit (instr) name;} instr;
             })
             named);
+        })
+        # Global context → `<configDir>/steering/<contextFilename>`.
+        # Mirrors HM side; no frontmatter, per-CLI wins over top-level.
+        (lib.mkIf hasContext {
+          files."${cfg.configDir}/steering/${cfg.contextFilename}" =
+            if builtins.isPath effectiveContext
+            then {source = effectiveContext;}
+            else {text = effectiveContext;};
         })
         # Skills via the user-space walker. devenv's `files.*.source`
         # cannot walk a directory recursively, so we enumerate leaves

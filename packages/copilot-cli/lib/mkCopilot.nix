@@ -92,11 +92,15 @@ lib.ai.app.mkAiApp {
   };
   hm = {
     options = {};
+    # `...` absorbs topContext passed by the transforms; Copilot's
+    # global-context path is TBD (ai.copilot.context not yet wired),
+    # so no consumer here today.
     config = {
       cfg,
       mergedServers,
       mergedInstructions,
       mergedSkills,
+      ...
     }: let
       # symlinkJoin + makeWrapper wrapper that exports
       # `environmentVariables` and prepends `--additional-mcp-config
@@ -276,11 +280,15 @@ lib.ai.app.mkAiApp {
   };
   devenv = {
     options = {};
+    # `...` absorbs topContext passed by the transforms; Copilot's
+    # global-context path is TBD (ai.copilot.context not yet wired),
+    # so no consumer here today.
     config = {
       cfg,
       mergedServers,
       mergedInstructions,
       mergedSkills,
+      ...
     }:
       lib.mkMerge [
         # Package installation — devenv projects are shell-scoped, so

@@ -58,7 +58,17 @@ lib.ai.app.mkAiApp {
       mergedServers,
       mergedInstructions,
       mergedSkills,
-    }:
+      topContext,
+    }: let
+      # Resolve effective context: per-CLI wins when set (non-empty);
+      # else top-level `ai.context`; else empty (upstream default).
+      effectiveContext =
+        if cfg.context != ""
+        then cfg.context
+        else if topContext != null
+        then topContext
+        else "";
+    in
       lib.mkMerge [
         # Delegate to upstream programs.claude-code.* where upstream
         # provides the capability. mkDefault lets consumers override.
@@ -67,7 +77,7 @@ lib.ai.app.mkAiApp {
             enable = lib.mkDefault true;
             package = lib.mkDefault cfg.package;
             skills = lib.mapAttrs (_: lib.mkDefault) mergedSkills;
-            context = lib.mkDefault cfg.context;
+            context = lib.mkDefault effectiveContext;
             plugins = lib.mkDefault cfg.plugins;
             inherit (cfg) settings;
             # Render typed ai.mcpServers / ai.claude.mcpServers entries
@@ -103,11 +113,15 @@ lib.ai.app.mkAiApp {
   # Devenv-specific projection
   devenv = {
     options = {};
+    # `...` absorbs extra args passed by devenvTransform that this
+    # backend doesn't need (e.g. topContext — Claude delegates context
+    # writing to upstream claude.code, no gap-write here).
     config = {
       cfg,
       mergedServers,
       mergedInstructions,
       mergedSkills,
+      ...
     }:
       lib.mkMerge [
         # Delegate to upstream devenv claude.code.* where upstream

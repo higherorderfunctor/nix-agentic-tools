@@ -14,6 +14,7 @@
   mergedServers = config.ai.mcpServers // cfg.mcpServers;
   mergedInstructions = config.ai.instructions ++ cfg.instructions;
   mergedSkills = config.ai.skills // cfg.skills;
+  topContext = config.ai.context;
 
   devenvSpec = appRecord.devenv or {};
   devenvOptions = devenvSpec.options or {};
@@ -25,7 +26,7 @@
   outputPath = devenvDefaults.outputPath or defaults.outputPath or null;
 
   customConfig = devenvConfigFn {
-    inherit cfg mergedServers mergedInstructions mergedSkills;
+    inherit cfg mergedServers mergedInstructions mergedSkills topContext;
   };
 
   renderedInstructions =

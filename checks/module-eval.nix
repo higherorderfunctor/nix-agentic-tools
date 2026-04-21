@@ -730,6 +730,70 @@ in {
       && lib.hasInfix "fileMatchPattern: [" (steeringFile.text or "")
   );
 
+  # HM: per-CLI context → `.kiro/steering/<contextFilename>` (default AGENTS.md).
+  module-kiro-hm-writes-context = mkTest "kiro-hm-writes-context" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          context = "Project conventions go here.";
+        };
+      };
+      contextFile = result.config.home.file.".kiro/steering/AGENTS.md" or null;
+    in
+      contextFile
+      != null
+      && lib.hasInfix "Project conventions" (contextFile.text or "")
+  );
+
+  # HM: top-level ai.context fans out to kiro when per-CLI unset.
+  module-kiro-hm-top-level-context-fallback = mkTest "kiro-hm-top-level-context-fallback" (
+    let
+      result = evalHm {
+        ai.kiro.enable = true;
+        ai.context = "Top-level context flows everywhere.";
+      };
+      contextFile = result.config.home.file.".kiro/steering/AGENTS.md" or null;
+    in
+      contextFile
+      != null
+      && lib.hasInfix "Top-level context" (contextFile.text or "")
+  );
+
+  # HM: per-CLI context wins over top-level when both set.
+  module-kiro-hm-per-cli-context-precedence = mkTest "kiro-hm-per-cli-context-precedence" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          context = "Per-CLI wins.";
+        };
+        ai.context = "Top-level loses.";
+      };
+      contextFile = result.config.home.file.".kiro/steering/AGENTS.md" or null;
+    in
+      contextFile
+      != null
+      && lib.hasInfix "Per-CLI wins" (contextFile.text or "")
+      && !(lib.hasInfix "Top-level loses" (contextFile.text or ""))
+  );
+
+  # HM: contextFilename override redirects the context emission.
+  module-kiro-hm-context-filename-override = mkTest "kiro-hm-context-filename-override" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          context = "Custom filename.";
+          contextFilename = "custom.md";
+        };
+      };
+      customFile = result.config.home.file.".kiro/steering/custom.md" or null;
+      agentsFile = result.config.home.file.".kiro/steering/AGENTS.md" or null;
+    in
+      customFile != null && agentsFile == null
+  );
+
   # HM: skills fanout via mkSkillEntries.
   module-kiro-hm-writes-skills = mkTest "kiro-hm-writes-skills" (
     let
@@ -863,6 +927,36 @@ in {
       settingsFile
       != null
       && lib.hasInfix "telemetry" (settingsFile.text or "")
+  );
+
+  # Devenv: per-CLI context → `.kiro/steering/<contextFilename>` (parity with HM).
+  module-kiro-devenv-writes-context = mkTest "kiro-devenv-writes-context" (
+    let
+      result = evalDevenv {
+        ai.kiro = {
+          enable = true;
+          context = "Project conventions go here.";
+        };
+      };
+      contextFile = result.config.files.".kiro/steering/AGENTS.md" or null;
+    in
+      contextFile
+      != null
+      && lib.hasInfix "Project conventions" (contextFile.text or "")
+  );
+
+  # Devenv: top-level ai.context fans to kiro when per-CLI unset.
+  module-kiro-devenv-top-level-context-fallback = mkTest "kiro-devenv-top-level-context-fallback" (
+    let
+      result = evalDevenv {
+        ai.kiro.enable = true;
+        ai.context = "Top-level context flows everywhere.";
+      };
+      contextFile = result.config.files.".kiro/steering/AGENTS.md" or null;
+    in
+      contextFile
+      != null
+      && lib.hasInfix "Top-level context" (contextFile.text or "")
   );
 
   # Devenv: agent files written.
