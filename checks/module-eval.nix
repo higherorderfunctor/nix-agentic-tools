@@ -1711,4 +1711,20 @@ in {
       !(result.config.home.file ? ".kiro/agents/reviewer.json")
       && !(result.config.home.file ? ".kiro/agents/reviewer.md")
   );
+
+  # HM: ai.claude.commands routes to programs.claude-code.commands via
+  # identity translation. Claude-only — Kiro and Copilot have no
+  # commands concept, so no top-level fanout.
+  module-claude-hm-commands-route-to-upstream = mkTest "claude-hm-commands-route-to-upstream" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          commands.fix-issue = "# Fix issue\n\nSteps…";
+        };
+      };
+      upstream = result.config.programs.claude-code.commands or {};
+    in
+      (upstream.fix-issue or null) == "# Fix issue\n\nSteps…"
+  );
 }

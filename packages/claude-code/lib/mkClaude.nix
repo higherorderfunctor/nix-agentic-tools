@@ -104,6 +104,23 @@ lib.ai.app.mkAiApp {
         `claude.code` has no agents surface.
       '';
     };
+    commands = lib.mkOption {
+      type = with lib.types; attrsOf (either lines path);
+      default = {};
+      description = ''
+        Claude custom slash-commands. Attribute name becomes the
+        command filename stem; value is inline markdown or a path
+        to a .md file. Routed to `programs.claude-code.commands`;
+        upstream writes them under `~/.claude/commands/<name>.md`.
+        Claude-only — Kiro and Copilot have no analogous command
+        concept, so no top-level `ai.commands` fanout.
+      '';
+      example = lib.literalExpression ''
+        {
+          fix-issue = ./commands/fix-issue.md;
+        }
+      '';
+    };
   };
   # HM-specific projection
   hm = {
@@ -145,7 +162,7 @@ lib.ai.app.mkAiApp {
             skills = lib.mapAttrs (_: lib.mkDefault) mergedSkills;
             context = lib.mkDefault effectiveContext;
             plugins = lib.mkDefault cfg.plugins;
-            inherit (cfg) marketplaces outputStyles;
+            inherit (cfg) marketplaces outputStyles commands;
             lspServers = lib.mapAttrs aiCommon.mkClaudeLspConfig mergedLspServers;
             agents = mergedClaudeCopilotAgents;
             # Transitional raw inherit. End state mirrors the devenv
