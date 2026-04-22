@@ -185,3 +185,326 @@ to "share" the pool. HM's Claude consumer wrote
 `~/.claude/skills/sws-*` (leaking personal-scope files), and
 devenv never saw the skills at all. Fix: move the contribution to
 the devenv module. See `docs/stacked-workflows-scope-fix-plan.md`.
+
+<!-- Fragment: dev/fragments/ai-module/collision-semantics.md -->
+
+## ai.\* Collision Semantics
+
+> **Last verified:** 2026-04-21 (commit pending — refactor of
+> ai-factory-collision plan §3.2). If you add a new shared pool
+> to `ai.*` or change how pools are merged across the L2↔L3
+> boundary and this fragment isn't updated in the same commit,
+> stop and fix it.
+
+### Rule
+
+Duplicate keys across any shared `ai.*` pool are a **failure
+condition**, not a silent override. The factory used to merge
+the top-level pool with the per-CLI pool via `config.ai.<pool>
+// cfg.<pool>`, letting a later per-CLI contribution silently
+overwrite a same-name top-level entry. User directive: "mixing
+and collision should be a failure. we don't merge over keys."
+
+### Covered pools
+
+Applies to every attrset-shaped shared pool in `ai.*`:
+
+- `ai.rules` / `ai.<cli>.rules`
+- `ai.skills` / `ai.<cli>.skills`
+- `ai.mcpServers` / `ai.<cli>.mcpServers`
+- `ai.lspServers` / `ai.<cli>.lspServers`
+- `ai.environmentVariables` / `ai.<cli>.environmentVariables`
+- `ai.agents` / `ai.<cli>.agents`
+
+`ai.instructions` is a list, not an attrset, so list concat
+stays as-is. `ai.context` is single-valued.
+
+### Implementation
+
+`lib.ai.mergeWithCollisionCheck` in `lib/ai/ai-common.nix`. Call
+site in `lib/ai/app/hmTransform.nix` and `devenvTransform.nix`:
+
+```nix
+mergeCheck = poolName: topPool: cliPool:
+  aiCommon.mergeWithCollisionCheck {
+    inherit poolName topPool cliPool;
+    cliName = appRecord.name;
+  };
+
+rulesMerge = mergeCheck "rules" config.ai.rules cfg.rules;
+# ...
+collisionAssertions = rulesMerge.assertions ++ ... ;
+```
+
+The helper returns `{ merged, assertions }`. The merged shape
+matches the old `//` behavior (per-CLI wins) so downstream
+code keeps resolving until the module system checks
+assertions. Assertions aggregate into `config.assertions`
+**outside any mkIf guard**, so misconfigurations surface even
+when the CLI is toggled off.
+
+### Error message
+
+```
+<pool> '<key>' declared in both ai.<pool> and ai.<cli>.<pool> —
+collisions across shared ai.* pools are errors. Rename one or
+delete the duplicate.
+```
+
+### Adding a new shared pool
+
+1. Declare `ai.<pool>` in `lib/ai/sharedOptions.nix` (attrset
+   shape).
+2. Declare `ai.<cli>.<pool>` in the mkAiApp baseline
+   (`lib/ai/app/hmTransform.nix` + `devenvTransform.nix`) OR in
+   the per-CLI factory (for CLI-specific shape, like kiro's
+   JSON `agents`).
+3. Add `<pool>Merge = mergeCheck "<pool>" config.ai.<pool>
+cfg.<pool>;` to the transform.
+4. Append `<pool>Merge.assertions` to `collisionAssertions`.
+5. Set `merged<Pool> = <pool>Merge.merged;`.
+6. Add a collision test in `checks/module-eval.nix`.
+
+### Pitfall
+
+**Do NOT merge with `//` anywhere in the factory.** That was
+the old shape — it silently overrode. If you see a new `//`
+on a pool merge during code review, route it through the
+helper instead. The existing tests cover the collision path
+per pool, but a brand-new pool added without the helper will
+evade detection until someone happens to configure a
+collision.
+
+### Debugging
+
+If a collision assertion fires and the user disagrees, inspect
+which side of the merge owns the offending key:
+
+```bash
+nix eval --impure --expr 'builtins.attrNames \
+  (builtins.fromJSON (builtins.readFile ./result/etc/<pool>.json))'
+```
+
+Or look at `config.ai.<pool>` / `config.ai.<cli>.<pool>` via
+`nix eval .#homeConfigurations.<host>.config.ai.<pool>`.
+
+<!-- Fragment: dev/fragments/ai-module/dir-helpers.md -->
+
+## ai.\* Dir Helpers
+
+> **Last verified:** 2026-04-21 (commit pending — refactor of
+> ai-factory-collision plan §4 / commits 4–7). If you add a new
+> `*FromDir` helper or change the polymorphic input shape or
+> the filter signature and this fragment isn't updated in the
+> same commit, stop and fix it.
+
+### The helpers
+
+All live in `lib/ai/dir-helpers.nix`, re-exported under
+`lib.ai.*`:
+
+- `rulesFromDir` — directory of `.md` files → `attrsOf
+{ text = <path> }`. Key is basename minus `.md`.
+- `skillsFromDir` — directory-of-directories → `attrsOf path`.
+  Key is the subdir name unchanged.
+- `agentsFromDir` — directory of `.md` files → `attrsOf
+path`. Key is basename minus `.md`. Claude + Copilot only.
+- `hooksFromDir` — directory of regular files → `attrsOf lines`
+  (via `readFile`). Key is the filename unchanged (hooks are
+  typically extensionless shell scripts). Claude-only.
+
+### Polymorphic input
+
+Per the refactor plan §3.5 — every Dir option is either:
+
+- A bare Nix path literal, or
+- A submodule `{ path, filter? }` where `filter : name → bool`.
+
+The option type lives in `lib/ai/ai-common.nix:dirOptionType`
+and is shared across sharedOptions and the per-CLI baselines.
+
+### Filter signature
+
+`name → bool` — name only, NOT `(name, kind) → bool` or
+`(entry) → bool`. Covers the real use cases (e.g. "exclude
+.bk files", "only keep a specific entry") without
+over-engineering. User directive: "just name is fine on the
+filter".
+
+Default filters per helper:
+
+| Helper          | Default filter                 |
+| --------------- | ------------------------------ |
+| `rulesFromDir`  | `name: hasSuffix ".md" name`   |
+| `skillsFromDir` | `_: true` (every subdir)       |
+| `agentsFromDir` | `name: hasSuffix ".md" name`   |
+| `hooksFromDir`  | `_: true` (every regular file) |
+
+### Consumer patterns
+
+Point at a directory and every file becomes an entry:
+
+```nix
+ai.kiro.rulesDir = ./kiro-config/steering;
+```
+
+Exclude backup files with a custom filter:
+
+```nix
+ai.kiro.rulesDir = {
+  path = ./kiro-config/steering;
+  filter = name: !(lib.hasSuffix ".bk" name);
+};
+```
+
+Mix Dir-based and explicit entries freely — they merge through
+`mkDefault` (explicit entries win within the same layer;
+collisions between L2 and L3 fire the shared assertion per
+the collision-semantics fragment).
+
+### Why pure-eval only
+
+Earlier iterations let a `sourcePath` field on `ruleModule`
+trigger out-of-store symlink emission for live-edit. Rolled
+back in the same refactor (plan §3.3). Rationale: devenv
+already covers the live-iteration use case, and pure-eval
+keeps the factory easier to reason about. All rule/agent/skill/
+hook content bakes into the store at eval time with
+transformer frontmatter injected.
+
+### Why per-file (not wholesale symlink)
+
+A `home.file.<dir>.source = <path>` with `recursive = true`
+takes the destination dir over — no other derivation can
+contribute files alongside. Per-file expansion preserves that
+escape hatch. This matters in Claude's rules dir, which a
+consumer may also populate directly from `programs.claude-code.
+marketplaces` or via a separate module.
+
+### Pitfall — path type strictness
+
+The helpers use `builtins.readDir cfg.path` and compute
+per-file paths as `cfg.path + "/${name}"`. Path addition
+preserves the `"path"` type when `cfg.path` is a literal, so
+downstream consumers that strict-check `lib.isPath` still see
+a path (not a store-path string). Do NOT replace the path
+literal in consumer code with `builtins.path { path = ...; }`
+or a `builtins.filterSource` result — those return strings and
+silently break upstream HM's `mkSkillEntry` and similar
+strict-check paths. See `hm-modules/module-conventions.md` on
+"Nix path types".
+
+<!-- Fragment: dev/fragments/ai-module/layered-fanout.md -->
+
+## ai.\* Layered Fanout Pattern
+
+> **Last verified:** 2026-04-21 (commit pending — refactor of
+> ai-factory-collision plan §4). If you add a new Dir option or
+> change how per-file Dir expansion fans through the layers,
+> update this fragment in the same commit.
+
+### Canonical 4-layer shape
+
+```
+┌────────────────────────────────────────────────────────────┐
+│ L1: Top-level Dir option (optional)                        │
+│   ai.<X>Dir = path | { path, filter? }                     │
+└────────────────────────────────────────────────────────────┘
+                             │
+                             ▼  fanout via lib.ai.<X>FromDir
+┌────────────────────────────────────────────────────────────┐
+│ L2: Top-level singles                                      │
+│   ai.<X> = attrsOf <itemModule>                            │
+│   - cross-ecosystem pool                                   │
+└────────────────────────────────────────────────────────────┘
+                             │
+                             ▼  fanout to each enabled CLI
+┌────────────────────────────────────────────────────────────┐
+│ L2b: Per-CLI Dir option (optional)                         │
+│   ai.<cli>.<X>Dir = path | { path, filter? }               │
+└────────────────────────────────────────────────────────────┘
+                             │
+                             ▼  fanout via lib.ai.<X>FromDir
+┌────────────────────────────────────────────────────────────┐
+│ L3: Per-CLI singles                                        │
+│   ai.<cli>.<X> = attrsOf <itemModule>                      │
+│   - merged with L2 via mergeWithCollisionCheck             │
+│   - collision-as-failure at the L2↔L3 boundary             │
+└────────────────────────────────────────────────────────────┘
+                             │
+                             ▼  translation + emission
+┌────────────────────────────────────────────────────────────┐
+│ L4: Emission (factory internal; not a user surface)        │
+│   - HM: home.file.* / programs.<cli>.* delegation          │
+│   - Devenv: files.* emission                               │
+│   - Transformer frontmatter per ecosystem                  │
+└────────────────────────────────────────────────────────────┘
+```
+
+### Rules
+
+- **Emission logic lives ONLY at L4.** L1/L2/L2b are pure
+  fanout — they never touch `home.file.*` or `files.*`.
+- **Collision-as-failure at every layer boundary.** The
+  mergeWithCollisionCheck helper fires on the L2↔L3 boundary
+  inside each CLI's transform. L1→L2 and L2b→L3 use
+  `mkDefault` so explicit entries within the same layer still
+  win (that's a fanout, not a cross-layer collision).
+- **Dir helpers live in `lib.ai.*`**, not in the module layer.
+  They're pure (`path → attrset`) and usable outside HM/devenv.
+- **Per-file emission only.** A Dir option never takes a
+  destination dir over wholesale — other derivations (or
+  consumer's own direct `home.file.*` calls) can always
+  contribute alongside.
+- **Key identity is preserved.** If a file is named `foo.md`
+  in the source dir, the L2 key is `foo` (the helper strips
+  known suffixes before emitting the key, and the per-CLI L4
+  emission re-appends). This is why the `.md.md` doubled-
+  extension bug from 2026-04-21 is structurally impossible
+  now.
+
+### Layer location map
+
+- L1 options and L1→L2 expansion → `lib/ai/sharedOptions.nix`
+- L2b options (CLI-generic) and L2b→L3 expansion →
+  `lib/ai/app/{hmTransform,devenvTransform}.nix`
+- L2b options (CLI-specific, like Claude's `agentsDir` or
+  `hooksDir`) → `packages/<pkg>/lib/mk<Cli>.nix`
+- L2↔L3 collision check → transform (`collisionAssertions`)
+- L4 emission → `packages/<pkg>/lib/mk<Cli>.nix`
+
+### Adding a new concern X
+
+1. Add L2 option `ai.<X>` in `lib/ai/sharedOptions.nix`.
+2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform
+   baseline (if every supported CLI handles it the same way)
+   or in each per-CLI factory (if the shape differs).
+3. Add L4 emission in each per-CLI factory's customConfig.
+4. Wire the L2↔L3 merge through mergeWithCollisionCheck in
+   both transforms.
+5. (Optional) Add L1 option `ai.<X>Dir` + L1→L2 expansion.
+6. (Optional) Add per-CLI L2b option `ai.<cli>.<X>Dir` +
+   L2b→L3 expansion.
+7. Add tests in `checks/module-eval.nix` for every new
+   surface.
+
+### Pitfall
+
+**Never emit from L1/L2/L2b.** Those layers exist solely to
+reshape data; they read nothing from `config.home.file.*` /
+`config.files.*` and write nothing there either. If you find
+yourself reaching for `home.file.*` in `sharedOptions.nix` or
+in a transform's `config` block, something is off — drop the
+contribution into the per-CLI factory's L4 emission.
+
+### Why 4 layers instead of inline
+
+Earlier iterations wrote emission logic inline in each branch
+of per-CLI config — directly setting `home.file.".claude/
+rules/${name}.md".text` from the `ai.rules` attrset. That
+coupled the source shape (list vs attrset, with or without
+Dir-backed ingestion) to each CLI's emission. When the rules
+attrs grew a `sourcePath` field and then dropped it, every
+CLI had to change in lockstep. With the 4-layer shape, new
+input modes (Dir helpers, filter signatures) only touch L1/L2b;
+emission stays stable.

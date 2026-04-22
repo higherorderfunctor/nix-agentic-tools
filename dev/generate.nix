@@ -182,7 +182,12 @@
   # ── Dev fragment names per package ───────────────────────────────────
   devFragmentNames = {
     ai-clis = ["packaging-guide"];
-    ai-module = ["ai-module-fanout"];
+    ai-module = [
+      "ai-module-fanout"
+      "collision-semantics"
+      "dir-helpers"
+      "layered-fanout"
+    ];
     ai-skills = ["skills-fanout-pattern"];
     claude-code = [
       {
