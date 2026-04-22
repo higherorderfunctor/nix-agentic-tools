@@ -34,7 +34,7 @@
             const path_to_root = "../../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../../searchindex-670ef962.js";
+            window.path_to_searchindex_js = "../../searchindex-12258bb0.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../../toc-e2aa3dc8.js"></script>
@@ -318,6 +318,37 @@ This is enforced by convention, not by the module system.</p>
 </code></pre>
 <p>If the option stays false despite <code>ai.claude.enable = true</code>, the
 fanout is broken — fix the module, not the consumer.</p>
+<h3 id="shared-pool-is-per-evaluation-not-cross-backend"><a class="header" href="#shared-pool-is-per-evaluation-not-cross-backend">Shared-pool is per-evaluation, NOT cross-backend</a></h3>
+<p><code>lib/ai/sharedOptions.nix</code> declares cross-app pools (<code>ai.skills</code>,
+<code>ai.instructions</code>, <code>ai.rules</code>, <code>ai.mcpServers</code>, <code>ai.lspServers</code>,
+<code>ai.environmentVariables</code>, <code>ai.agents</code>, <code>ai.context</code>). It’s
+imported by BOTH <code>hmTransform.nix</code> and <code>devenvTransform.nix</code>.</p>
+<p><strong>The option declarations are shared. The values are NOT.</strong></p>
+<p>HM and devenv run separate <code>evalModules</code> invocations with
+independent config trees. A value set in the HM-imported copy
+of a module is visible only to HM’s eval. Devenv’s eval has a
+completely separate <code>config.ai.skills</code> (etc.) that doesn’t see
+the HM contribution.</p>
+<p><strong>Consequence for “plain modules”</strong> (not <code>mkAiApp</code> participants,
+like <code>packages/stacked-workflows/modules/</code>): when a plain module
+contributes to <code>ai.skills</code> / <code>ai.instructions</code> / etc., the
+contribution MUST happen in the module’s appropriate backend
+sibling. If the content is HM-scope (personal user config), put it
+in the HM module. If it’s project-scope (devenv-only), put it in
+the devenv module. Contributing in one and expecting the other to
+pick it up will silently fail — the contribution just doesn’t land
+in the other eval.</p>
+<p>This is a different discipline from the AI CLI factories
+(<code>mkAiApp</code>), which have structural <code>hm = { config = …; }</code> /
+<code>devenv = { config = …; }</code> blocks that force per-backend
+separation by construction. Plain modules have no such guardrail —
+authors must decide scope consciously.</p>
+<p><strong>Historical bug this caused:</strong> the stacked-workflows HM module
+contributed <code>ai.skills.sws-*</code> from its HM scope, intending devenv
+to “share” the pool. HM’s Claude consumer wrote
+<code>~/.claude/skills/sws-*</code> (leaking personal-scope files), and
+devenv never saw the skills at all. Fix: move the contribution to
+the devenv module. See <code>docs/stacked-workflows-scope-fix-plan.md</code>.</p>
 
                     </main>
 

@@ -34,7 +34,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-670ef962.js";
+            window.path_to_searchindex_js = "../searchindex-12258bb0.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-e2aa3dc8.js"></script>
@@ -189,6 +189,27 @@ installation and quickstart.</p>
 <p>The single module includes AI CLI config (Claude, Copilot, Kiro),
 MCP server management, and stacked-workflow presets.</p>
 <h2 id="options"><a class="header" href="#options">Options</a></h2>
+<h2 id="aiagents"><a class="header" href="#aiagents">ai.agents</a></h2>
+<p>Markdown+frontmatter agent definitions fanned out to Claude
+and Copilot. Each entry becomes a file:</p>
+<ul>
+<li>Claude → ~/.claude/agents/&lt;name&gt;.md</li>
+<li>Copilot → .github/agents/&lt;name&gt;.agent.md (devenv) or
+~/.copilot/agents/&lt;name&gt;.agent.md (HM)
+Kiro intentionally excluded — Kiro’s agent format is JSON
+with different semantic fields; use <code>ai.kiro.agents</code>
+directly for that ecosystem. Per-app overrides
+(ai.&lt;cli&gt;.agents) merge on top and win on conflict.</li>
+</ul>
+<p><em>Type:</em>
+attribute set of (strings concatenated with “\n” or absolute path)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
 <h2 id="aiclaudeenable"><a class="header" href="#aiclaudeenable">ai.claude.enable</a></h2>
 <p>Whether to enable claude.</p>
 <p><em>Type:</em>
@@ -214,6 +235,43 @@ package</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
+<h2 id="aiclaudeagents"><a class="header" href="#aiclaudeagents">ai.claude.agents</a></h2>
+<p>Claude-specific agent markdown (merged with top-level
+<code>ai.agents</code>; per-CLI wins on conflict). Routed to
+<code>programs.claude-code.agents</code>; upstream writes them under
+<code>~/.claude/agents/&lt;name&gt;.md</code>. HM only — upstream devenv
+<code>claude.code</code> has no agents surface.</p>
+<p><em>Type:</em>
+attribute set of (strings concatenated with “\n” or absolute path)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudecommands"><a class="header" href="#aiclaudecommands">ai.claude.commands</a></h2>
+<p>Claude custom slash-commands. Attribute name becomes the
+command filename stem; value is inline markdown or a path
+to a .md file. Routed to <code>programs.claude-code.commands</code>;
+upstream writes them under <code>~/.claude/commands/&lt;name&gt;.md</code>.
+Claude-only — Kiro and Copilot have no analogous command
+concept, so no top-level <code>ai.commands</code> fanout.</p>
+<p><em>Type:</em>
+attribute set of (strings concatenated with “\n” or absolute path)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">{
+  fix-issue = ./commands/fix-issue.md;
+}
+
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
 <h2 id="aiclaudecontext"><a class="header" href="#aiclaudecontext">ai.claude.context</a></h2>
 <p>Global Claude context. Inline string or path to a file.
 Passed through to programs.claude-code.context (which writes
@@ -231,12 +289,148 @@ strings concatenated with “\n” or absolute path</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
+<h2 id="aiclaudehooks"><a class="header" href="#aiclaudehooks">ai.claude.hooks</a></h2>
+<p>Claude hook shell scripts. Attribute name becomes the hook
+filename; value is the script body. Routed to
+<code>programs.claude-code.hooks</code> (HM) and merged into
+<code>claude.code.hooks</code> (devenv, where existing
+<code>settings.hooks</code> continues to work for backward compat but
+this option is the authoritative route going forward).
+Claude-only — Kiro’s <code>ai.kiro.hooks</code> takes JSON-shaped hook
+definitions (different file format, different semantics),
+so no top-level <code>ai.hooks</code> fanout.</p>
+<p><em>Type:</em>
+attribute set of strings concatenated with “\n”</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">{ pre-edit = "#!/usr/bin/env bash\nexec :\n"; }
+
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
 <h2 id="aiclaudeinstructions"><a class="header" href="#aiclaudeinstructions">ai.claude.instructions</a></h2>
 <p>claude-specific instructions (appended to top-level ai.instructions).</p>
 <p><em>Type:</em>
 list of (attribute set)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudelspservers"><a class="header" href="#aiclaudelspservers">ai.claude.lspServers</a></h2>
+<p>Typed Claude-specific LSP server declarations. Merged with
+top-level <code>ai.lspServers</code>; per-CLI wins on name conflict.
+Translated via <code>mkClaudeLspConfig</code> to
+<code>programs.claude-code.lspServers</code>, which upstream writes into
+<code>~/.claude/settings.json</code>. Extensions list becomes
+<code>extensionToLanguage</code> mapping. Upstream devenv <code>claude.code</code>
+has no LSP surface — devenv ignores this option.</p>
+<p><em>Type:</em>
+attribute set of (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudelspserversnamepackage"><a class="header" href="#aiclaudelspserversnamepackage">ai.claude.lspServers.&lt;name&gt;.package</a></h2>
+<p>LSP server nix package. Alternative to <code>command</code>.</p>
+<p><em>Type:</em>
+null or package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudelspserversnameargs"><a class="header" href="#aiclaudelspserversnameargs">ai.claude.lspServers.&lt;name&gt;.args</a></h2>
+<p>Arguments to pass to the LSP binary.</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[
+  "--stdio"
+]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudelspserversnamebinary"><a class="header" href="#aiclaudelspserversnamebinary">ai.claude.lspServers.&lt;name&gt;.binary</a></h2>
+<p>Binary name within <code>package</code> (defaults to attribute name). Ignored when <code>command</code> is set.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"‹name›"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudelspserversnamecommand"><a class="header" href="#aiclaudelspserversnamecommand">ai.claude.lspServers.&lt;name&gt;.command</a></h2>
+<p>Literal command (absolute path or PATH-resolvable). Alternative to <code>package</code>+<code>binary</code>.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">"nixd"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudelspserversnameextensions"><a class="header" href="#aiclaudelspserversnameextensions">ai.claude.lspServers.&lt;name&gt;.extensions</a></h2>
+<p>File extensions this server handles (without leading dots). Used by Copilot/Claude to build ext→language mappings; ignored by Kiro.</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">[
+  "nix"
+]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudelspserversnameinitializationoptions"><a class="header" href="#aiclaudelspserversnameinitializationoptions">ai.claude.lspServers.&lt;name&gt;.initializationOptions</a></h2>
+<p>LSP initialization options passed during handshake.</p>
+<p><em>Type:</em>
+attribute set</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudemarketplaces"><a class="header" href="#aiclaudemarketplaces">ai.claude.marketplaces</a></h2>
+<p>Claude plugin marketplaces. Each entry is either a path to a
+marketplace directory or a package derivation. Routed to
+programs.claude-code.marketplaces; upstream writes them into
+~/.claude/settings.json under extraKnownMarketplaces.</p>
+<p><em>Type:</em>
+attribute set of (package or absolute path)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">{
+  my-marketplace = ./my-marketplace;
+}
+
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -336,6 +530,27 @@ null or string</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
+<h2 id="aiclaudeoutputstyles"><a class="header" href="#aiclaudeoutputstyles">ai.claude.outputStyles</a></h2>
+<p>Claude custom output styles. Attribute name becomes the style
+filename stem; value is inline markdown or a path to a .md
+file. Routed to programs.claude-code.outputStyles; upstream
+writes them under ~/.claude/output-styles/&lt;name&gt;.md.</p>
+<p><em>Type:</em>
+attribute set of (strings concatenated with “\n” or absolute path)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">{
+  concise = "Keep answers under 3 sentences.";
+  tutorial = ./styles/tutorial.md;
+}
+
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
 <h2 id="aiclaudeplugins"><a class="header" href="#aiclaudeplugins">ai.claude.plugins</a></h2>
 <p>Claude plugin directories or packages. Each entry is either
 a path to a plugin directory or a package derivation. Passed
@@ -345,6 +560,78 @@ through to programs.claude-code.plugins; each produces a
 list of (package or absolute path)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclauderules"><a class="header" href="#aiclauderules">ai.claude.rules</a></h2>
+<p>claude-specific rules (merged with top-level ai.rules; per-app wins on conflict).</p>
+<p><em>Type:</em>
+attribute set of (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclauderulesnamedescription"><a class="header" href="#aiclauderulesnamedescription">ai.claude.rules.&lt;name&gt;.description</a></h2>
+<p>Short description (used by Claude and Kiro frontmatter).</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">""
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclauderulesnamepaths"><a class="header" href="#aiclauderulesnamepaths">ai.claude.rules.&lt;name&gt;.paths</a></h2>
+<p>File path globs this rule applies to. null = always loaded.
+Translated per ecosystem:</p>
+<ul>
+<li>Claude: paths: frontmatter</li>
+<li>Kiro: inclusion: fileMatch + fileMatchPattern:</li>
+<li>Copilot: applyTo: glob</li>
+</ul>
+<p><em>Type:</em>
+null or (list of string)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclauderulesnamesourcepath"><a class="header" href="#aiclauderulesnamesourcepath">ai.claude.rules.&lt;name&gt;.sourcePath</a></h2>
+<p>Absolute filesystem path for out-of-store symlink emission.
+Preserves live-edit — edits to the source <code>.md</code> are visible
+immediately without <code>home-manager switch</code>. When set, <code>text</code>
+must be null and transformer frontmatter is NOT injected;
+manage <code>inclusion:</code> / <code>applyTo:</code> / <code>paths:</code> frontmatter in
+the source file directly. Mutually exclusive with <code>text</code>.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">"/home/user/.config/kiro/steering/foo.md"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclauderulesnametext"><a class="header" href="#aiclauderulesnametext">ai.claude.rules.&lt;name&gt;.text</a></h2>
+<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
+Content is baked into the nix store at eval time; transformer
+frontmatter IS injected on emission. Mutually exclusive with
+<code>sourcePath</code>.</p>
+<p><em>Type:</em>
+null or strings concatenated with “\n” or absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -372,6 +659,23 @@ attribute set of absolute path</p>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aicontext"><a class="header" href="#aicontext">ai.context</a></h2>
+<p>Cross-app global context (single always-on file) fanned out to every
+enabled AI app. Each ecosystem emits it at its native location:
+Claude → ~/.claude/CLAUDE.md, Kiro → ~/.kiro/steering/&lt;contextFilename&gt;
+(default AGENTS.md). Per-app overrides (ai.&lt;name&gt;.context) win when set.</p>
+<p><em>Type:</em>
+null or strings concatenated with “\n” or absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">./ai-context.md
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
 </ul>
 <h2 id="aicopilotenable"><a class="header" href="#aicopilotenable">ai.copilot.enable</a></h2>
 <p>Whether to enable copilot.</p>
@@ -421,11 +725,38 @@ null or absolute path</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
 <h2 id="aicopilotconfigdir"><a class="header" href="#aicopilotconfigdir">ai.copilot.configDir</a></h2>
-<p>Config directory relative to HOME / devenv root.</p>
+<p>Personal config dir relative to HOME (Copilot CLI’s canonical location).</p>
 <p><em>Type:</em>
 string</p>
 <p><em>Default:</em></p>
-<pre><code class="language-nix">".config/github-copilot"
+<pre><code class="language-nix">".copilot"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aicopilotcontext"><a class="header" href="#aicopilotcontext">ai.copilot.context</a></h2>
+<p>Copilot-scope global context. Inline string or path to a file.
+Written to <code>&lt;configDir&gt;/&lt;contextFilename&gt;</code> with no frontmatter.
+When null, falls back to top-level <code>ai.context</code>.</p>
+<p><em>Type:</em>
+null or strings concatenated with “\n” or absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">./copilot-context.md
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aicopilotcontextfilename"><a class="header" href="#aicopilotcontextfilename">ai.copilot.contextFilename</a></h2>
+<p>Filename for the context file inside <code>&lt;configDir&gt;/</code>.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"copilot-instructions.md"
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -454,9 +785,85 @@ list of (attribute set)</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
 <h2 id="aicopilotlspservers"><a class="header" href="#aicopilotlspservers">ai.copilot.lspServers</a></h2>
-<p>LSP server definitions written to lsp-config.json.</p>
+<p>Typed LSP server definitions; translated via <code>mkCopilotLspConfig</code> into lsp-config.json on emission (adds fileExtensions mapping).</p>
 <p><em>Type:</em>
-attribute set of attribute set of anything</p>
+attribute set of (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aicopilotlspserversnamepackage"><a class="header" href="#aicopilotlspserversnamepackage">ai.copilot.lspServers.&lt;name&gt;.package</a></h2>
+<p>LSP server nix package. Alternative to <code>command</code>.</p>
+<p><em>Type:</em>
+null or package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aicopilotlspserversnameargs"><a class="header" href="#aicopilotlspserversnameargs">ai.copilot.lspServers.&lt;name&gt;.args</a></h2>
+<p>Arguments to pass to the LSP binary.</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[
+  "--stdio"
+]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aicopilotlspserversnamebinary"><a class="header" href="#aicopilotlspserversnamebinary">ai.copilot.lspServers.&lt;name&gt;.binary</a></h2>
+<p>Binary name within <code>package</code> (defaults to attribute name). Ignored when <code>command</code> is set.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"‹name›"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aicopilotlspserversnamecommand"><a class="header" href="#aicopilotlspserversnamecommand">ai.copilot.lspServers.&lt;name&gt;.command</a></h2>
+<p>Literal command (absolute path or PATH-resolvable). Alternative to <code>package</code>+<code>binary</code>.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">"nixd"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aicopilotlspserversnameextensions"><a class="header" href="#aicopilotlspserversnameextensions">ai.copilot.lspServers.&lt;name&gt;.extensions</a></h2>
+<p>File extensions this server handles (without leading dots). Used by Copilot/Claude to build ext→language mappings; ignored by Kiro.</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">[
+  "nix"
+]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aicopilotlspserversnameinitializationoptions"><a class="header" href="#aicopilotlspserversnameinitializationoptions">ai.copilot.lspServers.&lt;name&gt;.initializationOptions</a></h2>
+<p>LSP initialization options passed during handshake.</p>
+<p><em>Type:</em>
+attribute set</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">{ }
 </code></pre>
@@ -558,6 +965,78 @@ null or string</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
+<h2 id="aicopilotrules"><a class="header" href="#aicopilotrules">ai.copilot.rules</a></h2>
+<p>copilot-specific rules (merged with top-level ai.rules; per-app wins on conflict).</p>
+<p><em>Type:</em>
+attribute set of (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aicopilotrulesnamedescription"><a class="header" href="#aicopilotrulesnamedescription">ai.copilot.rules.&lt;name&gt;.description</a></h2>
+<p>Short description (used by Claude and Kiro frontmatter).</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">""
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aicopilotrulesnamepaths"><a class="header" href="#aicopilotrulesnamepaths">ai.copilot.rules.&lt;name&gt;.paths</a></h2>
+<p>File path globs this rule applies to. null = always loaded.
+Translated per ecosystem:</p>
+<ul>
+<li>Claude: paths: frontmatter</li>
+<li>Kiro: inclusion: fileMatch + fileMatchPattern:</li>
+<li>Copilot: applyTo: glob</li>
+</ul>
+<p><em>Type:</em>
+null or (list of string)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aicopilotrulesnamesourcepath"><a class="header" href="#aicopilotrulesnamesourcepath">ai.copilot.rules.&lt;name&gt;.sourcePath</a></h2>
+<p>Absolute filesystem path for out-of-store symlink emission.
+Preserves live-edit — edits to the source <code>.md</code> are visible
+immediately without <code>home-manager switch</code>. When set, <code>text</code>
+must be null and transformer frontmatter is NOT injected;
+manage <code>inclusion:</code> / <code>applyTo:</code> / <code>paths:</code> frontmatter in
+the source file directly. Mutually exclusive with <code>text</code>.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">"/home/user/.config/kiro/steering/foo.md"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aicopilotrulesnametext"><a class="header" href="#aicopilotrulesnametext">ai.copilot.rules.&lt;name&gt;.text</a></h2>
+<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
+Content is baked into the nix store at eval time; transformer
+frontmatter IS injected on emission. Mutually exclusive with
+<code>sourcePath</code>.</p>
+<p><em>Type:</em>
+null or strings concatenated with “\n” or absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
 <h2 id="aicopilotsettings"><a class="header" href="#aicopilotsettings">ai.copilot.settings</a></h2>
 <p>Freeform settings merged into ~/.config/github-copilot/settings.json (HM: via activation script; devenv: via static write).</p>
 <p><em>Type:</em>
@@ -579,6 +1058,22 @@ attribute set of absolute path</p>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aienvironmentvariables"><a class="header" href="#aienvironmentvariables">ai.environmentVariables</a></h2>
+<p>Environment variables fanned out to every enabled AI app that
+supports a wrapper/env surface (Kiro, Copilot). Per-app overrides
+(ai.&lt;name&gt;.environmentVariables) merge on top and win on conflict.
+Claude does NOT currently consume this pool — Claude env vars
+should be set via <code>ai.claude.settings.env</code> instead (upstream
+writes them into <code>~/.claude/settings.json</code>).</p>
+<p><em>Type:</em>
+attribute set of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
 </ul>
 <h2 id="aiinstructions"><a class="header" href="#aiinstructions">ai.instructions</a></h2>
 <p>Cross-app instructions fanned out to every enabled AI app.</p>
@@ -649,6 +1144,33 @@ string</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
+<h2 id="aikirocontext"><a class="header" href="#aikirocontext">ai.kiro.context</a></h2>
+<p>Kiro-scope global context. Inline string or path to a file.
+Written to <code>&lt;configDir&gt;/steering/&lt;contextFilename&gt;</code> with no frontmatter.
+When null, falls back to top-level <code>ai.context</code>.</p>
+<p><em>Type:</em>
+null or strings concatenated with “\n” or absolute path</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">./kiro-context.md
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aikirocontextfilename"><a class="header" href="#aikirocontextfilename">ai.kiro.contextFilename</a></h2>
+<p>Filename for the context file inside <code>&lt;configDir&gt;/steering/</code>.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"AGENTS.md"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
 <h2 id="aikiroenvironmentvariables"><a class="header" href="#aikiroenvironmentvariables">ai.kiro.environmentVariables</a></h2>
 <p>Environment variables exported when launching kiro (HM: via wrapper; devenv: via native env).</p>
 <p><em>Type:</em>
@@ -694,9 +1216,85 @@ list of (attribute set)</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
 <h2 id="aikirolspservers"><a class="header" href="#aikirolspservers">ai.kiro.lspServers</a></h2>
-<p>LSP server definitions written to settings/lsp.json.</p>
+<p>Typed LSP server definitions; translated via <code>mkLspConfig</code> into settings/lsp.json on emission.</p>
 <p><em>Type:</em>
-attribute set of attribute set of anything</p>
+attribute set of (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aikirolspserversnamepackage"><a class="header" href="#aikirolspserversnamepackage">ai.kiro.lspServers.&lt;name&gt;.package</a></h2>
+<p>LSP server nix package. Alternative to <code>command</code>.</p>
+<p><em>Type:</em>
+null or package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aikirolspserversnameargs"><a class="header" href="#aikirolspserversnameargs">ai.kiro.lspServers.&lt;name&gt;.args</a></h2>
+<p>Arguments to pass to the LSP binary.</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[
+  "--stdio"
+]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aikirolspserversnamebinary"><a class="header" href="#aikirolspserversnamebinary">ai.kiro.lspServers.&lt;name&gt;.binary</a></h2>
+<p>Binary name within <code>package</code> (defaults to attribute name). Ignored when <code>command</code> is set.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"‹name›"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aikirolspserversnamecommand"><a class="header" href="#aikirolspserversnamecommand">ai.kiro.lspServers.&lt;name&gt;.command</a></h2>
+<p>Literal command (absolute path or PATH-resolvable). Alternative to <code>package</code>+<code>binary</code>.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">"nixd"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aikirolspserversnameextensions"><a class="header" href="#aikirolspserversnameextensions">ai.kiro.lspServers.&lt;name&gt;.extensions</a></h2>
+<p>File extensions this server handles (without leading dots). Used by Copilot/Claude to build ext→language mappings; ignored by Kiro.</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">[
+  "nix"
+]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aikirolspserversnameinitializationoptions"><a class="header" href="#aikirolspserversnameinitializationoptions">ai.kiro.lspServers.&lt;name&gt;.initializationOptions</a></h2>
+<p>LSP initialization options passed during handshake.</p>
+<p><em>Type:</em>
+attribute set</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">{ }
 </code></pre>
@@ -791,6 +1389,78 @@ null or one of “http”, “stdio”</p>
 <p>HTTP endpoint URL. Required for shape ©.</p>
 <p><em>Type:</em>
 null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aikirorules"><a class="header" href="#aikirorules">ai.kiro.rules</a></h2>
+<p>kiro-specific rules (merged with top-level ai.rules; per-app wins on conflict).</p>
+<p><em>Type:</em>
+attribute set of (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aikirorulesnamedescription"><a class="header" href="#aikirorulesnamedescription">ai.kiro.rules.&lt;name&gt;.description</a></h2>
+<p>Short description (used by Claude and Kiro frontmatter).</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">""
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aikirorulesnamepaths"><a class="header" href="#aikirorulesnamepaths">ai.kiro.rules.&lt;name&gt;.paths</a></h2>
+<p>File path globs this rule applies to. null = always loaded.
+Translated per ecosystem:</p>
+<ul>
+<li>Claude: paths: frontmatter</li>
+<li>Kiro: inclusion: fileMatch + fileMatchPattern:</li>
+<li>Copilot: applyTo: glob</li>
+</ul>
+<p><em>Type:</em>
+null or (list of string)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aikirorulesnamesourcepath"><a class="header" href="#aikirorulesnamesourcepath">ai.kiro.rules.&lt;name&gt;.sourcePath</a></h2>
+<p>Absolute filesystem path for out-of-store symlink emission.
+Preserves live-edit — edits to the source <code>.md</code> are visible
+immediately without <code>home-manager switch</code>. When set, <code>text</code>
+must be null and transformer frontmatter is NOT injected;
+manage <code>inclusion:</code> / <code>applyTo:</code> / <code>paths:</code> frontmatter in
+the source file directly. Mutually exclusive with <code>text</code>.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">"/home/user/.config/kiro/steering/foo.md"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aikirorulesnametext"><a class="header" href="#aikirorulesnametext">ai.kiro.rules.&lt;name&gt;.text</a></h2>
+<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
+Content is baked into the nix store at eval time; transformer
+frontmatter IS injected on emission. Mutually exclusive with
+<code>sourcePath</code>.</p>
+<p><em>Type:</em>
+null or strings concatenated with “\n” or absolute path</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">null
 </code></pre>
@@ -906,6 +1576,97 @@ boolean</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
+<h2 id="ailspservers"><a class="header" href="#ailspservers">ai.lspServers</a></h2>
+<p>Typed LSP server declarations fanned out to every enabled AI app.
+Each per-ecosystem translator renders the native JSON shape on
+emission (Kiro: command/args; Copilot: + fileExtensions;
+Claude: + extensionToLanguage). Per-app overrides
+(ai.&lt;name&gt;.lspServers) merge on top and win on conflict.</p>
+<p><em>Type:</em>
+attribute set of (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
+<h2 id="ailspserversnamepackage"><a class="header" href="#ailspserversnamepackage">ai.lspServers.&lt;name&gt;.package</a></h2>
+<p>LSP server nix package. Alternative to <code>command</code>.</p>
+<p><em>Type:</em>
+null or package</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
+<h2 id="ailspserversnameargs"><a class="header" href="#ailspserversnameargs">ai.lspServers.&lt;name&gt;.args</a></h2>
+<p>Arguments to pass to the LSP binary.</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[
+  "--stdio"
+]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
+<h2 id="ailspserversnamebinary"><a class="header" href="#ailspserversnamebinary">ai.lspServers.&lt;name&gt;.binary</a></h2>
+<p>Binary name within <code>package</code> (defaults to attribute name). Ignored when <code>command</code> is set.</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">"‹name›"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
+<h2 id="ailspserversnamecommand"><a class="header" href="#ailspserversnamecommand">ai.lspServers.&lt;name&gt;.command</a></h2>
+<p>Literal command (absolute path or PATH-resolvable). Alternative to <code>package</code>+<code>binary</code>.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">"nixd"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
+<h2 id="ailspserversnameextensions"><a class="header" href="#ailspserversnameextensions">ai.lspServers.&lt;name&gt;.extensions</a></h2>
+<p>File extensions this server handles (without leading dots). Used by Copilot/Claude to build ext→language mappings; ignored by Kiro.</p>
+<p><em>Type:</em>
+list of string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">[ ]
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">[
+  "nix"
+]
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
+<h2 id="ailspserversnameinitializationoptions"><a class="header" href="#ailspserversnameinitializationoptions">ai.lspServers.&lt;name&gt;.initializationOptions</a></h2>
+<p>LSP initialization options passed during handshake.</p>
+<p><em>Type:</em>
+attribute set</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
 <h2 id="aimcpservers"><a class="header" href="#aimcpservers">ai.mcpServers</a></h2>
 <p>MCP servers fanned out to every enabled AI app. Per-app overrides
 (ai.&lt;name&gt;.mcpServers) merge on top and win on conflict.</p>
@@ -994,6 +1755,94 @@ null or one of “http”, “stdio”</p>
 <p>HTTP endpoint URL. Required for shape ©.</p>
 <p><em>Type:</em>
 null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
+<h2 id="airules"><a class="header" href="#airules">ai.rules</a></h2>
+<p>Cross-app modular rule files fanned out to every enabled AI app.
+Each attribute becomes one file in the ecosystem’s native rules
+directory (Claude: <code>.claude/rules/&lt;name&gt;.md</code>, Kiro:
+<code>.kiro/steering/&lt;name&gt;.md</code>, Copilot:
+<code>.github/instructions/&lt;name&gt;.instructions.md</code>). Per-app overrides
+(ai.&lt;name&gt;.rules) merge on top and win on name conflict.</p>
+<p><em>Type:</em>
+attribute set of (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">{
+  code-style = { text = "Use consistent formatting."; };
+  testing = {
+    text = ./rules/testing.md;
+    paths = [ "**/*.test.*" ];
+    description = "Testing conventions";
+  };
+}
+
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
+<h2 id="airulesnamedescription"><a class="header" href="#airulesnamedescription">ai.rules.&lt;name&gt;.description</a></h2>
+<p>Short description (used by Claude and Kiro frontmatter).</p>
+<p><em>Type:</em>
+string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">""
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
+<h2 id="airulesnamepaths"><a class="header" href="#airulesnamepaths">ai.rules.&lt;name&gt;.paths</a></h2>
+<p>File path globs this rule applies to. null = always loaded.
+Translated per ecosystem:</p>
+<ul>
+<li>Claude: paths: frontmatter</li>
+<li>Kiro: inclusion: fileMatch + fileMatchPattern:</li>
+<li>Copilot: applyTo: glob</li>
+</ul>
+<p><em>Type:</em>
+null or (list of string)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
+<h2 id="airulesnamesourcepath"><a class="header" href="#airulesnamesourcepath">ai.rules.&lt;name&gt;.sourcePath</a></h2>
+<p>Absolute filesystem path for out-of-store symlink emission.
+Preserves live-edit — edits to the source <code>.md</code> are visible
+immediately without <code>home-manager switch</code>. When set, <code>text</code>
+must be null and transformer frontmatter is NOT injected;
+manage <code>inclusion:</code> / <code>applyTo:</code> / <code>paths:</code> frontmatter in
+the source file directly. Mutually exclusive with <code>text</code>.</p>
+<p><em>Type:</em>
+null or string</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">"/home/user/.config/kiro/steering/foo.md"
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
+<h2 id="airulesnametext"><a class="header" href="#airulesnametext">ai.rules.&lt;name&gt;.text</a></h2>
+<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
+Content is baked into the nix store at eval time; transformer
+frontmatter IS injected on emission. Mutually exclusive with
+<code>sourcePath</code>.</p>
+<p><em>Type:</em>
+null or strings concatenated with “\n” or absolute path</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">null
 </code></pre>
@@ -3358,7 +4207,7 @@ attribute set of list of string <em>(read only)</em></p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager/default.nix">modules/homeManager/default.nix</a></li>
 </ul>
 <h2 id="stacked-workflowsenable"><a class="header" href="#stacked-workflowsenable">stacked-workflows.enable</a></h2>
-<p>Whether to enable stacked workflow skills and references.</p>
+<p>Whether to enable stacked workflow git config presets (skills/instructions/refs live in the devenv module — project-local scope).</p>
 <p><em>Type:</em>
 boolean</p>
 <p><em>Default:</em></p>
