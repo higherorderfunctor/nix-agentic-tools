@@ -34,7 +34,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-12258bb0.js";
+            window.path_to_searchindex_js = "../searchindex-d5bbbdfc.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-e2aa3dc8.js"></script>
@@ -180,11 +180,9 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="lib-api"><a class="header" href="#lib-api">lib API</a></h1>
-<p>Public functions exported by <code>inputs.nix-agentic-tools.lib</code>, organized
-by source module. This page documents the <strong>current</strong> exported surface
-on this branch — additional functions exist in the <code>lib/</code> source files
-but are not yet exported via <code>flake.nix</code>. As later chunks land, the
-flake <code>lib</code> output expands and this page grows with it.</p>
+<p>Public functions exported by <code>inputs.nix-agentic-tools.lib.ai</code>, organized
+by source module. Every flake-level helper lives under <code>lib.ai.*</code> —
+there are no top-level <code>lib.&lt;helper&gt;</code> exports.</p>
 <h2 id="libfragmentsnix"><a class="header" href="#libfragmentsnix">lib/fragments.nix</a></h2>
 <p>Fragment composition library. Pure functions, no file I/O.</p>
 <h3 id="mkfragment"><a class="header" href="#mkfragment">mkFragment</a></h3>
@@ -255,8 +253,7 @@ in {
 <p>Build a YAML frontmatter block (<code>---\nkey: value\n---\n</code>) from an
 attrset. Used internally by ecosystem generators.</p>
 <h2 id="libmcpnix"><a class="header" href="#libmcpnix">lib/mcp.nix</a></h2>
-<p>MCP server entry builders. Exported via top-level <code>lib.&lt;name&gt;</code>
-(no <code>lib.mcp.*</code> sub-namespace).</p>
+<p>MCP server entry builders. Exported under <code>lib.ai.&lt;name&gt;</code>.</p>
 <h3 id="loadserver"><a class="header" href="#loadserver">loadServer</a></h3>
 <pre><code class="language-nix">loadServer :: name -&gt; serverDef
 </code></pre>
@@ -319,11 +316,11 @@ modules and produces a <code>mkShell</code> derivation.</p>
 <h2 id="externalservers"><a class="header" href="#externalservers">externalServers</a></h2>
 <p>Static registry of remote MCP server URLs that don’t ship with their
 own package. Currently keyed by provider:</p>
-<pre><code class="language-nix">inputs.nix-agentic-tools.lib.externalServers.aws-mcp
+<pre><code class="language-nix">inputs.nix-agentic-tools.lib.ai.externalServers.aws-mcp
 # =&gt; { type = "http"; url = "https://knowledge-mcp.global.api.aws"; }
 </code></pre>
 <h2 id="presets"><a class="header" href="#presets">presets</a></h2>
-<pre><code class="language-nix">inputs.nix-agentic-tools.lib.presets.nix-agentic-tools-dev
+<pre><code class="language-nix">inputs.nix-agentic-tools.lib.ai.presets.nix-agentic-tools-dev
 </code></pre>
 <p>Composed <code>Fragment</code> containing all coding-standards content
 (<code>pkgs.coding-standards.passthru.fragments</code>) plus stacked-workflows
@@ -333,7 +330,7 @@ projects.</p>
 <hr>
 <p>Functions defined in <code>lib/mcp.nix</code>, <code>lib/ai-common.nix</code>, and
 <code>lib/hm-helpers.nix</code> that are NOT yet exported through the flake
-<code>lib</code> output (e.g., <code>mkSecretsWrapper</code>, <code>mkCredentialsOption</code>,
+<code>lib.ai</code> output (e.g., <code>mkSecretsWrapper</code>, <code>mkCredentialsOption</code>,
 <code>mkLspConfig</code>, <code>mkContentOption</code>, <code>mkSkillEntries</code>) become public
 as later chunks land their consumers and promote them to the
 flake export surface.</p>

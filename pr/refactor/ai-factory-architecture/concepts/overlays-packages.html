@@ -34,7 +34,7 @@
             const path_to_root = "../";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "../searchindex-12258bb0.js";
+            window.path_to_searchindex_js = "../searchindex-d5bbbdfc.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-e2aa3dc8.js"></script>
@@ -309,8 +309,8 @@ pkgs.ai.agnix.mcpBinary
 pkgs.ai.mcpServers.serena-mcp.mcpArgs
 # =&gt; ["start-mcp-server"]
 </code></pre>
-<p>Use <code>lib.mkPackageEntry</code> to derive a complete MCP config entry:</p>
-<pre><code class="language-nix">lib.mkPackageEntry pkgs.ai.mcpServers.github-mcp
+<p>Use <code>lib.ai.mkPackageEntry</code> to derive a complete MCP config entry:</p>
+<pre><code class="language-nix">lib.ai.mkPackageEntry pkgs.ai.mcpServers.github-mcp
 # =&gt; { type = "stdio"; command = "/nix/store/.../github-mcp-server"; args = [...]; }
 </code></pre>
 

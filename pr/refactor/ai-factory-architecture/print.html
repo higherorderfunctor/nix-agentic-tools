@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "coal";
             const default_dark_theme = "coal";
-            window.path_to_searchindex_js = "searchindex-12258bb0.js";
+            window.path_to_searchindex_js = "searchindex-d5bbbdfc.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-e2aa3dc8.js"></script>
@@ -278,7 +278,7 @@ frontmatter generators — pure functions for building MCP configs
 and instruction files.</p>
 <pre><code class="language-nix">let
   at = inputs.nix-agentic-tools;
-  entry = at.lib.mkPackageEntry pkgs.nix-mcp-servers.github-mcp;
+  entry = at.lib.ai.mkPackageEntry pkgs.nix-mcp-servers.github-mcp;
 in
   # entry = { type = "stdio"; command = "/nix/store/.../github-mcp-server"; args = [...]; }
 </code></pre>
@@ -1027,8 +1027,8 @@ pkgs.ai.agnix.mcpBinary
 pkgs.ai.mcpServers.serena-mcp.mcpArgs
 # =&gt; ["start-mcp-server"]
 </code></pre>
-<p>Use <code>lib.mkPackageEntry</code> to derive a complete MCP config entry:</p>
-<pre><code class="language-nix">lib.mkPackageEntry pkgs.ai.mcpServers.github-mcp
+<p>Use <code>lib.ai.mkPackageEntry</code> to derive a complete MCP config entry:</p>
+<pre><code class="language-nix">lib.ai.mkPackageEntry pkgs.ai.mcpServers.github-mcp
 # =&gt; { type = "stdio"; command = "/nix/store/.../github-mcp-server"; args = [...]; }
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div>
@@ -1375,12 +1375,30 @@ and Copilot. Each entry becomes a file:</p>
 Kiro intentionally excluded — Kiro’s agent format is JSON
 with different semantic fields; use <code>ai.kiro.agents</code>
 directly for that ecosystem. Per-app overrides
-(ai.&lt;cli&gt;.agents) merge on top and win on conflict.</li>
+(ai.&lt;cli&gt;.agents) merge on top; collisions fail.</li>
 </ul>
 <p><em>Type:</em>
 attribute set of (strings concatenated with “\n” or absolute path)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
+<h2 id="aiagentsdir"><a class="header" href="#aiagentsdir">ai.agentsDir</a></h2>
+<p>Directory of <code>.md</code> agent files fanned out to Claude and
+Copilot. Each file becomes one entry in <code>ai.agents</code> keyed
+by the basename minus <code>.md</code>. Kiro intentionally excluded
+(different JSON shape — use <code>ai.kiro.agentsDir</code> which
+exists for the kiro-specific agents dir).</p>
+<p><em>Type:</em>
+null or absolute path or (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">./agents
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -1413,7 +1431,7 @@ package</p>
 </ul>
 <h2 id="aiclaudeagents"><a class="header" href="#aiclaudeagents">ai.claude.agents</a></h2>
 <p>Claude-specific agent markdown (merged with top-level
-<code>ai.agents</code>; per-CLI wins on conflict). Routed to
+<code>ai.agents</code>; collisions fail). Routed to
 <code>programs.claude-code.agents</code>; upstream writes them under
 <code>~/.claude/agents/&lt;name&gt;.md</code>. HM only — upstream devenv
 <code>claude.code</code> has no agents surface.</p>
@@ -1421,6 +1439,21 @@ package</p>
 attribute set of (strings concatenated with “\n” or absolute path)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aiclaudeagentsdir"><a class="header" href="#aiclaudeagentsdir">ai.claude.agentsDir</a></h2>
+<p>Claude-specific directory of <code>.md</code> agent files. Each file
+becomes one entry in <code>ai.claude.agents</code> keyed by basename
+minus <code>.md</code>. Accepts a path literal or
+<code>{ path, filter? }</code> (filter: name → bool, default keeps
+<code>.md</code>).</p>
+<p><em>Type:</em>
+null or absolute path or (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -1483,6 +1516,26 @@ attribute set of strings concatenated with “\n”</p>
 <p><em>Example:</em></p>
 <pre><code class="language-nix">{ pre-edit = "#!/usr/bin/env bash\nexec :\n"; }
 
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aiclaudehooksdir"><a class="header" href="#aiclaudehooksdir">ai.claude.hooksDir</a></h2>
+<p>Claude-specific directory of hook scripts. Each regular
+file becomes one entry in <code>ai.claude.hooks</code> keyed by the
+filename (no extension strip — Claude hooks are typically
+extensionless shell scripts). Accepts a path literal or
+<code>{ path, filter? }</code> (filter: name → bool, default
+accepts every regular file). Claude-only — no top-level
+<code>ai.hooksDir</code> fanout since hooks are Claude-specific.</p>
+<p><em>Type:</em>
+null or absolute path or (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">./hooks
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -1742,7 +1795,7 @@ list of (package or absolute path)</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aiclauderules"><a class="header" href="#aiclauderules">ai.claude.rules</a></h2>
-<p>claude-specific rules (merged with top-level ai.rules; per-app wins on conflict).</p>
+<p>claude-specific rules (merged with top-level ai.rules; collisions fail).</p>
 <p><em>Type:</em>
 attribute set of (submodule)</p>
 <p><em>Default:</em></p>
@@ -1780,32 +1833,26 @@ null or (list of string)</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
-<h2 id="aiclauderulesnamesourcepath"><a class="header" href="#aiclauderulesnamesourcepath">ai.claude.rules.&lt;name&gt;.sourcePath</a></h2>
-<p>Absolute filesystem path for out-of-store symlink emission.
-Preserves live-edit — edits to the source <code>.md</code> are visible
-immediately without <code>home-manager switch</code>. When set, <code>text</code>
-must be null and transformer frontmatter is NOT injected;
-manage <code>inclusion:</code> / <code>applyTo:</code> / <code>paths:</code> frontmatter in
-the source file directly. Mutually exclusive with <code>text</code>.</p>
+<h2 id="aiclauderulesnametext"><a class="header" href="#aiclauderulesnametext">ai.claude.rules.&lt;name&gt;.text</a></h2>
+<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
+Content is baked into the nix store at eval time; transformer
+frontmatter IS injected on emission.</p>
 <p><em>Type:</em>
-null or string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Example:</em></p>
-<pre><code class="language-nix">"/home/user/.config/kiro/steering/foo.md"
-</code></pre>
+strings concatenated with “\n” or absolute path</p>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
-<h2 id="aiclauderulesnametext"><a class="header" href="#aiclauderulesnametext">ai.claude.rules.&lt;name&gt;.text</a></h2>
-<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
-Content is baked into the nix store at eval time; transformer
-frontmatter IS injected on emission. Mutually exclusive with
-<code>sourcePath</code>.</p>
+<h2 id="aiclauderulesdir"><a class="header" href="#aiclauderulesdir">ai.claude.rulesDir</a></h2>
+<p>claude-specific directory of <code>.md</code> rule files. Each
+file becomes one entry in <code>ai.claude.rules</code> keyed by
+the basename minus <code>.md</code>. Accepts a path literal or
+<code>{ path, filter? }</code> (filter: name → bool, default keeps <code>.md</code>).
+Runs through the same collision-as-failure merge with
+<code>ai.rules</code> as explicit per-CLI entries; other derivations may
+still contribute to the same on-disk rules dir.</p>
 <p><em>Type:</em>
-null or strings concatenated with “\n” or absolute path</p>
+null or absolute path or (submodule)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">null
 </code></pre>
@@ -1831,6 +1878,19 @@ attribute set of anything</p>
 attribute set of absolute path</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aiclaudeskillsdir"><a class="header" href="#aiclaudeskillsdir">ai.claude.skillsDir</a></h2>
+<p>claude-specific directory-of-directories; each
+immediate subdirectory becomes one entry in
+<code>ai.claude.skills</code> keyed by the subdir name.</p>
+<p><em>Type:</em>
+null or absolute path or (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -1890,9 +1950,9 @@ attribute set of strings concatenated with “\n”</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aicopilotagentsdir"><a class="header" href="#aicopilotagentsdir">ai.copilot.agentsDir</a></h2>
-<p>External directory of agent markdown files (symlinked into &lt;configDir&gt;/agents).</p>
+<p>Directory of <code>.md</code> agent files (expanded into <code>ai.copilot.agents</code>).</p>
 <p><em>Type:</em>
-null or absolute path</p>
+null or absolute path or (submodule)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">null
 </code></pre>
@@ -2153,7 +2213,7 @@ string</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aicopilotrules"><a class="header" href="#aicopilotrules">ai.copilot.rules</a></h2>
-<p>copilot-specific rules (merged with top-level ai.rules; per-app wins on conflict).</p>
+<p>copilot-specific rules (merged with top-level ai.rules; collisions fail).</p>
 <p><em>Type:</em>
 attribute set of (submodule)</p>
 <p><em>Default:</em></p>
@@ -2191,32 +2251,26 @@ null or (list of string)</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
-<h2 id="aicopilotrulesnamesourcepath"><a class="header" href="#aicopilotrulesnamesourcepath">ai.copilot.rules.&lt;name&gt;.sourcePath</a></h2>
-<p>Absolute filesystem path for out-of-store symlink emission.
-Preserves live-edit — edits to the source <code>.md</code> are visible
-immediately without <code>home-manager switch</code>. When set, <code>text</code>
-must be null and transformer frontmatter is NOT injected;
-manage <code>inclusion:</code> / <code>applyTo:</code> / <code>paths:</code> frontmatter in
-the source file directly. Mutually exclusive with <code>text</code>.</p>
+<h2 id="aicopilotrulesnametext"><a class="header" href="#aicopilotrulesnametext">ai.copilot.rules.&lt;name&gt;.text</a></h2>
+<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
+Content is baked into the nix store at eval time; transformer
+frontmatter IS injected on emission.</p>
 <p><em>Type:</em>
-null or string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Example:</em></p>
-<pre><code class="language-nix">"/home/user/.config/kiro/steering/foo.md"
-</code></pre>
+strings concatenated with “\n” or absolute path</p>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
-<h2 id="aicopilotrulesnametext"><a class="header" href="#aicopilotrulesnametext">ai.copilot.rules.&lt;name&gt;.text</a></h2>
-<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
-Content is baked into the nix store at eval time; transformer
-frontmatter IS injected on emission. Mutually exclusive with
-<code>sourcePath</code>.</p>
+<h2 id="aicopilotrulesdir"><a class="header" href="#aicopilotrulesdir">ai.copilot.rulesDir</a></h2>
+<p>copilot-specific directory of <code>.md</code> rule files. Each
+file becomes one entry in <code>ai.copilot.rules</code> keyed by
+the basename minus <code>.md</code>. Accepts a path literal or
+<code>{ path, filter? }</code> (filter: name → bool, default keeps <code>.md</code>).
+Runs through the same collision-as-failure merge with
+<code>ai.rules</code> as explicit per-CLI entries; other derivations may
+still contribute to the same on-disk rules dir.</p>
 <p><em>Type:</em>
-null or strings concatenated with “\n” or absolute path</p>
+null or absolute path or (submodule)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">null
 </code></pre>
@@ -2241,6 +2295,19 @@ attribute set of anything</p>
 attribute set of absolute path</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aicopilotskillsdir"><a class="header" href="#aicopilotskillsdir">ai.copilot.skillsDir</a></h2>
+<p>copilot-specific directory-of-directories; each
+immediate subdirectory becomes one entry in
+<code>ai.copilot.skills</code> keyed by the subdir name.</p>
+<p><em>Type:</em>
+null or absolute path or (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -2584,7 +2651,7 @@ null or string</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
 <h2 id="aikirorules"><a class="header" href="#aikirorules">ai.kiro.rules</a></h2>
-<p>kiro-specific rules (merged with top-level ai.rules; per-app wins on conflict).</p>
+<p>kiro-specific rules (merged with top-level ai.rules; collisions fail).</p>
 <p><em>Type:</em>
 attribute set of (submodule)</p>
 <p><em>Default:</em></p>
@@ -2622,32 +2689,26 @@ null or (list of string)</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
-<h2 id="aikirorulesnamesourcepath"><a class="header" href="#aikirorulesnamesourcepath">ai.kiro.rules.&lt;name&gt;.sourcePath</a></h2>
-<p>Absolute filesystem path for out-of-store symlink emission.
-Preserves live-edit — edits to the source <code>.md</code> are visible
-immediately without <code>home-manager switch</code>. When set, <code>text</code>
-must be null and transformer frontmatter is NOT injected;
-manage <code>inclusion:</code> / <code>applyTo:</code> / <code>paths:</code> frontmatter in
-the source file directly. Mutually exclusive with <code>text</code>.</p>
+<h2 id="aikirorulesnametext"><a class="header" href="#aikirorulesnametext">ai.kiro.rules.&lt;name&gt;.text</a></h2>
+<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
+Content is baked into the nix store at eval time; transformer
+frontmatter IS injected on emission.</p>
 <p><em>Type:</em>
-null or string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Example:</em></p>
-<pre><code class="language-nix">"/home/user/.config/kiro/steering/foo.md"
-</code></pre>
+strings concatenated with “\n” or absolute path</p>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
 </ul>
-<h2 id="aikirorulesnametext"><a class="header" href="#aikirorulesnametext">ai.kiro.rules.&lt;name&gt;.text</a></h2>
-<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
-Content is baked into the nix store at eval time; transformer
-frontmatter IS injected on emission. Mutually exclusive with
-<code>sourcePath</code>.</p>
+<h2 id="aikirorulesdir"><a class="header" href="#aikirorulesdir">ai.kiro.rulesDir</a></h2>
+<p>kiro-specific directory of <code>.md</code> rule files. Each
+file becomes one entry in <code>ai.kiro.rules</code> keyed by
+the basename minus <code>.md</code>. Accepts a path literal or
+<code>{ path, filter? }</code> (filter: name → bool, default keeps <code>.md</code>).
+Runs through the same collision-as-failure merge with
+<code>ai.rules</code> as explicit per-CLI entries; other derivations may
+still contribute to the same on-disk rules dir.</p>
 <p><em>Type:</em>
-null or strings concatenated with “\n” or absolute path</p>
+null or absolute path or (submodule)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">null
 </code></pre>
@@ -2729,6 +2790,19 @@ null or boolean</p>
 attribute set of absolute path</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/devenv">modules/devenv</a></li>
+</ul>
+<h2 id="aikiroskillsdir"><a class="header" href="#aikiroskillsdir">ai.kiro.skillsDir</a></h2>
+<p>kiro-specific directory-of-directories; each
+immediate subdirectory becomes one entry in
+<code>ai.kiro.skills</code> keyed by the subdir name.</p>
+<p><em>Type:</em>
+null or absolute path or (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -2955,7 +3029,7 @@ Each attribute becomes one file in the ecosystem’s native rules
 directory (Claude: <code>.claude/rules/&lt;name&gt;.md</code>, Kiro:
 <code>.kiro/steering/&lt;name&gt;.md</code>, Copilot:
 <code>.github/instructions/&lt;name&gt;.instructions.md</code>). Per-app overrides
-(ai.&lt;name&gt;.rules) merge on top and win on name conflict.</p>
+(ai.&lt;name&gt;.rules) merge on top; collisions are a failure.</p>
 <p><em>Type:</em>
 attribute set of (submodule)</p>
 <p><em>Default:</em></p>
@@ -3004,34 +3078,39 @@ null or (list of string)</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
 </ul>
-<h2 id="airulesnamesourcepath"><a class="header" href="#airulesnamesourcepath">ai.rules.&lt;name&gt;.sourcePath</a></h2>
-<p>Absolute filesystem path for out-of-store symlink emission.
-Preserves live-edit — edits to the source <code>.md</code> are visible
-immediately without <code>home-manager switch</code>. When set, <code>text</code>
-must be null and transformer frontmatter is NOT injected;
-manage <code>inclusion:</code> / <code>applyTo:</code> / <code>paths:</code> frontmatter in
-the source file directly. Mutually exclusive with <code>text</code>.</p>
+<h2 id="airulesnametext"><a class="header" href="#airulesnametext">ai.rules.&lt;name&gt;.text</a></h2>
+<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
+Content is baked into the nix store at eval time; transformer
+frontmatter IS injected on emission.</p>
 <p><em>Type:</em>
-null or string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Example:</em></p>
-<pre><code class="language-nix">"/home/user/.config/kiro/steering/foo.md"
-</code></pre>
+strings concatenated with “\n” or absolute path</p>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
 </ul>
-<h2 id="airulesnametext"><a class="header" href="#airulesnametext">ai.rules.&lt;name&gt;.text</a></h2>
-<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
-Content is baked into the nix store at eval time; transformer
-frontmatter IS injected on emission. Mutually exclusive with
-<code>sourcePath</code>.</p>
+<h2 id="airulesdir"><a class="header" href="#airulesdir">ai.rulesDir</a></h2>
+<p>Directory of <code>.md</code> rule files fanned out to every enabled AI app.
+Each file becomes one entry in <code>ai.rules</code> keyed by the basename
+minus <code>.md</code>. Collisions with explicit <code>ai.rules.&lt;name&gt;</code> entries
+(or with <code>ai.&lt;cli&gt;.rules</code>) fail via the shared collision check.
+Accepts either a Nix path literal or <code>{ path, filter? }</code> where
+<code>filter : name → bool</code> (default: keep <code>.md</code> files). The source
+directory is NOT taken over wholesale — other derivations can
+still contribute to the same ecosystem rules dir via
+<code>home.file.*</code> / <code>files.*</code> without conflict.</p>
 <p><em>Type:</em>
-null or strings concatenated with “\n” or absolute path</p>
+null or absolute path or (submodule)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">./rules                                  # keep defaults
+# or
+{
+  path = ./rules;
+  filter = name: !(lib.hasSuffix ".bk" name);
+}
+
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -3043,6 +3122,29 @@ null or strings concatenated with “\n” or absolute path</p>
 attribute set of absolute path</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
+<h2 id="aiskillsdir"><a class="header" href="#aiskillsdir">ai.skillsDir</a></h2>
+<p>Directory-of-directories; each immediate subdirectory becomes
+one entry in <code>ai.skills</code> keyed by the subdir name. Collisions
+with explicit <code>ai.skills.&lt;name&gt;</code> entries (or with
+<code>ai.&lt;cli&gt;.skills</code>) fail via the shared collision check. The
+default filter accepts every subdirectory; supply a
+<code>{ path, filter? }</code> submodule with <code>filter : name → bool</code> to
+exclude specific subdirs.</p>
+<p><em>Type:</em>
+null or absolute path or (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">./skills
+# or
+{ path = ./skills; filter = name: name != "draft"; }
+
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -3120,12 +3222,30 @@ and Copilot. Each entry becomes a file:</p>
 Kiro intentionally excluded — Kiro’s agent format is JSON
 with different semantic fields; use <code>ai.kiro.agents</code>
 directly for that ecosystem. Per-app overrides
-(ai.&lt;cli&gt;.agents) merge on top and win on conflict.</li>
+(ai.&lt;cli&gt;.agents) merge on top; collisions fail.</li>
 </ul>
 <p><em>Type:</em>
 attribute set of (strings concatenated with “\n” or absolute path)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
+<h2 id="aiagentsdir-1"><a class="header" href="#aiagentsdir-1">ai.agentsDir</a></h2>
+<p>Directory of <code>.md</code> agent files fanned out to Claude and
+Copilot. Each file becomes one entry in <code>ai.agents</code> keyed
+by the basename minus <code>.md</code>. Kiro intentionally excluded
+(different JSON shape — use <code>ai.kiro.agentsDir</code> which
+exists for the kiro-specific agents dir).</p>
+<p><em>Type:</em>
+null or absolute path or (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">./agents
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -3158,7 +3278,7 @@ package</p>
 </ul>
 <h2 id="aiclaudeagents-1"><a class="header" href="#aiclaudeagents-1">ai.claude.agents</a></h2>
 <p>Claude-specific agent markdown (merged with top-level
-<code>ai.agents</code>; per-CLI wins on conflict). Routed to
+<code>ai.agents</code>; collisions fail). Routed to
 <code>programs.claude-code.agents</code>; upstream writes them under
 <code>~/.claude/agents/&lt;name&gt;.md</code>. HM only — upstream devenv
 <code>claude.code</code> has no agents surface.</p>
@@ -3166,6 +3286,21 @@ package</p>
 attribute set of (strings concatenated with “\n” or absolute path)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudeagentsdir-1"><a class="header" href="#aiclaudeagentsdir-1">ai.claude.agentsDir</a></h2>
+<p>Claude-specific directory of <code>.md</code> agent files. Each file
+becomes one entry in <code>ai.claude.agents</code> keyed by basename
+minus <code>.md</code>. Accepts a path literal or
+<code>{ path, filter? }</code> (filter: name → bool, default keeps
+<code>.md</code>).</p>
+<p><em>Type:</em>
+null or absolute path or (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -3228,6 +3363,26 @@ attribute set of strings concatenated with “\n”</p>
 <p><em>Example:</em></p>
 <pre><code class="language-nix">{ pre-edit = "#!/usr/bin/env bash\nexec :\n"; }
 
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudehooksdir-1"><a class="header" href="#aiclaudehooksdir-1">ai.claude.hooksDir</a></h2>
+<p>Claude-specific directory of hook scripts. Each regular
+file becomes one entry in <code>ai.claude.hooks</code> keyed by the
+filename (no extension strip — Claude hooks are typically
+extensionless shell scripts). Accepts a path literal or
+<code>{ path, filter? }</code> (filter: name → bool, default
+accepts every regular file). Claude-only — no top-level
+<code>ai.hooksDir</code> fanout since hooks are Claude-specific.</p>
+<p><em>Type:</em>
+null or absolute path or (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">./hooks
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -3487,7 +3642,7 @@ list of (package or absolute path)</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
 <h2 id="aiclauderules-1"><a class="header" href="#aiclauderules-1">ai.claude.rules</a></h2>
-<p>claude-specific rules (merged with top-level ai.rules; per-app wins on conflict).</p>
+<p>claude-specific rules (merged with top-level ai.rules; collisions fail).</p>
 <p><em>Type:</em>
 attribute set of (submodule)</p>
 <p><em>Default:</em></p>
@@ -3525,32 +3680,26 @@ null or (list of string)</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
-<h2 id="aiclauderulesnamesourcepath-1"><a class="header" href="#aiclauderulesnamesourcepath-1">ai.claude.rules.&lt;name&gt;.sourcePath</a></h2>
-<p>Absolute filesystem path for out-of-store symlink emission.
-Preserves live-edit — edits to the source <code>.md</code> are visible
-immediately without <code>home-manager switch</code>. When set, <code>text</code>
-must be null and transformer frontmatter is NOT injected;
-manage <code>inclusion:</code> / <code>applyTo:</code> / <code>paths:</code> frontmatter in
-the source file directly. Mutually exclusive with <code>text</code>.</p>
+<h2 id="aiclauderulesnametext-1"><a class="header" href="#aiclauderulesnametext-1">ai.claude.rules.&lt;name&gt;.text</a></h2>
+<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
+Content is baked into the nix store at eval time; transformer
+frontmatter IS injected on emission.</p>
 <p><em>Type:</em>
-null or string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Example:</em></p>
-<pre><code class="language-nix">"/home/user/.config/kiro/steering/foo.md"
-</code></pre>
+strings concatenated with “\n” or absolute path</p>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
-<h2 id="aiclauderulesnametext-1"><a class="header" href="#aiclauderulesnametext-1">ai.claude.rules.&lt;name&gt;.text</a></h2>
-<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
-Content is baked into the nix store at eval time; transformer
-frontmatter IS injected on emission. Mutually exclusive with
-<code>sourcePath</code>.</p>
+<h2 id="aiclauderulesdir-1"><a class="header" href="#aiclauderulesdir-1">ai.claude.rulesDir</a></h2>
+<p>claude-specific directory of <code>.md</code> rule files. Each
+file becomes one entry in <code>ai.claude.rules</code> keyed by
+the basename minus <code>.md</code>. Accepts a path literal or
+<code>{ path, filter? }</code> (filter: name → bool, default keeps <code>.md</code>).
+Runs through the same collision-as-failure merge with
+<code>ai.rules</code> as explicit per-CLI entries; other derivations may
+still contribute to the same on-disk rules dir.</p>
 <p><em>Type:</em>
-null or strings concatenated with “\n” or absolute path</p>
+null or absolute path or (submodule)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">null
 </code></pre>
@@ -3571,11 +3720,25 @@ attribute set of anything</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
 <h2 id="aiclaudeskills-1"><a class="header" href="#aiclaudeskills-1">ai.claude.skills</a></h2>
-<p>claude-specific skills (merged with top-level ai.skills; per-app wins).</p>
+<p>claude-specific skills (merged with top-level ai.skills; collisions fail).</p>
 <p><em>Type:</em>
 attribute set of absolute path</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aiclaudeskillsdir-1"><a class="header" href="#aiclaudeskillsdir-1">ai.claude.skillsDir</a></h2>
+<p>claude-specific directory-of-directories; each
+immediate subdirectory becomes one entry in
+<code>ai.claude.skills</code> keyed by the subdir name.
+Accepts a path literal or <code>{ path, filter? }</code>.</p>
+<p><em>Type:</em>
+null or absolute path or (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -3635,9 +3798,9 @@ attribute set of strings concatenated with “\n”</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
 <h2 id="aicopilotagentsdir-1"><a class="header" href="#aicopilotagentsdir-1">ai.copilot.agentsDir</a></h2>
-<p>External directory of agent markdown files (symlinked into &lt;configDir&gt;/agents).</p>
+<p>Directory of <code>.md</code> agent files (expanded into <code>ai.copilot.agents</code>).</p>
 <p><em>Type:</em>
-null or absolute path</p>
+null or absolute path or (submodule)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">null
 </code></pre>
@@ -3887,7 +4050,7 @@ null or string</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
 <h2 id="aicopilotrules-1"><a class="header" href="#aicopilotrules-1">ai.copilot.rules</a></h2>
-<p>copilot-specific rules (merged with top-level ai.rules; per-app wins on conflict).</p>
+<p>copilot-specific rules (merged with top-level ai.rules; collisions fail).</p>
 <p><em>Type:</em>
 attribute set of (submodule)</p>
 <p><em>Default:</em></p>
@@ -3925,32 +4088,26 @@ null or (list of string)</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
-<h2 id="aicopilotrulesnamesourcepath-1"><a class="header" href="#aicopilotrulesnamesourcepath-1">ai.copilot.rules.&lt;name&gt;.sourcePath</a></h2>
-<p>Absolute filesystem path for out-of-store symlink emission.
-Preserves live-edit — edits to the source <code>.md</code> are visible
-immediately without <code>home-manager switch</code>. When set, <code>text</code>
-must be null and transformer frontmatter is NOT injected;
-manage <code>inclusion:</code> / <code>applyTo:</code> / <code>paths:</code> frontmatter in
-the source file directly. Mutually exclusive with <code>text</code>.</p>
+<h2 id="aicopilotrulesnametext-1"><a class="header" href="#aicopilotrulesnametext-1">ai.copilot.rules.&lt;name&gt;.text</a></h2>
+<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
+Content is baked into the nix store at eval time; transformer
+frontmatter IS injected on emission.</p>
 <p><em>Type:</em>
-null or string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Example:</em></p>
-<pre><code class="language-nix">"/home/user/.config/kiro/steering/foo.md"
-</code></pre>
+strings concatenated with “\n” or absolute path</p>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
-<h2 id="aicopilotrulesnametext-1"><a class="header" href="#aicopilotrulesnametext-1">ai.copilot.rules.&lt;name&gt;.text</a></h2>
-<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
-Content is baked into the nix store at eval time; transformer
-frontmatter IS injected on emission. Mutually exclusive with
-<code>sourcePath</code>.</p>
+<h2 id="aicopilotrulesdir-1"><a class="header" href="#aicopilotrulesdir-1">ai.copilot.rulesDir</a></h2>
+<p>copilot-specific directory of <code>.md</code> rule files. Each
+file becomes one entry in <code>ai.copilot.rules</code> keyed by
+the basename minus <code>.md</code>. Accepts a path literal or
+<code>{ path, filter? }</code> (filter: name → bool, default keeps <code>.md</code>).
+Runs through the same collision-as-failure merge with
+<code>ai.rules</code> as explicit per-CLI entries; other derivations may
+still contribute to the same on-disk rules dir.</p>
 <p><em>Type:</em>
-null or strings concatenated with “\n” or absolute path</p>
+null or absolute path or (submodule)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">null
 </code></pre>
@@ -3970,11 +4127,25 @@ attribute set of anything</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
 <h2 id="aicopilotskills-1"><a class="header" href="#aicopilotskills-1">ai.copilot.skills</a></h2>
-<p>copilot-specific skills (merged with top-level ai.skills; per-app wins).</p>
+<p>copilot-specific skills (merged with top-level ai.skills; collisions fail).</p>
 <p><em>Type:</em>
 attribute set of absolute path</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aicopilotskillsdir-1"><a class="header" href="#aicopilotskillsdir-1">ai.copilot.skillsDir</a></h2>
+<p>copilot-specific directory-of-directories; each
+immediate subdirectory becomes one entry in
+<code>ai.copilot.skills</code> keyed by the subdir name.
+Accepts a path literal or <code>{ path, filter? }</code>.</p>
+<p><em>Type:</em>
+null or absolute path or (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -4318,7 +4489,7 @@ null or string</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
 <h2 id="aikirorules-1"><a class="header" href="#aikirorules-1">ai.kiro.rules</a></h2>
-<p>kiro-specific rules (merged with top-level ai.rules; per-app wins on conflict).</p>
+<p>kiro-specific rules (merged with top-level ai.rules; collisions fail).</p>
 <p><em>Type:</em>
 attribute set of (submodule)</p>
 <p><em>Default:</em></p>
@@ -4356,32 +4527,26 @@ null or (list of string)</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
-<h2 id="aikirorulesnamesourcepath-1"><a class="header" href="#aikirorulesnamesourcepath-1">ai.kiro.rules.&lt;name&gt;.sourcePath</a></h2>
-<p>Absolute filesystem path for out-of-store symlink emission.
-Preserves live-edit — edits to the source <code>.md</code> are visible
-immediately without <code>home-manager switch</code>. When set, <code>text</code>
-must be null and transformer frontmatter is NOT injected;
-manage <code>inclusion:</code> / <code>applyTo:</code> / <code>paths:</code> frontmatter in
-the source file directly. Mutually exclusive with <code>text</code>.</p>
+<h2 id="aikirorulesnametext-1"><a class="header" href="#aikirorulesnametext-1">ai.kiro.rules.&lt;name&gt;.text</a></h2>
+<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
+Content is baked into the nix store at eval time; transformer
+frontmatter IS injected on emission.</p>
 <p><em>Type:</em>
-null or string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Example:</em></p>
-<pre><code class="language-nix">"/home/user/.config/kiro/steering/foo.md"
-</code></pre>
+strings concatenated with “\n” or absolute path</p>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
-<h2 id="aikirorulesnametext-1"><a class="header" href="#aikirorulesnametext-1">ai.kiro.rules.&lt;name&gt;.text</a></h2>
-<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
-Content is baked into the nix store at eval time; transformer
-frontmatter IS injected on emission. Mutually exclusive with
-<code>sourcePath</code>.</p>
+<h2 id="aikirorulesdir-1"><a class="header" href="#aikirorulesdir-1">ai.kiro.rulesDir</a></h2>
+<p>kiro-specific directory of <code>.md</code> rule files. Each
+file becomes one entry in <code>ai.kiro.rules</code> keyed by
+the basename minus <code>.md</code>. Accepts a path literal or
+<code>{ path, filter? }</code> (filter: name → bool, default keeps <code>.md</code>).
+Runs through the same collision-as-failure merge with
+<code>ai.rules</code> as explicit per-CLI entries; other derivations may
+still contribute to the same on-disk rules dir.</p>
 <p><em>Type:</em>
-null or strings concatenated with “\n” or absolute path</p>
+null or absolute path or (submodule)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">null
 </code></pre>
@@ -4458,11 +4623,25 @@ null or boolean</p>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
 </ul>
 <h2 id="aikiroskills-1"><a class="header" href="#aikiroskills-1">ai.kiro.skills</a></h2>
-<p>kiro-specific skills (merged with top-level ai.skills; per-app wins).</p>
+<p>kiro-specific skills (merged with top-level ai.skills; collisions fail).</p>
 <p><em>Type:</em>
 attribute set of absolute path</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/modules/homeManager">modules/homeManager</a></li>
+</ul>
+<h2 id="aikiroskillsdir-1"><a class="header" href="#aikiroskillsdir-1">ai.kiro.skillsDir</a></h2>
+<p>kiro-specific directory-of-directories; each
+immediate subdirectory becomes one entry in
+<code>ai.kiro.skills</code> keyed by the subdir name.
+Accepts a path literal or <code>{ path, filter? }</code>.</p>
+<p><em>Type:</em>
+null or absolute path or (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -4689,7 +4868,7 @@ Each attribute becomes one file in the ecosystem’s native rules
 directory (Claude: <code>.claude/rules/&lt;name&gt;.md</code>, Kiro:
 <code>.kiro/steering/&lt;name&gt;.md</code>, Copilot:
 <code>.github/instructions/&lt;name&gt;.instructions.md</code>). Per-app overrides
-(ai.&lt;name&gt;.rules) merge on top and win on name conflict.</p>
+(ai.&lt;name&gt;.rules) merge on top; collisions are a failure.</p>
 <p><em>Type:</em>
 attribute set of (submodule)</p>
 <p><em>Default:</em></p>
@@ -4738,34 +4917,39 @@ null or (list of string)</p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
 </ul>
-<h2 id="airulesnamesourcepath-1"><a class="header" href="#airulesnamesourcepath-1">ai.rules.&lt;name&gt;.sourcePath</a></h2>
-<p>Absolute filesystem path for out-of-store symlink emission.
-Preserves live-edit — edits to the source <code>.md</code> are visible
-immediately without <code>home-manager switch</code>. When set, <code>text</code>
-must be null and transformer frontmatter is NOT injected;
-manage <code>inclusion:</code> / <code>applyTo:</code> / <code>paths:</code> frontmatter in
-the source file directly. Mutually exclusive with <code>text</code>.</p>
+<h2 id="airulesnametext-1"><a class="header" href="#airulesnametext-1">ai.rules.&lt;name&gt;.text</a></h2>
+<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
+Content is baked into the nix store at eval time; transformer
+frontmatter IS injected on emission.</p>
 <p><em>Type:</em>
-null or string</p>
-<p><em>Default:</em></p>
-<pre><code class="language-nix">null
-</code></pre>
-<p><em>Example:</em></p>
-<pre><code class="language-nix">"/home/user/.config/kiro/steering/foo.md"
-</code></pre>
+strings concatenated with “\n” or absolute path</p>
 <p><em>Declared by:</em></p>
 <ul>
 <li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
 </ul>
-<h2 id="airulesnametext-1"><a class="header" href="#airulesnametext-1">ai.rules.&lt;name&gt;.text</a></h2>
-<p>Rule body (inline markdown or Nix path to a <code>.md</code> file).
-Content is baked into the nix store at eval time; transformer
-frontmatter IS injected on emission. Mutually exclusive with
-<code>sourcePath</code>.</p>
+<h2 id="airulesdir-1"><a class="header" href="#airulesdir-1">ai.rulesDir</a></h2>
+<p>Directory of <code>.md</code> rule files fanned out to every enabled AI app.
+Each file becomes one entry in <code>ai.rules</code> keyed by the basename
+minus <code>.md</code>. Collisions with explicit <code>ai.rules.&lt;name&gt;</code> entries
+(or with <code>ai.&lt;cli&gt;.rules</code>) fail via the shared collision check.
+Accepts either a Nix path literal or <code>{ path, filter? }</code> where
+<code>filter : name → bool</code> (default: keep <code>.md</code> files). The source
+directory is NOT taken over wholesale — other derivations can
+still contribute to the same ecosystem rules dir via
+<code>home.file.*</code> / <code>files.*</code> without conflict.</p>
 <p><em>Type:</em>
-null or strings concatenated with “\n” or absolute path</p>
+null or absolute path or (submodule)</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">./rules                                  # keep defaults
+# or
+{
+  path = ./rules;
+  filter = name: !(lib.hasSuffix ".bk" name);
+}
+
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -4777,6 +4961,29 @@ null or strings concatenated with “\n” or absolute path</p>
 attribute set of absolute path</p>
 <p><em>Default:</em></p>
 <pre><code class="language-nix">{ }
+</code></pre>
+<p><em>Declared by:</em></p>
+<ul>
+<li><a href="https://github.com/nix-community/nix-agentic-tools/pr/refactor/ai-factory-architecture/blob/main/lib/ai/sharedOptions.nix">lib/ai/sharedOptions.nix</a></li>
+</ul>
+<h2 id="aiskillsdir-1"><a class="header" href="#aiskillsdir-1">ai.skillsDir</a></h2>
+<p>Directory-of-directories; each immediate subdirectory becomes
+one entry in <code>ai.skills</code> keyed by the subdir name. Collisions
+with explicit <code>ai.skills.&lt;name&gt;</code> entries (or with
+<code>ai.&lt;cli&gt;.skills</code>) fail via the shared collision check. The
+default filter accepts every subdirectory; supply a
+<code>{ path, filter? }</code> submodule with <code>filter : name → bool</code> to
+exclude specific subdirs.</p>
+<p><em>Type:</em>
+null or absolute path or (submodule)</p>
+<p><em>Default:</em></p>
+<pre><code class="language-nix">null
+</code></pre>
+<p><em>Example:</em></p>
+<pre><code class="language-nix">./skills
+# or
+{ path = ./skills; filter = name: name != "draft"; }
+
 </code></pre>
 <p><em>Declared by:</em></p>
 <ul>
@@ -7189,7 +7396,7 @@ services.mcp-servers.servers = {
 
 # DevEnv (inline per-CLI)
 claude.code.mcpServers.github-mcp =
-  inputs.nix-agentic-tools.lib.mkStdioEntry pkgs {
+  inputs.nix-agentic-tools.lib.ai.mkStdioEntry pkgs {
     package = pkgs.ai.mcpServers.github-mcp;
     settings.credentials.file = "/run/secrets/github-token";
   };
@@ -7448,11 +7655,9 @@ separately and configure git manually (see the minimal preset settings
 above).</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="lib-api"><a class="header" href="#lib-api">lib API</a></h1>
-<p>Public functions exported by <code>inputs.nix-agentic-tools.lib</code>, organized
-by source module. This page documents the <strong>current</strong> exported surface
-on this branch — additional functions exist in the <code>lib/</code> source files
-but are not yet exported via <code>flake.nix</code>. As later chunks land, the
-flake <code>lib</code> output expands and this page grows with it.</p>
+<p>Public functions exported by <code>inputs.nix-agentic-tools.lib.ai</code>, organized
+by source module. Every flake-level helper lives under <code>lib.ai.*</code> —
+there are no top-level <code>lib.&lt;helper&gt;</code> exports.</p>
 <h2 id="libfragmentsnix"><a class="header" href="#libfragmentsnix">lib/fragments.nix</a></h2>
 <p>Fragment composition library. Pure functions, no file I/O.</p>
 <h3 id="mkfragment-1"><a class="header" href="#mkfragment-1">mkFragment</a></h3>
@@ -7523,8 +7728,7 @@ in {
 <p>Build a YAML frontmatter block (<code>---\nkey: value\n---\n</code>) from an
 attrset. Used internally by ecosystem generators.</p>
 <h2 id="libmcpnix"><a class="header" href="#libmcpnix">lib/mcp.nix</a></h2>
-<p>MCP server entry builders. Exported via top-level <code>lib.&lt;name&gt;</code>
-(no <code>lib.mcp.*</code> sub-namespace).</p>
+<p>MCP server entry builders. Exported under <code>lib.ai.&lt;name&gt;</code>.</p>
 <h3 id="loadserver"><a class="header" href="#loadserver">loadServer</a></h3>
 <pre><code class="language-nix">loadServer :: name -&gt; serverDef
 </code></pre>
@@ -7587,11 +7791,11 @@ modules and produces a <code>mkShell</code> derivation.</p>
 <h2 id="externalservers"><a class="header" href="#externalservers">externalServers</a></h2>
 <p>Static registry of remote MCP server URLs that don’t ship with their
 own package. Currently keyed by provider:</p>
-<pre><code class="language-nix">inputs.nix-agentic-tools.lib.externalServers.aws-mcp
+<pre><code class="language-nix">inputs.nix-agentic-tools.lib.ai.externalServers.aws-mcp
 # =&gt; { type = "http"; url = "https://knowledge-mcp.global.api.aws"; }
 </code></pre>
 <h2 id="presets"><a class="header" href="#presets">presets</a></h2>
-<pre><code class="language-nix">inputs.nix-agentic-tools.lib.presets.nix-agentic-tools-dev
+<pre><code class="language-nix">inputs.nix-agentic-tools.lib.ai.presets.nix-agentic-tools-dev
 </code></pre>
 <p>Composed <code>Fragment</code> containing all coding-standards content
 (<code>pkgs.coding-standards.passthru.fragments</code>) plus stacked-workflows
@@ -7601,7 +7805,7 @@ projects.</p>
 <hr>
 <p>Functions defined in <code>lib/mcp.nix</code>, <code>lib/ai-common.nix</code>, and
 <code>lib/hm-helpers.nix</code> that are NOT yet exported through the flake
-<code>lib</code> output (e.g., <code>mkSecretsWrapper</code>, <code>mkCredentialsOption</code>,
+<code>lib.ai</code> output (e.g., <code>mkSecretsWrapper</code>, <code>mkCredentialsOption</code>,
 <code>mkLspConfig</code>, <code>mkContentOption</code>, <code>mkSkillEntries</code>) become public
 as later chunks land their consumers and promote them to the
 flake export surface.</p>
