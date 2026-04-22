@@ -150,6 +150,20 @@ lib.ai.app.mkAiApp {
         { pre-edit = "#!/usr/bin/env bash\nexec :\n"; }
       '';
     };
+    hooksDir = lib.mkOption {
+      type = lib.types.nullOr (import ../../../lib/ai/ai-common.nix {inherit lib;}).dirOptionType;
+      default = null;
+      description = ''
+        Claude-specific directory of hook scripts. Each regular
+        file becomes one entry in `ai.claude.hooks` keyed by the
+        filename (no extension strip — Claude hooks are typically
+        extensionless shell scripts). Accepts a path literal or
+        `{ path, filter? }` (filter: name → bool, default
+        accepts every regular file). Claude-only — no top-level
+        `ai.hooksDir` fanout since hooks are Claude-specific.
+      '';
+      example = lib.literalExpression ''./hooks'';
+    };
   };
   # HM-specific projection
   hm = {
@@ -191,6 +205,14 @@ lib.ai.app.mkAiApp {
         (lib.mkIf (cfg.agentsDir != null) {
           ai.claude.agents = lib.mapAttrs (_: lib.mkDefault) (
             dirHelpers.agentsFromDir cfg.agentsDir
+          );
+        })
+        # L2b → L3: expand `ai.claude.hooksDir` into
+        # `ai.claude.hooks`. Content is `readFile`'d into
+        # `lib.types.lines` via hooksFromDir.
+        (lib.mkIf (cfg.hooksDir != null) {
+          ai.claude.hooks = lib.mapAttrs (_: lib.mkDefault) (
+            dirHelpers.hooksFromDir cfg.hooksDir
           );
         })
         # Delegate to upstream programs.claude-code.* where upstream
@@ -276,6 +298,7 @@ lib.ai.app.mkAiApp {
       ...
     }: let
       aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
+      dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
       resolveRuleText = rule:
         if builtins.isPath rule.text
         then builtins.readFile rule.text
@@ -303,6 +326,15 @@ lib.ai.app.mkAiApp {
       hasGapSettings = gapSettings != {};
     in
       lib.mkMerge [
+        # L2b → L3: expand `ai.claude.hooksDir` into
+        # `ai.claude.hooks` (parity with HM side). The devenv
+        # factory merges `cfg.hooks` into `claude.code.hooks`
+        # below, so this expansion flows through.
+        (lib.mkIf (cfg.hooksDir != null) {
+          ai.claude.hooks = lib.mapAttrs (_: lib.mkDefault) (
+            dirHelpers.hooksFromDir cfg.hooksDir
+          );
+        })
         # Translate upstream-owned keys + pin the settings file path.
         {
           claude.code = {

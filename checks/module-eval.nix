@@ -2216,6 +2216,74 @@ in {
       && files ? ".copilot/agents/agent-two.md"
   );
 
+  # ── ai.claude.hooksDir Dir helper ──────────────────────────
+  # Claude-only per plan §5 (hooks are a Claude-specific
+  # concept). See lib/ai/dir-helpers.nix:hooksFromDir. Default
+  # filter is always-true — hook files are typically
+  # extensionless shell scripts, so no `.md`-like suffix strip.
+
+  module-claude-hooksdir-path-form = mkTest "claude-hooksdir-path-form" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          hooksDir = ./fixtures/claude-hooks;
+        };
+      };
+      upstream = result.config.programs.claude-code.hooks or {};
+    in
+      upstream ? pre-edit && upstream ? post-edit
+  );
+
+  # Filter excludes post-edit.
+  module-claude-hooksdir-filter = mkTest "claude-hooksdir-filter" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          hooksDir = {
+            path = ./fixtures/claude-hooks;
+            filter = name: name == "pre-edit";
+          };
+        };
+      };
+      upstream = result.config.programs.claude-code.hooks or {};
+    in
+      upstream ? pre-edit && !(upstream ? post-edit)
+  );
+
+  # Collision: Dir-generated vs explicit `ai.claude.hooks.<name>`
+  # is NOT a shared-pool collision (hooks have no top-level pool),
+  # so the module system handles it via the `attrsOf lines` merge.
+  # The Dir expansion uses mkDefault so explicit entries win.
+  module-claude-hooksdir-explicit-wins-within-layer = mkTest "claude-hooksdir-explicit-wins-within-layer" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          hooks.pre-edit = "explicit override";
+          hooksDir = ./fixtures/claude-hooks;
+        };
+      };
+      upstream = result.config.programs.claude-code.hooks or {};
+    in
+      upstream.pre-edit == "explicit override"
+  );
+
+  # Devenv parity — hooksDir feeds claude.code.hooks.
+  module-claude-devenv-hooksdir-path-form = mkTest "claude-devenv-hooksdir-path-form" (
+    let
+      result = evalDevenv {
+        ai.claude = {
+          enable = true;
+          hooksDir = ./fixtures/claude-hooks;
+        };
+      };
+      upstream = result.config.claude.code.hooks or {};
+    in
+      upstream ? pre-edit && upstream ? post-edit
+  );
+
   # ── sourcePath rollback regression guards ──────────────────────
   # `sourcePath` was introduced in fab4e5c and rolled back in this
   # commit per the ai-factory-collision refactor plan §6 (commit 2).
