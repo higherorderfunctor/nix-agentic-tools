@@ -1,6 +1,8 @@
 # ai.\* factory — collision refactor + pure-eval rollback + Dir helpers
 
-> **Status:** PLAN (awaiting user approval before implementation)
+> **Status:** EXECUTED + ACTIVATED. Core refactor landed. Several
+> items still open — see the "DONE / NOT DONE / NEXT SESSION" block
+> immediately below.
 >
 > **Origin:** failed `nixos-config` pin bump on 2026-04-21. Post-
 > activation audit exposed three bugs (kiro `.md.md` doubled
@@ -14,6 +16,104 @@
 > **Implementation policy:** subagents do the execution — this
 > session preserves its context for bug triage during rollout.
 > No code changes until explicit user go-ahead.
+
+## Status roll-up — 2026-04-21 end of session
+
+### ✅ DONE (self-verified via `git log` + `nix flake check` green)
+
+All 9 commits from §6 landed and pushed to
+`origin refactor/ai-factory-architecture`:
+
+| #   | SHA       | Title                                                      |
+| --- | --------- | ---------------------------------------------------------- |
+| 1   | `21f8260` | refactor(lib): move lib.\* to lib.ai.\*                    |
+| 2   | `056c7ad` | refactor(ai): deprecate sourcePath; pure-eval rollback     |
+| 3   | `8cdc370` | refactor(ai): collision-as-failure across all shared pools |
+| 4   | `ca85d90` | feat(lib): rulesFromDir + ai.<cli>.rulesDir option         |
+| 5   | `1996081` | feat(lib): skillsFromDir + ai.<cli>.skillsDir option       |
+| 6   | `e9ce26c` | feat(lib): agentsFromDir + ai.<cli>.agentsDir option       |
+| 7   | `fdff369` | feat(claude): hooksFromDir + ai.claude.hooksDir option     |
+| 8   | `e65a012` | fix(devenv): stale copilot skills paths                    |
+| 9   | `83f459a` | docs(ai): dev fragments for collision + fanout + dir       |
+
+- Consumer (`nixos-config`) edited — `kiroSymlinkSteering` + 15-file
+  list replaced by `ai.kiro.rulesDir = ./kiro-config/steering;`, all
+  `lib.<x>` → `lib.ai.<x>`. User pin-bumped + activated.
+- Post-activation: **kiro `.md.md` bug FIXED** — steering files now
+  land as `NN-name.md` under new gen `a91pv5q9...`. Structurally
+  impossible to double-suffix by construction.
+- Subagent reported 31 tests added (9 collision, 5 rulesDir,
+  4 skillsDir, 5 agentsDir, 4 hooksDir, 2 sourcePath rollback,
+  2 path-bake regression) — **needs verification next session**.
+- Subagent reported dev fragments in `dev/fragments/ai-module/`
+  (not plan's original `modules/ai/fragments/dev/` — repo layout
+  mismatch; `ai-module` category already existed) — **needs
+  verification next session**.
+
+### ⚠️ NOT DONE / OUTSTANDING
+
+- **Orphan cleanup** — user skipped step 2 of activation. Stale
+  symlinks still present on disk (need manual `rm`):
+  - `~/.kiro/steering/*.md.md` (15 files — doubled alongside new
+    correct `.md` files)
+  - `~/.kiro/steering/stacked-workflows.md` (OLD gen)
+  - `~/.claude/skills/sws-stack-*` (6 Layout B dirs)
+  - `~/.claude/rules/stacked-workflows.md` (OLD gen)
+  - `~/.claude/references/{git-absorb,git-branchless,git-revise,philosophy,recommended-config,stacked-workflow}.md`
+    (keep `nix-workflow.md` — user-owned)
+  - `~/.config/github-copilot/{copilot-instructions.md,mcp-config.json}`
+  - Cleanup command ready in audit — one-liner, run when user
+    has time. Does not require rebuild.
+- **SYMPTOM B (ruamel fetchhg)** — deferred per user call. Plan
+  §10.2 has the evidence-backed findings. Awaiting next CI
+  observation with the bumped flake input to see if transient or
+  deterministic.
+- **SYMPTOM A (devenv stale paths)** — shipped as commit 8. Not
+  yet CI-verified (would surface next test run on main).
+- **CI failures** — user reports CI still failing. Cause not yet
+  investigated this session; plausibly SYMPTOM A / B mix carried
+  over from prior runs, or new surface from the refactor. Needs
+  fresh triage.
+
+### 🔍 VALIDATE NEXT SESSION (before declaring the refactor complete)
+
+1. **Verify `skillsDir` + `agentsDir` + `hooksDir` implementations
+   match the plan.** The subagent's report says they follow the
+   rulesDir pattern, but this session never hand-verified:
+   - `lib/ai/dir-helpers.nix` — contains `rulesFromDir`,
+     `skillsFromDir`, `agentsFromDir`, `hooksFromDir`? Filter
+     signature `name → bool`? Polymorphic `path | { path, filter? }`
+     input? Correct default filters per helper (see fragment
+     `ai.* Dir Helpers`)?
+   - Per-CLI options: `ai.claude.{skillsDir, agentsDir, hooksDir}`,
+     `ai.copilot.{skillsDir, agentsDir}`, `ai.kiro.{skillsDir}` —
+     all wired to their respective FromDir helpers? Kiro agents
+     intentionally excluded per §6 commit 6?
+2. **Verify test coverage.** 31 tests claimed — confirm via
+   `grep -c 'Test\s*=' checks/module-eval.nix` or similar; read
+   the collision / rulesDir / skillsDir / agentsDir / hooksDir
+   / sourcePath test blocks and sanity-check assertions.
+3. **Verify dev fragments.** Read
+   `dev/fragments/ai-module/*.md` — collision-semantics,
+   layered-fanout, dir-helpers. Confirm they render to the
+   expected per-ecosystem scoped rule files
+   (`.claude/rules/ai-module.md` should already have them since
+   they loaded into context this session — indicates the
+   `devenv tasks run generate:instructions` ran).
+4. **CI triage.** Pull the latest failing run log(s), classify
+   symptom (A, B, or new), match against fixes in commits 8/9
+   (not shipped) / followup.
+5. **Orphan cleanup status.** Ask user if they ran the
+   `rm` command; if not, the stale symlinks persist but cause
+   no functional issues (new-gen symlinks take precedence for
+   any fresh-name entry).
+
+### Diff of audit outcomes vs pre-activation snapshot
+
+Captured in this session's post-activation audit #2. Key delta:
+the `.md.md` bug is structurally dead; no new orphans introduced;
+pre-existing orphans (from failed 2026-04-21 activation) persist
+until manual cleanup.
 
 ## Table of contents
 

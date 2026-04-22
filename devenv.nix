@@ -100,6 +100,7 @@ in {
         ".*-package-lock\\.json$"
         ".*\\.lock$"
         "^config/cspell/"
+        "^docs/ai-factory-collision-refactor-plan\\.md$"
         "^docs/overnight-.*\\.md$"
         "^docs/plan\\.md$"
       ];
