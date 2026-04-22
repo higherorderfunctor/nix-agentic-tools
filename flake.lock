@@ -808,11 +808,11 @@
         "treefmt-nix": "treefmt-nix_2"
       },
       "locked": {
-        "lastModified": 1775969483,
-        "narHash": "sha256-fVTG9Uw7wfKmjYSu0CuB+kdvs9p4MrPimjtUtgWOPJE=",
+        "lastModified": 1776574437,
+        "narHash": "sha256-alXHqlAEqZ7nQXpMHA6Z/GQq9/TLpuUX5Mq6quz9smk=",
         "owner": "Mic92",
         "repo": "nix-fast-build",
-        "rev": "67df5acda0e22b97e17d5eed579b969ddb9ea06c",
+        "rev": "57f131541d565fe118452590d4cff32c2418d2dc",
         "type": "github"
       },
       "original": {
