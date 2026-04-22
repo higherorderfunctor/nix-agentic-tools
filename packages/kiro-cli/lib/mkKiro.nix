@@ -175,7 +175,6 @@ lib.ai.app.mkAiApp {
     options = {};
     config = {
       cfg,
-      config,
       mergedServers,
       mergedInstructions,
       mergedSkills,
@@ -197,9 +196,7 @@ lib.ai.app.mkAiApp {
 
       # Resolve rule body: path → readFile; string → passthrough.
       resolveRuleText = rule:
-        if rule.text == null
-        then ""
-        else if builtins.isPath rule.text
+        if builtins.isPath rule.text
         then builtins.readFile rule.text
         else rule.text;
 
@@ -335,16 +332,12 @@ lib.ai.app.mkAiApp {
           inherit (import ../../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
         in {
           home.file = lib.mapAttrs' (name: rule:
-            lib.nameValuePair "${cfg.configDir}/steering/${name}.md" (
-              if rule.sourcePath != null
-              then {source = config.lib.file.mkOutOfStoreSymlink rule.sourcePath;}
-              else {
-                text = fragmentsLib.mkRenderer kiroTransformer {inherit name;} (rule
-                  // {
-                    text = resolveRuleText rule;
-                  });
-              }
-            ))
+            lib.nameValuePair "${cfg.configDir}/steering/${name}.md" {
+              text = fragmentsLib.mkRenderer kiroTransformer {inherit name;} (rule
+                // {
+                  text = resolveRuleText rule;
+                });
+            })
           mergedRules;
         })
         # Global context → `<configDir>/steering/<contextFilename>`. Kiro
@@ -423,9 +416,7 @@ lib.ai.app.mkAiApp {
       hasContext = effectiveContext != null && effectiveContext != "";
 
       resolveRuleText = rule:
-        if rule.text == null
-        then ""
-        else if builtins.isPath rule.text
+        if builtins.isPath rule.text
         then builtins.readFile rule.text
         else rule.text;
 
@@ -533,16 +524,12 @@ lib.ai.app.mkAiApp {
           inherit (import ../../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
         in {
           files = lib.mapAttrs' (name: rule:
-            lib.nameValuePair "${cfg.configDir}/steering/${name}.md" (
-              if rule.sourcePath != null
-              then {source = rule.sourcePath;}
-              else {
-                text = fragmentsLib.mkRenderer kiroTransformer {inherit name;} (rule
-                  // {
-                    text = resolveRuleText rule;
-                  });
-              }
-            ))
+            lib.nameValuePair "${cfg.configDir}/steering/${name}.md" {
+              text = fragmentsLib.mkRenderer kiroTransformer {inherit name;} (rule
+                // {
+                  text = resolveRuleText rule;
+                });
+            })
           mergedRules;
         })
         # Global context → `<configDir>/steering/<contextFilename>`.

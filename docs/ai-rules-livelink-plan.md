@@ -1,14 +1,24 @@
 # `ai.rules` live-edit support via out-of-store symlink
 
-> **Status:** plan; proceeding autonomously.
+> **Status:** ROLLED BACK. Shipped in commit `fab4e5c` as
+> `sourcePath` on `ruleModule`. Reverted in the
+> `refactor/ai-factory-architecture` branch per the
+> ai-factory-collision refactor plan §6 (commit 2). User decided
+> live-edit is not worth the impurity — devenv covers iteration
+> and pure-eval rules are simpler. Rules now always bake into the
+> store with transformer-injected frontmatter. See
+> `docs/ai-factory-collision-refactor-plan.md` §3.3 for the
+> rationale.
 >
-> **Goal:** add `sourcePath` field to the rule submodule that
-> triggers `home.file.<path>.source = mkOutOfStoreSymlink …` on HM
-> instead of baking content into the store. Lets consumers edit the
-> source `.md` file and see changes live without `home-manager
-switch`. Closes the miss flagged in `session-handoff-2026-04-21.md`
-> that blocks clean migration of the consumer's 15 kiro steering
-> files.
+> **Historical goal (for reference):** add `sourcePath` field to
+> the rule submodule that triggered `home.file.<path>.source =
+mkOutOfStoreSymlink …` on HM instead of baking content into the
+> store. Closed the miss flagged in
+> `session-handoff-2026-04-21.md` that was blocking clean
+> migration of the consumer's 15 kiro steering files. The
+> consumer migration is now handled by the new
+> `ai.<cli>.rulesDir` Dir helper (refactor plan §4 / commit 4)
+> instead.
 
 ## Why
 

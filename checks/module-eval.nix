@@ -64,17 +64,6 @@
         type = lib.types.attrsOf lib.types.anything;
         default = {};
       };
-      # Stub config.lib so factory code using config.lib.file.mkOutOfStoreSymlink
-      # doesn't error at eval time. Real HM injects this; the module-eval
-      # harness otherwise has no config.lib. Identity: the mkOutOfStoreSymlink
-      # stub returns its input unchanged — tests assert on .source-vs-.text
-      # structure, not the exact symlink-marker shape.
-      lib = lib.mkOption {
-        type = lib.types.attrsOf lib.types.anything;
-        default = {
-          file.mkOutOfStoreSymlink = path: path;
-        };
-      };
       # programs.claude-code is collapsed to attrsOf anything —
       # upstream options aren't in our doc scope (options-doc filters
       # to `ai.*` prefixes), and the stub's only job is to absorb
@@ -1809,28 +1798,15 @@ in {
       && (upstream.from-top or null) != null
   );
 
-  # HM: rule with sourcePath emits home.file.<path>.source (out-of-store
-  # symlink) instead of baking content into the store. Note: the
-  # module-eval harness stubs home.file as attrsOf anything, so the
-  # actual source value is a raw path string (the harness's
-  # config.lib.file.mkOutOfStoreSymlink stub is a no-op identity —
-  # see hmLib below if the test fails). We assert presence of
-  # `source` and absence of `text`.
-  module-kiro-hm-rule-sourcepath-emits-source = mkTest "kiro-hm-rule-sourcepath-emits-source" (
-    let
-      result = evalHm {
-        ai.kiro = {
-          enable = true;
-          rules.my-rule.sourcePath = "/abs/path/to/my-rule.md";
-        };
-      };
-      entry = result.config.home.file.".kiro/steering/my-rule.md" or null;
-    in
-      entry != null && (entry ? source) && !(entry ? text)
-  );
+  # ── sourcePath rollback regression guards ──────────────────────
+  # `sourcePath` was introduced in fab4e5c and rolled back in this
+  # commit per the ai-factory-collision refactor plan §6 (commit 2).
+  # Live-edit is deprecated — devenv covers iteration. `text` is
+  # required again; rules always bake into the store with
+  # transformer-injected frontmatter.
 
-  # HM: rule with text (no sourcePath) keeps baking behavior.
-  module-kiro-hm-rule-text-still-bakes = mkTest "kiro-hm-rule-text-still-bakes" (
+  # HM: inline rule text still bakes and carries frontmatter.
+  module-kiro-hm-rule-text-bakes = mkTest "kiro-hm-rule-text-bakes" (
     let
       result = evalHm {
         ai.kiro = {
@@ -1847,31 +1823,61 @@ in {
       && lib.hasInfix "Inline content" entry.text
   );
 
-  # Devenv: rule with sourcePath emits files.<path>.source verbatim.
-  module-kiro-devenv-rule-sourcepath = mkTest "kiro-devenv-rule-sourcepath" (
-    let
-      result = evalDevenv {
-        ai.kiro = {
-          enable = true;
-          rules.my-rule.sourcePath = "/abs/path/to/my-rule.md";
-        };
-      };
-      entry = result.config.files.".kiro/steering/my-rule.md" or null;
-    in
-      entry != null && (entry.source or null) == "/abs/path/to/my-rule.md"
-  );
-
-  # HM: Claude rules sourcePath emits source, not text.
-  module-claude-hm-rule-sourcepath-emits-source = mkTest "claude-hm-rule-sourcepath-emits-source" (
+  # HM: rule.text accepting a path literal still works.
+  module-kiro-hm-rule-path-bakes = mkTest "kiro-hm-rule-path-bakes" (
     let
       result = evalHm {
-        ai.claude = {
+        ai.kiro = {
           enable = true;
-          rules.my-rule.sourcePath = "/abs/path/to/my-rule.md";
+          rules.rule-from-path.text = ./fixtures/kiro-steering/alpha.md;
         };
       };
-      entry = result.config.home.file.".claude/rules/my-rule.md" or null;
+      entry = result.config.home.file.".kiro/steering/rule-from-path.md" or null;
     in
-      entry != null && (entry ? source) && !(entry ? text)
+      entry
+      != null
+      && (entry ? text)
+      && !(entry ? source)
+      && lib.hasInfix "Alpha steering body" entry.text
+  );
+
+  # Negative: `sourcePath` is no longer a known option. Attempting to
+  # set it fails module evaluation (tryEval captures the error from
+  # strict-evaluating only the target rule's attrs, to avoid a full
+  # config-tree walk stack overflow).
+  module-kiro-hm-rule-sourcepath-rejected = mkTest "kiro-hm-rule-sourcepath-rejected" (
+    let
+      attempt = builtins.tryEval (let
+        r = evalHm {
+          ai.kiro = {
+            enable = true;
+            rules.my-rule = {
+              text = "body";
+              sourcePath = "/abs/path/to/my-rule.md";
+            };
+          };
+        };
+      in
+        builtins.deepSeq r.config.ai.kiro.rules.my-rule true);
+    in
+      !attempt.success
+  );
+
+  module-claude-hm-rule-sourcepath-rejected = mkTest "claude-hm-rule-sourcepath-rejected" (
+    let
+      attempt = builtins.tryEval (let
+        r = evalHm {
+          ai.claude = {
+            enable = true;
+            rules.my-rule = {
+              text = "body";
+              sourcePath = "/abs/path/to/my-rule.md";
+            };
+          };
+        };
+      in
+        builtins.deepSeq r.config.ai.claude.rules.my-rule true);
+    in
+      !attempt.success
   );
 }

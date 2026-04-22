@@ -112,7 +112,6 @@ lib.ai.app.mkAiApp {
     };
     config = {
       cfg,
-      config,
       mergedServers,
       mergedInstructions,
       mergedSkills,
@@ -121,6 +120,7 @@ lib.ai.app.mkAiApp {
       mergedEnvironmentVariables,
       mergedClaudeCopilotAgents,
       topContext,
+      ...
     }: let
       aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
       # Resolve effective context: per-CLI wins when set, else top-level.
@@ -130,9 +130,7 @@ lib.ai.app.mkAiApp {
         else topContext;
       hasContext = effectiveContext != null && effectiveContext != "";
       resolveRuleText = rule:
-        if rule.text == null
-        then ""
-        else if builtins.isPath rule.text
+        if builtins.isPath rule.text
         then builtins.readFile rule.text
         else rule.text;
       # symlinkJoin + makeWrapper wrapper that exports
@@ -264,16 +262,12 @@ lib.ai.app.mkAiApp {
           inherit (import ../../../lib/ai/transformers/copilot.nix {inherit lib;}) copilotTransformer;
         in {
           home.file = lib.mapAttrs' (name: rule:
-            lib.nameValuePair ".github/instructions/${name}.instructions.md" (
-              if rule.sourcePath != null
-              then {source = config.lib.file.mkOutOfStoreSymlink rule.sourcePath;}
-              else {
-                text = fragmentsLib.mkRenderer copilotTransformer {} (rule
-                  // {
-                    text = resolveRuleText rule;
-                  });
-              }
-            ))
+            lib.nameValuePair ".github/instructions/${name}.instructions.md" {
+              text = fragmentsLib.mkRenderer copilotTransformer {} (rule
+                // {
+                  text = resolveRuleText rule;
+                });
+            })
           mergedRules;
         })
         # Global context → `<configDir>/<contextFilename>`. Written
@@ -384,9 +378,7 @@ lib.ai.app.mkAiApp {
         else topContext;
       hasContext = effectiveContext != null && effectiveContext != "";
       resolveRuleText = rule:
-        if rule.text == null
-        then ""
-        else if builtins.isPath rule.text
+        if builtins.isPath rule.text
         then builtins.readFile rule.text
         else rule.text;
     in
@@ -485,16 +477,12 @@ lib.ai.app.mkAiApp {
           inherit (import ../../../lib/ai/transformers/copilot.nix {inherit lib;}) copilotTransformer;
         in {
           files = lib.mapAttrs' (name: rule:
-            lib.nameValuePair ".github/instructions/${name}.instructions.md" (
-              if rule.sourcePath != null
-              then {source = rule.sourcePath;}
-              else {
-                text = fragmentsLib.mkRenderer copilotTransformer {} (rule
-                  // {
-                    text = resolveRuleText rule;
-                  });
-              }
-            ))
+            lib.nameValuePair ".github/instructions/${name}.instructions.md" {
+              text = fragmentsLib.mkRenderer copilotTransformer {} (rule
+                // {
+                  text = resolveRuleText rule;
+                });
+            })
           mergedRules;
         })
         # Global context → `<projectDir>/<contextFilename>` (project-scope).

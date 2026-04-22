@@ -145,7 +145,6 @@ lib.ai.app.mkAiApp {
     options = {};
     config = {
       cfg,
-      config,
       mergedServers,
       mergedInstructions,
       mergedSkills,
@@ -167,9 +166,7 @@ lib.ai.app.mkAiApp {
 
       # Resolve rule body: path → readFile; string → passthrough.
       resolveRuleText = rule:
-        if rule.text == null
-        then ""
-        else if builtins.isPath rule.text
+        if builtins.isPath rule.text
         then builtins.readFile rule.text
         else rule.text;
     in
@@ -226,16 +223,12 @@ lib.ai.app.mkAiApp {
           inherit (import ../../../lib/ai/transformers/claude.nix {inherit lib;}) claudeTransformer;
         in {
           home.file = lib.mapAttrs' (name: rule:
-            lib.nameValuePair ".claude/rules/${name}.md" (
-              if rule.sourcePath != null
-              then {source = config.lib.file.mkOutOfStoreSymlink rule.sourcePath;}
-              else {
-                text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
-                  // {
-                    text = resolveRuleText rule;
-                  });
-              }
-            ))
+            lib.nameValuePair ".claude/rules/${name}.md" {
+              text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
+                // {
+                  text = resolveRuleText rule;
+                });
+            })
           mergedRules;
         })
         # Auto-set ENABLE_LSP_TOOL=1 when MCP servers are present.
@@ -262,9 +255,7 @@ lib.ai.app.mkAiApp {
     }: let
       aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
       resolveRuleText = rule:
-        if rule.text == null
-        then ""
-        else if builtins.isPath rule.text
+        if builtins.isPath rule.text
         then builtins.readFile rule.text
         else rule.text;
 
@@ -329,16 +320,12 @@ lib.ai.app.mkAiApp {
           inherit (import ../../../lib/ai/transformers/claude.nix {inherit lib;}) claudeTransformer;
         in {
           files = lib.mapAttrs' (name: rule:
-            lib.nameValuePair ".claude/rules/${name}.md" (
-              if rule.sourcePath != null
-              then {source = rule.sourcePath;}
-              else {
-                text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
-                  // {
-                    text = resolveRuleText rule;
-                  });
-              }
-            ))
+            lib.nameValuePair ".claude/rules/${name}.md" {
+              text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
+                // {
+                  text = resolveRuleText rule;
+                });
+            })
           mergedRules;
         })
         # Skills — devenv has no upstream skills option on
