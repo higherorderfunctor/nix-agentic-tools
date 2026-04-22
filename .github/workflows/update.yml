@@ -286,3 +286,18 @@ jobs:
           else
             echo "No report generated"
           fi
+
+      # Cosmetic red: fail the job if any per-dependency target was held
+      # back. Runs last so PR creation, stale-PR cleanup, and report steps
+      # all complete first — the surviving updates still land as PRs.
+      # No untrusted input; report is produced by in-repo scripts.
+      - name: Fail if any updates were held back
+        if: always()
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          if [ -f .update-report.txt ] && grep -q '^HELD BACK:' .update-report.txt; then
+            count=$(grep -c '^HELD BACK:' .update-report.txt)
+            echo "::error::${count} dependency update(s) held back — see Update Report above"
+            exit 1
+          fi
