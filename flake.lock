@@ -221,6 +221,27 @@
         "type": "github"
       }
     },
+    "devshell_3": {
+      "inputs": {
+        "nixpkgs": [
+          "mcp-nixos",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1768818222,
+        "narHash": "sha256-460jc0+CZfyaO8+w8JNtlClB2n4ui1RbHfPTLkpwhU8=",
+        "owner": "numtide",
+        "repo": "devshell",
+        "rev": "255a2b1725a20d060f566e4755dbf571bbbb5f76",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "devshell",
+        "type": "github"
+      }
+    },
     "flake-compat": {
       "locked": {
         "lastModified": 1733328505,
@@ -740,17 +761,18 @@
     },
     "mcp-nixos": {
       "inputs": {
+        "devshell": "devshell_3",
         "flake-parts": "flake-parts_4",
         "nixpkgs": [
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1775229475,
-        "narHash": "sha256-A7KhRVOqLmtta507DPZoKbO8D1AlMMDWLMfHEBhEAxY=",
+        "lastModified": 1776884399,
+        "narHash": "sha256-y0d/nQCXhNortZ2X6fg268U80kd8TV1+G/7Py91zOIo=",
         "owner": "utensils",
         "repo": "mcp-nixos",
-        "rev": "68c272fb930de52502d97aae91d8f7ed7edd9e0e",
+        "rev": "def17aaae6677a222fa077b26dd1e77143e1e838",
         "type": "github"
       },
       "original": {
