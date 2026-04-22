@@ -1798,6 +1798,169 @@ in {
       && (upstream.from-top or null) != null
   );
 
+  # ── Collision-as-failure ──────────────────────────────────────
+  # Shared ai.<pool> merging with ai.<cli>.<pool> emits NixOS
+  # assertions on duplicate keys. See lib/ai/ai-common.nix
+  # mergeWithCollisionCheck. Applies retroactively to: rules,
+  # skills, mcpServers, lspServers, environmentVariables, agents.
+  #
+  # The assertion always fires (no mkIf cfg.enable gate) so a
+  # mis-configured ai.* surface surfaces even when the feature is
+  # toggled off.
+
+  # Rules: top-level ai.rules.foo vs per-CLI ai.claude.rules.foo.
+  module-claude-rules-collision = mkTest "claude-rules-collision" (
+    let
+      result = evalHm {
+        ai.rules.foo.text = "top";
+        ai.claude = {
+          enable = true;
+          rules.foo.text = "cli";
+        };
+      };
+    in
+      lib.any
+      (a: lib.hasInfix "rules 'foo' declared in both" a.message && !a.assertion)
+      result.config.assertions
+  );
+
+  # Rules: collision fires even when the CLI is disabled.
+  module-claude-rules-collision-without-enable = mkTest "claude-rules-collision-without-enable" (
+    let
+      result = evalHm {
+        ai.rules.foo.text = "top";
+        ai.claude.rules.foo.text = "cli";
+      };
+    in
+      lib.any
+      (a: lib.hasInfix "rules 'foo' declared in both" a.message && !a.assertion)
+      result.config.assertions
+  );
+
+  # Skills.
+  module-kiro-skills-collision = mkTest "kiro-skills-collision" (
+    let
+      result = evalHm {
+        ai.skills.my-skill = ./../packages/stacked-workflows/skills/stack-fix;
+        ai.kiro = {
+          enable = true;
+          skills.my-skill = ./../packages/stacked-workflows/skills/stack-fix;
+        };
+      };
+    in
+      lib.any
+      (a: lib.hasInfix "skills 'my-skill' declared in both" a.message && !a.assertion)
+      result.config.assertions
+  );
+
+  # MCP servers.
+  module-copilot-mcpservers-collision = mkTest "copilot-mcpservers-collision" (
+    let
+      result = evalHm {
+        ai.mcpServers.my-server = {
+          type = "stdio";
+          package = pkgs.hello;
+          command = "hello";
+        };
+        ai.copilot = {
+          enable = true;
+          mcpServers.my-server = {
+            type = "stdio";
+            package = pkgs.hello;
+            command = "hello";
+          };
+        };
+      };
+    in
+      lib.any
+      (a: lib.hasInfix "mcpServers 'my-server' declared in both" a.message && !a.assertion)
+      result.config.assertions
+  );
+
+  # LSP servers.
+  module-claude-lspservers-collision = mkTest "claude-lspservers-collision" (
+    let
+      result = evalHm {
+        ai.lspServers.nixd = {
+          command = "nixd";
+        };
+        ai.claude = {
+          enable = true;
+          lspServers.nixd = {
+            command = "nixd";
+          };
+        };
+      };
+    in
+      lib.any
+      (a: lib.hasInfix "lspServers 'nixd' declared in both" a.message && !a.assertion)
+      result.config.assertions
+  );
+
+  # Environment variables.
+  module-copilot-envvar-collision = mkTest "copilot-envvar-collision" (
+    let
+      result = evalHm {
+        ai.environmentVariables.FOO = "top";
+        ai.copilot = {
+          enable = true;
+          environmentVariables.FOO = "cli";
+        };
+      };
+    in
+      lib.any
+      (a: lib.hasInfix "environmentVariables 'FOO' declared in both" a.message && !a.assertion)
+      result.config.assertions
+  );
+
+  # Agents.
+  module-claude-agents-collision = mkTest "claude-agents-collision" (
+    let
+      result = evalHm {
+        ai.agents.helper = "Top-level agent";
+        ai.claude = {
+          enable = true;
+          agents.helper = "Claude-only agent";
+        };
+      };
+    in
+      lib.any
+      (a: lib.hasInfix "agents 'helper' declared in both" a.message && !a.assertion)
+      result.config.assertions
+  );
+
+  # Devenv collision surfaces through the same helper.
+  module-claude-devenv-rules-collision = mkTest "claude-devenv-rules-collision" (
+    let
+      result = evalDevenv {
+        ai.rules.foo.text = "top";
+        ai.claude = {
+          enable = true;
+          rules.foo.text = "cli";
+        };
+      };
+    in
+      lib.any
+      (a: lib.hasInfix "rules 'foo' declared in both" a.message && !a.assertion)
+      result.config.assertions
+  );
+
+  # Distinct keys do NOT trigger an assertion.
+  module-claude-rules-no-collision = mkTest "claude-rules-no-collision" (
+    let
+      result = evalHm {
+        ai.rules.from-top.text = "top";
+        ai.claude = {
+          enable = true;
+          rules.from-cli.text = "cli";
+        };
+      };
+    in
+      !(lib.any
+        (a: !a.assertion && lib.hasInfix "declared in both" a.message)
+        result.config.assertions)
+  );
+
   # ── sourcePath rollback regression guards ──────────────────────
   # `sourcePath` was introduced in fab4e5c and rolled back in this
   # commit per the ai-factory-collision refactor plan §6 (commit 2).

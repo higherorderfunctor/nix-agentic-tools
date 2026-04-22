@@ -1,3 +1,4 @@
+Patchelf
 addy
 adoc
 agenix
@@ -70,9 +71,9 @@ gpgsign
 heredocs
 higherorderfunctor
 hitl
-hsjobeki
 hostable
 hotspots
+hsjobeki
 indexedlog
 ints
 isaacphi
@@ -97,6 +98,7 @@ ltrimstr
 markdownify
 mcpconfig
 mcps
+mcpservers
 mdbook
 mergetool
 modelcontextprotocol
@@ -127,7 +129,6 @@ partialclone
 passthroughs
 passthru
 pasteable
-Patchelf
 pathspec
 pdsolve
 peaceiris
@@ -144,13 +145,13 @@ reftable
 regen
 reimplementation
 relpath
-rnix
 reparent
 rerere
 revertibility
 revset
 revsets
 revwalk
+rnix
 rustc
 sadjow
 sarif

@@ -12,13 +12,34 @@
 {lib}: appRecord: {config, ...}: let
   aiCommon = import ../ai-common.nix {inherit lib;};
   cfg = config.ai.${appRecord.name};
-  mergedServers = config.ai.mcpServers // cfg.mcpServers;
+  # Collision-as-failure merges — shared ai.<pool> vs ai.<cli>.<pool>.
+  # See lib/ai/ai-common.nix:mergeWithCollisionCheck. Assertions are
+  # emitted through config.assertions below.
+  mergeCheck = poolName: topPool: cliPool:
+    aiCommon.mergeWithCollisionCheck {
+      inherit poolName topPool cliPool;
+      cliName = appRecord.name;
+    };
+  serversMerge = mergeCheck "mcpServers" config.ai.mcpServers cfg.mcpServers;
+  skillsMerge = mergeCheck "skills" config.ai.skills cfg.skills;
+  rulesMerge = mergeCheck "rules" config.ai.rules cfg.rules;
+  lspMerge = mergeCheck "lspServers" config.ai.lspServers (cfg.lspServers or {});
+  envMerge = mergeCheck "environmentVariables" config.ai.environmentVariables (cfg.environmentVariables or {});
+  agentsMerge = mergeCheck "agents" config.ai.agents (cfg.agents or {});
+  collisionAssertions =
+    serversMerge.assertions
+    ++ skillsMerge.assertions
+    ++ rulesMerge.assertions
+    ++ lspMerge.assertions
+    ++ envMerge.assertions
+    ++ agentsMerge.assertions;
+  mergedServers = serversMerge.merged;
   mergedInstructions = config.ai.instructions ++ cfg.instructions;
-  mergedSkills = config.ai.skills // cfg.skills;
-  mergedRules = config.ai.rules // cfg.rules;
-  mergedLspServers = config.ai.lspServers // (cfg.lspServers or {});
-  mergedEnvironmentVariables = config.ai.environmentVariables // (cfg.environmentVariables or {});
-  mergedClaudeCopilotAgents = config.ai.agents // (cfg.agents or {});
+  mergedSkills = skillsMerge.merged;
+  mergedRules = rulesMerge.merged;
+  mergedLspServers = lspMerge.merged;
+  mergedEnvironmentVariables = envMerge.merged;
+  mergedClaudeCopilotAgents = agentsMerge.merged;
   topContext = config.ai.context;
 
   devenvSpec = appRecord.devenv or {};
@@ -80,6 +101,10 @@ in {
   config = lib.mkMerge (
     [
       {_module.args.aiTransformers = appRecord.transformers;}
+      # Collision-as-failure: always evaluate (no mkIf cfg.enable
+      # guard) so misconfigurations surface even when the feature
+      # is toggled off.
+      {assertions = collisionAssertions;}
       (lib.mkIf cfg.enable customConfig)
     ]
     ++ lib.optional hasOutputPath (lib.mkIf (cfg.enable && hasInstructions) {

@@ -255,4 +255,57 @@
       lib.filterAttrs (_: v: v != null && v != {}) mapped;
   in
     go;
+
+  # ── Collision-as-failure pool merge ─────────────────────────────
+  # Merge two attrset pools and surface duplicate keys as NixOS
+  # module assertions. The shared `ai.*` pools (rules, skills,
+  # context, mcpServers, lspServers, environmentVariables, agents)
+  # fan out to every enabled CLI, and each CLI may also contribute
+  # per-CLI entries via `ai.<cli>.<pool>`. Silent `//` merges at
+  # that boundary let a later contributor override an earlier one
+  # without a signal; the user directive is "collisions are
+  # failure, we don't merge over keys".
+  #
+  # Inputs:
+  #   poolName : human-readable label for the pool, used in the
+  #              assertion message (e.g. "rule", "skill",
+  #              "MCP server", "LSP server", "agent",
+  #              "environment variable").
+  #   cliName  : CLI identifier for error context (e.g. "claude").
+  #              Use `null` for boundaries that aren't per-CLI.
+  #   topPool  : attrset of entries contributed at top level
+  #              (`ai.<pool>`).
+  #   cliPool  : attrset of entries contributed per-CLI
+  #              (`ai.<cli>.<pool>`).
+  #
+  # Output: an attrset with
+  #   - `merged`     : the combined pool (safe to read even when
+  #                    collisions exist — per-CLI values win, same
+  #                    as the legacy `//` shape, so downstream
+  #                    references still resolve until `assertions`
+  #                    fire and abort eval).
+  #   - `assertions` : a list of NixOS assertion attrs naming each
+  #                    duplicate key and the two contributing pools.
+  mergeWithCollisionCheck = {
+    poolName,
+    cliName ? null,
+    topPool,
+    cliPool,
+  }: let
+    duplicates = lib.attrNames (builtins.intersectAttrs topPool cliPool);
+    scope =
+      if cliName == null
+      then "ai.${poolName}"
+      else "ai.${cliName}.${poolName}";
+    mkAssertion = key: {
+      assertion = false;
+      message =
+        "${poolName} '${key}' declared in both ai.${poolName} and "
+        + "${scope} — collisions across shared ai.* pools are errors. "
+        + "Rename one or delete the duplicate.";
+    };
+  in {
+    merged = topPool // cliPool;
+    assertions = map mkAssertion duplicates;
+  };
 }

@@ -17,14 +17,20 @@
   # home.file.* without importing home-manager. Mirrors the
   # hmStubs pattern in checks/module-eval.nix.
   hmStubs = {
-    options.home = {
-      activation = lib.mkOption {
-        type = lib.types.attrsOf lib.types.anything;
-        default = {};
+    options = {
+      assertions = lib.mkOption {
+        type = lib.types.listOf lib.types.anything;
+        default = [];
       };
-      file = lib.mkOption {
-        type = lib.types.attrsOf lib.types.anything;
-        default = {};
+      home = {
+        activation = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+        };
+        file = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+        };
       };
     };
   };
@@ -421,9 +427,15 @@ in {
       module = ai.app.devenvTransform record;
       # devenv stub: `files` option instead of `home.file`
       devenvStubs = {
-        options.files = lib.mkOption {
-          type = lib.types.attrsOf lib.types.anything;
-          default = {};
+        options = {
+          assertions = lib.mkOption {
+            type = lib.types.listOf lib.types.anything;
+            default = [];
+          };
+          files = lib.mkOption {
+            type = lib.types.attrsOf lib.types.anything;
+            default = {};
+          };
         };
       };
       evaluated = lib.evalModules {
