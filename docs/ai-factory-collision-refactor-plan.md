@@ -17,9 +17,9 @@
 > session preserves its context for bug triage during rollout.
 > No code changes until explicit user go-ahead.
 
-## Status roll-up — 2026-04-21 end of session
+## Status roll-up — 2026-04-21 end of session (late)
 
-### ✅ DONE (self-verified via `git log` + `nix flake check` green)
+### ✅ DONE + hand-verified
 
 All 9 commits from §6 landed and pushed to
 `origin refactor/ai-factory-architecture`:
@@ -36,84 +36,145 @@ All 9 commits from §6 landed and pushed to
 | 8   | `e65a012` | fix(devenv): stale copilot skills paths                    |
 | 9   | `83f459a` | docs(ai): dev fragments for collision + fanout + dir       |
 
+Plus housekeeping:
+
+| SHA       | Title                                                       |
+| --------- | ----------------------------------------------------------- |
+| `d397ec8` | docs(plan): mark ai-factory-collision refactor EXECUTED     |
+| `2733070` | chore(cspell): exclude docs/monorepo-restructure-assessment |
+
 - Consumer (`nixos-config`) edited — `kiroSymlinkSteering` + 15-file
   list replaced by `ai.kiro.rulesDir = ./kiro-config/steering;`, all
   `lib.<x>` → `lib.ai.<x>`. User pin-bumped + activated.
 - Post-activation: **kiro `.md.md` bug FIXED** — steering files now
   land as `NN-name.md` under new gen `a91pv5q9...`. Structurally
   impossible to double-suffix by construction.
-- Subagent reported 31 tests added (9 collision, 5 rulesDir,
-  4 skillsDir, 5 agentsDir, 4 hooksDir, 2 sourcePath rollback,
-  2 path-bake regression) — **needs verification next session**.
-- Subagent reported dev fragments in `dev/fragments/ai-module/`
-  (not plan's original `modules/ai/fragments/dev/` — repo layout
-  mismatch; `ai-module` category already existed) — **needs
-  verification next session**.
+- **Orphan cleanup DONE** — user ran the `rm` one-liner before
+  the session wrapped. Stale symlinks from the failed 2026-04-21
+  activation are gone.
+- **Dir helper parity VERIFIED** (`lib/ai/dir-helpers.nix`):
+  all four helpers use shared `resolveDirArg` normalizer,
+  polymorphic `path | { path, filter? }` input, `name → bool`
+  filter signature. Default filters: `.md` suffix for rules +
+  agents; `_: true` for skills (dirs) + hooks (files). rules
+  and agents strip `.md` from keys so emission re-append can't
+  double-suffix. Differences between helpers (skills use dirs,
+  hooks use `readFile` for inline content) are semantic and
+  intentional.
+- **Test coverage VERIFIED** — 29 of 31 subagent-claimed tests
+  present in `checks/module-eval.nix`: 9 collision + 5 rulesDir
+  - 4 skillsDir + 5 agentsDir + 4 hooksDir + 2 sourcePath-rejected.
+    The 2 "bake regression" tests claimed in the subagent's report
+    are either folded into pre-existing rule-text tests or weren't
+    added under that name. Core coverage is present; the 2-test
+    gap is low-risk (regression of a pre-existing path).
+- **Dev fragments VERIFIED** — `dev/fragments/ai-module/`
+  contains `collision-semantics.md`, `dir-helpers.md`,
+  `layered-fanout.md` (plus pre-existing `ai-module-fanout.md`).
+  Generator rendered them into `.claude/rules/ai-module.md`,
+  `.github/instructions/ai-module.instructions.md`, and
+  `.kiro/steering/ai-module.md`. Collaborators cloning without
+  the user's memory get full architectural context.
 
-### ⚠️ NOT DONE / OUTSTANDING
+### ⚠️ OUTSTANDING (real work remaining)
 
-- **Orphan cleanup** — user skipped step 2 of activation. Stale
-  symlinks still present on disk (need manual `rm`):
-  - `~/.kiro/steering/*.md.md` (15 files — doubled alongside new
-    correct `.md` files)
-  - `~/.kiro/steering/stacked-workflows.md` (OLD gen)
-  - `~/.claude/skills/sws-stack-*` (6 Layout B dirs)
-  - `~/.claude/rules/stacked-workflows.md` (OLD gen)
-  - `~/.claude/references/{git-absorb,git-branchless,git-revise,philosophy,recommended-config,stacked-workflow}.md`
-    (keep `nix-workflow.md` — user-owned)
-  - `~/.config/github-copilot/{copilot-instructions.md,mcp-config.json}`
-  - Cleanup command ready in audit — one-liner, run when user
-    has time. Does not require rebuild.
 - **SYMPTOM B (ruamel fetchhg)** — deferred per user call. Plan
-  §10.2 has the evidence-backed findings. Awaiting next CI
-  observation with the bumped flake input to see if transient or
-  deterministic.
-- **SYMPTOM A (devenv stale paths)** — shipped as commit 8. Not
-  yet CI-verified (would surface next test run on main).
-- **CI failures** — user reports CI still failing. Cause not yet
-  investigated this session; plausibly SYMPTOM A / B mix carried
-  over from prior runs, or new surface from the refactor. Needs
-  fresh triage.
+  §10.2 has the evidence-backed findings. Root cause TBD. Fix
+  TBD. Awaiting fresh CI data from the flake input bump. Best
+  hypothesis: CI transient / cache desync, not a repo bug.
+  Defensive candidates (untested): (a) add `cache.nixos.org`
+  explicit substituter in ci.yml test job, (b) pin nix version,
+  (c) reduce substitution concurrency.
+- **SYMPTOM A CI verification** — commit `e65a012` shipped the
+  fix (devenv.nix stale copilot skill paths, lines 250 + 266).
+  No green CI run observed post-fix yet. Will land automatically
+  on next push to main / next PR.
+- **CI failures (broader triage)** — user reports CI still red
+  at session close. Not investigated here. Could be SYMPTOM A
+  residue, SYMPTOM B spread, or new surface from the refactor
+  (e.g., collision assertions firing somewhere unexpected,
+  rulesDir eval behavior under CI). Needs a log pull + classify.
 
-### 🔍 VALIDATE NEXT SESSION (before declaring the refactor complete)
+### 🗒 User observations for next-session triage (NOT DECISIONS)
 
-1. **Verify `skillsDir` + `agentsDir` + `hooksDir` implementations
-   match the plan.** The subagent's report says they follow the
-   rulesDir pattern, but this session never hand-verified:
-   - `lib/ai/dir-helpers.nix` — contains `rulesFromDir`,
-     `skillsFromDir`, `agentsFromDir`, `hooksFromDir`? Filter
-     signature `name → bool`? Polymorphic `path | { path, filter? }`
-     input? Correct default filters per helper (see fragment
-     `ai.* Dir Helpers`)?
-   - Per-CLI options: `ai.claude.{skillsDir, agentsDir, hooksDir}`,
-     `ai.copilot.{skillsDir, agentsDir}`, `ai.kiro.{skillsDir}` —
-     all wired to their respective FromDir helpers? Kiro agents
-     intentionally excluded per §6 commit 6?
-2. **Verify test coverage.** 31 tests claimed — confirm via
-   `grep -c 'Test\s*=' checks/module-eval.nix` or similar; read
-   the collision / rulesDir / skillsDir / agentsDir / hooksDir
-   / sourcePath test blocks and sanity-check assertions.
-3. **Verify dev fragments.** Read
-   `dev/fragments/ai-module/*.md` — collision-semantics,
-   layered-fanout, dir-helpers. Confirm they render to the
-   expected per-ecosystem scoped rule files
-   (`.claude/rules/ai-module.md` should already have them since
-   they loaded into context this session — indicates the
-   `devenv tasks run generate:instructions` ran).
-4. **CI triage.** Pull the latest failing run log(s), classify
-   symptom (A, B, or new), match against fixes in commits 8/9
-   (not shipped) / followup.
-5. **Orphan cleanup status.** Ask user if they ran the
-   `rm` command; if not, the stale symlinks persist but cause
-   no functional issues (new-gen symlinks take precedence for
-   any fresh-name entry).
+Captured at session close after the batch of update PRs merged
+(12 commits fast-forwarded into `refactor/ai-factory-architecture`).
+User reviewed the Update-job + PR-CI outcomes and flagged two
+parity gaps. **No decisions yet — these are notes to dig into
+when we pick up CI / SYMPTOM B.**
+
+**Observation 1 — openmem PR (not merged)**
+
+- Update job (nightly pipeline): **FAILED** on openmem. But the
+  pipeline still went on to **open a PR** for it.
+- The resulting PR's CI job: **PASSED**.
+- Two apparent gaps:
+  1. The Update job and the PR's CI job didn't fail the same
+     way. Why? Different eval paths? Different substituter
+     behavior? Different worktree state? Worth tracing.
+  2. The Update job opened a PR despite its own worktree
+     checks failing. User originally asked for just a branch
+     push (no auto-PR) so failures could be reviewed off-tree,
+     but that "didn't work" — the pivot was to make the Update
+     job fail gracefully instead. With graceful-fail in place,
+     user is now wondering whether the auto-PR-open should be
+     reverted (so failed checks DON'T produce PRs).
+- **No decision yet.** User wants to understand WHY the two
+  jobs diverged before revisiting the open-PR behavior.
+
+**Observation 2 — mcp-nixos PR (not merged)**
+
+- Update job: **PASSED** on mcp-nixos.
+- PR's CI job: **FAILED**.
+- Inverse parity gap from openmem. Depending on where the PR
+  CI failed, this may indicate a real check gap in the Update
+  job's worktree smoke test. User's stated preference: "I don't
+  want to run every check during update, just the basic smoke
+  test we already have." So this is **understand-first**, not
+  expand-Update-coverage-first.
+
+**Both PRs left open for inspection.** User explicitly did NOT
+merge them so they're available for log-pulling + eval-tracing
+tomorrow. All other update PRs were merged (12 commits
+fast-forwarded into the refactor branch).
+
+### 📋 NEXT SESSION — suggested order
+
+1. **CI triage.** Start with the two un-merged PRs (openmem +
+   mcp-nixos). For each:
+   - Pull both the Update job log AND the PR CI log.
+   - Diff the failure points — are they hitting different
+     derivations, different eval caches, different
+     substituters?
+   - Cross-reference against SYMPTOM A (stale paths, fixed
+     by `e65a012`) and SYMPTOM B (ruamel fetchhg /
+     unidentified CI environment delta).
+2. **Understand the Update-job vs PR-CI parity gap** before
+   making any architectural change. The observations above
+   are the entry points — don't jump to fixes.
+3. **SYMPTOM B.** If the triage above converges on the ruamel
+   / builder.sh / cache story from §10.2, candidate defensive
+   fixes there (a/b/c) become relevant. Otherwise it's a
+   different class of bug.
+4. **SYMPTOM A CI verification.** Look for the enterTest
+   assertion fix landing green on main via the next PR that
+   lands (passive observation, not an explicit task).
+5. Declare the refactor complete once CI is green on the
+   branch.
 
 ### Diff of audit outcomes vs pre-activation snapshot
 
-Captured in this session's post-activation audit #2. Key delta:
-the `.md.md` bug is structurally dead; no new orphans introduced;
-pre-existing orphans (from failed 2026-04-21 activation) persist
-until manual cleanup.
+Captured in this session's post-activation audit #2 + the
+follow-up orphan cleanup. Key outcomes:
+
+- `.md.md` bug: structurally dead by construction
+- No new orphans introduced by the new gen
+- Pre-existing orphans from the failed 2026-04-21 activation:
+  all cleared by user's manual `rm`
+- `~/.kiro/steering/` now holds exactly 15 `NN-name.md`
+  symlinks, each pointing at the current HM gen
+- Copilot writes to the new path (`~/.copilot/`) only; old
+  path (`~/.config/github-copilot/`) is clean
 
 ## Table of contents
 
