@@ -256,6 +256,32 @@
   in
     go;
 
+  # ── Dir option type ──────────────────────────────────────────
+  # Shared option type for the L1/L2b Dir-shaped options on the
+  # ai.* factory. Polymorphic `path | { path, filter? }` per plan
+  # §3.5 and §4. `filter` is `name → bool` (name only, not the
+  # full direntry attrs). Downstream normalization happens in
+  # lib/ai/dir-helpers.nix via `resolveDirArg`.
+  #
+  # The default filter here keeps `.md` files — it's the common
+  # case for rules/agents. Helpers that want different defaults
+  # (skills: always-true, hooks: always-true) override the filter
+  # at their call site; the option's default text is cosmetic.
+  dirOptionType = lib.types.either lib.types.path (lib.types.submodule {
+    options = {
+      path = lib.mkOption {
+        type = lib.types.path;
+        description = "Source directory.";
+      };
+      filter = lib.mkOption {
+        type = lib.types.functionTo lib.types.bool;
+        default = name: lib.hasSuffix ".md" name;
+        defaultText = lib.literalExpression "name: lib.hasSuffix \".md\" name";
+        description = "Predicate `name → bool`. Entries for which this returns false are skipped.";
+      };
+    };
+  });
+
   # ── Collision-as-failure pool merge ─────────────────────────────
   # Merge two attrset pools and surface duplicate keys as NixOS
   # module assertions. The shared `ai.*` pools (rules, skills,

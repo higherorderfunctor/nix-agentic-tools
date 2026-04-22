@@ -1961,6 +1961,110 @@ in {
         result.config.assertions)
   );
 
+  # ── ai.*.rulesDir Dir helper ──────────────────────────────────
+  # See lib/ai/dir-helpers.nix + lib/ai/sharedOptions.nix + the
+  # per-CLI baseline option in hmTransform/devenvTransform.
+  # Plan §4: polymorphic `path | { path, filter? }`, default
+  # filter keeps `.md`, basename minus `.md` becomes the key
+  # (fixes the `.md.md` doubled-extension bug).
+
+  # Path-only form: `ai.kiro.rulesDir = ./fixtures/kiro-steering;`
+  # expands to three entries (alpha, beta, gamma). notes.txt is
+  # dropped by the default `.md` filter. Emission lands at
+  # `.kiro/steering/<name>.md` — no `.md.md`.
+  module-kiro-rulesdir-path-form = mkTest "kiro-rulesdir-path-form" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          rulesDir = ./fixtures/kiro-steering;
+        };
+      };
+      files = result.config.home.file;
+      hasAlpha = files ? ".kiro/steering/alpha.md";
+      hasBeta = files ? ".kiro/steering/beta.md";
+      hasGamma = files ? ".kiro/steering/gamma.md";
+      # Key is stripped — no `.md.md` path ever emitted.
+      noDoubledMd =
+        !(lib.any (p: lib.hasSuffix ".md.md" p) (lib.attrNames files));
+      # notes.txt is filtered out (default keeps only `.md`).
+      noNotes = !(files ? ".kiro/steering/notes.md");
+    in
+      hasAlpha
+      && hasBeta
+      && hasGamma
+      && noDoubledMd
+      && noNotes
+  );
+
+  # Submodule form with custom filter (keep only `alpha.md`).
+  module-kiro-rulesdir-submodule-filter = mkTest "kiro-rulesdir-submodule-filter" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          rulesDir = {
+            path = ./fixtures/kiro-steering;
+            filter = name: name == "alpha.md";
+          };
+        };
+      };
+      files = result.config.home.file;
+    in
+      files
+      ? ".kiro/steering/alpha.md"
+      && !(files ? ".kiro/steering/beta.md")
+      && !(files ? ".kiro/steering/gamma.md")
+  );
+
+  # Top-level `ai.rulesDir` fans out to every enabled CLI via the
+  # sharedOptions L1→L2 expansion.
+  module-top-level-rulesdir-fans-out-to-kiro = mkTest "top-level-rulesdir-fans-out-to-kiro" (
+    let
+      result = evalHm {
+        ai = {
+          kiro.enable = true;
+          rulesDir = ./fixtures/kiro-steering;
+        };
+      };
+      files = result.config.home.file;
+    in
+      files ? ".kiro/steering/alpha.md"
+  );
+
+  # Collision between Dir-generated and explicit single (same key)
+  # fires the shared collision assertion.
+  module-kiro-rulesdir-collides-with-explicit-single = mkTest "kiro-rulesdir-collides-with-explicit-single" (
+    let
+      result = evalHm {
+        ai.rules.alpha.text = "explicit top-level";
+        ai.kiro = {
+          enable = true;
+          rulesDir = ./fixtures/kiro-steering;
+        };
+      };
+    in
+      lib.any
+      (a: lib.hasInfix "rules 'alpha' declared in both" a.message && !a.assertion)
+      result.config.assertions
+  );
+
+  # Devenv-side rulesDir works the same way (parity).
+  module-kiro-devenv-rulesdir-path-form = mkTest "kiro-devenv-rulesdir-path-form" (
+    let
+      result = evalDevenv {
+        ai.kiro = {
+          enable = true;
+          rulesDir = ./fixtures/kiro-steering;
+        };
+      };
+      inherit (result.config) files;
+    in
+      files
+      ? ".kiro/steering/alpha.md"
+      && !(lib.any (p: lib.hasSuffix ".md.md" p) (lib.attrNames files))
+  );
+
   # ── sourcePath rollback regression guards ──────────────────────
   # `sourcePath` was introduced in fab4e5c and rolled back in this
   # commit per the ai-factory-collision refactor plan §6 (commit 2).

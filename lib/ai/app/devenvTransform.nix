@@ -11,6 +11,7 @@
 # devenv-specific options.
 {lib}: appRecord: {config, ...}: let
   aiCommon = import ../ai-common.nix {inherit lib;};
+  dirHelpers = import ../dir-helpers.nix {inherit lib;};
   cfg = config.ai.${appRecord.name};
   # Collision-as-failure merges — shared ai.<pool> vs ai.<cli>.<pool>.
   # See lib/ai/ai-common.nix:mergeWithCollisionCheck. Assertions are
@@ -87,7 +88,20 @@ in {
       rules = lib.mkOption {
         type = lib.types.attrsOf aiCommon.ruleModule;
         default = {};
-        description = "${appRecord.name}-specific rules (merged with top-level ai.rules; per-app wins on conflict).";
+        description = "${appRecord.name}-specific rules (merged with top-level ai.rules; collisions fail).";
+      };
+      rulesDir = lib.mkOption {
+        type = lib.types.nullOr aiCommon.dirOptionType;
+        default = null;
+        description = ''
+          ${appRecord.name}-specific directory of `.md` rule files. Each
+          file becomes one entry in `ai.${appRecord.name}.rules` keyed by
+          the basename minus `.md`. Accepts a path literal or
+          `{ path, filter? }` (filter: name → bool, default keeps `.md`).
+          Runs through the same collision-as-failure merge with
+          `ai.rules` as explicit per-CLI entries; other derivations may
+          still contribute to the same on-disk rules dir.
+        '';
       };
       skills = lib.mkOption {
         type = lib.types.attrsOf lib.types.path;
@@ -105,6 +119,12 @@ in {
       # guard) so misconfigurations surface even when the feature
       # is toggled off.
       {assertions = collisionAssertions;}
+      # L2b → L3 fanout for per-CLI Dir options.
+      (lib.mkIf (cfg.rulesDir != null) {
+        ai.${appRecord.name}.rules = lib.mapAttrs (_: lib.mkDefault) (
+          dirHelpers.rulesFromDir cfg.rulesDir
+        );
+      })
       (lib.mkIf cfg.enable customConfig)
     ]
     ++ lib.optional hasOutputPath (lib.mkIf (cfg.enable && hasInstructions) {

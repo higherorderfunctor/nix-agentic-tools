@@ -4,8 +4,13 @@
 # Imported by every mkAiApp module so per-app overrides
 # (ai.<name>.mcpServers, etc.) can merge on top of these top-level
 # pools. Per-app values win on key conflicts; lists are concatenated.
-{lib, ...}: let
+{
+  config,
+  lib,
+  ...
+}: let
   aiCommon = import ./ai-common.nix {inherit lib;};
+  dirHelpers = import ./dir-helpers.nix {inherit lib;};
 in {
   options.ai = {
     context = lib.mkOption {
@@ -46,7 +51,7 @@ in {
         directory (Claude: `.claude/rules/<name>.md`, Kiro:
         `.kiro/steering/<name>.md`, Copilot:
         `.github/instructions/<name>.instructions.md`). Per-app overrides
-        (ai.<name>.rules) merge on top and win on name conflict.
+        (ai.<name>.rules) merge on top; collisions are a failure.
       '';
       example = lib.literalExpression ''
         {
@@ -56,6 +61,30 @@ in {
             paths = [ "**/*.test.*" ];
             description = "Testing conventions";
           };
+        }
+      '';
+    };
+
+    rulesDir = lib.mkOption {
+      type = lib.types.nullOr aiCommon.dirOptionType;
+      default = null;
+      description = ''
+        Directory of `.md` rule files fanned out to every enabled AI app.
+        Each file becomes one entry in `ai.rules` keyed by the basename
+        minus `.md`. Collisions with explicit `ai.rules.<name>` entries
+        (or with `ai.<cli>.rules`) fail via the shared collision check.
+        Accepts either a Nix path literal or `{ path, filter? }` where
+        `filter : name → bool` (default: keep `.md` files). The source
+        directory is NOT taken over wholesale — other derivations can
+        still contribute to the same ecosystem rules dir via
+        `home.file.*` / `files.*` without conflict.
+      '';
+      example = lib.literalExpression ''
+        ./rules                                  # keep defaults
+        # or
+        {
+          path = ./rules;
+          filter = name: !(lib.hasSuffix ".bk" name);
         }
       '';
     };
@@ -107,4 +136,16 @@ in {
       description = "Cross-app skills fanned out to every enabled AI app.";
     };
   };
+
+  # L1 → L2 fanout: expand `ai.rulesDir` into per-file entries
+  # on `ai.rules`. mkDefault priority lets explicit `ai.rules.<name>`
+  # contributions override (this is the L1→L2 fanout specifically,
+  # not a collision; collisions are handled at the L2↔L3 boundary
+  # by the factory's mergeWithCollisionCheck helper).
+  #
+  # Emission logic lives at L4 inside each per-CLI factory. This
+  # layer only reshapes the L1 Dir option into L2 per-file entries.
+  config.ai.rules = lib.mkIf (config.ai.rulesDir != null) (
+    lib.mapAttrs (_: lib.mkDefault) (dirHelpers.rulesFromDir config.ai.rulesDir)
+  );
 }

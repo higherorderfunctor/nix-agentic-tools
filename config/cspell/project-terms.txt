@@ -45,6 +45,7 @@ derefs
 devenv
 devshell
 difftool
+direntry
 direnv
 direnvrc
 docnix
