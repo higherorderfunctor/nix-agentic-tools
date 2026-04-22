@@ -138,6 +138,65 @@ merge them so they're available for log-pulling + eval-tracing
 tomorrow. All other update PRs were merged (12 commits
 fast-forwarded into the refactor branch).
 
+**Observation 3 — three "late" update PRs after the merge batch**
+
+About 30 min after the first batch of update PRs merged, three
+more update PRs opened on the same schedule-like cadence:
+
+- #53 `chore(overlays): update agnix`
+- #54 `chore(overlays): update context7-mcp`
+- #55 `chore(overlays): update modelcontextprotocol-all-mcps`
+
+Suspicious because:
+
+- Those three overlays were NOT in the earlier run less than
+  30 min prior.
+- All three have had no upstream activity for the past 4–5
+  days (since user's last manual update).
+- It's unusual for three unrelated overlays to all show a new
+  rev in a single fresh run after showing nothing for days.
+
+Hypotheses (to investigate, NOT decisions):
+
+- Legitimate: three upstreams did in fact publish new
+  commits in the last 30 min and the previous run simply
+  missed them due to timing (ran before the pushes landed).
+- Bug: the Update pipeline has a state-caching or skip-list
+  issue that suppressed these three during the earlier run
+  and only "unlocked" them after the first batch of merges.
+- Bug: merging the earlier batch changed something in
+  worktree setup (e.g., reset state, freshly-fetched refs)
+  that the Update logic was previously using to skip these.
+
+**Follow-up data point:** all three late PRs (#53, #54, #55)
+failed CI — **all due to hash mismatches**. That shifts the
+hypothesis balance:
+
+- Less likely pure-timing coincidence (three simultaneous
+  legitimate upstream pushes that all produce bad hashes is
+  a weird coincidence).
+- More likely a rev-bump / hash-write ordering bug in
+  `dev/scripts/update-pkg.sh`: the script does (1) rev sed,
+  (2) `nix flake prefetch` for src hash, (3) hash sed,
+  (4) `nix-update --version skip` for dep hashes. A
+  disturbance in that sequence (e.g., state carryover from
+  the prior run, concurrent worktree cleanup, substituter
+  mid-flight) would yield a committed rev with a hash that
+  doesn't match.
+- Possibly intersects with SYMPTOM B's "path builder.sh is
+  not valid" class — if the substituter raced mid-prefetch,
+  the computed hash could correspond to a partial closure.
+
+**User direction: "just want to understand."** Pull the
+`nix-update` output + the committed overlay .nix diffs for
+all three, plus the CI failure logs. Look for: (a) which
+hash field is wrong (src / cargo / pnpm / vendor), (b) whether
+the rev in the commit matches the rev the script intended to
+land (rev-write succeeded, hash-write used stale value), (c)
+whether the same hash appears verbatim in any OTHER overlay
+(copy-paste bug from the prior batch). Cross-reference against
+the Update job's ninja DAG state.
+
 ### 📋 NEXT SESSION — suggested order
 
 1. **CI triage.** Start with the two un-merged PRs (openmem +
@@ -149,17 +208,25 @@ fast-forwarded into the refactor branch).
    - Cross-reference against SYMPTOM A (stale paths, fixed
      by `e65a012`) and SYMPTOM B (ruamel fetchhg /
      unidentified CI environment delta).
-2. **Understand the Update-job vs PR-CI parity gap** before
+2. **Investigate Observation 3 (late PRs #53/#54/#55).** Pull
+   the Update job logs for the agnix / context7-mcp /
+   modelcontextprotocol-all-mcps targets across the earlier
+   run AND the later run. Determine whether the earlier run
+   genuinely saw no new rev (timing) or whether it skipped
+   them (bug). If a bug, the fix likely sits in the rev-bump
+   logic in `dev/scripts/update-pkg.sh` or in the ninja DAG
+   state reuse.
+3. **Understand the Update-job vs PR-CI parity gap** before
    making any architectural change. The observations above
    are the entry points — don't jump to fixes.
-3. **SYMPTOM B.** If the triage above converges on the ruamel
+4. **SYMPTOM B.** If the triage above converges on the ruamel
    / builder.sh / cache story from §10.2, candidate defensive
    fixes there (a/b/c) become relevant. Otherwise it's a
    different class of bug.
-4. **SYMPTOM A CI verification.** Look for the enterTest
+5. **SYMPTOM A CI verification.** Look for the enterTest
    assertion fix landing green on main via the next PR that
    lands (passive observation, not an explicit task).
-5. Declare the refactor complete once CI is green on the
+6. Declare the refactor complete once CI is green on the
    branch.
 
 ### Diff of audit outcomes vs pre-activation snapshot
