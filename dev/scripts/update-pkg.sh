@@ -62,6 +62,17 @@ log_info "Running nix-update..."
 if ! (
   cd "$wt"
 
+  # Prime the src derivation file in the store. `nix flake prefetch`
+  # (Phase 0) populates the source output but does NOT create a .drv
+  # for the fetchFromGitHub derivation — .drv files are machine-local
+  # and not produced by the flake-prefetch builtin. nix-update's
+  # internal nix-instantiate then fails at `readFile "${src}/..."`
+  # with "path '...source.drv' is not valid" because readFile's
+  # context-realization needs the drv registered. A single
+  # `nix eval` on drvPath instantiates the derivation file without
+  # building the output, which is enough to unblock nix-update.
+  nix eval --raw ".#$name.src.drvPath" >/dev/null 2>&1 || true
+
   # shellcheck disable=SC2086
   nix run --inputs-from . nix-update -- --flake "$name" --system "$system" $extra_flags 2>&1 | tee "$version_file"
   # pipefail propagates nix-update failures through tee
