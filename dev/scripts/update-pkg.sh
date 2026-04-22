@@ -90,6 +90,12 @@ if ! (
   run_build nix build ".#$name" --no-link --log-format bar-with-logs
 ); then
   version_detail=$(parse_pkg_version "$version_file")
+  # Roll back the Phase 0 rev+src commit so a held-back package does
+  # NOT leave a branch ahead of base. The PR-creation step in
+  # .github/workflows/update.yml filters on `wt_head == base_head`, so
+  # resetting here is what makes held-back packages skip their PR.
+  # Successful targets keep their commit and open their PR as before.
+  git -C "$wt" reset --hard "$base_head"
   report_held_back "$name" "nix-update or build failed" "$version_detail"
   exit 0
 fi
