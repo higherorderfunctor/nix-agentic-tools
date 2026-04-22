@@ -83,20 +83,25 @@ lib.ai.app.mkAiApp {
       description = "Environment variables exported when launching copilot (HM: via wrapper; devenv: via native env).";
     };
     # Inline agent markdown content. Written under
-    # `<configDir>/agents/<name>.md` in both backends. Mutually
-    # exclusive with `agentsDir` (enforced by assertion below).
+    # `<configDir>/agents/<name>.md` in both backends. Merged with
+    # top-level `ai.agents`; collisions fail. Can also be populated
+    # from a directory via `agentsDir` below (same L2b→L3 pattern as
+    # `rulesDir` / `skillsDir`).
     agents = lib.mkOption {
       type = lib.types.attrsOf lib.types.lines;
       default = {};
       description = "Inline agent markdown (written to <configDir>/agents/<name>.md).";
     };
-    # External agents directory. Symlinked at `<configDir>/agents`
-    # when set; walked recursively in devenv (via the same walker as
-    # skills) because devenv's `files.*.source` can't recurse.
+    # Directory of `.md` agent files. Each file becomes one entry
+    # in `ai.copilot.agents`, keyed by basename minus `.md`. Parity
+    # with `rulesDir` / `skillsDir`: expansion runs through the
+    # shared collision-as-failure check, and the on-disk emission
+    # dir is NOT taken over wholesale (other derivations may still
+    # contribute files alongside).
     agentsDir = lib.mkOption {
-      type = lib.types.nullOr lib.types.path;
+      type = lib.types.nullOr (import ../../../lib/ai/ai-common.nix {inherit lib;}).dirOptionType;
       default = null;
-      description = "External directory of agent markdown files (symlinked into <configDir>/agents).";
+      description = "Directory of `.md` agent files (expanded into `ai.copilot.agents`).";
     };
   };
   hm = {
@@ -183,23 +188,26 @@ lib.ai.app.mkAiApp {
         if needsWrapper
         then wrappedPackage
         else cfg.package;
+      dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
     in
       lib.mkMerge [
+        # L2b → L3: expand `ai.copilot.agentsDir` into
+        # `ai.copilot.agents`. mkDefault priority; collisions with
+        # `ai.agents` go through the shared collision check.
+        (lib.mkIf (cfg.agentsDir != null) {
+          ai.copilot.agents = lib.mapAttrs (_: lib.mkDefault) (
+            dirHelpers.agentsFromDir cfg.agentsDir
+          );
+        })
         # Package installation — wrapped with symlinkJoin when env
         # vars or MCP servers are configured so the binary picks up
         # `--additional-mcp-config` and the requested env. Matches
         # the legacy modules/copilot-cli/default.nix wrapper shape.
         {home.packages = [copilotPackage];}
-        # Assertions: agents and agentsDir are mutually exclusive
-        # (matches legacy `mkExclusiveAssertion`).
-        {
-          assertions = [
-            {
-              assertion = !(cfg.agents != {} && cfg.agentsDir != null);
-              message = "ai.copilot: cannot set both `agents` and `agentsDir` — choose one.";
-            }
-          ];
-        }
+        # agents + agentsDir are no longer mutually exclusive — the
+        # Dir expansion feeds the same `ai.copilot.agents` pool via
+        # mkDefault priority, so explicit entries override Dir
+        # entries without a collision.
         # lsp-config.json — typed LSP server definitions for the
         # copilot CLI. Inlined via `text` so module-eval can assert
         # on content and we don't pay for a store build per eval.
@@ -217,15 +225,10 @@ lib.ai.app.mkAiApp {
             })
           mergedClaudeCopilotAgents;
         })
-        # External agents directory — symlinked wholesale via
-        # `recursive = true` so each file inside gets its own
-        # store symlink (Layout B).
-        (lib.mkIf (cfg.agentsDir != null) {
-          home.file."${cfg.configDir}/agents" = {
-            source = cfg.agentsDir;
-            recursive = true;
-          };
-        })
+        # External agents directory handled at L2b→L3 above —
+        # expansion runs through the existing per-file agents emission
+        # instead of a wholesale Layout B symlink. Other derivations
+        # may still contribute files to `${cfg.configDir}/agents/`.
         # mcp-config.json — static write of the merged MCP server
         # pool. The symlinkJoin wrapper above points
         # `--additional-mcp-config` at this exact path so copilot
@@ -381,22 +384,23 @@ lib.ai.app.mkAiApp {
         if builtins.isPath rule.text
         then builtins.readFile rule.text
         else rule.text;
+      dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
     in
       lib.mkMerge [
+        # L2b → L3: expand `ai.copilot.agentsDir` into
+        # `ai.copilot.agents` (parity with HM side).
+        (lib.mkIf (cfg.agentsDir != null) {
+          ai.copilot.agents = lib.mapAttrs (_: lib.mkDefault) (
+            dirHelpers.agentsFromDir cfg.agentsDir
+          );
+        })
         # Package installation — devenv projects are shell-scoped, so
         # env exports go in the devenv `env` attrset directly rather
         # than an HM-style symlinkJoin wrapper. The binary is enough
         # here; env wiring is handled by the `env = ...` merge below.
         {packages = [cfg.package];}
-        # Assertions: agents and agentsDir are mutually exclusive.
-        {
-          assertions = [
-            {
-              assertion = !(cfg.agents != {} && cfg.agentsDir != null);
-              message = "ai.copilot: cannot set both `agents` and `agentsDir` — choose one.";
-            }
-          ];
-        }
+        # agents + agentsDir are no longer mutually exclusive
+        # (parity with HM side).
         # Environment variables — devenv has a native `env` attrset
         # so no wrapper is required. `mkDefault` lets consumers
         # override per-project via explicit `env.FOO = ...`.
@@ -419,26 +423,8 @@ lib.ai.app.mkAiApp {
             })
           mergedClaudeCopilotAgents;
         })
-        # External agents directory — devenv's `files.*.source`
-        # can't recurse, so we walk the tree at eval time and produce
-        # one `files.*` entry per leaf under `${projectDir}/agents/`.
-        # Filenames in the external dir are preserved as-is (user
-        # supplies `.agent.md`-suffixed files if they want that
-        # convention).
-        (lib.mkIf (cfg.agentsDir != null) (let
-          walkDir = prefix: dir:
-            lib.concatMapAttrs (
-              name: kind:
-                if kind == "directory"
-                then walkDir "${prefix}/${name}" (dir + "/${name}")
-                else if kind == "regular" || kind == "symlink"
-                then {"${prefix}/${name}".source = dir + "/${name}";}
-                else {}
-            )
-            (builtins.readDir dir);
-        in {
-          files = walkDir "${cfg.projectDir}/agents" cfg.agentsDir;
-        }))
+        # agentsDir handled at L2b→L3 above — expansion runs
+        # through the existing per-file agents emission.
         # Skills via the user-space walker. devenv's `files.*.source`
         # cannot walk a directory recursively (see the devenv files
         # internals fragment), so we enumerate leaves at eval time

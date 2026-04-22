@@ -2130,6 +2130,92 @@ in {
       result.config.assertions
   );
 
+  # ── ai.*.agentsDir Dir helper ──────────────────────────────
+  # Claude + Copilot only; Kiro is excluded because its agent
+  # shape is JSON (separate `ai.kiro.agents` / `ai.kiro.agentsDir`
+  # surfaces handle that).
+
+  # Path-only form: `ai.claude.agentsDir = ./fixtures/claude-agents;`
+  # expands to two entries (agent-one, agent-two). Emission lands
+  # at `.claude/agents/<name>.md` via the existing per-agent file
+  # emission in mkClaude.
+  module-claude-agentsdir-path-form = mkTest "claude-agentsdir-path-form" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          agentsDir = ./fixtures/claude-agents;
+        };
+      };
+      upstream = result.config.programs.claude-code.agents or {};
+    in
+      upstream ? agent-one && upstream ? agent-two
+  );
+
+  # Submodule form with filter.
+  module-claude-agentsdir-filter = mkTest "claude-agentsdir-filter" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          agentsDir = {
+            path = ./fixtures/claude-agents;
+            filter = name: name == "agent-one.md";
+          };
+        };
+      };
+      upstream = result.config.programs.claude-code.agents or {};
+    in
+      upstream ? agent-one && !(upstream ? agent-two)
+  );
+
+  # Top-level `ai.agentsDir` fans out to every enabled agent-
+  # consumer (Claude, Copilot — NOT kiro).
+  module-top-level-agentsdir-fans-out-to-claude = mkTest "top-level-agentsdir-fans-out-to-claude" (
+    let
+      result = evalHm {
+        ai = {
+          claude.enable = true;
+          agentsDir = ./fixtures/claude-agents;
+        };
+      };
+      upstream = result.config.programs.claude-code.agents or {};
+    in
+      upstream ? agent-one && upstream ? agent-two
+  );
+
+  # Collision between Dir-generated and explicit top-level single.
+  module-claude-agentsdir-collides-with-explicit-single = mkTest "claude-agentsdir-collides-with-explicit-single" (
+    let
+      result = evalHm {
+        ai.agents.agent-one = "Explicit top-level agent";
+        ai.claude = {
+          enable = true;
+          agentsDir = ./fixtures/claude-agents;
+        };
+      };
+    in
+      lib.any
+      (a: lib.hasInfix "agents 'agent-one' declared in both" a.message && !a.assertion)
+      result.config.assertions
+  );
+
+  # Copilot parity (HM side).
+  module-copilot-agentsdir-path-form = mkTest "copilot-agentsdir-path-form" (
+    let
+      result = evalHm {
+        ai.copilot = {
+          enable = true;
+          agentsDir = ./fixtures/claude-agents;
+        };
+      };
+      files = result.config.home.file;
+    in
+      files
+      ? ".copilot/agents/agent-one.md"
+      && files ? ".copilot/agents/agent-two.md"
+  );
+
   # ── sourcePath rollback regression guards ──────────────────────
   # `sourcePath` was introduced in fab4e5c and rolled back in this
   # commit per the ai-factory-collision refactor plan §6 (commit 2).

@@ -113,8 +113,21 @@ in {
         Kiro intentionally excluded — Kiro's agent format is JSON
         with different semantic fields; use `ai.kiro.agents`
         directly for that ecosystem. Per-app overrides
-        (ai.<cli>.agents) merge on top and win on conflict.
+        (ai.<cli>.agents) merge on top; collisions fail.
       '';
+    };
+
+    agentsDir = lib.mkOption {
+      type = lib.types.nullOr aiCommon.dirOptionType;
+      default = null;
+      description = ''
+        Directory of `.md` agent files fanned out to Claude and
+        Copilot. Each file becomes one entry in `ai.agents` keyed
+        by the basename minus `.md`. Kiro intentionally excluded
+        (different JSON shape — use `ai.kiro.agentsDir` which
+        exists for the kiro-specific agents dir).
+      '';
+      example = lib.literalExpression ''./agents'';
     };
 
     environmentVariables = lib.mkOption {
@@ -165,12 +178,15 @@ in {
   #
   # Emission logic lives at L4 inside each per-CLI factory. This
   # layer only reshapes the L1 Dir option into L2 per-file entries.
-  config = {
-    ai.rules = lib.mkIf (config.ai.rulesDir != null) (
+  config.ai = {
+    rules = lib.mkIf (config.ai.rulesDir != null) (
       lib.mapAttrs (_: lib.mkDefault) (dirHelpers.rulesFromDir config.ai.rulesDir)
     );
-    ai.skills = lib.mkIf (config.ai.skillsDir != null) (
+    skills = lib.mkIf (config.ai.skillsDir != null) (
       lib.mapAttrs (_: lib.mkDefault) (dirHelpers.skillsFromDir config.ai.skillsDir)
+    );
+    agents = lib.mkIf (config.ai.agentsDir != null) (
+      lib.mapAttrs (_: lib.mkDefault) (dirHelpers.agentsFromDir config.ai.agentsDir)
     );
   };
 }

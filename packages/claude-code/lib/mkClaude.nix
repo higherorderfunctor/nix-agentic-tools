@@ -98,10 +98,21 @@ lib.ai.app.mkAiApp {
       default = {};
       description = ''
         Claude-specific agent markdown (merged with top-level
-        `ai.agents`; per-CLI wins on conflict). Routed to
+        `ai.agents`; collisions fail). Routed to
         `programs.claude-code.agents`; upstream writes them under
         `~/.claude/agents/<name>.md`. HM only — upstream devenv
         `claude.code` has no agents surface.
+      '';
+    };
+    agentsDir = lib.mkOption {
+      type = lib.types.nullOr (import ../../../lib/ai/ai-common.nix {inherit lib;}).dirOptionType;
+      default = null;
+      description = ''
+        Claude-specific directory of `.md` agent files. Each file
+        becomes one entry in `ai.claude.agents` keyed by basename
+        minus `.md`. Accepts a path literal or
+        `{ path, filter? }` (filter: name → bool, default keeps
+        `.md`).
       '';
     };
     commands = lib.mkOption {
@@ -169,8 +180,19 @@ lib.ai.app.mkAiApp {
         if builtins.isPath rule.text
         then builtins.readFile rule.text
         else rule.text;
+      dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
     in
       lib.mkMerge [
+        # L2b → L3: expand `ai.claude.agentsDir` into per-CLI
+        # `ai.claude.agents`. mkDefault lets explicit
+        # `ai.claude.agents.<name>` entries win within this layer;
+        # collisions with `ai.agents.<name>` still go through the
+        # shared collision check in the transform.
+        (lib.mkIf (cfg.agentsDir != null) {
+          ai.claude.agents = lib.mapAttrs (_: lib.mkDefault) (
+            dirHelpers.agentsFromDir cfg.agentsDir
+          );
+        })
         # Delegate to upstream programs.claude-code.* where upstream
         # provides the capability. mkDefault lets consumers override.
         {
