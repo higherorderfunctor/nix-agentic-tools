@@ -20,7 +20,7 @@
 #   (C) External HTTP — for already-running services
 #       { type = "http"; url = "..."; }
 #       Pass-through. Used by services.mcp-servers outputs and
-#       lib.externalServers.
+#       lib.ai.externalServers.
 {lib, ...}: {
   options = {
     type = lib.mkOption {

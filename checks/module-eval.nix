@@ -11,22 +11,25 @@
   # entries run in a real HM eval context; this is enough to prove
   # the option tree + config block assemble correctly.
   #
-  # Also extend lib with lib.ai so mkClaude.nix can call
-  # lib.ai.app.mkAiApp and lib.ai.transformers.claude. mcpLib is
-  # exported as top-level helpers (lib.mkStdioEntry, lib.renderServer)
-  # to mirror the flake's `baseLib` shape.
+  # lib.ai.* mirrors the flake's `baseLib` shape: mcp helpers,
+  # fragment helpers, and the app factory primitives are all nested
+  # under `lib.ai.*`. No top-level `lib.<helper>` exports exist.
   mcpLib = import ./../lib/mcp.nix {inherit lib;};
+  aiBase = import ./../lib/ai {inherit lib;};
   hmLib =
     lib
     // {
-      ai = import ./../lib/ai {inherit lib;};
+      ai =
+        aiBase
+        // {
+          inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig renderServer;
+        };
       hm = {
         dag = {
           entryAfter = _: text: {inherit text;};
           entryBefore = _: text: {inherit text;};
         };
       };
-      inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig renderServer;
     };
 
   # Stub HM options so the config callback in mkClaude.nix can set

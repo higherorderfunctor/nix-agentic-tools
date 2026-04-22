@@ -132,7 +132,7 @@
       fragments = import ./lib/fragments.nix {inherit lib;};
       devshellLib = import ./lib/devshell.nix {inherit lib;};
       mcpLib = import ./lib/mcp.nix {inherit lib;};
-      ai = import ./lib/ai {inherit lib;};
+      aiBase = import ./lib/ai {inherit lib;};
 
       # Cross-package presets (compose fragments from multiple
       # packages). Individual packages expose their own presets in
@@ -164,21 +164,28 @@
           description = "Full nix-agentic-tools dev standards";
         };
       };
+      # Every flake-level helper lives under `lib.ai.*`. There are no
+      # top-level `lib.<helper>` exports — consumers access everything
+      # via `inputs.nix-agentic-tools.lib.ai.<helper>`.
       baseLib = {
-        inherit ai fragments presets;
-        inherit (devshellLib) mkAgenticShell;
-        inherit (fragments) compose mkFragment mkFrontmatter render;
-        inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig renderServer;
-        mkMcpConfig = entries: {mcpServers = entries;};
-        mapTools = f: lib.concatLists (lib.mapAttrsToList (server: tools: map (tool: f server tool) tools));
-        externalServers = {
-          aws-mcp = {
-            type = "http";
-            url = "https://knowledge-mcp.global.api.aws";
+        ai =
+          aiBase
+          // {
+            inherit fragments presets;
+            inherit (devshellLib) mkAgenticShell;
+            inherit (fragments) compose mkFragment mkFrontmatter render;
+            inherit (mcpLib) loadServer mkPackageEntry mkStdioEntry mkHttpEntry mkStdioConfig renderServer;
+            mkMcpConfig = entries: {mcpServers = entries;};
+            mapTools = f: lib.concatLists (lib.mapAttrsToList (server: tools: map (tool: f server tool) tools));
+            externalServers = {
+              aws-mcp = {
+                type = "http";
+                url = "https://knowledge-mcp.global.api.aws";
+              };
+            };
+            # `gitConfig` / `gitConfigFull` defer to Chunk 8 (depends on
+            # packages/stacked-workflows/modules/homeManager/git-config*.nix).
           };
-        };
-        # `gitConfig` / `gitConfigFull` defer to Chunk 8 (depends on
-        # packages/stacked-workflows/modules/homeManager/git-config*.nix).
       };
     in
       lib.recursiveUpdate baseLib packageLibContributions;

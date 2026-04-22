@@ -5,15 +5,15 @@
 # schema (type, package, command, args, env, settings, url).
 #
 # This is a newer API under `lib.ai.mcpServers.*`. It is SEPARATE from
-# the live, consumer-facing `lib.mkStdioEntry` / `lib.loadServer`
+# the live, consumer-facing `lib.ai.mkStdioEntry` / `lib.ai.loadServer`
 # path which already has working typed settings + auth
 # (`GITHUB_PERSONAL_ACCESS_TOKEN` via `settings.credentials.file` /
 # `settings.credentials.helper` sops-nix pass-through) declared in
 # `modules/mcp-servers/servers/github-mcp.nix`. nixos-config uses
-# the `lib.mkStdioEntry` path today at the sentinel commit
+# the `lib.ai.mkStdioEntry` path today at the sentinel commit
 # `f341bcb`:
 #
-#   github-mcp = inputs.nix-agentic-tools.lib.mkStdioEntry pkgs {
+#   github-mcp = inputs.nix-agentic-tools.lib.ai.mkStdioEntry pkgs {
 #     package = pkgs.nix-mcp-servers.github-mcp;
 #     settings.credentials.file =
 #       config.sops.secrets."${username}-github-api-key".path;
@@ -38,7 +38,7 @@ lib.ai.mcpServer.mkMcpServer {
     args = [];
   };
   # Typed settings + auth live in modules/mcp-servers/servers/github-mcp.nix,
-  # consumed via lib.mkStdioEntry. A5 relocates that module to
+  # consumed via lib.ai.mkStdioEntry. A5 relocates that module to
   # packages/github-mcp/modules/mcp-server.nix.
   options = {};
 }

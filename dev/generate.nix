@@ -570,7 +570,7 @@
     | Git tool packages | Install manually | Overlay + `nix build` | Overlay + `nix build` |
     | Unified AI config | N/A | `ai.*` fans out to all CLIs | `ai.*` fans out to all CLIs |
     | LSP server config | N/A | `ai.lspServers.*` | `ai.lspServers.*` |
-    | Fragment composition | N/A | `lib.compose` | `lib.compose` |
+    | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
 
     ## Configuration
 

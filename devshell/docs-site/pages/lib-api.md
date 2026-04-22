@@ -1,10 +1,8 @@
 # lib API
 
-Public functions exported by `inputs.nix-agentic-tools.lib`, organized
-by source module. This page documents the **current** exported surface
-on this branch — additional functions exist in the `lib/` source files
-but are not yet exported via `flake.nix`. As later chunks land, the
-flake `lib` output expands and this page grows with it.
+Public functions exported by `inputs.nix-agentic-tools.lib.ai`, organized
+by source module. Every flake-level helper lives under `lib.ai.*` —
+there are no top-level `lib.<helper>` exports.
 
 ## lib/fragments.nix
 
@@ -80,8 +78,7 @@ attrset. Used internally by ecosystem generators.
 
 ## lib/mcp.nix
 
-MCP server entry builders. Exported via top-level `lib.<name>`
-(no `lib.mcp.*` sub-namespace).
+MCP server entry builders. Exported under `lib.ai.<name>`.
 
 ### loadServer
 
@@ -175,14 +172,14 @@ Static registry of remote MCP server URLs that don't ship with their
 own package. Currently keyed by provider:
 
 ```nix
-inputs.nix-agentic-tools.lib.externalServers.aws-mcp
+inputs.nix-agentic-tools.lib.ai.externalServers.aws-mcp
 # => { type = "http"; url = "https://knowledge-mcp.global.api.aws"; }
 ```
 
 ## presets
 
 ```nix
-inputs.nix-agentic-tools.lib.presets.nix-agentic-tools-dev
+inputs.nix-agentic-tools.lib.ai.presets.nix-agentic-tools-dev
 ```
 
 Composed `Fragment` containing all coding-standards content
@@ -195,7 +192,7 @@ projects.
 
 Functions defined in `lib/mcp.nix`, `lib/ai-common.nix`, and
 `lib/hm-helpers.nix` that are NOT yet exported through the flake
-`lib` output (e.g., `mkSecretsWrapper`, `mkCredentialsOption`,
+`lib.ai` output (e.g., `mkSecretsWrapper`, `mkCredentialsOption`,
 `mkLspConfig`, `mkContentOption`, `mkSkillEntries`) become public
 as later chunks land their consumers and promote them to the
 flake export surface.

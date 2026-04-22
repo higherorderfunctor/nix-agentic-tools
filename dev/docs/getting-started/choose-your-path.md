@@ -69,7 +69,7 @@ and instruction files.
 ```nix
 let
   at = inputs.nix-agentic-tools;
-  entry = at.lib.mkPackageEntry pkgs.nix-mcp-servers.github-mcp;
+  entry = at.lib.ai.mkPackageEntry pkgs.nix-mcp-servers.github-mcp;
 in
   # entry = { type = "stdio"; command = "/nix/store/.../github-mcp-server"; args = [...]; }
 ```

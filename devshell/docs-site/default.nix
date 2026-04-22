@@ -216,10 +216,10 @@ _: final: _prev: let
     # => ["start-mcp-server"]
     ```
 
-    Use `lib.mkPackageEntry` to derive a complete MCP config entry:
+    Use `lib.ai.mkPackageEntry` to derive a complete MCP config entry:
 
     ```nix
-    lib.mkPackageEntry pkgs.ai.mcpServers.github-mcp
+    lib.ai.mkPackageEntry pkgs.ai.mcpServers.github-mcp
     # => { type = "stdio"; command = "/nix/store/.../github-mcp-server"; args = [...]; }
     ```
   '';
@@ -271,7 +271,7 @@ _: final: _prev: let
 
     # DevEnv (inline per-CLI)
     claude.code.mcpServers.github-mcp =
-      inputs.nix-agentic-tools.lib.mkStdioEntry pkgs {
+      inputs.nix-agentic-tools.lib.ai.mkStdioEntry pkgs {
         package = pkgs.ai.mcpServers.github-mcp;
         settings.credentials.file = "/run/secrets/github-token";
       };
