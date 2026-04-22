@@ -2065,6 +2065,71 @@ in {
       && !(lib.any (p: lib.hasSuffix ".md.md" p) (lib.attrNames files))
   );
 
+  # ── ai.*.skillsDir Dir helper ──────────────────────────────
+  # Directory-of-directories; each immediate subdir becomes a
+  # skill. See lib/ai/dir-helpers.nix:skillsFromDir.
+
+  # Path-only form fans every subdir into ai.claude.skills.
+  module-claude-skillsdir-path-form = mkTest "claude-skillsdir-path-form" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          skillsDir = ./fixtures/claude-skills;
+        };
+      };
+      upstream = result.config.programs.claude-code.skills or {};
+    in
+      upstream ? skill-a && upstream ? skill-b
+  );
+
+  # Submodule form with a filter that excludes skill-b.
+  module-claude-skillsdir-filter = mkTest "claude-skillsdir-filter" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          skillsDir = {
+            path = ./fixtures/claude-skills;
+            filter = name: name == "skill-a";
+          };
+        };
+      };
+      upstream = result.config.programs.claude-code.skills or {};
+    in
+      upstream ? skill-a && !(upstream ? skill-b)
+  );
+
+  # Top-level `ai.skillsDir` fans out to every enabled CLI.
+  module-top-level-skillsdir-fans-out-to-claude = mkTest "top-level-skillsdir-fans-out-to-claude" (
+    let
+      result = evalHm {
+        ai = {
+          claude.enable = true;
+          skillsDir = ./fixtures/claude-skills;
+        };
+      };
+      upstream = result.config.programs.claude-code.skills or {};
+    in
+      upstream ? skill-a && upstream ? skill-b
+  );
+
+  # Collision between Dir-generated and explicit single.
+  module-claude-skillsdir-collides-with-explicit-single = mkTest "claude-skillsdir-collides-with-explicit-single" (
+    let
+      result = evalHm {
+        ai.skills.skill-a = ./fixtures/claude-skills/skill-a;
+        ai.claude = {
+          enable = true;
+          skillsDir = ./fixtures/claude-skills;
+        };
+      };
+    in
+      lib.any
+      (a: lib.hasInfix "skills 'skill-a' declared in both" a.message && !a.assertion)
+      result.config.assertions
+  );
+
   # ── sourcePath rollback regression guards ──────────────────────
   # `sourcePath` was introduced in fab4e5c and rolled back in this
   # commit per the ai-factory-collision refactor plan §6 (commit 2).

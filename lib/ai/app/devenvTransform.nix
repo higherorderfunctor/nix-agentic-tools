@@ -108,6 +108,15 @@ in {
         default = {};
         description = "${appRecord.name}-specific skills.";
       };
+      skillsDir = lib.mkOption {
+        type = lib.types.nullOr aiCommon.dirOptionType;
+        default = null;
+        description = ''
+          ${appRecord.name}-specific directory-of-directories; each
+          immediate subdirectory becomes one entry in
+          `ai.${appRecord.name}.skills` keyed by the subdir name.
+        '';
+      };
     }
     // (appRecord.options or {})
     // devenvOptions;
@@ -123,6 +132,11 @@ in {
       (lib.mkIf (cfg.rulesDir != null) {
         ai.${appRecord.name}.rules = lib.mapAttrs (_: lib.mkDefault) (
           dirHelpers.rulesFromDir cfg.rulesDir
+        );
+      })
+      (lib.mkIf (cfg.skillsDir != null) {
+        ai.${appRecord.name}.skills = lib.mapAttrs (_: lib.mkDefault) (
+          dirHelpers.skillsFromDir cfg.skillsDir
         );
       })
       (lib.mkIf cfg.enable customConfig)

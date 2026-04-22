@@ -122,7 +122,17 @@ in {
       skills = lib.mkOption {
         type = lib.types.attrsOf lib.types.path;
         default = {};
-        description = "${appRecord.name}-specific skills (merged with top-level ai.skills; per-app wins).";
+        description = "${appRecord.name}-specific skills (merged with top-level ai.skills; collisions fail).";
+      };
+      skillsDir = lib.mkOption {
+        type = lib.types.nullOr aiCommon.dirOptionType;
+        default = null;
+        description = ''
+          ${appRecord.name}-specific directory-of-directories; each
+          immediate subdirectory becomes one entry in
+          `ai.${appRecord.name}.skills` keyed by the subdir name.
+          Accepts a path literal or `{ path, filter? }`.
+        '';
       };
     }
     // (appRecord.options or {})
@@ -143,6 +153,11 @@ in {
       (lib.mkIf (cfg.rulesDir != null) {
         ai.${appRecord.name}.rules = lib.mapAttrs (_: lib.mkDefault) (
           dirHelpers.rulesFromDir cfg.rulesDir
+        );
+      })
+      (lib.mkIf (cfg.skillsDir != null) {
+        ai.${appRecord.name}.skills = lib.mapAttrs (_: lib.mkDefault) (
+          dirHelpers.skillsFromDir cfg.skillsDir
         );
       })
       (lib.mkIf cfg.enable customConfig)

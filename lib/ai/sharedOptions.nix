@@ -135,17 +135,42 @@ in {
       default = {};
       description = "Cross-app skills fanned out to every enabled AI app.";
     };
+
+    skillsDir = lib.mkOption {
+      type = lib.types.nullOr aiCommon.dirOptionType;
+      default = null;
+      description = ''
+        Directory-of-directories; each immediate subdirectory becomes
+        one entry in `ai.skills` keyed by the subdir name. Collisions
+        with explicit `ai.skills.<name>` entries (or with
+        `ai.<cli>.skills`) fail via the shared collision check. The
+        default filter accepts every subdirectory; supply a
+        `{ path, filter? }` submodule with `filter : name → bool` to
+        exclude specific subdirs.
+      '';
+      example = lib.literalExpression ''
+        ./skills
+        # or
+        { path = ./skills; filter = name: name != "draft"; }
+      '';
+    };
   };
 
-  # L1 → L2 fanout: expand `ai.rulesDir` into per-file entries
-  # on `ai.rules`. mkDefault priority lets explicit `ai.rules.<name>`
-  # contributions override (this is the L1→L2 fanout specifically,
-  # not a collision; collisions are handled at the L2↔L3 boundary
-  # by the factory's mergeWithCollisionCheck helper).
+  # L1 → L2 fanout: expand Dir options into per-file entries on
+  # the matching L2 pools. mkDefault priority lets explicit
+  # `ai.<pool>.<name>` contributions override (this is the L1→L2
+  # fanout specifically, not a collision; collisions are handled
+  # at the L2↔L3 boundary by the factory's mergeWithCollisionCheck
+  # helper).
   #
   # Emission logic lives at L4 inside each per-CLI factory. This
   # layer only reshapes the L1 Dir option into L2 per-file entries.
-  config.ai.rules = lib.mkIf (config.ai.rulesDir != null) (
-    lib.mapAttrs (_: lib.mkDefault) (dirHelpers.rulesFromDir config.ai.rulesDir)
-  );
+  config = {
+    ai.rules = lib.mkIf (config.ai.rulesDir != null) (
+      lib.mapAttrs (_: lib.mkDefault) (dirHelpers.rulesFromDir config.ai.rulesDir)
+    );
+    ai.skills = lib.mkIf (config.ai.skillsDir != null) (
+      lib.mapAttrs (_: lib.mkDefault) (dirHelpers.skillsFromDir config.ai.skillsDir)
+    );
+  };
 }
