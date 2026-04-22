@@ -101,6 +101,7 @@ in {
         ".*\\.lock$"
         "^config/cspell/"
         "^docs/ai-factory-collision-refactor-plan\\.md$"
+        "^docs/monorepo-restructure-assessment\\.md$"
         "^docs/overnight-.*\\.md$"
         "^docs/plan\\.md$"
       ];

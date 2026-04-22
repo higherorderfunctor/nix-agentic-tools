@@ -15,6 +15,7 @@
     "*.lock",
     "*.png",
     "docs/ai-factory-collision-refactor-plan.md",
+    "docs/monorepo-restructure-assessment.md",
     "docs/plan.md",
     "overlays/sources",
     "result"
