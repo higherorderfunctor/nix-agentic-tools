@@ -38,6 +38,15 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # Deliberately different nixpkgs pin used ONLY by the
+    # `checks.cache-hit-parity` regression gate to simulate a
+    # consumer whose own nixpkgs diverges from ours. NO follows —
+    # the whole point is that this pin drifts from `nixpkgs`. If
+    # every overlay package uses `ourPkgs = import inputs.nixpkgs
+    # { ... }` for build inputs (not `final`/`prev`), the store
+    # paths stay byte-identical across the two pins and cachix
+    # hits work for consumers regardless of their own pin.
+    nixpkgs-test.url = "github:NixOS/nixpkgs/nixos-25.05";
     # NuschtOS options search — client-side search UI embedded at
     # /options/ in the built doc site. Generates a multi-scope
     # options browser from nixosOptionsDoc JSON output.
@@ -193,11 +202,12 @@
     checks = forAllSystems (system: let
       pkgs = pkgsFor system;
       bareCommandsCheck = {bare-commands = import ./checks/bare-commands.nix {inherit pkgs;};};
+      cacheHitParityCheck = import ./checks/cache-hit-parity.nix {inherit inputs lib pkgs self;};
       factoryChecks = import ./checks/factory-eval.nix {inherit lib pkgs;};
       fragmentsChecks = import ./checks/fragments-eval.nix {inherit lib pkgs;};
       moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs;};
     in
-      bareCommandsCheck // fragmentsChecks // factoryChecks // moduleChecks);
+      bareCommandsCheck // cacheHitParityCheck // fragmentsChecks // factoryChecks // moduleChecks);
 
     # devShells.default provided by devenv.lib.mkShell (see devenv.nix).
     # devShells.ci is a lightweight shell for the CI update pipeline.
