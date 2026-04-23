@@ -17,7 +17,7 @@ inputs:
       nixpkgs:
         follows: nixpkgs
   mcp-nixos:
-    url: github:utensils/mcp-nixos/def17aaae6677a222fa077b26dd1e77143e1e838
+    url: github:utensils/mcp-nixos/8e6c89125aef334e3f333c2525c83e45f84247b2
     inputs:
       nixpkgs:
         follows: nixpkgs
