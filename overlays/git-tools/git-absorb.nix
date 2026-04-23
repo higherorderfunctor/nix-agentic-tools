@@ -40,7 +40,8 @@ in
         a
         // {
           version = vu.mkVersion {
-            upstream = vu.readCargoVersion "${src}/Cargo.toml";
+            # upstream: readCargoVersion @ Cargo.toml
+            upstream = "0.9.0";
             inherit rev;
           };
           inherit src;

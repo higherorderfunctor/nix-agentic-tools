@@ -26,7 +26,8 @@ in
   ourPkgs.stdenv.mkDerivation (finalAttrs: {
     pname = "effect-mcp";
     version = vu.mkVersion {
-      upstream = vu.readPackageJsonVersion "${src}/package.json";
+      # upstream: readPackageJsonVersion @ package.json
+      upstream = "0.1.17";
       inherit rev;
     };
     inherit src;

@@ -21,7 +21,8 @@ in
   buildNpmPackage {
     pname = "openmemory-mcp";
     version = vu.mkVersion {
-      upstream = vu.readPackageJsonVersion "${src}/packages/openmemory-js/package.json";
+      # upstream: readPackageJsonVersion @ packages/openmemory-js/package.json
+      upstream = "1.3.3";
       inherit rev;
     };
     inherit src;

@@ -25,7 +25,8 @@
   };
 in
   ourPkgs.context7-mcp.overrideAttrs (finalAttrs: _prev: let
-    upstreamVersion = vu.readPackageJsonVersion "${src}/packages/mcp/package.json";
+    # upstream: readPackageJsonVersion @ packages/mcp/package.json
+    upstreamVersion = "2.1.8";
   in {
     version = vu.mkVersion {
       upstream = upstreamVersion;

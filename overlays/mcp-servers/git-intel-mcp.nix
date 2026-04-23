@@ -25,7 +25,8 @@ in
   buildNpmPackage {
     pname = "git-intel-mcp";
     version = vu.mkVersion {
-      upstream = vu.readPackageJsonVersion "${src}/package.json";
+      # upstream: readPackageJsonVersion @ package.json
+      upstream = "1.0.0";
       inherit rev;
     };
     inherit src;

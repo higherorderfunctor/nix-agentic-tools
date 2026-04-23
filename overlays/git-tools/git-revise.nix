@@ -29,7 +29,8 @@ in
   ourPkgs.git-revise.overridePythonAttrs (old: {
     version = vu.mkVersion {
       # pyproject.toml uses dynamic version (hatch); read from __init__.py
-      upstream = vu.readPythonDunderVersion "${src}/gitrevise/__init__.py";
+      # upstream: readPythonDunderVersion @ gitrevise/__init__.py
+      upstream = "0.8.0";
       inherit rev;
     };
     inherit src;

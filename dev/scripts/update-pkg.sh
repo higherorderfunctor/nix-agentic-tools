@@ -37,19 +37,98 @@ if [ -n "$git_url" ]; then
       old_rev=$(grep -oP 'rev = "\K[a-f0-9]{40}' "$target_file" | head -1 || true)
       if [ -n "$old_rev" ] && [ "$old_rev" != "$new_rev" ]; then
         sed -i "s|$old_rev|$new_rev|g" "$target_file"
-        # Prefetch new source hash
+        # Prefetch new source hash + storePath (used below for upstream
+        # version re-derivation; one prefetch, two uses)
         old_hash=$(grep -oP 'hash = "\Ksha256-[^"]+' "$target_file" | head -1 || true)
+        storePath=""
         if [ -n "$old_hash" ]; then
           flake_ref="github:$(echo "$git_url" | sed 's|\.git$||' | grep -oP 'github\.com/\K.*')/$new_rev"
-          new_hash=$(nix flake prefetch --json "$flake_ref" 2>/dev/null | jq -r '.hash // empty')
-          if [ -n "$new_hash" ]; then
-            sed -i "s|$old_hash|$new_hash|" "$target_file"
-            log_info "Hash updated in $(basename "$target_file")"
+          prefetch_json=$(nix flake prefetch --json "$flake_ref" 2>/dev/null || true)
+          if [ -n "$prefetch_json" ]; then
+            new_hash=$(echo "$prefetch_json" | jq -r '.hash // empty')
+            storePath=$(echo "$prefetch_json" | jq -r '.storePath // empty')
+            if [ -n "$new_hash" ]; then
+              sed -i "s|$old_hash|$new_hash|" "$target_file"
+              log_info "Hash updated in $(basename "$target_file")"
+            fi
           fi
         fi
         log_info "Rev: ${old_rev:0:7} -> ${new_rev:0:7} in $(basename "$target_file")"
 
-        # Commit rev + src hash so nix-update has a clean tree to evaluate
+        # Re-derive upstream version literals from the fresh src.
+        # The overlay carries a magic comment on the line preceding
+        # each `upstream = "..."` literal, naming which vu.read* helper
+        # to invoke and the manifest path relative to src:
+        #
+        #   # upstream: readPackageJsonVersion @ packages/foo/package.json
+        #   upstream = "1.2.3";
+        #
+        # This eliminates eval-time IFD — overlays no longer call
+        # vu.read* at eval time (which forced realization of the
+        # platform-tagged src drv and broke cross-platform eval on
+        # PR CI). See .claude/rules/overlays.md § IFD Patterns.
+        #
+        # One file can carry multiple markers (e.g.,
+        # modelcontextprotocol/default.nix has 7 sub-packages, and
+        # two of them happen to share the same manifest path). The
+        # Python filter indexes by LINE NUMBER so each marker drives
+        # its own replacement.
+        if [ -n "$storePath" ] && grep -q '# upstream: ' "$target_file"; then
+          # Emit "line-number|kind|manifest" for every marker in the
+          # file, then the Python filter below does all replacements
+          # in one pass against the target file.
+          markers=$(awk '
+            match($0, /# upstream: ([A-Za-z]+) @ (.+)$/, arr) {
+              if (arr[1] != "" && arr[2] != "") print NR "|" arr[1] "|" arr[2];
+            }
+          ' "$target_file")
+          if [ -n "$markers" ]; then
+            # For each marker, resolve the new upstream value via nix
+            # eval of the corresponding vu.read* helper against the
+            # fresh src, then feed a JSON array of
+            # {lineno, new_value} pairs to Python to rewrite the file.
+            resolved="[]"
+            while IFS='|' read -r lineno kind manifest_rel; do
+              [ -z "$lineno" ] && continue
+              new_upstream=$(nix eval --impure --raw --expr "
+                let vu = import (toString $PWD/overlays/lib.nix);
+                in vu.$kind ($storePath + \"/$manifest_rel\")
+              " 2>/dev/null || true)
+              if [ -z "$new_upstream" ]; then
+                log_info "Could not derive upstream from $manifest_rel via $kind"
+                continue
+              fi
+              resolved=$(echo "$resolved" | jq --arg n "$lineno" --arg v "$new_upstream" \
+                '. + [{lineno: ($n | tonumber), value: $v}]')
+              log_info "Upstream (L$lineno): $kind @ $manifest_rel -> $new_upstream"
+            done <<<"$markers"
+            if [ "$resolved" != "[]" ]; then
+              python3 - "$target_file" "$resolved" <<'PY'
+import json, re, sys
+path, spec = sys.argv[1], sys.argv[2]
+entries = json.loads(spec)
+with open(path) as f:
+    lines = f.read().split("\n")
+pat = re.compile(r'^(\s*(?:upstream|upstreamVersion|version)\s*=\s*(?:mkPyVersion\s+)?)"[^"]*"(.*)$')
+for e in entries:
+    marker_idx = e["lineno"] - 1  # awk is 1-based, python 0-based
+    # Replace the FIRST upstream literal that follows this marker
+    # (usually the very next line; 5-line window absorbs rare
+    # intervening comments/whitespace).
+    for j in range(marker_idx + 1, min(marker_idx + 6, len(lines))):
+        m = pat.match(lines[j])
+        if m:
+            lines[j] = f'{m.group(1)}"{e["value"]}"{m.group(2)}'
+            break
+with open(path, "w") as f:
+    f.write("\n".join(lines))
+PY
+            fi
+          fi
+        fi
+
+        # Commit rev + src hash + upstream version so nix-update has a
+        # clean tree to evaluate
         git -C "$wt" add -A
         git -C "$wt" commit -m "chore(overlays): update $name"
       fi

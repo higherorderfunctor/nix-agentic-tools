@@ -28,7 +28,8 @@
 in
   ourPkgs.mcp-proxy.overridePythonAttrs (old: {
     version = vu.mkVersion {
-      upstream = vu.readPyprojectVersion "${src}/pyproject.toml";
+      # upstream: readPyprojectVersion @ pyproject.toml
+      upstream = "0.10.0";
       inherit rev;
     };
     inherit src;

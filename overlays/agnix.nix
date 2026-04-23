@@ -45,7 +45,8 @@ in
   rustPlatform.buildRustPackage {
     pname = "agnix";
     version = vu.mkVersion {
-      upstream = vu.readCargoWorkspaceVersion "${src}/Cargo.toml";
+      # upstream: readCargoWorkspaceVersion @ Cargo.toml
+      upstream = "0.18.0";
       inherit rev;
     };
     inherit src;

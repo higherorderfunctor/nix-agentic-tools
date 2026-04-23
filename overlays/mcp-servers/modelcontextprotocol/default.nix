@@ -21,12 +21,12 @@
     hash = "sha256-bHknioQu8i5RcFlBBdXUQjsV4WN1IScnwohGRxXgGDk=";
   };
 
-  # Helper: read version from a sub-package's pyproject.toml and append +shortrev
-  readPyVersion = subdir:
-    vu.mkVersion {
-      upstream = vu.readPyprojectVersion "${src}/src/${subdir}/pyproject.toml";
-      inherit rev;
-    };
+  # Helper: compute version string from a sub-package's upstream version.
+  # upstream literals live at each call site (see # upstream: comments
+  # below); update-pkg.sh re-derives them from the fresh src using the
+  # vu.readPyprojectVersion helper at update time. Eliminates eval-time
+  # IFD (see .claude/rules/overlays.md § IFD Patterns).
+  mkPyVersion = upstream: vu.mkVersion {inherit upstream rev;};
 
   # Shared npm deps from the upstream mono-repo lockfile.
   # npmDepsFetcherVersion = 2 enables workspace support.
@@ -34,16 +34,18 @@
   npmDepsHash = "sha256-bj6q6TWOmZT+MGVugutU6vCpwaxedcraLB1Q/UfPIvc=";
 
   # Build a JS sub-package from the mono-repo using npm workspaces.
+  # `upstream` literal is written at the call site (see # upstream:
+  # comments below); update-pkg.sh re-derives it from the fresh src
+  # using vu.readPackageJsonVersion at update time. Eliminates
+  # eval-time IFD (see .claude/rules/overlays.md § IFD Patterns).
   mkJsPackage = {
     pname,
     subdir,
+    upstream,
   }:
     buildNpmPackage {
       inherit pname src;
-      version = vu.mkVersion {
-        upstream = vu.readPackageJsonVersion "${src}/src/${subdir}/package.json";
-        inherit rev;
-      };
+      version = vu.mkVersion {inherit upstream rev;};
       sourceRoot = "source";
       postUnpack = "chmod -R u+w source";
       inherit npmDepsHash;
@@ -80,19 +82,26 @@
   fsMcp = mkJsPackage {
     pname = "filesystem-mcp";
     subdir = "filesystem";
+    # upstream: readPackageJsonVersion @ src/filesystem/package.json
+    upstream = "0.6.3";
   };
   memMcp = mkJsPackage {
     pname = "memory-mcp";
     subdir = "memory";
+    # upstream: readPackageJsonVersion @ src/memory/package.json
+    upstream = "0.6.3";
   };
   seqMcp = mkJsPackage {
     pname = "sequential-thinking-mcp";
     subdir = "sequentialthinking";
+    # upstream: readPackageJsonVersion @ src/sequentialthinking/package.json
+    upstream = "0.6.2";
   };
 
   fetchMcp = python314Packages.buildPythonApplication {
     pname = "fetch-mcp";
-    version = readPyVersion "fetch";
+    # upstream: readPyprojectVersion @ src/fetch/pyproject.toml
+    version = mkPyVersion "0.6.3";
     src = "${src}/src/fetch";
     pyproject = true;
     build-system = with python314Packages; [hatchling];
@@ -112,7 +121,8 @@
 
   gitMcp = python314Packages.buildPythonApplication {
     pname = "git-mcp";
-    version = readPyVersion "git";
+    # upstream: readPyprojectVersion @ src/git/pyproject.toml
+    version = mkPyVersion "0.6.2";
     src = "${src}/src/git";
     pyproject = true;
     build-system = with python314Packages; [hatchling];
@@ -123,7 +133,8 @@
 
   timeMcp = python314Packages.buildPythonApplication {
     pname = "time-mcp";
-    version = readPyVersion "time";
+    # upstream: readPyprojectVersion @ src/time/pyproject.toml
+    version = mkPyVersion "0.6.2";
     src = "${src}/src/time";
     pyproject = true;
     build-system = with python314Packages; [hatchling];
@@ -137,7 +148,8 @@ in {
   all-mcps = ourPkgs.stdenv.mkDerivation {
     pname = "modelcontextprotocol-all-mcps";
     version = vu.mkVersion {
-      upstream = vu.readPackageJsonVersion "${src}/src/sequentialthinking/package.json";
+      # upstream: readPackageJsonVersion @ src/sequentialthinking/package.json
+      upstream = "0.6.2";
       inherit rev;
     };
     inherit src;

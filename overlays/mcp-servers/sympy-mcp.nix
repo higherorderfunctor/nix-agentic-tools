@@ -29,7 +29,8 @@ in
   ourPkgs.stdenv.mkDerivation {
     pname = "sympy-mcp";
     version = vu.mkVersion {
-      upstream = vu.readPyprojectVersion "${src}/pyproject.toml";
+      # upstream: readPyprojectVersion @ pyproject.toml
+      upstream = "0.1.0";
       inherit rev;
     };
     inherit src;
