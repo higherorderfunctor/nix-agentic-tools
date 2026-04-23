@@ -65,18 +65,10 @@
     "kiro-gateway"
   ];
 
-  # Git tools + agnix — live at `consumerPkgs.gitTools.<name>`
-  # (git-absorb, git-revise).
-  #
-  # NOTE: `git-branchless` intentionally EXCLUDED. It consumes
-  # `inputs.git-branchless.overlays.default final final` — an
-  # upstream flake's overlay that binds to the consumer's pkgs
-  # for base build inputs. Fixing this requires replacing the
-  # thin upstream-overlay wrapper with a from-scratch nixpkgs
-  # override using `ourPkgs`. Tracked as follow-up; see
-  # overlays/git-tools/git-branchless.nix:21.
+  # Git tools — live at `consumerPkgs.gitTools.<name>`.
   gitToolPackages = [
     "git-absorb"
+    "git-branchless"
     "git-revise"
   ];
 
