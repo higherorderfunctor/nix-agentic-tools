@@ -27,12 +27,14 @@ inputs:
       nixpkgs:
         follows: nixpkgs
   nix-update:
-    url: github:Mic92/nix-update/6bcb3d93875ccd352d57db71d0ae414489a69e48
+    url: github:Mic92/nix-update/3125a1e4789b221142543749ae2f19eec9ac371e
     inputs:
       nixpkgs:
         follows: nixpkgs
   nixpkgs:
     url: github:NixOS/nixpkgs/b12141ef619e0a9c1c84dc8c684040326f27cdcc
+  nixpkgs-test:
+    url: github:NixOS/nixpkgs/ac62194c3917d5f474c1a844b6fd6da2db95077d
   nuscht-search:
     url: github:NuschtOS/search/d15c05d20b434704c3e84f9dea161b8184b6643d
     inputs:
