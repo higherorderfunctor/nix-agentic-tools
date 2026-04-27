@@ -33,6 +33,8 @@ inputs:
         follows: nixpkgs
   nixpkgs:
     url: github:NixOS/nixpkgs/b12141ef619e0a9c1c84dc8c684040326f27cdcc
+  nixpkgs-test:
+    url: github:NixOS/nixpkgs/ac62194c3917d5f474c1a844b6fd6da2db95077d
   nuscht-search:
     url: github:NuschtOS/search/d15c05d20b434704c3e84f9dea161b8184b6643d
     inputs:
@@ -44,7 +46,7 @@ inputs:
       nixpkgs:
         follows: nixpkgs
   serena:
-    url: github:oraios/serena/9ae2d1af7774109d88c904ec9b0970af91ac6b51
+    url: github:oraios/serena/0a96f71bd90cc11ef4f35b8012f6710b03806da4
     inputs:
       nixpkgs:
         follows: nixpkgs
