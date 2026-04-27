@@ -36,6 +36,96 @@ Major fixes landed on `refactor/ai-factory-architecture` (not yet on main):
 - **Buddy disabled** — upstream removed `/buddy` (anthropics/claude-code#45596).
   User disabled buddy config in nixos-config pending upstream resolution.
 
+### Active investigation: kiro-gateway PR #71 — upstream lifespan hard-exit
+
+> **Last touched:** 2026-04-27. PR #71 (`update/kiro-gateway`)
+> remains OPEN, all checks failing. Diagnosis complete; fix
+> approach not chosen. Pause point — pick up here next session.
+
+**PR:** [#71](https://github.com/higherorderfunctor/nix-agentic-tools/pull/71)
+bumps `kiro-gateway` rev `7f95bdf` → `d2634ce035429bd4b77ffcbbf1cbcc2182ea13dc`
+(upstream PR #93 "feat(account-system): add multi-account
+support with failover").
+
+**Symptom:** `nix build .#kiro-gateway` fails on both runners.
+All 30+ tests under `tests/integration/test_full_flow.py` ERROR
+at fixture setup with:
+
+```
+| File "/build/kiro-gateway-d2634ce/main.py", line 475, in lifespan
+|     sys.exit(1)
+| SystemExit: 1
+```
+
+Captured stderr:
+
+```
+INFO     | main:lifespan:334 - Starting application... Creating state managers.
+INFO     | main:lifespan:356 - Shared HTTP client created with connection pooling
+WARNING  | kiro.account_manager:load_credentials:197 - Credentials file not found: credentials.json
+ERROR    | main:lifespan:474 - No accounts configured in credentials.json
+```
+
+Failed CI run:
+<https://github.com/higherorderfunctor/nix-agentic-tools/actions/runs/24859306704/job/72780518814#step:6:14138>
+
+**Root cause:** Upstream PR #93 added a hard `sys.exit(1)` in
+the FastAPI `lifespan` startup hook when
+`app.state.account_manager._accounts` is empty after credentials
+load (`d2634ce:main.py:470-475`). Our overlay sets `doCheck =
+true` and runs `pytest tests/`. The integration tests use
+`TestClient(clean_app)` which triggers `lifespan` → exits → all
+tests ERROR at setup. Unit tests pass; integration suite is
+fully blocked.
+
+**Two upstream paths populate `_accounts`:**
+
+1. `credentials.json` exists in cwd (`/build/kiro-gateway-d2634ce/`)
+   — does NOT exist in nix sandbox.
+2. Env vars (`REFRESH_TOKEN` / `KIRO_CREDS_FILE` / `KIRO_CLI_DB_FILE`)
+   set, triggering the env→credentials.json migration in
+   `main.py:359-444` — also not set in nix sandbox.
+
+**Open question — why upstream CI passes:** their `docker.yml`
+runs `pytest -v --tb=short` with no env block. Latest upstream
+runs (HEAD `85f5e431`, also `d2644d2d` near the failing rev)
+report success. Their `tests/conftest.py` has a `mock_env_vars`
+fixture, but `test_client → clean_app` chain doesn't depend on
+it. Either (a) there's an autouse fixture or `.env` source I
+missed, (b) the test_full_flow integration tests are also
+failing upstream and the workflow conclusion is misleading, or
+(c) something in their ubuntu runner environment we don't have.
+Need to verify before choosing a fix.
+
+**Options (none applied — flagged per `feedback_no_masking_fixes.md`):**
+
+| # | Approach                                                     | Honest?                                            | Cost                                                                       |
+| - | ------------------------------------------------------------ | -------------------------------------------------- | -------------------------------------------------------------------------- |
+| A | `preCheck` exports `REFRESH_TOKEN=test-fixture-token`        | **Real fix** if env→migration actually populates `_accounts` | One-line preCheck addition                                                 |
+| B | First reproduce upstream's green CI locally, mirror exactly  | **Most rigorous**                                  | 30–60 min investigation                                                    |
+| C | Stay pinned at `7f95bdf`; close PR #71                       | **Honest defer**                                   | No multi-account feature; recurring update PRs will keep proposing the bump |
+| D | Restrict `checkPhase` to `tests/unit/` (drop integration)    | **Masking** — flagged, not recommending            | Drops valuable coverage                                                    |
+| E | `doCheck = false`                                            | **Worst masking** — flagged, not recommending      | Drops all test coverage                                                    |
+
+**Suggested order next session:**
+
+1. Run upstream's `pytest tests/integration/test_full_flow.py`
+   locally with no env vars (clone + venv) — confirm or refute
+   that those tests pass for them. This decides between A and C.
+2. If upstream passes: figure out HOW (autouse fixture? `.env`
+   in checkout? something else) — then mirror that exactly.
+3. If upstream fails too: their CI is misleading; option C
+   (defer) is the right call until upstream stabilizes.
+
+**Files involved:**
+- `overlays/kiro-gateway.nix` — declares `doCheck = true` and
+  `checkPhase = "${pythonEnv}/bin/python -m pytest tests/ -v"`
+- `.worktrees/update-kiro-gateway/` — local worktree (was stale
+  at `e6f23c22` during this session's investigation; the live
+  PR rev is `d2634ce`).
+
+---
+
 ### Active investigation: MCP server startup failures
 
 `github-mcp` and `kagi-mcp` show `✘ failed` in Claude Code session startup.

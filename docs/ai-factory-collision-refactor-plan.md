@@ -1,8 +1,8 @@
 # ai.\* factory — collision refactor + pure-eval rollback + Dir helpers
 
-> **Status:** EXECUTED + ACTIVATED. Core refactor landed. Several
-> items still open — see the "DONE / NOT DONE / NEXT SESSION" block
-> immediately below.
+> **Status:** COMPLETE. Refactor landed, consumer migrated, CI green.
+> All outstanding items from prior session resolved — see status
+> roll-up below.
 >
 > **Origin:** failed `nixos-config` pin bump on 2026-04-21. Post-
 > activation audit exposed three bugs (kiro `.md.md` doubled
@@ -13,9 +13,9 @@
 >
 > **Branch:** `refactor/ai-factory-architecture`
 >
-> **Implementation policy:** subagents do the execution — this
-> session preserves its context for bug triage during rollout.
-> No code changes until explicit user go-ahead.
+> **Retained as historical reference.** Sections 3–12 document the
+> design, commit sequence, and testing strategy for future
+> archaeology. Day-to-day backlog lives in `docs/plan.md`.
 
 ## Status roll-up — 2026-04-21 end of session (late)
 
@@ -76,158 +76,40 @@ Plus housekeeping:
   `.kiro/steering/ai-module.md`. Collaborators cloning without
   the user's memory get full architectural context.
 
-### ⚠️ OUTSTANDING (real work remaining)
+### ✅ All previously-outstanding items RESOLVED (2026-04-27 verify)
 
-- **SYMPTOM B (ruamel fetchhg)** — deferred per user call. Plan
-  §10.2 has the evidence-backed findings. Root cause TBD. Fix
-  TBD. Awaiting fresh CI data from the flake input bump. Best
-  hypothesis: CI transient / cache desync, not a repo bug.
-  Defensive candidates (untested): (a) add `cache.nixos.org`
-  explicit substituter in ci.yml test job, (b) pin nix version,
-  (c) reduce substitution concurrency.
-- **SYMPTOM A CI verification** — commit `e65a012` shipped the
-  fix (devenv.nix stale copilot skill paths, lines 250 + 266).
-  No green CI run observed post-fix yet. Will land automatically
-  on next push to main / next PR.
-- **CI failures (broader triage)** — user reports CI still red
-  at session close. Not investigated here. Could be SYMPTOM A
-  residue, SYMPTOM B spread, or new surface from the refactor
-  (e.g., collision assertions firing somewhere unexpected,
-  rulesDir eval behavior under CI). Needs a log pull + classify.
-
-### 🗒 User observations for next-session triage (NOT DECISIONS)
-
-Captured at session close after the batch of update PRs merged
-(12 commits fast-forwarded into `refactor/ai-factory-architecture`).
-User reviewed the Update-job + PR-CI outcomes and flagged two
-parity gaps. **No decisions yet — these are notes to dig into
-when we pick up CI / SYMPTOM B.**
-
-**Observation 1 — openmem PR (not merged)**
-
-- Update job (nightly pipeline): **FAILED** on openmem. But the
-  pipeline still went on to **open a PR** for it.
-- The resulting PR's CI job: **PASSED**.
-- Two apparent gaps:
-  1. The Update job and the PR's CI job didn't fail the same
-     way. Why? Different eval paths? Different substituter
-     behavior? Different worktree state? Worth tracing.
-  2. The Update job opened a PR despite its own worktree
-     checks failing. User originally asked for just a branch
-     push (no auto-PR) so failures could be reviewed off-tree,
-     but that "didn't work" — the pivot was to make the Update
-     job fail gracefully instead. With graceful-fail in place,
-     user is now wondering whether the auto-PR-open should be
-     reverted (so failed checks DON'T produce PRs).
-- **No decision yet.** User wants to understand WHY the two
-  jobs diverged before revisiting the open-PR behavior.
-
-**Observation 2 — mcp-nixos PR (not merged)**
-
-- Update job: **PASSED** on mcp-nixos.
-- PR's CI job: **FAILED**.
-- Inverse parity gap from openmem. Depending on where the PR
-  CI failed, this may indicate a real check gap in the Update
-  job's worktree smoke test. User's stated preference: "I don't
-  want to run every check during update, just the basic smoke
-  test we already have." So this is **understand-first**, not
-  expand-Update-coverage-first.
-
-**Both PRs left open for inspection.** User explicitly did NOT
-merge them so they're available for log-pulling + eval-tracing
-tomorrow. All other update PRs were merged (12 commits
-fast-forwarded into the refactor branch).
-
-**Observation 3 — three "late" update PRs after the merge batch**
-
-About 30 min after the first batch of update PRs merged, three
-more update PRs opened on the same schedule-like cadence:
-
-- #53 `chore(overlays): update agnix`
-- #54 `chore(overlays): update context7-mcp`
-- #55 `chore(overlays): update modelcontextprotocol-all-mcps`
-
-Suspicious because:
-
-- Those three overlays were NOT in the earlier run less than
-  30 min prior.
-- All three have had no upstream activity for the past 4–5
-  days (since user's last manual update).
-- It's unusual for three unrelated overlays to all show a new
-  rev in a single fresh run after showing nothing for days.
-
-Hypotheses (to investigate, NOT decisions):
-
-- Legitimate: three upstreams did in fact publish new
-  commits in the last 30 min and the previous run simply
-  missed them due to timing (ran before the pushes landed).
-- Bug: the Update pipeline has a state-caching or skip-list
-  issue that suppressed these three during the earlier run
-  and only "unlocked" them after the first batch of merges.
-- Bug: merging the earlier batch changed something in
-  worktree setup (e.g., reset state, freshly-fetched refs)
-  that the Update logic was previously using to skip these.
-
-**Follow-up data point:** all three late PRs (#53, #54, #55)
-failed CI — **all due to hash mismatches**. That shifts the
-hypothesis balance:
-
-- Less likely pure-timing coincidence (three simultaneous
-  legitimate upstream pushes that all produce bad hashes is
-  a weird coincidence).
-- More likely a rev-bump / hash-write ordering bug in
-  `dev/scripts/update-pkg.sh`: the script does (1) rev sed,
-  (2) `nix flake prefetch` for src hash, (3) hash sed,
-  (4) `nix-update --version skip` for dep hashes. A
-  disturbance in that sequence (e.g., state carryover from
-  the prior run, concurrent worktree cleanup, substituter
-  mid-flight) would yield a committed rev with a hash that
-  doesn't match.
-- Possibly intersects with SYMPTOM B's "path builder.sh is
-  not valid" class — if the substituter raced mid-prefetch,
-  the computed hash could correspond to a partial closure.
-
-**User direction: "just want to understand."** Pull the
-`nix-update` output + the committed overlay .nix diffs for
-all three, plus the CI failure logs. Look for: (a) which
-hash field is wrong (src / cargo / pnpm / vendor), (b) whether
-the rev in the commit matches the rev the script intended to
-land (rev-write succeeded, hash-write used stale value), (c)
-whether the same hash appears verbatim in any OTHER overlay
-(copy-paste bug from the prior batch). Cross-reference against
-the Update job's ninja DAG state.
-
-### 📋 NEXT SESSION — suggested order
-
-1. **CI triage.** Start with the two un-merged PRs (openmem +
-   mcp-nixos). For each:
-   - Pull both the Update job log AND the PR CI log.
-   - Diff the failure points — are they hitting different
-     derivations, different eval caches, different
-     substituters?
-   - Cross-reference against SYMPTOM A (stale paths, fixed
-     by `e65a012`) and SYMPTOM B (ruamel fetchhg /
-     unidentified CI environment delta).
-2. **Investigate Observation 3 (late PRs #53/#54/#55).** Pull
-   the Update job logs for the agnix / context7-mcp /
-   modelcontextprotocol-all-mcps targets across the earlier
-   run AND the later run. Determine whether the earlier run
-   genuinely saw no new rev (timing) or whether it skipped
-   them (bug). If a bug, the fix likely sits in the rev-bump
-   logic in `dev/scripts/update-pkg.sh` or in the ninja DAG
-   state reuse.
-3. **Understand the Update-job vs PR-CI parity gap** before
-   making any architectural change. The observations above
-   are the entry points — don't jump to fixes.
-4. **SYMPTOM B.** If the triage above converges on the ruamel
-   / builder.sh / cache story from §10.2, candidate defensive
-   fixes there (a/b/c) become relevant. Otherwise it's a
-   different class of bug.
-5. **SYMPTOM A CI verification.** Look for the enterTest
-   assertion fix landing green on main via the next PR that
-   lands (passive observation, not an explicit task).
-6. Declare the refactor complete once CI is green on the
-   branch.
+- **SYMPTOM A** — `e65a012` (devenv.nix stale copilot skill paths)
+  confirmed green on subsequent update PRs. Closed.
+- **SYMPTOM B (ruamel fetchhg)** — verified inactive on
+  2026-04-27. flake.nix:24 still declares `inputs.git-hooks.inputs.nixpkgs.follows
+= "nixpkgs"` and flake.lock still routes git-hooks's nixpkgs through
+  the buried `["devenv","crate2nix","cachix","nixpkgs"]` chain
+  (declaration not honored, same state as 2026-04-21). Despite
+  that unchanged state, PR #45 (git-hooks update) merged green
+  on 2026-04-22 and current PR #70 has all checks passing. Best
+  read: the underlying ruamel-yaml-clib derivation got fixed
+  upstream during a nixpkgs movement, masking the unresolved
+  follows-not-honored anomaly. The follows resolution gap is a
+  latent puzzle, not an active blocker. **No action needed unless
+  it resurfaces.**
+- **Observation 1 (openmem Update-vs-PR parity gap)** — RESOLVED
+  via `9b5cbc5` (prime src drvPath before nix-update) +
+  `2604eb2` (roll back Phase 0 commit on Phase 1 failure). Root
+  cause was IFD: `nix flake prefetch` doesn't materialize the
+  src `.drv` that nix-instantiate --strict needs to resolve
+  `readFile "${src}/..."` context.
+- **Observation 2 (mcp-nixos PR-CI failure)** — RESOLVED. The
+  failure was upstream's transitional reference to
+  `pyFinal.uncalled-for`; cleared by the nixpkgs bump in PR #51.
+- **Observation 3 (late PRs #53/#54/#55 with hash mismatches)** —
+  RESOLVED. Commit `f277053` eliminated IFD from version
+  computation by switching from `vu.readPackageJsonVersion
+"${src}/path"` to literal version strings + magic-comment
+  parsing in `update-pkg.sh`. The hash-mismatch class disappeared
+  with the IFD-elimination + drv-priming combo.
+- **Cache-hit parity regression gate** — `5bb3d17` shipped the
+  check; `57a2c04` fixed git-branchless (real drift bug surfaced
+  by the gate). 18 overlay packages covered, 0 drift.
 
 ### Diff of audit outcomes vs pre-activation snapshot
 
@@ -838,7 +720,16 @@ Root cause: `446f8a6` moved Copilot project skills from
 
 Fix: update both lines to `.github/skills/`.
 
-### 10.2 SYMPTOM B — ruamel-yaml-clib fetchhg failure (ROOT CAUSE PENDING)
+### 10.2 SYMPTOM B — ruamel-yaml-clib fetchhg failure (RESOLVED — inactive)
+
+**Resolution (verified 2026-04-27):** PR #45 (next git-hooks
+update, 2026-04-22) merged green; PR #70 (current update) has
+all checks passing. flake.nix declaration + flake.lock state
+unchanged from the 2026-04-21 snapshot — the follows resolution
+anomaly persists but the failure class is gone. Most likely
+upstream nixpkgs moved past whatever broken-fetchhg ruamel
+derivation was being pulled in. Latent puzzle preserved below
+for archaeology if it returns.
 
 **Known so far (evidence-backed):**
 
@@ -927,5 +818,10 @@ Before subagent dispatch:
 ## Changelog
 
 - 2026-04-21 — initial plan written
+- 2026-04-27 — all outstanding items resolved; status flipped
+  to COMPLETE. SYMPTOM B verified inactive (flake.lock state
+  unchanged but failure class gone). Observations 1/2/3 closed
+  via `9b5cbc5` + `2604eb2` + `f277053`. Cache-hit parity gate
+  added (`5bb3d17`, `57a2c04`).
 - 2026-04-21 — post-activation audit added (§2)
 - 2026-04-21 — pending: SYMPTOM B root-cause investigation (§10.2)
