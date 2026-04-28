@@ -36,11 +36,26 @@ Major fixes landed on `refactor/ai-factory-architecture` (not yet on main):
 - **Buddy disabled** — upstream removed `/buddy` (anthropics/claude-code#45596).
   User disabled buddy config in nixos-config pending upstream resolution.
 
-### Active investigation: kiro-gateway PR #71 — upstream lifespan hard-exit
+### Resolved: kiro-gateway PR #71 — upstream lifespan hard-exit
 
-> **Last touched:** 2026-04-27. PR #71 (`update/kiro-gateway`)
-> remains OPEN, all checks failing. Diagnosis complete; fix
-> approach not chosen. Pause point — pick up here next session.
+> **Resolution:** RESOLVED upstream. PR #71 merged 2026-04-27
+> 23:36 UTC as commit `d2bf341`. The bot's nightly re-run picked
+> up upstream commit `85f5e43` (latest main) instead of the
+> failing `d2634ce`. Upstream commit `04cc949 test(account-system):
+> add comprehensive test suite and fix critical bugs (#93)`
+> changed `main.py:475` from `sys.exit(1)` to `raise
+RuntimeError(...)`. Local `nix build .#kiro-gateway` produces
+> `kiro-gateway-0.0.0+85f5e43` cleanly from cachix.
+>
+> **Open question (not blocking):** `RuntimeError` propagates
+> out of lifespan the same way `SystemExit` does, so tests
+> shouldn't pass for that reason alone. There must be a
+> fixture / env setup difference at `85f5e43` that we didn't
+> trace. If the next kiro-gateway bump also fails, re-open this
+> investigation rather than re-rolling. No action needed unless
+> it returns.
+>
+> Below kept for archaeology.
 
 **PR:** [#71](https://github.com/higherorderfunctor/nix-agentic-tools/pull/71)
 bumps `kiro-gateway` rev `7f95bdf` → `d2634ce035429bd4b77ffcbbf1cbcc2182ea13dc`
