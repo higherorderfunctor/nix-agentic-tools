@@ -139,8 +139,10 @@ in {
     # via `git-hooks.package.meta.mainProgram`, which fails when Claude
     # Code spawns the hook with a stripped PATH. Bug:
     # https://github.com/cachix/devenv/blob/main/src/modules/integrations/claude.nix#L249
+    # Redirect stdout to stderr so prek's hook-failure output reaches
+    # Claude Code, which only surfaces stderr on non-blocking hook failures.
     hooks.git-hooks-run.command = ''
-      cd "$DEVENV_ROOT" && ${lib.getExe config.git-hooks.package} run
+      cd "$DEVENV_ROOT" && ${lib.getExe config.git-hooks.package} run 1>&2
     '';
 
     permissions.rules = {

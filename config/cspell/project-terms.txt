@@ -1,4 +1,3 @@
-Patchelf
 addy
 adoc
 agenix
@@ -38,6 +37,7 @@ convco
 coreutils
 cpaczek
 creds
+crystallise
 cuda
 deadnix
 dedup
@@ -133,6 +133,7 @@ partialclone
 passthroughs
 passthru
 pasteable
+Patchelf
 pathspec
 pdsolve
 peaceiris
