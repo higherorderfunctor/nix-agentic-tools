@@ -100,10 +100,7 @@ in {
         ".*-package-lock\\.json$"
         ".*\\.lock$"
         "^config/cspell/"
-        "^docs/ai-factory-collision-refactor-plan\\.md$"
-        "^docs/monorepo-restructure-assessment\\.md$"
-        "^docs/overnight-.*\\.md$"
-        "^docs/plan\\.md$"
+        "^docs/"
       ];
     };
     # Re-stage files modified by formatters (treefmt, shfmt, etc.)
