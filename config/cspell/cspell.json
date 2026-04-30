@@ -14,9 +14,7 @@
     "config/cspell",
     "*.lock",
     "*.png",
-    "docs/ai-factory-collision-refactor-plan.md",
-    "docs/monorepo-restructure-assessment.md",
-    "docs/plan.md",
+    "docs/**",
     "overlays/sources",
     "result"
   ],
