@@ -50,7 +50,6 @@ jobs:
             --systems "${{ matrix.system }}" \
             --skip-cached \
             --cachix-cache nix-agentic-tools \
-            --no-nom \
             --no-link
 
   test:
