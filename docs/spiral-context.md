@@ -126,3 +126,48 @@ load-bearing during grills:
 - Journal before acting on non-trivial changes.
 - No premature convergence-pitching. Don't end turns with "want me
   to start?" trying to ship.
+
+## Diagnosis (grill 1, 2026-05-04)
+
+The (A)/(B)/(C) framing — architecture vs process vs trust — missed
+the actual diagnosis. The spiral is **(D): optimizing DRY-as-proxy
+for an unstated self-assembly target whose composition feasibility
+is unverified.** Each pattern in the intended pipeline (module-merge
+fanout, typed submodule options, records carrying transforms,
+package-as-source-of-truth, edge-only ecosystem translation) has
+worked in prior projects independently. The _composition_ of all of
+them through Nix's module system is novel and was never tested
+end-to-end.
+
+In the user's own words:
+
+> "The plans match how I'd think to implement it, but the
+> implementation falls short of some goals I suspect were not well
+> defined. Just some vague notions of keep things DRY. In my head
+> having developed using FP for a number of years, the expectation
+> is the artifacts almost self-assemble using a few composible
+> patterns that form a pipeline through nix's module system. Maybe
+> the gap I didn't consider is testing the feasibility as I've seen
+> each part work in past work but haven't implemented the
+> composition of all these ideas and just make assumptions is
+> feasible, when maybe it is not."
+
+This explains the recurring "80% interface, busted implementation"
+pattern. The interface is shaped by the real (self-assembly) target,
+which is mostly captured; the implementation is graded against the
+proxy (DRY), which silently lets non-composing implementations pass.
+
+**Caveat — (C) is still in play.** Treating this as purely "I
+should have tested feasibility" risks under-investing in agent
+execution failures. The named failure modes (skill-as-install,
+surface adaptation, convergence-rushing) all produce the same
+"looks composable but isn't" symptom even when the patterns
+themselves _would_ compose. Both layers need work: feasibility of
+composition (architecture) and execution-loop tightening (grill
+cadence, glossary, smaller turns).
+
+User pivoted at this point — rethinking the whole approach rather
+than continuing down slice-nav as the next plan. Q2 (naming the
+composable patterns) was unanswered when the grill ended; the
+five-pattern list in the conversation was Claude's reconstruction,
+not user-confirmed.
