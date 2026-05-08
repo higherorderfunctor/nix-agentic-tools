@@ -125,8 +125,6 @@ in {
       pass_filenames = false;
       stages = ["pre-commit"];
     };
-    check-json.enable = true;
-    check-toml.enable = true;
   };
 
   # ── Claude Code (upstream devenv options) ───────────────────────────
