@@ -75,7 +75,7 @@ jobs:
   # gitleaks runs locally as a pre-commit hook (see devenv.nix). This
   # CI job is the safety net for the `--no-verify` path: even when
   # damage is already done, the alert tells us to rotate credentials.
-  secrets:
+  gitleaks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
