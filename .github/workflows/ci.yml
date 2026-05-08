@@ -52,6 +52,11 @@ jobs:
             --cachix-cache nix-agentic-tools \
             --no-link
 
+  # Validation entrypoint: `nix flake check` is the single source of
+  # truth for repo health (structural eval checks + formatting hard
+  # gate via checks.<system>.formatting). Pre-commit hooks remain a
+  # local-only fast subset; see devenv.nix's git-hooks.hooks comment
+  # block for the architecture rationale.
   test:
     runs-on: ubuntu-latest
     steps:
@@ -64,8 +69,18 @@ jobs:
         with:
           name: nix-agentic-tools
 
-      - name: Install devenv
-        run: nix profile add nixpkgs#devenv
+      - name: Run flake checks
+        run: nix flake check
 
-      - name: Run devenv test
-        run: devenv test
+  # gitleaks runs locally as a pre-commit hook (see devenv.nix). This
+  # CI job is the safety net for the `--no-verify` path: even when
+  # damage is already done, the alert tells us to rotate credentials.
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

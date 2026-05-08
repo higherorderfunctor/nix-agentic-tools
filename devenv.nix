@@ -84,6 +84,35 @@ in {
   };
 
   # ── Git Hooks ─────────────────────────────────────────────────────────
+  #
+  # Two-tier validation architecture:
+  #
+  #   1. Pre-commit (this block, runs on `git commit`):
+  #      - Formatters: treefmt (drives biome/taplo/alejandra/etc.)
+  #      - Re-stagers: treefmt-restage
+  #      - Security trip-wires: gitleaks (catches secrets BEFORE push)
+  #      - Commit-message validators: convco
+  #      - Code validators (TEMPORARY here): deadnix, statix, cspell,
+  #        shellcheck — these belong in agent steering, not pre-commit.
+  #        Pre-commit's job is "did I format and not leak secrets",
+  #        not "is this code well-typed". They're parked here until
+  #        the future agent harness lands and consumes the same
+  #        config from steering files. See the
+  #        single-source-of-truth decision in
+  #        feedback_validation_entrypoint.md (memory).
+  #
+  #   2. CI (`nix flake check` in .github/workflows/ci.yml):
+  #      - Structural eval checks (cache-hit-parity, factory-eval, etc.)
+  #      - Formatting hard gate: checks.<system>.formatting (treefmt --check)
+  #      - Package builds (separate `build` job via nix-fast-build)
+  #      - NOT devenv test — devenv is a dev-UX tool, not a test runner.
+  #      - NOT the validators above — they're advisory until the
+  #        steering migration.
+  #
+  # If you're an agent reading this and wondering where to add a new
+  # validator: think first about whether it belongs in the agent
+  # steering (most do) or as a CI hard gate (formatting, security).
+  # Pre-commit should stay narrow.
   git-hooks.hooks = {
     treefmt.enable = true;
     deadnix = {
