@@ -71,3 +71,21 @@ jobs:
 
       - name: Run flake checks
         run: nix flake check
+
+  # gitleaks runs locally as a pre-commit hook (see devenv.nix). This
+  # CI job is the safety net for the `--no-verify` path: even when
+  # damage is already done, the alert tells us to rotate credentials.
+  # Uses gitleaks from nixpkgs directly (no third-party action) to
+  # match the exact binary used in the pre-commit hook.
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+      - name: Run gitleaks
+        run: nix run nixpkgs#gitleaks -- detect --source . --verbose --redact
