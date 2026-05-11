@@ -12,7 +12,7 @@ inputs:
       nixpkgs:
         follows: nixpkgs
   git-hooks:
-    url: github:cachix/git-hooks.nix/3cfd774b0a530725a077e17354fbdb87ea1c4aad
+    url: github:cachix/git-hooks.nix/61ab0e80d9c7ab14c256b5b453d8b3fb0189ba0a
     inputs:
       nixpkgs:
         follows: nixpkgs
