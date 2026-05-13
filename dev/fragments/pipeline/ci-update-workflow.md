@@ -1,6 +1,6 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-04-13. If you touch
+> **Last verified:** 2026-05-13. If you touch
 > `.github/workflows/update.yml`, `dev/scripts/update-common.sh`
 > (CI_MODE sections), or the PR creation logic, and this fragment
 > isn't updated in the same commit, stop and fix it.
@@ -82,13 +82,14 @@ errors about branches named `+ update/foo`.
 
 ### Environment requirements
 
-| Variable            | Source                          | Purpose                                                  |
-| ------------------- | ------------------------------- | -------------------------------------------------------- |
-| `UPDATE_CI`         | Set to `1` in workflow          | Activates CI mode in scripts                             |
-| `GITHUB_TOKEN`      | App token step output           | Authenticates git push + gh CLI                          |
-| `NIX_PATH`          | `nixpkgs=flake:nixpkgs`         | Required by nix-update (uses `import <nixpkgs>`)         |
-| `MERGE_LOCK`        | `$RUNNER_TEMP/nix-update-merge` | Override for `/run/user/$UID/` which may not exist on CI |
-| `CACHIX_AUTH_TOKEN` | Repository secret               | Pushes fetched sources + built outputs                   |
+| Variable            | Source                             | Purpose                                                  |
+| ------------------- | ---------------------------------- | -------------------------------------------------------- |
+| `CACHIX_AUTH_TOKEN` | Repository secret                  | Pushes fetched sources + built outputs                   |
+| `GITHUB_TOKEN`      | App token step output              | Authenticates git push + gh CLI                          |
+| `MERGE_LOCK`        | `$RUNNER_TEMP/nix-update-merge`    | Override for `/run/user/$UID/` which may not exist on CI |
+| `NIX_PATH`          | `nixpkgs=flake:nixpkgs`            | Required by nix-update (uses `import <nixpkgs>`)         |
+| `UPDATE_CI`         | Set to `1` in workflow             | Activates CI mode in scripts                             |
+| `WORKTREE_LOCK`     | `$RUNNER_TEMP/nix-update-worktree` | Serializes `git worktree add` (not concurrency-safe)     |
 
 ### Key files
 

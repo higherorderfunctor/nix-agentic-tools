@@ -9,6 +9,9 @@ shopt -s inherit_errexit 2>/dev/null || :
 
 WORKTREES_DIR="$PWD/.worktrees"
 MERGE_LOCK="${MERGE_LOCK:-/run/user/$(id -u)/nix-update-merge}"
+# `git worktree add` is not concurrency-safe: parallel invocations
+# race on `.git/worktrees/<name>/commondir` creation. Serialize.
+WORKTREE_LOCK="${WORKTREE_LOCK:-/run/user/$(id -u)/nix-update-worktree}"
 REPORT_FILE="$PWD/.update-report.txt"
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 CI_MODE="${UPDATE_CI:-}"
@@ -73,7 +76,7 @@ setup_worktree() {
     git -C "$wt" clean -fd >&2
   else
     mkdir -p "$WORKTREES_DIR"
-    git worktree add -B "$wt_branch" "$wt" "$BRANCH" >&2
+    flock "$WORKTREE_LOCK" git worktree add -B "$wt_branch" "$wt" "$BRANCH" >&2
   fi
 
   # Symlink pre-commit config (devenv-generated, gitignored — worktrees don't have it).

@@ -109,6 +109,7 @@ jobs:
           shopt -s inherit_errexit 2>/dev/null || :
           mkdir -p "$RUNNER_TEMP"
           export MERGE_LOCK="$RUNNER_TEMP/nix-update-merge"
+          export WORKTREE_LOCK="$RUNNER_TEMP/nix-update-worktree"
           export UPDATE_CI=1
           nix run .#generate-update-ninja
           ninja -j4 -v -k0 -f .update.ninja update-report

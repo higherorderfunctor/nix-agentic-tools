@@ -31,6 +31,7 @@ clis
 codemod
 codepaths
 codesign
+commondir
 configdir
 contentpkgs
 convco
