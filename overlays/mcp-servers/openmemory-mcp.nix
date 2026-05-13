@@ -10,12 +10,12 @@
   inherit (ourPkgs) buildNpmPackage bun fetchFromGitHub makeWrapper;
   vu = import ../lib.nix;
 
-  rev = "6ab6221a5417784f08e10c0b47f805692d1c95a9";
+  rev = "d4bde31d3baf0a64b192462a71b37e8779f155f6";
   src = fetchFromGitHub {
     owner = "CaviraOSS";
     repo = "OpenMemory";
     inherit rev;
-    hash = "sha256-Kh8ezTYc7+UCjPH7qsFNXkaAwaYNPaoRlzmlydWmjxw=";
+    hash = "sha256-WtXc/IDuMwieWYx6zpfSSQBDYNO0QTuksHozjPUqp0Y=";
   };
 in
   buildNpmPackage {
