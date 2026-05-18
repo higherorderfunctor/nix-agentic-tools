@@ -10,12 +10,12 @@
   inherit (ourPkgs) buildNpmPackage bun fetchFromGitHub makeWrapper;
   vu = import ../lib.nix;
 
-  rev = "d4bde31d3baf0a64b192462a71b37e8779f155f6";
+  rev = "de39bcd74c7d0a73982def1c052d0b69ecefd7f6";
   src = fetchFromGitHub {
     owner = "CaviraOSS";
     repo = "OpenMemory";
     inherit rev;
-    hash = "sha256-WtXc/IDuMwieWYx6zpfSSQBDYNO0QTuksHozjPUqp0Y=";
+    hash = "sha256-2ZfJwEPzQGxwSPRd/z2kOof+7eFeTj/n9WQKVYpoCr8=";
   };
 in
   buildNpmPackage {
@@ -28,7 +28,7 @@ in
     inherit src;
     sourceRoot = "source/packages/openmemory-js";
     postUnpack = "chmod -R u+w source";
-    npmDepsHash = "sha256-ZL+/UtzRohRVU4OeSSSHm7A6Dxut22LQ5VGfPOaNsm8=";
+    npmDepsHash = "sha256-jYvuAPpU53V44FdNmcvxQRJu7cGQBJ+7MCZPspWQwMA=";
     # Source needs building (tsc). npm tarball had pre-built dist/.
     nativeBuildInputs = [makeWrapper];
     installPhase = ''
