@@ -16,12 +16,12 @@
   };
   vu = import ../lib.nix;
 
-  rev = "3a4bc2666f17d241c58e9ccd3d083a0bd6d24a63";
+  rev = "ea9d0c81a25dde963b775dd546b20889a46b01cd";
   src = ourPkgs.fetchFromGitHub {
     owner = "github";
     repo = "github-mcp-server";
     inherit rev;
-    hash = "sha256-FoBvslhW5wauFKqRSrqAN5nrTb3hgg1yZYuoPgB5ui4=";
+    hash = "sha256-tVFd/LcM3sdB0Xj7/JfqV6dB2st9tCVfuYKgqpCy+YM=";
   };
 in
   ourPkgs.github-mcp-server.overrideAttrs (_finalAttrs: old: {
@@ -30,7 +30,7 @@ in
       inherit rev;
     };
     inherit src;
-    vendorHash = "sha256-fVNMtCpodsr1Z9E21osHb+e63ZQqFKYwi4fz4OsTJe0=";
+    vendorHash = "sha256-AiwpJn2dMUHA3jUCqPl3xAk1W7IpZOaRgMFmPSbKMxo=";
     installCheckPhase = vu.mkMcpSmokeTest {bin = "github-mcp-server";};
     passthru = (old.passthru or {}) // {mcpName = "github-mcp";};
   })
