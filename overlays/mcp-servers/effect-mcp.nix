@@ -34,7 +34,7 @@ in
     pnpmDeps = fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
       fetcherVersion = 3;
-      hash = "sha256-8VCbs1gEKWGUD7nKxDL48RErzY0KW5k4fcW+chnAJ70=";
+      hash = "sha256-BtXGw92T+7Cbvg9tUTvHQNiEy1yIGH12zhJLKRxhEl8=";
     };
     nativeBuildInputs = [makeWrapper nodejs pnpm pnpmConfigHook];
     buildPhase = ''
