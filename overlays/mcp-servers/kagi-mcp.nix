@@ -17,12 +17,12 @@
   inherit (ourPkgs) fetchFromGitHub fetchurl python314Packages;
   vu = import ../lib.nix;
 
-  rev = "8b17c04aeefbc75dcfd04b6ee33222da21a4caa5";
+  rev = "17c4dfd25fbfeeffa43a428574b786982bd3cd97";
   src = fetchFromGitHub {
     owner = "kagisearch";
     repo = "kagimcp";
     inherit rev;
-    hash = "sha256-I+lyGlw4/mH38DzuHRhKYyZz7I2bWKWJbIAT3sebm4g=";
+    hash = "sha256-EMLZ8IPHfY1f4kuzRWhu2f2dqyKQtXcBf087tOHg1QQ=";
   };
 
   kagiapi = python314Packages.buildPythonPackage {
