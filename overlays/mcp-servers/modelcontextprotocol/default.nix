@@ -31,7 +31,7 @@
   # Shared npm deps from the upstream mono-repo lockfile.
   # npmDepsFetcherVersion = 2 enables workspace support.
   # Hash managed by nix-update.
-  npmDepsHash = "sha256-bj6q6TWOmZT+MGVugutU6vCpwaxedcraLB1Q/UfPIvc=";
+  npmDepsHash = "sha256-+9w4WTzPGIJlerkbbKhfSPQhhKOQpNda5pZzi/P4vN0=";
 
   # Build a JS sub-package from the mono-repo using npm workspaces.
   # `upstream` literal is written at the call site (see # upstream:
