@@ -70,6 +70,14 @@
 
         cp -r src/${subdir}/dist $out/lib/${pname}/
         cp -r node_modules $out/lib/${pname}/
+        # Upstream lockfile installs some deps (notably
+        # @modelcontextprotocol/sdk) per-workspace at
+        # src/<workspace>/node_modules/ instead of hoisting to root.
+        # Merge them into the output node_modules so node/bun resolution
+        # finds them at runtime.
+        if [ -d src/${subdir}/node_modules ]; then
+          cp -r src/${subdir}/node_modules/. $out/lib/${pname}/node_modules/
+        fi
         cp src/${subdir}/package.json $out/lib/${pname}/
         makeWrapper ${bun}/bin/bun $out/bin/${pname} \
           --add-flags "$out/lib/${pname}/dist/index.js"
@@ -169,11 +177,28 @@ in {
     doInstallCheck = true;
     installCheckPhase = ''
       runHook preInstallCheck
+      # Exchange an MCP initialize handshake instead of relying on
+      # exit-zero. The old timeout-and-discard check passed even when
+      # the binary crashed on first import, masking packaging bugs.
+      init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}'
       for bin in $out/bin/*; do
         name=$(basename "$bin")
-        echo "smoke-test: starting $name..."
-        timeout 2 "$bin" < /dev/null 2>&1 || true
-        echo "smoke-test: $name started (exit ok)"
+        echo "smoke-test: handshake with $name..."
+        out=$(printf '%s\n' "$init" | timeout 10 "$bin" 2>&1 || true)
+        case "$out" in
+          *"Cannot find module"*|*ModuleNotFoundError*|*ImportError*)
+            echo "smoke-test FAIL: $name import error:" >&2
+            printf '%s\n' "$out" >&2
+            exit 1
+            ;;
+        esac
+        if [[ "$out" == *'"jsonrpc"'* && "$out" == *'"result"'* ]]; then
+          echo "smoke-test: $name handshake OK"
+        else
+          echo "smoke-test FAIL: $name no init response:" >&2
+          printf '%s\n' "$out" >&2
+          exit 1
+        fi
       done
       runHook postInstallCheck
     '';
