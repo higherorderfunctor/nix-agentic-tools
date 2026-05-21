@@ -10,9 +10,8 @@ The Renovate-style per-input update pipeline (`dev/scripts/update-*.sh`,
 updates the **directly named** dependency hash for each PR but
 cannot refresh **transitive** hashes that change as a side effect
 of that update, cannot see intra-derivation version coupling, and
-cannot detect upstream constraint violations before opening the
-PR. CI then validates PRs the pipeline itself can never have made
-pass.
+silently disables build verification on every package. CI then
+validates PRs the pipeline itself can never have made pass.
 
 Four concrete failure modes have been observed (PRs #144, #145,
 #148, #160 on 2026-05-20). Each maps to a distinct architectural
@@ -20,14 +19,20 @@ gap, and each has a real (non-patch) fix laid out below.
 
 - The update target runs in an isolated worktree branched from
   base. It only refreshes hashes for the package nix-update is
-  pointed at. In CI mode `merge_to_branch` is a no-op
-  (`dev/scripts/update-common.sh:117-120`), so no downstream
-  worktree ever sees an in-flight upstream input bump.
-- Phase 2 `run_build` is a no-op in CI mode
-  (`dev/scripts/update-common.sh:91-97`), so the pipeline never
-  surfaces build-time signals (upstream constraint violations,
-  cross-version skew) as `HELD BACK` — they leak into PR-CI as
-  red builds instead.
+  pointed at. `merge_to_branch` is a no-op in CI mode
+  (`dev/scripts/update-common.sh:117-120`); this part is by
+  design — the Renovate model isolates each update as its own
+  PR, so cherry-picks would defeat the model.
+- `run_build` (Phase 2 build verification) is also a no-op in
+  CI mode (`dev/scripts/update-common.sh:91-97`). **That part
+  is dead-code.** Local-mode pipeline execution was deprecated
+  some time ago (it OOMed), so every real run hits the CI branch.
+  The `if [ -n "$CI_MODE" ]; then return 0; fi` short-circuit
+  was kept as a no-op while local mode was being maintained;
+  with local mode retired, it now silently disables Phase 2 for
+  every package, every run. This is the bug behind Modes C and D
+  (and would catch certain Mode A regressions for free if
+  enabled).
 
 ## Failure modes observed
 
@@ -98,22 +103,20 @@ mcp-proxy>   - uvicorn>=0.47.0 not satisfied by version 0.40.0
 
 `pythonRuntimeDepsCheckHook` evaluating real upstream constraints
 from `pyproject.toml` against `python3Packages.mcp` /
-`python3Packages.uvicorn` shipped by the pinned nixpkgs. **Not a
-hash class of problem.** The pipeline has no upstream-dep-floor
-awareness; the consequence only surfaces in ci.yml's actual
-build.
+`python3Packages.uvicorn` shipped by the pinned nixpkgs.
 
 **Why the pipeline didn't catch it:** `update-pkg.sh` Phase 1
-runs `nix-update --version skip`, which only validates that
-hashes resolve, not that the produced derivation builds. Phase 2
-`run_build` is a no-op in CI mode
-(`dev/scripts/update-common.sh:91-97`). The
-"Fail if any updates were held back" gate at
-`.github/workflows/update.yml:295-304` only fires when
-`report_held_back` was called — and `report_held_back` is reached
-only on `nix-update` errors (`dev/scripts/update-pkg.sh:181-189`),
-never on downstream constraint failures. So the worktree branch
-is pushed and the PR opens with no signal.
+runs `nix-update --version skip`, which only resolves the FOD
+source/hash — it does not run the build, so `pythonRuntimeDepsCheckHook`
+is never invoked. Phase 2 `run_build` would invoke the build,
+but `run_build` returns 0 unconditionally because of the
+leftover `CI_MODE` short-circuit at
+`dev/scripts/update-common.sh:91-97`. Local-mode pipeline
+execution was deprecated (OOMs), so every real run hits the
+no-op branch. The `report_held_back` path at
+`dev/scripts/update-pkg.sh:181-189` is therefore never reached
+for build-time failures, the worktree branch is pushed, and the
+PR opens with no signal.
 
 **Upstream status (as of 2026-05-20):**
 
@@ -123,6 +126,7 @@ is pushed and the PR opens with no signal.
 | `python3Packages.uvicorn` | 0.40.0           | ≥ 0.47.0           | no open PR for 0.47 series — long tail |
 
 mcp is plausible 4–8 weeks out; uvicorn is unknown but slower.
+The PR can sit `HELD BACK` until either ships.
 
 ### Mode D — Cross-package-version skew within a single overlay (PR #160: context7-mcp)
 
@@ -175,10 +179,10 @@ opened by the pipeline; nothing transitive), Mode B (nix-update
 saw the hash and updated it correctly given the inputs it had),
 and Mode C (no Python constraint involved).
 
-`effect-mcp.nix` is fine today because it uses
-`mkDerivation` with `pnpm` and `pnpmConfigHook` both pulled from
-the same `ourPkgs` attribute set — fetcher and build are bound
-to the same pnpm. `context7-mcp.nix` is fragile because it uses
+`effect-mcp.nix` is fine today because it uses `mkDerivation`
+with `pnpm` and `pnpmConfigHook` both pulled from the same
+`ourPkgs` attribute set — fetcher and build are bound to the
+same pnpm. `context7-mcp.nix` is fragile because it uses
 `overrideAttrs` against a nixpkgs derivation that pins one pnpm
 version while the fetcher default tracks another.
 
@@ -188,8 +192,8 @@ version while the fetcher default tracks another.
 | -------------------- | ---- | ---------------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | #148 nixpkgs         | A    | `flake.lock`, `devenv.lock`                          | Refresh `pnpmDeps.hash` on effect-mcp (+ likely other pnpm/npm/cargo consumers) | Cross-target propagation: nixpkgs PR isolated to lock; downstream worktrees can't see it in CI mode             |
 | #145 mcp-servers rev | B    | `rev`, `src.hash`, `upstream` literals on `all-mcps` | Refresh shared `npmDepsHash` consumed by 4+ siblings                            | nix-update introspects target derivation attrs only — let-scope bindings on siblings invisible                  |
-| #144 mcp-proxy ver   | C    | `rev`, `src.hash`                                    | Detect dep-floor skew pre-PR, `HELD BACK (upstream-dep-floor)`                  | No pre-flight constraint check; Phase 2 `run_build` is no-op in CI                                              |
-| #160 context7-mcp    | D    | `pnpmDeps.hash` (spurious regen)                     | Bind fetcher + buildPhase to same pnpm version                                  | Overlay's `fetchPnpmDeps` defaults to `pnpmLatest`; parent pins `pnpm_10`; nixpkgs default moved 10→11 silently |
+| #144 mcp-proxy ver   | C    | `rev`, `src.hash`                                    | Build the package and let `pythonRuntimeDepsCheckHook` flag it → `HELD BACK`    | Leftover dead-code `CI_MODE` guard on `run_build` (`update-common.sh:91-97`) — local mode is deprecated         |
+| #160 context7-mcp    | D    | `pnpmDeps.hash` (spurious regen)                     | Bind fetcher + buildPhase to same pnpm version + build before PR                | Overlay's `fetchPnpmDeps` defaults to `pnpmLatest`; parent pins `pnpm_10`; nixpkgs default moved 10→11 silently |
 
 ## One-time manual exception applied 2026-05-20
 
@@ -216,7 +220,7 @@ Applied:
 
 ## What a real fix would look like
 
-Two pipeline gaps to close, ordered by impact:
+Five gaps to close, ordered by recommended sequencing below.
 
 ### Gap 1 — Refresh downstream hashes on input bumps
 
@@ -233,6 +237,10 @@ Amend hash-only diffs into the input PR's commit.
 Trade-off: an input bump PR becomes much larger (potentially 10+
 hash changes) but ci.yml gets a coherent unit to validate.
 
+Note: Gap 5 (real Phase 2 build) does NOT cover Mode A, because
+input bumps don't have a single target package to build — only
+the per-package targets do. Gap 1 is the only fix for Mode A.
+
 ### Gap 2 — Expose shared hashes per child
 
 For `modelcontextprotocol/default.nix` specifically, the shared
@@ -248,54 +256,29 @@ requires a custom `updateScript` rather than `--use-update-script`
 
 - nix-update.
 
-### Gap 3 — Upstream-dep-floor pre-flight check (real fix for Mode C / #144)
+### Gap 3 (dropped) — was: Upstream-dep-floor pre-flight check
 
-**Insertion point:** between Phase 0 (rev bump commit at
-`dev/scripts/update-pkg.sh:132-134`) and Phase 1 (nix-update at
-line 140). Call it Phase 0.5.
+**Earlier proposal was a regex-based PEP 508 parser. Discarded
+as a smell.** PEP 508 includes range syntax (`>=X,<Y`), compatible
+release (`~=X.Y`), exclusions (`!=`), environment markers
+(`; python_version<"3.13"`), extras (`mcp[server]>=…`), and VCS/URL
+specifiers. A `>=X.Y.Z` regex silently mis-handles all of these
+and produces both false positives and false negatives.
 
-**Mechanism:**
+Reinventing PEP 508 in Nix would also be reinventing what
+`pythonRuntimeDepsCheckHook` already does correctly. That hook is
+the canonical evaluator; the right move is to **let it run** at
+update-bot time, which is exactly what Gap 5 does. Equivalent
+applies to npm (`npmRuntimeDepsCheckHook`, when present) and to
+Rust/Cargo (the resolver itself).
 
-1. Add `parseRuntimeFloors` helper in `overlays/lib.nix`
-   (alongside `readPyprojectVersion` at line 22). For Python:
-   `builtins.fromTOML` on `pyproject.toml`, iterate
-   `[project.dependencies]`, regex-extract `>=X.Y.Z` floors.
-   Start strict on PEP 508 (`>=` only); generalize later.
-2. For each `# upstream:` marker the script already parses at
-   `update-pkg.sh:80-84`, locate the corresponding manifest in
-   the freshly-fetched `$storePath`.
-3. Evaluate each `python3Packages.<name>.version` via
-   `nix eval --impure --raw` against the current flake's
-   nixpkgs and compare with `lib.versionAtLeast`.
-4. On mismatch: call
-   `report_held_back "$name" "upstream-dep-floor" "$detail"`
-   (refactor the rollback block at
-   `dev/scripts/update-pkg.sh:186-190` into a function and call
-   it from both Phase 0.5 and Phase 1 failure paths). The
-   existing CI gate at
-   `.github/workflows/update.yml:295-304` grep'es `^HELD BACK:`
-   regardless of reason — no workflow change needed.
-
-**Generalizes to ecosystems:**
-
-- npm/pnpm: `readPackageJsonVersion` already in `overlays/lib.nix:14`;
-  read `dependencies` + `peerDependencies` from `package.json` and
-  compare against `nodePackages.<name>.version`.
-- Cargo: `readCargoWorkspaceVersion` already in `overlays/lib.nix:27`;
-  parse `[dependencies]` + `[workspace.dependencies]` from
-  `Cargo.toml` and compare against the rust-overlay's toolchain.
-
-**Auto-retry consideration:** ideally
-`update-input.sh nixpkgs` (or, post-Gap 1, the in-flight bump
-worker) would re-run Phase 0.5 against held-back packages whose
-floors are now met and promote them from `HELD BACK` to
-`UPDATED`. Defer until after the basic check lands and we measure
-how often #144-class entries actually sit.
+This entry is preserved so a future reader knows the regex
+approach was considered and rejected.
 
 ### Gap 4 — Cross-package-version skew in overlays (real fix for Mode D / #160)
 
-This is two fixes — a one-line content fix for `context7-mcp.nix`
-plus a structural guard to prevent recurrence.
+Two parts — a one-line content fix for `context7-mcp.nix` plus a
+structural guard to prevent recurrence.
 
 **Content fix (`overlays/mcp-servers/context7-mcp.nix:50-54`):**
 
@@ -336,61 +319,127 @@ Equivalent npm guard for `fetchNpmDeps` is worth adding at the
 same time (same risk shape: `npmDepsFetcherVersion` plus
 defaulting to nixpkgs' current `nodejs`).
 
-### Gap 5 (long-tail) — Build before opening PRs
+### Gap 5 — Restore Phase 2 build verification (real fix for Mode C / #144 and safety net for D and future modes)
 
-Phase 2 `run_build` is a no-op in CI mode
-(`dev/scripts/update-common.sh:91-97`). The pipeline therefore
-opens PRs for dead-on-arrival updates (Mode C #144 is the
-canonical case, but Mode A #148 also slipped through this
-check). Enabling Phase 2 build in CI mode — even just
-`nix build .#$name --no-link --max-jobs 1` — would catch most
-Mode C/D failures at the bot stage and convert them to
-`HELD BACK` instead of red PRs. Trade-off: meaningful CI runtime
-cost (~ minutes per package per pipeline run). Defer until after
-Gaps 3 + 4 land and we can measure how many remaining failures
-this would catch.
+The `run_build` short-circuit at
+`dev/scripts/update-common.sh:91-97` is leftover from a
+deprecated local-mode pipeline (retired due to OOMs). In current
+all-CI execution it makes `run_build` an unconditional no-op,
+which is what allows Mode C and Mode D failures to reach PRs.
+
+**Content fix:** drop the `CI_MODE` short-circuit. Concretely,
+replace
+
+```bash
+run_build() {
+  if [ -n "$CI_MODE" ]; then
+    log_info "CI mode: skipping full build (PR pipeline validates)"
+    return 0
+  fi
+  "$@"
+}
+```
+
+with
+
+```bash
+run_build() {
+  "$@"
+}
+```
+
+(or just inline the build call at the existing Phase 2 site and
+delete the helper entirely; either way, the dead branch goes).
+This makes `update-pkg.sh:180`'s
+`nix build .#$name --no-link --log-format bar-with-logs` actually
+run during the bot job, before the PR is opened.
+
+The existing `report_held_back` machinery at
+`update-pkg.sh:181-189` already catches the build failure cleanly:
+on non-zero exit it logs `HELD BACK: <name> | <detail> (nix-update
+or build failed)`, resets the worktree to base
+(so the PR-creation step at `update.yml:139-141` filters it out),
+and the workflow's `^HELD BACK:` gate at `update.yml:295-304`
+turns the run red. **No new code paths needed.**
+
+What this catches automatically:
+
+- **Mode C** — `pythonRuntimeDepsCheckHook` fires during the
+  build's `pypaBuildPhase` follow-up, fails with the exact
+  dep-floor message we saw on #144, build exits non-zero,
+  `report_held_back` runs.
+- **Mode D** — the build attempts to consume the FOD output,
+  hits `ERR_PNPM_NO_OFFLINE_TARBALL`, fails, same path.
+- **Any future class of build-time failure** specific to the
+  targeted package (test failures, missing native deps, etc.) —
+  caught for free because we're running the same build the
+  consumer runs.
+
+Cost analysis: each package bump pays one extra build in the
+bot job. Cachix-action is already configured in `update.yml` and
+pushes successful builds; ci.yml's PR check uses
+`nix-fast-build --skip-cached`, so the PR build substitutes the
+cachix-served output → near-zero wall-clock cost in PR CI. The
+marginal cost is the first build, which has to happen somewhere
+anyway. Per-pipeline-run cost grows with the number of packages
+that actually update; packages that report `NO UPDATES` skip
+Phase 2 (see `update-pkg.sh:174-176`).
+
+Out-of-scope today: re-enabling local-mode execution. Local mode
+stays deprecated; the `CI_MODE` guard removal is purely about
+killing the dead branch that disables verification in the
+all-CI flow.
+
+**Optional follow-up cleanup:** with local mode retired and Gap 5
+landed, the `CI_MODE` variable itself can be ripped out of
+`update-common.sh` entirely (along with `merge_to_branch`'s
+local-cherry-pick code path that no longer runs). That's a
+cosmetic cleanup, not load-bearing, and can wait.
 
 ## Code map
 
-| File                                                                 | Role                                                                                                                |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `dev/scripts/update-input.sh:20-31`                                  | Where input bumps land — currently no downstream hash refresh                                                       |
-| `dev/scripts/update-pkg.sh:39-55`                                    | Rev bump + src.hash sed for main-tracking packages                                                                  |
-| `dev/scripts/update-pkg.sh:156`                                      | `nix-update` invocation — sees only target attrs                                                                    |
-| `dev/scripts/update-common.sh:75/79`                                 | `setup_worktree` checks out fresh from `$BRANCH`                                                                    |
-| `dev/scripts/update-common.sh:117-120`                               | CI mode no-op for `merge_to_branch`                                                                                 |
-| `config/generate-update-ninja.nix:36-42`                             | DAG edges — currently ordering-only, no content propagation                                                         |
-| `overlays/mcp-servers/modelcontextprotocol/default.nix:34`           | Shared `npmDepsHash` let-binding                                                                                    |
-| `overlays/mcp-servers/modelcontextprotocol/default.nix:148`          | `all-mcps` meta-derivation with no hash attrs                                                                       |
-| `overlays/mcp-servers/effect-mcp.nix:34-38`                          | `pnpmDeps.hash` that breaks on pnpm-version-change in nixpkgs                                                       |
-| `overlays/mcp-servers/mcp-proxy.nix`                                 | `pythonRuntimeDepsCheckHook` enforces upstream dep floors (Gap 3 canary)                                            |
-| `dev/scripts/update-pkg.sh:80-84`                                    | `# upstream:` marker parsing — reusable for Gap 3 manifest discovery                                                |
-| `dev/scripts/update-pkg.sh:132-134`                                  | End of Phase 0 commit — Gap 3 Phase 0.5 inserts here                                                                |
-| `dev/scripts/update-pkg.sh:179-189`                                  | Phase 2 build + held-back rollback (extract into shared function)                                                   |
-| `dev/scripts/update-common.sh:91-97`                                 | CI-mode no-op for `run_build` — Gap 5                                                                               |
-| `dev/scripts/update-common.sh:183-191`                               | `report_held_back` — extend reason taxonomy for Gap 3                                                               |
-| `.github/workflows/update.yml:295-304`                               | "Fail if any updates were held back" gate — grep'es `^HELD BACK:`                                                   |
-| `overlays/lib.nix:14-27`                                             | `readPackageJsonVersion`, `readCargoWorkspaceVersion`, `readPyprojectVersion` — reusable for Gap 3 manifest parsing |
-| `overlays/mcp-servers/context7-mcp.nix:50-54`                        | Fetcher without `pnpm` binding — Gap 4 content fix lands here                                                       |
-| Upstream `pkgs/by-name/co/context7-mcp/package.nix:17`               | nixpkgs's `pnpm = pnpm_10;` pin — the truth our overlay must follow                                                 |
-| Upstream `pkgs/build-support/node/fetch-pnpm-deps/default.nix:16,29` | `pnpm ? pnpmLatest` default — the trap that produces Mode D                                                         |
+| File                                                                 | Role                                                                                                               |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `dev/scripts/update-input.sh:20-31`                                  | Where input bumps land — currently no downstream hash refresh (Gap 1)                                              |
+| `dev/scripts/update-pkg.sh:39-55`                                    | Rev bump + src.hash sed for main-tracking packages                                                                 |
+| `dev/scripts/update-pkg.sh:156`                                      | `nix-update` invocation — sees only target attrs                                                                   |
+| `dev/scripts/update-pkg.sh:179-189`                                  | Phase 2 build + held-back rollback — already correct shape; Gap 5 just needs `run_build` to actually run           |
+| `dev/scripts/update-common.sh:75/79`                                 | `setup_worktree` checks out fresh from `$BRANCH`                                                                   |
+| `dev/scripts/update-common.sh:91-97`                                 | **Dead-code `CI_MODE` guard on `run_build`** — Gap 5 removes this short-circuit                                    |
+| `dev/scripts/update-common.sh:117-120`                               | `merge_to_branch` no-op in CI — by design (Renovate model), don't touch                                            |
+| `dev/scripts/update-common.sh:183-191`                               | `report_held_back` — already handles the build-failed case Gap 5 needs                                             |
+| `config/generate-update-ninja.nix:36-42`                             | DAG edges — currently ordering-only, no content propagation (Gap 1)                                                |
+| `.github/workflows/update.yml:295-304`                               | "Fail if any updates were held back" gate — grep'es `^HELD BACK:`, already wired for Gap 5                         |
+| `overlays/lib.nix:14-27`                                             | `readPackageJsonVersion`, `readCargoWorkspaceVersion`, `readPyprojectVersion` — not needed for Gap 5; kept for ref |
+| `overlays/mcp-servers/modelcontextprotocol/default.nix:34`           | Shared `npmDepsHash` let-binding (Gap 2)                                                                           |
+| `overlays/mcp-servers/modelcontextprotocol/default.nix:148`          | `all-mcps` meta-derivation with no hash attrs (Gap 2)                                                              |
+| `overlays/mcp-servers/effect-mcp.nix:34-38`                          | `pnpmDeps.hash` that breaks on pnpm-version-change in nixpkgs                                                      |
+| `overlays/mcp-servers/mcp-proxy.nix`                                 | `pythonRuntimeDepsCheckHook` enforces upstream dep floors (Gap 5 canary)                                           |
+| `overlays/mcp-servers/context7-mcp.nix:50-54`                        | Fetcher without `pnpm` binding — Gap 4 content fix lands here                                                      |
+| Upstream `pkgs/by-name/co/context7-mcp/package.nix:17`               | nixpkgs's `pnpm = pnpm_10;` pin — the truth our overlay must follow                                                |
+| Upstream `pkgs/build-support/node/fetch-pnpm-deps/default.nix:16,29` | `pnpm ? pnpmLatest` default — the trap that produces Mode D                                                        |
 
 ## How to resume
 
-Recommended sequencing (updated 2026-05-20 after the four-mode
-RCA):
+Recommended sequencing (revised 2026-05-20 after the CI_MODE
+dead-code observation):
 
-1. **Gap 4 (Mode D / #160)** — smallest blast radius. One-line
-   content fix in `context7-mcp.nix` + structural-guard check.
-   Land first to prove the guard-check pattern works.
-2. **Gap 3 (Mode C / #144)** — Phase 0.5 manifest pre-flight.
-   Reuses the same shape (parse, evaluate, `HELD BACK`).
-3. **Gap 1 (Mode A / #148-class)** — downstream refresh on input
-   bumps. Biggest impact, biggest work.
-4. **Gap 2 (Mode B / #145)** — modelcontextprotocol shared hash.
-   Self-contained but cosmetic compared to the others.
-5. **Gap 5** — enable Phase 2 build in CI as a catch-all. Defer
-   until 3 + 4 land and we can measure remaining failures.
+1. **Gap 4 content fix (Mode D / #160)** — 5 minutes. Thread
+   `pnpm = ourPkgs.pnpm_10;` into `context7-mcp.nix:50-54`, revert
+   the hash to `f3PX…`. PR #160 closes / re-greens.
+2. **Gap 5 (Mode C / #144 fix, plus safety net for Mode D and
+   any future build-time failure)** — drop the `CI_MODE`
+   short-circuit on `run_build`. ~1 hour including local
+   verification on a sample target.
+3. **Gap 4 structural guard** — `checks.pnpm-fetcher-parity` so
+   the Mode D bug class can't be reintroduced silently.
+   ~2 hours.
+4. **Gap 1 (Mode A / #148-class)** — downstream refresh on input
+   bumps. Biggest impact, biggest work. ~1 day.
+5. **Gap 2 (Mode B / #145)** — modelcontextprotocol shared hash
+   refactor. ~half a day.
+6. **(Optional cleanup)** — rip out the now-unused `CI_MODE`
+   variable and `merge_to_branch`'s local-cherry-pick branch.
 
 When resuming, re-read `feedback_no_manual_hashes.md` — the
 2026-05-20 manual patching was a one-time exception, not a
