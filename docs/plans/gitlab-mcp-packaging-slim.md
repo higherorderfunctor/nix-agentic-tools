@@ -9,10 +9,11 @@ the self-hosted GitLab URL, which may need to be treated as a credential.
 | Item              | Value                                                                                  |
 | ----------------- | -------------------------------------------------------------------------------------- |
 | Repo              | `github.com/zereight/gitlab-mcp`                                                       |
-| Tag / rev         | `v2.1.11` / `3c8a1f367902ba10a2a01e93c86bd68d7a08996a`                                 |
+| Tag / rev         | `v2.1.13` (or whatever `git ls-remote HEAD` returns at land time — CI bumps on merge)  |
 | License           | MIT                                                                                    |
 | Build             | `npm run build` (tsc → `build/index.js`)                                               |
-| Entry binary      | `mcp-gitlab` (we rename to `gitlab-mcp`)                                               |
+| Entry binary      | `mcp-gitlab` (we rename to `gitlab-mcp` via `makeWrapper`)                             |
+| Runtime           | `bun` (repo convention — upstream allows node ≥18 but we standardize on bun)           |
 | Native deps       | none                                                                                   |
 | Reserved port     | `19761`                                                                                |
 | Templates to copy | `overlays/mcp-servers/git-intel-mcp.nix`, `packages/github-mcp/modules/mcp-server.nix` |
@@ -100,15 +101,20 @@ consumers who need it use the freeform `env = { … }` escape hatch.
 - `overlays/mcp-servers/gitlab-mcp.nix` — copy `git-intel-mcp.nix`, swap:
   - `rev`, `hash`, `npmDepsHash` (two fakeHash rounds)
   - owner/repo/pname → `zereight` / `gitlab-mcp` / `gitlab-mcp`
-  - `upstream = "2.1.11"`
+  - `upstream = "2.1.13"` (or current `package.json` value at land time)
   - `build/index.js` path (upstream emits `build/`, not `dist/`)
-  - wrapper binary name `gitlab-mcp`
+  - wrapper binary name `gitlab-mcp` (keep `bun` as the runtime — repo
+    convention, matches git-intel-mcp's `makeWrapper ${bun}/bin/bun ...`)
   - drop the `git`/`vitest` check inputs and `checkPhase` (gitlab-mcp's
     upstream tests aren't run here; git-intel runs vitest)
   - `meta.{license = ourPkgs.lib.licenses.mit; mainProgram = "gitlab-mcp"; homepage; description}`
 - `packages/gitlab-mcp/default.nix` — barrel, 5 lines like `github-mcp/default.nix`
 - `packages/gitlab-mcp/modules/mcp-server.nix` — typed schema (see Design above)
-- `packages/gitlab-mcp/lib/mkGitlab.nix` — rename of `github-mcp/lib/mkGitHub.nix`
+- `packages/gitlab-mcp/lib/mkGitlab.nix` — rename of `github-mcp/lib/mkGitHub.nix`.
+  Stub with `options = {}`. **Intentionally mirrors the existing
+  pattern** so when the factory-factory DRY gap
+  (`project_factory_known_gaps.md`) gets fixed, gitlab-mcp moves with the
+  rest of the cohort in one sweep instead of needing a separate catch-up.
 - `packages/gitlab-mcp/docs/README.md` — short usage doc covering:
   - sops-nix PAT wiring
   - `instanceUrl` vs `apiUrl.file` (when to pick which)
@@ -121,19 +127,32 @@ consumers who need it use the freeform `env = { … }` escape hatch.
 2. `packages/default.nix`
 3. `config/update-matrix.nix` — entry with `flags = "--version skip"` and `git = "https://github.com/zereight/gitlab-mcp.git"`
 4. `dev/data.nix` — `{ description = "GitLab platform integration"; credentials = "Required"; }`
-5. `README.md:128` — bump server count `14 → 15`, add table row
-6. `packages/mcp-services/modules/homeManager/default.nix:52` — add `"gitlab-mcp"` to names list
-7. `checks/cache-hit-parity.nix:99` — add `"gitlab-mcp"` to package list
-8. `checks/factory-eval.nix:213` — add two tests after `github-mcp`'s:
+5. `packages/mcp-services/modules/homeManager/default.nix:52` — add `"gitlab-mcp"` to names list
+6. `checks/cache-hit-parity.nix:99` — add `"gitlab-mcp"` to package list
+7. `checks/factory-eval.nix:213` — add two tests after `github-mcp`'s:
    - `factory-loadServer-gitlab-mcp-from-package-dir` (checks `settingsOptions ? pat`)
    - `factory-gitlab-mcp-has-package-module`
-9. `checks/module-eval.nix:1214` — add `&& servers ? gitlab-mcp`
-10. `config/cspell/project-terms.txt` — add `glpat`, `mcpgitlab`, `zereight` if absent (alphabetical)
+8. `checks/module-eval.nix:1214` — add `&& servers ? gitlab-mcp`
+9. `config/cspell/project-terms.txt` — add `glpat`, `mcpgitlab`, `zereight` if absent (alphabetical)
+
+**Do NOT edit `README.md` directly.** It is generated. `dev/generate.nix:513`
+emits the server count (`${toString mcpServerCount} servers`) from the
+`dev/data.nix` attrset size, and the table rows come from
+`mcpServerMeta`. After registering in `dev/data.nix` (step 4), run:
+
+```bash
+devenv tasks run --mode before generate:repo
+```
+
+That regenerates `README.md` with the new count and row in one shot. Any
+manual edit to `README.md:128` will be clobbered the next time anyone
+runs the generator.
 
 ## Validation
 
 ```bash
 nix build .#ai.mcpServers.gitlab-mcp
+devenv tasks run --mode before generate:repo   # regenerate README
 nix flake check
 treefmt
 ```
@@ -156,8 +175,9 @@ retagged, postUnpack needed) — stop and look at the build error.
 Small linear commits, restack later as needed:
 
 1. `feat(overlay): add gitlab-mcp package` — `overlays/mcp-servers/gitlab-mcp.nix` + `overlays/default.nix`
-2. `feat(gitlab-mcp): typed server module and factory` — `packages/gitlab-mcp/{default.nix,modules/,lib/}`
-3. `feat(gitlab-mcp): register across monorepo` — all the registration touchpoints
+2. `feat(gitlab-mcp): typed server module and factory stub` — `packages/gitlab-mcp/{default.nix,modules/,lib/}`
+3. `feat(gitlab-mcp): register across monorepo` — registration touchpoints +
+   `devenv tasks run --mode before generate:repo` output (regenerated README)
 4. `docs(gitlab-mcp): consumer config` — `packages/gitlab-mcp/docs/README.md`
 
 Only the final state must pass `nix flake check`.
