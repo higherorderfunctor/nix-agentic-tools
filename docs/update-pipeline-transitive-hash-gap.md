@@ -496,97 +496,128 @@ generalize per `feedback_no_manual_hashes.md`):
 - `b85b6c8` — #145 filesystem-mcp npmDepsHash regen.
 - `07632c2` — #148 effect-mcp pnpmDeps.hash regen.
 
-Real fixes shipped:
+Real fixes shipped (originally as PRs, then cherry-picked directly per user preference for landing on the dev branch without PR overhead):
 
-- **Gap 4 content fix** in PR #166
-  (https://github.com/higherorderfunctor/nix-agentic-tools/pull/166)
-  — branch `fix/context7-mcp-pnpm-pin`, commit `3d10f1f`.
-  Threads `pnpm = ourPkgs.pnpm_10;` into `context7-mcp.nix`
+- **Gap 4 content fix** in commit `51a8429`. Threads
+  `pnpm = ourPkgs.pnpm_10;` into `overlays/mcp-servers/context7-mcp.nix`
   fetcher. Local build green, cachix HTTP/2 200 on the
   cache-served `f3PX…` outPath, `nix flake check --no-build`
-  passes. Awaiting review + merge. After merge, close #160
-  (it is the spurious bot regen that the real fix supersedes).
+  passes. PR #166 closed without merging; PR #160 closed as
+  superseded by this fix.
 
-- **Gap 4 structural guard** in PR #168
-  (https://github.com/higherorderfunctor/nix-agentic-tools/pull/168)
-  — branch `feat/pnpm-fetcher-parity-check`, stacked on PR #166.
-  Adds `checks/pnpm-fetcher-parity.nix` asserting fetcher pnpm ==
+- **Gap 4 structural guard** in commit `1d864d3`. Adds
+  `checks/pnpm-fetcher-parity.nix` asserting fetcher pnpm ==
   buildPhase pnpm for every overlay package using `fetchPnpmDeps`.
-  Positive test (with content fix): `ok — every pnpmDeps fetcher
-uses the same pnpm as its consuming buildPhase`. Negative test
-  (content fix reverted): `FAIL: 1 package(s) bind fetchPnpmDeps
-to a different pnpm than the buildPhase: context7-mcp: fetcher
-pnpm: pnpm-11.1.1, build pnpm: pnpm-10.33.4`. GitHub will
-  auto-retarget to `refactor/ai-factory-architecture` after #166
-  lands.
+  Positive test: `ok — every pnpmDeps fetcher uses the same pnpm
+as its consuming buildPhase`. Negative test (content fix
+  reverted): `FAIL: context7-mcp: fetcher pnpm: pnpm-11.1.1,
+build pnpm: pnpm-10.33.4`. PR #168 closed without merging.
 
-- **Gap 2 fix** in PR #167
-  (https://github.com/higherorderfunctor/nix-agentic-tools/pull/167)
-  — branch `fix/modelcontextprotocol-update-target`. Adds
+- **Gap 2 fix** in commit `4345fa3`. Adds
   `modelcontextprotocol-filesystem-mcp` as a top-level flake
-  output and renames the update-matrix entry to point at it
-  (instead of the meta-derivation `modelcontextprotocol-all-mcps`,
-  which has no `npmDepsHash` attribute to refresh). Negative test:
-  set the let-binding to a wrong hash, `nix-update --flake
-modelcontextprotocol-filesystem-mcp` correctly restored the
-  original `sha256-+9w4W…` hash by writing it back to source.
-  Targets `refactor/ai-factory-architecture` directly (no stack).
+  output and renames the `config/update-matrix.nix` entry to
+  point at it (instead of the meta-derivation `all-mcps`, which
+  has no `npmDepsHash` attribute). Negative test confirmed
+  `nix-update --flake modelcontextprotocol-filesystem-mcp`
+  correctly refreshes the shared let-binding. PR #167 closed
+  without merging.
 
-- **Gap 5 immediate fix** in PR #170
-  (https://github.com/higherorderfunctor/nix-agentic-tools/pull/170)
-  — branch `fix/gap-5-restore-phase-2-build`, commit `e3a7fe7`.
-  Drops the dead-code `CI_MODE` short-circuit from `run_build` in
-  `dev/scripts/update-common.sh:91-97`. Mode C and Mode D failures
-  now hit `report_held_back` at the bot stage and the worktree
-  resets to base, so bad PRs no longer force-push. User confirmed
-  OOM was a local-mode concern and CI runner has been fine —
-  re-enabling builds in CI is safe.
+- **Gap 5 immediate fix** in commit `32a72c3`. Drops the
+  dead-code `CI_MODE` short-circuit from `run_build` in
+  `dev/scripts/update-common.sh`. Mode C (#144) and Mode D
+  failures now hit `report_held_back` at the bot stage and the
+  worktree resets to base, so bad PRs no longer force-push.
+  Input-bump Phase 2 (`update-input.sh:40`) also runs now —
+  the full-platform `nix-fast-build` after a nixpkgs bump
+  catches Mode A transitively. PR #170 closed without merging.
+
+- **`CI_MODE` cleanup** in commit `a2ac7d2`. Deletes the
+  `CI_MODE` and `MERGE_LOCK` variable declarations, the entire
+  `merge_to_branch` function (its CI body was just a log +
+  return 0; inlined at the two call sites), and the dead
+  `rc=1`/`rc=2` dispatch arms in callers. Removes
+  `UPDATE_CI=1` + `MERGE_LOCK` exports from `update.yml`.
+  Updates `dev/fragments/pipeline/{ci-update-workflow,update-pipeline}.md`
+  - regenerates ecosystem steering. `WORKTREE_LOCK` preserved
+    (real concurrency safety; `git worktree add` is not
+    thread-safe and ninja runs -j4). The
+    `wt_head == base_head` early-return preserved at callers —
+    defensive and what the held-back rollback path relies on.
 
 Real fixes pending:
 
-- **`CI_MODE` removal follow-up** — `CI_MODE` still gates
-  `merge_to_branch` (intentional for Renovate-per-PR model) and
-  the declaration at `update-common.sh:17` is still there. User
-  wants it gone entirely; defer as cleanup after the in-flight
-  PRs land.
 - **Gap 1** — design discussion needed (downstream refresh on
-  input bumps; touches the DAG model). Note: PR #170's
-  `update-input.sh` Phase 2 build now runs the full
+  input bumps; touches the DAG model). Less urgent now that
+  `update-input.sh` Phase 2 build runs the full
   `nix-fast-build --flake .#packages.${system}` against every
-  input bump, which catches Mode A transitively as a side effect.
-  Gap 1's narrower "refresh hashes inline in the input PR" work
-  is still valuable but less urgent now.
+  input bump, which catches Mode A transitively. Gap 1's
+  narrower "refresh hashes inline in the input PR" work would
+  still produce a coherent unit of validation rather than
+  separate red/held-back PRs, but isn't blocking anything today.
 
 ## How to resume
 
-Sequencing after the 2026-05-20 evening session shipped the
-content/guard/Gap-2 PRs:
+State on `refactor/ai-factory-architecture` as of 2026-05-20
+late evening:
 
-1. ~~**Gap 4 content fix**~~ — done, PR #166 open.
-2. ~~**Gap 4 structural guard**~~ — done, PR #168 open, stacked
-   on #166.
-3. ~~**Gap 2**~~ — done, PR #167 open.
-4. ~~**Gap 5 immediate fix**~~ — done, PR #170 open.
-5. **Merge order**: review/merge PR #166 first, then PR #168
-   (which auto-retargets), then PR #167, then PR #170. After all
-   four land, close PR #160 (superseded by the content fix). PR
-   #144 stays open as the Mode C canary — next pipeline run will
-   convert it from a red PR to `HELD BACK (build failed)`.
-6. **Gap 1** — design + implement downstream refresh on input
-   bumps. ~1 day. Less urgent post-PR-#170 since input bumps now
-   run a full-platform build that catches Mode A transitively.
-7. **(Cleanup)** — rip out the now-unused `CI_MODE`
-   variable and `merge_to_branch`'s local-cherry-pick branch.
+1. ~~Gap 4 content fix~~ — commit `51a8429`.
+2. ~~Gap 4 structural guard~~ — commit `1d864d3`.
+3. ~~Gap 2 fix~~ — commit `4345fa3`.
+4. ~~Gap 5 immediate fix~~ — commit `32a72c3`.
+5. ~~`CI_MODE` cleanup~~ — commit `a2ac7d2`.
+6. **Gap 1** — design discussion needed; not blocking.
+7. **PR #144** stays open as the Mode C canary. Next pipeline
+   run after these commits will convert it from a red PR to
+   `HELD BACK (build failed)` because `update-pkg.sh`'s Phase 2
+   now actually runs the build, fails on the
+   `pythonRuntimeDepsCheckHook` constraint, and resets the
+   worktree to base before the PR-creation step sees it. The
+   existing GitHub PR for #144 will stay at its current
+   force-pushed state (not re-broken on each run); the
+   workflow's `^HELD BACK:` gate will turn the run red until
+   nixpkgs catches up on mcp/uvicorn versions.
+
+### Held-back semantics refresher (`update-pkg.sh:179-191`)
+
+When Phase 2 build fails, the rollback path does this in order:
+
+1. `version_detail=$(parse_pkg_version ...)`
+2. `git -C "$wt" reset --hard "$base_head"` — wipes the bot's
+   Phase 0 (rev + src.hash) and Phase 1 (nix-update dep-hash)
+   commits, putting the worktree branch back at base
+3. `report_held_back "$name" "nix-update or build failed" "$version_detail"`
+4. `exit 0` (so ninja moves on)
+
+Later, the PR-creation step in `update.yml:139-141` filters
+`update/*` branches on `wt_head == base_head` and skips the
+ones at base — so a held-back package does **not** trigger
+`git push -f origin update/<name>` and does **not** call
+`gh pr edit` / `gh pr create`. The existing GitHub PR (if any)
+for that package stays at whatever state it was last
+force-pushed to; the held-back run turns the pipeline red via
+the `^HELD BACK:` grep at `update.yml:295-304`.
+
+This is why HELD BACK happens "before pushing" — the rollback
+is what makes the package invisible to the push step.
 
 ### Environment notes for the next session
 
 - `treefmt` CLI was misconfigured in the worktree-agent
-  environment (PWD tree-root mismatch with a sibling
-  `nix-agentic-tools-ideation` symlink). Workaround used by both
-  agents: `nix fmt <files>`. Worth root-causing before another
-  agent run.
+  environment (PWD tree-root mismatch — agent worktrees live
+  under `/home/caubut/Documents/projects/nix-agentic-tools/.claude/worktrees/`
+  but the treefmt wrapper hardcodes `--tree-root` to
+  `nix-agentic-tools-ideation`). Workaround used by all four
+  agents: `nix fmt <files>`. Worth root-causing before
+  another agent run.
 - Worktrees agents create need `.pre-commit-config.yaml`
-  symlinked from the parent checkout (devenv-generated, gitignored).
+  symlinked from the parent checkout (devenv-generated,
+  gitignored).
+- Generated steering files (`.claude/rules/pipeline.md`,
+  `.kiro/steering/pipeline.md`) are gitignored; only
+  `.github/instructions/pipeline.instructions.md` is tracked.
+  After fragment edits, run
+  `devenv tasks run --mode before generate:instructions`
+  locally to refresh the gitignored copies.
 
 When resuming, re-read `feedback_no_manual_hashes.md` — the
 2026-05-20 manual patching was a one-time exception, not a
