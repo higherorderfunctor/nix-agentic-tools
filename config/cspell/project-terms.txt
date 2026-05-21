@@ -69,6 +69,7 @@ frontmatter
 gitbook
 gitref
 gitrevise
+glpat
 gnused
 gopls
 gpgsign
@@ -102,6 +103,7 @@ lspservers
 ltrimstr
 markdownify
 mcpconfig
+mcpgitlab
 mcps
 mcpservers
 mdbook

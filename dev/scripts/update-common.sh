@@ -86,13 +86,9 @@ setup_worktree() {
   echo "$wt"
 }
 
-# Build verification. In CI mode, prefetch sources instead of full build.
-# Sources must be in cachix for CI eval (IFD: readFile on fetchFromGitHub).
+# Build verification. Runs the actual build to catch Mode C/D failures
+# before PRs open — see docs/update-pipeline-transitive-hash-gap.md § Gap 5.
 run_build() {
-  if [ -n "$CI_MODE" ]; then
-    log_info "CI mode: skipping full build (PR pipeline validates)"
-    return 0
-  fi
   "$@"
 }
 
