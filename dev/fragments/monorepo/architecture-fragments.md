@@ -1,19 +1,27 @@
 ## Architecture Fragments
 
-> **Last verified:** 2026-04-08 (commit pending — follows the
-> monorepo fragment re-scope in a9f991b).
+> **Last verified:** 2026-05-20 (commit pending — corrects stale
+> location paths after the post-factory `packages/<pkg>/docs/`
+> migration).
 
 This repo ships path-scoped architecture fragments as dev-only
 context for agents working on it. They are SEPARATE from the
-published consumer-facing content. Locations:
+published consumer-facing content. Three location flavors are
+supported by `dev/generate.nix`:
 
-- `dev/fragments/monorepo/` — always-loaded orientation (this
-  category, composed into `common.md` and the equivalent for
-  each ecosystem)
-- `packages/<pkg>/fragments/dev/` — scoped to files under
-  `packages/<pkg>/**`, co-located with the code they document
-- `modules/<subdir>/fragments/dev/` — scoped to files under
-  `modules/<subdir>/**`, co-located with the code they document
+- `dev/fragments/<category>/<name>.md` (default
+  `location = "dev"`) — orientation and topic-scoped categories
+  not tied to a single package. `dev/fragments/monorepo/`
+  specifically holds the always-loaded orientation, composed into
+  `common.md` and the equivalent for each ecosystem.
+- `packages/<pkg>/docs/<name>.md` (`location = "package"`) —
+  co-located with the package whose abstractions it documents.
+- `devshell/<group>/docs/<name>.md` (`location = "devshell"`) —
+  co-located with a devshell module.
+
+Scope globs (which files the fragment loads for) live separately
+in `packagePaths.<category>` in `dev/generate.nix` and are
+independent of where the markdown source lives on disk.
 
 Each scoped fragment emits per-ecosystem frontmatter via the
 `fragments-ai.passthru.transforms` pipeline:
@@ -83,12 +91,15 @@ explicit location:
 
 ```nix
 devFragmentNames.ai-clis = [
-  "packaging-guide"  # legacy: dev/fragments/ai-clis/packaging-guide.md
+  "packaging-guide"  # default location="dev"
+                     # → dev/fragments/ai-clis/packaging-guide.md
+];
+devFragmentNames.claude-code = [
   {
     location = "package";
     name = "claude-code-wrapper";
-    # dir defaults to "ai-clis"
-    # → packages/ai-clis/fragments/dev/claude-code-wrapper.md
+    dir = "claude-code";  # defaults to the category key
+    # → packages/claude-code/docs/claude-code-wrapper.md
   }
 ];
 ```
