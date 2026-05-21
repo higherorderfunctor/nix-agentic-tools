@@ -307,17 +307,28 @@ existing `checks.cache-hit-parity` documented in
 `.claude/rules/overlays.md`). For every overlay package whose
 final `pnpmDeps` is a `fetchPnpmDeps` output, assert that the
 fetcher's pnpm storeDir matches the buildPhase's pnpm storeDir.
-Mechanically: evaluate
-`drv.pnpmDeps.passthru.fetcherInfo.pnpm.outPath ==
-(drv.nativeBuildInputs |> findPnpm |> .outPath)` (exact attribute
-shape TBD by inspecting `fetchPnpmDeps`'s passthru). On
-mismatch, fail the check with a drift report naming the offender
-and both pnpm versions. Same shape as the cache-hit-parity check
-and runs in the same CI job, so cost is one extra eval pass.
 
-Equivalent npm guard for `fetchNpmDeps` is worth adding at the
-same time (same risk shape: `npmDepsFetcherVersion` plus
-defaulting to nixpkgs' current `nodejs`).
+Verified mechanism (research 2026-05-20): `fetchPnpmDeps.passthru`
+exposes ONLY `fetcherVersion` and `serve` — `pnpm` is **not** on
+passthru. The reliable attribute is
+`drv.pnpmDeps.nativeBuildInputs` filtered by `pname == "pnpm"`,
+compared against the same filter applied to `drv.nativeBuildInputs`.
+
+Consumer set in the overlay today: `context7-mcp` and `effect-mcp`.
+Hardcoded list matches the cache-hit-parity convention; revisit
+if a third pnpm consumer lands.
+
+Live walkthrough against the pre-fix state confirms the check
+would flag `context7-mcp` (fetcher=`pnpm-11.1.1`, build=`pnpm-10.33.4`)
+and pass `effect-mcp` (both `pnpm-11.1.1`).
+
+**No equivalent npm-side check is needed.** `fetchNpmDeps` uses
+a static Rust prefetcher (`prefetch-npm-deps`) and takes no
+`nodejs` parameter — there is no fetcher-vs-build tool drift to
+guard against. Mode D is pnpm-specific because pnpm's offline
+store layout is version-keyed; npm's `package-lock.json`
+resolution is not. Adding `npm-fetcher-parity` would be ceremony
+with no bug class behind it.
 
 ### Gap 5 — Restore Phase 2 build verification (real fix for Mode C / #144 and safety net for D and future modes)
 
