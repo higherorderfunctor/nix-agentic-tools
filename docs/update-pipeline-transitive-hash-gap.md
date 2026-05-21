@@ -188,12 +188,12 @@ version while the fetcher default tracks another.
 
 ## Summary table
 
-| PR                   | Mode | What pipeline updates                                | What it should have done                                                        | Why it can't                                                                                                    |
-| -------------------- | ---- | ---------------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| #148 nixpkgs         | A    | `flake.lock`, `devenv.lock`                          | Refresh `pnpmDeps.hash` on effect-mcp (+ likely other pnpm/npm/cargo consumers) | Cross-target propagation: nixpkgs PR isolated to lock; downstream worktrees can't see it in CI mode             |
-| #145 mcp-servers rev | B    | `rev`, `src.hash`, `upstream` literals on `all-mcps` | Refresh shared `npmDepsHash` consumed by 4+ siblings                            | nix-update introspects target derivation attrs only — let-scope bindings on siblings invisible                  |
-| #144 mcp-proxy ver   | C    | `rev`, `src.hash`                                    | Build the package and let `pythonRuntimeDepsCheckHook` flag it → `HELD BACK`    | Leftover dead-code `CI_MODE` guard on `run_build` (`update-common.sh:91-97`) — local mode is deprecated         |
-| #160 context7-mcp    | D    | `pnpmDeps.hash` (spurious regen)                     | Bind fetcher + buildPhase to same pnpm version + build before PR                | Overlay's `fetchPnpmDeps` defaults to `pnpmLatest`; parent pins `pnpm_10`; nixpkgs default moved 10→11 silently |
+| PR                   | Mode | What pipeline updates                                | What it should have done                                                        | Why it can't                                                                                                                 |
+| -------------------- | ---- | ---------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| #148 nixpkgs         | A    | `flake.lock`, `devenv.lock`                          | Refresh `pnpmDeps.hash` on effect-mcp (+ likely other pnpm/npm/cargo consumers) | Cross-target propagation: nixpkgs PR isolated to lock; downstream worktrees can't see it in CI mode                          |
+| #145 mcp-servers rev | B    | `rev`, `src.hash`, `upstream` literals on `all-mcps` | Refresh the (correctly) shared `npmDepsHash` let-binding                        | Matrix points at the meta-derivation `all-mcps` (no hash attrs); should point at any JS child so nix-update sees the literal |
+| #144 mcp-proxy ver   | C    | `rev`, `src.hash`                                    | Build the package and let `pythonRuntimeDepsCheckHook` flag it → `HELD BACK`    | Leftover dead-code `CI_MODE` guard on `run_build` (`update-common.sh:91-97`) — local mode is deprecated                      |
+| #160 context7-mcp    | D    | `pnpmDeps.hash` (spurious regen)                     | Bind fetcher + buildPhase to same pnpm version + build before PR                | Overlay's `fetchPnpmDeps` defaults to `pnpmLatest`; parent pins `pnpm_10`; nixpkgs default moved 10→11 silently              |
 
 ## One-time manual exception applied 2026-05-20
 
@@ -241,20 +241,57 @@ Note: Gap 5 (real Phase 2 build) does NOT cover Mode A, because
 input bumps don't have a single target package to build — only
 the per-package targets do. Gap 1 is the only fix for Mode A.
 
-### Gap 2 — Expose shared hashes per child
+### Gap 2 — Point nix-update at a child instead of the meta-derivation
 
-For `modelcontextprotocol/default.nix` specifically, the shared
-`npmDepsHash` let-binding needs to either become per-child
-(refactor each `mkJsPackage` to carry its own hash) or be
-attached to `all-mcps` as a synthetic attribute that nix-update
-can see and update. The current shape is invisible to
-introspection-based tooling.
+The shared `npmDepsHash` let-binding is correct as written.
+`modelcontextprotocol/servers` is a workspace monorepo with a
+single `package-lock.json` at the repo root. `fetchNpmDeps` reads
+that one lockfile and produces content-addressed output. Verified
+2026-05-20 by eval: all three JS sub-packages (filesystem-mcp,
+memory-mcp, sequential-thinking-mcp) have **different** npm-deps
+outPaths because the drv name embeds pname — but the underlying
+content (and therefore the hash they all assert) is identical.
 
-Trade-off: per-child hashes means 4× the storage and 4× the
-update steps. The synthetic-attribute approach is cleaner but
-requires a custom `updateScript` rather than `--use-update-script`
+The mistake is in `config/update-matrix.nix`: it points
+`nix-update` at `modelcontextprotocol-all-mcps`, the meta-derivation
+that exists only to symlink binaries. `all-mcps` has no
+`npmDepsHash` attribute itself, so nix-update sees nothing to
+refresh and exits clean. The shared let-binding stays stale.
 
-- nix-update.
+**Two-line fix:**
+
+1. Expose one JS child as a top-level flake package next to the
+   existing meta (`flake.nix:397`):
+
+   ```nix
+   modelcontextprotocol-all-mcps = pkgs.ai.mcpServers.modelContextProtocol.all-mcps;
+   modelcontextprotocol-filesystem-mcp = pkgs.ai.mcpServers.modelContextProtocol.filesystem-mcp;
+   ```
+
+2. Replace the matrix entry key in `config/update-matrix.nix`:
+   `modelcontextprotocol-all-mcps` → `modelcontextprotocol-filesystem-mcp`.
+   The `git` field stays the same.
+
+Phase 0 of `update-pkg.sh` is unaffected: rev-bump greps for the
+repo name "servers" in `overlays/`, finds the same file, and
+applies the same rev+src.hash sed regardless of the matrix key.
+The `# upstream:` markers continue to drive per-child version
+re-derivation.
+
+Phase 1 then runs `nix-update --flake modelcontextprotocol-filesystem-mcp`,
+which finds the `npmDepsHash` literal on the child, reads the
+runtime FOD's actual hash, and replaces the string in source.
+Because every JS child references the same let-binding via
+`inherit npmDepsHash;`, updating one updates them all.
+
+Why this works: nix-update's update mechanism is
+**string-replacement on the source file**, not symbolic
+introspection. It finds the stored hash literal as text and
+replaces it. The let-binding hash literal exists exactly once in
+the file, so the replacement is unambiguous and correct for all
+children.
+
+No overlay refactor, no synthetic attr, no custom updateScript.
 
 ### Gap 3 (dropped) — was: Upstream-dep-floor pre-flight check
 
@@ -430,25 +467,74 @@ cosmetic cleanup, not load-bearing, and can wait.
 | Upstream `pkgs/by-name/co/context7-mcp/package.nix:17`               | nixpkgs's `pnpm = pnpm_10;` pin — the truth our overlay must follow                                                |
 | Upstream `pkgs/build-support/node/fetch-pnpm-deps/default.nix:16,29` | `pnpm ? pnpmLatest` default — the trap that produces Mode D                                                        |
 
+## Session log
+
+### 2026-05-20 (evening) — RCA + Gap 4 content fix shipped
+
+Doc evolution:
+
+- Initial RCA + Modes A/B/C captured (`4a29a45`).
+- Added Mode D + Gap 4 + Gap 5 (long-tail) after subagent RCAs
+  (`2b0c13f`).
+- Dropped regex-based Gap 3 (PEP 508 was a smell), promoted
+  Gap 5 to the real Mode C/D fix after the user confirmed
+  local-mode pipeline execution was deprecated and the
+  `CI_MODE` guard on `run_build` is dead-code (`a6224dd`).
+- Corrected Gap 4 structural-guard mechanism after research —
+  `fetchPnpmDeps.passthru` does not expose pnpm; correct path
+  is `nativeBuildInputs` filtered by `pname == "pnpm"`. Dropped
+  the proposed `npm-fetcher-parity` check (`fetchNpmDeps` uses a
+  static Rust prefetcher with no nodejs binding, no bug class to
+  guard) (`8ac6eff`).
+- Corrected Gap 2 (this commit) — verified via eval that the
+  shared `npmDepsHash` let-binding is correct; the fix is a
+  two-line config change, not a per-child refactor.
+
+One-time manual hash exceptions landed (authorized; do not
+generalize per `feedback_no_manual_hashes.md`):
+
+- `b85b6c8` — #145 filesystem-mcp npmDepsHash regen.
+- `07632c2` — #148 effect-mcp pnpmDeps.hash regen.
+
+Real fixes shipped:
+
+- **Gap 4 content fix** in PR #166
+  (https://github.com/higherorderfunctor/nix-agentic-tools/pull/166)
+  — branch `fix/context7-mcp-pnpm-pin`, commit `3d10f1f`.
+  Threads `pnpm = ourPkgs.pnpm_10;` into `context7-mcp.nix`
+  fetcher. Local build green, cachix HTTP/2 200 on the
+  cache-served `f3PX…` outPath, `nix flake check --no-build`
+  passes. Awaiting review + merge. After merge, close #160
+  (it is the spurious bot regen that the real fix supersedes).
+
+Real fixes pending:
+
+- **Gap 4 structural guard** — research complete with
+  paste-ready snippet (see Gap 4 § Structural guard).
+- **Gap 2 fix** — two-line change (see Gap 2 above).
+- **Gap 5** — needs HITL conversation about OOM-risk class.
+- **Gap 1** — design discussion needed.
+
 ## How to resume
 
-Recommended sequencing (revised 2026-05-20 after the CI_MODE
-dead-code observation):
+Sequencing (revised 2026-05-20 after Gap 2 verification):
 
-1. **Gap 4 content fix (Mode D / #160)** — 5 minutes. Thread
-   `pnpm = ourPkgs.pnpm_10;` into `context7-mcp.nix:50-54`, revert
-   the hash to `f3PX…`. PR #160 closes / re-greens.
-2. **Gap 5 (Mode C / #144 fix, plus safety net for Mode D and
-   any future build-time failure)** — drop the `CI_MODE`
-   short-circuit on `run_build`. ~1 hour including local
-   verification on a sample target.
-3. **Gap 4 structural guard** — `checks.pnpm-fetcher-parity` so
-   the Mode D bug class can't be reintroduced silently.
-   ~2 hours.
-4. **Gap 1 (Mode A / #148-class)** — downstream refresh on input
-   bumps. Biggest impact, biggest work. ~1 day.
-5. **Gap 2 (Mode B / #145)** — modelcontextprotocol shared hash
-   refactor. ~half a day.
+1. ~~**Gap 4 content fix**~~ — done, PR #166 open.
+2. **Gap 4 structural guard** — paste the research-verified
+   snippet into `checks/pnpm-fetcher-parity.nix` and wire at
+   `flake.nix:202-211`. Negative test: revert the Gap 4 content
+   fix in a scratch worktree and confirm the check fails. ~1 hr.
+3. **Gap 2** — two-line config change in `flake.nix` +
+   `config/update-matrix.nix`. Negative test: run
+   `nix-update --flake modelcontextprotocol-filesystem-mcp`
+   against a worktree with an artificially-wrong hash and
+   confirm it gets refreshed. ~30 min.
+4. **Gap 5** — HITL conversation about whether re-enabling
+   Phase 2 build in CI carries OOM risk on the shared
+   ubuntu-latest runner. Likely needs `nix-fast-build --max-jobs 1`
+   semantics rather than naked `nix build`. ~1 hr after decision.
+5. **Gap 1** — design + implement downstream refresh on input
+   bumps. ~1 day.
 6. **(Optional cleanup)** — rip out the now-unused `CI_MODE`
    variable and `merge_to_branch`'s local-cherry-pick branch.
 
