@@ -207,8 +207,9 @@
       formattingCheck = import ./checks/formatting.nix {inherit inputs pkgs self;};
       fragmentsChecks = import ./checks/fragments-eval.nix {inherit lib pkgs;};
       moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs;};
+      pnpmFetcherParityCheck = import ./checks/pnpm-fetcher-parity.nix {inherit lib pkgs self;};
     in
-      bareCommandsCheck // cacheHitParityCheck // factoryChecks // formattingCheck // fragmentsChecks // moduleChecks);
+      bareCommandsCheck // cacheHitParityCheck // factoryChecks // formattingCheck // fragmentsChecks // moduleChecks // pnpmFetcherParityCheck);
 
     # devShells.default provided by devenv.lib.mkShell (see devenv.nix).
     # devShells.ci is a lightweight shell for the CI update pipeline.
