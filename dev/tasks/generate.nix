@@ -19,6 +19,16 @@ in {
       '';
     };
 
+    # BROKEN: `.#repo-contributing` and `.#repo-readme` flake outputs
+    # don't exist. Running `devenv tasks run --mode before generate:repo`
+    # will fail with "attribute missing" on both tasks below. The
+    # `readmeMd` / `contributingMd` strings exist in `dev/generate.nix`
+    # but aren't exposed as flake packages the way `instructions-*` are.
+    # Fix: add `repo-readme` / `repo-contributing` packages to
+    # `flake.nix` that wrap those strings in `pkgs.writeText`, paralleling
+    # the existing `instructions-claude` / `instructions-copilot` / etc.
+    # Until then, README.md and CONTRIBUTING.md must be edited manually
+    # (use `dev/data.nix` as the source of truth for the data-driven rows).
     "generate:repo:contributing" = {
       description = "Generate CONTRIBUTING.md from fragments and nix data";
       before = ["generate:repo"];

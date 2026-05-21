@@ -324,6 +324,12 @@ in {
   # so a module-level `assertions` block silently no-ops here.
   # Encode the instanceUrl ⊕ apiUrl mutex as an `if/throw` at the
   # top — it fires every time `renderServer` evaluates the config.
+  #
+  # UNVERIFIED: `nix flake check` only exercises this with valid
+  # inputs (one side set, not both). Confirm the throw actually
+  # fires by instantiating a consumer config with both
+  # `settings.instanceUrl` and `settings.apiUrl.file` set, then
+  # evaluating — should error at eval time, not produce a config.
   settingsToEnv = cfg: _mode: let
     s = cfg.settings;
     instanceUrlSet = s.instanceUrl != null;
