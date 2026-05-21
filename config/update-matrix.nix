@@ -61,7 +61,7 @@
       flags = "--version skip";
       git = "https://github.com/sparfenyuk/mcp-proxy.git";
     };
-    modelcontextprotocol-all-mcps = {
+    modelcontextprotocol-filesystem-mcp = {
       flags = "--version skip";
       git = "https://github.com/modelcontextprotocol/servers.git";
     };
