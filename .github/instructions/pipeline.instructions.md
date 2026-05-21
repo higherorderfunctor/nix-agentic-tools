@@ -7,10 +7,10 @@ applyTo: ".github/workflows/update.yml,config/generate-update-ninja.nix,config/u
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-05-13. If you touch
-> `.github/workflows/update.yml`, `dev/scripts/update-common.sh`
-> (CI_MODE sections), or the PR creation logic, and this fragment
-> isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-05-20. If you touch
+> `.github/workflows/update.yml`, `dev/scripts/update-common.sh`,
+> or the PR creation logic, and this fragment isn't updated in the
+> same commit, stop and fix it.
 
 ### Design: Renovate-style per-dependency PRs
 
@@ -24,10 +24,10 @@ back that specific dependency, not the entire batch.
 
 **Phase 1 — Ninja pipeline** (ubuntu runner):
 
-The workflow runs the same ninja DAG as local, but with
-`UPDATE_CI=1`. In CI mode, `run_build` is a no-op and
-`merge_to_branch` skips the cherry-pick. Each target creates
-its worktree branch (`update/<name>`) but does not merge it.
+The workflow runs the ninja DAG. Each target updates its
+dependency in an isolated worktree and leaves the resulting
+commits on a per-dependency branch (`update/<name>`). Branches
+are not pushed or merged at this stage — that happens in Phase 2.
 
 **Phase 2 — PR creation** (same ubuntu runner):
 
@@ -89,21 +89,19 @@ errors about branches named `+ update/foo`.
 
 ### Environment requirements
 
-| Variable            | Source                             | Purpose                                                  |
-| ------------------- | ---------------------------------- | -------------------------------------------------------- |
-| `CACHIX_AUTH_TOKEN` | Repository secret                  | Pushes fetched sources + built outputs                   |
-| `GITHUB_TOKEN`      | App token step output              | Authenticates git push + gh CLI                          |
-| `MERGE_LOCK`        | `$RUNNER_TEMP/nix-update-merge`    | Override for `/run/user/$UID/` which may not exist on CI |
-| `NIX_PATH`          | `nixpkgs=flake:nixpkgs`            | Required by nix-update (uses `import <nixpkgs>`)         |
-| `UPDATE_CI`         | Set to `1` in workflow             | Activates CI mode in scripts                             |
-| `WORKTREE_LOCK`     | `$RUNNER_TEMP/nix-update-worktree` | Serializes `git worktree add` (not concurrency-safe)     |
+| Variable            | Source                             | Purpose                                              |
+| ------------------- | ---------------------------------- | ---------------------------------------------------- |
+| `CACHIX_AUTH_TOKEN` | Repository secret                  | Pushes fetched sources + built outputs               |
+| `GITHUB_TOKEN`      | App token step output              | Authenticates git push + gh CLI                      |
+| `NIX_PATH`          | `nixpkgs=flake:nixpkgs`            | Required by nix-update (uses `import <nixpkgs>`)     |
+| `WORKTREE_LOCK`     | `$RUNNER_TEMP/nix-update-worktree` | Serializes `git worktree add` (not concurrency-safe) |
 
 ### Key files
 
 | File                           | CI-relevant sections                                  |
 | ------------------------------ | ----------------------------------------------------- |
 | `.github/workflows/update.yml` | Full workflow definition                              |
-| `dev/scripts/update-common.sh` | `CI_MODE` checks in `run_build` and `merge_to_branch` |
+| `dev/scripts/update-common.sh` | Shared worktree, version, and report helpers          |
 | `dev/scripts/update-init.sh`   | Cleans stale `update/*` branches + detaches worktrees |
 
 <!-- Fragment: dev/fragments/pipeline/fragment-pipeline.md -->
@@ -348,7 +346,7 @@ devenv tasks run generate:all             # everything
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-04-13. If you touch
+> **Last verified:** 2026-05-20. If you touch
 > `dev/scripts/update-*.sh`, `config/generate-update-ninja.nix`,
 > `config/update-matrix.nix`, or `.github/workflows/update.yml` and
 > this fragment isn't updated in the same commit, stop and fix it.
@@ -381,14 +379,12 @@ branch `update/<name>` reset to the current branch HEAD.
 `.pre-commit-config.yaml` is symlinked from the main tree so
 hooks work in worktrees.
 
-**Local mode** (`UPDATE_CI` unset): after a successful build,
-`merge_to_branch` cherry-picks the worktree commits onto the
-main branch. `flock` serializes cherry-picks from parallel ninja
-targets to avoid conflicts.
-
-**CI mode** (`UPDATE_CI=1`): builds and cherry-picks are skipped.
-The worktree branches are pushed by the CI workflow after ninja
-completes, and each gets its own PR.
+After each target finishes its update + build verification in
+the worktree, it leaves the resulting commits on its named
+branch and emits a single report line. The pipeline never merges
+those branches itself; the CI workflow's PR-creation step pushes
+each `update/<name>` branch that has commits ahead of the base
+SHA and opens (or updates) one PR per dependency.
 
 ### Rev bump flow (main-tracking packages)
 
@@ -425,7 +421,7 @@ Every target writes exactly one line to `.update-report.txt`:
 | ---------------------------------- | ------------------------------------------------------ |
 | `config/generate-update-ninja.nix` | Generates `.update.ninja` DAG from flake.lock + matrix |
 | `config/update-matrix.nix`         | Declares packages with nix-update flags and git URLs   |
-| `dev/scripts/update-common.sh`     | Shared functions (worktree, merge, report, colors)     |
+| `dev/scripts/update-common.sh`     | Shared functions (worktree, version, report, colors)   |
 | `dev/scripts/update-init.sh`       | Pipeline initialization (clean stale state)            |
 | `dev/scripts/update-input.sh`      | Per-input update script                                |
 | `dev/scripts/update-pkg.sh`        | Per-package update script (rev bump + nix-update)      |

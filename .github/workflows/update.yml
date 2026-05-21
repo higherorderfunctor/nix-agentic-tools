@@ -1,9 +1,8 @@
 # CI pipeline v4: Renovate-style per-dependency PRs.
 #
-# Runs the ninja update pipeline in CI mode (UPDATE_CI=1):
-#   - Builds are skipped (PR pipeline validates)
-#   - Cherry-picks are skipped (worktree branches pushed as PRs)
-#   - Each dependency gets its own branch + PR
+# Runs the ninja update pipeline. Each target leaves its commits on
+# a per-dependency worktree branch (update/<name>); the PR-creation
+# step pushes those branches and opens one PR per updated dependency.
 #
 # ci.yml validates PRs on both platforms (linux + darwin).
 # PRs that pass both can be merged.
@@ -99,8 +98,7 @@ jobs:
             --apply 'pkgs: builtins.mapAttrs (n: p: p.version or p.name or "unknown") pkgs' \
             .#packages.x86_64-linux > /dev/null
 
-      # Run ninja pipeline in CI mode:
-      # - UPDATE_CI=1: skip builds, skip cherry-picks
+      # Run ninja pipeline:
       # - Each target creates a worktree branch (update/<name>)
       # - Branches are pushed and PRs created after ninja completes
       - name: Run ninja update pipeline
@@ -108,9 +106,7 @@ jobs:
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
           mkdir -p "$RUNNER_TEMP"
-          export MERGE_LOCK="$RUNNER_TEMP/nix-update-merge"
           export WORKTREE_LOCK="$RUNNER_TEMP/nix-update-worktree"
-          export UPDATE_CI=1
           nix run .#generate-update-ninja
           ninja -j4 -v -k0 -f .update.ninja update-report
         env:

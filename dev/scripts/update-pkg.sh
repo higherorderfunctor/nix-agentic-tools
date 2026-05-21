@@ -176,7 +176,7 @@ if ! (
     exit 0
   fi
 
-  # Phase 2: Build verification (skipped in CI mode)
+  # Phase 2: Build verification
   run_build nix build ".#$name" --no-link --log-format bar-with-logs
 ); then
   version_detail=$(parse_pkg_version "$version_file")
@@ -200,13 +200,5 @@ if [ "$wt_head" = "$base_head" ]; then
   exit 0
 fi
 
-merge_to_branch "$wt" "$name" || rc=$?
-rc=${rc:-0}
-if [ "$rc" -eq 1 ]; then
-  report_held_back "$name" "cherry-pick conflict" "$version_detail"
-  exit 0
-elif [ "$rc" -eq 2 ]; then
-  report_unchanged "$name"
-  exit 0
-fi
+log_success "$name: branch update/$name ready for PR"
 report_updated "$name" "$version_detail"

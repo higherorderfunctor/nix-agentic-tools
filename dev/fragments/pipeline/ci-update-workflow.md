@@ -1,9 +1,9 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-05-13. If you touch
-> `.github/workflows/update.yml`, `dev/scripts/update-common.sh`
-> (CI_MODE sections), or the PR creation logic, and this fragment
-> isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-05-20. If you touch
+> `.github/workflows/update.yml`, `dev/scripts/update-common.sh`,
+> or the PR creation logic, and this fragment isn't updated in the
+> same commit, stop and fix it.
 
 ### Design: Renovate-style per-dependency PRs
 
@@ -17,10 +17,10 @@ back that specific dependency, not the entire batch.
 
 **Phase 1 — Ninja pipeline** (ubuntu runner):
 
-The workflow runs the same ninja DAG as local, but with
-`UPDATE_CI=1`. In CI mode, `run_build` is a no-op and
-`merge_to_branch` skips the cherry-pick. Each target creates
-its worktree branch (`update/<name>`) but does not merge it.
+The workflow runs the ninja DAG. Each target updates its
+dependency in an isolated worktree and leaves the resulting
+commits on a per-dependency branch (`update/<name>`). Branches
+are not pushed or merged at this stage — that happens in Phase 2.
 
 **Phase 2 — PR creation** (same ubuntu runner):
 
@@ -82,19 +82,17 @@ errors about branches named `+ update/foo`.
 
 ### Environment requirements
 
-| Variable            | Source                             | Purpose                                                  |
-| ------------------- | ---------------------------------- | -------------------------------------------------------- |
-| `CACHIX_AUTH_TOKEN` | Repository secret                  | Pushes fetched sources + built outputs                   |
-| `GITHUB_TOKEN`      | App token step output              | Authenticates git push + gh CLI                          |
-| `MERGE_LOCK`        | `$RUNNER_TEMP/nix-update-merge`    | Override for `/run/user/$UID/` which may not exist on CI |
-| `NIX_PATH`          | `nixpkgs=flake:nixpkgs`            | Required by nix-update (uses `import <nixpkgs>`)         |
-| `UPDATE_CI`         | Set to `1` in workflow             | Activates CI mode in scripts                             |
-| `WORKTREE_LOCK`     | `$RUNNER_TEMP/nix-update-worktree` | Serializes `git worktree add` (not concurrency-safe)     |
+| Variable            | Source                             | Purpose                                              |
+| ------------------- | ---------------------------------- | ---------------------------------------------------- |
+| `CACHIX_AUTH_TOKEN` | Repository secret                  | Pushes fetched sources + built outputs               |
+| `GITHUB_TOKEN`      | App token step output              | Authenticates git push + gh CLI                      |
+| `NIX_PATH`          | `nixpkgs=flake:nixpkgs`            | Required by nix-update (uses `import <nixpkgs>`)     |
+| `WORKTREE_LOCK`     | `$RUNNER_TEMP/nix-update-worktree` | Serializes `git worktree add` (not concurrency-safe) |
 
 ### Key files
 
 | File                           | CI-relevant sections                                  |
 | ------------------------------ | ----------------------------------------------------- |
 | `.github/workflows/update.yml` | Full workflow definition                              |
-| `dev/scripts/update-common.sh` | `CI_MODE` checks in `run_build` and `merge_to_branch` |
+| `dev/scripts/update-common.sh` | Shared worktree, version, and report helpers          |
 | `dev/scripts/update-init.sh`   | Cleans stale `update/*` branches + detaches worktrees |

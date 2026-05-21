@@ -1,6 +1,6 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-04-13. If you touch
+> **Last verified:** 2026-05-20. If you touch
 > `dev/scripts/update-*.sh`, `config/generate-update-ninja.nix`,
 > `config/update-matrix.nix`, or `.github/workflows/update.yml` and
 > this fragment isn't updated in the same commit, stop and fix it.
@@ -33,14 +33,12 @@ branch `update/<name>` reset to the current branch HEAD.
 `.pre-commit-config.yaml` is symlinked from the main tree so
 hooks work in worktrees.
 
-**Local mode** (`UPDATE_CI` unset): after a successful build,
-`merge_to_branch` cherry-picks the worktree commits onto the
-main branch. `flock` serializes cherry-picks from parallel ninja
-targets to avoid conflicts.
-
-**CI mode** (`UPDATE_CI=1`): builds and cherry-picks are skipped.
-The worktree branches are pushed by the CI workflow after ninja
-completes, and each gets its own PR.
+After each target finishes its update + build verification in
+the worktree, it leaves the resulting commits on its named
+branch and emits a single report line. The pipeline never merges
+those branches itself; the CI workflow's PR-creation step pushes
+each `update/<name>` branch that has commits ahead of the base
+SHA and opens (or updates) one PR per dependency.
 
 ### Rev bump flow (main-tracking packages)
 
@@ -77,7 +75,7 @@ Every target writes exactly one line to `.update-report.txt`:
 | ---------------------------------- | ------------------------------------------------------ |
 | `config/generate-update-ninja.nix` | Generates `.update.ninja` DAG from flake.lock + matrix |
 | `config/update-matrix.nix`         | Declares packages with nix-update flags and git URLs   |
-| `dev/scripts/update-common.sh`     | Shared functions (worktree, merge, report, colors)     |
+| `dev/scripts/update-common.sh`     | Shared functions (worktree, version, report, colors)   |
 | `dev/scripts/update-init.sh`       | Pipeline initialization (clean stale state)            |
 | `dev/scripts/update-input.sh`      | Per-input update script                                |
 | `dev/scripts/update-pkg.sh`        | Per-package update script (rev bump + nix-update)      |

@@ -36,10 +36,10 @@ if ! (
     exit 0
   fi
 
-  # Phase 2: Build verification (skipped in CI mode)
+  # Phase 2: Build verification
   run_build nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --flake ".#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem')"
 
-  # Phase 3: Commit only after build passes (or skipped in CI)
+  # Phase 3: Commit only after build passes
   git commit -m "chore: update input $name"
 ); then
   version_detail=$(parse_input_version "$version_file" "$name")
@@ -58,13 +58,5 @@ if [ "$wt_head" = "$base_head" ]; then
   exit 0
 fi
 
-merge_to_branch "$wt" "$name" || rc=$?
-rc=${rc:-0}
-if [ "$rc" -eq 1 ]; then
-  report_held_back "$name" "cherry-pick conflict" "$version_detail"
-  exit 0
-elif [ "$rc" -eq 2 ]; then
-  report_unchanged "$name"
-  exit 0
-fi
+log_success "$name: branch update/$name ready for PR"
 report_updated "$name" "$version_detail"
