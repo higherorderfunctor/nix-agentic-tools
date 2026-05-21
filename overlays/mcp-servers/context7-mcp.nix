@@ -49,6 +49,7 @@ in
     '';
     pnpmDeps = ourPkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
+      pnpm = ourPkgs.pnpm_10;
       fetcherVersion = 3;
       hash = "sha256-f3PXpCdmKh2LPD5VyFsRdLR7CEvh+GozkQFSeeNuj2c=";
     };
