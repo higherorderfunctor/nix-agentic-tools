@@ -139,7 +139,7 @@
       "packages/*/modules/homeManager/**"
     ];
     mcp-servers = [
-      "packages/mcp-servers/**"
+      "overlays/mcp-servers/**"
     ];
     monorepo = null;
     # nix-standards: broad Nix code conventions. Applies to any
