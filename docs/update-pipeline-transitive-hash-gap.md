@@ -532,14 +532,30 @@ modelcontextprotocol-filesystem-mcp` correctly restored the
   original `sha256-+9w4W…` hash by writing it back to source.
   Targets `refactor/ai-factory-architecture` directly (no stack).
 
+- **Gap 5 immediate fix** in PR #170
+  (https://github.com/higherorderfunctor/nix-agentic-tools/pull/170)
+  — branch `fix/gap-5-restore-phase-2-build`, commit `e3a7fe7`.
+  Drops the dead-code `CI_MODE` short-circuit from `run_build` in
+  `dev/scripts/update-common.sh:91-97`. Mode C and Mode D failures
+  now hit `report_held_back` at the bot stage and the worktree
+  resets to base, so bad PRs no longer force-push. User confirmed
+  OOM was a local-mode concern and CI runner has been fine —
+  re-enabling builds in CI is safe.
+
 Real fixes pending:
 
-- **Gap 5** — needs HITL conversation about OOM-risk class
-  (re-enabling Phase 2 build in CI may push the shared
-  ubuntu-latest runner into OOM territory; likely needs
-  `nix-fast-build --max-jobs 1` rather than naked `nix build`).
+- **`CI_MODE` removal follow-up** — `CI_MODE` still gates
+  `merge_to_branch` (intentional for Renovate-per-PR model) and
+  the declaration at `update-common.sh:17` is still there. User
+  wants it gone entirely; defer as cleanup after the in-flight
+  PRs land.
 - **Gap 1** — design discussion needed (downstream refresh on
-  input bumps; touches the DAG model).
+  input bumps; touches the DAG model). Note: PR #170's
+  `update-input.sh` Phase 2 build now runs the full
+  `nix-fast-build --flake .#packages.${system}` against every
+  input bump, which catches Mode A transitively as a side effect.
+  Gap 1's narrower "refresh hashes inline in the input PR" work
+  is still valuable but less urgent now.
 
 ## How to resume
 
@@ -550,17 +566,16 @@ content/guard/Gap-2 PRs:
 2. ~~**Gap 4 structural guard**~~ — done, PR #168 open, stacked
    on #166.
 3. ~~**Gap 2**~~ — done, PR #167 open.
-4. **Merge order**: review/merge PR #166 first, then PR #168
-   (which auto-retargets), then PR #167. After all three land,
-   close PR #160 (spurious bot regen superseded by the content
-   fix) and PR #144 stays as the Mode C canary for Gap 5.
-5. **Gap 5** — HITL conversation about whether re-enabling
-   Phase 2 build in CI carries OOM risk on the shared
-   ubuntu-latest runner. Likely needs `nix-fast-build --max-jobs 1`
-   semantics rather than naked `nix build`. ~1 hr after decision.
+4. ~~**Gap 5 immediate fix**~~ — done, PR #170 open.
+5. **Merge order**: review/merge PR #166 first, then PR #168
+   (which auto-retargets), then PR #167, then PR #170. After all
+   four land, close PR #160 (superseded by the content fix). PR
+   #144 stays open as the Mode C canary — next pipeline run will
+   convert it from a red PR to `HELD BACK (build failed)`.
 6. **Gap 1** — design + implement downstream refresh on input
-   bumps. ~1 day.
-7. **(Optional cleanup)** — rip out the now-unused `CI_MODE`
+   bumps. ~1 day. Less urgent post-PR-#170 since input bumps now
+   run a full-platform build that catches Mode A transitively.
+7. **(Cleanup)** — rip out the now-unused `CI_MODE`
    variable and `merge_to_branch`'s local-cherry-pick branch.
 
 ### Environment notes for the next session
