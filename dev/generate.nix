@@ -199,7 +199,10 @@
     devenv = ["files-internals"];
     flake = ["binary-cache"];
     hm-modules = ["module-conventions"];
-    mcp-servers = ["overlay-guide"];
+    mcp-servers = [
+      "js-server-packaging"
+      "overlay-guide"
+    ];
     monorepo = [
       "architecture-fragments"
       "build-commands"
