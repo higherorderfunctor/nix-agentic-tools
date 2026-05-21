@@ -14,6 +14,7 @@
   git-mcp = import ./git-mcp;
   git-revise = import ./git-revise;
   github-mcp = import ./github-mcp;
+  gitlab-mcp = import ./gitlab-mcp;
   kagi-mcp = import ./kagi-mcp;
   kiro-cli = import ./kiro-cli;
   kiro-gateway = import ./kiro-gateway;

@@ -41,6 +41,10 @@
       flags = "--version skip";
       git = "https://github.com/github/github-mcp-server.git";
     };
+    gitlab-mcp = {
+      flags = "--version skip";
+      git = "https://github.com/zereight/gitlab-mcp.git";
+    };
     kagi-mcp = {
       flags = "--version skip";
       git = "https://github.com/kagisearch/kagimcp.git";

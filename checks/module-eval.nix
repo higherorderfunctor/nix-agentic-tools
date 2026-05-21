@@ -1212,6 +1212,7 @@ in {
       && servers ? git-intel-mcp
       && servers ? git-mcp
       && servers ? github-mcp
+      && servers ? gitlab-mcp
       && servers ? kagi-mcp
       && servers ? nixos-mcp
       && servers ? openmemory-mcp

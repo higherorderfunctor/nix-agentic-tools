@@ -33,6 +33,10 @@ _: let
       description = "GitHub platform integration";
       credentials = "Required";
     };
+    gitlab-mcp = {
+      description = "GitLab platform integration";
+      credentials = "Required";
+    };
     kagi-mcp = {
       description = "Kagi search and summarization";
       credentials = "Required";

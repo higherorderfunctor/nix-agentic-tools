@@ -125,7 +125,7 @@ git-revise.
 ## Packages
 
 <details>
-<summary><strong>MCP Servers</strong> (14 servers)</summary>
+<summary><strong>MCP Servers</strong> (15 servers)</summary>
 
 <!-- prettier-ignore -->
 | Server | Description | Credentials |
@@ -136,6 +136,7 @@ git-revise.
 | `git-intel-mcp` | Git repository analytics | None |
 | `git-mcp` | Git operations | None |
 | `github-mcp` | GitHub platform integration | Required |
+| `gitlab-mcp` | GitLab platform integration | Required |
 | `kagi-mcp` | Kagi search and summarization | Required |
 | `mcp-language-server` | LSP-to-MCP bridge | None |
 | `mcp-proxy` | stdio-to-HTTP bridge proxy | None |

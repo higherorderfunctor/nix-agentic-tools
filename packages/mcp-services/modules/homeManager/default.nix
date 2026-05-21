@@ -50,6 +50,7 @@
     "git-intel-mcp"
     "git-mcp"
     "github-mcp"
+    "gitlab-mcp"
     "kagi-mcp"
     "nixos-mcp"
     "openmemory-mcp"

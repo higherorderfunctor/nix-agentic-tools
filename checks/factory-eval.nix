@@ -219,6 +219,15 @@ in {
       && serverDef.settingsOptions ? credentials
   );
 
+  factory-loadServer-gitlab-mcp-from-package-dir = mkTest "loadServer-gitlab-mcp-from-package-dir" (
+    let
+      mcpLib = import ../lib/mcp.nix {inherit lib;};
+      serverDef = mcpLib.loadServer "gitlab-mcp";
+    in
+      serverDef ? settingsOptions
+      && serverDef.settingsOptions ? pat
+  );
+
   factory-loadServer-kagi-mcp-from-package-dir = mkTest "loadServer-kagi-mcp-from-package-dir" (
     let
       mcpLib = import ../lib/mcp.nix {inherit lib;};
@@ -230,6 +239,10 @@ in {
 
   factory-github-mcp-has-package-module = mkTest "github-mcp-has-package-module" (
     builtins.pathExists ../packages/github-mcp/modules/mcp-server.nix
+  );
+
+  factory-gitlab-mcp-has-package-module = mkTest "gitlab-mcp-has-package-module" (
+    builtins.pathExists ../packages/gitlab-mcp/modules/mcp-server.nix
   );
 
   # ── sharedOptions tests ─────────────────────────────────────────

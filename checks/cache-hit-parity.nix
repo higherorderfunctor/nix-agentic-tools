@@ -97,6 +97,7 @@
     "effect-mcp"
     "git-intel-mcp"
     "github-mcp"
+    "gitlab-mcp"
     "kagi-mcp"
     "mcp-language-server"
     "mcp-proxy"
