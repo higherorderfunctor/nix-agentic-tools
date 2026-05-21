@@ -80,6 +80,9 @@
     github-mcp = import ./mcp-servers/github-mcp.nix {
       inherit inputs final;
     };
+    gitlab-mcp = import ./mcp-servers/gitlab-mcp.nix {
+      inherit inputs final;
+    };
     kagi-mcp = import ./mcp-servers/kagi-mcp.nix {
       inherit inputs final;
     };
