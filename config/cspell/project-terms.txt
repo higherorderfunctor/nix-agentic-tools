@@ -20,6 +20,7 @@ bashisms
 berberman
 bitemporality
 boehm
+burndown
 cachix
 caubut
 cavira
@@ -192,6 +193,7 @@ tophat
 toplevel
 treefmt
 tummychow
+unapprove
 undmg
 unhide
 unskipped
@@ -203,3 +205,4 @@ worktree
 worktrees
 wyhash
 zdiff
+zereight
