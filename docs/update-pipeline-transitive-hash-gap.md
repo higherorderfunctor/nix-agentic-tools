@@ -507,36 +507,71 @@ Real fixes shipped:
   passes. Awaiting review + merge. After merge, close #160
   (it is the spurious bot regen that the real fix supersedes).
 
+- **Gap 4 structural guard** in PR #168
+  (https://github.com/higherorderfunctor/nix-agentic-tools/pull/168)
+  — branch `feat/pnpm-fetcher-parity-check`, stacked on PR #166.
+  Adds `checks/pnpm-fetcher-parity.nix` asserting fetcher pnpm ==
+  buildPhase pnpm for every overlay package using `fetchPnpmDeps`.
+  Positive test (with content fix): `ok — every pnpmDeps fetcher
+uses the same pnpm as its consuming buildPhase`. Negative test
+  (content fix reverted): `FAIL: 1 package(s) bind fetchPnpmDeps
+to a different pnpm than the buildPhase: context7-mcp: fetcher
+pnpm: pnpm-11.1.1, build pnpm: pnpm-10.33.4`. GitHub will
+  auto-retarget to `refactor/ai-factory-architecture` after #166
+  lands.
+
+- **Gap 2 fix** in PR #167
+  (https://github.com/higherorderfunctor/nix-agentic-tools/pull/167)
+  — branch `fix/modelcontextprotocol-update-target`. Adds
+  `modelcontextprotocol-filesystem-mcp` as a top-level flake
+  output and renames the update-matrix entry to point at it
+  (instead of the meta-derivation `modelcontextprotocol-all-mcps`,
+  which has no `npmDepsHash` attribute to refresh). Negative test:
+  set the let-binding to a wrong hash, `nix-update --flake
+modelcontextprotocol-filesystem-mcp` correctly restored the
+  original `sha256-+9w4W…` hash by writing it back to source.
+  Targets `refactor/ai-factory-architecture` directly (no stack).
+
 Real fixes pending:
 
-- **Gap 4 structural guard** — research complete with
-  paste-ready snippet (see Gap 4 § Structural guard).
-- **Gap 2 fix** — two-line change (see Gap 2 above).
-- **Gap 5** — needs HITL conversation about OOM-risk class.
-- **Gap 1** — design discussion needed.
+- **Gap 5** — needs HITL conversation about OOM-risk class
+  (re-enabling Phase 2 build in CI may push the shared
+  ubuntu-latest runner into OOM territory; likely needs
+  `nix-fast-build --max-jobs 1` rather than naked `nix build`).
+- **Gap 1** — design discussion needed (downstream refresh on
+  input bumps; touches the DAG model).
 
 ## How to resume
 
-Sequencing (revised 2026-05-20 after Gap 2 verification):
+Sequencing after the 2026-05-20 evening session shipped the
+content/guard/Gap-2 PRs:
 
 1. ~~**Gap 4 content fix**~~ — done, PR #166 open.
-2. **Gap 4 structural guard** — paste the research-verified
-   snippet into `checks/pnpm-fetcher-parity.nix` and wire at
-   `flake.nix:202-211`. Negative test: revert the Gap 4 content
-   fix in a scratch worktree and confirm the check fails. ~1 hr.
-3. **Gap 2** — two-line config change in `flake.nix` +
-   `config/update-matrix.nix`. Negative test: run
-   `nix-update --flake modelcontextprotocol-filesystem-mcp`
-   against a worktree with an artificially-wrong hash and
-   confirm it gets refreshed. ~30 min.
-4. **Gap 5** — HITL conversation about whether re-enabling
+2. ~~**Gap 4 structural guard**~~ — done, PR #168 open, stacked
+   on #166.
+3. ~~**Gap 2**~~ — done, PR #167 open.
+4. **Merge order**: review/merge PR #166 first, then PR #168
+   (which auto-retargets), then PR #167. After all three land,
+   close PR #160 (spurious bot regen superseded by the content
+   fix) and PR #144 stays as the Mode C canary for Gap 5.
+5. **Gap 5** — HITL conversation about whether re-enabling
    Phase 2 build in CI carries OOM risk on the shared
    ubuntu-latest runner. Likely needs `nix-fast-build --max-jobs 1`
    semantics rather than naked `nix build`. ~1 hr after decision.
-5. **Gap 1** — design + implement downstream refresh on input
+6. **Gap 1** — design + implement downstream refresh on input
    bumps. ~1 day.
-6. **(Optional cleanup)** — rip out the now-unused `CI_MODE`
+7. **(Optional cleanup)** — rip out the now-unused `CI_MODE`
    variable and `merge_to_branch`'s local-cherry-pick branch.
+
+### Environment notes for the next session
+
+- `treefmt` CLI was misconfigured in the worktree-agent
+  environment (PWD tree-root mismatch with a sibling
+  `nix-agentic-tools-ideation` symlink). Workaround used by both
+  agents: `nix fmt <files>`. Worth root-causing before another
+  agent run.
+- Worktrees agents create need `.pre-commit-config.yaml`
+  symlinked from the parent checkout (devenv-generated, gitignored).
 
 When resuming, re-read `feedback_no_manual_hashes.md` — the
 2026-05-20 manual patching was a one-time exception, not a
