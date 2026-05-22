@@ -1,6 +1,5 @@
 # kagi-mcp — builds the Kagi MCP server from GitHub source
-# via buildPythonApplication. Includes an inline build of the kagiapi helper
-# package (PyPI source).
+# via buildPythonApplication.
 #
 # Instantiates `ourPkgs` from `inputs.nixpkgs` so every build input
 # (python interpreter + python packages) routes through this repo's pinned
@@ -14,41 +13,27 @@
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
   };
-  inherit (ourPkgs) fetchFromGitHub fetchurl python314Packages;
+  inherit (ourPkgs) fetchFromGitHub python313Packages;
   vu = import ../lib.nix;
 
-  rev = "17c4dfd25fbfeeffa43a428574b786982bd3cd97";
+  rev = "23f4aec74b255e0338b97195a0f3046fe2832bb0";
   src = fetchFromGitHub {
     owner = "kagisearch";
     repo = "kagimcp";
     inherit rev;
-    hash = "sha256-EMLZ8IPHfY1f4kuzRWhu2f2dqyKQtXcBf087tOHg1QQ=";
-  };
-
-  kagiapi = python314Packages.buildPythonPackage {
-    pname = "kagiapi";
-    version = "0.2.1";
-    src = fetchurl {
-      url = "https://pypi.org/packages/source/k/kagiapi/kagiapi-0.2.1.tar.gz";
-      hash = "sha256-NV/kB7TGg9bwhIJ+T4VP2VE03yhC8V0Inaz/Yg4/Sus=";
-    };
-    pyproject = true;
-    build-system = with python314Packages; [setuptools];
-    dependencies = with python314Packages; [requests typing-extensions];
-    doCheck = false;
+    hash = "sha256-tUmZaQv3IpdRMnmrOUvzIxmU2UAPORrgvrKHPVu8Xuk=";
   };
 in
-  python314Packages.buildPythonApplication {
+  python313Packages.buildPythonApplication {
     pname = "kagi-mcp";
     version = vu.mkVersion {
-      # upstream: readPyprojectVersion @ pyproject.toml
-      upstream = "0.1.5";
+      upstream = vu.readPyprojectVersion "${src}/pyproject.toml";
       inherit rev;
     };
     inherit src;
     pyproject = true;
-    build-system = with python314Packages; [hatchling];
-    dependencies = with python314Packages; [kagiapi mcp pydantic];
+    build-system = with python313Packages; [hatchling];
+    dependencies = with python313Packages; [fastmcp pydantic python-dateutil typing-extensions urllib3];
     doInstallCheck = true;
     installCheckPhase = vu.mkMcpSmokeTest {bin = "kagimcp";};
     meta.mainProgram = "kagimcp";

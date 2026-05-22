@@ -61,6 +61,7 @@ envrc
 extensionless
 fanout
 fanouts
+fastmcp
 fetchgit
 fetchurl
 fetchzip
