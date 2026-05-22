@@ -7,7 +7,7 @@ inputs:
   devenv:
     url: github:cachix/devenv/b01c64f104b83f50245b58b844ae2945fc5e0b97
   git-branchless:
-    url: github:arxanas/git-branchless/d7d80654f2c5670e1ce5f2b6206b35a05ac8c1c4
+    url: github:arxanas/git-branchless/69eaf9cbc3926e96cd7f41b12304ec083fcb655d
     inputs:
       nixpkgs:
         follows: nixpkgs
