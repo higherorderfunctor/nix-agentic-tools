@@ -68,7 +68,7 @@
       description = Full treefmt (formatter config may have changed)
 
     rule final-build
-      command = bash -c 'mkdir -p .update-logs && set -o pipefail && nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --flake ".#packages.$$(nix eval --impure --raw --expr builtins.currentSystem)" 2>&1 | tee .update-logs/final-build.log'
+      command = bash -c 'mkdir -p .update-logs && set -o pipefail && source dev/scripts/update-common.sh && run_nfb_build nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --flake ".#packages.$$(nix eval --impure --raw --expr builtins.currentSystem)" 2>&1 | tee .update-logs/final-build.log'
       description = Final build verification (should be cached)
 
     rule report

@@ -37,7 +37,7 @@ if ! (
   fi
 
   # Phase 2: Build verification
-  run_build nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --flake ".#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem')"
+  run_nfb_build nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --flake ".#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem')"
 
   # Phase 3: Commit only after build passes
   git commit -m "chore: update input $name"

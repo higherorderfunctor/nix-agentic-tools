@@ -87,6 +87,47 @@ run_build() {
   "$@"
 }
 
+# nix-fast-build wrapper that gates on the JSON result file.
+#
+# Upstream bug: nix-fast-build's async_main's `finally: stack.aclose()`
+# swallows non-zero exit codes, so per-build failures silently exit 0.
+# Effect: a broken peer package lets nixpkgs (or any input) report as
+# UPDATED instead of HELD BACK.
+#
+# Fix: append --result-file <tmp> --result-format json to the caller's
+# command, then inspect the JSON for any `success: false` entries and
+# exit non-zero if found.
+#
+# The JSON shape emitted by nix-fast-build (nix_fast_build/__init__.py
+# `dump_json`) is:
+#   {"results": [{"attr": "...", "success": bool, "error": "..." | null, ...}]}
+#
+# Usage: run_nfb_build nix run --inputs-from . nix-fast-build -- ...
+run_nfb_build() {
+  local rf
+  rf=$(mktemp --suffix=.json) || return 1
+  # Append the gate args to the caller's command. The caller's command
+  # already terminates in nix-fast-build flags (after the `--` that
+  # separates nix-run args from nix-fast-build args), so appending here
+  # passes them straight through to nix-fast-build.
+  "$@" --result-file "$rf" --result-format json
+  local exit_code=$?
+  if [ $exit_code -ne 0 ]; then
+    rm -f "$rf"
+    return $exit_code
+  fi
+  # nix-fast-build exited 0 — verify no per-build failures slipped through.
+  if ! jq -e '.results | all(.success)' "$rf" >/dev/null 2>&1; then
+    log_failure "nix-fast-build reported per-build failures:"
+    jq -r '.results[] | select(.success | not) | "    \(.attr): \(.error // "<no error message>")"' \
+      "$rf" >&2 || true
+    rm -f "$rf"
+    return 1
+  fi
+  rm -f "$rf"
+  return 0
+}
+
 # ── Version parsing ───────────────────────────────────────────────────────────
 
 # Parse nix-update output for "Update X -> Y" lines
