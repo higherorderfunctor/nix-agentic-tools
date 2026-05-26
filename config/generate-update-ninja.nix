@@ -52,27 +52,27 @@
   rules = ''
     # Rules
     rule pipeline-init
-      command = bash dev/scripts/update-init.sh
+      command = bash -c 'mkdir -p .update-logs && set -o pipefail && bash dev/scripts/update-init.sh 2>&1 | tee .update-logs/init.log'
       description = Pipeline init
 
     rule update-input
-      command = bash dev/scripts/update-input.sh $name
+      command = bash -c 'mkdir -p .update-logs && set -o pipefail && bash dev/scripts/update-input.sh $name 2>&1 | tee .update-logs/input-$name.log'
       description = Updating input: $name
 
     rule update-pkg
-      command = bash dev/scripts/update-pkg.sh $name $flags $git
+      command = bash -c 'mkdir -p .update-logs && set -o pipefail && bash dev/scripts/update-pkg.sh $name $flags $git 2>&1 | tee .update-logs/pkg-$name.log'
       description = Updating package: $name
 
     rule full-format
-      command = bash -c 'nix fmt && git add -A && git diff --staged --quiet || git commit -m "style: treefmt full reformat after updates"'
+      command = bash -c 'mkdir -p .update-logs && set -o pipefail && { nix fmt && git add -A && git diff --staged --quiet || git commit -m "style: treefmt full reformat after updates"; } 2>&1 | tee .update-logs/full-format.log'
       description = Full treefmt (formatter config may have changed)
 
     rule final-build
-      command = bash -c 'nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --flake ".#packages.$$(nix eval --impure --raw --expr builtins.currentSystem)"'
+      command = bash -c 'mkdir -p .update-logs && set -o pipefail && nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --flake ".#packages.$$(nix eval --impure --raw --expr builtins.currentSystem)" 2>&1 | tee .update-logs/final-build.log'
       description = Final build verification (should be cached)
 
     rule report
-      command = bash dev/scripts/update-report.sh
+      command = bash -c 'mkdir -p .update-logs && set -o pipefail && bash dev/scripts/update-report.sh 2>&1 | tee .update-logs/report.log'
       description = Update report
   '';
 

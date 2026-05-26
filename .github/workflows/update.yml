@@ -30,6 +30,7 @@ env:
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # Skip if this push was made by the bot (prevents self-triggering).
     if: >-
       github.actor != 'nix-agentic-tools-bot[bot]'
@@ -296,4 +297,35 @@ jobs:
           if [ -f .update-report.txt ] && grep -q '^HELD BACK:' .update-report.txt; then
             count=$(grep -c '^HELD BACK:' .update-report.txt)
             echo "::warning::${count} dependency update(s) held back — see Update Report above"
+          fi
+
+      # Diagnostic dump — runs on success/fail/cancel/timeout.
+      # Surfaces per-target sidecar logs and process state even when
+      # ninja's stdout capture is lost (e.g., on cancellation).
+      - name: Diagnostic dump
+        if: always()
+        run: |
+          set +e
+          echo "::group::.update-report.txt"
+          [ -f .update-report.txt ] && cat .update-report.txt || echo "(no report)"
+          echo "::endgroup::"
+
+          echo "::group::orphaned worktrees"
+          ls -la .worktrees/ 2>/dev/null || echo "(none)"
+          echo "::endgroup::"
+
+          echo "::group::lingering nix/ninja/bash processes"
+          ps -ef --forest 2>/dev/null | grep -E "nix|ninja|update-" | grep -v grep || echo "(none)"
+          echo "::endgroup::"
+
+          if [ -d .update-logs ]; then
+            for f in .update-logs/*.log; do
+              [ -f "$f" ] || continue
+              name=$(basename "$f" .log)
+              echo "::group::log: $name"
+              cat "$f"
+              echo "::endgroup::"
+            done
+          else
+            echo "(no .update-logs/ directory)"
           fi
