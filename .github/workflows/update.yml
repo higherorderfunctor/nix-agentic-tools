@@ -297,6 +297,11 @@ jobs:
           if [ -f .update-report.txt ] && grep -q '^HELD BACK:' .update-report.txt; then
             count=$(grep -c '^HELD BACK:' .update-report.txt)
             echo "::warning::${count} dependency update(s) held back — see Update Report above"
+            while IFS= read -r line; do
+              pkg=$(echo "$line" | sed -E 's/^HELD BACK: ([^ |]+).*/\1/')
+              reason=$(echo "$line" | grep -oE '\([^)]+\)$' || true)
+              echo "::warning::held back: ${pkg} ${reason}"
+            done < <(grep '^HELD BACK:' .update-report.txt)
           fi
 
       # Diagnostic dump — runs on success/fail/cancel/timeout.
