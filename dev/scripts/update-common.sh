@@ -87,16 +87,23 @@ run_build() {
   "$@"
 }
 
-# nix-fast-build wrapper that gates on the JSON result file.
+# nix-fast-build wrapper that gates on three independent signals.
 #
-# Upstream bug: nix-fast-build's async_main's `finally: stack.aclose()`
-# swallows non-zero exit codes, so per-build failures silently exit 0.
-# Effect: a broken peer package lets nixpkgs (or any input) report as
-# UPDATED instead of HELD BACK.
+# Upstream bug: nix-fast-build's async_main `finally: stack.aclose()` can
+# swallow non-zero exit on the build-failure path, so per-build failures
+# sometimes silently exit 0. Effect: a broken peer package lets nixpkgs
+# (or any input/package update) report as UPDATED instead of HELD BACK.
 #
-# Fix: append --result-file <tmp> --result-format json to the caller's
-# command, then inspect the JSON for any `success: false` entries and
-# exit non-zero if found.
+# Defense in depth — fail if ANY of these tripwires fire:
+#   1. nix-fast-build's own exit code is non-zero
+#   2. The JSON result file shows any `success: false` (or is empty/missing)
+#   3. nix-fast-build's stderr contains
+#      `ERROR:nix_fast_build:BUILD: N successes, M failures` with M > 0 —
+#      the consistent signal observed in CI run 26473689694 when (1) and
+#      (2) both missed.
+#
+# On failure, forensic data (result file + stderr capture) is preserved
+# under `.update-logs/` and surfaced by the Diagnostic dump workflow step.
 #
 # The JSON shape emitted by nix-fast-build (nix_fast_build/__init__.py
 # `dump_json`) is:
@@ -104,27 +111,63 @@ run_build() {
 #
 # Usage: run_nfb_build nix run --inputs-from . nix-fast-build -- ...
 run_nfb_build() {
-  local rf
-  rf=$(mktemp --suffix=.json) || return 1
-  # Append the gate args to the caller's command. The caller's command
-  # already terminates in nix-fast-build flags (after the `--` that
-  # separates nix-run args from nix-fast-build args), so appending here
-  # passes them straight through to nix-fast-build.
-  "$@" --result-file "$rf" --result-format json
-  local exit_code=$?
-  if [ $exit_code -ne 0 ]; then
-    rm -f "$rf"
-    return $exit_code
-  fi
-  # nix-fast-build exited 0 — verify no per-build failures slipped through.
-  if ! jq -e '.results | all(.success)' "$rf" >/dev/null 2>&1; then
-    log_failure "nix-fast-build reported per-build failures:"
-    jq -r '.results[] | select(.success | not) | "    \(.attr): \(.error // "<no error message>")"' \
-      "$rf" >&2 || true
+  local rf stderr_log exit_code=0 failed=0
+  mkdir -p "$PWD/.update-logs"
+  rf=$(mktemp -p "$PWD/.update-logs" --suffix=.json nfb-result-XXXXXX) || return 1
+  stderr_log=$(mktemp -p "$PWD/.update-logs" --suffix=.log nfb-stderr-XXXXXX) || {
     rm -f "$rf"
     return 1
+  }
+
+  # Buffered stderr capture (not `2> >(tee ...)`): bash process
+  # substitution offers no synchronization with the parent shell, so the
+  # tee writer may still be flushing when gate 3 greps the file. The
+  # buffered form `2> file` then `cat file >&2` is deterministic — we
+  # only lose real-time stderr streaming, which the caller already
+  # tees through `2>&1 | tee .update-logs/final-build.log` anyway.
+  #
+  # `|| exit_code=$?` localizes errexit suppression to this single call
+  # (NOT a blanket `set +e`) — we want to inspect the exit code AND
+  # continue to the JSON/stderr gates regardless.
+  "$@" --result-file "$rf" --result-format json \
+    2>"$stderr_log" || exit_code=$?
+  cat "$stderr_log" >&2
+
+  # Gate 1: nix-fast-build's own exit code.
+  if [ "$exit_code" -ne 0 ]; then
+    log_failure "nix-fast-build exited non-zero ($exit_code)"
+    failed=1
   fi
-  rm -f "$rf"
+
+  # Gate 2: JSON result file. Empty/missing file is also a failure (we
+  # asked for one; not getting one means the build verification was
+  # incomplete and we should not trust it).
+  if [ ! -s "$rf" ]; then
+    log_failure "nix-fast-build wrote no result file (expected $rf)"
+    failed=1
+  elif ! jq -e '.results | all(.success)' "$rf" >/dev/null 2>&1; then
+    log_failure "nix-fast-build result file shows per-build failures:"
+    jq -r '.results[] | select(.success | not) | "    \(.attr): \(.error // "<no error message>")"' \
+      "$rf" >&2 || true
+    failed=1
+  fi
+
+  # Gate 3: stderr fallback. Observed in CI run 26473689694 — the JSON
+  # gate missed a copilot-cli build failure but this stderr line was
+  # present. nix-fast-build emits it consistently when builds fail, even
+  # when its own exit code and JSON output are misleading.
+  if grep -qE "ERROR:nix_fast_build:BUILD: [0-9]+ successes, [1-9][0-9]* failures" "$stderr_log"; then
+    log_failure "nix-fast-build stderr reports build failures:"
+    grep -E "BUILD: [0-9]+ successes|Failed attributes:" "$stderr_log" >&2 || true
+    failed=1
+  fi
+
+  if [ "$failed" -eq 1 ]; then
+    log_failure "(forensic data preserved: $rf, $stderr_log)"
+    return 1
+  fi
+
+  rm -f "$rf" "$stderr_log"
   return 0
 }
 

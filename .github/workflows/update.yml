@@ -324,9 +324,12 @@ jobs:
           echo "::endgroup::"
 
           if [ -d .update-logs ]; then
-            for f in .update-logs/*.log; do
+            # Glob `*` (not `*.log`) — forensic JSON result files from
+            # the run_nfb_build wrapper land alongside the .log sidecars
+            # and need to be dumped too when builds fail.
+            for f in .update-logs/*; do
               [ -f "$f" ] || continue
-              name=$(basename "$f" .log)
+              name=$(basename "$f")
               echo "::group::log: $name"
               cat "$f"
               echo "::endgroup::"

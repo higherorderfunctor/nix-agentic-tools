@@ -1,6 +1,6 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-05-20. If you touch
+> **Last verified:** 2026-05-27. If you touch
 > `.github/workflows/update.yml`, `dev/scripts/update-common.sh`,
 > or the PR creation logic, and this fragment isn't updated in the
 > same commit, stop and fix it.
@@ -88,6 +88,53 @@ errors about branches named `+ update/foo`.
 | `GITHUB_TOKEN`      | App token step output              | Authenticates git push + gh CLI                      |
 | `NIX_PATH`          | `nixpkgs=flake:nixpkgs`            | Required by nix-update (uses `import <nixpkgs>`)     |
 | `WORKTREE_LOCK`     | `$RUNNER_TEMP/nix-update-worktree` | Serializes `git worktree add` (not concurrency-safe) |
+
+### Build verification gate (`run_nfb_build`)
+
+`update-input.sh` and the `final-build` ninja rule both invoke
+`nix-fast-build` to verify peer packages still build after an
+input change. Upstream has a known bug where `async_main`'s
+`finally: stack.aclose()` can swallow non-zero exit on the
+build-failure path — per-build failures silently exit 0. Effect:
+a broken peer package would let `nixpkgs` (or any other input
+update) ship as UPDATED instead of HELD BACK.
+
+`run_nfb_build` in `update-common.sh` defends against this with
+three independent gates — any of them tripping fails the build:
+
+1. **Exit code** — `nix-fast-build`'s own exit code is non-zero.
+2. **JSON result file** — `--result-file <path> --result-format json`
+   is appended to the caller's command, then `jq` checks for any
+   `success: false` entry. Empty/missing file is also a failure
+   (we asked for one; not getting one means verification was
+   incomplete).
+3. **Stderr grep** — the consistent
+   `ERROR:nix_fast_build:BUILD: N successes, M failures` line
+   with `M > 0` is matched against captured stderr. This is the
+   tripwire that caught CI run 26473689694 when (1) and (2)
+   both missed.
+
+`|| exit_code=$?` localizes errexit suppression to the single
+nix-fast-build call — no blanket `set +e`. All three gates run
+unconditionally so failure signals are always logged together.
+
+### Sidecar logging and forensic preservation
+
+Every ninja rule wraps its script invocation in
+`2>&1 | tee .update-logs/<target>.log` to capture per-target
+output independently of ninja's stdout capture (which buffers
+until child exit). The `Diagnostic dump` step (`if: always()`)
+in `update.yml` globs `.update-logs/*` and surfaces every file
+under `::group::log: <name>` collapsible sections — works on
+success, failure, cancel, and timeout.
+
+`run_nfb_build` writes its forensic data
+(`nfb-result-XXXXXX.json` + `nfb-stderr-XXXXXX.log`) into the
+same `.update-logs/` dir. On gate failure the files are
+preserved for the Diagnostic dump to surface; on success they
+are cleaned up.
+
+The directory is gitignored.
 
 ### Key files
 
