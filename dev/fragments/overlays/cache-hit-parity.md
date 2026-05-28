@@ -1,7 +1,7 @@
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-04-12 (commit pending — full rollout
-> across git-tools, mcp-servers, and ai-clis). If you touch any
+> **Last verified:** 2026-05-28 (commit pending — copilot-cli
+> standalone variant). If you touch any
 > `overlays/<name>.nix` overlay file or the overlay composition
 > machinery and this fragment isn't updated in the same commit,
 > stop and fix it. Regressions are gated by the
@@ -166,3 +166,21 @@ the starting derivation tied to this repo's nixpkgs pin. The
 `copilot-cli`, `github-copilot-cli`, `kiro-cli`, and
 `kiro-gateway` overlays in `packages/ai-clis/` follow this shape
 and are covered by the `checks.cache-hit-parity` flake check.
+
+**Standalone variant.** When upstream's attrs become incompatible
+with the artifact we want to ship (different `sourceRoot`,
+`installPhase`, `buildInputs`, wrapper shape, etc.), a per-platform
+overlay can instead be a standalone `ourPkgs.stdenv.mkDerivation { ... }`
+rather than an `overrideAttrs`. The cache-hit parity rule is
+unchanged — all build inputs still route through `ourPkgs` — but
+no upstream attrs are inherited. `overlays/copilot-cli.nix` is the
+current example: upstream rewrote `github-copilot-cli` from the
+per-platform SEA tarball to a universal Node tarball, which would
+have required overriding ~every interesting attr, so the overlay
+holds its own SEA-shaped derivation instead. Upstream-state
+detection lives in the Update workflow as a non-blocking
+annotation step ("Detect upstream copilot-cli SEA restoration" in
+`.github/workflows/update.yml`). It surfaces in the Update job's
+annotation panel — same UX as the held-back-PR warnings — when
+upstream nixos-unstable HEAD changes mechanism away from the
+universal-node layout we forked against.

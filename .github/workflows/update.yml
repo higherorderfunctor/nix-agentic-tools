@@ -304,6 +304,32 @@ jobs:
             done < <(grep '^HELD BACK:' .update-report.txt)
           fi
 
+      # Detect whether upstream nixos-unstable HEAD has restored per-platform
+      # SEA support for github-copilot-cli. Our overlay is a STANDALONE
+      # derivation targeting SEA — if upstream offers it again, we could
+      # consider switching back to an overrideAttrs overlay on upstream.
+      # See overlays/copilot-cli.nix for rationale.
+      - name: Detect upstream copilot-cli SEA restoration
+        if: always()
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          sr=$(nix eval --raw --impure --expr '
+            let p = (builtins.getFlake "github:NixOS/nixpkgs/nixos-unstable").legacyPackages.x86_64-linux;
+            in p.github-copilot-cli.sourceRoot or "<missing>"
+          ' 2>/dev/null || echo "<error>")
+          case "$sr" in
+            "package")
+              echo "copilot-cli: upstream nixos-unstable sourceRoot=\"package\" (expected). No annotation."
+              ;;
+            ".")
+              echo "::warning::copilot-cli: upstream nixos-unstable HEAD now ships per-platform SEA (github-copilot-cli.sourceRoot=\".\"). Our overlay is a STANDALONE derivation targeting SEA — consider whether overlays/copilot-cli.nix can switch back to an overrideAttrs overlay on upstream."
+              ;;
+            *)
+              echo "::warning::copilot-cli: upstream nixos-unstable HEAD sourceRoot is unexpected value \"${sr}\". Upstream may have changed packaging mechanism — re-evaluate overlays/copilot-cli.nix."
+              ;;
+          esac
+
       # Diagnostic dump — runs on success/fail/cancel/timeout.
       # Surfaces per-target sidecar logs and process state even when
       # ninja's stdout capture is lost (e.g., on cancellation).

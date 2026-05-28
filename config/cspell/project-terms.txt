@@ -95,7 +95,9 @@ kiro
 kirocli
 landable
 ldflags
+libexec
 libgit
+libsecret
 libsets
 lifecycles
 livelink
