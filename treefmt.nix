@@ -1,6 +1,14 @@
 # Shared treefmt config — consumed by devenv.nix treefmt module.
 # Each formatter handles specific file types (see inline comments).
 {
+  # Use flake.nix as the tree-root marker so `nix fmt` works in git
+  # worktrees (where .git is a gitfile pointer, not a directory).
+  # treefmt-nix's default is `.git/config`, which fails inside any
+  # `git worktree add`-created tree. The update pipeline runs
+  # `nix fmt` from per-input worktrees (see update-input.sh Phase 2.5),
+  # so this default must be overridden.
+  projectRootFile = "flake.nix";
+
   programs = {
     # Nix: *.nix
     alejandra.enable = true;

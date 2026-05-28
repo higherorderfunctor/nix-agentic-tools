@@ -39,6 +39,20 @@ if ! (
   # Phase 2: Build verification
   run_nfb_build nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --flake ".#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem')"
 
+  # Phase 2.5: Formatter pass. Input bumps (especially nixpkgs) can
+  # bring new versions of prettier/alejandra/biome/etc. that want
+  # different output than the existing repo files. Without this pass
+  # the `update/<name>` PR ships only the lock change and PR CI's
+  # `treefmt-check` fails because the docs/other files no longer
+  # round-trip through the bumped formatter. The base-branch
+  # `full-format` run happens after merge — too late to gate PRs.
+  # `nix fmt` exits 0 on successful in-place formatting regardless
+  # of whether files changed (no --fail-on-change). A non-zero exit
+  # here means the formatter itself errored, which correctly aborts
+  # the subshell and reports HELD BACK.
+  run_build nix fmt
+  git add -A
+
   # Phase 3: Commit only after build passes
   git commit -m "chore: update input $name"
 ); then

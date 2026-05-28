@@ -70,6 +70,7 @@ foldl
 frontloaded
 frontmatter
 gitbook
+gitfile
 gitref
 gitrevise
 glpat
@@ -188,6 +189,7 @@ statix
 stdenv
 subdirs
 subkeys
+subshell
 substituters
 sympy
 taplo

@@ -7,10 +7,10 @@ applyTo: ".github/workflows/update.yml,config/generate-update-ninja.nix,config/u
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-05-27. If you touch
+> **Last verified:** 2026-05-28. If you touch
 > `.github/workflows/update.yml`, `dev/scripts/update-common.sh`,
-> or the PR creation logic, and this fragment isn't updated in the
-> same commit, stop and fix it.
+> `dev/scripts/update-input.sh`, or the PR creation logic, and this
+> fragment isn't updated in the same commit, stop and fix it.
 
 ### Design: Renovate-style per-dependency PRs
 
@@ -45,6 +45,34 @@ behavior as Renovate's rebasing strategy.
 
 PRs trigger ci.yml's `pull_request` event, which runs builds on
 both linux and darwin runners. PRs that pass both can be merged.
+
+### Per-input formatter pass (`update-input.sh` Phase 2.5)
+
+Between build verification and the commit, `update-input.sh`
+runs `nix fmt` inside the per-input worktree and `git add -A`'s
+any reformatted files into the pending commit. This catches the
+case where an input bump (most commonly `nixpkgs`) brings a new
+version of `prettier`, `alejandra`, `biome`, or another formatter
+that wants different output than the existing repo files. Without
+this pass, the `update/<name>` PR ships only the lock change and
+PR CI's `treefmt-check` fails because the docs / other files no
+longer round-trip through the bumped formatter.
+
+`nix fmt` exits 0 on successful in-place formatting regardless
+of whether files changed (we do not pass `--fail-on-change`), so
+a non-zero exit here is a real formatter error and correctly
+aborts the worktree subshell → reports HELD BACK.
+
+This requires `projectRootFile = "flake.nix"` in `treefmt.nix`:
+treefmt-nix's default `projectRootFile = ".git/config"` does not
+exist inside a git worktree (where `.git` is a gitfile pointer,
+not a directory), so the default would make `nix fmt` error in
+every worktree.
+
+The base-branch `full-format` ninja rule still runs after the
+per-input pipeline as a safety net for the rare case where two
+simultaneous input bumps interact in a way the per-input passes
+do not catch on their own.
 
 ### GitHub App token
 
