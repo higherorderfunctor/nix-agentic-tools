@@ -7,7 +7,7 @@ applyTo: ".github/workflows/update.yml,config/generate-update-ninja.nix,config/u
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-05-28. If you touch
+> **Last verified:** 2026-05-29. If you touch
 > `.github/workflows/update.yml`, `dev/scripts/update-common.sh`,
 > `dev/scripts/update-input.sh`, or the PR creation logic, and this
 > fragment isn't updated in the same commit, stop and fix it.
@@ -49,14 +49,25 @@ both linux and darwin runners. PRs that pass both can be merged.
 ### Per-input formatter pass (`update-input.sh` Phase 2.5)
 
 Between build verification and the commit, `update-input.sh`
-runs `nix fmt` inside the per-input worktree and `git add -A`'s
-any reformatted files into the pending commit. This catches the
-case where an input bump (most commonly `nixpkgs`) brings a new
-version of `prettier`, `alejandra`, `biome`, or another formatter
-that wants different output than the existing repo files. Without
-this pass, the `update/<name>` PR ships only the lock change and
-PR CI's `treefmt-check` fails because the docs / other files no
-longer round-trip through the bumped formatter.
+conditionally runs `nix fmt` inside the per-input worktree —
+only when the input bump actually moves `formatter.<system>`'s
+store path — and `git add -A`'s any reformatted files into the
+pending commit. The gate captures `nix eval --raw
+.#formatter.x86_64-linux.outPath` before `nix flake update` and
+again after build verification; identical store paths mean the
+formatter hasn't changed and `nix fmt` is skipped. Most inputs
+(devenv, git-branchless, rust-overlay, etc.) don't carry new
+prettier / alejandra / biome versions, so unconditionally running
+`nix fmt` per target added ~15–20 minutes per pipeline run for
+no benefit.
+
+When the formatter does move (typically a `nixpkgs` bump, or an
+input that follows nixpkgs for treefmt-nix), the pass catches the
+case where a new formatter version wants different output than
+the existing repo files. Without it, the `update/<name>` PR ships
+only the lock change and PR CI's `treefmt-check` fails because
+the docs / other files no longer round-trip through the bumped
+formatter.
 
 `nix fmt` exits 0 on successful in-place formatting regardless
 of whether files changed (we do not pass `--fail-on-change`), so
