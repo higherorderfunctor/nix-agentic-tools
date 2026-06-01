@@ -401,7 +401,7 @@ Cross-referencing against `docs/plan.md` (single flat backlog):
 | "Replace `isRoot = package == \"monorepo\"` with category metadata"    | **Independent**; fragment-pipeline concern, unaffected                                               |
 | "flake-parts modular per-package flake outputs" (Unsorted)             | **Directly addressed** — this WAS the ask; now has an assessment                                     |
 | "Consolidate fragment enumeration into single metadata table" (Medium) | **Independent**, still worth doing                                                                   |
-| "HM ↔ devenv ai module parity test" (Medium)                          | **Reinforced** — would verify the factory's backend parity regardless of restructure                 |
+| "HM ↔ devenv ai module parity test" (Medium)                           | **Reinforced** — would verify the factory's backend parity regardless of restructure                 |
 | "Codify gap: ai.skills factory layout" (Medium)                        | **Still needed** — restructure doesn't change factory internals                                      |
 | "Migrate git-branchless to upstream flake input" (Easy wins)           | **Independent**                                                                                      |
 | Aggregate `ai.all` module                                              | **NEW item** — the one thing in the dump not already on backlog                                      |

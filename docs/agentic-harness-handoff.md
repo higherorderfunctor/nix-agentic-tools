@@ -198,7 +198,7 @@ echo "=== Done. Session: $SESSION_ID, Logs: $LOG_DIR ==="
 | Var                   | Default          | Purpose                                                                                                                                       |
 | --------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `HARNESS_AAR_TIMEOUT` | 60               | AAR turn wall-clock seconds.                                                                                                                  |
-| `HARNESS_LOOP_MAX`    | 5                | Max writer↔reviewer iterations per loop step.                                                                                                |
+| `HARNESS_LOOP_MAX`    | 5                | Max writer↔reviewer iterations per loop step.                                                                                                 |
 | `HARNESS_RESUME_ID`   | unset            | If set, skip first-turn capture and resume an existing session immediately. Enables chunked runs across multiple harness invocations.         |
 | `HARNESS_TIMEOUT`     | 600              | Per-turn wall-clock seconds.                                                                                                                  |
 | `HARNESS_TOOLS`       | `Read,Grep,Glob` | Comma-separated `--allowedTools` for claude. Widen for authoring (e.g., `Read,Edit,Write,Glob,Grep,Bash`); without it, write/bash are denied. |
