@@ -168,29 +168,55 @@
   allDrifts = lib.filter (x: x != null) (
     aiCliChecks ++ gitToolChecks ++ agnixChecks ++ mcpServerChecks ++ specialChecks
   );
+
+  # agnix's CLI / LSP / MCP variants are ONE build: overlays/agnix.nix
+  # compiles all three binaries, and the -lsp/-mcp attrs only re-point
+  # meta.mainProgram, so the three must share a single derivation.
+  # nixpkgs injects NIX_MAIN_PROGRAM=meta.mainProgram into the build
+  # env, so setting mainProgram via `overrideAttrs` (which re-runs
+  # mkDerivation) forks the drv hash into three full Rust compiles. The
+  # mkCheck pass above cannot catch this — each variant matches itself
+  # across both pins regardless of the fork — so assert drvPath parity
+  # across the three siblings directly.
+  agnixVariants = ["agnix" "agnix-lsp" "agnix-mcp"];
+  agnixDrvPaths = map (n: self.packages.${system}.${n}.drvPath) agnixVariants;
+  agnixSiblingOk =
+    builtins.all (d: d == builtins.head agnixDrvPaths) agnixDrvPaths;
 in {
   cache-hit-parity = pkgs.runCommand "cache-hit-parity" {} ''
     ${
-      if allDrifts == []
-      then "echo 'ok — no drift detected (every overlay package produces byte-identical store paths against both nixpkgs pins)' > $out"
-      else let
-        drifts = builtins.concatStringsSep "\n" (map (d: ''
-            ${d.name}:
-              standalone (inputs.nixpkgs):     ${d.standalone}
-              consumer   (inputs.nixpkgs-test): ${d.consumer}
-          '')
-          allDrifts);
-      in ''
-        echo "FAIL: ${toString (builtins.length allDrifts)} package(s) bind build inputs to the consumer's nixpkgs and will NOT hit cachix:" >&2
-        cat >&2 <<'DRIFT'
-        ${drifts}
-        DRIFT
-        echo "" >&2
-        echo "Each affected package must use 'ourPkgs = import inputs.nixpkgs { ... }'" >&2
-        echo "instead of routing build inputs through the consumer-provided 'final'/'prev'." >&2
-        echo "See .claude/rules/overlays.md 'Overlay Cache-Hit Parity' section for the full pattern." >&2
-        exit 1
-      ''
+      if allDrifts == [] && agnixSiblingOk
+      then "echo 'ok — no drift detected (every overlay package produces byte-identical store paths against both nixpkgs pins; agnix variants share one build)' > $out"
+      else
+        lib.optionalString (allDrifts != []) (let
+          drifts = builtins.concatStringsSep "\n" (map (d: ''
+              ${d.name}:
+                standalone (inputs.nixpkgs):     ${d.standalone}
+                consumer   (inputs.nixpkgs-test): ${d.consumer}
+            '')
+            allDrifts);
+        in ''
+          echo "FAIL: ${toString (builtins.length allDrifts)} package(s) bind build inputs to the consumer's nixpkgs and will NOT hit cachix:" >&2
+          cat >&2 <<'DRIFT'
+          ${drifts}
+          DRIFT
+          echo "" >&2
+          echo "Each affected package must use 'ourPkgs = import inputs.nixpkgs { ... }'" >&2
+          echo "instead of routing build inputs through the consumer-provided 'final'/'prev'." >&2
+          echo "See .claude/rules/overlays.md 'Overlay Cache-Hit Parity' section for the full pattern." >&2
+        '')
+        + lib.optionalString (!agnixSiblingOk) (
+          "echo 'FAIL: agnix cli/lsp/mcp variants do NOT share one derivation:' >&2\n"
+          + lib.concatStrings (lib.imap0 (
+              i: n: "echo '  ${n}: ${builtins.elemAt agnixDrvPaths i}' >&2\n"
+            )
+            agnixVariants)
+          + "echo 'They are one build (overlays/agnix.nix compiles all three binaries).' >&2\n"
+          + "echo 'Set mainProgram with `agnix // {meta = agnix.meta // {mainProgram = ...;};}`,' >&2\n"
+          + "echo 'NOT overrideAttrs: nixpkgs injects NIX_MAIN_PROGRAM=meta.mainProgram into the' >&2\n"
+          + "echo 'build env, so overrideAttrs forks the hash into 3 redundant Rust compiles.' >&2\n"
+        )
+        + "exit 1\n"
     }
   '';
 }
