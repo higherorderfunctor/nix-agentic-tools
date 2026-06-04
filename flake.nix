@@ -455,7 +455,11 @@
             gen.kiroFiles
           )
         );
-
+      }
+      # Doc site is Linux-only: nuscht-search (docs-options-search)
+      # Angular build SIGABRTs on node-24/darwin on exit; the site is
+      # built + deployed from Linux (docs.yml) regardless.
+      // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
         # ── Doc site outputs ────────────────────────────────────
         # Intermediate derivations exposed for debugging / inspection.
         # The top-level `docs` output is the built mdbook + NuschtOS
