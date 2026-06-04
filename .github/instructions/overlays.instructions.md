@@ -7,8 +7,8 @@ applyTo: "overlays/*.nix,overlays/**/*.nix,packages/ai-clis/*.nix,packages/git-t
 
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-05-28 (commit pending — copilot-cli
-> standalone variant). If you touch any
+> **Last verified:** 2026-06-04 (commit pending — agnix
+> mainProgram/NIX_MAIN_PROGRAM single-build gotcha). If you touch any
 > `overlays/<name>.nix` overlay file or the overlay composition
 > machinery and this fragment isn't updated in the same commit,
 > stop and fix it. Regressions are gated by the
@@ -111,6 +111,36 @@ entirely: every consumer builds from source on every rebuild.
    the same package through a consumer's nixpkgs with the overlay
    applied, and confirm the store path is byte-identical. If they
    differ, cache hits won't happen.
+
+### Meta-only overrides can still fork the hash (`mainProgram`)
+
+`overrideAttrs` is NOT free when it touches `meta.mainProgram`.
+Current nixpkgs injects `NIX_MAIN_PROGRAM = meta.mainProgram` into the
+**build environment** (`pkgs/stdenv/generic/make-derivation.nix`), so
+`mainProgram` is a derivation input — an `overrideAttrs` that re-points
+it re-runs `mkDerivation`, re-derives `NIX_MAIN_PROGRAM`, and forks the
+output hash. For a package whose base build produces several role
+binaries (e.g. `agnix` builds `agnix` / `agnix-lsp` / `agnix-mcp` in one
+derivation), exposing the role variants via `overrideAttrs` therefore
+triggers a FULL, redundant rebuild per variant — invisible when cached,
+but multiplied on every cold / toolchain-bump build.
+
+Expose such variants with a plain attrset overlay instead, which does
+not re-run `mkDerivation`:
+
+```nix
+# overlays/lsp-servers/agnix-lsp.nix
+{agnix}: agnix // {meta = agnix.meta // {mainProgram = "agnix-lsp";};}
+```
+
+`//` overrides only the eval-time `meta` that `lib.getExe` reads, so all
+variants share ONE derivation and ONE build while `getExe` still
+resolves the correct per-role binary. Trade-off: the variant becomes a
+plain attrset (keeps `type` / `drvPath` / `outPath` / `passthru`) and
+loses `.overrideAttrs` / `.override` — fine when nothing overrides it
+further. The `checks.cache-hit-parity` check asserts that `agnix`,
+`agnix-lsp`, and `agnix-mcp` share one `drvPath`, so a regression back
+to `overrideAttrs` turns it red.
 
 ### Verification
 
