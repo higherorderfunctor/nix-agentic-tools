@@ -368,16 +368,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1754860581,
-        "narHash": "sha256-EM0IE63OHxXCOpDHXaTyHIOk2cNvMCGPqLt/IdtVxgk=",
+        "lastModified": 1780853531,
+        "narHash": "sha256-vLSO1r6UJ8+8r2o05ZILtvIQ5vPobGWTKvWXc4hYq+o=",
         "owner": "NuschtOS",
         "repo": "ixx",
-        "rev": "babfe85a876162c4acc9ab6fb4483df88fa1f281",
+        "rev": "d7a538df37375683fda931d244ca47aed0296940",
         "type": "github"
       },
       "original": {
         "owner": "NuschtOS",
-        "ref": "v0.1.1",
+        "ref": "v0.2.1",
         "repo": "ixx",
         "type": "github"
       }
@@ -465,6 +465,27 @@
         "owner": "Mic92",
         "repo": "nix-fast-build",
         "rev": "6d0e150236146efecb60ee21625f88ad81e5df37",
+        "type": "github"
+      }
+    },
+    "nix-index-database": {
+      "inputs": {
+        "nixpkgs": [
+          "nuscht-search",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1781422160,
+        "narHash": "sha256-W7S8O86bVrw2gaomEwkHStOzmPpnFIHQ6lS4Q2HffJ0=",
+        "owner": "Mic92",
+        "repo": "nix-index-database",
+        "rev": "854d04e2368fb2e9c328a36b3c0a04cd713bfae1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Mic92",
+        "repo": "nix-index-database",
         "type": "github"
       }
     },
@@ -603,22 +624,23 @@
       "inputs": {
         "flake-utils": "flake-utils",
         "ixx": "ixx",
+        "nix-index-database": "nix-index-database",
         "nixpkgs": [
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1779818959,
-        "narHash": "sha256-bdYUEL9fboBFaKnqO4Vhh84XF5qriXwBiT/hNOIf/fA=",
+        "lastModified": 1781568066,
+        "narHash": "sha256-L9roRFvAq22QIdHfZns6Keo2ZfUfmEMvAVQRvXZ0V2s=",
         "owner": "NuschtOS",
         "repo": "search",
-        "rev": "7470004b7cb9459f1427692d7ee4e36888dbc022",
+        "rev": "b9092e8a7171f7eb5cbf4f6c34c98ed4bd05a802",
         "type": "github"
       },
       "original": {
         "owner": "NuschtOS",
         "repo": "search",
-        "rev": "7470004b7cb9459f1427692d7ee4e36888dbc022",
+        "rev": "b9092e8a7171f7eb5cbf4f6c34c98ed4bd05a802",
         "type": "github"
       }
     },
