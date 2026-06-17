@@ -18,14 +18,14 @@ treating it as the central abstraction is too narrow.
 
 The actual transformation surface includes at least:
 
-| Axis                                        | Today's example                                                                                     | Shape                          |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------ |
-| Shared settings → ecosystem keys            | `ai.settings.model` → `programs.kiro-cli.settings.chat.defaultModel`                                | data → data                    |
-| Shared LSP servers → ecosystem schema       | `ai.lspServers.*` → `mkCopilotLspConfig` vs `mkLspConfig`                                           | data → data (different shapes) |
-| Shared env vars → ecosystem options or skip | `ai.environmentVariables` → `programs.copilot-cli.environmentVariables` (Claude skips)              | data → data (or noop)          |
-| Shared instructions → markdown bytes        | `ai.instructions` → `<frontmatter>` + body with link rewriting                                      | data → bytes                   |
-| Markdown bytes → on-disk file               | rendered string → `~/.claude/rules/foo.md`                                                          | bytes → file (per backend)     |
-| Shared skills → on-disk dir layout          | `ai.skills.foo = ./path` → `~/.claude/skills/foo/` (HM) vs `<project>/.claude/skills/foo/` (devenv) | path → file (per backend)      |
+| Axis                                        | Today's example                                                                                                                                                          | Shape                          |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
+| Shared settings → ecosystem keys            | `ai.settings.model` → `programs.kiro-cli.settings.chat.defaultModel` (**Rejected:** models are ecosystem-specific; no normalized ai.settings was implemented (see WS5).) | data → data                    |
+| Shared LSP servers → ecosystem schema       | `ai.lspServers.*` → `mkCopilotLspConfig` vs `mkLspConfig`                                                                                                                | data → data (different shapes) |
+| Shared env vars → ecosystem options or skip | `ai.environmentVariables` → `programs.copilot-cli.environmentVariables` (Claude skips)                                                                                   | data → data (or noop)          |
+| Shared instructions → markdown bytes        | `ai.instructions` → `<frontmatter>` + body with link rewriting                                                                                                           | data → bytes                   |
+| Markdown bytes → on-disk file               | rendered string → `~/.claude/rules/foo.md`                                                                                                                               | bytes → file (per backend)     |
+| Shared skills → on-disk dir layout          | `ai.skills.foo = ./path` → `~/.claude/skills/foo/` (HM) vs `<project>/.claude/skills/foo/` (devenv)                                                                      | path → file (per backend)      |
 
 Markdown rendering is one row. The other rows are equally important
 and equally per-ecosystem. The right unifying abstraction is **an

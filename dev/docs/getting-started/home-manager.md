@@ -165,7 +165,7 @@ stacked-workflows = {
   # ── Per-CLI overrides (optional) ───────────────────────────────────
   # These override ai.* settings at normal priority (ai.* uses mkDefault)
   programs.copilot-cli = {
-    settings.model = "gpt-4o";  # override ai.settings.model for Copilot
+    settings.model = "gpt-4o";  # Copilot's model setting
   };
 }
 ```
@@ -190,8 +190,6 @@ cat ~/.claude/settings.json  # Claude settings (merged)
 | `skills`               | `~/.claude/skills/{name}`   | `~/.copilot/skills/{name}`          | `~/.kiro/skills/{name}`      |
 | `instructions`         | `~/.claude/rules/{name}.md` | `~/.copilot/instructions/{name}.md` | `~/.kiro/steering/{name}.md` |
 | `lspServers`           | `ENABLE_LSP_TOOL=1`         | `lsp-config.json`                   | `lsp.json`                   |
-| `settings.model`       | `settings.model`            | `settings.model`                    | `chat.defaultModel`          |
-| `settings.telemetry`   | —                           | —                                   | `telemetry.enabled`          |
 | `environmentVariables` | —                           | wrapped in binary                   | wrapped in binary            |
 
 ## Next steps

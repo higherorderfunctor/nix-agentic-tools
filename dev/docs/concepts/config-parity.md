@@ -21,7 +21,7 @@ Every configurable surface must be available in all three methods:
 | Instructions / steering | `ai.instructions`         | `ai.instructions`               | `render` + `transforms.{claude,copilot,kiro}` |
 | MCP servers             | `services.mcp-servers`    | `claude.code.mcpServers`        | `mkStdioEntry`, `mkStdioConfig`               |
 | LSP servers             | `ai.lspServers`           | `ai.lspServers`                 | `mkLspConfig`, `mkCopilotLspConfig`           |
-| Settings                | `ai.settings`             | `ai.settings`                   | Per-CLI JSON generation                       |
+| Settings                | Per-CLI via `.settings`   | Per-CLI via `.settings`         | Per-CLI JSON generation                       |
 | Environment variables   | `ai.environmentVariables` | `ai.environmentVariables`       | Manual wiring                                 |
 | Credentials             | `settings.credentials.*`  | `mkStdioEntry` with credentials | `mkSecretsWrapper`                            |
 | Hooks                   | Per-CLI module            | Per-CLI module                  | Manual                                        |

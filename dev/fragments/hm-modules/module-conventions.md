@@ -27,7 +27,7 @@ submodule is the logical grouping — do not flatten per-ecosystem
 options into the top level.
 
 **Flat at top level for cross-ecosystem.** `ai.skills`,
-`ai.instructions`, `ai.lspServers`, `ai.settings`, and
+`ai.instructions`, `ai.lspServers`, and
 `ai.environmentVariables` are NOT nested inside a per-ecosystem
 submodule. They fan out to whichever ecosystems are enabled at
 `mkDefault` priority. Anything that's "one option, many

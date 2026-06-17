@@ -51,19 +51,17 @@ Every `ai.*` value is injected at `mkDefault` priority (1000). This
 means per-CLI options set at normal priority (100 from `=`) always win.
 
 ```nix
-# Shared: all CLIs get claude-sonnet-4
-ai.settings.model = "claude-sonnet-4";
-
-# Per-CLI override: Copilot gets gpt-4o instead
+# Each CLI owns its own settings path
+programs.claude-code.settings.model = "claude-sonnet-4";
 programs.copilot-cli.settings.model = "gpt-4o";
+programs.kiro-cli.settings.chat.defaultModel = "claude-sonnet-4";
 ```
 
 The priority chain:
 
-1. `ai.settings.model` sets each CLI's model at `mkDefault`
-2. `programs.copilot-cli.settings.model = "gpt-4o"` sets at normal priority
-3. Normal priority (100) beats `mkDefault` (1000), so Copilot uses `gpt-4o`
-4. Claude and Kiro still use `claude-sonnet-4` from the shared config
+1. Each CLI's `programs.<cli>.settings.*` is set at normal priority (100)
+2. Any `ai.*` fanout value is set at `mkDefault` (1000), so per-CLI settings always win
+3. Normal priority (100) beats `mkDefault` (1000), so each CLI uses its own setting
 
 ## Settings Mapping
 

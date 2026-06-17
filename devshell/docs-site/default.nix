@@ -33,11 +33,9 @@ _: final: _prev: let
   snippets = {
     # ai.* settings mapping table for reference/ai-mapping.md and mixed pages
     aiMappingTable = _: ''
-      | `ai.*` option          | Claude Code                           | Copilot CLI                                 | Kiro CLI                                       |
-      | ---------------------- | ------------------------------------- | ------------------------------------------- | ---------------------------------------------- |
-      | `settings.model`       | `programs.claude-code.settings.model` | `programs.copilot-cli.settings.model`       | `programs.kiro-cli.settings.chat.defaultModel` |
-      | `settings.telemetry`   | --                                    | --                                          | `programs.kiro-cli.settings.telemetry.enabled` |
-      | `environmentVariables` | --                                    | `programs.copilot-cli.environmentVariables` | `programs.kiro-cli.environmentVariables`       |'';
+      | `ai.*` option          | Claude Code | Copilot CLI                                 | Kiro CLI                             |
+      | ---------------------- | ----------- | ------------------------------------------- | ------------------------------------ |
+      | `environmentVariables` | --          | `programs.copilot-cli.environmentVariables` | `programs.kiro-cli.environmentVariables` |'';
 
     # Supported CLIs table for index.md
     cliTable = _: ''

@@ -26,7 +26,7 @@ it. Gaps are bugs unless marked N/A with rationale.
 | LSP servers           | N/A                           | `ai.lspServers`, copilot + kiro `.lspServers`          | `ai.lspServers`, copilot + kiro `.lspServers`          |
 | MCP servers           | `mkStdioEntry`, `mkHttpEntry` | per-CLI `.mcpServers` + `.enableMcpIntegration`        | per-CLI `.mcpServers` (typed submodule)                |
 | Permissions           | N/A                           | Claude upstream only; copilot/kiro N/A                 | Claude upstream only; copilot/kiro N/A                 |
-| Settings              | N/A                           | `ai.settings`, per-CLI `.settings` (typed + freeform)  | `ai.settings`, per-CLI `.settings` (typed + freeform)  |
+| Settings              | N/A                           | Per-CLI `.settings` (typed + freeform)                 | Per-CLI `.settings` (typed + freeform)                 |
 | Skills                | N/A                           | `ai.skills`, per-CLI `.skills`                         | `ai.skills`, per-CLI `.skills`                         |
 
 ### Per-Surface Notes
@@ -65,16 +65,6 @@ Typed options with `freeformType` fallback for unknown keys:
 | Claude  | upstream `claude.code.*` (model, hooks, agents, etc.)           | upstream `claude.code.*`                                        |
 | Copilot | `model`, `theme`                                                | `model`, `theme`                                                |
 | Kiro    | `chat.defaultModel`, `chat.enableThinking`, `telemetry.enabled` | `chat.defaultModel`, `chat.enableThinking`, `telemetry.enabled` |
-
-### Normalized Settings (ai.settings)
-
-The `ai.settings` submodule provides ecosystem-agnostic keys that fan
-out per CLI at `mkDefault` priority (both HM and devenv):
-
-| ai.settings key | Claude                                        | Copilot                  | Kiro                              |
-| --------------- | --------------------------------------------- | ------------------------ | --------------------------------- |
-| `model`         | `programs.claude-code.settings.model` (if HM) | `copilot.settings.model` | `kiro.settings.chat.defaultModel` |
-| `telemetry`     | N/A (no upstream option)                      | N/A (no upstream option) | `kiro.settings.telemetry.enabled` |
 
 ## Audit Checklist (for repo-review)
 

@@ -4,10 +4,8 @@ All `ai.*` values are injected at `mkDefault` priority (1000). To
 override for a specific CLI:
 
 ```nix
-# Shared default
-ai.settings.model = "claude-sonnet-4";
-
-# Copilot override (normal priority wins over mkDefault)
+# Per-CLI model selection (each CLI owns its own settings)
+programs.claude-code.settings.model = "claude-sonnet-4";
 programs.copilot-cli.settings.model = "gpt-4o";
 ```
 

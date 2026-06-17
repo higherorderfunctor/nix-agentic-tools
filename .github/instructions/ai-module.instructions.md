@@ -88,10 +88,6 @@ The ai module fans out TWO kinds of configuration:
 - `ai.lspServers` — typed LSP definitions, translated to each
   ecosystem's native LSP config format (Claude via
   `ENABLE_LSP_TOOL=1`; Copilot has `lspServers` option; Kiro too).
-- `ai.settings.{model,telemetry}` — normalized settings; each
-  ecosystem has a different native option path (Claude has no
-  model setting; Copilot has `settings.model`; Kiro has
-  `settings.chat.defaultModel`).
 - `ai.environmentVariables` — shared env vars; Copilot and Kiro
   fan out directly, Claude has no native option so Claude itself
   receives nothing from this (intentional — Claude env goes via

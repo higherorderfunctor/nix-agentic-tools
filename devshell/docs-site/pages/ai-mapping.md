@@ -4,11 +4,9 @@ How each `ai.*` option maps to ecosystem-specific configuration.
 
 ## Settings
 
-| `ai.*` option          | Claude Code                           | Copilot CLI                                 | Kiro CLI                                       |
-| ---------------------- | ------------------------------------- | ------------------------------------------- | ---------------------------------------------- |
-| `settings.model`       | `programs.claude-code.settings.model` | `programs.copilot-cli.settings.model`       | `programs.kiro-cli.settings.chat.defaultModel` |
-| `settings.telemetry`   | --                                    | --                                          | `programs.kiro-cli.settings.telemetry.enabled` |
-| `environmentVariables` | --                                    | `programs.copilot-cli.environmentVariables` | `programs.kiro-cli.environmentVariables`       |
+| `ai.*` option          | Claude Code | Copilot CLI                                 | Kiro CLI                                 |
+| ---------------------- | ----------- | ------------------------------------------- | ---------------------------------------- |
+| `environmentVariables` | --          | `programs.copilot-cli.environmentVariables` | `programs.kiro-cli.environmentVariables` |
 
 ## Content
 
@@ -61,8 +59,8 @@ All `ai.*` values are injected at `mkDefault` priority (1000).
 Per-CLI options set at normal priority (100) always win:
 
 ```nix
-ai.settings.model = "claude-sonnet-4";               # mkDefault (1000)
-programs.copilot-cli.settings.model = "gpt-4o";      # normal (100) -- wins
+programs.claude-code.settings.model = "claude-sonnet-4";   # per-CLI
+programs.copilot-cli.settings.model = "gpt-4o";            # per-CLI
 ```
 
 This applies to all mapped values: skills, instructions,
