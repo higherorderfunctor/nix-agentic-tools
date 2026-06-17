@@ -1,0 +1,8 @@
+{
+  "launchEffortPins": [
+    "unpinFable5LaunchEffort",
+    "unpinOpus47LaunchEffort",
+    "unpinOpus48LaunchEffort"
+  ],
+  "effortLevels": ["low", "medium", "high", "xhigh"]
+}

@@ -74,6 +74,7 @@ gitfile
 gitref
 gitrevise
 glpat
+gnugrep
 gnused
 gopls
 gpgsign
@@ -180,6 +181,7 @@ sigtool
 sixel
 skillname
 skillsdir
+slurpfile
 smartlog
 sourcepath
 sparfenyuk
@@ -212,5 +214,6 @@ watchlist
 worktree
 worktrees
 wyhash
+xhigh
 zdiff
 zereight

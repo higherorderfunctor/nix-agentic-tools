@@ -203,13 +203,14 @@
       pkgs = pkgsFor system;
       bareCommandsCheck = {bare-commands = import ./checks/bare-commands.nix {inherit pkgs;};};
       cacheHitParityCheck = import ./checks/cache-hit-parity.nix {inherit inputs lib pkgs self;};
+      claudeExtractedCheck = import ./checks/claude-code-extracted.nix {inherit pkgs self;};
       factoryChecks = import ./checks/factory-eval.nix {inherit lib pkgs;};
       formattingCheck = import ./checks/formatting.nix {inherit inputs pkgs self;};
       fragmentsChecks = import ./checks/fragments-eval.nix {inherit lib pkgs;};
       moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs;};
       pnpmFetcherParityCheck = import ./checks/pnpm-fetcher-parity.nix {inherit lib pkgs self;};
     in
-      bareCommandsCheck // cacheHitParityCheck // factoryChecks // formattingCheck // fragmentsChecks // moduleChecks // pnpmFetcherParityCheck);
+      bareCommandsCheck // cacheHitParityCheck // claudeExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // moduleChecks // pnpmFetcherParityCheck);
 
     # devShells.default provided by devenv.lib.mkShell (see devenv.nix).
     # devShells.ci is a lightweight shell for the CI update pipeline.

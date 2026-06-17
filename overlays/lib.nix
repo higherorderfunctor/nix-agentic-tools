@@ -95,6 +95,52 @@
       echo "Updated rev: ${rev} -> $new_rev"
     '';
 
+  # Grep claude's binary for its launch-effort pin keys and the effort
+  # enum, emitting `{launchEffortPins, effortLevels}` to `dest` (default
+  # stdout). Single source of the grep logic — used by claude-code.nix's
+  # passthru.extracted (and, transitively, by mkUpdateScript). Fails loud
+  # (exit 1) if the pin grep is empty or the effort anchor != exactly one
+  # match, so an upstream rename breaks the build instead of silently
+  # extracting nothing.
+  #   bin:  absolute path to the claude binary.
+  #   pkgs: nixpkgs set (gnugrep, coreutils, jq).
+  #   dest: output path (default "/dev/stdout"; pass "$out" in runCommand).
+  mkClaudeExtract = {
+    bin,
+    pkgs,
+    dest ? "/dev/stdout",
+  }: ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    grep="${pkgs.gnugrep}/bin/grep"
+    jq="${pkgs.jq}/bin/jq"
+    sort="${pkgs.coreutils}/bin/sort"
+
+    pins=$("$grep" -aoE 'unpin[A-Za-z0-9]+LaunchEffort' "${bin}" | "$sort" -u || true)
+    if [ -z "$pins" ]; then
+      echo "claude-extract: no unpin*LaunchEffort keys found (upstream renamed the launch-pin mechanism)" >&2
+      exit 1
+    fi
+
+    # The persisted-settings effort validator. The minifier variable
+    # before `.enum` is rebuilt every release (2.1.159 emitted `y`,
+    # 2.1.181 emitted `H`), so match ANY identifier and key on the
+    # `effortLevel:` prefix + the enum literal instead of a fixed token.
+    # Extract the level array; require exactly one DISTINCT match so an
+    # upstream shape change still fails loud.
+    levels=$("$grep" -aoE 'effortLevel:[A-Za-z_$][A-Za-z0-9_$]*\.enum\(\[[^]]*\]\)' "${bin}" \
+      | "$grep" -oE '\[[^]]*\]' | "$sort" -u)
+    matchCount=$(printf '%s\n' "$levels" | "$grep" -c . || true)
+    if [ "$matchCount" -ne 1 ]; then
+      echo "claude-extract: effort enum matched $matchCount distinct level arrays (expected 1; upstream changed the validator)" >&2
+      exit 1
+    fi
+
+    pinsJson=$(printf '%s\n' "$pins" | "$jq" -R . | "$jq" -s .)
+    "$jq" -n --argjson pins "$pinsJson" --argjson levels "$levels" \
+      '{launchEffortPins: $pins, effortLevels: $levels}' > "${dest}"
+  '';
+
   # Generate an updateScript for per-platform binary packages that use
   # sources.json. Fetches the latest version, prefetches each platform's
   # binary, writes version + per-platform hashes to sourcesFile.
@@ -102,12 +148,16 @@
   # versionCheck: { cmd = "curl ..."; } — shell command that prints the version
   # platforms: { "x86_64-linux" = ver: "https://.../${ver}/file.tar.gz"; ... }
   # sourcesFile: path to sources.json relative to repo root
+  # extraExtract: extra shell appended after the sources.json write (e.g.
+  #   regenerating a committed sidecar from the freshly-bumped binary).
+  #   Defaults to "" so callers that don't need it are unaffected.
   # pkgs: nixpkgs set (for curl, jq, nix)
   mkUpdateScript = {
     pname,
     versionCheck,
     platforms,
     sourcesFile ? "overlays/${pname}-sources.json",
+    extraExtract ? "",
     pkgs,
   }:
     pkgs.writeShellScript "update-${pname}" ''
@@ -143,5 +193,6 @@
 
       mv "$tmp" "${sourcesFile}"
       echo "Updated ${sourcesFile}"
+      ${extraExtract}
     '';
 }

@@ -31,7 +31,7 @@
   sources = builtins.fromJSON (builtins.readFile ./claude-code-sources.json);
   platformSrc = sources.${stdenv.hostPlatform.system} or (throw "claude-code: unsupported system ${stdenv.hostPlatform.system}");
 in
-  stdenv.mkDerivation {
+  stdenv.mkDerivation (finalAttrs: {
     pname = "claude-code";
     inherit (sources) version;
     src = fetchurl {inherit (platformSrc) url hash;};
@@ -52,18 +52,44 @@ in
       ''}
       runHook postInstall
     '';
-    passthru.updateScript = vu.mkUpdateScript {
-      pname = "claude-code";
-      versionCheck.cmd = "${ourPkgs.curl}/bin/curl -s ${manifestBase}/latest";
-      platforms = {
-        "x86_64-linux" = ver: "${manifestBase}/${ver}/linux-x64/claude";
-        "aarch64-darwin" = ver: "${manifestBase}/${ver}/darwin-arm64/claude";
+    passthru = {
+      updateScript = vu.mkUpdateScript {
+        pname = "claude-code";
+        versionCheck.cmd = "${ourPkgs.curl}/bin/curl -s ${manifestBase}/latest";
+        platforms = {
+          "x86_64-linux" = ver: "${manifestBase}/${ver}/linux-x64/claude";
+          "aarch64-darwin" = ver: "${manifestBase}/${ver}/darwin-arm64/claude";
+        };
+        # Regenerate the committed sidecar from the freshly-bumped binary
+        # in the SAME update/claude-code PR (no intra-PR drift). Builds the
+        # pure passthru.extracted against the just-written sources.json
+        # (dirty-tracked -> flake eval sees the new version) and copies it
+        # over the committed path. Single grep source (mkClaudeExtract via
+        # passthru) — DRY with the drift check.
+        extraExtract = ''
+          echo "claude-code: regenerating overlays/claude-code-extracted.json"
+          extracted=$(${ourPkgs.nix}/bin/nix build --no-link --print-out-paths \
+            ".#claude-code.passthru.extracted")
+          ${ourPkgs.coreutils}/bin/cp "$extracted" overlays/claude-code-extracted.json
+          ${ourPkgs.coreutils}/bin/chmod 644 overlays/claude-code-extracted.json
+          echo "claude-code: wrote overlays/claude-code-extracted.json"
+        '';
+        pkgs = ourPkgs;
       };
-      pkgs = ourPkgs;
+      # Pure grep of THIS package's own binary -> committed-sidecar shape.
+      # IFD-safe: consumed ONLY by `nix build` (drift check + update
+      # script), NEVER readFile'd at eval. See overlays.md § IFD Patterns.
+      extracted = ourPkgs.runCommandLocal "claude-code-extracted.json" {} (
+        vu.mkClaudeExtract {
+          bin = "${finalAttrs.finalPackage}/bin/claude";
+          pkgs = ourPkgs;
+          dest = "$out";
+        }
+      );
     };
     meta = {
       mainProgram = "claude";
       license = lib.licenses.unfree;
       description = "Anthropic's Claude Code CLI";
     };
-  }
+  })
