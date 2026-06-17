@@ -128,6 +128,7 @@ lib.ai.app.mkAiApp {
       ...
     }: let
       aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
+      helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
       # Resolve effective context: per-CLI wins when set, else top-level.
       effectiveContext =
         if cfg.context != null
@@ -289,11 +290,9 @@ lib.ai.app.mkAiApp {
         # to produce Layout B (a real directory with per-file
         # symlinks) and is path-type-agnostic (accepts both Nix path
         # literals and absolute string paths).
-        (let
-          helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
-        in {
+        {
           home.file = helpers.mkSkillEntries cfg.configDir mergedSkills;
-        })
+        }
         # Settings.json activation merge. Preserves user-added runtime
         # keys (e.g. `trusted_folders`) by merging Nix-declared values
         # on top of the existing file via `jq -s '.[0] * .[1]'`. On
@@ -312,30 +311,14 @@ lib.ai.app.mkAiApp {
         # ai.copilot just for MCP/skills fanout don't clobber an
         # externally-managed settings.json. Matches upstream Claude HM
         # behavior. Devenv-side is unconditional (project-local).
-        (lib.mkIf (cfg.settings != {}) (let
-          settingsJsonText = builtins.toJSON cfg.settings;
-        in {
-          home.activation.copilotSettingsMerge = lib.hm.dag.entryAfter ["writeBoundary"] ''
-            set -eu
-            SETTINGS_DIR="$HOME/${cfg.configDir}"
-            ${pkgs.coreutils}/bin/mkdir -p "$SETTINGS_DIR"
-            NIX_SETTINGS=$(${pkgs.coreutils}/bin/mktemp)
-            ${pkgs.coreutils}/bin/cat > "$NIX_SETTINGS" <<'COPILOT_SETTINGS_EOF'
-            ${settingsJsonText}
-            COPILOT_SETTINGS_EOF
-            if [ ! -f "$SETTINGS_DIR/settings.json" ]; then
-              ${pkgs.coreutils}/bin/cp "$NIX_SETTINGS" "$SETTINGS_DIR/settings.json"
-            else
-              # Merge Nix-declared settings on top of user runtime settings;
-              # Nix values override on conflict, user additions pass through.
-              TMP=$(${pkgs.coreutils}/bin/mktemp)
-              ${pkgs.jq}/bin/jq -s '.[0] * .[1]' "$SETTINGS_DIR/settings.json" "$NIX_SETTINGS" > "$TMP"
-              ${pkgs.coreutils}/bin/mv "$TMP" "$SETTINGS_DIR/settings.json"
-            fi
-            ${pkgs.coreutils}/bin/rm -f "$NIX_SETTINGS"
-            ${pkgs.coreutils}/bin/chmod 644 "$SETTINGS_DIR/settings.json"
-          '';
-        }))
+        (lib.mkIf (cfg.settings != {}) {
+          home.activation.copilotSettingsMerge = lib.hm.dag.entryAfter ["writeBoundary"] (helpers.mkSettingsActivationScript {
+            configFile = "${cfg.configDir}/settings.json";
+            settingsJson = builtins.toJSON cfg.settings;
+            jq = "${pkgs.jq}/bin/jq";
+            inherit (pkgs) coreutils;
+          });
+        })
       ];
   };
   devenv = {

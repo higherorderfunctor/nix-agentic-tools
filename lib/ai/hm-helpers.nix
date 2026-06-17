@@ -132,31 +132,44 @@ in rec {
   };
 
   # ── Settings activation script ───────────────────────────────────────
-  # Generates a shell snippet that merges Nix-declared settings into
-  # an existing mutable JSON config file on activation.
+  # Shell snippet that merges Nix-declared JSON settings into an existing
+  # mutable JSON config file at HM activation time. The settings JSON is
+  # INLINED via a quoted heredoc (not a store-path read) so module-eval
+  # tests can assert on rendered content and the merge stays atomic.
+  # `jq -s '.[0] * .[1]'` makes Nix-declared values win on key conflict
+  # while preserving runtime-added keys (oauth tokens in ~/.claude.json,
+  # trusted_folders in copilot settings.json, etc.).
   #
-  # configDir: relative path from $HOME (e.g. ".copilot")
-  # configFile: relative path from configDir (e.g. "config.json" or "settings/cli.json")
-  # nixSettingsPath: Nix store path to the generated settings JSON
-  # jq: path to jq binary
+  # configFile:   path relative to $HOME (".copilot/settings.json",
+  #               ".kiro/settings/cli.json", ".claude.json").
+  # settingsJson: JSON string to merge (caller `builtins.toJSON`'s it;
+  #               Kiro flattens dot-keys first).
+  # jq:           absolute jq binary path ("${pkgs.jq}/bin/jq").
+  # coreutils:    coreutils package (absolute paths for every command).
   mkSettingsActivationScript = {
     configFile,
-    nixSettingsPath,
+    settingsJson,
     jq,
     coreutils,
-    ...
   }: let
     parentDir = builtins.dirOf configFile;
   in ''
+    set -eu
     TARGET_DIR="$HOME/${parentDir}"
     CONFIG_FILE="$HOME/${configFile}"
     ${coreutils}/bin/mkdir -p "$TARGET_DIR"
-    if [ -f "$CONFIG_FILE" ]; then
-      ${jq} -s '.[0] * .[1]' "$CONFIG_FILE" "${nixSettingsPath}" > "$CONFIG_FILE.tmp"
-      ${coreutils}/bin/mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+    NIX_SETTINGS=$(${coreutils}/bin/mktemp)
+    ${coreutils}/bin/cat > "$NIX_SETTINGS" <<'NAT_SETTINGS_EOF'
+    ${settingsJson}
+    NAT_SETTINGS_EOF
+    if [ ! -f "$CONFIG_FILE" ]; then
+      ${coreutils}/bin/cp "$NIX_SETTINGS" "$CONFIG_FILE"
     else
-      ${coreutils}/bin/cp "${nixSettingsPath}" "$CONFIG_FILE"
-      ${coreutils}/bin/chmod 644 "$CONFIG_FILE"
+      TMP=$(${coreutils}/bin/mktemp)
+      ${jq} -s '.[0] * .[1]' "$CONFIG_FILE" "$NIX_SETTINGS" > "$TMP"
+      ${coreutils}/bin/mv "$TMP" "$CONFIG_FILE"
     fi
+    ${coreutils}/bin/rm -f "$NIX_SETTINGS"
+    ${coreutils}/bin/chmod 644 "$CONFIG_FILE"
   '';
 }

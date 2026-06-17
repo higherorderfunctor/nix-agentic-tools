@@ -367,30 +367,14 @@ lib.ai.app.mkAiApp {
         # managed cli.json. Matches upstream Claude HM behavior
         # (settings.json only written when cfg.settings != {}).
         # Devenv-side is unconditional (project-local, harmless).
-        (lib.mkIf (filteredSettings != {}) (let
-          settingsJsonText = builtins.toJSON flatSettings;
-        in {
-          home.activation.kiroSettingsMerge = lib.hm.dag.entryAfter ["writeBoundary"] ''
-            set -eu
-            SETTINGS_DIR="$HOME/${cfg.configDir}/settings"
-            ${pkgs.coreutils}/bin/mkdir -p "$SETTINGS_DIR"
-            NIX_SETTINGS=$(${pkgs.coreutils}/bin/mktemp)
-            ${pkgs.coreutils}/bin/cat > "$NIX_SETTINGS" <<'KIRO_SETTINGS_EOF'
-            ${settingsJsonText}
-            KIRO_SETTINGS_EOF
-            if [ ! -f "$SETTINGS_DIR/cli.json" ]; then
-              ${pkgs.coreutils}/bin/cp "$NIX_SETTINGS" "$SETTINGS_DIR/cli.json"
-            else
-              # Merge Nix-declared settings on top of user runtime settings;
-              # Nix values override on conflict, user additions pass through.
-              TMP=$(${pkgs.coreutils}/bin/mktemp)
-              ${pkgs.jq}/bin/jq -s '.[0] * .[1]' "$SETTINGS_DIR/cli.json" "$NIX_SETTINGS" > "$TMP"
-              ${pkgs.coreutils}/bin/mv "$TMP" "$SETTINGS_DIR/cli.json"
-            fi
-            ${pkgs.coreutils}/bin/rm -f "$NIX_SETTINGS"
-            ${pkgs.coreutils}/bin/chmod 644 "$SETTINGS_DIR/cli.json"
-          '';
-        }))
+        (lib.mkIf (filteredSettings != {}) {
+          home.activation.kiroSettingsMerge = lib.hm.dag.entryAfter ["writeBoundary"] (helpers.mkSettingsActivationScript {
+            configFile = "${cfg.configDir}/settings/cli.json";
+            settingsJson = builtins.toJSON flatSettings;
+            jq = "${pkgs.jq}/bin/jq";
+            inherit (pkgs) coreutils;
+          });
+        })
       ];
   };
   devenv = {
