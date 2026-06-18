@@ -243,6 +243,7 @@ in
           then builtins.readFile rule.text
           else rule.text;
         dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
+        helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
       in
         lib.mkMerge [
           # L2b → L3: expand `ai.claude.agentsDir` into per-CLI
@@ -286,6 +287,29 @@ in
               mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
             };
           }
+          # Reconcile per-model launch-effort unpin flags into ~/.claude.json
+          # so settings.effortLevel is honored instead of a newly-shipped
+          # model's launch-default pin. HM-only — devenv never touches $HOME
+          # (documented category exception). The log line is unconditional so
+          # an emptied flag map is visible ("reconciling 0 …"); the merge body
+          # is included only when there are flags. Never `exit` here — the
+          # block inlines into HM's set -eu activation script. See memory
+          # project_claude_effort_pin_state + feedback_hm_activation_exit.
+          (let
+            n = builtins.length (builtins.attrNames cfg.unpinLaunchEffort);
+          in {
+            home.activation.claudeUnpinLaunchEffort = lib.hm.dag.entryAfter ["writeBoundary"] (
+              ''
+                echo "ai.claude: reconciling ${toString n} launch-effort unpin flag(s) into ~/.claude.json"
+              ''
+              + lib.optionalString (n > 0) (helpers.mkSettingsActivationScript {
+                configFile = ".claude.json";
+                settingsJson = builtins.toJSON cfg.unpinLaunchEffort;
+                jq = "${pkgs.jq}/bin/jq";
+                inherit (pkgs) coreutils;
+              })
+            );
+          })
           # Per-instruction rule files — write .claude/rules/<name>.md
           # for each instruction entry that carries a `name` field. This
           # is a gap in upstream programs.claude-code (no per-rule file

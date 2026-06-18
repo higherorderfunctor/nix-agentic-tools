@@ -515,6 +515,49 @@ in {
       (result.config.programs.claude-code.settings.env.ENABLE_LSP_TOOL or null) == "1"
   );
 
+  # ── Task 5 (A4b): Claude launch-effort unpin reconciler ────────
+
+  # Default reconciler: flags from the committed sidecar are merged into
+  # ~/.claude.json through the shared helper.
+  module-claude-hm-reconciles-unpin-launch-effort = mkTest "claude-hm-reconciles-unpin-launch-effort" (
+    let
+      result = evalHm {ai.claude.enable = true;};
+      activation = result.config.home.activation.claudeUnpinLaunchEffort or null;
+    in
+      activation
+      != null
+      && lib.hasInfix "unpinOpus48LaunchEffort" (activation.text or "")
+      && lib.hasInfix ".claude.json" (activation.text or "")
+      && lib.hasInfix "jq" (activation.text or "")
+  );
+
+  # Emptied flag map: merge body omitted, but the applied-0 log still fires.
+  module-claude-hm-unpin-empty-logs-zero = mkTest "claude-hm-unpin-empty-logs-zero" (
+    let
+      result = evalHm {
+        ai.claude.enable = true;
+        ai.claude.unpinLaunchEffort = lib.mkForce {};
+      };
+      activation = result.config.home.activation.claudeUnpinLaunchEffort or null;
+    in
+      activation
+      != null
+      && lib.hasInfix "reconciling 0" (activation.text or "")
+      && !(lib.hasInfix "unpinOpus48LaunchEffort" (activation.text or ""))
+  );
+
+  # A key set false is still written (re-pins that model deliberately).
+  module-claude-hm-unpin-false-key-written = mkTest "claude-hm-unpin-false-key-written" (
+    let
+      result = evalHm {
+        ai.claude.enable = true;
+        ai.claude.unpinLaunchEffort.unpinOpus48LaunchEffort = false;
+      };
+      activation = result.config.home.activation.claudeUnpinLaunchEffort or null;
+    in
+      activation != null && lib.hasInfix "false" (activation.text or "")
+  );
+
   # ── Task 4 (A3): Copilot HM/devenv fanout absorption ──────────
   module-copilot-hm-wraps-package = mkTest "copilot-hm-wraps-package" (
     let
