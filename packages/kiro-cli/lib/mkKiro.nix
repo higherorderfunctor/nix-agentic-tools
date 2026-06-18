@@ -19,8 +19,9 @@
   pkgs,
   ...
 }: let
-  # Eval-pure read of the committed source list (no IFD).
+  # Eval-pure read of the committed source lists (no IFD).
   knownKiroModels = builtins.fromJSON (builtins.readFile ../models.json);
+  knownKiroEngines = builtins.fromJSON (builtins.readFile ../engines.json);
 in
   lib.ai.app.mkAiApp {
     name = "kiro";
@@ -141,6 +142,38 @@ in
         default = false;
         description = "Append --tui flag to the kiro-cli wrapper (HM only — devenv doesn't wrap the binary).";
       };
+      # Agent engine — appends `--agent-engine=<v>` to `kiro-cli`. Soft
+      # enum: known ids (packages/kiro-cli/engines.json) autocomplete; any
+      # string is accepted. The new TUI rejects the legacy `v1` engine, so
+      # when `tui = true` and this is null the wrapper auto-selects `v2`
+      # (mirrors the binary's own "Use --agent-engine=v2" guidance).
+      agentEngine = lib.mkOption {
+        type =
+          lib.types.nullOr
+          (lib.types.either (lib.types.enum knownKiroEngines) lib.types.str);
+        default = null;
+        description = ''
+          Agent engine launch flag (`--agent-engine`). Known ids
+          (packages/kiro-cli/engines.json) autocomplete; any string is
+          accepted (non-enforcing soft enum). When `tui = true` and this
+          is null the wrapper defaults to `v2` (the new TUI rejects the
+          legacy `v1` engine). HM only — devenv doesn't wrap the binary.
+        '';
+        example = "v3";
+      };
+      # V3 agent sub-mode — appends `--mode=<m>` to `kiro-cli`. Inline soft
+      # enum (default | spec); any string is accepted.
+      mode = lib.mkOption {
+        type =
+          lib.types.nullOr
+          (lib.types.either (lib.types.enum ["default" "spec"]) lib.types.str);
+        default = null;
+        description = ''
+          V3 agent mode launch flag (`--mode`): "default" or "spec". Any
+          string is accepted (non-enforcing soft enum). HM only.
+        '';
+        example = "spec";
+      };
       # MCP tools to auto-approve — appends `--trust-tools='<csv>'`
       # to `kiro-cli-chat`. Eliminates the need for a bespoke
       # symlinkJoin wrapper in the consumer.
@@ -220,7 +253,18 @@ in
         hasEnv = mergedEnvironmentVariables != {};
         hasTui = cfg.tui;
         hasTrust = cfg.trustedMcpTools != [];
-        needsWrapper = hasEnv || hasTui || hasTrust;
+        # The new TUI rejects the legacy v1 engine; when tui is on and no
+        # engine is set explicitly, default to v2 (the binary's own
+        # guidance). The tui+v1 mismatch is caught by an assertion below.
+        effectiveAgentEngine =
+          if cfg.agentEngine != null
+          then cfg.agentEngine
+          else if cfg.tui
+          then "v2"
+          else null;
+        hasEngine = effectiveAgentEngine != null;
+        hasMode = cfg.mode != null;
+        needsWrapper = hasEnv || hasTui || hasTrust || hasEngine || hasMode;
         setEnvArgs =
           lib.concatStringsSep " "
           (lib.mapAttrsToList
@@ -232,10 +276,12 @@ in
           paths = [cfg.package];
           nativeBuildInputs = [pkgs.makeWrapper];
           postBuild = ''
-            ${lib.optionalString (hasEnv || hasTui) ''
+            ${lib.optionalString (hasEnv || hasTui || hasEngine || hasMode) ''
               wrapProgram $out/bin/kiro-cli \
                 ${setEnvArgs} \
-                ${lib.optionalString hasTui ''--append-flags "--tui"''}
+                ${lib.optionalString hasTui ''--append-flags "--tui"''} \
+                ${lib.optionalString hasEngine ''--append-flags "--agent-engine=${effectiveAgentEngine}"''} \
+                ${lib.optionalString hasMode ''--append-flags "--mode=${cfg.mode}"''}
             ''}
             ${lib.optionalString (hasEnv || hasTrust) ''
               wrapProgram $out/bin/kiro-cli-chat \
@@ -268,6 +314,10 @@ in
               {
                 assertion = !(cfg.agents != {} && cfg.agentsDir != null);
                 message = "ai.kiro: cannot set both `agents` and `agentsDir` — choose one.";
+              }
+              {
+                assertion = !(cfg.tui && cfg.agentEngine == "v1");
+                message = "ai.kiro: `tui = true` cannot be combined with `agentEngine = \"v1\"` — the new TUI rejects the legacy v1 engine. Use \"v2\" or \"v3\", or leave agentEngine unset (defaults to v2 when tui is on).";
               }
               {
                 assertion = !(cfg.hooks != {} && cfg.hooksDir != null);
