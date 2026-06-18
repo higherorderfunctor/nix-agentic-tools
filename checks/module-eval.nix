@@ -343,6 +343,60 @@ in {
       && ((upstreamSettings.permissions.allow or []) == ["Read"])
   );
 
+  # Strict enum: an invalid effortLevel must throw at eval.
+  module-claude-hm-effort-level-rejects-invalid = mkTest "claude-hm-effort-level-rejects-invalid" (
+    let
+      attempt = builtins.tryEval (
+        let
+          ev = evalHm {
+            ai.claude = {
+              enable = true;
+              settings.effortLevel = "ultra";
+            };
+          };
+        in
+          builtins.deepSeq ev.config.ai.claude.settings.effortLevel
+          ev.config.ai.claude.settings.effortLevel
+      );
+    in
+      attempt.success == false
+  );
+
+  # Valid effortLevel reaches upstream.
+  module-claude-hm-effort-level-valid-reaches-upstream = mkTest "claude-hm-effort-level-valid-reaches-upstream" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          settings.effortLevel = "xhigh";
+        };
+      };
+    in
+      (result.config.programs.claude-code.settings.effortLevel or null) == "xhigh"
+  );
+
+  # Null typed keys are filtered out — upstream never sees effortLevel/model.
+  module-claude-hm-null-settings-filtered = mkTest "claude-hm-null-settings-filtered" (
+    let
+      result = evalHm {ai.claude.enable = true;};
+      s = result.config.programs.claude-code.settings or {};
+    in
+      !(s ? effortLevel) && !(s ? model)
+  );
+
+  # Soft-enum model: an arbitrary (unknown) id is accepted and reaches upstream.
+  module-claude-hm-model-soft-enum-accepts-arbitrary = mkTest "claude-hm-model-soft-enum-accepts-arbitrary" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          settings.model = "some-future-model";
+        };
+      };
+    in
+      (result.config.programs.claude-code.settings.model or null) == "some-future-model"
+  );
+
   module-claude-hm-writes-instruction-rule-file = mkTest "claude-hm-writes-instruction-rule-file" (
     let
       result = evalHm {
