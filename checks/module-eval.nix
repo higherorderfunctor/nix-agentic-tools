@@ -833,6 +833,34 @@ in {
       && lib.hasInfix "jq" (activation.text or "")
   );
 
+  # Known Kiro model id reaches the cli.json merge.
+  module-kiro-hm-default-model-known-accepted = mkTest "kiro-hm-default-model-known-accepted" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          settings.chat.defaultModel = "claude-opus-4.8";
+        };
+      };
+      activation = result.config.home.activation.kiroSettingsMerge or null;
+    in
+      activation != null && lib.hasInfix "claude-opus-4.8" (activation.text or "")
+  );
+
+  # Arbitrary (unknown) id is accepted (str branch of the soft enum).
+  module-kiro-hm-default-model-arbitrary-accepted = mkTest "kiro-hm-default-model-arbitrary-accepted" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          settings.chat.defaultModel = "some-future-model";
+        };
+      };
+      activation = result.config.home.activation.kiroSettingsMerge or null;
+    in
+      activation != null && lib.hasInfix "some-future-model" (activation.text or "")
+  );
+
   # HM: mcp.json — verify mergedServers writes mcp config.
   module-kiro-hm-writes-mcp-json = mkTest "kiro-hm-writes-mcp-json" (
     let
