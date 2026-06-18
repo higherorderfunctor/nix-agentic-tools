@@ -861,16 +861,16 @@ in {
       activation != null && lib.hasInfix "some-future-model" (activation.text or "")
   );
 
-  # Known Kiro agent engine triggers the HM wrapper (soft-enum known
-  # branch). Stub can't introspect postBuild, but a named symlinkJoin
+  # v3 = true triggers the HM wrapper (appends --v3 to the launcher).
+  # Stub can't introspect postBuild, but a named symlinkJoin
   # ("kiro-cli-wrapped") is a strong signal the wrapper fired — same
   # fidelity as the copilot wrapper tests.
-  module-kiro-hm-agent-engine-known-accepted = mkTest "kiro-hm-agent-engine-known-accepted" (
+  module-kiro-hm-v3-wraps-package = mkTest "kiro-hm-v3-wraps-package" (
     let
       result = evalHm {
         ai.kiro = {
           enable = true;
-          agentEngine = "v3";
+          v3 = true;
         };
       };
       packages = result.config.home.packages or [];
@@ -878,38 +878,9 @@ in {
       lib.any (p: (p.name or "") == "kiro-cli-wrapped") packages
   );
 
-  # Arbitrary (unknown) engine is accepted (str branch of the soft enum).
-  module-kiro-hm-agent-engine-arbitrary-accepted = mkTest "kiro-hm-agent-engine-arbitrary-accepted" (
-    let
-      result = evalHm {
-        ai.kiro = {
-          enable = true;
-          agentEngine = "some-future-engine";
-        };
-      };
-      packages = result.config.home.packages or [];
-    in
-      lib.any (p: (p.name or "") == "kiro-cli-wrapped") packages
-  );
-
-  # V3 sub-mode triggers the HM wrapper (soft-enum mode option).
-  module-kiro-hm-mode-accepted = mkTest "kiro-hm-mode-accepted" (
-    let
-      result = evalHm {
-        ai.kiro = {
-          enable = true;
-          mode = "spec";
-        };
-      };
-      packages = result.config.home.packages or [];
-    in
-      lib.any (p: (p.name or "") == "kiro-cli-wrapped") packages
-  );
-
-  # tui = true alone wraps (the wrapper auto-selects --agent-engine=v2
-  # because the new TUI rejects the legacy v1 engine) and does NOT trip
-  # the v1 guard.
-  module-kiro-hm-tui-defaults-engine-v2 = mkTest "kiro-hm-tui-defaults-engine-v2" (
+  # tui = true implies --v3 at the launcher (bare --tui is rejected on
+  # 2.8.1), so it must wrap. hasV3 = v3 || tui.
+  module-kiro-hm-tui-implies-v3-wraps = mkTest "kiro-hm-tui-implies-v3-wraps" (
     let
       result = evalHm {
         ai.kiro = {
@@ -920,26 +891,6 @@ in {
       packages = result.config.home.packages or [];
     in
       lib.any (p: (p.name or "") == "kiro-cli-wrapped") packages
-      && !(lib.any
-        (a: lib.hasInfix "rejects the legacy v1 engine" a.message && !a.assertion)
-        result.config.assertions)
-  );
-
-  # tui = true + explicit agentEngine = "v1" trips the assertion (mirrors
-  # the binary's own runtime rule at config-eval time).
-  module-kiro-hm-tui-v1-conflict-asserts = mkTest "kiro-hm-tui-v1-conflict-asserts" (
-    let
-      result = evalHm {
-        ai.kiro = {
-          enable = true;
-          tui = true;
-          agentEngine = "v1";
-        };
-      };
-    in
-      lib.any
-      (a: lib.hasInfix "rejects the legacy v1 engine" a.message && !a.assertion)
-      result.config.assertions
   );
 
   # HM: mcp.json — verify mergedServers writes mcp config.

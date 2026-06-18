@@ -1,16 +1,55 @@
 # Kiro CLI V3 — typed `agentEngine` + `mode` launch flags
 
-> Status: IMPLEMENTED (T1–T3 + tests) — T4 staleness check deferred (Q2-b).
-> Branch: refactor/ai-factory-architecture
-> Date: 2026-06-18
+> Status: SUPERSEDED by the CORRECTION below. The original
+> `agentEngine`/`mode` design targeted the wrong parser surface and was
+> reverted to a `v3` boolean. Branch: refactor/ai-factory-architecture.
+> Date: 2026-06-18.
 >
-> Landed: `packages/kiro-cli/engines.json`; `agentEngine` + `mode`
-> soft-enum options, `effectiveAgentEngine` (tui⇒v2 default), wrapper
-> append, and the `tui`+`v1` assertion in `packages/kiro-cli/lib/mkKiro.nix`;
-> 5 eval tests in `checks/module-eval.nix` (all green, no regression).
-> Decisions: Q-A=(a) auto-default v2 + assert on v1; Q1=inline mode;
-> Q2=defer staleness check; Q3=emit `--agent-engine`, never `--v3`.
-> NOT done: commit (user-gated); consumer nixos-config toggle (user-gated).
+> The sections from "What the flags actually are" through the original
+> Tasks below are kept for history but describe the chat-subcommand
+> surface, NOT the launcher the wrapper actually wraps. Read the
+> CORRECTION first.
+
+## CORRECTION (2026-06-18) — wrong parser surface
+
+The first implementation validated against `kiro-cli **chat** --help`
+and emitted `--agent-engine=<v>` / `--mode=<m>`. But the HM wrapper
+appends to the **top-level `kiro-cli` launcher**, whose parser is
+different and **rejects** `--agent-engine`/`--mode` (they are
+chat-subcommand-only):
+
+```
+$ kiro-cli --tui --agent-engine=v2
+error: unexpected argument '--agent-engine' found
+Usage: kiro-cli --tui --agent <AGENT>
+```
+
+**Launcher-level truth (kiro-cli 2.8.1):**
+
+| Invocation (top-level `kiro-cli`) | Result                                                     |
+| --------------------------------- | ---------------------------------------------------------- |
+| `--tui` alone                     | ❌ conflicts (wants an engine; can't pass one at launcher) |
+| `--v3`                            | ✅ works                                                   |
+| `--tui --v3`                      | ✅ works — the target combo                                |
+| `--agent-engine` / `--mode`       | ❌ rejected (chat-only)                                    |
+
+So the launcher's only engine selector is the **`--v3` boolean**, and
+`--tui` must pair with `--v3`.
+
+**Final design (shipped in the fix):**
+
+- Replace `agentEngine`/`mode`/`engines.json`/`effectiveAgentEngine`/the
+  `tui`+`v1` assertion with a single `v3 = bool` option → appends `--v3`.
+- `hasV3 = cfg.v3 || cfg.tui` (tui implies `--v3`), wrapper emits
+  `--tui` and/or `--v3`. HM-only, like `tui`.
+- 2 eval tests: `module-kiro-hm-v3-wraps-package`,
+  `module-kiro-hm-tui-implies-v3-wraps`.
+- Consumer nixos-config: drop `agentEngine`; `tui = true` now yields
+  `--tui --v3` automatically (or set `v3 = true` for v3 without the TUI).
+
+---
+
+> ORIGINAL PLAN (superseded — chat-subcommand surface, kept for history):
 
 ## Motivation
 
