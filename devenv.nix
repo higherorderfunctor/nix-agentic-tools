@@ -299,9 +299,11 @@ in {
 
   # ── Tasks ─────────────────────────────────────────────────────────────
   tasks = let
+    checkTasks = (import ./dev/tasks/check.nix {}).tasks;
     generateTasks = (import ./dev/tasks/generate.nix {inherit lib;}).tasks;
   in
-    generateTasks
+    checkTasks
+    // generateTasks
     // {
       # ── Update pipeline (ninja DAG) ──────────────────────────────────
       # ninja handles the full dependency graph with -j4 concurrency.
