@@ -930,6 +930,55 @@ in {
       && lib.hasInfix "nixd" (lspFile.text or "")
   );
 
+  # HM: explicit `permissions` rules render permissions.yaml (source is a
+  # pkgs.formats.yaml derivation, so we assert the file ENTRY exists).
+  module-kiro-hm-permissions-explicit-rendered = mkTest "kiro-hm-permissions-explicit-rendered" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          permissions = [
+            {
+              capability = "mcp";
+              effect = "allow";
+              match = ["openmemory/*"];
+            }
+          ];
+        };
+      };
+    in
+      (result.config.home.file.".kiro/settings/permissions.yaml" or null) != null
+  );
+
+  # HM: under v3 (tui implies v3), `trustedMcpTools` is translated into
+  # permissions.yaml — so the file is written even with no explicit rules.
+  module-kiro-hm-permissions-translated-under-v3 = mkTest "kiro-hm-permissions-translated-under-v3" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          tui = true;
+          trustedMcpTools = ["@openmemory" "@git-mcp/git_diff" "subagent" "use_aws"];
+        };
+      };
+    in
+      (result.config.home.file.".kiro/settings/permissions.yaml" or null) != null
+  );
+
+  # HM: without v3 (no tui, no v3) and no explicit permissions, the
+  # trustedMcpTools list is NOT translated — no permissions.yaml written.
+  module-kiro-hm-permissions-absent-without-v3 = mkTest "kiro-hm-permissions-absent-without-v3" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          trustedMcpTools = ["@openmemory"];
+        };
+      };
+    in
+      (result.config.home.file.".kiro/settings/permissions.yaml" or null) == null
+  );
+
   # HM: per-instruction steering files with kiro transformer frontmatter.
   # Verifies the kiro transformer emits `inclusion:` and `name:` fields.
   module-kiro-hm-writes-steering-files = mkTest "kiro-hm-writes-steering-files" (
