@@ -21,6 +21,51 @@
 }: let
   # Eval-pure read of the committed source list (no IFD).
   knownKiroModels = builtins.fromJSON (builtins.readFile ../models.json);
+
+  # Translate the v2 `trustedMcpTools` list into v3 `permissions.yaml`
+  # rules (ONLY when v3 is active) and merge with explicit `permissions`.
+  # v2 keeps using `--trust-tools` untouched. See
+  # docs/plans/kiro-v3-permissions.md.
+  #   "@srv"      -> { capability = mcp; match = ["srv/*"]; }
+  #   "@srv/tool" -> { capability = mcp; match = ["srv/tool"]; }  (1:1)
+  #   "subagent"  -> { capability = subagent; }
+  #   "use_aws" / other bare tokens -> dropped (aws_tool removed in v3)
+  mkPermissionRules = cfg: let
+    hasV3 = cfg.v3 || cfg.tui;
+    trusted = cfg.trustedMcpTools;
+    mcpMatches = map (t: let
+      body = lib.removePrefix "@" t;
+    in
+      if lib.hasInfix "/" body
+      then body
+      else "${body}/*")
+    (builtins.filter (lib.hasPrefix "@") trusted);
+    bare = builtins.filter (t: !(lib.hasPrefix "@" t)) trusted;
+    hasSubagent = builtins.elem "subagent" bare;
+    dropped = builtins.filter (t: t != "subagent") bare;
+    translated =
+      lib.optional (mcpMatches != []) {
+        capability = "mcp";
+        effect = "allow";
+        match = mcpMatches;
+      }
+      ++ lib.optional hasSubagent {
+        capability = "subagent";
+        effect = "allow";
+      };
+    # Always emit capability+effect; match/exclude only when non-empty.
+    renderRule = r:
+      {inherit (r) capability effect;}
+      // lib.optionalAttrs ((r.match or []) != []) {inherit (r) match;}
+      // lib.optionalAttrs ((r.exclude or []) != []) {inherit (r) exclude;};
+    rules = map renderRule (cfg.permissions ++ lib.optionals hasV3 translated);
+  in
+    if hasV3 && dropped != []
+    then
+      lib.warn
+      "ai.kiro: trustedMcpTools entries not representable as v3 permissions, dropped: ${lib.concatStringsSep ", " dropped}"
+      rules
+    else rules;
 in
   lib.ai.app.mkAiApp {
     name = "kiro";
@@ -166,6 +211,91 @@ in
         description = "List of MCP tool patterns to auto-approve via --trust-tools on kiro-cli-chat (HM only).";
         example = ["@context7-mcp" "@git-mcp/git_diff" "subagent"];
       };
+      # V3 capability-based permissions -> `<configDir>/settings/permissions.yaml`.
+      # Mirrors Kiro's `rules:` schema 1:1 (capability / effect / match /
+      # exclude). Under v3 (tui or v3) the v2 `trustedMcpTools` list is also
+      # translated and merged in (see mkPermissionRules). HM-only: Kiro reads
+      # permissions only from `~/.kiro/settings/` (global) or
+      # `~/.kiro/workspace-roots/<hash>/`, never project `.kiro/`.
+      permissions = lib.mkOption {
+        type = lib.types.listOf (lib.types.submodule {
+          options = {
+            capability = lib.mkOption {
+              type =
+                lib.types.either
+                (lib.types.enum [
+                  "all"
+                  "builtin"
+                  "context"
+                  "diagnostics"
+                  "filesystem"
+                  "fs_read"
+                  "fs_write"
+                  "mcp"
+                  "shell"
+                  "skill"
+                  "subagent"
+                  "web_fetch"
+                  "web_search"
+                ])
+                lib.types.str;
+              description = "Capability category (soft enum; any string accepted).";
+            };
+            effect = lib.mkOption {
+              type = lib.types.enum ["allow" "ask" "deny"];
+              description = "deny | ask | allow (resolved by restrictiveness: deny > ask > allow).";
+            };
+            match = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [];
+              description = "Glob patterns (mcp: server/tool; `*` only, no `**`/`?`).";
+            };
+            exclude = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [];
+              description = "Glob patterns exempting resources from this rule.";
+            };
+          };
+        });
+        default = [];
+        description = ''
+          V3 capability-based permission rules, rendered to
+          `<configDir>/settings/permissions.yaml` as `{ rules = [...]; }`
+          (mirrors Kiro's schema). When v3 is active, `trustedMcpTools` is
+          translated and merged. HM only.
+        '';
+        example = [
+          {
+            capability = "mcp";
+            effect = "allow";
+            match = ["openmemory/*" "git-mcp/git_diff"];
+          }
+        ];
+      };
+      # -- Agents & hooks --------------------------------------------------
+      # GREENFIELD (held -- see docs/plans/kiro-v3-permissions.md). These are
+      # UNTYPED PASSTHROUGH today: we write whatever JSON the consumer
+      # authors. There is no upstream format we wrap -- Kiro OWNS these
+      # schemas -- so a future session should MODEL them typed (like
+      # `permissions`), not passthrough. No v2 typed surface exists, so there
+      # is nothing to translate; this is net-new modeling.
+      #
+      # v3 agent schema (`<configDir>/agents/<name>.{json,md}`; global
+      # ~/.kiro or project .kiro): { description, model, prompt,
+      # tools:[tag|"*"], mcpServers:{<name>:{command,args,env,timeout}},
+      # resources:["file://..."|"skill://..."],
+      # permissions:[{capability,effect,match,exclude}], welcomeMessage }.
+      # Tool tags: read write shell web subagent knowledge todo_list @mcp
+      # @builtin *. `.md` = YAML frontmatter + system-prompt body.
+      # Default agent: `kiro-cli agent set-default <name>`.
+      #
+      # v3 hook schema (`<configDir>/hooks/<name>.json`): { version:"v1",
+      # hooks:[{ name, description?, trigger, matcher?,
+      # action:{type:"command"|"agent", command|prompt}, timeout?(60),
+      # enabled?(true) }] }. Triggers (PascalCase): SessionStart Stop
+      # PreToolUse PostToolUse PreTaskExec PostTaskExec UserPromptSubmit
+      # PostFileCreate PostFileSave PostFileDelete Manual. v2 embedded hooks
+      # still work transitionally; `kiro-cli agent migrate` converts.
       # Inline agent JSON content. Written under
       # `<configDir>/agents/<name>.json` in both backends.
       agents = lib.mkOption {
@@ -298,6 +428,18 @@ in
               }
             ];
           }
+          # settings/permissions.yaml — V3 capability rules (explicit
+          # `permissions` ++ translated `trustedMcpTools` under v3). Static
+          # declarative write; Kiro's "Always allow" is session-scoped and
+          # never mutates this file.
+          (let
+            permissionRules = mkPermissionRules cfg;
+          in
+            lib.mkIf (permissionRules != []) {
+              home.file."${cfg.configDir}/settings/permissions.yaml".source = (pkgs.formats.yaml {}).generate "kiro-permissions.yaml" {
+                rules = permissionRules;
+              };
+            })
           # settings/lsp.json — typed LSP server definitions.
           (lib.mkIf (mergedLspServers != {}) {
             home.file."${cfg.configDir}/settings/lsp.json".text =
