@@ -174,6 +174,53 @@
     };
   in
     mcpLib.effectiveArgs name cfgShim mode srv.args;
+
+  # ── Restart long-lived services on credential rotation ─────────────
+  # A service unit reads its credential file once, at ExecStart. A
+  # rotated secret keeps the same *path*, so the generated unit is
+  # byte-identical -- neither home-manager nor systemd restarts it, and
+  # the process keeps serving with the stale token. This activation step
+  # fingerprints each service's credential file(s) and restarts the unit
+  # only when the content actually changed. Secret-manager agnostic: it
+  # needs a stable path, not sops/agenix internals. Ordered after the
+  # `sops-nix` activation entry so we hash the freshly-rendered secret;
+  # the dependency is silently ignored when sops-nix is not in use.
+  credentialedServiceFiles =
+    filterAttrs (_: paths: paths != [])
+    (mapAttrs (name: srv:
+      mcpLib.credentialFilePaths
+      (credentialVarsFor name)
+      (mcpLib.evalSettings name srv.settings))
+    serviceServers);
+
+  mkRotationCheck = name: paths: let
+    unit = "mcp-" + name + ".service";
+    readableGuard = concatStringsSep " && " (map (p: "[ -r ${escapeShellArg p} ]") paths);
+    pathArgs = concatStringsSep " " (map escapeShellArg paths);
+  in ''
+    hash_file="$state_dir/${name}"
+    if ${readableGuard}; then
+      if new_hash="$(${pkgs.coreutils}/bin/cat -- ${pathArgs} | ${pkgs.coreutils}/bin/sha256sum | ${pkgs.coreutils}/bin/cut -d ' ' -f1)"; then
+        old_hash=""
+        if [ -r "$hash_file" ]; then
+          old_hash="$(${pkgs.coreutils}/bin/cat -- "$hash_file")"
+        fi
+        if [ -n "$old_hash" ] && [ "$old_hash" != "$new_hash" ] \
+          && ${pkgs.systemd}/bin/systemctl --user is-active --quiet ${escapeShellArg unit}; then
+          $VERBOSE_ECHO "mcp-servers: credential for ${unit} rotated -- restarting"
+          ${pkgs.systemd}/bin/systemctl --user restart ${escapeShellArg unit} || true
+        fi
+        printf '%s' "$new_hash" > "$hash_file" || true
+      fi
+    fi
+  '';
+
+  rotationRestartScript = ''
+    state_dir="''${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/mcp-cred-hashes"
+    ${pkgs.coreutils}/bin/mkdir -p "$state_dir" || true
+    ${pkgs.coreutils}/bin/chmod 700 "$state_dir" || true
+    ${concatStringsSep "\n" (mapAttrsToList mkRotationCheck credentialedServiceFiles)}
+  '';
 in {
   # ── Options ────────────────────────────────────────────────────────
   options.services.mcp-servers = {
@@ -253,5 +300,14 @@ in {
         };
       })
     serviceServers);
+
+    # Restart credentialed services when their secret file content
+    # changes (token rotation). See mkRotationCheck above. Gated on
+    # Linux (systemd user services) + at least one file-credentialed
+    # service, so it is inert for stdio-only or credential-free setups.
+    home.activation = mkIf (pkgs.stdenv.isLinux && credentialedServiceFiles != {}) {
+      mcpRestartOnSecretRotation =
+        lib.hm.dag.entryAfter ["writeBoundary" "sops-nix"] rotationRestartScript;
+    };
   };
 }

@@ -98,6 +98,22 @@
       (cred.file or null) != null || (cred.helper or null) != null)
     (builtins.attrNames credentialVars);
 
+  # File paths backing file-based credentials, in declaration order.
+  # Helper-based creds have no stable file to fingerprint, so they are
+  # excluded. The path is stable across a rotation (only the content
+  # changes), so callers hash these files to decide whether a dependent
+  # long-lived service must restart. Agnostic to the secret manager
+  # (sops-nix, agenix, ln, ...): it only needs the decrypted file path.
+  credentialFilePaths = credentialVars: settings:
+    builtins.filter (p: p != null)
+    (mapAttrsToList (optName: _: let
+      cred = settings.${optName} or null;
+    in
+      if cred != null && cred ? file
+      then cred.file
+      else null)
+    credentialVars);
+
   # Use absolute paths for all commands — Claude Code's MCP `env` field
   # replaces the process environment (no PATH inheritance), so bare
   # command names like `cat` fail with "command not found".
@@ -284,6 +300,7 @@
   };
 in {
   inherit
+    credentialFilePaths
     effectiveArgs
     effectiveEnv
     evalSettings

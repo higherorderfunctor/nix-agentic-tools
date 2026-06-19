@@ -1443,6 +1443,48 @@ in {
       result.config.services.mcp-servers.mcpConfig.mcpServers == {}
   );
 
+  # Credential rotation: enabling a file-credentialed HTTP server emits a
+  # restart-on-rotation activation entry that fingerprints the secret path
+  # and targets the matching systemd user unit.
+  module-mcp-services-rotation-restart-entry = mkTest "mcp-services-rotation-restart-entry" (
+    let
+      result = evalHm {
+        services.mcp-servers.servers.github-mcp = {
+          enable = true;
+          settings.credentials.file = "/run/secrets/gh-token";
+        };
+      };
+      activation = result.config.home.activation.mcpRestartOnSecretRotation or null;
+    in
+      activation
+      != null
+      && lib.hasInfix "mcp-github-mcp.service" (activation.text or "")
+      && lib.hasInfix "sha256sum" (activation.text or "")
+      && lib.hasInfix "/run/secrets/gh-token" (activation.text or "")
+  );
+
+  # Helper-based credentials have no stable file to fingerprint, so they
+  # contribute no rotation entry (the path-based restart cannot apply).
+  module-mcp-services-rotation-skips-helper-creds = mkTest "mcp-services-rotation-skips-helper-creds" (
+    let
+      result = evalHm {
+        services.mcp-servers.servers.github-mcp = {
+          enable = true;
+          settings.credentials.helper = "/run/wrappers/gh-token-helper";
+        };
+      };
+    in
+      !(result.config.home.activation ? mcpRestartOnSecretRotation)
+  );
+
+  # No credentialed services -> no rotation activation entry (inert).
+  module-mcp-services-rotation-absent-without-creds = mkTest "mcp-services-rotation-absent-without-creds" (
+    let
+      result = evalHm {};
+    in
+      !(result.config.home.activation ? mcpRestartOnSecretRotation)
+  );
+
   # ── Attrs-shape ai.rules / ai.<cli>.rules (unified transformer) ───
 
   # Claude HM: top-level ai.rules → .claude/rules/<name>.md with paths frontmatter.
