@@ -22,6 +22,7 @@ Versions computed at eval time via `overlays/lib.nix:mkVersion`
 | agnix                | root       | GitHub main          | cargo                     | —                     | cargo test    | --version + MCP/LSP |
 | claude-code          | root       | GCS manifest         | pre-built binary          | —                     | —             | binary              |
 | copilot-cli          | root       | GitHub releases      | pre-built binary          | `github-copilot-cli`  | —             | binary              |
+| kimchi               | root       | GitHub releases      | pre-built binary (bun)    | —                     | —             | --version           |
 | kiro-cli             | root       | AWS manifest         | pre-built binary          | `kiro-cli`            | —             | binary              |
 | kiro-gateway         | root       | GitHub main          | python                    | —                     | pytest (1413) | —                   |
 | context7-mcp         | mcpServers | GitHub main          | pnpm (nixpkgs override)   | `context7-mcp`        | vitest (2)    | version check       |

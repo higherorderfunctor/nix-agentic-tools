@@ -177,6 +177,7 @@ nix build .#git-absorb
 |---------|-------------|
 | `claude-code` | Claude Code CLI |
 | `github-copilot-cli` | GitHub Copilot CLI |
+| `kimchi` | Kimchi CLI |
 | `kiro-cli` | Kiro CLI |
 | `kiro-gateway` | Python proxy API for Kiro |
 
