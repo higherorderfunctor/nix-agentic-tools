@@ -61,6 +61,7 @@
   aiCliPackages = [
     "claude-code"
     "copilot-cli"
+    "kimchi"
     "kiro-cli"
     "kiro-gateway"
   ];

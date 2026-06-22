@@ -77,6 +77,7 @@
     # ── Binary packages (custom updateScript handles per-platform fetches) ──
     claude-code = {flags = "--use-update-script";};
     copilot-cli = {flags = "--use-update-script --override-filename overlays/copilot-cli.nix";};
+    kimchi = {flags = "--use-update-script --override-filename overlays/kimchi.nix";};
     kiro-cli = {flags = "--use-update-script --override-filename overlays/kiro-cli.nix";};
   };
 
