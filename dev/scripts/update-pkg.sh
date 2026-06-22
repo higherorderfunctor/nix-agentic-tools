@@ -161,6 +161,23 @@ if ! (
     exit 1
   fi
 
+  # Formatter pass — normalize anything the updateScript regenerated
+  # (e.g. claude-code's extraExtract cp's jq output, whose multi-line
+  # arrays biome collapses onto one line). Mirrors update-input.sh
+  # Phase 2.5, but the trigger here is "the updateScript wrote files"
+  # (dirty tree) rather than "the formatter store path moved" — a
+  # package bump can emit non-canonical files even when the formatter
+  # itself is unchanged. Without it the per-package PR ships an
+  # unformatted sidecar and PR CI's checks.formatting fails; the
+  # base-branch full-format run happens post-merge, too late to gate
+  # the PR. Gated on a dirty tree so a no-op update doesn't trigger a
+  # spurious reformat commit. `nix fmt` exits 0 on successful in-place
+  # format (no --fail-on-change); a non-zero exit is a real formatter
+  # error and correctly aborts the subshell -> reports HELD BACK.
+  if ! git -C "$wt" diff --quiet || ! git -C "$wt" diff --staged --quiet; then
+    run_build nix fmt
+  fi
+
   # Commit dep hash changes (amend if update commit exists, new commit otherwise)
   if ! git -C "$wt" diff --quiet || ! git -C "$wt" diff --staged --quiet; then
     git -C "$wt" add -A

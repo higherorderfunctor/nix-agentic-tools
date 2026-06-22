@@ -1,9 +1,10 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-05-29. If you touch
+> **Last verified:** 2026-06-22. If you touch
 > `.github/workflows/update.yml`, `dev/scripts/update-common.sh`,
-> `dev/scripts/update-input.sh`, or the PR creation logic, and this
-> fragment isn't updated in the same commit, stop and fix it.
+> `dev/scripts/update-input.sh`, `dev/scripts/update-pkg.sh`, or the
+> PR creation logic, and this fragment isn't updated in the same
+> commit, stop and fix it.
 
 ### Design: Renovate-style per-dependency PRs
 
@@ -39,7 +40,34 @@ behavior as Renovate's rebasing strategy.
 PRs trigger ci.yml's `pull_request` event, which runs builds on
 both linux and darwin runners. PRs that pass both can be merged.
 
-### Per-input formatter pass (`update-input.sh` Phase 2.5)
+### Formatter passes (per-input and per-package)
+
+Both worktree update scripts run `nix fmt` before their commit so the
+per-dependency PR ships treefmt-clean files. PR CI's `treefmt-check`
+(`checks.formatting`) runs on each PR branch in isolation, and the
+base-branch `full-format` ninja rule only runs post-merge — too late
+to gate a PR — so each branch must normalize its own tree. The two
+paths differ in their **trigger**:
+
+- **`update-input.sh` (Phase 2.5)** runs `nix fmt` only when the input
+  bump moves `formatter.<system>`'s store path (a new
+  prettier/alejandra/biome version wants different output across the
+  whole tree). Detail below.
+- **`update-pkg.sh`** runs `run_build nix fmt` whenever the update left
+  a dirty tree. The trigger is "the updateScript regenerated a file,"
+  not "the formatter moved": a package's custom updateScript can emit
+  non-canonical output even when the formatter is unchanged. The
+  motivating case is `claude-code`'s `extraExtract`, which `cp`'s
+  `jq`-pretty-printed JSON (every array multi-line) over
+  `overlays/claude-code-extracted.json`; biome collapses short arrays
+  (e.g. `effortLevels`) onto one line, so the raw `cp` drifts from
+  treefmt-clean. The `extraExtract` hook also formats its own output
+  directly (defense in depth — the hook stays correct when invoked
+  outside the pipeline); the `update-pkg.sh` pass is the general net
+  for any future package updateScript. Gated on a dirty tree so a
+  no-op update doesn't create a spurious reformat commit.
+
+#### Per-input formatter pass (`update-input.sh` Phase 2.5)
 
 Between build verification and the commit, `update-input.sh`
 conditionally runs `nix fmt` inside the per-input worktree —
