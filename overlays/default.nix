@@ -52,6 +52,9 @@
     copilot-cli = import ./copilot-cli.nix {
       inherit inputs final;
     };
+    kimchi = import ./kimchi.nix {
+      inherit inputs final;
+    };
     kiro-cli = import ./kiro-cli.nix {
       inherit inputs final;
     };

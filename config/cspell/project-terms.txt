@@ -69,6 +69,7 @@ fetchzip
 foldl
 frontloaded
 frontmatter
+getkimchi
 gitbook
 gitfile
 gitref
@@ -162,6 +163,7 @@ regen
 reimplementation
 relpath
 reparent
+repoint
 rerere
 revertibility
 revset
