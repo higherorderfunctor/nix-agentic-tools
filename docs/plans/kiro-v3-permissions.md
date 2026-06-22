@@ -10,7 +10,14 @@
 > `checks/module-eval.nix`. `trustedMcpTools`/`--trust-tools` untouched (no
 > deprecation). Verified: real YAML output correct (`@srv`→`srv/*`,
 > `@srv/tool` 1:1, `subagent` rule, `use_aws` dropped w/ warn); tests green;
-> no regression. NOT done: commit (user-gated).
+> no regression. Committed fb7bf1a / 69caa9b / dbef5f6.
+>
+> VALIDATED on consumer activation 2026-06-22: `~/.kiro/settings/permissions.yaml`
+> generated (HM symlink; ~180 rules incl. enumerated github/gitlab read tools
+>
+> - `subagent`; `use_aws` absent); launcher `kiro-cli-wrapped` carries
+>   `--tui --v3`; a live V3 session ran all six `@openmemory` tools with ZERO
+>   approval prompts. Full chain confirmed working end-to-end.
 
 ## User decisions
 
