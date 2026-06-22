@@ -36,7 +36,7 @@ inputs:
   nixpkgs-test:
     url: github:NixOS/nixpkgs/ac62194c3917d5f474c1a844b6fd6da2db95077d
   nuscht-search:
-    url: github:NuschtOS/search/a45595bc2e1ed7def0f8bce6e5f6bb9c8a6bbcbe
+    url: github:NuschtOS/search/1b4bc60840fbe3d5c9faa866031db49266fe3367
     inputs:
       nixpkgs:
         follows: nixpkgs
