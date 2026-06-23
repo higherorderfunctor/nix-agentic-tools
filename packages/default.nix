@@ -16,6 +16,7 @@
   github-mcp = import ./github-mcp;
   gitlab-mcp = import ./gitlab-mcp;
   kagi-mcp = import ./kagi-mcp;
+  kimchi = import ./kimchi;
   kiro-cli = import ./kiro-cli;
   kiro-gateway = import ./kiro-gateway;
   mcp-services = import ./mcp-services;
