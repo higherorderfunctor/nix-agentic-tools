@@ -6,6 +6,9 @@ result-docs
 # Claude Code plugin state
 .remember/
 
+# Kimchi CLI project-local state (config, sessions, plans, ferments)
+.kimchi/
+
 # devenv state
 .devenv/
 .direnv/
