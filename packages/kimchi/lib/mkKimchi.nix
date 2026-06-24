@@ -167,7 +167,6 @@ in
         hasContext = effectiveContext != null && effectiveContext != "";
 
         filteredSettings = aiCommon.filterNulls cfg.settings;
-        flatSettings = aiCommon.flattenDotKeys filteredSettings;
         filteredHarnessSettings = aiCommon.filterNulls cfg.harnessSettings;
 
         kimchiEnvVars =
@@ -229,7 +228,7 @@ in
           (lib.mkIf (filteredSettings != {}) {
             home.activation.kimchiConfigMerge = lib.hm.dag.entryAfter ["writeBoundary"] (helpers.mkSettingsActivationScript {
               configFile = "${cfg.configDir}/config.json";
-              settingsJson = builtins.toJSON flatSettings;
+              settingsJson = builtins.toJSON filteredSettings;
               jq = "${pkgs.jq}/bin/jq";
               inherit (pkgs) coreutils;
             });
@@ -283,7 +282,6 @@ in
         hasContext = effectiveContext != null && effectiveContext != "";
 
         filteredSettings = aiCommon.filterNulls cfg.settings;
-        flatSettings = aiCommon.flattenDotKeys filteredSettings;
         filteredHarnessSettings = aiCommon.filterNulls cfg.harnessSettings;
 
         kimchiEnvVars =
@@ -327,7 +325,7 @@ in
 
           # config.json static write.
           (lib.mkIf (filteredSettings != {}) {
-            files."${cfg.configDir}/config.json".text = builtins.toJSON flatSettings;
+            files."${cfg.configDir}/config.json".text = builtins.toJSON filteredSettings;
           })
 
           # harness/settings.json static write.
