@@ -138,6 +138,11 @@
     hm-modules = [
       "packages/*/modules/homeManager/**"
     ];
+    # kimchi: two-tree factory (config.json + harness/), runtime SOPS
+    # credential, wrapProgram separator + flattenDotKeys gotchas.
+    kimchi = [
+      "packages/kimchi/**"
+    ];
     mcp-servers = [
       "overlays/mcp-servers/**"
     ];
@@ -199,6 +204,13 @@
     devenv = ["files-internals"];
     flake = ["binary-cache"];
     hm-modules = ["module-conventions"];
+    kimchi = [
+      {
+        location = "package";
+        name = "kimchi-factory";
+        dir = "kimchi";
+      }
+    ];
     mcp-servers = [
       "js-server-packaging"
       "overlay-guide"
