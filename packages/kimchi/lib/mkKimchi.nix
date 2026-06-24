@@ -17,6 +17,7 @@
 }: let
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
+  mcpLib = import ../../../lib/mcp.nix {inherit lib;};
 
   # Shared per-backend data prep. hm.config and devenv.config derive the
   # same settings/env/instruction values from the merged inputs the
@@ -53,20 +54,50 @@
       )
       mergedInstructions;
 
+    # Non-secret env vars — baked into the wrapper via `--set`.
     kimchiEnvVars =
-      lib.optionalAttrs (cfg.apiKey != null) {KIMCHI_API_KEY = cfg.apiKey;}
-      // lib.optionalAttrs cfg.noUpdateCheck {KIMCHI_NO_UPDATE_CHECK = "1";}
+      lib.optionalAttrs cfg.noUpdateCheck {KIMCHI_NO_UPDATE_CHECK = "1";}
       // lib.optionalAttrs (cfg.telemetry != null) {
         KIMCHI_TELEMETRY_ENABLED =
           if cfg.telemetry
           then "1"
           else "0";
       };
+    effectiveEnvVars = mergedEnvironmentVariables // kimchiEnvVars;
+
+    # The Cast AI key is a secret: read it from its decrypted file (or
+    # helper) at launch via the repo's shared credential snippet, so it is
+    # never serialized into the world-readable /nix/store. Same mechanism
+    # the MCP servers use (lib/mcp.nix); sops-nix / agenix agnostic.
+    credSnippet =
+      if cfg.apiKey != null
+      then mcpLib.mkCredentialsSnippet pkgs {apiKey.envVar = "KIMCHI_API_KEY";} {inherit (cfg) apiKey;}
+      else "";
+
+    # wrapProgram args: `--set` for non-secret env, `--run` for the
+    # runtime secret export. Joined with a single space on the continued
+    # line — never a backslash-newline, which breaks multi-arg wrapping.
+    wrapArgs =
+      lib.mapAttrsToList (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}") effectiveEnvVars
+      ++ lib.optional (credSnippet != "") "--run ${lib.escapeShellArg credSnippet}";
+
+    wrappedPackage = pkgs.symlinkJoin {
+      name = "kimchi-wrapped";
+      paths = [cfg.package];
+      nativeBuildInputs = [pkgs.makeWrapper];
+      postBuild = lib.optionalString (wrapArgs != []) ''
+        wrapProgram $out/bin/kimchi \
+          ${lib.concatStringsSep " " wrapArgs}
+      '';
+    };
   in {
     filteredSettings = aiCommon.filterNulls cfg.settings;
     filteredHarnessSettings = aiCommon.filterNulls cfg.harnessSettings;
-    effectiveEnvVars = mergedEnvironmentVariables // kimchiEnvVars;
     allAgencyTexts = lib.filter (s: s != "") ([contextText] ++ instructionTexts);
+    package =
+      if wrapArgs != []
+      then wrappedPackage
+      else cfg.package;
   };
 in
   lib.ai.app.mkAiApp {
@@ -181,11 +212,12 @@ in
         description = "Environment variables exported when launching kimchi.";
       };
 
-      apiKey = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = "Cast AI API key. Injected via KIMCHI_API_KEY env var instead of config.json.";
-      };
+      # Cast AI key — a runtime credential (file | helper), exported as
+      # KIMCHI_API_KEY at launch. Reuses the repo's shared MCP credential
+      # pattern (lib/mcp.nix) so the secret is read from its decrypted file
+      # at runtime and never lands in the /nix/store. Set exactly one of
+      # apiKey.file (sops-nix/agenix path) or apiKey.helper.
+      apiKey = mcpLib.mkCredentialsOption "KIMCHI_API_KEY";
 
       noUpdateCheck = lib.mkOption {
         type = lib.types.bool;
@@ -212,31 +244,11 @@ in
         ...
       }: let
         prep = mkPrep {inherit cfg mergedInstructions mergedEnvironmentVariables topContext;};
-        inherit (prep) filteredSettings filteredHarnessSettings effectiveEnvVars allAgencyTexts;
-        hasEnv = effectiveEnvVars != {};
-
-        # symlinkJoin wrapper for env vars (HM only).
-        wrappedPackage = pkgs.symlinkJoin {
-          name = "kimchi-wrapped";
-          paths = [cfg.package];
-          nativeBuildInputs = [pkgs.makeWrapper];
-          postBuild = lib.optionalString hasEnv ''
-            wrapProgram $out/bin/kimchi \
-              ${lib.concatStringsSep " " (lib.mapAttrsToList (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}") effectiveEnvVars)}
-          '';
-        };
+        inherit (prep) filteredSettings filteredHarnessSettings allAgencyTexts;
       in
         lib.mkMerge [
-          # Package installation — wrapped when env vars are configured.
-          {
-            home.packages = [
-              (
-                if hasEnv
-                then wrappedPackage
-                else cfg.package
-              )
-            ];
-          }
+          # Package installation — wrapped to inject env + the runtime secret.
+          {home.packages = [prep.package];}
 
           # config.json activation merge.
           (lib.mkIf (filteredSettings != {}) {
@@ -290,16 +302,12 @@ in
         ...
       }: let
         prep = mkPrep {inherit cfg mergedInstructions mergedEnvironmentVariables topContext;};
-        inherit (prep) filteredSettings filteredHarnessSettings effectiveEnvVars allAgencyTexts;
+        inherit (prep) filteredSettings filteredHarnessSettings allAgencyTexts;
       in
         lib.mkMerge [
-          # Package installation.
-          {packages = [cfg.package];}
-
-          # Environment variables — devenv native `env`.
-          (lib.mkIf (effectiveEnvVars != {}) {
-            env = lib.mapAttrs (_: lib.mkDefault) effectiveEnvVars;
-          })
+          # Package installation — wrapped to inject env + the runtime
+          # secret (parity with HM; secret never enters the store).
+          {packages = [prep.package];}
 
           # config.json static write.
           (lib.mkIf (filteredSettings != {}) {
