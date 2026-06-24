@@ -17,6 +17,57 @@
 }: let
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
   aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
+
+  # Shared per-backend data prep. hm.config and devenv.config derive the
+  # same settings/env/instruction values from the merged inputs the
+  # transform injects — compute them once here instead of duplicating.
+  mkPrep = {
+    cfg,
+    mergedInstructions,
+    mergedEnvironmentVariables,
+    topContext,
+  }: let
+    effectiveContext =
+      if cfg.context != null
+      then cfg.context
+      else topContext;
+    hasContext = effectiveContext != null && effectiveContext != "";
+
+    contextText =
+      if hasContext
+      then
+        if builtins.isPath effectiveContext
+        then builtins.readFile effectiveContext
+        else toString effectiveContext
+      else "";
+
+    instructionTexts =
+      map (
+        frag:
+          if frag ? text
+          then
+            if builtins.isPath frag.text
+            then builtins.readFile frag.text
+            else toString frag.text
+          else ""
+      )
+      mergedInstructions;
+
+    kimchiEnvVars =
+      lib.optionalAttrs (cfg.apiKey != null) {KIMCHI_API_KEY = cfg.apiKey;}
+      // lib.optionalAttrs cfg.noUpdateCheck {KIMCHI_NO_UPDATE_CHECK = "1";}
+      // lib.optionalAttrs (cfg.telemetry != null) {
+        KIMCHI_TELEMETRY_ENABLED =
+          if cfg.telemetry
+          then "1"
+          else "0";
+      };
+  in {
+    filteredSettings = aiCommon.filterNulls cfg.settings;
+    filteredHarnessSettings = aiCommon.filterNulls cfg.harnessSettings;
+    effectiveEnvVars = mergedEnvironmentVariables // kimchiEnvVars;
+    allAgencyTexts = lib.filter (s: s != "") ([contextText] ++ instructionTexts);
+  };
 in
   lib.ai.app.mkAiApp {
     name = "kimchi";
@@ -160,25 +211,8 @@ in
         topContext,
         ...
       }: let
-        effectiveContext =
-          if cfg.context != null
-          then cfg.context
-          else topContext;
-        hasContext = effectiveContext != null && effectiveContext != "";
-
-        filteredSettings = aiCommon.filterNulls cfg.settings;
-        filteredHarnessSettings = aiCommon.filterNulls cfg.harnessSettings;
-
-        kimchiEnvVars =
-          lib.optionalAttrs (cfg.apiKey != null) {KIMCHI_API_KEY = cfg.apiKey;}
-          // lib.optionalAttrs cfg.noUpdateCheck {KIMCHI_NO_UPDATE_CHECK = "1";}
-          // lib.optionalAttrs (cfg.telemetry != null) {
-            KIMCHI_TELEMETRY_ENABLED =
-              if cfg.telemetry
-              then "1"
-              else "0";
-          };
-        effectiveEnvVars = mergedEnvironmentVariables // kimchiEnvVars;
+        prep = mkPrep {inherit cfg mergedInstructions mergedEnvironmentVariables topContext;};
+        inherit (prep) filteredSettings filteredHarnessSettings effectiveEnvVars allAgencyTexts;
         hasEnv = effectiveEnvVars != {};
 
         # symlinkJoin wrapper for env vars (HM only).
@@ -191,26 +225,6 @@ in
               ${lib.concatStringsSep " " (lib.mapAttrsToList (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}") effectiveEnvVars)}
           '';
         };
-
-        # Extract plain text from instruction fragments.
-        instructionTexts = map (frag:
-          if frag ? text
-          then
-            if builtins.isPath frag.text
-            then builtins.readFile frag.text
-            else toString frag.text
-          else "")
-        mergedInstructions;
-
-        contextText =
-          if hasContext
-          then
-            if builtins.isPath effectiveContext
-            then builtins.readFile effectiveContext
-            else toString effectiveContext
-          else "";
-
-        allAgencyTexts = lib.filter (s: s != "") ([contextText] ++ instructionTexts);
       in
         lib.mkMerge [
           # Package installation — wrapped when env vars are configured.
@@ -275,44 +289,8 @@ in
         topContext,
         ...
       }: let
-        effectiveContext =
-          if cfg.context != null
-          then cfg.context
-          else topContext;
-        hasContext = effectiveContext != null && effectiveContext != "";
-
-        filteredSettings = aiCommon.filterNulls cfg.settings;
-        filteredHarnessSettings = aiCommon.filterNulls cfg.harnessSettings;
-
-        kimchiEnvVars =
-          lib.optionalAttrs (cfg.apiKey != null) {KIMCHI_API_KEY = cfg.apiKey;}
-          // lib.optionalAttrs cfg.noUpdateCheck {KIMCHI_NO_UPDATE_CHECK = "1";}
-          // lib.optionalAttrs (cfg.telemetry != null) {
-            KIMCHI_TELEMETRY_ENABLED =
-              if cfg.telemetry
-              then "1"
-              else "0";
-          };
-        effectiveEnvVars = mergedEnvironmentVariables // kimchiEnvVars;
-
-        instructionTexts = map (frag:
-          if frag ? text
-          then
-            if builtins.isPath frag.text
-            then builtins.readFile frag.text
-            else toString frag.text
-          else "")
-        mergedInstructions;
-
-        contextText =
-          if hasContext
-          then
-            if builtins.isPath effectiveContext
-            then builtins.readFile effectiveContext
-            else toString effectiveContext
-          else "";
-
-        allAgencyTexts = lib.filter (s: s != "") ([contextText] ++ instructionTexts);
+        prep = mkPrep {inherit cfg mergedInstructions mergedEnvironmentVariables topContext;};
+        inherit (prep) filteredSettings filteredHarnessSettings effectiveEnvVars allAgencyTexts;
       in
         lib.mkMerge [
           # Package installation.
