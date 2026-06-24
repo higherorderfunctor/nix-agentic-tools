@@ -183,18 +183,15 @@ in
         hasEnv = effectiveEnvVars != {};
 
         # symlinkJoin wrapper for env vars (HM only).
-        wrappedPackage =
-          pkgs.symlinkJoin {
-            name = "kimchi-wrapped";
-            paths = [cfg.package];
-            nativeBuildInputs = [pkgs.makeWrapper];
-            postBuild =
-              lib.optionalString hasEnv ''
-                wrapProgram $out/bin/kimchi \
-                  ${lib.concatStringsSep " \
-  " (lib.mapAttrsToList (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}") effectiveEnvVars)}
-              '';
-          };
+        wrappedPackage = pkgs.symlinkJoin {
+          name = "kimchi-wrapped";
+          paths = [cfg.package];
+          nativeBuildInputs = [pkgs.makeWrapper];
+          postBuild = lib.optionalString hasEnv ''
+            wrapProgram $out/bin/kimchi \
+              ${lib.concatStringsSep " " (lib.mapAttrsToList (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}") effectiveEnvVars)}
+          '';
+        };
 
         # Extract plain text from instruction fragments.
         instructionTexts = map (frag:
