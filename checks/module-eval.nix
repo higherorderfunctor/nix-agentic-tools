@@ -122,6 +122,9 @@
     // {
       claude-code = pkgs.ai.claude-code or pkgs.hello;
       copilot-cli = pkgs.ai.copilot-cli or pkgs.hello;
+      # Force a tiny `bin/kimchi` stub so the HM wrapper build test is cheap
+      # and the wrapProgram target exists (hello has no bin/kimchi).
+      kimchi = pkgs.writeShellScriptBin "kimchi" "exec true";
       kiro-cli = pkgs.ai.kiro-cli or pkgs.hello;
       mcpServers = pkgs.ai.mcpServers or {};
       lspServers = pkgs.ai.lspServers or {};
@@ -138,6 +141,7 @@
         ./../lib/ai/sharedOptions.nix
         ./../packages/claude-code/modules/homeManager
         ./../packages/copilot-cli/modules/homeManager
+        ./../packages/kimchi/modules/homeManager
         ./../packages/kiro-cli/modules/homeManager
         ./../packages/mcp-services/modules/homeManager
         ./../packages/stacked-workflows/modules/homeManager
@@ -156,6 +160,7 @@
         ./../lib/ai/sharedOptions.nix
         ./../packages/claude-code/modules/devenv
         ./../packages/copilot-cli/modules/devenv
+        ./../packages/kimchi/modules/devenv
         ./../packages/kiro-cli/modules/devenv
         ./../packages/stacked-workflows/modules/devenv
         devenvStubs
@@ -2615,4 +2620,91 @@ in {
     in
       !attempt.success
   );
+
+  # ── Kimchi (mkAiApp factory participant) ──────────────────────────
+  module-kimchi-default-disabled = mkTest "kimchi-default-disabled" (!(evalHm {}).config.ai.kimchi.enable);
+
+  module-kimchi-enable-toggles = mkTest "kimchi-enable-toggles" (evalHm {ai.kimchi.enable = true;}).config.ai.kimchi.enable;
+
+  # Regression lock for the flattenDotKeys bug: config.json must be NESTED
+  # JSON, never Kiro-style flat dot keys ("telemetry.enabled").
+  module-kimchi-config-json-nested = mkTest "kimchi-config-json-nested" (
+    let
+      result = evalDevenv {
+        ai.kimchi = {
+          enable = true;
+          settings.telemetry.enabled = false;
+        };
+      };
+      text = result.config.files.".config/kimchi/config.json".text;
+    in
+      lib.hasInfix ''"telemetry":{"enabled":false}'' text
+      && !lib.hasInfix "telemetry.enabled" text
+  );
+
+  # Parity: the same config.json surface triggers the HM activation merge.
+  module-kimchi-config-json-hm-merge = mkTest "kimchi-config-json-hm-merge" (
+    let
+      result = evalHm {
+        ai.kimchi = {
+          enable = true;
+          settings.telemetry.enabled = false;
+        };
+      };
+    in
+      result.config.home.activation ? kimchiConfigMerge
+  );
+
+  # harnessSettings render to harness/settings.json (mutable-state tree).
+  module-kimchi-harness-settings = mkTest "kimchi-harness-settings" (
+    let
+      result = evalDevenv {
+        ai.kimchi = {
+          enable = true;
+          harnessSettings.resources."tools.web_search" = true;
+        };
+      };
+    in
+      result.config.files ? ".config/kimchi/harness/settings.json"
+  );
+
+  # The Cast AI key is a runtime credential ({file|helper}); setting
+  # apiKey.file must evaluate and must never become a static env var.
+  module-kimchi-credential = mkTest "kimchi-credential" (
+    let
+      result = evalDevenv {
+        ai.kimchi = {
+          enable = true;
+          apiKey.file = "/run/secrets/kimchi-key";
+        };
+      };
+    in
+      builtins.length result.config.packages
+      == 1
+      && result.config.env == {}
+  );
+
+  # Real-execution gate for the wrapProgram blocker (#1) + secret handling
+  # (#3): build the wrapped package (over the tiny aiStubs.kimchi bin) with
+  # a second env var plus a credential, and assert the wrapper sets static
+  # env via --set and reads the key from its file at runtime (cat), never
+  # baking the secret literal into the store. The old backslash-newline
+  # separator made this build fail with exit 127 once >=2 args were present.
+  module-kimchi-wrapper-builds = let
+    result = evalHm {
+      ai.kimchi = {
+        enable = true;
+        apiKey.file = "/run/secrets/kimchi-test";
+        environmentVariables.KIMCHI_EXTRA = "yes";
+      };
+    };
+    wrapped = builtins.head result.config.home.packages;
+  in
+    pkgs.runCommand "module-test-kimchi-wrapper-builds" {} ''
+      bin=${wrapped}/bin/kimchi
+      grep -q "KIMCHI_NO_UPDATE_CHECK" "$bin"
+      grep -q "KIMCHI_EXTRA" "$bin"
+      grep -q 'cat "/run/secrets/kimchi-test"' "$bin"
+      echo PASS > "$out"
+    '';
 }
