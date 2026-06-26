@@ -47,36 +47,13 @@ jobs:
       # (builtins.readFile on fetchFromGitHub) to compute versions at eval
       # time; fresh runners haven't realized these sources, so the build's
       # own eval would fetch them and a transient network blip ("HTTP2
-      # framing layer") fails the whole job. Pre-realize the sources here,
-      # retried with backoff. Best-effort: if all attempts fail we warn and
-      # continue — the build step still gets its own eval attempt. Mirrors
-      # update.yml's "Warm flake eval" step (same --apply expression).
+      # framing layer") fails the whole job. Best-effort: if all attempts
+      # fail we warn and continue — the build step still gets its own eval.
+      # Only this runner's system; the test job's flake check covers both.
       - name: Warm IFD sources (retry, best-effort)
-        run: |
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-
-          warm() {
-            nix eval --json \
-              --option allow-import-from-derivation true \
-              --apply 'pkgs: builtins.mapAttrs (n: p: p.version or p.name or "unknown") pkgs' \
-              ".#packages.${{ matrix.system }}" >/dev/null
-          }
-
-          for attempt in 1 2 3; do
-            if warm; then
-              echo "IFD warm succeeded on attempt ${attempt}"
-              exit 0
-            fi
-            echo "IFD warm attempt ${attempt} failed"
-            if [ "${attempt}" -lt 3 ]; then
-              backoff=$((attempt * 15))
-              echo "Retrying in ${backoff}s..."
-              sleep "${backoff}"
-            fi
-          done
-
-          echo "::warning::IFD warm failed after 3 attempts; build step will retry its own eval"
+        uses: ./.github/actions/warm-ifd
+        with:
+          systems: ${{ matrix.system }}
 
       - name: Build all packages
         run: |
@@ -104,46 +81,16 @@ jobs:
           name: nix-agentic-tools
 
       # Warm the flake eval cache BEFORE the check. Same IFD-fetch flake as
-      # the build job (see its warm step): overlays read fetchFromGitHub
-      # sources at eval time to compute versions, and a transient network
-      # blip during that fetch fails the whole job. Unlike the build job,
-      # `nix flake check` evaluates ALL systems on one runner, so warm both
-      # x86_64-linux and aarch64-darwin here — IFD source fetches are
+      # the build job: overlays read fetchFromGitHub sources at eval time,
+      # and a transient fetch blip fails the whole job. Unlike the build
+      # job, `nix flake check` evaluates ALL systems on one runner, so warm
+      # both x86_64-linux and aarch64-darwin here — IFD source fetches are
       # system-agnostic, so cross-system eval on a linux runner is fine.
-      # Retried with backoff per system; best-effort (warn + continue) so we
-      # never introduce a new hard failure — flake check still evaluates.
+      # Best-effort: flake check still gets its own eval if warm fails.
       - name: Warm IFD sources (retry, best-effort)
-        run: |
-          set -euETo pipefail
-          shopt -s inherit_errexit 2>/dev/null || :
-
-          warm() {
-            nix eval --json \
-              --option allow-import-from-derivation true \
-              --apply 'pkgs: builtins.mapAttrs (n: p: p.version or p.name or "unknown") pkgs' \
-              ".#packages.$1" >/dev/null
-          }
-
-          warm_system() {
-            local system=$1
-            for attempt in 1 2 3; do
-              if warm "${system}"; then
-                echo "IFD warm (${system}) succeeded on attempt ${attempt}"
-                return 0
-              fi
-              echo "IFD warm (${system}) attempt ${attempt} failed"
-              if [ "${attempt}" -lt 3 ]; then
-                backoff=$((attempt * 15))
-                echo "Retrying in ${backoff}s..."
-                sleep "${backoff}"
-              fi
-            done
-            echo "::warning::IFD warm (${system}) failed after 3 attempts; flake check will retry its own eval"
-          }
-
-          for system in x86_64-linux aarch64-darwin; do
-            warm_system "${system}"
-          done
+        uses: ./.github/actions/warm-ifd
+        with:
+          systems: x86_64-linux aarch64-darwin
 
       - name: Run flake checks
         run: nix flake check

@@ -71,33 +71,26 @@ jobs:
           nix profile add --inputs-from . nixpkgs#devenv
           nix profile add ".#formatter.x86_64-linux"
 
-      # Warm the flake eval cache BEFORE the ninja pipeline.
-      # Our overlays use IFD (builtins.readFile on fetchFromGitHub) to
-      # compute versions at eval time. Fresh CI runners don't have these
-      # sources realized. nix flake check --no-build triggers eval which
-      # fetches all sources as a side effect. Cachix daemon pushes them.
-      # Warm the nix store with all package sources BEFORE the ninja pipeline.
-      # Our overlays use IFD (builtins.readFile on fetchFromGitHub) to
-      # compute versions at eval time. Fresh CI runners don't have these
-      # sources. Evaluating the packages attrset triggers IFD fetches.
-      # --allow-import-from-derivation is required for the eval to fetch.
-      # Record base commit before pipeline runs.
+      # Record base commit before the pipeline runs.
       # Used to identify which worktree branches have actual updates.
       - name: Record base commit
         id: base
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      # Warm: evaluate all package versions to trigger IFD source fetches.
-      # builtins.attrNames is lazy — doesn't trigger IFD. We need to force
-      # evaluation of each package's version (which reads from fetchFromGitHub
-      # sources). mapAttrs + version produces { name = "version-string"; }
-      # which forces full eval. Cachix daemon pushes fetched sources.
-      - name: Warm flake eval (prefetch all sources)
-        run: |
-          nix eval --json \
-            --option allow-import-from-derivation true \
-            --apply 'pkgs: builtins.mapAttrs (n: p: p.version or p.name or "unknown") pkgs' \
-            .#packages.x86_64-linux > /dev/null
+      # Warm the flake eval cache BEFORE the ninja pipeline. Our overlays
+      # use IFD (builtins.readFile on fetchFromGitHub) to compute versions
+      # at eval time; nix-update (which runs nix-instantiate) crashes on
+      # cold runners if those sources aren't realized first. This is the
+      # shared warm-ifd composite (also used by ci.yml's build + test jobs).
+      # Unlike CI, the pipeline cannot proceed without warm sources, so
+      # retries: "1" + best-effort: "false" keep the original single-shot,
+      # fail-hard behavior. Cachix daemon pushes the fetched sources.
+      - name: Warm IFD sources (single-shot, fail-hard)
+        uses: ./.github/actions/warm-ifd
+        with:
+          best-effort: "false"
+          retries: "1"
+          systems: x86_64-linux
 
       # Run ninja pipeline:
       # - Each target creates a worktree branch (update/<name>)

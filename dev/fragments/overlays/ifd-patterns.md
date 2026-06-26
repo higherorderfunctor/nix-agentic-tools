@@ -1,10 +1,11 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-04-13. If you touch
+> **Last verified:** 2026-06-26. If you touch
 > `overlays/lib.nix`, any overlay `.nix` file that calls
-> `vu.mkVersion`, or the CI eval/warm steps in
-> `.github/workflows/update.yml`, and this fragment isn't updated
-> in the same commit, stop and fix it.
+> `vu.mkVersion`, the shared `.github/actions/warm-ifd/action.yml`
+> composite, or the warm steps that consume it in
+> `.github/workflows/ci.yml` / `.github/workflows/update.yml`, and
+> this fragment isn't updated in the same commit, stop and fix it.
 
 ### What is IFD in this repo
 
@@ -55,24 +56,37 @@ Key properties of IFD in nix:
 
 ### CI warm step
 
-The CI update workflow (`.github/workflows/update.yml`) includes
-a "Warm flake eval" step that forces all IFD fetches before the
-ninja pipeline runs:
+The warm logic is a single composite action,
+`.github/actions/warm-ifd/action.yml`, consumed by every workflow
+that evaluates before it builds:
 
-```yaml
-- name: Warm flake eval (prefetch all sources)
-  run: |
-    nix eval --json \
-      --option allow-import-from-derivation true \
-      --apply 'pkgs: builtins.mapAttrs (n: p: p.version or p.name or "unknown") pkgs' \
-      .#packages.x86_64-linux > /dev/null
+- `ci.yml` build job — `systems: ${{ matrix.system }}` (defaults:
+  3 retries, best-effort) so a transient fetch doesn't flake the
+  per-system build eval.
+- `ci.yml` test job — `systems: x86_64-linux aarch64-darwin`
+  because `nix flake check` evaluates ALL systems on one runner; IFD
+  source fetches are system-agnostic, so cross-system eval on a
+  linux runner is fine.
+- `update.yml` — `systems: x86_64-linux`, `retries: "1"`,
+  `best-effort: "false"`. The ninja pipeline cannot proceed
+  without warm sources (nix-update crashes), so it keeps the
+  original single-shot, fail-hard behavior via the inputs.
+
+The composite runs, per system with backoff:
+
+```bash
+nix eval --json \
+  --option allow-import-from-derivation true \
+  --apply 'pkgs: builtins.mapAttrs (n: p: p.version or p.name or "unknown") pkgs' \
+  ".#packages.${system}" >/dev/null
 ```
 
 `builtins.mapAttrs` with `p.version` forces evaluation of each
 package's version attribute, which triggers `builtins.readFile`
 on the fetched source, which triggers the fetch. The cachix
 daemon pushes fetched sources so subsequent evaluations (PR CI) can
-substitute them.
+substitute them. The `--apply` expression is the load-bearing
+detail — keep the composite and this fragment in sync.
 
 ### Gotchas when adding new packages
 
