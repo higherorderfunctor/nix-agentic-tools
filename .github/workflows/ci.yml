@@ -43,11 +43,45 @@ jobs:
       - name: Install nix-fast-build
         run: nix profile add nixpkgs#nix-fast-build
 
+      # Warm the flake eval cache BEFORE the build. Our overlays use IFD
+      # (builtins.readFile on fetchFromGitHub) to compute versions at eval
+      # time; fresh runners haven't realized these sources, so the build's
+      # own eval would fetch them and a transient network blip ("HTTP2
+      # framing layer") fails the whole job. Pre-realize the sources here,
+      # retried with backoff. Best-effort: if all attempts fail we warn and
+      # continue — the build step still gets its own eval attempt. Mirrors
+      # update.yml's "Warm flake eval" step (same --apply expression).
+      - name: Warm IFD sources (retry, best-effort)
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+
+          warm() {
+            nix eval --json \
+              --option allow-import-from-derivation true \
+              --apply 'pkgs: builtins.mapAttrs (n: p: p.version or p.name or "unknown") pkgs' \
+              ".#packages.${{ matrix.system }}" >/dev/null
+          }
+
+          for attempt in 1 2 3; do
+            if warm; then
+              echo "IFD warm succeeded on attempt ${attempt}"
+              exit 0
+            fi
+            echo "IFD warm attempt ${attempt} failed"
+            if [ "${attempt}" -lt 3 ]; then
+              backoff=$((attempt * 15))
+              echo "Retrying in ${backoff}s..."
+              sleep "${backoff}"
+            fi
+          done
+
+          echo "::warning::IFD warm failed after 3 attempts; build step will retry its own eval"
+
       - name: Build all packages
         run: |
           nix-fast-build \
-            --flake ".#packages" \
-            --systems "${{ matrix.system }}" \
+            --flake ".#packages.${{ matrix.system }}" \
             --skip-cached \
             --cachix-cache nix-agentic-tools \
             --no-link
