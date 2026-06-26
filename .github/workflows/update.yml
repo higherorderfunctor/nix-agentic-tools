@@ -337,7 +337,7 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::lingering nix/ninja/bash processes"
-          ps -ef --forest 2>/dev/null | grep -E "nix|ninja|update-" | grep -v grep || echo "(none)"
+          pgrep -af "nix|ninja|update-" || echo "(none)"
           echo "::endgroup::"
 
           if [ -d .update-logs ]; then
