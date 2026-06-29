@@ -170,6 +170,7 @@ revset
 revsets
 revwalk
 rnix
+rollup
 rulesdir
 rustc
 sadjow

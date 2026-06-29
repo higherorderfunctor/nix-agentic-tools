@@ -73,6 +73,7 @@ in {
 
       # Dev skills
       index-repo-docs = ./dev/skills/index-repo-docs;
+      merge-update-prs = ./dev/skills/merge-update-prs;
       repo-review = ./dev/skills/repo-review;
     };
   };
@@ -291,6 +292,7 @@ in {
     echo "Validating devenv configuration..."
     test -f .claude/skills/sws-stack-fix/SKILL.md || { echo "FAIL: .claude/skills/sws-stack-fix/SKILL.md missing"; exit 1; }
     test -f .claude/skills/repo-review/SKILL.md || { echo "FAIL: .claude/skills/repo-review/SKILL.md missing"; exit 1; }
+    test -f .claude/skills/merge-update-prs/SKILL.md || { echo "FAIL: .claude/skills/merge-update-prs/SKILL.md missing"; exit 1; }
     test -f .github/skills/sws-stack-fix/SKILL.md || { echo "FAIL: .github/skills/sws-stack-fix/SKILL.md missing"; exit 1; }
     test -f .kiro/skills/sws-stack-fix/SKILL.md || { echo "FAIL: .kiro/skills/sws-stack-fix/SKILL.md missing"; exit 1; }
     test -L .claude/settings.json || { echo "FAIL: .claude/settings.json missing"; exit 1; }
@@ -301,9 +303,11 @@ in {
   tasks = let
     checkTasks = (import ./dev/tasks/check.nix {}).tasks;
     generateTasks = (import ./dev/tasks/generate.nix {inherit lib;}).tasks;
+    mergeTasks = (import ./dev/tasks/merge.nix {}).tasks;
   in
     checkTasks
     // generateTasks
+    // mergeTasks
     // {
       # ── Update pipeline (ninja DAG) ──────────────────────────────────
       # ninja handles the full dependency graph with -j4 concurrency.
