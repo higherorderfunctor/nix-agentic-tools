@@ -249,11 +249,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1781999181,
-        "narHash": "sha256-QAztpCDnqLg8/4MXyLMRXqfD+Ji2v13tUTRyTXfpXzc=",
+        "lastModified": 1782623011,
+        "narHash": "sha256-mOsCDYScSAt5N56ZUblgxLsanuoJKgVA1FCVY+kduIU=",
         "owner": "arxanas",
         "repo": "git-branchless",
-        "rev": "624edd2004015198edec6fbffbc92d3c4ce27aaf",
+        "rev": "813ac431685ecb14075e9d63993f4193b0396f72",
         "type": "github"
       },
       "original": {
