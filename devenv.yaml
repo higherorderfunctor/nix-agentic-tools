@@ -32,7 +32,7 @@ inputs:
       nixpkgs:
         follows: nixpkgs
   nixpkgs:
-    url: github:NixOS/nixpkgs/e73de5be04e0eff4190a1432b946d469c794e7b4
+    url: github:NixOS/nixpkgs/b5aa0fbd538984f6e3d201be0005b4463d8b09f8
   nixpkgs-test:
     url: github:NixOS/nixpkgs/ac62194c3917d5f474c1a844b6fd6da2db95077d
   nuscht-search:
