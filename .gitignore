@@ -42,3 +42,6 @@ docs/src/
 .update.ninja
 .update-report.txt
 .worktrees/
+
+# Local private working area (untracked journals, assessments, scratch)
+/private/
