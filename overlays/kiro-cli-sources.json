@@ -1,11 +1,11 @@
 {
-  "version": "2.10.0",
+  "version": "2.11.1",
   "aarch64-darwin": {
-    "url": "https://desktop-release.q.us-east-1.amazonaws.com/2.10.0/Kiro%20CLI.dmg",
-    "hash": "sha256-NDeyXQO9NBsK3xqAEcO1gGn9ta+ZVQ1GNwZ4hbGUe3Q="
+    "url": "https://desktop-release.q.us-east-1.amazonaws.com/2.11.1/Kiro%20CLI.dmg",
+    "hash": "sha256-iHi7Jx8NJITvLIqFRhjUW47WFNH0hj9LilzsPWZDrXE="
   },
   "x86_64-linux": {
-    "url": "https://desktop-release.q.us-east-1.amazonaws.com/2.10.0/kirocli-x86_64-linux.tar.gz",
-    "hash": "sha256-cJl6CyYCzbLpB6m+W9Tx7enaPzijgjOBjdmG6CPMM8k="
+    "url": "https://desktop-release.q.us-east-1.amazonaws.com/2.11.1/kirocli-x86_64-linux.tar.gz",
+    "hash": "sha256-0aZNu0ARyR8dJ/vEQUOJV2m8g2BjvYgWJosF8RkxtWk="
   }
 }
