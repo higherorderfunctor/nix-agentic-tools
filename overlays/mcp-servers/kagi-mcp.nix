@@ -16,12 +16,12 @@
   inherit (ourPkgs) fetchFromGitHub python313Packages;
   vu = import ../lib.nix;
 
-  rev = "d51dd997fdd12601888b824e4befb7965f22bac2";
+  rev = "55b38d20c67f1406f2c284af776de395297a75cc";
   src = fetchFromGitHub {
     owner = "kagisearch";
     repo = "kagimcp";
     inherit rev;
-    hash = "sha256-XU8Xm5Mdfj/DX2D5vcyr/v1cJJofKSGPDDeO8suMRkg=";
+    hash = "sha256-GBXAxYjWFkvCBcYyxf2ObqzMjJSPREU3fFHCqyPGnyE=";
   };
 in
   python313Packages.buildPythonApplication {
