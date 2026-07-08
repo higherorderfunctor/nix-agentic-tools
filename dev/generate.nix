@@ -114,7 +114,7 @@
     # claude-code: wrapper chain. Spans the claude-code overlay
     # package and the factory-built module.
     claude-code = [
-      "packages/ai-clis/claude-code.nix"
+      "overlays/claude-code.nix"
       "packages/claude-code/**"
     ];
     # devenv: devenv files.* internals + skills layout walker. Scoped

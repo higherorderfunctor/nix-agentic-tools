@@ -380,13 +380,96 @@ in {
       (result.config.programs.claude-code.settings.effortLevel or null) == "xhigh"
   );
 
-  # Null typed keys are filtered out — upstream never sees effortLevel/model.
+  # Null typed keys are filtered out — upstream never sees the typed keys
+  # when unset, and the undocumented `ultracode` key is never written unless
+  # ultracodeOnLaunch is set.
   module-claude-hm-null-settings-filtered = mkTest "claude-hm-null-settings-filtered" (
     let
       result = evalHm {ai.claude.enable = true;};
       s = result.config.programs.claude-code.settings or {};
     in
-      !(s ? effortLevel) && !(s ? model)
+      !(s ? effortLevel)
+      && !(s ? model)
+      && !(s ? enableWorkflows)
+      && !(s ? workflowKeywordTriggerEnabled)
+      && !(s ? ultracode)
+  );
+
+  # Valid enableWorkflows reaches upstream (typed nullOr bool).
+  module-claude-hm-enable-workflows-valid-reaches-upstream = mkTest "claude-hm-enable-workflows-valid-reaches-upstream" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          settings.enableWorkflows = true;
+        };
+      };
+    in
+      (result.config.programs.claude-code.settings.enableWorkflows or null) == true
+  );
+
+  # Valid workflowKeywordTriggerEnabled reaches upstream (typed nullOr bool);
+  # `false` survives the null-filter (filterNulls drops null, keeps false).
+  module-claude-hm-workflow-keyword-trigger-valid-reaches-upstream = mkTest "claude-hm-workflow-keyword-trigger-valid-reaches-upstream" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          settings.workflowKeywordTriggerEnabled = false;
+        };
+      };
+      s = result.config.programs.claude-code.settings or {};
+    in
+      (s ? workflowKeywordTriggerEnabled)
+      && s.workflowKeywordTriggerEnabled == false
+  );
+
+  # Meta option: ultracodeOnLaunch = true writes both the undocumented
+  # `ultracode` key and the `enableWorkflows` master toggle to upstream.
+  module-claude-hm-ultracode-on-launch-writes-settings = mkTest "claude-hm-ultracode-on-launch-writes-settings" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          ultracodeOnLaunch = true;
+        };
+      };
+      s = result.config.programs.claude-code.settings or {};
+    in
+      (s.ultracode or null) == true && (s.enableWorkflows or null) == true
+  );
+
+  # Meta option uses mkDefault, so an explicit settings.ultracode = false
+  # wins over ultracodeOnLaunch, and the false survives the null-filter.
+  module-claude-hm-ultracode-on-launch-explicit-false-wins = mkTest "claude-hm-ultracode-on-launch-explicit-false-wins" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          ultracodeOnLaunch = true;
+          settings.ultracode = false;
+        };
+      };
+      s = result.config.programs.claude-code.settings or {};
+    in
+      (s ? ultracode) && s.ultracode == false
+  );
+
+  # Negative invariant: ultracodeOnLaunch writes ONLY ultracode +
+  # enableWorkflows. It must NOT set effortLevel (ultracode implies xhigh) or
+  # workflowKeywordTriggerEnabled (orthogonal per-turn key). Guards against a
+  # future fan-out accidentally over-reaching.
+  module-claude-hm-ultracode-on-launch-omits-orthogonal-keys = mkTest "claude-hm-ultracode-on-launch-omits-orthogonal-keys" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          ultracodeOnLaunch = true;
+        };
+      };
+      s = result.config.programs.claude-code.settings or {};
+    in
+      !(s ? effortLevel) && !(s ? workflowKeywordTriggerEnabled)
   );
 
   # Soft-enum model: an arbitrary (unknown) id is accepted and reaches upstream.
@@ -475,6 +558,60 @@ in {
       settingsFile
       != null
       && (settingsFile.json.env.FOO or null) == "bar"
+  );
+
+  # Devenv: typed enableWorkflows flows through the gap write into
+  # files.".claude/settings.json".json (parity with the HM typed key).
+  module-claude-devenv-settings-gap-writes-enable-workflows = mkTest "claude-devenv-settings-gap-writes-enable-workflows" (
+    let
+      result = evalDevenv {
+        ai.claude = {
+          enable = true;
+          settings.enableWorkflows = true;
+        };
+      };
+      settingsFile = result.config.files.".claude/settings.json" or null;
+    in
+      settingsFile
+      != null
+      && (settingsFile.json.enableWorkflows or null) == true
+  );
+
+  # Devenv: ultracodeOnLaunch = true writes both ultracode and
+  # enableWorkflows into the gap-written settings.json (parity with HM).
+  module-claude-devenv-ultracode-on-launch-writes-settings = mkTest "claude-devenv-ultracode-on-launch-writes-settings" (
+    let
+      result = evalDevenv {
+        ai.claude = {
+          enable = true;
+          ultracodeOnLaunch = true;
+        };
+      };
+      settingsFile = result.config.files.".claude/settings.json" or null;
+    in
+      settingsFile
+      != null
+      && (settingsFile.json.ultracode or null) == true
+      && (settingsFile.json.enableWorkflows or null) == true
+  );
+
+  # Devenv parity for the mkDefault override: an explicit settings.ultracode =
+  # false wins over ultracodeOnLaunch and survives the gap-write null-filter.
+  module-claude-devenv-ultracode-on-launch-explicit-false-wins = mkTest "claude-devenv-ultracode-on-launch-explicit-false-wins" (
+    let
+      result = evalDevenv {
+        ai.claude = {
+          enable = true;
+          ultracodeOnLaunch = true;
+          settings.ultracode = false;
+        };
+      };
+      settingsFile = result.config.files.".claude/settings.json" or null;
+    in
+      settingsFile
+      != null
+      && (settingsFile.json ? ultracode)
+      && settingsFile.json.ultracode == false
   );
 
   # Devenv: `hooks` routes to claude.code.hooks (upstream-owned) and is

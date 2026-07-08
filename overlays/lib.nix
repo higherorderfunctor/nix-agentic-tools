@@ -95,13 +95,24 @@
       echo "Updated rev: ${rev} -> $new_rev"
     '';
 
-  # Grep claude's binary for its launch-effort pin keys and the effort
-  # enum, emitting `{launchEffortPins, effortLevels}` to `dest` (default
-  # stdout). Single source of the grep logic — used by claude-code.nix's
-  # passthru.extracted (and, transitively, by mkUpdateScript). Fails loud
-  # (exit 1) if the pin grep is empty or the effort anchor != exactly one
-  # match, so an upstream rename breaks the build instead of silently
-  # extracting nothing.
+  # Grep claude's binary for its launch-effort pin keys, the effort enum,
+  # and the workflow/ultracode boolean settings keys we depend on, emitting
+  # `{launchEffortPins, effortLevels, settingsBooleanKeys}` to `dest`
+  # (default stdout). Single source of the grep logic — used by
+  # claude-code.nix's passthru.extracted (and, transitively, by
+  # mkUpdateScript). Fails loud (exit 1) if the pin grep is empty, the
+  # effort anchor != exactly one match, or any tracked boolean settings key
+  # is missing/renamed — so an upstream change breaks the build instead of
+  # silently extracting nothing.
+  #
+  # The `settingsBooleanKeys` guard covers `ultracode` (UNDOCUMENTED,
+  # officially session-only — persisted via ai.claude.ultracodeOnLaunch),
+  # `enableWorkflows`, and `workflowKeywordTriggerEnabled`. These are
+  # off-label / /config-only keys with no compatibility promise; asserting
+  # they still parse as boolean-schema settings keys on each claude-code
+  # bump converts a future silent drop into a loud update-pipeline (and
+  # `nix flake check` drift-check) failure. See mkClaude.nix for the option
+  # surface and docs/plans/ultracode-typed-options-and-meta-option.md § 3.
   #   bin:  absolute path to the claude binary.
   #   pkgs: nixpkgs set (gnugrep, coreutils, jq).
   #   dest: output path (default "/dev/stdout"; pass "$out" in runCommand).
@@ -136,9 +147,33 @@
       exit 1
     fi
 
+    # Guard the workflow/ultracode boolean settings keys. Each is registered
+    # in the settings schema as `<key>:<ident>.boolean()`. The minifier
+    # identifier is rebuilt every release (2.1.202 emitted `A`), so match ANY
+    # identifier and key on the `<key>:` prefix + `.boolean()` literal. Unlike
+    # the effort enum above — which strips to the `[...]` array payload so
+    # repeated occurrences collapse — a boolean key has no payload to validate
+    # AND can appear MORE THAN ONCE (2.1.202 emits `ultracode:<ident>.boolean()`
+    # twice, sharing an identifier only by coincidence). So we must NOT dedup on
+    # the ident-bearing string: check PRESENCE (>= 1 raw match), not
+    # exactly-one-distinct — otherwise a future re-minification that splits the
+    # two idents apart would fail this guard spuriously (keyCount 2 != 1). The
+    # trailing `|| true` keeps the zero-match case from aborting at the
+    # assignment (pipefail + inherit_errexit) so the not-found branch is
+    # reachable and fails loud with its own message.
+    boolKeys=(ultracode enableWorkflows workflowKeywordTriggerEnabled)
+    for key in "''${boolKeys[@]}"; do
+      keyHits=$("$grep" -aoE "$key"':[A-Za-z_$][A-Za-z0-9_$]*\.boolean\(\)' "${bin}" | "$grep" -c . || true)
+      if [ "$keyHits" -lt 1 ]; then
+        echo "claude-extract: settings key '$key' not found as a boolean-schema registration (upstream renamed/removed it or changed the schema)" >&2
+        exit 1
+      fi
+    done
+
     pinsJson=$(printf '%s\n' "$pins" | "$jq" -R . | "$jq" -s .)
-    "$jq" -n --argjson pins "$pinsJson" --argjson levels "$levels" \
-      '{launchEffortPins: $pins, effortLevels: $levels}' > "${dest}"
+    boolKeysJson=$(printf '%s\n' "''${boolKeys[@]}" | "$sort" -u | "$jq" -R . | "$jq" -s .)
+    "$jq" -n --argjson pins "$pinsJson" --argjson levels "$levels" --argjson boolKeys "$boolKeysJson" \
+      '{launchEffortPins: $pins, effortLevels: $levels, settingsBooleanKeys: $boolKeys}' > "${dest}"
   '';
 
   # Generate an updateScript for per-platform binary packages that use

@@ -62,6 +62,18 @@ in
                 via /effort and cannot be persisted.
               '';
             };
+            enableWorkflows = lib.mkOption {
+              type = lib.types.nullOr lib.types.bool;
+              default = null;
+              description = ''
+                Master Workflows feature toggle — the /config "Dynamic
+                workflows" setting. Enables the Workflow tool at all.
+                null leaves Claude's own default (true). Mirrors a stable
+                /config toggle; the key name is not in the official settings
+                reference but has been stable across releases (verified on
+                claude-code 2.1.202).
+              '';
+            };
             model = lib.mkOption {
               type =
                 lib.types.nullOr
@@ -73,13 +85,31 @@ in
                 the binary's runtime model set is not a safe closed enum.
               '';
             };
+            workflowKeywordTriggerEnabled = lib.mkOption {
+              type = lib.types.nullOr lib.types.bool;
+              default = null;
+              description = ''
+                Whether the "ultracode" keyword in a prompt opts THAT TURN
+                into the Workflow tool (per-turn) — the /config "Ultracode
+                keyword trigger" row. Orthogonal to the ultracode session
+                mode. null leaves Claude's own default (true). Mirrors a
+                stable /config toggle; the key name is not in the official
+                settings reference but has been stable across releases
+                (verified on claude-code 2.1.202). NOTE: the persisted key is
+                `workflowKeywordTriggerEnabled`, not `ultracodeKeywordTrigger`
+                (that string is only an in-memory UI alias).
+              '';
+            };
           };
         };
         default = {};
         description = ''
-          Typed Claude settings (effortLevel, model) plus freeform passthrough,
-          written to ~/.claude/settings.json by upstream. Null typed keys are
-          filtered out before reaching upstream.
+          Typed Claude settings (effortLevel, enableWorkflows, model,
+          workflowKeywordTriggerEnabled) plus freeform passthrough, written to
+          ~/.claude/settings.json by upstream. Null typed keys are filtered out
+          before reaching upstream. The undocumented `ultracode` session key is
+          intentionally NOT a typed option (see ultracodeOnLaunch) but remains
+          reachable here via freeform passthrough.
         '';
       };
       unpinLaunchEffort = lib.mkOption {
@@ -97,6 +127,28 @@ in
           leave that model pinned.
         '';
       };
+      ultracodeOnLaunch = lib.mkEnableOption ''
+        starting every Claude session in ultracode (xhigh effort plus
+        standing dynamic-workflow orchestration).
+
+        Session-setup convenience, NOT the per-turn "ultracode" keyword
+        (that is `settings.workflowKeywordTriggerEnabled`, orthogonal).
+        When true, writes `settings.ultracode = true` (⚠ see caveat) and
+        `settings.enableWorkflows = true` via mkDefault, so an explicit
+        `ai.claude.settings.*` still wins. Does NOT set effortLevel —
+        ultracode implies xhigh unconditionally.
+
+        ⚠ CAVEAT: the `ultracode` settings key is UNDOCUMENTED and
+        officially session-only. Anthropic's docs describe ultracode as
+        lasting only for the current session; only `disableWorkflows`
+        appears in the official settings reference. Persisting
+        `ultracode = true` relies on internal behavior (the binary reads it
+        from any settings.json source) that works today (verified on
+        claude-code 2.1.202) but carries no compatibility promise — a future
+        release could stop honoring it without it counting as a breaking
+        change. The claude-code overlay's extraExtract guard asserts the key
+        still parses on each bump so a silent drop fails the update pipeline
+        loudly'';
       lspServers = lib.mkOption {
         type = lib.types.attrsOf (import ../../../lib/ai/ai-common.nix {inherit lib;}).lspServerModule;
         default = {};
@@ -264,6 +316,19 @@ in
               dirHelpers.hooksFromDir cfg.hooksDir
             );
           })
+          # Meta option: ultracode on at every launch. Writes the
+          # (undocumented, officially session-only) `ultracode` key plus the
+          # `enableWorkflows` master toggle via mkDefault so an explicit
+          # `ai.claude.settings.*` still wins. This is the single place the
+          # off-label `ultracode` key is written (its risk is disclosed in the
+          # ultracodeOnLaunch description). No effortLevel — ultracode implies
+          # xhigh. No workflowKeywordTriggerEnabled — orthogonal per-turn key.
+          (lib.mkIf cfg.ultracodeOnLaunch {
+            ai.claude.settings = {
+              ultracode = lib.mkDefault true;
+              enableWorkflows = lib.mkDefault true;
+            };
+          })
           # Delegate to upstream programs.claude-code.* where upstream
           # provides the capability. mkDefault lets consumers override.
           {
@@ -404,6 +469,18 @@ in
             ai.claude.hooks = lib.mapAttrs (_: lib.mkDefault) (
               dirHelpers.hooksFromDir cfg.hooksDir
             );
+          })
+          # Meta option: ultracode on at every launch (parity with HM side).
+          # Writes the (undocumented, officially session-only) `ultracode` key
+          # plus the `enableWorkflows` master toggle via mkDefault so an
+          # explicit `ai.claude.settings.*` still wins. Flows through the
+          # gap-write below into .claude/settings.json. Risk disclosed in the
+          # ultracodeOnLaunch description.
+          (lib.mkIf cfg.ultracodeOnLaunch {
+            ai.claude.settings = {
+              ultracode = lib.mkDefault true;
+              enableWorkflows = lib.mkDefault true;
+            };
           })
           # Translate upstream-owned keys + pin the settings file path.
           {

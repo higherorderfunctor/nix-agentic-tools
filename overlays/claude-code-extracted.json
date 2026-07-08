@@ -4,5 +4,10 @@
     "unpinOpus47LaunchEffort",
     "unpinOpus48LaunchEffort"
   ],
-  "effortLevels": ["low", "medium", "high", "xhigh"]
+  "effortLevels": ["low", "medium", "high", "xhigh"],
+  "settingsBooleanKeys": [
+    "enableWorkflows",
+    "ultracode",
+    "workflowKeywordTriggerEnabled"
+  ]
 }
