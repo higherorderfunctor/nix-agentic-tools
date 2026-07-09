@@ -16,12 +16,12 @@
   };
   vu = import ../lib.nix;
 
-  rev = "778f5bb6a3120719bfeaeefb47169ad0739ebee8";
+  rev = "6787f085697c09f045acbba6c02c4504a878e8a0";
   src = ourPkgs.fetchFromGitHub {
     owner = "github";
     repo = "github-mcp-server";
     inherit rev;
-    hash = "sha256-pysZns1T+kj3LNuO7rmuCK8XrqL8ropLTAxjoHD56+M=";
+    hash = "sha256-wC7Js1DILDoL/Ze76WolUPjz7EGn8J7JtDunaIGv91o=";
   };
 in
   ourPkgs.github-mcp-server.overrideAttrs (_finalAttrs: old: {
