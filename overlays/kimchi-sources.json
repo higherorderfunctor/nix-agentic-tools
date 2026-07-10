@@ -1,11 +1,11 @@
 {
-  "version": "0.1.62",
+  "version": "0.1.63",
   "aarch64-darwin": {
-    "url": "https://github.com/getkimchi/kimchi/releases/download/v0.1.62/kimchi_darwin_arm64.tar.gz",
-    "hash": "sha256-/9S7OCWwYlZOz777Iva7fpzWsM2fxZ6PwS3an0e2Bc8="
+    "url": "https://github.com/getkimchi/kimchi/releases/download/v0.1.63/kimchi_darwin_arm64.tar.gz",
+    "hash": "sha256-V4zpZ6DweWTtf6jz5Fb9O/RuFOSjVxFFiKV380pLirg="
   },
   "x86_64-linux": {
-    "url": "https://github.com/getkimchi/kimchi/releases/download/v0.1.62/kimchi_linux_amd64.tar.gz",
-    "hash": "sha256-RIzrszvLQYQs0ibLeEXxiYA8rDRMHj8Os98OVOIjqTs="
+    "url": "https://github.com/getkimchi/kimchi/releases/download/v0.1.63/kimchi_linux_amd64.tar.gz",
+    "hash": "sha256-cumbhTDJwZ4S9UYobx+Xm3Us20RtE8bzfRsakasPBoM="
   }
 }
