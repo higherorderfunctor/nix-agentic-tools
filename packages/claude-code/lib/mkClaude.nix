@@ -85,6 +85,21 @@ in
                 the binary's runtime model set is not a safe closed enum.
               '';
             };
+            tui = lib.mkOption {
+              type = lib.types.nullOr (lib.types.enum ["default" "fullscreen"]);
+              default = null;
+              description = ''
+                Terminal UI renderer — the persisted `/tui` setting.
+                "fullscreen" is the flicker-free alt-screen renderer with
+                virtualized scrollback (equivalent to env
+                CLAUDE_CODE_NO_FLICKER=1); "default" is the classic
+                main-screen renderer. null leaves Claude's own default.
+                MUST be set here rather than via the interactive `/tui`
+                command, which read-modify-writes settings.json and so fails
+                against a read-only Nix store path. Verified on
+                claude-code 2.1.206.
+              '';
+            };
             workflowKeywordTriggerEnabled = lib.mkOption {
               type = lib.types.nullOr lib.types.bool;
               default = null;
@@ -104,7 +119,7 @@ in
         };
         default = {};
         description = ''
-          Typed Claude settings (effortLevel, enableWorkflows, model,
+          Typed Claude settings (effortLevel, enableWorkflows, model, tui,
           workflowKeywordTriggerEnabled) plus freeform passthrough, written to
           ~/.claude/settings.json by upstream. Null typed keys are filtered out
           before reaching upstream. The undocumented `ultracode` session key is

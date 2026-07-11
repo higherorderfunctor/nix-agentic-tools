@@ -380,6 +380,38 @@ in {
       (result.config.programs.claude-code.settings.effortLevel or null) == "xhigh"
   );
 
+  # Strict enum: an invalid tui renderer must throw at eval.
+  module-claude-hm-tui-rejects-invalid = mkTest "claude-hm-tui-rejects-invalid" (
+    let
+      attempt = builtins.tryEval (
+        let
+          ev = evalHm {
+            ai.claude = {
+              enable = true;
+              settings.tui = "curses";
+            };
+          };
+        in
+          builtins.deepSeq ev.config.ai.claude.settings.tui
+          ev.config.ai.claude.settings.tui
+      );
+    in
+      attempt.success == false
+  );
+
+  # Valid tui renderer reaches upstream (typed nullOr enum).
+  module-claude-hm-tui-valid-reaches-upstream = mkTest "claude-hm-tui-valid-reaches-upstream" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          settings.tui = "fullscreen";
+        };
+      };
+    in
+      (result.config.programs.claude-code.settings.tui or null) == "fullscreen"
+  );
+
   # Null typed keys are filtered out — upstream never sees the typed keys
   # when unset, and the undocumented `ultracode` key is never written unless
   # ultracodeOnLaunch is set.
@@ -390,6 +422,7 @@ in {
     in
       !(s ? effortLevel)
       && !(s ? model)
+      && !(s ? tui)
       && !(s ? enableWorkflows)
       && !(s ? workflowKeywordTriggerEnabled)
       && !(s ? ultracode)
