@@ -26,29 +26,43 @@
 ## Bootstrap prompt (read first)
 
 ```
-Resume the kiro-cli auto-memory work. Read docs/plans/kiro-cli-auto-memory.md
-in full first — it holds the complete design, decisions, and session history;
-you should not need to re-run research.
+Resume the kiro-cli auto-memory work. FIRST read
+docs/plans/kiro-cli-auto-memory.md in full — it holds the complete design,
+decisions, and session history; you should not need to re-run research. Follow
+its per-session protocol (do the Next task, append to the logs, rewrite this
+Bootstrap prompt, commit).
 
-Current state (end of session 1): research + synthesis complete. Design is
-settled pending TWO empirical unknowns about the installed kiro-cli binary
-that gate all module wiring (see "Open empirical questions"):
-  Q1. Does a kiro `SessionStart` hook's stdout get injected into model context?
-  Q2. Does the `Stop` hook fire once per assistant turn, without blocking, and
-      can it spawn a surviving background process?
+State (end of session 1): research + synthesis done. Design is settled pending
+two empirical unknowns about the installed kiro-cli binary that gate all module
+wiring:
+  Q1. Does a SessionStart hook's stdout get injected into model context?
+  Q2. Does Stop fire once per assistant turn, non-blocking, and can it spawn a
+      background process that survives the turn?
+(Also confirm Q3: hook + steering pickup from a project-local .kiro/. And Q4:
+that there is no SessionEnd/exit trigger.)
 
-Next task = run the empirical hook tests in "Next task" below. Method (agreed
-with the user): a throwaway SCRATCH repo, driven with the shell tool using
-kiro-cli NON-INTERACTIVE single-prompt invocations. Discover the exact
-non-interactive flag first (`kiro-cli --help`, `kiro-cli chat --help`). The
-user has handled kiro-cli auth; if a run still hits an auth/login wall, STOP
-and report — do not try to authenticate.
+Next task = run the empirical hook tests in the plan's "Next task" section.
+SELF-SERVE the single-turn tests: drive kiro-cli NON-INTERACTIVE single-prompt
+runs via the shell tool in a throwaway scratch repo (discover the exact flag
+first via `kiro-cli --help` / `kiro-cli chat --help`; one non-interactive
+prompt fires SessionStart once + Stop once, enough for Q1–Q4). Run them
+autonomously and report — do NOT wait on me for the single-turn probes.
 
-When done: record results in the Decisions log + Session log, update Target
-architecture if the results change it, rewrite this Bootstrap prompt to point
-at the next task (which will be: turn the §MVP into an implementation plan
-against real mkKiro.nix option paths), then commit (docs(plans): …). Keep the
-plan additive — mark items done, never delete.
+Multi-turn is different: anything needing several turns in one session (e.g.
+proving the Stop DEBOUNCE across turns) I will run/assist — don't block on it.
+When you hit a multi-turn need, do what you can single-turn, note it, and leave
+it as a plan edit for the next revision (it's already flagged as deferred).
+
+Constraints: the user handled kiro-cli auth — if a run still hits an auth/login
+wall, or a command hook is gated behind a trust prompt that auto-denies
+non-interactively, STOP and report (try a `--trust-all-tools`-style flag if one
+exists, but do NOT authenticate). Keep everything in scratch; never touch the
+real repo tree or ~/.kiro global config.
+
+When done: record Q1–Q4 answers in the Decisions + Session logs, update Target
+architecture if results change it, rewrite this Bootstrap prompt to point at the
+next task (implementation plan against real mkKiro.nix option paths), then
+commit (docs(plans): …). Keep the plan additive — mark items done, never delete.
 ```
 
 ---
@@ -320,6 +334,12 @@ bogus `SessionEnd` hook and see if it is rejected/ignored.
 - For READ tests, the model may paraphrase; make sentinels highly distinctive
   and ask for verbatim echo. Prefer the file-side-effect signal (Step 3) where
   possible since it does not depend on model cooperation.
+- **Single-turn = self-serve; multi-turn = user-assisted.** Run every probe
+  that fits one non-interactive prompt autonomously. Anything requiring several
+  turns in one live session — chiefly the `Stop` **debounce across turns** — is
+  deferred: the user will run/assist those. Don't block: note the multi-turn
+  need, capture whatever the single-turn run proved, and mark it as a
+  next-revision plan edit.
 
 **Deliverable:** Q1–Q4 answered with evidence, recorded in Decisions + Session
 logs; Target architecture updated (e.g. if Q1 = yes, add hook-stdout live
