@@ -37,6 +37,7 @@ commondir
 configdir
 contentpkgs
 convco
+cooldown
 coreutils
 cpaczek
 creds
@@ -180,6 +181,7 @@ scriptable
 sdiehl
 sequentialthinking
 serena
+sess
 shellharden
 shortrev
 sigtool
