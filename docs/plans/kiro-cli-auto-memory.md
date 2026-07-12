@@ -32,48 +32,61 @@ decisions, and session history; you should not need to re-run research. Follow
 its per-session protocol (do the Next task, append to the logs, rewrite this
 Bootstrap prompt, commit).
 
-State (end of session 1): research + synthesis done. Design is settled pending
-two empirical unknowns about the installed kiro-cli binary that gate all module
-wiring:
-  Q1. Does a SessionStart hook's stdout get injected into model context?
-  Q2. Does Stop fire once per assistant turn, non-blocking, and can it spawn a
-      background process that survives the turn?
-(Also confirm Q3: hook + steering pickup from a project-local .kiro/. And Q4:
-that there is no SessionEnd/exit trigger.)
+State (end of session 2): empirical hook probes done self-serve against the
+installed kiro-cli 2.11.1. Established: (a) READ Tier-1 via steering
+`inclusion: always` WORKS on both v2 and v3, hook-independent — the load-bearing
+channel; (b) kiro ships TWO hook systems — v2 embedded camelCase
+(agentSpawn/userPromptSubmit/preToolUse/postToolUse/stop) and v3 standalone
+PascalCase `.kiro/hooks/*.json` (the mkKiro.nix target); (c) on v2 all embedded
+hooks fire, session-start stdout injects (Q1=yes), stop is non-blocking and
+backgrounds survive (Q2=yes); (d) on v3 NO hooks fired in the non-interactive
+harness because v3 needs a TUI (classic mode unsupported) AND a trusted
+workspace. Docs also correct the plan: v3 `Stop` fires at session-end (the exit
+hook the plan thought was missing) with JSON context on stdin.
 
-Next task = run the empirical hook tests in the plan's "Next task" section.
-SELF-SERVE the single-turn tests: drive kiro-cli NON-INTERACTIVE single-prompt
-runs via the shell tool in a throwaway scratch repo (discover the exact flag
-first via `kiro-cli --help` / `kiro-cli chat --help`; one non-interactive
-prompt fires SessionStart once + Stop once, enough for Q1–Q4). Run them
-autonomously and report — do NOT wait on me for the single-turn probes.
+Next task = Part A: the v3 trusted-TUI hook confirmation (Q5–Q8). This is
+USER-ASSISTED and interactive — the non-interactive shell harness structurally
+cannot test v3 hooks. A ready-to-run fixture is staged in the session scratch
+repo (<scratchpad>/kiro-hooktest, `.kiro/hooks/mem.json` etc.). Ask the user to
+run `kiro-cli chat --v3` in that dir, accept the workspace-trust prompt, send
+two prompts, and quit; then YOU read the `v3-fired-*.log` / `v3-*-stdin.json`
+side-effect files (self-serve, no auth) to answer Q5 (do v3 hooks fire trusted),
+Q6 (Stop once-per-session vs per-turn), Q7 (Stop stdin transcript contract), Q8
+(trust persistence). See "Next task" for the exact steps + read-back checklist.
+If the scratch is gone, rebuild the fixture from the Session-2 recipe.
 
-Multi-turn is different: anything needing several turns in one session (e.g.
-proving the Stop DEBOUNCE across turns) I will run/assist — don't block on it.
-When you hit a multi-turn need, do what you can single-turn, note it, and leave
-it as a plan edit for the next revision (it's already flagged as deferred).
+Then Part B = the implementation plan against real mkKiro.nix option paths
+(steering MEMORY.md, v3 `.kiro/hooks/*.json`, external `~/.kiro-memory` store,
+openmemory stdio MCP, HM↔devenv parity, workspace-trust bootstrap).
 
-Constraints: the user handled kiro-cli auth — if a run still hits an auth/login
-wall, or a command hook is gated behind a trust prompt that auto-denies
-non-interactively, STOP and report (try a `--trust-all-tools`-style flag if one
-exists, but do NOT authenticate). Keep everything in scratch; never touch the
-real repo tree or ~/.kiro global config.
+Constraints: keep everything in scratch; never touch the real repo tree or
+~/.kiro global config; if a run hits an auth wall, STOP and report (do not
+authenticate). `--trust-all-tools` is gone under v3 → permissions.yaml.
 
-When done: record Q1–Q4 answers in the Decisions + Session logs, update Target
+When done: record Q5–Q8 in the Decisions + Session logs, update Target
 architecture if results change it, rewrite this Bootstrap prompt to point at the
-next task (implementation plan against real mkKiro.nix option paths), then
-commit (docs(plans): …). Keep the plan additive — mark items done, never delete.
+next task, then commit (docs(plans): …). Keep the plan additive — mark items
+done, never delete.
 ```
 
 ---
 
 ## Status
 
-- **Phase:** research complete → empirical validation pending.
+- **Phase:** empirical validation done for the **v2 engine** (single-turn,
+  self-serve). The **v3 engine** hook path is gated behind an interactive
+  TUI + trusted-workspace run (Q5–Q8) that the self-serve non-interactive
+  harness structurally cannot exercise. Implementation plan is next after v3
+  confirmation.
 - **Branch:** `refactor/ai-factory-architecture`.
-- **Blocking unknowns:** Q1 (SessionStart stdout injection), Q2 (Stop firing
-  semantics). Everything downstream is designed to route around them, but the
-  test results will simplify or harden the wiring.
+- **Installed binary:** `kiro-cli 2.11.1` (store path
+  `…4mandd5ra27ggndwk4mqww35g7kzx43z-kiro-cli-2.11.1`). CLI 3.0/v3 is **Early
+  Access** in this build (`--v3` / `--agent-engine v3` opt-in).
+- **Blocking unknowns:** Q1/Q2 are **answered for v2** (see Q&A below). The
+  live-behavior unknown that now gates the WRITE side is **Q6** (does the v3
+  `Stop` hook fire, once-per-session or once-per-turn, in a trusted TUI) —
+  deferred to a user-assisted interactive run. READ Tier-1 (steering) is
+  confirmed working on **both** engines and does not depend on any of this.
 
 ## Goal
 
@@ -135,6 +148,15 @@ UserPromptSubmit · PostFileCreate/Save/Delete · Manual
 - **No `SessionEnd` / on-exit event.** READ ports cleanly (`SessionStart`,
   `UserPromptSubmit`); WRITE has no "summarize once on exit" hook → must use a
   debounced `Stop` or explicit `/remember`.
+  - **[S2 correction — this premise was wrong for v3].** The v2 embedded-hook
+    enum genuinely has no exit trigger (`agentSpawn userPromptSubmit preToolUse
+postToolUse stop` — see F7). But the **kiro.dev v3 hook docs define `Stop`
+    as _"Fires when session ends"_**, with a `timeout` (default 60s) the CLI
+    waits on and hook context delivered **as JSON on stdin**. So under v3 the
+    session-end hook the plan wanted _does_ exist — it is `Stop`. This makes the
+    WRITE side simpler than F5 assumed (a synchronous distiller in the `Stop`
+    hook, no background/debounce needed) **provided v3 `Stop` fires once per
+    session rather than once per turn** — the open question is Q6.
 - **kiro hooks in the factory are UNTYPED passthrough (greenfield)** —
   `ai.kiro.hooks` writes whatever raw JSON you author (`mkKiro.nix:316-327`);
   no typed `SessionStart` option yet.
@@ -222,130 +244,233 @@ From the config-parity remap (`packages/kiro-cli/…`):
 - **kiro-cli 2.0 remote-MCP has an OAuth/PRM auth gap** → keep `openmemory` on
   **stdio**, not HTTP.
 
+### F7 — the empirical binary results (Session 2): TWO hook systems, engine-split
+
+The installed `kiro-cli 2.11.1` ships **both** hook systems, and they behave
+differently by engine. Tested in a throwaway scratch repo via
+`kiro-cli chat --no-interactive` (self-serve, single-turn) plus the pasted
+kiro.dev v3 docs. **Evidence matrix (✓ = fired/injected, ✗ = silent):**
+
+| Mechanism (where it lives)                              | v2 engine (default) | v3 engine (`--v3`, "Kas") |
+| ------------------------------------------------------- | :-----------------: | :-----------------------: |
+| Steering `inclusion: always` (`.kiro/steering/*.md`)    |          ✓          |             ✓             |
+| **Agent-embedded** hooks (`agent.hooks.{agentSpawn,…}`) |     ✓ all fire      |        ✗ none fire        |
+| **Standalone** hooks (`.kiro/hooks/*.json`, PascalCase) |     ✗ not read      |       ✗ (see gates)       |
+
+Key facts established:
+
+- **Two hook schemas, and the repo factory targets the _v3_ one (correctly).**
+  - **v2 = embedded, camelCase**, enum forced out of the binary's own validator
+    (`agent validate` on a bogus trigger): exactly
+    `agentSpawn · userPromptSubmit · preToolUse · postToolUse · stop`. Lives in
+    the agent JSON under `"hooks": { <trigger>: [ { "command": … } ] }`.
+  - **v3 = standalone, PascalCase**, per kiro.dev docs: `SessionStart Stop
+PreToolUse PostToolUse PreTaskExec PostTaskExec UserPromptSubmit
+PostFileCreate PostFileSave PostFileDelete Manual` in
+    `.kiro/hooks/<name>.json` (`{version, hooks:[{name, trigger, matcher?,
+action:{type:"command"|"agent", …}, timeout?, enabled?}]}`). This **matches
+    the `mkKiro.nix` schema comment exactly** — the factory's kiro-hook emission
+    is aimed at the right v3 target. The docs give the 2.x→3.0 mapping:
+    `agentSpawn→SessionStart`, `stop→Stop`, `userPromptSubmit→UserPromptSubmit`,
+    `pre/postToolUse→Pre/PostToolUse`, `fileEdited→PostFileSave`,
+    `fileCreated→PostFileCreate`; **new in v3:** `PreTaskExec PostTaskExec
+PostFileDelete Manual`.
+- **v2 answers Q1/Q2 affirmatively.** With an agent carrying embedded
+  `agentSpawn`/`userPromptSubmit`/`stop` hooks (run via `--agent memtest`):
+  all three fired; `agentSpawn` and `userPromptSubmit` **stdout was injected
+  into model context** (sentinels echoed back) → **Q1 = yes**; the `stop` run
+  finished in ~8s without hanging and a `nohup … &` child **survived process
+  exit** → **Q2 = yes** (non-blocking, background survives). Reproduced across
+  repeat runs; `--agent-engine v2` and the no-flag default both fire, proving
+  the **engine is the discriminator**.
+- **v3 fired NO hooks in the self-serve harness** — neither embedded nor
+  standalone. This is explained by **two documented v3 gates**, not by a design
+  flaw:
+  1. **Classic mode is unsupported for v3.** kiro.dev "Known gaps": _"The
+     legacy non-TUI mode (`kiro-cli chat` without the TUI) does not support the
+     v3 engine. Use the TUI."_ Our `--no-interactive` path spawns an ACP
+     subprocess (`spawning ACP server subprocess for non-interactive session
+agent_engine=Kas` in `-vvv` logs) — i.e. exactly the unsupported non-TUI
+     path.
+  2. **Workspace trust gating.** v3 loads workspace `.kiro/agents/**` and
+     `.kiro/hooks/**` **only if the workspace is trusted** (agent-config docs:
+     "loaded only if workspace is trusted"). A fresh scratch dir is untrusted;
+     `~/.kiro/workspace-roots/` did not even exist. Trust is granted by an
+     interactive first-run TUI prompt (no non-interactive trust subcommand
+     exists). Steering still loaded because it is not execution-gated.
+     → Therefore **v3 hook firing can only be validated in a trusted TUI**
+     (Q5–Q8), which is inherently interactive/multi-turn = user-assisted.
+- **`--trust-all-tools` is removed in v3** (→ `permissions.yaml`), so the flag
+  is a v2-only no-op under `--v3`. Aligns with the existing
+  `[[project_kiro_v3_permissions]]` memory (typed `permissions` →
+  `~/.kiro/settings/permissions.yaml`). Hook _command_ subprocesses are
+  user-authored and run unconditionally; permissions gate the **agent's** tool
+  calls, not hook execution — so a `Stop` hook writing to `~/.kiro-memory/` is
+  not permission-gated.
+- **READ Tier-1 is the load-bearing, engine-agnostic channel.** Project-local
+  `.kiro/steering/mem.md` with `inclusion: always` injected its sentinel on
+  **both** v2 and v3, with **no hook involvement**. The plan's D1 anchor holds
+  regardless of how the v3 hook question resolves; hooks only _enhance_ READ
+  (live-refresh the steering file) and _enable_ WRITE.
+
 ---
 
 ## Target architecture (MVP)
 
-1. **READ:** an always-loaded `steering/MEMORY.md` (via `ai.kiro.context` or an
-   `ai.rules` entry with `paths = null`) holding the small recent-tier buffer,
-   refreshed by a `SessionStart` hook that reads `~/.kiro-memory/{slug}/now.md`.
-2. **WRITE:** a debounced `Stop` hook running the background-summarizer pattern
-   into that buffer + `openmemory_store` for the archive, **plus** a `/remember`
-   Manual hook as deterministic override.
+**Engine assumption:** the user runs **v3** (Kas, TUI). Emit hooks in the **v3
+standalone PascalCase** format (`.kiro/hooks/*.json`) — the factory already
+targets this. The design degrades gracefully to READ-only if v3 `Stop` turns
+out not to fire the way we need (Q6).
+
+1. **READ Tier-1 (confirmed, engine-agnostic — do this first, it is ~80–90% of
+   the value):** an always-loaded `steering/MEMORY.md` (via `ai.kiro.context`
+   or an `ai.rules` entry with `paths = null` → `inclusion: always`) holding the
+   small recent-tier buffer. **Verified injecting on both v2 and v3 with no hook
+   dependency.** Optional live-refresh: a v3 `SessionStart` **command** hook
+   whose exit-0 **stdout is appended to context** (docs) and/or which rewrites
+   the steering file from `~/.kiro-memory/{slug}/now.md` before load. The
+   `SessionStart` **agent** action type (appends a prompt string, no subprocess)
+   is an alternative lightweight inject.
+2. **WRITE (v3-native, revised from F5):** a v3 `Stop` **command** hook. Per
+   docs `Stop` fires at **session end**, the CLI **waits up to `timeout`
+   (default 60s)**, and **hook context arrives as JSON on stdin** — so the hook
+   can distill the just-ended session synchronously (no background/debounce
+   needed) and write to `~/.kiro-memory/{slug}/` + `openmemory_store` for the
+   archive. **Gated on Q6** (once-per-session vs once-per-turn; and confirming
+   what the stdin JSON actually contains — does it include the transcript?).
+   Keep a `Manual`-trigger `/remember` hook as the deterministic override and
+   the fallback if `Stop` is unusable.
 3. **ARCHIVE RECALL:** `openmemory` on **stdio**, queried by a
-   `UserPromptSubmit` hook with a metadata filter — raw prompt, no rewrite.
+   `UserPromptSubmit` hook (v3: `UserPromptSubmit` command hook, exit-0 stdout →
+   context) with a metadata filter — raw prompt, no rewrite.
 4. **Skip** the ollama query-rewriter until a need is measured.
+5. **Classification** stays out of the shell hook (F5): the `Stop`/`Manual`
+   command ships raw turns to `openmemory_store` (`infer=True`) or a cheap
+   summarizer; never a steering line asking the model to store.
 
 Store lives outside the nix-managed tree (F6 sidestep). Parity: rides existing
-HOOKS/STEERING/MCP emission; no new module axes required for MVP.
+HOOKS/STEERING/MCP emission; no new module axes required for MVP. **v3 caveat:**
+workspace `.kiro/hooks` + `.kiro/agents` load only in a **trusted** TUI
+workspace, and `--trust-all-tools` is gone under v3 (use `permissions.yaml`).
 
 ---
 
 ## Open empirical questions (gate the wiring)
 
 These are about the _installed kiro-cli binary's runtime behavior_, which the
-repo source cannot answer. They are resolved by the **Next task** tests.
+repo source cannot answer. **Q1–Q4 were resolved in Session 2** (see answers
+inline); **Q5–Q8 are the v3-specific deferrals** that need a trusted-TUI run.
 
-- **Q1 — SessionStart stdout injection (READ).** Does a `SessionStart` hook of
-  `action.type = "command"` have its **stdout injected into model context**?
-  - If **yes** → hook-stdout is a viable live-refresh channel (can inject
-    fresher memory than a frozen steering file).
-  - If **no** → the steering `inclusion: always` file is _mandatory_ as the read
-    channel (already the plan's default); the hook can only _rewrite that file_,
-    not inject directly.
-- **Q2 — Stop firing semantics (WRITE).** Does `Stop` fire **once per assistant
-  turn**, **without blocking** the UI, and can its command **spawn a background
-  process that survives** the turn (for the async summarizer)?
-- **Q3 — hook config location & pickup.** Are project-local `.kiro/hooks/*.json`
-  picked up in a scratch repo (vs only `~/.kiro/hooks/`)? Does the always-loaded
-  `.kiro/steering/*.md` (`inclusion: always`) actually load? (Confirms the F4
-  read channel independently of Q1.)
-- **Q4 — trigger inventory.** Confirm empirically there is no `SessionEnd`/exit
-  trigger, and note any triggers the repo schema comment missed.
+- **Q1 — SessionStart stdout injection (READ). ✅ ANSWERED: yes.** On **v2**,
+  an `agentSpawn` (=v3 `SessionStart`) **command** hook's stdout was injected
+  into model context (sentinel echoed back). v3 docs confirm the same by design
+  (`SessionStart` exit-0 STDOUT "added to context"). So hook-stdout _is_ a viable
+  live-refresh channel — but see Q5 (does it fire in a v3 TUI at all). Steering
+  remains the mandatory, hook-independent base channel either way.
+- **Q2 — Stop firing semantics (WRITE). ✅ ANSWERED for v2: yes.** v2 `stop`
+  fired, run did not hang (~8s), and a `nohup … &` child survived process exit.
+  v3 reframes this: docs say `Stop` fires at **session end**, is **non-blocking
+  to the model** but the CLI **waits up to `timeout`**, and delivers context as
+  JSON on stdin → prefer a synchronous distiller over a background one. Live v3
+  behavior = Q6.
+- **Q3 — hook config location & pickup. ✅ ANSWERED.** Steering
+  `.kiro/steering/*.md` (`inclusion: always`) loads on **both** engines
+  (project-local, scratch repo). Hooks: **v2** picks up the agent-embedded
+  hooks of the selected `--agent`; **standalone `.kiro/hooks/*.json` is NOT read
+  by v2**; **v3** gates workspace `.kiro/hooks` + `.kiro/agents` behind
+  **workspace trust** (Q5).
+- **Q4 — trigger inventory. ✅ ANSWERED.** v2 embedded enum (from the binary's
+  own validator) = `agentSpawn · userPromptSubmit · preToolUse · postToolUse ·
+stop` — no exit trigger. v3 standalone set (docs) = 11 triggers incl.
+  **`Stop` = session-end** (the exit hook the plan thought was missing) and new
+  `PreTaskExec/PostTaskExec/PostFileDelete/Manual`. The `mkKiro.nix` comment's
+  PascalCase list matches the v3 docs exactly.
+
+**v3-specific deferrals (need a trusted TUI — user-assisted, multi-turn):**
+
+- **Q5 — Do v3 standalone hooks fire at all, in a trusted TUI?** After
+  accepting the workspace-trust prompt, does a `SessionStart`/`UserPromptSubmit`
+  command hook fire and inject stdout? This separates the "classic-mode
+  unsupported" and "untrusted-workspace" gates from any deeper problem.
+- **Q6 — v3 `Stop` cardinality (THE write-side linchpin).** Does `Stop` fire
+  **once per session** (at quit) or **once per assistant turn**? Determines
+  whether the WRITE distiller needs debouncing. Multi-turn by nature.
+- **Q7 — v3 `Stop` (and `SessionStart`) stdin contract.** What JSON does the
+  hook actually receive on stdin? Does it include the transcript / last turns
+  (the distiller's input), or just metadata? Capture with a `cat > file` hook.
+- **Q8 — Trust mechanics for automation.** How is workspace trust granted, and
+  can it be pre-seeded (e.g. a `~/.kiro/workspace-roots/<hash>/` entry) so a
+  packaged setup "just works" without a manual prompt? (Read-only recon only;
+  do not write into the user's real `~/.kiro`.)
 
 ---
 
-## Next task: empirical hook tests
+## Next task: v3 trusted-TUI hook confirmation (user-assisted), then impl plan
 
-**Method (agreed with user):** throwaway **scratch repo**, driven via the shell
-tool using **kiro-cli non-interactive single-prompt** invocations. The user has
-handled kiro-cli auth. Single non-interactive prompt = one conversation → fires
-`SessionStart` once and `Stop` once, which is exactly enough to probe Q1/Q2.
+The self-serve non-interactive probes are done (Session 2). What remains is the
+one thing the non-interactive harness **structurally cannot** test — v3 hook
+firing in a trusted TUI (Q5–Q8) — followed by writing the implementation plan.
+Do these in order.
 
-**Step 0 — discover invocation.** Run `kiro-cli --help` and
-`kiro-cli chat --help` (the repo wraps the launcher as `kiro-cli-chat`; the raw
-binary is `kiro-cli`). Find the non-interactive/headless single-prompt form.
-Candidates to check (do NOT assume): `kiro-cli chat --no-interactive "<prompt>"`,
-`echo "<prompt>" | kiro-cli chat`, a `--trust-all-tools`/`--no-interactive`
-combo. Record the exact working invocation in the Session log.
+### Part A — v3 trusted-TUI hook probe (user runs; agent prepares + reads results)
 
-**Step 1 — Test Q3 + READ channel (steering).** In `scratch/` create
-`.kiro/steering/mem.md` with `inclusion: always` frontmatter containing a
-distinctive sentinel, e.g. `KIRO_STEER_SENTINEL_a17c`. Run a non-interactive
-prompt: _"Reply with only the unusual all-caps sentinel tokens visible in your
-current context, comma-separated; if none, say NONE."_ Observe whether
-`KIRO_STEER_SENTINEL_a17c` appears. This validates the channel the plan anchors
-on, independent of hooks.
+A ready-to-run **v3 standalone-hook fixture** was staged in Session 2 at the
+session scratch repo:
 
-**Step 2 — Test Q1 (SessionStart stdout injection).** Add
-`.kiro/hooks/mem-read.json` — a `SessionStart` `command` hook that
-`echo`s a _different_ sentinel `KIRO_HOOK_SENTINEL_9f3e` to stdout. Re-run the
-same echo-the-sentinels prompt. If `KIRO_HOOK_SENTINEL_9f3e` appears →
-Q1 = yes; if only the steering sentinel appears → Q1 = no.
+```
+<scratchpad>/kiro-hooktest/
+  .kiro/steering/mem.md          # inclusion: always, sentinel KIRO_STEER_SENTINEL_a17c
+  .kiro/hooks/mem.json           # v3 PascalCase: SessionStart, UserPromptSubmit, Stop
+  .kiro/agents/memtest.json      # v2 embedded-hook agent (ignore under v3 default agent)
+```
 
-- Candidate hook JSON shape (VERIFY against `kiro-cli` schema/docs first — the
-  factory comment gives `{version:"v1", hooks:[{name, trigger,
-action:{type:"command"|"agent", command|prompt}}]}`):
-  ```json
-  {
-    "version": "v1",
-    "hooks": [
-      {
-        "name": "mem-read",
-        "trigger": "SessionStart",
-        "action": {
-          "type": "command",
-          "command": "echo KIRO_HOOK_SENTINEL_9f3e"
-        }
-      }
-    ]
-  }
-  ```
+Each hook (a) echoes a distinctive sentinel to stdout (`KIRO_V3_SS_SENTINEL_11aa`
+for SessionStart, `KIRO_V3_UPS_SENTINEL_22bb` for UserPromptSubmit), (b) appends
+a timestamped line to `v3-fired-<Trigger>.log`, and (c) captures its **stdin** to
+`v3-<Trigger>-stdin.json` (`timeout 10 cat`). If a future session lost the
+scratch, regenerate it with the Session-2 python snippet (see Session log for the
+exact command; the fixture is trivial to rebuild).
 
-**Step 3 — Test Q2 (Stop fires, non-blocking, background survives).** Add
-`.kiro/hooks/mem-write.json` — a `Stop` `command` hook that appends a timestamp
-to `./stop-fired.log` **and** launches a `nohup … &` background process that
-sleeps briefly then writes `./bg-survived.log`. Run one non-interactive prompt,
-time it (confirm it did not hang), then after exit check: `stop-fired.log`
-exists with exactly one line (fired once/turn), and `bg-survived.log` appears
-shortly after (background survived the turn). Use strict-mode bash in any hook
-script (`set -euETo pipefail; shopt -s inherit_errexit`).
+**User steps (interactive TUI — ~2 min):**
 
-**Step 4 — Test Q4.** From `--help`/any schema output, inventory the accepted
-triggers; confirm no `SessionEnd`/exit trigger. Optionally try registering a
-bogus `SessionEnd` hook and see if it is rejected/ignored.
+1. `cd <scratchpad>/kiro-hooktest`
+2. `kiro-cli chat --v3` (TUI). **Accept the workspace-trust prompt** when it
+   appears (this is the gate that was blocking the non-interactive runs).
+3. Send **two** prompts in the same session, e.g. `first turn` then
+   `second turn` — this distinguishes Q6 (per-turn vs per-session).
+4. Quit the TUI (this should trigger `Stop` if it is a session-end hook).
 
-**Guardrails.**
+**Then the agent reads the side-effect files** (all self-serve, no auth):
 
-- Keep everything in a scratch dir under the session scratchpad or a temp git
-  repo; do **not** touch the real repo tree or `~/.kiro/` global config.
-- If any run hits an auth/login wall, **STOP and report** — do not attempt to
-  authenticate.
-- For READ tests, the model may paraphrase; make sentinels highly distinctive
-  and ask for verbatim echo. Prefer the file-side-effect signal (Step 3) where
-  possible since it does not depend on model cooperation.
-- **Single-turn = self-serve; multi-turn = user-assisted.** Run every probe
-  that fits one non-interactive prompt autonomously. Anything requiring several
-  turns in one live session — chiefly the `Stop` **debounce across turns** — is
-  deferred: the user will run/assist those. Don't block: note the multi-turn
-  need, capture whatever the single-turn run proved, and mark it as a
-  next-revision plan edit.
+- `v3-fired-SessionStart.log` present? → **Q5** (v3 hooks fire in trusted TUI).
+- Did `KIRO_V3_SS_SENTINEL_11aa` / `KIRO_V3_UPS_SENTINEL_22bb` appear in the TUI
+  transcript? (ask the user, or check session logs) → v3 stdout-injection.
+- **Line count of `v3-fired-Stop.log`** (1 = once-per-session; 2 = once-per-turn)
+  and of `v3-fired-UserPromptSubmit.log` (expect 2) → **Q6**.
+- `cat v3-Stop-stdin.json` / `v3-SessionStart-stdin.json` → **Q7** (the stdin
+  JSON contract: does it carry the transcript the distiller needs?).
+- `ls ~/.kiro/workspace-roots/` after trust → **Q8** recon (how trust persists;
+  read-only, do not write there).
 
-**Deliverable:** Q1–Q4 answered with evidence, recorded in Decisions + Session
-logs; Target architecture updated (e.g. if Q1 = yes, add hook-stdout live
-refresh; if Q2 background does not survive, switch the summarizer to a
-fire-and-record-then-next-session-flush design). Then set the next task =
-"implementation plan against real `mkKiro.nix` option paths."
+If v3 hooks fire and `Stop` gives a usable session-end + transcript-on-stdin →
+the WRITE design in Target architecture §2 is validated as-is. If `Stop` is
+per-turn → add debounce. If v3 hooks do **not** fire even trusted → fall back to
+READ-only auto-memory (steering, confirmed) + a `Manual` `/remember` hook, and
+escalate the v3 Early-Access gap.
+
+**Guardrails (unchanged):** everything stays in the scratch repo; never write to
+the real repo tree or `~/.kiro/` config; if a run hits an auth wall, STOP and
+report; do not authenticate.
+
+### Part B — implementation plan against real `mkKiro.nix` option paths
+
+Once Q5–Q8 are known, write the concrete wiring plan: which `ai.kiro.*` /
+`mkKiro.nix` options emit the steering `MEMORY.md`, the v3 `.kiro/hooks/*.json`
+(`ai.kiro.hooks` untyped passthrough today — decide typed vs raw), the external
+`~/.kiro-memory/{slug}/` store (F6 sidestep), and the `openmemory` stdio MCP;
+plus HM↔devenv parity checks and the workspace-trust bootstrap (Q8). Target the
+v3 standalone format; keep v2 embedded-hook emission only if the user still runs
+v2 anywhere.
 
 ---
 
@@ -364,6 +489,25 @@ fire-and-record-then-next-session-flush design). Then set the next task =
 - **D5 (S1):** `openmemory` stays on **stdio** (kiro-cli 2.0 remote-MCP OAuth
   gap).
 
+- **D6 (S2):** Installed binary = `kiro-cli 2.11.1`; v3/CLI 3.0 = Early Access.
+  **Two hook systems coexist:** v2 embedded camelCase (5 triggers, in the agent
+  JSON) and v3 standalone PascalCase (11 triggers, `.kiro/hooks/*.json`). The
+  `mkKiro.nix` factory hook schema matches the **v3** target exactly → keep
+  emitting v3 standalone hooks; treat v2 embedded as legacy-only.
+- **D7 (S2):** READ Tier-1 (steering `inclusion: always`) **confirmed injecting
+  on BOTH engines, hook-independent.** It is the load-bearing channel — ship it
+  first, standalone of any hook question. Strengthens D1.
+- **D8 (S2):** WRITE reframed to a **v3 `Stop` session-end command hook** (hook
+  context as JSON on stdin, CLI waits up to `timeout`) — supersedes F5's v2
+  debounced-Stop-with-background. Synchronous distiller, no background/debounce,
+  **provided `Stop` is once-per-session (Q6)**. `Manual` `/remember` stays as
+  override + fallback.
+- **D9 (S2):** v3 hook firing is **untestable via non-interactive/headless
+  kiro** (classic non-TUI mode unsupported for v3 + workspace-trust gating), so
+  it needs a trusted TUI. Packaging consequence: the memory setup must
+  handle/document **workspace trust** (Q8); `--trust-all-tools` is gone under v3
+  (→ `permissions.yaml`, per `[[project_kiro_v3_permissions]]`).
+
 ## Session log (append-only)
 
 - **Session 1 — 2026-07-11.** Research via a 3-phase workflow (map local memory
@@ -376,6 +520,43 @@ fire-and-record-then-next-session-flush design). Then set the next task =
   deferred to an empirical binary test rather than trusting docs. Four agents
   completed cleanly and fed the synthesis captured above (F0–F6). Wrote this
   plan. **Next:** empirical hook tests (Q1–Q4).
+
+- **Session 2 — 2026-07-11.** Ran the empirical hook probes **self-serve**
+  against `kiro-cli 2.11.1` in a throwaway scratch git repo via
+  `kiro-cli chat --no-interactive [--v3] [--agent memtest] --trust-all-tools
+"<prompt>"` (auth already handled by user; no wall hit). Findings:
+  - **Invocation:** `--no-interactive` + a positional prompt works; stdout = the
+    model reply only, logs on stderr. `--v3` selects the "Kas" engine, which
+    **spawns an ACP subprocess for non-interactive** sessions.
+  - **Steering READ:** project-local `.kiro/steering/mem.md` (`inclusion:
+always`) injected its sentinel on **v2 AND v3** → Q3 confirmed.
+  - **Standalone `.kiro/hooks/*.json` (PascalCase):** fired nothing on v2 or v3
+    non-interactive.
+  - **v2 embedded enum** (forced from the binary's own validator by feeding
+    `kiro-cli agent validate` a bogus trigger): `agentSpawn, userPromptSubmit,
+preToolUse, postToolUse, stop`.
+  - Built an agent via `kiro-cli agent create` with embedded
+    `agentSpawn`/`userPromptSubmit`/`stop` hooks; ran with `--agent memtest`:
+    **v2 (default / `--agent-engine v2`)** — all three fired; agentSpawn +
+    userPromptSubmit **stdout injected** (Q1=yes); stop non-blocking, `nohup … &`
+    child **survived exit** (Q2=yes); reproduced. **v3 (`--v3` /
+    `--agent-engine v3`)** — none fired; only steering injected. → engine is the
+    discriminator.
+  - **User pasted the kiro.dev CLI 3.0 docs**, which resolved the v3 silence:
+    (a) classic non-TUI mode is unsupported for v3; (b) workspace-trust gates
+    `.kiro/hooks`+`.kiro/agents`; plus the v3 standalone hook schema (matches
+    `mkKiro.nix`), the 2.x→3.0 trigger mapping, `Stop` = _session-end_, and
+    `--trust-all-tools` removal.
+  - Q1–Q4 answered (see Open questions). Staged a **v3 standalone-hook fixture**
+    in the scratch repo for the user-assisted trusted-TUI probe. **Next:** Part A
+    (v3 TUI hook confirmation, Q5–Q8), then Part B (impl plan).
+  - **Fixture regen** (empty scratch git repo; `S` = abs scratch path): create
+    `.kiro/steering/mem.md` (`---\ninclusion: always\nname: mem\n---`, body =
+    `sentinel KIRO_STEER_SENTINEL_a17c`) and `.kiro/hooks/mem.json`
+    (`{version:"v1", hooks:[…]}` with triggers `SessionStart` /
+    `UserPromptSubmit` / `Stop`; each `action.type="command"` doing: `printf`
+    its sentinel to stdout, append `$S/v3-fired-<Trigger>.log`, and
+    `timeout 10 cat > $S/v3-<Trigger>-stdin.json`).
 
 ## Sources
 
@@ -399,3 +580,9 @@ fire-and-record-then-next-session-flush design). Then set the next task =
   https://github.com/modelcontextprotocol/servers/tree/main/src/memory
 - In-repo — `packages/kiro-cli/lib/mkKiro.nix` (hook schema, options),
   `lib/ai/transformers/kiro.nix` (steering inclusion), `lib/ai/app/*Transform.nix`
+- kiro.dev CLI 3.0 (Early Access) docs (pasted by user, S2) —
+  https://kiro.dev/docs/cli/v3/hooks.md ·
+  https://kiro.dev/docs/cli/v3/permissions.md ·
+  https://kiro.dev/docs/cli/v3/agent-config.md ·
+  https://kiro.dev/docs/cli/v3/feature-overview.md ·
+  https://kiro.dev/docs/cli/v3/specs.md · index https://kiro.dev/llms.txt
