@@ -68,6 +68,61 @@ the same commit — future sessions inherit it by reading the doc.
   and report (do not authenticate). `--trust-all-tools` is gone under v3 →
   permissions.yaml.
 
+── STATE (end of session 9) ──
+Session 9 (2026-07-12) landed STAGE 2 — nix-packaged the distiller as a derivation.
+Self-serve; the distiller is now a buildable/cachix-able flake package but still UNWIRED
+(no hook/module consumer yet — that is STAGE 3). All green: the 58 bun tests run IN the nix
+sandbox via checkPhase, the targeted build is clean, treefmt + cspell clean, adversarially
+reviewed (4-lens workflow + per-finding refute — 0 confirmed defects).
+- **Landed:** `overlays/kiro-memory-distiller.nix` — a dependency-free (node: built-ins only,
+  so NO buildNpmPackage/npmDepsHash) `ourPkgs.stdenvNoCC.mkDerivation` over
+  `packages/kiro-cli/memory/distiller.ts`. Mirrors the openmemory-mcp bun-wrapper idiom
+  (`makeWrapper ${bun}/bin/bun --add-flags <entry>`), NOT `bun build --compile` (no in-repo
+  precedent; bun is already in the closure; a wrapper is smaller + transparent). TWO role bins
+  from one drv (like openmemory-mcp/-serve): `kiro-memory-distiller` (Stop/Manual → main()) +
+  `kiro-memory-flush` (SessionStart → `distiller.ts --flush` → mainFlush()) — so STAGE 3's hooks
+  reference a bare absolute path per role with no arg plumbing. git on the wrapper PATH via
+  `--suffix` (ambient-first) because the distiller shells out to `git --git-common-dir` (D19
+  project_id); `openmemory-mem` stays best-effort-absent (STAGE 5). checkPhase runs the 58-test
+  suite in-sandbox (real fail = build fail, no masking); installCheck pipes `{}` to both bins
+  (exit-0 smoke). Registered in `overlays/default.nix` flatDrvs → auto-flattens to
+  `.#kiro-memory-distiller` / `pkgs.ai.kiro-memory-distiller` (no flake.nix edit); added to the
+  cache-hit-parity allowlist (aiCliPackages) + the `overlays/README.md` index. version="0.1.0"
+  (in-repo, no upstream/rev — the first in-repo-source overlay pkg, so NOT in update-matrix, like
+  the content pkgs); license=unlicense (repo LICENSE, free → the unfree guard passes it unwrapped).
+- **OOM method (reused, works):** validated with a TARGETED `nix-build --expr` importing ONLY this
+  overlay + the flake's pinned nixpkgs (`getFlake … .inputs.nixpkgs` — inputs only, NOT outputs),
+  so no packages/checks/modules eval → no flake-eval OOM even with a live kiro TUI + opm procs
+  running. Built `/nix/store/mkc…-kiro-memory-distiller-0.1.0`; both wrappers exec bun by absolute
+  path with git suffixed on PATH.
+- **Adversarial review (4-lens + refute; 6 agents): 0 CONFIRMED, 1 PARTIAL, 1 REFUTED.** See D25.
+  - PARTIAL (dev/data.nix): the distiller is absent from the user-facing generated-docs SSOT.
+    DECIDED intentional — it is internal hook plumbing, never a user-run CLI, consistent with the
+    curated ai-cli/overlay tables already omitting claude-code (from overlayPackages) and agnix.
+    No structural check enforces data.nix completeness; nothing breaks. No change made.
+  - REFUTED (overlay header omits HOME): correctly refuted for the header (HOME is a universal
+    inherited var, not a wrapper-baked decision). BUT the real STAGE-3 requirement below is now
+    recorded so the next session cannot miss it.
+- **STAGE-3 wiring requirement (from the refuted-but-real HOME finding):** the v3 hook `action`
+  env MUST export `HOME` — the distiller derives `sessionsDir`/`memoryDir` from it
+  (`resolveCliEnv`), and if HOME is stripped it silently writes to a cwd-relative `.kiro-memory`
+  (exit 0, memory-loss). It MAY also set the `KIRO_MEMORY_*` overrides
+  (SESSIONS_DIR/DIR/MIN_NEW_LINES/COOLDOWN_MS/MAX_NOW/MAX_RECENT/FORCE). Reference the two bins by
+  absolute store path via `pkgs.ai.kiro-memory-distiller` (`getExe'`).
+- **FROZEN STAGE ORDER (updated; agent-owned per the protocol bullet):**
+    1. D24 tail-loss (OR gate + flushSessionTails)  ✅ DONE (S8)
+    2. Nix-package the distiller as a derivation  ✅ DONE (S9)
+    3. Emit the v3 Stop hook + `--flush` SessionStart hook + steering anchor via ai.kiro.hooks /
+       ai.kiro.rules — THE first working end-to-end loop ships here (the load-bearing slice),
+       adversarially verified vs the real option surface. OOM: drv-build / lib-only evals only.
+       The hook action env MUST export HOME (see above).  ← NEXT
+    4. D23b buffer lockfile (O_EXCL mutex around loadBuffer→rollTiers→write) — pull BEFORE stage 3
+       if immediate multi-worktree concurrent loops are expected.
+    5. openmemory-mem SDK helper (add/query, project_id) — backend enrichment; the file buffer
+       already works without it; needs the serve daemon + Postgres to integration-test, so last.
+NEXT = STAGE 3: emit the v3 hook set + steering anchor (Q10/Q11 still gate only the consumer flip;
+HITL stays on the nixos-config side).
+
 ── STATE (end of session 8) ──
 Session 8 (2026-07-12) landed D24 — the deferred tail-loss fix (D23a). Self-serve;
 the distiller is still UNWIRED (no nix/module consumer yet), so the change is
@@ -296,9 +351,14 @@ the real option surface before landing each checkpoint.
   `openmemory-mcp-serve` drives a real MCP client (D22). **Session 7 (2026-07-11)
   built Checkpoint 2 part 1 — the distiller core** (bun/TS, 47 TDD tests, committed
   d50fae0) and CORRECTED the messages.jsonl schema (`payload.type` discriminator;
-  `promptTurnSummaries` = billing, so the B3/D12 reuse shortcut is dead — D23). Next
-  = the deferred review fixes (OR-gate tail-flush + buffer lockfile), the
-  `openmemory-mem` SDK helper, nix packaging, and the v3 hook + steering emission.
+  `promptTurnSummaries` = billing, so the B3/D12 reuse shortcut is dead — D23).
+  **Session 8 (2026-07-12)** landed D24 — the deferred tail-loss fix (shouldDistill AND→OR gate +
+  a SessionStart `flushSessionTails` scan + `--flush` CLI; 58 TDD tests). **Session 9 (2026-07-12)**
+  landed STAGE 2 (D25) — nix-packaged the distiller as `overlays/kiro-memory-distiller.nix`
+  (dependency-free bun-wrapper, two role bins, 58 tests run in-sandbox via checkPhase, cache-hit-
+  parity allowlisted; the distiller is now a buildable flake package but still unwired). Next =
+  STAGE 3 (the v3 hook set + steering anchor — the first working end-to-end loop), then D23b buffer
+  lockfile and the `openmemory-mem` SDK helper.
 - **Branch:** `refactor/ai-factory-architecture`.
 - **Installed binary:** `kiro-cli 2.11.1` (store path
   `…4mandd5ra27ggndwk4mqww35g7kzx43z-kiro-cli-2.11.1`). CLI 3.0/v3 is **Early
@@ -1150,6 +1210,50 @@ cwd}`; `UserPromptSubmit` adds an empty `prompt` in 2.11.1) — no transcript. T
     each scanned entry is independently re-validated). first-Stop-always-distills is
     already pinned by two shouldDistill tests.
 
+- **D25 (S9):** **STAGE 2 landed — the distiller is nix-packaged.**
+  `overlays/kiro-memory-distiller.nix` packages `packages/kiro-cli/memory/distiller.ts` as an
+  `ourPkgs.stdenvNoCC.mkDerivation`. The script is dependency-free (node: built-ins only) → NO
+  `buildNpmPackage`/`npmDepsHash` (simpler than every MCP server). Build pattern = the repo's
+  established bun-wrapper idiom (openmemory-mcp / effect-mcp / git-intel-mcp): `makeWrapper` over
+  `${bun}/bin/bun --add-flags <entry>`, chosen over `bun build --compile` (no in-repo precedent;
+  bun is already in the closure; a wrapper is smaller + transparent). TWO role bins from one
+  derivation (`kiro-memory-distiller` + `kiro-memory-flush`, mirroring openmemory-mcp/-serve) so
+  STAGE 3's Stop vs SessionStart hooks each reference a bare absolute path with no arg plumbing.
+  git on the wrapper PATH via `--suffix` (ambient-first, ours as fallback — resolves even under an
+  env-stripped hook). checkPhase runs the 58-test suite IN the sandbox (a real failure fails the
+  build — no `|| true` masking); installCheck is an exit-0 `{}`-stdin smoke on both bins.
+  - **Cache-hit parity:** every build input routes through `ourPkgs` (bun/git/lib/makeWrapper/
+    stdenvNoCC + the `lib.makeBinPath` git path baked into the wrapper); `src` is the in-repo path
+    (this flake's content, consumer-stable) → byte-identical CI-vs-consumer. Added to the
+    `checks/cache-hit-parity.nix` allowlist (aiCliPackages, the `consumerPkgs.ai.<name>` lookup).
+  - **Registration:** `overlays/default.nix` flatDrvs (alphabetical) → auto-flattens to
+    `.#kiro-memory-distiller` / `pkgs.ai.kiro-memory-distiller` (flake.nix comment confirms new
+    flatDrvs entries need no flake.nix edit). `overlays/README.md` index row + an "In-repo source"
+    bullet. version="0.1.0" (no upstream/rev — the first in-repo-source overlay pkg, so NOT in
+    `config/update-matrix.nix`, mirroring the content pkgs); license=`lib.licenses.unlicense`
+    (repo LICENSE = Unlicense; free → the `ensureUnfreeCheck` guard passes it unwrapped).
+  - **Validated OOM-safely** (this host OOMs on flake eval; a live kiro TUI + opm procs were up):
+    a TARGETED `nix-build --impure --expr` importing ONLY this overlay + `getFlake … .inputs.nixpkgs`
+    (inputs, NOT outputs) → no packages/checks/modules eval. Built clean, 58 tests green in-sandbox,
+    both wrappers exit 0. The full cache-hit-parity check runs in CI (can't run locally).
+  - **Adversarial review (4-lens workflow + per-finding refute; 6 agents): 0 CONFIRMED, 1 PARTIAL,
+    1 REFUTED.**
+    - PARTIAL (dev/data.nix): the distiller is absent from the user-facing generated-docs SSOT
+      (root README AI-CLI table / doc-site overlay table). **DECIDED intentional, no change:** it is
+      internal hook plumbing invoked by kiro's hooks, never a user-run CLI — consistent with the
+      curated lists already omitting claude-code (from `overlayPackages.ai-clis`) and agnix. No
+      structural check enforces data.nix completeness; the generators iterate data.nix (not pkgs),
+      so an absent package is silently dropped, not an error. (The repo does not annotate the
+      analogous claude-code/agnix omissions inline, so neither does this.)
+    - REFUTED (overlay header omits HOME): refuted FOR THE HEADER (HOME is a universal inherited
+      var, unlike the wrapper-baked git/openmemory-mem decisions the header documents; the cited
+      MCP env-replacement failure class is MCP-specific, and the PATH-strip case is already
+      mitigated by absolute bun + suffixed git). BUT the underlying insight is a real STAGE-3
+      requirement, recorded in the S9 STATE block: the hook `action` env MUST export HOME (the
+      distiller derives sessionsDir/memoryDir from it; a stripped HOME → silent cwd-relative
+      memory-loss), and MAY set the `KIRO_MEMORY_*` overrides.
+      No correctness or parity defect survived the review.
+
 ## Session log (append-only)
 
 - **Session 1 — 2026-07-11.** Research via a 3-phase workflow (map local memory
@@ -1350,6 +1454,25 @@ preToolUse, postToolUse, stop`.
   User delegated implementation order to the agent (agile working increments; most
   load-bearing otherwise) → encoded a frozen stage order + a new protocol bullet into
   the bootstrap. **Next:** STAGE 2 — nix-package the distiller as a derivation.
+
+- **Session 9 — 2026-07-12.** Landed **STAGE 2 — nix-packaged the distiller** (D25), self-serve on
+  refactor/ai-factory-architecture; the distiller is now a buildable/cachix-able flake package but
+  still unwired (no hook/module consumer — that is STAGE 3), so the change is contained to
+  `overlays/` + `checks/`. First mapped the repo's bun/TS packaging precedent (openmemory-mcp et al.
+  = `makeWrapper ${bun}/bin/bun --add-flags <entry>`, all inputs via `ourPkgs` for cache-hit
+  parity), then wrote `overlays/kiro-memory-distiller.nix` (stdenvNoCC, dep-free, two role bins,
+  checkPhase = 58 in-sandbox bun tests, installCheck smoke) + registered it (flatDrvs auto-flatten,
+  parity allowlist, README index). Validated OOM-safely via a targeted single-overlay
+  `nix-build --expr` (getFlake inputs only, no flake-output eval) — built clean, tests green
+  in-sandbox, both wrappers exit 0. Ran a 4-lens adversarial review workflow (build-fidelity /
+  cache-hit-parity / conventions-propagation / stage3-readiness) + a per-finding refute pass (6
+  agents): **0 CONFIRMED, 1 PARTIAL, 1 REFUTED** — no correctness/parity defect. Adjudicated the
+  PARTIAL (dev/data.nix omission) as intentional (internal plumbing, matches the claude-code/agnix
+  curation) and folded the refuted-but-real HOME point into the S9 STATE block as a STAGE-3 wiring
+  requirement. Also corrected the `overlays/default.nix` header comment (now notes the in-repo
+  source pattern). **Next:** STAGE 3 — emit the v3 Stop + `--flush` SessionStart hooks + steering
+  anchor via `ai.kiro.hooks` / `ai.kiro.rules`, referencing the packaged bins by absolute store
+  path (HOME must be exported in the hook action env).
 
 ## Sources
 
