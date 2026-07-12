@@ -58,6 +58,38 @@ the same commit — future sessions inherit it by reading the doc.
   and report (do not authenticate). `--trust-all-tools` is gone under v3 →
   permissions.yaml.
 
+── STATE (end of session 5) ──
+Session 5 (2026-07-11) RESOLVED Q9 — the residual gate — with a CORRECTION the
+user's pushback forced (do not conclude from one failed handshake). Findings,
+all self-serve (scratch `opm serve` daemon + real MCP SDK client + curl + upstream
+source; no real config touched):
+- **Native `opm serve` DOES mount `POST /mcp`** and answers a no-auth `initialize`
+  (200) under `OM_DEV_ALLOW_NO_AUTH=true`; both OAuth well-knowns 404 — the exact
+  fingerprint of the 4 kiro-working http servers (D15). D16/D18 CONFIRMED live.
+- **BUT the INSTALLED npx (openmemory-js 1.3.3 = npm `latest`) is BROKEN for real
+  HTTP MCP clients:** its `/mcp` uses ONE shared `StreamableHTTPServerTransport`
+  (`sessionIdGenerator: undefined`) connected ONCE and reused, so `initialize`
+  succeeds (200) then EVERY next request (`notifications/initialized`, `tools/list`)
+  500s. A spec client always sends `notifications/initialized`, so it never reaches
+  `tools/list`. Reproduced by BOTH the real SDK client AND raw curl.
+- **The fix already exists on upstream `main` (rev 9af0f95) — which OUR overlay
+  ALREADY PINS.** main creates a FRESH transport+server PER REQUEST (code comment:
+  "MCP SDK 1.27 rejects re-initialization on a single transport instance") AND adds
+  the `openmemory_store_project` + `project_id` tooling D19/D20 need (1.3.3 has
+  NEITHER). A/B repro with the real SDK client+server: shared→FAIL, per-request→PASS.
+- **So D16/D17 native daemon is VALIDATED — but the flip is ALSO a version change:**
+  the daemon MUST be our nix pkg `openmemory-mcp-serve` (builds rev 9af0f95), NOT
+  `npx openmemory-js serve` (=1.3.3, broken `/mcp`). stdio works today only because
+  stdio is single-session (the shared-transport bug can't bite it).
+- **RAM win CONFIRMED huge:** live = 15 openmemory procs / 1,190 MB (~90 MB per
+  `opm mcp` child, from subagent fan-out); one daemon = 86 MB → ~93% / ~1.1 GB saved.
+- New residual follow-ups for Part B: Q10 (tenant vs `user_id` under http no-auth)
+  and Q11 (1.3.3→9af0f95 DB `project_id`/schema migration). Neither blocks Ckpt 1.
+See D21 + Session-5 log. NEXT = Checkpoint 1 (the daemon server module), whose first
+step is the deferred empirical confirm: `nix build .#openmemory-mcp` then drive its
+built `openmemory-mcp-serve` with a real client (deferred here — this host OOMs on
+local eval).
+
 ── STATE (end of session 4) ──
 Session 4 (2026-07-11) resolved the openmemory TRANSPORT + ISOLATION questions
 Part B's archive tier depends on — triggered by a user ask to get openmemory OFF
@@ -109,10 +141,11 @@ camelCase, v3 standalone PascalCase = the mkKiro.nix target).
 ── NEXT TASK ──
 Part B is DESIGN-COMPLETE in the doc (see the "Part B — implementation plan"
 section). NEXT is IMPLEMENTATION, in checkpoints (HITL on the nixos-config side):
-(0) **Residual empirical Q9 FIRST** — it gates the transport flip: live-confirm
-kiro 2.11.1 connects to openmemory serve's native `/mcp` (near-certain from the 4
-analogues, unconfirmed for openmemory specifically), and measure per-subagent
-openmemory RSS to quantify the RAM win.
+(0) **Residual empirical Q9 — ✅ DONE (Session 5).** Native `opm serve` `/mcp` works
+with a real MCP client ON OUR PINNED REV (9af0f95); npm `latest` 1.3.3 is broken
+(shared-transport). RAM win ~1.1 GB confirmed. See STATE + D21. Consequence for the
+flip: it is ALSO a version bump (daemon = our nix pkg, NOT npx) and carries the
+`project_id` tooling + a DB schema change (Q11). → proceed to Checkpoint 1.
 (1) **nix-agentic-tools:** add a native-HTTP `openmemory` server module to the
 `services.mcp-servers` fleet (uses `openmemory-mcp-serve`; `OM_*` env passthrough;
 `OM_DEV_ALLOW_NO_AUTH=true`; emits `{type=http; url=…/mcp}` for the consumer to
@@ -140,7 +173,10 @@ the real option surface before landing each checkpoint.
   self-serve (S2) + v3 trusted-TUI user-assisted (S3, Q5–Q8). **No blocking
   unknowns remain for the MVP.** Session 4 (2026-07-11) resolved the openmemory
   transport + isolation questions (D15–D20) and made Part B design-complete; next
-  is checkpointed implementation (one residual empirical test, Q9, gates the flip).
+  is checkpointed implementation. **Session 5 (2026-07-11) resolved Q9:** native
+  `opm serve` `/mcp` works with a real client on our pinned rev 9af0f95 (npm `latest`
+  1.3.3 is broken — shared-transport); RAM win ~1.1 GB confirmed; the transport flip
+  is also a version bump. Next = Checkpoint 1 (the daemon server module).
 - **Branch:** `refactor/ai-factory-architecture`.
 - **Installed binary:** `kiro-cli 2.11.1` (store path
   `…4mandd5ra27ggndwk4mqww35g7kzx43z-kiro-cli-2.11.1`). CLI 3.0/v3 is **Early
@@ -441,6 +477,36 @@ tier for cross-cutting. See "Part B — implementation plan" for the full wiring
 
 ---
 
+## End-goal architecture (direction, Session 5 — after the technical limits are mapped)
+
+The MVP/Part B above wires openmemory + hooks + steering directly. The INTENDED end
+state (user direction, S5) sits one level up:
+
+- **A custom typed factory setting** (e.g. `ai.kiro.autoMemory` / `ai.autoMemory`,
+  fanning out like the rest of `ai.*`) that SYNTHESISES the whole auto-memory rig —
+  the steering anchor (B1), the v3 hook set + debounced distiller (B3), the external
+  file buffer (B2), and the backend wiring — from ONE declarative switch. It is a
+  custom option that **does NOT map 1:1 to a file kiro reads**; it OWNS the
+  abstraction and emits the B1–B5 pieces.
+- **A pluggable memory backend, expressed as a lambda / small interface.** The
+  harness layer (SessionStart rotate, debounced Stop distiller, UPS archive-RAG,
+  Manual `/remember`) is backend-AGNOSTIC; only `store` / `query` / `roll` differ per
+  backend. Backends are swappable implementations of that interface:
+  - `openmemory` (the S4/S5 design: SDK add/query keyed on `project_id`, one HTTP
+    daemon for the model) — the first/default backend.
+  - a future `markdown` backend (Claude `.remember`-style tiered files only, no
+    openmemory) — essentially B2 standalone, for parity with the user's Claude setup.
+    This is the FP-composition the user prefers ([[feedback_fp_composition]]):
+    parameterise the common hook/steering shape once, pass the backend as the lambda
+    that differs. It also means the "which store" decisions (D16–D20) are contained to
+    the openmemory backend, not baked into the harness.
+- **Sequencing:** this synthesis layer comes AFTER the technical limits are fully
+  mapped (Q1–Q11) and the openmemory backend + harness are proven end-to-end. The
+  current checkpoints build those concrete pieces; the typed `autoMemory` option and
+  the backend-interface extraction are the capstone once the pieces work.
+
+---
+
 ## Open empirical questions (gate the wiring)
 
 These are about the _installed kiro-cli binary's runtime behavior_, which the
@@ -503,14 +569,36 @@ stop` — no exit trigger. v3 standalone set (docs) = 11 triggers incl.
 **Session-4 residual (gates the openmemory transport flip, not the MVP):**
 
 - **Q9 — Does kiro 2.11.1 connect to openmemory `serve`'s native `/mcp`, and how
-  much RAM does the daemon save? ⏳ OPEN (near-certain, unconfirmed).** D15
-  established kiro 2.11.1 accepts no-auth HTTP MCP (4 live analogues), and D16 that
-  openmemory `serve` mounts a native `/mcp` — but no one has driven the installed
-  kiro against openmemory's OWN endpoint yet. Do FIRST: (1) start `opm serve`
-  (dev-no-auth, ai-pg), add it to kiro's mcp.json as `type=http`, confirm tools
-  load + a `tools/list` succeeds; (2) measure per-subagent openmemory RSS (stdio
-  vs zero-with-daemon) to quantify the RAM win. Low-risk given the analogues, but
-  it gates flipping the real config.
+  much RAM does the daemon save? ✅ ANSWERED (Session 5) — with a version caveat.**
+  The transport/auth handshake is version-specific:
+  - **Auth/mount CONFIRMED live:** `opm serve` mounts `POST /mcp`; no-auth
+    `initialize` → 200 under `OM_DEV_ALLOW_NO_AUTH=true`; both OAuth well-knowns 404
+    (matches the 4 kiro-working http servers). D16/D18 hold.
+  - **Installed npx 1.3.3 (= npm `latest`) `/mcp` is BROKEN for real clients:** one
+    shared `StreamableHTTPServerTransport` (`sessionIdGenerator: undefined`) reused
+    across requests → `initialize` 200, then `notifications/initialized` + `tools/list`
+    both 500. Reproduced by the real SDK client AND raw curl. A spec client can't get
+    past `initialize`.
+  - **Upstream `main` (rev 9af0f95 — the rev our overlay pins) FIXES it** with a
+    fresh transport+server PER REQUEST (+ adds `openmemory_store_project`/`project_id`).
+    A/B with the real SDK client+server: shared→FAIL, per-request→PASS. So our nix
+    daemon works; `npx openmemory-js serve` does not.
+  - **RAM win:** live 15 procs / 1,190 MB → 1 daemon / 86 MB (~93% / ~1.1 GB).
+  - **Net:** native daemon VIABLE; flip = ALSO a version bump (our pkg, not npx).
+    Deferred confirm (Ckpt 1): `nix build .#openmemory-mcp` + drive its built
+    `openmemory-mcp-serve` with a real client (skipped here — local eval OOMs).
+- **Q10 — tenant vs `user_id` under HTTP no-auth (9af0f95). ⏳ OPEN (Part B).** In
+  9af0f95, HTTP MCP calls carry a `tenant` from `authenticate_api_request`; under
+  `OM_DEV_ALLOW_NO_AUTH=true` that tenant is `dev-no-auth`, and `resolve_user_id`
+  THROWS `tenant_mismatch` if the MODEL passes a `user_id` ≠ tenant. The hooks use
+  the in-process SDK (no tenant → fine, D20), but the model's own
+  `openmemory_store`/`_query` calls must OMIT `user_id` (or pass `dev-no-auth`) and
+  scope by `project_id` only. Confirm and constrain the steering/banner guidance.
+- **Q11 — DB migration 1.3.3→9af0f95. ⏳ OPEN (Ckpt 4).** 9af0f95 adds a
+  `project_id` column + the `openmemory_store_project` model; the live ai-pg store
+  was written by 1.3.3 (no `project_id`). Verify whether `serve` auto-migrates the
+  schema on startup or a manual `ALTER TABLE` is needed, alongside the D18
+  `anonymous`→`dev-no-auth` user_id re-key.
 
 ---
 
@@ -579,7 +667,11 @@ the real `mkKiro.nix` / `ai.kiro.*` surface. Target the v3 standalone hook forma
 #### B0 — openmemory deployment (foundational; fixes the RAM bomb)
 
 - **Daemon.** `pkgs.ai.mcpServers.openmemory-mcp` exposes `openmemory-mcp-serve`
-  (`opm serve`). Run it as a systemd user service on `127.0.0.1:<PORT>` with:
+  (`opm serve`). **[S5/D21] Use THIS package (pins rev 9af0f95 — the fixed
+  per-request `/mcp` transport + `project_id` tooling). Do NOT use
+  `npx openmemory-js serve`: npm `latest` 1.3.3 ships a BROKEN shared-transport
+  `/mcp` (initialize 200, then every subsequent request 500s → no real MCP client
+  can connect).** Run it as a systemd user service on `127.0.0.1:<PORT>` with:
   `OM_DEV_ALLOW_NO_AUTH=true` (and NODE*ENV unset, no `OM_REQUIRE_AUTH` → single
   `dev-no-auth` tenant, no key — auth.ts), `OM_PORT=<PORT>`, plus the SAME
   `OM_PG*_`/`OM*EMBEDDINGS=ollama`/`OM_OLLAMA*_`/`OM_TIER=deep`/`OM_VECTOR_BACKEND=postgres`/`OM_METADATA_BACKEND=postgres`/`OM_VEC_DIM=768`
@@ -801,6 +893,26 @@ cwd}`; `UserPromptSubmit` adds an empty `prompt` in 2.11.1) — no transcript. T
   `project_id=<repo-slug>`. Ship an `openmemory-mem` SDK helper binary (or bun +
   `NODE_PATH`). Typed-vs-raw for `ai.kiro.hooks`: keep RAW passthrough, build JSON
   in-module via `builtins.toJSON` (typed hook schema is a separate future refactor).
+- **D21 (S5):** **Q9 RESOLVED — native `opm serve` `/mcp` is VIABLE, but version-gated.**
+  Empirically (real MCP SDK client + curl, self-serve): (a) `opm serve` mounts
+  `POST /mcp` and answers a no-auth `initialize` (200) under `OM_DEV_ALLOW_NO_AUTH=true`
+  with both OAuth well-knowns 404 — confirms D16/D18 live; (b) the INSTALLED npx
+  `openmemory-js 1.3.3` (= npm `latest`, published 2026-01-27) is **broken for real
+  HTTP clients** — its `/mcp` reuses ONE shared `StreamableHTTPServerTransport`, so
+  `initialize` 200 then `notifications/initialized`+`tools/list` 500 (a spec client
+  can't proceed); (c) upstream `main` **rev 9af0f95 — which our overlay already
+  pins — FIXES it** by creating a fresh transport+server per request (comment: "MCP
+  SDK 1.27 rejects re-initialization on a single transport instance") and adds
+  `openmemory_store_project` + `project_id` (1.3.3 has neither). A/B repro:
+  shared→FAIL, per-request→PASS. **Consequences:** the stdio→http flip is ALSO a
+  version bump (daemon = our nix pkg `openmemory-mcp-serve`, NEVER `npx …@latest`);
+  it carries the D19/D20 `project_id` tooling; and it implies a DB schema change
+  (Q11). RAM win confirmed: 15 live procs / 1,190 MB → 1 daemon / 86 MB (~1.1 GB /
+  ~93%). Deferred empirical confirm of OUR built serve (`nix build .#openmemory-mcp`
+  - real-client drive) is Checkpoint 1's first step (local eval OOMs this host).
+    **Lesson (again, per D-note S4): the version you RUN ≠ the source you READ —
+    `main`/our-pin had the fix, the npm `latest` did not; the user's "one turn isn't
+    enough evidence" pushback caught a premature "serve is broken" conclusion.**
 
 ## Session log (append-only)
 
@@ -905,6 +1017,43 @@ preToolUse, postToolUse, stop`.
     of one repo). Part B written design-complete. **Next:** implementation,
     checkpointed, starting with the Q9 live test.
   - Corrected the stale `project_mcp_proxy_kiro2_auth_gap` memory (2.11.1 change).
+
+- **Session 5 — 2026-07-11.** Executed **Checkpoint 0 (Q9)** — the residual gate.
+  Method, all self-serve (no real config touched; scratch daemon + probe scripts
+  cleaned up afterward): a scratch `opm serve` daemon (the npx-cache `opm` binary,
+  `OM_DEV_ALLOW_NO_AUTH=true`, synthetic embeddings, default sqlite, port 19911) +
+  the REAL MCP SDK client (`StreamableHTTPClientTransport`) + raw curl + reading the
+  installed `dist/src` and upstream `main` via github MCP.
+  - **First result (misleading):** `initialize` 200 no-auth (well-knowns 404, matches
+    the 4 kiro-working http servers), but `notifications/initialized` and `tools/list`
+    both 500. Root-caused in `src/ai/mcp.ts`: ONE shared
+    `StreamableHTTPServerTransport` (`sessionIdGenerator: undefined`) connected once
+    and reused — breaks after the first request.
+  - **User pushback** ("one turn isn't enough evidence; search docs/issues/flags?")
+    → I checked: (a) NO serve flag toggles the transport (`serve` parses zero flags;
+    port is `OM_PORT`-only; README's own mcp example is buggy — wires `serve` as a
+    stdio `command`); (b) npm `latest` = 1.3.3 (2026-01-27) = the broken code;
+    (c) upstream `main` **rev 9af0f95 — which our overlay already pins — FIXES it**
+    (fresh transport+server per request; also adds `openmemory_store_project` +
+    `project_id`, absent in 1.3.3).
+  - **A/B proof** (self-contained: real SDK client + real SDK server transport, no DB,
+    no nix): `shared`→FAIL (reproduces the exact "Error POSTing to endpoint" 500),
+    `per-request`→PASS (lists tools). Confirms the diagnosis AND the fix empirically.
+  - **RAM:** 15 live openmemory procs / 1,190 MB (~90 MB per `opm mcp` child, from
+    subagent fan-out) → 1 daemon / 86 MB (~93% / ~1.1 GB saved).
+  - **Corrected conclusion:** native `opm serve` `/mcp` is VIABLE (D16/D17 stand),
+    but the stdio→http flip is ALSO a version bump — the daemon MUST be our nix pkg
+    (rev 9af0f95), never `npx openmemory-js serve` (1.3.3, broken). Recorded as D21;
+    opened Q10 (tenant vs `user_id` under http no-auth) + Q11 (1.3.3→9af0f95 DB
+    migration). Empirical confirm of OUR built serve deferred to Ckpt 1 (local eval
+    OOMs this host).
+  - **User direction (end goal, recorded in "End-goal architecture"):** a custom typed
+    `autoMemory` setting that synthesises the whole rig, with a PLUGGABLE backend as a
+    lambda (openmemory now; a Claude-`.remember`-style markdown backend later) —
+    sequenced AFTER the technical limits are mapped.
+  - **Next:** Checkpoint 1 — the native-HTTP openmemory server module in
+    `services.mcp-servers`, starting with the deferred `nix build .#openmemory-mcp`
+    - real-client handshake confirmation.
 
 ## Sources
 
