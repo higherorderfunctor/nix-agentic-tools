@@ -20,6 +20,7 @@ import {
   readdirSync,
   readFileSync,
   renameSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -83,6 +84,9 @@ export function deriveProjectId(
 export interface DistillState {
   /** transcript line count at the last distill run (debounce line-delta baseline). */
   lastLineCount: number;
+  /** transcript byte size at the last distill run — the cheap (stat-only) growth
+   * signal flushSessionTails uses to skip caught-up sessions without a full read. */
+  lastTranscriptSize: number;
   /** epoch ms of the last distill run (debounce cooldown baseline). */
   lastRunMs: number;
   /** execIds already distilled (extraction dedup). */
@@ -97,10 +101,19 @@ export interface DebounceOpts {
 }
 
 /**
- * Cheap pre-parse debounce gate. Stop fires per-turn (D11), so distill only once
- * enough new lines have accrued AND the cooldown has elapsed. The third "dirty-flag"
- * signal (are there actually undistilled complete turns?) is evaluated after parsing,
- * only once this gate has already passed — see distill().
+ * Cheap pre-parse debounce gate. Stop fires per-turn (D11), so distill on EITHER
+ * signal: enough new lines have accrued (batch while a turn stream is busy) OR the
+ * cooldown has elapsed since the last run (flush the tail while quiet). It skips only
+ * when BOTH are false — too few new lines AND a recent run — which is the rate-limit.
+ *
+ * The OR (not AND) is load-bearing (D24): v3 has no SessionEnd hook and Stop is
+ * per-turn, so an AND gate silently DROPS a session's final turn whenever it adds
+ * fewer than minNewLines. OR flushes that tail once the cooldown passes; the residual
+ * (a sub-threshold tail that ends within the cooldown) is caught by flushSessionTails
+ * on the next SessionStart, and Manual `force` is the interim catch either way.
+ *
+ * The third "dirty-flag" signal (are there actually undistilled complete turns?) is
+ * evaluated after parsing, only once this gate has passed — see distill().
  */
 export function shouldDistill(
   state: Pick<DistillState, "lastLineCount" | "lastRunMs">,
@@ -109,7 +122,7 @@ export function shouldDistill(
 ): boolean {
   const enoughNew = current.lineCount - state.lastLineCount >= opts.minNewLines;
   const cooledDown = current.nowMs - state.lastRunMs >= opts.cooldownMs;
-  return enoughNew && cooledDown;
+  return enoughNew || cooledDown;
 }
 
 export interface FormatOpts {
@@ -376,12 +389,23 @@ function loadState(path: string): DistillState {
     const s = JSON.parse(readFileSync(path, "utf8")) as Partial<DistillState>;
     return {
       lastLineCount: s.lastLineCount ?? 0,
+      lastTranscriptSize: s.lastTranscriptSize ?? 0,
       lastRunMs: s.lastRunMs ?? 0,
       distilled: Array.isArray(s.distilled) ? s.distilled : [],
     };
   } catch {
-    return { lastLineCount: 0, lastRunMs: 0, distilled: [] };
+    return {
+      lastLineCount: 0,
+      lastTranscriptSize: 0,
+      lastRunMs: 0,
+      distilled: [],
+    };
   }
+}
+
+/** Non-empty transcript lines — the single split used by both distill and the flush gate. */
+function transcriptLines(content: string): string[] {
+  return content.split("\n").filter((l) => l.length > 0);
 }
 
 function loadBuffer(projDir: string): FileBuffer {
@@ -437,8 +461,9 @@ export function distill(cfg: DistillConfig): DistillResult {
     // Raced with a rotation/removal after locateTranscript's existsSync check.
     return { projectId, distilled: 0, skipped: "no-transcript" };
   }
-  const lines = content.split("\n").filter((l) => l.length > 0);
+  const lines = transcriptLines(content);
   const lineCount = lines.length;
+  const transcriptSize = Buffer.byteLength(content, "utf8");
 
   const statePath = join(projDir, ".state", `${cfg.sessionId}.json`);
   const state = loadState(statePath);
@@ -451,8 +476,25 @@ export function distill(cfg: DistillConfig): DistillResult {
   }
 
   const turns = selectUndistilledTurns(lines, new Set(state.distilled));
-  if (turns.length === 0)
+  if (turns.length === 0) {
+    // No complete turn to distill, but the transcript may have GROWN (an in-flight or
+    // aborted tail, or a legacy pre-D24 state with lastTranscriptSize=0). Advance ONLY
+    // the flush stat-watermark — NOT the debounce baselines (lastLineCount/lastRunMs) —
+    // so flushSessionTails' size gate stops re-reading + re-parsing this session on
+    // every SessionStart. Guarded on growth so a genuine no-op writes nothing.
+    if (transcriptSize > state.lastTranscriptSize) {
+      writeAtomic(
+        statePath,
+        JSON.stringify({
+          lastLineCount: state.lastLineCount,
+          lastTranscriptSize: transcriptSize,
+          lastRunMs: state.lastRunMs,
+          distilled: state.distilled,
+        }),
+      );
+    }
     return { projectId, distilled: 0, skipped: "no-new-turns" };
+  }
 
   // File buffer (unconditional — this tier must survive the backend being down).
   const blocks = turns.map((t) => formatTurnBlock(t, cfg.format));
@@ -483,6 +525,7 @@ export function distill(cfg: DistillConfig): DistillResult {
     statePath,
     JSON.stringify({
       lastLineCount: lineCount,
+      lastTranscriptSize: transcriptSize,
       lastRunMs: cfg.nowMs,
       distilled: [...state.distilled, ...turns.map((t) => t.execId)],
     }),
@@ -500,6 +543,91 @@ export function distill(cfg: DistillConfig): DistillResult {
   }
 
   return { projectId, distilled: turns.length, skipped: null };
+}
+
+// --- cross-session tail-flush (SessionStart hook) ---
+
+export interface FlushConfig {
+  /** the just-started session, EXCLUDED from the flush (it has nothing to flush). */
+  currentSessionId: string;
+  cwd: string;
+  gitCommonDir: string | null;
+  sessionsDir: string;
+  memoryDir: string;
+  nowMs: number;
+  roll: RollOpts;
+  format: FormatOpts;
+  backendWrite?: BackendWrite;
+}
+
+export interface FlushResult {
+  projectId: string;
+  /** the prior sessions that had an unflushed tail, and how many turns each yielded. */
+  flushed: Array<{ sessionId: string; distilled: number }>;
+}
+
+/**
+ * Flush the tails the per-turn debounce dropped. v3 has no SessionEnd hook, so a
+ * session whose final turn(s) stayed under the debounce threshold never gets a last
+ * distill (D24). On SessionStart, scan the project's prior sessions and force-distill
+ * any whose transcript GREW past its last recorded byte size — using a stat-only size
+ * gate so a caught-up session costs a locate + stat, never a read/parse. distill() is
+ * idempotent (execId dedup), so a spurious flush is a harmless no-op. A grown session
+ * that yields no NEW complete turn still advances its watermark (distill no-new-turns
+ * path), so an aborted/in-flight tail or a legacy pre-D24 state is stat-skipped after
+ * one flush rather than re-parsed on every SessionStart.
+ *
+ * Bounded-in-practice, not bounded-in-theory: the scan is O(prior sessions in the
+ * project), and .state entries accrue over a repo's lifetime with no pruning yet
+ * (a later hardening item). The expensive read+parse is gated to grown sessions only.
+ */
+export function flushSessionTails(cfg: FlushConfig): FlushResult {
+  const projectId = deriveProjectId(cfg.gitCommonDir, cfg.cwd);
+  const stateDir = join(cfg.memoryDir, projectId, ".state");
+  const flushed: FlushResult["flushed"] = [];
+
+  let entries: string[];
+  try {
+    entries = readdirSync(stateDir);
+  } catch {
+    return { projectId, flushed }; // project has never distilled: no .state dir
+  }
+
+  for (const entry of entries) {
+    if (!entry.endsWith(".json")) continue;
+    const sessionId = entry.slice(0, -".json".length);
+    if (sessionId === cfg.currentSessionId) continue; // never flush the live session
+    if (!isValidSessionId(sessionId)) continue; // defense-in-depth on the path key
+
+    const transcriptPath = locateTranscript(cfg.sessionsDir, sessionId);
+    if (!transcriptPath) continue; // transcript gone (rotated/removed)
+    let size: number;
+    try {
+      size = statSync(transcriptPath).size;
+    } catch {
+      continue; // vanished between locate and stat
+    }
+    const state = loadState(join(stateDir, entry));
+    if (size <= state.lastTranscriptSize) continue; // caught up — no unflushed tail
+
+    const res = distill({
+      sessionId,
+      cwd: cfg.cwd,
+      gitCommonDir: cfg.gitCommonDir,
+      sessionsDir: cfg.sessionsDir,
+      memoryDir: cfg.memoryDir,
+      nowMs: cfg.nowMs,
+      force: true, // bypass the debounce — flushing the tail is the whole point
+      debounce: { minNewLines: 0, cooldownMs: 0 },
+      roll: cfg.roll,
+      format: cfg.format,
+      backendWrite: cfg.backendWrite,
+    });
+    if (res.distilled > 0)
+      flushed.push({ sessionId, distilled: res.distilled });
+  }
+
+  return { projectId, flushed };
 }
 
 // --- CLI entry (the Stop / Manual hook invokes this in the background) ---
@@ -543,25 +671,57 @@ export function isValidSessionId(s: string): boolean {
   return /^[A-Za-z0-9._-]{1,128}$/.test(s) && s !== "." && s !== "..";
 }
 
-export async function main(): Promise<void> {
+interface CliEnv {
+  sessionsDir: string;
+  memoryDir: string;
+  roll: RollOpts;
+  format: FormatOpts;
+}
+
+/** Shared env-derived config for both hook entry points (DRY). */
+function resolveCliEnv(home: string): CliEnv {
+  return {
+    sessionsDir:
+      process.env.KIRO_MEMORY_SESSIONS_DIR ?? join(home, ".kiro", "sessions"),
+    memoryDir: process.env.KIRO_MEMORY_DIR ?? join(home, ".kiro-memory"),
+    roll: {
+      maxNowTurns: envNum("KIRO_MEMORY_MAX_NOW", 6),
+      maxRecentTurns: envNum("KIRO_MEMORY_MAX_RECENT", 20),
+    },
+    format: {},
+  };
+}
+
+/** Hook stdin is metadata-only (D12): {session_id, cwd}. Tolerate anything else. */
+async function readMeta(): Promise<{
+  sessionId: string;
+  cwd: string;
+  home: string;
+}> {
   let meta: { session_id?: string; cwd?: string } = {};
   try {
     meta = JSON.parse((await readStdin()) || "{}");
   } catch {
-    // Stop hook stdin is metadata-only (D12); tolerate anything unexpected.
+    // not JSON — fall through to defaults
   }
-  const sessionId = meta.session_id ?? "";
+  return {
+    sessionId: meta.session_id ?? "",
+    cwd: meta.cwd ?? process.cwd(),
+    home: process.env.HOME ?? "",
+  };
+}
+
+/** Stop / Manual hook: distill the current session's newly-completed turns. */
+export async function main(): Promise<void> {
+  const { sessionId, cwd, home } = await readMeta();
   if (!isValidSessionId(sessionId)) return; // nothing safe to key on
-  const cwd = meta.cwd ?? process.cwd();
-  const home = process.env.HOME ?? "";
+  const env = resolveCliEnv(home);
 
   try {
     const res = distill({
       sessionId,
       cwd,
-      sessionsDir:
-        process.env.KIRO_MEMORY_SESSIONS_DIR ?? join(home, ".kiro", "sessions"),
-      memoryDir: process.env.KIRO_MEMORY_DIR ?? join(home, ".kiro-memory"),
+      ...env,
       nowMs: Date.now(),
       gitCommonDir: resolveGitCommonDir(cwd),
       force: process.env.KIRO_MEMORY_FORCE === "1",
@@ -569,11 +729,6 @@ export async function main(): Promise<void> {
         minNewLines: envNum("KIRO_MEMORY_MIN_NEW_LINES", 12),
         cooldownMs: envNum("KIRO_MEMORY_COOLDOWN_MS", 90_000),
       },
-      roll: {
-        maxNowTurns: envNum("KIRO_MEMORY_MAX_NOW", 6),
-        maxRecentTurns: envNum("KIRO_MEMORY_MAX_RECENT", 20),
-      },
-      format: {},
       backendWrite: defaultBackendWrite,
     });
     process.stderr.write(`[kiro-memory] ${JSON.stringify(res)}\n`);
@@ -583,4 +738,29 @@ export async function main(): Promise<void> {
   }
 }
 
-if (import.meta.main) void main();
+/**
+ * SessionStart hook: flush prior sessions' tails the per-turn debounce dropped (D24).
+ * The stdin session_id is the just-started session, used only to exclude it.
+ */
+export async function mainFlush(): Promise<void> {
+  const { sessionId, cwd, home } = await readMeta();
+  const env = resolveCliEnv(home);
+
+  try {
+    const res = flushSessionTails({
+      currentSessionId: sessionId,
+      cwd,
+      ...env,
+      gitCommonDir: resolveGitCommonDir(cwd),
+      nowMs: Date.now(),
+      backendWrite: defaultBackendWrite,
+    });
+    process.stderr.write(`[kiro-memory] flush ${JSON.stringify(res)}\n`);
+  } catch (e) {
+    process.stderr.write(`[kiro-memory] flush error: ${String(e)}\n`);
+  }
+}
+
+if (import.meta.main) {
+  void (process.argv.includes("--flush") ? mainFlush() : main());
+}

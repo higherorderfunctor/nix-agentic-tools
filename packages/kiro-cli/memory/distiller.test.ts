@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,6 +15,8 @@ import {
   type DistillConfig,
   deriveProjectId,
   distill,
+  type FlushConfig,
+  flushSessionTails,
   formatTurnBlock,
   isValidSessionId,
   locateTranscript,
@@ -238,10 +241,40 @@ describe("deriveProjectId", () => {
   });
 });
 
-describe("shouldDistill (debounce gate)", () => {
+describe("shouldDistill (debounce gate — OR semantics)", () => {
+  // OR gate (D24): distill when EITHER enough new lines have accrued (batch
+  // while busy) OR the cooldown has elapsed (flush the tail while quiet). It
+  // skips ONLY when both signals are false — few new lines AND a recent run.
   const opts = { minNewLines: 10, cooldownMs: 60_000 };
 
-  test("true when enough new lines AND cooldown elapsed", () => {
+  test("distills when enough new lines accrued, even though the cooldown has NOT elapsed (batch while busy)", () => {
+    const ok = shouldDistill(
+      { lastLineCount: 100, lastRunMs: 50_000 },
+      { lineCount: 115, nowMs: 90_000 }, // delta 15 >= 10 (yes); gap 40s < 60s (no)
+      opts,
+    );
+    expect(ok).toBe(true);
+  });
+
+  test("distills when the cooldown has elapsed, even with too few new lines (flush the tail while quiet) — the tail-loss fix", () => {
+    const ok = shouldDistill(
+      { lastLineCount: 100, lastRunMs: 0 },
+      { lineCount: 103, nowMs: 60_000 }, // delta 3 < 10 (no); gap 60s >= 60s (yes)
+      opts,
+    );
+    expect(ok).toBe(true);
+  });
+
+  test("skips ONLY when there are too few new lines AND the cooldown has not elapsed (rate-limit)", () => {
+    const ok = shouldDistill(
+      { lastLineCount: 100, lastRunMs: 50_000 },
+      { lineCount: 103, nowMs: 90_000 }, // delta 3 < 10 (no); gap 40s < 60s (no)
+      opts,
+    );
+    expect(ok).toBe(false);
+  });
+
+  test("distills when both signals are satisfied", () => {
     const ok = shouldDistill(
       { lastLineCount: 100, lastRunMs: 0 },
       { lineCount: 115, nowMs: 60_000 },
@@ -250,37 +283,19 @@ describe("shouldDistill (debounce gate)", () => {
     expect(ok).toBe(true);
   });
 
-  test("false when too few new lines, even past cooldown", () => {
+  test("delta == minNewLines alone (cooldown not elapsed) suffices — inclusive boundary", () => {
     const ok = shouldDistill(
-      { lastLineCount: 100, lastRunMs: 0 },
-      { lineCount: 105, nowMs: 10_000_000 },
-      opts,
-    );
-    expect(ok).toBe(false);
-  });
-
-  test("false when cooldown not elapsed, even with many new lines", () => {
-    const ok = shouldDistill(
-      { lastLineCount: 0, lastRunMs: 50_000 },
-      { lineCount: 500, nowMs: 90_000 }, // only 40s since last run
-      opts,
-    );
-    expect(ok).toBe(false);
-  });
-
-  test("first run (zeroed state) distills once there is enough content", () => {
-    const ok = shouldDistill(
-      { lastLineCount: 0, lastRunMs: 0 },
-      { lineCount: 12, nowMs: 60_000 },
+      { lastLineCount: 100, lastRunMs: 50_000 },
+      { lineCount: 110, nowMs: 60_000 }, // delta 10 == 10 (yes); gap 10s < 60s (no)
       opts,
     );
     expect(ok).toBe(true);
   });
 
-  test("boundaries are inclusive (delta == min, gap == cooldown)", () => {
+  test("gap == cooldownMs alone (too few new lines) suffices — inclusive boundary", () => {
     const ok = shouldDistill(
       { lastLineCount: 100, lastRunMs: 0 },
-      { lineCount: 110, nowMs: 60_000 },
+      { lineCount: 101, nowMs: 60_000 }, // delta 1 < 10 (no); gap 60s == 60s (yes)
       opts,
     );
     expect(ok).toBe(true);
@@ -561,16 +576,26 @@ describe("distill (orchestration)", () => {
     expect(calls[3]!.content).toContain("ask four"); // e4
   });
 
-  test("debounce gate skips when cooldown has not elapsed", () => {
+  test("debounce gate skips only when too few new lines AND cooldown not elapsed (OR gate)", () => {
     const { cfg, memoryDir, projectId, calls } = setup({
-      debounce: { minNewLines: 1, cooldownMs: 60_000 },
-      nowMs: 1_000, // 1000 - 0 < 60000 -> cooled down false
+      debounce: { minNewLines: 999, cooldownMs: 60_000 },
+      nowMs: 1_000, // delta << 999 (no) AND gap 1s < 60s (no) -> both false -> debounced
     });
     const res = distill(cfg);
     expect(res.skipped).toBe("debounced");
     expect(res.distilled).toBe(0);
     expect(calls).toHaveLength(0);
     expect(existsSync(join(memoryDir, projectId, "now.md"))).toBe(false);
+  });
+
+  test("distills once the cooldown elapses even with too few new lines (tail flush via OR gate)", () => {
+    const { cfg } = setup({
+      debounce: { minNewLines: 999, cooldownMs: 60_000 },
+      nowMs: 60_000, // gap 60_000 - 0 >= 60_000 (cooled down) despite few new lines
+    });
+    const res = distill(cfg);
+    expect(res.skipped).toBeNull();
+    expect(res.distilled).toBe(2);
   });
 
   test("force bypasses the debounce gate", () => {
@@ -659,6 +684,70 @@ describe("main (CLI end-to-end via subprocess)", () => {
     expect(nowMd).toContain("e2e ask");
     expect(nowMd).toContain("e2e answer");
   });
+
+  test("--flush flushes a prior session's dropped tail on SessionStart", () => {
+    const root = mkdtempSync(join(tmpdir(), "flush-e2e-"));
+    const repo = join(root, "repo");
+    mkdirSync(repo);
+    execFileSync("git", ["init", "-q", "-b", "trunk", repo]);
+    execFileSync("git", ["-C", repo, "config", "user.email", "t@t"]);
+    execFileSync("git", ["-C", repo, "config", "user.name", "t"]);
+    execFileSync("git", [
+      "-C",
+      repo,
+      "commit",
+      "-q",
+      "--allow-empty",
+      "-m",
+      "init",
+    ]);
+
+    const memoryDir = mkdtempSync(join(tmpdir(), "flush-e2e-mem-"));
+    const sessionsDir = mkdtempSync(join(tmpdir(), "flush-e2e-sess-"));
+    const gitCommonDir = resolveGitCommonDir(repo);
+    const priorDir = join(sessionsDir, "hash1", "sess_prior");
+    mkdirSync(priorDir, { recursive: true });
+    const first = [
+      userMsg("ask one"),
+      turnStart("e1"),
+      assistant("e1", "Say", "answer one"),
+      turnEnd("e1"),
+    ];
+    writeFileSync(join(priorDir, "messages.jsonl"), `${first.join("\n")}\n`);
+    // The prior session distilled turn 1 (recording lastTranscriptSize)...
+    distill({
+      sessionId: "sess_prior",
+      cwd: repo,
+      gitCommonDir,
+      sessionsDir,
+      memoryDir,
+      nowMs: 1_000,
+      force: true,
+      debounce: { minNewLines: 0, cooldownMs: 0 },
+      roll: { maxNowTurns: 10, maxRecentTurns: 10 },
+      format: {},
+    });
+    // ...then a sub-threshold tail (turn 2) landed that the debounce dropped.
+    writeFileSync(
+      join(priorDir, "messages.jsonl"),
+      `${[...first, userMsg("ask two"), turnStart("e2"), assistant("e2", "Say", "answer two"), turnEnd("e2")].join("\n")}\n`,
+    );
+
+    execFileSync("bun", [join(import.meta.dir, "distiller.ts"), "--flush"], {
+      input: JSON.stringify({ session_id: "sess_new", cwd: repo }),
+      env: {
+        ...process.env,
+        HOME: root,
+        KIRO_MEMORY_DIR: memoryDir,
+        KIRO_MEMORY_SESSIONS_DIR: sessionsDir,
+      },
+      stdio: ["pipe", "ignore", "ignore"],
+    });
+
+    const projectId = deriveProjectId(gitCommonDir, repo);
+    const nowMd = readFileSync(join(memoryDir, projectId, "now.md"), "utf8");
+    expect(nowMd).toContain("ask two"); // the dropped tail was flushed
+  });
 });
 
 describe("parseTranscript (review hardening)", () => {
@@ -738,5 +827,214 @@ describe("review fixes", () => {
     };
     distill(cfg);
     expect(stateExistedWhenBackendCalled).toBe(true);
+  });
+});
+
+describe("flushSessionTails (cross-session tail-flush, D24)", () => {
+  const gitCommonDir = "/fake/sample/.git";
+  const cwd = "/workdir";
+
+  const flushCfg = (
+    memoryDir: string,
+    sessionsDir: string,
+    currentSessionId: string,
+  ): FlushConfig => ({
+    currentSessionId,
+    cwd,
+    gitCommonDir,
+    sessionsDir,
+    memoryDir,
+    nowMs: 5_000,
+    roll: { maxNowTurns: 10, maxRecentTurns: 10 },
+    format: {},
+  });
+
+  // A single complete turn keyed on a globally-unique label (distinct execIds so
+  // cross-session turns never collide in the shared project buffer).
+  const oneTurn = (label: string) => [
+    userMsg(`ask ${label}`),
+    turnStart(`e-${label}`),
+    assistant(`e-${label}`, "Say", `answer ${label}`),
+    turnEnd(`e-${label}`),
+  ];
+
+  // Write a session transcript and run distill(force) so it records real per-session
+  // state (including lastTranscriptSize) exactly as a live Stop hook would have.
+  const seedSession = (
+    memoryDir: string,
+    sessionsDir: string,
+    sessionId: string,
+    lines: string[],
+  ) => {
+    const dir = join(sessionsDir, "hash1", sessionId);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "messages.jsonl"), `${lines.join("\n")}\n`);
+    distill({
+      sessionId,
+      cwd,
+      gitCommonDir,
+      sessionsDir,
+      memoryDir,
+      nowMs: 1_000,
+      force: true,
+      debounce: { minNewLines: 0, cooldownMs: 0 },
+      roll: { maxNowTurns: 10, maxRecentTurns: 10 },
+      format: {},
+    });
+  };
+
+  const growTranscript = (
+    sessionsDir: string,
+    sessionId: string,
+    lines: string[],
+  ) =>
+    writeFileSync(
+      join(sessionsDir, "hash1", sessionId, "messages.jsonl"),
+      `${lines.join("\n")}\n`,
+    );
+
+  test("flushes a prior session whose transcript grew past its last run (the dropped tail)", () => {
+    const memoryDir = mkdtempSync(join(tmpdir(), "flush-mem-"));
+    const sessionsDir = mkdtempSync(join(tmpdir(), "flush-sess-"));
+    const projectId = deriveProjectId(gitCommonDir, cwd);
+
+    // Prior session distilled turn p1; then a sub-threshold tail (p2) landed that
+    // the debounce dropped — so the transcript is now longer than the last run.
+    const first = oneTurn("p1");
+    seedSession(memoryDir, sessionsDir, "sess_prior", first);
+    growTranscript(sessionsDir, "sess_prior", [...first, ...oneTurn("p2")]);
+
+    const res = flushSessionTails(flushCfg(memoryDir, sessionsDir, "sess_new"));
+
+    expect(res.projectId).toBe(projectId);
+    expect(res.flushed).toEqual([{ sessionId: "sess_prior", distilled: 1 }]);
+    const nowMd = readFileSync(join(memoryDir, projectId, "now.md"), "utf8");
+    expect(nowMd).toContain("ask p2"); // the dropped tail is now in the buffer
+  });
+
+  test("skips a caught-up prior session (transcript did not grow since last run)", () => {
+    const memoryDir = mkdtempSync(join(tmpdir(), "flush-mem-"));
+    const sessionsDir = mkdtempSync(join(tmpdir(), "flush-sess-"));
+    seedSession(memoryDir, sessionsDir, "sess_prior", oneTurn("p1"));
+
+    const res = flushSessionTails(flushCfg(memoryDir, sessionsDir, "sess_new"));
+    expect(res.flushed).toEqual([]);
+  });
+
+  test("never flushes the current (just-started) session, even if it grew", () => {
+    const memoryDir = mkdtempSync(join(tmpdir(), "flush-mem-"));
+    const sessionsDir = mkdtempSync(join(tmpdir(), "flush-sess-"));
+    const first = oneTurn("c1");
+    seedSession(memoryDir, sessionsDir, "sess_cur", first);
+    growTranscript(sessionsDir, "sess_cur", [...first, ...oneTurn("c2")]);
+
+    const res = flushSessionTails(flushCfg(memoryDir, sessionsDir, "sess_cur"));
+    expect(res.flushed).toEqual([]);
+  });
+
+  test("returns empty when the project has never distilled (no .state dir)", () => {
+    const memoryDir = mkdtempSync(join(tmpdir(), "flush-mem-"));
+    const sessionsDir = mkdtempSync(join(tmpdir(), "flush-sess-"));
+    const res = flushSessionTails(flushCfg(memoryDir, sessionsDir, "sess_new"));
+    expect(res).toEqual({
+      projectId: deriveProjectId(gitCommonDir, cwd),
+      flushed: [],
+    });
+  });
+
+  test("flushes several prior sessions, each with its own dropped tail", () => {
+    const memoryDir = mkdtempSync(join(tmpdir(), "flush-mem-"));
+    const sessionsDir = mkdtempSync(join(tmpdir(), "flush-sess-"));
+    for (const s of ["sess_a", "sess_b"]) {
+      const first = oneTurn(`${s}-1`);
+      seedSession(memoryDir, sessionsDir, s, first);
+      growTranscript(sessionsDir, s, [...first, ...oneTurn(`${s}-2`)]);
+    }
+
+    const res = flushSessionTails(flushCfg(memoryDir, sessionsDir, "sess_new"));
+    expect(res.flushed.map((f) => f.sessionId).sort()).toEqual([
+      "sess_a",
+      "sess_b",
+    ]);
+    expect(res.flushed.every((f) => f.distilled === 1)).toBe(true);
+  });
+
+  test("advances the size watermark when a grown transcript yields no NEW complete turn (no perpetual re-parse)", () => {
+    const memoryDir = mkdtempSync(join(tmpdir(), "flush-mem-"));
+    const sessionsDir = mkdtempSync(join(tmpdir(), "flush-sess-"));
+    const projectId = deriveProjectId(gitCommonDir, cwd);
+    const first = oneTurn("p1");
+    seedSession(memoryDir, sessionsDir, "sess_prior", first);
+    // Transcript grows, but ONLY with an incomplete turn (turn_start, no turn_end).
+    growTranscript(sessionsDir, "sess_prior", [
+      ...first,
+      userMsg("ask p2"),
+      turnStart("e-p2"),
+    ]);
+    const grownSize = statSync(
+      join(sessionsDir, "hash1", "sess_prior", "messages.jsonl"),
+    ).size;
+
+    const res = flushSessionTails(flushCfg(memoryDir, sessionsDir, "sess_new"));
+    expect(res.flushed).toEqual([]); // nothing complete to flush
+
+    // The watermark must advance to the observed size so the NEXT SessionStart
+    // stat-skips this session instead of re-reading + re-parsing it forever.
+    const state = JSON.parse(
+      readFileSync(
+        join(memoryDir, projectId, ".state", "sess_prior.json"),
+        "utf8",
+      ),
+    );
+    expect(state.lastTranscriptSize).toBe(grownSize);
+  });
+
+  test("self-heals a legacy state file that predates lastTranscriptSize (defaulted to 0)", () => {
+    const memoryDir = mkdtempSync(join(tmpdir(), "flush-mem-"));
+    const sessionsDir = mkdtempSync(join(tmpdir(), "flush-sess-"));
+    const projectId = deriveProjectId(gitCommonDir, cwd);
+    seedSession(memoryDir, sessionsDir, "sess_prior", oneTurn("p1"));
+    const statePath = join(memoryDir, projectId, ".state", "sess_prior.json");
+    // Simulate a pre-D24 state file: strip lastTranscriptSize (loadState defaults 0).
+    const st = JSON.parse(readFileSync(statePath, "utf8"));
+    delete st.lastTranscriptSize;
+    writeFileSync(statePath, JSON.stringify(st));
+    const size = statSync(
+      join(sessionsDir, "hash1", "sess_prior", "messages.jsonl"),
+    ).size;
+
+    const res = flushSessionTails(flushCfg(memoryDir, sessionsDir, "sess_new"));
+    expect(res.flushed).toEqual([]); // fully distilled already — nothing new
+
+    // Watermark seeded on first flush, so subsequent SessionStarts stat-skip it.
+    const state = JSON.parse(readFileSync(statePath, "utf8"));
+    expect(state.lastTranscriptSize).toBe(size);
+  });
+
+  test("the stat gate skips a session already covered by its watermark WITHOUT reading it", () => {
+    const memoryDir = mkdtempSync(join(tmpdir(), "flush-mem-"));
+    const sessionsDir = mkdtempSync(join(tmpdir(), "flush-sess-"));
+    const projectId = deriveProjectId(gitCommonDir, cwd);
+    // An UNDISTILLED complete turn on disk, but a watermark already (artificially)
+    // past the file size: the gate must skip the session WITHOUT distilling it.
+    const dir = join(sessionsDir, "hash1", "sess_prior");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "messages.jsonl"), `${oneTurn("x").join("\n")}\n`);
+    mkdirSync(join(memoryDir, projectId, ".state"), { recursive: true });
+    writeFileSync(
+      join(memoryDir, projectId, ".state", "sess_prior.json"),
+      JSON.stringify({
+        lastLineCount: 0,
+        lastTranscriptSize: 10_000_000,
+        lastRunMs: 0,
+        distilled: [],
+      }),
+    );
+
+    const res = flushSessionTails(flushCfg(memoryDir, sessionsDir, "sess_new"));
+    expect(res.flushed).toEqual([]);
+    // If the gate were removed, the undistilled complete turn would be read and
+    // distilled into now.md. The stat gate must prevent that.
+    expect(existsSync(join(memoryDir, projectId, "now.md"))).toBe(false);
   });
 });
