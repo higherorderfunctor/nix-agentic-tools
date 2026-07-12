@@ -119,7 +119,21 @@ reviewed (4-lens workflow + per-finding refute — 0 confirmed defects).
     4. D23b buffer lockfile (O_EXCL mutex around loadBuffer→rollTiers→write) — pull BEFORE stage 3
        if immediate multi-worktree concurrent loops are expected.
     5. openmemory-mem SDK helper (add/query, project_id) — backend enrichment; the file buffer
-       already works without it; needs the serve daemon + Postgres to integration-test, so last.
+       already works without it; needs the serve daemon + Postgres to integration-test, so it is
+       the last CODE stage.
+    6. Comprehensive implementation doc (FINAL) — a package-scoped architecture fragment
+       (location=package, `packages/kiro-cli/docs/kiro-auto-memory.md`, registered in
+       `dev/generate.nix` `devFragmentNames.kiro-cli`, scope-globbed to `packages/kiro-cli/**` +
+       `overlays/kiro-memory-distiller.nix`) that explains the WHOLE auto-memory system end-to-end
+       — read/write tiers, the distiller pipeline (parse→select→distill→rollTiers→buffer→backend)
+       + schema (D23), the v3 hook wiring + the mandatory HOME/`KIRO_MEMORY_*` env contract, the
+       two role bins + packaging idiom (D25), the module surface (`ai.kiro.hooks`/`.rules`, B5
+       parity), and the load-bearing invariants (worktree-shared project_id D19/D20, debounce
+       OR-gate + tail-flush D24, buffer lock D23b). ONE source → per-ecosystem scoped router files
+       for an LLM revising the code AND readable prose for a human; cross-link from
+       `overlays/README.md` + a top-level README/docs pointer. LAST by design — documenting a
+       moving target violates the repo's own stale-fragment doctrine, so finalize only after
+       stages 3–5 stop reshaping the abstraction. (User backlog item, 2026-07-12; D26.)
 NEXT = STAGE 3: emit the v3 hook set + steering anchor (Q10/Q11 still gate only the consumer flip;
 HITL stays on the nixos-config side).
 
@@ -1254,6 +1268,31 @@ cwd}`; `UserPromptSubmit` adds an empty `prompt` in 2.11.1) — no transcript. T
       memory-loss), and MAY set the `KIRO_MEMORY_*` overrides.
       No correctness or parity defect survived the review.
 
+- **D26 (interim, 2026-07-12):** **Backlog — a comprehensive implementation doc, scheduled LAST
+  (FROZEN STAGE 6).** User directive: add a deliverable that "explains the whole implementation"
+  for BOTH an LLM revising the code AND a human; placement at the END is the user's stated lean and
+  the agent-owned ordering call (protocol bullet, S8).
+  - **Form (recommended, not frozen):** a package-scoped architecture fragment — the repo's
+    established mechanism for exactly this dual audience (`location=package`,
+    `packages/kiro-cli/docs/<name>.md`, registered in `dev/generate.nix` `devFragmentNames.kiro-cli`,
+    scope globs in `packagePaths`). ONE markdown source fans out to per-ecosystem scoped router files
+    (`.claude/rules` `paths:`, Copilot `applyTo:`, Kiro `fileMatch`) for the LLM audience AND stays
+    plain readable prose for the human audience — so it satisfies both with no duplication (see
+    AGENTS.md "Architecture Fragments"). The user left the form open ("readme or fragment or
+    steering… something"); a fragment is the DRY pick, optionally cross-linked from a top-level
+    README / `overlays/README.md` for discoverability. Final call at implementation time.
+  - **Why LAST:** the repo's own doctrine says an out-of-date fragment is worse than none ("a lie is
+    worse than silence"). Stages 3–5 still reshape the abstraction (hook wiring, buffer lock, backend
+    helper); documenting before they settle guarantees immediate staleness. End placement also
+    matches the user's lean.
+  - **Scope to cover:** the two-problem frame (auto-READ / auto-WRITE, F0); the read tiers (steering
+    anchor + external file buffer + archive RAG, F4/D2); the write distiller pipeline
+    (parse→select→distill→rollTiers→buffer→backend) + its corrected schema (D23); the v3 hook set +
+    the mandatory HOME / `KIRO_MEMORY_*` env contract (S9 STATE); the two role bins + the bun-wrapper
+    packaging idiom (D25); the module option surface (`ai.kiro.hooks`/`.rules` + B5 HM↔devenv parity);
+    and the load-bearing invariants (worktree-shared project_id D19/D20, debounce OR-gate + tail-flush
+    watermark D24, buffer O_EXCL lock D23b). Mark the fragment's `Last verified:` on landing.
+
 ## Session log (append-only)
 
 - **Session 1 — 2026-07-11.** Research via a 3-phase workflow (map local memory
@@ -1473,6 +1512,13 @@ preToolUse, postToolUse, stop`.
   source pattern). **Next:** STAGE 3 — emit the v3 Stop + `--flush` SessionStart hooks + steering
   anchor via `ai.kiro.hooks` / `ai.kiro.rules`, referencing the packaged bins by absolute store
   path (HOME must be exported in the hook action env).
+
+- **Interim — 2026-07-12 (post-S9).** Recorded a user backlog item without touching code: a
+  comprehensive implementation doc (README/fragment/steering) that explains the whole auto-memory
+  system for BOTH an LLM revising it and a human, scheduled LAST. Added as FROZEN STAGE 6 + D26
+  (recommended form = a package-scoped architecture fragment; final form + timing owned by the
+  agent per the protocol, deferred to after stages 3–5 per the repo's stale-fragment doctrine).
+  Plan-only (docs(plans)); no source/module change. **Next unchanged:** STAGE 3.
 
 ## Sources
 
