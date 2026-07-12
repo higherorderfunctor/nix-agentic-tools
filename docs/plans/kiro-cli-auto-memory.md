@@ -58,6 +58,39 @@ the same commit — future sessions inherit it by reading the doc.
   and report (do not authenticate). `--trust-all-tools` is gone under v3 →
   permissions.yaml.
 
+── STATE (end of session 7) ──
+Session 7 (2026-07-11) built CHECKPOINT 2, PART 1: the deterministic Stop-hook
+DISTILLER CORE, and CORRECTED the messages.jsonl schema the plan had wrong. All
+self-serve; committed to nix-agentic-tools (d50fae0), nixos-config untouched.
+- **Landed:** `packages/kiro-cli/memory/{distiller.ts,distiller.test.ts}` (bun/TS,
+  47 TDD tests, treefmt+cspell clean, real-transcript validated). Pure functions:
+  parseTranscript, selectUndistilledTurns (execId dedup), deriveProjectId (D19
+  worktree-shared slug), shouldDistill (debounce), formatTurnBlock, rollTiers; plus
+  distill() + fs/git wrappers + a CLI main() (stdin {session_id,cwd} + env config).
+  Language = bun/TS per directive; TS is covered by treefmt (prettier) so the
+  earlier "TS untooled" worry is void. cspell terms added: cooldown, sess.
+- **SCHEMA CORRECTION (D23):** real messages.jsonl = `{id,payload,timestamp}`,
+  discriminator `payload.type` (NOT top-level `.type` as D12/Q7 said). And
+  **`promptTurnSummaries` is BILLING data** (`{unit,usage,usedTools}` in
+  usage_summary), NOT a semantic summary → the B3/D12 "reuse it as the primary
+  distillation" shortcut is DEAD. Distillation derives from user.content +
+  assistant Say content instead. `user` has no executionId (positional assoc).
+- **Adversarially reviewed** (4-lens workflow + adjudicator, 9 findings). Applied:
+  state-before-backend dup-guard, unique atomic temp names, corrupt-buffer
+  preservation, backend timeout, readFileSync/main try-catch, session_id
+  path-traversal validation, git-ENOENT warn, turn_start prompt-leak fix, usedTools
+  dedup. **DEFERRED two review fixes (see D23):** (i) the debounce gate is still AND
+  → the LAST turn of a session below threshold is dropped (no v3 SessionEnd hook);
+  next session should flip to OR (flush-on-quiet) AND add a SessionStart cross-session
+  tail-flush. (ii) concurrent worktree distillers RMW the shared buffer with no lock
+  → add a per-project O_EXCL lockfile mutex.
+NEXT = the rest of Checkpoint 2: (a) OR-gate + tail-flush + buffer lockfile (the two
+deferred review fixes); (b) the `openmemory-mem` SDK helper binary (add/query,
+project_id — needs the serve daemon/Postgres to integration-test); (c) nix-package
+the distiller (+ helper) as derivations; (d) emit the v3 hook set via ai.kiro.hooks +
+steering anchor via ai.kiro.rules, adversarially verified against the real option
+surface (OOM: drv-build / lib-only evals only). Q10/Q11 still gate only the consumer flip.
+
 ── STATE (end of session 6) ──
 Session 6 (2026-07-11) executed CHECKPOINT 1 — the native-HTTP openmemory server
 module — and CLOSED the deferred Q9 confirm on OUR actual nix artifact. All
@@ -214,8 +247,12 @@ the real option surface before landing each checkpoint.
   is also a version bump. **Session 6 (2026-07-11) landed Checkpoint 1:** the
   native-HTTP wiring already existed in the `services.mcp-servers` fleet; added the
   typed `devAllowNoAuth` no-auth knob (+ module-eval tests) and confirmed our built
-  `openmemory-mcp-serve` drives a real MCP client (D22). Next = Checkpoint 2 (the v3
-  hook set + debounced distiller).
+  `openmemory-mcp-serve` drives a real MCP client (D22). **Session 7 (2026-07-11)
+  built Checkpoint 2 part 1 — the distiller core** (bun/TS, 47 TDD tests, committed
+  d50fae0) and CORRECTED the messages.jsonl schema (`payload.type` discriminator;
+  `promptTurnSummaries` = billing, so the B3/D12 reuse shortcut is dead — D23). Next
+  = the deferred review fixes (OR-gate tail-flush + buffer lockfile), the
+  `openmemory-mem` SDK helper, nix packaging, and the v3 hook + steering emission.
 - **Branch:** `refactor/ai-factory-architecture`.
 - **Installed binary:** `kiro-cli 2.11.1` (store path
   `…4mandd5ra27ggndwk4mqww35g7kzx43z-kiro-cli-2.11.1`). CLI 3.0/v3 is **Early
@@ -485,7 +522,7 @@ out not to fire the way we need (Q6).
    `type:"user"` / `type:"assistant"` between `turn_start`/`turn_end`). Distill to
    `~/.kiro-memory/{slug}/` + `openmemory_store` (`infer=True`). **Candidate
    shortcut:** kiro already writes `promptTurnSummaries` into `messages.jsonl` —
-   evaluate reusing those instead of a bespoke summarizer (Part B). Run the
+   evaluate reusing those instead of a bespoke summarizer (Part B). **[S7: FALSIFIED — `promptTurnSummaries` is billing data (`usage_summary`), NOT a summary; distill from `user.content` + assistant `Say` instead; records are `{id,payload,timestamp}` keyed on `payload.type`. See D23.]** Run the
    distiller **in the background** off the turn's hot path (v2 proved a
    `nohup … &` child survives exit, Q2). Keep a `Manual`-trigger `/remember` hook
    as the deterministic override + fallback.
@@ -772,7 +809,7 @@ the real `mkKiro.nix` / `ai.kiro.*` surface. Target the v3 standalone hook forma
   (D12). The distiller: (a) debounce via a state file (dirty-flag + cooldown +
   line-delta) → distill at most every N turns; (b) locate the transcript by
   `session_id` glob at `~/.kiro/sessions/<hash>/<session_id>/messages.jsonl`;
-  (c) distill — **REUSE kiro's own `promptTurnSummaries`** (jq) as the primary
+  (c) distill — **REUSE kiro's own `promptTurnSummaries`** _[S7: FALSIFIED — billing data, not a summary; see D23]_ (jq) as the primary
   distillation (Q7/D12 shortcut), cheap summarizer only as fallback; (d) append to
   the file buffer + roll tiers; (e) write to openmemory via the SDK (B4). Run in
   the BACKGROUND (`nohup … &`; survives exit per Q2) off the hot path.
@@ -983,6 +1020,48 @@ cwd}`; `UserPromptSubmit` adds an empty `prompt` in 2.11.1) — no transcript. T
   against the real ai-pg store still gated on Q11 (DB schema migration) + Q10
   (tenant/user_id).
 
+- **D23 (S7):** **Checkpoint 2, part 1 — the distiller core landed (d50fae0), + a
+  schema correction.** Built `packages/kiro-cli/memory/distiller.ts` (bun/TS, 47 TDD
+  tests, real-transcript validated). It is the deterministic Stop-hook write path:
+  parse → select undistilled complete turns (execId dedup) → roll the tiered file
+  buffer (`~/.kiro-memory/<slug>/` now/recent/archive) → best-effort backend seam →
+  persist per-session state. Debounce = line-delta + cooldown; Manual = `force`.
+  project_id/slug = D19 (dirname of git-common-dir + path hash; worktrees share).
+  - **SCHEMA CORRECTION (supersedes the schema in D12/Q7 + kills the B3/D12
+    promptTurnSummaries shortcut):** real messages.jsonl records are
+    `{id,payload,timestamp}` with discriminator **`payload.type`** (D12/Q7 wrongly
+    listed those values as top-level `.type`). **`promptTurnSummaries` is BILLING
+    data** (`[{unit,unitPlural,usage,usedTools}]` inside `usage_summary`), NOT a
+    per-turn summary — so distillation must derive from `user.content` +
+    `assistant.content where operationType=="Say"` (Reasoning excluded); `usedTools`
+    kept as cheap metadata. `user` payloads have no executionId (positional assoc).
+  - **Design:** dedup by execId (not line offset) is robust to a turn straddling
+    runs; line-count feeds ONLY the debounce gate. Backend is an injected best-effort
+    seam; the file-buffer write is unconditional (survives daemon-down, D20).
+  - **Adversarial review (4-lens workflow + adjudicator, 9 findings).** FIXED:
+    persist state before the backend loop (dup-on-crash), unique atomic-write temp
+    names, corrupt-buffer preservation (never silently wipe the warm buffer), backend
+    timeout/killSignal, readFileSync + main try-catch, session_id path-traversal
+    validation, git-ENOENT warn, turn_start prompt-leak, usedTools dedup. VERIFIED
+    against real data that usage_summary DOES carry executionId (reviewer's "usedTools
+    dropped" case cannot fire). **DEFERRED (next session):**
+    - **(D23a) Tail-loss.** The gate is `enoughNew && cooledDown` (AND). Because v3 has
+      NO SessionEnd hook and Stop is per-turn (D11), the LAST turn of a session, if it
+      adds < minNewLines lines, is never flushed. FIX: flip to `enoughNew || cooledDown`
+      (batch when busy, flush when quiet) AND add a SessionStart hook that flushes the
+      PRIOR session's tail; Manual `/remember` is the interim catch. (Changing the gate
+      requires rewriting the shouldDistill tests to the OR semantics.)
+    - **(D23b) Concurrency.** Concurrent worktree distillers RMW the ONE shared buffer
+      (D19) with no lock → last-writer lost-update / corruption. FIX: a per-project
+      O_EXCL lockfile mutex (Atomics.wait backoff + stale-break) around the
+      loadBuffer→rollTiers→write critical section. (unique-temp + corrupt-preservation
+      already reduce the blast radius.)
+  - DECLINED (with reason): capping `state.distilled` (unsafe without transcript
+    windowing — would re-distill old turns); throttling the no-op re-parse (LOW; n is
+    small, interacts with the tail-flush).
+  - Language = bun/TS per the user directive; TS turns out to be treefmt-covered
+    (prettier), voiding the earlier "TS untooled" concern. cspell terms: cooldown, sess.
+
 ## Session log (append-only)
 
 - **Session 1 — 2026-07-11.** Research via a 3-phase workflow (map local memory
@@ -1157,6 +1236,20 @@ preToolUse, postToolUse, stop`.
   - **Next:** Checkpoint 2 (v3 hook set + debounced distiller + optional
     `openmemory-mem` SDK helper). User may do a SAFE live daemon smoke on nixos-config
     (throwaway store); the FULL flip against real ai-pg stays gated on Q11 + Q10.
+
+- **Session 7 — 2026-07-11.** Built **Checkpoint 2, part 1 — the distiller core**
+  (`packages/kiro-cli/memory/distiller.ts` + tests, bun/TS, 47 TDD tests, treefmt +
+  cspell clean, committed d50fae0). FIRST introspected the REAL `messages.jsonl`
+  (3 live sessions) and CORRECTED the plan's schema: discriminator is `payload.type`,
+  and `promptTurnSummaries` is billing data (not a summary) → the B3/D12 reuse shortcut
+  is dead; distillation now derives from user + assistant-Say content. TDD'd
+  parse/select/deriveProjectId/shouldDistill/format/rollTiers/distill + fs/git wrappers
+  - a CLI `main()`; validated end-to-end via a subprocess smoke test and against a real
+    transcript. Ran a 4-lens adversarial review workflow (correctness / schema-fidelity /
+    safety / spec-fidelity) + an adjudicator (9 findings); applied 9 fixes, deferred 2
+    (OR-gate tail-flush; per-project buffer lockfile) and declined 2 with reasons. See
+    D23. **Next:** the deferred review fixes, the `openmemory-mem` SDK helper, nix
+    packaging of the distiller, and the v3 hook + steering nix emission.
 
 ## Sources
 
