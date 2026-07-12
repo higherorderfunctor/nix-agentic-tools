@@ -46,6 +46,16 @@ the same commit — future sessions inherit it by reading the doc.
   bounded chunk (an implementation / testing / research / discussion round)
   sized to finish in a single session, and budget for any research or discussion
   it needs. State the plan before diving in; don't over-reach past it.
+- Implementation order is AGENT-owned — do NOT ask the user "which chunk next?".
+  Sequence the backlog as an agile vertical slice: each stage must leave the
+  system in a WORKING, shippable state; among eligible stages pick the most
+  load-bearing (unblocks/enables the most, or turns dead code into a running
+  loop); pull a correctness bug forward only when it would otherwise ship in the
+  first working slice built on that component; hardening nothing yet depends on
+  comes after there is a loop to harden; prefer self-contained work over work
+  needing an external daemon/Postgres/HITL. The frozen stage order lives in the
+  current STATE block. (User directive, S8. Does NOT override asking on
+  source/hash/build-tool choices or the nixos-config / test HITL gates.)
 - Session END: (1) update the plan — Session log, Decisions log, Target
   architecture, Open questions, and THIS bootstrap (state + next task + any
   how-to-function change) — treefmt, then commit (docs(plans): …). (2) ALSO emit
@@ -57,6 +67,42 @@ the same commit — future sessions inherit it by reading the doc.
   never touch the real repo tree or ~/.kiro global config; on an auth wall STOP
   and report (do not authenticate). `--trust-all-tools` is gone under v3 →
   permissions.yaml.
+
+── STATE (end of session 8) ──
+Session 8 (2026-07-12) landed D24 — the deferred tail-loss fix (D23a). Self-serve;
+the distiller is still UNWIRED (no nix/module consumer yet), so the change is
+isolated to packages/kiro-cli/memory/. All green (58 bun tests, TDD), treefmt +
+cspell clean, adversarially reviewed (4-lens workflow + per-finding verify — the
+watermark defect below was CAUGHT and fixed BEFORE landing).
+- **Landed:** shouldDistill debounce gate AND→OR (batch-when-busy / flush-when-quiet
+  — this is the actual tail-loss fix); new flushSessionTails() SessionStart scan that
+  force-distills prior sessions whose transcript grew past a recorded byte size (new
+  DistillState.lastTranscriptSize); CLI `--flush` dispatch + mainFlush(); DRY
+  resolveCliEnv/readMeta/transcriptLines helpers. cspell term: unflushed.
+- **Review caught + fixed (D24):** the stat-gate never advanced lastTranscriptSize on
+  a grown-but-no-new-complete-turn force run → EVERY legacy pre-D24 state file (+ any
+  aborted/in-flight tail) would re-read+parse on EVERY SessionStart forever. Fixed by
+  advancing ONLY the flush watermark on distill's no-new-turns path (guarded on
+  growth; debounce baselines untouched). Efficiency-only, but unbounded → fixed before
+  wiring. Deferred-with-reason: flushSessionTails can force-distill a LIVE
+  cross-worktree session (same class as the deferred D23b lock; verified NOT new
+  data-loss). See D24.
+- **IMPLEMENTATION ORDER is now AGENT-owned** (user directive; see the new protocol
+  bullet). FROZEN STAGE ORDER for the rest of Checkpoint 2:
+    1. D24 tail-loss (OR gate + flushSessionTails)  ✅ DONE (S8)
+    2. Nix-package the distiller (+ future helper) as derivations — the artifact the
+       hook wiring depends on.  ← NEXT
+    3. Emit the v3 Stop hook + `--flush` SessionStart hook + steering anchor via
+       ai.kiro.hooks / ai.kiro.rules — THE first working end-to-end loop ships here
+       (the load-bearing slice), adversarially verified vs the real option surface.
+       OOM: drv-build / lib-only evals only.
+    4. D23b buffer lockfile (O_EXCL mutex around loadBuffer→rollTiers→write) — pull
+       BEFORE stage 3 if immediate multi-worktree concurrent loops are expected.
+    5. openmemory-mem SDK helper (add/query, project_id) — backend enrichment; the
+       file buffer already works without it; needs the serve daemon + Postgres to
+       integration-test, so it goes last.
+NEXT = STAGE 2: nix-package the distiller as a derivation (Q10/Q11 still gate only the
+consumer flip; HITL stays on the nixos-config side).
 
 ── STATE (end of session 7) ──
 Session 7 (2026-07-11) built CHECKPOINT 2, PART 1: the deterministic Stop-hook
@@ -1062,6 +1108,48 @@ cwd}`; `UserPromptSubmit` adds an empty `prompt` in 2.11.1) — no transcript. T
   - Language = bun/TS per the user directive; TS turns out to be treefmt-covered
     (prettier), voiding the earlier "TS untooled" concern. cspell terms: cooldown, sess.
 
+- **D24 (S8):** **Checkpoint 2 — the deferred tail-loss fix (D23a) landed.** Two
+  parts + a review-caught watermark fix.
+  - **(a) OR gate.** shouldDistill flipped from `enoughNew && cooledDown` to
+    `enoughNew || cooledDown`: distill on EITHER enough new lines (batch while busy) OR
+    the cooldown elapsed (flush the tail while quiet); skip only when BOTH are false
+    (few new lines AND a recent run). This is the actual tail-loss fix — under AND, a
+    session's final sub-threshold turn was never distilled (v3 has no SessionEnd; Stop
+    is per-turn). Note the pre-existing interaction: fresh state has lastRunMs=0, so
+    cooledDown is trivially true on a session's FIRST Stop → every session now distills
+    its opening turn immediately (intended — it also guarantees a .state file exists
+    for the flush scan). Rewrote the shouldDistill tests to OR semantics + the one
+    distill debounce test whose premise changed.
+  - **(b) flushSessionTails (SessionStart).** The residual the OR gate can't catch (a
+    sub-threshold tail ending WITHIN the cooldown) is flushed on the next SessionStart:
+    scan the project's prior-session .state files and, for each session != the just-
+    started one whose transcript grew past a recorded byte size, force-distill it
+    (idempotent via execId dedup). New DistillState field lastTranscriptSize + a
+    stat-only size gate keep a caught-up session at locate+stat, no read/parse. CLI:
+    `--flush` argv dispatch + mainFlush(); shared env/stdin plumbing DRY'd into
+    resolveCliEnv/readMeta.
+  - **Adversarial review (4-lens workflow + per-finding refute pass; 16 agents, 12
+    findings, 6 CONFIRMED).** THREE lenses independently caught the flagship defect:
+    distill's no-new-turns path returned BEFORE the state write, so a
+    grown-but-no-new-complete-turn force run never advanced lastTranscriptSize → the
+    stat gate never closed → EVERY legacy pre-D24 state file (lastTranscriptSize
+    defaults 0) and every aborted/in-flight tail would re-locate+read+parse on EVERY
+    SessionStart forever (efficiency, not correctness — distill is idempotent — but
+    unbounded, and it defeats the feature's own optimization). FIXED before landing:
+    advance ONLY the flush watermark on the no-new-turns path, guarded on growth,
+    debounce baselines (lastLineCount/lastRunMs) untouched; legacy state self-heals
+    after one flush. Also FIXED: mainFlush uses the `...env` spread like main (DRY);
+    added 3 tests — two pinning the watermark advance (incomplete-tail + legacy-zero)
+    and one that truly pins the stat gate (inflated watermark + undistilled complete
+    turn ⇒ NOT distilled).
+  - REFUTED / not changed (with reason): the byte-size (Buffer.byteLength) vs
+    statSync().size equality is exact for valid UTF-8 (messages.jsonl always is) → no
+    false grow/caught-up; the live cross-worktree flush race is real but the SAME class
+    as the deferred D23b lock and NOT new data-loss (idempotent); the empty/invalid
+    currentSessionId tolerance in mainFlush is intended (it is only the exclusion key;
+    each scanned entry is independently re-validated). first-Stop-always-distills is
+    already pinned by two shouldDistill tests.
+
 ## Session log (append-only)
 
 - **Session 1 — 2026-07-11.** Research via a 3-phase workflow (map local memory
@@ -1250,6 +1338,18 @@ preToolUse, postToolUse, stop`.
     (OR-gate tail-flush; per-project buffer lockfile) and declined 2 with reasons. See
     D23. **Next:** the deferred review fixes, the `openmemory-mem` SDK helper, nix
     packaging of the distiller, and the v3 hook + steering nix emission.
+
+- **Session 8 — 2026-07-12.** Landed D24 (the deferred D23a tail-loss fix) self-serve
+  on refactor/ai-factory-architecture; the distiller is still unwired, so the change is
+  isolated to packages/kiro-cli/memory/. TDD throughout (watched each test fail first):
+  shouldDistill gate AND→OR + flushSessionTails SessionStart scan + `--flush` CLI +
+  lastTranscriptSize state field + DRY helpers (58 bun tests, treefmt + cspell clean).
+  Ran a 4-lens adversarial review workflow (correctness / concurrency / design / tests)
+  with a per-finding refute pass (16 agents, 12 findings, 6 confirmed); fixed the
+  3-lens-confirmed watermark re-parse defect + a DRY nit + 2 test gaps before landing.
+  User delegated implementation order to the agent (agile working increments; most
+  load-bearing otherwise) → encoded a frozen stage order + a new protocol bullet into
+  the bootstrap. **Next:** STAGE 2 — nix-package the distiller as a derivation.
 
 ## Sources
 
