@@ -58,7 +58,37 @@ the same commit — future sessions inherit it by reading the doc.
   and report (do not authenticate). `--trust-all-tools` is gone under v3 →
   permissions.yaml.
 
-── STATE (end of session 3) ──
+── STATE (end of session 4) ──
+Session 4 (2026-07-11) resolved the openmemory TRANSPORT + ISOLATION questions
+Part B's archive tier depends on — triggered by a user ask to get openmemory OFF
+per-subagent stdio (RAM bomb: each subagent fan-out spawns its own ~100MB
+`npx openmemory-js mcp`). Empirically settled (verified live, not doc-trusted):
+- **D5 SUPERSEDED (D15):** kiro-cli 2.11.1 ACCEPTS no-auth, non-PRM
+  streamable-HTTP MCP — proven live (the user's effect/fetch/gitlab/nixos servers
+  are all `type=http` in `~/.kiro/settings/mcp.json`; each 404s both OAuth
+  well-knowns and answers a no-auth `POST /mcp` initialize with 200). The
+  OAuth/PRM gap in `[[project_mcp_proxy_kiro2_auth_gap]]` was real on kiro 2.0/2.2
+  (issue #8151) but NOT on 2.11.1 — that memory is corrected.
+- **openmemory `opm serve` (D16)** natively mounts `POST /mcp` (streamable-HTTP,
+  stateless, same tool surface as stdio) PLUS the REST API. Fix = a native HTTP
+  daemon, no shim/mcp-proxy.
+- **Decision (D17/D18):** ONE `openmemory-mcp-serve` systemd daemon, no-auth
+  `dev-no-auth` (`OM_DEV_ALLOW_NO_AUTH=true`), 127.0.0.1:PORT, against the SHARED
+  ai-pg Postgres; flip kiro/Claude/Copilot's openmemory entry stdio→http → RAM
+  bomb solved (one process for all fan-outs). Store is Postgres (OM_PG_*), not the
+  default SQLite → no file-contention; openmemory embeddings are ollama/remote
+  (no in-process ML) so the ~100MB is Node + pg/ioredis/sqlite3 + aws/google/openai
+  SDKs + doc parsers, amortized once in the daemon.
+- **Isolation (user decision, D19/D20):** SOFT per-project via `project_id`, keyed
+  on the CANONICAL REPO ROOT shared across worktrees
+  (`git rev-parse --git-common-dir` → parent dir → slug), so all worktrees of one
+  repo SHARE memory; `system_global` tier for cross-cutting. Hooks set project_id
+  via the in-process `Memory` SDK (bun→Postgres) because REST `/memory/{add,query}`
+  lack project_id (only the SDK/MCP layer has it).
+- Part B is now DESIGN-COMPLETE (see "Part B" section). Residual empirical Q9
+  (live kiro↔openmemory /mcp connect + per-subagent RSS) gates the transport flip.
+
+Earlier (end of session 3, still valid):
 Part A (v3 trusted-TUI hook probe, Q5–Q8) DONE — self-serve reads of a user-run
 TUI session against kiro-cli 2.11.1. Results: Q5 v3 standalone `.kiro/hooks/*.json`
 LOAD + FIRE + inject exit-0 stdout into context (no trust prompt; `/hooks` listed
@@ -77,20 +107,29 @@ channel on both engines; v2 answered Q1/Q2; two hook systems (v2 embedded
 camelCase, v3 standalone PascalCase = the mkKiro.nix target).
 
 ── NEXT TASK ──
-Part B: write the implementation plan against the real `mkKiro.nix` / `ai.kiro.*`
-option paths (Part A is DONE; no trusted-TUI blocker remains — this is a
-desk/design chunk). Cover: (1) the always-loaded steering `MEMORY.md` read-anchor
-(`ai.kiro.context` or an `ai.rules` entry with `paths=null`); (2) the v3
-`.kiro/hooks/*.json` WRITE — a DEBOUNCED `Stop` command hook (dirty-flag +
-cooldown + line-delta, since Stop fires per-turn) that reads `messages.jsonl` by
-`session_id` and distills to the external store + `openmemory_store` in the
-background, plus a `Manual` `/remember` override; decide typed-vs-raw for
-`ai.kiro.hooks` (untyped passthrough today); (3) a `UserPromptSubmit` command hook
-for per-turn archive-RAG injection (openmemory stdio, raw prompt); (4) the
-external `~/.kiro-memory/{slug}/` store (F6 sidestep — no outOfStoreSymlink);
-(5) HM↔devenv parity checks. Evaluate reusing kiro's own `promptTurnSummaries`
-instead of a bespoke summarizer. Optionally use a small workflow to draft +
-adversarially verify the wiring against the actual option surface.
+Part B is DESIGN-COMPLETE in the doc (see the "Part B — implementation plan"
+section). NEXT is IMPLEMENTATION, in checkpoints (HITL on the nixos-config side):
+(0) **Residual empirical Q9 FIRST** — it gates the transport flip: live-confirm
+kiro 2.11.1 connects to openmemory serve's native `/mcp` (near-certain from the 4
+analogues, unconfirmed for openmemory specifically), and measure per-subagent
+openmemory RSS to quantify the RAM win.
+(1) **nix-agentic-tools:** add a native-HTTP `openmemory` server module to the
+`services.mcp-servers` fleet (uses `openmemory-mcp-serve`; `OM_*` env passthrough;
+`OM_DEV_ALLOW_NO_AUTH=true`; emits `{type=http; url=…/mcp}` for the consumer to
+inherit, exactly like nixos-mcp). Optionally a tiny `openmemory-mem` SDK helper
+binary (add/query with project_id) for the hooks.
+(2) **The v3 hook set + distiller:** SessionStart rotate/banner, DEBOUNCED Stop
+distiller (dirty-flag + cooldown + line-delta; reads `messages.jsonl` by
+session_id; reuses kiro's `promptTurnSummaries`), UserPromptSubmit archive-RAG,
+Manual `/remember`. Distiller = a bun SDK script keyed on the worktree-shared repo
+root (D19). Emit via `ai.kiro.hooks.<name>` (raw JSON built structurally in-module).
+(3) **Steering anchor** via `ai.kiro.rules.<KEY>` (`paths=null` → `inclusion:
+always`) + the external `~/.kiro-memory/<repo-slug>/` file buffer (hook-independent
+Tier-1, survives daemon-down).
+(4) **nixos-config consumer flip (HITL):** openmemory stdio→http, systemd daemon
+enable, one-time Postgres re-key `anonymous`→`dev-no-auth`.
+Consider a small workflow to adversarially verify the emitted nix wiring against
+the real option surface before landing each checkpoint.
 ```
 
 ---
@@ -99,7 +138,9 @@ adversarially verify the wiring against the actual option surface.
 
 - **Phase:** empirical validation **complete for both engines** — v2 single-turn
   self-serve (S2) + v3 trusted-TUI user-assisted (S3, Q5–Q8). **No blocking
-  unknowns remain for the MVP.** Next is the Part B implementation plan.
+  unknowns remain for the MVP.** Session 4 (2026-07-11) resolved the openmemory
+  transport + isolation questions (D15–D20) and made Part B design-complete; next
+  is checkpointed implementation (one residual empirical test, Q9, gates the flip).
 - **Branch:** `refactor/ai-factory-architecture`.
 - **Installed binary:** `kiro-cli 2.11.1` (store path
   `…4mandd5ra27ggndwk4mqww35g7kzx43z-kiro-cli-2.11.1`). CLI 3.0/v3 is **Early
@@ -390,6 +431,14 @@ never created, hooks ran) — so no trust pre-seed is needed for the memory hook
 `--trust-all-tools` is gone under v3 (use `permissions.yaml`), which gates the
 **agent's own tool calls** — a separate axis from hook-command execution.
 
+**Session-4 update (supersedes the "openmemory stdio" assumption in §2/§3
+above).** openmemory moves to ONE no-auth HTTP `serve` daemon (D15–D18) sharing
+the ai-pg Postgres — the MODEL connects via `type=http` `/mcp` (kiro 2.11.1
+accepts no-auth HTTP MCP), killing the per-subagent stdio RAM bomb. The WRITE/READ
+hooks reach the SAME Postgres via the in-process `Memory` SDK (D20), scoped by
+`project_id` = the worktree-shared canonical repo root (D19), with a `system_global`
+tier for cross-cutting. See "Part B — implementation plan" for the full wiring.
+
 ---
 
 ## Open empirical questions (gate the wiring)
@@ -451,6 +500,18 @@ stop` — no exit trigger. v3 standalone set (docs) = 11 triggers incl.
   agent's own tool calls remain permission-gated via `permissions.yaml` — a
   separate axis from hook-command execution.)
 
+**Session-4 residual (gates the openmemory transport flip, not the MVP):**
+
+- **Q9 — Does kiro 2.11.1 connect to openmemory `serve`'s native `/mcp`, and how
+  much RAM does the daemon save? ⏳ OPEN (near-certain, unconfirmed).** D15
+  established kiro 2.11.1 accepts no-auth HTTP MCP (4 live analogues), and D16 that
+  openmemory `serve` mounts a native `/mcp` — but no one has driven the installed
+  kiro against openmemory's OWN endpoint yet. Do FIRST: (1) start `opm serve`
+  (dev-no-auth, ai-pg), add it to kiro's mcp.json as `type=http`, confirm tools
+  load + a `tools/list` succeeds; (2) measure per-subagent openmemory RSS (stdio
+  vs zero-with-daemon) to quantify the RAM win. Low-risk given the analogues, but
+  it gates flipping the real config.
+
 ---
 
 ## Next task: implementation plan (Part B) — Part A ✅ DONE (Session 3)
@@ -510,15 +571,128 @@ escalate the v3 Early-Access gap.
 the real repo tree or `~/.kiro/` config; if a run hits an auth wall, STOP and
 report; do not authenticate.
 
-### Part B — implementation plan against real `mkKiro.nix` option paths (ACTIVE — the Next task)
+### Part B — implementation plan (DESIGN-COMPLETE, Session 4)
 
-Q5–Q8 are now known (Session 3); write the concrete wiring plan: which `ai.kiro.*` /
-`mkKiro.nix` options emit the steering `MEMORY.md`, the v3 `.kiro/hooks/*.json`
-(`ai.kiro.hooks` untyped passthrough today — decide typed vs raw), the external
-`~/.kiro-memory/{slug}/` store (F6 sidestep), and the `openmemory` stdio MCP;
-plus HM↔devenv parity checks and the workspace-trust bootstrap (Q8). Target the
-v3 standalone format; keep v2 embedded-hook emission only if the user still runs
-v2 anywhere.
+Transport + isolation are resolved (D15–D20). Below is the concrete wiring against
+the real `mkKiro.nix` / `ai.kiro.*` surface. Target the v3 standalone hook format.
+
+#### B0 — openmemory deployment (foundational; fixes the RAM bomb)
+
+- **Daemon.** `pkgs.ai.mcpServers.openmemory-mcp` exposes `openmemory-mcp-serve`
+  (`opm serve`). Run it as a systemd user service on `127.0.0.1:<PORT>` with:
+  `OM_DEV_ALLOW_NO_AUTH=true` (and NODE*ENV unset, no `OM_REQUIRE_AUTH` → single
+  `dev-no-auth` tenant, no key — auth.ts), `OM_PORT=<PORT>`, plus the SAME
+  `OM_PG*_`/`OM*EMBEDDINGS=ollama`/`OM_OLLAMA*_`/`OM_TIER=deep`/`OM_VECTOR_BACKEND=postgres`/`OM_METADATA_BACKEND=postgres`/`OM_VEC_DIM=768`
+  the current stdio entry already uses → same ai-pg Postgres store.
+- **nix-agentic-tools change (small, DRY).** Add a native-HTTP `openmemory` server
+  module to the `services.mcp-servers` fleet (mirrors nixos-mcp's native mode;
+  effect/fetch/gitlab are mcp-proxy `bridge` mode — openmemory does NOT need the
+  bridge because `serve` is natively HTTP with `POST /mcp`). It emits
+  `mcpConfig.mcpServers.openmemory = { type = "http"; url = "http://127.0.0.1:<PORT>/mcp"; }`
+  for the consumer to `inherit`, exactly how effect/fetch/gitlab/nixos are wired.
+- **Consumer flip (nixos-config, HITL).** Replace the raw
+  `openmemory = { command = "npx"; args = ["-y" "openmemory-js" "mcp"]; … }`
+  stdio entry in `ai.mcpServers` with the inherited http entry. One-time Postgres
+  re-key so existing stdio-written rows stay visible under the new tenant:
+  `UPDATE memories SET user_id='dev-no-auth' WHERE user_id='anonymous';` (repeat
+  for `openmemory_vectors` and `temporal_facts`).
+- **RAM result.** kiro (and Claude/Copilot) connect to ONE daemon over HTTP;
+  subagent fan-outs no longer spawn per-instance openmemory processes.
+- **Guardrail.** Bind `127.0.0.1` only; no-auth is safe because it's localhost
+  single-user (the stdio setup had no auth either). Ignore openmemory's "dev only"
+  warning — it concerns multi-tenant fail-open, irrelevant at one user.
+
+#### B1 — READ Tier-1: steering anchor (engine-agnostic, hook-independent)
+
+- `ai.kiro.rules.<KEY> = { paths = null; text = <anchor>; }` →
+  `<configDir>/steering/<KEY>.md` with `inclusion: always` via `kiroTransformer`
+  (verified: mkKiro.nix HM 504–516 / devenv 680–692; transformer `paths==null →
+"always"`). Use a dedicated `ai.kiro.rules` entry, NOT `ai.kiro.context` (which
+  writes the flat frontmatter-less AGENTS.md the user already fills via `rulesDir`).
+- This file is an IMMUTABLE store symlink → it holds a STATIC anchor (frames how
+  to use memory, states the current `project_id` convention), NOT live content.
+  Live content comes from the hooks (B3), never from mutating this file (F6: no
+  `outOfStoreSymlink`; store files are immutable — this is why the SessionStart
+  hook cannot "refresh" the steering file, only the buffer it reads).
+
+#### B2 — External file buffer (Tier-1 live, hook-independent)
+
+- `~/.kiro-memory/<repo-slug>/` (now.md → recent.md → archive.md), created at
+  runtime by the hooks (`mkdir -p`) → sidesteps the missing `outOfStoreSymlink`
+  (F6/D4). Faithful port of Claude's file-only `.remember` tiers; works even if the
+  openmemory daemon is down. Keyed by the SAME canonical-repo-root slug as
+  `project_id` (B4).
+
+#### B3 — Hooks (v3 standalone `.kiro/hooks/*.json`, raw passthrough)
+
+- Emit via `ai.kiro.hooks.<name>` (`attrsOf (either lines path)` →
+  `<configDir>/hooks/<name>.json`; both backends: mkKiro.nix 469–479 / 644–650).
+  **DECISION (typed-vs-raw): keep RAW passthrough** for the memory hooks — build
+  the JSON structurally in-module with `builtins.toJSON` (type-safe authoring
+  without a public typed schema). A typed `ai.kiro.hooks` schema is a separate
+  future refactor (the mkKiro.nix greenfield note, 275–298), NOT a blocker.
+- `action.command` = ABSOLUTE store path (nix-standards) to a distiller shipped
+  from `packages/kiro-cli/` (content-separation: kiro-scoped, not shared lib).
+- **Stop hook (WRITE, debounced).** Stop fires per-turn (D11), stdin metadata-only
+  (D12). The distiller: (a) debounce via a state file (dirty-flag + cooldown +
+  line-delta) → distill at most every N turns; (b) locate the transcript by
+  `session_id` glob at `~/.kiro/sessions/<hash>/<session_id>/messages.jsonl`;
+  (c) distill — **REUSE kiro's own `promptTurnSummaries`** (jq) as the primary
+  distillation (Q7/D12 shortcut), cheap summarizer only as fallback; (d) append to
+  the file buffer + roll tiers; (e) write to openmemory via the SDK (B4). Run in
+  the BACKGROUND (`nohup … &`; survives exit per Q2) off the hot path.
+- **UserPromptSubmit hook (READ archive-RAG).** Per-turn; exit-0 stdout injects
+  (D14). Query openmemory for the raw prompt scoped to `project_id=<repo-slug>`
+  (+ `system_global`), echo top hits; also cat the recent file-buffer tier.
+  Interface tradeoff (B4): SDK for exact project scoping (slower, per-turn bun
+  spawn) vs daemon REST for speed (no project filter → broader results) — MEASURE
+  and pick; a keyword/synthetic-mode SDK query may be fast enough.
+- **SessionStart hook.** stdout is one-shot (turn-1 only, D14) → rotate/refresh the
+  buffer + emit a one-time banner naming the current `project_id` so the model can
+  pass it to `openmemory_store_project`/`_query`. Not for durable content.
+- **Manual `/remember` hook.** Deterministic user-triggered distill+store; the
+  reliable fallback.
+
+#### B4 — openmemory access from hooks: the `Memory` SDK, keyed on the worktree-shared repo root
+
+- **project_id derivation (D19).**
+  `root="$(dirname "$(git -C "$cwd" rev-parse --path-format=absolute --git-common-dir)")"`;
+  `project_id="$(basename "$root")"` (or a fuller slug to avoid same-basename
+  collisions). `--git-common-dir` returns the MAIN repo's `.git` for every linked
+  worktree → all worktrees of a repo share one `project_id` (the user's
+  requirement). Non-git cwd → a fallback bucket. Same slug keys
+  `~/.kiro-memory/<slug>/` (B2).
+- **Why the SDK, not REST (D20).** REST `/memory/add` + `/memory/query` have NO
+  `project_id` (routes/memory.ts — only tenant/user*id scoping). Only the
+  in-process `Memory` SDK (and the MCP tool layer) accept `{user_id, project_id}`.
+  So hook writes/reads use a tiny bun script `import { Memory }` with `OM_PG*\*`env
+(→ same Postgres):`add(content,{project_id})`/`search(query,{project_id})`.
+The daemon is the MODEL's frontend; hooks go straight to Postgres via the SDK
+(same store). Ship an `openmemory-mem`helper binary (SDK add/query) from the
+openmemory package, or invoke bun with`NODE_PATH`into its`node_modules`.
+- **Model-side scoping.** The daemon can't see the client cwd, so the model's own
+  `openmemory_store_project`/`_query` calls are best-effort — inject the current
+  `project_id` via the SessionStart banner/steering so the model echoes it. The
+  DETERMINISTIC loop is the hooks.
+- **Scope split.** repo-specific → `project_id=<repo-slug>`; cross-cutting (prefs,
+  coding standards) → `openmemory_store` (`system_global`). A project query returns
+  its project + `system_global`, never a sibling project (test_project_isolation.ts).
+
+#### B5 — HM↔devenv parity
+
+- All factory-emitted parts ride existing fanout: steering (`ai.kiro.rules` — both
+  backends), hooks (`ai.kiro.hooks` — both), MCP http entry (`ai.mcpServers` — both).
+  No new module axis (F6); parity is structural-by-construction. The distiller +
+  `openmemory-mem` helper are backend-agnostic packages. The systemd daemon +
+  Postgres re-key are HM/nixos-config consumer concerns (a devenv project points at
+  the same daemon URL, or degrades to file-buffer-only Tier-1).
+
+#### Residual empirical (Q9) — do FIRST; gates the flip
+
+1. Live-confirm kiro 2.11.1 connects to openmemory `serve`'s native `/mcp`
+   (near-certain from the 4 analogues, unconfirmed for openmemory). 2. Measure
+   per-subagent openmemory RSS (stdio vs zero-with-daemon) to quantify the win. 3. Confirm stateless `/mcp` + `dev-no-auth` end-to-end (`tools/list` over http,
+   no auth header).
 
 ---
 
@@ -587,6 +761,46 @@ cwd}`; `UserPromptSubmit` adds an empty `prompt` in 2.11.1) — no transcript. T
   stdout is **one-shot** (turn 1 only). Read-side roles follow: steering = durable
   buffer, UPS hook = per-turn archive-RAG injection, SessionStart hook = one-shot
   session-open rotation/banner. Reinforces D1/D7.
+
+- **D15 (S4):** **kiro-cli 2.11.1 ACCEPTS no-auth, non-PRM streamable-HTTP MCP —
+  SUPERSEDES D5.** Proven live: the user's effect/fetch/gitlab/nixos servers are all
+  `type=http` in `~/.kiro/settings/mcp.json`; each 404s
+  `/.well-known/oauth-protected-resource` + `/.well-known/oauth-authorization-server`
+  and answers a no-auth `POST /mcp` initialize (200). The OAuth 2.1 / RFC 9728 PRM
+  gap (`[[project_mcp_proxy_kiro2_auth_gap]]`, kiro issue #8151) was real on kiro
+  2.0/2.2 but NOT 2.11.1. openmemory therefore does NOT need to stay stdio for the
+  MODEL. Residual live-confirm = Q9.
+- **D16 (S4):** openmemory `opm serve` NATIVELY mounts `POST /mcp` (streamable-HTTP,
+  stateless, `enableJsonResponse`, same tool surface as stdio) PLUS the REST API
+  (`/memory/add`, `/memory/query`, …). So the transport fix is a native HTTP
+  daemon; NO shim / mcp-proxy needed (contra the research workflow's Option C,
+  which was premised on the now-refuted D5).
+- **D17 (S4):** Deploy ONE `openmemory-mcp-serve` systemd user daemon on
+  `127.0.0.1:<PORT>` against the SHARED ai-pg Postgres; flip kiro/Claude/Copilot's
+  openmemory entry stdio→`{type=http; url=…/mcp}`. Fixes the per-subagent stdio RAM
+  bomb (one process for all fan-outs). The ~100MB/instance is Node + pg/ioredis/
+  sqlite3 drivers + aws/google/openai SDKs + doc parsers (NOT an embedding engine —
+  openmemory embeddings are ollama/remote), amortized once in the daemon. Store is
+  Postgres → no SQLite file-contention. Add the daemon via a native-HTTP server
+  module in the `services.mcp-servers` fleet (small nix-agentic-tools change).
+- **D18 (S4):** Auth mode = **no-auth `dev-no-auth`** (`OM_DEV_ALLOW_NO_AUTH=true`,
+  NODE_ENV unset). Single implicit tenant `dev-no-auth`; kiro's http entry needs no
+  headers; localhost-only guard. One-time Postgres re-key `anonymous`→`dev-no-auth`
+  so existing stdio memories stay visible. (Keyed mode with `OM_API_KEY`+SOPS is the
+  alternative if a hard tenant wall is ever wanted — see D19/D20.)
+- **D19 (S4):** Isolation = **SOFT per-project via `project_id`**, keyed on the
+  **canonical repo root shared across worktrees**
+  (`dirname "$(git rev-parse --path-format=absolute --git-common-dir)"` → slug), so
+  all worktrees of one repo SHARE memory (user requirement). `system_global` tier
+  for cross-cutting. NOT a security wall (same DB/tenant); a HARD work/personal wall
+  would need separate keyed daemons/DBs (deferred; not needed now).
+- **D20 (S4):** Hooks reach openmemory via the **in-process `Memory` SDK (bun →
+  Postgres)**, NOT REST — because REST `/memory/{add,query}` lack `project_id`
+  (only the SDK/MCP layer accepts `{user_id, project_id}`). The daemon is the
+  MODEL's frontend; the hooks write/read Postgres directly with
+  `project_id=<repo-slug>`. Ship an `openmemory-mem` SDK helper binary (or bun +
+  `NODE_PATH`). Typed-vs-raw for `ai.kiro.hooks`: keep RAW passthrough, build JSON
+  in-module via `builtins.toJSON` (typed hook schema is a separate future refactor).
 
 ## Session log (append-only)
 
@@ -667,6 +881,30 @@ preToolUse, postToolUse, stop`.
     reused as-is. Flag check: `chat` accepts `--v3` / `--agent-engine v3` /
     `--mode` / `--tui`; a bare wrapped `kiro-cli` already selects v3+TUI.
   - **Next:** Part B — implementation plan against real `mkKiro.nix` option paths.
+
+- **Session 4 — 2026-07-11.** Resolved openmemory TRANSPORT + ISOLATION (the
+  archive tier's real dependencies), triggered by the user's ask to move openmemory
+  off per-subagent stdio (RAM bomb). Method: grounded reads of the openmemory-js
+  source (CaviraOSS/OpenMemory @ 9af0f95) via github MCP + a 4-grounder/adversarial
+  research workflow + a LIVE probe of the user's running MCP fleet.
+  - **The workflow's central conclusion was WRONG for 2.11.1 and I caught it
+    empirically.** It concluded (from kiro issue #8151 + the stale
+    `project_mcp_proxy_kiro2_auth_gap` memory, both kiro 2.0/2.2) that kiro rejects
+    no-auth HTTP MCP → recommended a thin stdio shim (Option C). But the user's LIVE
+    config has 4 working `type=http` servers; `curl` proved each 404s the OAuth
+    well-knowns and answers a no-auth `POST /mcp` initialize (200). So kiro 2.11.1
+    ACCEPTS no-auth HTTP MCP (D15) → the shim is unnecessary; a native `opm serve`
+    daemon is the answer (Option B). Lesson: live config beats stale GitHub issues.
+  - Read auth.ts/index.ts/mcp.ts/memory.ts/tenant.ts/cfg.ts to settle the auth +
+    isolation model (D16–D20). Confirmed `serve` mounts native `POST /mcp`; auth is
+    fail-closed 503 without a key BUT `OM_DEV_ALLOW_NO_AUTH=true` gives a single
+    `dev-no-auth` tenant (stdio-equivalent); REST lacks `project_id` (SDK/MCP only);
+    `project_id` gives soft per-project isolation with a `system_global` tier.
+  - User decisions: no-auth localhost daemon (mode 1); SOFT per-project isolation
+    keyed on the worktree-shared canonical repo root (share memory across worktrees
+    of one repo). Part B written design-complete. **Next:** implementation,
+    checkpointed, starting with the Q9 live test.
+  - Corrected the stale `project_mcp_proxy_kiro2_auth_gap` memory (2.11.1 change).
 
 ## Sources
 
