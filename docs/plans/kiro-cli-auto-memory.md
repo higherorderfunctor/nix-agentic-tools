@@ -58,6 +58,38 @@ the same commit — future sessions inherit it by reading the doc.
   and report (do not authenticate). `--trust-all-tools` is gone under v3 →
   permissions.yaml.
 
+── STATE (end of session 6) ──
+Session 6 (2026-07-11) executed CHECKPOINT 1 — the native-HTTP openmemory server
+module — and CLOSED the deferred Q9 confirm on OUR actual nix artifact. All
+self-serve (scratch daemon + probe, cleaned up; no nixos-config / ~/.kiro touched):
+- **Empirical: our built `openmemory-mcp-serve` serves a WORKING `/mcp`.** Realised
+  the openmemory-mcp derivation straight from its on-disk `.drv`
+  (`nix build <drv>^out`) to skip the flake-eval OOM (a live kiro TUI + ~7 lingering
+  `opm mcp` procs were eating RAM); it substituted the exact CI/cachix output
+  `nnd6fka…-openmemory-mcp-1.3.3+9af0f95` (consumer-identical). Drove it with a REAL
+  MCP SDK client (`StreamableHTTPClientTransport`) + curl under
+  `OM_DEV_ALLOW_NO_AUTH=true`: no-auth `initialize`→200, both OAuth well-knowns→404,
+  `tools/list`→7 tools INCL. `openmemory_store_project` (absent in 1.3.3) — the
+  9af0f95 per-request transport, no 500s. D21's A/B now holds on the real artifact.
+- **The gap was narrower than B0 said.** The `services.mcp-servers` fleet ALREADY
+  wires openmemory as native-HTTP (in serverNames; `meta.modes.http =
+  "openmemory-mcp-serve"`, not "bridge"; generic machinery emits the systemd unit +
+  OM_* env + `{type=http; url=…:19758/mcp}` via `mkHttpEntry`). Only the D18 no-auth
+  knob was missing.
+- **Landed (nix-agentic-tools):** typed `devAllowNoAuth` (`nullOr bool`) →
+  http-gated `OM_DEV_ALLOW_NO_AUTH` in `settingsToEnv`
+  (packages/openmemory-mcp/modules/mcp-server.nix) + 2 platform-independent
+  module-eval tests. Verified pre-land by a lib-only targeted `settingsToEnv` eval +
+  a 3-lens adversarial workflow (correctness could not refute the systemd-env +
+  mcpConfig-url trace, incl. the escapeShellArg→systemd-EXTRACT_UNQUOTE question).
+  See D22 + Session-6 log.
+- **Method note (reusable):** this host OOMs on flake eval, but `nix build <drv>^out`
+  on a pre-existing on-disk `.drv` builds/substitutes WITHOUT re-evaluating the flake.
+NEXT = Checkpoint 2 (v3 hook set + debounced distiller). The user can OPTIONALLY do a
+SAFE live daemon smoke on nixos-config first (throwaway store), but the FULL consumer
+flip against the real ai-pg Postgres stays gated on Q11 (1.3.3→9af0f95 project_id DB
+migration) + Q10 (tenant/user_id guidance).
+
 ── STATE (end of session 5) ──
 Session 5 (2026-07-11) RESOLVED Q9 — the residual gate — with a CORRECTION the
 user's pushback forced (do not conclude from one failed handshake). Findings,
@@ -146,11 +178,14 @@ with a real MCP client ON OUR PINNED REV (9af0f95); npm `latest` 1.3.3 is broken
 (shared-transport). RAM win ~1.1 GB confirmed. See STATE + D21. Consequence for the
 flip: it is ALSO a version bump (daemon = our nix pkg, NOT npx) and carries the
 `project_id` tooling + a DB schema change (Q11). → proceed to Checkpoint 1.
-(1) **nix-agentic-tools:** add a native-HTTP `openmemory` server module to the
-`services.mcp-servers` fleet (uses `openmemory-mcp-serve`; `OM_*` env passthrough;
-`OM_DEV_ALLOW_NO_AUTH=true`; emits `{type=http; url=…/mcp}` for the consumer to
-inherit, exactly like nixos-mcp). Optionally a tiny `openmemory-mem` SDK helper
-binary (add/query with project_id) for the hooks.
+(1) **nix-agentic-tools — ✅ DONE (Session 6, D22).** The `services.mcp-servers`
+fleet ALREADY wired openmemory as native-HTTP (serverNames + `meta.modes.http =
+"openmemory-mcp-serve"` + generic systemd-unit / `mkHttpEntry` machinery emitting
+`{type=http; url=…:19758/mcp}`); the ONLY missing piece was the D18 no-auth env, now
+added as a typed `devAllowNoAuth` → http-gated `OM_DEV_ALLOW_NO_AUTH` (+ 2 module-eval
+tests). Our built `openmemory-mcp-serve` empirically drives a real MCP client (D22).
+The `openmemory-mem` SDK helper binary is DEFERRED to Checkpoint 2 (it is for the
+hooks). → proceed to Checkpoint 2.
 (2) **The v3 hook set + distiller:** SessionStart rotate/banner, DEBOUNCED Stop
 distiller (dirty-flag + cooldown + line-delta; reads `messages.jsonl` by
 session_id; reuses kiro's `promptTurnSummaries`), UserPromptSubmit archive-RAG,
@@ -176,7 +211,11 @@ the real option surface before landing each checkpoint.
   is checkpointed implementation. **Session 5 (2026-07-11) resolved Q9:** native
   `opm serve` `/mcp` works with a real client on our pinned rev 9af0f95 (npm `latest`
   1.3.3 is broken — shared-transport); RAM win ~1.1 GB confirmed; the transport flip
-  is also a version bump. Next = Checkpoint 1 (the daemon server module).
+  is also a version bump. **Session 6 (2026-07-11) landed Checkpoint 1:** the
+  native-HTTP wiring already existed in the `services.mcp-servers` fleet; added the
+  typed `devAllowNoAuth` no-auth knob (+ module-eval tests) and confirmed our built
+  `openmemory-mcp-serve` drives a real MCP client (D22). Next = Checkpoint 2 (the v3
+  hook set + debounced distiller).
 - **Branch:** `refactor/ai-factory-architecture`.
 - **Installed binary:** `kiro-cli 2.11.1` (store path
   `…4mandd5ra27ggndwk4mqww35g7kzx43z-kiro-cli-2.11.1`). CLI 3.0/v3 is **Early
@@ -585,8 +624,12 @@ stop` — no exit trigger. v3 standalone set (docs) = 11 triggers incl.
     daemon works; `npx openmemory-js serve` does not.
   - **RAM win:** live 15 procs / 1,190 MB → 1 daemon / 86 MB (~93% / ~1.1 GB).
   - **Net:** native daemon VIABLE; flip = ALSO a version bump (our pkg, not npx).
-    Deferred confirm (Ckpt 1): `nix build .#openmemory-mcp` + drive its built
-    `openmemory-mcp-serve` with a real client (skipped here — local eval OOMs).
+    **Deferred confirm — ✅ DONE (Session 6, D22):** realised the openmemory-mcp
+    `.drv` directly (`nix build <drv>^out`, skips the flake-eval OOM), substituting
+    the cachix CI output `nnd6fka…-openmemory-mcp-1.3.3+9af0f95`; a real MCP SDK
+    client + curl drove its `openmemory-mcp-serve` under `OM_DEV_ALLOW_NO_AUTH=true`
+    → 200 no-auth `initialize`, well-knowns 404, `tools/list` with
+    `openmemory_store_project`, no 500s.
 - **Q10 — tenant vs `user_id` under HTTP no-auth (9af0f95). ⏳ OPEN (Part B).** In
   9af0f95, HTTP MCP calls carry a `tenant` from `authenticate_api_request`; under
   `OM_DEV_ALLOW_NO_AUTH=true` that tenant is `dev-no-auth`, and `resolve_user_id`
@@ -913,6 +956,32 @@ cwd}`; `UserPromptSubmit` adds an empty `prompt` in 2.11.1) — no transcript. T
     **Lesson (again, per D-note S4): the version you RUN ≠ the source you READ —
     `main`/our-pin had the fix, the npm `latest` did not; the user's "one turn isn't
     enough evidence" pushback caught a premature "serve is broken" conclusion.**
+- **D22 (S6):** **Checkpoint 1 landed — the native-HTTP openmemory wiring was
+  ALREADY generic; only the D18 no-auth knob was missing.** Recon of the real option
+  surface proved the `services.mcp-servers` fleet
+  (packages/mcp-services/modules/homeManager/default.nix) already treats openmemory
+  as native-HTTP: it is in `serverNames`; its module declares `meta.modes.http =
+"openmemory-mcp-serve"` (≠ "bridge"); the generic machinery already generates the
+  `mcp-openmemory-mcp` systemd unit running `openmemory-mcp-serve` + all OM\_\* env, and
+  emits `mcpConfig.mcpServers.openmemory-mcp = {type=http; url=http://127.0.0.1:PORT/mcp}`
+  via `mkHttpEntry` (settings.path default `/mcp`). So B0's "add a native-HTTP module"
+  was already done EXCEPT `OM_DEV_ALLOW_NO_AUTH`. Added a typed `devAllowNoAuth`
+  (`nullOr bool`, default null) → http-gated `OM_DEV_ALLOW_NO_AUTH` in `settingsToEnv`
+  (only meaningful for the http `serve` daemon; stdio has no auth layer) + 2
+  platform-independent module-eval tests (option discoverability + native-HTTP
+  mcpConfig entry). Verified pre-land: a lib-only targeted `settingsToEnv` eval
+  (`import <nixpkgs/lib>`, no flake) → OM_DEV_ALLOW_NO_AUTH="true" for
+  {devAllowNoAuth=true} in http mode, absent by default, absent in stdio (gate holds);
+  a 3-lens adversarial workflow (conventions PASS_WITH_NITS → fixed the description
+  style outlier; correctness PASS, could not refute the systemd-env + url trace incl.
+  escapeShellArg→systemd-EXTRACT_UNQUOTE; propagation flaked → answered its cspell /
+  module-eval / README questions by hand: no doc staleness, cspell clean, tests added).
+  **Empirical Q9 confirm now holds on OUR built artifact** (cachix output `nnd6fka…`,
+  real SDK client, `openmemory_store_project` present, no 500s). **METHOD NOTE
+  (reusable on this OOM-prone host):** `nix build <drv>^out` on the pre-existing
+  on-disk `.drv` builds/substitutes WITHOUT re-evaluating the flake. Consumer flip
+  against the real ai-pg store still gated on Q11 (DB schema migration) + Q10
+  (tenant/user_id).
 
 ## Session log (append-only)
 
@@ -1054,6 +1123,40 @@ preToolUse, postToolUse, stop`.
   - **Next:** Checkpoint 1 — the native-HTTP openmemory server module in
     `services.mcp-servers`, starting with the deferred `nix build .#openmemory-mcp`
     - real-client handshake confirmation.
+
+- **Session 6 — 2026-07-11.** Executed **Checkpoint 1** (native-HTTP openmemory
+  module) + closed the deferred Q9 confirm on our actual nix artifact. All self-serve
+  (scratch daemon + probe scripts, cleaned up; no nixos-config / ~/.kiro touched):
+  - **Recon first.** Read the real option surface
+    (packages/openmemory-mcp/modules/mcp-server.nix, the
+    `services.mcp-servers` fleet, lib/mcp.nix `mkHttpEntry`/`effectiveEnv`,
+    lib/ai/mcpServer/\*, the nixos-mcp native-HTTP reference). Finding: the fleet
+    ALREADY wires openmemory as native-HTTP; the only gap for D18 was the missing
+    `OM_DEV_ALLOW_NO_AUTH` knob (grep across the repo returned zero hits). B0's
+    framing overstated the work.
+  - **Empirical confirm (deferred Q9) — PASS on OUR built package.** The built output
+    wasn't in the store but the `.drv` was (from a prior eval), so realised it via
+    `nix build /nix/store/…-openmemory-mcp-1.3.3+9af0f95.drv^out` — NO flake eval
+    (this host OOMs on flake eval, and a live kiro TUI + ~7 `opm mcp` procs were
+    eating RAM). It substituted the exact CI/cachix output
+    `nnd6fka…-openmemory-mcp-1.3.3+9af0f95`. Drove its `openmemory-mcp-serve` under
+    `OM_DEV_ALLOW_NO_AUTH=true` (synthetic embeddings + scratch sqlite, no
+    ollama/postgres) with a REAL MCP SDK client (`StreamableHTTPClientTransport`) +
+    curl: OAuth well-knowns 404/404, no-auth `initialize`→200, `tools/list`→7 tools
+    INCL. `openmemory_store_project` (absent in 1.3.3); serve.log confirms
+    initialize→notifications/initialized→tools/list with NO 500s.
+  - **Change (nix-agentic-tools):** typed `devAllowNoAuth` (`nullOr bool`) →
+    http-gated `OM_DEV_ALLOW_NO_AUTH`; + 2 module-eval tests
+    (`mcp-services-openmemory-devallownoauth`, `mcp-services-openmemory-http-entry`).
+    Fixed the description to plain-prose house style (conventions nit).
+  - **Verify before land:** lib-only targeted `settingsToEnv` eval (proved the
+    emission + the stdio/default gates) + a 3-agent adversarial workflow. The
+    propagation agent flaked (stub summary "test"); I answered its questions by hand
+    (no README/doc staleness, cspell clean, tests added). treefmt clean, both files
+    parse.
+  - **Next:** Checkpoint 2 (v3 hook set + debounced distiller + optional
+    `openmemory-mem` SDK helper). User may do a SAFE live daemon smoke on nixos-config
+    (throwaway store); the FULL flip against real ai-pg stays gated on Q11 + Q10.
 
 ## Sources
 
