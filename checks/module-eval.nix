@@ -1660,6 +1660,39 @@ in {
       !(result.config.home.activation ? mcpRestartOnSecretRotation)
   );
 
+  # openmemory devAllowNoAuth is a discoverable typed setting (guards the
+  # no-auth serve knob added for the HTTP daemon flip). Its emission into
+  # OM_DEV_ALLOW_NO_AUTH lives in the isLinux-gated systemd http env, so it
+  # is verified separately by a settingsToEnv eval; this test stays
+  # platform-independent by asserting on the evaluated option value.
+  module-mcp-services-openmemory-dev-allow-no-auth = mkTest "mcp-services-openmemory-dev-allow-no-auth" (
+    let
+      result = evalHm {
+        services.mcp-servers.servers.openmemory-mcp = {
+          enable = true;
+          settings.devAllowNoAuth = true;
+        };
+      };
+    in
+      result.config.services.mcp-servers.servers.openmemory-mcp.settings.devAllowNoAuth == true
+  );
+
+  # Enabling openmemory-mcp emits a NATIVE-HTTP mcpConfig entry (not a
+  # bridge) pointing at openmemory-mcp-serve's /mcp -- the daemon URL the
+  # consumer inherits for the stdio->http flip.
+  module-mcp-services-openmemory-http-entry = mkTest "mcp-services-openmemory-http-entry" (
+    let
+      result = evalHm {
+        services.mcp-servers.servers.openmemory-mcp.enable = true;
+      };
+      entry = result.config.services.mcp-servers.mcpConfig.mcpServers.openmemory-mcp or null;
+    in
+      entry
+      != null
+      && entry.type == "http"
+      && lib.hasSuffix ":19758/mcp" entry.url
+  );
+
   # ── Attrs-shape ai.rules / ai.<cli>.rules (unified transformer) ───
 
   # Claude HM: top-level ai.rules → .claude/rules/<name>.md with paths frontmatter.

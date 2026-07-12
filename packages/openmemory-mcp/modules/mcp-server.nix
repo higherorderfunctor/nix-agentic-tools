@@ -239,6 +239,13 @@ in {
       description = "Server mode. Default: standard.";
     };
 
+    # ── Auth ──────────────────────────────────────────────────────
+    devAllowNoAuth = mkOption {
+      type = types.nullOr types.bool;
+      default = null;
+      description = "Allow unauthenticated access with a single implicit dev-no-auth tenant (sets OM_DEV_ALLOW_NO_AUTH). Intended for a localhost-only HTTP serve daemon; never expose the port. Only meaningful in HTTP mode.";
+    };
+
     logAuth = mkOption {
       type = types.nullOr types.bool;
       default = null;
@@ -543,6 +550,8 @@ in {
     // optionalAttrs (!s.telemetry) {OM_TELEMETRY = "false";}
     // optionalAttrs (mode == "http") {OM_PORT = toString cfg.service.port;}
     // optionalAttrs (s.mode != null) {OM_MODE = s.mode;}
+    # ── Auth ────────────────────────────────────────────────────
+    // optionalAttrs (mode == "http" && s.devAllowNoAuth != null) {OM_DEV_ALLOW_NO_AUTH = boolStr s.devAllowNoAuth;}
     // optionalAttrs (s.logAuth != null) {OM_LOG_AUTH = boolStr s.logAuth;}
     # ── IDE ─────────────────────────────────────────────────────
     // optionalAttrs (s.ideMode != null) {OM_IDE_MODE = boolStr s.ideMode;}
