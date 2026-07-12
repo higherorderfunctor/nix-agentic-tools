@@ -17,7 +17,10 @@
 >    **append-only** — mark items done, never delete prior items.
 > 4. Update **Target architecture** / **Open empirical questions** if findings
 >    changed them.
-> 5. Rewrite the **Bootstrap prompt** to describe the _new_ Next task.
+> 5. Rewrite the **Bootstrap prompt** to describe the _new_ Next task, and
+>    keep its **Operating protocol** section current with any
+>    how-to-function change (the Bootstrap is the single source of truth
+>    for how to run a session).
 > 6. Commit with a Conventional Commit (`docs(plans): …`). Run
 >    `treefmt docs/plans/kiro-cli-auto-memory.md` before committing.
 
@@ -27,46 +30,56 @@
 
 ```
 Resume the kiro-cli auto-memory work. FIRST read
-docs/plans/kiro-cli-auto-memory.md in full — it holds the complete design,
-decisions, and session history; you should not need to re-run research. Follow
-its per-session protocol (do the Next task, append to the logs, rewrite this
-Bootstrap prompt, commit).
+docs/plans/kiro-cli-auto-memory.md in full — it is self-contained (design,
+decisions, session history, AND the operating protocol below). You should not
+need external context or to re-run research.
 
-State (end of session 2): empirical hook probes done self-serve against the
-installed kiro-cli 2.11.1. Established: (a) READ Tier-1 via steering
-`inclusion: always` WORKS on both v2 and v3, hook-independent — the load-bearing
-channel; (b) kiro ships TWO hook systems — v2 embedded camelCase
+── OPERATING PROTOCOL (how to run a session; KEEP THIS SECTION UPDATED) ──
+This bootstrap is the single source of truth for BOTH how to function and the
+current state/next task. Any change to how sessions should operate goes HERE, in
+the same commit — future sessions inherit it by reading the doc.
+- Peer stance: act as a same-level, adversarial peer. Push back, challenge
+  assumptions, disagree openly. Do not defer or rubber-stamp.
+- Classification confidence: if you cannot classify a directive or decision with
+  high confidence, STOP and ask — do not guess.
+- Session scoping (short sessions to manage context): at session START pick ONE
+  bounded chunk (an implementation / testing / research / discussion round)
+  sized to finish in a single session, and budget for any research or discussion
+  it needs. State the plan before diving in; don't over-reach past it.
+- Session END: (1) update the plan — Session log, Decisions log, Target
+  architecture, Open questions, and THIS bootstrap (state + next task + any
+  how-to-function change) — treefmt, then commit (docs(plans): …). (2) ALSO emit
+  a paste-able handoff prompt in chat for the next round.
+- Handoff prompt = convenience pointer to resume + a catch for LATE tuning that
+  arrives after you have committed; the doc/bootstrap stays the single source of
+  truth and the handoff must not contradict it.
+- Logs are append-only (mark done, never delete). Keep experiments in scratch;
+  never touch the real repo tree or ~/.kiro global config; on an auth wall STOP
+  and report (do not authenticate). `--trust-all-tools` is gone under v3 →
+  permissions.yaml.
+
+── STATE (end of session 2) ──
+Empirical hook probes done self-serve against installed kiro-cli 2.11.1: (a) READ
+Tier-1 via steering `inclusion: always` WORKS on both v2 and v3, hook-independent
+— the load-bearing channel; (b) TWO hook systems — v2 embedded camelCase
 (agentSpawn/userPromptSubmit/preToolUse/postToolUse/stop) and v3 standalone
 PascalCase `.kiro/hooks/*.json` (the mkKiro.nix target); (c) on v2 all embedded
 hooks fire, session-start stdout injects (Q1=yes), stop is non-blocking and
-backgrounds survive (Q2=yes); (d) on v3 NO hooks fired in the non-interactive
-harness because v3 needs a TUI (classic mode unsupported) AND a trusted
-workspace. Docs also correct the plan: v3 `Stop` fires at session-end (the exit
-hook the plan thought was missing) with JSON context on stdin.
+backgrounds survive (Q2=yes); (d) on v3 NO hooks fired non-interactively because
+v3 needs a TUI (classic mode unsupported) AND a trusted workspace. Docs correct
+the plan: v3 `Stop` fires at session-end with JSON context on stdin.
 
-Next task = Part A: the v3 trusted-TUI hook confirmation (Q5–Q8). This is
-USER-ASSISTED and interactive — the non-interactive shell harness structurally
-cannot test v3 hooks. A ready-to-run fixture is staged in the session scratch
-repo (<scratchpad>/kiro-hooktest, `.kiro/hooks/mem.json` etc.). Ask the user to
-run `kiro-cli chat --v3` in that dir, accept the workspace-trust prompt, send
-two prompts, and quit; then YOU read the `v3-fired-*.log` / `v3-*-stdin.json`
-side-effect files (self-serve, no auth) to answer Q5 (do v3 hooks fire trusted),
-Q6 (Stop once-per-session vs per-turn), Q7 (Stop stdin transcript contract), Q8
-(trust persistence). See "Next task" for the exact steps + read-back checklist.
-If the scratch is gone, rebuild the fixture from the Session-2 recipe.
-
-Then Part B = the implementation plan against real mkKiro.nix option paths
-(steering MEMORY.md, v3 `.kiro/hooks/*.json`, external `~/.kiro-memory` store,
-openmemory stdio MCP, HM↔devenv parity, workspace-trust bootstrap).
-
-Constraints: keep everything in scratch; never touch the real repo tree or
-~/.kiro global config; if a run hits an auth wall, STOP and report (do not
-authenticate). `--trust-all-tools` is gone under v3 → permissions.yaml.
-
-When done: record Q5–Q8 in the Decisions + Session logs, update Target
-architecture if results change it, rewrite this Bootstrap prompt to point at the
-next task, then commit (docs(plans): …). Keep the plan additive — mark items
-done, never delete.
+── NEXT TASK ──
+Part A: v3 trusted-TUI hook confirmation (Q5–Q8), USER-ASSISTED (the
+non-interactive harness structurally cannot test v3 hooks). A ready fixture is
+staged at <scratchpad>/kiro-hooktest (`.kiro/hooks/mem.json` etc.). Ask the user
+to run `kiro-cli chat --v3` there, accept the workspace-trust prompt, send two
+prompts, and quit; then YOU read the `v3-fired-*.log` / `v3-*-stdin.json`
+side-effect files (self-serve) to answer Q5 (hooks fire when trusted), Q6 (Stop
+once-per-session vs per-turn), Q7 (Stop stdin transcript contract), Q8 (trust
+persistence). See the "Next task" section for exact steps. If scratch is gone,
+rebuild from the Session-2 recipe. Then Part B: implementation plan against real
+mkKiro.nix option paths.
 ```
 
 ---
