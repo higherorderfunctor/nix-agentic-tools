@@ -10,6 +10,7 @@
   docs = ./docs;
   fragments = ./fragments;
 
+  lib.ai.apps.kiroAutoMemory = import ./lib/autoMemory.nix;
   lib.ai.apps.mkKiro = import ./lib/mkKiro.nix;
 
   modules = {

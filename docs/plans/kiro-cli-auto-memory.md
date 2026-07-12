@@ -68,6 +68,46 @@ the same commit — future sessions inherit it by reading the doc.
   and report (do not authenticate). `--trust-all-tools` is gone under v3 →
   permissions.yaml.
 
+── STATE (end of session 10) ──
+Session 10 (2026-07-12) landed STAGE 3 — the FIRST end-to-end auto-memory wiring (D27). Self-serve
+in nix-agentic-tools; the nixos-config consumer splice + the live trusted-TUI test stay HITL.
+- **Landed:** `packages/kiro-cli/lib/autoMemory.nix` — a generator `{lib, pkgs, home?null, env?{},
+  timeout?30}: {hooks; rules;}` exported as `lib.ai.apps.kiroAutoMemory`. Produces VALUES for the
+  existing `ai.kiro.hooks` (one `kiro-memory.json` `{version,hooks:[Stop,SessionStart,Manual]}`
+  envelope) and `ai.kiro.rules` (a `kiro-auto-memory` steering anchor, `paths=null` → `inclusion:
+  always`). No new module axis (B5). Bins referenced by absolute store path via
+  `getExe' pkgs.ai.kiro-memory-distiller`; wrappers are strict-mode `writeShellScript`.
+- **HOME contract hardened (S10 review):** wrappers ALWAYS fail-loud-guard HOME (unset AND empty)
+  and bake only a non-empty path — an empty-string `home` can no longer emit `export HOME=''`
+  (silent cwd-relative loss). See D27.
+- **Sync distiller (D27 refines B3 over D8):** synchronous, not `nohup &` — debounced + file-IO-only
+  + sub-second. Revisit at STAGE 5 (network SDK write).
+- **Verified OOM-safely:** targeted generator eval + built wrappers (all 3 HOME branches) + 4
+  module-eval tests incl. HM↔devenv byte-parity, all via bounded `evalModules` (no flake eval).
+  4-lens adversarial review + refute: 2 CONFIRMED (the HOME gap — FIXED), 1 PARTIAL (the D27 label —
+  now recorded), 1 REFUTED, 1 clean. cspell/deadnix/statix/treefmt clean.
+- **FROZEN STAGE ORDER (agent-owned):**
+    1. D24 tail-loss  ✅ DONE (S8)
+    2. Nix-package the distiller  ✅ DONE (S9)
+    3. v3 hook set + `--flush` SessionStart + steering anchor  ✅ DONE (S10, D27)
+    4. D23b buffer lockfile (O_EXCL mutex) — pull now if immediate multi-worktree concurrent loops
+       are expected; else it can trail the SDK helper.  ← NEXT
+    5. openmemory-mem SDK helper (add/query, project_id) — backend enrichment; the file buffer works
+       without it; needs the serve daemon + Postgres to integration-test.
+    6. Comprehensive implementation doc (FINAL) — the D26 backlog fragment, after 3–5 settle.
+- **HITL live-TUI test — WHEN & HOW (user-run, gates the consumer flip):** run it EARLY — it
+  de-risks the load-bearing assumption everything downstream rides on. It does NOT block STAGE 4/5
+  CODE, but SHOULD precede the nixos-config consumer flip and ideally the STAGE-5 SDK investment: if
+  the one-file-3-hooks model or the stdin-through-`exec "$@"` path is wrong, the wiring changes.
+  HOW (keep it in SCRATCH — never the real `~/.kiro`): point a throwaway kiro config's
+  `ai.kiro.hooks`/`ai.kiro.rules` at `kiroAutoMemory.{hooks,rules}` (with `home` set), open a
+  trusted TUI, run 2–3 turns then quit, and check (a) `/hooks` lists all three, (b)
+  `~/.kiro-memory/<project>/{now,recent}.md` grew, (c) the steering anchor shows in context. Report
+  back; the next session folds results into D27 + the frozen order (split to one-file-per-hook if
+  needed). This is the ONLY remaining unknown for the write loop; the nix wiring is eval-proven.
+NEXT = STAGE 4 (D23b buffer lockfile) OR STAGE 5 (SDK helper) — agent's call next session; the
+consumer flip + live-TUI test remain HITL (Q10/Q11 gate only the flip).
+
 ── STATE (end of session 9) ──
 Session 9 (2026-07-12) landed STAGE 2 — nix-packaged the distiller as a derivation.
 Self-serve; the distiller is now a buildable/cachix-able flake package but still UNWIRED
@@ -933,6 +973,9 @@ the real `mkKiro.nix` / `ai.kiro.*` surface. Target the v3 standalone hook forma
   distillation (Q7/D12 shortcut), cheap summarizer only as fallback; (d) append to
   the file buffer + roll tiers; (e) write to openmemory via the SDK (B4). Run in
   the BACKGROUND (`nohup … &`; survives exit per Q2) off the hot path.
+  _[S10/D27: the BACKGROUND note is SUPERSEDED for STAGE 3 — the distiller ships
+  synchronous (debounced + file-IO-only + sub-second). Revisit when STAGE 5 adds
+  the network SDK write. See D27.]_
 - **UserPromptSubmit hook (READ archive-RAG).** Per-turn; exit-0 stdout injects
   (D14). Query openmemory for the raw prompt scoped to `project_id=<repo-slug>`
   (+ `system_global`), echo top hits; also cat the recent file-buffer tier.
@@ -1293,6 +1336,42 @@ cwd}`; `UserPromptSubmit` adds an empty `prompt` in 2.11.1) — no transcript. T
     and the load-bearing invariants (worktree-shared project_id D19/D20, debounce OR-gate + tail-flush
     watermark D24, buffer O_EXCL lock D23b). Mark the fragment's `Last verified:` on landing.
 
+- **D27 (S10, 2026-07-12):** **STAGE 3 landed — the v3 hook set + steering anchor as a reusable
+  generator.** `packages/kiro-cli/lib/autoMemory.nix` (exported `lib.ai.apps.kiroAutoMemory`)
+  produces VALUES for the EXISTING `ai.kiro.hooks` / `ai.kiro.rules` options — no new module axis
+  (B5), riding the same HM↔devenv fanout. It emits ONE `.kiro/hooks/kiro-memory.json`
+  `{version:"v1", hooks:[…]}` envelope with three v3 hooks + one steering rule.
+  - **Sync, not background (refines B3 over D8):** D8 (S2) chose a synchronous distiller; D11 (S3)
+    found Stop is per-turn → debounce (F5); B3 (S4) then said "Run in the BACKGROUND (nohup &)".
+    D27 REAFFIRMS synchronous for STAGE 3 — the distiller is already debounced (S7/S8) + file-IO-only
+    (no network until the STAGE-5 SDK) + sub-second, so kiro's Stop `timeout` wait is negligible and
+    a store-path `nohup &` fork only adds fragility (reap-on-exit, PATH/env). B3's background note is
+    annotated SUPERSEDED in place; revisit at STAGE 5.
+  - **HOME always-guarded (hardened by the S10 review):** each wrapper ALWAYS runs a fail-loud
+    `: "${HOME:?…}"` guard (trips on unset AND empty) and additionally bakes a supplied NON-EMPTY
+    absolute path. The 4-lens adversarial review (2 lenses CONFIRMED) caught that a naive
+    `home != null` bake would emit `export HOME=''` for an empty-string input — a public-API footgun
+    (`builtins.getEnv "HOME"` → "" under pure eval) that the distiller's `?? ""` keeps empty →
+    silent cwd-relative memory-loss (the exact S9/D25 failure the guard exists to stop). Empty is
+    now treated exactly like null (guard-only, never baked); regression-locked by the module-eval
+    `empty == unset` assertion + built-wrapper evidence for all three HOME branches.
+  - **Scope:** Stop (distill) + SessionStart (`--flush`) + Manual (`/remember`, reuses the Stop bin,
+    D3 fallback) + the B1 steering anchor. UserPromptSubmit archive-RAG stays deferred to STAGE 5
+    (needs the `openmemory-mem` SDK helper + the B3 interface measurement).
+  - **Bins by absolute store path** via `getExe' pkgs.ai.kiro-memory-distiller` (D25): Stop/Manual →
+    `kiro-memory-distiller`, SessionStart → `kiro-memory-flush`. Wrappers are `writeShellScript`
+    (strict mode, absolute paths per nix-standards) — consumer-local config artifacts, NOT overlay
+    packages, so no cache-hit-parity concern.
+  - **Tests:** 4 module-eval tests (checks/module-eval.nix) — HM emits the hooks, HM emits the
+    steering (`inclusion: always`), HM↔devenv BYTE-IDENTICAL parity (B5 proven empirically), and the
+    HOME-baked / empty==null regression. All green via a bounded targeted `evalModules` (no flake
+    eval — this host OOMs); the full checks run in CI.
+  - **LIVE-TEST CHECKPOINT (HITL, gates the consumer flip):** confirm in a trusted TUI that kiro (a)
+    fires all three hooks from ONE file (the documented schema supports it; if it wants one-per-file,
+    splitting is a trivial 3-attr change), (b) the Stop hook's stdin still reaches the distiller
+    through the wrapper `exec … "$@"`, and (c) the steering anchor injects. These are closed-binary
+    behaviors the repo cannot assert.
+
 ## Session log (append-only)
 
 - **Session 1 — 2026-07-11.** Research via a 3-phase workflow (map local memory
@@ -1512,6 +1591,22 @@ preToolUse, postToolUse, stop`.
   source pattern). **Next:** STAGE 3 — emit the v3 Stop + `--flush` SessionStart hooks + steering
   anchor via `ai.kiro.hooks` / `ai.kiro.rules`, referencing the packaged bins by absolute store
   path (HOME must be exported in the hook action env).
+
+- **Session 10 — 2026-07-12.** Landed STAGE 3 (D27) self-serve on refactor/ai-factory-architecture
+  — the first end-to-end auto-memory wiring, turning the packaged-but-unwired distiller into
+  referenced-and-emitted hooks + steering. First mapped the real option surface (mkKiro.nix
+  hooks/rules emission, ai-common ruleModule, the kiro transformer's `inclusion: always`, the
+  distiller's HOME/`KIRO_MEMORY_*`/`--flush` contract, the flake's `lib.ai.apps` merge), then wrote
+  `packages/kiro-cli/lib/autoMemory.nix` + exported it + added 4 module-eval parity tests. Verified
+  OOM-safely (targeted `evalModules` + built wrappers for all HOME branches — no flake eval). Ran a
+  4-lens adversarial review workflow (schema-fidelity / option-surface / distiller-contract /
+  plan-and-nix) + a per-finding refute pass (8 agents): **2 CONFIRMED, 1 PARTIAL, 1 REFUTED, 1
+  clean.** The CONFIRMED finding (a `home != null` bake would emit `export HOME=''` for an
+  empty-string input → silent cwd-relative loss) was FIXED before presenting — always-guard +
+  bake-only-non-empty, regression-locked by `empty == unset`. The PARTIAL (dangling D27 label) is
+  resolved by recording D27 + annotating B3 in the same change. **Next:** STAGE 4 (D23b buffer
+  lockfile) or STAGE 5 (openmemory-mem SDK helper) — agent's call; the consumer flip + live-TUI
+  test stay HITL.
 
 - **Interim — 2026-07-12 (post-S9).** Recorded a user backlog item without touching code: a
   comprehensive implementation doc (README/fragment/steering) that explains the whole auto-memory

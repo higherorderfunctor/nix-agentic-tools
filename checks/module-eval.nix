@@ -168,6 +168,24 @@
       ];
     };
 
+  # STAGE 3 auto-memory generator (packages/kiro-cli/lib/autoMemory.nix). A tiny
+  # two-bin stub stands in for the distiller so these emission/parity tests don't
+  # depend on building the real overlay package (its bins + behavior are covered
+  # by the distiller's own suite and the overlay build).
+  kiroMemStub = pkgs.runCommand "kiro-memory-distiller-stub" {} ''
+    mkdir -p "$out/bin"
+    for b in kiro-memory-distiller kiro-memory-flush; do
+      printf '#!/bin/sh\nexit 0\n' > "$out/bin/$b"
+      chmod +x "$out/bin/$b"
+    done
+  '';
+  kiroAutoMem = args:
+    import ./../packages/kiro-cli/lib/autoMemory.nix ({
+        inherit lib;
+        pkgs = pkgs // {ai = (pkgs.ai or {}) // {kiro-memory-distiller = kiroMemStub;};};
+      }
+      // args);
+
   mkTest = name: assertion:
     pkgs.runCommand "module-test-${name}" {} ''
       ${
@@ -975,6 +993,101 @@ in {
       file
       != null
       && lib.hasInfix "Kiro steering content." file.text
+  );
+
+  # ── STAGE 3: kiro auto-memory wiring (lib/autoMemory.nix) ────
+  # The generator produces reusable values for ai.kiro.hooks / ai.kiro.rules.
+  # These assert the emitted v3 hook envelope + steering anchor and that HM and
+  # devenv emit BYTE-IDENTICAL sources (B5 structural parity, no new module axis).
+
+  # HM: the hook envelope reaches .kiro/hooks/kiro-memory.json with all three v3
+  # lifecycle triggers and the per-role wrapper commands.
+  module-kiro-auto-memory-hm-emits-hooks = mkTest "kiro-auto-memory-hm-emits-hooks" (
+    let
+      mem = kiroAutoMem {home = "/home/tester";};
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          inherit (mem) hooks;
+        };
+      };
+      hookText = (result.config.home.file.".kiro/hooks/kiro-memory.json" or {}).text or "";
+    in
+      lib.hasInfix ''"version":"v1"'' hookText
+      && lib.hasInfix ''"trigger":"Stop"'' hookText
+      && lib.hasInfix ''"trigger":"SessionStart"'' hookText
+      && lib.hasInfix ''"trigger":"Manual"'' hookText
+      && lib.hasInfix ''"type":"command"'' hookText
+      && lib.hasInfix "kiro-memory-stop" hookText
+      && lib.hasInfix "kiro-memory-flush" hookText
+      && lib.hasInfix "kiro-memory-manual" hookText
+  );
+
+  # HM: the steering anchor reaches .kiro/steering/kiro-auto-memory.md with
+  # `inclusion: always` (paths = null) and the anchor body.
+  module-kiro-auto-memory-hm-emits-steering = mkTest "kiro-auto-memory-hm-emits-steering" (
+    let
+      mem = kiroAutoMem {home = "/home/tester";};
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          inherit (mem) rules;
+        };
+      };
+      steerText = (result.config.home.file.".kiro/steering/kiro-auto-memory.md" or {}).text or "";
+    in
+      lib.hasInfix "inclusion: always" steerText
+      && lib.hasInfix "Persistent project memory" steerText
+  );
+
+  # Parity (B5): HM and devenv emit the IDENTICAL hook JSON + steering file for
+  # the same generator output — the whole point of riding the existing
+  # ai.kiro.hooks / ai.kiro.rules fanout instead of adding a new module axis.
+  module-kiro-auto-memory-hm-devenv-parity = mkTest "kiro-auto-memory-hm-devenv-parity" (
+    let
+      mem = kiroAutoMem {home = "/home/tester";};
+      hm = evalHm {
+        ai.kiro = {
+          enable = true;
+          inherit (mem) hooks rules;
+        };
+      };
+      dv = evalDevenv {
+        ai.kiro = {
+          enable = true;
+          inherit (mem) hooks rules;
+        };
+      };
+      hmHook = (hm.config.home.file.".kiro/hooks/kiro-memory.json" or {}).text or "";
+      dvHook = (dv.config.files.".kiro/hooks/kiro-memory.json" or {}).text or "";
+      hmSteer = (hm.config.home.file.".kiro/steering/kiro-auto-memory.md" or {}).text or "";
+      dvSteer = (dv.config.files.".kiro/steering/kiro-auto-memory.md" or {}).text or "";
+    in
+      hmHook
+      != ""
+      && hmHook == dvHook
+      && hmSteer != ""
+      && hmSteer == dvSteer
+  );
+
+  # HOME is baked into the wrappers: a different `home` (and the null fail-loud
+  # branch) yields a different hook envelope via different wrapper store paths —
+  # proving the S9/D25 HOME contract is load-bearing, not a no-op.
+  module-kiro-auto-memory-home-baked = mkTest "kiro-auto-memory-home-baked" (
+    let
+      a = (kiroAutoMem {home = "/home/alice";}).hooks."kiro-memory";
+      b = (kiroAutoMem {home = "/home/bob";}).hooks."kiro-memory";
+      unset = (kiroAutoMem {home = null;}).hooks."kiro-memory";
+      empty = (kiroAutoMem {home = "";}).hooks."kiro-memory";
+    in
+      a
+      != b
+      && a != unset
+      && b != unset
+      # Regression guard: an empty-string `home` must NOT bake `export HOME=''`
+      # (silent cwd-relative memory-loss) — it takes the same guard-only path as
+      # null, so its output is byte-identical to the null case.
+      && empty == unset
   );
 
   # ── Task 5 (A4): Kiro HM/devenv fanout absorption ────────────

@@ -17,6 +17,7 @@ aubut
 autosquash
 autoupdater
 avifenesh
+backgrounded
 bashisms
 berberman
 bitemporality
@@ -127,6 +128,7 @@ nixdoc
 nixos
 nixpkgs
 nixvim
+nohup
 nomic
 numtide
 nuscht
