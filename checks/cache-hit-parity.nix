@@ -64,6 +64,7 @@
     "kimchi"
     "kiro-cli"
     "kiro-gateway"
+    "kiro-memory-distiller"
   ];
 
   # Git tools — live at `consumerPkgs.gitTools.<name>`.

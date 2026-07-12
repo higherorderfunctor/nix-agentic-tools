@@ -11,7 +11,9 @@
 #   pkgs.gitTools.*           — git workflow tools
 #
 # Each per-package file takes {inputs, final, ...} and manages its
-# own source via fetchFromGitHub with inline hashes.
+# own source — fetchFromGitHub with inline hashes for upstream
+# packages, or an in-repo path for packages built from this repo
+# (e.g. kiro-memory-distiller).
 {inputs, ...}: final: _prev: let
   # Unfree guard. Checks if the derivation has an unfree license and
   # wraps it so the consumer's allowUnfree config is respected. If the
@@ -59,6 +61,9 @@
       inherit inputs final;
     };
     kiro-gateway = import ./kiro-gateway.nix {
+      inherit inputs final;
+    };
+    kiro-memory-distiller = import ./kiro-memory-distiller.nix {
       inherit inputs final;
     };
   };
