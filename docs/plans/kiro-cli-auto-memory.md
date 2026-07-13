@@ -67,6 +67,68 @@ the same commit — future sessions inherit it by reading the doc.
   never touch the real repo tree or ~/.kiro global config; on an auth wall STOP
   and report (do not authenticate). `--trust-all-tools` is gone under v3 →
   permissions.yaml.
+- USER-run tests (the HITL live-TUI test) are GUIDED SYNCHRONOUSLY, never handed
+  off async: when the code path that needs one is ready, walk the user through it
+  one spoon-fed step at a time and wait at each step (busy/ADHD user —
+  [[feedback_hitl_walk_through_live]]). It stays a checkpoint; you never invoke it
+  for them ([[feedback_nixos_config_hitl]]).
+
+── STATE (end of session 12) ──
+Session 12 (2026-07-13) landed STAGE 5a — the `openmemory-mem` SDK helper binary (the backend
+`add`/`query` seam, D19/D20), the LAST backend-code piece. Self-contained; the 5b hook wiring +
+consumer flip stay ahead. All green: 30 bun tests (TDD), treefmt + cspell clean, OOM-safe build (the
+checkPhase runs all 30 tests in the nix sandbox), 4-lens adversarial review + per-finding refute
+(0 CONFIRMED, 1 REFUTED, 3 PARTIAL — all 3 actioned). NOT pushed (origin was at 531e5b4 = the S11 tip).
+- **Verified the SDK FIRST (rev 9af0f95 source, not memory — "the version you RUN ≠ the source you
+  READ"):** `new Memory(user_id?)`; `mem.add(content,{project_id})`; `mem.search(query,{project_id,
+  limit})` → rows {id,score,primary_sector,salience,content,…}. The SDK path goes STRAIGHT to Postgres
+  (add_hsg_memory/hsg_query), BYPASSING the HTTP serve daemon's tenant layer → Q10's tenant_mismatch
+  CANNOT bite the helper (it fires only on the model's HTTP calls). A write with user_id undefined
+  defaults to "anonymous"; search applies NO user filter when unset → the helper's own write→read loop
+  is self-consistent; `OM_USER_ID` aligns the write user_id to the daemon tenant (`dev-no-auth`) at
+  the consumer flip.
+- **Landed:** `packages/openmemory-mcp/mem/openmemory-mem.{ts,test.ts}` — a PURE CLI core
+  (parseArgs / formatHits / normalizeRows / runMem) with the Memory SDK as an INJECTED seam
+  (`MemoryBackend`); the real backend is built LAZILY (dynamic import of the co-packaged
+  `./dist/index.js`, which connects to Postgres on load) only in the `import.meta.main` entry, so the
+  bun suite NEVER loads dist/PG (mirrors the distiller's `backendWrite` injection). CLI contract
+  matches the distiller's `defaultBackendWrite` byte-for-byte: `openmemory-mem add --project-id <id>`
+  + stdin; plus `query --project-id <id> [--limit n]` (stdin = query) for the deferred read hook.
+  `formatHits` mirrors openmemory's own `fmt_matches`.
+- **Packaged as the 3rd bin of openmemory-mcp** (D20 "from the openmemory package"), NOT a separate
+  overlay — shares the exact `dist/` + `node_modules` the daemon runs → SDK/Postgres-schema lockstep
+  (Q11). `overlays/mcp-servers/openmemory-mcp.nix`: a `checkPhase` runs the bun suite in-sandbox
+  (isolated temp dir so bun ignores the upstream vitest suite); `installPhase` cp's the helper next to
+  `dist/` + a 3rd `makeWrapper` bin; an empty-stdin `postInstallCheck` smoke (short-circuits before
+  any dist/PG load) via `runHook postInstallCheck`. Repo-local helper src → cache-hit parity holds.
+- **Review: 0 CONFIRMED, 1 REFUTED, 3 PARTIAL (all low, all actioned; D29).** REFUTED (empirically, on
+  Nix 2.34.4): a claim that interpolating the repo-local `memHelper`/`memTest` path literals pulls the
+  WHOLE flake source into the drv context → churn; the verifier proved file-literal interpolation is
+  content-addressed (byte-identical to `builtins.path`), so the drv re-hashes ONLY when the helper/test
+  bytes change (confirmed live: `wlkk…` → `c3h6…` on the fix). PARTIAL fixes: (1) extracted+exported
+  `normalizeRows` (the drift-prone SDK row→Hit projection, previously untested until the consumer flip)
+  + 2 unit tests; (2) codepoint-aware `trunc` (a UTF-16 slice split surrogate pairs on astral content →
+  lone-surrogate garble; proven old→NOT-well-formed / new→well-formed) + astral + trimEnd-boundary
+  tests; (3) `parseArgs` rejects a flag-shaped `--project-id` value (`--project-id --limit` no longer
+  silently parses `projectId="--limit"`).
+- **5a/5b SPLIT (D29):** STAGE 5 split so the HITL de-risk precedes the HITL-reshapeable wiring. 5a
+  (the helper binary) is HITL-INDEPENDENT and shipped now (the user's named NEXT — the backendWrite
+  seam). 5b (wire `openmemory-mem` onto the hook PATH + the deferred UserPromptSubmit archive-RAG read
+  hook + the `OM_PG*`/`OM_USER_ID` env contract, all in `autoMemory.nix`) is DEFERRED until AFTER the
+  HITL — that wiring rides on the one-file-3-hooks model the HITL can reshape.
+- **FROZEN STAGE ORDER (agent-owned):**
+    1. D24 tail-loss  ✅ DONE (S8)
+    2. Nix-package the distiller  ✅ DONE (S9)
+    3. v3 hook set + `--flush` SessionStart + steering anchor  ✅ DONE (S10, D27)
+    4. D23b buffer lockfile (O_EXCL mutex)  ✅ DONE (S11, D28)
+    5a. openmemory-mem SDK helper binary (add/query, project_id)  ✅ DONE (S12, D29)
+    5b. Wire openmemory-mem → hook PATH + UserPromptSubmit read hook + `OM_PG*`/`OM_USER_ID` env
+        (autoMemory.nix) — GATED on the HITL result.  ← NEXT (do the HITL first)
+    6. Comprehensive implementation doc (FINAL) — the D26 backlog fragment, after 5b settles.
+NEXT = the HITL live-TUI test (USER-run, GUIDED synchronously — spoon-feed the steps, do NOT hand off
+async; [[feedback_hitl_walk_through_live]]), THEN STAGE 5b. Per D27 the HITL can reshape the STAGE-3
+one-file-3-hooks wiring the 5b read side rides on, so it precedes 5b. Harness:
+`bash dev/scripts/kiro-memory-hitl.sh`. The consumer flip stays HITL (Q10/Q11 gate only the flip).
 
 ── STATE (end of session 11) ──
 Session 11 (2026-07-13) landed STAGE 4 — the D23b per-project buffer lockfile (D28). Self-serve;
@@ -469,9 +531,12 @@ the real option surface before landing each checkpoint.
   (2026-07-12)** landed STAGE 3 (D27) — the first end-to-end wiring
   (`packages/kiro-cli/lib/autoMemory.nix` → the v3 Stop/SessionStart/Manual hooks + steering anchor).
   **Session 11 (2026-07-13)** landed STAGE 4 (D28) — the D23b per-project buffer lockfile
-  (`withBufferLock`), making the distiller loop concurrency-safe across sibling worktrees. Next =
-  STAGE 5 (the `openmemory-mem` SDK helper); the HITL live-TUI test + the nixos-config consumer flip
-  stay HITL.
+  (`withBufferLock`), making the distiller loop concurrency-safe across sibling worktrees.
+  **Session 12 (2026-07-13)** landed STAGE 5a (D29) — the `openmemory-mem` SDK helper binary
+  (`add`/`query` scoped by `project_id`, packaged as the 3rd bin of openmemory-mcp; 30 TDD tests;
+  4-lens review 0-confirmed/1-refuted/3-partial-fixed), the last backend-code piece. STAGE 5 was
+  split into 5a (helper, done) / 5b (hook wiring, gated on the HITL). Next = the HITL live-TUI test
+  (USER-run, guided synchronously) then STAGE 5b; the consumer flip stays HITL.
 - **Branch:** `refactor/ai-factory-architecture`.
 - **Installed binary:** `kiro-cli 2.11.1` (store path
   `…4mandd5ra27ggndwk4mqww35g7kzx43z-kiro-cli-2.11.1`). CLI 3.0/v3 is **Early
@@ -1470,6 +1535,56 @@ cwd}`; `UserPromptSubmit` adds an empty `prompt` in 2.11.1) — no transcript. T
     all 67 tests green in the checkPhase sandbox, both wrappers exit 0. cspell terms added:
     serialised, serialising, toctou, unheld, unparseable, rebuildable.
 
+- **D29 (S12, 2026-07-13):** **STAGE 5a landed — the `openmemory-mem` SDK helper binary; STAGE 5 split
+  into 5a (helper) / 5b (wiring).** The deterministic backend seam the distiller shells out to
+  (`defaultBackendWrite` → `openmemory-mem add --project-id <id>` + stdin) plus a symmetric `query`
+  subcommand for the deferred read hook. Fills the `backendWrite` seam stubbed since D23.
+  - **SDK verified against the pinned 9af0f95 source (not memory):** `new Memory(user_id?)`;
+    `mem.add(content,{project_id})`; `mem.search(query,{project_id,limit})` → hsg_query rows
+    {id,score,primary_sector,salience,content,…}. The in-process SDK writes/reads Postgres DIRECTLY
+    (`add_hsg_memory`/`hsg_query`), BYPASSING the HTTP daemon's tenant middleware — so **Q10's
+    `tenant_mismatch` cannot bite the helper** (D20 holds; it fires only on the model's HTTP calls).
+    A write with user_id undefined stores "anonymous"; search applies no user filter when unset (the
+    hook write→read loop is self-consistent); `OM_USER_ID` aligns the write to the daemon tenant
+    (`dev-no-auth`) at the consumer flip (a 5b/flip knob, not a 5a decision).
+  - **Design:** a pure exported core (`parseArgs`/`formatHits`/`normalizeRows`/`runMem`) with the SDK
+    as an INJECTED `MemoryBackend` seam; the real backend is built LAZILY (dynamic import of the
+    co-packaged `./dist/index.js`) only in the `import.meta.main` entry, so the bun suite never loads
+    dist/PG (mirrors the distiller's seam injection). Exit codes: 0 ok / 1 backend-or-op failure
+    (best-effort, the distiller swallows it) / 2 usage. Empty stdin short-circuits BEFORE constructing
+    the backend (so the nix smoke never touches PG). `formatHits` mirrors openmemory's `fmt_matches`.
+  - **Packaging = 3rd bin of openmemory-mcp** (D20 "from the openmemory package"), NOT a separate
+    overlay — shares the exact `dist/` + `node_modules` the daemon runs → SDK/Postgres-schema lockstep
+    (Q11). A `checkPhase` runs the 30-test bun suite in-sandbox (isolated temp dir → ignores the
+    upstream vitest suite); `installPhase` cp's the helper beside `dist/` + adds the wrapper; the
+    empty-stdin `openmemory-mem` smoke rides `mkMcpSmokeTest`'s `runHook postInstallCheck` (DRY, no
+    double runHook). Verified OOM-safely (`nix build <drv>^out` — npmDeps substituted; the checkPhase
+    tests + both smokes green; 3 bins present; dist/node_modules are siblings of the helper).
+  - **Adversarial review (4 lenses — correctness / nix-packaging / contract-fidelity / test-adversarial
+    — + per-finding refute; 8 agents): 0 CONFIRMED, 1 REFUTED, 3 PARTIAL (all low).**
+    - REFUTED (nix cache-parity): a claim that `${memHelper}`/`${memTest}` interpolation pulls the whole
+      flake source into the drv context → per-commit churn. The verifier empirically proved (Nix 2.34.4)
+      that file-literal interpolation yields an ISOLATED content-addressed single-file store path,
+      byte-identical to `builtins.path` — so the drv re-hashes ONLY on a helper/test byte change
+      (confirmed live: `wlkk…` → `c3h6…` only after the fix). The `toString ./file` sub-path behavior the
+      author conflated is a different operation, not used here. No change.
+    - PARTIAL → FIXED: (1) extracted+exported `normalizeRows(rows): Hit[]` (the drift-prone SDK row→Hit
+      projection — `primary_sector`→sector + numeric/string coercion — that had ZERO coverage since the
+      stub replaces the whole backend and the smoke short-circuits before the real path) + 2 unit tests
+      (canonical row → exact Hit; coercion + missing-field defaults). Catches an adapter typo as a red
+      test instead of a silent blank read hook. (2) `trunc` made codepoint-aware (`Array.from`) — the
+      UTF-16 `slice(0,200)` split a surrogate pair on astral content, emitting a lone surrogate that
+      renders U+FFFD and diverges from openmemory's codepoint `fmt_matches`; proven old→`isWellFormed()`
+      false / new→true; added an astral test + a trimEnd-boundary characterization test. (3) `parseArgs`
+      now rejects a flag-shaped `--project-id` value (`--project-id --limit` previously parsed a VALID
+      `projectId="--limit"` silently — the opposite of the "typo'd flag is loud" intent) + 2 tests.
+  - **5a/5b split (agent-owned ordering, protocol S8):** 5a is HITL-INDEPENDENT (the helper binary
+    touches no hook wiring), so it shipped now — reconciling the user's "de-risk the HITL before sinking
+    effort into STAGE 5" with "it gates the consumer flip, not STAGE 5 code." 5b (wire the bin onto the
+    hook PATH + the UserPromptSubmit read hook + the `OM_PG*`/`OM_USER_ID` env in `autoMemory.nix`) is
+    HITL-reshapeable (one-file-3-hooks) → deferred until after the HITL live-TUI test.
+  - cspell: renamed a `memtest` shell var → `mem_test_dir` (dictionary-clean) rather than adding a term.
+
 ## Session log (append-only)
 
 - **Session 1 — 2026-07-11.** Research via a 3-phase workflow (map local memory
@@ -1727,6 +1842,25 @@ preToolUse, postToolUse, stop`.
     in-sandbox). ALSO prepared a turnkey USER-run HITL live-TUI harness (real autoMemory hooks JSON
     built OOM-safely + a shellcheck-clean scratch-config setup script). **Next:** STAGE 5 — the
     `openmemory-mem` SDK helper (agent's call next session; run the HITL live-TUI test first per D27).
+
+- **Session 12 — 2026-07-13.** Landed **STAGE 5a — the `openmemory-mem` SDK helper binary** (D29),
+  self-serve on refactor/ai-factory-architecture. First VERIFIED the real `Memory` SDK API against the
+  pinned 9af0f95 GitHub source (via the github MCP) rather than trusting D19/D20 from memory — confirmed
+  `add`/`search` accept `project_id` and the SDK path bypasses the HTTP tenant layer (so Q10 doesn't
+  bite the helper). TDD (watched RED): a pure `parseArgs`/`formatHits`/`normalizeRows`/`runMem` core
+  with the SDK as an injected `MemoryBackend` seam (real backend built lazily in the entry, so the bun
+  suite never loads dist/PG); CLI matches the distiller's `defaultBackendWrite` byte-for-byte. Packaged
+  as the 3rd bin of openmemory-mcp (shares dist/ + node_modules → schema lockstep). Verified OOM-safely
+  (`nix build <drv>^out`, npmDeps substituted; the checkPhase ran the suite in-sandbox + smokes green).
+  Ran a 4-lens adversarial review + per-finding refute (8 agents; 0 CONFIRMED, 1 REFUTED — the nix
+  cache-parity claim, empirically disproven on Nix 2.34.4 — 3 PARTIAL, all low, all fixed:
+  extracted+tested `normalizeRows`, made `trunc` codepoint-aware, and rejected flag-shaped
+  `--project-id` values). 30 bun tests, treefmt + cspell clean. STAGE 5 split into 5a (done) / 5b (hook
+  wiring, gated on the HITL). Mid-turn, the user twice flagged the error-path stderr in the test output
+  as looking broken → refactored the error sink to be injected so error-path tests CAPTURE + assert the
+  diagnostics (clean output, stronger tests), and recorded the guided-HITL preference
+  ([[feedback_hitl_walk_through_live]]). **Next:** the HITL live-TUI test (USER-run, guided
+  synchronously), then STAGE 5b.
 
 ## Sources
 
