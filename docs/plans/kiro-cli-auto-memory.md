@@ -74,7 +74,61 @@ the same commit — future sessions inherit it by reading the doc.
   off async: when the code path that needs one is ready, walk the user through it
   one spoon-fed step at a time and wait at each step (busy/ADHD user —
   [[feedback_hitl_walk_through_live]]). It stays a checkpoint; you never invoke it
-  for them ([[feedback_nixos_config_hitl]]).
+  for them ([[feedback_nixos_config_hitl]]). BEFORE handing over the interactive
+  baton, DE-RISK everything non-interactive yourself (OOM-safe): verify the generated
+  config, and SMOKE the pipeline against real data (e.g. drive the hook wrapper with a
+  real transcript on stdin) so the user's TUI time tests ONLY the irreducible
+  closed-binary behavior — this both saves their time and catches version-drift (S13:
+  re-validated the D23 parser on a kiro-cli minor bump before the live run).
+
+── STATE (end of session 13) ──
+Session 13 (2026-07-13) ran THE HITL LIVE-TUI TEST (D30) — the user-run trusted-TUI checkpoint deferred
+since S3, guided synchronously. **ALL THREE CHECKS PASSED on kiro-cli 2.12.0** (a bump from the 2.11.1
+of S1–S12; the run doubles as re-validation). This satisfies D27's LIVE-TEST CHECKPOINT — the last
+closed-binary unknown gating the consumer flip — and settles the load-bearing question STAGE 5b rode on.
+No production code changed; the plan + a one-line harness-hint fix are self-contained. NOT yet pushed.
+- **The decisive result — one file fires three hooks (NO split needed):** `/hooks` in the live trusted
+  TUI listed all three from the single `.kiro/hooks/kiro-memory.json` envelope — `kiro-memory-distill`
+  (Stop), `kiro-memory-flush` (SessionStart), `kiro-memory-remember` (Manual). STAGE 5b therefore adds
+  its UserPromptSubmit read hook as a **4th entry in the same envelope**, not a per-hook file split.
+- **Write loop proven end-to-end on the live session:** after quitting, the scratch `.state` file was
+  keyed on the LIVE session id (`sess_f3248b29…`) — proving kiro fired the Stop hook AND delivered the
+  `{session_id,cwd}` stdin — and `now.md` grew 0→320 B with the correct distilled turn (Ask + answer +
+  `_tools: read_file_`). Turn 2 was correctly cooldown-skipped (first Stop distilled at `lastRunMs=0` ⇒
+  `cooledDown`; turn 2 within 90 s + under the 12-line threshold): the D24 OR-gate + D8 debounce seen
+  live. Per Q6, quit added no Stop. Steering `inclusion: always` injects: the model quoted the anchor's
+  title line ("# Persistent project memory (auto-maintained)") and named the rule.
+- **Agent pre-flight (non-interactive, OOM-safe) BEFORE the user's TUI time:** verified the generated
+  envelope + all three wrappers (HOME `:?` guard + `KIRO_MEMORY_DIR` scratch redirect + REALIZED
+  distiller bins), then drove the stop wrapper as kiro would (`{session_id,cwd}` on stdin, `FORCE=1`)
+  against a REAL 2.12.0 `messages.jsonl` → `distilled:2`. So the **D23 parser schema did NOT drift on
+  2.12.0** and the whole write pipeline works on real data — narrowing the live test to the irreducible
+  closed-binary behaviors. (Method now baked into the OPERATING PROTOCOL's USER-run-tests bullet.)
+- **kiro-cli 2.12.0 flag move (harness fix):** the v3/TUI flags moved under the `chat` subcommand —
+  `kiro-cli chat --tui --v3` (also `--agent-engine {v1,v2,v3}`, `--mode {default,spec}`,
+  `-a/--trust-all-tools`), NOT the launcher. Corrected the printed hint in `dev/scripts/kiro-memory-hitl.sh`
+  (evidence: the live TUI's own command line + `chat --help`; corrects [[project_kiro_v3_engine_mode]]
+  for this build). The rest of the harness is unchanged and still turnkey.
+- **FROZEN STAGE ORDER (agent-owned):**
+    1. D24 tail-loss  ✅ DONE (S8)
+    2. Nix-package the distiller  ✅ DONE (S9)
+    3. v3 hook set + `--flush` SessionStart + steering anchor  ✅ DONE (S10, D27)
+    4. D23b buffer lockfile (O_EXCL mutex)  ✅ DONE (S11, D28)
+    5a. openmemory-mem SDK helper binary (add/query, project_id)  ✅ DONE (S12, D29)
+    HITL live-TUI test (gates the consumer flip; can reshape 5b's wiring)  ✅ DONE (S13, D30 — passed,
+        no reshape needed: one file fires three hooks)
+    5b. Wire openmemory-mem → hook PATH + UserPromptSubmit archive-RAG read hook + `OM_PG*`/`OM_USER_ID`
+        env (autoMemory.nix), as a 4th entry in the existing one-file envelope.  ← NEXT
+    6. Comprehensive implementation doc (FINAL) — the D26 backlog fragment, after 5b settles.
+NEXT = STAGE 5b: in `packages/kiro-cli/lib/autoMemory.nix`, (i) put `openmemory-mem` on the hook
+wrappers' PATH (it ships as the 3rd bin of `pkgs.openmemory-mcp` from D29 — add it via `makeWrapper
+--suffix`/`--prefix PATH` or reference it absolutely the way the distiller does git), (ii) add the
+deferred **UserPromptSubmit** archive-RAG read hook (query `openmemory-mem query --project-id <id>`,
+inject a bounded result to stdout — this is where the B3 interface measurement finally happens: decide
+how much to inject), and (iii) thread the `OM_PG*` connection env + `OM_USER_ID` (align to the daemon
+tenant `dev-no-auth`, Q10) into the wrapper env. All self-serve/testable at the module-eval + drv-build
+level; the nixos-config consumer flip (openmemory stdio→http daemon, Postgres re-key, Q10/Q11) stays
+HITL and is NOT part of 5b. OOM: bounded evalModules / drv-build / getFlake-inputs only.
 
 ── STATE (end of session 12) ──
 Session 12 (2026-07-13) landed STAGE 5a — the `openmemory-mem` SDK helper binary (the backend
@@ -538,13 +592,17 @@ the real option surface before landing each checkpoint.
   **Session 12 (2026-07-13)** landed STAGE 5a (D29) — the `openmemory-mem` SDK helper binary
   (`add`/`query` scoped by `project_id`, packaged as the 3rd bin of openmemory-mcp; 30 TDD tests;
   4-lens review 0-confirmed/1-refuted/3-partial-fixed), the last backend-code piece. STAGE 5 was
-  split into 5a (helper, done) / 5b (hook wiring, gated on the HITL). Next = the HITL live-TUI test
-  (USER-run, guided synchronously) then STAGE 5b; the consumer flip stays HITL.
+  split into 5a (helper, done) / 5b (hook wiring, gated on the HITL). **Session 13 (2026-07-13)**
+  ran the HITL live-TUI test (D30) — **all three checks PASSED on kiro-cli 2.12.0** (3 hooks from one
+  file, Stop fires + delivers stdin + the write loop runs end-to-end, steering `inclusion: always`
+  injects); the D23 parser schema did not drift on 2.12.0. This satisfies D27's LIVE-TEST CHECKPOINT,
+  so STAGE 5b needs no one-file-per-hook split. Next = STAGE 5b (wire the helper + read hook + env);
+  the consumer flip stays HITL.
 - **Branch:** `refactor/ai-factory-architecture`.
-- **Installed binary:** `kiro-cli 2.11.1` (store path
-  `…4mandd5ra27ggndwk4mqww35g7kzx43z-kiro-cli-2.11.1`). CLI 3.0/v3 is **Early
-  Access** in this build (`--v3` / `--agent-engine v3` / `--tui` opt-in; a bare
-  wrapped `kiro-cli` may already inject these).
+- **Installed binary:** `kiro-cli 2.12.0` (S13; was 2.11.1 through S12). Under 2.12.0 the v3/TUI
+  flags live under the **`chat` subcommand** — `kiro-cli chat --tui --v3` (also `--agent-engine
+{v1,v2,v3}`, `--mode {default,spec}`, `-a/--trust-all-tools`), NOT the launcher. CLI 3.0/v3 is
+  no longer bannered as Early Access (the welcome screen reads "Welcome to Kiro CLI V3!").
 - **Blocking unknowns:** none for the MVP. Q1–Q4 (v2) and Q5–Q8 (v3) are all
   answered. The WRITE side is unblocked but **requires a debounced per-turn
   `Stop`** (Q6) whose distiller reads `messages.jsonl` off disk (Q7) — an
@@ -1588,6 +1646,40 @@ cwd}`; `UserPromptSubmit` adds an empty `prompt` in 2.11.1) — no transcript. T
     HITL-reshapeable (one-file-3-hooks) → deferred until after the HITL live-TUI test.
   - cspell: renamed a `memtest` shell var → `mem_test_dir` (dictionary-clean) rather than adding a term.
 
+- **D30 (S13, 2026-07-13):** **HITL live-TUI test PASSED — all three checks green on kiro-cli 2.12.0;
+  the one-file-3-hooks model holds, so STAGE 5b needs NO split.** This satisfies D27's LIVE-TEST
+  CHECKPOINT — the last closed-binary unknown that has gated the consumer flip since S3.
+  - **Version note:** the installed binary is now **kiro-cli 2.12.0** (was 2.11.1 across S1–S12). The
+    v3 hook set was last probed on 2.11.1, so this run doubles as re-validation on the newer binary.
+    The v3/TUI flags **moved under the `chat` subcommand** in 2.12.0 (`kiro-cli chat --tui --v3`, and
+    `chat` also accepts `--agent-engine {v1,v2,v3}` + `--mode {default,spec}` + `-a/--trust-all-tools`)
+    — the launcher-level `--v3 --tui` the harness printed (and the older [[project_kiro_v3_engine_mode]]
+    probe) is stale for this build. Confirmed the correct form from the live TUI's own command line AND
+    `chat --help`; corrected the harness's printed hint in the same change (`dev/scripts/kiro-memory-hitl.sh`).
+  - **Pre-flight de-risk (agent, non-interactive, OOM-safe):** BEFORE the user's TUI time, verified the
+    generated config end-to-end — the `kiro-memory.json` envelope carries all 3 hooks; each wrapper has
+    the HOME `:?` guard + `KIRO_MEMORY_DIR` scratch redirect + execs a REALIZED distiller bin; and,
+    crucially, drove the **stop wrapper** exactly as kiro would (`{session_id,cwd}` on stdin, `FORCE=1`)
+    against a **real 2.12.0 `messages.jsonl`** → `distilled:2, skipped:null`, buffer files written. So
+    the **D23 parser schema did NOT drift on 2.12.0** and the whole write pipeline works on real data.
+    This narrowed the live test to purely the closed-binary firing/stdin/injection behaviors.
+  - **Live results (user-run trusted TUI, guided synchronously — [[feedback_hitl_walk_through_live]]):**
+    - **(a) 3 hooks / 1 file** ✅ — `/hooks` listed `kiro-memory-distill` (Stop), `kiro-memory-flush`
+      (SessionStart), `kiro-memory-remember` (Manual), all from the single envelope. **No one-file-per-hook
+      split needed** — 5b adds its UserPromptSubmit read hook as a 4th entry in the same file.
+    - **(b) Stop fires + delivers stdin + full write loop** ✅ — after quitting, the scratch `.state`
+      file was keyed on the **live** session id (`sess_f3248b29…`), proving kiro delivered the stdin
+      metadata; `now.md` grew 0→320 B with the correct distilled turn (Ask + answer + `_tools: read_file_`).
+      Turn 2 was correctly cooldown-skipped (first Stop distilled at `lastRunMs=0` ⇒ `cooledDown`; turn 2
+      within 90 s and under the 12-line `enoughNew` threshold) — the D24 OR-gate + D8 debounce observed
+      live, not a bug. Per Q6, quit added no Stop.
+    - **(c) steering `inclusion: always` injects** ✅ — the model quoted "# Persistent project memory
+      (auto-maintained)" verbatim and named the rule `kiro-auto-memory`.
+  - **Consequence for 5b:** proceed as designed against the existing one-file envelope. The open design
+    surface is the UserPromptSubmit archive-RAG **read** hook (what to query, how much to inject, the B3
+    interface measurement) + the `OM_PG*`/`OM_USER_ID` env contract (Q10 alignment at the flip). The
+    consumer flip stays HITL (Q10/Q11 gate ONLY the flip, not 5b code).
+
 ## Session log (append-only)
 
 - **Session 1 — 2026-07-11.** Research via a 3-phase workflow (map local memory
@@ -1869,6 +1961,25 @@ preToolUse, postToolUse, stop`.
   biome owns them (`a49fb03`, zero reformat — all tracked files were already biome fixed points;
   [[feedback_prefer_biome]]); (b) baked "push without asking" into the OPERATING PROTOCOL. **Next:** the
   HITL live-TUI test (USER-run, guided synchronously), then STAGE 5b.
+
+- **Session 13 — 2026-07-13.** Ran **the HITL live-TUI test** (D30) — the user-run trusted-TUI
+  checkpoint deferred since S3, guided synchronously step-by-step ([[feedback_hitl_walk_through_live]]).
+  **All three checks PASSED on kiro-cli 2.12.0** (a version bump from the 2.11.1 of S1–S12, so the run
+  doubles as re-validation). Agent-side pre-flight (non-interactive, OOM-safe): verified the generated
+  `kiro-memory.json` envelope + all three wrappers (HOME guard + `KIRO_MEMORY_DIR` redirect + realized
+  distiller bins), then drove the stop wrapper as kiro would against a REAL 2.12.0 `messages.jsonl`
+  (`distilled:2`) — proving the **D23 parser schema did not drift** and the whole write pipeline works on
+  real data, narrowing the live test to the closed-binary behaviors alone. Live (user-run): (a) `/hooks`
+  listed **all three hooks from the one file** → no split needed; (b) the scratch `.state` was keyed on
+  the **live** session id and `now.md` grew with the correct distilled turn → Stop fires + delivers stdin
+  - the write loop runs end-to-end (turn 2 correctly cooldown-skipped); (c) the model quoted the steering
+    anchor's title line → `inclusion: always` injects. Discovered + corrected a stale harness hint: 2.12.0
+    moved the v3/TUI flags under `chat` (`kiro-cli chat --tui --v3`), not the launcher — fixed the printed
+    command in `dev/scripts/kiro-memory-hitl.sh` (evidence: the live TUI's own command line + `chat --help`;
+    corrects [[project_kiro_v3_engine_mode]] for this build). No production code changed; the plan +
+    harness-hint updates are self-contained. **Next:** STAGE 5b — wire `openmemory-mem` onto the hook PATH,
+    add the UserPromptSubmit archive-RAG read hook (as a 4th entry in the existing envelope) + the
+    `OM_PG*`/`OM_USER_ID` env contract, all in `autoMemory.nix`; the consumer flip stays HITL.
 
 ## Sources
 
