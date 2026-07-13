@@ -1164,6 +1164,39 @@ in {
       echo PASS > "$out"
     '';
 
+  # D33: Manual `/remember` must FORCE an immediate distill — its wrapper bakes
+  # KIRO_MEMORY_FORCE=1 (which distiller main() honors, bypassing the debounce),
+  # while the per-turn Stop wrapper must stay debounced (no FORCE). Realize both
+  # wrappers on disk and grep them — this locks the per-wrapper distinction so a
+  # future refactor cannot collapse Manual back onto the debounced Stop path (the
+  # STAGE-6-surfaced gap where /remember silently no-op'd after a recent Stop).
+  module-kiro-auto-memory-manual-forces = let
+    mem = kiroAutoMem {home = "/home/tester";};
+    envelope = builtins.fromJSON (builtins.unsafeDiscardStringContext mem.hooks."kiro-memory");
+    cmdFor = trigger:
+      (lib.findFirst (h: h.trigger == trigger)
+        (throw "no ${trigger} hook")
+        envelope.hooks).action.command;
+    manualCmd = cmdFor "Manual";
+    stopCmd = cmdFor "Stop";
+  in
+    pkgs.runCommand "module-test-kiro-auto-memory-manual-forces" {
+      hookFile = pkgs.writeText "kiro-memory-hooks.json" mem.hooks."kiro-memory";
+    } ''
+      fail() {
+        echo "FAIL: kiro-auto-memory-manual-forces: $1" >&2
+        exit 1
+      }
+      m=${manualCmd}
+      grep -q 'export KIRO_MEMORY_FORCE=1' "$m" \
+        || fail "manual: /remember must force an immediate distill (KIRO_MEMORY_FORCE=1 not baked)"
+      s=${stopCmd}
+      if grep -q 'KIRO_MEMORY_FORCE' "$s"; then
+        fail "stop: per-turn Stop must stay debounced (KIRO_MEMORY_FORCE leaked into the stop wrapper)"
+      fi
+      echo PASS > "$out"
+    '';
+
   # STAGE 5b: a secret smuggled via EITHER env or omEnv would bake into the world-
   # readable store (bakedEnv = env // omEnv), so the generator asserts against the
   # merged set — evaluation must FAIL (tryEval success=false) for both routes.

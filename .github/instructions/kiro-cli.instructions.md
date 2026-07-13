@@ -41,7 +41,7 @@ extraction + formatting, never summarization.
 kiro v3 lifecycle hook   role wrapper (autoMemory.nix)   distiller.ts entry   effect
 ──────────────────────   ────────────────────────────   ──────────────────   ─────────────────────────────
 Stop  (per turn)      →  kiro-memory-stop     ┐          main()          →    distill this session's new turns
-Manual (/remember)    →  kiro-memory-manual   ┘ distill  main()          →    same debounced path as Stop (see Known gap — /remember does not force)
+Manual (/remember)    →  kiro-memory-manual   ┘ distill  main()          →    force-distill now (bakes KIRO_MEMORY_FORCE=1, bypasses debounce, D33)
 SessionStart          →  kiro-memory-flush      flush     mainFlush()     →    flush prior sessions' dropped tails
 UserPromptSubmit      →  kiro-memory-recall     read      mainRead()      →    inject recent tier + archive query
 
@@ -228,12 +228,19 @@ flush,manual,recall}`) that `exec`s a distiller bin by **absolute store path**
   `bakedEnv` (guarding BOTH `env` and `omEnv`, since a secret via either would
   bake — the review-caught guard gap). Defaults (`omEnv={}`,
   `omPgPasswordFile=null`) ⇒ backend best-effort-fails ⇒ file buffer alone.
+- **Manual forces (D33).** The `kiro-memory-manual` (`/remember`) wrapper — and
+  only it — additionally bakes `export KIRO_MEMORY_FORCE=1` (placed AFTER the
+  baked env so it wins over a consumer's `env`), making `/remember` bypass the
+  debounce for a deterministic immediate distill (D3). `mkWrapper` takes a
+  `force` flag; Manual is exactly the Stop wrapper `+ force`, every other wrapper
+  stays on the normal debounced path.
 
 **Env tuning knobs** (all read in `distiller.ts`, defaults in parens):
 `KIRO_MEMORY_SESSIONS_DIR` (`$HOME/.kiro/sessions`), `KIRO_MEMORY_DIR`
 (`$HOME/.kiro-memory`), `KIRO_MEMORY_MAX_NOW` (6), `KIRO_MEMORY_MAX_RECENT`
 (20), `KIRO_MEMORY_MIN_NEW_LINES` (12), `KIRO_MEMORY_COOLDOWN_MS` (90000),
-`KIRO_MEMORY_FORCE` (`"1"` bypasses debounce), `KIRO_MEMORY_RECALL_LIMIT` (3),
+`KIRO_MEMORY_FORCE` (`"1"` bypasses debounce — baked by the Manual wrapper, D33),
+`KIRO_MEMORY_RECALL_LIMIT` (3),
 `KIRO_MEMORY_RECALL_MAX_CHARS` (4000).
 
 ## Packaging — the bins (D25/D29)
@@ -305,18 +312,12 @@ fragility. Revisit if the STAGE-5 network SDK write is felt (tuning path P3).
 8. The read hook exits 0 and injects nothing on any failure.
 9. Wrapper commands are absolute store paths (nix-standards); only
    `openmemory-mem` (prepended) + `git` (suffixed) resolve off PATH.
+10. Manual `/remember` forces (`KIRO_MEMORY_FORCE=1` baked) and Stop stays
+    debounced (no force) — collapsing the two wrappers re-opens the D33 gap
+    where `/remember` silently no-ops after a recent Stop.
 
 ## Not done yet / tuning paths
 
-- **Known gap — Manual `/remember` does not force.** The `kiro-memory-manual`
-  wrapper is byte-identical to `kiro-memory-stop` and sets no `KIRO_MEMORY_FORCE`,
-  so `/remember` runs the SAME debounced path as `Stop` — it can no-op when a
-  `Stop` distilled < `cooldownMs` ago with < `minNewLines` new lines. D3's intent
-  (a deterministic, immediate user-triggered distill) needs
-  `export KIRO_MEMORY_FORCE=1` in `manualWrapper` only; the distiller already
-  honors it (`main()` reads `KIRO_MEMORY_FORCE==="1"`). A one-line `autoMemory.nix`
-  fix — until then the steering anchor's "force an immediate distill" line
-  over-promises. (Surfaced by the STAGE-6 review; awaiting the decision to land.)
 - **Consumer flip (HITL, SEPARATE track).** In nixos-config: openmemory
   stdio→http daemon, one-time Postgres re-key `anonymous`→`dev-no-auth`, and
   feed `omEnv` + `omPgPasswordFile` from the daemon's `settingsToEnv` so hook
@@ -342,4 +343,5 @@ fragility. Revisit if the STAGE-5 network SDK write is felt (tuning path P3).
 - Tests: `packages/kiro-cli/memory/distiller.test.ts` (80 bun tests),
   `packages/openmemory-mcp/mem/openmemory-mem.test.ts` (backend helper),
   `checks/module-eval.nix` (`module-kiro-auto-memory-*`: hooks, steering,
-  HM↔devenv parity, HOME-baked/empty==null, backend-wiring, rejects-baked-password).
+  HM↔devenv parity, HOME-baked/empty==null, backend-wiring, manual-forces,
+  rejects-baked-password).

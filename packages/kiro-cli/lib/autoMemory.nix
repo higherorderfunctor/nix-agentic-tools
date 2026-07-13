@@ -17,7 +17,7 @@
 # The four v3 lifecycle hooks (one `.kiro/hooks/kiro-memory.json` envelope):
 #   Stop             → kiro-memory-distiller  (per-turn, debounced distill of new turns)
 #   SessionStart     → kiro-memory-flush      (flush prior sessions' dropped tails)
-#   Manual           → kiro-memory-distiller  (deterministic user `/remember` fallback, D3)
+#   Manual           → kiro-memory-distiller  (user `/remember`; forces an immediate distill, D3/D33)
 #   UserPromptSubmit → kiro-memory-recall     (per-turn READ: inject the recent tier +
 #                                              a best-effort openmemory archive query, D30/5b)
 # All bins ship from overlays/kiro-memory-distiller.nix (STAGE 2, `pkgs.ai.*`).
@@ -112,21 +112,46 @@
   # external command is the distiller bin (absolute via getExe') plus a runtime cat
   # (absolute) for the secret; the openmemory-mem helper resolves off the prepended
   # PATH. Everything else is a bash builtin. Strict mode per repo convention.
-  mkWrapper = suffix: bin:
+  #
+  # `force` bakes `KIRO_MEMORY_FORCE=1` (which distiller main() honors, bypassing
+  # the debounce) — the Manual `/remember` wrapper is exactly the Stop wrapper plus
+  # force, so a user asking to remember is never silently no-op'd by the debounce
+  # after a recent Stop (D3/D33). Placed AFTER envLines so it wins over a
+  # consumer-supplied `KIRO_MEMORY_FORCE` in `env`; the per-turn Stop stays
+  # debounced (force=false → the line renders empty).
+  mkWrapper = {
+    suffix,
+    bin,
+    force ? false,
+  }:
     pkgs.writeShellScript "kiro-memory-${suffix}" ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
       export PATH=${omBinPath}:"$PATH"
       ${homeBlock}
       ${lib.optionalString (bakedEnv != {}) envLines}
+      ${lib.optionalString force "export KIRO_MEMORY_FORCE=1"}
       ${passwordLine}
       exec ${bin} "$@"
     '';
 
-  stopWrapper = mkWrapper "stop" distillBin;
-  flushWrapper = mkWrapper "flush" flushBin;
-  manualWrapper = mkWrapper "manual" distillBin;
-  recallWrapper = mkWrapper "recall" recallBin;
+  stopWrapper = mkWrapper {
+    suffix = "stop";
+    bin = distillBin;
+  };
+  flushWrapper = mkWrapper {
+    suffix = "flush";
+    bin = flushBin;
+  };
+  manualWrapper = mkWrapper {
+    suffix = "manual";
+    bin = distillBin;
+    force = true;
+  };
+  recallWrapper = mkWrapper {
+    suffix = "recall";
+    bin = recallBin;
+  };
 
   mkHook = {
     name,
@@ -164,7 +189,7 @@
         name = "kiro-memory-remember";
         trigger = "Manual";
         command = "${manualWrapper}";
-        description = "Deterministic user-triggered distill fallback (/remember).";
+        description = "Deterministic user-triggered distill (/remember): forces an immediate distill past the debounce.";
       })
       (mkHook {
         name = "kiro-memory-recall";
