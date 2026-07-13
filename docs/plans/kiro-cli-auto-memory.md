@@ -91,6 +91,42 @@ the same commit — future sessions inherit it by reading the doc.
   closed-binary behavior — this both saves their time and catches version-drift (S13:
   re-validated the D23 parser on a kiro-cli minor bump before the live run).
 
+── STATE (end of session 16) ──
+Session 16 (2026-07-13) landed OPTION B (D33) — Manual `/remember` now FORCES an immediate distill. This
+closes the one correctness gap the STAGE-6 review surfaced; the workstream's in-repo code + docs are COMPLETE.
+Self-serve; all green; PUSHED. The user picked B over the HITL consumer flip (A), which stays the sole
+remaining item (user-gated).
+- **Deliverable:** `mkWrapper` in `packages/kiro-cli/lib/autoMemory.nix` gains a `force` flag; the Manual
+  wrapper alone sets `force=true` → bakes `export KIRO_MEMORY_FORCE=1` (AFTER the baked env, so it wins over a
+  consumer's `env`), which the distiller's `main()` already honors (`KIRO_MEMORY_FORCE==="1"` → `force:true` →
+  `shouldDistill` bypassed). Manual is now exactly the Stop wrapper `+ force`; Stop stays debounced. So
+  `/remember` is a deterministic immediate distill (D3 intent), and the steering anchor's "force an immediate
+  distill" line is no longer over-promising. Also aligned the Manual `mkHook` description with the header
+  comment ("…forces an immediate distill past the debounce" — a review consistency nit).
+- **TDD:** new module-eval check `module-kiro-auto-memory-manual-forces` (realizes the manual + stop wrappers,
+  greps manual has `export KIRO_MEMORY_FORCE=1` / stop has none), proven RED→GREEN OOM-safely
+  (getFlake-inputs-only targeted `nix-build` of the single check); cat'd the realized manual wrapper to confirm
+  placement.
+- **Fragment maintained in the SAME commit** (repo doctrine): `packages/kiro-cli/docs/kiro-auto-memory.md` —
+  data-flow row (Manual → force-distill/D33), a "Manual forces" env-contract bullet, the FORCE knob note,
+  invariant #10, Known-gap bullet removed, `manual-forces` added to the test enumeration. Routers regenerated
+  via `devenv tasks run --mode before generate:instructions` (only the tracked
+  `.github/instructions/kiro-cli.instructions.md` is committed; `.claude/rules` + `.kiro/steering` are
+  gitignored mirrors).
+- **Adversarial review (4-lens: correctness / test-adversarial / doc-fidelity / DRY-convention + per-finding
+  refute; 8 agents): 1 CONFIRMED / 3 refuted.** The confirmed (doc-fidelity): the minted D33 dangled in THIS
+  plan (the fragment header names it the D# SSOT) and STATE(15) mislabeled the fix "(D32)" — FIXED here (this
+  D33 entry + the "(D32)"→"(D33)" correction). 3 refuted: an ordering-test nice-to-have (guards a nonsensical
+  `KIRO_MEMORY_FORCE=0` config; sibling tests are presence-only); "plan-doc live status still says B un-landed"
+  (correctly out-of-scope for the feat commit — handled in THIS docs(plans) update: Status + STATE + D33 + S16);
+  the Manual `description` "fallback" wording (cosmetic — fixed anyway, self-introduced asymmetry).
+- **Commits:** `feat(kiro-cli): force immediate distill on Manual /remember` (autoMemory.nix + module-eval +
+  fragment + tracked router) + `docs(plans): record S16 — manual-force landed (D33)` (this doc). Pushed.
+NEXT = only (A) the nixos-config CONSUMER FLIP remains (HITL, user-gated — do NOT self-start): openmemory
+stdio→http daemon, Postgres re-key `anonymous`→`dev-no-auth`, feed `autoMemory.nix`'s `omEnv` +
+`omPgPasswordFile` from the daemon's `settingsToEnv` (Q10/Q11). The in-repo code + docs are complete; there is
+no self-serve work left. OOM: bounded evalModules / drv-build / getFlake-inputs only.
+
 ── STATE (end of session 15) ──
 Session 15 (2026-07-13) landed STAGE 6 — the D26 comprehensive implementation doc. This is the FINAL stage
 of the workstream; ALL CODE (stages 1–5b) AND the doc are now done. Self-serve; all green; PUSHED.
@@ -134,7 +170,7 @@ of the workstream; ALL CODE (stages 1–5b) AND the doc are now done. Self-serve
 NEXT = the workstream's CODE + DOC are COMPLETE. Two items remain, BOTH outside the frozen stage order and
 BOTH gated on a USER decision (do NOT self-start): (A) the nixos-config CONSUMER FLIP (HITL) — openmemory
 stdio→http daemon, Postgres re-key `anonymous`→`dev-no-auth`, feed `autoMemory.nix`'s `omEnv` +
-`omPgPasswordFile` from the daemon's `settingsToEnv` (Q10/Q11). (B) the MANUAL-FORCE 1-line fix (D32) — add
+`omPgPasswordFile` from the daemon's `settingsToEnv` (Q10/Q11). (B) the MANUAL-FORCE 1-line fix (D33) — add
 `export KIRO_MEMORY_FORCE=1` to `manualWrapper` so `/remember` actually forces (recommended, but a change to
 otherwise-frozen code → user's call). If (B) is approved it is a tiny `feat(kiro-cli)` + a doc touch-up
 (drop the Known-gap note + the fragment's data-flow row); if declined, the Known-gap note stays honest. OOM:
@@ -749,9 +785,12 @@ the real option surface before landing each checkpoint.
   deferred / 3 refuted). This was the FINAL code stage. **Session 15 (2026-07-13)** landed STAGE 6 (D32) —
   the D26 comprehensive implementation doc (`packages/kiro-cli/docs/kiro-auto-memory.md`, a package-scoped
   fragment registered in `dev/generate.nix` + cross-linked + fanned out to all 3 ecosystems); 4-lens review
-  5-confirmed/5-refuted, all fixed; surfaced the Manual-`/remember`-does-not-force wiring gap (documented +
-  deferred to the user). **The workstream is now CODE- + DOC-complete;** only the HITL consumer flip and the
-  optional Manual-force 1-liner remain, both gated on a user decision.
+  5-confirmed/5-refuted, all fixed; surfaced the Manual-`/remember`-does-not-force wiring gap (then documented +
+  deferred to the user). **Session 16 (2026-07-13)** landed option B (D33) — Manual `/remember` now FORCES
+  (`mkWrapper` `force` flag → `KIRO_MEMORY_FORCE=1` baked into the Manual wrapper only; new `manual-forces`
+  module-eval test; the fragment's Known-gap note dropped in the same commit; 4-lens review 1-confirmed [the
+  D33 SSOT registration, fixed here] / 3-refuted). **The workstream's in-repo code + docs are now complete;**
+  only the HITL nixos-config consumer flip (A, Q10/Q11) remains — user-gated.
 - **Branch:** `refactor/ai-factory-architecture`.
 - **Installed binary:** `kiro-cli 2.12.0` (S13; was 2.11.1 through S12). On 2.12.0 BOTH
   `kiro-cli chat --tui --v3` (the `chat` subcommand, verified live) and the launcher form
@@ -1925,6 +1964,26 @@ cwd}`; `UserPromptSubmit` adds an empty `prompt` in 2.11.1) — no transcript. T
     user's call, NOT landed. If approved → `feat(kiro-cli)` + drop the Known-gap note + the fragment's
     data-flow row; if declined → the note stays.
 
+- **D33 (S16, 2026-07-13):** **Manual `/remember` now FORCES — option B landed** (closes the gap D32
+  surfaced). `mkWrapper` in `autoMemory.nix` gains a `force` flag; the Manual wrapper alone sets `force=true`,
+  baking `export KIRO_MEMORY_FORCE=1` (placed AFTER the baked env so it wins over a consumer's `env`), which
+  `distiller.main()` already honors (`KIRO_MEMORY_FORCE==="1"` → `force:true` → `shouldDistill` bypassed).
+  Manual = the Stop wrapper `+ force`; Stop stays debounced. `/remember` is thus a deterministic immediate
+  distill (the D3 intent), and the steering anchor's "force an immediate distill" line no longer over-promises.
+  TDD: new module-eval check `module-kiro-auto-memory-manual-forces` (realizes both wrappers; manual has FORCE,
+  stop has none), proven RED→GREEN OOM-safely. The fragment was maintained in the SAME commit (data-flow row,
+  a "Manual forces" env-contract bullet, the FORCE knob note, invariant #10, Known-gap bullet removed,
+  `manual-forces` added to the test enumeration); routers regenerated. Also aligned the Manual `mkHook`
+  description with the header comment. 4-lens review + per-finding refute (8 agents): **1 CONFIRMED / 3
+  refuted.** CONFIRMED (doc-fidelity): the minted D33 was un-registered in this plan SSOT (the fragment header
+  names it the D# source) and STATE(15) mislabeled the fix "(D32)" — both fixed here (this entry + the
+  "(D32)"→"(D33)" correction). 3 refuted: an ordering-test nice-to-have (guards a nonsensical
+  `KIRO_MEMORY_FORCE=0` config; sibling tests are presence-only by convention); "plan-doc live status still
+  says B un-landed" (out-of-scope for the feat commit — handled in the S16 docs(plans) update: Status + STATE
+  - D33 + S16); the Manual `description` "fallback" wording (cosmetic — fixed anyway as self-introduced
+    asymmetry). The user chose B over the HITL consumer flip (A), which stays the sole remaining item
+    (user-gated).
+
 ## Session log (append-only)
 
 - **Session 1 — 2026-07-11.** Research via a 3-phase workflow (map local memory
@@ -2263,6 +2322,22 @@ preToolUse, postToolUse, stop`.
   user rather than fixed in this frozen-code doc-only session). Pushed. **Next:** the workstream is CODE- +
   DOC-complete; only the HITL consumer flip and the optional Manual-force 1-liner remain, both gated on a
   user decision.
+
+- **Session 16 — 2026-07-13.** Landed **option B — Manual `/remember` forces** (D33), closing the one
+  correctness gap the STAGE-6 review surfaced. Resumed the (complete) workstream, reconciled the doc's
+  STATE(15) against the live repo (branch clean at `b3e9c653`; the S15 commits + 7 merged update PRs present;
+  fragment + routers on disk), and confirmed the gap was still real (`manualWrapper == stopWrapper`, no
+  `KIRO_MEMORY_FORCE`). Per the user's pick of B over the HITL flip (A), fixed it TDD-style: a failing
+  `manual-forces` module-eval test first (RED), then parameterized `mkWrapper` with a `force` flag so the
+  Manual wrapper bakes `KIRO_MEMORY_FORCE=1` after the baked env (GREEN); cat'd the realized wrapper to confirm
+  placement. Closed the gap everywhere the fragment documented it + regenerated routers (only
+  `.github/instructions/kiro-cli.instructions.md` is tracked; `.claude`/`.kiro` mirrors gitignored) + aligned
+  the Manual `mkHook` description. 4-lens adversarial review + per-finding refute (8 agents): **1 CONFIRMED**
+  (the minted D33 dangled in this plan SSOT + STATE(15) mislabeled it "(D32)" — both fixed here) **/ 3
+  refuted.** De-risked OOM-safely (getFlake-inputs-only targeted `nix-build` of the single module-eval check,
+  RED→GREEN; no full flake eval). Commits: `feat(kiro-cli)` (code + fragment + tracked router) + `docs(plans)`
+  (this doc). Pushed. **Next:** only the HITL nixos-config consumer flip (A, Q10/Q11) remains — user-gated; the
+  in-repo code + docs are complete.
 
 ## Sources
 
