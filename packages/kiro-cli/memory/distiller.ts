@@ -16,11 +16,13 @@ import { createHash, randomBytes } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
+  linkSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   renameSync,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -362,17 +364,161 @@ export interface DistillConfig {
   format: FormatOpts;
   /** best-effort backend seam; omitted = file-buffer only. */
   backendWrite?: BackendWrite;
+  /** per-project buffer-mutex tuning (D23b); omitted = production defaults. */
+  lock?: LockOpts;
 }
 
 export interface DistillResult {
   projectId: string;
   distilled: number;
-  skipped: "debounced" | "no-new-turns" | "no-transcript" | null;
+  skipped: "debounced" | "locked" | "no-new-turns" | "no-transcript" | null;
 }
 
 interface FileBuffer {
   now: string[];
   recent: string[];
+}
+
+export interface LockOpts {
+  /** wall clock (ms); injected for deterministic tests. default Date.now. */
+  now?: () => number;
+  /** synchronous sleep (ms); injected for tests. default Atomics.wait spin. */
+  sleep?: (ms: number) => void;
+  /** a held lock whose recorded age exceeds this is presumed abandoned and broken. */
+  ttlMs?: number;
+  /** give up acquiring after this long; the caller then skips (a later run retries). */
+  maxWaitMs?: number;
+  /** backoff between contended attempts. */
+  backoffMs?: number;
+}
+
+/**
+ * Block the calling thread for `ms` without an event loop (the distiller is a
+ * one-shot synchronous CLI). Atomics.wait on a throwaway SharedArrayBuffer sleeps
+ * without busy-spinning the CPU.
+ */
+function sleepSync(ms: number): void {
+  if (ms > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * Atomically create `lockPath` holding `token`, or return false if it already
+ * exists. Writing to a private temp file first and then `link()`-ing it into place
+ * makes the lock content fully present the instant the name becomes visible (no
+ * empty-file window a concurrent reader could observe), and link() is atomic +
+ * EEXIST-on-collision on a local filesystem — the canonical file mutex.
+ */
+function tryAcquireLock(lockPath: string, token: string): boolean {
+  const tmp = `${lockPath}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
+  writeFileSync(tmp, token);
+  try {
+    linkSync(tmp, lockPath);
+    return true;
+  } catch (e) {
+    if ((e as { code?: string }).code !== "EEXIST") throw e;
+    return false;
+  } finally {
+    try {
+      unlinkSync(tmp);
+    } catch {
+      // best-effort temp cleanup
+    }
+  }
+}
+
+/**
+ * True if the lock at `lockPath` records an acquire time older than `ttlMs` (its
+ * holder is presumed dead). An unreadable-but-present lock (garbage content — a
+ * writer that died mid-create, which link()-atomicity should prevent) is treated
+ * as infinitely old so it can be broken; a vanished lock is NOT stale (just retry).
+ */
+function lockAgeExceeded(
+  lockPath: string,
+  now: number,
+  ttlMs: number,
+): boolean {
+  let raw: string;
+  try {
+    raw = readFileSync(lockPath, "utf8");
+  } catch {
+    return false; // gone between the EEXIST and the read → let the next acquire retry
+  }
+  let ts = Number.NEGATIVE_INFINITY;
+  try {
+    const parsed = JSON.parse(raw) as { ts?: unknown };
+    if (typeof parsed.ts === "number") ts = parsed.ts;
+  } catch {
+    // unparseable → treat as infinitely old (break it)
+  }
+  return now - ts > ttlMs;
+}
+
+/**
+ * Run `critical` while holding a per-project O_EXCL-style lockfile at `lockPath`,
+ * serialising the read-modify-write of the D19 worktree-SHARED file buffer against
+ * concurrent distillers in sibling worktrees. Returns true if the lock was acquired
+ * and `critical` ran; false if acquisition timed out — the caller MUST then treat
+ * the run as a no-op (advance no state) so a later Stop / flushSessionTails retries.
+ * A stale lock (holder older than `ttlMs`) is broken; the lock is always released in
+ * a finally, and a throw from `critical` propagates after release.
+ *
+ * Best-effort by design (D23b), NOT a liveness-tracking lock. The acquire timestamp
+ * is stamped once and never refreshed, and both the stale-break and the release
+ * unlink by PATH with no holder-identity check. Two residuals follow: (1) a holder
+ * whose critical section outlives `ttlMs` (a suspend / SIGSTOP / severe-swap
+ * mid-distill — not only a *dead* holder) can have its lock broken by a waiter, and
+ * (2) that first holder, on resume, can unlink what is by then a second holder's
+ * lock. Both admit a concurrent critical section, but the outcome is bounded to a
+ * lost UPDATE, never a torn file: every buffer write goes through writeAtomic
+ * (temp+rename), and the dropped turns still survive in that session's `.state`
+ * distilled[] and were handed to the backend — they are missing only from the
+ * rebuildable file-buffer tier. `ttlMs` (≫ a sub-second distill) makes the trigger
+ * rare, and this strictly improves on the pre-D23b fully-unlocked RMW. Kernel flock
+ * or identity-checked break/release is a future hardening if the residual bites.
+ */
+export function withBufferLock(
+  lockPath: string,
+  opts: LockOpts,
+  critical: () => void,
+): boolean {
+  const now = opts.now ?? Date.now;
+  const sleep = opts.sleep ?? sleepSync;
+  const ttlMs = opts.ttlMs ?? 10_000;
+  const maxWaitMs = opts.maxWaitMs ?? 5_000;
+  const backoffMs = opts.backoffMs ?? 25;
+
+  mkdirSync(dirname(lockPath), { recursive: true });
+  const deadline = now() + maxWaitMs;
+  let acquired = false;
+  while (now() < deadline) {
+    if (
+      tryAcquireLock(lockPath, JSON.stringify({ ts: now(), pid: process.pid }))
+    ) {
+      acquired = true;
+      break;
+    }
+    if (lockAgeExceeded(lockPath, now(), ttlMs)) {
+      try {
+        unlinkSync(lockPath);
+      } catch {
+        // already broken by another waiter; the loop guard re-checks the deadline
+      }
+      continue; // retry immediately after breaking a stale lock
+    }
+    sleep(backoffMs);
+  }
+  if (!acquired) return false;
+
+  try {
+    critical();
+  } finally {
+    try {
+      unlinkSync(lockPath);
+    } catch {
+      // best-effort release
+    }
+  }
+  return true;
 }
 
 function writeAtomic(path: string, content: string): void {
@@ -497,25 +643,57 @@ export function distill(cfg: DistillConfig): DistillResult {
   }
 
   // File buffer (unconditional — this tier must survive the backend being down).
+  // The read-modify-write of the D19 worktree-SHARED buffer is serialised under a
+  // per-project lock so a concurrent distiller in a sibling worktree cannot
+  // lost-update it. On lock-timeout we advance NOTHING (no buffer, no state, no
+  // backend) and report skipped:"locked" — the next Stop / flushSessionTails, seeing
+  // the same undistilled turns and unchanged debounce baselines, simply retries.
   const blocks = turns.map((t) => formatTurnBlock(t, cfg.format));
-  const buf = loadBuffer(projDir);
-  const rolled = rollTiers(
-    { now: buf.now, recent: buf.recent, archive: [] },
-    blocks,
-    cfg.roll,
+  const wrote = withBufferLock(
+    join(projDir, ".buffer.lock"),
+    cfg.lock ?? {},
+    () => {
+      const buf = loadBuffer(projDir);
+      const rolled = rollTiers(
+        { now: buf.now, recent: buf.recent, archive: [] },
+        blocks,
+        cfg.roll,
+      );
+      writeAtomic(
+        join(projDir, "buffer.json"),
+        JSON.stringify({ now: rolled.now, recent: rolled.recent }),
+      );
+      writeAtomic(join(projDir, "now.md"), renderTier(rolled.now));
+      writeAtomic(join(projDir, "recent.md"), renderTier(rolled.recent));
+      if (rolled.archive.length) {
+        mkdirSync(projDir, { recursive: true });
+        appendFileSync(
+          join(projDir, "archive.md"),
+          `${rolled.archive.join("\n\n")}\n`,
+        );
+      }
+    },
   );
-  writeAtomic(
-    join(projDir, "buffer.json"),
-    JSON.stringify({ now: rolled.now, recent: rolled.recent }),
-  );
-  writeAtomic(join(projDir, "now.md"), renderTier(rolled.now));
-  writeAtomic(join(projDir, "recent.md"), renderTier(rolled.recent));
-  if (rolled.archive.length) {
-    mkdirSync(projDir, { recursive: true });
-    appendFileSync(
-      join(projDir, "archive.md"),
-      `${rolled.archive.join("\n\n")}\n`,
+  if (!wrote) {
+    // Lock timed out: write NOTHING to the shared buffer and call NO backend, and
+    // advance NO debounce baseline — but a per-session .state file MUST still exist
+    // so flushSessionTails (which discovers recoverable sessions by scanning
+    // .state/*.json) can rediscover this session's undistilled tail on a later
+    // SessionStart. Without it, a session whose only/final Stop timed out on the
+    // lock would leave no .state entry and its turns would be permanently dropped.
+    // Persist the LOADED values verbatim: for a fresh session these are all zeros
+    // (distilled=[], watermark=0), so the flush size gate re-fires and the next Stop
+    // still re-distills; for an existing session it is an idempotent rewrite.
+    writeAtomic(
+      statePath,
+      JSON.stringify({
+        lastLineCount: state.lastLineCount,
+        lastTranscriptSize: state.lastTranscriptSize,
+        lastRunMs: state.lastRunMs,
+        distilled: state.distilled,
+      }),
     );
+    return { projectId, distilled: 0, skipped: "locked" };
   }
 
   // Persist state BEFORE the backend call: the turns are now durably in the file

@@ -5,11 +5,12 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   type BackendWrite,
   type DistillConfig,
@@ -27,7 +28,23 @@ import {
   shouldDistill,
   type Turn,
   turnToMemoryText,
+  withBufferLock,
 } from "./distiller.ts";
+
+// A fully in-memory clock so the lock's wait/backoff loop is deterministic and
+// instant: `sleep(ms)` advances `now()` instead of blocking the thread.
+const fakeClock = (start: number) => {
+  let t = start;
+  let sleeps = 0;
+  return {
+    now: () => t,
+    sleep: (ms: number) => {
+      t += ms;
+      sleeps++;
+    },
+    sleeps: () => sleeps,
+  };
+};
 
 // --- schema-accurate synthetic record builders (kiro-cli 2.11.1) ---
 // Each transcript line is {id, payload, timestamp}; discriminator is payload.type.
@@ -634,6 +651,98 @@ describe("distill (orchestration)", () => {
     expect(res.distilled).toBe(2);
     expect(existsSync(join(memoryDir, projectId, "now.md"))).toBe(true);
   });
+
+  test("a normal distill leaves no stray .buffer.lock (release smoke)", () => {
+    const { cfg, memoryDir, projectId } = setup();
+    const res = distill(cfg);
+    expect(res.distilled).toBe(2);
+    expect(existsSync(join(memoryDir, projectId, ".buffer.lock"))).toBe(false);
+  });
+
+  test("returns skipped:locked and advances nothing when the buffer lock is held", () => {
+    const { cfg, memoryDir, projectId, calls } = setup();
+    // A concurrent worktree distiller holds the shared-buffer lock (fresh ts).
+    const projDir = join(memoryDir, projectId);
+    mkdirSync(projDir, { recursive: true });
+    writeFileSync(
+      join(projDir, ".buffer.lock"),
+      JSON.stringify({ ts: 1_000, pid: 424242 }),
+    );
+    const clock = fakeClock(1_000);
+    const res = distill({
+      ...cfg,
+      lock: {
+        now: clock.now,
+        sleep: clock.sleep,
+        ttlMs: 10_000,
+        maxWaitMs: 50,
+      },
+    });
+
+    expect(res.skipped).toBe("locked");
+    expect(res.distilled).toBe(0);
+    // No SHARED buffer write and no backend call — the turns stay undistilled.
+    expect(existsSync(join(projDir, "now.md"))).toBe(false);
+    expect(calls).toHaveLength(0);
+    // BUT a per-session .state file MUST exist with the loaded (zero) values —
+    // nothing advanced (distilled stays [], watermark stays 0) so the next Stop
+    // re-distills, AND flushSessionTails can rediscover this session's tail on a
+    // later SessionStart (it scans .state/*.json; a missing file = a lost session).
+    const st = JSON.parse(
+      readFileSync(join(projDir, ".state", "sess_test.json"), "utf8"),
+    );
+    expect(st.distilled).toEqual([]);
+    expect(st.lastTranscriptSize).toBe(0);
+    expect(st.lastRunMs).toBe(0);
+    // The held lock is left intact — we never stole a live lock.
+    expect(existsSync(join(projDir, ".buffer.lock"))).toBe(true);
+    expect(clock.sleeps()).toBeGreaterThan(0); // it actually spun waiting
+  });
+
+  test("flushSessionTails rediscovers a session whose only Stop timed out on the lock", () => {
+    // Regression guard for the D23b data-loss gap: a locked skip leaves a .state
+    // stub (watermark 0) so a later SessionStart force-distills the dropped tail.
+    const { cfg, memoryDir, projectId, calls } = setup({
+      sessionId: "sess_lost",
+    });
+    const projDir = join(memoryDir, projectId);
+    mkdirSync(projDir, { recursive: true });
+    writeFileSync(
+      join(projDir, ".buffer.lock"),
+      JSON.stringify({ ts: 1_000, pid: 424242 }),
+    );
+    const clock = fakeClock(1_000);
+    const locked = distill({
+      ...cfg,
+      lock: {
+        now: clock.now,
+        sleep: clock.sleep,
+        ttlMs: 10_000,
+        maxWaitMs: 50,
+      },
+    });
+    expect(locked.skipped).toBe("locked");
+    expect(existsSync(join(projDir, "now.md"))).toBe(false);
+
+    // The contending worktree finishes; its lock is gone. A later SessionStart runs.
+    rmSync(join(projDir, ".buffer.lock"));
+    const flush = flushSessionTails({
+      currentSessionId: "sess_other",
+      cwd: cfg.cwd,
+      gitCommonDir: cfg.gitCommonDir,
+      sessionsDir: cfg.sessionsDir,
+      memoryDir,
+      nowMs: 5_000,
+      roll: cfg.roll,
+      format: cfg.format,
+      backendWrite: cfg.backendWrite,
+    });
+    expect(flush.flushed).toEqual([{ sessionId: "sess_lost", distilled: 2 }]);
+    const nowMd = readFileSync(join(projDir, "now.md"), "utf8");
+    expect(nowMd).toContain("ask one");
+    expect(nowMd).toContain("ask two");
+    expect(calls).toHaveLength(2); // the tail reached the backend on flush
+  });
 });
 
 describe("main (CLI end-to-end via subprocess)", () => {
@@ -1036,5 +1145,116 @@ describe("flushSessionTails (cross-session tail-flush, D24)", () => {
     // If the gate were removed, the undistilled complete turn would be read and
     // distilled into now.md. The stat gate must prevent that.
     expect(existsSync(join(memoryDir, projectId, "now.md"))).toBe(false);
+  });
+});
+
+describe("withBufferLock (D23b per-project buffer mutex)", () => {
+  const lockPath = () =>
+    join(mkdtempSync(join(tmpdir(), "lock-")), "sub", ".buffer.lock");
+
+  test("acquires an unheld lock, runs the critical section, then releases it", () => {
+    const path = lockPath();
+    let ran = false;
+    const ok = withBufferLock(path, {}, () => {
+      // The lock file must exist WHILE the critical section runs.
+      expect(existsSync(path)).toBe(true);
+      ran = true;
+    });
+    expect(ok).toBe(true);
+    expect(ran).toBe(true);
+    expect(existsSync(path)).toBe(false); // released
+  });
+
+  test("releases the lock even when the critical section throws, and re-throws", () => {
+    const path = lockPath();
+    expect(() =>
+      withBufferLock(path, {}, () => {
+        throw new Error("boom");
+      }),
+    ).toThrow("boom");
+    expect(existsSync(path)).toBe(false); // released despite the throw
+  });
+
+  test("skips (returns false) without stealing a fresh lock held by another writer", () => {
+    const path = lockPath();
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify({ ts: 1_000, pid: 999 }));
+    const clock = fakeClock(1_000);
+    let ran = false;
+    const ok = withBufferLock(
+      path,
+      { now: clock.now, sleep: clock.sleep, ttlMs: 10_000, maxWaitMs: 100 },
+      () => {
+        ran = true;
+      },
+    );
+    expect(ok).toBe(false);
+    expect(ran).toBe(false);
+    expect(clock.sleeps()).toBeGreaterThan(0); // it spun on backoff
+    expect(existsSync(path)).toBe(true); // the live lock is untouched
+    expect(JSON.parse(readFileSync(path, "utf8")).pid).toBe(999);
+  });
+
+  test("breaks a stale lock (older than ttl) and acquires", () => {
+    const path = lockPath();
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify({ ts: 0, pid: 111 })); // ancient holder
+    const clock = fakeClock(20_000); // 20s later, ttl is 10s -> stale
+    let ran = false;
+    const ok = withBufferLock(
+      path,
+      { now: clock.now, sleep: clock.sleep, ttlMs: 10_000, maxWaitMs: 5_000 },
+      () => {
+        ran = true;
+      },
+    );
+    expect(ok).toBe(true);
+    expect(ran).toBe(true);
+    expect(existsSync(path)).toBe(false); // acquired then released
+  });
+
+  test("reads its OWN written token as fresh — a second acquire skips (writer/reader round-trip)", () => {
+    // Guards the writer(token @ acquire)->reader(staleness) schema coupling: the
+    // held lock here is one withBufferLock WROTE itself, not a hand-planted token.
+    // If the token ever stopped recording a numeric `ts`, the inner acquire would
+    // read it as infinitely-old, break the live outer lock, and run — so this pins
+    // that the real token round-trips as fresh.
+    const path = lockPath();
+    const clock = fakeClock(1_000);
+    let inner: boolean | null = null;
+    const outer = withBufferLock(
+      path,
+      { now: clock.now, sleep: clock.sleep },
+      () => {
+        inner = withBufferLock(
+          path,
+          { now: clock.now, sleep: clock.sleep, ttlMs: 10_000, maxWaitMs: 100 },
+          () => {
+            throw new Error("must not run — the outer lock is still held");
+          },
+        );
+      },
+    );
+    expect(outer).toBe(true);
+    expect(inner).toBe(false);
+  });
+
+  test("breaks a lock with garbage (non-JSON) content and acquires", () => {
+    // A lock whose content has no numeric `ts` (a would-be dead/incompatible writer)
+    // is treated as infinitely old and broken, so distillation never deadlocks on it.
+    const path = lockPath();
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, "not json at all");
+    let ran = false;
+    const ok = withBufferLock(
+      path,
+      { now: () => 5_000, sleep: () => {}, ttlMs: 10_000, maxWaitMs: 5_000 },
+      () => {
+        ran = true;
+      },
+    );
+    expect(ok).toBe(true);
+    expect(ran).toBe(true);
+    expect(existsSync(path)).toBe(false);
   });
 });

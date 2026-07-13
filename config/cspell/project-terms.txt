@@ -161,6 +161,7 @@ pythonpath
 quickstarts
 readabilipy
 reauthor
+rebuildable
 reflog
 reftable
 regen
@@ -183,6 +184,8 @@ scriptable
 sdiehl
 sequentialthinking
 serena
+serialised
+serialising
 sess
 shellharden
 shortrev
@@ -206,6 +209,7 @@ sympy
 taplo
 testapp
 tinyduck
+toctou
 tonumber
 toolsets
 tophat
@@ -216,7 +220,9 @@ ultracode
 unapprove
 undmg
 unflushed
+unheld
 unhide
+unparseable
 unskipped
 unstages
 unstash
