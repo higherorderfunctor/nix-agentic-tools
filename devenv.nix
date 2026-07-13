@@ -169,6 +169,17 @@ in {
     hooks.git-hooks-run.command = ''
       cd "$DEVENV_ROOT" && ${lib.getExe config.git-hooks.package} run 1>&2
     '';
+    # Scope this PostToolUse hook to file-WRITE tools only. Upstream devenv
+    # leaves the matcher `""`, so prek ran after EVERY tool call (Read, Bash,
+    # …) — treefmt inside prek rewrites files (mtime bump even on identical
+    # content), which (a) trips the Edit tool's "modified since read" guard and
+    # (b) fails --fail-on-change on a bare write. Firing only after Edit/Write/
+    # MultiEdit/NotebookEdit keeps the auto-format-as-you-go intent without the
+    # per-Read/Bash churn. If it still causes stale-file "modified since read"
+    # races, DELETE this hook block entirely and rely on the commit-time
+    # git-hooks (which already enforce formatting at `git commit`) — the
+    # per-tool run is redundant with it.
+    hooks.git-hooks-run.matcher = "Edit|MultiEdit|NotebookEdit|Write";
 
     permissions.rules = {
       Bash = {
