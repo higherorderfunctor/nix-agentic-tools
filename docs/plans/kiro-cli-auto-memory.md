@@ -68,6 +68,61 @@ the same commit — future sessions inherit it by reading the doc.
   and report (do not authenticate). `--trust-all-tools` is gone under v3 →
   permissions.yaml.
 
+── STATE (end of session 11) ──
+Session 11 (2026-07-13) landed STAGE 4 — the D23b per-project buffer lockfile (D28). Self-serve;
+isolated to packages/kiro-cli/memory/ (distiller.ts + tests) + a cspell bump. The distiller loop is
+now concurrency-safe across sibling worktrees. All green: 67 bun tests (TDD), treefmt + cspell clean,
+built OOM-safely (67 tests in the nix checkPhase sandbox), 4-lens adversarial review + per-finding
+refute (2 CONFIRMED fixed, 4 PARTIAL adjudicated, 0 survived un-actioned).
+- **Landed:** exported `withBufferLock(lockPath, {now?,sleep?,ttlMs?,maxWaitMs?,backoffMs?}, critical)`
+  — mkdir; spin (bounded by maxWaitMs on an injectable clock) trying `tryAcquireLock` (writeFile temp
+  + `linkSync` → atomic EEXIST-on-collision, the canonical local-fs mutex, no empty-file window);
+  break a stale lock (recorded ts > ttlMs old); run `critical` under the lock; release in `finally`;
+  propagate a throw after release. `distill()` wraps ONLY the SHARED-buffer RMW
+  (loadBuffer→rollTiers→write buffer.json/now.md/recent.md/archive.md) at `<projDir>/.buffer.lock`;
+  the per-session `.state/<sid>.json` stays OUTSIDE (not cross-process shared). Sync `Atomics.wait`
+  sleep (no event loop — matches the sync distiller, D8/D27). `DistillResult.skipped` gains `"locked"`.
+- **Review CONFIRMED + FIXED before landing (D28):**
+  (1) MEDIUM data-loss REGRESSION — a locked skip wrote NO `.state`, but `flushSessionTails` discovers
+      recoverable sessions ONLY via `.state/*.json`, so a session whose sole/final Stop timed out on
+      the lock was invisible to the recovery net → its turns permanently dropped (pre-D23b every first
+      Stop wrote `.state`). FIX: the locked skip now writes `.state` with the LOADED (unchanged)
+      values — discoverable by flush's `size > lastTranscriptSize` gate, retry semantics intact
+      (nothing advanced, no turn marked distilled). Regression-locked by an end-to-end
+      lock-skip → drop-lock → SessionStart-flush-rediscovers test.
+  (2) LOW test-gap — no test round-tripped withBufferLock's OWN token through the staleness reader (a
+      future drop of `ts` → every contended lock reads as infinitely-old → both break-and-enter →
+      total mutex defeat, all tests still green). ADDED a self-contention round-trip test + a
+      garbage-content-lock break test.
+- **Review PARTIAL (adjudicated, all low):** the stale-break/release unlink by PATH with no
+  holder-identity check, so a live-but-slow/suspended holder past ttlMs can be broken (not only a
+  *dead* one) and a resumed holder can free a successor's lock → a concurrent critical section.
+  Bounded to a lost UPDATE (writeAtomic keeps it corruption-free; dropped turns survive in `.state`
+  distilled[] + the backend, missing only from the rebuildable file-buffer tier) — squarely inside
+  D23b's stated best-effort scope. The overstated doc comment was CORRECTED in place. DECLINED a
+  subprocess real-race test (flaky, best-effort, bounded impact); kernel-flock / identity-checked
+  break-release noted as future hardening if the residual bites.
+- **HITL live-TUI harness is READY (turnkey, USER-run).** Built the REAL autoMemory hooks JSON
+  OOM-safely (overlay + autoMemory.nix targeted eval): one `kiro-memory.json` envelope, all 3 hooks;
+  the Stop wrapper guards HOME + execs the STAGE-4 distiller store path, `home=null` → guard-only +
+  `KIRO_MEMORY_DIR=/tmp/kiro-mem-hitl` scratch write target (nothing lands in ~/.kiro config OR
+  ~/.kiro-memory). A shellcheck-clean setup script (throwaway trusted-TUI project, workspace-local
+  `.kiro/{hooks,steering}`, prints the 3 checks) is in the session handoff. Run it EARLY — it de-risks
+  the loop and gates the consumer flip; if kiro won't fire 3 hooks from one file, split to
+  one-file-per-hook (trivial) and fold into D27.
+- **FROZEN STAGE ORDER (agent-owned):**
+    1. D24 tail-loss  ✅ DONE (S8)
+    2. Nix-package the distiller  ✅ DONE (S9)
+    3. v3 hook set + `--flush` SessionStart + steering anchor  ✅ DONE (S10, D27)
+    4. D23b buffer lockfile (O_EXCL mutex)  ✅ DONE (S11, D28)
+    5. openmemory-mem SDK helper (add/query, project_id) — backend enrichment; the file buffer works
+       without it; needs the serve daemon + Postgres to integration-test. Also unblocks the deferred
+       UserPromptSubmit archive-RAG read channel (D27).  ← NEXT
+    6. Comprehensive implementation doc (FINAL) — the D26 backlog fragment, after 5 settles.
+NEXT = STAGE 5 (openmemory-mem SDK helper) — the last CODE stage; agent's call next session. Per D27,
+run the HITL live-TUI test FIRST (it can reshape the STAGE-3 wiring the read side rides on). The
+consumer flip + live-TUI test stay HITL (Q10/Q11 gate only the flip).
+
 ── STATE (end of session 10) ──
 Session 10 (2026-07-12) landed STAGE 3 — the FIRST end-to-end auto-memory wiring (D27). Self-serve
 in nix-agentic-tools; the nixos-config consumer splice + the live trusted-TUI test stay HITL.
@@ -409,10 +464,13 @@ the real option surface before landing each checkpoint.
   **Session 8 (2026-07-12)** landed D24 — the deferred tail-loss fix (shouldDistill AND→OR gate +
   a SessionStart `flushSessionTails` scan + `--flush` CLI; 58 TDD tests). **Session 9 (2026-07-12)**
   landed STAGE 2 (D25) — nix-packaged the distiller as `overlays/kiro-memory-distiller.nix`
-  (dependency-free bun-wrapper, two role bins, 58 tests run in-sandbox via checkPhase, cache-hit-
-  parity allowlisted; the distiller is now a buildable flake package but still unwired). Next =
-  STAGE 3 (the v3 hook set + steering anchor — the first working end-to-end loop), then D23b buffer
-  lockfile and the `openmemory-mem` SDK helper.
+  (dependency-free bun-wrapper, two role bins, cache-hit-parity allowlisted). **Session 10
+  (2026-07-12)** landed STAGE 3 (D27) — the first end-to-end wiring
+  (`packages/kiro-cli/lib/autoMemory.nix` → the v3 Stop/SessionStart/Manual hooks + steering anchor).
+  **Session 11 (2026-07-13)** landed STAGE 4 (D28) — the D23b per-project buffer lockfile
+  (`withBufferLock`), making the distiller loop concurrency-safe across sibling worktrees. Next =
+  STAGE 5 (the `openmemory-mem` SDK helper); the HITL live-TUI test + the nixos-config consumer flip
+  stay HITL.
 - **Branch:** `refactor/ai-factory-architecture`.
 - **Installed binary:** `kiro-cli 2.11.1` (store path
   `…4mandd5ra27ggndwk4mqww35g7kzx43z-kiro-cli-2.11.1`). CLI 3.0/v3 is **Early
@@ -1372,6 +1430,45 @@ cwd}`; `UserPromptSubmit` adds an empty `prompt` in 2.11.1) — no transcript. T
     through the wrapper `exec … "$@"`, and (c) the steering anchor injects. These are closed-binary
     behaviors the repo cannot assert.
 
+- **D28 (S11, 2026-07-13):** **STAGE 4 landed — the D23b per-project buffer lockfile.**
+  `withBufferLock` (exported) serialises the SHARED-buffer read-modify-write (loadBuffer→rollTiers→
+  write) across concurrent sibling-worktree distillers — D19 keys the buffer on the worktree-shared
+  repo root, so concurrent kiro sessions in different worktrees RMW ONE buffer. Mechanism: `linkSync`
+  of a written temp onto `<projDir>/.buffer.lock` (atomic EEXIST-on-collision, the canonical local-fs
+  mutex — no empty-file window); ttl-based stale-break; `Atomics.wait` sync backoff (matches the sync
+  file-IO distiller, D8/D27 — no event loop); release in `finally`. On lock-timeout `distill()`
+  returns `skipped:"locked"`. The per-session `.state/<sid>.json` stays OUTSIDE the lock (per-session,
+  no cross-process contention).
+  - **Adversarial review (4-lens workflow + per-finding refute; 10 agents): 2 CONFIRMED, 4 PARTIAL, 0
+    REFUTED.** Both CONFIRMED fixed before landing:
+    - **(medium) data-loss regression** — the locked skip originally wrote nothing, but
+      `flushSessionTails` finds recoverable sessions only by scanning `.state/*.json`. A session whose
+      only/final Stop timed out on the lock left no `.state` → invisible to flush → turns permanently
+      dropped. Pre-D23b every first Stop wrote `.state` (first Stop always distills: lastRunMs=0 ⇒
+      cooledDown), so the lock introduced a NEW gap. FIX: the locked skip writes `.state` with the
+      LOADED values verbatim (fresh session ⇒ all zeros ⇒ flush's `size > lastTranscriptSize` gate
+      re-fires; no baseline advanced ⇒ the next Stop still re-distills). End-to-end regression test:
+      lock-skip → drop lock → SessionStart flush rediscovers + distills the tail.
+    - **(low) test-fidelity** — no test fed withBufferLock's OWN written token back through the
+      staleness reader, so a future drop of `ts` from the token (→ every contended lock reads as
+      infinitely-old → both break-and-enter → total mutex defeat) would pass all tests. Added a
+      self-contention round-trip test + a garbage-content-lock break test.
+  - **PARTIAL (adjudicated, all low):** (i) the stale-break + release unlink by PATH with no
+    holder-identity check → a live-but-slow/suspended holder past ttlMs can be broken and a resumed
+    holder can free a successor's lock (a concurrent critical section) — bounded to a lost UPDATE
+    (writeAtomic corruption-free; the turns survive in `.state` distilled[] + the backend, missing
+    only from the rebuildable file-buffer tier), squarely inside D23b's best-effort scope; the
+    overstated doc comment (was "only triggers when a holder has actually died") was CORRECTED.
+    (ii) `lockAgeExceeded`'s garbage/vanished branches — the garbage precondition is not producible by
+    this module (linkSync atomicity → only an orphan `.tmp`), added a cheap test anyway. (iii) a
+    weak-named "happy path releases the lock" test (already covered by the unit acquire/release tests)
+    — renamed to a "no stray .buffer.lock" smoke. DECLINED a subprocess real-race test (flaky,
+    best-effort, bounded impact); kernel-flock / identity-checked break-release recorded as future
+    hardening if the residual bites.
+  - Validated OOM-safely (targeted single-overlay `nix-build --expr`, no flake outputs): built clean,
+    all 67 tests green in the checkPhase sandbox, both wrappers exit 0. cspell terms added:
+    serialised, serialising, toctou, unheld, unparseable, rebuildable.
+
 ## Session log (append-only)
 
 - **Session 1 — 2026-07-11.** Research via a 3-phase workflow (map local memory
@@ -1614,6 +1711,21 @@ preToolUse, postToolUse, stop`.
   (recommended form = a package-scoped architecture fragment; final form + timing owned by the
   agent per the protocol, deferred to after stages 3–5 per the repo's stale-fragment doctrine).
   Plan-only (docs(plans)); no source/module change. **Next unchanged:** STAGE 3.
+
+- **Session 11 — 2026-07-13.** Landed **STAGE 4 — the D23b per-project buffer lockfile** (D28),
+  self-serve on refactor/ai-factory-architecture; isolated to packages/kiro-cli/memory/ (distiller.ts
+  - tests) + a cspell bump. TDD throughout (watched RED first): `withBufferLock` (linkSync O_EXCL
+    mutex + ttl stale-break + `Atomics.wait` backoff, injectable clock/sleep) around the shared-buffer
+    RMW; `distill()` returns `skipped:"locked"` on timeout. Ran a 4-lens adversarial review workflow
+    (concurrency / data-loss / test-fidelity / nix-repo-plan) + a per-finding refute pass (10 agents; 2
+    CONFIRMED, 4 PARTIAL, 0 REFUTED). Fixed both CONFIRMED before landing — the medium data-loss
+    regression (locked skip now writes a discoverable `.state` stub so `flushSessionTails` rediscovers
+    the tail) and the low token round-trip test gap — and adjudicated the 4 PARTIALs (corrected the
+    overstated stale-break comment; added garbage-lock + round-trip tests; renamed a weak-named test;
+    declined a flaky real-race test). 67 bun tests, treefmt + cspell clean, built OOM-safely (67 tests
+    in-sandbox). ALSO prepared a turnkey USER-run HITL live-TUI harness (real autoMemory hooks JSON
+    built OOM-safely + a shellcheck-clean scratch-config setup script). **Next:** STAGE 5 — the
+    `openmemory-mem` SDK helper (agent's call next session; run the HITL live-TUI test first per D27).
 
 ## Sources
 
