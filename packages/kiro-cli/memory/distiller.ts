@@ -808,6 +808,110 @@ export function flushSessionTails(cfg: FlushConfig): FlushResult {
   return { projectId, flushed };
 }
 
+// --- read side: the UserPromptSubmit archive-RAG recall hook (STAGE 5b) ---
+
+/**
+ * A best-effort memory-backend semantic query (the openmemory SDK helper). Returns
+ * the pre-formatted hit block, or "" when the daemon is down / helper absent / no
+ * hits — symmetric with BackendWrite, and swallowed the same way (a read hook must
+ * never break the turn).
+ */
+export type BackendQuery = (q: {
+  projectId: string;
+  query: string;
+  limit: number;
+}) => string;
+
+export interface RecallConfig {
+  cwd: string;
+  memoryDir: string;
+  /** resolved git common dir (null = non-git); injected so recall() stays pure of git. */
+  gitCommonDir: string | null;
+  /** top-K archive hits to request from the backend query. */
+  archiveLimit: number;
+  /** hard cap on the total injected block; over → truncated with a marker. */
+  maxChars: number;
+  /** best-effort archive-query seam; omitted = file-buffer tier only (no openmemory). */
+  backendQuery?: BackendQuery;
+}
+
+const RECALL_HEADER =
+  "<!-- kiro-memory: auto-recalled project context (read-only) -->";
+const RECALL_TRUNC = "\n…[truncated]";
+
+function readTierFile(path: string): string {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return ""; // absent tier: nothing to inject
+  }
+}
+
+/**
+ * Truncate to a HARD upper bound of `maxChars` UTF-16 units, never splitting a surrogate
+ * pair (a lone surrogate renders as U+FFFD — the same fix 5a's fmt_matches trunc uses).
+ * The marker is appended only when it fits; below its length the bound wins and the
+ * marker is dropped, so `result.length <= maxChars` holds for EVERY maxChars.
+ */
+function boundedTruncate(s: string, maxChars: number): string {
+  if (s.length <= maxChars) return s;
+  const marker = maxChars > RECALL_TRUNC.length ? RECALL_TRUNC : "";
+  let cut = s.slice(0, Math.max(0, maxChars - marker.length));
+  const last = cut.charCodeAt(cut.length - 1);
+  if (last >= 0xd800 && last <= 0xdbff) cut = cut.slice(0, -1); // drop lone high surrogate
+  return cut + marker;
+}
+
+/**
+ * Compose the injected read block from the recent (file-buffer) tier and the archive
+ * (openmemory) tier. Pure: no I/O, so the section logic + the hard char bound are unit-
+ * testable in isolation. Each tier is rendered only when non-empty; both empty ⇒ "" so
+ * the hook injects nothing. Over the budget ⇒ truncated with a marker (defense-in-depth
+ * on top of now.md already being turn-bounded).
+ */
+export function formatRecall(parts: {
+  now: string;
+  archive: string;
+  maxChars: number;
+}): string {
+  const now = parts.now.trim();
+  const archive = parts.archive.trim();
+  if (!now && !archive) return "";
+
+  const sections = [RECALL_HEADER];
+  if (now) sections.push(`## Recent working context\n\n${now}`);
+  if (archive) sections.push(`## Related from project memory\n\n${archive}`);
+  const out = sections.join("\n\n");
+  return boundedTruncate(out, parts.maxChars);
+}
+
+/**
+ * One recall run (a UserPromptSubmit hook invocation). Read the recent tier from the
+ * project's now.md, seed a best-effort archive query with it (the UPS prompt is empty
+ * on stdin, D12), and compose the bounded injected block. project_id keys BOTH the
+ * buffer path and the query scope (D19), so the read side sees exactly what the write
+ * side produced. A missing/failing backend degrades to the file-buffer tier alone.
+ */
+export function recall(cfg: RecallConfig): string {
+  const projectId = deriveProjectId(cfg.gitCommonDir, cfg.cwd);
+  const now = readTierFile(join(cfg.memoryDir, projectId, "now.md"));
+
+  let archive = "";
+  const seed = now.trim();
+  if (seed && cfg.backendQuery) {
+    try {
+      archive = cfg.backendQuery({
+        projectId,
+        query: seed,
+        limit: cfg.archiveLimit,
+      });
+    } catch {
+      archive = ""; // best-effort: a broken query injects less, never breaks the turn
+    }
+  }
+  return formatRecall({ now, archive, maxChars: cfg.maxChars });
+}
+
 // --- CLI entry (the Stop / Manual hook invokes this in the background) ---
 
 function defaultBackendWrite(fact: {
@@ -825,6 +929,32 @@ function defaultBackendWrite(fact: {
     });
   } catch {
     // helper not installed / daemon down.
+  }
+}
+
+function defaultBackendQuery(q: {
+  projectId: string;
+  query: string;
+  limit: number;
+}): string {
+  // Query the openmemory SDK helper if present, scoped by project_id (D20). Symmetric
+  // with defaultBackendWrite: best-effort, absence/failure/non-zero → "" (file-buffer
+  // tier alone). Captures stdout; stderr is dropped so a daemon warning can never leak
+  // into the injected context.
+  try {
+    return execFileSync(
+      "openmemory-mem",
+      ["query", "--project-id", q.projectId, "--limit", String(q.limit)],
+      {
+        input: q.query,
+        encoding: "utf8",
+        stdio: ["pipe", "pipe", "ignore"],
+        timeout: 5_000,
+        killSignal: "SIGKILL",
+      },
+    ).trim();
+  } catch {
+    return "";
   }
 }
 
@@ -939,6 +1069,41 @@ export async function mainFlush(): Promise<void> {
   }
 }
 
+/**
+ * UserPromptSubmit hook (READ): inject the recent working-context tier + a best-effort
+ * openmemory archive query into context every turn (exit-0 stdout injects, D14). The
+ * UPS prompt is empty on stdin (D12), so the archive query is seeded from the distilled
+ * buffer, not the prompt. Any failure injects nothing and exits 0 — a read hook must
+ * never break the user's turn.
+ */
+export async function mainRead(): Promise<void> {
+  const { cwd, home } = await readMeta();
+  const env = resolveCliEnv(home);
+  try {
+    const out = recall({
+      cwd,
+      memoryDir: env.memoryDir,
+      gitCommonDir: resolveGitCommonDir(cwd),
+      // Coerce to a positive integer: the helper hard-rejects a non-integer/<1 --limit
+      // (exit 2), which would silently drop the whole archive tier on a fat-fingered env.
+      archiveLimit: Math.max(
+        1,
+        Math.trunc(envNum("KIRO_MEMORY_RECALL_LIMIT", 3)),
+      ),
+      maxChars: envNum("KIRO_MEMORY_RECALL_MAX_CHARS", 4_000),
+      backendQuery: defaultBackendQuery,
+    });
+    if (out) process.stdout.write(out.endsWith("\n") ? out : `${out}\n`);
+  } catch (e) {
+    process.stderr.write(`[kiro-memory] recall error: ${String(e)}\n`);
+  }
+}
+
 if (import.meta.main) {
-  void (process.argv.includes("--flush") ? mainFlush() : main());
+  const args = process.argv;
+  void (args.includes("--flush")
+    ? mainFlush()
+    : args.includes("--read")
+      ? mainRead()
+      : main());
 }

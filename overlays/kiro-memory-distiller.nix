@@ -3,19 +3,24 @@
 # Source: packages/kiro-cli/memory/distiller.ts — a dependency-free bun/TS
 # script (only node: built-ins, no npm deps). It is the deterministic Stop-hook
 # write path for kiro-cli auto-memory (see docs/plans/kiro-cli-auto-memory.md).
-# This overlay ships it as two role wrappers a later checkpoint's v3 hooks invoke
-# by absolute store path:
+# This overlay ships it as three role wrappers the v3 hooks invoke by absolute
+# store path:
 #   kiro-memory-distiller  — Stop / Manual: distill the session's new turns.
 #   kiro-memory-flush      — SessionStart: flush prior sessions' dropped tails
 #                            (`distiller.ts --flush` → mainFlush()).
+#   kiro-memory-recall     — UserPromptSubmit: inject the recent tier + a best-effort
+#                            openmemory archive query (`distiller.ts --read` → mainRead()).
 #
 # Build pattern mirrors overlays/mcp-servers/openmemory-mcp.nix: makeWrapper over
 # ${bun}/bin/bun --add-flags <entry>. The script has nothing to compile, so the
 # install just copies the entry to the store and wraps it. git is on the wrapper
 # PATH (--suffix, ambient-first) because the distiller shells out to
-# `git rev-parse --git-common-dir` to derive the worktree-shared project_id (D19);
-# the openmemory-mem backend helper is intentionally best-effort-absent until a
-# later checkpoint (the file buffer works without it).
+# `git rev-parse --git-common-dir` to derive the worktree-shared project_id (D19).
+# The `openmemory-mem` backend helper (write add / read query) is intentionally NOT
+# baked onto PATH here — this package stays backend-agnostic so a future markdown-only
+# backend can reuse it. The wiring layer (packages/kiro-cli/lib/autoMemory.nix) puts
+# openmemory-mem on the hook wrappers' PATH; absent, the backend calls no-op (the file
+# buffer works without it).
 #
 # Cache-hit parity: every build input routes through `ourPkgs` (this repo's
 # nixpkgs pin), never `final`/`prev`. See .claude/rules/overlays.md.
@@ -63,18 +68,24 @@ in
         --add-flags "$out/lib/kiro-memory/distiller.ts" \
         --add-flags "--flush" \
         --suffix PATH : "${gitPath}"
+      makeWrapper ${bun}/bin/bun "$out/bin/kiro-memory-recall" \
+        --add-flags "$out/lib/kiro-memory/distiller.ts" \
+        --add-flags "--read" \
+        --suffix PATH : "${gitPath}"
       runHook postInstall
     '';
 
-    # End-to-end wrapper smoke: metadata-only stdin with no session_id makes both
-    # entry points no-op and exit 0 (main() bails on an invalid session id; the
-    # flush scan finds no prior-session state). Proves bun resolves the wrapped
-    # entry and the top-level dispatch runs, independent of any real transcript.
+    # End-to-end wrapper smoke: metadata-only stdin with no session_id makes every
+    # entry point no-op and exit 0 (main() bails on an invalid session id; the flush
+    # scan finds no prior-session state; recall finds no buffer → empty stdout). Proves
+    # bun resolves the wrapped entry and the top-level dispatch routes each --flag,
+    # independent of any real transcript or backend.
     doInstallCheck = true;
     installCheckPhase = ''
       runHook preInstallCheck
       echo '{}' | "$out/bin/kiro-memory-distiller"
       echo '{}' | "$out/bin/kiro-memory-flush"
+      echo '{}' | "$out/bin/kiro-memory-recall"
       runHook postInstallCheck
     '';
 

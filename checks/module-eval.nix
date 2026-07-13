@@ -174,15 +174,32 @@
   # by the distiller's own suite and the overlay build).
   kiroMemStub = pkgs.runCommand "kiro-memory-distiller-stub" {} ''
     mkdir -p "$out/bin"
-    for b in kiro-memory-distiller kiro-memory-flush; do
+    for b in kiro-memory-distiller kiro-memory-flush kiro-memory-recall; do
       printf '#!/bin/sh\nexit 0\n' > "$out/bin/$b"
       chmod +x "$out/bin/$b"
     done
   '';
+  # STAGE 5b: the recall/backend wiring puts openmemory-mem (a bin of openmemory-mcp)
+  # on the wrapper PATH. A tiny stub stands in so the eval tests don't build the real
+  # MCP server package.
+  omMemStub = pkgs.runCommand "openmemory-mcp-stub" {} ''
+    mkdir -p "$out/bin"
+    printf '#!/bin/sh\nexit 0\n' > "$out/bin/openmemory-mem"
+    chmod +x "$out/bin/openmemory-mem"
+  '';
   kiroAutoMem = args:
     import ./../packages/kiro-cli/lib/autoMemory.nix ({
         inherit lib;
-        pkgs = pkgs // {ai = (pkgs.ai or {}) // {kiro-memory-distiller = kiroMemStub;};};
+        pkgs =
+          pkgs
+          // {
+            ai =
+              (pkgs.ai or {})
+              // {
+                kiro-memory-distiller = kiroMemStub;
+                mcpServers = (pkgs.ai.mcpServers or {}) // {openmemory-mcp = omMemStub;};
+              };
+          };
       }
       // args);
 
@@ -1017,10 +1034,12 @@ in {
       && lib.hasInfix ''"trigger":"Stop"'' hookText
       && lib.hasInfix ''"trigger":"SessionStart"'' hookText
       && lib.hasInfix ''"trigger":"Manual"'' hookText
+      && lib.hasInfix ''"trigger":"UserPromptSubmit"'' hookText
       && lib.hasInfix ''"type":"command"'' hookText
       && lib.hasInfix "kiro-memory-stop" hookText
       && lib.hasInfix "kiro-memory-flush" hookText
       && lib.hasInfix "kiro-memory-manual" hookText
+      && lib.hasInfix "kiro-memory-recall" hookText
   );
 
   # HM: the steering anchor reaches .kiro/steering/kiro-auto-memory.md with
@@ -1088,6 +1107,78 @@ in {
       # (silent cwd-relative memory-loss) — it takes the same guard-only path as
       # null, so its output is byte-identical to the null case.
       && empty == unset
+  );
+
+  # STAGE 5b backend wiring: the recall wrapper must (a) prepend the openmemory-mem
+  # bin dir to PATH, (b) bake the non-secret omEnv, and (c) cat the password FILE at
+  # runtime — never bake the secret into the store. The wrapper is a store path
+  # referenced from the (context-carrying) hook JSON, so passing that JSON as a build
+  # input realizes all four wrappers; then grep the recall one on disk.
+  module-kiro-auto-memory-backend-wiring = let
+    mem = kiroAutoMem {
+      home = "/home/tester";
+      omEnv = {
+        OM_PG_HOST = "db.example";
+        OM_USER_ID = "dev-no-auth";
+      };
+      omPgPasswordFile = "/run/secrets/om-pg";
+    };
+    # fromJSON rejects a context-carrying string, and the JSON holds the wrapper
+    # store paths — so strip context to PARSE (safe: the path is only used as a grep
+    # target; the wrappers are realized via hookFile's retained context below).
+    envelope = builtins.fromJSON (builtins.unsafeDiscardStringContext mem.hooks."kiro-memory");
+    cmdFor = trigger:
+      (lib.findFirst (h: h.trigger == trigger)
+        (throw "no ${trigger} hook")
+        envelope.hooks).action.command;
+    recallCmd = cmdFor "UserPromptSubmit";
+    # The write-path wrappers (Stop/SessionStart/Manual) also shell to openmemory-mem
+    # (`add`), so they must share the SAME PATH + secret wiring — grep one to catch a
+    # future per-wrapper refactor that drops it from the write side (P8).
+    stopCmd = cmdFor "Stop";
+  in
+    pkgs.runCommand "module-test-kiro-auto-memory-backend-wiring" {
+      # writeText persists the context-carrying hook JSON (as real HM does), so its
+      # build realizes all four wrapper store paths — then the cmd paths exist on disk.
+      hookFile = pkgs.writeText "kiro-memory-hooks.json" mem.hooks."kiro-memory";
+    } ''
+      fail() {
+        echo "FAIL: kiro-auto-memory-backend-wiring: $1" >&2
+        exit 1
+      }
+      w=${recallCmd}
+      grep -q 'export PATH=' "$w" || fail "recall: no PATH prepend"
+      grep -q 'openmemory-mcp-stub' "$w" || fail "recall: openmemory-mem bin dir not on PATH"
+      grep -q 'OM_PG_HOST=' "$w" || fail "recall: omEnv OM_PG_HOST not baked"
+      grep -q 'OM_USER_ID=' "$w" || fail "recall: omEnv OM_USER_ID not baked"
+      # Runtime form is `OM_PG_PASSWORD="$(cat …)"` (double-quote); a baked secret
+      # would be single-quoted by escapeShellArg (`OM_PG_PASSWORD='…'`).
+      grep -q 'OM_PG_PASSWORD="' "$w" || fail "recall: password not read at runtime"
+      grep -q '/run/secrets/om-pg' "$w" || fail "recall: password file path missing"
+      if grep -q "OM_PG_PASSWORD='" "$w"; then fail "recall: password baked into store"; fi
+      # A write-path wrapper shares the wiring (openmemory-mem `add` + the same secret).
+      s=${stopCmd}
+      grep -q 'openmemory-mcp-stub' "$s" || fail "stop: openmemory-mem bin dir not on PATH"
+      grep -q 'OM_PG_PASSWORD="' "$s" || fail "stop: password not read at runtime"
+      if grep -q "OM_PG_PASSWORD='" "$s"; then fail "stop: password baked into store"; fi
+      echo PASS > "$out"
+    '';
+
+  # STAGE 5b: a secret smuggled via EITHER env or omEnv would bake into the world-
+  # readable store (bakedEnv = env // omEnv), so the generator asserts against the
+  # merged set — evaluation must FAIL (tryEval success=false) for both routes.
+  module-kiro-auto-memory-rejects-baked-password = mkTest "kiro-auto-memory-rejects-baked-password" (
+    let
+      throws = args: !(builtins.tryEval (kiroAutoMem args).hooks."kiro-memory").success;
+    in
+      throws {
+        home = "/home/tester";
+        omEnv = {OM_PG_PASSWORD = "leak";};
+      }
+      && throws {
+        home = "/home/tester";
+        env = {OM_PG_PASSWORD = "leak";};
+      }
   );
 
   # ── Task 5 (A4): Kiro HM/devenv fanout absorption ────────────

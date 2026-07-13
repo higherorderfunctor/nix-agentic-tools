@@ -12,16 +12,20 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  type BackendQuery,
   type BackendWrite,
   type DistillConfig,
   deriveProjectId,
   distill,
   type FlushConfig,
   flushSessionTails,
+  formatRecall,
   formatTurnBlock,
   isValidSessionId,
   locateTranscript,
   parseTranscript,
+  type RecallConfig,
+  recall,
   resolveGitCommonDir,
   rollTiers,
   selectUndistilledTurns,
@@ -745,6 +749,161 @@ describe("distill (orchestration)", () => {
   });
 });
 
+describe("formatRecall (pure read-side composer)", () => {
+  const M = 4000;
+
+  test("returns empty when both tiers are empty (inject nothing)", () => {
+    expect(formatRecall({ now: "", archive: "", maxChars: M })).toBe("");
+    expect(formatRecall({ now: "   \n", archive: "\t ", maxChars: M })).toBe(
+      "",
+    );
+  });
+
+  test("renders only the recent tier when the archive is empty", () => {
+    const out = formatRecall({ now: "recent stuff", archive: "", maxChars: M });
+    expect(out).toContain("## Recent working context");
+    expect(out).toContain("recent stuff");
+    expect(out).not.toContain("Related from project memory");
+  });
+
+  test("renders both tiers when the archive has hits", () => {
+    const out = formatRecall({
+      now: "recent stuff",
+      archive: "hit body",
+      maxChars: M,
+    });
+    expect(out).toContain("auto-recalled project context"); // the labeled fence
+    expect(out).toContain("## Recent working context");
+    expect(out).toContain("recent stuff");
+    expect(out).toContain("## Related from project memory");
+    expect(out).toContain("hit body");
+    // recent tier precedes the archive tier (freshest-first).
+    expect(out.indexOf("Recent working context")).toBeLessThan(
+      out.indexOf("Related from project memory"),
+    );
+  });
+
+  test("renders the archive tier even when the recent tier is empty", () => {
+    const out = formatRecall({ now: "", archive: "hit body", maxChars: M });
+    expect(out).toContain("## Related from project memory");
+    expect(out).toContain("hit body");
+    expect(out).not.toContain("Recent working context");
+  });
+
+  test("bounds the output to the char budget with a truncation marker", () => {
+    const out = formatRecall({
+      now: "x".repeat(9000),
+      archive: "",
+      maxChars: 500,
+    });
+    expect(out.length).toBeLessThanOrEqual(500);
+    expect(out).toContain("[truncated]");
+  });
+
+  test("honours a maxChars smaller than the marker (true upper bound)", () => {
+    for (const maxChars of [0, 1, 8, 13]) {
+      const out = formatRecall({ now: "y".repeat(100), archive: "", maxChars });
+      expect(out.length).toBeLessThanOrEqual(maxChars);
+    }
+  });
+
+  test("never splits an astral character at the truncation boundary", () => {
+    // All-astral content forces the UTF-16 budget cut onto a surrogate pair; a naive
+    // slice would leave a lone high surrogate (renders as U+FFFD), mirroring the 5a
+    // openmemory-mem trunc fix.
+    const out = formatRecall({
+      now: "🚀".repeat(300),
+      archive: "",
+      maxChars: 500,
+    });
+    expect(out.length).toBeLessThanOrEqual(500);
+    expect(out.isWellFormed()).toBe(true);
+  });
+});
+
+describe("recall (read-side orchestration, real fs + injected query seam)", () => {
+  const cwd = "/recall-workdir";
+  const projectId = deriveProjectId(null, cwd);
+
+  const setup = (nowContent: string | null) => {
+    const memoryDir = mkdtempSync(join(tmpdir(), "recall-mem-"));
+    if (nowContent !== null) {
+      const projDir = join(memoryDir, projectId);
+      mkdirSync(projDir, { recursive: true });
+      writeFileSync(join(projDir, "now.md"), nowContent);
+    }
+    const calls: Array<{ projectId: string; query: string; limit: number }> =
+      [];
+    const spyEmpty: BackendQuery = (q) => {
+      calls.push(q);
+      return "";
+    };
+    return { memoryDir, calls, spyEmpty };
+  };
+
+  const base = (
+    memoryDir: string,
+    over: Partial<RecallConfig> = {},
+  ): RecallConfig => ({
+    cwd,
+    memoryDir,
+    gitCommonDir: null,
+    archiveLimit: 3,
+    maxChars: 4000,
+    ...over,
+  });
+
+  test("injects nothing and never queries when the buffer is absent", () => {
+    const { memoryDir, calls, spyEmpty } = setup(null);
+    const out = recall(base(memoryDir, { backendQuery: spyEmpty }));
+    expect(out).toBe("");
+    expect(calls.length).toBe(0);
+  });
+
+  test("injects the recent tier + archive hits, seeding the query with now.md", () => {
+    const { memoryDir, calls } = setup("Ask: hi\n\nanswer body\n");
+    const query: BackendQuery = (q) => {
+      calls.push(q);
+      return "1. [decision] score=0.900 salience=0.500 id=x\narchived fact";
+    };
+    const out = recall(base(memoryDir, { backendQuery: query }));
+    expect(out).toContain("answer body");
+    expect(out).toContain("## Related from project memory");
+    expect(out).toContain("archived fact");
+    // seed = now.md trimmed; scope = the same project_id that keys the buffer.
+    expect(calls).toEqual([
+      { projectId, query: "Ask: hi\n\nanswer body", limit: 3 },
+    ]);
+  });
+
+  test("degrades to the recent tier when the archive query returns no hits", () => {
+    const { memoryDir, spyEmpty } = setup("answer body\n");
+    const out = recall(base(memoryDir, { backendQuery: spyEmpty }));
+    expect(out).toContain("answer body");
+    expect(out).not.toContain("Related from project memory");
+  });
+
+  test("degrades to the recent tier when no backend query is wired", () => {
+    const { memoryDir } = setup("answer body\n");
+    const out = recall(base(memoryDir));
+    expect(out).toContain("answer body");
+    expect(out).not.toContain("Related from project memory");
+  });
+
+  test("degrades to the recent tier when the archive query throws (daemon down)", () => {
+    const { memoryDir } = setup("answer body\n");
+    const out = recall(
+      base(memoryDir, {
+        backendQuery: () => {
+          throw new Error("daemon down");
+        },
+      }),
+    );
+    expect(out).toContain("answer body");
+    expect(out).not.toContain("Related from project memory");
+  });
+});
+
 describe("main (CLI end-to-end via subprocess)", () => {
   test("reads stdin metadata + env config, resolves real git, writes now.md", () => {
     const root = mkdtempSync(join(tmpdir(), "e2e-"));
@@ -856,6 +1015,39 @@ describe("main (CLI end-to-end via subprocess)", () => {
     const projectId = deriveProjectId(gitCommonDir, repo);
     const nowMd = readFileSync(join(memoryDir, projectId, "now.md"), "utf8");
     expect(nowMd).toContain("ask two"); // the dropped tail was flushed
+  });
+
+  test("--read injects the recent tier from now.md on UserPromptSubmit", () => {
+    const root = mkdtempSync(join(tmpdir(), "read-e2e-"));
+    const repo = join(root, "repo");
+    mkdirSync(repo);
+    execFileSync("git", ["init", "-q", "-b", "trunk", repo]);
+
+    const memoryDir = mkdtempSync(join(tmpdir(), "read-e2e-mem-"));
+    const projectId = deriveProjectId(resolveGitCommonDir(repo), repo);
+    const projDir = join(memoryDir, projectId);
+    mkdirSync(projDir, { recursive: true });
+    writeFileSync(
+      join(projDir, "now.md"),
+      "Ask: recall me\n\nrecalled answer\n",
+    );
+
+    // openmemory-mem is intentionally absent from PATH here, so the archive query
+    // best-effort-fails and the hook injects the file-buffer tier alone — the exact
+    // degraded mode this host runs in until the consumer flip.
+    const out = execFileSync(
+      "bun",
+      [join(import.meta.dir, "distiller.ts"), "--read"],
+      {
+        input: JSON.stringify({ session_id: "sess_read", cwd: repo }),
+        env: { ...process.env, HOME: root, KIRO_MEMORY_DIR: memoryDir },
+        encoding: "utf8",
+        stdio: ["pipe", "pipe", "ignore"],
+      },
+    );
+    expect(out).toContain("Recent working context");
+    expect(out).toContain("recalled answer");
+    expect(out).not.toContain("Related from project memory");
   });
 });
 
