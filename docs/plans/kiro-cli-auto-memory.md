@@ -104,11 +104,13 @@ No production code changed; the plan + a one-line harness-hint fix are self-cont
   against a REAL 2.12.0 `messages.jsonl` → `distilled:2`. So the **D23 parser schema did NOT drift on
   2.12.0** and the whole write pipeline works on real data — narrowing the live test to the irreducible
   closed-binary behaviors. (Method now baked into the OPERATING PROTOCOL's USER-run-tests bullet.)
-- **kiro-cli 2.12.0 flag move (harness fix):** the v3/TUI flags moved under the `chat` subcommand —
-  `kiro-cli chat --tui --v3` (also `--agent-engine {v1,v2,v3}`, `--mode {default,spec}`,
-  `-a/--trust-all-tools`), NOT the launcher. Corrected the printed hint in `dev/scripts/kiro-memory-hitl.sh`
-  (evidence: the live TUI's own command line + `chat --help`; corrects [[project_kiro_v3_engine_mode]]
-  for this build). The rest of the harness is unchanged and still turnkey.
+- **kiro-cli 2.12.0 launch forms (harness hint):** the `chat` subcommand accepts `--tui --v3`
+  (`kiro-cli chat --tui --v3`; `chat` also exposes `--agent-engine {v1,v2,v3}`, `--mode
+  {default,spec}`, `-a/--trust-all-tools`) — verified live. The **top-level launcher ALSO still
+  accepts `--v3`/`--tui`** on 2.12.0 (verified via `--help-all` Options block + a parse-only `--help`
+  check), consistent with the 2.8.1 [[project_kiro_v3_engine_mode]] launcher semantics — so the
+  harness's original `kiro-cli --v3 --tui` hint was **NOT broken**. Switched the printed hint to the
+  `chat` form actually exercised this session (both work); no other harness change.
 - **FROZEN STAGE ORDER (agent-owned):**
     1. D24 tail-loss  ✅ DONE (S8)
     2. Nix-package the distiller  ✅ DONE (S9)
@@ -599,10 +601,11 @@ the real option surface before landing each checkpoint.
   so STAGE 5b needs no one-file-per-hook split. Next = STAGE 5b (wire the helper + read hook + env);
   the consumer flip stays HITL.
 - **Branch:** `refactor/ai-factory-architecture`.
-- **Installed binary:** `kiro-cli 2.12.0` (S13; was 2.11.1 through S12). Under 2.12.0 the v3/TUI
-  flags live under the **`chat` subcommand** — `kiro-cli chat --tui --v3` (also `--agent-engine
-{v1,v2,v3}`, `--mode {default,spec}`, `-a/--trust-all-tools`), NOT the launcher. CLI 3.0/v3 is
-  no longer bannered as Early Access (the welcome screen reads "Welcome to Kiro CLI V3!").
+- **Installed binary:** `kiro-cli 2.12.0` (S13; was 2.11.1 through S12). On 2.12.0 BOTH
+  `kiro-cli chat --tui --v3` (the `chat` subcommand, verified live) and the launcher form
+  `kiro-cli --v3 --tui` work; `chat` additionally exposes `--agent-engine {v1,v2,v3}`, `--mode
+{default,spec}`, `-a/--trust-all-tools`. CLI 3.0/v3 is no longer bannered as Early Access (the
+  welcome screen reads "Welcome to Kiro CLI V3!").
 - **Blocking unknowns:** none for the MVP. Q1–Q4 (v2) and Q5–Q8 (v3) are all
   answered. The WRITE side is unblocked but **requires a debounced per-turn
   `Stop`** (Q6) whose distiller reads `messages.jsonl` off disk (Q7) — an
@@ -1651,11 +1654,13 @@ cwd}`; `UserPromptSubmit` adds an empty `prompt` in 2.11.1) — no transcript. T
   CHECKPOINT — the last closed-binary unknown that has gated the consumer flip since S3.
   - **Version note:** the installed binary is now **kiro-cli 2.12.0** (was 2.11.1 across S1–S12). The
     v3 hook set was last probed on 2.11.1, so this run doubles as re-validation on the newer binary.
-    The v3/TUI flags **moved under the `chat` subcommand** in 2.12.0 (`kiro-cli chat --tui --v3`, and
-    `chat` also accepts `--agent-engine {v1,v2,v3}` + `--mode {default,spec}` + `-a/--trust-all-tools`)
-    — the launcher-level `--v3 --tui` the harness printed (and the older [[project_kiro_v3_engine_mode]]
-    probe) is stale for this build. Confirmed the correct form from the live TUI's own command line AND
-    `chat --help`; corrected the harness's printed hint in the same change (`dev/scripts/kiro-memory-hitl.sh`).
+    The `chat` subcommand accepts `--tui --v3` (`kiro-cli chat --tui --v3`; `chat` also accepts
+    `--agent-engine {v1,v2,v3}` + `--mode {default,spec}` + `-a/--trust-all-tools`) — confirmed from the
+    live TUI's own command line. The **top-level launcher ALSO still accepts `--v3`/`--tui`** on 2.12.0
+    (verified via `--help-all` Options block + a parse-only `kiro-cli --v3 --tui --help` exiting 0),
+    consistent with the 2.8.1 [[project_kiro_v3_engine_mode]] launcher semantics — so the harness's
+    original `kiro-cli --v3 --tui` hint was **NOT broken** (I initially mis-claimed it was and corrected
+    that here). Switched the printed hint to the `chat` form actually exercised this session; both work.
   - **Pre-flight de-risk (agent, non-interactive, OOM-safe):** BEFORE the user's TUI time, verified the
     generated config end-to-end — the `kiro-memory.json` envelope carries all 3 hooks; each wrapper has
     the HOME `:?` guard + `KIRO_MEMORY_DIR` scratch redirect + execs a REALIZED distiller bin; and,
@@ -1973,10 +1978,12 @@ preToolUse, postToolUse, stop`.
   listed **all three hooks from the one file** → no split needed; (b) the scratch `.state` was keyed on
   the **live** session id and `now.md` grew with the correct distilled turn → Stop fires + delivers stdin
   - the write loop runs end-to-end (turn 2 correctly cooldown-skipped); (c) the model quoted the steering
-    anchor's title line → `inclusion: always` injects. Discovered + corrected a stale harness hint: 2.12.0
-    moved the v3/TUI flags under `chat` (`kiro-cli chat --tui --v3`), not the launcher — fixed the printed
-    command in `dev/scripts/kiro-memory-hitl.sh` (evidence: the live TUI's own command line + `chat --help`;
-    corrects [[project_kiro_v3_engine_mode]] for this build). No production code changed; the plan +
+    anchor's title line → `inclusion: always` injects. Switched the harness's printed launch hint to the
+    `kiro-cli chat --tui --v3` form actually exercised this session; VERIFIED both that form and the
+    launcher form `kiro-cli --v3 --tui` work on 2.12.0 (the launcher still exposes `--v3`/`--tui` per
+    `--help-all`), so the original hint was NOT broken — [[project_kiro_v3_engine_mode]]'s 2.8.1 launcher
+    semantics still hold. (I first mis-claimed the launcher form was stale and corrected it fix-forward
+    the same session — verify-before-asserting.) No production code changed; the plan +
     harness-hint updates are self-contained. **Next:** STAGE 5b — wire `openmemory-mem` onto the hook PATH,
     add the UserPromptSubmit archive-RAG read hook (as a 4th entry in the existing envelope) + the
     `OM_PG*`/`OM_USER_ID` env contract, all in `autoMemory.nix`; the consumer flip stays HITL.

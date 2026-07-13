@@ -49,8 +49,8 @@ cat <<EOF
 ==> READY. Now run the live test (trusted TUI — v3):
 
   cd ${proj}
-  kiro-cli chat --tui --v3      # 2.12.0: v3/tui flags live under the 'chat' subcommand,
-                                # NOT the launcher (verified S13; older builds differed)
+  kiro-cli chat --tui --v3      # verified working on 2.12.0 (S13). The launcher form
+                                # 'kiro-cli --v3 --tui' also works; either is fine.
   # Trust the workspace when prompted (hooks only fire in a trusted TUI).
 
   Run 2-3 turns that reference the two files, e.g.:
