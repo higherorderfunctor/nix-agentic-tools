@@ -13,6 +13,27 @@ Distilled from the workflows in `PLANv3.md` (code-review skill) and
 narrative is append-only markdown, and live views are rendered, never
 hand-patched.
 
+> **Restructure note — bootstrap of the ROOT workflow pivot (DIR-11; ideation repo,
+> WRITE-ONLY per register X11 — never git add/commit here, the resident session
+> commits).** This canonical living doc moved from
+> `docs/plans/living-plan-bootstrap-prompt.md` →
+> `docs/plans/living-workflow/living-plan-bootstrap.md`, and its two scaffold FILE
+> blocks were extracted to `scripts/` (`state.schema.json`, `render.sh`) as the
+> shared, reusable harness (register X9, DRY-by-reference). **`scripts/` is now the
+> canonical source for those files**; the verbatim copies still embedded in the
+> prompt block below are demoted to the WEB/no-repo cold-start fallback.
+>
+> **Protocol prose below is still v0, unchanged.** The v1 fold — reflection protocol
+> (X7), nesting (X8), DRY-by-reference (X9), ecosystem adapter (X10), commit-ownership
+> (X11), backlog-entry contract (X12) — is the NEXT step and is **not yet applied**.
+>
+> **Baseline pin (X9).** Anything authored against this doc (backlog entries, child
+> plans, the extract-arch-doc reconcile) records the git commit of the version it was
+> written against and reads that version. This restructure is intentionally left
+> uncommitted; the resident session stamps the baseline commit when it commits (see
+> the commit-note this session emits). When User tunes this doc, User re-points here
+> and dependents re-pin.
+
 Copy everything in the block below into a new session.
 
 ---
