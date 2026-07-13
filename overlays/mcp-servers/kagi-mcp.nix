@@ -34,6 +34,11 @@ in
     pyproject = true;
     build-system = with python313Packages; [hatchling];
     dependencies = with python313Packages; [fastmcp pydantic python-dateutil typing-extensions urllib3];
+    # Upstream pins `pydantic~=2.12.5`; the new nixpkgs ships pydantic 2.13.4,
+    # which trips pythonRuntimeDepsCheckHook. Relax the pydantic bound — the
+    # MCP-initialize smoke test in installCheckPhase still gates real runtime
+    # compatibility with the newer point release.
+    pythonRelaxDeps = ["pydantic"];
     doInstallCheck = true;
     installCheckPhase = vu.mkMcpSmokeTest {bin = "kagimcp";};
     meta.mainProgram = "kagimcp";
