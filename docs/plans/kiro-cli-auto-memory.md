@@ -26,6 +26,16 @@
 
 ---
 
+> **Implementation map (STAGE 6, S15).** The end-to-end current-code map now lives
+> in the package-scoped architecture fragment
+> `packages/kiro-cli/docs/kiro-auto-memory.md` (scope-globbed; fans out to
+> `.claude/rules/kiro-cli.md`, `.github/instructions/kiro-cli.instructions.md`,
+> `.kiro/steering/kiro-cli.md`). THIS plan stays the design + decision + session
+> record; the fragment is the code map and carries the mandatory
+> `Last verified:` maintenance marker. Keep them in sync.
+
+---
+
 ## Bootstrap prompt (read first)
 
 ```
@@ -80,6 +90,55 @@ the same commit — future sessions inherit it by reading the doc.
   real transcript on stdin) so the user's TUI time tests ONLY the irreducible
   closed-binary behavior — this both saves their time and catches version-drift (S13:
   re-validated the D23 parser on a kiro-cli minor bump before the live run).
+
+── STATE (end of session 15) ──
+Session 15 (2026-07-13) landed STAGE 6 — the D26 comprehensive implementation doc. This is the FINAL stage
+of the workstream; ALL CODE (stages 1–5b) AND the doc are now done. Self-serve; all green; PUSHED.
+- **Deliverable:** `packages/kiro-cli/docs/kiro-auto-memory.md` — a package-scoped architecture fragment
+  (location=package, D26) explaining the WHOLE auto-memory system end-to-end for BOTH an LLM revising the
+  code AND a human: the auto-READ/auto-WRITE frame; the write distiller pipeline + corrected D23 schema +
+  debounce OR-gate + tail-flush watermark (D24) + buffer O_EXCL lock (D23b) + the ordering guarantees; the
+  hybrid recall + `BackendQuery` seam (D31); worktree-shared `project_id` (D19/D20); the v3 hook set + the
+  HOME/`KIRO_MEMORY_*`/`OM_*` env contract + secret-never-baked (D31); the three role bins + bun-wrapper
+  idiom (D25) + the `openmemory-mem` 3rd-bin seam (D29); the module surface (`ai.kiro.hooks`/`.rules`, B5
+  parity); an invariants checklist; not-done/tuning; and debugging entry points. `Last verified: 2026-07-13`
+  + a mandatory-maintenance trigger per the repo's fragment doctrine.
+- **Registered** in `dev/generate.nix`: a new `kiro-cli` category in `devFragmentNames` (location=package)
+  + `packagePaths` (scoped to `overlays/kiro-memory-distiller.nix` + `packages/kiro-cli/**` +
+  `packages/openmemory-mcp/mem/**`). Fans out to `.claude/rules/kiro-cli.md`, the TRACKED
+  `.github/instructions/kiro-cli.instructions.md`, and `.kiro/steering/kiro-cli.md` — all 3 ecosystem
+  transforms verified (Copilot comma-`applyTo`, Claude `paths:` list, Kiro `fileMatchPattern:` array).
+  Cross-linked from `overlays/README.md` (+ a stale `bun test (58)`→`(80)` fix) and this plan.
+- **Adversarial review (4-lens + per-finding refute; 14 agents): 5 CONFIRMED / 5 refuted; all 5 FIXED
+  before landing.** Two medium: (i) the pipeline-order summary listed select-then-gate → corrected to
+  gate-BEFORE-parse (the cheap pre-parse gate; distill() runs shouldDistill before selectUndistilledTurns);
+  (ii) **THE REAL FIND — the Manual `/remember` hook does NOT force.** `manualWrapper` is byte-identical to
+  `stopWrapper` and sets no `KIRO_MEMORY_FORCE`, so `/remember` runs the SAME debounced path as `Stop` and
+  can silently no-op — contradicting D3 (deterministic immediate distill) + the steering anchor's "force an
+  immediate distill" promise. Three low, all fixed: "file-IO-only" (the sync path also forks git per Stop +
+  openmemory-mem per turn at a 5 s SIGKILL cap); "every write is temp+rename atomic" (false for archive.md's
+  appendFileSync — scoped to the whole-file tiers); "three tiers, only one live read" (recall() does two).
+- **Manual-force gap NOT landed this session.** The fix is a 1-line `export KIRO_MEMORY_FORCE=1` in
+  `manualWrapper` only (the distiller already honors it), but it is a code change to code the user FROZE
+  after 5b and it reshapes the abstraction the doc describes. So STAGE 6 stayed doc-only: the gap is
+  documented as a KNOWN GAP in the fragment (honest, not masked — [[feedback_no_masking_fixes]]) and
+  SURFACED for the user's decision, per [[feedback_wait_for_review]] + [[feedback_run_decisions_by_user]].
+- **De-risk (OOM-safe):** built each `instructions-{copilot,claude,kiro}` derivation individually (lazy
+  flake-parts attrs — no heavy overlay/checks eval; RAM held ~15 GB free); verified the generated router
+  frontmatter; nothing interactive.
+- **FROZEN STAGE ORDER (agent-owned) — ALL DONE:**
+    1. D24 tail-loss ✅ (S8)  ·  2. Nix-package the distiller ✅ (S9)  ·  3. v3 hook set + steering anchor ✅
+    (S10, D27)  ·  4. D23b buffer lockfile ✅ (S11, D28)  ·  5a. openmemory-mem SDK helper ✅ (S12, D29)  ·
+    HITL live-TUI test ✅ (S13, D30)  ·  5b. Read hook + backend wiring ✅ (S14, D31)  ·  6. Comprehensive
+    implementation doc ✅ (S15, D32)
+NEXT = the workstream's CODE + DOC are COMPLETE. Two items remain, BOTH outside the frozen stage order and
+BOTH gated on a USER decision (do NOT self-start): (A) the nixos-config CONSUMER FLIP (HITL) — openmemory
+stdio→http daemon, Postgres re-key `anonymous`→`dev-no-auth`, feed `autoMemory.nix`'s `omEnv` +
+`omPgPasswordFile` from the daemon's `settingsToEnv` (Q10/Q11). (B) the MANUAL-FORCE 1-line fix (D32) — add
+`export KIRO_MEMORY_FORCE=1` to `manualWrapper` so `/remember` actually forces (recommended, but a change to
+otherwise-frozen code → user's call). If (B) is approved it is a tiny `feat(kiro-cli)` + a doc touch-up
+(drop the Known-gap note + the fragment's data-flow row); if declined, the Known-gap note stays honest. OOM:
+bounded evalModules / drv-build / getFlake-inputs only.
 
 ── STATE (end of session 14) ──
 Session 14 (2026-07-13) landed STAGE 5b — the READ side + the openmemory backend wiring (D31). This is
@@ -687,8 +746,12 @@ the real option surface before landing each checkpoint.
   `autoMemory.nix` (openmemory-mem onto every wrapper PATH; `OM_*` via a baked `omEnv`; the PG password
   runtime-cat from `omPgPasswordFile`, never baked; a `bakedEnv` password-guard assert). 11 new bun tests
   (80 total, TDD) + 2 module-eval checks; 4-lens review (0 confirmed / 9 partial — 8 fixed, 1 tuning-path
-  deferred / 3 refuted). This is the FINAL code stage; only STAGE 6 (the comprehensive doc) and the HITL
-  consumer flip remain.
+  deferred / 3 refuted). This was the FINAL code stage. **Session 15 (2026-07-13)** landed STAGE 6 (D32) —
+  the D26 comprehensive implementation doc (`packages/kiro-cli/docs/kiro-auto-memory.md`, a package-scoped
+  fragment registered in `dev/generate.nix` + cross-linked + fanned out to all 3 ecosystems); 4-lens review
+  5-confirmed/5-refuted, all fixed; surfaced the Manual-`/remember`-does-not-force wiring gap (documented +
+  deferred to the user). **The workstream is now CODE- + DOC-complete;** only the HITL consumer flip and the
+  optional Manual-force 1-liner remain, both gated on a user decision.
 - **Branch:** `refactor/ai-factory-architecture`.
 - **Installed binary:** `kiro-cli 2.12.0` (S13; was 2.11.1 through S12). On 2.12.0 BOTH
   `kiro-cli chat --tui --v3` (the `chat` subcommand, verified live) and the launcher form
@@ -1828,6 +1891,40 @@ cwd}`; `UserPromptSubmit` adds an empty `prompt` in 2.11.1) — no transcript. T
     daemon's `settingsToEnv`, Q10/Q11) stays HITL and is NOT part of 5b. cspell: British spellings avoided
     (American) rather than adding dictionary terms.
 
+- **D32 (S15, 2026-07-13):** **STAGE 6 landed — the D26 comprehensive implementation doc; the workstream's
+  FINAL stage.** `packages/kiro-cli/docs/kiro-auto-memory.md`, a package-scoped architecture fragment
+  (location=package) registered in `dev/generate.nix` (`devFragmentNames.kiro-cli` + `packagePaths.kiro-cli`,
+  scoped to `overlays/kiro-memory-distiller.nix` + `packages/kiro-cli/**` + `packages/openmemory-mcp/mem/**`).
+  Fans out to `.claude/rules/kiro-cli.md`, the TRACKED `.github/instructions/kiro-cli.instructions.md`, and
+  `.kiro/steering/kiro-cli.md`. Cross-linked from `overlays/README.md` (+ a stale 58→80 test-count fix) and
+  this plan (the top-of-file implementation-map pointer). Covers everything D26 named (READ/WRITE frame;
+  distiller pipeline + D23 schema; hybrid recall + `BackendQuery` seam D31; `project_id` D19/D20; hook set +
+  env contract + secret-never-baked D31; 3 role bins + packaging D25/D29; module surface + B5 parity; the
+  invariant checklist). `Last verified: 2026-07-13` + maintenance trigger. Doc-only stage: no production code
+  changed; built OOM-safely (per-derivation instruction builds, not a full flake eval).
+  - **Adversarial review (4-lens — write-path / read-path / nix-wiring / completeness — + per-finding refute;
+    14 agents): 5 CONFIRMED / 5 refuted; all 5 fixed.** Two medium: (i) the pipeline-order summary listed
+    select-then-gate → corrected to gate-BEFORE-parse (distill() runs shouldDistill before
+    selectUndistilledTurns — the cheap pre-parse gate). (ii) **the real find — the Manual `/remember` hook
+    does NOT force:** `manualWrapper` is byte-identical to `stopWrapper` and sets no `KIRO_MEMORY_FORCE`, so
+    `/remember` runs the same debounced path as `Stop` and can silently no-op — contradicting D3 + the
+    steering anchor's "force an immediate distill" line. Three low, all fixed: "file-IO-only" (the sync path
+    also forks git per Stop + openmemory-mem per turn at a 5 s SIGKILL cap); "every write is temp+rename
+    atomic" (false for archive.md's appendFileSync); "three tiers, only one live read" (recall() does two).
+    5 refuted (all cosmetic/imprecise-only, refute-by-default): "injects every turn" (empty-buffer case
+    already documented downstream); "fourth bin from a different package" (a running count, not a bin-count
+    claim; the doc says "3rd bin of openmemory-mcp" correctly at its packaging section); "cache-hit-parity
+    allowlisted" (accurate — aiCliPackages is the covered list, the repo's own term); the "80" test count
+    (correct today, mitigated by the maintenance marker); the env-knob block (accurate + a genuine
+    cross-file contract, not a restatement).
+  - **Manual-force decision (deferred to user, per [[feedback_wait_for_review]] +
+    [[feedback_run_decisions_by_user]]):** the fix is a 1-line `export KIRO_MEMORY_FORCE=1` in `manualWrapper`
+    (the distiller already honors it) — but it is a code change to code the user explicitly froze after 5b,
+    and it reshapes the abstraction the doc describes. So STAGE 6 stayed doc-only: the gap is documented as a
+    KNOWN GAP in the fragment (honest, not masked — [[feedback_no_masking_fixes]]) and surfaced for the
+    user's call, NOT landed. If approved → `feat(kiro-cli)` + drop the Known-gap note + the fragment's
+    data-flow row; if declined → the note stays.
+
 ## Session log (append-only)
 
 - **Session 1 — 2026-07-11.** Research via a 3-phase workflow (map local memory
@@ -2151,6 +2248,21 @@ preToolUse, postToolUse, stop`.
   OOM-safely: built the overlay (80 tests + 3-bin smoke) + all 6 module-eval checks + drove the built
   recall bin on real data (degraded recent-only AND the archive path with a fake helper). **Next:** STAGE
   6 — the D26 comprehensive implementation doc; the consumer flip stays HITL.
+
+- **Session 15 — 2026-07-13.** Landed **STAGE 6 — the D26 comprehensive implementation doc** (D32), the
+  workstream's FINAL stage. Read the whole plan + all four code files (`distiller.ts`, `autoMemory.nix`,
+  `kiro-memory-distiller.nix`, `openmemory-mem.ts`) + the generator-registration mechanics + a template
+  package fragment, then wrote `packages/kiro-cli/docs/kiro-auto-memory.md` (~320 lines, end-to-end),
+  registered it in `dev/generate.nix` (`devFragmentNames`/`packagePaths` `kiro-cli` category), cross-linked
+  `overlays/README.md` (+ fixed a stale test count 58→80), and regenerated the router files — verifying the
+  TRACKED Copilot output + the gitignored Claude/Kiro mirrors, all OOM-safe via per-derivation
+  `instructions-*` builds (no full flake eval; RAM held ~15 GB free). Ran a 4-lens adversarial review
+  workflow (write-path / read-path / nix-wiring / completeness) + a per-finding refute pass (14 agents, 10
+  raw findings → 5 CONFIRMED / 5 refuted); fixed all 5, the headline being the
+  Manual-`/remember`-does-not-force wiring gap (surfaced, documented as a KNOWN GAP, and deferred to the
+  user rather than fixed in this frozen-code doc-only session). Pushed. **Next:** the workstream is CODE- +
+  DOC-complete; only the HITL consumer flip and the optional Manual-force 1-liner remain, both gated on a
+  user decision.
 
 ## Sources
 
