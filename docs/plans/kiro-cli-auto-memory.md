@@ -102,14 +102,15 @@ refute (2 CONFIRMED fixed, 4 PARTIAL adjudicated, 0 survived un-actioned).
   D23b's stated best-effort scope. The overstated doc comment was CORRECTED in place. DECLINED a
   subprocess real-race test (flaky, best-effort, bounded impact); kernel-flock / identity-checked
   break-release noted as future hardening if the residual bites.
-- **HITL live-TUI harness is READY (turnkey, USER-run).** Built the REAL autoMemory hooks JSON
-  OOM-safely (overlay + autoMemory.nix targeted eval): one `kiro-memory.json` envelope, all 3 hooks;
-  the Stop wrapper guards HOME + execs the STAGE-4 distiller store path, `home=null` → guard-only +
-  `KIRO_MEMORY_DIR=/tmp/kiro-mem-hitl` scratch write target (nothing lands in ~/.kiro config OR
-  ~/.kiro-memory). A shellcheck-clean setup script (throwaway trusted-TUI project, workspace-local
-  `.kiro/{hooks,steering}`, prints the 3 checks) is in the session handoff. Run it EARLY — it de-risks
-  the loop and gates the consumer flip; if kiro won't fire 3 hooks from one file, split to
-  one-file-per-hook (trivial) and fold into D27.
+- **HITL live-TUI harness is COMMITTED + turnkey (USER-run): `dev/scripts/kiro-memory-hitl.{nix,sh}`.**
+  The `.nix` assembles a scratch `.kiro/{hooks,steering}` tree from the REAL generators — autoMemory.nix
+  (hooks) + the kiro transformer (steering `inclusion: always`) — so it CANNOT go stale (it always builds
+  the current output; reuse it across STAGE 5 / kiro-version bumps). `bash dev/scripts/kiro-memory-hitl.sh`
+  builds it OOM-safely (getFlake inputs only), wires a throwaway trusted-TUI git project, and prints the 3
+  checks. `home=null` → HOME-guard-only + `KIRO_MEMORY_DIR=/tmp/kiro-mem-hitl` scratch write target
+  (nothing lands in ~/.kiro config OR ~/.kiro-memory; kiro still reads its own ~/.kiro/sessions). Run it
+  EARLY — it de-risks the loop and gates the consumer flip; if kiro won't fire 3 hooks from one file, split
+  to one-file-per-hook (trivial) and fold into D27.
 - **FROZEN STAGE ORDER (agent-owned):**
     1. D24 tail-loss  ✅ DONE (S8)
     2. Nix-package the distiller  ✅ DONE (S9)
