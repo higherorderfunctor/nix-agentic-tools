@@ -143,6 +143,14 @@
     kimchi = [
       "packages/kimchi/**"
     ];
+    # kiro-cli: auto-memory system (distiller pipeline, v3 hook set,
+    # buffer/archive tiers, the openmemory-mem backend seam). Scoped to the
+    # kiro-cli package, the distiller overlay, and the backend helper source.
+    kiro-cli = [
+      "overlays/kiro-memory-distiller.nix"
+      "packages/kiro-cli/**"
+      "packages/openmemory-mcp/mem/**"
+    ];
     mcp-servers = [
       "overlays/mcp-servers/**"
     ];
@@ -209,6 +217,13 @@
         location = "package";
         name = "kimchi-factory";
         dir = "kimchi";
+      }
+    ];
+    kiro-cli = [
+      {
+        location = "package";
+        name = "kiro-auto-memory";
+        dir = "kiro-cli";
       }
     ];
     mcp-servers = [

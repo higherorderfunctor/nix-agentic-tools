@@ -16,7 +16,10 @@ Versions computed at eval time via `overlays/lib.nix:mkVersion`
 - **Flake inputs**: consumed from `inputs.<name>.packages`, updated via `nix flake update`.
 - **In-repo source**: packaged from a path in this repo (no upstream rev/hash,
   not version-tracked). Currently only `kiro-memory-distiller`
-  (`packages/kiro-cli/memory/`).
+  (`packages/kiro-cli/memory/`). Its whole system — the distiller pipeline, the
+  v3 hook set, the buffer/archive tiers, and the `openmemory-mem` backend seam —
+  is documented end-to-end in
+  [`packages/kiro-cli/docs/kiro-auto-memory.md`](../packages/kiro-cli/docs/kiro-auto-memory.md).
 
 ## Package table
 
@@ -28,7 +31,7 @@ Versions computed at eval time via `overlays/lib.nix:mkVersion`
 | kimchi                | root       | GitHub releases      | pre-built binary (bun)    | —                     | —             | --version           |
 | kiro-cli              | root       | AWS manifest         | pre-built binary          | `kiro-cli`            | —             | binary              |
 | kiro-gateway          | root       | GitHub main          | python                    | —                     | pytest (1413) | —                   |
-| kiro-memory-distiller | root       | in-repo              | bun wrapper               | —                     | bun test (58) | stdin exit 0        |
+| kiro-memory-distiller | root       | in-repo              | bun wrapper               | —                     | bun test (80) | stdin exit 0        |
 | context7-mcp          | mcpServers | GitHub main          | pnpm (nixpkgs override)   | `context7-mcp`        | vitest (2)    | version check       |
 | effect-mcp            | mcpServers | GitHub main          | pnpm                      | —                     | —             | MCP stdin           |
 | git-intel-mcp         | mcpServers | GitHub main          | npm                       | —                     | vitest (40)   | MCP stdin           |
