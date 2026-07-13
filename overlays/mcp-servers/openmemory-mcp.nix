@@ -17,6 +17,15 @@
     inherit rev;
     hash = "sha256-wzQ347TcOU+IezCoFtk66GT4f4LkCyf6o+2Db7uziz0=";
   };
+
+  # The auto-memory backend helper (STAGE 5, D19/D20): a thin CLI over the
+  # in-process `Memory` SDK. Shipped FROM this package (not a separate overlay)
+  # so it shares the exact `dist/` + `node_modules` the daemon runs — guaranteeing
+  # SDK/Postgres-schema lockstep. Source is repo-local (consumer-stable → cache-hit
+  # parity holds). Referenced as individual file paths so only the helper (not its
+  # test) enters $out. See docs/plans/kiro-cli-auto-memory.md.
+  memHelper = ../../packages/openmemory-mcp/mem/openmemory-mem.ts;
+  memTest = ../../packages/openmemory-mcp/mem/openmemory-mem.test.ts;
 in
   buildNpmPackage {
     pname = "openmemory-mcp";
@@ -31,6 +40,22 @@ in
     npmDepsHash = "sha256-jYvuAPpU53V44FdNmcvxQRJu7cGQBJ+7MCZPspWQwMA=";
     # Source needs building (tsc). npm tarball had pre-built dist/.
     nativeBuildInputs = [makeWrapper];
+
+    # Run the openmemory-mem helper's own bun suite in-sandbox (pure: stub
+    # backend, no Postgres/dist load), so a real regression fails the build.
+    # Copied into an isolated temp dir so bun does not pick up the upstream
+    # vitest suite in sourceRoot.
+    doCheck = true;
+    nativeCheckInputs = [bun];
+    checkPhase = ''
+      runHook preCheck
+      mem_test_dir="$(mktemp -d)"
+      cp ${memHelper} "$mem_test_dir/openmemory-mem.ts"
+      cp ${memTest} "$mem_test_dir/openmemory-mem.test.ts"
+      HOME="$TMPDIR" ${bun}/bin/bun test "$mem_test_dir/openmemory-mem.test.ts"
+      runHook postCheck
+    '';
+
     installPhase = ''
       runHook preInstall
       mkdir -p $out/lib/openmemory-mcp $out/bin
@@ -41,9 +66,21 @@ in
       makeWrapper ${bun}/bin/bun $out/bin/openmemory-mcp-serve \
         --add-flags "$out/lib/openmemory-mcp/bin/opm.js" \
         --add-flags "serve"
+      # Auto-memory backend helper (STAGE 5): resolves `./dist/index.js` relative
+      # to itself, so its openmemory-js deps load from the sibling node_modules.
+      cp ${memHelper} $out/lib/openmemory-mcp/openmemory-mem.ts
+      makeWrapper ${bun}/bin/bun $out/bin/openmemory-mem \
+        --add-flags "$out/lib/openmemory-mcp/openmemory-mem.ts"
       runHook postInstall
     '';
     doInstallCheck = true;
     installCheckPhase = vu.mkMcpSmokeTest {bin = "openmemory-mcp";};
+    # openmemory-mem smoke (runs via mkMcpSmokeTest's `runHook postInstallCheck`):
+    # empty stdin short-circuits before any dist/Postgres load, proving bun resolves
+    # the wrapped entry + dispatch runs. Live PG is exercised at the consumer flip.
+    postInstallCheck = ''
+      echo -n "" | $out/bin/openmemory-mem add --project-id smoke
+      echo -n "" | $out/bin/openmemory-mem query --project-id smoke
+    '';
     meta.mainProgram = "openmemory-mcp";
   }

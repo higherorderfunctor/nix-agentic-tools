@@ -37,7 +37,7 @@ Versions computed at eval time via `overlays/lib.nix:mkVersion`
 | mcp-language-server   | mcpServers | GitHub main          | go (nixpkgs override)     | `mcp-language-server` | go test       | MCP stdin           |
 | mcp-proxy             | mcpServers | GitHub main          | python (nixpkgs override) | `mcp-proxy`           | pytest        | MCP stdin           |
 | nixos-mcp             | mcpServers | flake input          | —                         | —                     | upstream      | MCP stdin           |
-| openmemory-mcp        | mcpServers | GitHub main          | npm                       | —                     | —             | MCP stdin           |
+| openmemory-mcp        | mcpServers | GitHub main          | npm                       | `openmemory-mem`      | bun test (30) | MCP stdin + mem     |
 | serena-mcp            | mcpServers | flake input          | —                         | —                     | —             | MCP stdin           |
 | sympy-mcp             | mcpServers | GitHub main          | python                    | —                     | pytest (62)   | MCP stdin           |
 | modelcontextprotocol  | mcpServers | GitHub main          | npm + python              | —                     | pytest        | all 6 bins          |
