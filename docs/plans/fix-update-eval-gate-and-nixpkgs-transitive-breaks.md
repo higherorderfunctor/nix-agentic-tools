@@ -43,9 +43,11 @@ verify it.
 
 ## Context
 
-A recent `nixpkgs` bump (flake input `nixpkgs`, new revision
-`0bb7ec54c8483066ec9d7720e780a5caa71f8612`) shipped through the update
-pipeline as PR **#350 (`update/nixpkgs`)**. That PR's CI fails on two packages
+A recent `nixpkgs` bump shipped through the update pipeline as PR
+**#350 (`update/nixpkgs`)**. The exact nixpkgs revision on that branch
+changes as the update bot refreshes it (as of 2026-07-13,
+`e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3`); the fixes below are
+revision-agnostic. That PR's CI fails on two packages
 at build time, a third is held back by the update pipeline, and — separately —
 the pipeline _should have withheld the bump_ but did not. The four fixes:
 
@@ -522,6 +524,7 @@ maintainer's audit.
 - Task 3 kagi-mcp: confirm `pythonRelaxDeps` cleared `pythonRuntimeDepsCheck`
   and the smoke test still passes under pydantic 2.13.4 (a runtime break there
   means pin instead of relax).
-- Task 4 eval gate: sanity-check the grep pattern against the observed line
-  `ERROR:nix_fast_build:EVAL: 37 successes, 1 failures`.
+- Task 4 eval gate: sanity-check the grep pattern against an observed line
+  like `ERROR:nix_fast_build:EVAL: 38 successes, 1 failures` (the success
+  count varies; the nonzero failure count is what the gate keys on).
 - `git-absorb` is intentionally excluded — PR #350's CI did not flag it.
