@@ -12,7 +12,12 @@
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
   };
-  inherit (ourPkgs) bun fetchPnpmDeps makeWrapper nodejs pnpm pnpmConfigHook;
+  inherit (ourPkgs) bun fetchPnpmDeps makeWrapper nodejs pnpmConfigHook;
+  # New nixpkgs makes the default `pnpm` be pnpm_11, which dropped
+  # fetchPnpmDeps `fetcherVersion = 3`. Pin pnpm_10 for BOTH the deps
+  # fetch and the build so they stay in lockstep
+  # (see checks/pnpm-fetcher-parity.nix). Mirrors context7-mcp.nix.
+  pnpm = ourPkgs.pnpm_10;
   vu = import ../lib.nix;
 
   rev = "83a768303839b9e125f6c286369a5d9cc26c666e";
@@ -33,8 +38,9 @@ in
     inherit src;
     pnpmDeps = fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
+      inherit pnpm;
       fetcherVersion = 3;
-      hash = "sha256-BtXGw92T+7Cbvg9tUTvHQNiEy1yIGH12zhJLKRxhEl8=";
+      hash = "sha256-8VCbs1gEKWGUD7nKxDL48RErzY0KW5k4fcW+chnAJ70=";
     };
     nativeBuildInputs = [makeWrapper nodejs pnpm pnpmConfigHook];
     buildPhase = ''
