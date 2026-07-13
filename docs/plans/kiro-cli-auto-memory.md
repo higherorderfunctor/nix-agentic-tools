@@ -58,8 +58,11 @@ the same commit — future sessions inherit it by reading the doc.
   source/hash/build-tool choices or the nixos-config / test HITL gates.)
 - Session END: (1) update the plan — Session log, Decisions log, Target
   architecture, Open questions, and THIS bootstrap (state + next task + any
-  how-to-function change) — treefmt, then commit (docs(plans): …). (2) ALSO emit
-  a paste-able handoff prompt in chat for the next round.
+  how-to-function change) — treefmt, then commit (docs(plans): …). (2) PUSH the
+  branch to origin — STANDING AUTHORIZATION, do NOT ask the user to push (user
+  directive S12; keep the refactor branch backed up on origin,
+  [[feedback_push_backups]]). (3) ALSO emit a paste-able handoff prompt in chat
+  for the next round.
 - Handoff prompt = convenience pointer to resume + a catch for LATE tuning that
   arrives after you have committed; the doc/bootstrap stays the single source of
   truth and the handoff must not contradict it.
@@ -1859,8 +1862,13 @@ preToolUse, postToolUse, stop`.
   wiring, gated on the HITL). Mid-turn, the user twice flagged the error-path stderr in the test output
   as looking broken → refactored the error sink to be injected so error-path tests CAPTURE + assert the
   diagnostics (clean output, stronger tests), and recorded the guided-HITL preference
-  ([[feedback_hitl_walk_through_live]]). **Next:** the HITL live-TUI test (USER-run, guided
-  synchronously), then STAGE 5b.
+  ([[feedback_hitl_walk_through_live]]). Follow-ups (user directives): (a) fixed a repo-wide treefmt
+  footgun the commit surfaced — biome AND prettier both formatted every `.ts` (treefmt-nix `includes`
+  APPEND, they don't replace) and fought over a `new(...)=>` ctor type → `--fail-on-change` looped with
+  an empty git diff; per the user's "prefer biome" directive, scoped prettier off JS/TS/JSON/CSS so
+  biome owns them (`a49fb03`, zero reformat — all tracked files were already biome fixed points;
+  [[feedback_prefer_biome]]); (b) baked "push without asking" into the OPERATING PROTOCOL. **Next:** the
+  HITL live-TUI test (USER-run, guided synchronously), then STAGE 5b.
 
 ## Sources
 
