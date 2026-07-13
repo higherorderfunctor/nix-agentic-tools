@@ -174,7 +174,7 @@ a broken peer package would let `nixpkgs` (or any other input
 update) ship as UPDATED instead of HELD BACK.
 
 `run_nfb_build` in `update-common.sh` defends against this with
-three independent gates — any of them tripping fails the build:
+four independent gates — any of them tripping fails the build:
 
 1. **Exit code** — `nix-fast-build`'s own exit code is non-zero.
 2. **JSON result file** — `--result-file <path> --result-format json`
@@ -182,14 +182,19 @@ three independent gates — any of them tripping fails the build:
    `success: false` entry. Empty/missing file is also a failure
    (we asked for one; not getting one means verification was
    incomplete).
-3. **Stderr grep** — the consistent
+3. **Stderr grep — build failures** — the consistent
    `ERROR:nix_fast_build:BUILD: N successes, M failures` line
    with `M > 0` is matched against captured stderr. This is the
    tripwire that caught CI run 26473689694 when (1) and (2)
    both missed.
+4. **Stderr grep — evaluation failures** — the distinct
+   `ERROR:nix_fast_build:EVAL: N successes, M failures` line with
+   `M > 0` is matched against captured stderr. Eval-time throws
+   (e.g. an input bump that breaks a package's `fetchPnpmDeps`)
+   never become builds, so they are invisible to gates 1-3.
 
 `|| exit_code=$?` localizes errexit suppression to the single
-nix-fast-build call — no blanket `set +e`. All three gates run
+nix-fast-build call — no blanket `set +e`. All four gates run
 unconditionally so failure signals are always logged together.
 
 ### Sidecar logging and forensic preservation

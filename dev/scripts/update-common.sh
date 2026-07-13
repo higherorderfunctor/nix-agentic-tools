@@ -87,7 +87,7 @@ run_build() {
   "$@"
 }
 
-# nix-fast-build wrapper that gates on three independent signals.
+# nix-fast-build wrapper that gates on four independent signals.
 #
 # Upstream bug: nix-fast-build's async_main `finally: stack.aclose()` can
 # swallow non-zero exit on the build-failure path, so per-build failures
@@ -101,6 +101,9 @@ run_build() {
 #      `ERROR:nix_fast_build:BUILD: N successes, M failures` with M > 0 —
 #      the consistent signal observed in CI run 26473689694 when (1) and
 #      (2) both missed.
+#   4. nix-fast-build's stderr contains
+#      `ERROR:nix_fast_build:EVAL: N successes, M failures` with M > 0 —
+#      eval-time throws are invisible to gates 1-3.
 #
 # On failure, forensic data (result file + stderr capture) is preserved
 # under `.update-logs/` and surfaced by the Diagnostic dump workflow step.
@@ -159,6 +162,21 @@ run_nfb_build() {
   if grep -qE "ERROR:nix_fast_build:BUILD: [0-9]+ successes, [1-9][0-9]* failures" "$stderr_log"; then
     log_failure "nix-fast-build stderr reports build failures:"
     grep -E "BUILD: [0-9]+ successes|Failed attributes:" "$stderr_log" >&2 || true
+    failed=1
+  fi
+
+  # Gate 4: evaluation failures. nix-fast-build reports eval-time errors on a
+  # separate line from build failures. An attribute that throws during
+  # evaluation (e.g. an input bump that breaks a package's eval) never becomes
+  # a build, so it produces no `success: false` result entry (gate 2) and does
+  # not increment the BUILD failure count (gate 3): it is invisible to gates
+  # 1-3. nix-fast-build emits a distinct line for it:
+  #   ERROR:nix_fast_build:EVAL: N successes, M failures
+  # Observed when a nixpkgs bump broke effect-mcp's fetchPnpmDeps eval, yet the
+  # nixpkgs update still shipped as UPDATED instead of HELD BACK.
+  if grep -qE "ERROR:nix_fast_build:EVAL: [0-9]+ successes, [1-9][0-9]* failures" "$stderr_log"; then
+    log_failure "nix-fast-build stderr reports evaluation failures:"
+    grep -E "EVAL: [0-9]+ successes|Failed attributes:" "$stderr_log" >&2 || true
     failed=1
   fi
 
