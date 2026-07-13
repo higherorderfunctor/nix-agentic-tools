@@ -12,13 +12,16 @@
   programs = {
     # Nix: *.nix
     alejandra.enable = true;
-    # JSON: *.json (via settings.formatter.biome.includes)
+    # PRIMARY formatter (user pref: biome over prettier). biome owns JS/TS/JSX/
+    # JSON/CSS via its default treefmt globs; prettier is excluded from those in
+    # settings.formatter below so the two never format the same file.
     biome = {
       enable = true;
       settings.formatter.indentStyle = "space";
       settings.formatter.indentWidth = 2;
     };
-    # Markdown: *.md (via settings.formatter.prettier.includes)
+    # Only the types biome can't format (markdown/yaml/scss/html/vue/json5) —
+    # scoped via settings.formatter.prettier.excludes.
     prettier = {
       enable = true;
       settings.proseWrap = "preserve";
@@ -30,8 +33,23 @@
   };
 
   settings.formatter = {
-    prettier.includes = ["*.md"];
-    biome.includes = ["*.json"];
+    # Prefer biome: it owns JS/TS/JSX/JSON/CSS via its default globs. Exclude
+    # those from prettier so the two never format the same file — they disagree
+    # on constructs like a `new (x) => {…}` ctor type, which makes
+    # `treefmt --fail-on-change` loop with an empty git diff. Note: treefmt-nix
+    # `includes` APPEND to a formatter's defaults (they do not replace), so the
+    # scoping has to be done with `excludes`. prettier keeps only what biome
+    # can't format (markdown/yaml/scss/html/vue/json5).
+    prettier.excludes = [
+      "*.cjs"
+      "*.css"
+      "*.js"
+      "*.json"
+      "*.jsx"
+      "*.mjs"
+      "*.ts"
+      "*.tsx"
+    ];
   };
 
   settings.global.excludes = [
