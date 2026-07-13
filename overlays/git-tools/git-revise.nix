@@ -41,4 +41,14 @@ in
     nativeCheckInputs =
       (old.nativeCheckInputs or [])
       ++ [ourPkgs.openssh];
+    # nixpkgs builds meta.changelog from `finalAttrs.src.tag`. We pin `src`
+    # to a bare rev (no tag), so src.tag is null and the base expression
+    # throws `cannot coerce null to a string` the moment anything reads
+    # meta.changelog (nix-update does). Repoint it at the pinned rev so the
+    # changelog link stays valid instead of dropping the metadata.
+    meta =
+      (old.meta or {})
+      // {
+        changelog = "https://github.com/mystor/git-revise/blob/${rev}/CHANGELOG.md";
+      };
   })
