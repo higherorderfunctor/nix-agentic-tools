@@ -81,6 +81,89 @@ the same commit — future sessions inherit it by reading the doc.
   closed-binary behavior — this both saves their time and catches version-drift (S13:
   re-validated the D23 parser on a kiro-cli minor bump before the live run).
 
+── STATE (end of session 14) ──
+Session 14 (2026-07-13) landed STAGE 5b — the READ side + the openmemory backend wiring (D31). This is
+the FINAL code stage; only the STAGE-6 comprehensive doc and the HITL consumer flip remain. Self-serve;
+all green; NOT yet pushed (origin was at 7df7f194 = the S13 tip).
+- **The one open design question is resolved: Option C (hybrid recall).** The `UserPromptSubmit` hook's
+  stdin `prompt` is EMPTY (D12), so "query openmemory with the user's prompt" is impossible — the query
+  is seeded from the distilled buffer, not the prompt. And the distilled `now.md` was, until now, NEVER
+  read back into context (the steering anchor is a static store symlink). So the recall hook injects, per
+  turn: (1) the live `now.md` tier (the always-available base — works TODAY with the daemon down), PLUS
+  (2) a best-effort openmemory archive query seeded by `now.md` (the archive tier — lights up after the
+  consumer flip). It degrades gracefully (daemon down ⇒ recent tier alone) and is faithful to the Claude
+  `.remember` + openmemory blueprint. The user delegated the call ("pick the best, not the surgical
+  route; log tuning paths"); C is the best because it is the deliverable this stage is NAMED for
+  (archive-RAG) and is what 5a's `query` subcommand was built for.
+- **Landed (code):**
+  - `packages/kiro-cli/memory/distiller.ts` — a `--read` mode (`mainRead`) as a 3rd role bin
+    `kiro-memory-recall`, mirroring `--flush`/`kiro-memory-flush`. New exports: `BackendQuery` (the read
+    seam, symmetric with `BackendWrite`), `RecallConfig`, `formatRecall` (pure composer: fenced
+    `## Recent working context` + `## Related from project memory`, both bounded), `recall` (orchestrator:
+    read now.md → seed → best-effort `backendQuery` → compose), plus `defaultBackendQuery` (shells to
+    `openmemory-mem query --project-id <id> --limit <n>`, seed on stdin, best-effort "" on failure —
+    symmetric with `defaultBackendWrite`). `project_id` keys BOTH the buffer path and the query scope
+    (D19), so the read sees exactly what the write produced.
+  - `overlays/kiro-memory-distiller.nix` — the 3rd `kiro-memory-recall` (`--read`) bin + install smoke;
+    stays backend-agnostic (openmemory-mem is bound by the wiring layer, not here → a future markdown-only
+    backend reuses it).
+  - `packages/kiro-cli/lib/autoMemory.nix` — a 4th `UserPromptSubmit → recall` hook entry (a 4th entry in
+    the SAME one-file envelope, per D30 — no split); puts `openmemory-mem` (a bin of
+    `pkgs.ai.mcpServers.openmemory-mcp`) on EVERY wrapper's PATH (write paths call `add`, read calls
+    `query`); threads `OM_*` connection env via a baked `omEnv` attrset; runtime-cats the Postgres
+    password from `omPgPasswordFile` (a runtime STRING path — NEVER baked into the world-readable store,
+    `[[feedback_mimic_sops_secrets]]`); asserts `OM_PG_PASSWORD` is not in the merged `bakedEnv`
+    (`env // omEnv`). Defaults (`omEnv={}`, `omPgPasswordFile=null`) ⇒ backend best-effort-fails ⇒ file
+    buffer alone (the current host state until the flip).
+- **TDD + adversarial review (like every prior stage).** 11 new bun tests (80 total, TDD red→green) + 2
+  new module-eval checks (a build-and-grep of the recall AND a write-path wrapper for PATH/omEnv/runtime-
+  password; a two-route `rejects-baked-password`). 4-lens review (correctness / nix-wiring / contract-
+  fidelity / test-adversarial) + per-finding refute (16 agents): **0 CONFIRMED, 9 PARTIAL, 3 REFUTED.**
+  8 partials FIXED before landing: the medium **password-guard gap** (two lenses — the guard covered only
+  `omEnv`, but `bakedEnv = env // omEnv`, so a secret via `env` still baked → broadened to `bakedEnv`);
+  `formatRecall`'s true char bound for `maxChars < marker` + codepoint-safe truncation (the exact 5a
+  fmt_matches surrogate fix); `archiveLimit` integer-coercion (a fractional `KIRO_MEMORY_RECALL_LIMIT`
+  silently killed the archive tier); a write-wrapper grep; header/ordering test assertions. The 1 deferred
+  partial (P3, per-turn synchronous `openmemory-mem` spawn latency) is a post-flip TUNING path (not
+  reachable in the 5b default), logged below.
+- **De-risk (non-interactive, OOM-safe — getFlake INPUTS only + targeted `nix-build`):** built the
+  distiller overlay (80 bun tests in checkPhase + the 3-bin install smoke) + all 6 module-eval checks, then
+  drove the **built** `kiro-memory-recall` bin on real data twice — (a) degraded (no `openmemory-mem` on
+  PATH ⇒ recent tier only) and (b) archive path with a fake `openmemory-mem` on PATH, confirming it invokes
+  `query --project-id <slug> --limit 3` with the `now.md` seed on stdin and injects BOTH tiers.
+- **TUNING PATHS (logged for the expected tuning rounds; NONE block the flip):**
+  1. P3 — the recall hook spawns `openmemory-mem` synchronously per prompt (5 s timeout). Sub-perceptible
+     + symmetric with the landed write path, and inert in the 5b default (no backend). Post-flip, if the
+     per-turn Postgres query is felt, add a debounce/short-TTL cache or an async fork. MEASURE first (B4).
+  2. Seed strategy — currently the whole `now.md`; alternatives: last turn only, a synthetic keyword query.
+  3. Recent-tier depth — `now.md` only today; could add a bounded `recent.md` tail (more continuity vs more
+     per-turn context budget). The composer is structured so this is a localized change.
+  4. Injection size — `KIRO_MEMORY_RECALL_MAX_CHARS` (4000) / `KIRO_MEMORY_RECALL_LIMIT` (3) are operator
+     knobs; tune once real archive hits are observed post-flip.
+  5. Buffer/archive dedup — archive hits (seeded by now.md) may echo the recent tier; a dedup pass would
+     cut redundancy (non-trivial fuzzy match — deferred).
+- **FROZEN STAGE ORDER (agent-owned):**
+    1. D24 tail-loss  ✅ DONE (S8)
+    2. Nix-package the distiller  ✅ DONE (S9)
+    3. v3 hook set + `--flush` SessionStart + steering anchor  ✅ DONE (S10, D27)
+    4. D23b buffer lockfile (O_EXCL mutex)  ✅ DONE (S11, D28)
+    5a. openmemory-mem SDK helper binary  ✅ DONE (S12, D29)
+    HITL live-TUI test  ✅ DONE (S13, D30 — passed)
+    5b. Read hook + openmemory-mem→PATH + `OM_*`/password env (autoMemory.nix)  ✅ DONE (S14, D31)
+    6. Comprehensive implementation doc (FINAL) — the D26 backlog fragment.  ← NEXT
+NEXT = STAGE 6: the D26 comprehensive implementation doc (a package-scoped architecture fragment,
+`packages/kiro-cli/docs/kiro-auto-memory.md`, registered in `dev/generate.nix` `devFragmentNames.kiro-cli`,
+scope-globbed to `packages/kiro-cli/**` + `overlays/kiro-memory-distiller.nix`; run `devenv tasks run
+--mode before generate:instructions` after). It explains the WHOLE system end-to-end for BOTH an LLM
+revising the code and a human — the read/write tiers, the distiller pipeline + schema (D23), the v3 hook
+set + the HOME/`KIRO_MEMORY_*`/`OM_*` env contract, the two→three role bins + packaging idiom (D25), the
+recall read side + `BackendQuery` seam (D31), the module surface (`ai.kiro.hooks`/`.rules`, B5 parity), and
+the load-bearing invariants (worktree-shared project_id D19/D20, debounce OR-gate + tail-flush D24, buffer
+lock D23b, secret-never-baked D31). Now safe to write: stages 3–5b have stopped reshaping the abstraction.
+The nixos-config consumer flip (openmemory stdio→http daemon, Postgres re-key, full `OM_*` from the daemon's
+settingsToEnv, Q10/Q11) stays HITL and is a SEPARATE track from STAGE 6. OOM: bounded evalModules /
+drv-build / getFlake-inputs only.
+
 ── STATE (end of session 13) ──
 Session 13 (2026-07-13) ran THE HITL LIVE-TUI TEST (D30) — the user-run trusted-TUI checkpoint deferred
 since S3, guided synchronously. **ALL THREE CHECKS PASSED on kiro-cli 2.12.0** (a bump from the 2.11.1
@@ -598,8 +681,14 @@ the real option surface before landing each checkpoint.
   ran the HITL live-TUI test (D30) — **all three checks PASSED on kiro-cli 2.12.0** (3 hooks from one
   file, Stop fires + delivers stdin + the write loop runs end-to-end, steering `inclusion: always`
   injects); the D23 parser schema did not drift on 2.12.0. This satisfies D27's LIVE-TEST CHECKPOINT,
-  so STAGE 5b needs no one-file-per-hook split. Next = STAGE 5b (wire the helper + read hook + env);
-  the consumer flip stays HITL.
+  so STAGE 5b needs no one-file-per-hook split. **Session 14 (2026-07-13)** landed STAGE 5b (D31) — the
+  READ side (a `--read`/`kiro-memory-recall` hybrid recall hook: live `now.md` tier + best-effort
+  openmemory archive query seeded by the buffer, since the UPS prompt is empty) + the backend wiring in
+  `autoMemory.nix` (openmemory-mem onto every wrapper PATH; `OM_*` via a baked `omEnv`; the PG password
+  runtime-cat from `omPgPasswordFile`, never baked; a `bakedEnv` password-guard assert). 11 new bun tests
+  (80 total, TDD) + 2 module-eval checks; 4-lens review (0 confirmed / 9 partial — 8 fixed, 1 tuning-path
+  deferred / 3 refuted). This is the FINAL code stage; only STAGE 6 (the comprehensive doc) and the HITL
+  consumer flip remain.
 - **Branch:** `refactor/ai-factory-architecture`.
 - **Installed binary:** `kiro-cli 2.12.0` (S13; was 2.11.1 through S12). On 2.12.0 BOTH
   `kiro-cli chat --tui --v3` (the `chat` subcommand, verified live) and the launcher form
@@ -1685,6 +1774,60 @@ cwd}`; `UserPromptSubmit` adds an empty `prompt` in 2.11.1) — no transcript. T
     interface measurement) + the `OM_PG*`/`OM_USER_ID` env contract (Q10 alignment at the flip). The
     consumer flip stays HITL (Q10/Q11 gate ONLY the flip, not 5b code).
 
+- **D31 (S14, 2026-07-13):** **STAGE 5b landed — the READ side + openmemory backend wiring; the FINAL
+  code stage.** Adds the `UserPromptSubmit` archive-RAG recall hook and binds the `openmemory-mem` helper
+  onto the hook PATH + threads the `OM_*` env, completing the deterministic read/write loop.
+  - **Read-hook design — Option C (hybrid), the resolved open question.** The `UserPromptSubmit` stdin
+    `prompt` is EMPTY (D12), so the archive query is seeded from the distilled buffer, not the prompt;
+    and `now.md` was never read back into context before (the steering anchor is a static store symlink).
+    So recall injects, per turn: the live `now.md` tier (always-available base, works with the daemon
+    down) PLUS a best-effort openmemory archive query seeded by `now.md` (lights up after the flip). It
+    degrades to the recent tier alone when the backend is absent — faithful to the Claude `.remember` +
+    openmemory blueprint. Rejected: archive-only (dark until the flip, untestable end-to-end in 5b) and
+    buffer-only (skips the archive-RAG the stage is named for). The user delegated the call and asked for
+    the best (not surgical) approach + logged tuning paths.
+  - **Where the logic lives.** A `--read` mode (`mainRead`) in `distiller.ts`, a 3rd role bin
+    `kiro-memory-recall`, mirroring `--flush`. It REUSES `deriveProjectId`/`resolveCliEnv`/the buffer
+    paths — reimplementing the git-common-dir→slug derivation in bash would be a DRY violation + drift
+    risk (the read must see the same `project_id` the write produced, D19). New exports: `BackendQuery`
+    (read seam symmetric with `BackendWrite`), `RecallConfig`, `formatRecall` (pure, bounded composer),
+    `recall`; `defaultBackendQuery` shells `openmemory-mem query --project-id <id> --limit <n>` (seed on
+    stdin, best-effort "" on any failure — symmetric with `defaultBackendWrite`). `--read` dispatch after
+    `--flush`.
+  - **Wiring (autoMemory.nix), secret-safe.** A 4th `UserPromptSubmit → recall` entry in the SAME
+    one-file envelope (D30 — no split). `openmemory-mem` (a bin of `pkgs.ai.mcpServers.openmemory-mcp`)
+    goes on EVERY wrapper's PATH — bound HERE, not in the distiller overlay, so that package stays
+    backend-agnostic (the end-goal pluggable-backend direction). `OM_*` connection env rides a baked
+    `omEnv` attrset EXCEPT the Postgres password, which is cat from `omPgPasswordFile` (a runtime STRING
+    path) at wrapper start — NEVER baked into the world-readable store ([[feedback_mimic_sops_secrets]]).
+    An assert rejects `OM_PG_PASSWORD` in the merged `bakedEnv` (`env // omEnv`). Consumers should feed
+    `omEnv` from the SAME source as the daemon (openmemory-mcp `settingsToEnv`) so the hook and daemon
+    stay schema-lockstep (Q11) — a consumer-flip concern; 5b provides the seam.
+  - **TDD + 4-lens adversarial review + per-finding refute (16 agents): 0 CONFIRMED, 9 PARTIAL, 3
+    REFUTED.** 11 new bun tests (80 total, red→green) + 2 module-eval checks (build-and-grep of the recall
+    AND a write-path wrapper; two-route `rejects-baked-password`). **8 partials FIXED before landing:**
+    - (medium, flagged by nix-wiring AND test-adversarial) the password guard covered only `omEnv`, but
+      `bakedEnv = env // omEnv` — a secret via `env` would still bake. Broadened the assert to `bakedEnv`
+      - a module-eval test smuggling via `env`.
+    - `formatRecall` violated its stated `length <= maxChars` bound when `maxChars < marker` (13); and it
+      sliced by UTF-16 unit (a lone surrogate → U+FFFD, the exact class 5a's `fmt_matches` `trunc` fixed).
+      Replaced with `boundedTruncate` (true bound for every `maxChars` + drop a trailing lone high
+      surrogate) + tests at `maxChars < marker` and all-astral content.
+    - `defaultBackendQuery` passed an un-coerced `--limit`; a fractional `KIRO_MEMORY_RECALL_LIMIT` made
+      the helper exit-2 and silently drop the whole archive tier → `Math.max(1, Math.trunc(...))`.
+    - test hardening: grep a write-path (Stop) wrapper too (P8); pin the fence + section ordering (P9).
+    - **1 partial DEFERRED as a TUNING path (P3):** the recall hook spawns `openmemory-mem` synchronously
+      per prompt (5 s timeout) — sub-perceptible, symmetric with the landed write path, and inert in the
+      5b default (no backend). Post-flip, if felt, add a debounce/short-TTL cache or async fork; MEASURE
+      first (B4). Logged alongside seed-strategy / recent-tier-depth / injection-size / dedup knobs in the
+      S14 STATE block for the tuning rounds.
+  - **De-risk (OOM-safe):** built the distiller overlay (80 tests + 3-bin smoke) + 6 module-eval checks +
+    drove the built `kiro-memory-recall` on real data (degraded recent-only AND the archive path with a
+    fake `openmemory-mem`: `query --project-id <slug> --limit 3`, `now.md` seed on stdin, both tiers).
+  - **Scope:** the consumer flip (openmemory stdio→http daemon, Postgres re-key, full `OM_*` from the
+    daemon's `settingsToEnv`, Q10/Q11) stays HITL and is NOT part of 5b. cspell: British spellings avoided
+    (American) rather than adding dictionary terms.
+
 ## Session log (append-only)
 
 - **Session 1 — 2026-07-11.** Research via a 3-phase workflow (map local memory
@@ -1987,6 +2130,27 @@ preToolUse, postToolUse, stop`.
     harness-hint updates are self-contained. **Next:** STAGE 5b — wire `openmemory-mem` onto the hook PATH,
     add the UserPromptSubmit archive-RAG read hook (as a 4th entry in the existing envelope) + the
     `OM_PG*`/`OM_USER_ID` env contract, all in `autoMemory.nix`; the consumer flip stays HITL.
+
+- **Session 14 — 2026-07-13.** Landed **STAGE 5b — the READ side + openmemory backend wiring** (D31),
+  the FINAL code stage. Brainstormed the one open design question ([[superpowers:brainstorming]]) and
+  resolved it to **Option C (hybrid recall)**: because the `UserPromptSubmit` stdin `prompt` is empty
+  (D12) and `now.md` was never read back into context, the recall hook injects the live `now.md` tier
+  (works with the daemon down) PLUS a best-effort openmemory archive query seeded by the buffer (lights
+  up post-flip) — the user delegated the call ("pick the best, not surgical; log tuning paths"). Built,
+  TDD-first: a `--read`/`mainRead` mode + `kiro-memory-recall` bin (mirroring `--flush`), `formatRecall`
+  (pure bounded composer) + `recall` + a `BackendQuery` seam symmetric with `BackendWrite`
+  (`defaultBackendQuery` shells `openmemory-mem query`); the overlay's 3rd bin; and `autoMemory.nix`'s 4th
+  hook entry + openmemory-mem-on-PATH + `omEnv`/`omPgPasswordFile` (secret runtime-cat, never baked) +
+  a `bakedEnv` password-guard assert. 11 new bun tests (80 total) + 2 module-eval checks. **4-lens
+  adversarial review + per-finding refute (16 agents, read-only over the captured diff): 0 CONFIRMED, 9
+  PARTIAL, 3 REFUTED.** Fixed 8 partials before landing — the standout being a medium two-lens catch that
+  my `OM_PG_PASSWORD` guard covered only `omEnv` while `bakedEnv = env // omEnv` also bakes `env` (→
+  guard the merged set); plus `formatRecall`'s true char bound + codepoint-safe truncation (the 5a
+  surrogate fix), an `archiveLimit` integer-coercion, and test hardening. Deferred 1 partial as a
+  post-flip TUNING path (per-turn synchronous `openmemory-mem` spawn — inert in the 5b default). De-risked
+  OOM-safely: built the overlay (80 tests + 3-bin smoke) + all 6 module-eval checks + drove the built
+  recall bin on real data (degraded recent-only AND the archive path with a fake helper). **Next:** STAGE
+  6 — the D26 comprehensive implementation doc; the consumer flip stays HITL.
 
 ## Sources
 
