@@ -640,29 +640,31 @@ in
           in {
             files = walkDir "${cfg.configDir}/agents" cfg.agentsDir;
           }))
-          # Inline hook JSON files.
+          # Inline hook JSON files — written as REAL files via enterShell, NOT
+          # devenv `files.*` (which symlinks into /nix/store). Kiro v3 discovers
+          # workspace hooks by scanning `${cfg.configDir}/hooks/` with read_dir
+          # and does NOT follow a store symlink (the scan skips it), so a
+          # symlinked hook never loads and `/hooks` shows nothing. Only hooks
+          # need this — steering and agents load fine as symlinks. See the
+          # kiro-v3-hooks-workspace-local finding + docs/plans/kiro-cli-auto-memory.md.
           (lib.mkIf (cfg.hooks != {}) {
-            files =
-              lib.concatMapAttrs (name: content: {
-                "${cfg.configDir}/hooks/${name}.json".text = content;
-              })
-              cfg.hooks;
+            enterShell = ''
+              ${pkgs.coreutils}/bin/mkdir -p ${lib.escapeShellArg "${cfg.configDir}/hooks"}
+              ${lib.concatStrings (lib.mapAttrsToList (name: content: ''
+                  ${pkgs.coreutils}/bin/install -m 0644 ${pkgs.writeText "kiro-hook-${name}.json" content} ${lib.escapeShellArg "${cfg.configDir}/hooks/${name}.json"}
+                '')
+                cfg.hooks)}
+            '';
           })
-          # External hooks directory — walked at eval time.
-          (lib.mkIf (cfg.hooksDir != null) (let
-            walkDir = prefix: dir:
-              lib.concatMapAttrs (
-                name: kind:
-                  if kind == "directory"
-                  then walkDir "${prefix}/${name}" (dir + "/${name}")
-                  else if kind == "regular" || kind == "symlink"
-                  then {"${prefix}/${name}".source = dir + "/${name}";}
-                  else {}
-              )
-              (builtins.readDir dir);
-          in {
-            files = walkDir "${cfg.configDir}/hooks" cfg.hooksDir;
-          }))
+          # External hooks directory — copied as REAL files (same reason as the
+          # inline hooks above: kiro v3 skips symlinked hook files).
+          (lib.mkIf (cfg.hooksDir != null) {
+            enterShell = ''
+              ${pkgs.coreutils}/bin/mkdir -p ${lib.escapeShellArg "${cfg.configDir}/hooks"}
+              ${pkgs.coreutils}/bin/cp -rL --no-preserve=mode -- ${lib.escapeShellArg "${toString cfg.hooksDir}/."} ${lib.escapeShellArg "${cfg.configDir}/hooks/"}
+              ${pkgs.coreutils}/bin/chmod -R u+w ${lib.escapeShellArg "${cfg.configDir}/hooks"}
+            '';
+          })
           # Per-instruction steering files under `.kiro/steering/`.
           # Same transformer as HM, same filter-by-name pattern.
           (let

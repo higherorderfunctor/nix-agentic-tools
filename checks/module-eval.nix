@@ -98,6 +98,10 @@
         type = lib.types.listOf lib.types.package;
         default = [];
       };
+      enterShell = lib.mkOption {
+        type = lib.types.lines;
+        default = "";
+      };
       claude.code = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         default = {};
@@ -1078,13 +1082,20 @@ in {
         };
       };
       hmHook = (hm.config.home.file.".kiro/hooks/kiro-memory.json" or {}).text or "";
-      dvHook = (dv.config.files.".kiro/hooks/kiro-memory.json" or {}).text or "";
+      # HM writes the hook as home.file text; devenv writes it as a REAL file via
+      # enterShell (kiro v3 skips symlinked hooks — see the workspace-local
+      # finding). Parity is by construction (both emit `mem.hooks."kiro-memory"`):
+      # assert HM emits the generator output verbatim AND devenv's enterShell
+      # installs that hook into .kiro/hooks/.
+      dvEnter = dv.config.enterShell or "";
       hmSteer = (hm.config.home.file.".kiro/steering/kiro-auto-memory.md" or {}).text or "";
       dvSteer = (dv.config.files.".kiro/steering/kiro-auto-memory.md" or {}).text or "";
     in
       hmHook
       != ""
-      && hmHook == dvHook
+      && hmHook == mem.hooks."kiro-memory"
+      && lib.hasInfix ".kiro/hooks/kiro-memory.json" dvEnter
+      && lib.hasInfix "install -m 0644" dvEnter
       && hmSteer != ""
       && hmSteer == dvSteer
   );
@@ -1664,7 +1675,9 @@ in {
       && lib.hasInfix "reviewer" (agentFile.text or "")
   );
 
-  # Devenv: hook files written.
+  # Devenv: hook files written as REAL files via enterShell (kiro v3 does not
+  # discover symlinked hooks, so devenv `files.*` symlinks are wrong here — the
+  # enterShell copies the content into a plain `.kiro/hooks/<name>.json`).
   module-kiro-devenv-writes-hook-files = mkTest "kiro-devenv-writes-hook-files" (
     let
       result = evalDevenv {
@@ -1673,11 +1686,12 @@ in {
           hooks.pre-commit = ''{"event": "pre-commit"}'';
         };
       };
-      hookFile = result.config.files.".kiro/hooks/pre-commit.json" or null;
+      enter = result.config.enterShell or "";
     in
-      hookFile
-      != null
-      && lib.hasInfix "pre-commit" (hookFile.text or "")
+      lib.hasInfix ".kiro/hooks/pre-commit.json" enter
+      && lib.hasInfix "install -m 0644" enter
+      # not a devenv `files.*` symlink
+      && !((result.config.files or {}) ? ".kiro/hooks/pre-commit.json")
   );
 
   # ── Task 7 (A6): Stacked-workflows HM module absorption ────────

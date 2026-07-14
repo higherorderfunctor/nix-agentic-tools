@@ -15,6 +15,7 @@ arxanas
 attrset
 attrsets
 aubut
+automemory
 autosquash
 autoupdater
 avifenesh
@@ -104,6 +105,7 @@ kagisearch
 kanagawa
 kiro
 kirocli
+kirodotdev
 landable
 ldflags
 libexec

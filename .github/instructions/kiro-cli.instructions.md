@@ -7,12 +7,14 @@ applyTo: "overlays/kiro-memory-distiller.nix,packages/kiro-cli/**,packages/openm
 
 # Kiro-CLI auto-memory
 
-> **Last verified:** 2026-07-13 (commit pending). If you touch
+> **Last verified:** 2026-07-14 (commit pending). If you touch
 > `packages/kiro-cli/memory/distiller.ts`,
 > `packages/kiro-cli/lib/autoMemory.nix`,
+> `packages/kiro-cli/lib/mkKiro.nix` (hook-file emission),
 > `overlays/kiro-memory-distiller.nix`,
-> `packages/openmemory-mcp/mem/openmemory-mem.ts`, or the auto-memory
-> module-eval checks, and this fragment isn't updated in the same
+> `packages/openmemory-mcp/mem/openmemory-mem.ts`,
+> `packages/openmemory-mcp/modules/mcp-server.nix` (pgvector prestart), or the
+> auto-memory module-eval checks, and this fragment isn't updated in the same
 > commit, stop and fix it. An out-of-date architecture fragment
 > actively misleads the next session — a lie is worse than silence.
 
@@ -279,14 +281,28 @@ model's tool call or this hook.
   emitted on BOTH HM and devenv (`mkKiro.nix`). The memory hooks are RAW
   passthrough JSON (`builtins.toJSON` in-module), not a typed schema — a typed
   `ai.kiro.hooks` schema is a separate future refactor (D20).
+  **CRITICAL — hooks are WORKSPACE-local + must be REAL files (2026-07-14).**
+  Kiro v3 discovers hooks ONLY under the launch cwd's `.kiro/hooks/` — never
+  global `~/.kiro/hooks/` (docs `kiro.dev/docs/cli/v3/hooks`; issues
+  kirodotdev/Kiro #5440/#7737/#9075; only steering + skills load globally) —
+  and its `read_dir` scan SKIPS store symlinks. Consequences: **(a)** the HM
+  global install (`~/.kiro/hooks/`) never loads under v3, so HM `ai.kiro.hooks`
+  is effectively dead for v3 auto-memory (kept only as a source of truth);
+  **(b)** the **devenv** backend writes hooks as REAL files via `enterShell`
+  (`install -m 0644 <writeText> .kiro/hooks/<name>.json`), NOT devenv `files.*`
+  symlinks (which v3 skips). Steering/agents stay symlinks (they load fine).
+  So delivery is per-workspace: devenv (project-local real files) for nix
+  projects; a direnv/manual symlink→copy for non-nix repos (backlog).
 - `ai.kiro.rules` — attrs-shape ai-common ruleModule → `<configDir>/steering/<name>.md`
   with `inclusion:`/`fileMatchPattern:` frontmatter (`paths=null` →
   `inclusion: always`), BOTH backends.
 
 Because both surfaces ride the existing HM↔devenv fanout, parity is
-**structural-by-construction** — no new module axis, no hand-written per-backend
-emission. Proven by `module-kiro-auto-memory-hm-devenv-parity` (byte-identical
-hook + steering output). The distiller sync-vs-background choice: **synchronous**
+**structural-by-construction** — no new module axis. Proven by
+`module-kiro-auto-memory-hm-devenv-parity`: HM emits the generator's hook JSON
+verbatim (`home.file` text), devenv's `enterShell` installs the SAME generator
+output as a real file, and steering is byte-identical on both (steering stays a
+symlink; only hooks are real-file'd — see the CRITICAL note above). The distiller sync-vs-background choice: **synchronous**
 (D8/D27) — debounced + a file-buffer write + sub-second in the default (no
 backend). The sync path also forks `git` once per `Stop` (for `project_id`) and,
 once the backend is live, `openmemory-mem` once per distilled turn (each capped
@@ -315,14 +331,24 @@ fragility. Revisit if the STAGE-5 network SDK write is felt (tuning path P3).
 10. Manual `/remember` forces (`KIRO_MEMORY_FORCE=1` baked) and Stop stays
     debounced (no force) — collapsing the two wrappers re-opens the D33 gap
     where `/remember` silently no-ops after a recent Stop.
+11. Hooks reach kiro as REAL files in a WORKSPACE `.kiro/hooks/` — never a store
+    symlink, never the global `~/.kiro/hooks/` (v3 skips both). The devenv
+    `enterShell` copy is load-bearing: reverting it to devenv `files.*`
+    (symlink) makes `/hooks` silently show 0.
 
 ## Not done yet / tuning paths
 
-- **Consumer flip (HITL, SEPARATE track).** In nixos-config: openmemory
-  stdio→http daemon, one-time Postgres re-key `anonymous`→`dev-no-auth`, and
-  feed `omEnv` + `omPgPasswordFile` from the daemon's `settingsToEnv` so hook
-  and daemon stay schema-lockstep (Q10/Q11). Until then the file buffer works
-  standalone; the archive tier is dark.
+- **Consumer flip — DONE (2026-07-14, S17).** nixos-config runs a fresh
+  `automemory` Postgres DB + a native-HTTP `openmemory-mcp` daemon (parallel to
+  the legacy `openmemory` the model still uses); `omEnv` is derived from the
+  daemon's `settingsToEnv`. The pgvector HNSW-dimension create-race is fixed in
+  the `openmemory-mcp` module's `settingsToPreStart`/`ExecStartPre`. Backend
+  add→query round-trip verified against `automemory`.
+- **Per-workspace hook delivery (the live gap).** v3 hooks are workspace-local
+  real files (see the CRITICAL note under Module surface), so the auto-memory
+  hooks load ONLY where a project-local `.kiro/hooks/` is materialized. The
+  devenv backend does this (real-file `enterShell`); for non-nix repos a
+  direnv/manual symlink→copy is still a backlog item.
 - **Tuning (post-flip, MEASURE first, B4):** per-prompt `openmemory-mem` spawn
   latency (P3 — add a short-TTL cache or async fork if felt); seed strategy
   (whole `now.md` vs last turn vs synthetic keywords); recent-tier depth (add a

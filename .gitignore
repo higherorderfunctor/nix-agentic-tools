@@ -13,6 +13,9 @@ result-docs
 .devenv/
 .direnv/
 
+# Local devenv overrides (host-specific, not committed)
+devenv.local.nix
+
 # devenv nix store symlinks inside skill source directories
 packages/stacked-workflows/skills/*/[0-9a-z]*-*
 
@@ -24,6 +27,7 @@ packages/stacked-workflows/skills/*/[0-9a-z]*-*
 .config/github-copilot/
 .copilot/
 .github/skills/
+.kiro/hooks/
 .kiro/settings/
 .kiro/skills/
 .kiro/steering/
