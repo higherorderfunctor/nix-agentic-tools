@@ -661,4 +661,52 @@ in {
     // optionalAttrs (lg.reflective != null) {OM_LG_REFLECTIVE = boolStr lg.reflective;};
 
   settingsToArgs = _cfg: _mode: [];
+
+  # Extra systemd ExecStartPre for the HTTP serve daemon (fleet service).
+  #
+  # Works around an upstream openmemory bug: on a FRESH postgres DB the daemon
+  # creates the vectors table as `v vector` WITHOUT a dimension, then builds an
+  # HNSW index on it — which pgvector rejects ("column does not have
+  # dimensions"), aborting init. When a persistent daemon and any DB bootstrap
+  # race to create the table, the daemon's undimensioned version can win. This
+  # pre-creates the database (if missing) and the vectors table WITH the
+  # configured dimension + `project_id` BEFORE the daemon inits — the daemon's
+  # own create-if-not-exists then no-ops and the HNSW build succeeds. An
+  # ExecStartPre always completes before its unit's ExecStart, so this is
+  # race-free. Emitted only for the postgres metadata+vector backend in HTTP
+  # mode; empty (no ExecStartPre) otherwise. Idempotent + best-effort.
+  settingsToPreStart = pkgs: cfg: mode: let
+    s = cfg.settings;
+    meta = s.metadataBackend;
+    vec = s.vectorBackend;
+  in
+    lib.optional (mode == "http" && meta ? postgres && vec ? postgres) (
+      let
+        pg = meta.postgres;
+        dim = toString (
+          if s.vecDim != null
+          then s.vecDim
+          else 768
+        );
+        vecTable = vec.postgres.table;
+        conn = "-h ${pg.host} -p ${toString pg.port}";
+        userFlag = lib.optionalString (pg.user != null) "-U ${pg.user}";
+      in "${pkgs.writeShellScript "openmemory-ensure-pgvector" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        for _ in $(${pkgs.coreutils}/bin/seq 1 30); do
+          ${pkgs.postgresql}/bin/pg_isready ${conn} -q && break
+          ${pkgs.coreutils}/bin/sleep 1
+        done
+        ${pkgs.postgresql}/bin/createdb ${conn} ${userFlag} ${pg.db} 2>/dev/null || :
+        ${pkgs.postgresql}/bin/psql ${conn} ${userFlag} -d ${pg.db} -v ON_ERROR_STOP=1 -c "
+          CREATE EXTENSION IF NOT EXISTS vector;
+          CREATE TABLE IF NOT EXISTS ${vecTable}(
+            id uuid, sector text, user_id text, project_id text,
+            v vector(${dim}), dim integer NOT NULL,
+            PRIMARY KEY(id, sector)
+          );
+        "
+      ''}"
+    );
 }

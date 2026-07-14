@@ -279,22 +279,36 @@ in {
       credAssertions;
 
     systemd.user.services = mkIf pkgs.stdenv.isLinux (mapAttrs' (name: srv: let
+      serverDef = serverFiles.${name};
       srvEnv = effectiveEnvFor name srv "http";
+      # Optional per-server ExecStartPre (e.g. openmemory pre-creating its
+      # dimensioned pgvector table before the daemon inits — see the server
+      # module's settingsToPreStart). Absent → no ExecStartPre.
+      preStart =
+        if serverDef ? settingsToPreStart
+        then
+          serverDef.settingsToPreStart pkgs (mcpLib.mkCfgShim {
+            evaluatedSettings = mcpLib.evalSettings name srv.settings;
+            inherit (srv.service) port host;
+          }) "http"
+        else [];
     in
       nameValuePair ("mcp-" + name) {
         Unit = {
           Description = name + " MCP server";
           After = ["network.target"];
         };
-        Service = {
-          Type = "simple";
-          ExecStart = mkExecStart name srv;
-          Restart = "on-failure";
-          RestartSec = 5;
-          Environment =
-            [("MCP_PORT=" + toString srv.service.port)]
-            ++ mapAttrsToList (k: v: k + "=" + escapeShellArg v) srvEnv;
-        };
+        Service =
+          {
+            Type = "simple";
+            ExecStart = mkExecStart name srv;
+            Restart = "on-failure";
+            RestartSec = 5;
+            Environment =
+              [("MCP_PORT=" + toString srv.service.port)]
+              ++ mapAttrsToList (k: v: k + "=" + escapeShellArg v) srvEnv;
+          }
+          // optionalAttrs (preStart != []) {ExecStartPre = preStart;};
         Install = {
           WantedBy = ["default.target"];
         };

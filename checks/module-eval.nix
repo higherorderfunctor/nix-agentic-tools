@@ -3147,4 +3147,32 @@ in {
       grep -q 'cat "/run/secrets/kimchi-test"' "$bin"
       echo PASS > "$out"
     '';
+
+  # openmemory-mcp: the postgres+http serve daemon contributes an ExecStartPre
+  # (settingsToPreStart) that pre-creates the dimensioned pgvector table — the
+  # upstream HNSW-dimension bug workaround. Assert it fires ONLY for the postgres
+  # metadata+vector backend in http mode (one script), and is empty for stdio
+  # mode and for the default sqlite backend. Eval-only: `"${writeShellScript …}"`
+  # yields the store-path string without building, so no IFD.
+  module-openmemory-pgvector-prestart = let
+    srv = mcpLib.loadServer "openmemory-mcp";
+    mkPre = settings: mode:
+      srv.settingsToPreStart pkgs (mcpLib.mkCfgShim {
+        evaluatedSettings = mcpLib.evalSettings "openmemory-mcp" settings;
+        port = 19758;
+        host = "127.0.0.1";
+      })
+      mode;
+    pgSettings = {
+      metadataBackend.postgres = {db = "test";};
+      vectorBackend.postgres = {};
+      vecDim = 768;
+    };
+  in
+    mkTest "openmemory-pgvector-prestart" (
+      (srv ? settingsToPreStart)
+      && builtins.length (mkPre pgSettings "http") == 1
+      && mkPre pgSettings "stdio" == []
+      && mkPre {} "http" == []
+    );
 }

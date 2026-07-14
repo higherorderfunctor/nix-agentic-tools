@@ -42,6 +42,7 @@ convco
 cooldown
 coreutils
 cpaczek
+createdb
 creds
 crystallise
 cuda
@@ -85,6 +86,7 @@ gpgsign
 heredocs
 higherorderfunctor
 hitl
+hnsw
 hooksdir
 hostable
 hotspots
@@ -94,6 +96,7 @@ indexedlog
 inlines
 ints
 isaacphi
+isready
 kagi
 kagiapi
 kagimcp
@@ -154,9 +157,12 @@ Patchelf
 pathspec
 pdsolve
 peaceiris
+pgvector
 pkgs
 pname
 prek
+prestart
+psql
 pythonnousersite
 pythonpath
 quickstarts
@@ -219,6 +225,7 @@ treefmt
 tummychow
 ultracode
 unapprove
+undimensioned
 undmg
 unflushed
 unheld
