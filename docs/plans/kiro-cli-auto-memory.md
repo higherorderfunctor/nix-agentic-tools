@@ -39,6 +39,15 @@
 ## Bootstrap prompt (read first)
 
 ```
+⚠ PLAN CLOSED (end of session 17, 2026-07-14). The kiro-cli auto-memory
+workstream is DONE — the in-repo code + the nixos-config consumer are complete
+and the loop is proven end-to-end in a nix/devenv workspace. Do NOT reopen or
+"resume" this plan. The remaining memory work is a NEW living plan the USER
+drafts via the living workflow (see STATE(17) + "Backlog — next rolling plan" +
+memory `automemory-rolling-plan`). This file is kept as the closed design +
+decision + session record; read STATE(17) first for the close-out + next steps.
+
+(Historical resume instructions, retained for provenance:)
 Resume the kiro-cli auto-memory work. FIRST read
 docs/plans/kiro-cli-auto-memory.md in full — it is self-contained (design,
 decisions, session history, AND the operating protocol below). You should not
@@ -90,6 +99,51 @@ the same commit — future sessions inherit it by reading the doc.
   real transcript on stdin) so the user's TUI time tests ONLY the irreducible
   closed-binary behavior — this both saves their time and catches version-drift (S13:
   re-validated the D23 parser on a kiro-cli minor bump before the live run).
+
+── STATE (end of session 17) — PLAN CLOSED ──
+Session 17 (2026-07-13/14) executed the consumer flip (item A) AND uncovered + fixed the delivery reality for
+kiro v3. **This living plan is now CLOSED.** The in-repo code + the nixos-config consumer are done and the
+auto-memory loop is proven end-to-end in a nix/devenv workspace. Do NOT reopen this plan — remaining work is a
+SEPARATE, NEW memory living plan the USER drafts via the living workflow (see "Backlog — next rolling plan"
+below + memory `automemory-rolling-plan`).
+- **Consumer flip (A) — DONE (nixos-config).** Fresh `automemory` Postgres DB running in PARALLEL with the
+  legacy `openmemory` (the MODEL keeps legacy for now); native-HTTP `openmemory-mcp` fleet daemon → automemory
+  (dev-no-auth, tier=deep, vecDim=768, ollama). kiro `ai.kiro.hooks`/`.rules` spliced; `omEnv` derived from the
+  daemon's `settingsToEnv` via `lib.ai.loadServer` (Q11 lockstep — verified by a lib-only eval). NO re-key /
+  migration: the 9af0f95 base schema has `project_id` natively on a FRESH DB (verified in db.js — its runtime
+  PG migrator is dead code AND short-circuits on user_id, so in-place migration was NOT viable; a fresh DB
+  sidesteps it). Backend add→query round-trip verified against automemory.
+- **Flake race-fix — DONE + PUSHED (58536a4c).** The 9af0f95 daemon creates the pgvector table `v vector`
+  (no dimension) then builds an HNSW index → pgvector rejects it ("column does not have dimensions"); a
+  persistent daemon can win the create-race vs the ai-pg bootstrap, leaving an undimensioned table that breaks
+  ALL openmemory writes. Fixed in the `openmemory-mcp` MODULE (not the consumer): a new `settingsToPreStart`
+  service-schema hook → the fleet systemd `ExecStartPre` pre-creates the dimensioned
+  `openmemory_vectors(v vector(<vecDim>), … project_id)` before the daemon inits. Proven reproducibly by
+  dropping automemory + re-activating (zero manual steps). (D34)
+- **THE BIG FINDING — kiro v3 hooks are WORKSPACE-local + must be REAL files. (D35)** `/hooks` showed 0 for
+  the global HM install. Kiro v3 discovers hooks ONLY under the launch cwd's `.kiro/hooks/` — never global
+  `~/.kiro/hooks/` (kirodotdev/Kiro #5440/#7737/#9075; only steering + skills load globally) — AND its
+  `read_dir` scan SKIPS store symlinks. S13 "passed" only because its harness used PROJECT-LOCAL REAL files —
+  the global HM path was never actually exercised. So global HM `ai.kiro.hooks` was doubly wrong (global +
+  symlink); the devenv path (project-local) was right on location, wrong on symlinks. See memory
+  `kiro-v3-hooks-workspace-local`.
+- **devenv hook delivery fix — DONE + committed local (e73972a5; PUSH via sync/rebase). (D36)** `mkKiro.nix`
+  now writes devenv kiro hooks as REAL files via `enterShell`
+  (`install -m 0644 <writeText> .kiro/hooks/<name>.json`), not devenv `files.*` symlinks. Steering/agents stay
+  symlinks (they load fine). module-eval updated (`enterShell` stub + adapted parity/writes-hooks tests,
+  GREEN); fragment + tracked router regenerated. Hooks now LOAD live in this repo (user confirmed `/hooks`
+  lists the 4). Test-wired via a gitignored `devenv.local.nix` (host-specific `omEnv` → automemory).
+- **Process lesson recorded:** never hand-patch runtime/DB state to mask a broken declarative activation — fix
+  in nix (reusable module), then re-activate from the FRESH/broken state to prove reproducibility (memory
+  `no-manual-masking-activation`; the pgvector race was first mis-fixed by a manual DROP+recreate).
+NEXT (a NEW memory living plan — USER drafts it via the living workflow; do NOT reopen this plan):
+1. Per-workspace hook delivery for NON-NIX repos (e.g. `~/Documents/work/gdp`) — a direnv/manual symlink→COPY
+   into each repo's `.kiro/hooks/`; the devenv real-file fix only covers nix/devenv projects.
+2. Live firing test in this repo (take turns → verify `~/.kiro-memory/<repo>/now.md` + the automemory archive
+   grow) — the loop is wired; only the in-session observation remains.
+3. The memory-integration backlog (module ergonomics `ai.autoMemory`, retire legacy openmemory + give the
+   model the new DB, encourage-LLM-to-use-memory, louder/observable, Graphiti+neo4j, drop `remember`, mimic
+   Claude's `/dream`) — see "Backlog — next rolling plan" below + memory `automemory-rolling-plan`.
 
 ── STATE (end of session 16) ──
 Session 16 (2026-07-13) landed OPTION B (D33) — Manual `/remember` now FORCES an immediate distill. This
@@ -744,6 +798,44 @@ the real option surface before landing each checkpoint.
 ```
 
 ---
+
+## Backlog — next rolling plan (deferred; do NOT self-start)
+
+> Captured across sessions from user direction; these roll into a NEW rolling
+> plan when this workstream is retired. Do not start any of these without an
+> explicit go. Mirror of memory `automemory-rolling-plan`.
+
+**Consumer/backend follow-ups (from the S17 consumer flip):**
+
+- **Module ergonomics (DRY).** The consumer currently hand-wires the `omEnv`
+  derivation (`loadServer` + `settingsToEnv`) + the `kiroAutoMemory` call + the
+  hooks/rules splice. Fold this into a declarative **`ai.autoMemory`** option
+  (cross-CLI — NOT kiro-scoped, since Claude joins later) with sane defaults you
+  just turn on; HM↔devenv parity + module-eval tests + fragment required.
+- **Retire legacy openmemory + give the model the new DB.** Bring openmemory back
+  as an MCP server pointed at the fresh `automemory` DB so the MODEL reads/writes
+  it too, then drop the legacy `openmemory` stdio entry + old DB. Ends the
+  parallel phase.
+
+**Memory-behaviour / integration direction (user, S17):**
+
+- **Encourage the LLM to USE memory** (not only the deterministic hooks): tune the
+  system prompt / inject reminder instructions so the model retrieves +
+  drafts/updates memory via the hooks, mimicking Claude. Non-deterministic; tune
+  as we go.
+- **Louder / observable:** surface in-session when the hooks store/retrieve, or
+  when the LLM opts to invoke memory ops (like Claude's "retrieving memory" /
+  "drafting/update memory" affordances).
+- **Swap backend openmemory → Graphiti + neo4j.**
+- **Drop the `remember` plugin** (`.remember` only used in this repo; user prefers
+  Claude's auto-memory model, which this workstream ports).
+- **Hijack Claude's auto-memory to use our harness.**
+- **Mimic Claude's `/dream` consolidation cycle.**
+
+**Process guardrail reinforced (S17):** never mask a broken declarative
+activation with a manual runtime/DB fix — fix it in nix (reusable module), then
+re-activate from the fresh/broken state to prove reproducibility. (Memory
+`no-manual-masking-activation`.)
 
 ## Status
 
@@ -1983,6 +2075,29 @@ cwd}`; `UserPromptSubmit` adds an empty `prompt` in 2.11.1) — no transcript. T
   - D33 + S16); the Manual `description` "fallback" wording (cosmetic — fixed anyway as self-introduced
     asymmetry). The user chose B over the HITL consumer flip (A), which stays the sole remaining item
     (user-gated).
+- **D34 (S17, 2026-07-14):** **pgvector HNSW-dimension race fixed in the openmemory-mcp MODULE.** On a fresh
+  Postgres DB the 9af0f95 daemon creates `openmemory_vectors(v vector)` (no dimension) then builds an HNSW
+  index → pgvector rejects it; a persistent daemon races the ai-pg bootstrap and can win with the
+  undimensioned table, breaking ALL openmemory writes. Added a `settingsToPreStart` service-schema hook wired
+  as the fleet systemd `ExecStartPre` (`packages/mcp-services/modules/homeManager`); `openmemory-mcp`
+  implements it (postgres+http): wait for PG, `createdb` if missing, pre-create the dimensioned
+  `openmemory_vectors(v vector(<vecDim>), … project_id)` before ExecStart. Module-eval
+  `module-openmemory-pgvector-prestart`. Committed+pushed `58536a4c`. Lesson (memory
+  `no-manual-masking-activation`): first mis-fixed by a manual DROP+recreate that MASKED whether activation
+  works — the right fix is declarative + re-activate from the FRESH/broken state.
+- **D35 (S17, 2026-07-14):** **kiro v3 hooks are WORKSPACE-local + must be REAL files (docs-confirmed).** v3
+  discovers hooks ONLY under the launch cwd's `.kiro/hooks/`, never global `~/.kiro/hooks/` (kirodotdev/Kiro
+  #5440/#7737/#9075; only steering + skills load globally), AND its `read_dir` scan SKIPS store symlinks. So
+  the HM global `ai.kiro.hooks` install never loads under v3, and devenv `files.*` symlinks don't either. S13
+  "passed" only because its harness used PROJECT-LOCAL REAL files — the global HM path was never exercised.
+  Memory `kiro-v3-hooks-workspace-local`. Consequence → D36.
+- **D36 (S17, 2026-07-14):** **devenv writes kiro hooks as REAL files via enterShell (not `files.*`).**
+  `packages/kiro-cli/lib/mkKiro.nix` devenv branch now emits inline hooks + hooksDir via `enterShell`
+  (`install -m 0644 <writeText> .kiro/hooks/<name>.json`); steering/agents stay symlinks. module-eval:
+  `enterShell` added to the devenv stub; HM↔devenv-parity + devenv-writes-hooks tests adapted (parity is now
+  by-construction — HM emits the JSON verbatim, devenv installs the same content as a real file). Fragment +
+  tracked router updated. Hooks LOAD live in-repo (user-confirmed). Committed local `e73972a5`. Delivery for
+  NON-nix repos (per-workspace symlink→copy) → next memory living plan.
 
 ## Session log (append-only)
 
@@ -2338,6 +2453,20 @@ preToolUse, postToolUse, stop`.
   RED→GREEN; no full flake eval). Commits: `feat(kiro-cli)` (code + fragment + tracked router) + `docs(plans)`
   (this doc). Pushed. **Next:** only the HITL nixos-config consumer flip (A, Q10/Q11) remains — user-gated; the
   in-repo code + docs are complete.
+- **Session 17 — 2026-07-13/14. PLAN CLOSED.** Executed the consumer flip (A) in nixos-config: fresh
+  `automemory` Postgres DB in PARALLEL with the legacy `openmemory` (model keeps legacy); native-HTTP
+  `openmemory-mcp` daemon → automemory; kiro hooks/rules spliced; `omEnv` derived from the daemon's
+  `settingsToEnv` (Q11 lockstep). No re-key/migration — the 9af0f95 base schema has `project_id` natively on a
+  fresh DB (user chose "fresh parallel DB, retire legacy later" over re-keying real data; empirical ai-pg
+  inspection showed the dominant existing user_id was `caubut`, not `anonymous`, which the fresh-DB path made
+  moot). Hit + fixed a pgvector HNSW-dimension create-race in the openmemory-mcp MODULE (D34, `58536a4c`) —
+  after first mis-fixing it by hand (recorded the no-manual-masking lesson); proven reproducibly by dropping
+  automemory + re-activating (zero manual steps) + a backend add→query round-trip. THEN the delivery reality:
+  `/hooks` showed 0 — kiro v3 hooks are WORKSPACE-local + REAL-file only (D35; kirodotdev/Kiro
+  #5440/#7737/#9075). Fixed the devenv path to write real files via `enterShell` (D36, `e73972a5`); hooks now
+  load live in-repo (test-wired via a gitignored `devenv.local.nix`). Fragment + router updated; module-eval
+  GREEN. See STATE(17) for the full close-out + next steps (a NEW memory living plan the user drafts via the
+  living workflow). **Plan CLOSED.**
 
 ## Sources
 
