@@ -153,6 +153,15 @@
         default = {};
         description = "Upstream devenv claude.code stub (out of doc scope).";
       };
+      # Stub: devenv's enterShell hook. The kiro-cli devenv module
+      # writes hook JSON files via enterShell (real files, not store
+      # symlinks — kiro v3 skips symlinked hooks). types.lines because
+      # multiple mkIf blocks (inline hooks + hooksDir) contribute.
+      enterShell = lib.mkOption {
+        type = lib.types.lines;
+        default = "";
+        description = "Devenv shell entry hook.";
+      };
       env = lib.mkOption {
         type = lib.types.attrsOf lib.types.str;
         default = {};
