@@ -13,12 +13,12 @@
   inherit (ourPkgs) buildNpmPackage bun fetchFromGitHub makeWrapper python314Packages;
   vu = import ../../lib.nix;
 
-  rev = "64b1cb0208cc49a4f5ae55fa71df5cf67a3cdc3d";
+  rev = "d31124c982401739917fd817c2a59db344529c16";
   src = fetchFromGitHub {
     owner = "modelcontextprotocol";
     repo = "servers";
     inherit rev;
-    hash = "sha256-dp5XoXulH3PpCkT+V6kwmBTzE8Z4z9WePkE99oU2ya0=";
+    hash = "sha256-ZmzvLbukCjKlO+7Xlqp4UpMW4I2y+utgpyh6ifc75tc=";
   };
 
   # Helper: compute version string from a sub-package's upstream version.
@@ -31,7 +31,7 @@
   # Shared npm deps from the upstream mono-repo lockfile.
   # npmDepsFetcherVersion = 2 enables workspace support.
   # Hash managed by nix-update.
-  npmDepsHash = "sha256-+9w4WTzPGIJlerkbbKhfSPQhhKOQpNda5pZzi/P4vN0=";
+  npmDepsHash = "sha256-gH+IHjzJdlfgNtev8YDj0Gv2hKgR0YEG/DZF+REuwFs=";
 
   # Build a JS sub-package from the mono-repo using npm workspaces.
   # `upstream` literal is written at the call site (see # upstream:
