@@ -831,11 +831,25 @@ the real option surface before landing each checkpoint.
   Claude's auto-memory model, which this workstream ports).
 - **Hijack Claude's auto-memory to use our harness.**
 - **Mimic Claude's `/dream` consolidation cycle.**
+- **Session isolation** — [seed, user] isolate memory per session, not only per
+  worktree-shared `project_id`; exact semantics (opt-in scope, a session
+  sub-namespace under the project scope, or a hard wall vs the shared buffer) are
+  for the next plan to define.
+- **Per-workspace hook delivery for non-nix repos** — v3 hooks are workspace-local
+  real files (D35), and the devenv fix (D36) only covers nix/devenv projects; a
+  direnv/manual symlink→copy into each non-nix repo's `.kiro/hooks/` is still open.
 
 **Process guardrail reinforced (S17):** never mask a broken declarative
 activation with a manual runtime/DB fix — fix it in nix (reusable module), then
 re-activate from the fresh/broken state to prove reproducibility. (Memory
 `no-manual-masking-activation`.)
+
+**Final (S17):** this plan is DONE after this session and is not rerun. The next
+memory living plan is drafted FRESH from the _tuned_ living workflow — i.e. after
+the `workflow-backlog` (`B01…B24`, including this session's captures) is groomed
+and its adopted tunings fold into `docs/plans/living-workflow/` — pulling in the
+items above (session isolation, non-nix hook delivery, module ergonomics, retire
+legacy, louder/observable, Graphiti, `/dream`). Do NOT reopen this doc.
 
 ## Status
 
