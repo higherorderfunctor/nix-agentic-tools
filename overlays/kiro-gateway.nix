@@ -25,11 +25,11 @@
       uvicorn
     ]);
 
-  rev = "0398d74f15549bd771480da8fceb21916ce333e5";
+  rev = "a5292ca04c7c6231e0b47673ac3f981f5a706e1e";
   src = ourPkgs.fetchgit {
     url = "https://github.com/jwadow/kiro-gateway.git";
     inherit rev;
-    hash = "sha256-zaWDDNFUZ33cxYAnzn5DDbZk1s6TYmDN1tPlQR4NQDs=";
+    hash = "sha256-LgZiMJXy7v0o4VbQTMYi1Yk2SjBsKj82cUC5FhhZ4zo=";
   };
 in
   ourPkgs.stdenvNoCC.mkDerivation {
