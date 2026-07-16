@@ -21,6 +21,7 @@ autoupdater
 avifenesh
 backgrounded
 bashisms
+bashpid
 berberman
 bitemporality
 boehm
@@ -215,11 +216,13 @@ stdenv
 subdirs
 subkeys
 subshell
+subshells
 substituters
 sympy
 taplo
 testapp
 tinyduck
+tmpfs
 toctou
 tonumber
 toolsets

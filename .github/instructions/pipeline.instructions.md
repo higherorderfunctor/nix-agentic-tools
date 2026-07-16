@@ -7,7 +7,7 @@ applyTo: ".github/workflows/update.yml,config/generate-update-ninja.nix,config/u
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-06-22. If you touch
+> **Last verified:** 2026-07-16. If you touch
 > `.github/workflows/update.yml`, `dev/scripts/update-common.sh`,
 > `dev/scripts/update-input.sh`, `dev/scripts/update-pkg.sh`, or the
 > PR creation logic, and this fragment isn't updated in the same
@@ -493,11 +493,20 @@ Targets fall into three categories:
 
 ### Worktree isolation
 
-Every update target runs in its own git worktree under
-`.worktrees/update-<name>/`. Each worktree checks out a named
-branch `update/<name>` reset to the current branch HEAD.
-`.pre-commit-config.yaml` is symlinked from the main tree so
-hooks work in worktrees.
+Every update target runs in its own **ephemeral** git worktree
+under `$WORKTREES_DIR/update-<name>/` — a binned temp root
+(default `${TMPDIR:-/tmp}/nat-update-worktrees`, override
+`NAT_UPDATE_WORKTREES_DIR`) deliberately OUTSIDE the flake root:
+devenv/Nix enumerates all untracked + gitignored files under the
+flake root on every shell entry (`git ls-files --others`;
+cachix/devenv#257, #2042), so in-tree worktrees were re-scanned on
+every `direnv reload`. Each worktree checks out a named branch
+`update/<name>` reset to the current branch HEAD.
+`.pre-commit-config.yaml` is symlinked from the main tree so hooks
+work in worktrees. Worktrees are torn down on exit
+(`teardown_worktree`) and any registration stranded by a crash or
+wiped temp is reaped by `git worktree prune` in `update-init.sh`,
+so nothing persists between runs.
 
 After each target finishes its update + build verification in
 the worktree, it leaves the resulting commits on its named

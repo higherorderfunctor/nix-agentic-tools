@@ -10,6 +10,10 @@ name="$1"
 log_header "Input: $name"
 
 wt=$(setup_worktree "$name")
+# Ephemeral worktree: tear down on ANY exit path (success, held-back,
+# error). EXIT fires after all reporting below. See teardown_worktree in
+# update-common.sh.
+trap 'teardown_worktree "$wt"' EXIT
 version_file="$wt/.update-version"
 
 # Phase 1: Update the input in the worktree

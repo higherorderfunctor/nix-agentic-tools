@@ -105,6 +105,11 @@ jobs:
           ninja -j4 -v -k0 -f .update.ninja update-report
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Per-job worktree root, OUTSIDE $GITHUB_WORKSPACE (the flake root)
+          # so devenv/Nix doesn't scan it, and under $RUNNER_TEMP (per-job,
+          # auto-cleaned) so concurrent runs on a self-hosted runner can't
+          # collide on a shared /tmp path.
+          NAT_UPDATE_WORKTREES_DIR: ${{ runner.temp }}/nat-update-worktrees
           NIX_PATH: nixpkgs=flake:nixpkgs
 
       # Push worktree branches and create/update PRs.
@@ -326,6 +331,8 @@ jobs:
       # ninja's stdout capture is lost (e.g., on cancellation).
       - name: Diagnostic dump
         if: always()
+        env:
+          NAT_UPDATE_WORKTREES_DIR: ${{ runner.temp }}/nat-update-worktrees
         run: |
           set +e
           echo "::group::.update-report.txt"
@@ -333,7 +340,7 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::orphaned worktrees"
-          ls -la .worktrees/ 2>/dev/null || echo "(none)"
+          ls -la "${NAT_UPDATE_WORKTREES_DIR}/" 2>/dev/null || echo "(none)"
           echo "::endgroup::"
 
           echo "::group::lingering nix/ninja/bash processes"

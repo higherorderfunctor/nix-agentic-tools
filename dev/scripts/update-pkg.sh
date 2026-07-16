@@ -23,6 +23,9 @@ system=$(nix eval --impure --raw --expr 'builtins.currentSystem')
 log_header "Package: $name"
 
 wt=$(setup_worktree "$name")
+# Ephemeral worktree: tear down on ANY exit path. See teardown_worktree in
+# update-common.sh. The update/<name> branch commit persists in refs.
+trap 'teardown_worktree "$wt"' EXIT
 version_file="$wt/.update-version"
 base_head=$(git rev-parse "$BRANCH")
 

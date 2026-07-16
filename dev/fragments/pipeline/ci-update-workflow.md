@@ -1,6 +1,6 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-06-22. If you touch
+> **Last verified:** 2026-07-16. If you touch
 > `.github/workflows/update.yml`, `dev/scripts/update-common.sh`,
 > `dev/scripts/update-input.sh`, `dev/scripts/update-pkg.sh`, or the
 > PR creation logic, and this fragment isn't updated in the same

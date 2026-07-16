@@ -8,11 +8,25 @@ shopt -s inherit_errexit 2>/dev/null || :
 # shellcheck source=dev/scripts/resolve-overlay-file.sh
 source "$(dirname "${BASH_SOURCE[0]}")/resolve-overlay-file.sh"
 
-WORKTREES_DIR="$PWD/.worktrees"
+# Ephemeral worktree root, binned under one dir OUTSIDE the flake root.
+# devenv/Nix enumerates ALL untracked + gitignored files under the flake
+# root on every shell entry (`git ls-files --others`; cachix/devenv#257,
+# #2042 — maintainer-confirmed, no in-place exclude exists), so worktrees
+# kept in-tree (the old `$PWD/.worktrees`) were re-scanned on every
+# `direnv reload`. `${TMPDIR:-/tmp}` gives macOS its per-user temp and
+# `/tmp` on Linux/WSL2; override with `NAT_UPDATE_WORKTREES_DIR` (e.g.
+# `/var/tmp`) if tmpfs RAM pressure bites. Worktrees are created per run
+# and torn down (`teardown_worktree` on EXIT + `git worktree prune` in
+# update-init.sh), so nothing persists between runs.
+WORKTREES_DIR="${NAT_UPDATE_WORKTREES_DIR:-${TMPDIR:-/tmp}/nat-update-worktrees}"
 # `git worktree add` is not concurrency-safe: parallel invocations
 # race on `.git/worktrees/<name>/commondir` creation. Serialize.
 WORKTREE_LOCK="${WORKTREE_LOCK:-/run/user/$(id -u)/nix-update-worktree}"
 REPORT_FILE="$PWD/.update-report.txt"
+# Absolute (captured at source time, before any `cd "$wt"`) so forensic
+# artifacts survive an ephemeral worktree teardown and land in the
+# workspace .update-logs the CI Diagnostic dump globs.
+UPDATE_LOGS_DIR="$PWD/.update-logs"
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
 # Force color output from subcommands (ninja buffers output, tools lose TTY detection)
@@ -85,6 +99,25 @@ setup_worktree() {
   echo "$wt"
 }
 
+# Tear down an ephemeral worktree. Idempotent, and guarded to run only in
+# the main shell: an EXIT trap can fire inside `(...)`/`$(...)` subshells
+# (version-dependent), and premature teardown would cut off the
+# post-update reporting that still reads the worktree. The `update/<name>`
+# branch commit persists in refs independent of the checkout, so removing
+# the worktree never loses the update. Any registration stranded by a
+# crash or wiped temp is reaped by `git worktree prune` at the next init.
+# The `remove` is serialized on WORKTREE_LOCK just like setup_worktree's
+# `add`: under `ninja -j4` a finishing target's teardown would otherwise
+# mutate the shared `.git/worktrees/` admin dir concurrently with another
+# target's add (git worktree metadata ops are not concurrency-safe).
+teardown_worktree() {
+  [ "$BASHPID" = "$$" ] || return 0
+  local wt="${1:-}"
+  [ -n "$wt" ] || return 0
+  flock "$WORKTREE_LOCK" git worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt" 2>/dev/null || true
+  return 0
+}
+
 # Build verification. Runs the actual build to catch Mode C/D failures
 # before PRs open — see docs/update-pipeline-transitive-hash-gap.md § Gap 5.
 run_build() {
@@ -110,7 +143,9 @@ run_build() {
 #      eval-time throws are invisible to gates 1-3.
 #
 # On failure, forensic data (result file + stderr capture) is preserved
-# under `.update-logs/` and surfaced by the Diagnostic dump workflow step.
+# under the workspace `.update-logs/` (UPDATE_LOGS_DIR — an absolute path,
+# so it survives a per-input build's ephemeral worktree teardown) and
+# surfaced by the Diagnostic dump workflow step.
 #
 # The JSON shape emitted by nix-fast-build (nix_fast_build/__init__.py
 # `dump_json`) is:
@@ -119,9 +154,9 @@ run_build() {
 # Usage: run_nfb_build nix run --inputs-from . nix-fast-build -- ...
 run_nfb_build() {
   local rf stderr_log exit_code=0 failed=0
-  mkdir -p "$PWD/.update-logs"
-  rf=$(mktemp -p "$PWD/.update-logs" --suffix=.json nfb-result-XXXXXX) || return 1
-  stderr_log=$(mktemp -p "$PWD/.update-logs" --suffix=.log nfb-stderr-XXXXXX) || {
+  mkdir -p "$UPDATE_LOGS_DIR"
+  rf=$(mktemp -p "$UPDATE_LOGS_DIR" --suffix=.json nfb-result-XXXXXX) || return 1
+  stderr_log=$(mktemp -p "$UPDATE_LOGS_DIR" --suffix=.log nfb-stderr-XXXXXX) || {
     rm -f "$rf"
     return 1
   }
