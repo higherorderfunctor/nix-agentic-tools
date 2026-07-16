@@ -31,8 +31,17 @@ if [ -n "$git_url" ]; then
   log_info "Fetching latest rev from $git_url..."
   new_rev=$(git ls-remote "$git_url" HEAD | cut -f1)
   if [ -n "$new_rev" ]; then
-    repo_name=$(echo "$git_url" | sed 's|\.git$||' | grep -oP '[^/]+$')
-    target_file=$(grep -rl "$repo_name" "$wt/overlays" --include='*.nix' | head -1)
+    # Deterministic overlay resolution + exactly-one-match guard.
+    # Replaces the old `grep -rl "$repo_name" | head -1`, which matched any
+    # file merely naming the repo basename (e.g. effect-mcp.nix's "Mirrors
+    # context7-mcp.nix." comment) and raced on head -1's early pipe close,
+    # silently rewriting the wrong overlay — context7's HEAD rev landed in
+    # effect-mcp's fetch block → nonexistent commit → source 404 → red CI.
+    # See dev/scripts/resolve-overlay-file.sh.
+    if ! target_file=$(resolve_overlay_file "$git_url" "$wt/overlays"); then
+      report_held_back "$name" "could not uniquely resolve overlay file"
+      exit 0
+    fi
     if [ -n "$target_file" ]; then
       old_rev=$(grep -oP 'rev = "\K[a-f0-9]{40}' "$target_file" | head -1 || true)
       if [ -n "$old_rev" ] && [ "$old_rev" != "$new_rev" ]; then

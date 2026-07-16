@@ -4,6 +4,10 @@
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 
+# Deterministic overlay-file resolution (resolve_overlay_file).
+# shellcheck source=dev/scripts/resolve-overlay-file.sh
+source "$(dirname "${BASH_SOURCE[0]}")/resolve-overlay-file.sh"
+
 WORKTREES_DIR="$PWD/.worktrees"
 # `git worktree add` is not concurrency-safe: parallel invocations
 # race on `.git/worktrees/<name>/commondir` creation. Serialize.

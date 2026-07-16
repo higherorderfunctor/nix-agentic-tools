@@ -71,6 +71,7 @@ fastmcp
 fetchgit
 fetchurl
 fetchzip
+findutils
 foldl
 frontloaded
 frontmatter
@@ -126,6 +127,7 @@ mcps
 mcpservers
 mdbook
 mergetool
+metacharacter
 modelcontextprotocol
 mystor
 narinfo

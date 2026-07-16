@@ -465,10 +465,11 @@ devenv tasks run generate:all             # everything
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-05-20. If you touch
-> `dev/scripts/update-*.sh`, `config/generate-update-ninja.nix`,
-> `config/update-matrix.nix`, or `.github/workflows/update.yml` and
-> this fragment isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-07-16. If you touch
+> `dev/scripts/update-*.sh`, `dev/scripts/resolve-overlay-file.sh`,
+> `config/generate-update-ninja.nix`, `config/update-matrix.nix`, or
+> `.github/workflows/update.yml` and this fragment isn't updated in
+> the same commit, stop and fix it.
 
 ### Execution model: ninja DAG
 
@@ -511,7 +512,14 @@ For packages that track a git repo's HEAD (no tagged releases),
 `update-pkg.sh` receives the repo URL as a trailing argument:
 
 1. `git ls-remote <url> HEAD` fetches the latest commit SHA.
-2. `sed` replaces the old `rev` in the overlay `.nix` file.
+2. `resolve_overlay_file` (`dev/scripts/resolve-overlay-file.sh`)
+   deterministically locates the single overlay `.nix` pinning this
+   upstream, by matching the fetch block's identity — either
+   `fetchFromGitHub { owner = "<owner>"; repo = "<repo>"; }` or
+   `fetchgit { url = "…github.com/<owner>/<repo>.git"; }` — and
+   requiring **exactly one** match. 0 or >1 matches ⇒ the target is
+   reported `HELD BACK` (never a silent guess). `sed` then replaces the
+   old `rev` in that resolved file.
 3. `nix flake prefetch github:<owner>/<repo>/<new-rev>` fetches
    the new source hash.
 4. `sed` replaces the old `hash` in the overlay `.nix` file.
@@ -522,6 +530,17 @@ For packages that track a git repo's HEAD (no tagged releases),
 
 If the rev is unchanged (already at latest), steps 1-6 are
 skipped entirely and the target reports NO UPDATES.
+
+**Why the resolver is deterministic.** Step 2 replaced an earlier
+`grep -rl "<repo-basename>" | head -1`, which matched any overlay merely
+naming the basename (e.g. `effect-mcp.nix`'s "Mirrors context7-mcp.nix."
+comment) and raced on `head -1`'s early pipe close. On 2026-07-15 that
+wrote context7's HEAD rev into effect-mcp's `tim-smart/effect-mcp` fetch
+block, pinning a nonexistent commit → source 404 → red CI (and silently
+froze packages whose mis-resolved file had no `rev`, e.g. mcp-proxy). The
+`checks.overlay-target-resolution` flake check now asserts every
+main-tracking matrix entry resolves to exactly one overlay carrying an
+inline rev, so the class fails at PR time rather than mid-pipeline.
 
 ### Report format
 
@@ -536,13 +555,15 @@ Every target writes exactly one line to `.update-report.txt`:
 
 ### Key files
 
-| File                               | Role                                                   |
-| ---------------------------------- | ------------------------------------------------------ |
-| `config/generate-update-ninja.nix` | Generates `.update.ninja` DAG from flake.lock + matrix |
-| `config/update-matrix.nix`         | Declares packages with nix-update flags and git URLs   |
-| `dev/scripts/update-common.sh`     | Shared functions (worktree, version, report, colors)   |
-| `dev/scripts/update-init.sh`       | Pipeline initialization (clean stale state)            |
-| `dev/scripts/update-input.sh`      | Per-input update script                                |
-| `dev/scripts/update-pkg.sh`        | Per-package update script (rev bump + nix-update)      |
-| `dev/scripts/update-report.sh`     | Report printer                                         |
-| `.github/workflows/update.yml`     | CI workflow (Renovate-style per-dependency PRs)        |
+| File                                   | Role                                                            |
+| -------------------------------------- | --------------------------------------------------------------- |
+| `checks/overlay-target-resolution.nix` | Flake check: every matrix pkg resolves to one overlay w/ rev    |
+| `config/generate-update-ninja.nix`     | Generates `.update.ninja` DAG from flake.lock + matrix          |
+| `config/update-matrix.nix`             | Declares packages with nix-update flags and git URLs            |
+| `dev/scripts/resolve-overlay-file.sh`  | Deterministic overlay resolution (fetch-block identity + guard) |
+| `dev/scripts/update-common.sh`         | Shared functions (worktree, version, report, colors)            |
+| `dev/scripts/update-init.sh`           | Pipeline initialization (clean stale state)                     |
+| `dev/scripts/update-input.sh`          | Per-input update script                                         |
+| `dev/scripts/update-pkg.sh`            | Per-package update script (rev bump + nix-update)               |
+| `dev/scripts/update-report.sh`         | Report printer                                                  |
+| `.github/workflows/update.yml`         | CI workflow (Renovate-style per-dependency PRs)                 |
