@@ -29,7 +29,7 @@ improvements land in this doc only by a deliberate grooming session, never self-
 > concerns become schema-backed state fields, not ad-hoc prose tokens). The backlog sub-workflow
 > this doc references lives at `../living-workflow-backlog/`.
 >
-> **Living-doc version: `v3-cedar-harbor-quartz`.** The assigned VERSION dependents pin to — a
+> **Living-doc version: `v4-amber-fjord-willow`.** The assigned VERSION dependents pin to — a
 > monotonic ORDINAL (for "am I behind?") paired with a DISTINCTIVE LABEL (so the exact version
 > stays searchable in history and in copied text). A modifying commit bumps it and authors a
 > migration entry if an upgrader needs one (see DRY-BY-REFERENCE → BASELINE PIN, MIGRATION GUIDE,
@@ -716,6 +716,13 @@ defined by the backlog sub-workflow beside this doc, not duplicated here.
    behavioral assumptions against the real component once, up front.
 4. Act by position class: phase_boundary or hitl_opening → state position and WAIT
    for me. mid_batch → state position in one line and resume autonomously.
+   FULL-REGISTER VISIBILITY AT THE OPENER: when the position class opens a
+   phase_boundary/hitl_opening WAIT, also present the plan's WHOLE open_items register at a HIGH
+   level — every active and held/parked item as one-line headers, not line-by-line detail, and not
+   only this session's in-scope work — so an operator running consecutive sessions can see where
+   newly-captured and held items sit and reprioritize before work resumes. This is a read-only
+   VISIBILITY snapshot, never an added question batch: it neither dribbles questions nor appends a
+   bonus ask (see the OPEN-ITEMS REGISTER never-dribble rule and the DECISION-SCOPE FILTER).
    DISTINGUISH A SESSION-ENDING WAIT FROM A MID-WORK PAUSE: both share this WAIT, so they are not
    told apart by position class. A mid-work HITL pause is "answer me so I can keep working THIS
    session" — un-gated work remains behind the answer, and the behavior is exactly the above. A
@@ -773,10 +780,18 @@ defined by the backlog sub-workflow beside this doc, not duplicated here.
    increment(s) done, every remaining agenda item human-gated); or budget soft-close (step 7).
    - PRESENT, then ask. In the single-pass chat register, present (i) what this session
      accomplished (results; units flipped done; commits or dirty paths), (ii) the remaining
-     agenda (open_items / next position / pending HITL decisions), and (iii) an explicit
-     "accept and close, or keep going?" ask. If the human keeps going or answers a pending
-     decision, this is NOT a close — resume under step 4, with no kickoff and no reflection
-     capture.
+     agenda — the plan's whole open_items register at a HIGH level (every active/held/parked item,
+     not line-by-line) plus the next position — and, when the session is ending, a PROPOSED
+     next-session plan: each candidate next-session focus carrying enough context for an informed
+     pick, never a bare one-line label (an application of the STANCE / TWO REGISTERS
+     pair-every-label-with-its-meaning rule); and (iii) an explicit ask that is actionable on that
+     direction — the operator APPROVES, WEIGHS IN, or RESHUFFLES the proposed next-session plan,
+     alongside the accept-and-close-or-keep-going decision. If the human keeps going or answers a
+     pending decision, this is NOT a close — resume under step 4, with no kickoff and no reflection
+     capture. Because the operator does not read the dense AI-facing kickoff (TWO REGISTERS), this
+     plain-chat approval is where the operator steers the next session; CAPTURE the approved
+     direction here, BEFORE the close ritual's state mutation (a), so the recorded next position and
+     the kickoff both encode the approved plan rather than an unreviewed one.
    - ONLY on acceptance (or an explicit close instruction) run the close ritual IN ORDER:
      (a) mutate state.json (jq, atomic), append logs, validate against the schema (or a
      structural jq assertion if no validator resolved) — but in a SELF-DELETING TERMINAL CLOSE the
@@ -786,7 +801,12 @@ defined by the backlog sub-workflow beside this doc, not duplicated here.
      see VALIDATION-ON-UPDATE); then by commit-ownership: we-commit → run the repo's format-hook +
      commit (Conventional Commit, lowercase-verb subject, final status-flip atomic with the work);
      resident-commits → leave the tree dirty and emit a "please commit these paths" note (never
-     commit here). (b) THEN generate the kickoff prompt. (c) THEN, in reflection mode, distill this
+     commit here). (b) THEN generate the kickoff prompt; in WEB mode, where the host renders a copy
+     affordance on fenced code blocks, emit any prompt the operator copies verbatim into a fresh
+     session — the kickoff, or a proposed next-session prompt — inside a FENCED CODE BLOCK rather
+     than a blockquote, so the operator relaunches in one click (moot in CLI, which has no such
+     affordance; the fenced block stays a dense handoff artifact and the single-pass chat that
+     introduces it is unchanged, per TWO REGISTERS). (c) THEN, in reflection mode, distill this
      session's friction into the backlog sub-workflow (author only there, never this doc).
    The KICKOFF is a REQUIRED output the close gate produces (not skippable) — but it stays
    NON-AUTHORITATIVE: THE PLAN ITSELF IS THE CROSS-SESSION HANDOFF, a separate "handoff"/"session

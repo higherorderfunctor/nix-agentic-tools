@@ -82,7 +82,15 @@ deferred the actual point of grooming.
 4. **Present under the decision-scope filter** (defined in the master). Auto-disposition the items
    the orchestrator can stand behind and surface them as one **batch for veto-by-exception**;
    reserve the **one-at-a-time** HITL walk for genuinely low-confidence, intent-dependent, or
-   ground-rule-changing items.
+   ground-rule-changing items. **Present a content-reducing fold's exact items before writing it.**
+   When an accepted fold will GENERALIZE-AWAY, ABSTRACT, or DROP concrete content (not merely
+   rephrase reversibly), show the operator the specific text to be written, precisely which
+   specifics are dropped or generalized, and where each dropped specific is preserved — _before_ the
+   edit lands, not after and not merely before commit — so a silent content loss is catchable while
+   it can still be prevented. This sharpens the master's degradation-by-shrug rule (a drop is made
+   explicit BEFORE it lands, not only logged after). A purely additive or mechanical fold, and
+   reversible wording that loses no specific (agent-owned under the master's DECISION-SCOPE FILTER),
+   need no such preview.
 5. **Fold each accepted tuning inline** into its target doc, obeying the master's leak-safe fold
    rule (the entry contract): write a self-contained generic tuning + generic reasoning and no
    entry/artifact references. Then **drain** the entry: remove it from the register, delete its
@@ -224,6 +232,19 @@ folded tunings (in their target docs), this index, and the changelog. Beyond tha
 practice**: scrub specifics on the way in, and when in doubt **defer the commit** until grooming
 has sharpened or folded the entry. This is a review habit and a stated default, **not** an
 automated gate.
+
+The leak-safety concern is specifically a **private/work → public** one — protecting the operator's
+private/work context from leaking into this public workflow repo (see the master's BACKLOG-ENTRY
+CONTRACT, which owns that framing and the own-first-party-tooling-is-nameable carve-out). **On
+cross-repo reflection** — a plan running in a private/work
+repo capturing up to this public workflow's backlog (the framework-channel case the master's STATE
+SUBSTRATE enables) — the **source (private) repo owns the on-the-way-in scrub** of its handoff,
+since it is the party that can see what is private; the committed record stays protected by the
+fold-time review regardless. This applies to **CLI capture only** and does not touch WEB-mode
+leak-relax (where capture may be raw until the master's web→CLI transition scrub). Where the agent
+genuinely cannot judge whether naming a specific third-party tool a plan runs against is leak-safe,
+that is a low-confidence call **escalated to the operator per the master's DECISION-SCOPE FILTER** —
+neither blindly redacted nor blindly named.
 
 ## The register and the changelog
 

@@ -332,3 +332,30 @@ here.
 - **Self-identifying generation marker clarified:** the document-only web generation marker is
   DISTINCT from the committed master VERSION — different docs, different lifetimes; the marker still
   retires at the web→CLI transition. No dependent action required.
+
+## Session-close operator experience
+
+Migration entries folded after the versioning batch. This section's anchor is **derived from
+history** (the commit that first added this section header), not embedded here.
+
+### Master protocol (`living-plan-bootstrap.md`)
+
+- **Session bootstrap — full open-items register at the opener:** the session opener (step 4) now
+  ALSO presents the plan's whole `open_items` register at a HIGH level (every active/held/parked item
+  as one-line headers — a read-only visibility snapshot, not a question batch), so an operator
+  running consecutive sessions sees where newly-captured and held items sit. **Upgraders: add the
+  opener-side full-register snapshot** (the close already presents the register; it is now marked
+  high-level).
+- **Session close — approve the next-session direction in chat before the kickoff:** the close
+  acceptance gate's PRESENT-then-ask now widens (ii) to a PROPOSED next-session plan (each candidate
+  focus carrying enough context for an informed pick, never a bare label) and (iii) to an ask the
+  operator can APPROVE / WEIGH IN / RESHUFFLE — and the approved direction is CAPTURED before the
+  close ritual's state mutation, so the recorded next position and the (non-authoritative) kickoff
+  both encode the approved plan. Rationale: the operator does not read the dense AI-facing kickoff.
+  **Upgraders: widen the close gate's ask to approve/reshuffle the next-session direction and capture
+  it before state mutation.**
+- **Session close — copyable kickoff prompt in web:** in WEB mode, where the host renders a copy
+  affordance on fenced code blocks, a prompt the operator copies verbatim into a fresh session (the
+  kickoff, or a proposed next-session prompt) is emitted inside a FENCED CODE BLOCK rather than a
+  blockquote, for one-click relaunch. Web-only; moot in CLI. **Upgraders: emit copyable prompts as
+  code blocks in web mode.**
