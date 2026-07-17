@@ -28,8 +28,8 @@ living doc (`../living-workflow/living-plan-bootstrap.md`) that every living pla
 doc does **not** restate it; it references it and adds only what is unique to the backlog
 sub-workflow: **the grooming loop**, plus a few operational specifics (the capture/grooming split,
 git posture). The shared harness (`../living-workflow/state.schema.json`) sits beside the master, and the
-master's convention-delta changelog lives beside the master doc (`../living-workflow/changelog.md`);
-`state.json`'s `living_doc_baseline` pins the exact master-doc commit this backlog is authored
+master's judgment-based migration guide lives beside the master doc (`../living-workflow/changelog.md`);
+`state.json`'s `living_doc_baseline` pins the master-doc VERSION this backlog is authored
 against.
 
 Keeping this doc a **reference, not a duplicate** of the master is a session-close invariant:
@@ -86,10 +86,11 @@ deferred the actual point of grooming.
 5. **Fold each accepted tuning inline** into its target doc, obeying the master's leak-safe fold
    rule (the entry contract): write a self-contained generic tuning + generic reasoning and no
    entry/artifact references. Then **drain** the entry: remove it from the register, delete its
-   file, and — for a fold that changes MASTER/harness conventions — append a **generic
-   convention-delta line** to the co-located changelog (beside the master); a fold that tunes
-   only this backlog doc's own rules is **git-history-only** (no dependent pins to it), and a DROP
-   changes no convention (working journal only).
+   file, and — for a fold that changes MASTER/harness conventions — **bump the master's version**
+   and, in the same commit, **author a generic migration entry if an upgrader needs one** (the
+   judgment-based migration guide beside the master — see the master's VERSION-BUMP STEP); a fold
+   that tunes only this backlog doc's own rules is **git-history-only** (no dependent pins to it),
+   and a DROP changes no convention (working journal only).
 6. **Journal + persist each disposition the instant it is made**, so a mid-loop handoff resumes
    from state + the working journal without regenerating anything.
 7. **Before closing, run the light-fix sweep** — after every OTHER substantive entry is disposed and,
@@ -151,10 +152,10 @@ on first append, like the working dir.
 The sweep is a **grooming step, not reflection-at-close**, and **never fires in a non-grooming
 session** — a session at its end only BUFFERS (master REFLECTION MODE); one that spots a nit appends it
 to the collector and moves on. What gets lighter is the **ceremony** — the adversarial eval, the HITL,
-and the changelog line — **never the checking**: EVERY light fix, by either arm, verifies against
+and the migration entry — **never the checking**: EVERY light fix, by either arm, verifies against
 source before and re-greps with a positive control after, because a light fix that trusts a
 false-clean is worse than the nit. Light fixes are **git-history-only**: they change no dependent-facing convention, and a
-changelog line for a typo fix would itself be a fresh drift surface.
+migration entry for a typo fix would itself be a fresh drift surface.
 
 ### PARK WHAT IS PLAUSIBLE BUT NOT YET DECIDABLE
 
@@ -210,7 +211,7 @@ dispositions, folds, and drains.
 
 So the entry **files** are authoritative for **pending (un-groomed) capture**, and the register is
 the grooming session's working view reconciled from them. The durable-record and transience
-semantics — the folded tuning plus its changelog line is the record, the entry is removed on fold —
+semantics — the folded tuning plus its migration entry is the record, the entry is removed on fold —
 are the master's entry contract, not restated here. (Web/no-repo mode has no files; the master
 defines how it tracks in the doc and drains to files on the first CLI session.)
 
@@ -218,7 +219,7 @@ defines how it tracks in the doc and drains to files on the first CLI session.)
 
 Working state is gitignored by location (`.living-workflows/`), so entries, the journal, and
 `state.json` are **never committed** — an entry can carry sensitive or in-progress work material
-even though the contract forbids specifics. Commit only the **committed** surfaces: the generic
+even though the contract forbids private/work specifics. Commit only the **committed** surfaces: the generic
 folded tunings (in their target docs), this index, and the changelog. Beyond that, a **soft hygiene
 practice**: scrub specifics on the way in, and when in doubt **defer the commit** until grooming
 has sharpened or folded the entry. This is a review habit and a stated default, **not** an
@@ -229,12 +230,13 @@ automated gate.
 The live register (`state.json.open_items`) is bounded to **active** candidates: when an entry
 reaches a terminal disposition it drains out. That bound is the only register rule this doc owns.
 
-Whether a drain ALSO appends a convention-delta line to the changelog beside the master
-(`../living-workflow/changelog.md`) is decided by the master's DRY-BY-REFERENCE scoping rule —
-read it there. The changelog is a convention-delta for dependents and is owned entirely by the
-master: its purpose, its co-location, its MASTER/harness scoping, its contract, and the
-reconciliation walk all live there. This doc adds nothing to it. The operational shape of the
-drain, for a groomer executing the loop, is stated once in grooming step 5 above.
+Whether a drain ALSO bumps the master's version and appends a migration entry to the changelog
+beside the master (`../living-workflow/changelog.md`) is decided by the master's DRY-BY-REFERENCE
+scoping rule — read it there. The changelog is the judgment-based migration guide for dependents
+and is owned entirely by the master: its purpose, its co-location, its MASTER/harness scoping, its
+contract, the version bump, and the reconciliation walk all live there. This doc adds nothing to
+it. The operational shape of the drain, for a groomer executing the loop, is stated once in
+grooming step 5 above.
 
 ## Entry file shape
 
@@ -249,7 +251,7 @@ drain, for a groomer executing the loop, is stated once in grooming step 5 above
 <the generalized tuning>
 
 ## Justification (evidence)
-<the abstracted friction/observation motivating it — no specifics>
+<the abstracted friction/observation motivating it — no private/work specifics>
 
 ## Notes / non-goals
 <scope boundaries; why it is non-prescriptive>

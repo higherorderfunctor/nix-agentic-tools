@@ -29,12 +29,20 @@ improvements land in this doc only by a deliberate grooming session, never self-
 > concerns become schema-backed state fields, not ad-hoc prose tokens). The backlog sub-workflow
 > this doc references lives at `../living-workflow-backlog/`.
 >
+> **Living-doc version: `v3-cedar-harbor-quartz`.** The assigned VERSION dependents pin to — a
+> monotonic ORDINAL (for "am I behind?") paired with a DISTINCTIVE LABEL (so the exact version
+> stays searchable in history and in copied text). A modifying commit bumps it and authors a
+> migration entry if an upgrader needs one (see DRY-BY-REFERENCE → BASELINE PIN, MIGRATION GUIDE,
+> and the VERSION-BUMP STEP).
+>
 > **Baseline pin, state-tracked.** Anything authored against this doc (backlog
 > entries, child plans, external reconciles) records — in a `living_doc_baseline` field in
-> its own `state.json`, not an ad-hoc prose token — the git commit of the version it was
-> written against, and reads that version. In a resident-commits repo the resident stamps
-> the commit (dependents carry the sentinel `PENDING-RESIDENT-STAMP` until then). When the
-> doc is tuned, dependents re-pin.
+> its own `state.json`, not an ad-hoc prose token — the assigned VERSION it was written against,
+> and reads that version. A version is content the doc assigns itself (not a self-named commit
+> hash, not a build-tool-injected identity like a Nix flake's `self.rev`), so it resolves to a commit by derive-from-history and also
+> travels to a document-only artifact that has no commit. In a resident-commits repo the resident
+> stamps the shipped version (dependents carry the sentinel `PENDING-RESIDENT-STAMP` until then).
+> When the doc is tuned, dependents re-pin.
 
 Copy everything in the block below into a new session.
 
@@ -79,8 +87,11 @@ OPERATING MODE IS A CONFIRMED INPUT, NOT AN INFERENCE. Two modes are supported: 
 durable knowledge is committed). The mode turns on human intent the first session's context
 cannot reveal. If it is unstated, ASK; never infer it from apparent context — a wrong guess at
 this high-fan-out point propagates cost downstream. Record the confirmed mode in state
-(ecosystem.execution_mode). (Auto-resolvable capabilities are still resolved, not asked — see the
-ecosystem adapter.)
+(ecosystem.execution_mode), and APPEND it to a mode-history LEDGER (an ordered list of the mode
+segments the plan has run in, each with the living-doc version in force when it began) — a plan may
+cross the web↔CLI boundary more than once, so the ledger, not a single current-mode field, is the
+complete provenance of where the plan has been. (Auto-resolvable capabilities are still resolved,
+not asked — see the ecosystem adapter.)
 
 ── PLAN LIFECYCLE — plans complete and are removed; the backlog is the exception ──
 A living plan exists to enable AGILE development: decide as details unfold, pivot fast, do not
@@ -92,7 +103,7 @@ front-load every decision. It is DEVELOPMENT-TIME SCAFFOLDING, not a durable del
   plan. It is never merged; it is not a reviewable artifact. (The detailed distillation procedure
   is deliberately unspecified here — treat completion as: artifacts self-contained, plan removed.)
 - The PERPETUAL backlog sub-workflow is the deliberate EXCEPTION: it never completes, so its
-  committed rules doc is its durable record; the convention-delta CHANGELOG lives BESIDE THE
+  committed rules doc is its durable record; the migration-guide CHANGELOG lives BESIDE THE
   MASTER (in the master's own committed directory — see DRY-BY-REFERENCE), because it serves
   master-dependents, not the backlog.
 SELF-DELETING TERMINAL CLOSE: when a plan's terminal action REMOVES its own state substrate (the
@@ -112,14 +123,14 @@ is a SEPARATE gate from the leak-safety scrub (which removes raw working detail)
 is provenance-for-its-own-sake. Sort each item with MODIFY-TIME vs RUN-TIME (below) as the
 instrument — KEEP what a run needs (self-contained on the run path) and what modifying it reads
 (design rationale and rejected paths, since a rejected path deleted is one re-proposed and
-re-rejected at full cost; and the convention-delta a live dependent reconciles against, referenced
+re-rejected at full cost; and the migration guide a live dependent reconciles against, referenced
 off the run path); DROP a record of changes relative to drafts nobody holds, narration that changes
 no future decision, and sections retained-for-provenance whose provenance nothing consumes. Length
 is not the target; audience is: a long section a future editor genuinely needs stays, a short one
 nobody reads goes.
 MODIFY-TIME vs RUN-TIME CONTEXT (a standing principle): anything a RUN needs must be
 self-contained in the artifact itself. Context needed only when MODIFYING an artifact — design
-rationale for an editor, or the convention-delta a dependent reads when reconciling — is
+rationale for an editor, or the migration guide a dependent reads when reconciling — is
 REFERENCED with an explicit "load only when modifying" marker and is NEVER on the run path. Two
 artifacts embody this: a completed plan's optional ARCH DOC (below) and the workflow's CHANGELOG
 co-located with the master (read only when a dependent updates its baseline pin — see
@@ -215,7 +226,7 @@ This holds under any formatter hook, not only in resident-commits repos.
 Split every artifact by WHERE it lives; the location carries the commit/leak rules, so no
 per-file judgment is needed.
 - COMMITTED DURABLE KNOWLEDGE → the plan/rules doc, under the plan's committed directory. The
-  shared harness (`state.schema.json`) and the convention-delta changelog are NOT
+  shared harness (`state.schema.json`) and the migration-guide changelog are NOT
   per-plan: single copies live in the MASTER's own committed directory and are REFERENCED, never
   copied down (see DRY-BY-REFERENCE).
 - GITIGNORED WORKING STATE (CLI mode) → state.json and the WAL journal, under
@@ -307,7 +318,11 @@ DEFINITION, so the flag is a second surface carrying no information the counter 
 selects the highest generation and treats lower ones as superseded; prune or ignore superseded
 copies where the host allows. This concrete shape is DOCUMENT-ONLY: at the web→CLI transition the
 redraft collapses to the single committed doc and the marker retires, so the invented keys never
-leak into a committed CLI doc.
+leak into a committed CLI doc. This document-only generation marker is DISTINCT from the master's
+committed VERSION (see BASELINE PIN): the marker orders re-emitted copies of a running plan WITHIN
+web mode and retires at the transition, whereas the version is the master doc's own committed
+identity that a dependent pins to — different docs, different lifetimes, not one counter promoted
+across the boundary.
 COLD-START SEED: the plan embeds a COMPLETE initial-state seed sufficient to populate the
 whole state object — position, phases, open items, budget — not just a position marker.
 DERIVE it from the plan's own phase/open-items/budget sections (DRY — no redundant frozen
@@ -589,48 +604,84 @@ project-specific citations) — only generic provenance and its own harness sibl
 dependent doc references the master and does not duplicate protocol that belongs to it; that
 reference-not-duplicate relationship is validated at session close (VALIDATION-ON-UPDATE).
 BASELINE PIN: every dependent (backlog entry, child plan, external reconcile) records the
-git commit of the living-doc version it was authored against, in a living_doc_baseline
-field in its own state.json (state-over-tokens — not an ad-hoc prose token), and reads that
-version. In a resident-commits repo the resident stamps the commit (PENDING-RESIDENT-STAMP
-until then).
+assigned VERSION of the living-doc it was authored against, in a living_doc_baseline field in its
+own state.json (state-over-tokens — not an ad-hoc prose token), and reads that version. A VERSION
+is an identity the doc ASSIGNS itself as ordinary content — NOT a commit hash the file names about
+itself (a hash cannot be written into the commit that creates it, the same self-reference the
+migration-guide anchor avoids), and NOT a build-tool-injected identity like a Nix flake's `self.rev`
+(which exists only for a clean tree, so it cannot see the dirty working state you activate from; is
+the whole-repo commit, not the doc's, so it drifts on unrelated commits; and never reaches a pasted
+web artifact).
+Because the version is content, it travels across surfaces, including a document-only artifact that
+has no commit to name. Give the version a HYBRID form: a monotonic ORDINAL, so a dependent can tell
+whether it is BEHIND, paired with a DISTINCTIVE LABEL, so the exact version stays SEARCHABLE in
+history and in a sea of copied text where a bare ordinal over-matches. Resolve VERSION → commit,
+when a repo is present, by the SAME derive-from-history search the migration-guide anchor uses (the
+commit that ASSIGNED that version to the doc — assignment granularity, never per-line blame under a
+reflowing formatter); the resolve LOCATION is provided by the deployment, never hardcoded, and a
+document-only artifact has no commit to resolve to (the degenerate case). A version read off a DIRTY
+/ not-yet-committed doc is PROVISIONAL until it lands: in a resident-commits repo the dependent
+carries the sentinel PENDING-RESIDENT-STAMP and the resident stamps the SHIPPED version at commit —
+only one version lands per commit, so an intermediate dirty bump never becomes a real pin — and the
+provisional value is never recorded as if resolvable.
 ACTIVE DRIFT RECONCILIATION (the pin is active, not passive): on session start a dependent
-compares its pinned baseline against the current living-doc commit; if the doc has MOVED it
-reconciles — absorbing applicable new rules, retiring removed ones — before RE-PINNING to the
-new commit. Surfacing-and-reconciling is required; a human may still steer contested
-absorptions. This keeps active dependents DRY against the master instead of silently drifting
-after a tune.
-CHANGELOG AS THE DELTA SOURCE (update mechanics): the workflow's CHANGELOG is the convention-
-delta a dependent reads to reconcile — it exists ONLY to help dependents update to new
-conventions, and is LOAD-BEARING ONLY WHEN UPDATING (a normal run never reads it; nothing a run
-needs lives there). A changelog batch is NOT self-stamped with its own landing commit — that anchor
-is DERIVED FROM GIT HISTORY at reconcile time, which dissolves the self-reference a committed file
-naming its own commit hash would create. To reconcile, a dependent finds the changelog batches
-added by commits in <pin>..HEAD that touch the changelog — the batches NEWER than its pin — applies
-their convention deltas, then re-pins to the new HEAD, instead of diffing the whole doc. DERIVE AT
-BATCH GRANULARITY, never per-line blame: a formatter hook reflows committed content on commit
-(verbatim means semantic, not byte), so line-level blame misattributes a batch to a reformat
-commit; ask which commit first ADDED a batch's section header. DOCUMENT-ONLY degenerate case:
-web/no-repo mode has no commits, so there is no anchor to derive and nothing to pin to until the
-web→CLI transition creates the first commit. The changelog is
-LEAK-SAFE and WORKFLOW-FOCUSED by contract: it describes only what changed in the conventions,
-never the tuning sources that produced the change (no entry ids, no session/project detail). The
-changelog LIVES BESIDE THE MASTER (the master's own committed directory, alongside the shared
-harness), so the reconcilable unit — protocol + harness + changelog — travels together and a
-dependent updating its pin finds it there. It is SCOPED to MASTER + shared-harness convention
-changes ONLY: the backlog sub-workflow's own rules have no external dependent (dependents pin to
-the master; the backlog rules are re-read fresh each session), so changes to them are recorded
-in git history, not as changelog deltas.
+compares its pinned VERSION against the current living-doc version; if the version has MOVED it
+reconciles — absorbing applicable new rules, retiring removed ones — by reading the migration
+entries BETWEEN its pinned version and the current one (resolving version → commit as above to
+bound the range when a repo is present), before RE-PINNING to the new version. Surfacing-and-
+reconciling is required; a human may still steer contested absorptions. This keeps active
+dependents DRY against the master instead of silently drifting after a tune.
+MIGRATION GUIDE AS THE DELTA SOURCE (update mechanics): the workflow's changelog is the MIGRATION
+GUIDE a dependent reads to reconcile — it exists ONLY to help dependents update to new conventions,
+and is LOAD-BEARING ONLY WHEN UPDATING (a normal run never reads it; nothing a run needs lives
+there). It is JUDGMENT-BASED, not a mechanical diff of every edit: a migration entry is written ONLY
+when a re-syncing dependent must actually DO something differently, and it says what an UPGRADER
+must change — grooming-internal conventions no active dependent consumes, and cosmetic or reflow-only
+edits, add NO entry. Most modifying commits add a short entry; some add none. A migration entry is
+NOT self-stamped with its own landing commit — that anchor is DERIVED FROM HISTORY at reconcile time,
+which dissolves the self-reference a committed file naming its own commit hash would create. To
+reconcile, a dependent resolves its pinned VERSION → commit (see BASELINE PIN) and reads the
+migration entries assigned by commits in <pin>..HEAD — the entries NEWER than its pin — applies them,
+then re-pins to the new version, instead of diffing the whole doc: the VERSION is the reconcile ENTRY
+POINT that bounds the range, while entry HEADERS stay DESCRIPTIVE (never the bare version, which
+would be a fresh self-referential surface). DERIVE AT ENTRY GRANULARITY, never per-line blame: a
+formatter hook reflows committed content on commit (verbatim means semantic, not byte), so line-level
+blame misattributes an entry to a reformat commit; ask which commit first ADDED an entry's section
+header. CORRECTNESS RESTS ON GUIDE COMPLETENESS, NOT ON THE VERSION BUMP: a real convention change
+committed WITHOUT its migration entry is silently missed by the range-walk (the version moved, the
+guide did not), so the version bump and the migration entry are authored TOGETHER in the same
+modifying commit (see the VERSION-BUMP STEP) — completeness of the guide is the load-bearing
+invariant, not the fact that a version incremented. DOCUMENT-ONLY degenerate case: web/no-repo mode
+has no commits, so there is no anchor to derive and nothing to pin to until the web→CLI transition
+creates the first commit. The guide is LEAK-SAFE and WORKFLOW-FOCUSED by contract: it describes only
+what changed in the conventions, never the tuning sources that produced the change (no entry ids, no
+session/project detail). It LIVES BESIDE THE MASTER (the master's own committed directory, alongside
+the shared harness), so the reconcilable unit — protocol + harness + guide — travels together and a
+dependent updating its pin finds it there. It is SCOPED to MASTER + shared-harness convention changes
+ONLY: the backlog sub-workflow's own rules have no external dependent (dependents pin to the master;
+the backlog rules are re-read fresh each session), so changes to them are recorded in git history,
+not as migration entries.
+VERSION-BUMP STEP (a workflow step, not a deterministic tool): a MODIFYING commit to the living
+workflow BUMPS the master's version (increment the ordinal, mint a fresh distinctive label in the
+doc header) and, in the SAME commit, AUTHORS a migration entry if an upgrader needs one. This is a
+JUDGMENT step precisely because whether an entry is needed — and what an upgrader must change —
+cannot be decided mechanically: a commit-time tool could enforce that the version moved but never
+that the guide is COMPLETE, so the same step that bumps the version writes the entry, keeping the
+two from drifting apart. A purely cosmetic / reflow-only commit is not a modifying commit and bumps
+nothing.
 
 ── BACKLOG-ENTRY CONTRACT ──
 A backlog entry is: self-contained (decidable without reconstructing a session);
 generalized (a workflow tuning, not a project fix); evidence-based (names the friction that
-motivates it); NON-prescriptive (a groomed candidate, not an applied change); and FREE OF
-SPECIFICS (no filesystem paths, project names, tool brands, session numbers, or example-run
-detail). Plan-local friction logs keep the specifics; the backlog gets the sanitized
-abstraction. Entries are GITIGNORED WORKING CAPTURES — never committed — because they may
+motivates it); NON-prescriptive (a groomed candidate, not an applied change); and FREE OF PRIVATE/WORK
+SPECIFICS (no internal project names, internal code references, filesystem paths, session numbers,
+example-run detail, or the operator's private/work tool-stack) — the concern is a capture that
+originates in a PRIVATE repo leaking work context up into this PUBLIC one, so this workflow's OWN
+open-source repo and its first-party tooling (e.g. its Nix install substrate) ARE nameable.
+Plan-local friction logs keep the specifics; the backlog gets the sanitized abstraction. Entries are GITIGNORED WORKING CAPTURES — never committed — because they may
 still carry work detail despite this contract; they are reviewed before folding, and only the
 resulting generic tuning reaches a committed doc. So the durable, authoritative record is the
-FOLDED TUNING plus a generic changelog line, NOT the entry file; the entry file is a transient
+FOLDED TUNING plus a generic migration entry, NOT the entry file; the entry file is a transient
 buffer, authoritative only for pending (un-groomed) capture. Lifecycle: BACKLOG -> GROOMED
 (transient) -> a TERMINAL disposition (FOLDED-and-removed, or DROPPED:<reason>); folding a tuning
 REMOVES its entry (the fold IS the drain). A candidate that is plausible but not yet decidable PARKS

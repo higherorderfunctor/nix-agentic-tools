@@ -37,6 +37,17 @@
           "enum": ["web-run", "cli"],
           "description": "Operating mode resolved at cold start, a confirmed input not an inference: 'web-run' (no-repo/document-only — everything in the single regenerated plan doc; leak-safety relaxed) or 'cli' (repo-backed, single machine — working state in gitignored <WORKTREE_ROOT>/.living-workflows/<plan>/, durable knowledge committed)."
         },
+        "execution_mode_history": {
+          "type": "array",
+          "description": "Ordered ledger of the mode segments this plan has run in — a plan may cross the web<->cli boundary more than once, so this ledger, not the single current execution_mode, is the complete provenance of where the plan has been. Appended at cold start and at each transition.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "mode": { "enum": ["web-run", "cli"] },
+              "at_version": { "type": "string" }
+            }
+          }
+        },
         "capabilities": {
           "type": "object",
           "description": "map of capability-name -> resolved primitive; an ABSENT resolution records the probe that produced it alongside its fallback — a negative result is falsifiable, a present resolution self-proving on use."
@@ -49,11 +60,11 @@
     },
     "living_doc_baseline": {
       "type": "object",
-      "description": "Commit pin for the canonical living doc + shared harness this plan was authored against (DRY-by-reference). Dependents read the living doc at this commit. In a resident-commits repo the resident stamps the commit at commit time; until then 'commit' holds the sentinel 'PENDING-RESIDENT-STAMP'. State-tracked rather than an ad-hoc prose token (state-over-tokens).",
-      "required": ["path", "commit"],
+      "description": "VERSION pin for the canonical living doc + shared harness this plan was authored against (DRY-by-reference). Dependents read the living doc at this version. 'version' is the assigned identity the doc carries as content (a monotonic ordinal + a distinctive label), NOT a raw commit hash — it resolves to a commit by derive-from-history (the commit that assigned it) and also travels to a document-only artifact that has no commit. In a resident-commits repo the resident stamps the shipped version at commit time; until then 'version' holds the sentinel 'PENDING-RESIDENT-STAMP'. State-tracked rather than an ad-hoc prose token (state-over-tokens).",
+      "required": ["path", "version"],
       "properties": {
         "path": { "type": "string" },
-        "commit": { "type": "string" },
+        "version": { "type": "string" },
         "note": { "type": "string" }
       }
     },

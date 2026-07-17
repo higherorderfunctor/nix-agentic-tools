@@ -1,19 +1,23 @@
-# Living-workflow changelog — convention-delta for dependents
+# Living-workflow changelog — the judgment-based migration guide for dependents
 
-This is the **convention-delta** a DRY dependent reads to update itself when the living workflow's
+This is the **migration guide** a DRY dependent reads to update itself when the living workflow's
 conventions change. It **lives beside the master doc + shared harness** so the reconcilable unit —
-protocol + harness + changelog — travels together, and it is **scoped to MASTER protocol +
+protocol + harness + guide — travels together, and it is **scoped to MASTER protocol +
 shared-harness changes only**: the backlog sub-workflow's own rules have no external dependent
 (nothing pins to them; they are re-read fresh each session), so their changes are
-**git-history-only** and are not added here going forward (the retained backlog-sub-workflow
-subsection below is pre-scoping provenance, not an ongoing record). It is **load-bearing ONLY when updating** — a normal run
-never reads it, and nothing a run needs lives here. It is **leak-safe and workflow-focused**: each
-line states what changed in the conventions and where it folded (master protocol or shared
-harness) — **no entry
-ids, no tuning-source references, no session/project detail**. Each batch's landing commit is
-**derived from git history** at reconcile time (not embedded here); a dependent maps its pinned
-baseline → the batches added since the pin → the deltas to adopt → re-pins. (The purpose and update
-mechanics are owned by the master's DRY-BY-REFERENCE section; this doc is just the record.)
+**git-history-only** and are not added here (the retained backlog-sub-workflow subsection below is
+pre-scoping provenance, not an ongoing record). It is **load-bearing ONLY when updating** — a normal
+run never reads it, and nothing a run needs lives here. It is **judgment-based, not a mechanical
+diff**: a **migration entry** is written ONLY when a re-syncing dependent must actually DO something
+differently, and it says what an **upgrader** must change — grooming-internal conventions and
+cosmetic/reflow-only edits add none. It is **leak-safe and workflow-focused**: each entry states
+what changed in the conventions and where it folded (master protocol or shared harness) — **no entry
+ids, no tuning-source references, no session/project detail**. A dependent pins to an assigned
+**VERSION** (see the master's BASELINE PIN); to reconcile it resolves version → commit by
+**derive-from-history** and reads the migration entries between its pinned version and the current
+one, then re-pins. (The purpose and update mechanics — the version pin, the version-bump step, the
+reconciliation walk — are owned by the master's DRY-BY-REFERENCE section; this doc is just the
+record. Earlier sections below use the prior term "batch" for what is now a migration entry.)
 
 ## First committed baseline
 
@@ -292,3 +296,39 @@ git history** (the commit that first added this section header), not embedded he
   deterministic) while a host-only binary is self-proving only within its machine — so the
   self-proving-on-use property is scoped to a single machine and cross-machine determinism comes from
   sourcing the primitive reproducibly.
+
+## Versioning
+
+Migration entries folded after the capability-sourcing batch. This section's anchor is **derived
+from history** (the commit that assigned the master version `v3-cedar-harbor-quartz`), not embedded
+here.
+
+### Master protocol (`living-plan-bootstrap.md`) + shared harness (`state.schema.json`)
+
+- **Baseline pin — an assigned VERSION, not a raw commit.** A dependent's `living_doc_baseline` now
+  records the master's assigned VERSION (a monotonic ORDINAL for "am I behind" + a DISTINCTIVE LABEL
+  so the exact version stays searchable), not a git commit hash. **To reconcile: re-pin your
+  `living_doc_baseline` from the old `commit` field to a `version` field** (schema: `required` is now
+  `[path, version]`; `commit` is removed). A version is content the doc assigns itself — not a
+  self-named commit hash (which cannot be written into the commit that creates it) and not a
+  build-tool-injected identity (e.g. a Nix flake's `self.rev`, which cannot see a dirty tree, is
+  whole-repo-granular, and never reaches web) — so it resolves to a commit by
+  **derive-from-history** (the commit that assigned it; assignment granularity, never per-line blame
+  under a reflowing formatter) and also travels to a document-only artifact that has no commit. A
+  version read off a dirty/uncommitted master is **provisional-until-committed** — carry
+  `PENDING-RESIDENT-STAMP`, never the provisional value.
+- **Active drift reconciliation is version-based:** compare your pinned VERSION to the current one;
+  if it moved, read the migration entries between them (resolving version → commit to bound the range
+  when a repo is present) and re-pin to the new version.
+- **Changelog is now a judgment-based migration guide:** an entry is written only when a re-syncing
+  dependent must do something differently; the VERSION is the reconcile ENTRY POINT, entry headers
+  stay DESCRIPTIVE, and reconcile correctness rests on guide COMPLETENESS (a real change committed
+  without its entry is silently missed) — so the version bump and the entry are authored TOGETHER in
+  the same modifying commit (the VERSION-BUMP STEP, a judgment step, not a hook).
+- **Mode-history ledger (shared harness):** the `ecosystem` record gains an optional
+  `execution_mode_history` array — an ordered ledger of the web/cli segments a plan has run in (a plan
+  may cross the boundary more than once); the single `execution_mode` remains the current mode. No
+  dependent action required (additive/optional).
+- **Self-identifying generation marker clarified:** the document-only web generation marker is
+  DISTINCT from the committed master VERSION — different docs, different lifetimes; the marker still
+  retires at the web→CLI transition. No dependent action required.
