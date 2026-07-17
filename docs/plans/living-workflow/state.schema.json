@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["current_position", "phases", "open_items", "budget"],
+  "properties": {
+    "current_position": {
+      "type": "object",
+      "required": ["phase", "next_action", "class"],
+      "properties": {
+        "phase": { "type": "string" },
+        "next_action": { "type": "string" },
+        "class": { "enum": ["phase_boundary", "hitl_opening", "mid_batch"] },
+        "branch": { "type": "string" }
+      }
+    },
+    "reflection_mode": {
+      "type": "object",
+      "description": "Standing self-reflection. When enabled, a session distills SANITIZED, generalized workflow-improvement candidates into the backlog sub-workflow at session end (after the kickoff prompt) AND authors ONLY to the backlog — it never edits the living doc. Default ON, natural-language-toggleable. State-tracked rather than an ad-hoc prose token (state-over-tokens).",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "default_on": { "type": "boolean" },
+        "toggle": { "type": "string" },
+        "note": { "type": "string" }
+      }
+    },
+    "ecosystem": {
+      "type": "object",
+      "description": "Ecosystem capabilities resolved at COLD START. Never assume host/runtime/tools; encode divergences as 'if capability absent -> do Y'. Capability names are ecosystem-agnostic; values are the resolved primitive for this ecosystem.",
+      "properties": {
+        "resolved_at": { "type": "string" },
+        "runtime": { "type": "string" },
+        "forge": { "type": "string" },
+        "repo": { "type": "string" },
+        "commit_ownership": { "enum": ["we-commit", "resident-commits"] },
+        "execution_mode": {
+          "enum": ["web-run", "cli"],
+          "description": "Operating mode resolved at cold start, a confirmed input not an inference: 'web-run' (no-repo/document-only — everything in the single regenerated plan doc; leak-safety relaxed) or 'cli' (repo-backed, single machine — working state in gitignored <WORKTREE_ROOT>/.living-workflows/<plan>/, durable knowledge committed)."
+        },
+        "capabilities": {
+          "type": "object",
+          "description": "map of capability-name -> resolved primitive; an ABSENT resolution records the probe that produced it alongside its fallback — a negative result is falsifiable, a present resolution self-proving on use."
+        },
+        "execution_constraints": {
+          "type": "object",
+          "description": "Host execution/resource constraints resolved at cold start: resource ceilings, sandbox/rate limits, each with its safe workaround recipe. Read every session, never re-derived."
+        }
+      }
+    },
+    "living_doc_baseline": {
+      "type": "object",
+      "description": "Commit pin for the canonical living doc + shared harness this plan was authored against (DRY-by-reference). Dependents read the living doc at this commit. In a resident-commits repo the resident stamps the commit at commit time; until then 'commit' holds the sentinel 'PENDING-RESIDENT-STAMP'. State-tracked rather than an ad-hoc prose token (state-over-tokens).",
+      "required": ["path", "commit"],
+      "properties": {
+        "path": { "type": "string" },
+        "commit": { "type": "string" },
+        "note": { "type": "string" }
+      }
+    },
+    "parent": {
+      "type": "object",
+      "description": "Nesting pointer for a child of a downstream PROJECT plan: records the parent plan and the return pointer, so on the child's TERMINAL FOLD the kickoff chain RETURNS to its PARENT. For project work only — not the backlog's own inline fold. Absent on any top-level plan (a project root or the backlog sub-workflow).",
+      "required": ["parent_path"],
+      "properties": {
+        "parent_path": { "type": "string" },
+        "return_pointer": { "type": "string" }
+      }
+    },
+    "phases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "status", "ordering_rationale"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "status": { "enum": ["pending", "open", "done"] },
+          "ordering_rationale": { "type": "string" },
+          "budget_estimate": { "type": "string" }
+        }
+      }
+    },
+    "units": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "phase", "title", "status", "class"],
+        "properties": {
+          "id": { "type": "string" },
+          "phase": { "type": "string" },
+          "title": { "type": "string" },
+          "status": { "enum": ["open", "done"] },
+          "class": { "enum": ["reversible", "side_effecting"] },
+          "idempotency_handle": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "open_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "disposition"],
+        "properties": {
+          "id": { "type": "string" },
+          "disposition": {
+            "type": "string",
+            "description": "HITL@Pn | DEFAULT:<x>(revisable) | AI-OWNED | RESOLVED | BACKLOG | GROOMED | NEEDS-EVIDENCE:<what-would-decide-it> | FOLDED | DROPPED:<reason>. NEEDS-EVIDENCE parks an item that is plausible but not yet decidable: it names the evidence that would settle it and waits for that evidence to accrue, rather than being decided on a single sighting or discarded. It is a HOLD, not a terminal state."
+          },
+          "origin": { "type": "string" },
+          "pinned": {
+            "type": "boolean",
+            "description": "Optional flag marking an open_item as pinned in the live register so it is not drained — e.g. a parked NEEDS-EVIDENCE candidate that accrues sightings across passes rather than being re-decided or removed."
+          },
+          "entry": {
+            "type": "string",
+            "description": "relative path to the backlog entry file, when this open_item is a rolling-backlog candidate"
+          },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "text"],
+        "properties": {
+          "id": { "type": "string" },
+          "text": { "type": "string" }
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "required": ["unit", "soft_close_pct"],
+      "properties": {
+        "unit": { "enum": ["units", "dispatches", "tool_calls"] },
+        "soft_close_pct": { "type": "number" },
+        "ceiling": { "type": "number" }
+      }
+    }
+  }
+}
