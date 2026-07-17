@@ -105,6 +105,54 @@ lives in each doc, its format, how web carries it, and how it interacts with ACT
 DRIFT RECONCILIATION and CHANGELOG AS THE DELTA SOURCE. Touches BASELINE PIN,
 SELF-IDENTIFYING GENERATION, CHANGELOG.
 
+**A.1 — how the version token is produced and where it lives (injection vs
+content-embedded).** Operator question: can Nix inject a commit hash (pure mode, at
+activation)? Yes, via the flake's `self.rev` — but it fails all three of this
+workflow's real constraints, so it is the wrong tool here:
+
+- **Dirty-tree purity.** `self.rev` exists only for a CLEAN flake tree. The operator
+  activates with tracked-but-uncommitted changes; a dirty tree has no `self.rev`, only
+  `self.dirtyRev` (`<hash>-dirty`), which corresponds to no commit and cannot be found
+  in history. So an injected hash either points at the last commit (not the activated
+  working state) or is an unresolvable dirty marker.
+- **Wrong granularity.** `self.rev` is the whole-REPO commit, not the doc's. It bumps
+  on every unrelated repo commit, so a dependent pinned to it sees drift on commits
+  that never touched the master — ACTIVE DRIFT RECONCILIATION fires spuriously.
+- **Web gap.** Nix builds only the CLI copy; the web artifact is pasted, not
+  Nix-built, so injection never reaches web and would force a SECOND version
+  mechanism — violating the single-version goal.
+
+**Dominant scheme: a content-embedded token** (the operator's "three random words"
+idea). It is the only scheme that (a) survives the web boundary with ONE mechanism
+(the token is content; it travels into the isolated artifact), (b) is doc-granular
+(changes iff the doc changes), and (c) reflects the DIRTY working state — the
+operator's own dirty-activation point argues FOR this and AGAINST Nix injection, since
+a token bumped in the working tree is present while `self.rev` cannot see it.
+version→commit = `git log -S/-G "<token>" -- <doc>`, or the commit that changed the
+version field (the derive-from-history technique R-DIR-20 already blessed), or a git
+tag.
+
+**Refinements to weigh:** (1) prefer the master's EXISTING monotonic generation
+counter (SELF-IDENTIFYING GENERATION) over a fresh random slug — the counter adds
+ORDERING a slug lacks, and reuses a marker rather than inventing a second surface (the
+master already rejected a redundant second flag). (2) ENFORCE "changes on every
+modifying commit" with a pre-commit HOOK (the repo already has the chain), not author
+discipline — it turns a silent ambiguity (two doc states sharing a token) into a loud
+commit-time stop, per the prefer-a-tool-for-a-decidable-recurring-property maxim.
+
+**Open sub-questions (do not resolve without grooming):** (a) CADENCE — web
+generations increment per re-emit, CLI versions per modifying commit; define how one
+counter spans the transition (sub-version? reset?). (b) RESIDENT RACE — a token pinned
+against a DIRTY (uncommitted) master is unresolvable until the resident commits; it
+composes with `PENDING-RESIDENT-STAMP`, but a token bumped AGAIN before commit strands
+the intermediate pin — define the stable-pin point. (c) REFLOW SENSITIVITY — a
+content-HASH token bumps on formatter reflow (byte-sensitive, against "verbatim means
+semantic"); a counter+hook avoids that, but the hook cannot easily tell reflow from
+semantic change so it over-fires (safe but noisy) — pick the trade-off. (d) NIX'S REAL
+ROLE — install/copy the already-versioned doc, and OPTIONALLY record the source-repo
+checkout rev as the deployment pointer to where `git log` runs (the resolve-location
+pointer, separate from version IDENTITY).
+
 **B. XDG scoping.** Decided: the framework-channel working state moves to XDG.
 Undecided: does **all** plan working state (each downstream plan's `state.json` +
 journal) also move to XDG, or does only the framework backlog move while ordinary
