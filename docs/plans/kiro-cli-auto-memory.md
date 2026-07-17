@@ -846,7 +846,7 @@ re-activate from the fresh/broken state to prove reproducibility. (Memory
 
 **Final (S17):** this plan is DONE after this session and is not rerun. The next
 memory living plan is drafted FRESH from the _tuned_ living workflow — i.e. after
-the `workflow-backlog` (`B01…B24`, including this session's captures) is groomed
+the `living-workflow-backlog` (`B01…B24`, including this session's captures) is groomed
 and its adopted tunings fold into `docs/plans/living-workflow/` — pulling in the
 items above (session isolation, non-nix hook delivery, module ergonomics, retire
 legacy, louder/observable, Graphiti, `/dream`). Do NOT reopen this doc.
