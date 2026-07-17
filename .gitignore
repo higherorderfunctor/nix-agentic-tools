@@ -45,7 +45,9 @@ docs/src/
 .update-version
 .update.ninja
 .update-report.txt
-.worktrees/
+
+# Living-workflow per-worktree working state (state.json, journals, entries — never committed)
+.living-workflows/
 
 # Local private working area (untracked journals, assessments, scratch)
 /private/
