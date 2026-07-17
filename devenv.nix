@@ -38,6 +38,7 @@ in {
   # ── Packages ──────────────────────────────────────────────────────────
   packages = with pkgs; [
     # Dev tools
+    check-jsonschema
     cspell
     deadnix
     mdbook
