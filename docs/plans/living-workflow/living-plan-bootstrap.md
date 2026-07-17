@@ -162,6 +162,16 @@ OPERATOR-GATED — the capability exists but only the human can enable it; the s
 flip the toggle itself. Record operator-gated capabilities explicitly, and when one is wanted
 surface the toggle to the operator rather than silently degrading to the fallback as though
 the capability were unavailable.
+PREFER A REPRODUCIBLE SOURCE FOR A PRESENT BINDING: when a capability can bind either to a primitive
+from the project's own declared reproducible toolchain (its pinned dev environment) OR to a binary
+that merely happens to sit on the host PATH, bind the project-provided one and record any host-only
+binary as a FLAGGED fallback, not the primary. A toolchain-sourced primitive resolves identically on
+every independent cold start (portable, deterministic); a host-only binary is self-proving on the
+resolving machine but may be absent — or a different version — on the next, silently degrading a
+later cold start to the fallback. So the present-and-self-proving-on-use property (below) holds only
+WITHIN a machine — cross-machine determinism comes from sourcing the primitive reproducibly — and a
+host-only binding records that it is host-only, letting a later resolver prefer a reproducible source
+once one exists.
 AN ABSENT RESOLUTION IS A NEGATIVE RESULT: record, alongside the fallback, the PROBE that produced
 it — what was actually checked for. A PRESENT resolution binds to a concrete primitive and is
 self-proving on use (a wrong binding fails loudly the first time it is exercised), so it needs no
@@ -499,6 +509,15 @@ living workflow. Every plan SUBMITS candidates to the living-workflow-backlog an
 the workflow itself — this single uniform rule replaces per-plan "do not edit the protocol"
 instructions. The living-workflow-backlog is the SOLE authorized editor of the living workflow,
 because it is the one workflow with a defined update procedure (grooming).
+SOLE EDITOR IMPLIES SOLE CHANGE-CHANNEL: the authority that makes the backlog the only editor also
+fixes the only ROUTE a workflow change may travel. Every change to the living workflow ENTERS
+through a sanctioned change-channel — a backlog entry that grooming folds, or the lighter fix path
+for a mechanical, behavior-neutral nit — and the backlog's own state substrate IS the plan-of-record
+for the change. A workflow change is never planned, staged, or drafted off-substrate — in an ad-hoc
+scratch file, an external planning doc, a task-tracker, or any surface outside the backlog's own
+gitignored working state; reaching for such a side channel to work through a workflow edit is itself
+the tripwire to STOP and route it through the backlog. This scopes to changes to the
+WORKFLOW ITSELF — unrelated scratch space for a downstream plan's own project work is untouched.
 CAPTURE: at session close — AFTER the acceptance gate fires and the kickoff prompt is produced
 (see EMBEDDED SESSION BOOTSTRAP step 8) — distill this session's reflection into SANITIZED, generalized
 candidates and write ONLY the entry file into the living-workflow-backlog's entries AT THE

@@ -269,3 +269,26 @@ here — see the master's CHANGELOG AS THE DELTA SOURCE.
   master/harness conventions appends a convention-delta line to the co-located changelog; a fold
   tuning only these backlog rules is
   git-history-only; a drop is recorded in the working journal only (it changed no convention).
+
+## Capability sourcing + workflow change-channel
+
+Convention deltas folded after the first committed baseline. This batch's anchor is **derived from
+git history** (the commit that first added this section header), not embedded here.
+
+### Master protocol (`living-plan-bootstrap.md`)
+
+- **Reflection scope + authority — sole editor implies sole change-channel:** the same authority that
+  makes the living-workflow-backlog the only editor of the workflow also fixes the only ROUTE a
+  workflow change may travel — every change enters through a sanctioned change-channel (a
+  groomed-and-folded backlog entry, or the lighter fix path for a mechanical behavior-neutral nit) and
+  the backlog's own state substrate IS the plan-of-record; a workflow change is never planned or
+  staged off-substrate (scratch file, external planning doc, task-tracker), and reaching for such a
+  side channel is itself the tripwire to route it through the backlog instead. Scoped to changes to
+  the workflow itself; a downstream plan's own scratch space is untouched.
+- **Ecosystem adapter — prefer a reproducible source for a present binding:** when a capability can
+  bind either to a primitive from the project's declared reproducible toolchain or to a host-PATH
+  binary, bind the project-provided one and mark any host-only binary as a flagged fallback; a
+  toolchain-sourced primitive resolves identically on every independent cold start (portable,
+  deterministic) while a host-only binary is self-proving only within its machine — so the
+  self-proving-on-use property is scoped to a single machine and cross-machine determinism comes from
+  sourcing the primitive reproducibly.
