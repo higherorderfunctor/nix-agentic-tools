@@ -11,6 +11,11 @@
   # Fragment composition — same import as flake.nix, single source of truth.
   # Returns { agentsMd, claudeFiles, claudeMd, copilotFiles, kiroFiles }.
   gen = import ./dev/generate.nix {inherit lib pkgs;};
+
+  # Stop-hook validator (runs the git-hooks suite when Claude hands control
+  # back, instead of racing the Edit tool on every PostToolUse). See the
+  # claude.code.hooks block below.
+  validateAtStop = import ./lib/validate-at-stop.nix {inherit pkgs config;};
 in {
   imports = [
     ./lib/ai/sharedOptions.nix
@@ -160,27 +165,22 @@ in {
 
   # ── Claude Code (upstream devenv options) ───────────────────────────
   claude.code = {
-    # Override the auto-generated git-hooks-run hook to use an absolute
-    # store path. Upstream devenv emits the bare binary name (`prek`)
-    # via `git-hooks.package.meta.mainProgram`, which fails when Claude
-    # Code spawns the hook with a stripped PATH. Bug:
-    # https://github.com/cachix/devenv/blob/main/src/modules/integrations/claude.nix#L249
-    # Redirect stdout to stderr so prek's hook-failure output reaches
-    # Claude Code, which only surfaces stderr on non-blocking hook failures.
-    hooks.git-hooks-run.command = ''
-      cd "$DEVENV_ROOT" && ${lib.getExe config.git-hooks.package} run 1>&2
-    '';
-    # Scope this PostToolUse hook to file-WRITE tools only. Upstream devenv
-    # leaves the matcher `""`, so prek ran after EVERY tool call (Read, Bash,
-    # …) — treefmt inside prek rewrites files (mtime bump even on identical
-    # content), which (a) trips the Edit tool's "modified since read" guard and
-    # (b) fails --fail-on-change on a bare write. Firing only after Edit/Write/
-    # MultiEdit/NotebookEdit keeps the auto-format-as-you-go intent without the
-    # per-Read/Bash churn. If it still causes stale-file "modified since read"
-    # races, DELETE this hook block entirely and rely on the commit-time
-    # git-hooks (which already enforce formatting at `git commit`) — the
-    # per-tool run is redundant with it.
-    hooks.git-hooks-run.matcher = "Edit|MultiEdit|NotebookEdit|Write";
+    # Disable devenv's default PostToolUse git-hooks-run hook. It fired the
+    # formatter after Edits, and treefmt's rewrite broke sync with the Edit
+    # tool's read-snapshot ("modified since read"). Validation now happens
+    # at the Stop boundary via validate-at-stop, where a rewrite has no
+    # following Edit to race. Root-cause + POC:
+    # docs/plans/prek-posttooluse-hook-feedback-channel.md.
+    hooks.git-hooks-run.enable = false;
+
+    # Run the git-hooks suite when Claude hands control back (Stop): auto-fix
+    # formatting silently, block-with-reason on judgment lint. See the plan.
+    hooks.validate-at-stop = {
+      enable = true;
+      name = "validate-at-stop";
+      hookType = "Stop";
+      command = lib.getExe validateAtStop;
+    };
 
     permissions.rules = {
       Bash = {
