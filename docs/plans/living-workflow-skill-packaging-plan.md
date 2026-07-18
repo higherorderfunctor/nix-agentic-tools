@@ -363,3 +363,70 @@ to its own worktree root.`
 ALL referencing surfaces in the same commit" — schema (13) + changelog (14) + backlog mirrors move with
 the bootstrap; (b) DRY-SYNC close invariant — the backlog table (11) stays a reference to the master's
 STATE SUBSTRATE, edited in lockstep.
+
+---
+
+## END STATE — B+C SHIPPED (2026-07-18)
+
+**Status: COMPLETE + verified.** Executed via supervisor-worker-verifier (root-inline edits +
+read-only adversarial verifier fan-out; no edit fan-out). All 4 phases / 11 tasks done.
+
+### Shipped
+
+Commits on `origin/refactor/ai-factory-architecture` (rebased onto the bot dep-updates; full CI
+`nix flake check` **GREEN**):
+
+- `b84cd3b3` refactor: move the 4 machinery docs → `packages/living-workflow/skills/living-workflow/references/`
+  - relocate working state to XDG + master **v5-onyx-meadow-cobalt → v6-garnet-tundra-birch** + a new
+    changelog migration entry (schema / backlog-table / `.gitignore` rippled in lockstep).
+- `010d9cc3` feat: `packages/living-workflow/` — barrel + HM-primary/devenv-parity modules +
+  `lib/mkSkill.nix` (Nix-generated skill baking `config.xdg.stateHome`); registered in
+  `packages/default.nix`. **No overlay** (per-eval bake → a static `-content` derivation is the wrong place).
+- `8db3719f` test: 5 `checks/module-eval.nix` assertions incl. the isPath/isString **trap-catcher** +
+  an `xdg.stateHome` stub in `hmStubs`.
+
+Installed + verified user-global on Claude Code + Kiro v3 (HM store symlinks `~/.claude/skills/` +
+`~/.kiro/skills/`; `nixos-config` `ai/default.nix` has `living-workflow.enable = true`). The live
+backlog self-migrated `.living-workflows/living-workflow-backlog/` →
+`~/.local/state/living-workflows/living-workflow-backlog/` (tested copy→validate→prove-resume→remove-old;
+backup `../living-workflows-bk`); delivered-record emitted (backlog `R-DIR-30`): the two B+C entries
+drained `DROPPED:<delivered>`, `living_doc_baseline` re-pinned v6.
+
+### Key decisions resolved during the build (differ from / sharpen the design)
+
+- **Framework channel = first-party CLONE-LESS override.** The living-workflow-backlog is NOT repo-bound
+  (it pairs with the installed skill) → `<xdg>/living-workflows/living-workflow-backlog/` (drop the
+  `<clone-name>` segment); all living-workflow feedback lands in the ONE backlog. Ordinary plans stay
+  per-clone `<xdg>/living-workflows/<clone-name>/<workflow-name>/`. This resolved a genuine
+  design-doc-internal tension (design §1 "one per clone" vs plan/handoff "single machine-global
+  canonical") that the adversarial verifier caught at build time.
+- **clone-name recipe** = `basename "$(dirname "$(realpath "$(git rev-parse --git-common-dir)")")"` with a
+  **dirname fallback** (`basename "$PWD"`) when git can't resolve.
+- **ai.skills value shape** = the runCommand **outpath STRING** (`"${skill}"`), NOT the derivation (which
+  trips `mkSkillEntries`' `isPath||isString` guard → path written as text). Works because modern upstream
+  claude `mkSkillEntry` uses `lib.hm.strings.isPathLike` — the 2026-04-08 `claude-rules` "`lib.isPath`"
+  fragment is SUPERSEDED upstream.
+
+### Tech debt / follow-ups (for the review session)
+
+1. **Hand-curated module lists (footgun).** Both `checks/module-eval.nix` (evalHm/evalDevenv module lists)
+   and `devenv.nix` (imports L20–25) require MANUALLY adding each new package's modules — they do NOT
+   auto-discover the way `flake.nix`'s `collectFacet` does. living-workflow was added to module-eval but
+   (deliberately, see #2) not to `devenv.nix`. Consider auto-discovery to kill the manual-add footgun.
+2. **living-workflow devenv module is NOT wired into this repo's `devenv.nix`** (decision point, not a bug).
+   The devenv (project-local) parity is therefore inactive in nix-agentic-tools. This is fine as-is: the
+   HM **user-global** install already provides the skill in every repo, so a project-local copy here is
+   redundant for the single consumer. Wire it (`+ ./packages/living-workflow/modules/devenv` in the
+   imports + `living-workflow.enable = true`) only if project-local parity in THIS repo is ever wanted.
+3. **devenv base-source asymmetry.** The devenv variant bakes a runtime XDG shell-default
+   (`${XDG_STATE_HOME:-$HOME/.local/state}/living-workflows`) because devenv has no `config.xdg.stateHome`;
+   HM bakes the Nix-resolved absolute. Documented + acceptable, but asymmetric.
+4. **Generated-skill requires a string-tolerant (modern) home-manager** (`isPathLike`). A pin regressing
+   HM below that threshold would break the skill's directory materialization (silent path-as-text).
+5. **Two external plan-doc refs to the old machinery path, left untouched:** `docs/plans/kiro-cli-auto-memory.md:850`
+   (a CLOSED doc — "Do NOT reopen") and `docs/plans/prune-claude-plugin-and-memory-surface.md:5,183`
+   (self-documents "re-verify paths if HEAD moved"). Re-root if desired.
+6. **Pre-existing alphabetical drift** (not from this build): `packages/default.nix` has `mcp-services`
+   before `mcp-language-server`. Fix in an ordering sweep if doing one.
+7. The `-design.md` and `-handoff.md` working docs stay untracked (per no-commit-working-docs); this plan
+   doc is tracked and now carries the end state.
