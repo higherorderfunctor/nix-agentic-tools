@@ -12,12 +12,12 @@ state.schema.json), so a fresh session can materialize its working state from th
 alone.
 
 Distilled from prior planning workflows. Design rationale: location encodes durability —
-committed docs carry durable knowledge while gitignored side-files carry per-worktree working
+committed docs carry durable knowledge while out-of-repo side-files carry clone-scoped working
 state; structured machine state lives in `state.json` (key-addressed jq mutation — no surgical
 markdown editing) and human narrative is append-only markdown. This
 prompt is itself under continuous improvement: sessions running under it reflect at close
 and drop sanitized, generalized candidates into its **backlog sub-workflow**
-(`../living-workflow-backlog/`), a perpetual grooming loop that folds them back in;
+(`living-workflow-backlog.md`), a perpetual grooming loop that folds them back in;
 improvements land in this doc only by a deliberate grooming session, never self-ratified.
 
 > **Structure note.** The scaffold harness is canonical beside this doc
@@ -27,9 +27,9 @@ improvements land in this doc only by a deliberate grooming session, never self-
 > nesting model, DRY-by-reference + the baseline pin, the ecosystem adapter, commit-ownership,
 > and the backlog-entry contract, plus the state-over-tokens principle (new cross-session
 > concerns become schema-backed state fields, not ad-hoc prose tokens). The backlog sub-workflow
-> this doc references lives at `../living-workflow-backlog/`.
+> this doc references lives at `living-workflow-backlog.md`.
 >
-> **Living-doc version: `v5-onyx-meadow-cobalt`.** The assigned VERSION dependents pin to — a
+> **Living-doc version: `v6-garnet-tundra-birch`.** The assigned VERSION dependents pin to — a
 > monotonic ORDINAL (for "am I behind?") paired with a DISTINCTIVE LABEL (so the exact version
 > stays searchable in history and in copied text). A modifying commit bumps it and authors a
 > migration entry if an upgrader needs one (see DRY-BY-REFERENCE → BASELINE PIN, MIGRATION GUIDE,
@@ -83,7 +83,7 @@ and why:
 Do not over-build. FULL on a small task is mechanism creep.
 OPERATING MODE IS A CONFIRMED INPUT, NOT AN INFERENCE. Two modes are supported: WEB-RUN
 (no-repo / document-only — everything lives in the single regenerated plan doc) and CLI
-(repo-backed, worked on a SINGLE machine — working state lives in gitignored side-files while
+(repo-backed, worked on a SINGLE machine — working state lives in out-of-repo side-files while
 durable knowledge is committed). The mode turns on human intent the first session's context
 cannot reveal. If it is unstated, ASK; never infer it from apparent context — a wrong guess at
 this high-fan-out point propagates cost downstream. Record the confirmed mode in state
@@ -229,28 +229,35 @@ per-file judgment is needed.
   shared harness (`state.schema.json`) and the migration-guide changelog are NOT
   per-plan: single copies live in the MASTER's own committed directory and are REFERENCED, never
   copied down (see DRY-BY-REFERENCE).
-- GITIGNORED WORKING STATE (CLI mode) → state.json and the WAL journal, under
-  <WORKTREE_ROOT>/.living-workflows/<plan>/ — per-worktree (resolve WORKTREE_ROOT freshly, e.g.
-  git rev-parse --show-toplevel; do NOT use the shared common git dir), SINGLE-MACHINE, never
-  committed, never travels. An entries/ CAPTURE SUBDIR is NOT part of an ordinary plan's working
-  state: a plan's OWN new work lives in state.json.open_items, and its reflection candidates route
-  to the FRAMEWORK-CHANNEL location (below) — so entries/ is materialized ONLY inside the working
-  dir of the plan that HOSTS the framework channel, never in an ordinary plan's dir where nothing
-  would ever write to it. One .living-workflows/ line in the repo-root .gitignore covers every
-  worktree and every plan; the bootstrap creates the plan's working dir if missing (no committed
-  placeholder).
-- FRAMEWORK-CHANNEL LOCATION (the living-workflow-backlog's entries/) is a SPECIAL case: it is
-  anchored NOT to the reflecting session's worktree but to WHERE THE LIVING WORKFLOW ITSELF
-  LIVES — a session may reflect while running a plan in a DIFFERENT repo than the one hosting
-  the living workflow, and its framework captures must reach the single canonical backlog, not
-  the foreign worktree. This does NOT violate never-travels: the framework channel is still
-  SINGLE-MACHINE and its entries stay gitignored/never-committed — the capture is a same-machine
-  direct write to the canonical backlog's own gitignored entries/ (a different repo on the same
-  machine than the reflecting plan, not a committed artifact carried across machines). Resolve
-  that location at cold start into the ecosystem record (a per-deployment pointer); NEVER
-  hardcode it in this reusable protocol. When the workflow and its plans share one repo the
-  pointer coincides with the local worktree and the distinction is
-  invisible. A plan's OWN working state always resolves to its own worktree root.
+- OUT-OF-REPO WORKING STATE (CLI mode) → state.json and the WAL journal live OUTSIDE any repo,
+  under an XDG state base keyed by clone and workflow:
+  <xdg-state-base>/<clone-name>/<workflow-name>/ — SINGLE-MACHINE, never committed, never travels.
+  Resolve the three parts as: (a) <xdg-state-base> is a STANDARD resolution — the installed skill
+  bakes $XDG_STATE_HOME/living-workflows (default ~/.local/state/living-workflows) as an absolute
+  base at activation; NEVER hardcode a home path. (b) <clone-name> is the basename of the MAIN
+  clone's directory — the worktree holding the real .git/ directory (git's common dir), stable
+  across every linked worktree — resolved as
+  basename "$(dirname "$(realpath "$(git rev-parse --git-common-dir)")")", FALLING BACK to the
+  current directory's name (basename "$PWD") if git cannot provide it. This USES the common git
+  dir as the NAMESPACE KEY (its parent's basename), the exact INVERSE of the retired per-worktree
+  rule that forbade it for the location. (c) <workflow-name> disambiguates multiple workflows run in
+  one clone (e.g. living-workflow-backlog). Because state is keyed by CLONE, not worktree, it
+  SURVIVES worktree teardown and is SHARED across every worktree of one clone running the same-named
+  workflow. An entries/ CAPTURE SUBDIR is NOT part of an ordinary plan's working state: a plan's OWN
+  new work lives in state.json.open_items, and its reflection candidates route to the
+  FRAMEWORK-CHANNEL location (below) — so entries/ is materialized ONLY inside the working dir of the
+  plan that HOSTS the framework channel, never in an ordinary plan's dir where nothing would ever
+  write to it. Living outside every repo, working state cannot be committed by accident (a strict
+  leak-safety improvement over gitignore-by-location); the bootstrap creates the plan's working dir
+  if missing (no committed placeholder).
+- FRAMEWORK-CHANNEL LOCATION (the living-workflow-backlog's entries/) is a FIRST-PARTY OVERRIDE of
+  the per-clone rule: it is NOT repo-bound. ALL living-workflow general feedback lands in the ONE
+  canonical backlog, so its working dir DROPS the <clone-name> segment entirely —
+  <xdg-state-base>/living-workflow-backlog/ — because this backlog pairs with the INSTALLED skill
+  (machine-global), not with any single repo. A session reflecting from ANY repo resolves the
+  framework channel to this same single location (base baked by the installed skill; no clone key,
+  no cold-start pointer, no foreign worktree to reach — the old cross-repo "which worktree root"
+  fork is gone). Still SINGLE-MACHINE and never committed (structurally, outside any repo).
 - Machine-owned state → state.json (in the working dir), mutated ONLY by key with jq (atomic:
   jq '…' state.json > tmp && mv tmp state.json). Key-addressed mutation is unique+idempotent —
   no anchor matching, no whitespace normalization.
@@ -261,8 +268,9 @@ per-file judgment is needed.
   standing machinery.
 - Ephemeral session artifacts (scratch state copies, delegation briefs/results, one-shot
   scripts, downloads) live in a SELF-IGNORING per-run scratch area — nothing under it is ever
-  committed and a whole-tree clean removes it. In CLI mode the gitignored
-  .living-workflows/<plan>/ working dir IS that area; terminal-fold sweeps treat it as exempt.
+  committed. In CLI mode the out-of-repo working dir
+  (<xdg-state-base>/<clone-name>/<workflow-name>/) IS that area; being outside every repo, a repo
+  whole-tree clean never touches it, and terminal-fold sweeps treat it as exempt.
 - Only in-place prose edit allowed: full-section replacement on section fences.
 - SQLite is out unless a real cross-plan query need appears (flag if tempted).
 - STATE-OVER-TOKENS: when a new cross-session or tracked concern appears, give it a
@@ -277,8 +285,9 @@ reusable. When a repo is present, REFERENCE it — do NOT re-embed a copy into e
 (DRY-by-reference). There is no second, embedded copy of the harness anywhere in this prompt; the
 canonical file beside this doc is the only one, and it carries the full field set (reflection_mode,
 ecosystem, execution_mode, living_doc_baseline, parent, and the rest). In CLI mode the working
-state file (state.json) materializes to <WORKTREE_ROOT>/.living-workflows/<plan>/, NOT the plan's
-committed directory (which holds only the plan doc itself; the harness and changelog are referenced
+state file (state.json) materializes to the out-of-repo XDG location
+(<xdg-state-base>/<clone-name>/<workflow-name>/ — see STATE SUBSTRATE), NOT the plan's committed
+directory (which holds only the plan doc itself; the harness and changelog are referenced
 from the master, not copied here).
 WEB/NO-REPO MODE has no durable side-file substrate — do NOT materialize state files there, and
 there is no harness file to write. The machine-owned state lives IN THE SINGLE REGENERATED PLAN DOC
@@ -289,9 +298,10 @@ is the only durable artifact): reflection/backlog capture accumulates as buckets
 committed in WEB mode, leak-safety RELAXES there — capture may be raw; the scrub is deferred to
 the transition boundary. WEB → CLI TRANSITION: on the first CLI session, cold start detects the
 mode switch, REDRAFTS the doc to CLI conventions (reference the canonical harness, materialize
-.living-workflows/<plan>/, split working state into state.json + the WAL journal, DRAIN the in-doc
-buckets to their homes — framework candidates to the living-workflow-backlog's entries (at the
-framework-channel location — see STATE SUBSTRATE), plan candidates to the plan's own
+the out-of-repo XDG working dir (see STATE SUBSTRATE), split working state into state.json + the
+WAL journal, DRAIN the in-doc buckets to their homes — framework candidates to the
+living-workflow-backlog's entries (at the framework-channel location — see STATE SUBSTRATE), plan
+candidates to the plan's own
 open_items) and SCRUBS the doc clean of raw working detail. The scrub is a HARD GATE before the
 first commit — the one place leak-safety is enforced by a stop, not a default — after which the
 human commits that clean initial version. CLI mode always tracks in files thereafter.
@@ -530,14 +540,14 @@ through a sanctioned change-channel — a backlog entry that grooming folds, or 
 for a mechanical, behavior-neutral nit — and the backlog's own state substrate IS the plan-of-record
 for the change. A workflow change is never planned, staged, or drafted off-substrate — in an ad-hoc
 scratch file, an external planning doc, a task-tracker, or any surface outside the backlog's own
-gitignored working state; reaching for such a side channel to work through a workflow edit is itself
+out-of-repo working state; reaching for such a side channel to work through a workflow edit is itself
 the tripwire to STOP and route it through the backlog. This scopes to changes to the
 WORKFLOW ITSELF — unrelated scratch space for a downstream plan's own project work is untouched.
 CAPTURE: at session close — AFTER the acceptance gate fires and the kickoff prompt is produced
 (see EMBEDDED SESSION BOOTSTRAP step 8) — distill this session's reflection into SANITIZED, generalized
 candidates and write ONLY the entry file into the living-workflow-backlog's entries AT THE
-FRAMEWORK-CHANNEL LOCATION resolved from the ecosystem pointer (the living workflow's own backlog,
-NOT the reflecting session's worktree — see STATE SUBSTRATE) — a reflecting session does NOT touch
+FRAMEWORK-CHANNEL LOCATION in the XDG namespace (the living workflow's own backlog, NOT the
+reflecting plan's own working dir — see STATE SUBSTRATE) — a reflecting session does NOT touch
 the register; the grooming session reconciles files into the register.
 GROOMING is the authorized edit, and a SEPARATE activity from reflection: a grooming session
 FOLDS groomed tunings INLINE into their target doc (this protocol, or the backlog's own rules)
@@ -682,7 +692,7 @@ SPECIFICS (no internal project names, internal code references, filesystem paths
 example-run detail, or the operator's private/work tool-stack) — the concern is a capture that
 originates in a PRIVATE repo leaking work context up into this PUBLIC one, so this workflow's OWN
 open-source repo and its first-party tooling (e.g. its Nix install substrate) ARE nameable.
-Plan-local friction logs keep the specifics; the backlog gets the sanitized abstraction. Entries are GITIGNORED WORKING CAPTURES — never committed — because they may
+Plan-local friction logs keep the specifics; the backlog gets the sanitized abstraction. Entries are OUT-OF-REPO WORKING CAPTURES — never committed — because they may
 still carry work detail despite this contract; they are reviewed before folding, and only the
 resulting generic tuning reaches a committed doc. So the durable, authoritative record is the
 FOLDED TUNING plus a generic migration entry, NOT the entry file; the entry file is transient,
@@ -700,8 +710,8 @@ defined by the backlog sub-workflow beside this doc, not duplicated here.
 1. Read this plan in full (self-contained).
 2. COLD START (repo-less or scaffold absent): before anything, resolve the mode
    (execution_mode: web-run vs cli) and materialize the scaffold. CLI: reference the shared
-   harness (`state.schema.json`, in the master's own directory) and create the working dir
-   <WORKTREE_ROOT>/.living-workflows/<plan>/ (if missing) for state.json + the WAL journal
+   harness (`state.schema.json`, in the master's own directory) and create the out-of-repo working
+   dir <xdg-state-base>/<clone-name>/<workflow-name>/ (if missing) for state.json + the WAL journal
    (materialize an entries/ capture subdir ONLY for the plan that HOSTS the framework channel —
    see STATE SUBSTRATE; an ordinary plan captures reflection to the framework-channel location and
    tracks its own work in open_items, so it needs no entries/). WEB/no-repo: there is no harness

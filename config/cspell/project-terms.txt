@@ -17,6 +17,7 @@ attrsets
 aubut
 automemory
 autosquash
+autostash
 autoupdater
 avifenesh
 backgrounded
@@ -27,6 +28,7 @@ bitemporality
 boehm
 burndown
 cachix
+catchable
 caubut
 cavira
 cclsp
@@ -38,6 +40,7 @@ codemod
 codepaths
 codesign
 commondir
+completionist
 configdir
 contentpkgs
 convco
@@ -53,6 +56,7 @@ dedup
 deprioritized
 derefs
 devenv
+deviable
 devshell
 difftool
 direntry
@@ -60,6 +64,7 @@ direnv
 direnvrc
 docnix
 docsite
+drainedness
 drvs
 dsolve
 dunder
@@ -75,6 +80,7 @@ fetchzip
 fileset
 findutils
 foldl
+formedness
 frontloaded
 frontmatter
 getkimchi
@@ -101,11 +107,13 @@ inlines
 ints
 isaacphi
 isready
+journaled
 kagi
 kagiapi
 kagimcp
 kagisearch
 kanagawa
+keyspace
 kiro
 kirocli
 kirodotdev
@@ -115,6 +123,7 @@ libexec
 libgit
 libsecret
 libsets
+licence
 lifecycles
 livelink
 llms
@@ -130,9 +139,12 @@ mcpservers
 mdbook
 mergetool
 metacharacter
+misattributes
+miscited
 modelcontextprotocol
 mystor
 narinfo
+neighbour
 nixd
 nixdoc
 nixos
@@ -164,6 +176,7 @@ pathspec
 pdsolve
 peaceiris
 pgvector
+pinnable
 pkgs
 pname
 posttooluse
@@ -182,8 +195,10 @@ reftable
 regen
 reimplementation
 relpath
+remapper
 reparent
 repoint
+reprioritize
 rerere
 revertibility
 revset
@@ -227,6 +242,7 @@ testapp
 tinyduck
 tmpfs
 toctou
+toggleable
 tonumber
 toolsets
 tophat
@@ -237,13 +253,18 @@ ultracode
 unapprove
 undimensioned
 undmg
+unexecutable
 unflushed
+ungroomed
 unheld
 unhide
 unparseable
+unreviewed
 unskipped
 unstages
 unstash
+upgrader
+upgraders
 valkey
 watchlist
 worktree

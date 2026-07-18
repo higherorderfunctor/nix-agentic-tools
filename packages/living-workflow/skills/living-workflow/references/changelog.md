@@ -252,7 +252,7 @@ here — see the master's CHANGELOG AS THE DELTA SOURCE.
   the body; prefer a message file for multi-paragraph messages), resolved per-repo off the
   commit-metadata capability, never a hardcoded width.
 
-### Backlog sub-workflow (`../living-workflow-backlog/living-workflow-backlog.md`)
+### Backlog sub-workflow (`living-workflow-backlog.md`)
 
 > **Sub-workflow-internal — NOT dependent-facing.** Retained for provenance. Per the
 > master-scoping decision, changes to this sub-workflow's own rules are dependent-irrelevant
@@ -378,3 +378,45 @@ Migration entries folded after the session-close-operator-experience batch. This
   backlog items, and the "buffer-not-self-groom" rule is now "capture-not-self-groom". A
   behavior-neutral rename with no mechanism change. **No dependent action required** (update local
   wording only if you quote the old term).
+
+## XDG state relocation
+
+Migration entries folded after the entry-hygiene batch. This section's anchor is **derived from
+history** (the commit that bumped the master to `v6-garnet-tundra-birch`), not embedded here.
+
+### Master protocol (`living-plan-bootstrap.md`) + shared harness (`state.schema.json`)
+
+- **State substrate — working state now lives OUT-OF-REPO under an XDG base:** CLI working state
+  (state.json + the WAL journal, and the framework channel's entries/) no longer lives in the in-repo
+  `<WORKTREE_ROOT>/.living-workflows/<plan>/`. It resolves to
+  `<xdg-state-base>/<clone-name>/<workflow-name>/`, where `<xdg-state-base>` is the installed skill's
+  baked `$XDG_STATE_HOME/living-workflows` (default `~/.local/state/living-workflows`), `<clone-name>`
+  is the basename of the main clone's directory (git's common-dir parent —
+  `basename "$(dirname "$(realpath "$(git rev-parse --git-common-dir)")")"`, falling back to the
+  current directory's name if git is unavailable), and `<workflow-name>` disambiguates workflows in
+  one clone. **Upgraders MUST migrate existing state:** move any in-repo
+  `.living-workflows/<plan>/` working dir to the new XDG location by a tested move (copy → prove
+  resume → remove old); nothing writes to the in-repo `.living-workflows/` any more.
+- **git-common-dir inverts from forbidden to the namespace KEY:** the retired rule resolved a plan's
+  location via `git rev-parse --show-toplevel` and forbade the shared common git dir. The new rule
+  USES the common git dir — its parent's basename is the clone namespace KEY (not the location) — so
+  state is CLONE-scoped: it survives worktree teardown and is shared across every worktree of one
+  clone running the same-named workflow. **Upgraders: adopt the git-common-dir key; do not resurrect
+  the show-toplevel / per-worktree location rule.**
+- **Framework-channel location — pointer dropped; the backlog is a first-party override:** the
+  framework channel (the living-workflow-backlog's entries/) is NOT repo-bound — it pairs with the
+  installed skill and DROPS the clone segment, resolving to the single machine-global
+  `<xdg-state-base>/living-workflow-backlog/` regardless of which repo you reflect from, so all
+  living-workflow feedback lands in the ONE canonical backlog and the cross-repo "which worktree
+  root" fork dissolves (no foreign worktree, no cold-start pointer). **Upgraders: drop the
+  framework-channel ecosystem pointer; resolve the backlog to
+  `<xdg-state-base>/living-workflow-backlog/` (no clone segment).**
+- **Leak-safety improves; `.gitignore` kept as belt-and-suspenders:** working state living outside
+  every repo cannot be committed by accident (a strict improvement over gitignore-by-location). The
+  repo's `.living-workflows/` gitignore line is retained only as cheap safety against a stray in-repo
+  write. No dependent action beyond the state migration above.
+- **Shared harness (`state.schema.json`) — descriptions only:** the `execution_mode` and
+  `living_doc_baseline` descriptions now name the XDG location and the installed-skill path resolution
+  (a running plan reads the master from the installed skill's `references/`; version→commit
+  reconciliation resolves against the nix-agentic-tools source checkout). No field-shape change, so
+  **no dependent action required** beyond the state migration above.

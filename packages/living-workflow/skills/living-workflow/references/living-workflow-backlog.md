@@ -24,11 +24,11 @@ plan submits framework candidates here.
 
 The **general living-plan protocol** — reflection mode, the entry contract, the entry lifecycle,
 commit-ownership, nesting, the state substrate, state-over-tokens — lives **once** in the master
-living doc (`../living-workflow/living-plan-bootstrap.md`) that every living plan references. This
+living doc (`living-plan-bootstrap.md`) that every living plan references. This
 doc does **not** restate it; it references it and adds only what is unique to the backlog
 sub-workflow: **the grooming loop**, plus a few operational specifics (the capture/grooming split,
-git posture). The shared harness (`../living-workflow/state.schema.json`) sits beside the master, and the
-master's judgment-based migration guide lives beside the master doc (`../living-workflow/changelog.md`);
+git posture). The shared harness (`state.schema.json`) sits beside the master, and the
+master's judgment-based migration guide lives beside the master doc (`changelog.md`);
 `state.json`'s `living_doc_baseline` pins the master-doc VERSION this backlog is authored
 against.
 
@@ -39,14 +39,16 @@ and that nothing owned by the master has been copied down here.
 ## What lives here
 
 Location encodes durability (master's STATE SUBSTRATE): committed durable knowledge lives in this
-directory; per-worktree working state lives in the gitignored working dir under `<WORKTREE_ROOT>`.
+directory; working state lives OUT-OF-REPO in the workflow's XDG working dir. This backlog is the
+master's FIRST-PARTY FRAMEWORK-CHANNEL OVERRIDE — NOT repo-bound (it pairs with the installed
+skill), so it drops the `<clone-name>` segment: `<xdg-state-base>/living-workflow-backlog/`.
 
-| Path                                                                   | Role                                                                                                                                              |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `living-workflow-backlog.md`                                           | **Committed.** This grooming index — the durable explainer of the backlog sub-workflow and grooming loop.                                         |
-| `<WORKTREE_ROOT>/.living-workflows/living-workflow-backlog/state.json` | **Gitignored working state.** This plan's own state (reflection_mode, ecosystem, `living_doc_baseline`, decisions, the register in `open_items`). |
-| `<WORKTREE_ROOT>/.living-workflows/living-workflow-backlog/journal.md` | **Gitignored working state.** Append-only WAL narrative (may carry work detail — never committed).                                                |
-| `<WORKTREE_ROOT>/.living-workflows/living-workflow-backlog/entries/`   | **Gitignored working captures.** One markdown file per candidate — never committed (may carry work detail).                                       |
+| Path                                                  | Role                                                                                                                                               |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `living-workflow-backlog.md`                          | **Committed.** This grooming index — the durable explainer of the backlog sub-workflow and grooming loop.                                          |
+| `<xdg-state-base>/living-workflow-backlog/state.json` | **Out-of-repo working state.** This plan's own state (reflection_mode, ecosystem, `living_doc_baseline`, decisions, the register in `open_items`). |
+| `<xdg-state-base>/living-workflow-backlog/journal.md` | **Out-of-repo working state.** Append-only WAL narrative (may carry work detail — never committed).                                                |
+| `<xdg-state-base>/living-workflow-backlog/entries/`   | **Out-of-repo working captures.** One markdown file per candidate — never committed (may carry work detail).                                       |
 
 The bootstrap creates the working dir (and `entries/`) if missing; there is no committed
 placeholder. There is no rendered status board and no status file.
@@ -138,7 +140,7 @@ REPOINT-VS-MIGRATION change-class rule under VALIDATION-ON-UPDATE — the genera
 states, applied to a light-fix admission decision.)
 
 **Collection.** Spotted nits accrue in a **single standing collector** — a working file
-`consistency-nits.md` beside the journal in the gitignored working dir (**not** an `entries/` file, so
+`consistency-nits.md` beside the journal in the out-of-repo working dir (**not** an `entries/` file, so
 a cold-start reconcile never mistakes it for a candidate), the way a parked entry accrues sightings,
 and **never one file per nit** (that would just move the unbounded-rounds problem into the register).
 Any session may **append** a spotted nit (capture-only, per the capture/grooming split); an on-sight
@@ -239,8 +241,8 @@ defines how it tracks in the doc and drains to files on the first CLI session.)
 
 ## Git posture (soft guardrails, not a hard gate)
 
-Working state is gitignored by location (`.living-workflows/`), so entries, the journal, and
-`state.json` are **never committed** — an entry can carry sensitive or in-progress work material
+Working state lives OUT-OF-REPO (the master's XDG STATE SUBSTRATE), so entries, the journal, and
+`state.json` are **never committed** — being outside any repo, they cannot be — an entry can carry sensitive or in-progress work material
 even though the contract forbids private/work specifics. Commit only the **committed** surfaces: the generic
 folded tunings (in their target docs), this index, and the changelog. Beyond that, a **soft hygiene
 practice**: scrub specifics on the way in, and when in doubt **defer the commit** until grooming
@@ -266,7 +268,7 @@ The live register (`state.json.open_items`) is bounded to **active** candidates:
 reaches a terminal disposition it drains out. That bound is the only register rule this doc owns.
 
 Whether a drain ALSO bumps the master's version and appends a migration entry to the changelog
-beside the master (`../living-workflow/changelog.md`) is decided by the master's DRY-BY-REFERENCE
+beside the master (`changelog.md`) is decided by the master's DRY-BY-REFERENCE
 scoping rule — read it there. The changelog is the judgment-based migration guide for dependents
 and is owned entirely by the master: its purpose, its co-location, its MASTER/harness scoping, its
 contract, the version bump, and the reconciliation walk all live there. This doc adds nothing to

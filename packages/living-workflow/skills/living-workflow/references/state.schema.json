@@ -35,7 +35,7 @@
         "commit_ownership": { "enum": ["we-commit", "resident-commits"] },
         "execution_mode": {
           "enum": ["web-run", "cli"],
-          "description": "Operating mode resolved at cold start, a confirmed input not an inference: 'web-run' (no-repo/document-only — everything in the single regenerated plan doc; leak-safety relaxed) or 'cli' (repo-backed, single machine — working state in gitignored <WORKTREE_ROOT>/.living-workflows/<plan>/, durable knowledge committed)."
+          "description": "Operating mode resolved at cold start, a confirmed input not an inference: 'web-run' (no-repo/document-only — everything in the single regenerated plan doc; leak-safety relaxed) or 'cli' (repo-backed, single machine — working state out-of-repo under <xdg-state-base>/<clone-name>/<workflow-name>/, durable knowledge committed)."
         },
         "execution_mode_history": {
           "type": "array",
@@ -60,7 +60,7 @@
     },
     "living_doc_baseline": {
       "type": "object",
-      "description": "VERSION pin for the canonical living doc + shared harness this plan was authored against (DRY-by-reference). Dependents read the living doc at this version. 'version' is the assigned identity the doc carries as content (a monotonic ordinal + a distinctive label), NOT a raw commit hash — it resolves to a commit by derive-from-history (the commit that assigned it) and also travels to a document-only artifact that has no commit. In a resident-commits repo the resident stamps the shipped version at commit time; until then 'version' holds the sentinel 'PENDING-RESIDENT-STAMP'. State-tracked rather than an ad-hoc prose token (state-over-tokens).",
+      "description": "VERSION pin for the canonical living doc + shared harness this plan was authored against (DRY-by-reference). Dependents read the living doc at this version. 'path' identifies the master living doc; under XDG a running plan resolves it to the INSTALLED skill's references/ copy (bundled with the harness + changelog as same-dir siblings), while version->commit reconciliation resolves against the nix-agentic-tools source checkout. 'version' is the assigned identity the doc carries as content (a monotonic ordinal + a distinctive label), NOT a raw commit hash — it resolves to a commit by derive-from-history (the commit that assigned it) and also travels to a document-only artifact that has no commit. In a resident-commits repo the resident stamps the shipped version at commit time; until then 'version' holds the sentinel 'PENDING-RESIDENT-STAMP'. State-tracked rather than an ad-hoc prose token (state-over-tokens).",
       "required": ["path", "version"],
       "properties": {
         "path": { "type": "string" },
