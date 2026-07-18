@@ -1703,7 +1703,11 @@ in {
       && !((result.config.files or {}) ? ".kiro/hooks/pre-commit.json")
   );
 
-  # ── Task 7 (A6): Stacked-workflows HM module absorption ────────
+  # ── Stacked-workflows: skills + router, user-global (HM) + project (devenv) ──
+  # Scope-revert (docs/plans/stacked-workflows-scope-revert-plan.md): the HM
+  # module now installs the (unprefixed) stack-* skills + routing table
+  # user-global; the devenv module mirrors them project-local. References are
+  # bundled as REAL files inside each skill dir (deref'd at build).
 
   # Default disabled — stacked-workflows.enable defaults to false.
   module-sws-default-disabled = mkTest "sws-default-disabled" (
@@ -1713,20 +1717,19 @@ in {
       !(result.config.stacked-workflows.enable or true)
   );
 
-  # Devenv scope: when stacked-workflows is enabled IN THE DEVENV MODULE,
-  # skills contribute to ai.skills (which each enabled CLI fans out at
-  # project-local scope). Must be evalDevenv — the HM module no longer
-  # contributes skills (they leaked to personal ~/.claude/skills/*).
+  # Devenv scope: enable -> ai.skills gets the unprefixed stack-* skills
+  # (each enabled CLI fans them out at project-local scope).
   module-sws-devenv-enable-sets-ai-skills = mkTest "sws-devenv-enable-sets-ai-skills" (
     let
       result = evalDevenv {stacked-workflows.enable = true;};
+      inherit (result.config.ai) skills;
     in
-      result.config.ai.skills ? sws-stack-fix
-      && result.config.ai.skills ? sws-stack-plan
-      && result.config.ai.skills ? sws-stack-split
-      && result.config.ai.skills ? sws-stack-submit
-      && result.config.ai.skills ? sws-stack-summary
-      && result.config.ai.skills ? sws-stack-test
+      skills ? stack-fix
+      && skills ? stack-plan
+      && skills ? stack-split
+      && skills ? stack-submit
+      && skills ? stack-summary
+      && skills ? stack-test
   );
 
   # Devenv scope: instructions landed in the devenv pool.
@@ -1739,24 +1742,31 @@ in {
       builtins.length swsEntries == 1
   );
 
-  # Regression guard: HM scope MUST NOT contribute sws skills.
-  # The earlier HM contribution leaked to ~/.claude/skills/sws-*.
-  module-sws-hm-no-skills-leak = mkTest "sws-hm-no-skills-leak" (
+  # HM (user-global) scope: enable -> ai.skills gets the unprefixed stack-*
+  # skills, so each enabled CLI installs them to ~/.claude/skills etc. This
+  # is the scope-revert (previously the HM module was git-config only).
+  module-sws-hm-enable-sets-ai-skills = mkTest "sws-hm-enable-sets-ai-skills" (
     let
       result = evalHm {stacked-workflows.enable = true;};
+      inherit (result.config.ai) skills;
     in
-      !(result.config.ai.skills ? sws-stack-fix)
-      && !(result.config.ai.skills ? sws-stack-plan)
+      skills ? stack-fix
+      && skills ? stack-plan
+      && skills ? stack-split
+      && skills ? stack-submit
+      && skills ? stack-summary
+      && skills ? stack-test
   );
 
-  # Regression guard: HM scope MUST NOT contribute sws instructions.
-  module-sws-hm-no-instructions-leak = mkTest "sws-hm-no-instructions-leak" (
+  # HM (user-global) scope: enable -> the routing-table instruction lands in
+  # ai.instructions (-> ~/.claude/CLAUDE.md, ~/.kiro/steering/, ...).
+  module-sws-hm-enable-sets-ai-instructions = mkTest "sws-hm-enable-sets-ai-instructions" (
     let
       result = evalHm {stacked-workflows.enable = true;};
       inherit (result.config.ai) instructions;
       swsEntries = builtins.filter (i: (i.name or "") == "stacked-workflows") instructions;
     in
-      builtins.length swsEntries == 0
+      builtins.length swsEntries == 1
   );
 
   # Git config applies when preset is "minimal".
@@ -1807,25 +1817,18 @@ in {
       !(gitSettings ? branchless)
   );
 
-  # Devenv scope: reference files written under .claude/references/.
-  # Were previously written at HM scope (~/.claude/references/), leaked
-  # to personal scope — moved to devenv alongside skills/instructions.
-  module-sws-devenv-reference-files-written = mkTest "sws-devenv-reference-files-written" (
+  # References are bundled as REAL files inside each skill dir (deref'd at
+  # build) — NOT written as separate .claude/references/* files anymore.
+  # This guards the dangling-symlink regression: the skill's references must
+  # resolve to real, present files.
+  module-sws-skill-references-resolve = mkTest "sws-skill-references-resolve" (
     let
       result = evalDevenv {stacked-workflows.enable = true;};
-      inherit (result.config) files;
+      skillPath = result.config.ai.skills.stack-fix;
     in
-      files ? ".claude/references/philosophy.md"
-      && files ? ".claude/references/git-absorb.md"
-  );
-
-  # Regression guard: HM scope MUST NOT write sws reference files.
-  module-sws-hm-no-reference-leak = mkTest "sws-hm-no-reference-leak" (
-    let
-      result = evalHm {stacked-workflows.enable = true;};
-      files = result.config.home.file;
-    in
-      !(files ? ".claude/references/philosophy.md")
+      builtins.pathExists "${skillPath}/SKILL.md"
+      && builtins.pathExists "${skillPath}/references/git-absorb.md"
+      && builtins.pathExists "${skillPath}/references/git-branchless.md"
   );
 
   # ── living-workflow module (skill packaging + XDG state) ─────────

@@ -1,21 +1,25 @@
-# Stacked-workflows home-manager module.
+# Stacked-workflows home-manager module — user-global install.
 #
-# HM scope is git-config only. Skills, instructions, and reference
-# docs moved to the devenv module (project-local scope) because
-# sws-prefixed skills leaking into `~/.claude/skills/` collided with
-# the user's personal-scope `stack-*` skills.
+# `stacked-workflows.enable = true` fans the stack skills and the
+# routing-table instruction into the cross-ecosystem `ai.*` pools, so each
+# enabled ecosystem installs them user-global (~/.claude/skills,
+# ~/.kiro/skills, ~/.claude/CLAUDE.md, ~/.kiro/steering/, ...). Also applies
+# optional git-config presets.
 #
-# See `docs/stacked-workflows-scope-fix-plan.md` for the scope-fix
-# root cause: shared-option pools (`ai.skills`, `ai.instructions`)
-# are per-`evalModules`, NOT cross-backend. A value set in the HM
-# module is only visible to HM's eval; devenv has a separate eval.
-# Placing contributions in the HM module meant they landed in
-# personal HM scope and were missing from devenv entirely.
+# Skill sources are the deref'd, self-contained skill dirs from
+# `pkgs.stacked-workflows-content.passthru.skills` — real reference files are
+# bundled inside each skill dir, so they resolve in every scope. The values
+# are store-path strings, accepted by the modern upstream `isPathLike`
+# skill-entry check (see lib/ai path-type notes).
+#
+# `ai.skills` is per-`evalModules`, so this HM-scope contribution is
+# independent of the devenv module's project-scope contribution.
 #
 # Picked up by `collectFacet ["modules" "homeManager"]` in flake.nix.
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   cfg = config.stacked-workflows;
@@ -32,9 +36,12 @@
     "minimal" = gitConfigMinimal;
     "none" = {};
   };
+
+  skills = pkgs.stacked-workflows-content.passthru.skills;
+  router = import ../../router.nix {inherit lib pkgs;};
 in {
   options.stacked-workflows = {
-    enable = lib.mkEnableOption "stacked workflow git config presets (skills/instructions/refs live in the devenv module — project-local scope)";
+    enable = lib.mkEnableOption "stacked workflow skills, routing table, and git-config presets (user-global)";
 
     gitPreset = lib.mkOption {
       type = lib.types.enum ["full" "minimal" "none"];
@@ -74,6 +81,12 @@ in {
           '';
         }
       ];
+    }
+
+    # ── Skills + routing table (user-global via ai.* pools) ────────────
+    {
+      ai.skills = lib.mapAttrs (_: lib.mkDefault) skills;
+      ai.instructions = router;
     }
 
     # ── Git configuration ──────────────────────────────────────────────
