@@ -9,6 +9,14 @@
 >
 > No code was changed during this assessment.
 
+> **RESOLVED 2026-07-17 — implemented, activated, and verified live.** Chosen
+> direction: disable the racy `PostToolUse` `git-hooks-run` hook and move
+> validation to a `Stop`-hook validator (`validate-at-stop`) that auto-fixes
+> formatting silently and blocks-with-reason on judgment lint at the hand-back
+> boundary. Landed in commits `8aafde8a..630f108f`; the stale-read race is
+> eliminated by construction (no per-tool file-mutating hook exists). The
+> assessment below is retained as the root-cause record.
+
 ## Symptom
 
 Every tool call in the Claude Code session surfaces a red notice:
