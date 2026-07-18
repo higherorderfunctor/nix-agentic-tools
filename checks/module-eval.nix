@@ -74,6 +74,13 @@
         type = lib.types.attrsOf lib.types.anything;
         default = {};
       };
+      # xdg.stateHome: the living-workflow HM module bakes
+      # `config.xdg.stateHome` into its generated skill. Home-manager provides
+      # this option in a real eval; stub it here for the module-eval harness.
+      xdg.stateHome = lib.mkOption {
+        type = lib.types.str;
+        default = "/home/test/.local/state";
+      };
     };
   };
 
@@ -147,6 +154,7 @@
         ./../packages/copilot-cli/modules/homeManager
         ./../packages/kimchi/modules/homeManager
         ./../packages/kiro-cli/modules/homeManager
+        ./../packages/living-workflow/modules/homeManager
         ./../packages/mcp-services/modules/homeManager
         ./../packages/stacked-workflows/modules/homeManager
         hmStubs
@@ -166,6 +174,7 @@
         ./../packages/copilot-cli/modules/devenv
         ./../packages/kimchi/modules/devenv
         ./../packages/kiro-cli/modules/devenv
+        ./../packages/living-workflow/modules/devenv
         ./../packages/stacked-workflows/modules/devenv
         devenvStubs
         {inherit config;}
@@ -1817,6 +1826,70 @@ in {
       files = result.config.home.file;
     in
       !(files ? ".claude/references/philosophy.md")
+  );
+
+  # ── living-workflow module (skill packaging + XDG state) ─────────
+  #
+  # HM is the PRIMARY scope (user-global), INVERTING the sws choice (sws keeps
+  # skills in its devenv module; living-workflow's HM module installs
+  # user-global). The skill is Nix-GENERATED (bakes the XDG state base into
+  # SKILL.md) and fed to ai.skills as its store-path STRING — the value shape
+  # every consumer (upstream claude mkSkillEntry, our mkSkillEntries, the devenv
+  # walker) materializes as a recursive DIRECTORY.
+
+  # Default: living-workflow.enable defaults to false.
+  module-living-workflow-default-disabled = mkTest "living-workflow-default-disabled" (
+    let
+      result = evalHm {};
+    in
+      !(result.config.living-workflow.enable or true)
+  );
+
+  # HM (primary): enable -> ai.skills.living-workflow -> upstream
+  # programs.claude-code.skills.living-workflow (end-to-end fanout).
+  module-living-workflow-hm-enable-sets-skill = mkTest "living-workflow-hm-enable-sets-skill" (
+    let
+      result = evalHm {
+        ai.claude.enable = true;
+        living-workflow.enable = true;
+      };
+    in
+      result.config.programs.claude-code.skills ? living-workflow
+  );
+
+  # Kiro HM: the generated store-path string must materialize as a recursive
+  # DIRECTORY (home.file.".kiro/skills/living-workflow"), NOT trip the
+  # isPath/isString trap that would write it as a single SKILL.md file. Asserts
+  # the directory key present AND the single-file trap key absent. (Forces IFD:
+  # readFileType builds the tiny skill derivation.)
+  module-living-workflow-kiro-hm-writes-skill-dir = mkTest "living-workflow-kiro-hm-writes-skill-dir" (
+    let
+      result = evalHm {
+        ai.kiro.enable = true;
+        living-workflow.enable = true;
+      };
+      files = result.config.home.file;
+    in
+      (files ? ".kiro/skills/living-workflow")
+      && !(files ? ".kiro/skills/living-workflow/SKILL.md")
+  );
+
+  # Devenv parity: enable in the devenv module contributes to ai.skills too
+  # (config-parity rule; separate eval from HM).
+  module-living-workflow-devenv-enable-sets-skill = mkTest "living-workflow-devenv-enable-sets-skill" (
+    let
+      result = evalDevenv {living-workflow.enable = true;};
+    in
+      result.config.ai.skills ? living-workflow
+  );
+
+  # Disabled -> absent: with living-workflow off, no living-workflow skill is
+  # contributed even when an ecosystem is enabled.
+  module-living-workflow-disabled-no-skill = mkTest "living-workflow-disabled-no-skill" (
+    let
+      result = evalHm {ai.kiro.enable = true;};
+    in
+      !(result.config.ai.skills ? living-workflow)
   );
 
   # ── services.mcp-servers module ──────────────────────────────────
