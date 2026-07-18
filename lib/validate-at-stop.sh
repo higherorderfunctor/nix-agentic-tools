@@ -41,6 +41,8 @@ prek run treefmt --files "${files[@]}" >/dev/null 2>&1 || true
 git add -u -- "${files[@]}" >/dev/null 2>&1 || true
 
 # (3) judgment lint over the same changeset, reusing git-hooks config/excludes.
+# Keep this id list in sync with the judgment hooks in devenv.nix `git-hooks.hooks`
+# (treefmt is the auto-fix above; gitleaks/convco are commit-time only).
 read -r -a judgment <<<"${JUDGMENT_HOOKS_OVERRIDE:-cspell deadnix shellcheck statix}"
 report=""
 for id in "${judgment[@]}"; do

@@ -1,5 +1,4 @@
 aclose
-addgone
 addy
 adoc
 agenix
@@ -131,7 +130,6 @@ mcpservers
 mdbook
 mergetool
 metacharacter
-missingfails
 modelcontextprotocol
 mystor
 narinfo
@@ -248,7 +246,6 @@ unstages
 unstash
 valkey
 watchlist
-wibble
 worktree
 worktrees
 wyhash

@@ -3,6 +3,7 @@
 # git-hooks tools — the real linters are covered by git-hooks + CI, so this
 # check stays fast and sandbox-safe. See
 # docs/plans/prek-posttooluse-hook-feedback-channel.md.
+# cspell:ignore addgone missingfails wibble  (test-scaffold tokens, not project vocabulary)
 {pkgs, ...}:
 pkgs.runCommandLocal "validate-at-stop-check" {
   nativeBuildInputs = [pkgs.coreutils pkgs.git pkgs.python3 pkgs.shellcheck];

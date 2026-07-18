@@ -102,10 +102,11 @@ in {
   #      - Code validators (TEMPORARY here): deadnix, statix, cspell,
   #        shellcheck — these belong in agent steering, not pre-commit.
   #        Pre-commit's job is "did I format and not leak secrets",
-  #        not "is this code well-typed". They're parked here until
-  #        the future agent harness lands and consumes the same
-  #        config from steering files. See the
-  #        single-source-of-truth decision in
+  #        not "is this code well-typed". The `validate-at-stop` Stop
+  #        hook (claude.code, below) now runs these same validators at
+  #        each agent hand-back — the first piece of that steering
+  #        surface — but they stay here too as the commit-time gate. See
+  #        the single-source-of-truth decision in
   #        feedback_validation_entrypoint.md (memory).
   #
   #   2. CI (`nix flake check` in .github/workflows/ci.yml):
