@@ -12,6 +12,7 @@ pkgs.runCommandLocal "validate-at-stop-check" {
   set -euETo pipefail
   shopt -s inherit_errexit 2>/dev/null || :
 
+  outdir="$out"   # capture $out before the test loop reuses `out` as a local var
   export HOME="$PWD/home"; mkdir -p "$HOME"
   git config --global user.email a@b.c; git config --global user.name a
   git config --global init.defaultBranch main
@@ -23,7 +24,7 @@ pkgs.runCommandLocal "validate-at-stop-check" {
   #   anything else         -> exit 0
   mkdir -p stub
   cat > stub/prek <<'STUB'
-  #!/usr/bin/env bash
+  #!${pkgs.bash}/bin/bash
   set -euETo pipefail
   shopt -s inherit_errexit 2>/dev/null || :
   [ "$1" = run ] || exit 0
@@ -80,5 +81,5 @@ pkgs.runCommandLocal "validate-at-stop-check" {
 
   echo "validate-at-stop: $pass passed, $fail failed"
   [ "$fail" -eq 0 ]
-  mkdir -p "$out"; touch "$out/ok"
+  mkdir -p "$outdir"; touch "$outdir/ok"
 ''
