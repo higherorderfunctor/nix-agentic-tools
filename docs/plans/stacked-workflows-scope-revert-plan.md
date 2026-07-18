@@ -1,6 +1,6 @@
 # Stacked-workflows scope revert + skill-packaging convergence
 
-**Status:** EXECUTING S1 (2026-07-18, green-lit) — both packages dev-prefixed in-repo; shared helper IN S1; supervisor-worker-verifier (inline edits + parallel read-only verifiers).
+**Status:** EXECUTING S1 (2026-07-18). **DONE + verified (9 sws checks green, committed):** Phase A (real-file refs + `passthru.skills`), B1 (modules emit unprefixed `stack-*` + router), D (module-eval tests). **REMAINING:** C (dev-repo `dev-` prefix wiring for sws + living-workflow), E (cleanup), B2 (shared `mkSkillPackageModule` + retrofit), F (full `nix flake check`).
 **Branch:** `refactor/ai-factory-architecture`
 **Execution model:** supervisor-worker-verifier (subagent fan-out), NOT superpowers:executing-plans
 **Deliverable of this session:** this plan (no code changes this session)
