@@ -74,7 +74,7 @@ here — see the master's CHANGELOG AS THE DELTA SOURCE.
   (from friction or generalizable steering), never a plan's own project content; no plan may edit
   the living workflow; every plan submits candidates to the living-workflow-backlog, the sole
   authorized editor via grooming. Grooming folds (its main work) and also reflects at its end,
-  buffering new candidates for the next pass, never self-grooming them.
+  capturing new candidates as pending backlog items for the next pass, never self-grooming them.
 - **Backlog terminology (two channels):** a plan's own `open_items` (plan-local) vs the
   living-workflow-backlog (framework); never cross them.
 - **Changelog** is the convention-delta a dependent reads to reconcile — load-bearing only when
@@ -189,7 +189,7 @@ here — see the master's CHANGELOG AS THE DELTA SOURCE.
   channel; an ordinary plan's working dir holds state.json + the WAL journal, tracks its own work in
   open_items, and routes reflection to the framework-channel location.
 - **Reflection mode — steering at close is capture, not a licence to fold:** operator steering
-  handed over at close is reflection INPUT (buffered as entries, groomed later), explicitly closing
+  handed over at close is reflection INPUT (captured as entries, groomed later), explicitly closing
   the "mechanical vs reasoning" difficulty-split rationalization; acting is out of scope unless the
   operator directs immediate action.
 - **Modify-time vs run-time — negative arm:** content with neither a run nor a modify audience does
@@ -359,3 +359,22 @@ history** (the commit that first added this section header), not embedded here.
   kickoff, or a proposed next-session prompt) is emitted inside a FENCED CODE BLOCK rather than a
   blockquote, for one-click relaunch. Web-only; moot in CLI. **Upgraders: emit copyable prompts as
   code blocks in web mode.**
+
+## Entry hygiene + terminology
+
+Migration entries folded after the session-close-operator-experience batch. This section's anchor is
+**derived from history** (the commit that first added this section header), not embedded here.
+
+### Master protocol (`living-plan-bootstrap.md`)
+
+- **Backlog-entry contract — an entry describes the ISSUE, not a solution:** the master's
+  NON-prescriptive clause now states an entry CHARACTERIZES the problem (the friction, its mechanism,
+  its evidence) and leaves the fix to grooming — a groomed candidate, not an applied change AND not a
+  prescribed solution (noting a candidate direction as explicitly-undecided context stays allowed;
+  prescribing a chosen lever is the anti-pattern). **Upgraders: hold pending captures to an
+  issue-first shape — reframe any that prescribe a chosen fix to describe the friction instead.**
+- **Terminology — "buffer" renamed to "capture" / "pending backlog items":** the reflection/capture
+  vocabulary drops the word "buffer" — a reflecting session now CAPTURES new candidates as pending
+  backlog items, and the "buffer-not-self-groom" rule is now "capture-not-self-groom". A
+  behavior-neutral rename with no mechanism change. **No dependent action required** (update local
+  wording only if you quote the old term).

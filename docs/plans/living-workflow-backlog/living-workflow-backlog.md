@@ -107,8 +107,9 @@ deferred the actual point of grooming.
    consistency-nit collector through the lighter path defined below. This is a grooming step, **not**
    reflection-at-close.
 
-A grooming session, like every session, **reflects at its own end** — but it only **buffers** any
-new candidates as entries for the NEXT pass; it never self-grooms them (the session is spent). See
+A grooming session, like every session, **reflects at its own end** — but it only **captures** any
+new candidates as pending backlog items for the NEXT pass; it never self-grooms them (the session is
+spent). See
 the master's REFLECTION MODE.
 
 ### The light-fix path for consistency nits
@@ -158,7 +159,7 @@ on first append, like the working dir.
   to confirm the drift is gone and nothing was corrupted, journal, drain the fixed line.
 
 The sweep is a **grooming step, not reflection-at-close**, and **never fires in a non-grooming
-session** — a session at its end only BUFFERS (master REFLECTION MODE); one that spots a nit appends it
+session** — a session at its end only CAPTURES (master REFLECTION MODE); one that spots a nit appends it
 to the collector and moves on. What gets lighter is the **ceremony** — the adversarial eval, the HITL,
 and the migration entry — **never the checking**: EVERY light fix, by either arm, verifies against
 source before and re-greps with a positive control after, because a light fix that trusts a
@@ -186,6 +187,19 @@ recurs enough to clear its own stated bar, the answer is often not a written rul
 **tool** that makes the failure impossible or loud: where the property a rule would check is
 mechanically decidable and the failure keeps recurring, prefer the tool over prose — a rule a tool
 could reliably enforce is better delivered as that tool.
+
+SCOPE — the park test governs UN-STEERED friction, not operator-directed changes. Its purpose is to
+gate a candidate whose only warrant is a single, possibly-non-recurring SIGHTING the session may have
+won or lost by chance. An operator-directed flow/UX change is not such an observation: the operator
+has DECIDED, and the decision is itself the warrant — it needs no evidence to accrue before folding,
+and holding it at NEEDS-EVIDENCE inverts the gate (it asks the operator to justify with accruing
+evidence a change they already directed). So a groomer never parks an operator-directed change for
+evidence; it evaluates the change adversarially like any candidate and folds it if sound. This is NOT
+a licence to fold operator steering that arrives AT CLOSE — that is still captured and groomed on a
+later pass (master REFLECTION MODE), where an item that looks mechanical may still encode a
+ground-rule change and earns the same scrutiny; the carve-out is only that PARK-for-evidence is the
+wrong disposition once the change is in grooming, so the scrutiny is unchanged and only the
+evidence-wait is removed.
 
 A parked entry stays in `entries/` and in the register, and each recurrence appends a sighting to it
 rather than opening a duplicate.
@@ -268,8 +282,10 @@ grooming step 5 above.
 - Origin: <sanitized provenance — no session/project specifics>
 - Target: <which doc + part this would tune, in generic terms>
 
-## Candidate
-<the generalized tuning>
+## The issue
+<characterize the friction: what breaks, its mechanism, who it costs — NOT a prescribed fix.
+Grooming decides the lever WITH the operator. Noting a candidate direction as explicitly-undecided
+context is fine; prescribing a chosen one is the anti-pattern.>
 
 ## Justification (evidence)
 <the abstracted friction/observation motivating it — no private/work specifics>

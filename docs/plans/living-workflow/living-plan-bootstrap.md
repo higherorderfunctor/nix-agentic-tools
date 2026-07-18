@@ -29,7 +29,7 @@ improvements land in this doc only by a deliberate grooming session, never self-
 > concerns become schema-backed state fields, not ad-hoc prose tokens). The backlog sub-workflow
 > this doc references lives at `../living-workflow-backlog/`.
 >
-> **Living-doc version: `v4-amber-fjord-willow`.** The assigned VERSION dependents pin to — a
+> **Living-doc version: `v5-onyx-meadow-cobalt`.** The assigned VERSION dependents pin to — a
 > monotonic ORDINAL (for "am I behind?") paired with a DISTINCTIVE LABEL (so the exact version
 > stays searchable in history and in copied text). A modifying commit bumps it and authors a
 > migration entry if an upgrader needs one (see DRY-BY-REFERENCE → BASELINE PIN, MIGRATION GUIDE,
@@ -541,9 +541,10 @@ NOT the reflecting session's worktree — see STATE SUBSTRATE) — a reflecting 
 the register; the grooming session reconciles files into the register.
 GROOMING is the authorized edit, and a SEPARATE activity from reflection: a grooming session
 FOLDS groomed tunings INLINE into their target doc (this protocol, or the backlog's own rules)
-as its main work, and it ALSO reflects at its own end like every session — buffering any new
-candidates as entries for the NEXT pass, never self-grooming them (the session is spent).
-This buffer-not-self-groom rule explicitly covers STEERING THE OPERATOR HANDS OVER AT CLOSE — the
+as its main work, and it ALSO reflects at its own end like every session — capturing any new
+candidates as pending backlog items for the NEXT pass, never self-grooming them (the session is
+spent).
+This capture-not-self-groom rule explicitly covers STEERING THE OPERATOR HANDS OVER AT CLOSE — the
 case most likely to be misread as an exception. A batch of operator tuning items arriving at close
 is reflection INPUT: captured as entries and groomed on a later pass, exactly like friction the
 session found itself — not a licence to fold. The rationalization to foreclose is the difficulty
@@ -673,7 +674,10 @@ nothing.
 ── BACKLOG-ENTRY CONTRACT ──
 A backlog entry is: self-contained (decidable without reconstructing a session);
 generalized (a workflow tuning, not a project fix); evidence-based (names the friction that
-motivates it); NON-prescriptive (a groomed candidate, not an applied change); and FREE OF PRIVATE/WORK
+motivates it); NON-prescriptive — it CHARACTERIZES the problem (the friction, its mechanism, its
+evidence) and leaves the fix to grooming; a groomed candidate, not an applied change and NOT a
+prescribed solution (noting a candidate direction as explicitly undecided is fine, prescribing a
+chosen one is the anti-pattern); and FREE OF PRIVATE/WORK
 SPECIFICS (no internal project names, internal code references, filesystem paths, session numbers,
 example-run detail, or the operator's private/work tool-stack) — the concern is a capture that
 originates in a PRIVATE repo leaking work context up into this PUBLIC one, so this workflow's OWN
@@ -681,8 +685,8 @@ open-source repo and its first-party tooling (e.g. its Nix install substrate) AR
 Plan-local friction logs keep the specifics; the backlog gets the sanitized abstraction. Entries are GITIGNORED WORKING CAPTURES — never committed — because they may
 still carry work detail despite this contract; they are reviewed before folding, and only the
 resulting generic tuning reaches a committed doc. So the durable, authoritative record is the
-FOLDED TUNING plus a generic migration entry, NOT the entry file; the entry file is a transient
-buffer, authoritative only for pending (un-groomed) capture. Lifecycle: BACKLOG -> GROOMED
+FOLDED TUNING plus a generic migration entry, NOT the entry file; the entry file is transient,
+authoritative only for pending (un-groomed) capture. Lifecycle: BACKLOG -> GROOMED
 (transient) -> a TERMINAL disposition (FOLDED-and-removed, or DROPPED:<reason>); folding a tuning
 REMOVES its entry (the fold IS the drain). A candidate that is plausible but not yet decidable PARKS
 at NEEDS-EVIDENCE:<what-would-decide-it> until its named evidence
