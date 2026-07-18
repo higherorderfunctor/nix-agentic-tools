@@ -211,8 +211,9 @@
       moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs;};
       overlayTargetResolutionCheck = {overlay-target-resolution = import ./checks/overlay-target-resolution.nix {inherit lib pkgs;};};
       pnpmFetcherParityCheck = import ./checks/pnpm-fetcher-parity.nix {inherit lib pkgs self;};
+      validateAtStopCheck = {validate-at-stop = import ./checks/validate-at-stop.nix {inherit pkgs;};};
     in
-      bareCommandsCheck // cacheHitParityCheck // claudeExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // modelStalenessClaudeCheck // moduleChecks // overlayTargetResolutionCheck // pnpmFetcherParityCheck);
+      bareCommandsCheck // cacheHitParityCheck // claudeExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // modelStalenessClaudeCheck // moduleChecks // overlayTargetResolutionCheck // pnpmFetcherParityCheck // validateAtStopCheck);
 
     # devShells.default provided by devenv.lib.mkShell (see devenv.nix).
     # devShells.ci is a lightweight shell for the CI update pipeline.

@@ -72,6 +72,7 @@ fastmcp
 fetchgit
 fetchurl
 fetchzip
+fileset
 findutils
 foldl
 frontloaded
@@ -170,6 +171,7 @@ prestart
 psql
 pythonnousersite
 pythonpath
+qfdx
 quickstarts
 readabilipy
 reauthor
@@ -243,6 +245,7 @@ unstages
 unstash
 valkey
 watchlist
+wibble
 worktree
 worktrees
 wyhash
