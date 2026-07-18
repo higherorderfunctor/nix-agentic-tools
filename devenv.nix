@@ -169,12 +169,13 @@ in {
     # formatter after Edits, and treefmt's rewrite broke sync with the Edit
     # tool's read-snapshot ("modified since read"). Validation now happens
     # at the Stop boundary via validate-at-stop, where a rewrite has no
-    # following Edit to race. Root-cause + POC:
+    # following Edit to race. Root cause assessed in:
     # docs/plans/prek-posttooluse-hook-feedback-channel.md.
     hooks.git-hooks-run.enable = false;
 
     # Run the git-hooks suite when Claude hands control back (Stop): auto-fix
-    # formatting silently, block-with-reason on judgment lint. See the plan.
+    # formatting silently, block-with-reason on judgment lint. See the
+    # assessment cited above.
     hooks.validate-at-stop = {
       enable = true;
       name = "validate-at-stop";
