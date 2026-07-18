@@ -30,6 +30,12 @@ mapfile -d '' -t files < <(
 )
 [ "${#files[@]}" -eq 0 ] && exit 0
 
+# Drop deleted paths — a nonexistent file makes the linters error (false block).
+existing=()
+for f in "${files[@]}"; do [ -e "$f" ] && existing+=("$f"); done
+files=("${existing[@]}")
+[ "${#files[@]}" -eq 0 ] && exit 0
+
 # (2) auto-fix formatting SILENTLY (reuse git-hooks treefmt config). Never blocks.
 prek run treefmt --files "${files[@]}" >/dev/null 2>&1 || true
 git add -u -- "${files[@]}" >/dev/null 2>&1 || true

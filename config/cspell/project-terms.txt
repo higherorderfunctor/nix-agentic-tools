@@ -1,4 +1,5 @@
 aclose
+addgone
 addy
 adoc
 agenix
@@ -130,6 +131,7 @@ mcpservers
 mdbook
 mergetool
 metacharacter
+missingfails
 modelcontextprotocol
 mystor
 narinfo
@@ -166,6 +168,7 @@ peaceiris
 pgvector
 pkgs
 pname
+posttooluse
 prek
 prestart
 psql

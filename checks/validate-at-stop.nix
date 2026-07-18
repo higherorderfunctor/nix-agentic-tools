@@ -1,7 +1,8 @@
 # Hermetic branch-test for lib/validate-at-stop.sh. Exercises the Stop-hook
 # orchestration (no-diff / auto-fix / block / loop-guard) against STUB
 # git-hooks tools — the real linters are covered by git-hooks + CI, so this
-# check stays fast and sandbox-safe. See docs/plans/prek-stop-hook-validator.md.
+# check stays fast and sandbox-safe. See
+# docs/plans/prek-posttooluse-hook-feedback-channel.md.
 {pkgs, ...}:
 pkgs.runCommandLocal "validate-at-stop-check" {
   nativeBuildInputs = [pkgs.coreutils pkgs.git pkgs.python3 pkgs.shellcheck];
@@ -17,16 +18,19 @@ pkgs.runCommandLocal "validate-at-stop-check" {
   # --- stub prek: `prek run <id> --files ...` ---
   #   id == treefmt        -> strip trailing WS on the given files, exit 0
   #   id == cspell-BAD      -> print a finding, exit 1
+  #   id == missingfails    -> fail if any given file does not exist on disk
   #   anything else         -> exit 0
   mkdir -p stub
   cat > stub/prek <<'STUB'
   #!/usr/bin/env bash
-  set -euo pipefail
+  set -euETo pipefail
+  shopt -s inherit_errexit 2>/dev/null || :
   [ "$1" = run ] || exit 0
   id="$2"; shift 2; [ "$1" = --files ] && shift
   case "$id" in
     treefmt) for f in "$@"; do sed -i 's/[[:space:]]\{1,\}$//' "$f"; done; exit 0 ;;
     cspell-BAD) echo "cspell: unknown word 'wibble' in $*"; exit 1 ;;
+    missingfails) for f in "$@"; do [ -e "$f" ] || { echo "no such file: $f"; exit 1; }; done; exit 0 ;;
     *) exit 0 ;;
   esac
   STUB
@@ -66,6 +70,12 @@ pkgs.runCommandLocal "validate-at-stop-check" {
   ok '[ "$rc" -eq 0 ]' "T4 rc"
   ok '! printf "%s" "$out" | grep -q "\"decision\""' "T4 no block"
   ok 'printf "%s" "$out" | grep -q systemMessage' "T4 advisory"
+
+  # T5 deleted tracked file in changeset -> excluded, no false block
+  reset; ( cd "$repo"; echo x > gone.txt; git add gone.txt; git commit -qm addgone; rm gone.txt; echo ok > keep.txt )
+  out="$(payload false | JUDGMENT_HOOKS_OVERRIDE=missingfails bash validate.sh)"; rc=$?
+  ok '[ "$rc" -eq 0 ]' "T5 rc"
+  ok '! printf "%s" "$out" | grep -q "\"decision\""' "T5 deleted file excluded"
 
   echo "validate-at-stop: $pass passed, $fail failed"
   [ "$fail" -eq 0 ]
