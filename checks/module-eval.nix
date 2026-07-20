@@ -930,9 +930,10 @@ in {
       && settingsFile.json.ultracode == false
   );
 
-  # Devenv: `hooks` routes to claude.code.hooks (upstream-owned) and is
-  # excluded from the gap write.
-  module-claude-devenv-settings-hooks-route-to-upstream = mkTest "claude-devenv-settings-hooks-route-to-upstream" (
+  # Devenv: the legacy `settings.hooks` escape hatch lowers verbatim into
+  # files.".claude/settings.json".json.hooks — NOT claude.code.hooks anymore
+  # (approach B). Composes with the typed event map via the formats.json merge.
+  module-claude-devenv-settings-hooks-escape-hatch = mkTest "claude-devenv-settings-hooks-escape-hatch" (
     let
       result = evalDevenv {
         ai.claude = {
@@ -940,12 +941,12 @@ in {
           settings.hooks.PreToolUse = [{matcher = "Bash";}];
         };
       };
+      settingsHooks = ((result.config.files.".claude/settings.json" or {}).json or {}).hooks or {};
       upstreamHooks = result.config.claude.code.hooks or {};
-      gapJson = (result.config.files.".claude/settings.json" or {}).json or null;
     in
-      (upstreamHooks.PreToolUse or null)
-      != null
-      && (gapJson == null || !(gapJson ? hooks))
+      ((builtins.head (settingsHooks.PreToolUse or [])).matcher or null)
+      == "Bash"
+      && !(upstreamHooks ? PreToolUse)
   );
 
   # Devenv: empty ai.claude.settings produces no gap file (lib.mkIf
@@ -2803,24 +2804,27 @@ in {
       (upstream.pre-edit or null) == "#!/usr/bin/env bash\necho edit\n"
   );
 
-  # Devenv PRE-COMMIT-3 latent state: hookScripts + legacy settings.hooks both
-  # still mis-feed claude.code.hooks (masked by the stub). Rewritten in Commit 5
-  # to assert the real typed lowering; here it only guards that the rename
-  # evaluates.
-  module-claude-devenv-hookscripts-merge = mkTest "claude-devenv-hookscripts-merge" (
+  # Devenv: hookScripts → a `.claude/hooks/<name>` file; the legacy
+  # settings.hooks escape hatch → settings.json.hooks (verbatim). Neither feeds
+  # claude.code.hooks anymore (approach B — the old type-invalid mis-feed is gone).
+  module-claude-devenv-hookscripts-and-settings-split = mkTest "claude-devenv-hookscripts-and-settings-split" (
     let
       result = evalDevenv {
         ai.claude = {
           enable = true;
-          settings.hooks.from-settings = "#!/usr/bin/env bash\necho from-settings\n";
+          settings.hooks.from-settings = [{matcher = "X";}];
           hookScripts.from-top = "#!/usr/bin/env bash\necho from-top\n";
         };
       };
+      settingsHooks = ((result.config.files.".claude/settings.json" or {}).json or {}).hooks or {};
+      scriptFile = result.config.files.".claude/hooks/from-top" or null;
       upstream = result.config.claude.code.hooks or {};
     in
-      (upstream.from-settings or null)
+      (settingsHooks.from-settings or null)
       != null
-      && (upstream.from-top or null) != null
+      && scriptFile != null
+      && (scriptFile.text or null) == "#!/usr/bin/env bash\necho from-top\n"
+      && !(upstream ? from-top)
   );
 
   # Typed ai.claude.hooks event map: accepts the settings.json-shaped
@@ -2863,6 +2867,44 @@ in {
       handler = builtins.head (builtins.head result.config.ai.claude.hooks.PostToolUse).hooks;
     in
       builtins.isString handler.command && lib.hasSuffix "/bin/demo-hook" handler.command
+  );
+
+  # Devenv: the typed ai.claude.hooks event map lowers into
+  # files.".claude/settings.json".json.hooks via the shared helper
+  # (approach B — no claude.code.hooks records).
+  module-claude-devenv-hooks-lower-to-settings = mkTest "claude-devenv-hooks-lower-to-settings" (
+    let
+      result = evalDevenv {
+        ai.claude = {
+          enable = true;
+          hooks.PreToolUse = [
+            {
+              matcher = "Bash";
+              hooks = [{command = "validate";}];
+            }
+          ];
+        };
+      };
+      settingsJson = (result.config.files.".claude/settings.json" or {}).json or {};
+      block = builtins.head (settingsJson.hooks.PreToolUse or []);
+      handler = builtins.head (block.hooks or []);
+    in
+      block.matcher == "Bash" && handler.command == "validate" && handler.type == "command"
+  );
+
+  # Devenv: hookScripts (inline bodies) become standalone
+  # .claude/hooks/<name> files (greenfield; NOT claude.code.hooks).
+  module-claude-devenv-hookscripts-write-files = mkTest "claude-devenv-hookscripts-write-files" (
+    let
+      result = evalDevenv {
+        ai.claude = {
+          enable = true;
+          hookScripts.my-hook = "#!/usr/bin/env bash\nexit 0\n";
+        };
+      };
+      f = result.config.files.".claude/hooks/my-hook" or null;
+    in
+      f != null && (f.text or null) == "#!/usr/bin/env bash\nexit 0\n"
   );
 
   # ── Collision-as-failure ──────────────────────────────────────
@@ -3337,7 +3379,8 @@ in {
       upstream.pre-edit == "explicit override"
   );
 
-  # Devenv parity — hookScriptsDir feeds the script-file route.
+  # Devenv parity — hookScriptsDir feeds the greenfield .claude/hooks/<name>
+  # files (approach B; devenv has no programs.claude-code.hooks equivalent).
   module-claude-devenv-hookscriptsdir-path-form = mkTest "claude-devenv-hookscriptsdir-path-form" (
     let
       result = evalDevenv {
@@ -3346,9 +3389,9 @@ in {
           hookScriptsDir = ./fixtures/claude-hooks;
         };
       };
-      upstream = result.config.claude.code.hooks or {};
+      files = result.config.files or {};
     in
-      upstream ? pre-edit && upstream ? post-edit
+      files ? ".claude/hooks/pre-edit" && files ? ".claude/hooks/post-edit"
   );
 
   # ── sourcePath rollback regression guards ──────────────────────

@@ -73,6 +73,24 @@
       };
     };
   };
+  # Shared lowering (both backends): typed event map → settings.json `hooks`
+  # JSON. Per handler: `filterAttrs (v != null)` drops null command/timeout and
+  # keeps `type` + the freeform tail (http url, prompt, …). Per block: omit a
+  # null matcher (settings.json has no matcher for no-matcher events). Same-event
+  # lists concat across module writers (formats.json merge), so this composes
+  # with the legacy `settings.hooks` escape hatch and, on devenv, with the
+  # git-hooks-run entry — never clobbers.
+  hooksToSettings = hooksAttr:
+    lib.mapAttrs (
+      _event: blocks:
+        map (
+          block:
+            (lib.optionalAttrs (block.matcher != null) {inherit (block) matcher;})
+            // {hooks = map (h: lib.filterAttrs (_: v: v != null) h) block.hooks;}
+        )
+        blocks
+    )
+    hooksAttr;
 in
   lib.ai.app.mkAiApp {
     name = "claude";
@@ -577,8 +595,9 @@ in
 
         # Translate cfg.settings → backend surfaces.
         #
-        # - `hooks` routes to upstream `claude.code.hooks` since upstream
-        #   already writes them into settings.json.
+        # - `hooks` is handled separately (the dedicated legacy escape-hatch
+        #   write below routes it to settings.json.hooks, composing with the
+        #   typed event map) — so it is excluded from the generic gap write.
         # - `mcpServers` belongs in `.mcp.json`, not settings.json;
         #   filtered out defensively in case a user mis-assigns it
         #   (the authoritative path is the top-level ai.mcpServers pool).
@@ -590,10 +609,10 @@ in
         # deep-merges them into one settings.json. Upstream's default is
         # `${devenv.root}/.claude/settings.json` (absolute) which would
         # otherwise produce a separate files.* entry.
-        upstreamOwnedSettingsKeys = ["hooks" "mcpServers"];
+        separatelyHandledSettingsKeys = ["hooks" "mcpServers"];
         gapSettings =
           aiCommon.filterNulls
-          (removeAttrs cfg.settings upstreamOwnedSettingsKeys);
+          (removeAttrs cfg.settings separatelyHandledSettingsKeys);
         hasGapSettings = gapSettings != {};
       in
         lib.mkMerge [
@@ -618,19 +637,39 @@ in
               enableWorkflows = lib.mkDefault true;
             };
           })
-          # Translate upstream-owned keys + pin the settings file path.
+          # Translate upstream-owned keys + pin the settings file path. Hooks are
+          # NO LONGER fed to `claude.code.hooks` (that was the type-invalid
+          # mis-feed — script bodies + a freeform event-map into devenv's
+          # `attrsOf hookSubmodule`, masked by the module-eval stub). The typed
+          # event map + the legacy escape hatch gap-write settings.json.hooks
+          # below (concatenating with devenv's own git-hooks-run entry via the
+          # formats.json list merge), and script bodies become greenfield files.
           {
             claude.code = {
               enable = lib.mkDefault true;
               mcpServers = mergedServers;
-              # PRE-COMMIT-3 latent state: still mis-feeds script bodies +
-              # freeform event-map into devenv's `attrsOf hookSubmodule` (masked
-              # by the module-eval stub). Commit 3 replaces this with the typed
-              # lowering (ride `claude.code.hooks` records + gap tail) and de-stubs.
-              hooks = (cfg.settings.hooks or {}) // cfg.hookScripts;
               settingsPath = lib.mkDefault ".claude/settings.json";
             };
           }
+          # Typed event map → settings.json hooks (shared helper). devenv's
+          # git-hooks-run and the legacy escape hatch concat into the same
+          # per-event lists — no clobber, no per-event partition needed.
+          (lib.mkIf (cfg.hooks != {}) {
+            files.".claude/settings.json".json.hooks = hooksToSettings cfg.hooks;
+          })
+          # Legacy `settings.hooks` escape hatch → same settings.json.hooks,
+          # verbatim (composes via the list merge, never clobbers).
+          (lib.mkIf ((cfg.settings.hooks or {}) != {}) {
+            files.".claude/settings.json".json.hooks = cfg.settings.hooks;
+          })
+          # Script bodies → standalone hook files (greenfield; mirrors HM's
+          # programs.claude-code.hooks path, which devenv's claude.code lacks).
+          (lib.mkIf (cfg.hookScripts != {}) {
+            files =
+              lib.mapAttrs'
+              (name: body: lib.nameValuePair ".claude/hooks/${name}" {text = body;})
+              cfg.hookScripts;
+          })
           # Gap write — everything in cfg.settings that upstream doesn't
           # already handle. Uses `.json` format so module-system merges
           # our attrs with upstream's hook-only write into a single
