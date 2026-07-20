@@ -1,0 +1,17 @@
+{
+  "description": "PreToolUse Bash `ls` passes the exit-2 guard (exit 0, silent)",
+  "provenance": "documented (docs snapshot 2026-07-20); REPLACE with Tier-2 capture@2.1.214",
+  "hook": "claude-pretooluse-exit2-guard.sh",
+  "stdin": {
+    "session_id": "abc123",
+    "cwd": "/repo",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": { "command": "ls -la" },
+    "tool_use_id": "toolu_04JKL"
+  },
+  "expect": {
+    "exit": 0,
+    "stdoutEmpty": true
+  }
+}

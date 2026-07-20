@@ -1,0 +1,16 @@
+{
+  "description": "Stop allows the turn to end when tests pass (silent exit 0)",
+  "provenance": "documented (docs snapshot 2026-07-20); REPLACE with Tier-2 capture@2.1.214",
+  "hook": "claude-stop-guard.sh",
+  "stdin": {
+    "session_id": "abc123",
+    "cwd": "/repo",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "last_assistant_message": "All tests pass, done."
+  },
+  "expect": {
+    "exit": 0,
+    "stdoutEmpty": true
+  }
+}

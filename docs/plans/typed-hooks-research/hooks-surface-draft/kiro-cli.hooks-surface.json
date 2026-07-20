@@ -1,0 +1,31 @@
+{
+  "cli": "kiro-cli",
+  "schemaVersion": 1,
+  "provenance": {
+    "binaryVersion": "2.13.0",
+    "binarySource": "overlays/kiro-cli-sources.json",
+    "docsUrls": [
+      "https://kiro.dev/docs/cli/hooks/ (Jun5, 5 triggers)",
+      "https://kiro.dev/docs/cli/v3/hooks/ (Jun17, 11 triggers)"
+    ],
+    "lastVerifiedVersion": "2.13.0",
+    "lastVerifiedDate": "2026-07-20",
+    "notes": "THREE-WAY conflict: Jun5 docs=5, Jun17 docs=11, binary=~6 present. PreTaskExec/PostTaskExec/PostFile{Create,Save,Delete} ABSENT as literals in 2.13.0 (fragments taskExec/fileSaved exist). SessionStart+Manual present-but-undocumented-on-Jun5. Needs live TUI probe to confirm which fire."
+  },
+  "typedEvents_binaryPresent": [
+    "SessionStart",
+    "Stop",
+    "PreToolUse",
+    "PostToolUse",
+    "UserPromptSubmit",
+    "Manual",
+    "AgentSpawn"
+  ],
+  "documentedButAbsentInBinary": [
+    "PreTaskExec",
+    "PostTaskExec",
+    "PostFileCreate",
+    "PostFileSave",
+    "PostFileDelete"
+  ]
+}

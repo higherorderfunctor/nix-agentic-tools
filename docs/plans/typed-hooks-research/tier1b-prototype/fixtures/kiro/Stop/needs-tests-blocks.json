@@ -1,0 +1,19 @@
+{
+  "description": "Kiro v3 Stop blocks via {\"decision\":\"block\"} when a cwd marker exists (metadata-only stdin)",
+  "provenance": "documented (assessment §5.3, verdicts [R] fix — Kiro Stop JSON block channel); Kiro stdin is metadata-only on 2.11/2.12 (§12 Q4). REPLACE with a Tier-2 TUI capture@2.13.0",
+  "hook": "kiro-stop-guard.sh",
+  "setup": { "cwdFiles": [".needs-tests"] },
+  "stdin": {
+    "session_id": "kiro-sess-1",
+    "cwd": "@CWD@",
+    "hook_event_name": "Stop"
+  },
+  "expect": {
+    "exit": 0,
+    "stdoutEmpty": false,
+    "jsonAsserts": [
+      { "path": ".decision", "eq": "block" },
+      { "path": ".reason", "present": true }
+    ]
+  }
+}

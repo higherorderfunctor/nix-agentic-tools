@@ -1,0 +1,280 @@
+
+===== section_01.json : Claude Code & Kiro CLI Hooks: Complete Inventory + Nix Typing Gap Analysis =====
+-- KEY CLAIMS --
+  [LB high] Claude Code official documentation lists 30 distinct hook events (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStart, etc.)  (src: https://code.claude.com/docs/en/hooks.md fetched 2026-07-20)
+  [LB high] Kiro v3 hooks fire per-turn (Stop), per-session (SessionStart), per-prompt (UserPromptSubmit), and on-demand (Manual), with metadata-only stdin (no prompt content)  (src: /home/caubut/Documents/projects/nix-agentic-tools/packages/kiro-cli/lib/autoMemory.nix lin)
+  [LB high] Kiro v3 discovers hooks ONLY in workspace-local .kiro/hooks/, skips store symlinks, ignores global ~/.kiro/hooks/  (src: mkKiro.nix lines 643-658 (devenv real-file emit), autoMemory.nix invariant #11, Kiro issue)
+  [LB high] Current nix-agentic-tools factory defines ai.claude.hooks as attrsOf lines (raw script bodies) and ai.kiro.hooks as attrsOf (either lines path), with no per-event schema validation  (src: /home/caubut/Documents/projects/nix-agentic-tools/packages/claude-code/lib/mkClaude.nix li)
+  [high] mkKiro.nix lines 275-282 explicitly mark hooks as GREENFIELD: 'There is no upstream format we wrap — Kiro OWNS these schemas — so a future session should MODEL them typed'  (src: /home/caubut/Documents/projects/nix-agentic-tools/packages/kiro-cli/lib/mkKiro.nix lines 2)
+  [LB high] autoMemory.nix (validate-at-stop, kiro-memory distiller) is a reference implementation proving: multiple hooks work in one JSON envelope, absolute store paths required in wrappers, HOME guard essentia  (src: /home/caubut/Documents/projects/nix-agentic-tools/packages/kiro-cli/lib/autoMemory.nix, ch)
+  [LB high] ai.kiro.permissions (typed submodule with capability/effect/match/exclude fields, lines 220-266 of mkKiro.nix) demonstrates typed schema pattern already exists; hooks are the gap  (src: /home/caubut/Documents/projects/nix-agentic-tools/packages/kiro-cli/lib/mkKiro.nix lines 2)
+  [medium] Nixpkgs programs.claude-code HM module exists (PR #7711 merged 2025) and provides hooks option as freeform passthrough to settings.json, no schema  (src: WebSearch results link: github.com/nix-community/home-manager/pull/7711)
+  [LB high] Claude Code PreToolUse hook can modify input (updatedInput field), PostToolUse can modify output (updatedToolOutput), both can block via decision=block  (src: https://code.claude.com/docs/en/hooks.md sections PreToolUse / PostToolUse)
+  [LB high] Kiro v3 has no SessionEnd hook; Stop fires per-turn; debounce OR-gate + cross-session tail-flush required to avoid dropping final sub-threshold turn (D24, autoMemory.nix lines 24, 174-200)  (src: /home/caubut/Documents/projects/nix-agentic-tools/packages/kiro-cli/lib/autoMemory.nix lin)
+-- OPEN QUESTIONS --
+  ? Are Claude Code prompt-based hooks ('prompt' type) production-ready across all surfaces (Terminal, VS Code, Desktop, Web, Slack)? What is the token cost model?
+  ? Is Kiro v2 still supported with full feature parity, or is v3 the only forward path? Should typed schema target v2+v3 with compat layer, or v3-only?
+  ? Can hooks be scoped to specific agents, skills, MCP servers, or workspace contexts, or are they always global to the CLI instance?
+  ? Do hooks fire identically in TUI mode vs. headless API mode (e.g., Claude web surface vs. terminal)?
+  ? For Kiro subagents: do they inherit parent session hooks, run with independent hook config, or have no hook support?
+  ? Claude MessageDisplay hook says 'transcript keeps original' — does this mean the hook-modified display is transient (visual only), not saved to transcript?
+  ? Should the typed schema support per-hook timeout overrides, or use a global timeout? Kiro auto-memory uses per-hook timeouts today.
+  ? For Claude's WorktreeCreate hook: if it returns a worktreePath, does Claude Code use that path for subsequent worktree operations in the same session, or only for creation?
+  ? Does the 'matcher' field support regex or only glob patterns? Kiro permissions uses glob only; Claude hooks documentation doesn't specify.
+-- DECISIONS FOR USER --
+  Q: Should the typed hook option use per-hook (one file per hook) or envelope (all hooks in one JSON array) structure?
+     - Per-hook: One .json or .sh file per hook name; mirrors legacy per-file pattern; clear event intent; easier to override p
+     - Envelope: Single hooks.json (or kiro-memory.json) with hooks:[...] array; matches live auto-memory pattern; proven to wo
+     => REC: Envelope. autoMemory.nix proves it works in production; reduces file proliferation; simplifies HM↔devenv sync (one file to install vs. many).
+  Q: Should typed schema be defined inline in Nix or external in JSON/YAML?
+     - Inline Nix submodules: Load-bearing definition lives in the factory; full module-system validation; tightest control; ha
+     - External JSON Schema: Single source for validation tools; easier to document; harder to keep in sync with Nix option ren
+     => REC: Inline Nix submodules (primary), with optional JSON export for docs/CI. The module system is the source of truth; JSON schema is derived.
+  Q: Should matchers use glob patterns, regex, or both?
+     - Glob only (like Kiro permissions): Simple, matches existing precedent, covers ~95% of use cases
+     - Regex: Powerful, flexible, but higher learning curve; risk of performance bugs
+     - Both: Glob by default, regex as escape hatch (type: enum ["glob"|"regex"] + pattern string)
+     => REC: Glob only for Phase 1. If power users need regex, add as Phase 2+ follow-up (or accept raw command flags like --matcher-regex).
+  Q: Should legacy untyped hooks (attrsOf lines) coexist with typed hooks, or migrate immediately to typed-only?
+     - Union type (oneOf [legacyType typedType]): Backward compatible; allows gradual migration; complex validation
+     - Typed-only: Clean break; forces migration; may break existing consumer configs
+     - Parallel options (ai.claude.hooks + ai.claude.hooksTyped): Clear intent; no collision; verbose
+     => REC: Union type on same option name (ai.claude.hooks). Allows attrsOf lines OR typed submodule; deprecation notice on legacy arm; gives consumers time to migrate.
+  Q: Should prompt-based hooks be included in Phase 1 typed schema?
+     - Include: Complete coverage of all hook types; consumers can opt-in to use prompts; requires model invocation + token cos
+     - Defer to Phase 2+: Focus Phase 1 on shell + HTTP + agent types; prompt is orthogonal complexity; auto-memory doesn't nee
+     => REC: Defer to Phase 2+. Phase 1 covers shell/HTTP/agent handlers only. Prompt-based hooks require separate cost tracking and LLM integration; out of scope for initial schema.
+  Q: Should Kiro v2 (embedded hooks) be supported with full typed schema, or marked as transitional (v3-only going forward)?
+     - Full v2+v3 support: Compatibility layer; v2 users get typed options; added complexity (two schemas to maintain)
+     - v3-only: Cleaner; v2 users get auto-migration prompt; aligns with Kiro's v3 push
+     => REC: v3-only in Phase 1. Mark v2 as transitional; recommend migration. If production v2 users exist, add compat layer as Phase 2+ follow-up.
+  Q: Should hook verification tests be manual CLI gates or hermetic unit tests?
+     - Hermetic only (static checks + stub inputs): Fast, sandbox-safe, no token burn, sufficient for schema validation
+     - Manual CLI gates: Catches integration bugs, expensive (tokens for Claude), required for production but not Phase 1
+     - Hybrid: Hermetic in nix flake check; manual gates in CI (expensive, gated feature)
+     => REC: Hermetic in Phase 1-3 (nix flake check, stub-based integration tests). Manual CLI verification deferred to Phase 5 or as optional pre-release gate.
+
+===== section_02.json : Hook Composition & Precedence: Claude Code and Kiro v3 (multi-source, script-con =====
+-- KEY CLAIMS --
+  [LB high] Claude Code runs ALL matching hooks for an event (union across user/project/local/managed/plugin/skill+agent sources), in parallel, de-duplicating identical handlers (command by command+args, HTTP by   (src: https://code.claude.com/docs/en/hooks + corroborating WebSearch (multiple independent sour)
+  [LB high] Hooks (and permission rules / arrays) MERGE across settings.json sources rather than override, unlike scalar settings which follow managed>CLI>local>project>user precedence.  (src: https://code.claude.com/docs/en/settings)
+  [LB high] Claude aggregates multi-hook blocking as most-restrictive-wins: any exit 2 / decision:block blocks; deny>ask>allow; all siblings still run to completion.  (src: https://code.claude.com/docs/en/hooks + corroborating search)
+  [LB high] Nix does not need to concatenate scripts for Claude — emit each contributor as a separate array entry and the CLI unions/aggregates them.  (src: inference from confirmed union+parallel behavior)
+  [LB high] ai.claude.hooks (attrsOf lines) writes executable SCRIPT FILES to ~/.claude/hooks/<name>; the event->matcher->command WIRING is separate, in ai.claude.settings.hooks JSON. They compose by reference, n  (src: packages/claude-code/lib/mkClaude.nix:250-267,356,364 + nixpkgs HM claude-code.nix:305-311)
+  [LB medium] devenv route `claude.code.hooks = (cfg.settings.hooks or {}) // cfg.hooks` conflates event-wiring JSON with script-body lines into one option — a right-biased override that would clobber (not union) a  (src: packages/claude-code/lib/mkClaude.nix:507,472; devenv claude.code.hooks expected type not )
+  [LB high] Kiro v3 fires every matching hooks[] entry in one .kiro/hooks/<name>.json envelope (union within a file), proven live with 4 hooks in the autoMemory envelope.  (src: packages/kiro-cli/lib/autoMemory.nix:173-201,232 (memory D30))
+  [LB high] Kiro v3 loads hooks ONLY from the workspace .kiro/hooks/ via a read_dir scan (global ~/.kiro/hooks/ ignored, store symlinks skipped); multiple files all load and union.  (src: packages/kiro-cli/lib/mkKiro.nix:643-667; docs/plans/kiro-v3-docs.txt:304; memory kiro_v3_)
+  [LB medium] Kiro blocking: only PreToolUse/UserPromptSubmit (and PreTaskExec) can block; exit 2 blocks, STDERR to LLM; other codes are warnings. Multi-hook aggregation for one Kiro event is undocumented (inferred  (src: docs/plans/kiro-v3-docs.txt:341-353,394-402,172)
+  [LB high] The natural composition mechanism is Nix listOf concatenation (module-system auto-concats listOf definitions), making the Nix merge isomorphic to the CLI runtime union; hooks must NOT use the collisio  (src: lib/ai/ai-common.nix:315-336; lib/ai/app/hmTransform.nix:37-56; NixOS module listOf merge )
+  [high] The repo currently forbids setting both ai.kiro.hooks and hooksDir (XOR assertion); this blocks inline+dir composition and should be lifted since Kiro unions all files.  (src: packages/kiro-cli/lib/mkKiro.nix:426,597)
+  [high] A generated dispatcher wrapper (strategy b) is only needed if a CLI restricts one command per event/matcher — neither Claude nor Kiro does — and it is strictly worse (loses Claude parallelism, forces   (src: inference from confirmed array-union behavior of both CLIs)
+  [low] The exact Claude hook-event list (docs summary reported ~30 events incl. PostToolBatch, TeammateIdle, WorktreeCreate, SubagentStart/Stop) came via WebFetch small-model summary and needs direct verific  (src: https://code.claude.com/docs/en/hooks (small-model summary, not directly quoted))
+-- OPEN QUESTIONS --
+  ? Does Kiro de-duplicate two hooks[] entries that share the same `name` field, and what is the ordering across multiple .kiro/hooks/*.json files? Docs are silent; needs an empirical fixture.
+  ? How does Kiro aggregate blocking when TWO matching PreToolUse/UserPromptSubmit hooks both run for one event — first-exit-2-wins vs any-exit-2-blocks? Undocumented; inferred any-blocks but must be verified live.
+  ? Does Kiro v3 fire hooks inside subagent/spec-task delegations, or only at the top-level agent? Docs say 'apply across all agents' which is ambiguous; the goal doc reports subagents do NOT fire — needs a manual TUI fixtur
+  ? What exact type does devenv's upstream `claude.code.hooks` expect (event-wiring JSON vs script-body lines)? This determines whether the `(settings.hooks or {}) // cfg.hooks` merge is merely awkward or actively malformed,
+  ? Confirm the current authoritative Claude hook-event set and per-event matcher fields directly from code.claude.com/docs/en/hooks (the ~30-event list here is a summarizer artifact) before committing them to typed per-even
+  ? Does `pkgs.formats.json {}` (today's freeform settings type) actually concatenate list values across module definitions, or does last-definition win? This decides whether the interim untyped `settings.hooks` composes, an
+  ? For the token-burning hooks that need an authenticated CLI: can `nix flake check` cover them via a hermetic stub-CLI fixture (like checks/validate-at-stop.nix feeds JSON on stdin), or is a separate env-gated flake app / 
+
+===== section_03.json : Hook Edge Cases & Gotchas Across Claude Code and Kiro CLI — Assessment for Typed =====
+-- KEY CLAIMS --
+  [LB high] Both Claude Code and Kiro CLI fail to fire hooks for a subagent's own tool calls — Kiro #7755 (docs say 'Hooks will not trigger in subagents') and Claude #34692 (closed 'not planned', affected 2.1.76+  (src: https://github.com/kirodotdev/Kiro/issues/7755 ; https://github.com/anthropics/claude-code)
+  [LB high] Kiro v3 discovers hooks ONLY from the launch cwd's .kiro/hooks/ (never global ~/.kiro/hooks) and its read_dir scan skips store symlinks, so hooks must be delivered as real files in a workspace dir; th  (src: /home/caubut/Documents/projects/nix-agentic-tools/packages/kiro-cli/lib/autoMemory.nix hea)
+  [LB high] Kiro Stop fires per-turn (not session end) and there is no SessionEnd/on-exit hook; Kiro's own v3 hooks page mislabels Stop as 'Session ends' while its general hooks page says 'at the end of each turn  (src: https://kiro.dev/docs/cli/hooks/ (general) vs docs/plans/kiro-v3-docs.txt:344; in-repo D11)
+  [LB high] Kiro hook stdin is metadata-only in practice ({session_id, cwd}); the documented UserPromptSubmit.prompt and Stop.assistant_response fields arrive EMPTY on tested versions 2.11/2.12, so the documented  (src: in-repo D12/D23 (autoMemory.nix + claude-rules-kiro-cli fragment); contradicts https://kir)
+  [LB medium] Claude Code hooks compose additively (union) across user/project/local settings, plugin hooks, and skill/agent frontmatter, with identical command+args deduped and all matching hooks run in parallel —  (src: https://code.claude.com/docs/en/hooks (summarized); https://code.claude.com/docs/en/plugin)
+  [LB high] Claude plugin-shipped agents CANNOT embed hooks/mcpServers/permissionMode (blocked for security), but locally-authored skill/agent frontmatter CAN embed hooks (scoped to component lifetime, require ap  (src: https://code.claude.com/docs/en/plugins-reference line 72; https://claude.com/blog/steerin)
+  [LB high] Claude MCP env field replaces the process env, stripping PATH, so hook/MCP wrappers must use absolute store paths or bare commands fail silently; the repo already enforces this via checks/bare-command  (src: /nix/store/...-claude-rules-nix-standards.md (in-repo fragment))
+  [LB high] Kiro v3 hooks are effectively TUI-only: the legacy non-TUI classic mode does not support the v3 engine, so headless Kiro runs no v3 hooks; Claude hooks fire in headless -p mode (Stop verified end-to-e  (src: docs/plans/kiro-v3-docs.txt:52-53 + in-repo memory project_kiro_hook_engine_split; docs/pl)
+  [LB high] Claude Stop can block (exit 2 / decision:block) to force a continue, creating infinite-loop risk guarded by stop_hook_active; Kiro Stop cannot block at all.  (src: in-repo validate-at-stop.sh + project_stop_hook_validation_poc; docs/plans/kiro-v3-docs.tx)
+  [LB high] Kiro v2 and v3 hook schemas diverge: PascalCase triggers, embedded→standalone files, and timeout_ms (ms, default 30000) → timeout (seconds, default 60, 0 disables, ignored for agent actions).  (src: docs/plans/kiro-v3-docs.txt:355-402; https://kiro.dev/docs/cli/hooks/ (v2 timeout_ms))
+  [LB medium] Claude's current hook event surface is far larger than the classic nine (SessionEnd, PreCompact, SubagentStop confirmed), with a long advertised tail that a small-model doc summary returned and which   (src: https://code.claude.com/docs/en/hooks (summarized, treat tail as unverified))
+  [high] Kiro exit codes: 0 success (stdout→context for SessionStart/UserPromptSubmit), 2 blocks PreToolUse/UserPromptSubmit only (stderr→LLM), any other exit is a user warning and execution proceeds; Claude:   (src: docs/plans/kiro-v3-docs.txt:394-402; docs/plans/prek-posttooluse-hook-feedback-channel.md:)
+  [medium] Kiro PreTaskExec/PostTaskExec fire only around spec tasks (/spec run), not arbitrary Task/subagent delegation, so they are not a general subagent-governance hook.  (src: docs/plans/kiro-v3-docs.txt:347-348,378 (trigger + matcher tables))
+  [LB medium] The current code.claude.com/docs/en/hooks page annotates PreToolUse/PostToolUse as firing in subagents (with agent_id), which contradicts issue #34692; the per-event subagent annotations from the summ  (src: https://code.claude.com/docs/en/hooks (summarized) vs https://github.com/anthropics/claude)
+-- OPEN QUESTIONS --
+  ? Claude subagent hooks: does the current doc's claim that PreToolUse/PostToolUse 'fire in subagents (with agent_id)' actually hold on the target Claude version, or is issue #34692 (closed 'not planned') still the real beh
+  ? Exact Claude hook event list on the pinned version: which of the advertised tail events (SubagentStart, PostToolUseFailure, PostToolBatch, Setup, UserPromptExpansion, PermissionRequest/Denied, MessageDisplay, CwdChanged,
+  ? Does Kiro strip PATH for hook command subprocesses the way Claude's MCP env does? Unconfirmed for Kiro specifically; the repo mitigates identically (absolute paths) regardless, but confirming would let us relax or tighte
+  ? Can `nix flake check` cover any authenticated-CLI hook, or must all token-burning fires move to a flake app / env-gated devenv task? Kiro v3's TUI-gating suggests even 'live' checks can't be headless — decide the verific
+  ? Do locally-authored (non-plugin) Claude subagent .md files reliably honor a `hooks` frontmatter field on the target version, and does the factory ship agents as plugin components (where hooks are rejected) or as user/pro
+  ? Kiro v3 timeout default of 60s vs the auto-memory synchronous Stop hook: is a slow (reachable-but-slow openmemory) backend at risk of hitting the Stop timeout under load, and should the typed option default lower or forc
+  ? Precise Kiro v3 hook execution ordering/parallelism when multiple .kiro/hooks/*.json files and multiple hooks within one envelope match the same trigger — undocumented; matters for telemetry ordering guarantees.
+-- DECISIONS FOR USER --
+  Q: How should the typed hook options model the two CLIs' event sets?
+     - CLI-namespaced schemas (ai.claude.hooks.<Event> / ai.kiro.hooks.<Trigger>) with only thin shared plumbing
+     - One unified cross-CLI event abstraction that maps to both
+     - Keep untyped passthrough for the volatile tail, type only the stable core events
+     => REC: CLI-namespaced schemas with soft enums (either (enum knownFromSidecar) str), mirroring the existing models.json/engines.json pattern. The event sets, stdin schemas, matcher semantics, exit-code contra
+  Q: How do we deliver Kiro v3 hooks given they must be real files in workspace .kiro/hooks/ and store-symlinks are skipped?
+     - devenv-only real-file materialization (enterShell install -m 0644), HM route documented as v3-dead
+     - Add an HM activation-script real-file copy so HM also delivers workspace hooks
+     - Support both, with a per-consumer toggle
+     => REC: Ship devenv real-file materialization as the live v3 path (already proven by auto-memory) and explicitly document the HM route as v3-inert; an HM real-file copy is possible but fights HM's symlink mod
+  Q: Where does verification of authenticated/token-burning hooks live, given nix flake check can't fire a live CLI and Kiro v3 is TUI-gated?
+     - Hermetic stub-tool checks in nix flake check for all logic + a separate env-gated flake app / devenv task for live fires
+     - Only hermetic checks; live behavior verified manually via HITL harness
+     - Attempt live fires inside a sandboxed derivation with a mocked auth token
+     => REC: Hermetic stub checks in nix flake check (schema→JSON, real-file vs symlink materialization, HM↔devenv parity, matcher/trigger validity, absolute-path linting — extending the validate-at-stop.nix + mod
+  Q: Should the typed layer expose Claude subagent-tool governance hooks at all?
+     - Expose them and document the #34692 blind spot
+     - Withhold per-tool subagent hooks; expose only SubagentStop/SubagentStart boundary hooks
+     - Gate on empirical re-verification of the target version first
+     => REC: Gate on empirical re-verification (open question 1). If PreToolUse/PostToolUse still don't fire in subagents on the pinned version, expose only SubagentStop/SubagentStart for delegation-boundary telem
+
+===== section_04.json : Kiro CLI Hooks — Complete v3 Inventory, v2 Stub Surface, and the Nix Typing Desi =====
+-- KEY CLAIMS --
+  [LB high] Kiro v3 has exactly 11 hook triggers (SessionStart, Stop, PreToolUse, PostToolUse, PreTaskExec, PostTaskExec, UserPromptSubmit, PostFileCreate, PostFileSave, PostFileDelete, Manual); this is the compl  (src: https://kiro.dev/docs/cli/v3/hooks/ ; docs/plans/kiro-v3-docs.txt:339-353)
+  [LB high] The repo pins kiro-cli 2.13.0, which is the exact release (2026-07-17) that added GLOBAL ~/.kiro/hooks/ discovery firing in every workspace — invalidating the pre-2.13.0 in-repo 'global hooks ignored   (src: overlays/kiro-cli-sources.json (version 2.13.0); https://kiro.dev/changelog/cli/)
+  [LB high] v3 hook command stdin is METADATA-ONLY ({session_id, cwd, hook_event_name}); UserPromptSubmit.prompt is empty; the official docs do NOT enumerate the stdin schema (empirical finding only).  (src: packages/kiro-cli/lib/autoMemory.nix header; claude-rules-kiro-cli.md 'two-problem frame' )
+  [LB high] Stop fires PER TURN (not at session end as the docs label implies) and there is NO SessionEnd trigger; memory/telemetry must debounce.  (src: packages/kiro-cli/lib/autoMemory.nix; claude-rules-kiro-cli.md (D11))
+  [LB high] v3 blocking is exit-code-2 ONLY (PreToolUse, UserPromptSubmit); there is NO JSON {"decision":"block"} channel for Kiro hooks, unlike Claude. STDOUT is added to context only for SessionStart and UserPr  (src: docs/plans/kiro-v3-docs.txt:394-403 (exit code table))
+  [LB medium] v3 hooks must be REAL files, not store symlinks — the read_dir scan skips symlinks, so HM's home.file symlink route is a latent no-op under v3; devenv delivers real files via enterShell copy.  (src: packages/kiro-cli/lib/mkKiro.nix:643-667 rationale + module-eval parity test; claude-rules)
+  [LB high] One .kiro/hooks/<name>.json envelope {version:'v1', hooks:[...]} carries MULTIPLE hooks across MULTIPLE triggers, confirmed live (autoMemory ships 4 triggers in one file).  (src: packages/kiro-cli/lib/autoMemory.nix:173-201; checks/module-eval.nix:1035-1055 (D30))
+  [LB high] The 'agent' action type appends a prompt to the current model context with NO subprocess and ignores timeout; it is inline steering, not a subagent dispatch.  (src: https://kiro.dev/docs/cli/v3/hooks/ ; docs/plans/kiro-v3-docs.txt:334-338,391)
+  [LB high] Today ai.kiro.hooks is untyped JSON passthrough (attrsOf (either lines path)); mkKiro.nix comments already prescribe modeling it typed like permissions, and permissions is the concrete precedent (list  (src: packages/kiro-cli/lib/mkKiro.nix:275-327 (hooks option + greenfield comment); :220-274 (pe)
+  [LB high] nixpkgs programs.claude-code.hooks is attrsOf lines (hook SCRIPT BODIES → files under configDir/hooks/); Claude event-wiring lives in the untyped settings.hooks freeform passthrough — the two are dist  (src: nixpkgs home-manager modules/programs/claude-code.nix:305-313; packages/claude-code/lib/mk)
+  [LB high] The Claude Code hook surface is ~30 events across 5 handler types (command/http/mcp_tool/prompt/agent) with rich JSON I/O and version-gated fields — a far larger, faster-drifting target than Kiro's 11  (src: https://code.claude.com/docs/en/hooks (live fetch))
+  [LB high] command-action hooks are hermetically testable via a synthetic-stdin runCommandLocal check (validate-at-stop precedent); agent-action + authed-CLI hooks cannot be, needing a manual/env-gated flake app  (src: checks/validate-at-stop.nix; dev/scripts/kiro-memory-hitl.sh (referenced in claude-rules-k)
+  [medium] Docs claim hooks apply across ALL agents in the workspace (including the Spec agent), which contradicts the lens's 'no hooks in subagents' assumption — must be resolved empirically.  (src: docs/plans/kiro-v3-docs.txt:75,304)
+-- OPEN QUESTIONS --
+  ? Does kiro-cli 2.13.0 still SKIP symlinked hook files, or did the global-hooks feature also change read_dir to follow symlinks? This decides whether HM can deliver hooks via home.file (symlink) or must use an activation-s
+  ? Do v3 hooks fire inside subagents / the subagent-delegation tool's children? Docs say hooks 'apply across all agents' (implying yes for named agents), contradicting the lens's assumption. Named-agent vs ephemeral-subagen
+  ? What is the exact file-path template variable for file-triggered command actions? Docs mangle it as '${…}'; the typed option should not advertise it until confirmed (likely ${file} or an env var).
+  ? With global (~/.kiro/hooks/) + workspace (.kiro/hooks/) both loading in 2.13.0, do same-named envelopes at both scopes double-fire or dedupe? Nix cannot catch an HM-global vs devenv-workspace collision — is that a real d
+  ? Scope decision: fully type all ~30 Claude events (drift-prone) vs a curated core with soft-enum + freeform tail? Kiro's 11 are bounded and finishable; Claude is a moving target.
+  ? Should the typed ai.kiro.hooks option SUBSUME autoMemory.nix's hand-built builtins.toJSON envelope (making autoMemory a typed-value producer), or keep them separate? Subsuming gains eval-time type-checking but couples th
+-- DECISIONS FOR USER --
+  Q: How should HM deliver Kiro v3 hooks, given they must be real files (not store symlinks) and 2.13.0 now loads global ~/.kiro/hooks/?
+     - (i) home.activation script copies rendered JSON to real ~/.kiro/hooks/<name>.json (only HM path yielding real files; mir
+     - (ii) devenv-only workspace-local delivery; document HM as unsupported for hooks (like tui/permissions are HM-only for th
+     - (iii) keep today's home.file symlink route (KNOWN latent no-op under v3 — reject)
+     => REC: (i) IF a live 2.13.0 test confirms global real-file hooks load AND symlinks are still skipped; otherwise (ii). Do not ship (iii).
+  Q: How wide should the 'type every hook' effort go for Claude Code, given ~30 drifting events vs Kiro's stable 11?
+     - Fully type all ~30 Claude events + 5 handler types
+     - Type a curated Claude core (PreToolUse, PostToolUse, UserPromptSubmit, Stop, SubagentStop, SessionStart, SessionEnd, Pre
+     - Type Kiro v3 fully now; defer all Claude typing to a later section/effort
+     => REC: Type Kiro v3 fully now (bounded, finishable); for Claude, curated core + soft-enum/freeform tail. Avoid chasing all 30 version-gated events.
+  Q: How should hooks requiring a live authenticated CLI (agent-action injection, real --v3 runs) be verified without burning tokens in nix flake check?
+     - Hermetic-only: cover command-action hooks in nix flake check; do not verify agent-action at all
+     - Hermetic for command-action + a separate env-gated flake app / devenv task (nix run .#check-kiro-agent-hooks) that launc
+     - Require all hook verification to be manual HITL
+     => REC: Option 2: nix flake check covers the deterministic command-action majority hermetically (validate-at-stop pattern); agent-action + live-injection go to an env-gated app/task using the kiro-memory-hitl
+
+===== section_05.json : SECTION_SCHEMA: Typed per-event hook options inside the mkAiApp factory (Claude  =====
+-- KEY CLAIMS --
+  [LB high] HM upstream `programs.claude-code.hooks` is `attrsOf lines` = executable SCRIPT FILES only (no event/matcher); the event→matcher→handler wiring exists only inside the fully-freeform `settings.hooks` J  (src: nix-community/home-manager modules/programs/claude-code/options.nix (ref e3dea8e): hooks m)
+  [LB high] devenv `claude.code.hooks` is a NAMED-RECORD submodule `{enable,name,hookType(enum17),matcher,command}` (Kiro-like), and devenv emits only `{type:"command",command}` grouped by hookType — command-only  (src: cachix/devenv src/modules/integrations/claude.nix (ref 5f1cf17): hookSubmodule, buildHooks)
+  [LB high] Current factory line `claude.code.hooks = (cfg.settings.hooks or {}) // cfg.hooks` assigns strings/lists that do NOT match devenv's `attrsOf hookSubmodule` type — a real schema mismatch masked because  (src: packages/claude-code/lib/mkClaude.nix:507; devenv claude.nix hookSubmodule; checks/module-)
+  [LB high] Recommendation: bypass devenv `claude.code.hooks` and write `files.".claude/settings.json".json.hooks` ourselves (like the existing gapSettings write), giving full fidelity AND byte-parity with the HM  (src: packages/claude-code/lib/mkClaude.nix:511-517 (gapSettings precedent); §1/§5 analysis)
+  [LB high] Keep hooks PER-CLI (no shared ai.hooks pool): divergent event vocabularies (~30 vs 11, ~5 overlap), divergent stdin (Claude rich JSON vs Kiro metadata-only), divergent blocking/lifecycle (Stop blocks   (src: code.claude.com/docs/en/hooks; kiro.dev/docs/cli/v3/hooks; packages/kiro-cli/lib/autoMemor)
+  [LB high] Kiro v3 discovers hooks ONLY from launch-cwd .kiro/hooks/ (never global ~/.kiro/hooks/) and its read_dir SKIPS store symlinks, so HM emission is dead for v3 and devenv must install REAL files via ente  (src: packages/kiro-cli/lib/mkKiro.nix:643-667; claude-rules-kiro-cli.md invariant #11; kirodotd)
+  [LB high] Claude keys hooks BY EVENT (event→[matcher-group→handler-array]); Kiro keys BY NAMED RECORD (name→{trigger,matcher,action}). Typed shapes must key differently to match their file formats; the only sha  (src: home-manager full-config.nix settings.hooks shape; kiro.dev/docs/cli/v3/hooks envelope sch)
+  [LB medium] Claude's live event set is version-specific (canonical 9 stable; ~30 on current docs; devenv independently ships 17). Model as a committed/extracted sidecar + soft enum (either enum str), mirroring mo  (src: code.claude.com/docs/en/hooks (~30); devenv hookType enum (17); packages/claude-code/lib/m)
+  [LB high] Generated hook scripts must be baked with writeShellScript (strict-mode header) and referenced by ABSOLUTE store path in command, because Claude/Kiro hook+MCP env REPLACES process env (bare names lose  (src: claude-rules-nix-standards.md (Shell Wrappers: Absolute Paths); packages/kiro-cli/lib/auto)
+  [LB high] Migration is breaking: ai.claude.hooks (attrsOf lines) and ai.kiro.hooks (raw-JSON envelopes) collide with the typed shapes. autoMemory.nix is a live consumer of the raw Kiro shape, so a raw escape ha  (src: packages/claude-code/lib/mkClaude.nix:250-267; packages/kiro-cli/lib/mkKiro.nix:316-320; p)
+  [high] nix flake check can cover eval-time wiring (module-eval) and hermetic script-behavior (validate-at-stop stub pattern) with no tokens; live hook-firing on auth-gated events cannot be hermetic and belon  (src: checks/module-eval.nix; checks/validate-at-stop.nix; dev/scripts/kiro-memory-hitl.sh (refe)
+  [low] Kiro reportedly does not fire hooks inside subagents (a GOAL edge case) — not confirmed in the fetched v3 docs; treat as unverified.  (src: inference — GOAL statement; not found in kiro.dev/docs/cli/v3/hooks nor repo docs)
+-- OPEN QUESTIONS --
+  ? Claude v1 handler scope: type only the `command` handler (95% case, http/prompt/agent/mcp_tool via freeform tail) or type all five handler types now? The non-command types are newer and less-documented.
+  ? Which Claude event set is authoritative for the enum, and should it be EXTRACTED from the packaged binary (extraExtract) rather than hand-maintained? Need to confirm the binary exposes the list parseably.
+  ? Claude devenv PostToolUse collision with devenv's default `claude.code.hooks.git-hooks-run`: merge into it, disable git-hooks-run when the typed option owns PostToolUse, or route our PostToolUse back through claude.code.
+  ? Kiro envelope packaging: bundle all typed records into ONE hooks.json envelope, or emit one file per hook? Both are v3-discoverable; one-file-per-hook is simpler to diff, one-envelope matches auto-memory's current shape.
+  ? Migration naming for Claude: repurpose `ai.claude.hooks` to the event map + rename script-bodies to `hookScripts`, or introduce a new name (`ai.claude.hookEvents`) and leave `ai.claude.hooks` as script-bodies? Affects ni
+  ? hooksDir/hooksFromDir fate under the typed model: keep as low-level script-body ingester referenced by typed entries, or deprecate in favor of explicit typed records (losing the drop-a-dir ergonomics)?
+  ? Does Kiro actually skip hooks in subagents, and do TUI-vs-headless / trusted-vs-untrusted workspace states change hook firing? Needs live verification before the typed option documents any per-scope guarantee.
+  ? Should the typed option validate handler/action field combinations via assertions (e.g. `type=command` requires exactly one of script/command; `type=http` requires url), or accept looser shapes and let the CLI reject? As
+
+===== section_06.json : Testing & Verification Strategy for Typed Claude/Kiro Hooks (Tiered: hermetic fl =====
+-- KEY CLAIMS --
+  [LB high] `nix flake check` builds sandboxed, pure derivations with no network/auth/credentials, so a real token-using live hook-fire test cannot run inside it at all — live firing MUST be a manual harness outs  (src: inference from Nix sandbox semantics + checks/validate-at-stop.nix:8-17 (stub tools, throw)
+  [LB high] The repo already has a hermetic contract-test precedent that feeds a documented stdin JSON payload to a hook script with STUB tools and asserts stdout/exit — directly reusable per-event for Tier 1.  (src: checks/validate-at-stop.nix:1-85; lib/validate-at-stop.sh:11-16,45-46)
+  [LB high] Golden-emission tests (module-eval style) can prove EVERY event on both CLIs serializes correctly, including matcher-awareness, composition/precedence, and absolute-store-path — this is fully hermetic  (src: checks/module-eval.nix:698-714 (claude hooks route), :3009-3069 (hooksDir), :1035-1110 (ki)
+  [LB high] Tier-1 contract tests only cover hooks whose action is a script we generate; Kiro action.type:agent and Claude type:prompt/agent hooks have no subprocess and are emission-only at Tier 1.  (src: docs/plans/kiro-v3-docs.txt:334-338 (two action types); WebFetch code.claude.com/docs/en/h)
+  [LB high] Kiro v3 fires hooks only in a trusted TUI, Stop fires per-turn, there is no SessionEnd, and hook stdin is metadata-only ({session_id,cwd}) with an empty UserPromptSubmit prompt — so firing/stdin can o  (src: claude-rules-kiro-cli.md (two-problem frame, invariants); dev/scripts/kiro-memory-hitl.sh:)
+  [LB high] An env-gated no-op check (HOOKS_LIVE_TOKEN) gives false assurance for live-fire because the sandbox strips network+auth before the gated branch could run; reject it for Tier 2.  (src: inference from Nix sandbox + task option (d))
+  [LB high] A live HITL builder that derives hooks from the real generators, drops them as REAL files into a throwaway trusted project, and prints a spoon-fed walkthrough is the proven Tier-2 pattern in this repo  (src: dev/scripts/kiro-memory-hitl.sh:1-74; dev/scripts/kiro-memory-hitl.nix:1-47)
+  [high] Bun-style unit + real-subprocess-with-synthetic-stdin tests are a hermetic Tier-1 technique for hook LOGIC, run at package build time via doCheck/checkPhase (targeted single build = OOM-safe), not nec  (src: packages/kiro-cli/memory/distiller.test.ts:907-1052; overlays/kiro-memory-distiller.nix:50)
+  [LB low] The exact full Claude Code hook event list may be larger than the canonical 9 (a fetch reported ~31 events incl. Setup/PermissionRequest/PostToolUseFailure/SubagentStart/etc.), but that came through a  (src: WebFetch https://code.claude.com/docs/en/hooks (summarized; unverified against raw source))
+  [medium] Kiro's claim of not firing hooks in subagents is stated but not verified in-repo; it is a Tier-2 (live) observation, not a hermetic fact.  (src: task prompt ('reportedly'); no in-repo confirmation found)
+-- OPEN QUESTIONS --
+  ? Verify the ACTUAL current Claude Code hook event list against the raw (non-summarized) docs before typing options — is it the canonical 9 (PreToolUse/PostToolUse/UserPromptSubmit/Notification/Stop/SubagentStop/PreCompact
+  ? Does `nix flake check` on this repo's Nix version BUILD packages.* (which would run the distiller-style checkPhase bun suites automatically) or only evaluate them? This decides whether hook-logic language tests need expl
+  ? Confirm live (Tier 2) whether Kiro v3 truly fires NO hooks inside subagents, and whether any headless (non-TUI) Kiro path fires hooks at all — both are edge cases the design must handle but are currently unverified.
+  ? What is the real stdin schema the SHIPPED Claude CLI version delivers for SubagentStop (agent_id/agent_type present?) and PostToolUse (tool_output/tool_use_id)? Capture live and pin as fixtures; docs may lead the shipped
+  ? Should the Tier-2 harness cover Claude headless (`claude -p`) as a cheaper partial proof of firing (no TUI), reserving full TUI runs for the events that only fire interactively?
+  ? For agent-action hooks (Kiro action.type:agent / Claude type:prompt), is emission-only Tier-1 coverage acceptable, or does the human want a live smoke that the model actually receives the injected prompt?
+-- DECISIONS FOR USER --
+  Q: How should the manual/live hook-verification surface be expressed in Nix?
+     - devenv task (primary) + flake app (secondary) both driving a shared non-checks harness derivation
+     - devenv task only
+     - flake app only
+     - exposed packages.hook-live-harness derivation only (user builds + runs by hand)
+     - env-gated check that no-ops without HOOKS_LIVE_TOKEN
+     => REC: devenv task `verify:hooks:live` as primary (matches HITL-live + devenv-task conventions and the kiro-memory-hitl precedent), a `nix run .#verify-hooks-live` flake app as secondary for external consume
+  Q: How should hook stdin fixtures be sourced for the Tier-1 contract tests?
+     - Hand-write documented-schema fixtures only
+     - Capture real stdin from a one-time live run, commit as fixtures, and re-diff against the documented schema in a hermetic
+     - Both: hand-write to start, replace with captured once available
+     => REC: Build the capture-once→replay bridge from the start: the live Tier-2 probe dumps each event's real stdin to fixtures, which then seed the hermetic contract tests. This detects CLI schema drift on upgr
+  Q: What event scope should the first typed-option pass cover, given the event list may be larger than the canonical set?
+     - Type the canonical Claude 9 + Kiro v3 11 now; gate the rest behind doc verification
+     - Type every event the current docs list immediately
+     - Type only the events already used in-repo (Stop, PreToolUse, SessionStart/UserPromptSubmit/Manual)
+     => REC: Type the canonical Claude 9 + Kiro v3 11 now (all high-confidence, all emission-testable), and gate any expanded Claude events behind a raw-doc verification pass — don't type options for events whose 
+  Q: Do hook scripts with nontrivial logic get language-level tests (bun/checkPhase) in addition to Nix contract tests?
+     - Yes — both, per the distiller precedent
+     - No — Nix stub-driven contract tests only
+     - Only for the most complex hooks (memory, workflow-optimizer)
+     => REC: Both where a hook carries real logic (branching, parsing, state): language unit + subprocess tests at build time (distiller precedent) for fine-grained logic, plus a Nix stub-driven contract test for 
+
+===== section_07.json : Typed Hook Options: The "Why", the Three Future Plans, Passthrough Gaps, and the =====
+-- KEY CLAIMS --
+  [LB high] Claude's official hooks reference now lists ~30 hook events (not the classic 9), including PostToolBatch, SubagentStart, StopFailure, PostToolUseFailure, PermissionRequest, UserPromptExpansion, etc. —  (src: https://code.claude.com/docs/en/hooks (fetched 2026-07-20); event list high-confidence, so)
+  [LB high] Claude event-wiring today is untyped and split across two incompatible surfaces: freeform ai.claude.settings.hooks on HM vs upstream typed claude.code.hooks (hookType/matcher/command) on devenv — so t  (src: packages/claude-code/lib/mkClaude.nix:250-267,500-517; checks/module-eval.nix:700-714)
+  [LB high] mkClaude.nix devenv projection merges the settings.json event-map shape with script-body attrs into one option: hooks = (cfg.settings.hooks or {}) // cfg.hooks — two incompatible shapes //-merged; a c  (src: packages/claude-code/lib/mkClaude.nix:505-507)
+  [LB high] A working memory-hook precedent already exists on Kiro (autoMemory.nix): one hooks.json envelope drives Stop(per-turn distill)/SessionStart(flush)/Manual(force)/UserPromptSubmit(recall inject), return  (src: packages/kiro-cli/lib/autoMemory.nix:17-23,173-238)
+  [LB high] Kiro v3 hook stdin is metadata-only ({session_id, cwd}); the UserPromptSubmit prompt field is empty; there is no SessionEnd; Stop fires per-turn. This forces Kiro memory to glob-locate its own transcr  (src: /nix/store/...claude-rules-kiro-cli.md (D12/D23); packages/kiro-cli/lib/autoMemory.nix:34-)
+  [LB high] Claude stdin gives transcript_path and (on UserPromptSubmit) the prompt text, unlike Kiro — so Claude memory can read the transcript directly and query-on-prompt, a capability divergence the typed bui  (src: https://code.claude.com/docs/en/hooks (PostToolUse/Stop/UserPromptSubmit stdin schemas))
+  [LB high] Telemetry needs zero output fields (fire-and-forget: exit 0, no stdout, no block) so it works on every event and can run async; memory-inject and turn-min gating both need the output envelope (additio  (src: inference from https://code.claude.com/docs/en/hooks exit-code contract + docs/plans/prek-)
+  [LB high] nix flake check CAN cover hook contracts (T1 synthetic-stdin + stub tools) and wiring shape (T2 eval-materialization) hermetically with no CLI/tokens; only live-firing (T3) needs an env-gated flake ap  (src: checks/validate-at-stop.nix; checks/module-eval.nix:700-714,1044-1055; docs/plans/prek-sto)
+  [LB high] Kiro v3 hooks must be REAL files in a workspace .kiro/hooks/ (read_dir skips store symlinks; global ~/.kiro/hooks and HM install are ignored), and hooks do NOT fire in subagents — both are unmodeled e  (src: /nix/store/...claude-rules-kiro-cli.md CRITICAL note; packages/kiro-cli/lib/mkKiro.nix:643)
+  [medium] The tool_input skill-name key used by a PostToolUse Skill hook (turn-min skill-bootstrap case) is unverified — likely tool_input.skill not tool_input.skill_name — and must be dumped from a live payloa  (src: docs/plans/skill-bootstrap-context-injection.md:50-59)
+  [LB high] Hooks need list-append coexistence (multiple contributors per event) — the OPPOSITE of the collision-as-failure mergeWithCollisionCheck policy used for rules/skills — and no hook merge/precedence poli  (src: inference from lib/ai/sharedOptions.nix + claude-rules-ai-module.md collision semantics; n)
+-- OPEN QUESTIONS --
+  ? Does Kiro v3 PostToolUse/PreToolUse stdin carry tool_name/tool_input, or is it also metadata-only {session_id,cwd}? Determines whether Kiro per-tool telemetry and tool-gating payloads are usable at all (the auto-memory f
+  ? For Kiro UserPromptSubmit, the docs say the matcher is evaluated against prompt text, yet the hook stdin carries an EMPTY prompt field — is the matcher evaluated server-side against text the hook never receives? Verify b
+  ? The exotic Claude stdout field names from the fetched doc (updatedInput, updatedToolOutput, permissionDecision:"defer", displayContent, reloadSkills, initialUserMessage) came via a summarizer and must be re-verified agai
+  ? Should the canonical typed schema be upstream devenv's claude.code.hooks (hookType/matcher/command, back-ported to HM) or a richer in-repo schema that also models additionalContext/decision/permissionDecision and Kiro's 
+  ? Is a token-burning T3 live-hook suite acceptable on a CI cron, or must it stay strictly manual (env-gated, developer-invoked)?
+  ? Do we accept the Kiro subagent telemetry/memory blind spot (hooks don't fire in subagents) or invest in a workaround?
+  ? Should the shipped Kiro autoMemory.nix be folded into the new typed hook surface immediately (risk to a working system) or left in place while Claude memory is built alongside?
+-- DECISIONS FOR USER --
+  Q: How wide should the initial Claude typed hook surface be, given the doc now lists ~30 events?
+     - PoC subset only (Stop, PostToolUse, UserPromptSubmit, SessionStart, +PreToolUse)
+     - Classic load-bearing set (~9 events)
+     - Full ~30-event coverage up front
+     => REC: PoC subset now (the four the three plans actually need), classic set at full-coverage, and keep the exotic long tail on freeform passthrough indefinitely.
+  Q: Keep untyped freeform hook passthrough alongside the typed options?
+     - Yes — retain freeform as an escape hatch (mirrors settings freeformType)
+     - No — typed-only once coverage lands
+     => REC: Yes. New/undocumented events ship fast (30 already); freeform must remain reachable exactly as settings.json does today.
+  Q: Which schema is canonical for HM↔devenv parity?
+     - Adopt upstream devenv claude.code.hooks (hookType/matcher/command) and back-port to HM
+     - Define our own richer schema (models inject/decision/permission + Kiro) and translate to both backends
+     => REC: Own richer schema. Upstream models only command hooks with no inject/decision output contract and nothing for Kiro — the three future plans need the output envelope typed.
+  Q: Where do token-burning live-firing tests run?
+     - Manual-only, env-gated (AI_HOOKS_LIVE=1) flake app / devenv task
+     - CI cron with a token budget
+     - Skip live tests; rely on hermetic T1+T2 only
+     => REC: Manual-only env-gated app/task now; nix flake check covers contract+wiring hermetically. Add a CI cron later only if regressions in live firing appear.
+  Q: Handle the Kiro subagent hook blind spot (hooks don't fire in subagents)?
+     - Accept the telemetry/memory gap in subagents and document it
+     - Invest in a workaround (e.g. wrap subagent spawns)
+     => REC: Accept and document for now; revisit only if subagent-heavy workflows make the memory/telemetry gap material.
+  Q: Fold the shipped Kiro autoMemory into the new typed hook surface?
+     - Fold it in now as the reference consumer
+     - Leave it untouched; build Claude memory alongside, unify later
+     => REC: Generalize the builder but keep Kiro autoMemory's emitted output byte-identical during the PoC (its parity tests lock it), then migrate once the Claude side is proven.

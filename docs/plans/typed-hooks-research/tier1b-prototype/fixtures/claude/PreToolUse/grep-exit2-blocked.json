@@ -1,0 +1,19 @@
+{
+  "description": "PreToolUse Bash `grep` is blocked via exit 2 (+ stderr to Claude), not JSON",
+  "provenance": "documented (docs snapshot 2026-07-20 §Exit codes) + anthropics reference impl; REPLACE with Tier-2 capture@2.1.214",
+  "hook": "claude-pretooluse-exit2-guard.sh",
+  "stdin": {
+    "session_id": "abc123",
+    "cwd": "/repo",
+    "permission_mode": "default",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": { "command": "grep -r TODO ." },
+    "tool_use_id": "toolu_03GHI"
+  },
+  "expect": {
+    "exit": 2,
+    "stdoutEmpty": true,
+    "stderrContains": "ripgrep"
+  }
+}

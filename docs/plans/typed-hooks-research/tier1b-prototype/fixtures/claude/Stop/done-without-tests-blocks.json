@@ -1,0 +1,22 @@
+{
+  "description": "Stop blocks (decision:block) when the model says done without tests passing",
+  "provenance": "documented (docs snapshot 2026-07-20 §Stop decision control); REPLACE with Tier-2 capture@2.1.214",
+  "hook": "claude-stop-guard.sh",
+  "stdin": {
+    "session_id": "abc123",
+    "transcript_path": "/tmp/t.jsonl",
+    "cwd": "/repo",
+    "permission_mode": "default",
+    "hook_event_name": "Stop",
+    "stop_hook_active": false,
+    "last_assistant_message": "I'm done with the refactor."
+  },
+  "expect": {
+    "exit": 0,
+    "stdoutEmpty": false,
+    "jsonAsserts": [
+      { "path": ".decision", "eq": "block" },
+      { "path": ".reason", "present": true }
+    ]
+  }
+}

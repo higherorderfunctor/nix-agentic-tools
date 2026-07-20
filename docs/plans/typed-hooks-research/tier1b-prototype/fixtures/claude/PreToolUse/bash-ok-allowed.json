@@ -1,0 +1,18 @@
+{
+  "description": "PreToolUse Bash `npm test` is allowed — hook stays silent (no decision)",
+  "provenance": "documented (docs snapshot 2026-07-20); REPLACE with Tier-2 capture@2.1.214",
+  "hook": "claude-pretooluse-bash-guard.sh",
+  "stdin": {
+    "session_id": "abc123",
+    "cwd": "/repo",
+    "permission_mode": "default",
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": { "command": "npm test" },
+    "tool_use_id": "toolu_02DEF"
+  },
+  "expect": {
+    "exit": 0,
+    "stdoutEmpty": true
+  }
+}

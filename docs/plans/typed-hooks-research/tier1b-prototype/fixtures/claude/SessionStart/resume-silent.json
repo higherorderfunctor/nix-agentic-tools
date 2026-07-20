@@ -1,0 +1,15 @@
+{
+  "description": "SessionStart source=resume stays silent (matcher-awareness demo)",
+  "provenance": "documented (docs snapshot 2026-07-20); REPLACE with Tier-2 capture@2.1.214",
+  "hook": "claude-sessionstart-context.sh",
+  "stdin": {
+    "session_id": "abc123",
+    "cwd": "/repo",
+    "hook_event_name": "SessionStart",
+    "source": "resume"
+  },
+  "expect": {
+    "exit": 0,
+    "stdoutEmpty": true
+  }
+}

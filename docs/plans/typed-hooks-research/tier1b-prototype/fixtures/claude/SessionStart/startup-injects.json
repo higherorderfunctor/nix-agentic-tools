@@ -1,0 +1,21 @@
+{
+  "description": "SessionStart source=startup injects additionalContext (cannot block)",
+  "provenance": "documented (docs snapshot 2026-07-20 §SessionStart decision control); REPLACE with Tier-2 capture@2.1.214",
+  "hook": "claude-sessionstart-context.sh",
+  "stdin": {
+    "session_id": "abc123",
+    "transcript_path": "/tmp/t.jsonl",
+    "cwd": "/repo",
+    "hook_event_name": "SessionStart",
+    "source": "startup",
+    "model": "claude-sonnet-5"
+  },
+  "expect": {
+    "exit": 0,
+    "stdoutEmpty": false,
+    "jsonAsserts": [
+      { "path": ".hookSpecificOutput.hookEventName", "eq": "SessionStart" },
+      { "path": ".hookSpecificOutput.additionalContext", "present": true }
+    ]
+  }
+}
