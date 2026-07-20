@@ -420,3 +420,26 @@ history** (the commit that bumped the master to `v6-garnet-tundra-birch`), not e
   (a running plan reads the master from the installed skill's `references/`; version→commit
   reconciliation resolves against the nix-agentic-tools source checkout). No field-shape change, so
   **no dependent action required** beyond the state migration above.
+
+## Version-bump boundary + design-phase coherence
+
+Migration entries folded in the pass that bumped the master to `v7-slate-marsh-aspen`. This section's
+anchor is **derived from history** (the commit that assigned that version), not embedded here.
+
+### Master protocol (`living-plan-bootstrap.md`)
+
+- **Version bump gated on behavior-change, reconciled with the fix path:** the VERSION-BUMP STEP now
+  states the bump criterion as the BEHAVIOR-NEUTRAL versus BEHAVIOR-CHANGING line (the same
+  REPOINT-VS-MIGRATION change class), independent of the migration-entry decision. Only a
+  behavior-changing edit (one that changes what some instruction directs a reader to do) bumps and
+  authors an entry; every behavior-neutral master edit — cosmetic, reflow, a deliberate terminology
+  rename, or a light-fix repair alike — is git-history-only, bumping nothing and adding no entry.
+  **Upgraders maintaining bump discipline: do not bump the version or write a migration entry for a
+  behavior-neutral master edit (including a deliberate rename); record the surface change in the
+  commit message and git history. The light-fix path is not a special exemption — it is this same
+  boundary applied by a different actor.**
+- **Design-phase coherence review:** a plan that separates a design phase from a build phase now
+  closes the design phase on its OWN adversarial coherence/contradiction review; self-contradiction
+  found there is a blocking finding by the convergence criterion, not deferred to the build-diff
+  review. **Upgraders: for design/build-separated plans, add a design-coherence review at design
+  close rather than relying on the build-diff review to surface design-internal conflicts.**

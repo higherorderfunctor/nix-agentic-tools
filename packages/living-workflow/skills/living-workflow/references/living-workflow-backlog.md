@@ -68,9 +68,13 @@ mark entries groomed: `GROOMED` is a transient state, and folding a tuning **rem
 (the fold **is** the drain). A pass that ends with everything groomed and nothing folded has
 deferred the actual point of grooming.
 
-1. **Cold start + reconcile.** Read the pending register from state, then scan the working
-   `entries/` for files not yet registered (capture writes only the file — see below) and register
-   them, so the register honestly reflects what has been captured.
+1. **Cold start + reconcile + park-clock cleanup.** Read the pending register from state, then scan
+   the working `entries/` for files not yet registered (capture writes only the file — see below)
+   and register them, so the register honestly reflects what has been captured. Then run the
+   **park-clock cleanup**: check each parked `NEEDS-EVIDENCE` entry's expiry clock and surface any
+   that has reached its window (see the expiry-clock rule under PARK WHAT IS PLAUSIBLE BUT NOT YET
+   DECIDABLE) — carried into this pass's step-4 HITL batch, never a separate dribble — for an explicit
+   operator discard-or-reset decision.
 2. **Evaluate each entry as a request, not an order** — a fair, honest, adversarial peer. Fan **one
    subagent per entry** to keep eval load off the main session. Beware bucket collapse: if each
    evaluator is told to "default to bucket X when unsure," nearly everything lands in X and the
@@ -78,9 +82,20 @@ deferred the actual point of grooming.
    require a **confidence / soundness signal** alongside the label, and have the **orchestrator
    re-derive** the split from those signals. A run where every item lands in one bucket is a smell
    to re-derive, not a result.
-3. **Classify each entry's fold target:** the **general protocol** (master living doc) or the
-   **backlog sub-workflow's own rules** (this doc). Feedback can target either, and the target
-   decides which doc the fold edits.
+3. **Classify each entry's disposition route.** Most entries FOLD, and the fold target is one of
+   two — the **general protocol** (master living doc) or the **backlog sub-workflow's own rules**
+   (this doc); the target decides which doc the fold edits. A third route is **NON-FOLD**: an
+   operator-directed entry that BUILDS the framework's own machinery — how the workflow is packaged
+   or installed, or where its working state physically lives — rather than TUNING a behavioral rule
+   is not a claim to prosecute and does not fold. It DISPATCHES to a downstream child work plan (the
+   master's nesting model owns the child/return mechanics — reference, do not restate) and drains as
+   `DROPPED:<delivered-…>` when the child ships. The child carries its own build-verification (design
+   review, verify-before-completion, code review), so the framework's quality floor is met by
+   build-verification instead of tuning-prosecution — not waived. A build that ALSO changes a
+   dependent-facing doc convention (a rule any dependent reads) is not exempt: that convention change
+   is an ordinary tuning that folds through the normal route, with its migration entry if one is
+   owed. Only the machinery-construction drains as delivered; the rule the machinery embodies still
+   travels the fold path.
 4. **Present under the decision-scope filter** (defined in the master). Auto-disposition the items
    the orchestrator can stand behind and surface them as one **batch for veto-by-exception**;
    reserve the **one-at-a-time** HITL walk for genuinely low-confidence, intent-dependent, or
@@ -166,7 +181,10 @@ to the collector and moves on. What gets lighter is the **ceremony** — the adv
 and the migration entry — **never the checking**: EVERY light fix, by either arm, verifies against
 source before and re-greps with a positive control after, because a light fix that trusts a
 false-clean is worse than the nit. Light fixes are **git-history-only**: they change no dependent-facing convention, and a
-migration entry for a typo fix would itself be a fresh drift surface.
+migration entry for a typo fix would itself be a fresh drift surface. This is the master's
+version-bump boundary seen from the fix side: a light fix is behavior-neutral, so like every
+behavior-neutral master edit it is git-history-only — one rule (behavior-neutral versus
+behavior-changing), not a light-fix-specific exemption.
 
 ### PARK WHAT IS PLAUSIBLE BUT NOT YET DECIDABLE
 
@@ -206,12 +224,30 @@ evidence-wait is removed.
 A parked entry stays in `entries/` and in the register, and each recurrence appends a sighting to it
 rather than opening a duplicate.
 
+A parked entry does not park forever. Each parked entry carries an expiry CLOCK anchored to the date
+of its last new sighting, or of an operator clock-reset, whichever is later (state-tracked in a
+`park_clock` field, per state-over-tokens). A parked entry that accrues no new sighting within a
+fixed window — **90 days, wall-clock** — has reached EXPIRY. Expiry NEVER silently drops the entry: a
+silent destruction of a parked record collides with the master's degradation-by-shrug rule (drops are
+explicit-and-logged only). Instead an expired park is SURFACED ONCE, at the park-clock cleanup (loop
+step 1), for an explicit operator decision — DISCARD it (terminal `DROPPED:<expired-no-recurrence>`),
+or RESET its clock (the record is rare-but-real and stays parked). A new sighting resets the clock,
+and the operator may reset any clock at any time. Absence of recurrence is a WEAKER signal than
+recurrence — a failure can be silently absorbed by a standing mitigation rather than have stopped —
+which is exactly why expiry surfaces for a decision rather than auto-dropping. The window binds every
+parked entry, including those already live when this rule lands (retroactive; the clock starts the
+day the rule lands, or an operator-chosen date).
+
 ### DRAINED does not mean the directory is empty
 
 The loop runs until the backlog is **drained**, and a **parked (`NEEDS-EVIDENCE`) entry does not
 count against drained** — it is waiting on the world, not on a groomer, so an indefinite hold must
 never block the loop from converging. Likewise an entry whose whole job is to **run a review of
 this workflow** does not count against itself.
+
+An EXPIRED-and-discarded park drains out like any terminal disposition; a park that is RESET, or not
+yet at its window, still does not count against drained — the expiry clock only converts long silence
+into a surfaced decision, never into an automatic block or drop.
 
 So drained means, by property: **no entry remains that active grooming can act on now** — parked
 (`NEEDS-EVIDENCE`) entries wait on the world and the gated review waits on drainedness itself, but
