@@ -397,6 +397,7 @@
       // builtins.removeAttrs pkgs.ai.mcpServers ["modelContextProtocol"]
       // pkgs.ai.lspServers
       // pkgs.gitTools
+      // pkgs.devTools
       // {
         # mono-repo combined package (nix-update target)
         modelcontextprotocol-all-mcps = pkgs.ai.mcpServers.modelContextProtocol.all-mcps;

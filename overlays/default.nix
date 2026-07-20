@@ -131,6 +131,12 @@
       inherit inputs final;
     };
   };
+  # ── Dev tools (linters/formatters) ─────────────────────────────────
+  devToolDrvs = {
+    tsgolint = import ./dev-tools/tsgolint.nix {
+      inherit inputs final;
+    };
+  };
   # Apply ensureUnfreeCheck to every package at the output level.
   # No manual per-package wrapping needed — if a package has an unfree
   # license, it gets the symlinkJoin wrapper automatically.
@@ -143,4 +149,5 @@ in {
       lspServers = guard {agnix-lsp = agnixLsp;};
     };
   gitTools = guard gitToolDrvs;
+  devTools = guard devToolDrvs;
 }
