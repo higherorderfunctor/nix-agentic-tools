@@ -9,7 +9,7 @@
 #   {
 #     name;
 #     transformers;
-#     defaults ? {package, outputPath?};
+#     defaults ? {package};
 #     options ? {};          # shared across backends
 #     hm ? {
 #       options ? {};        # HM-only option additions
@@ -63,23 +63,10 @@
 
   defaults = appRecord.defaults or {};
   package = hmDefaults.package or defaults.package or null;
-  outputPath = hmDefaults.outputPath or defaults.outputPath or null;
 
   customConfig = hmConfigFn {
     inherit cfg config mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables mergedClaudeCopilotAgents topContext;
   };
-
-  # Baseline render — concatenate rendered instructions into one
-  # file at defaults.outputPath. Per-instruction rule files are
-  # handled by the consumer config callback if needed.
-  renderedInstructions =
-    lib.concatMapStringsSep "\n\n" (
-      frag: appRecord.transformers.markdown.render frag
-    )
-    mergedInstructions;
-
-  hasOutputPath = outputPath != null;
-  hasInstructions = mergedInstructions != [];
 in {
   options.ai.${appRecord.name} =
     {
@@ -138,32 +125,27 @@ in {
     // (appRecord.options or {})
     // hmOptions;
 
-  config = lib.mkMerge (
-    [
-      {_module.args.aiTransformers = appRecord.transformers;}
-      # Collision-as-failure: always evaluate (no mkIf cfg.enable
-      # guard) so misconfigurations surface even when the feature
-      # is toggled off.
-      {assertions = collisionAssertions;}
-      # L2b → L3 fanout for per-CLI Dir options. Expansion happens
-      # unconditionally (no mkIf cfg.enable) so the collision check
-      # still has visibility even when the CLI is disabled — the
-      # actual on-disk emission is still gated by `cfg.enable` inside
-      # the per-CLI factory's customConfig.
-      (lib.mkIf (cfg.rulesDir != null) {
-        ai.${appRecord.name}.rules = lib.mapAttrs (_: lib.mkDefault) (
-          dirHelpers.rulesFromDir cfg.rulesDir
-        );
-      })
-      (lib.mkIf (cfg.skillsDir != null) {
-        ai.${appRecord.name}.skills = lib.mapAttrs (_: lib.mkDefault) (
-          dirHelpers.skillsFromDir cfg.skillsDir
-        );
-      })
-      (lib.mkIf cfg.enable customConfig)
-    ]
-    ++ lib.optional hasOutputPath (lib.mkIf (cfg.enable && hasInstructions) {
-      home.file.${outputPath}.text = renderedInstructions;
+  config = lib.mkMerge [
+    {_module.args.aiTransformers = appRecord.transformers;}
+    # Collision-as-failure: always evaluate (no mkIf cfg.enable
+    # guard) so misconfigurations surface even when the feature
+    # is toggled off.
+    {assertions = collisionAssertions;}
+    # L2b → L3 fanout for per-CLI Dir options. Expansion happens
+    # unconditionally (no mkIf cfg.enable) so the collision check
+    # still has visibility even when the CLI is disabled — the
+    # actual on-disk emission is still gated by `cfg.enable` inside
+    # the per-CLI factory's customConfig.
+    (lib.mkIf (cfg.rulesDir != null) {
+      ai.${appRecord.name}.rules = lib.mapAttrs (_: lib.mkDefault) (
+        dirHelpers.rulesFromDir cfg.rulesDir
+      );
     })
-  );
+    (lib.mkIf (cfg.skillsDir != null) {
+      ai.${appRecord.name}.skills = lib.mapAttrs (_: lib.mkDefault) (
+        dirHelpers.skillsFromDir cfg.skillsDir
+      );
+    })
+    (lib.mkIf cfg.enable customConfig)
+  ];
 }

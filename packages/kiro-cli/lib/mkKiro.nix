@@ -72,7 +72,6 @@ in
     transformers.markdown = lib.ai.transformers.kiro;
     defaults = {
       package = pkgs.ai.kiro-cli;
-      outputPath = ".config/kiro/steering/";
     };
     options = {
       # Config directory (HOME-relative for HM, project-relative for
@@ -484,9 +483,9 @@ in
           # fileMatchPattern MUST be emitted as a YAML array for
           # multi-element paths — a comma-joined string silently matches
           # nothing. The kiro transformer handles this correctly.
-          # Nameless entries fall through to the baseline aggregate
-          # render at `defaults.outputPath` which is handled by
-          # mkAiApp's hmTransform.
+          # Nameless entries → a dedicated `<configDir>/steering/instructions.md`
+          # steering file (below); Kiro is directory-native, so context stays
+          # standalone in AGENTS.md.
           (let
             fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
             inherit (import ../../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
@@ -498,6 +497,22 @@ in
               })
               named);
           })
+          # Unnamed always-on instructions → a dedicated
+          # `<configDir>/steering/instructions.md` steering file. Kiro is
+          # directory-native, so (unlike Claude/Copilot) context is NOT composed
+          # with instructions — context stays standalone in AGENTS.md and the
+          # nameless remainder that previously fed the retired generic aggregate
+          # lands here. Rendered via the kiro transformer (paths-less →
+          # `inclusion: always`).
+          (let
+            fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
+            inherit (import ../../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
+            unnamed = builtins.filter (i: !(i ? name)) mergedInstructions;
+          in
+            lib.mkIf (unnamed != []) {
+              home.file."${cfg.configDir}/steering/instructions.md".text =
+                lib.concatMapStringsSep "\n\n" (fragmentsLib.mkRenderer kiroTransformer {}) unnamed;
+            })
           # Attrs-shape ai.rules / ai.kiro.rules → <configDir>/steering/<name>.md.
           # Each entry becomes one steering file, translated through
           # kiroTransformer (inclusion: + fileMatchPattern: frontmatter).
@@ -678,6 +693,19 @@ in
               })
               named);
           })
+          # Unnamed always-on instructions → a dedicated
+          # `<configDir>/steering/instructions.md` steering file (parity with
+          # HM). Context stays standalone in AGENTS.md; this catches the
+          # nameless remainder that previously fed the retired generic aggregate.
+          (let
+            fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
+            inherit (import ../../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
+            unnamed = builtins.filter (i: !(i ? name)) mergedInstructions;
+          in
+            lib.mkIf (unnamed != []) {
+              files."${cfg.configDir}/steering/instructions.md".text =
+                lib.concatMapStringsSep "\n\n" (fragmentsLib.mkRenderer kiroTransformer {}) unnamed;
+            })
           # Attrs-shape ai.rules / ai.kiro.rules → steering files (parity with HM).
           (let
             fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};

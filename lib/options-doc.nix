@@ -172,15 +172,14 @@
         default = {};
         description = "Devenv managed files.";
       };
-      # Stub home.{file,activation} — mkAiApp's baseline instruction
-      # render writes to home.file.<outputPath> and some
-      # factory-of-factories write to home.activation.* regardless
-      # of backend. In a real devenv eval context these would be
-      # type errors; the stubs absorb the writes silently so the
-      # options-doc walker can enumerate the same option tree for
-      # the devenv module output. Future work: mkAiApp should
-      # dispatch HM vs devenv backends and write to the appropriate
-      # option path (home.file for HM, files.* for devenv).
+      # Stub home.{file,activation} — some factory-of-factories write
+      # to home.activation.* regardless of backend, and HM-shaped
+      # writes may otherwise surface in a devenv module eval. In a real
+      # devenv eval context these would be type errors; the stubs absorb
+      # the writes silently so the options-doc walker can enumerate the
+      # same option tree for the devenv module output. Future work:
+      # mkAiApp should dispatch HM vs devenv backends and write to the
+      # appropriate option path (home.file for HM, files.* for devenv).
       home = {
         file = lib.mkOption {
           type = lib.types.attrsOf lib.types.anything;

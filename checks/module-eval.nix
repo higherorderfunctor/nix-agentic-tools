@@ -306,13 +306,16 @@ in {
       && evaluated.config.ai.kiro.enable
   );
 
-  # ── Baseline instruction rendering ──────────────────────────────
-  # Verify that mkAiApp's baseline render pipeline produces a
-  # home.file entry at the app's outputPath when instructions are
-  # merged from the shared pool. This covers the end-to-end path:
-  # sharedOptions.ai.instructions -> mkAiApp's mergedInstructions
-  # -> transformers.markdown.render -> home.file.<outputPath>.text
-  module-claude-instructions-rendered-to-home-file = mkTest "claude-instructions-rendered-to-home-file" (
+  # ── Unnamed-instruction composition ─────────────────────────────
+  # Shared-pool UNNAMED instructions compose into the single CLAUDE.md via
+  # upstream `programs.claude-code.context` (the generic aggregate home.file
+  # writer was retired to end the ~/.claude/CLAUDE.md double-writer collision —
+  # see docs/plans/ai-instructions-context-compose-fix.md). Covers
+  # sharedOptions.ai.instructions -> mergedInstructions -> composeInstructionsFile
+  # -> programs.claude-code.context. (Formerly
+  # module-claude-instructions-rendered-to-home-file, which asserted the retired
+  # home.file aggregate.)
+  module-claude-unnamed-instructions-composed-into-context = mkTest "claude-unnamed-instructions-composed-into-context" (
     let
       evaluated = evalHm {
         ai = {
@@ -325,26 +328,29 @@ in {
           ];
         };
       };
-      outputPath = ".claude/CLAUDE.md";
-      file = evaluated.config.home.file.${outputPath} or null;
+      ctx = evaluated.config.programs.claude-code.context or "";
     in
-      file
-      != null
-      && file ? text
-      && lib.hasInfix "Always use rg instead of grep." file.text
-      && lib.hasInfix "description: Grep replacement" file.text
+      lib.hasInfix "Always use rg instead of grep." ctx
+      && lib.hasInfix "description: Grep replacement" ctx
+      && !(evaluated.config.home.file ? ".claude/CLAUDE.md")
   );
 
   module-claude-no-instructions-no-file = mkTest "claude-no-instructions-no-file" (
     let
       evaluated = evalHm {ai.claude.enable = true;};
-      # With no instructions merged, mkAiApp should NOT write the
-      # baseline home.file entry for Claude's CLAUDE.md path.
+      # With no instructions and no context merged, nothing writes the
+      # `home.file` CLAUDE.md path (the generic aggregate writer is retired;
+      # context flows through programs.claude-code.context instead). Regression
+      # guard that the aggregate stays gone.
     in
       !(evaluated.config.home.file ? ".claude/CLAUDE.md")
   );
 
-  module-claude-per-app-instructions-rendered = mkTest "claude-per-app-instructions-rendered" (
+  # Per-app (ai.claude.instructions) UNNAMED entries also compose into
+  # programs.claude-code.context. (Formerly
+  # module-claude-per-app-instructions-rendered, which asserted the home.file
+  # aggregate.)
+  module-claude-per-app-unnamed-composed-into-context = mkTest "claude-per-app-unnamed-composed-into-context" (
     let
       evaluated = evalHm {
         ai.claude = {
@@ -357,11 +363,240 @@ in {
           ];
         };
       };
-      file = evaluated.config.home.file.".claude/CLAUDE.md" or null;
+      ctx = evaluated.config.programs.claude-code.context or "";
     in
-      file
-      != null
-      && lib.hasInfix "Claude-specific rule." file.text
+      lib.hasInfix "Claude-specific rule." ctx
+      && !(evaluated.config.home.file ? ".claude/CLAUDE.md")
+  );
+
+  # ── Compose fix (docs/plans/ai-instructions-context-compose-fix.md §6a) ──
+  # Claude HM: `context` + one NAMED + one UNNAMED instruction must lower to a
+  # SINGLE always-on writer — upstream `programs.claude-code.context` composed
+  # as [context baseline] + [unnamed instruction] — with the NAMED entry living
+  # ONLY in `.claude/rules/<name>.md`, never duplicated into the composed
+  # context. This fills the §4 blind spot (no fixture ever set context + an
+  # instruction together for an aggregate CLI), which is why the ~/.claude/
+  # CLAUDE.md double-writer collision shipped green.
+  #
+  # RED today: the generic aggregate (hmTransform:166) writes
+  # `home.file.".claude/CLAUDE.md"` whenever any instruction is merged (the
+  # second writer that collides with upstream context in a real HM eval), and
+  # `programs.claude-code.context` carries only the bare context — so (a) and
+  # (b) both fail. GREEN once the aggregate is retired and context composes.
+  module-claude-hm-compose-context-and-unnamed = mkTest "claude-hm-compose-context-and-unnamed" (
+    let
+      evaluated = evalHm {
+        ai = {
+          claude = {
+            enable = true;
+            context = "CONTEXT-BASELINE-TOKEN.";
+          };
+          instructions = [
+            {
+              name = "named-rule";
+              text = "NAMED-RULE-BODY-TOKEN.";
+              paths = ["src/**"];
+            }
+            {
+              text = "UNNAMED-INSTR-TOKEN.";
+              description = "unnamed always-on";
+            }
+          ];
+        };
+      };
+      ctx = evaluated.config.programs.claude-code.context or "";
+      aggregate = evaluated.config.home.file.".claude/CLAUDE.md" or null;
+      ruleFile = evaluated.config.home.file.".claude/rules/named-rule.md" or null;
+    in
+      # (a) no generic-aggregate writer on CLAUDE.md — context owns it (upstream).
+      aggregate
+      == null
+      # (b) the single composed context holds BOTH baseline AND the unnamed text.
+      && lib.hasInfix "CONTEXT-BASELINE-TOKEN." ctx
+      && lib.hasInfix "UNNAMED-INSTR-TOKEN." ctx
+      # (c) the named entry lives only in its rules file, not duplicated into context.
+      && ruleFile != null
+      && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (ruleFile.text or "")
+      && !(lib.hasInfix "NAMED-RULE-BODY-TOKEN." ctx)
+  );
+
+  # Claude devenv parity (§6a.2). devenv Claude has NO context writer today —
+  # its `.claude/CLAUDE.md` came only from the generic aggregate, which drops
+  # context (the §2 secondary bug, devenv side) and duplicates the named entry.
+  # RED today: the composed file must hold the context baseline (dropped today)
+  # and must NOT duplicate the named body (present in the aggregate today).
+  module-claude-devenv-compose-context-and-unnamed = mkTest "claude-devenv-compose-context-and-unnamed" (
+    let
+      evaluated = evalDevenv {
+        ai = {
+          claude = {
+            enable = true;
+            context = "CONTEXT-BASELINE-TOKEN.";
+          };
+          instructions = [
+            {
+              name = "named-rule";
+              text = "NAMED-RULE-BODY-TOKEN.";
+              paths = ["src/**"];
+            }
+            {
+              text = "UNNAMED-INSTR-TOKEN.";
+              description = "unnamed always-on";
+            }
+          ];
+        };
+      };
+      composed = (evaluated.config.files.".claude/CLAUDE.md" or {}).text or "";
+      ruleFile = evaluated.config.files.".claude/rules/named-rule.md" or null;
+    in
+      lib.hasInfix "CONTEXT-BASELINE-TOKEN." composed
+      && lib.hasInfix "UNNAMED-INSTR-TOKEN." composed
+      && !(lib.hasInfix "NAMED-RULE-BODY-TOKEN." composed)
+      && ruleFile != null
+      && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (ruleFile.text or "")
+  );
+
+  # Copilot HM parity (§6a.3). The single native context file
+  # (`.copilot/copilot-instructions.md`) must hold context + unnamed; there must
+  # be NO aggregate at `.config/github-copilot/copilot-instructions.md`; named →
+  # `.github/instructions/<name>.instructions.md`. RED today: the context writer
+  # carries only context (unnamed missing) and the aggregate file exists.
+  module-copilot-hm-compose-context-and-unnamed = mkTest "copilot-hm-compose-context-and-unnamed" (
+    let
+      evaluated = evalHm {
+        ai = {
+          copilot = {
+            enable = true;
+            context = "CONTEXT-BASELINE-TOKEN.";
+          };
+          instructions = [
+            {
+              name = "named-rule";
+              text = "NAMED-RULE-BODY-TOKEN.";
+              paths = ["src/**"];
+            }
+            {
+              text = "UNNAMED-INSTR-TOKEN.";
+              description = "unnamed always-on";
+            }
+          ];
+        };
+      };
+      contextFile = (evaluated.config.home.file.".copilot/copilot-instructions.md" or {}).text or "";
+      instrFile = evaluated.config.home.file.".github/instructions/named-rule.instructions.md" or null;
+    in
+      lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
+      && lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile
+      && !(evaluated.config.home.file ? ".config/github-copilot/copilot-instructions.md")
+      && instrFile != null
+      && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (instrFile.text or "")
+  );
+
+  # Copilot devenv parity (§6a.3). Native context file is `.github/copilot-instructions.md`
+  # (projectDir = .github). Same shape: holds context + unnamed, no aggregate.
+  module-copilot-devenv-compose-context-and-unnamed = mkTest "copilot-devenv-compose-context-and-unnamed" (
+    let
+      evaluated = evalDevenv {
+        ai = {
+          copilot = {
+            enable = true;
+            context = "CONTEXT-BASELINE-TOKEN.";
+          };
+          instructions = [
+            {
+              name = "named-rule";
+              text = "NAMED-RULE-BODY-TOKEN.";
+              paths = ["src/**"];
+            }
+            {
+              text = "UNNAMED-INSTR-TOKEN.";
+              description = "unnamed always-on";
+            }
+          ];
+        };
+      };
+      contextFile = (evaluated.config.files.".github/copilot-instructions.md" or {}).text or "";
+      instrFile = evaluated.config.files.".github/instructions/named-rule.instructions.md" or null;
+    in
+      lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
+      && lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile
+      && !(evaluated.config.files ? ".config/github-copilot/copilot-instructions.md")
+      && instrFile != null
+      && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (instrFile.text or "")
+  );
+
+  # Kiro HM parity (§6a.4). Directory-native: context stays standalone in
+  # `.kiro/steering/AGENTS.md` (context only); named → `.kiro/steering/<name>.md`;
+  # unnamed → a DEDICATED `.kiro/steering/instructions.md`; and NO stray at the
+  # trailing-slash aggregate path `.config/kiro/steering/`. RED today: the
+  # dedicated instructions file doesn't exist and the stray does.
+  module-kiro-hm-compose-context-and-unnamed = mkTest "kiro-hm-compose-context-and-unnamed" (
+    let
+      evaluated = evalHm {
+        ai = {
+          kiro = {
+            enable = true;
+            context = "CONTEXT-BASELINE-TOKEN.";
+          };
+          instructions = [
+            {
+              name = "named-rule";
+              text = "NAMED-RULE-BODY-TOKEN.";
+              paths = ["src/**"];
+            }
+            {
+              text = "UNNAMED-INSTR-TOKEN.";
+              description = "unnamed always-on";
+            }
+          ];
+        };
+      };
+      contextFile = (evaluated.config.home.file.".kiro/steering/AGENTS.md" or {}).text or "";
+      instrFile = evaluated.config.home.file.".kiro/steering/instructions.md" or null;
+      namedFile = evaluated.config.home.file.".kiro/steering/named-rule.md" or null;
+    in
+      lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
+      && !(lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile)
+      && instrFile != null
+      && lib.hasInfix "UNNAMED-INSTR-TOKEN." (instrFile.text or "")
+      && !(evaluated.config.home.file ? ".config/kiro/steering/")
+      && namedFile != null
+      && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (namedFile.text or "")
+  );
+
+  # Kiro devenv parity (§6a.4). Same shape against `files.*`.
+  module-kiro-devenv-compose-context-and-unnamed = mkTest "kiro-devenv-compose-context-and-unnamed" (
+    let
+      evaluated = evalDevenv {
+        ai = {
+          kiro = {
+            enable = true;
+            context = "CONTEXT-BASELINE-TOKEN.";
+          };
+          instructions = [
+            {
+              name = "named-rule";
+              text = "NAMED-RULE-BODY-TOKEN.";
+              paths = ["src/**"];
+            }
+            {
+              text = "UNNAMED-INSTR-TOKEN.";
+              description = "unnamed always-on";
+            }
+          ];
+        };
+      };
+      contextFile = (evaluated.config.files.".kiro/steering/AGENTS.md" or {}).text or "";
+      instrFile = evaluated.config.files.".kiro/steering/instructions.md" or null;
+      namedFile = evaluated.config.files.".kiro/steering/named-rule.md" or null;
+    in
+      lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
+      && !(lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile)
+      && instrFile != null
+      && lib.hasInfix "UNNAMED-INSTR-TOKEN." (instrFile.text or "")
+      && !(evaluated.config.files ? ".config/kiro/steering/")
+      && namedFile != null
+      && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (namedFile.text or "")
   );
 
   # ── Task 3 (A2): Claude HM/devenv fanout absorption ────────────
@@ -1003,7 +1238,12 @@ in {
       && lib.hasInfix "Review code carefully" (agentFile.text or "")
   );
 
-  module-kiro-instructions-rendered = mkTest "kiro-instructions-rendered" (
+  # Unnamed kiro instructions → a dedicated `.kiro/steering/instructions.md`
+  # steering file. Kiro is directory-native, so context stays standalone in
+  # AGENTS.md and the nameless remainder gets its own always-on file — the
+  # malformed trailing-slash `.config/kiro/steering/` aggregate stray is gone.
+  # (Formerly module-kiro-instructions-rendered, which asserted that stray.)
+  module-kiro-unnamed-instructions-to-dedicated-file = mkTest "kiro-unnamed-instructions-to-dedicated-file" (
     let
       evaluated = evalHm {
         ai.kiro = {
@@ -1016,13 +1256,12 @@ in {
           ];
         };
       };
-      # Kiro's outputPath is ".config/kiro/steering/" (directory-ish
-      # but currently treated as a single path by the baseline).
-      file = evaluated.config.home.file.".config/kiro/steering/" or null;
+      instrFile = evaluated.config.home.file.".kiro/steering/instructions.md" or null;
     in
-      file
+      instrFile
       != null
-      && lib.hasInfix "Kiro steering content." file.text
+      && lib.hasInfix "Kiro steering content." (instrFile.text or "")
+      && !(evaluated.config.home.file ? ".config/kiro/steering/")
   );
 
   # ── STAGE 3: kiro auto-memory wiring (lib/autoMemory.nix) ────

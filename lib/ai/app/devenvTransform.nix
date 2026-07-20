@@ -50,20 +50,10 @@
 
   defaults = appRecord.defaults or {};
   package = devenvDefaults.package or defaults.package or null;
-  outputPath = devenvDefaults.outputPath or defaults.outputPath or null;
 
   customConfig = devenvConfigFn {
     inherit cfg mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables mergedClaudeCopilotAgents topContext;
   };
-
-  renderedInstructions =
-    lib.concatMapStringsSep "\n\n" (
-      frag: appRecord.transformers.markdown.render frag
-    )
-    mergedInstructions;
-
-  hasOutputPath = outputPath != null;
-  hasInstructions = mergedInstructions != [];
 in {
   options.ai.${appRecord.name} =
     {
@@ -121,28 +111,23 @@ in {
     // (appRecord.options or {})
     // devenvOptions;
 
-  config = lib.mkMerge (
-    [
-      {_module.args.aiTransformers = appRecord.transformers;}
-      # Collision-as-failure: always evaluate (no mkIf cfg.enable
-      # guard) so misconfigurations surface even when the feature
-      # is toggled off.
-      {assertions = collisionAssertions;}
-      # L2b → L3 fanout for per-CLI Dir options.
-      (lib.mkIf (cfg.rulesDir != null) {
-        ai.${appRecord.name}.rules = lib.mapAttrs (_: lib.mkDefault) (
-          dirHelpers.rulesFromDir cfg.rulesDir
-        );
-      })
-      (lib.mkIf (cfg.skillsDir != null) {
-        ai.${appRecord.name}.skills = lib.mapAttrs (_: lib.mkDefault) (
-          dirHelpers.skillsFromDir cfg.skillsDir
-        );
-      })
-      (lib.mkIf cfg.enable customConfig)
-    ]
-    ++ lib.optional hasOutputPath (lib.mkIf (cfg.enable && hasInstructions) {
-      files.${outputPath}.text = renderedInstructions;
+  config = lib.mkMerge [
+    {_module.args.aiTransformers = appRecord.transformers;}
+    # Collision-as-failure: always evaluate (no mkIf cfg.enable
+    # guard) so misconfigurations surface even when the feature
+    # is toggled off.
+    {assertions = collisionAssertions;}
+    # L2b → L3 fanout for per-CLI Dir options.
+    (lib.mkIf (cfg.rulesDir != null) {
+      ai.${appRecord.name}.rules = lib.mapAttrs (_: lib.mkDefault) (
+        dirHelpers.rulesFromDir cfg.rulesDir
+      );
     })
-  );
+    (lib.mkIf (cfg.skillsDir != null) {
+      ai.${appRecord.name}.skills = lib.mapAttrs (_: lib.mkDefault) (
+        dirHelpers.skillsFromDir cfg.skillsDir
+      );
+    })
+    (lib.mkIf cfg.enable customConfig)
+  ];
 }

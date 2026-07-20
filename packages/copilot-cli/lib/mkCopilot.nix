@@ -25,7 +25,6 @@ lib.ai.app.mkAiApp {
   transformers.markdown = lib.ai.transformers.copilot;
   defaults = {
     package = pkgs.ai.copilot-cli;
-    outputPath = ".config/github-copilot/copilot-instructions.md";
   };
   options = {
     # Copilot-scope global context. When set, takes precedence over
@@ -135,6 +134,11 @@ lib.ai.app.mkAiApp {
         then cfg.context
         else topContext;
       hasContext = effectiveContext != null && effectiveContext != "";
+      # Unnamed always-on instructions compose into the single native context
+      # file below (the generic aggregate render was retired). Named entries
+      # emit their own `.github/instructions/<name>.instructions.md`.
+      unnamedInstructions = builtins.filter (i: !(i ? name)) mergedInstructions;
+      hasUnnamed = unnamedInstructions != [];
       resolveRuleText = rule:
         if builtins.isPath rule.text
         then builtins.readFile rule.text
@@ -244,9 +248,8 @@ lib.ai.app.mkAiApp {
         # `.github/instructions/<name>.instructions.md` for each
         # instruction entry that carries a `name` field. The copilot
         # transformer emits `applyTo:` YAML frontmatter per scope.
-        # Nameless entries fall through to the baseline aggregate
-        # render at `defaults.outputPath` which is handled by
-        # mkAiApp's hmTransform.
+        # Nameless entries are composed into the native context file
+        # (`<configDir>/<contextFilename>`) below.
         (let
           fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
           inherit (import ../../../lib/ai/transformers/copilot.nix {inherit lib;}) copilotTransformer;
@@ -274,15 +277,20 @@ lib.ai.app.mkAiApp {
             })
           mergedRules;
         })
-        # Global context → `<configDir>/<contextFilename>`. Written
-        # without frontmatter; precedence is per-CLI > top-level. Conflicts
-        # with the baseline instructions-concat when both are set — eval-time
-        # error signals the user to pick one pathway.
-        (lib.mkIf hasContext {
-          home.file."${cfg.configDir}/${cfg.contextFilename}" =
-            if builtins.isPath effectiveContext
-            then {source = effectiveContext;}
-            else {text = effectiveContext;};
+        # Global context + unnamed instructions → `<configDir>/<contextFilename>`,
+        # composed into one file (the single native context writer; the generic
+        # aggregate render was retired). A path context with no unnamed
+        # instructions stays a `source` symlink. Precedence is per-CLI > top-level.
+        (lib.mkIf (hasContext || hasUnnamed) {
+          home.file."${cfg.configDir}/${cfg.contextFilename}" = let
+            composed = lib.ai.composeInstructionsFile {
+              inherit effectiveContext unnamedInstructions;
+              render = lib.ai.transformers.copilot.render;
+            };
+          in
+            if builtins.isPath composed
+            then {source = composed;}
+            else {text = composed;};
         })
         # Skills fanout — copilot has no upstream HM skills option, so
         # we write `home.file."${configDir}/skills/<name>"` entries
@@ -363,6 +371,10 @@ lib.ai.app.mkAiApp {
         then cfg.context
         else topContext;
       hasContext = effectiveContext != null && effectiveContext != "";
+      # Unnamed always-on instructions compose into the native context file
+      # below (aggregate render retired); named entries emit their own files.
+      unnamedInstructions = builtins.filter (i: !(i ? name)) mergedInstructions;
+      hasUnnamed = unnamedInstructions != [];
       resolveRuleText = rule:
         if builtins.isPath rule.text
         then builtins.readFile rule.text
@@ -427,8 +439,8 @@ lib.ai.app.mkAiApp {
         })
         # Per-instruction files under `.github/instructions/`. Same
         # transformer as HM, same filter-by-name pattern — nameless
-        # entries flow into the baseline aggregate render at
-        # `defaults.outputPath` via mkAiApp's devenvTransform.
+        # entries are composed into the native context file
+        # (`<projectDir>/<contextFilename>`) below.
         (let
           fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
           inherit (import ../../../lib/ai/transformers/copilot.nix {inherit lib;}) copilotTransformer;
@@ -454,14 +466,21 @@ lib.ai.app.mkAiApp {
             })
           mergedRules;
         })
-        # Global context → `<projectDir>/<contextFilename>` (project-scope).
-        # Default lands at `.github/copilot-instructions.md`, which
-        # Copilot reads natively as project-scope context.
-        (lib.mkIf hasContext {
-          files."${cfg.projectDir}/${cfg.contextFilename}" =
-            if builtins.isPath effectiveContext
-            then {source = effectiveContext;}
-            else {text = effectiveContext;};
+        # Global context + unnamed instructions → `<projectDir>/<contextFilename>`
+        # (project-scope), composed into one file (the single native context
+        # writer; aggregate render retired). Default lands at
+        # `.github/copilot-instructions.md`, which Copilot reads natively. A path
+        # context with no unnamed instructions stays a `source` symlink.
+        (lib.mkIf (hasContext || hasUnnamed) {
+          files."${cfg.projectDir}/${cfg.contextFilename}" = let
+            composed = lib.ai.composeInstructionsFile {
+              inherit effectiveContext unnamedInstructions;
+              render = lib.ai.transformers.copilot.render;
+            };
+          in
+            if builtins.isPath composed
+            then {source = composed;}
+            else {text = composed;};
         })
         # settings.json — devenv does NOT support HM-style activation
         # scripts, so the runtime-merge story is different. Devenv

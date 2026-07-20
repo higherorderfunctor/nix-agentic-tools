@@ -23,7 +23,6 @@ in
     transformers.markdown = lib.ai.transformers.claude;
     defaults = {
       package = pkgs.ai.claude-code;
-      outputPath = ".claude/CLAUDE.md";
     };
     # Shared options (present in both backends)
     options = {
@@ -304,6 +303,18 @@ in
           then topContext
           else "";
 
+        # Compose the single always-on CLAUDE.md = context baseline + any
+        # UNNAMED instructions, routed through upstream
+        # `programs.claude-code.context` (the sole writer for this path — the
+        # generic aggregate render was retired to end the double-writer
+        # collision). Named instructions emit their own `.claude/rules/<name>.md`
+        # below and are excluded from the composed context.
+        unnamedInstructions = builtins.filter (i: !(i ? name)) mergedInstructions;
+        composedContext = lib.ai.composeInstructionsFile {
+          inherit effectiveContext unnamedInstructions;
+          render = lib.ai.transformers.claude.render;
+        };
+
         # Resolve rule body: path → readFile; string → passthrough.
         resolveRuleText = rule:
           if builtins.isPath rule.text
@@ -351,7 +362,7 @@ in
               enable = lib.mkDefault true;
               package = lib.mkDefault cfg.package;
               skills = lib.mapAttrs (_: lib.mkDefault) mergedSkills;
-              context = lib.mkDefault effectiveContext;
+              context = lib.mkDefault composedContext;
               plugins = lib.mkDefault cfg.plugins;
               inherit (cfg) marketplaces outputStyles commands hooks;
               lspServers = lib.mapAttrs aiCommon.mkClaudeLspConfig mergedLspServers;
@@ -394,8 +405,8 @@ in
           # for each instruction entry that carries a `name` field. This
           # is a gap in upstream programs.claude-code (no per-rule file
           # option), so we write home.file directly. Entries without a
-          # `name` field flow only into the baseline aggregated render
-          # at .claude/CLAUDE.md (handled by hmTransform's baseline).
+          # `name` field are composed into `programs.claude-code.context`
+          # (the single CLAUDE.md writer — see composedContext above).
           (let
             fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
             inherit (import ../../../lib/ai/transformers/claude.nix {inherit lib;}) claudeTransformer;
@@ -436,15 +447,18 @@ in
     # Devenv-specific projection
     devenv = {
       options = {};
-      # `...` absorbs extra args passed by devenvTransform that this
-      # backend doesn't need (e.g. topContext — Claude delegates context
-      # writing to upstream claude.code, no gap-write here).
+      # `topContext` is the top-level `ai.context` fallback. devenv Claude has
+      # no upstream context writer, so this projection composes context +
+      # unnamed instructions into `files.".claude/CLAUDE.md"` itself — the sole
+      # writer for that path. This also repairs the historical context-drop:
+      # the retired aggregate render only wrote instructions and omitted context.
       config = {
         cfg,
         mergedServers,
         mergedInstructions,
         mergedSkills,
         mergedRules,
+        topContext,
         ...
       }: let
         aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
@@ -453,6 +467,24 @@ in
           if builtins.isPath rule.text
           then builtins.readFile rule.text
           else rule.text;
+
+        # Resolve effective context (per-CLI wins, else top-level) and compose
+        # the single CLAUDE.md = context baseline + UNNAMED instructions. Named
+        # instructions emit their own `.claude/rules/<name>.md` below.
+        effectiveContext =
+          if cfg.context != ""
+          then cfg.context
+          else if topContext != null
+          then topContext
+          else "";
+        unnamedInstructions = builtins.filter (i: !(i ? name)) mergedInstructions;
+        composedContext = lib.ai.composeInstructionsFile {
+          inherit effectiveContext unnamedInstructions;
+          render = lib.ai.transformers.claude.render;
+        };
+        hasComposedContext =
+          (effectiveContext != null && effectiveContext != "")
+          || unnamedInstructions != [];
 
         # Translate cfg.settings → backend surfaces.
         #
@@ -515,10 +547,20 @@ in
           (lib.mkIf hasGapSettings {
             files.".claude/settings.json".json = gapSettings;
           })
+          # Compose CLAUDE.md — context baseline + UNNAMED instructions, the
+          # single devenv writer for this path (the generic aggregate render
+          # was retired). A path context with no unnamed instructions stays a
+          # `source` symlink; otherwise it is inlined and concatenated.
+          (lib.mkIf hasComposedContext {
+            files.".claude/CLAUDE.md" =
+              if builtins.isPath composedContext
+              then {source = composedContext;}
+              else {text = composedContext;};
+          })
           # Gap writes — per-instruction rule files. devenv has no
           # per-rule option, so we write files.* directly. Entries
-          # without a `name` field flow into the baseline aggregate
-          # render at .claude/CLAUDE.md (handled by devenvTransform).
+          # without a `name` field are composed into `.claude/CLAUDE.md`
+          # above; named entries emit one rule file each here.
           (let
             fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
             inherit (import ../../../lib/ai/transformers/claude.nix {inherit lib;}) claudeTransformer;

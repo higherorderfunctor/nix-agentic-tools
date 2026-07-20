@@ -4,6 +4,10 @@
 in {
   app = import ./app {inherit lib;};
   apps = import ./apps {inherit lib;};
+  # Compose an app's single always-on instructions file = context baseline +
+  # unnamed instructions (named live in their own per-name files). Consumed by
+  # the Claude + Copilot per-app factories; see composeInstructionsFile.nix.
+  composeInstructionsFile = import ./composeInstructionsFile.nix {inherit lib;};
   mcpServer = import ./mcpServer {inherit lib;};
   mcpServers = import ./mcpServers {inherit lib;};
   # Module function — imported unevaluated so consumers can pass it directly
