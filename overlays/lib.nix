@@ -170,10 +170,27 @@
       fi
     done
 
+    # Hook events — the northbound soft-enum `knownEvents`. Grep every flat array
+    # literal containing the "PreToolUse" token (the canonical first hook event),
+    # union the CamelCase string tokens, sort -u. The binary carries the master
+    # enum plus context-specific subsets; the union is the full recognized-event
+    # vocabulary (30 at 2.1.215). Reorder-robust (token match, not position).
+    # Fail loud on zero matches (anchor gone = hook schema shape change), mirroring
+    # the effort/bool guards above. Tokens are grepped WITH their quotes so each
+    # line is already a JSON string literal — jq -s slurps them, no tr needed.
+    hookEvents=$("$grep" -aoE '\[[^][]*"PreToolUse"[^][]*\]' "${bin}" \
+      | "$grep" -aoE '"[A-Za-z][A-Za-z0-9]*"' | "$sort" -u || true)
+    if [ "$(printf '%s\n' "$hookEvents" | "$grep" -c . || true)" -lt 1 ]; then
+      echo "claude-extract: no hook-event enum array found (upstream changed the hook schema shape)" >&2
+      exit 1
+    fi
+    hookEventsJson=$(printf '%s\n' "$hookEvents" | "$jq" -s .)
+
     pinsJson=$(printf '%s\n' "$pins" | "$jq" -R . | "$jq" -s .)
     boolKeysJson=$(printf '%s\n' "''${boolKeys[@]}" | "$sort" -u | "$jq" -R . | "$jq" -s .)
-    "$jq" -n --argjson pins "$pinsJson" --argjson levels "$levels" --argjson boolKeys "$boolKeysJson" \
-      '{launchEffortPins: $pins, effortLevels: $levels, settingsBooleanKeys: $boolKeys}' > "${dest}"
+    "$jq" -n --argjson pins "$pinsJson" --argjson levels "$levels" \
+      --argjson boolKeys "$boolKeysJson" --argjson hookEvents "$hookEventsJson" \
+      '{launchEffortPins: $pins, effortLevels: $levels, settingsBooleanKeys: $boolKeys, hookEvents: $hookEvents}' > "${dest}"
   '';
 
   # Generate an updateScript for per-platform binary packages that use
