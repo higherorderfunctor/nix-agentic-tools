@@ -27,7 +27,7 @@
     inherit rev;
   };
 in
-  (ourPkgs.oxlint.override {inherit tsgolint;}).overrideAttrs (finalAttrs: _prev: {
+  (ourPkgs.oxlint.override {inherit tsgolint;}).overrideAttrs (finalAttrs: prev: {
     inherit version src;
     cargoDeps = ourPkgs.rustPlatform.fetchCargoVendor {
       inherit (finalAttrs) pname version src;
@@ -39,4 +39,15 @@ in
       fetcherVersion = 3;
       hash = "sha256-xNqVCQVoCFWZGAnkMCg6Erhe1sOeAQj5wBy6ZCemeL0=";
     };
+    # Strip versionCheckHook: `oxlint --version` prints the bare upstream
+    # semver (e.g. 1.74.0) and drops the `+shortrev` build metadata that
+    # `mkVersion` puts in the derivation version, so the hook never matches
+    # and aborts installCheck. Same handling as
+    # overlays/git-tools/git-branchless.nix. The inherited installCheckPhase
+    # (`--type-aware` via our tsgolint + the jsPlugins smoke) is independent
+    # and still runs.
+    nativeInstallCheckInputs =
+      builtins.filter
+      (p: (p.pname or "") != "version-check-hook")
+      (prev.nativeInstallCheckInputs or []);
   })
