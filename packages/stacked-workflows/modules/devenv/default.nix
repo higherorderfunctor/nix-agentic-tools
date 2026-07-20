@@ -1,32 +1,25 @@
 # Stacked-workflows devenv module — project-local scope.
 #
-# Mirrors the HM module's skill + routing-table fanout at project (devenv)
-# scope via the cross-ecosystem `ai.*` pools. `ai.skills` is per-`evalModules`,
-# so this contribution is independent of the HM one. Reference docs travel
-# inside each skill dir (real files from the content build), so there is no
-# separate `.claude/references/` write.
+# Delegates to the shared skill-packaging factory (lib/ai/mkSkillPackageModule):
+# `stacked-workflows.enable = true` fans the unprefixed stack-* skills and the
+# routing-table instruction into the cross-ecosystem `ai.*` pools at
+# project-local (devenv) scope. The `ai.skills` pool is per-`evalModules`, so
+# this contribution is independent of the HM module's.
 #
-# The `enable` option is declared here independently of the HM module's
-# `enable` because HM and devenv run separate evalModules invocations. When
-# the same repo loads both, consumers can enable independently or in tandem.
+# Skills come from `pkgs.stacked-workflows-content.passthru.skills` — the
+# deref'd, self-contained skill dirs (real reference files bundled inside each,
+# so they resolve in every scope). Values are store-path strings, accepted by
+# the ai.skills fanout helpers.
 #
 # Picked up by `collectFacet ["modules" "devenv"]` in flake.nix.
-{
-  config,
-  lib,
-  pkgs,
-  ...
-}: let
-  cfg = config.stacked-workflows;
-  skills = pkgs.stacked-workflows-content.passthru.skills;
-  router = import ../../router.nix {inherit lib pkgs;};
-in {
-  options.stacked-workflows = {
-    enable = lib.mkEnableOption "stacked workflow skills + routing table (project-local devenv scope)";
-  };
-
-  config = lib.mkIf cfg.enable {
-    ai.skills = lib.mapAttrs (_: lib.mkDefault) skills;
-    ai.instructions = router;
-  };
+import ../../../../lib/ai/mkSkillPackageModule.nix {
+  name = "stacked-workflows";
+  enableDescription = "stacked workflow skills + routing table (project-local devenv scope)";
+  skills = {pkgs, ...}: pkgs.stacked-workflows-content.passthru.skills;
+  instructions = {
+    lib,
+    pkgs,
+    ...
+  }:
+    import ../../router.nix {inherit lib pkgs;};
 }

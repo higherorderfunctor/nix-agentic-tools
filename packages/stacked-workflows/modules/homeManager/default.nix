@@ -1,25 +1,22 @@
 # Stacked-workflows home-manager module — user-global install.
 #
-# `stacked-workflows.enable = true` fans the stack skills and the
-# routing-table instruction into the cross-ecosystem `ai.*` pools, so each
-# enabled ecosystem installs them user-global (~/.claude/skills,
-# ~/.kiro/skills, ~/.claude/CLAUDE.md, ~/.kiro/steering/, ...). Also applies
-# optional git-config presets.
+# The skills + routing-table fanout is delegated to the shared skill-packaging
+# factory (lib/ai/mkSkillPackageModule), imported below: `stacked-workflows.enable
+# = true` fans the unprefixed stack-* skills and the routing-table instruction
+# into the cross-ecosystem `ai.*` pools, so each enabled ecosystem installs them
+# user-global (~/.claude/skills, ~/.kiro/skills, ~/.claude/CLAUDE.md,
+# ~/.kiro/steering/, ...). The `ai.skills` pool is per-`evalModules`, so this
+# HM-scope contribution is independent of the devenv module's.
 #
-# Skill sources are the deref'd, self-contained skill dirs from
-# `pkgs.stacked-workflows-content.passthru.skills` — real reference files are
-# bundled inside each skill dir, so they resolve in every scope. The values
-# are store-path strings, accepted by the modern upstream `isPathLike`
-# skill-entry check (see lib/ai path-type notes).
-#
-# `ai.skills` is per-`evalModules`, so this HM-scope contribution is
-# independent of the devenv module's project-scope contribution.
+# On TOP of the factory, this module adds the HM-only `gitPreset` option (the
+# git-config presets have no devenv analogue). Skill sources are the deref'd,
+# self-contained skill dirs from `pkgs.stacked-workflows-content.passthru.skills`
+# (real reference files bundled inside each, so they resolve in every scope).
 #
 # Picked up by `collectFacet ["modules" "homeManager"]` in flake.nix.
 {
   config,
   lib,
-  pkgs,
   ...
 }: let
   cfg = config.stacked-workflows;
@@ -36,13 +33,22 @@
     "minimal" = gitConfigMinimal;
     "none" = {};
   };
-
-  skills = pkgs.stacked-workflows-content.passthru.skills;
-  router = import ../../router.nix {inherit lib pkgs;};
 in {
-  options.stacked-workflows = {
-    enable = lib.mkEnableOption "stacked workflow skills, routing table, and git-config presets (user-global)";
+  imports = [
+    (import ../../../../lib/ai/mkSkillPackageModule.nix {
+      name = "stacked-workflows";
+      enableDescription = "stacked workflow skills, routing table, and git-config presets (user-global)";
+      skills = {pkgs, ...}: pkgs.stacked-workflows-content.passthru.skills;
+      instructions = {
+        lib,
+        pkgs,
+        ...
+      }:
+        import ../../router.nix {inherit lib pkgs;};
+    })
+  ];
 
+  options.stacked-workflows = {
     gitPreset = lib.mkOption {
       type = lib.types.enum ["full" "minimal" "none"];
       default = "none";
@@ -81,12 +87,6 @@ in {
           '';
         }
       ];
-    }
-
-    # ── Skills + routing table (user-global via ai.* pools) ────────────
-    {
-      ai.skills = lib.mapAttrs (_: lib.mkDefault) skills;
-      ai.instructions = router;
     }
 
     # ── Git configuration ──────────────────────────────────────────────
