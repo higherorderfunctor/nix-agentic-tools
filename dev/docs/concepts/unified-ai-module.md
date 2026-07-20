@@ -76,16 +76,16 @@ only the destination changes:
 
 ```nix
 ai.skills = {
-  stack-fix = pkgs.stacked-workflows-content.passthru.skillsDir + "/stack-fix";
+  stack-fix = pkgs.stacked-workflows-content.passthru.skills.stack-fix;
 };
 ```
 
-**Path addition, not string interpolation.** Use `path + "/suffix"`
-rather than `"${path}/suffix"` — the former returns a Nix path and
-the downstream helpers type-check correctly for the
-directory-recursive branch. String interpolation coerces to a
-string, which some helpers handle but some (notably upstream HM's
-`mkSkillEntry`) reject silently.
+**Path literals and store-path strings both work.** The
+`passthru.skills` map yields store-path strings; a `./` path literal
+works too. Modern helpers — ours (`mkSkillEntries`,
+`mkDevenvSkillEntries`) and upstream HM's `mkSkillEntry` (via
+`lib.hm.strings.isPathLike`) — materialize both as recursive skill
+directories.
 
 | Ecosystem | Destination                                                        |
 | --------- | ------------------------------------------------------------------ |

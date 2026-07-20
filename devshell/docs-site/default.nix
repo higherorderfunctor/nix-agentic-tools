@@ -158,7 +158,7 @@ _: final: _prev: let
     | Package | Description | passthru |
     | ------- | ----------- | -------- |
     | `coding-standards` | Reusable coding standard fragments | `.fragments.*`, `.presets.all`, `.presets.minimal` |
-    | `stacked-workflows-content` | Skills, references, routing-table | `.fragments.*`, `.skillsDir`, `.referencesDir` |
+    | `stacked-workflows-content` | Skills, references, routing-table | `.fragments.*`, `.skills`, `.skillsDir`, `.referencesDir` |
 
     ## Content Package passthru
 
@@ -193,8 +193,12 @@ _: final: _prev: let
     "${"$"}{pkgs.stacked-workflows-content}/skills/stack-fix"
     # => /nix/store/...-stacked-workflows-content/skills/stack-fix/
 
+    pkgs.stacked-workflows-content.passthru.skills
+    # => { stack-fix = "/nix/store/...-stacked-workflows-skills/stack-fix"; ... }
+    #    name -> self-contained skill dir (real references bundled inside)
+
     pkgs.stacked-workflows-content.passthru.skillsDir
-    # => source path to skills directory (for symlinks)
+    # => the deref'd skills tree (all skills, real references materialized)
     ```
 
     ## MCP Package passthru

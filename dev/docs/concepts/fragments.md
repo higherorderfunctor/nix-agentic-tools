@@ -80,8 +80,12 @@ pkgs.coding-standards.passthru.presets.minimal  # coding-standards + commit-conv
 pkgs.stacked-workflows-content.passthru.fragments.routing-table
 # => { text = "..."; description = "Stacked workflow skill routing table"; }
 
+pkgs.stacked-workflows-content.passthru.skills
+# => { stack-fix = "/nix/store/...-stacked-workflows-skills/stack-fix"; ... }
+#    name -> self-contained skill dir (real references bundled inside)
+
 pkgs.stacked-workflows-content.passthru.skillsDir
-# => source path to skills/ directory
+# => the deref'd skills/ tree (all skills, real references materialized)
 ```
 
 ## Rendering to Ecosystem Format
