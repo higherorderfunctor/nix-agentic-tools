@@ -222,6 +222,7 @@
 
   hmPrefixes = [
     "ai."
+    "living-workflow."
     "programs.copilot-cli."
     "programs.kiro-cli."
     "services.mcp-servers."
@@ -256,6 +257,8 @@
     "ai."
     "copilot."
     "kiro."
+    "living-workflow."
+    "stacked-workflows."
   ];
 
   devenvOptionsDoc = pkgs.nixosOptionsDoc {
