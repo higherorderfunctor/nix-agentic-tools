@@ -249,6 +249,7 @@ toolsets
 tophat
 toplevel
 treefmt
+tsgo
 tsgolint
 tummychow
 ultracode

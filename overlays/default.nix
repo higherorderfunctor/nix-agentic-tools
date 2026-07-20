@@ -133,6 +133,9 @@
   };
   # ── Dev tools (linters/formatters) ─────────────────────────────────
   devToolDrvs = {
+    oxlint = import ./dev-tools/oxlint.nix {
+      inherit inputs final;
+    };
     tsgolint = import ./dev-tools/tsgolint.nix {
       inherit inputs final;
     };
