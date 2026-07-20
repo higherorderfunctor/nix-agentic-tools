@@ -2804,6 +2804,50 @@ in {
       (upstream.pre-edit or null) == "#!/usr/bin/env bash\necho edit\n"
   );
 
+  # HM: the typed ai.claude.hooks event map lowers into
+  # programs.claude-code.settings.hooks via the shared helper.
+  module-claude-hm-hooks-lower-to-settings = mkTest "claude-hm-hooks-lower-to-settings" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          hooks.PreToolUse = [
+            {
+              matcher = "Bash";
+              hooks = [{command = "validate";}];
+            }
+          ];
+        };
+      };
+      settingsHooks = (result.config.programs.claude-code.settings or {}).hooks or {};
+      block = builtins.head (settingsHooks.PreToolUse or []);
+      handler = builtins.head (block.hooks or []);
+    in
+      block.matcher == "Bash" && handler.command == "validate" && handler.type == "command"
+  );
+
+  # Compose-not-clobber invariant (decision #3): settings.json's formats.json
+  # merge CONCATENATES same-event hook lists across writers, so the typed event
+  # map and the legacy settings.hooks escape hatch coexist. Asserted against the
+  # REAL type — the module-eval `attrsOf anything` stub throws on this merge where
+  # formats.json concatenates, so it cannot model it. Mirrors the factory pattern:
+  # a whole `settings =` write plus a nested `settings.hooks =` write (both
+  # backends lower this way).
+  module-claude-hooks-settings-json-compose = mkTest "claude-hooks-settings-json-compose" (
+    let
+      jsonType = (pkgs.formats.json {}).type;
+      ev = lib.evalModules {
+        modules = [
+          {options.settings = lib.mkOption {type = jsonType;};}
+          {config.settings = {hooks.PreToolUse = [{matcher = "legacy";}];};}
+          {config.settings.hooks.PreToolUse = [{matcher = "typed";}];}
+        ];
+      };
+      matchers = map (b: b.matcher or null) ev.config.settings.hooks.PreToolUse;
+    in
+      builtins.length matchers == 2 && builtins.elem "legacy" matchers && builtins.elem "typed" matchers
+  );
+
   # Devenv: hookScripts → a `.claude/hooks/<name>` file; the legacy
   # settings.hooks escape hatch → settings.json.hooks (verbatim). Neither feeds
   # claude.code.hooks anymore (approach B — the old type-invalid mis-feed is gone).

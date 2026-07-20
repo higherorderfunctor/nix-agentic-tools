@@ -458,6 +458,15 @@ in
               enableWorkflows = lib.mkDefault true;
             };
           })
+          # Typed event map → programs.claude-code.settings.hooks (shared helper;
+          # HM has no typed hook backend to ride, so we generate the JSON). A
+          # separate mkMerge entry so it composes with the freeform
+          # `settings = filterNulls cfg.settings` write below — same-event lists
+          # merge, so the legacy settings.hooks escape hatch and the typed map
+          # coexist rather than clobber.
+          (lib.mkIf (cfg.hooks != {}) {
+            programs.claude-code.settings.hooks = hooksToSettings cfg.hooks;
+          })
           # Delegate to upstream programs.claude-code.* where upstream
           # provides the capability. mkDefault lets consumers override.
           {
@@ -468,9 +477,9 @@ in
               context = lib.mkDefault composedContext;
               plugins = lib.mkDefault cfg.plugins;
               inherit (cfg) marketplaces outputStyles commands;
-              # Renamed script-bodies option → upstream script files. The new
-              # typed `ai.claude.hooks` event map lowers to settings.json
-              # separately (Commit 4), NOT here.
+              # Renamed script-bodies option → upstream script files. The typed
+              # `ai.claude.hooks` event map lowers to settings.json separately
+              # (the mkMerge entry above), NOT here.
               hooks = cfg.hookScripts;
               lspServers = lib.mapAttrs aiCommon.mkClaudeLspConfig mergedLspServers;
               agents = mergedClaudeCopilotAgents;
