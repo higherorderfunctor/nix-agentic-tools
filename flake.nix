@@ -203,6 +203,7 @@
       pkgs = pkgsFor system;
       bareCommandsCheck = {bare-commands = import ./checks/bare-commands.nix {inherit pkgs;};};
       cacheHitParityCheck = import ./checks/cache-hit-parity.nix {inherit inputs lib pkgs self;};
+      claudeDevenvHooksRealTypeCheck = import ./checks/claude-devenv-hooks-real-type.nix {inherit pkgs inputs;};
       claudeExtractedCheck = import ./checks/claude-code-extracted.nix {inherit pkgs self;};
       factoryChecks = import ./checks/factory-eval.nix {inherit lib pkgs;};
       formattingCheck = import ./checks/formatting.nix {inherit inputs pkgs self;};
@@ -213,7 +214,7 @@
       pnpmFetcherParityCheck = import ./checks/pnpm-fetcher-parity.nix {inherit lib pkgs self;};
       validateAtStopCheck = {validate-at-stop = import ./checks/validate-at-stop.nix {inherit pkgs;};};
     in
-      bareCommandsCheck // cacheHitParityCheck // claudeExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // modelStalenessClaudeCheck // moduleChecks // overlayTargetResolutionCheck // pnpmFetcherParityCheck // validateAtStopCheck);
+      bareCommandsCheck // cacheHitParityCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // modelStalenessClaudeCheck // moduleChecks // overlayTargetResolutionCheck // pnpmFetcherParityCheck // validateAtStopCheck);
 
     # devShells.default provided by devenv.lib.mkShell (see devenv.nix).
     # devShells.ci is a lightweight shell for the CI update pipeline.
