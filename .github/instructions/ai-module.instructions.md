@@ -473,7 +473,7 @@ strict-check paths. See `hm-modules/module-conventions.md` on
 - L2b options (CLI-generic) and L2b→L3 expansion →
   `lib/ai/app/{hmTransform,devenvTransform}.nix`
 - L2b options (CLI-specific, like Claude's `agentsDir` or
-  `hooksDir`) → `packages/<pkg>/lib/mk<Cli>.nix`
+  `hookScriptsDir`) → `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 collision check → transform (`collisionAssertions`)
 - L4 emission → `packages/<pkg>/lib/mk<Cli>.nix`
 
