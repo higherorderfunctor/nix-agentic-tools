@@ -33,14 +33,14 @@ Creates the new group with tsgolint first (oxlint depends on it in Task 2).
 
 **Files:**
 
-- Create: `overlays/devTools/tsgolint.nix`
+- Create: `overlays/dev-tools/tsgolint.nix`
 - Modify: `overlays/default.nix` (add `devToolDrvs` + `devTools` group)
 - Modify: `flake.nix` (add `// pkgs.devTools` to the packages flatten, ~L399)
 - Reference (read-only): `/nix/store/…-source/pkgs/by-name/ts/tsgolint/package.nix` in the pinned nixpkgs (the base being overridden); `overlays/git-absorb.nix` (pattern); `overlays/lib.nix` (`mkVersion`).
 
 **Interfaces:**
 
-- Produces: `overlays/devTools/tsgolint.nix` — a function `{inputs, final, ...}: <derivation>` evaluating to the tsgolint package. Consumed by Task 2's oxlint.nix (`import ./tsgolint.nix {inherit inputs final;}`) and exposed as `pkgs.devTools.tsgolint` → `.#tsgolint`.
+- Produces: `overlays/dev-tools/tsgolint.nix` — a function `{inputs, final, ...}: <derivation>` evaluating to the tsgolint package. Consumed by Task 2's oxlint.nix (`import ./tsgolint.nix {inherit inputs final;}`) and exposed as `pkgs.devTools.tsgolint` → `.#tsgolint`.
 
 - [ ] **Step 1: Capture the current tsgolint main rev**
 
@@ -58,7 +58,7 @@ git ls-remote --tags --sort=-v:refname https://github.com/oxc-project/tsgolint.g
 
 Use its `vX.Y.Z` as the `upstream` base (e.g. `0.25.0`). Final version string will be `"<tag>-unstable+<shortrev>"` — see Step 2.
 
-- [ ] **Step 2: Create `overlays/devTools/tsgolint.nix` with fake hashes**
+- [ ] **Step 2: Create `overlays/dev-tools/tsgolint.nix` with fake hashes**
 
 ```nix
 # tsgolint — HEAD-tracked type-aware linting backend for oxlint, pinned
@@ -103,7 +103,7 @@ After the `gitToolDrvs` block, add:
 ```nix
   # ── Dev tools (linters/formatters) ─────────────────────────────────
   devToolDrvs = {
-    tsgolint = import ./devTools/tsgolint.nix {
+    tsgolint = import ./dev-tools/tsgolint.nix {
       inherit inputs final;
     };
   };
@@ -128,7 +128,7 @@ Find the packages flatten (search for `// pkgs.gitTools`). Add a line directly a
 Run:
 
 ```bash
-git add overlays/devTools/tsgolint.nix overlays/default.nix flake.nix
+git add overlays/dev-tools/tsgolint.nix overlays/default.nix flake.nix
 nix build .#tsgolint --max-jobs 1 2>&1 | tee /tmp/tsgolint-build.log
 ```
 
@@ -169,7 +169,7 @@ Expected: usage/help text, exit 0 (a `headless` subcommand should be listed).
 - [ ] **Step 9: Commit**
 
 ```bash
-git add overlays/devTools/tsgolint.nix overlays/default.nix flake.nix
+git add overlays/dev-tools/tsgolint.nix overlays/default.nix flake.nix
 git commit -m "feat(tsgolint): add HEAD-tracked tsgolint in new devTools overlay group"
 ```
 
@@ -179,13 +179,13 @@ git commit -m "feat(tsgolint): add HEAD-tracked tsgolint in new devTools overlay
 
 **Files:**
 
-- Create: `overlays/devTools/oxlint.nix`
+- Create: `overlays/dev-tools/oxlint.nix`
 - Modify: `overlays/default.nix` (add `oxlint` to `devToolDrvs`)
 - Reference (read-only): `/nix/store/…-source/pkgs/by-name/ox/oxlint/package.nix` in the pinned nixpkgs (base being overridden).
 
 **Interfaces:**
 
-- Consumes: `overlays/devTools/tsgolint.nix` from Task 1 via `import ./tsgolint.nix {inherit inputs final;}`.
+- Consumes: `overlays/dev-tools/tsgolint.nix` from Task 1 via `import ./tsgolint.nix {inherit inputs final;}`.
 - Produces: `pkgs.devTools.oxlint` → `.#oxlint`, an oxlint wrapped with our tsgolint on PATH.
 
 - [ ] **Step 1: Capture the current oxc main rev + version source**
@@ -203,7 +203,7 @@ Record as `OXC_REV`. Verify the oxlint version field location (Open Question 1) 
 #   apps/oxlint/Cargo.toml → [package].version  (fallback: workspace version)
 ```
 
-- [ ] **Step 2: Create `overlays/devTools/oxlint.nix` with fake hashes**
+- [ ] **Step 2: Create `overlays/dev-tools/oxlint.nix` with fake hashes**
 
 ```nix
 # oxlint — HEAD-tracked JS/TS linter with type-aware (tsgo) support, pinned
@@ -256,10 +256,10 @@ Replace `OXC_REV` with the SHA from Step 1.
 
 ```nix
   devToolDrvs = {
-    oxlint = import ./devTools/oxlint.nix {
+    oxlint = import ./dev-tools/oxlint.nix {
       inherit inputs final;
     };
-    tsgolint = import ./devTools/tsgolint.nix {
+    tsgolint = import ./dev-tools/tsgolint.nix {
       inherit inputs final;
     };
   };
@@ -270,7 +270,7 @@ Replace `OXC_REV` with the SHA from Step 1.
 Run:
 
 ```bash
-git add overlays/devTools/oxlint.nix overlays/default.nix
+git add overlays/dev-tools/oxlint.nix overlays/default.nix
 nix eval --raw .#oxlint.version 2>&1 | tee /tmp/oxlint-version.log
 ```
 
@@ -355,7 +355,7 @@ Expected: nonzero exit, output naming `no-unnecessary-type-assertion` (proves ts
 - [ ] **Step 11: Commit**
 
 ```bash
-git add overlays/devTools/oxlint.nix overlays/default.nix
+git add overlays/dev-tools/oxlint.nix overlays/default.nix
 git commit -m "feat(oxlint): add HEAD-tracked oxlint wired to our tsgolint backend"
 ```
 
@@ -368,7 +368,7 @@ Wires both into the auto-update loop and confirms the two spec validation points
 **Files:**
 
 - Modify: `config/update-matrix.nix`
-- Possibly create/modify: `overlays/devTools/tsgolint.nix` and/or `overlays/devTools/oxlint.nix` (bespoke `passthru.updateScript`, only if validation fails)
+- Possibly create/modify: `overlays/dev-tools/tsgolint.nix` and/or `overlays/dev-tools/oxlint.nix` (bespoke `passthru.updateScript`, only if validation fails)
 - Reference (read-only): `overlays/lib.nix` (`mkGitRevUpdateScript`, `mkUpdateScript`), `dev/scripts/update-pkg.sh`, `checks/overlay-target-resolution.nix`.
 
 **Interfaces:**
@@ -398,7 +398,7 @@ git add config/update-matrix.nix
 nix build .#checks.x86_64-linux.overlay-target-resolution --max-jobs 1 && cat result
 ```
 
-Expected: PASS — output includes `ok  oxlint -> overlays/devTools/oxlint.nix` and `ok  tsgolint -> overlays/devTools/tsgolint.nix`. If either fails to "resolve to exactly one overlay with an inline rev", re-check the Global Constraint (no second tsgolint fetch block in oxlint.nix; both revs are inline 40-hex).
+Expected: PASS — output includes `ok  oxlint -> overlays/dev-tools/oxlint.nix` and `ok  tsgolint -> overlays/dev-tools/tsgolint.nix`. If either fails to "resolve to exactly one overlay with an inline rev", re-check the Global Constraint (no second tsgolint fetch block in oxlint.nix; both revs are inline 40-hex).
 
 Then:
 
@@ -418,7 +418,7 @@ NAT_UPDATE_WORKTREES_DIR="${TMPDIR:-/tmp}/nat-update-wt" \
   bash dev/scripts/update-pkg.sh oxlint "--version skip" https://github.com/oxc-project/oxc.git 2>&1 | tail -40
 ```
 
-Expected: the script rewrites all three hashes to real values and the build verifies. If `nix-update` leaves any of the three as a fake/empty hash (build still fails), the standard flow is insufficient → do Step 4a. Otherwise skip to Step 5. Restore the real hashes afterward (`git checkout overlays/devTools/oxlint.nix`).
+Expected: the script rewrites all three hashes to real values and the build verifies. If `nix-update` leaves any of the three as a fake/empty hash (build still fails), the standard flow is insufficient → do Step 4a. Otherwise skip to Step 5. Restore the real hashes afterward (`git checkout overlays/dev-tools/oxlint.nix`).
 
 - [ ] **Step 4a: (only if Step 3 failed) Bespoke oxlint updateScript**
 
@@ -438,7 +438,7 @@ Expected: `nix-update` re-derives the submodule-aware src hash + vendorHash corr
 - [ ] **Step 5: Commit**
 
 ```bash
-git add config/update-matrix.nix overlays/devTools/oxlint.nix overlays/devTools/tsgolint.nix
+git add config/update-matrix.nix overlays/dev-tools/oxlint.nix overlays/dev-tools/tsgolint.nix
 git commit -m "feat(devtools): register oxlint + tsgolint in the update pipeline"
 ```
 
@@ -448,6 +448,8 @@ git commit -m "feat(devtools): register oxlint + tsgolint in the update pipeline
 
 **Files:**
 
+- Modify: `checks/cache-hit-parity.nix` (register `devToolPackages`)
+- Modify: `overlays/default.nix` (header doc-comment: add `pkgs.devTools.*`)
 - Modify: `dev/data.nix` (`overlayPackages` + descriptions)
 - Modify: `overlays/README.md` (package index)
 - Reference (read-only): `dev/generate.nix`, `flake.nix` docs generators.
@@ -455,9 +457,26 @@ git commit -m "feat(devtools): register oxlint + tsgolint in the update pipeline
 **Interfaces:**
 
 - Consumes: the completed overlay + matrix from Tasks 1–3.
-- Produces: doc-data registration so generated README/docsite list the `dev-tools` group; a green `nix flake check`.
+- Produces: doc-data registration so generated README/docsite list the `dev-tools` group; the `cache-hit-parity` check actually covering the new packages; a green `nix flake check`.
 
-- [ ] **Step 1: Register the group in `dev/data.nix`**
+- [ ] **Step 1: Register the devTools packages in the cache-hit-parity check**
+
+`checks/cache-hit-parity.nix` gates cache-hit parity via **hardcoded per-group allowlists** (`aiCliPackages`, `gitToolPackages`, `mcpServerPackages`, `agnixPackages`, `specialPackages`), aggregated into `allDrifts`. There is no `devToolPackages`, so the check currently **skips `oxlint`/`tsgolint` entirely** — the Global Constraint "a regression fails `checks.cache-hit-parity`" is false for them until registered (surfaced by the Task 1 review).
+
+Read the file first to match its exact evaluation shape (how each list is mapped through the standalone-vs-consumer store-path comparison). Add a `devToolPackages = ["oxlint" "tsgolint"];` list mirroring `gitToolPackages`, and fold it into the same aggregation `gitToolPackages` feeds (`allDrifts`).
+
+Also update the `overlays/default.nix` header doc-comment (the `Aggregates derivations into grouped namespaces: …` block) to add `pkgs.devTools.*`.
+
+Verify the check now SEES them (is a live gate, not a no-op):
+
+```bash
+git add checks/cache-hit-parity.nix overlays/default.nix
+nix build .#checks.x86_64-linux.cache-hit-parity --max-jobs 1 && cat result
+```
+
+Expected: PASS ("no drift"), with the drift logic now iterating oxlint + tsgolint. To prove the gate is live, temporarily point one package's build input at `final` instead of `ourPkgs`, re-run, confirm it FAILS, then revert.
+
+- [ ] **Step 2: Register the group in `dev/data.nix`**
 
 In `overlayPackages`, add (alphabetically, kebab key):
 
@@ -475,7 +494,7 @@ If the doc generator reads per-package descriptions from a map like `gitToolDesc
     tsgolint = "Type-aware linting backend for oxlint (typescript-go)";
 ```
 
-- [ ] **Step 2: Determine whether `overlays/README.md` is generated or hand-maintained**
+- [ ] **Step 3: Determine whether `overlays/README.md` is generated or hand-maintained**
 
 Run:
 
@@ -491,7 +510,7 @@ grep -rn "overlays/README" dev/ flake.nix 2>/dev/null
 | tsgolint  | devTools | GitHub main | go (nixpkgs override)   | `tsgolint` | upstream               | --help       |
 ```
 
-- [ ] **Step 3: git add and run the full flake check**
+- [ ] **Step 4: git add and run the full flake check**
 
 ```bash
 git add dev/data.nix overlays/README.md
@@ -500,7 +519,7 @@ nix flake check --max-jobs 1 2>&1 | tee /tmp/flake-check.log
 
 Expected: PASS. Specifically `cache-hit-parity` (both packages route through `ourPkgs`) and `overlay-target-resolution` are green. If `cache-hit-parity` reports drift, a build input is using `final`/`prev` instead of `ourPkgs` — fix in the offending overlay file.
 
-- [ ] **Step 4: Regenerate docs if applicable**
+- [ ] **Step 5: Regenerate docs if applicable**
 
 If Step 2 found a generator:
 
@@ -511,10 +530,10 @@ git diff --stat
 
 Expected: README/docsite files regenerate with the `dev-tools` group; stage them.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add dev/data.nix overlays/README.md README.md docs/ 2>/dev/null; git add -A
+git add checks/cache-hit-parity.nix dev/data.nix overlays/default.nix overlays/README.md README.md docs/ 2>/dev/null; git add -A
 git commit -m "docs(devtools): document oxlint + tsgolint in the overlay index"
 ```
 
