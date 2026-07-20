@@ -10,10 +10,12 @@ tools might fail to use these skills and fix the root causes.
 
 - Are skill descriptions clear enough for auto-discovery?
 - Does `disable-model-invocation: true` work as intended across platforms?
-- **Known exception:** `.claude/skills/sws-*` directory names intentionally
-  don't match SKILL.md `name` fields. The `sws-` prefix prevents global
-  skills from shadowing project-local working copies (personal > project
-  precedence in Claude Code). Do not flag this as a spec violation.
+- **Known exception:** in THIS dev repo, `.claude/skills/dev-*` directory
+  names (e.g. `dev-stack-fix`, `dev-living-workflow`) intentionally don't
+  match SKILL.md `name` fields. The `dev-` prefix keeps the in-repo working
+  copies from being shadowed by the user-global installs of the same skills
+  (personal > project precedence in Claude Code). Do not flag this as a spec
+  violation.
 - Is the routing table effective? Would the AI actually choose the skill over
   running raw commands?
 - Test: given a user prompt like "fix a typo in an earlier commit", would the

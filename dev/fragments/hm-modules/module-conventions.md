@@ -300,16 +300,24 @@ copies a source into the store returns a store-path string:
 This matters when passing values to options that gate on
 `lib.isPath` or `builtins.isPath`:
 
-- **Upstream HM `programs.claude-code.skills`** uses
-  `mkSkillEntry` which checks
-  `lib.isPath content && lib.pathIsDirectory content`. On
-  false (string input), it silently falls through to the
-  single-file `mkSourceEntry` branch, which writes the
-  string value as **TEXT CONTENT** to
-  `.claude/skills/<name>/SKILL.md`. Symptom: skill files
-  contain a single line like
-  `/nix/store/abc-skills/stack-fix` instead of real YAML
-  frontmatter, and Claude can't load the skill.
+- **Upstream HM `programs.claude-code.skills`.** MODERN
+  home-manager's `mkSkillEntry` gates on
+  `lib.hm.strings.isPathLike content && lib.pathIsDirectory content`.
+  `isPathLike` accepts store-path STRINGS, so a string that
+  resolves (via IFD) to a directory takes the recursive-directory
+  branch and materializes correctly; its fall-through also uses
+  `isPathLike` (`{ source = content; }`), never writing a store
+  path as text. This is why the current stacked-workflows /
+  living-workflow skill packages can feed store-path strings
+  (`packages/*/overlay.nix`, `lib/mkSkill.nix`,
+  `lib/ai/mkSkillPackageModule.nix`) — verified against the pinned
+  home-manager source (2026-07). It requires an HM pin recent
+  enough to carry `isPathLike` in `mkSkillEntry`.
+  **Historically (pre-`isPathLike`)** it checked the strict
+  `lib.isPath`, and a string input silently fell through to writing
+  the value as **TEXT CONTENT** to `.claude/skills/<name>/SKILL.md`
+  — a single line like `/nix/store/abc-skills/stack-fix` instead of
+  real YAML frontmatter, so Claude couldn't load the skill.
 
 - Our `lib/hm-helpers.nix:mkSkillEntries` had the same bug
   until commit `1f1ad35`. It now uses
@@ -319,12 +327,15 @@ This matters when passing values to options that gate on
 - Our `mkDevenvSkillEntries` walker (commit `8655130`) also
   uses `builtins.readFileType` — agnostic to path vs string.
 
-**How to apply.** When your module needs to pass a skill
-source (or any other value) through `programs.claude-code.
-skills` or anything else that strict-checks `lib.isPath`,
-**use a `./` path literal**, not a filtered/copied source.
-If the value needs filtering, introduce a module-relative
-path literal in the `let` block:
+**How to apply.** For **skills** on a modern HM pin either form
+works (path literal OR store-path string), so the skill packages
+deliberately use strings. But the type distinction still bites for
+values flowing into sinks that gate on the STRICT `lib.isPath` —
+`mkSourceEntry` (e.g. rule/instruction `source =`) and
+`cfg.context` both write a string as **text**, not a symlink — and
+for older HM pins. When the sink's tolerance is unknown, the safe
+form is a `./` path literal (introduce a module-relative one in the
+`let` block so filtering doesn't coerce it to a string):
 
 ```nix
 { ... }: let
@@ -341,24 +352,20 @@ in {
 }
 ```
 
-Do NOT do this:
+**Historical failure mode (pre-`isPathLike`).** Surfaced 2026-04-08
+during skills-fanout-fix Task 3: the stacked-workflows HM module
+used `swsContent.passthru.skillsDir + "/stack-*"` where `skillsDir`
+came from `builtins.path` (a string). Against the then-strict
+`mkSkillEntry`, every consumer had garbage
+`~/.claude/skills/stack-*/SKILL.md` files (the store path written as
+text) for weeks. Worked around in commit `5a14a0c` with a
+module-relative `skillsRepo` path literal; the root cause is gone
+now that upstream `mkSkillEntry` uses `isPathLike` (above).
 
-```nix
-# WRONG — builtins.path returns a string, mkSkillEntry
-# silently writes path-as-text instead of Layout B
-programs.claude-code.skills.bar = pkgs.myPkg.passthru.skillsDir + "/bar";
-```
-
-Surfaced 2026-04-08 during skills-fanout-fix Task 3. The
-stacked-workflows HM module was using
-`swsContent.passthru.skillsDir + "/stack-*"` where
-`skillsDir` came from `builtins.path` (a string). Every
-consumer had garbage `~/.claude/skills/stack-*/SKILL.md`
-files for weeks. Fixed in commit `5a14a0c` by introducing a
-module-relative `skillsRepo` path literal.
-
-**Our helpers are defensive, upstream is not.** We can't fix
-upstream HM's `mkSkillEntry` — it's in nixpkgs. Always use
-literals for values flowing into upstream options that
-type-check paths. Our own helpers handle both, but don't
-rely on that when the value might flow further.
+**Both our helpers and modern upstream are string-tolerant.** Our
+`mkSkillEntries` / `mkDevenvSkillEntries` and modern upstream
+`mkSkillEntry` all accept path-typed values AND store-path strings.
+A generated store-path string is now a supported, deliberate
+pattern (living-workflow bakes its XDG state base into a generated
+skill dir and feeds the outPath string). Reserve the `./`-literal
+discipline for the strict-`isPath` sinks noted above.

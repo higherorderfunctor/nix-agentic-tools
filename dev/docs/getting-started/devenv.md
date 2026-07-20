@@ -76,10 +76,12 @@ in {
     kiro.enable = true;
 
     skills = let
-      sws = contentPkgs.stacked-workflows-content.passthru.skillsDir;
+      # passthru.skills is a `name -> self-contained skill dir` map (real
+      # reference files bundled inside each). Pick the skills you want, or
+      # just set `stacked-workflows.enable = true` to install all of them.
+      sws = contentPkgs.stacked-workflows-content.passthru.skills;
     in {
-      stack-fix = sws + "/stack-fix";
-      stack-plan = sws + "/stack-plan";
+      inherit (sws) stack-fix stack-plan;
     };
   };
 

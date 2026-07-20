@@ -168,9 +168,17 @@ This is a different discipline from the AI CLI factories
 separation by construction. Plain modules have no such guardrail —
 authors must decide scope consciously.
 
-**Historical bug this caused:** the stacked-workflows HM module
-contributed `ai.skills.sws-*` from its HM scope, intending devenv
-to "share" the pool. HM's Claude consumer wrote
-`~/.claude/skills/sws-*` (leaking personal-scope files), and
-devenv never saw the skills at all. Fix: move the contribution to
-the devenv module. See `docs/stacked-workflows-scope-fix-plan.md`.
+**Worked example — stacked-workflows skills.** Because an
+`ai.skills` value set in one backend is invisible to the other,
+the stacked-workflows package contributes its `stack-*` skills from
+BOTH backend modules: the HM module installs them user-global
+(`~/.claude/skills/stack-*`, ...) and the devenv module installs
+them project-local — two separate, deliberate contributions, one
+per eval. A 2026-04 bug drove the lesson home: the skills were
+contributed from ONLY the HM module while a shared devenv pool was
+expected to "pick them up", so devenv consumers saw nothing while
+the HM contribution alone reached personal scope. It was first
+scoped to the devenv module (commit `940ec54c`); the current design
+re-adds the HM contribution as its own explicit, user-global
+emission, so both backends now contribute (each via
+`lib/ai/mkSkillPackageModule`).
