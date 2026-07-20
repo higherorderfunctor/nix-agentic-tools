@@ -29,7 +29,7 @@ improvements land in this doc only by a deliberate grooming session, never self-
 > concerns become schema-backed state fields, not ad-hoc prose tokens). The backlog sub-workflow
 > this doc references lives at `living-workflow-backlog.md`.
 >
-> **Living-doc version: `v6-garnet-tundra-birch`.** The assigned VERSION dependents pin to — a
+> **Living-doc version: `v7-slate-marsh-aspen`.** The assigned VERSION dependents pin to — a
 > monotonic ORDINAL (for "am I behind?") paired with a DISTINCTIVE LABEL (so the exact version
 > stays searchable in history and in copied text). A modifying commit bumps it and authors a
 > migration entry if an upgrader needs one (see DRY-BY-REFERENCE → BASELINE PIN, MIGRATION GUIDE,
@@ -511,6 +511,15 @@ is authoritative thereafter.
      what counts as a convergence BLOCKER, never what counts as a defect. Non-blocking findings are
      recorded and serviced, NOT hunted to zero each pass — their supply is unbounded whenever the
      surface area is, so a "no findings" bar never converges — and they do not gate convergence.
+   - DESIGN-PHASE COHERENCE REVIEW: run the adversarial coherence/contradiction check over a DESIGN
+     artifact before that design is consumed downstream, not only over the built diff after. A design
+     that conflicts with a neighbouring design decision, or with the plan that carries it, is cheaper
+     to resolve while it is still a design than after implementation has committed to it; a pass that
+     reviews only the built output surfaces a design-internal conflict mid-build, after work has been
+     spent building around it. Where a plan LEGITIMATELY separates a design phase from a build phase
+     — e.g. a build-class child work plan, not the functionality-free front-loaded phase the GREEDY
+     SCHEDULER bars — the design phase closes on its OWN coherence review, and self-contradiction
+     found there is a BLOCKING finding by the CONVERGENCE criterion, exactly as it is for a built diff.
 
 ── FULL-TIER ADDITIONS (skip if LITE) ──
 - Unit = smallest separately-resumable step; also the budget unit. Classed
@@ -679,7 +688,19 @@ JUDGMENT step precisely because whether an entry is needed — and what an upgra
 cannot be decided mechanically: a commit-time tool could enforce that the version moved but never
 that the guide is COMPLETE, so the same step that bumps the version writes the entry, keeping the
 two from drifting apart. A purely cosmetic / reflow-only commit is not a modifying commit and bumps
-nothing.
+nothing — and neither is any other BEHAVIOR-NEUTRAL master or shared-harness edit. The bump criterion is the
+BEHAVIOR-NEUTRAL versus BEHAVIOR-CHANGING line (the same REPOINT-VS-MIGRATION change class), not
+cosmetic-versus-substantive: an edit is behavior-changing when it changes what some instruction
+directs a reader to do, and behavior-neutral when it changes wording every reader sees but no
+instruction anyone follows — a deliberate terminology rename or a surface-form harmonization across
+the doc. Only a behavior-changing edit bumps — and it authors a migration entry only when an upgrader
+must actually act, keeping the bump and the entry as independent axes. Every behavior-neutral master
+or shared-harness edit — cosmetic, reflow, a deliberate rename, or the light-fix path's
+behavior-neutral repairs alike — is git-history-only, bumping nothing and adding no entry, because a
+dependent has nothing to reconcile and a migration note for a wording change is itself a fresh drift
+surface. So the light-fix carve-out is not a separate exception but this same boundary applied by a
+different actor: no behavior-neutral master edit bumps, whoever makes it, and the ordinal moves only
+when a dependent has a real convention to absorb.
 
 ── BACKLOG-ENTRY CONTRACT ──
 A backlog entry is: self-contained (decidable without reconstructing a session);

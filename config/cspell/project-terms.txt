@@ -147,6 +147,7 @@ modelcontextprotocol
 mystor
 narinfo
 neighbour
+neighbouring
 nixd
 nixdoc
 nixos
