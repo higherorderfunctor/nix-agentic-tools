@@ -17,6 +17,62 @@
     builtins.fromJSON (builtins.readFile ../../../overlays/claude-code-extracted.json);
   knownClaudeModels =
     builtins.fromJSON (builtins.readFile ../models.json);
+
+  # Typed hook wiring (northbound). S1: a handler `command` accepts a package,
+  # coerced to its executable path so its supporting files ride the /nix/store
+  # closure at absolute paths (Claude runs hooks with cwd = project root, so
+  # relative companion paths are unsafe). A package with meta.mainProgram →
+  # getExe; a bare-file derivation (writeShellScript/writeText) → its outPath; a
+  # string passes through unchanged.
+  pkgToCommand = p:
+    if lib.isDerivation p && (p.meta.mainProgram or null) != null
+    then lib.getExe p
+    else "${p}";
+  # A single handler. `command` is modelled fully; the exotic handler types
+  # (http/prompt/agent/mcp_tool) round-trip via the freeform JSON tail (and, on
+  # devenv, force the gap-write path — see plan §9b).
+  hookHandler = lib.types.submodule {
+    freeformType = (pkgs.formats.json {}).type;
+    options = {
+      type = lib.mkOption {
+        type = lib.types.enum ["command" "http" "prompt" "agent" "mcp_tool"];
+        default = "command";
+        description = "Handler type. Only `command` is modelled fully; other types round-trip via the freeform tail.";
+      };
+      command = lib.mkOption {
+        type = lib.types.nullOr (lib.types.coercedTo lib.types.package pkgToCommand lib.types.str);
+        default = null;
+        description = ''
+          For `type = "command"`: the executable to run. A package (coerced to
+          its getExe path — supporting files ride the store closure) or a string.
+        '';
+      };
+      timeout = lib.mkOption {
+        type = lib.types.nullOr lib.types.int;
+        default = null;
+        description = ''
+          Per-handler timeout in seconds. Lowered into settings.json; on the
+          devenv backend a non-null timeout forces the event onto the gap-write
+          path (devenv's `claude.code.hooks` has no timeout field).
+        '';
+      };
+    };
+  };
+  # One matcher block within an event: an optional matcher + its handlers.
+  hookMatcherBlock = lib.types.submodule {
+    options = {
+      matcher = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Tool-name matcher (exact name or JS regex). Null for events that take no matcher (Stop, UserPromptSubmit, …).";
+      };
+      hooks = lib.mkOption {
+        type = lib.types.listOf hookHandler;
+        default = [];
+        description = "Handlers that fire for this matcher block.";
+      };
+    };
+  };
 in
   lib.ai.app.mkAiApp {
     name = "claude";
@@ -247,34 +303,63 @@ in
         '';
       };
       hooks = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.listOf hookMatcherBlock);
+        default = {};
+        description = ''
+          Typed Claude hook event wiring, keyed by event name — mirrors
+          settings.json `hooks.<Event>` 1:1. Each event maps to a list of
+          matcher blocks; each block has an optional `matcher` and a list of
+          typed handlers. Lowered to settings.json on both backends
+          (programs.claude-code.settings on HM; claude.code.hooks records plus
+          a gap-write tail on devenv).
+
+          The event key is a soft enum: the ${toString (builtins.length extracted.hookEvents)}
+          recognized events (extracted from the packaged binary into the
+          drift-checked overlays/claude-code-extracted.json — never hard-coded)
+          are ${lib.concatStringsSep ", " extracted.hookEvents}. Any string is
+          accepted (forward-compatible with newer binaries).
+
+          For hooks that need supporting files, set a handler `command` to a
+          package (e.g. writeShellApplication) — the script and its data files
+          ride the /nix/store closure at absolute paths. Use
+          `ai.claude.hookScripts` only for trivial inline single-file hooks.
+          Claude-only — Kiro's `ai.kiro.hooks` takes JSON-shaped definitions.
+        '';
+        example = lib.literalExpression ''
+          {
+            PreToolUse = [
+              {
+                matcher = "Bash";
+                hooks = [{command = pkgs.writeShellApplication { /* ... */ };}];
+              }
+            ];
+          }
+        '';
+      };
+      hookScripts = lib.mkOption {
         type = lib.types.attrsOf lib.types.lines;
         default = {};
         description = ''
-          Claude hook shell scripts. Attribute name becomes the hook
-          filename; value is the script body. Routed to
-          `programs.claude-code.hooks` (HM) and merged into
-          `claude.code.hooks` (devenv, where existing
-          `settings.hooks` continues to work for backward compat but
-          this option is the authoritative route going forward).
-          Claude-only — Kiro's `ai.kiro.hooks` takes JSON-shaped hook
-          definitions (different file format, different semantics),
-          so no top-level `ai.hooks` fanout.
+          Inline Claude hook script bodies, materialized as standalone files at
+          `~/.claude/hooks/<name>` (HM: `programs.claude-code.hooks`; devenv:
+          greenfield `files` write). Attribute name = filename, value = script
+          body. For trivial single-file hooks only — hooks that need supporting
+          files should use a package `command` in `ai.claude.hooks` instead.
+          Claude-only — Kiro's `ai.kiro.hooks` takes JSON-shaped definitions.
         '';
         example = lib.literalExpression ''
           { pre-edit = "#!/usr/bin/env bash\nexec :\n"; }
         '';
       };
-      hooksDir = lib.mkOption {
+      hookScriptsDir = lib.mkOption {
         type = lib.types.nullOr (import ../../../lib/ai/ai-common.nix {inherit lib;}).dirOptionType;
         default = null;
         description = ''
-          Claude-specific directory of hook scripts. Each regular
-          file becomes one entry in `ai.claude.hooks` keyed by the
-          filename (no extension strip — Claude hooks are typically
-          extensionless shell scripts). Accepts a path literal or
-          `{ path, filter? }` (filter: name → bool, default
-          accepts every regular file). Claude-only — no top-level
-          `ai.hooksDir` fanout since hooks are Claude-specific.
+          Claude-specific directory of inline hook scripts. Each regular file
+          becomes one entry in `ai.claude.hookScripts` keyed by the filename
+          (no extension strip — Claude hooks are typically extensionless shell
+          scripts). Accepts a path literal or `{ path, filter? }` (filter:
+          name → bool, default accepts every regular file). Claude-only.
         '';
         example = lib.literalExpression ''./hooks'';
       };
@@ -334,12 +419,12 @@ in
               dirHelpers.agentsFromDir cfg.agentsDir
             );
           })
-          # L2b → L3: expand `ai.claude.hooksDir` into
-          # `ai.claude.hooks`. Content is `readFile`'d into
+          # L2b → L3: expand `ai.claude.hookScriptsDir` into
+          # `ai.claude.hookScripts`. Content is `readFile`'d into
           # `lib.types.lines` via hooksFromDir.
-          (lib.mkIf (cfg.hooksDir != null) {
-            ai.claude.hooks = lib.mapAttrs (_: lib.mkDefault) (
-              dirHelpers.hooksFromDir cfg.hooksDir
+          (lib.mkIf (cfg.hookScriptsDir != null) {
+            ai.claude.hookScripts = lib.mapAttrs (_: lib.mkDefault) (
+              dirHelpers.hooksFromDir cfg.hookScriptsDir
             );
           })
           # Meta option: ultracode on at every launch. Writes the
@@ -364,7 +449,11 @@ in
               skills = lib.mapAttrs (_: lib.mkDefault) mergedSkills;
               context = lib.mkDefault composedContext;
               plugins = lib.mkDefault cfg.plugins;
-              inherit (cfg) marketplaces outputStyles commands hooks;
+              inherit (cfg) marketplaces outputStyles commands;
+              # Renamed script-bodies option → upstream script files. The new
+              # typed `ai.claude.hooks` event map lowers to settings.json
+              # separately (Commit 4), NOT here.
+              hooks = cfg.hookScripts;
               lspServers = lib.mapAttrs aiCommon.mkClaudeLspConfig mergedLspServers;
               agents = mergedClaudeCopilotAgents;
               # Typed settings (effortLevel, model) plus freeform
@@ -508,13 +597,13 @@ in
         hasGapSettings = gapSettings != {};
       in
         lib.mkMerge [
-          # L2b → L3: expand `ai.claude.hooksDir` into
-          # `ai.claude.hooks` (parity with HM side). The devenv
-          # factory merges `cfg.hooks` into `claude.code.hooks`
+          # L2b → L3: expand `ai.claude.hookScriptsDir` into
+          # `ai.claude.hookScripts` (parity with HM side). The devenv
+          # factory merges `cfg.hookScripts` into `claude.code.hooks`
           # below, so this expansion flows through.
-          (lib.mkIf (cfg.hooksDir != null) {
-            ai.claude.hooks = lib.mapAttrs (_: lib.mkDefault) (
-              dirHelpers.hooksFromDir cfg.hooksDir
+          (lib.mkIf (cfg.hookScriptsDir != null) {
+            ai.claude.hookScripts = lib.mapAttrs (_: lib.mkDefault) (
+              dirHelpers.hooksFromDir cfg.hookScriptsDir
             );
           })
           # Meta option: ultracode on at every launch (parity with HM side).
@@ -534,9 +623,11 @@ in
             claude.code = {
               enable = lib.mkDefault true;
               mcpServers = mergedServers;
-              # Merge cfg.hooks (authoritative) with legacy cfg.settings.hooks
-              # (backward-compat). ai.claude.hooks wins on collision.
-              hooks = (cfg.settings.hooks or {}) // cfg.hooks;
+              # PRE-COMMIT-3 latent state: still mis-feeds script bodies +
+              # freeform event-map into devenv's `attrsOf hookSubmodule` (masked
+              # by the module-eval stub). Commit 3 replaces this with the typed
+              # lowering (ride `claude.code.hooks` records + gap tail) and de-stubs.
+              hooks = (cfg.settings.hooks or {}) // cfg.hookScripts;
               settingsPath = lib.mkDefault ".claude/settings.json";
             };
           }

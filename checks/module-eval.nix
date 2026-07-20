@@ -2788,14 +2788,14 @@ in {
       (upstream.fix-issue or null) == "# Fix issue\n\nSteps…"
   );
 
-  # HM: ai.claude.hooks routes to programs.claude-code.hooks via
-  # identity translation.
-  module-claude-hm-hooks-route-to-upstream = mkTest "claude-hm-hooks-route-to-upstream" (
+  # HM: ai.claude.hookScripts (inline script bodies) routes to
+  # programs.claude-code.hooks via identity translation.
+  module-claude-hm-hookscripts-route-to-upstream = mkTest "claude-hm-hookscripts-route-to-upstream" (
     let
       result = evalHm {
         ai.claude = {
           enable = true;
-          hooks.pre-edit = "#!/usr/bin/env bash\necho edit\n";
+          hookScripts.pre-edit = "#!/usr/bin/env bash\necho edit\n";
         };
       };
       upstream = result.config.programs.claude-code.hooks or {};
@@ -2803,15 +2803,17 @@ in {
       (upstream.pre-edit or null) == "#!/usr/bin/env bash\necho edit\n"
   );
 
-  # Devenv: ai.claude.hooks merges into claude.code.hooks alongside
-  # the legacy settings.hooks route. ai.claude.hooks wins on collision.
-  module-claude-devenv-hooks-merge = mkTest "claude-devenv-hooks-merge" (
+  # Devenv PRE-COMMIT-3 latent state: hookScripts + legacy settings.hooks both
+  # still mis-feed claude.code.hooks (masked by the stub). Rewritten in Commit 5
+  # to assert the real typed lowering; here it only guards that the rename
+  # evaluates.
+  module-claude-devenv-hookscripts-merge = mkTest "claude-devenv-hookscripts-merge" (
     let
       result = evalDevenv {
         ai.claude = {
           enable = true;
           settings.hooks.from-settings = "#!/usr/bin/env bash\necho from-settings\n";
-          hooks.from-top = "#!/usr/bin/env bash\necho from-top\n";
+          hookScripts.from-top = "#!/usr/bin/env bash\necho from-top\n";
         };
       };
       upstream = result.config.claude.code.hooks or {};
@@ -2819,6 +2821,48 @@ in {
       (upstream.from-settings or null)
       != null
       && (upstream.from-top or null) != null
+  );
+
+  # Typed ai.claude.hooks event map: accepts the settings.json-shaped
+  # per-event structure (soft-enum event key → list of matcher blocks →
+  # list of typed handlers) and carries it through. No lowering asserted
+  # here — that is Commit 3/4.
+  module-claude-hooks-typed-event-map = mkTest "claude-hooks-typed-event-map" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          hooks.PreToolUse = [
+            {
+              matcher = "Bash";
+              hooks = [{command = "true";}];
+            }
+          ];
+        };
+      };
+      block = builtins.head (result.config.ai.claude.hooks.PreToolUse or []);
+      handler = builtins.head (block.hooks or []);
+    in
+      block.matcher == "Bash" && handler.command == "true" && handler.type == "command"
+  );
+
+  # S1: a handler `command` accepts a package and coerces to its getExe path
+  # (its supporting files ride the /nix/store closure at absolute paths).
+  module-claude-hooks-command-accepts-package = mkTest "claude-hooks-command-accepts-package" (
+    let
+      pkg = pkgs.writeShellApplication {
+        name = "demo-hook";
+        text = "exit 0";
+      };
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          hooks.PostToolUse = [{hooks = [{command = pkg;}];}];
+        };
+      };
+      handler = builtins.head (builtins.head result.config.ai.claude.hooks.PostToolUse).hooks;
+    in
+      builtins.isString handler.command && lib.hasSuffix "/bin/demo-hook" handler.command
   );
 
   # ── Collision-as-failure ──────────────────────────────────────
@@ -3239,18 +3283,18 @@ in {
       && files ? ".copilot/agents/agent-two.md"
   );
 
-  # ── ai.claude.hooksDir Dir helper ──────────────────────────
-  # Claude-only per plan §5 (hooks are a Claude-specific
+  # ── ai.claude.hookScriptsDir Dir helper ────────────────────
+  # Claude-only per plan §5 (hook scripts are a Claude-specific
   # concept). See lib/ai/dir-helpers.nix:hooksFromDir. Default
   # filter is always-true — hook files are typically
   # extensionless shell scripts, so no `.md`-like suffix strip.
 
-  module-claude-hooksdir-path-form = mkTest "claude-hooksdir-path-form" (
+  module-claude-hookscriptsdir-path-form = mkTest "claude-hookscriptsdir-path-form" (
     let
       result = evalHm {
         ai.claude = {
           enable = true;
-          hooksDir = ./fixtures/claude-hooks;
+          hookScriptsDir = ./fixtures/claude-hooks;
         };
       };
       upstream = result.config.programs.claude-code.hooks or {};
@@ -3259,12 +3303,12 @@ in {
   );
 
   # Filter excludes post-edit.
-  module-claude-hooksdir-filter = mkTest "claude-hooksdir-filter" (
+  module-claude-hookscriptsdir-filter = mkTest "claude-hookscriptsdir-filter" (
     let
       result = evalHm {
         ai.claude = {
           enable = true;
-          hooksDir = {
+          hookScriptsDir = {
             path = ./fixtures/claude-hooks;
             filter = name: name == "pre-edit";
           };
@@ -3275,17 +3319,17 @@ in {
       upstream ? pre-edit && !(upstream ? post-edit)
   );
 
-  # Collision: Dir-generated vs explicit `ai.claude.hooks.<name>`
-  # is NOT a shared-pool collision (hooks have no top-level pool),
+  # Collision: Dir-generated vs explicit `ai.claude.hookScripts.<name>`
+  # is NOT a shared-pool collision (hook scripts have no top-level pool),
   # so the module system handles it via the `attrsOf lines` merge.
   # The Dir expansion uses mkDefault so explicit entries win.
-  module-claude-hooksdir-explicit-wins-within-layer = mkTest "claude-hooksdir-explicit-wins-within-layer" (
+  module-claude-hookscriptsdir-explicit-wins-within-layer = mkTest "claude-hookscriptsdir-explicit-wins-within-layer" (
     let
       result = evalHm {
         ai.claude = {
           enable = true;
-          hooks.pre-edit = "explicit override";
-          hooksDir = ./fixtures/claude-hooks;
+          hookScripts.pre-edit = "explicit override";
+          hookScriptsDir = ./fixtures/claude-hooks;
         };
       };
       upstream = result.config.programs.claude-code.hooks or {};
@@ -3293,13 +3337,13 @@ in {
       upstream.pre-edit == "explicit override"
   );
 
-  # Devenv parity — hooksDir feeds claude.code.hooks.
-  module-claude-devenv-hooksdir-path-form = mkTest "claude-devenv-hooksdir-path-form" (
+  # Devenv parity — hookScriptsDir feeds the script-file route.
+  module-claude-devenv-hookscriptsdir-path-form = mkTest "claude-devenv-hookscriptsdir-path-form" (
     let
       result = evalDevenv {
         ai.claude = {
           enable = true;
-          hooksDir = ./fixtures/claude-hooks;
+          hookScriptsDir = ./fixtures/claude-hooks;
         };
       };
       upstream = result.config.claude.code.hooks or {};

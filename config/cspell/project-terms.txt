@@ -97,6 +97,8 @@ heredocs
 higherorderfunctor
 hitl
 hnsw
+hookscripts
+hookscriptsdir
 hooksdir
 hostable
 hotspots
