@@ -22,7 +22,14 @@ in {
     ./packages/claude-code/modules/devenv
     ./packages/copilot-cli/modules/devenv
     ./packages/kiro-cli/modules/devenv
-    ./packages/stacked-workflows/modules/devenv
+    # NOTE: the stacked-workflows and living-workflow devenv modules are NOT
+    # imported here. Enabling them would fan their skills into `ai.skills`
+    # UNPREFIXED (stack-*, living-workflow) — which, once those packages are
+    # installed user-global via nixos-config, the personal-scope copies would
+    # silently shadow (Claude precedence: Personal > Project). This dev repo
+    # instead wires the same skills directly under a `dev-` prefix (see the
+    # `ai.skills` block below) so the in-repo copies are distinctly invocable
+    # and not shadowed while developing them.
   ];
 
   # ── Overlays ──────────────────────────────────────────────────────────
@@ -68,20 +75,31 @@ in {
     kiro.enable = true;
 
     skills = let
-      sws = pkgs.stacked-workflows-content.passthru.skillsDir;
-    in {
-      sws-stack-fix = sws + "/stack-fix";
-      sws-stack-plan = sws + "/stack-plan";
-      sws-stack-split = sws + "/stack-split";
-      sws-stack-submit = sws + "/stack-submit";
-      sws-stack-summary = sws + "/stack-summary";
-      sws-stack-test = sws + "/stack-test";
+      # Dev-repo self-consumption. Both the stacked-workflows and
+      # living-workflow skills are installed here under a `dev-` prefix so the
+      # in-repo copies never collide with — or get shadowed by — the
+      # user-global installs of the same skills (Claude precedence: Personal >
+      # Project, silent). Consumers and the global installs stay unprefixed
+      # (stack-*, living-workflow); only this dev shell prefixes.
+      prefixDev = lib.mapAttrs' (name: value: lib.nameValuePair "dev-${name}" value);
+      lwSkill = import ./packages/living-workflow/lib/mkSkill.nix {inherit pkgs;};
+    in
+      # stacked-workflows: re-key the deref'd, self-contained stack-* skill
+      # dirs (real reference files bundled inside each) as dev-stack-*.
+      prefixDev pkgs.stacked-workflows-content.passthru.skills
+      // {
+        # living-workflow: generated with the devenv XDG shell-default state
+        # base (devenv has no config.xdg.stateHome), keyed dev-living-workflow.
+        dev-living-workflow = lwSkill {
+          stateBase = "\${XDG_STATE_HOME:-$HOME/.local/state}/living-workflows";
+          src = ./packages/living-workflow/skills/living-workflow;
+        };
 
-      # Dev skills
-      index-repo-docs = ./dev/skills/index-repo-docs;
-      merge-update-prs = ./dev/skills/merge-update-prs;
-      repo-review = ./dev/skills/repo-review;
-    };
+        # Dev skills (repo-local tooling, not published packages).
+        index-repo-docs = ./dev/skills/index-repo-docs;
+        merge-update-prs = ./dev/skills/merge-update-prs;
+        repo-review = ./dev/skills/repo-review;
+      };
   };
 
   # ── treefmt ────────────────────────────────────────────────────────────
@@ -304,11 +322,15 @@ in {
   # ── Validation ─────────────────────────────────────────────────────────
   enterTest = ''
     echo "Validating devenv configuration..."
-    test -f .claude/skills/sws-stack-fix/SKILL.md || { echo "FAIL: .claude/skills/sws-stack-fix/SKILL.md missing"; exit 1; }
+    test -f .claude/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .claude/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
+    # Deref'd references must resolve on disk (guards the dangling-symlink
+    # regression end-to-end, not just at the store-path level).
+    test -f .claude/skills/dev-stack-fix/references/git-branchless.md || { echo "FAIL: dev-stack-fix reference git-branchless.md does not resolve"; exit 1; }
+    test -f .claude/skills/dev-living-workflow/SKILL.md || { echo "FAIL: .claude/skills/dev-living-workflow/SKILL.md missing"; exit 1; }
     test -f .claude/skills/repo-review/SKILL.md || { echo "FAIL: .claude/skills/repo-review/SKILL.md missing"; exit 1; }
     test -f .claude/skills/merge-update-prs/SKILL.md || { echo "FAIL: .claude/skills/merge-update-prs/SKILL.md missing"; exit 1; }
-    test -f .github/skills/sws-stack-fix/SKILL.md || { echo "FAIL: .github/skills/sws-stack-fix/SKILL.md missing"; exit 1; }
-    test -f .kiro/skills/sws-stack-fix/SKILL.md || { echo "FAIL: .kiro/skills/sws-stack-fix/SKILL.md missing"; exit 1; }
+    test -f .github/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .github/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
+    test -f .kiro/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .kiro/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
     test -L .claude/settings.json || { echo "FAIL: .claude/settings.json missing"; exit 1; }
     echo "All checks passed"
   '';
