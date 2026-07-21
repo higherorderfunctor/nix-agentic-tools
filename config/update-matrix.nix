@@ -69,9 +69,25 @@
       flags = "--version skip";
       git = "https://github.com/CaviraOSS/OpenMemory.git";
     };
+    # oxlint overrides THREE hashes (src, cargoDeps, pnpmDeps). If a future
+    # update leaves any stale (nix-update not bumping all three), switch to a
+    # bespoke `--use-update-script`. Empirical update-path validation deferred.
+    oxlint = {
+      flags = "--version skip";
+      git = "https://github.com/oxc-project/oxc.git";
+    };
     sympy-mcp = {
       flags = "--version skip";
       git = "https://github.com/sdiehl/sympy-mcp.git";
+    };
+    # tsgolint src uses fetchSubmodules (typescript-go). The rev-bump pre-step's
+    # `nix flake prefetch` omits submodules, so if a future update commits a
+    # wrong src hash that nix-update does not self-correct, switch to a bespoke
+    # `--use-update-script` using `nix-prefetch-git --fetch-submodules`.
+    # Empirical update-path validation deferred.
+    tsgolint = {
+      flags = "--version skip";
+      git = "https://github.com/oxc-project/tsgolint.git";
     };
 
     # ── Binary packages (custom updateScript handles per-platform fetches) ──
