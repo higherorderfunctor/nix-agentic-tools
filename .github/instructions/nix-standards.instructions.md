@@ -109,6 +109,29 @@ If the output needs to be formatted, either:
 1. Format inside the nix derivation (add formatter to build inputs)
 2. Format the working tree copy after `cp`
 
+**Destinations may themselves be store symlinks.** Anything declared
+in devenv's `files.*` (see `devenv.nix`) exists in the working tree as
+a symlink _into_ the store, so a bare `cp` onto it either follows the
+link and tries to write to the read-only original, or — when the
+generated content is unchanged and the link already resolves to the
+source — aborts with `are the same file`, which is fatal under
+`errexit`. `dev/tasks/generate.nix` therefore routes every copy
+through `copy_out`, which unlinks the destination first and then
+`chmod u+w`'s the copy (store files are `0444` and the mode is
+inherited):
+
+```bash
+copy_out() {
+  rm -f "$2"        # removes the working-tree link, never the store
+  cp -f "$1" "$2"
+  chmod u+w "$2"
+}
+```
+
+Use `rm -f` rather than `cp --remove-destination`, which is banned
+above. Prefer `copy_out` over open-coding `cp` in any new generation
+task.
+
 ### overrideAttrs: Preserve passthru
 
 When using `overrideAttrs` on nixpkgs packages, **merge passthru

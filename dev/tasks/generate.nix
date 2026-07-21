@@ -6,6 +6,29 @@ _: let
   '';
 
   log = ''log() { echo "==> $*" >&2; }'';
+
+  # Copy one generated file out of the nix store into the working tree.
+  #
+  # Destinations are frequently devenv `files.*` symlinks pointing INTO
+  # the store (see devenv.nix), which breaks a plain `cp` two ways: when
+  # the generated content is unchanged the link already resolves to the
+  # very file being copied, so cp aborts with "are the same file" (fatal
+  # under errexit); and otherwise cp follows the link and tries to write
+  # into the read-only store. Unlinking the destination first avoids
+  # both, and — unlike `cp --remove-destination`, which the nix coding
+  # standard forbids — only ever removes the working-tree link, never
+  # anything under /nix/store.
+  #
+  # chmod because store files are 0444 and the copy inherits that,
+  # leaving a read-only file in the tree. generate:site:prose already
+  # does the same for its directory copies.
+  copyOut = ''
+    copy_out() {
+      rm -f "$2"
+      cp -f "$1" "$2"
+      chmod u+w "$2"
+    }
+  '';
 in {
   tasks = {
     "build:all" = {
@@ -35,9 +58,10 @@ in {
       exec = ''
         ${bashPreamble}
         ${log}
+        ${copyOut}
         log "Building CONTRIBUTING.md"
         src=$(nix build .#repo-contributing --no-link --print-out-paths)
-        cp -f "$src" CONTRIBUTING.md
+        copy_out "$src" CONTRIBUTING.md
         log "CONTRIBUTING.md updated"
       '';
     };
@@ -48,9 +72,10 @@ in {
       exec = ''
         ${bashPreamble}
         ${log}
+        ${copyOut}
         log "Building README.md"
         src=$(nix build .#repo-readme --no-link --print-out-paths)
-        cp -f "$src" README.md
+        copy_out "$src" README.md
         log "README.md updated"
       '';
     };
@@ -74,9 +99,10 @@ in {
       exec = ''
         ${bashPreamble}
         ${log}
+        ${copyOut}
         log "Building AGENTS.md"
         src=$(nix build .#instructions-agents --no-link --print-out-paths)
-        cp -f "$src/AGENTS.md" AGENTS.md
+        copy_out "$src/AGENTS.md" AGENTS.md
         log "AGENTS.md updated"
       '';
     };
@@ -87,12 +113,13 @@ in {
       exec = ''
         ${bashPreamble}
         ${log}
+        ${copyOut}
         log "Building CLAUDE.md + Claude rules"
         src=$(nix build .#instructions-claude --no-link --print-out-paths)
-        cp -f "$src/CLAUDE.md" CLAUDE.md
+        copy_out "$src/CLAUDE.md" CLAUDE.md
         mkdir -p .claude/rules
         for f in "$src"/rules/*.md; do
-          [ -f "$f" ] && cp -f "$f" ".claude/rules/$(basename "$f")"
+          [ -f "$f" ] && copy_out "$f" ".claude/rules/$(basename "$f")"
         done
         log "CLAUDE.md + rules updated"
       '';
@@ -104,12 +131,13 @@ in {
       exec = ''
         ${bashPreamble}
         ${log}
+        ${copyOut}
         log "Building Copilot instructions"
         src=$(nix build .#instructions-copilot --no-link --print-out-paths)
         mkdir -p .github/instructions
-        cp -f "$src/copilot-instructions.md" .github/copilot-instructions.md
+        copy_out "$src/copilot-instructions.md" .github/copilot-instructions.md
         for f in "$src"/instructions/*.md; do
-          [ -f "$f" ] && cp -f "$f" ".github/instructions/$(basename "$f")"
+          [ -f "$f" ] && copy_out "$f" ".github/instructions/$(basename "$f")"
         done
         log "Copilot instructions updated"
       '';
@@ -121,11 +149,12 @@ in {
       exec = ''
         ${bashPreamble}
         ${log}
+        ${copyOut}
         log "Building Kiro steering files"
         src=$(nix build .#instructions-kiro --no-link --print-out-paths)
         mkdir -p .kiro/steering
         for f in "$src"/*.md; do
-          [ -f "$f" ] && cp -f "$f" ".kiro/steering/$(basename "$f")"
+          [ -f "$f" ] && copy_out "$f" ".kiro/steering/$(basename "$f")"
         done
         log "Kiro steering files updated"
       '';
