@@ -22,6 +22,111 @@
   # Eval-pure read of the committed source list (no IFD).
   knownKiroModels = builtins.fromJSON (builtins.readFile ../models.json);
 
+  # Eval-pure read of the committed hook-trigger sidecar (no IFD) — the source of
+  # the `trigger` soft-enum. Regenerated on bump + drift-checked
+  # (checks/kiro-cli-extracted.nix). See overlays.md § IFD Patterns.
+  kiroExtracted =
+    builtins.fromJSON (builtins.readFile ../../../overlays/kiro-cli-extracted.json);
+
+  # Typed hook wiring (northbound), mirroring the Claude slice. S1: an
+  # `action.command` accepts a package, coerced to its executable path so
+  # supporting files ride the /nix/store closure at absolute, cwd-independent
+  # paths (Kiro runs hooks with cwd = project root). meta.mainProgram → getExe; a
+  # bare-file derivation → its outPath; a string passes through.
+  pkgToCommand = p:
+    if lib.isDerivation p && (p.meta.mainProgram or null) != null
+    then lib.getExe p
+    else "${p}";
+
+  # A hook action: `command` (subprocess) or `agent` (inline prompt appended to
+  # the model context). `command` is S1 store-backed; extra fields round-trip via
+  # the freeform JSON tail.
+  kiroAction = lib.types.submodule {
+    freeformType = (pkgs.formats.json {}).type;
+    options = {
+      type = lib.mkOption {
+        type = lib.types.enum ["command" "agent"];
+        default = "command";
+        description = "`command` runs a subprocess; `agent` appends `prompt` to the model context (no subprocess, ignores timeout).";
+      };
+      command = lib.mkOption {
+        type = lib.types.nullOr (lib.types.coercedTo lib.types.package pkgToCommand lib.types.str);
+        default = null;
+        description = "For type=command: a package (coerced to its getExe path — companion files ride the store closure) or a string.";
+      };
+      prompt = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "For type=agent: the prompt appended to the current model context.";
+      };
+    };
+  };
+
+  # A single v3 hook record (keyed by hook name in `ai.kiro.hooks`). Un-modeled
+  # fields round-trip via the freeform JSON tail.
+  kiroHookRecord = lib.types.submodule {
+    freeformType = (pkgs.formats.json {}).type;
+    options = {
+      trigger = lib.mkOption {
+        type = lib.types.either (lib.types.enum kiroExtracted.hookTriggers) lib.types.str;
+        description = "Lifecycle trigger — soft enum from the drift-checked sidecar (any string accepted for forward-compat).";
+      };
+      matcher = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Tool-name matcher (Pre/PostToolUse); null for triggers that take none.";
+      };
+      action = lib.mkOption {
+        type = kiroAction;
+        default = {};
+        description = "What the hook does when it fires.";
+      };
+      timeout = lib.mkOption {
+        type = lib.types.nullOr lib.types.int;
+        default = null;
+        description = "Timeout in seconds (Kiro default 60; 0 disables; ignored for `agent` actions).";
+      };
+      enabled = lib.mkOption {
+        type = lib.types.nullOr lib.types.bool;
+        default = null;
+        description = "Whether the hook is enabled (Kiro default true).";
+      };
+      description = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Human-readable description.";
+      };
+    };
+  };
+
+  # Lower one typed record → its v3 `{ version, hooks:[record] }` envelope. `name`
+  # = the attr key; null optionals dropped (record + action).
+  kiroHookEnvelope = name: record: {
+    version = "v1";
+    hooks = [
+      (
+        {inherit name;}
+        // lib.filterAttrs (_: v: v != null) (removeAttrs record ["action"])
+        // {action = lib.filterAttrs (_: v: v != null) record.action;}
+      )
+    ];
+  };
+
+  # Combine raw `hooksJson` (verbatim escape hatch) + typed `hooks` (lowered to
+  # envelope JSON) into one <name> → JSON-string attrset, consumed by BOTH
+  # backends. Typed wins on a name collision. A raw `hooksJson` value may be a
+  # PATH (read its contents) or a string; resolve to string CONTENT here so both
+  # backends write the file body — devenv's `writeText` would otherwise embed the
+  # path string, and HM's `mkSourceEntry` handles paths but resolving keeps them
+  # identical.
+  mkAllHookFiles = cfg:
+    lib.mapAttrs (_: c:
+      if builtins.isPath c
+      then builtins.readFile c
+      else c)
+    cfg.hooksJson
+    // lib.mapAttrs (name: record: builtins.toJSON (kiroHookEnvelope name record)) cfg.hooks;
+
   # Translate the v2 `trustedMcpTools` list into v3 `permissions.yaml`
   # rules (ONLY when v3 is active) and merge with explicit `permissions`.
   # v2 keeps using `--trust-tools` untouched. See
@@ -310,12 +415,38 @@ in
         default = null;
         description = "External directory of agent JSON files (symlinked into <configDir>/agents).";
       };
-      # Inline hook JSON content. Written under
+      # Typed v3 hook records (keyed by hook name) — the northbound surface.
+      # Each lowers to a `{ version:"v1", hooks:[…] }` envelope written under
       # `<configDir>/hooks/<name>.json` in both backends.
       hooks = lib.mkOption {
+        type = lib.types.attrsOf kiroHookRecord;
+        default = {};
+        description = ''
+          Typed v3 hook records, keyed by hook name. Each lowers to a
+          `{ version = "v1"; hooks = [ … ]; }` envelope written to
+          `<configDir>/hooks/<name>.json` on both backends. `trigger` is a soft
+          enum from the drift-checked sidecar. Raw pre-baked envelopes go in
+          `hooksJson`. v3 schema only — v2 embedded hooks are NOT modeled (they
+          live in agent config; `kiro-cli agent migrate` converts them to v3).
+        '';
+        example = lib.literalExpression ''
+          {
+            lint = {
+              trigger = "PostToolUse";
+              matcher = "fs_write";
+              action.command = "just lint";
+              timeout = 30;
+            };
+          }
+        '';
+      };
+      # Raw hook envelope JSON (escape hatch) — written verbatim to
+      # `<configDir>/hooks/<name>.json`. Prefer the typed `hooks`; this exists for
+      # pre-baked envelopes (autoMemory ships one here).
+      hooksJson = lib.mkOption {
         type = lib.types.attrsOf (lib.types.either lib.types.lines lib.types.path);
         default = {};
-        description = "Hook JSON definitions (written to <configDir>/hooks/<name>.json).";
+        description = "Raw hook envelope JSON written verbatim to <configDir>/hooks/<name>.json (escape hatch; prefer typed `hooks`).";
       };
       # External hooks directory. Symlinked at `<configDir>/hooks`
       # when set; walked recursively in devenv.
@@ -422,8 +553,8 @@ in
                 message = "ai.kiro: cannot set both `agents` and `agentsDir` — choose one.";
               }
               {
-                assertion = !(cfg.hooks != {} && cfg.hooksDir != null);
-                message = "ai.kiro: cannot set both `hooks` and `hooksDir` — choose one.";
+                assertion = !((cfg.hooks != {} || cfg.hooksJson != {}) && cfg.hooksDir != null);
+                message = "ai.kiro: cannot set both inline hooks (`hooks`/`hooksJson`) and `hooksDir` — choose one.";
               }
             ];
           }
@@ -464,9 +595,10 @@ in
               recursive = true;
             };
           })
-          # Inline hook JSON files.
-          (lib.mkIf (cfg.hooks != {}) {
-            home.file = mkJsonEntries "hooks" cfg.hooks;
+          # Inline hook files — typed `hooks` lowered to v3 envelopes + raw
+          # `hooksJson`, combined into one <name> → JSON attrset.
+          (lib.mkIf (cfg.hooks != {} || cfg.hooksJson != {}) {
+            home.file = mkJsonEntries "hooks" (mkAllHookFiles cfg);
           })
           # External hooks directory — symlinked wholesale via
           # `recursive = true` (Layout B).
@@ -609,8 +741,8 @@ in
                 message = "ai.kiro: cannot set both `agents` and `agentsDir` — choose one.";
               }
               {
-                assertion = !(cfg.hooks != {} && cfg.hooksDir != null);
-                message = "ai.kiro: cannot set both `hooks` and `hooksDir` — choose one.";
+                assertion = !((cfg.hooks != {} || cfg.hooksJson != {}) && cfg.hooksDir != null);
+                message = "ai.kiro: cannot set both inline hooks (`hooks`/`hooksJson`) and `hooksDir` — choose one.";
               }
             ];
           }
@@ -662,13 +794,13 @@ in
           # symlinked hook never loads and `/hooks` shows nothing. Only hooks
           # need this — steering and agents load fine as symlinks. See the
           # kiro-v3-hooks-workspace-local finding + docs/plans/kiro-cli-auto-memory.md.
-          (lib.mkIf (cfg.hooks != {}) {
+          (lib.mkIf (cfg.hooks != {} || cfg.hooksJson != {}) {
             enterShell = ''
               ${pkgs.coreutils}/bin/mkdir -p ${lib.escapeShellArg "${cfg.configDir}/hooks"}
               ${lib.concatStrings (lib.mapAttrsToList (name: content: ''
                   ${pkgs.coreutils}/bin/install -m 0644 ${pkgs.writeText "kiro-hook-${name}.json" content} ${lib.escapeShellArg "${cfg.configDir}/hooks/${name}.json"}
                 '')
-                cfg.hooks)}
+                (mkAllHookFiles cfg))}
             '';
           })
           # External hooks directory — copied as REAL files (same reason as the

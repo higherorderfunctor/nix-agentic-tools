@@ -91,23 +91,36 @@ Claude output-contract in [§4](#4-claude-code-hook-inventory-authoritative)).
 
 ## 3. Current state in-repo
 
-### 3.1 Claude (`packages/claude-code/lib/mkClaude.nix`)
+### 3.1 Claude (`packages/claude-code/lib/mkClaude.nix`) — ✅ LANDED (Claude slice C1–C6b, origin @ `b5f7f74f`)
 
-- `ai.claude.hooks` = `attrsOf lines` — **script bodies**, written to `~/.claude/hooks/<name>`
-  as **non-executable** plain-text files via upstream `programs.claude-code.hooks`
-  (`mkClaude.nix:250-267`, `:356`). **[C, R]** (a lens said "executable"; upstream writes
-  plain text — the verifier corrected it; note the HM test asserts executability for its
-  _own_ fixture, so re-confirm on our path).
-- `ai.claude.hooksDir` = `nullOr dirOptionType` → `hooksFromDir` readFiles each file into
-  `attrsOf lines` (`dir-helpers.nix:116-127`).
-- Event→matcher→command wiring has **no typed home** — it rides the freeform
-  `ai.claude.settings.hooks` passthrough into `settings.json`.
-- **devenv route (`mkClaude.nix:507`):** `claude.code.hooks = (cfg.settings.hooks or {}) // cfg.hooks`.
-  `cfg.hooks` is `attrsOf lines` (strings); `cfg.settings.hooks` is event-nested JSON.
-  **Neither matches devenv's real `claude.code.hooks` type** (`attrsOf hookSubmodule` =
-  `{enable,name,hookType(enum 17),matcher,command}`). Only passes because
-  `checks/module-eval.nix:112` stubs `claude.code = attrsOf anything`. **Latent type
-  error to fix.** **[C]** (`section_05` §1).
+> **The bullets below are the now-accurate post-slice state** (typed hooks shipped 2026-07-20d;
+> full record: `docs/plans/claude-typed-hooks-implementation.md`). The pre-slice state — untyped
+> `attrsOf lines`, event-wiring riding freeform `settings.hooks`, and the latent devenv `//`
+> mis-feed (`claude.code.hooks = (settings.hooks) // cfg.hooks`, masked by the `attrsOf anything`
+> stub) — is preserved in the git history at `eadaa023` and in the closeout §2.
+
+- **`ai.claude.hooks` = typed per-event map** `attrsOf (listOf { matcher?; hooks = listOf handler })`.
+  `<Event>` is a **soft enum** `either (enum knownEvents) str` sourced from the extracted **30-event
+  `hookEvents`** key in `overlays/claude-code-extracted.json` (never hard-coded). A handler `command`
+  is **S1 store-backed** (`coercedTo package (getExe/outPath) str`) so companion files ride the
+  `/nix/store` closure at absolute, cwd-independent paths. **[C]**
+- **Script bodies moved to `ai.claude.hookScripts` / `hookScriptsDir`** (BREAKING but latent — no
+  consumer used them); lower to `~/.claude/hooks/<name>` (non-executable). **[C]**
+- **Event-wiring lowers via ONE shared `hooksToSettings` helper** to BOTH backends (HM →
+  `programs.claude-code.settings.hooks`; devenv → `files.".claude/settings.json".json.hooks`). The
+  latent devenv `//` mis-feed is **GONE** — `claude.code.hooks` records dropped entirely (approach B). **[C]**
+- **Verified devenv `claude.code.hooks` type** (re-verify on bump, devenv rev `5f1cf17b`):
+  `submodule { freeformType = attrsOf hookSubmodule; … }`, `hookSubmodule =
+{enable; name; hookType(enum 17); matcher; command(REQUIRED)}` — **command-only** (no
+  http/prompt/agent/mcp_tool, no `timeout`), and the enum covers only **17 of the binary's 30** events.
+  That "cannot-ride" tail is WHY approach B writes uniform settings.json JSON directly instead of minting
+  `claude.code.hooks` records. **[C]** (closeout §3.1/§9e).
+- **Composition:** `(pkgs.formats.json {}).type` **CONCATENATES** same-key list defs across writers
+  (verified empirically) — so our `settings.json.hooks.<Event>` write coexists with devenv's default
+  `git-hooks-run` entry with no clobber and no per-event partition. **[C]** (closeout §9e).
+- Legacy `ai.claude.settings.hooks` kept as a **deprecated composing escape hatch**. Drift + type guards:
+  `checks/claude-code-extracted.nix` (blocking hook-event enum) + `checks/claude-devenv-hooks-real-type.nix`
+  (real devenv module coexistence, NOT a stub). **[C]**
 
 ### 3.2 Kiro (`packages/kiro-cli/lib/mkKiro.nix`)
 
@@ -345,7 +358,7 @@ converts. Build **code stubs only**; do not model v2 typed. **[C]**
 | 10  | Skill/agent **frontmatter hooks**; plugin agents **can't** embed hooks                 | Claude | **[C]**                                                                              | A future "ship a hook with a skill" path exists on Claude; not on Kiro                                                                                                                                  |
 | 11  | Hooks **union across sources & run in parallel**; identical deduped                    | Claude | **[C]**                                                                              | Nix emits array entries; no concat/dispatcher                                                                                                                                                           |
 | 12  | Two doc pages + binary give **3 different trigger sets**                               | Kiro   | **[C]**                                                                              | Motivates drift detector; soft-enum + sidecar                                                                                                                                                           |
-| 13  | devenv `claude.code.hooks` schema mismatch masked by stub                              | (Nix)  | **[C]**                                                                              | Fix in refactor; write `settings.json.hooks` directly                                                                                                                                                   |
+| 13  | devenv `claude.code.hooks` schema mismatch masked by stub                              | (Nix)  | **[C]**                                                                              | ✅ FIXED (slice C3/C5): writes `settings.json.hooks` directly + real-type guard                                                                                                                         |
 | 14  | Claude event set is **binary-version-specific** (33 docs / 30 binary / 17 devenv-enum) | Claude | **[C]**                                                                              | Soft-enum from an extracted sidecar, never hard-code                                                                                                                                                    |
 
 ---
@@ -371,11 +384,13 @@ converts. Build **code stubs only**; do not model v2 typed. **[C]**
     modules declaring the same hook name is a failure). Script bodies compose by attrset
     key-union too — **[R]** a lens's "listOf concat" framing was corrected: the _script-file_
     surface is `attrsOf lines`. **[C]**
-- **The devenv `//` clobber (latent bug):** `claude.code.hooks = (settings.hooks or {}) // cfg.hooks`
-  right-biases — and `pkgs.formats.json` merge **replaces** lists, so a project `PostToolUse`
-  from devenv's own `git-hooks-run` and ours would clobber rather than union. Writing
-  `files.".claude/settings.json".json.hooks` ourselves (the existing gap-settings trick) fixes
-  fidelity **and** parity. **[C]** (`section_05` §5).
+- **The devenv `//` clobber — ✅ RESOLVED (Claude slice C3 `924bb9a1`).** The old
+  `claude.code.hooks = (settings.hooks) // cfg.hooks` mis-fed devenv's real type and is DROPPED.
+  **CORRECTION (verified empirically, closeout §9e):** `pkgs.formats.json` does **NOT** replace
+  same-key lists — it **CONCATENATES** them. So writing `files.".claude/settings.json".json.hooks`
+  directly (via the shared `hooksToSettings`) coexists with devenv's own `git-hooks-run` `PostToolUse`
+  entry — both land in the merged array. Fidelity + parity + no clobber, no per-event partition. **[C]**
+  **⇒ Kiro reuse:** if Kiro hooks ever compose from >1 writer, this same concat model applies.
 
 ---
 
@@ -417,6 +432,11 @@ enabled?; description? }`, `trigger` a soft enum from `hook-triggers.json`.
 store path (Claude/Kiro hook env replaces PATH). Generalizes autoMemory's existing wrappers. **[C]**
 
 ### 8.4 Migration is breaking
+
+> **Claude half ✅ DONE (slice C2 `11c3f04c`)** exactly as described below: `ai.claude.hooks`
+> repurposed to the event map, script bodies → `ai.claude.hookScripts`/`hookScriptsDir`, legacy
+> `settings.hooks` kept as a composing escape hatch; nixos-config had no consumer so the rename was
+> latent. **The Kiro half below is the remaining work** (this session).
 
 `ai.claude.hooks` (script bodies) wants the same name as the new event map → repurpose it to
 the event map, move script bodies to `ai.claude.hookScripts`/`hooksDir`; keep freeform
@@ -757,6 +777,38 @@ lenses — consensus noted.)
   typed event with captured-fixture provenance and failure-handling tests; migrate autoMemory
   onto the typed surface; blocking drift guard.
 
+### Backlog — concrete follow-ups (do it right, not surgical)
+
+> **Operator framing (2026-07-20f):** the north star is a **complete, correct typed hook option
+> surface across BOTH ecosystems** — the foundation for wiring in **different memory systems** (to
+> eval/compare) and **telemetry** (to measure hook effectiveness). Options get designed RIGHT on
+> their own merits; **implementations map onto the options, never the reverse.** (`B1` — the
+> `extraExtract` sidecar auto-refresh — is already DONE via the `*-extracted.json` approach on both
+> CLIs, so it drops off this list.)
+
+- **B2 — retire the surgical `hooksJson` bridge; migrate consumers onto the typed surface.**
+  `ai.kiro.hooksJson` was shaped to accept the existing autoMemory _pilot_'s pre-baked envelope
+  verbatim (D9 "byte-identical"). The pilot is **not** the destination — de-emphasize the
+  byte-identical constraint and do NOT let the pilot shape the option surface. Once the done-right
+  typed surface is complete: migrate autoMemory (and any memory impl) onto typed `ai.kiro.hooks`
+  records; **remove anything shaped to the pilot** (pilot-matching `hooksJson` usage + test shapes);
+  accept that the pilot's on-disk output may change (e.g. per-record files vs. today's single
+  envelope). Design the typed surface to EXPRESS what consumers need so impls map cleanly — e.g. an
+  optional **envelope/group key** to co-locate records in one Kiro file, a **telemetry hook-fire**
+  channel, parity across the FULL hook set (not just the PoC subset). Whether `hooksJson` survives at
+  all (as a genuinely _generic_ escape hatch) or is dropped is part of this. This session: nothing to
+  undo — the bridge stays so autoMemory keeps working; B2 is the follow-up.
+
+- **B3 — investigate wiring the non-hermetic extraction into automation; assess the auth cost.**
+  The binary-grep extraction is hermetic + wired (`passthru.extracted` + blocking drift check). The
+  OTHER extraction paths are not: (a) **docs-diff contract extraction** (fetch the hook docs, diff for
+  stdin/stdout _contract_ drift — public URLs, no auth, but network → scheduled Action / flake app,
+  not a `nix flake check`); (b) **live Tier-2 capture** (fire hooks on the _authenticated_ CLI,
+  capture real stdin — needs an authed CLI + burns tokens → cannot be a sandboxed check). Investigate
+  whether/where each can be wired (scheduled Action, devenv task, HITL harness), **understand exactly
+  what needs auth** and what that constrains, and make a deliberate choice (token-secret CI vs.
+  stays-HITL) rather than defaulting.
+
 ---
 
 ## 15. Verification-pass corrections applied (transparency)
@@ -804,6 +856,12 @@ symlink-skip (it is path-shallowness per #9075) though 2.13 symlink-_follow_ sta
 ## 17. Session handoff & next actions
 
 ### ▶ RESUME HERE (next session — hand off THIS doc)
+
+> **⟳ UPDATE 2026-07-20e (session 5 takeover):** the **Claude slice is DONE + landed** (C1–C6b,
+> `origin/refactor @ b5f7f74f`) and **C7 (this fold) is complete** — §3.1/§7/§6/§8.4 now reflect the
+> landed reality. The remaining work is the **Kiro slice**; the live plan of record for it is the
+> "Takeover + grading" section of `docs/plans/typed-hooks-phase1-build-plan.md` + memory
+> `project_typed_hooks_assessment` SESSION 5. The pre-slice text below is retained for provenance.
 
 **State:** all hermetic research + prototypes are **done and committed**. This doc is the plan of record;
 §4 + §11.1 + §18 are the hardened, primary-cited contract; `docs/plans/typed-hooks-research/` holds the
