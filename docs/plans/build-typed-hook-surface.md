@@ -3,123 +3,165 @@
 > **Living plan** (dev-living-workflow, FULL tier, CLI mode). This doc is the human-readable
 > face; the **authoritative machine state is out-of-repo** at
 > `${XDG_STATE_HOME:-~/.local/state}/living-workflows/nix-agentic-tools/typed-hook-surface/`
-> (`state.json` + `journal.ndjson`). This doc is **committed to the working branch** by operator
-> direction (overriding the untracked default — see open-item `oi-plan-doc-untracked`); the machine
-> state stays out-of-repo regardless.
+> (`state.json` + `journal.ndjson`). The out-of-repo `state.json` is authoritative; this doc is a
+> synced snapshot for humans + cross-session merge.
 >
 > **living_doc_baseline:** `v8-onyx-moor-rowan`
 > (master: `.claude/skills/dev-living-workflow/references/living-plan-bootstrap.md`).
-> The general protocol lives in the master and the harness beside it — this plan **references**
-> them (DRY-by-reference) and carries only plan-specific state. Read them, don't restate them.
+>
+> **⏸ PAUSED 2026-07-21 for a 3-session unify** (see CROSS-SESSION MERGE CONTEXT). This doc was
+> flushed to disk at operator request so a merge session can consume it.
 
 ## NORTH STAR
 
 The typed hook **option surface is the PRODUCT** — a complete, correct interface exposing ALL
 hooks across BOTH ecosystems (Claude Code + Kiro CLI), so different memory systems can be wired
 in to **eval/compare** and telemetry can be wired in to **measure hook effectiveness**. Options
-are designed **RIGHT on their own merits**; implementations (the autoMemory pilot, other memory
-systems, telemetry) **map onto** the options — never the reverse. `hooksJson` is a surgical
-bridge shaped to the autoMemory pilot; it is **not** the destination and gets retired.
+are designed **RIGHT on their own merits**; implementations (autoMemory, other memory systems,
+telemetry) **map onto** the options — never the reverse. `hooksJson` is a surgical bridge shaped
+to the autoMemory pilot; it is **not** the destination and gets retired.
 
 Provenance: continues the typed-hooks thread landed in PRs #418 (typed Kiro hooks) + #433
 (real-file delivery, tui/v3 parity, captured fixture). See memory `project_typed_hooks_assessment`
-(§14 backlog B2/B3) and `docs/plans/typed-hooks-across-clis-assessment.md` §8 (design) + §14.
+and `docs/plans/typed-hooks-across-clis-assessment.md` §8 (design) + §14.
 
 ## CURRENT POSITION
 
-- **Phase:** P1 — Design + skeleton the done-right typed hook surface
-- **Class:** `hitl_opening` — WAIT for the operator to answer the P1 opening HITL batch before
-  surface design begins.
-- **Next action:** operator answers `oi-colocation`, `oi-telemetry-design`, `oi-namespace`
-  (batched below), then P1 design/skeleton work starts in an isolated worktree.
+- **Phase:** P1 (design + skeleton the surface) — first net-new unit **u1 done + committed**.
+- **Class:** `mid_batch`, **PARKED** by operator pending a 3-session unify.
+- **Committed:** `0222a0eb` on branch `feat/kiro-hook-colocation` (pushed to origin) — the Kiro
+  per-record `file` co-location mechanism + module-eval golden + fragment maintenance.
+- **PR: NOT created** — blocked by a base divergence (below). Do not create it or force-push until
+  the base is reconciled.
+- **Next action:** on resume, rebase `0222a0eb` onto the **reconciled** integration base, adapt the
+  module-eval test to `#433`'s `home.activation` HM delivery, reconcile the fragment with `#433`,
+  re-verify the kiro hook checks, then open the PR.
 
-## RESUME (every session)
+## ⚑ CROSS-SESSION MERGE CONTEXT (read this first for the unify)
 
-Follow the master's **EMBEDDED SESSION BOOTSTRAP** (`living-plan-bootstrap.md`). Plan-specific
-coordinates:
+Three sessions have been colliding on the same hook/delivery surface. **This session is #2.**
 
-1. **State root** (out-of-repo, survives worktree teardown):
-   `${XDG_STATE_HOME:-~/.local/state}/living-workflows/nix-agentic-tools/typed-hook-surface/`.
-   Read `state.json` (authoritative) + `journal.ndjson`. `current_position.next_action` is the
-   steer; `open_items` is the live register.
-2. **Warm start:** position = the open phase's earliest not-done work; first commit any orphaned
-   status-flip (in the phase's worktree — never the co-occupied main checkout).
-3. Load only the working set: this plan + the relevant phase, plus `state.schema.json` and the
-   master. Do **not** load the changelog/backlog-rules on a run.
-4. Act by `current_position.class`: `hitl_opening`/`phase_boundary` → present the register at a
-   high level and WAIT; `mid_batch` → state position in one line and resume.
-5. Validate `state.json` against the schema after each mutation:
-   `check-jsonschema --schemafile .claude/skills/dev-living-workflow/references/state.schema.json <state.json>`.
+| #   | Session (operator's words)                      | What it owns / did                                                                                                                                                                                                                                                                      |
+| --- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | ci fix → **symlink vs real-file fanout**        | The delivery mechanism. Origin `#433` moved **HM** hook delivery `home.file` → `home.activation` real-files; local commits `3050f894` (instruction files symlink→real-file copies) + `bd67936f` (idempotent copies over devenv symlinks). Owns HOW hook/instruction files land on disk. |
+| 2   | **hook implementation to wire into hooks** ← ME | The typed hook **option surface** (`ai.kiro.hooks` / `ai.claude.hooks`). This session added the per-record **`file` co-location** key so N typed records lower into one envelope — the typed path off the `hooksJson` escape hatch.                                                     |
+| 3   | **fixture/lab implementation to test hooks**    | The hook **test harness** (tier1b prototype / hook contract fixtures / agent-primitive labs). Would consume the typed surface (this session's output) as the thing-under-test, and P1c/P2 here overlap with it.                                                                         |
 
-## PHASES (greedy scheduler — highest fan-out first)
+**Intersections the merge must resolve:**
 
-| id     | phase                                                               | runnable increment                                                                                          | est |
-| ------ | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --- |
-| **P1** | Design + skeleton the done-right typed hook surface (Claude + Kiro) | typed options accept the FULL hook set + lower + compose, proven by a module-eval golden that consumes them | 2–3 |
-| **P2** | Telemetry hook-fire channel wired through the surface               | a hook fires → a telemetry record is written, as a hermetic contract test extending the tier1b harness      | 1–2 |
-| **P3** | Migrate the autoMemory pilot onto the typed surface                 | autoMemory works via typed records (output may change); goldens updated                                     | 1   |
-| **P4** | Retire the `hooksJson` bridge + migrate remaining consumers         | `hooksJson` removed/deprecated, all checks green; nixos-config repin is HITL                                | 1   |
+- **#2 ↔ #1 (DIRECT COLLISION, already bit us):** my `file` co-location changes the hook **lowering**
+  (`mkAllHookFiles` / `kiroHookRecord` in `mkKiro.nix`); `#433` changed the hook **delivery**
+  (HM `home.file` → `home.activation`). The lowering is delivery-independent (`mkAllHookFiles` is
+  still the lowering fn on `#433`), so **the mechanism composes** — but my **module-eval test**
+  asserts the pre-`#433` `home.file` path and **fails on `#433`** (verified). Merge = keep my
+  lowering change, re-point the test at `#433`'s `home.activation` delivery.
+- **#2 ↔ #3:** the typed surface (incl. `file` co-location) is what #3's fixtures/labs test the
+  FIRING of. P1c (tier1b graduation) + P2 (telemetry test channel) here are #3's territory. Merge =
+  #3's harness consumes the typed surface as-shipped.
+- **#1 ↔ #3:** delivery mechanism vs the fixtures that assert on delivered files — they must agree
+  on real-file vs symlink for both hooks and steering.
 
-**Hard constraint (every phase):** the increment is exercised through the ACTUAL delivery
-mechanism (HM activation + devenv enterShell), not a locally-assembled stand-in. A phase declared
-done against a test harness records which config/path it proved and asserts that is the shipping
-path.
+**The base-divergence is the mechanical root of the collisions** — see next section. All three
+sessions are working in a local checkout that is **9 merged PRs behind origin**, so they are
+building on divergent bases and overwriting each other.
 
-## OPEN-ITEMS REGISTER
+## THE BASE DIVERGENCE (mechanical root cause)
 
-Every entry carries its **structural reason** (why it holds its disposition). Full text in
-`state.json.open_items`; headers here.
+The local `refactor/ai-factory-architecture` checkout **diverged from origin at `010dbe15`**:
 
-**P1 opening HITL batch (answer these to start P1):**
+- **origin has, local lacks (9 merged PRs):** `#433` (real-file HM hook delivery — the exact code
+  #1 rewrote), `#424`, `#414`–`#423`, docs.
+- **local has, origin lacks (unpushed):** the ~5 local session commits (`b75b4ac3` ci-perf,
+  `bd67936f` devenv fix, `3295031a` this plan doc, `699a2e4e` instruction regen, `3050f894`
+  materialize).
 
-- `oi-colocation` **[HITL@P1]** — co-location key shape: a `group`/file-key field on each typed
-  record **vs** a distinct envelope option packing N records into one Kiro file. _Why HITL:_ the
-  surface must express multi-record-per-file without `hooksJson`; turns on option-ergonomics intent.
-- `oi-telemetry-design` **[HITL@P1]** — telemetry hook-fire channel design (wrapper→JSONL under
-  XDG? shared prepended telemetry hook? opt-in per-record flag?). _Why HITL:_ high fan-out; shapes
-  every record's lowering and P2.
-- `oi-namespace` **[HITL@P1]** — unify Claude+Kiro under one option shape **vs** keep per-CLI
-  `ai.claude.hooks` / `ai.kiro.hooks` with a shared lowering lib. _Why HITL:_ cross-ecosystem
-  design intent; affects every consumer + the drift sidecars.
+Consequence for this session: `0222a0eb` was built + verified on the stale local base. Cherry-picked
+onto origin `af53cf63` (`#433`) it applies cleanly but the test then fails (`fromJSON` empty input —
+`#433` no longer writes `home.file.".kiro/hooks/…"`). **The `file` co-location mechanism itself is
+sound and composes with `#433`.** The plan's original recipe (base on **origin**) was correct; the
+`d8` deviation to the local tip was the mistake.
 
-**Held / default (agent-owned unless flagged):**
+## DECISIONS (resolved this session)
 
-- `oi-full-hookset` **[DEFAULT:extend-existing-extracted-sidecars, revisable]** — source soft-enums
-  from the COMPLETE documented set (Claude 30 / Kiro 7+5) via the drift-checked `*-extracted.json`
-  sidecars. _Why default:_ mechanism exists; revisable if the surface changes the sidecar shape.
-- `oi-probe-gate` **[HITL@P2]** — do Q2 (Manual/`/remember` didn't fire) + Q3 (Claude subagent
-  per-tool) need a live probe before telemetry locks? _Why HITL:_ telemetry over a dead trigger is
-  noise; needs a spoon-fed operator-run probe.
-- `oi-plan-doc-untracked` **[RESOLVED:committed-to-working-branch]** — operator directed committing
-  this plan to the cwd branch (overriding the untracked default). _Structural reason:_ operator
-  override of a revisable default; the out-of-repo `state.json` stays authoritative either way.
+- **`oi-namespace` → per-CLI + shared lib** (`d5`): keep `ai.claude.hooks` / `ai.kiro.hooks`
+  distinct, share the lowering lib. Operator filed a plan-local follow-up (`oi-namespace-unify-later`)
+  to revisit unifying once main-body work drains.
+- **`oi-colocation` → per-record `file`/group key** (`d6`): same-`file` records lower into one Kiro
+  envelope; flat + mergeable; mirrors Claude event-keying. Envelope option rejected. **Implemented in
+  u1.**
+- **`oi-telemetry-design` → lowering wrapper → JSONL, OFF by default / test-only** (`d7`): a test
+  instrument to exercise hook-fire, NOT general telemetry enablement (operator has separate larger
+  telemetry plans). Scopes P2.
+- `d8` (base = local tip) — **WRONG, superseded by `d9`** (base must be origin; local is stale).
+- `d10` — operator chose to **WAIT** for the session-#1 (factory) session to reconcile local↔origin
+  rather than rebase-now or reconcile-now.
 
-## PLAN-SPECIFIC STANDING RULES & CONSTRAINTS
+## WHAT LANDED THIS SESSION (u1)
 
-Carry the master's **STANDING RULES** verbatim (field-report laundering, completionist mode,
-mechanism creep, source-masking, degradation-by-shrug, prove-against-reality, sanctioned-deviation
-shapes). Plan-specific constraints (also in `state.json.ecosystem.execution_constraints`):
+Commit `0222a0eb` "feat(kiro-cli): co-locate typed hook records into shared envelopes":
 
-- **OOM / no parallel fan-out:** single `nix build --max-jobs 1` only; **never** `nix flake check`
-  (parallel); cap subagents ≤10 with a bounded queue (openmemory MCP per-subagent OOMs the host).
-- **Co-occupied main tree:** the main checkout is occupied by a parallel factory session. Work each
-  phase in an **isolated worktree** under `../nix-agentic-tools-worktrees/` based on
-  `origin/refactor/ai-factory-architecture`; commit there; integrate by **squash PR**. Never touch
-  the factory session's uncommitted files in the main checkout.
-- **nixos-config + live switches are HITL.** Commit/push **only when the operator asks.**
-- **Forge quirks:** `gh pr create` is hook-blocked → github-mcp `create_pull_request`; thread
-  resolve/reply + merge → `GH_ALLOW=1 gh api` (MCP PAT 403s); repo is **squash-only**.
+- `packages/kiro-cli/lib/mkKiro.nix`: new per-record **`file`** option on `kiroHookRecord` (Nix-side
+  grouping key, **stripped** from emitted JSON). Replaced one-record→one-envelope `kiroHookEnvelope`
+  with a grouping lowering (`kiroHookObject` + `kiroHookFileKey` + `kiroTypedHookFiles`) that
+  `groupBy`s `cfg.hooks` on the effective file-key → one `{version,hooks:[…]}` envelope per file.
+  Back-compat: `file = null` → file-key = attr name → byte-identical to before. Both backends consume
+  `mkAllHookFiles` → parity by construction.
+- `checks/module-eval.nix`: golden `module-kiro-hooks-typed-colocation`. **⚠ asserts the pre-`#433`
+  `home.file` HM delivery — must be re-pointed at `home.activation` on merge.**
+- `packages/kiro-cli/docs/kiro-auto-memory.md`: bumped `Last verified` → 2026-07-21; corrected the
+  stale `ai.kiro.hooks` bullet (typed surface + `file` key + autoMemory migration path). **⚠ must be
+  reconciled with `#433`'s version of this fragment.**
 
-## GIT WORKFLOW (binding)
+Verified: **8/8 kiro hook module-eval checks green on the local (stale) base** (7 as cache hits ⇒
+byte-identical back-compat). NOT yet verified against `#433`.
 
-Phase = branch = worktree = review sitting. At P<n> implementation start: create a worktree +
-`feat/<slug>` branch off `origin/refactor/ai-factory-architecture`. Commit often (Conventional
-Commits, lowercase-verb subject; unit id in body). Final status-flip commits atomically with its
-work. Integrate by squash PR into `refactor/ai-factory-architecture`; address review (fix or
-reject-with-comment + resolve thread) before merge. Restore lost content from git, never memory.
+## RECONCILIATION (what was already done by session #1 before u1)
 
-## COLD-START SEED
+Most of the original P1 ("design + skeleton the surface") had **already landed** on the base:
+Claude `ai.claude.hooks` per-event map + soft-enum (30 events) + non-clobber emission; Kiro
+`ai.kiro.hooks` v3 typed records + soft-enum + envelope lowering; the `*-extracted.json` sidecars +
+drift checks. So P1a/P1b (as originally scoped) were already satisfied; **u1 (the `file`
+co-location) was the one genuinely net-new P1 piece** — the enabler for P3 (autoMemory migration off
+`hooksJson`) and P4 (retire `hooksJson`).
 
-Complete initial state is in `state.json` (position P1/`hitl_opening`; phases P1–P4; the 6
-open-items; budget unit=`units`, soft_close_pct=0.7). Derived from the sections above; the live
-state file is authoritative after init.
+## PHASES (re-cut against landed reality)
+
+| id     | phase                                                | status                                                                   |
+| ------ | ---------------------------------------------------- | ------------------------------------------------------------------------ |
+| **P1** | Typed hook surface (Claude + Kiro)                   | surface pre-landed; **`file` co-location = u1 done/committed** (PR owed) |
+| **P2** | Telemetry hook-fire test wrapper (off by default)    | pending; overlaps session #3                                             |
+| **P3** | Migrate autoMemory onto typed `file`-grouped records | pending; unblocked by u1                                                 |
+| **P4** | Retire the `hooksJson` bridge                        | pending; nixos-config repin is HITL                                      |
+
+## OPEN ITEMS (current — full text in `state.json.open_items`)
+
+- `oi-base-divergence` **[DEFERRED:await-factory-reconcile]** — local is 9 PRs behind origin;
+  operator waiting on session #1 to reconcile. **The gating item.**
+- `oi-namespace-unify-later` **[NEEDS-EVIDENCE, pinned]** — revisit unifying Claude+Kiro option
+  shapes once main-body work drains.
+- `oi-regen-instructions` **[DEFERRED:reconcile-at-integration]** — generated instruction files stale
+  vs the fragment source; no CI drift-gate; regen once after the unify.
+- `oi-full-hookset` [DEFAULT], `oi-probe-gate` [HITL@P2] — unchanged.
+- `oi-namespace` / `oi-colocation` / `oi-telemetry-design` — RESOLVED (see DECISIONS).
+
+## RESUME / MERGE INSTRUCTIONS
+
+1. Read `state.json` (authoritative) + `journal.ndjson` at the state root above.
+2. **Prerequisite:** local↔origin reconciled by session #1 (`oi-base-divergence` cleared).
+3. Rebase `0222a0eb` onto the reconciled integration base (origin `refactor/ai-factory-architecture`,
+   which has `#433`).
+4. **Adapt the golden** `module-kiro-hooks-typed-colocation` to `#433`'s `home.activation` HM
+   delivery (assert the activation-script content, mirroring how `#433` verifies HM hooks — see the
+   existing `module-kiro-*` tests on the `#433` base). Reconcile the `kiro-auto-memory.md` fragment
+   with `#433`'s version.
+5. Re-verify the kiro hook checks single-job (`nix build --max-jobs 1 .#checks.<sys>.module-kiro-*`).
+6. Open the squash PR into `refactor/ai-factory-architecture`; then `oi-regen-instructions`.
+
+## CONSTRAINTS (also in `state.json.ecosystem.execution_constraints`)
+
+- **OOM / no parallel fan-out:** single `nix build --max-jobs 1` only; **never** `nix flake check`;
+  cap subagents ≤10 (openmemory MCP per-subagent OOMs the host).
+- **Co-occupied tree:** isolate work in a worktree; never touch another session's uncommitted files.
+- **Commit/push only when the operator asks.** nixos-config + live switches are HITL.
+- **Forge:** `gh pr create` hook-blocked → github-mcp `create_pull_request`; squash-only; thread
+  reply/resolve + merge via `GH_ALLOW=1 gh api`.
