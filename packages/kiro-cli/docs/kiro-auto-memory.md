@@ -1,6 +1,6 @@
 # Kiro-CLI auto-memory
 
-> **Last verified:** 2026-07-14 (commit pending). If you touch
+> **Last verified:** 2026-07-21 (commit pending). If you touch
 > `packages/kiro-cli/memory/distiller.ts`,
 > `packages/kiro-cli/lib/autoMemory.nix`,
 > `packages/kiro-cli/lib/mkKiro.nix` (hook-file emission),
@@ -272,17 +272,28 @@ model's tool call or this hook.
 
 ## Module surface + parity (B5)
 
-- `ai.kiro.hooks` — `attrsOf (either lines path)` → `<configDir>/hooks/<name>.json`,
-  emitted on BOTH HM and devenv (`mkKiro.nix`). The memory hooks are RAW
-  passthrough JSON (`builtins.toJSON` in-module), not a typed schema — a typed
-  `ai.kiro.hooks` schema is a separate future refactor (D20).
+- `ai.kiro.hooks` — TYPED v3 records (`attrsOf kiroHookRecord`: `trigger`
+  soft-enum, `matcher?`, `action{command|agent}`, `timeout?`, `enabled?`,
+  `description?`) → a `{version:"v1",hooks:[…]}` envelope at
+  `<configDir>/hooks/<file>.json`, emitted on BOTH HM and devenv (`mkKiro.nix`).
+  `<file>` is the record's attr name by default (one file per record); a
+  record's `file` co-location key groups several records into ONE envelope
+  (multiple hooks per file). The memory hooks currently ship as a pre-baked
+  envelope through the raw `ai.kiro.hooksJson` escape hatch (`builtins.toJSON`
+  in-module); migrating them to typed records sharing `file = "kiro-memory"`
+  is the destination that retires the escape hatch. On a file-key collision
+  TYPED records win: `mkAllHookFiles` merges `hooksJson // typed`, typed on
+  the right.
   **CRITICAL — hooks are WORKSPACE-local + must be REAL files (2026-07-14).**
   Kiro v3 discovers hooks ONLY under the launch cwd's `.kiro/hooks/` — never
   global `~/.kiro/hooks/` (docs `kiro.dev/docs/cli/v3/hooks`; issues
   kirodotdev/Kiro #5440/#7737/#9075; only steering + skills load globally) —
   and its `read_dir` scan SKIPS store symlinks. Consequences: **(a)** the HM
   global install (`~/.kiro/hooks/`) never loads under v3, so HM `ai.kiro.hooks`
-  is effectively dead for v3 auto-memory (kept only as a source of truth);
+  is effectively dead for v3 auto-memory (kept only as a source of truth —
+  since PR #433 HM writes it as REAL files via `home.activation.kiroHooks`,
+  not `home.file` symlinks, but v3's workspace-local discovery still never
+  reads the global dir);
   **(b)** the **devenv** backend writes hooks as REAL files via `enterShell`
   (`install -m 0644 <writeText> .kiro/hooks/<name>.json`), NOT devenv `files.*`
   symlinks (which v3 skips). Steering/agents stay symlinks (they load fine).
@@ -294,10 +305,11 @@ model's tool call or this hook.
 
 Because both surfaces ride the existing HM↔devenv fanout, parity is
 **structural-by-construction** — no new module axis. Proven by
-`module-kiro-auto-memory-hm-devenv-parity`: HM emits the generator's hook JSON
-verbatim (`home.file` text), devenv's `enterShell` installs the SAME generator
-output as a real file, and steering is byte-identical on both (steering stays a
-symlink; only hooks are real-file'd — see the CRITICAL note above).
+`module-kiro-auto-memory-hm-devenv-parity`: BOTH backends install hooks as
+REAL files carrying the generator output verbatim (PR #433: HM via the
+`home.activation.kiroHooks` script, devenv via `enterShell`), and steering is
+byte-identical on both (steering stays a symlink; only hooks are real-file'd
+— see the CRITICAL note above).
 
 > **Correction (2026-07-21):** "only hooks need real files" is almost
 > certainly wrong. Steering is discovered by the same `read_dir` scan that

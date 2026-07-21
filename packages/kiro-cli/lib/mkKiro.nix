@@ -96,36 +96,68 @@
         default = null;
         description = "Human-readable description.";
       };
+      # Co-location key (Nix-side only; stripped before emission — NOT a Kiro
+      # hook field). Records sharing a `file` are written together into one
+      # `<configDir>/hooks/<file>.json` `{version,hooks:[…]}` envelope — the
+      # typed path to N-hooks-in-one-file that the raw `hooksJson` escape hatch
+      # gives (e.g. autoMemory's four hooks in kiro-memory.json). null → the
+      # record's own attr name (one file per record; the back-compat default).
+      file = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          Co-location key: records sharing a `file` are written into one
+          `<configDir>/hooks/<file>.json` envelope (multiple hooks per file).
+          Defaults to the record's attribute name (one file per record). A
+          Nix-side grouping key only — stripped from the emitted JSON.
+        '';
+      };
     };
   };
 
-  # Lower one typed record → its v3 `{ version, hooks:[record] }` envelope. `name`
-  # = the attr key; null optionals dropped (record + action).
-  kiroHookEnvelope = name: record: {
-    version = "v1";
-    hooks = [
-      (
-        {inherit name;}
-        // lib.filterAttrs (_: v: v != null) (removeAttrs record ["action"])
-        // {action = lib.filterAttrs (_: v: v != null) record.action;}
-      )
-    ];
-  };
+  # Render one typed record → its v3 hook object (an element of an envelope's
+  # `hooks` list). `name` = the attr key; null optionals dropped (record +
+  # action). `file` is the Nix-only co-location key — stripped, not a Kiro field.
+  kiroHookObject = name: record:
+    {inherit name;}
+    // lib.filterAttrs (_: v: v != null) (removeAttrs record ["action" "file"])
+    // {action = lib.filterAttrs (_: v: v != null) record.action;};
 
-  # Combine raw `hooksJson` (verbatim escape hatch) + typed `hooks` (lowered to
-  # envelope JSON) into one <name> → JSON-string attrset, consumed by BOTH
-  # backends. Typed wins on a name collision. A raw `hooksJson` value may be a
-  # PATH (read its contents) or a string; resolve to string CONTENT here so both
-  # backends write the file body — devenv's `writeText` would otherwise embed the
-  # path string, and HM's `mkSourceEntry` handles paths but resolving keeps them
-  # identical.
+  # Effective co-location file key for a record: explicit `file`, else its attr
+  # name (→ one file per record, the back-compatible default).
+  kiroHookFileKey = name: record:
+    if record.file != null
+    then record.file
+    else name;
+
+  # Lower ALL typed records → { <fileKey> → { version, hooks:[…] } }, grouping
+  # records that share a fileKey into ONE envelope so N hooks can live in one
+  # file (the typed path off the raw `hooksJson` escape hatch). Records within a
+  # file are ordered by attr name (mapAttrsToList is sorted → deterministic).
+  kiroTypedHookFiles = hooks:
+    lib.mapAttrs
+    (_fileKey: entries: {
+      version = "v1";
+      hooks = map (e: kiroHookObject e.name e.record) entries;
+    })
+    (lib.groupBy
+      (e: kiroHookFileKey e.name e.record)
+      (lib.mapAttrsToList (name: record: {inherit name record;}) hooks));
+
+  # Combine raw `hooksJson` (verbatim escape hatch) + typed `hooks` (lowered +
+  # grouped to envelope JSON) into one <file-key> → JSON-string attrset, consumed
+  # by BOTH backends. Typed wins on a key collision. A raw `hooksJson` value may
+  # be a PATH (read its contents) or a string; resolve to string CONTENT here so
+  # both backends write the file body — devenv's `writeText` would otherwise embed
+  # the path string, and HM's `mkSourceEntry` handles paths but resolving keeps
+  # them identical.
   mkAllHookFiles = cfg:
     lib.mapAttrs (_: c:
       if builtins.isPath c
       then builtins.readFile c
       else c)
     cfg.hooksJson
-    // lib.mapAttrs (name: record: builtins.toJSON (kiroHookEnvelope name record)) cfg.hooks;
+    // lib.mapAttrs (_fileKey: envelope: builtins.toJSON envelope) (kiroTypedHookFiles cfg.hooks);
 
   # Hook names are attrset keys interpolated straight into activation-script
   # paths (`$HOOKS_DIR/<name>.json`) and shell heredocs, so a `/`, `..`,
@@ -481,18 +513,24 @@ in
         description = "External directory of agent JSON files (symlinked into <configDir>/agents).";
       };
       # Typed v3 hook records (keyed by hook name) — the northbound surface.
-      # Each lowers to a `{ version:"v1", hooks:[…] }` envelope written under
-      # `<configDir>/hooks/<name>.json` in both backends.
+      # Each lowers into a `{ version:"v1", hooks:[…] }` envelope written under
+      # `<configDir>/hooks/<file>.json` in both backends — `<file>` is the
+      # record's attr name by default, or its `file` key to co-locate several
+      # records in one envelope.
       hooks = lib.mkOption {
         type = lib.types.attrsOf kiroHookRecord;
         default = {};
         description = ''
-          Typed v3 hook records, keyed by hook name. Each lowers to a
+          Typed v3 hook records, keyed by hook name. Each lowers into a
           `{ version = "v1"; hooks = [ … ]; }` envelope written to
-          `<configDir>/hooks/<name>.json` on both backends. `trigger` is a soft
-          enum from the drift-checked sidecar. Raw pre-baked envelopes go in
-          `hooksJson`. v3 schema only — v2 embedded hooks are NOT modeled (they
-          live in agent config; `kiro-cli agent migrate` converts them to v3).
+          `<configDir>/hooks/<file>.json` on both backends — `<file>` defaults to
+          the record's attribute name (one file per record), or is set explicitly
+          via the record's `file` key to CO-LOCATE several records in one envelope
+          (multiple hooks per file, e.g. autoMemory's set in kiro-memory.json).
+          `trigger` is a soft enum from the drift-checked sidecar. Raw pre-baked
+          envelopes go in `hooksJson`. v3 schema only — v2 embedded hooks are NOT
+          modeled (they live in agent config; `kiro-cli agent migrate` converts
+          them to v3).
         '';
         example = lib.literalExpression ''
           {
