@@ -127,6 +127,57 @@
     cfg.hooksJson
     // lib.mapAttrs (name: record: builtins.toJSON (kiroHookEnvelope name record)) cfg.hooks;
 
+  # Wrap kiro-cli so it launches the way the config asks — shared by BOTH
+  # backends (DRY). `--tui`/`--v3` append to the top-level `kiro-cli` launcher;
+  # `--trust-tools` appends to the `kiro-cli-chat` subcommand. The new TUI is
+  # rejected on the legacy engine (`--tui` alone errors; `--tui --v3` is the
+  # working pair), so tui implies v3. Returns the raw package when nothing needs
+  # wrapping. `environmentVariables` are baked as `--set`s only when the backend
+  # has no native export path — HM passes them here (symlinkJoin is its only
+  # export mechanism); devenv passes `{}` because it exports via its native `env`
+  # attrset, but STILL needs the flag appends so `devenv shell` launches the v3
+  # TUI exactly like HM does.
+  wrapKiroPackage = {
+    package,
+    tui,
+    v3,
+    trustedMcpTools,
+    environmentVariables ? {},
+  }: let
+    hasEnv = environmentVariables != {};
+    hasTui = tui;
+    hasV3 = v3 || tui;
+    hasTrust = trustedMcpTools != [];
+    needsWrapper = hasEnv || hasTui || hasTrust || hasV3;
+    setEnvArgs =
+      lib.concatStringsSep " "
+      (lib.mapAttrsToList
+        (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}")
+        environmentVariables);
+    trustToolsCsv = lib.concatStringsSep "," trustedMcpTools;
+  in
+    if !needsWrapper
+    then package
+    else
+      pkgs.symlinkJoin {
+        name = "kiro-cli-wrapped";
+        paths = [package];
+        nativeBuildInputs = [pkgs.makeWrapper];
+        postBuild = ''
+          ${lib.optionalString (hasEnv || hasTui || hasV3) ''
+            wrapProgram $out/bin/kiro-cli \
+              ${setEnvArgs} \
+              ${lib.optionalString hasTui ''--append-flags "--tui"''} \
+              ${lib.optionalString hasV3 ''--append-flags "--v3"''}
+          ''}
+          ${lib.optionalString (hasEnv || hasTrust) ''
+            wrapProgram $out/bin/kiro-cli-chat \
+              ${setEnvArgs} \
+              ${lib.optionalString hasTrust ''--append-flags "--trust-tools='${trustToolsCsv}'"''}
+          ''}
+        '';
+      };
+
   # Translate the v2 `trustedMcpTools` list into v3 `permissions.yaml`
   # rules (ONLY when v3 is active) and merge with explicit `permissions`.
   # v2 keeps using `--trust-tools` untouched. See
@@ -288,7 +339,7 @@ in
       tui = lib.mkOption {
         type = lib.types.bool;
         default = false;
-        description = "Append --tui flag to the kiro-cli wrapper (HM only — devenv doesn't wrap the binary).";
+        description = "Append --tui flag to the kiro-cli launcher (both backends wrap the binary; implies --v3).";
       };
       # V3 next-gen agent — appends `--v3` to the top-level `kiro-cli`
       # launcher. The granular `--agent-engine`/`--mode` flags live ONLY
@@ -302,8 +353,7 @@ in
         description = ''
           Append `--v3` (next-generation Kiro agent) to the kiro-cli
           launcher wrapper. Implied by `tui = true` (the new TUI is
-          rejected on the legacy engine). HM only — devenv doesn't wrap
-          the binary.
+          rejected on the legacy engine). Applied by both backends.
         '';
       };
       # MCP tools to auto-approve — appends `--trust-tools='<csv>'`
@@ -312,7 +362,7 @@ in
       trustedMcpTools = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [];
-        description = "List of MCP tool patterns to auto-approve via --trust-tools on kiro-cli-chat (HM only).";
+        description = "List of MCP tool patterns to auto-approve via --trust-tools on kiro-cli-chat (both backends).";
         example = ["@context7-mcp" "@git-mcp/git_diff" "subagent"];
       };
       # V3 capability-based permissions -> `<configDir>/settings/permissions.yaml`.
@@ -491,46 +541,13 @@ in
         #   settings.chat.enableTangentMode = true;
         flatSettings = aiCommon.flattenDotKeys filteredSettings;
 
-        # symlinkJoin wrapper for environmentVariables, --tui, and
-        # --trust-tools. Conditional: raw package when nothing to wrap.
-        hasEnv = mergedEnvironmentVariables != {};
-        hasTui = cfg.tui;
-        hasTrust = cfg.trustedMcpTools != [];
-        # The launcher's only engine selector is the `--v3` boolean
-        # (`--agent-engine`/`--mode` are chat-subcommand-only and rejected
-        # by the launcher). The new TUI is rejected on the legacy engine
-        # (bare `--tui` errors; `--tui --v3` is the working pair), so
-        # `tui` implies `--v3`.
-        hasV3 = cfg.v3 || cfg.tui;
-        needsWrapper = hasEnv || hasTui || hasTrust || hasV3;
-        setEnvArgs =
-          lib.concatStringsSep " "
-          (lib.mapAttrsToList
-            (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}")
-            mergedEnvironmentVariables);
-        trustToolsCsv = lib.concatStringsSep "," cfg.trustedMcpTools;
-        wrappedPackage = pkgs.symlinkJoin {
-          name = "kiro-cli-wrapped";
-          paths = [cfg.package];
-          nativeBuildInputs = [pkgs.makeWrapper];
-          postBuild = ''
-            ${lib.optionalString (hasEnv || hasTui || hasV3) ''
-              wrapProgram $out/bin/kiro-cli \
-                ${setEnvArgs} \
-                ${lib.optionalString hasTui ''--append-flags "--tui"''} \
-                ${lib.optionalString hasV3 ''--append-flags "--v3"''}
-            ''}
-            ${lib.optionalString (hasEnv || hasTrust) ''
-              wrapProgram $out/bin/kiro-cli-chat \
-                ${setEnvArgs} \
-                ${lib.optionalString hasTrust ''--append-flags "--trust-tools='${trustToolsCsv}'"''}
-            ''}
-          '';
+        # HM's only export mechanism is the symlinkJoin wrapper, so env vars
+        # ride along with the --tui/--v3/--trust-tools flag appends. Shared
+        # wrapper helper (also used by the devenv backend).
+        kiroPackage = wrapKiroPackage {
+          inherit (cfg) package tui v3 trustedMcpTools;
+          environmentVariables = mergedEnvironmentVariables;
         };
-        kiroPackage =
-          if needsWrapper
-          then wrappedPackage
-          else cfg.package;
 
         # JSON entry generation for agents and hooks (legacy mkJsonEntries).
         mkJsonEntries = subdir: attrs:
@@ -595,18 +612,31 @@ in
               recursive = true;
             };
           })
-          # Inline hook files — typed `hooks` lowered to v3 envelopes + raw
-          # `hooksJson`, combined into one <name> → JSON attrset.
+          # Inline hook files — REAL files via home.activation, NOT home.file
+          # (which symlinks into /nix/store). Kiro v3 scans the hooks dir but does
+          # NOT follow store symlinks (verified live on 2.13.0: global scan fires
+          # real files, skips symlinks), so a symlinked hook never loads. Mirrors
+          # the devenv enterShell real-file install below.
           (lib.mkIf (cfg.hooks != {} || cfg.hooksJson != {}) {
-            home.file = mkJsonEntries "hooks" (mkAllHookFiles cfg);
+            home.activation.kiroHooks = lib.hm.dag.entryAfter ["writeBoundary"] (
+              helpers.mkHooksActivationScript {
+                hooks = mkAllHookFiles cfg;
+                hooksDir = "${cfg.configDir}/hooks";
+                inherit (pkgs) coreutils;
+              }
+            );
           })
-          # External hooks directory — symlinked wholesale via
-          # `recursive = true` (Layout B).
+          # External hooks directory — REAL files via home.activation (same reason
+          # as inline hooks: kiro v3 skips symlinked hook files). Mirrors the
+          # devenv cp -rL.
           (lib.mkIf (cfg.hooksDir != null) {
-            home.file."${cfg.configDir}/hooks" = {
-              source = cfg.hooksDir;
-              recursive = true;
-            };
+            home.activation.kiroHooksDir = lib.hm.dag.entryAfter ["writeBoundary"] ''
+              set -eu
+              HOOKS_DIR="$HOME/${cfg.configDir}/hooks"
+              ${pkgs.coreutils}/bin/mkdir -p "$HOOKS_DIR"
+              ${pkgs.coreutils}/bin/cp -rL --no-preserve=mode -- ${lib.escapeShellArg "${toString cfg.hooksDir}/."} "$HOOKS_DIR/"
+              ${pkgs.coreutils}/bin/chmod -R u+w "$HOOKS_DIR"
+            '';
           })
           # Per-instruction steering files — write
           # `.kiro/steering/<name>.md` for each instruction entry that
@@ -730,9 +760,18 @@ in
       in
         lib.mkMerge [
           # Package installation — devenv projects are shell-scoped, so
-          # env exports go in the devenv `env` attrset directly rather
-          # than an HM-style symlinkJoin wrapper.
-          {packages = [cfg.package];}
+          # env exports go in the devenv `env` attrset directly (below), not
+          # through the wrapper. But `--tui`/`--v3`/`--trust-tools` still need
+          # appending so `devenv shell` launches the v3 TUI like HM does, so we
+          # reuse the shared wrapper with an empty env set.
+          {
+            packages = [
+              (wrapKiroPackage {
+                inherit (cfg) package tui v3 trustedMcpTools;
+                environmentVariables = {};
+              })
+            ];
+          }
           # Assertions: mutually exclusive inline/dir pairs.
           {
             assertions = [

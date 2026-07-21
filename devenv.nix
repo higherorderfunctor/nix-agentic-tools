@@ -72,7 +72,13 @@ in {
   ai = {
     claude.enable = true;
     copilot.enable = true;
-    kiro.enable = true;
+    kiro = {
+      enable = true;
+      # Launch the v3 engine + new TUI from `devenv shell` (the wrapper appends
+      # `--tui --v3` to the kiro-cli launcher). Without this, devenv's kiro-cli
+      # ran the legacy engine, so hooks/slash-commands never loaded.
+      tui = true;
+    };
 
     skills = let
       # Dev-repo self-consumption. Both the stacked-workflows and
