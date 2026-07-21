@@ -84,7 +84,7 @@ inputs:
 ```nix
 # devenv.nix
 {inputs, ...}: {
-  imports = [inputs.nix-agentic-tools.devenvModules.default];
+  imports = [inputs.nix-agentic-tools.devenvModules.nix-agentic-tools];
 
   ai = {
     enable = true;

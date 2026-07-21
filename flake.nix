@@ -217,7 +217,8 @@
     in
       bareCommandsCheck // cacheHitParityCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // kiroExtractedCheck // modelStalenessClaudeCheck // moduleChecks // overlayTargetResolutionCheck // pnpmFetcherParityCheck // validateAtStopCheck);
 
-    # devShells.default provided by devenv.lib.mkShell (see devenv.nix).
+    # devShells.default provided by devenv CLI (devenv shell / devenv test)
+    # from devenv.nix; nothing in this flake constructs it.
     # devShells.ci is a lightweight shell for the CI update pipeline.
 
     packages = forAllSystems (system: let

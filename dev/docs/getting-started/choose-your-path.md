@@ -50,7 +50,7 @@ inputs:
         follows: nixpkgs
 
 # devenv.nix
-imports = [inputs.nix-agentic-tools.devenvModules.default];
+imports = [inputs.nix-agentic-tools.devenvModules.nix-agentic-tools];
 
 ai.claude.enable = true;
 ```

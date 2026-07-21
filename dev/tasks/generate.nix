@@ -120,6 +120,21 @@ in {
       '';
     };
 
+    # The task devenv.yaml's own header names as its regeneration path.
+    # Writes via a temp file so a failed eval cannot truncate devenv.yaml.
+    "generate:devenv-yaml" = {
+      description = "Generate devenv.yaml from flake.nix + flake.lock";
+      exec = ''
+        ${bashPreamble}
+        ${log}
+        log "Generating devenv.yaml"
+        tmp="$(mktemp)"
+        nix eval --raw --impure --expr 'import ./config/generate-devenv-yaml.nix {}' > "$tmp"
+        mv "$tmp" devenv.yaml
+        log "devenv.yaml updated"
+      '';
+    };
+
     # BROKEN: `.#repo-contributing` and `.#repo-readme` flake outputs
     # don't exist. Running `devenv tasks run --mode before generate:repo`
     # will fail with "attribute missing" on both tasks below. The

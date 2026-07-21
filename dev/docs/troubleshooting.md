@@ -52,7 +52,7 @@ skill content after a config change.
 
 3. **Auto-clean on shell entry.** The devenv shell hook includes
    automatic cleanup of stale skill symlinks. If this isn't running,
-   ensure you've imported `devenvModules.default`.
+   ensure you've imported `devenvModules.nix-agentic-tools`.
 
 ## Credentials Not Working
 

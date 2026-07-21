@@ -29,7 +29,7 @@ cachix.pull = ["nix-agentic-tools"];
 # devenv.nix
 {inputs, ...}: {
   imports = [
-    inputs.nix-agentic-tools.devenvModules.default
+    inputs.nix-agentic-tools.devenvModules.nix-agentic-tools
   ];
 }
 ```
@@ -45,7 +45,7 @@ imports = [inputs.nix-agentic-tools.devenvModules.ai];
 
 ```nix
 {inputs, pkgs, ...}: {
-  imports = [inputs.nix-agentic-tools.devenvModules.default];
+  imports = [inputs.nix-agentic-tools.devenvModules.nix-agentic-tools];
 
   ai.claude.enable = true;
 }
@@ -61,7 +61,7 @@ imports = [inputs.nix-agentic-tools.devenvModules.ai];
     (import "${inputs.nix-agentic-tools}/packages/stacked-workflows" {})
   ]);
 in {
-  imports = [inputs.nix-agentic-tools.devenvModules.default];
+  imports = [inputs.nix-agentic-tools.devenvModules.nix-agentic-tools];
 
   # ── Packages ──────────────────────────────────────────────────────
   packages = with pkgs; [nixd marksman taplo];
