@@ -29,19 +29,51 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@v31
+
+      # Split the installer by OS. cachix/install-nix-action runs the
+      # upstream multi-user installer, which medians 31s on macos-latest
+      # vs 4s on ubuntu (n=23 runs each): it carves an APFS volume for
+      # /nix, provisions build users, and loads a launchd daemon. That
+      # gap is real wall clock whenever this leg is the critical path,
+      # and it cannot be tuned away in place — install-nix.sh already
+      # passes --daemon-user-count $(cpu_count * 2), so the usual
+      # NIX_USER_COUNT knob is a no-op here.
+      #
+      # nix-quick-install-action unpacks a prebuilt store archive into a
+      # single-user /nix owned by the runner user: same volume, none of
+      # the user/daemon provisioning. Verified at v35: composite action
+      # (no Node runtime), and nix-2.34.7-aarch64-darwin.tar.zstd is
+      # published, so the pinned version resolves.
+      #
+      # darwin ONLY. The ubuntu legs install in 4s, so switching them
+      # would buy ~2s while giving up the multi-user build sandbox that
+      # is on by default there (macOS has it off regardless, so the
+      # darwin leg forfeits nothing real).
+      #
+      # nix_conf REPLACES ~/.config/nix/nix.conf, but the action appends
+      # its flake defaults AFTER writing it (nix-quick-install.sh:98-119),
+      # so accept-flake-config cannot be clobbered. It is repeated here
+      # anyway so both legs read identically; duplicate nix.conf keys are
+      # last-wins, not an error.
+      - if: runner.os == 'macOS'
+        uses: nixbuild/nix-quick-install-action@v35
+        with:
+          nix_version: "2.34.7"
+          nix_conf: |
+            accept-flake-config = true
+
+      - if: runner.os != 'macOS'
+        uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             accept-flake-config = true
+
       - uses: cachix/cachix-action@v17
         with:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
           # cachix-action pushes built paths automatically when
           # authToken is set and the push target matches
-
-      - name: Install nix-fast-build
-        run: nix profile add nixpkgs#nix-fast-build
 
       # Warm the flake eval cache BEFORE the build. Our overlays use IFD
       # (builtins.readFile on fetchFromGitHub) to compute versions at eval
@@ -55,9 +87,18 @@ jobs:
         with:
           systems: ${{ matrix.system }}
 
+      # Resolve nix-fast-build from THIS flake's pinned `nix-fast-build`
+      # input (flake.nix), matching devenv.nix, generate-update-ninja.nix
+      # and dev/scripts/update-input.sh — the update pipeline bumps that
+      # input, so CI must exercise the version the repo actually pins.
+      # The previous `nix profile add nixpkgs#nix-fast-build` pulled a
+      # DIFFERENT derivation out of a second, unpinned nixpkgs, unpacking
+      # the nixpkgs-unstable channel tarball in every job and sharing
+      # neither eval cache nor store paths with the flake evaluated by
+      # the very next step.
       - name: Build all packages
         run: |
-          nix-fast-build \
+          nix run --inputs-from . nix-fast-build -- \
             --flake ".#packages.${{ matrix.system }}" \
             --skip-cached \
             --cachix-cache nix-agentic-tools \
@@ -98,8 +139,12 @@ jobs:
   # gitleaks runs locally as a pre-commit hook (see devenv.nix). This
   # CI job is the safety net for the `--no-verify` path: even when
   # damage is already done, the alert tells us to rotate credentials.
-  # Uses gitleaks from nixpkgs directly (no third-party action) to
-  # match the exact binary used in the pre-commit hook.
+  # Uses gitleaks from nixpkgs directly (no third-party action), via
+  # `--inputs-from .` so it resolves from THIS flake's locked nixpkgs
+  # and therefore really is the same binary the pre-commit hook runs
+  # (`${pkgs.gitleaks}` in devenv.nix). The previous bare `nixpkgs#`
+  # form read the rolling registry channel, which matched the pin only
+  # by coincidence and would have drifted silently.
   gitleaks:
     runs-on: ubuntu-latest
     steps:
@@ -110,5 +155,31 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
+      # Scan every ref EXCEPT gh-pages. `fetch-depth: 0` pulls all
+      # branches, and docs.yml force-pushes gh-pages as an ORPHAN
+      # single commit (no parents) holding the generated mdBook/NuschtOS
+      # per-PR previews under pr/<branch>/. Because it has no parent,
+      # its entire tree (~154 MB / 4.5k files) reads as one enormous
+      # diff on every run: measured 407 MB / 4m58s, which made this
+      # job the critical path in 19 of 23 sampled runs.
+      #
+      # It also keeps growing: 92.7 MB / 2860 of those files are
+      # previews for 20 already-deleted branches. docs.yml has a
+      # `cleanup` job meant to prune them, but `delete` events run the
+      # DEFAULT branch's copy of a workflow and docs.yml does not exist
+      # on main, so that job has never fired. Fixing that shrinks this
+      # scan further but is not required for correctness here.
+      #
+      # Excluding it leaves ~20 MB of real source history (measured
+      # 2.9s locally; expect ~15s on a CI runner at its observed
+      # 1.4 MB/s). Coverage is unaffected: the published site is
+      # generated from source commits this scan still reads.
+      #
+      # `--exclude` is a glob filter on the following `--all`, so if the
+      # ref is ever renamed this silently degrades to a full scan
+      # (slow but still correct) rather than failing the security gate.
       - name: Run gitleaks
-        run: nix run nixpkgs#gitleaks -- detect --source . --verbose --redact
+        run: |
+          nix run --inputs-from . nixpkgs#gitleaks -- git \
+            --log-opts="--exclude=refs/remotes/origin/gh-pages --all" \
+            --verbose --redact .

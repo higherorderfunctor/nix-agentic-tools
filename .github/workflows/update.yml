@@ -63,11 +63,14 @@ jobs:
           git config user.name "nix-agentic-tools-bot[bot]"
           git config user.email "nix-agentic-tools-bot[bot]@users.noreply.github.com"
 
+      # `--inputs-from .` resolves against THIS flake's locked nixpkgs.
+      # The bare `nixpkgs#` form read the rolling registry channel,
+      # pulling in a second, unpinned nixpkgs and unpacking the
+      # nixpkgs-unstable channel tarball before the pipeline's own eval.
+      # jq is not installed at all: ubuntu-latest ships 1.7.1.
       - name: Install pipeline tools
         run: |
-          nix profile add \
-            nixpkgs#ninja \
-            nixpkgs#jq
+          nix profile add --inputs-from . nixpkgs#ninja
           nix profile add --inputs-from . nixpkgs#devenv
           nix profile add ".#formatter.x86_64-linux"
 
@@ -137,11 +140,51 @@ jobs:
             fi
 
             subject=$(git log "$base_head".."$branch" --format='%s' | head -1)
+
+            # Look up the existing PR once: its number and its
+            # mergeability both feed the push decision below.
+            pr_json=$(gh pr list --base "$BRANCH_NAME" --head "$branch" \
+              --json number,mergeable --jq '.[0] // empty' 2>/dev/null || true)
+            existing_pr=$(printf '%s' "$pr_json" | jq -r '.number // empty')
+            pr_mergeable=$(printf '%s' "$pr_json" | jq -r '.mergeable // "UNKNOWN"')
+
+            # Every run rebuilds this branch on the CURRENT base, so its
+            # tip SHA always differs even when the dependency did not
+            # move — and the unconditional force-push below then fired a
+            # duplicate 4-job CI run to re-validate a byte-identical
+            # patch. `git patch-id --stable` hashes the diff alone, so a
+            # pure rebase compares equal and we can skip the push.
+            #
+            # Two conditions keep this honest:
+            #   - an empty patch-id means "could not compare", never a
+            #     match, or every no-op branch would collapse together;
+            #   - a CONFLICTING PR is force-pushed anyway, so branches
+            #     cannot rot against a base they no longer apply to.
+            #     (Renovate's rebaseWhen=conflicted, in effect.)
+            remote_ref="refs/remotes/origin/$branch"
+            new_id=$(git diff "$base_head".."$branch" | git patch-id --stable | awk '{print $1}')
+            old_id=""
+            if git rev-parse --verify --quiet "$remote_ref" >/dev/null; then
+              old_base=$(git merge-base "$remote_ref" "$base_head" || true)
+              if [ -n "$old_base" ]; then
+                old_id=$(git diff "$old_base".."$remote_ref" \
+                  | git patch-id --stable | awk '{print $1}')
+              fi
+            fi
+
+            if [ -n "$new_id" ] && [ "$new_id" = "$old_id" ] \
+              && [ "$pr_mergeable" != "CONFLICTING" ]; then
+              echo "Skipping $branch (patch unchanged, PR still mergeable)"
+              # MUST still count as touched: the stale-PR step below
+              # closes and DELETES any update/* PR missing from this
+              # file, so a silent skip would make the pipeline close its
+              # own valid PR and recreate it on the next run.
+              echo "$branch" >>"$RUNNER_TEMP/touched-branches"
+              continue
+            fi
+
             echo "Pushing $branch ($subject)..."
             git push -f origin "$branch"
-
-            # Create or update PR
-            existing_pr=$(gh pr list --base "$BRANCH_NAME" --head "$branch" --json number --jq '.[0].number // empty' 2>/dev/null || true)
 
             if [ -n "$existing_pr" ]; then
               gh pr edit "$existing_pr" --title "$subject"

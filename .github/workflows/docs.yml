@@ -92,6 +92,89 @@ jobs:
           destination_dir: pr/${{ github.ref_name }}
           keep_files: false
 
+  # Reconciling prune. The `cleanup` job below reacts to `delete`
+  # events — but GitHub dispatches those from the DEFAULT branch's copy
+  # of a workflow, and docs.yml does not exist on main, so it has never
+  # fired once. gh-pages accumulated ~93 MB across ~2.9k files of
+  # previews for 20 branches that no longer exist (also most of what
+  # ci.yml's gitleaks job used to scan).
+  #
+  # This job reconciles rather than reacts: it runs after every preview
+  # deploy, which does dispatch from this branch, so it is self-healing
+  # and stays correct even when a `delete` event is missed entirely.
+  prune-previews:
+    needs: deploy-preview
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: gh-pages
+          fetch-depth: 1
+
+      - uses: ./.github/actions/git-bot-identity
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prune previews for deleted branches
+        shell: bash
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+
+          [ -d pr ] || { echo "no pr/ previews present; nothing to do"; exit 0; }
+
+          git ls-remote --heads origin \
+            | sed 's#.*refs/heads/##' | sort -u > /tmp/live-branches
+          # A network/permission blip must never read as "every branch
+          # was deleted", so treat an empty listing as fatal, not as a
+          # licence to delete the whole preview tree.
+          if [ ! -s /tmp/live-branches ]; then
+            echo "refusing to prune: branch listing came back empty" >&2
+            exit 1
+          fi
+          echo "live branches: $(wc -l < /tmp/live-branches)"
+
+          # Previews live at pr/<branch> and branch names contain
+          # slashes (pr/update/serena), so record both the exact preview
+          # roots and their ancestor directories. Ancestors get recursed
+          # into; exact roots are kept whole, because their children are
+          # site content rather than further previews.
+          declare -A exact ancestor
+          while IFS= read -r b; do
+            exact["pr/$b"]=1
+            p="pr/$b"
+            while [ "$p" != "pr" ]; do
+              p="$(dirname "$p")"
+              ancestor["$p"]=1
+            done
+          done < /tmp/live-branches
+
+          removed=0
+          prune() {
+            local d
+            for d in "$1"/*/; do
+              d="${d%/}"
+              [ -d "$d" ] || continue
+              if [ -n "${exact[$d]:-}" ]; then
+                continue
+              elif [ -n "${ancestor[$d]:-}" ]; then
+                prune "$d"
+              else
+                echo "removing stale preview: $d"
+                git rm -r --quiet "$d"
+                removed=$((removed + 1))
+              fi
+            done
+          }
+          prune pr
+
+          if [ "$removed" -eq 0 ]; then
+            echo "no stale previews to remove"
+            exit 0
+          fi
+          git commit -m "chore(docs): prune ${removed} preview(s) for deleted branches"
+          git push
+
   cleanup:
     if: github.event_name == 'delete' && github.event.ref_type == 'branch'
     runs-on: ubuntu-latest
@@ -101,14 +184,19 @@ jobs:
           ref: gh-pages
           fetch-depth: 1
 
+      - uses: ./.github/actions/git-bot-identity
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Remove preview
+        shell: bash
         env:
           BRANCH: ${{ github.event.ref }}
         run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
           PREVIEW_DIR="pr/${BRANCH}"
           if [ -d "$PREVIEW_DIR" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git rm -rf "$PREVIEW_DIR"
             git commit -m "chore: remove preview for deleted branch ${BRANCH}"
             git push

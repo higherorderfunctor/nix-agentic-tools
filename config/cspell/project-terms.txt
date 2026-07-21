@@ -8,6 +8,7 @@ agentskills
 agentsmd
 agnix
 anthropics
+APFS
 applyto
 argjson
 argstr
@@ -148,6 +149,7 @@ mystor
 narinfo
 neighbour
 neighbouring
+nixbuild
 nixd
 nixdoc
 nixos
@@ -265,6 +267,7 @@ ungroomed
 unheld
 unhide
 unparseable
+unrebased
 unreviewed
 unskipped
 unstages
@@ -279,3 +282,4 @@ wyhash
 xhigh
 zdiff
 zereight
+zstd

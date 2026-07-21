@@ -1,6 +1,6 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-07-16. If you touch
+> **Last verified:** 2026-07-21. If you touch
 > `.github/workflows/update.yml`, `dev/scripts/update-common.sh`,
 > `dev/scripts/update-input.sh`, `dev/scripts/update-pkg.sh`, or the
 > PR creation logic, and this fragment isn't updated in the same
@@ -28,12 +28,15 @@ are not pushed or merged at this stage — that happens in Phase 2.
 After ninja completes, the workflow iterates all `update/*`
 branches. For each branch with commits ahead of the base SHA:
 
-1. Force-pushes the branch to origin.
+1. Force-pushes the branch to origin — unless the change is
+   unchanged from what is already on the remote branch (see
+   "Patch-identity guard" below).
 2. Creates a PR against the working branch (or updates an
    existing PR's title if one already exists for that branch).
 
 On re-run, branches are force-updated and PRs are reused. Same
-behavior as Renovate's rebasing strategy.
+behavior as Renovate's rebasing strategy, with the same
+`rebaseWhen: conflicted` exception.
 
 **Phase 3 — Validation** (triggered automatically):
 
@@ -129,6 +132,41 @@ source fetches (see the IFD patterns fragment for details). This
 ensures `nix-update` (which internally runs `nix-instantiate`)
 can evaluate packages that use `builtins.readFile` on fetched
 sources. Without this step, nix-update crashes on cold runners.
+
+### Patch-identity guard
+
+The base SHA comparison below only detects "this branch has no
+commits". It cannot detect "this branch has the same commits as
+last run, rebased onto a newer base" — and because every run
+rebuilds each worktree from the _current_ base, the tip SHA
+always differs. The unconditional force-push therefore fired a
+duplicate 4-job CI run per dependency on every pipeline run, to
+re-validate a byte-identical patch. Measured on `update/devenv`:
+heads `595acf55` (parent `010dbe15`) and `6b51fe30` (parent
+`06da1e47`) both hash to patch-id `692bc6a5…`.
+
+Before pushing, the workflow compares `git patch-id --stable` of
+`base_sha..<branch>` against the same computation for the remote
+branch over _its_ own merge-base. `patch-id` hashes the diff
+alone, so a pure rebase compares equal and the push is skipped.
+
+Two conditions keep the guard honest:
+
+- **Empty patch-id is never a match.** An empty diff hashes to
+  the empty string; treating that as equality would collapse
+  every no-op branch together.
+- **A `CONFLICTING` PR is pushed anyway.** Otherwise a skipped
+  branch could rot against a base it no longer applies to. This
+  is Renovate's `rebaseWhen: conflicted` in effect. Note the
+  working branch has no protection rule requiring branches be
+  up to date, so an unrebased-but-mergeable PR still merges.
+
+**A skipped branch must still be recorded in
+`touched-branches`.** The stale-PR step closes _and deletes_ any
+`update/*` PR missing from that file, so a silent skip would
+make the pipeline close its own valid PR and recreate it on the
+next run — strictly worse than the duplicate CI it was meant to
+avoid.
 
 ### Base SHA comparison
 
