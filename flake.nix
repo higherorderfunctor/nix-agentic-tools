@@ -208,13 +208,14 @@
       factoryChecks = import ./checks/factory-eval.nix {inherit lib pkgs;};
       formattingCheck = import ./checks/formatting.nix {inherit inputs pkgs self;};
       fragmentsChecks = import ./checks/fragments-eval.nix {inherit lib pkgs;};
+      kiroExtractedCheck = import ./checks/kiro-cli-extracted.nix {inherit pkgs self;};
       modelStalenessClaudeCheck = import ./checks/model-staleness-claude.nix {inherit pkgs self;};
       moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs;};
       overlayTargetResolutionCheck = {overlay-target-resolution = import ./checks/overlay-target-resolution.nix {inherit lib pkgs;};};
       pnpmFetcherParityCheck = import ./checks/pnpm-fetcher-parity.nix {inherit lib pkgs self;};
       validateAtStopCheck = {validate-at-stop = import ./checks/validate-at-stop.nix {inherit pkgs;};};
     in
-      bareCommandsCheck // cacheHitParityCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // modelStalenessClaudeCheck // moduleChecks // overlayTargetResolutionCheck // pnpmFetcherParityCheck // validateAtStopCheck);
+      bareCommandsCheck // cacheHitParityCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // kiroExtractedCheck // modelStalenessClaudeCheck // moduleChecks // overlayTargetResolutionCheck // pnpmFetcherParityCheck // validateAtStopCheck);
 
     # devShells.default provided by devenv.lib.mkShell (see devenv.nix).
     # devShells.ci is a lightweight shell for the CI update pipeline.

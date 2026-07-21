@@ -193,6 +193,57 @@
       '{launchEffortPins: $pins, effortLevels: $levels, settingsBooleanKeys: $boolKeys, hookEvents: $hookEvents}' > "${dest}"
   '';
 
+  # Kiro hook triggers — the northbound soft-enum `knownTriggers`. Unlike Claude,
+  # Kiro has NO clean extract-all anchor: its PascalCase trigger names are polluted
+  # by the camelCase `ChatTriggerType` telemetry enum + unrelated tokens, so a
+  # mkClaudeExtract-style array grep would capture red herrings. Instead PROBE a
+  # baked candidate universe (the union of documented v2+v3 triggers) for binary
+  # presence — present -> `hookTriggers`, absent -> `documentedAbsent`
+  # (doc-ahead-of-binary). Fail loud if NONE present (anchor gone = binary
+  # hook-trigger shape change), mirroring mkClaudeExtract's guards. A brand-new
+  # trigger absent from the candidate universe is invisible here — the impure
+  # docs-diff (deferred) covers that; grow `candidates` from the docs on a new one.
+  #   bin:  absolute path to the kiro chat binary (`.kiro-cli-chat-wrapped`).
+  #   pkgs: nixpkgs set (gnugrep, coreutils, jq).
+  #   dest: output path (default "/dev/stdout"; pass "$out" in runCommand).
+  mkKiroExtract = {
+    bin,
+    pkgs,
+    dest ? "/dev/stdout",
+  }: ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    grep="${pkgs.gnugrep}/bin/grep"
+    jq="${pkgs.jq}/bin/jq"
+    sort="${pkgs.coreutils}/bin/sort"
+    wc="${pkgs.coreutils}/bin/wc"
+    tr="${pkgs.coreutils}/bin/tr"
+
+    # Documented v2+v3 trigger universe: Jun-5 docs (5) + v3 docs (11) + the v2
+    # `AgentSpawn` name (v3 maps it -> SessionStart). Alphabetical; grow from docs.
+    candidates=(AgentSpawn Manual PostFileCreate PostFileDelete PostFileSave PostTaskExec PostToolUse PreTaskExec PreToolUse SessionStart Stop UserPromptSubmit)
+
+    present=()
+    absent=()
+    for t in "''${candidates[@]}"; do
+      n=$({ "$grep" -aoF "$t" "${bin}" || true; } | "$wc" -l | "$tr" -d ' ')
+      if [ "$n" -gt 0 ]; then present+=("$t"); else absent+=("$t"); fi
+    done
+    if [ "''${#present[@]}" -lt 1 ]; then
+      echo "kiro-extract: no documented trigger present in the binary (upstream changed the hook-trigger vocabulary)" >&2
+      exit 1
+    fi
+
+    hookTriggersJson=$(printf '%s\n' "''${present[@]}" | "$sort" -u | "$jq" -R . | "$jq" -s .)
+    if [ "''${#absent[@]}" -gt 0 ]; then
+      documentedAbsentJson=$(printf '%s\n' "''${absent[@]}" | "$sort" -u | "$jq" -R . | "$jq" -s .)
+    else
+      documentedAbsentJson='[]'
+    fi
+    "$jq" -n --argjson hookTriggers "$hookTriggersJson" --argjson documentedAbsent "$documentedAbsentJson" \
+      '{hookTriggers: $hookTriggers, documentedAbsent: $documentedAbsent}' > "${dest}"
+  '';
+
   # Generate an updateScript for per-platform binary packages that use
   # sources.json. Fetches the latest version, prefetches each platform's
   # binary, writes version + per-platform hashes to sourcesFile.

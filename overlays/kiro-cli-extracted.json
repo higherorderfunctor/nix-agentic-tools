@@ -1,0 +1,18 @@
+{
+  "hookTriggers": [
+    "AgentSpawn",
+    "Manual",
+    "PostToolUse",
+    "PreToolUse",
+    "SessionStart",
+    "Stop",
+    "UserPromptSubmit"
+  ],
+  "documentedAbsent": [
+    "PostFileCreate",
+    "PostFileDelete",
+    "PostFileSave",
+    "PostTaskExec",
+    "PreTaskExec"
+  ]
+}
