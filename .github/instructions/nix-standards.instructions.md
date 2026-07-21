@@ -109,28 +109,35 @@ If the output needs to be formatted, either:
 1. Format inside the nix derivation (add formatter to build inputs)
 2. Format the working tree copy after `cp`
 
-**Destinations may themselves be store symlinks.** Anything declared
-in devenv's `files.*` (see `devenv.nix`) exists in the working tree as
-a symlink _into_ the store, so a bare `cp` onto it either follows the
-link and tries to write to the read-only original, or — when the
-generated content is unchanged and the link already resolves to the
-source — aborts with `are the same file`, which is fatal under
-`errexit`. `dev/tasks/generate.nix` therefore routes every copy
-through `copy_out`, which unlinks the destination first and then
-`chmod u+w`'s the copy (store files are `0444` and the mode is
-inherited):
+**Destinations may themselves be store symlinks.** Anything declared in
+devenv's `files.*` exists in the working tree as a symlink _into_ the
+store, so a bare `cp` onto it either follows the link and tries to write
+to the read-only original, or — when the generated content is unchanged
+and the link already resolves to the source — aborts with `are the same
+file`, which is fatal under `errexit`. Always unlink the destination
+first. Use `rm -f`, never `cp --remove-destination`, which is banned
+above; either way only the working-tree entry is removed, never anything
+under `/nix/store`.
 
-```bash
-copy_out() {
-  rm -f "$2"        # removes the working-tree link, never the store
-  cp -f "$1" "$2"
-  chmod u+w "$2"
-}
-```
+`dev/tasks/generate.nix` has two writers, and new code should reuse one
+rather than open-coding `cp`:
 
-Use `rm -f` rather than `cp --remove-destination`, which is banned
-above. Prefer `copy_out` over open-coding `cp` in any new generation
-task.
+- `sync_file` / `sync_dir` — for the generated instruction files. Skips
+  the write entirely when `cmp` says the content is unchanged (no mtime
+  churn on every shell entry), writes through `mktemp` + `mv` so a
+  concurrent reader never sees a partial file, and prunes generated
+  files whose fragment was renamed away.
+- `copy_out` — the simple unlink-then-copy, for one-shot outputs.
+
+Both `chmod` the result: store files are `0444` and the copy inherits
+that, which otherwise leaves a read-only file in the tree.
+
+One trap worth naming: **`cmp` ships in `diffutils`, not `coreutils`.**
+Interpolating `${pkgs.coreutils}/bin/cmp` yields a path that does not
+exist, and because the call sits in an `if` condition a missing binary
+is merely a false branch — `errexit` never fires, and every file is
+rewritten on every entry instead of being skipped. Silent, and only
+visible as churn.
 
 ### overrideAttrs: Preserve passthru
 

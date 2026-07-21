@@ -226,29 +226,16 @@
       # instruction-* derivations below. import is memoized so
       # the file is read once, but a single explicit binding is
       # clearer and cheaper to extend when a 5th ecosystem lands.
-      gen = import ./dev/generate.nix {inherit lib pkgs;};
-      # treefmt for use inside derivations. Same config as treefmt.nix
-      # but with projectRootFile disabled — no .git in nix sandbox.
-      fmtDrv =
-        (inputs.treefmt-nix.lib.evalModule pkgs (
-          lib.recursiveUpdate (import ./treefmt.nix) {projectRootFile = null;}
-        ))
-        .config
-        .build
-        .wrapper;
-      # Helper: runCommand that formats $out with treefmt before finishing.
-      # All generated content derivations should use this instead of bare
-      # runCommand to ensure store output is pre-formatted.
-      # $out files are cp'd from writeText store paths (read-only).
-      # chmod makes the build output writable so treefmt can format
-      # in place. This is the derivation's own $out being constructed,
-      # not an existing store path — safe and expected.
-      runFmt = name: attrs: script:
-        pkgs.runCommand name (attrs // {nativeBuildInputs = (attrs.nativeBuildInputs or []) ++ [fmtDrv];}) ''
-          ${script}
-          chmod -R u+w $out
-          treefmt --no-cache --walk filesystem --tree-root $out
-        '';
+      # Shared with devenv.nix — see dev/instructions.nix for why. The
+      # working tree is materialized from these exact derivations on every
+      # shell entry, so a second rendering here would flip-flop the tree.
+      instr = import ./dev/instructions.nix {
+        inherit lib pkgs;
+        inherit (inputs) treefmt-nix;
+      };
+      # runFmt is still used by the docs-site derivations below; the four
+      # instruction derivations now live in dev/instructions.nix itself.
+      inherit (instr) runFmt;
 
       # ── Doc site components ─────────────────────────────────────
       # Generator helpers ported from sentinel in M15. Composed into
@@ -407,61 +394,10 @@
         # Instruction file derivations (from dev/generate.nix).
         # Each ecosystem produces a content directory consumed by the
         # `generate:instructions:*` devenv tasks.
-        instructions-agents = runFmt "instructions-agents" {} ''
-          mkdir -p $out
-          cp ${pkgs.writeText "AGENTS.md" gen.agentsMd} $out/AGENTS.md
-        '';
-
-        instructions-claude = let
-          files =
-            {"CLAUDE.md" = gen.claudeMd;}
-            // lib.mapAttrs' (
-              name: content: lib.nameValuePair "rules/${name}" content
-            )
-            gen.claudeFiles;
-        in
-          runFmt "instructions-claude" {} (
-            "mkdir -p $out/rules\n"
-            + lib.concatStringsSep "\n" (
-              lib.mapAttrsToList (
-                name: content: "cp ${pkgs.writeText (baseNameOf name) content} $out/${name}"
-              )
-              files
-            )
-          );
-
-        instructions-copilot = let
-          files =
-            lib.mapAttrs' (
-              name: content:
-                lib.nameValuePair (
-                  if name == "copilot-instructions.md"
-                  then name
-                  else "instructions/${name}"
-                )
-                content
-            )
-            gen.copilotFiles;
-        in
-          runFmt "instructions-copilot" {} (
-            "mkdir -p $out/instructions\n"
-            + lib.concatStringsSep "\n" (
-              lib.mapAttrsToList (
-                name: content: "cp ${pkgs.writeText (baseNameOf name) content} $out/${name}"
-              )
-              files
-            )
-          );
-
-        instructions-kiro = runFmt "instructions-kiro" {} (
-          "mkdir -p $out\n"
-          + lib.concatStringsSep "\n" (
-            lib.mapAttrsToList (
-              name: content: "cp ${pkgs.writeText name content} $out/${name}"
-            )
-            gen.kiroFiles
-          )
-        );
+        instructions-agents = instr.agents;
+        instructions-claude = instr.claude;
+        instructions-copilot = instr.copilot;
+        instructions-kiro = instr.kiro;
       }
       # Doc site is Linux-only: nuscht-search (docs-options-search)
       # Angular build SIGABRTs on node-24/darwin on exit; the site is

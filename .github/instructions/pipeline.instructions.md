@@ -489,6 +489,14 @@ Skills, settings.json, MCP config, and CLI settings use `files.*`
 (devenv) or `home.file` (HM). These are symlinks to immutable store
 paths — no generation step.
 
+Instruction files are the exception: they are **copies**, not
+symlinks, materialized on every shell entry by
+`generate:instructions:materialize` (`before = ["devenv:enterShell"]`).
+Kiro cannot read symlinked steering — it discovers by scanning the
+directory and the scan skips symlinks — and the git-tracked outputs
+cannot be symlinks either, since a store symlink commits as an
+absolute `/nix/store` path. See the devenv files-internals fragment.
+
 ### Running Generation
 
 ```bash

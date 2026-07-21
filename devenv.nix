@@ -8,9 +8,16 @@
   mcpLib = import ./lib/mcp.nix {inherit lib;};
   inherit (mcpLib) mkPackageEntry;
 
-  # Fragment composition — same import as flake.nix, single source of truth.
-  # Returns { agentsMd, claudeFiles, claudeMd, copilotFiles, kiroFiles }.
-  gen = import ./dev/generate.nix {inherit lib pkgs;};
+  # The four generated instruction-file derivations — same import as
+  # flake.nix, single source of truth. Returns { agents, claude, copilot,
+  # kiro } (plus gen / fmtDrv / runFmt). Both consumers must render
+  # identical bytes: the working tree is materialized from these exact
+  # derivations on every shell entry by generate:instructions:materialize,
+  # so a second rendering here would flip-flop the tree on every reload.
+  instr = import ./dev/instructions.nix {
+    inherit lib pkgs;
+    inherit (inputs) treefmt-nix;
+  };
 
   # Stop-hook validator (runs the git-hooks suite when Claude hands control
   # back, instead of racing the Edit tool on every PostToolUse). See the
@@ -291,31 +298,6 @@ in {
     ${pkgs.mdbook}/bin/mdbook serve docs/ --open
   '';
 
-  # ── Generated Instruction Files ─────────────────────────────────────────
-  # Materialized from dev/generate.nix (same import as flake.nix).
-  # devenv files.* produces symlinks to nix store — auto-updated when
-  # fragment sources change and devenv re-evaluates.
-  files =
-    # CLAUDE.md + .claude/rules/*.md
-    {"CLAUDE.md".text = gen.claudeMd;}
-    // lib.mapAttrs' (name: content:
-      lib.nameValuePair ".claude/rules/${name}" {text = content;})
-    gen.claudeFiles
-    # AGENTS.md
-    // {"AGENTS.md".text = gen.agentsMd;}
-    # .github/copilot-instructions.md + .github/instructions/*.md
-    // lib.mapAttrs' (name: content:
-      lib.nameValuePair (
-        if name == "copilot-instructions.md"
-        then ".github/${name}"
-        else ".github/instructions/${name}"
-      ) {text = content;})
-    gen.copilotFiles
-    # .kiro/steering/*.md
-    // lib.mapAttrs' (name: content:
-      lib.nameValuePair ".kiro/steering/${name}" {text = content;})
-    gen.kiroFiles;
-
   # ── Shell Init ──────────────────────────────────────────────────────────
   enterShell = ''
     for dir in .claude/skills .github/skills .kiro/skills; do
@@ -342,13 +324,31 @@ in {
     test -f .github/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .github/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
     test -f .kiro/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .kiro/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
     test -L .claude/settings.json || { echo "FAIL: .claude/settings.json missing"; exit 1; }
+
+    # Generated instruction files must exist as REAL FILES, not symlinks.
+    # `test ! -L` is the load-bearing half: `test -f` follows symlinks, so a
+    # regression back to devenv files.* symlink mode would still pass a
+    # existence-only check while leaving .kiro/steering unreadable to Kiro
+    # (it discovers by scanning a directory, and the scan skips symlinks).
+    # Three of these groups are gitignored and invisible to every flake
+    # check, so this is the only gate on them.
+    for f in AGENTS.md CLAUDE.md .claude/rules/nix-standards.md \
+             .github/copilot-instructions.md \
+             .github/instructions/pipeline.instructions.md \
+             .kiro/steering/pipeline.md; do
+      test -f "$f" || { echo "FAIL: $f missing"; exit 1; }
+      if [ -L "$f" ]; then
+        echo "FAIL: $f is a symlink (Kiro cannot follow store symlinks)"
+        exit 1
+      fi
+    done
     echo "All checks passed"
   '';
 
   # ── Tasks ─────────────────────────────────────────────────────────────
   tasks = let
     checkTasks = (import ./dev/tasks/check.nix {}).tasks;
-    generateTasks = (import ./dev/tasks/generate.nix {inherit lib;}).tasks;
+    generateTasks = (import ./dev/tasks/generate.nix {inherit lib pkgs instr;}).tasks;
     mergeTasks = (import ./dev/tasks/merge.nix {}).tasks;
   in
     checkTasks

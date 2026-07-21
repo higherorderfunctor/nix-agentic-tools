@@ -166,39 +166,55 @@ Filing a PR to `cachix/devenv` adding a `recursive` field to
 just us. Not blocking any current work — the user-space walker is
 a viable fix while waiting for upstream.
 
-### Instruction file auto-regeneration via `gen` import
+### Instruction files are copies, not `files.*` symlinks
 
-`devenv.nix` imports `dev/generate.nix` as `gen` (the same import
-`flake.nix` uses — single source of truth). The `gen` output feeds
-`files.*` entries that materialize all instruction files on every
-shell entry:
+`devenv.nix` imports `dev/instructions.nix` as `instr` — the same
+import `flake.nix` uses, so both render identical bytes. It exposes
+the four `instructions-*` derivations; the working tree is
+materialized from them by a shell-entry task, **not** by `files.*`:
 
 ```nix
-gen = import ./dev/generate.nix {inherit lib pkgs;};
-
-files =
-  {"CLAUDE.md".text = gen.claudeMd;}
-  // lib.mapAttrs' (name: content:
-    lib.nameValuePair ".claude/rules/${name}" {text = content;})
-  gen.claudeFiles
-  // {"AGENTS.md".text = gen.agentsMd;}
-  // ...copilotFiles, kiroFiles
+instr = import ./dev/instructions.nix {
+  inherit lib pkgs;
+  inherit (inputs) treefmt-nix;
+};
 ```
 
-This means `.claude/rules/*.md`, `.github/instructions/*.md`,
-`.kiro/steering/*.md`, `CLAUDE.md`, and `AGENTS.md` are
-automatically regenerated whenever fragment sources change and
-devenv re-evaluates. No manual `devenv tasks run
-generate:instructions` needed for the common case.
+`dev/tasks/generate.nix` defines `generate:instructions:materialize`
+with `before = ["devenv:enterShell"]`, so every `devenv shell`,
+`direnv reload`, `devenv up`, `devenv reload` and `devenv test`
+copies `CLAUDE.md`, `.claude/rules/*.md`, `AGENTS.md`,
+`.github/copilot-instructions.md`, `.github/instructions/*.md` and
+`.kiro/steering/*.md` into place as **real files**.
+
+Why copies rather than `files.*`:
+
+- **Kiro cannot read symlinked steering.** It discovers by scanning
+  the directory, and the scan skips symlinks (kirodotdev/Kiro#2921,
+  #8121). This is the same reason the inline hook JSON is installed
+  via `enterShell` rather than `files.*`.
+- **The tracked outputs cannot be symlinks at all.** A store symlink
+  commits as mode `120000` holding an absolute `/nix/store` path —
+  meaningless in any other clone.
+
+The materializer is idempotent (`cmp` before writing, so mtimes do
+not churn on reload), atomic (`mktemp` + `mv`, so a concurrent agent
+session never reads a partial file), and prunes generated files whose
+fragment was renamed or removed — which neither of the previous two
+mechanisms did.
+
+`devenv`'s own `files.<name>.copyMode = "copy"` was considered and
+rejected: it `rm -rf`s and re-`cp`s unconditionally on every entry
+(a read race plus mtime churn), it cannot prune, and `files.<name>`
+has no `.source` in the pinned version, so feeding it _formatted_
+content would require IFD on every eval.
 
 **Prerequisite:** the `coding-standards` overlay must be applied to
-devenv's pkgs (was added alongside this feature) because `gen`
-reads `pkgs.coding-standards.passthru.fragments`.
+devenv's pkgs, because the fragment composition reads
+`pkgs.coding-standards.passthru.fragments`.
 
-**Note:** files materialized this way may not appear in devenv's
-`files.json` managed files list. This is a tracking gap, not a
-functional issue — the files exist with correct content and
-permissions.
+Skills, `settings.json` and MCP JSON still use `files.*` symlinks —
+they are unaffected by the Kiro scan defect and are not tracked.
 
 ### Related
 

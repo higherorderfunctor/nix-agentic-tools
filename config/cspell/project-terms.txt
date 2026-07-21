@@ -56,10 +56,12 @@ deadnix
 dedup
 deprioritized
 derefs
+destdir
 devenv
 deviable
 devshell
 difftool
+diffutils
 direntry
 direnv
 direnvrc
@@ -135,6 +137,7 @@ lockfiles
 lspservers
 ltrimstr
 markdownify
+materializer
 mcpconfig
 mcpgitlab
 mcps
@@ -145,6 +148,7 @@ metacharacter
 misattributes
 miscited
 modelcontextprotocol
+mtimes
 mystor
 narinfo
 neighbour
