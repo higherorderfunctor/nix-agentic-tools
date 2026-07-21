@@ -1,8 +1,9 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-04-08 (commit pending — adds activation
-> script `exit` warning + Nix path type strictness section after
-> bugs on both fronts surfaced during skills-fanout-fix Task 3).
+> **Last verified:** 2026-07-21 (commit pending — repo-wide
+> activation reordering `entryAfter ["writeBoundary"]` →
+> `["linkGeneration"]`; earlier revisions added the activation
+> script `exit` warning + Nix path type strictness section).
 > If you touch any `modules/<subdir>/default.nix` file, add a new
 > option, or change an assertion/activation pattern and this
 > fragment isn't updated in the same commit, stop and fix it.
@@ -151,11 +152,16 @@ pkgs.symlinkJoin {
 **Location and ordering:**
 
 ```nix
-home.activation.<name> = lib.hm.dag.entryAfter ["writeBoundary"] (script);
+home.activation.<name> = lib.hm.dag.entryAfter ["linkGeneration"] (script);
 ```
 
-All activation scripts run `entryAfter ["writeBoundary"]`, meaning
-after HM has written all files to the home directory. No use of
+All file-writing/merging activation scripts run `entryAfter
+["linkGeneration"]`, i.e. after HM has actually linked the
+generation's files into the home directory. `entryAfter
+["writeBoundary"]` is NOT sufficient for that: `writeBoundary` is a
+sibling of `linkGeneration` (order between siblings comes from
+`lib.toposort`), so a writeBoundary-ordered script can run before
+`home.file` entries exist on disk. No use of
 `entryBefore` in this repo.
 
 **NEVER use `exit` as a short-circuit.** `home.activation.<name>`

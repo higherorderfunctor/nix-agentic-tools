@@ -321,7 +321,7 @@ in {
     # service, so it is inert for stdio-only or credential-free setups.
     home.activation = mkIf (pkgs.stdenv.isLinux && credentialedServiceFiles != {}) {
       mcpRestartOnSecretRotation =
-        lib.hm.dag.entryAfter ["writeBoundary" "sops-nix"] rotationRestartScript;
+        lib.hm.dag.entryAfter ["linkGeneration" "sops-nix"] rotationRestartScript;
     };
   };
 }

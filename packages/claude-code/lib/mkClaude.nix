@@ -505,7 +505,7 @@ in
           (let
             n = builtins.length (builtins.attrNames cfg.unpinLaunchEffort);
           in {
-            home.activation.claudeUnpinLaunchEffort = lib.hm.dag.entryAfter ["writeBoundary"] (
+            home.activation.claudeUnpinLaunchEffort = lib.hm.dag.entryAfter ["linkGeneration"] (
               ''
                 echo "ai.claude: reconciling ${toString n} launch-effort unpin flag(s) into ~/.claude.json"
               ''

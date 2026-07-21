@@ -672,7 +672,7 @@ in
           # real files, skips symlinks), so a symlinked hook never loads. Mirrors
           # the devenv enterShell real-file install below.
           (lib.mkIf (cfg.hooks != {} || cfg.hooksJson != {}) {
-            home.activation.kiroHooks = lib.hm.dag.entryAfter ["writeBoundary"] (
+            home.activation.kiroHooks = lib.hm.dag.entryAfter ["linkGeneration"] (
               helpers.mkHooksActivationScript {
                 hooks = mkAllHookFiles cfg;
                 hooksDir = "${cfg.configDir}/hooks";
@@ -684,7 +684,7 @@ in
           # as inline hooks: kiro v3 skips symlinked hook files). Mirrors the
           # devenv cp -rL.
           (lib.mkIf (cfg.hooksDir != null) {
-            home.activation.kiroHooksDir = lib.hm.dag.entryAfter ["writeBoundary"] ''
+            home.activation.kiroHooksDir = lib.hm.dag.entryAfter ["linkGeneration"] ''
               set -euETo pipefail
               shopt -s inherit_errexit 2>/dev/null || :
               HOOKS_DIR="$HOME/${cfg.configDir}/hooks"
@@ -779,7 +779,7 @@ in
           # (settings.json only written when cfg.settings != {}).
           # Devenv-side is unconditional (project-local, harmless).
           (lib.mkIf (filteredSettings != {}) {
-            home.activation.kiroSettingsMerge = lib.hm.dag.entryAfter ["writeBoundary"] (helpers.mkSettingsActivationScript {
+            home.activation.kiroSettingsMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
               configFile = "${cfg.configDir}/settings/cli.json";
               settingsJson = builtins.toJSON flatSettings;
               jq = "${pkgs.jq}/bin/jq";
