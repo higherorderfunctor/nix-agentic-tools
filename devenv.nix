@@ -83,6 +83,7 @@ in {
       # (stack-*, living-workflow); only this dev shell prefixes.
       prefixDev = lib.mapAttrs' (name: value: lib.nameValuePair "dev-${name}" value);
       lwSkill = import ./packages/living-workflow/lib/mkSkill.nix {inherit pkgs;};
+      traceSource = import ./lib/traceSource.nix {inherit lib;};
     in
       # stacked-workflows: re-key the deref'd, self-contained stack-* skill
       # dirs (real reference files bundled inside each) as dev-stack-*.
@@ -95,10 +96,13 @@ in {
           src = ./packages/living-workflow/skills/living-workflow;
         };
 
-        # Dev skills (repo-local tooling, not published packages).
-        index-repo-docs = ./dev/skills/index-repo-docs;
-        merge-update-prs = ./dev/skills/merge-update-prs;
-        repo-review = ./dev/skills/repo-review;
+        # Dev skills (repo-local tooling, not published packages). Wrapped in
+        # traceSource.tracedPath so devenv/direnv track their source CONTENTS
+        # (a bare `./dir` handed to ai.skills is copied, never read inside, so
+        # an edit would otherwise be served from a stale eval cache).
+        index-repo-docs = traceSource.tracedPath ./dev/skills/index-repo-docs;
+        merge-update-prs = traceSource.tracedPath ./dev/skills/merge-update-prs;
+        repo-review = traceSource.tracedPath ./dev/skills/repo-review;
       };
   };
 

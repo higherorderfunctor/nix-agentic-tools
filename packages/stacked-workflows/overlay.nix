@@ -4,6 +4,7 @@
 _: final: _prev: let
   inherit (final) lib;
   fragmentsLib = import ../../lib/fragments.nix {inherit lib;};
+  traceSource = import ../../lib/traceSource.nix {inherit lib;};
 
   # Exclude devenv/activation cruft that can accumulate inside source
   # skill directories. Pattern: `<32-lowercase-alnum>-<name>` (a Nix
@@ -28,13 +29,23 @@ _: final: _prev: let
   # skill dir is portable to any install scope (HM-global,
   # devenv-project) and ecosystem — no shared references dir needed,
   # and the single source of a shared ref stays `./references/<x>.md`.
-  skillsWithRefs = final.runCommand "stacked-workflows-skills" {} ''
-    mkdir -p stage/skills stage/references
-    cp -r ${skillsSrc}/. stage/skills/
-    cp -r ${./references}/. stage/references/
-    # Dereference the ../../../references symlinks into real files.
-    cp -RL stage/skills $out
-  '';
+  skillsWithRefs =
+    final.runCommand "stacked-workflows-skills" {
+      # Force devenv/direnv to track skill + shared-reference CONTENTS (see
+      # lib/traceSource.nix). `builtins.path`/`readDir` above track only the
+      # directory LISTING, so editing a skill or reference BODY would otherwise
+      # be served from a stale eval cache.
+      referencesFingerprint = traceSource.fingerprint ./references;
+      skillsFingerprint = traceSource.fingerprint ./skills;
+    } ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      ${final.coreutils}/bin/mkdir -p stage/skills stage/references
+      ${final.coreutils}/bin/cp -r ${skillsSrc}/. stage/skills/
+      ${final.coreutils}/bin/cp -r ${./references}/. stage/references/
+      # Dereference the ../../../references symlinks into real files.
+      ${final.coreutils}/bin/cp -RL stage/skills $out
+    '';
 
   # Single source of truth: skill name -> self-contained skill dir.
   # Names come from the SOURCE dir (eval-safe readDir, no IFD); values

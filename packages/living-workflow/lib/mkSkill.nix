@@ -15,16 +15,26 @@
 #
 # The bake mirrors packages/kiro-cli/lib/autoMemory.nix: the Nix-resolved absolute base
 # is interpolated into the builder, which substitutes the token.
-{pkgs}: {
-  # Absolute XDG state base to bake, e.g. "${config.xdg.stateHome}/living-workflows" (HM),
-  # or a standard XDG shell-default expression (devenv, which has no config.xdg.stateHome).
-  stateBase,
-  # The skill source directory as a `./` path literal (SKILL.md + references/).
-  src,
-}: "${
-  pkgs.runCommand "living-workflow-skill" {} ''
-    ${pkgs.coreutils}/bin/mkdir -p "$out"
-    ${pkgs.coreutils}/bin/cp -R ${src}/references "$out/references"
-    ${pkgs.gnused}/bin/sed 's|@XDG_STATE_BASE@|${stateBase}|g' ${src}/SKILL.md > "$out/SKILL.md"
-  ''
-}"
+{pkgs}: let
+  traceSource = import ../../../lib/traceSource.nix {inherit (pkgs) lib;};
+in
+  {
+    # Absolute XDG state base to bake, e.g. "${config.xdg.stateHome}/living-workflows" (HM),
+    # or a standard XDG shell-default expression (devenv, which has no config.xdg.stateHome).
+    stateBase,
+    # The skill source directory as a `./` path literal (SKILL.md + references/).
+    src,
+  }: "${
+    pkgs.runCommand "living-workflow-skill" {
+      # Force devenv/direnv to track the skill source CONTENTS (see
+      # lib/traceSource.nix). `cp -R ${src}` alone reads nothing inside the tree,
+      # so a content edit would otherwise be served from a stale eval cache.
+      srcFingerprint = traceSource.fingerprint src;
+    } ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      ${pkgs.coreutils}/bin/mkdir -p "$out"
+      ${pkgs.coreutils}/bin/cp -R ${src}/references "$out/references"
+      ${pkgs.gnused}/bin/sed 's|@XDG_STATE_BASE@|${stateBase}|g' ${src}/SKILL.md > "$out/SKILL.md"
+    ''
+  }"
