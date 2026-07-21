@@ -1278,7 +1278,7 @@ in {
       result = evalHm {
         ai.kiro = {
           enable = true;
-          inherit (mem) hooks;
+          hooksJson = mem.hooks;
         };
       };
       hookText = (result.config.home.file.".kiro/hooks/kiro-memory.json" or {}).text or "";
@@ -1321,13 +1321,15 @@ in {
       hm = evalHm {
         ai.kiro = {
           enable = true;
-          inherit (mem) hooks rules;
+          hooksJson = mem.hooks;
+          inherit (mem) rules;
         };
       };
       dv = evalDevenv {
         ai.kiro = {
           enable = true;
-          inherit (mem) hooks rules;
+          hooksJson = mem.hooks;
+          inherit (mem) rules;
         };
       };
       hmHook = (hm.config.home.file.".kiro/hooks/kiro-memory.json" or {}).text or "";
@@ -1807,12 +1809,80 @@ in {
       result = evalHm {
         ai.kiro = {
           enable = true;
-          hooks.pre-commit = ''{"event": "pre-commit"}'';
+          hooksJson.pre-commit = ''{"event": "pre-commit"}'';
         };
       };
       hookFile = result.config.home.file.".kiro/hooks/pre-commit.json" or null;
     in
       hookFile != null
+  );
+
+  # HM: a TYPED hook record lowers to the correct v3 envelope JSON. name = attr
+  # key; null optionals dropped; action nulls dropped.
+  module-kiro-hooks-typed-hm-emits-envelope = mkTest "kiro-hooks-typed-hm-emits-envelope" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          hooks.lint = {
+            trigger = "PostToolUse";
+            matcher = "fs_write";
+            action.command = "just lint";
+            timeout = 30;
+          };
+        };
+      };
+      t = (result.config.home.file.".kiro/hooks/lint.json" or {}).text or "";
+    in
+      lib.hasInfix ''"version":"v1"'' t
+      && lib.hasInfix ''"name":"lint"'' t
+      && lib.hasInfix ''"trigger":"PostToolUse"'' t
+      && lib.hasInfix ''"matcher":"fs_write"'' t
+      && lib.hasInfix ''"type":"command"'' t
+      && lib.hasInfix ''"command":"just lint"'' t
+      && lib.hasInfix ''"timeout":30'' t
+      # `enabled`/`description` were null → omitted.
+      && !(lib.hasInfix ''"enabled"'' t)
+      && !(lib.hasInfix ''"description"'' t)
+  );
+
+  # HM: S1 — an `action.command` package coerces to its getExe store path so
+  # companion files ride the closure at an absolute, cwd-independent path.
+  module-kiro-hooks-command-accepts-package = mkTest "kiro-hooks-command-accepts-package" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          hooks.fmt = {
+            trigger = "PostToolUse";
+            action.command = pkgs.hello;
+          };
+        };
+      };
+      t = (result.config.home.file.".kiro/hooks/fmt.json" or {}).text or "";
+    in
+      lib.hasInfix ''"command":"/nix/store'' t && lib.hasInfix "/bin/hello" t
+  );
+
+  # HM↔devenv: the same typed hook emits the envelope on HM (home.file text) and
+  # devenv installs the REAL file via enterShell (v3 skips symlinked hooks).
+  module-kiro-hooks-typed-devenv-installs = mkTest "kiro-hooks-typed-devenv-installs" (
+    let
+      cfg = {
+        ai.kiro = {
+          enable = true;
+          hooks.lint = {
+            trigger = "PostToolUse";
+            action.command = "just lint";
+          };
+        };
+      };
+      hmT = (evalHm cfg).config.home.file.".kiro/hooks/lint.json".text or "";
+      dvEnter = (evalDevenv cfg).config.enterShell or "";
+    in
+      lib.hasInfix ''"trigger":"PostToolUse"'' hmT
+      && lib.hasInfix ".kiro/hooks/lint.json" dvEnter
+      && lib.hasInfix "install -m 0644" dvEnter
   );
 
   # Devenv: mcp.json write.
@@ -1932,7 +2002,7 @@ in {
       result = evalDevenv {
         ai.kiro = {
           enable = true;
-          hooks.pre-commit = ''{"event": "pre-commit"}'';
+          hooksJson.pre-commit = ''{"event": "pre-commit"}'';
         };
       };
       enter = result.config.enterShell or "";
