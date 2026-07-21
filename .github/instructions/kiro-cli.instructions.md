@@ -199,12 +199,14 @@ openmemory's `system_global` scope, not the per-project buffer.
 
 `lib.ai.apps.kiroAutoMemory { lib, pkgs, home?null, env?{}, omEnv?{},
 omPgPasswordFile?null, timeout?30 }` returns `{ hooks; rules; }` — VALUES for
-the existing `ai.kiro.hooks` / `ai.kiro.rules` options (no new module axis,
-B5). A consumer splices:
+the `ai.kiro.hooksJson` (raw envelope escape hatch) / `ai.kiro.rules` options
+(no new module axis, B5). `mem.hooks` is a pre-baked JSON envelope, so it rides
+the raw `hooksJson` surface; the typed `ai.kiro.hooks` records are the preferred
+surface for new hooks. A consumer splices:
 
 ```nix
 let mem = lib.ai.apps.kiroAutoMemory { inherit pkgs; home = config.home.homeDirectory; };
-in { ai.kiro.hooks = mem.hooks; ai.kiro.rules = mem.rules; }
+in { ai.kiro.hooksJson = mem.hooks; ai.kiro.rules = mem.rules; }
 ```
 
 Each hook is a strict-mode `writeShellScript` wrapper (`kiro-memory-{stop,
