@@ -16,6 +16,11 @@ inputs:
     inputs:
       nixpkgs:
         follows: nixpkgs
+  home-manager:
+    url: github:nix-community/home-manager/a02190edf9a79d8da191da75eced1ce1ae5e2408
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
   mcp-nixos:
     url: github:utensils/mcp-nixos/de85ae4cf8817709866fe91fef58774ef439d0a8
     inputs:

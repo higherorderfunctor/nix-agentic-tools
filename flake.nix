@@ -23,6 +23,14 @@
       url = "github:cachix/git-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # home-manager — used ONLY to build `homeConfigurations.lab-*`
+    # into a fake user-global config root for labs/ (see
+    # docs/plans/agent-primitive-labs-design.md). Never activated.
+    # Rev matches the nixos-config pin so the store entry is shared.
+    home-manager = {
+      url = "github:nix-community/home-manager/a02190edf9a79d8da191da75eced1ce1ae5e2408";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     mcp-nixos = {
       url = "github:utensils/mcp-nixos";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -87,6 +95,14 @@
     # Barrel walker — collects non-binary facets from packages/*/default.nix.
     packagesBarrel = import ./packages;
 
+    # ── Labs ────────────────────────────────────────────────────────────
+    # Auto-discovered from labs/. Adding a lab is adding a directory —
+    # no flake edit. See docs/plans/agent-primitive-labs-design.md.
+    labNames = lib.attrNames (
+      lib.filterAttrs (_: type: type == "directory") (builtins.readDir ./labs)
+    );
+    labDef = name: import (./labs + "/${name}/lab.nix");
+
     collectFacet = attrPath:
       lib.pipe packagesBarrel [
         (lib.filterAttrs (_: p: lib.hasAttrByPath attrPath p))
@@ -123,6 +139,34 @@
         [./lib/ai/sharedOptions.nix]
         ++ collectFacet ["modules" "devenv"];
     };
+
+    # Fake user-global config roots for labs/. Build
+    # `.config.home-files` (0.9s) — NOT `.activationPackage`, which drags
+    # in a 1.5 GiB closure including the claude CLI itself.
+    homeConfigurations = lib.genAttrs (map (n: "lab-${n}") labNames) (
+      attrName: let
+        name = lib.removePrefix "lab-" attrName;
+        def = labDef name;
+      in
+        inputs.home-manager.lib.homeManagerConfiguration {
+          pkgs = pkgsFor "x86_64-linux";
+          modules = [
+            self.homeManagerModules.default
+            (def.global or {})
+            {
+              home = {
+                username = "lab";
+                homeDirectory = "/home/lab";
+                stateVersion = "24.11";
+              };
+              programs.home-manager.enable = false;
+              # Drops the 1.3 GiB home-manager-path tail. The lab uses the
+              # developer's own claude/kiro binaries, not HM-installed ones.
+              programs.claude-code.package = lib.mkForce null;
+            }
+          ];
+        }
+    );
 
     lib = let
       fragments = import ./lib/fragments.nix {inherit lib;};
