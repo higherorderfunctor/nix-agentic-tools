@@ -1,5 +1,7 @@
 # oxlint + tsgolint `devTools` Overlay Implementation Plan
 
+> **✅ COMPLETED — 2026-07-21.** All tasks implemented, reviewed (opus whole-branch + Copilot), and merged into `refactor/ai-factory-architecture`: **PR #417** (feature) + **PR #422** (empirical update-path validation — confirmed the standard `nix-update` flow works for both packages, so no bespoke updateScript was needed). Step checkboxes below are ticked for the record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Package HEAD-tracked `oxlint` (with working `--type-aware`/tsgo linting + JS plugins) and its `tsgolint` backend as a new `pkgs.devTools.*` overlay group in this repo, version-controlled via the update pipeline.
@@ -42,7 +44,7 @@ Creates the new group with tsgolint first (oxlint depends on it in Task 2).
 
 - Produces: `overlays/dev-tools/tsgolint.nix` — a function `{inputs, final, ...}: <derivation>` evaluating to the tsgolint package. Consumed by Task 2's oxlint.nix (`import ./tsgolint.nix {inherit inputs final;}`) and exposed as `pkgs.devTools.tsgolint` → `.#tsgolint`.
 
-- [ ] **Step 1: Capture the current tsgolint main rev**
+- [x] **Step 1: Capture the current tsgolint main rev**
 
 Run:
 
@@ -58,7 +60,7 @@ git ls-remote --tags --sort=-v:refname https://github.com/oxc-project/tsgolint.g
 
 Use its `vX.Y.Z` as the `upstream` base (e.g. `0.25.0`). Final version string will be `"<tag>-unstable+<shortrev>"` — see Step 2.
 
-- [ ] **Step 2: Create `overlays/dev-tools/tsgolint.nix` with fake hashes**
+- [x] **Step 2: Create `overlays/dev-tools/tsgolint.nix` with fake hashes**
 
 ```nix
 # tsgolint — HEAD-tracked type-aware linting backend for oxlint, pinned
@@ -96,7 +98,7 @@ in
 
 Replace `TSGOLINT_REV` with the SHA from Step 1 and `0.25.0-unstable` with the tag base from Step 1.
 
-- [ ] **Step 3: Wire the `devTools` group in `overlays/default.nix`**
+- [x] **Step 3: Wire the `devTools` group in `overlays/default.nix`**
 
 After the `gitToolDrvs` block, add:
 
@@ -115,7 +117,7 @@ In the returned attrset (currently ending `gitTools = guard gitToolDrvs;`), add 
   devTools = guard devToolDrvs;
 ```
 
-- [ ] **Step 4: Expose the group at flake level in `flake.nix`**
+- [x] **Step 4: Expose the group at flake level in `flake.nix`**
 
 Find the packages flatten (search for `// pkgs.gitTools`). Add a line directly after it:
 
@@ -123,7 +125,7 @@ Find the packages flatten (search for `// pkgs.gitTools`). Add a line directly a
       // pkgs.devTools
 ```
 
-- [ ] **Step 5: git add + build to surface the real src hash**
+- [x] **Step 5: git add + build to surface the real src hash**
 
 Run:
 
@@ -134,7 +136,7 @@ nix build .#tsgolint --max-jobs 1 2>&1 | tee /tmp/tsgolint-build.log
 
 Expected: FAIL with a `hash mismatch in fixed-output derivation` for the `fetchFromGitHub` src, printing `got: sha256-…`.
 
-- [ ] **Step 6: Paste the real src hash, rebuild to surface vendorHash**
+- [x] **Step 6: Paste the real src hash, rebuild to surface vendorHash**
 
 Replace `ourPkgs.lib.fakeHash` on the `src` with the `got:` value from Step 5. Then:
 
@@ -144,7 +146,7 @@ nix build .#tsgolint --max-jobs 1 2>&1 | tee /tmp/tsgolint-build.log
 
 Expected: FAIL with a vendor hash mismatch (`got: sha256-…`) for the Go module vendor.
 
-- [ ] **Step 7: Paste the real vendorHash, rebuild to green**
+- [x] **Step 7: Paste the real vendorHash, rebuild to green**
 
 Replace the `vendorHash = ourPkgs.lib.fakeHash;` with the `got:` value from Step 6. Then:
 
@@ -156,7 +158,7 @@ Expected: PASS (produces `./result`).
 
 If the build fails on `patches` (a missing `patches/000N-*.patch` path), the upstream justfile patch set drifted at this rev — see spec Risk 3. Resolve by checking `ls <src>/patches/` at the pinned rev and updating the inherited patch list via an explicit `patches = [ … ];` override; record the deviation in the spec.
 
-- [ ] **Step 8: Smoke test the binary**
+- [x] **Step 8: Smoke test the binary**
 
 Run:
 
@@ -166,7 +168,7 @@ Run:
 
 Expected: usage/help text, exit 0 (a `headless` subcommand should be listed).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add overlays/dev-tools/tsgolint.nix overlays/default.nix flake.nix
@@ -188,7 +190,7 @@ git commit -m "feat(tsgolint): add HEAD-tracked tsgolint in new devTools overlay
 - Consumes: `overlays/dev-tools/tsgolint.nix` from Task 1 via `import ./tsgolint.nix {inherit inputs final;}`.
 - Produces: `pkgs.devTools.oxlint` → `.#oxlint`, an oxlint wrapped with our tsgolint on PATH.
 
-- [ ] **Step 1: Capture the current oxc main rev + version source**
+- [x] **Step 1: Capture the current oxc main rev + version source**
 
 Run:
 
@@ -203,7 +205,7 @@ Record as `OXC_REV`. Verify the oxlint version field location (Open Question 1) 
 #   apps/oxlint/Cargo.toml → [package].version  (fallback: workspace version)
 ```
 
-- [ ] **Step 2: Create `overlays/dev-tools/oxlint.nix` with fake hashes**
+- [x] **Step 2: Create `overlays/dev-tools/oxlint.nix` with fake hashes**
 
 ```nix
 # oxlint — HEAD-tracked JS/TS linter with type-aware (tsgo) support, pinned
@@ -252,7 +254,7 @@ in
 
 Replace `OXC_REV` with the SHA from Step 1.
 
-- [ ] **Step 3: Add oxlint to `devToolDrvs` in `overlays/default.nix`**
+- [x] **Step 3: Add oxlint to `devToolDrvs` in `overlays/default.nix`**
 
 ```nix
   devToolDrvs = {
@@ -265,7 +267,7 @@ Replace `OXC_REV` with the SHA from Step 1.
   };
 ```
 
-- [ ] **Step 4: git add + eval-check the version source**
+- [x] **Step 4: git add + eval-check the version source**
 
 Run:
 
@@ -276,7 +278,7 @@ nix eval --raw .#oxlint.version 2>&1 | tee /tmp/oxlint-version.log
 
 Expected: EITHER a version like `1.74.0+abcdef1` (good — the `apps/oxlint/Cargo.toml` field is correct), OR an eval error `attribute 'version' missing` / file-not-found. If it errors, the version path is wrong — switch `readCargoVersion "${src}/apps/oxlint/Cargo.toml"` to `readCargoWorkspaceVersion "${src}/Cargo.toml"` and re-run. (This step may trigger an IFD source fetch — that's expected.)
 
-- [ ] **Step 5: Build to surface the src hash**
+- [x] **Step 5: Build to surface the src hash**
 
 Run:
 
@@ -286,7 +288,7 @@ nix build .#oxlint --max-jobs 1 2>&1 | tee /tmp/oxlint-build.log
 
 Expected: FAIL with a `hash mismatch` for the oxc `fetchFromGitHub` src (`got: sha256-…`).
 
-- [ ] **Step 6: Paste src hash, rebuild to surface cargoDeps hash**
+- [x] **Step 6: Paste src hash, rebuild to surface cargoDeps hash**
 
 Replace the `src` `hash` fakeHash with the `got:` value. Rebuild:
 
@@ -296,7 +298,7 @@ nix build .#oxlint --max-jobs 1 2>&1 | tee /tmp/oxlint-build.log
 
 Expected: FAIL with a mismatch for the cargo vendor (`fetchCargoVendor`) `got: sha256-…`.
 
-- [ ] **Step 7: Paste cargoDeps hash, rebuild to surface pnpmDeps hash**
+- [x] **Step 7: Paste cargoDeps hash, rebuild to surface pnpmDeps hash**
 
 Replace the `cargoDeps` fakeHash with the `got:` value. Rebuild:
 
@@ -306,7 +308,7 @@ nix build .#oxlint --max-jobs 1 2>&1 | tee /tmp/oxlint-build.log
 
 Expected: FAIL with a mismatch for `pnpmDeps` (`fetchPnpmDeps`) `got: sha256-…`.
 
-- [ ] **Step 8: Paste pnpmDeps hash, rebuild — resolve versionCheckHook**
+- [x] **Step 8: Paste pnpmDeps hash, rebuild — resolve versionCheckHook**
 
 Replace the `pnpmDeps` fakeHash with the `got:` value. Rebuild:
 
@@ -328,7 +330,7 @@ Two possible outcomes:
 
 Then rebuild to PASS. (The `--type-aware` + `jsPlugins` sub-checks in `installCheckPhase` are independent of versionCheckHook and still run.)
 
-- [ ] **Step 9: Verify the wrapper points `--type-aware` at OUR tsgolint**
+- [x] **Step 9: Verify the wrapper points `--type-aware` at OUR tsgolint**
 
 Confirm the wrapper embeds our tsgolint store path (not a bare nixpkgs one):
 
@@ -339,7 +341,7 @@ nix eval --raw .#tsgolint.outPath
 
 Expected: the path grepped from the wrapper is under the SAME store path as `.#tsgolint.outPath` (proves the `.override` took effect).
 
-- [ ] **Step 10: End-to-end type-aware smoke test**
+- [x] **Step 10: End-to-end type-aware smoke test**
 
 ```bash
 tmp=$(mktemp -d); cd "$tmp"
@@ -352,7 +354,7 @@ cd "$OLDPWD"
 
 Expected: nonzero exit, output naming `no-unnecessary-type-assertion` (proves tsgolint is invoked at runtime). Also sanity-check `./result/bin/oxlint --version`.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add overlays/dev-tools/oxlint.nix overlays/default.nix
@@ -376,7 +378,7 @@ Wires both into the auto-update loop and confirms the two spec validation points
 - Consumes: `.#oxlint`, `.#tsgolint` targets from Tasks 1–2.
 - Produces: `config/update-matrix.nix` entries so `generate-update-ninja` emits `update/oxlint` + `update/tsgolint` targets.
 
-- [ ] **Step 1: Add both entries to `config/update-matrix.nix`**
+- [x] **Step 1: Add both entries to `config/update-matrix.nix`**
 
 In the `nixUpdate` attrset's main-tracking section (alphabetical), add:
 
@@ -391,7 +393,7 @@ In the `nixUpdate` attrset's main-tracking section (alphabetical), add:
     };
 ```
 
-- [ ] **Step 2: Verify target-resolution + ninja generation**
+- [x] **Step 2: Verify target-resolution + ninja generation**
 
 ```bash
 git add config/update-matrix.nix
@@ -408,7 +410,7 @@ nix run .#generate-update-ninja && grep -E 'update/(oxlint|tsgolint)' .update.ni
 
 Expected: both targets appear in the DAG.
 
-- [ ] **Step 3: Dry-validate the oxlint 3-hash bump (Validation Point 1)**
+- [x] **Step 3: Dry-validate the oxlint 3-hash bump (Validation Point 1)**
 
 In an isolated worktree, force a re-resolve of all three hashes to confirm `nix-update` handles src + cargoDeps + pnpmDeps together. Cheapest proxy: set all three oxlint hashes back to `ourPkgs.lib.fakeHash`, then run the repo's per-package update path against the current rev:
 
@@ -420,11 +422,11 @@ NAT_UPDATE_WORKTREES_DIR="${TMPDIR:-/tmp}/nat-update-wt" \
 
 Expected: the script rewrites all three hashes to real values and the build verifies. If `nix-update` leaves any of the three as a fake/empty hash (build still fails), the standard flow is insufficient → do Step 4a. Otherwise skip to Step 5. Restore the real hashes afterward (`git checkout overlays/dev-tools/oxlint.nix`).
 
-- [ ] **Step 4a: (only if Step 3 failed) Bespoke oxlint updateScript**
+- [x] **Step 4a: (only if Step 3 failed) Bespoke oxlint updateScript**
 
 Switch the matrix entry to `oxlint = { flags = "--use-update-script"; };` (drop `git`), and add to oxlint.nix's `overrideAttrs` body a `passthru.updateScript` that: (1) `git ls-remote` the oxc rev, (2) sed the `rev`, (3) `nix-prefetch-url`/`nix build .#oxlint.src` loop to fill `src`, `cargoDeps`, `pnpmDeps` via successive fake-hash rebuilds captured in-script. Use `overlays/lib.nix:mkGitRevUpdateScript` for the rev step; extend with three `nix build … |& sed`-driven hash captures. Full strict mode + absolute store paths per Global Constraints. Re-run Step 2's `generate-update-ninja` check.
 
-- [ ] **Step 4b: Validate the tsgolint submodule bump (Validation Point 2)**
+- [x] **Step 4b: Validate the tsgolint submodule bump (Validation Point 2)**
 
 Same worktree probe for tsgolint (src + vendorHash), which has `fetchSubmodules=true`:
 
@@ -435,7 +437,7 @@ NAT_UPDATE_WORKTREES_DIR="${TMPDIR:-/tmp}/nat-update-wt" \
 
 Expected: `nix-update` re-derives the submodule-aware src hash + vendorHash correctly (it realizes the `fetchFromGitHub`, which respects `fetchSubmodules`). If the committed src hash ends up WRONG (source 404 / hash mismatch on verify), the pipeline's `nix flake prefetch` pre-step poisoned it → switch tsgolint to `flags = "--use-update-script";` (drop `git`) with a bespoke `passthru.updateScript` using `${pkgs.nix-prefetch-git}/bin/nix-prefetch-git --fetch-submodules` for the src hash + a fake-hash rebuild for `vendorHash`. Full strict mode + absolute paths. Restore real hashes afterward.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add config/update-matrix.nix overlays/dev-tools/oxlint.nix overlays/dev-tools/tsgolint.nix
@@ -459,7 +461,7 @@ git commit -m "feat(devtools): register oxlint + tsgolint in the update pipeline
 - Consumes: the completed overlay + matrix from Tasks 1–3.
 - Produces: doc-data registration so generated README/docsite list the `dev-tools` group; the `cache-hit-parity` check actually covering the new packages; a green `nix flake check`.
 
-- [ ] **Step 1: Register the devTools packages in the cache-hit-parity check**
+- [x] **Step 1: Register the devTools packages in the cache-hit-parity check**
 
 `checks/cache-hit-parity.nix` gates cache-hit parity via **hardcoded per-group allowlists** (`aiCliPackages`, `gitToolPackages`, `mcpServerPackages`, `agnixPackages`, `specialPackages`), aggregated into `allDrifts`. There is no `devToolPackages`, so the check currently **skips `oxlint`/`tsgolint` entirely** — the Global Constraint "a regression fails `checks.cache-hit-parity`" is false for them until registered (surfaced by the Task 1 review).
 
@@ -476,7 +478,7 @@ nix build .#checks.x86_64-linux.cache-hit-parity --max-jobs 1 && cat result
 
 Expected: PASS ("no drift"), with the drift logic now iterating oxlint + tsgolint. To prove the gate is live, temporarily point one package's build input at `final` instead of `ourPkgs`, re-run, confirm it FAILS, then revert.
 
-- [ ] **Step 2: Register the group in `dev/data.nix`**
+- [x] **Step 2: Register the group in `dev/data.nix`**
 
 In `overlayPackages`, add (alphabetically, kebab key):
 
@@ -494,7 +496,7 @@ If the doc generator reads per-package descriptions from a map like `gitToolDesc
     tsgolint = "Type-aware linting backend for oxlint (typescript-go)";
 ```
 
-- [ ] **Step 3: Determine whether `overlays/README.md` is generated or hand-maintained**
+- [x] **Step 3: Determine whether `overlays/README.md` is generated or hand-maintained**
 
 Run:
 
@@ -510,7 +512,7 @@ grep -rn "overlays/README" dev/ flake.nix 2>/dev/null
 | tsgolint  | devTools | GitHub main | go (nixpkgs override)   | `tsgolint` | upstream               | --help       |
 ```
 
-- [ ] **Step 4: git add and run the full flake check**
+- [x] **Step 4: git add and run the full flake check**
 
 ```bash
 git add dev/data.nix overlays/README.md
@@ -519,7 +521,7 @@ nix flake check --max-jobs 1 2>&1 | tee /tmp/flake-check.log
 
 Expected: PASS. Specifically `cache-hit-parity` (both packages route through `ourPkgs`) and `overlay-target-resolution` are green. If `cache-hit-parity` reports drift, a build input is using `final`/`prev` instead of `ourPkgs` — fix in the offending overlay file.
 
-- [ ] **Step 5: Regenerate docs if applicable**
+- [x] **Step 5: Regenerate docs if applicable**
 
 If Step 2 found a generator:
 
@@ -530,7 +532,7 @@ git diff --stat
 
 Expected: README/docsite files regenerate with the `dev-tools` group; stage them.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add checks/cache-hit-parity.nix dev/data.nix overlays/default.nix overlays/README.md README.md docs/ 2>/dev/null; git add -A
