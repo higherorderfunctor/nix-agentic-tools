@@ -1933,6 +1933,76 @@ in {
       && lib.hasInfix "install -m 0644" dvEnter
   );
 
+  # HM+devenv: records sharing a `file` co-locate into ONE envelope (N hooks in
+  # one file — the typed path off the raw `hooksJson` escape hatch, e.g.
+  # autoMemory's set in kiro-memory.json). A record without `file` keeps its own
+  # <name>.json (back-compat); the Nix-only `file` key is stripped from output.
+  # PR #433 moved HM hook delivery to home.activation real files (kiro v3 skips
+  # store symlinks), so each envelope is read back out of its activation-script
+  # heredoc body and structurally asserted via fromJSON — same strength as the
+  # old home.file text read.
+  module-kiro-hooks-typed-colocation = mkTest "kiro-hooks-typed-colocation" (
+    let
+      cfg = {
+        ai.kiro = {
+          enable = true;
+          hooks = {
+            mem-stop = {
+              file = "kiro-memory";
+              trigger = "Stop";
+              action.command = "/bin/stop";
+            };
+            mem-recall = {
+              file = "kiro-memory";
+              trigger = "UserPromptSubmit";
+              action.command = "/bin/recall";
+            };
+            solo = {
+              trigger = "PostToolUse";
+              matcher = "fs_write";
+              action.command = "/bin/solo";
+            };
+          };
+        };
+      };
+      # The activation script embeds coreutils store paths, and every substring
+      # inherits the whole string's context — which fromJSON rejects. Strip it
+      # (same idiom as the auto-memory parity test); byte content is unchanged.
+      hmT =
+        builtins.unsafeDiscardStringContext
+        (((evalHm cfg).config.home.activation.kiroHooks or {}).text or "");
+      # Exact heredoc body for one emitted hook file: the script writes
+      # `cat > "$HOOKS_DIR/<file>.json" <<'NAT_KIRO_HOOK_EOF'` + body + EOF.
+      hookBody = file: let
+        parts = lib.splitString "\"$HOOKS_DIR/${file}.json\" <<'NAT_KIRO_HOOK_EOF'\n" hmT;
+      in
+        if builtins.length parts < 2
+        then ""
+        else builtins.head (lib.splitString "\nNAT_KIRO_HOOK_EOF" (builtins.elemAt parts 1));
+      coText = hookBody "kiro-memory";
+      co = builtins.fromJSON coText;
+      soloText = hookBody "solo";
+      dvEnter = (evalDevenv cfg).config.enterShell or "";
+    in
+      # both co-located records land in ONE kiro-memory.json envelope
+      co.version
+      == "v1"
+      && builtins.length co.hooks == 2
+      && lib.any (h: h.name == "mem-stop" && h.trigger == "Stop") co.hooks
+      && lib.any (h: h.name == "mem-recall" && h.trigger == "UserPromptSubmit") co.hooks
+      # the Nix-only `file` grouping key is stripped from every emitted hook object
+      && !(lib.any (h: h ? file) co.hooks)
+      && !(lib.hasInfix ''"file"'' coText)
+      # a record without `file` keeps its own <name>.json (back-compat)
+      && lib.hasInfix ''"name":"solo"'' soloText
+      # the co-located records do NOT also emit their own per-record files
+      && !(lib.hasInfix "mem-stop.json" hmT)
+      && !(lib.hasInfix "mem-recall.json" hmT)
+      # devenv installs the SAME grouped file (parity) and NOT per-record files
+      && lib.hasInfix ".kiro/hooks/kiro-memory.json" dvEnter
+      && !(lib.hasInfix "mem-stop.json" dvEnter)
+  );
+
   # A PATH-valued hooksJson entry must emit the file CONTENT, not the path string
   # (mkAllHookFiles resolves paths so devenv's writeText writes the body too).
   module-kiro-hooks-json-path-resolves = mkTest "kiro-hooks-json-path-resolves" (
