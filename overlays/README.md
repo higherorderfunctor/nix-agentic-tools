@@ -47,5 +47,7 @@ Versions computed at eval time via `overlays/lib.nix:mkVersion`
 | git-absorb            | gitTools   | GitHub main          | cargo (nixpkgs override)  | `git-absorb`          | cargo test    | --version           |
 | git-branchless        | gitTools   | flake input          | cargo (upstream overlay)  | —                     | upstream      | —                   |
 | git-revise            | gitTools   | GitHub main          | python (nixpkgs override) | `git-revise`          | pytest        | nixpkgs             |
+| oxlint                | devTools   | GitHub main          | pnpm (nixpkgs override)   | `oxlint`              | installCheck  | --type-aware        |
+| tsgolint              | devTools   | GitHub main          | go (nixpkgs override)     | `tsgolint`            | upstream      | --help              |
 | agnix-mcp             | mcpServers | mainProgram override | —                         | —                     | —             | —                   |
 | agnix-lsp             | lspServers | mainProgram override | —                         | —                     | —             | —                   |

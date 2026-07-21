@@ -396,7 +396,7 @@
 
   # ── Shared description mappings (from dev/data.nix) ──────────────────
   data = import ./data.nix {inherit lib;};
-  inherit (data) aiCliDescriptions gitToolDescriptions mcpServerMeta skillDescriptions;
+  inherit (data) aiCliDescriptions devToolDescriptions gitToolDescriptions mcpServerMeta skillDescriptions;
   inherit (data) mcpServerCount;
 
   # ── Table generators ─────────────────────────────────────────────────
@@ -410,6 +410,11 @@
   gitToolRows =
     lib.concatMapStringsSep "\n" (name: "| `${name}` | ${gitToolDescriptions.${name}} |")
     gitToolNames;
+
+  devToolNames = lib.sort lib.lessThan (builtins.attrNames devToolDescriptions);
+  devToolRows =
+    lib.concatMapStringsSep "\n" (name: "| `${name}` | ${devToolDescriptions.${name}} |")
+    devToolNames;
 
   aiCliNames = lib.sort lib.lessThan (builtins.attrNames aiCliDescriptions);
   aiCliRows =
@@ -563,6 +568,20 @@
 
     ```bash
     nix build .#git-absorb
+    ```
+
+    </details>
+
+    <details>
+    <summary><strong>Dev Tools</strong></summary>
+
+    <!-- prettier-ignore -->
+    | Package | Description |
+    |---------|-------------|
+    ${devToolRows}
+
+    ```bash
+    nix build .#oxlint
     ```
 
     </details>

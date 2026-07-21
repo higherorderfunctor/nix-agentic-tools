@@ -9,6 +9,7 @@
 #   pkgs.ai.mcpServers.*     — MCP server packages + proxies
 #   pkgs.ai.lspServers.*     — LSP server proxies
 #   pkgs.gitTools.*           — git workflow tools
+#   pkgs.devTools.*           — dev tools (linters)
 #
 # Each per-package file takes {inputs, final, ...} and manages its
 # own source — fetchFromGitHub with inline hashes for upstream
