@@ -1,0 +1,12 @@
+{
+  "session_id": "sess_a44bce46-1d84-4063-a51a-2d4608709a44",
+  "hook_event_name": "PreToolUse",
+  "cwd": "/home/caubut/Documents/projects/nix-agentic-tools",
+  "tool_name": "execute_bash",
+  "tool_input": {
+    "command": "git branch --show-current && echo \"---STATUS---\" && git status --short && echo \"---LAST 5 COMMITS---\" && git log --oneline -5",
+    "cwd": "/home/caubut/Documents/projects/nix-agentic-tools",
+    "run_in_background": false,
+    "timeout": null
+  }
+}
