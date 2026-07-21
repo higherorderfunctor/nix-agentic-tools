@@ -54,6 +54,13 @@ fi
 lab="${lab_root}/${name}"
 
 if [ "$reset" -eq 1 ] && [ -d "$lab" ]; then
+  # Refuse a symlinked lab dir. `rm -rf` is safe on one (it unlinks rather
+  # than traversing), but the chmod below DEREFERENCES a top-level symlink
+  # and would recursively chmod whatever it points at.
+  if [ -L "$lab" ]; then
+    log "refusing to reset '$lab': it is a symlink"
+    exit 1
+  fi
   log "resetting $lab"
   # u+w first: the copied tree includes dereferenced, still-read-only
   # Nix store files/dirs that rm -rf can't otherwise remove.
@@ -79,13 +86,22 @@ chmod -R u+w "$lab/home"
 # paths, so they run standalone with HOME repointed.
 for entry in claudeUnpinLaunchEffort copilotSettingsMerge kiroSettingsMerge; do
   eval_err="$(mktemp)"
+  trap 'rm -f "$eval_err"' EXIT
   if body=$(nix eval --raw \
     "${root}#homeConfigurations.lab-${name}.config.home.activation.${entry}.data" \
     2>"$eval_err"); then
     rm -f "$eval_err"
-  elif grep -qE 'does not provide attribute|does not exist|missing attribute' "$eval_err"; then
-    # Genuinely absent — entries are only emitted when the relevant app
-    # is enabled. Expected and fine, unlike any other eval failure below.
+  elif grep -q 'does not provide attribute' "$eval_err"; then
+    # Genuinely absent — entries are only emitted when the relevant app is
+    # enabled. Expected and fine, unlike any other eval failure below.
+    #
+    # Match ONLY this phrasing, verified as Nix 2.34.4's actual flake-CLI
+    # absence message. Do NOT broaden it: 'does not exist' appears in genuine
+    # module-system errors too ("The option 'foo.bar' does not exist."), and
+    # this repo renames options (hooksDir -> hookScriptsDir), so accepting it
+    # would silently reclassify a real failure as "absent" and re-open the
+    # fail-open hole this branch exists to close. If Nix changes the wording,
+    # absence lands in the else branch and fails LOUDLY — the safe direction.
     log "activation '$entry' not present — skipping"
     rm -f "$eval_err"
     continue
