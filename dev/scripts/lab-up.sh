@@ -52,7 +52,7 @@ cp -rL "$hf/." "$lab/home/"
 chmod -R u+w "$lab/home"
 
 # Replay activation-only writes. These jq merges never appear in
-# home-files. They are $HOME-parameterised and reference absolute store
+# home-files. They are $HOME-parameterized and reference absolute store
 # paths, so they run standalone with HOME repointed.
 for entry in claudeUnpinLaunchEffort copilotSettingsMerge kiroSettingsMerge; do
   body=$(nix eval --raw \

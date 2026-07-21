@@ -178,7 +178,6 @@ osmani
 oxalica
 oxlint
 pagefind
-parameterised
 partialclone
 passthroughs
 passthru
