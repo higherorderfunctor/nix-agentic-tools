@@ -106,17 +106,27 @@ jobs:
     needs: deploy-preview
     runs-on: ubuntu-latest
     steps:
+      # Local composite actions resolve from the workspace checkout, so
+      # the default branch must be checked out at the root; gh-pages
+      # goes into a subdirectory the later steps operate on. A bare
+      # gh-pages checkout at the root has no .github/actions/ and the
+      # composite fails with "Can't find action.yml".
+      - uses: actions/checkout@v6
+
       - uses: actions/checkout@v6
         with:
-          ref: gh-pages
           fetch-depth: 1
+          path: gh-pages
+          ref: gh-pages
 
       - uses: ./.github/actions/git-bot-identity
         with:
+          path: gh-pages
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prune previews for deleted branches
         shell: bash
+        working-directory: gh-pages
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
@@ -179,17 +189,24 @@ jobs:
     if: github.event_name == 'delete' && github.event.ref_type == 'branch'
     runs-on: ubuntu-latest
     steps:
+      # Same two-checkout shape as prune-previews: the composite must
+      # resolve from a default-branch checkout at the workspace root.
+      - uses: actions/checkout@v6
+
       - uses: actions/checkout@v6
         with:
-          ref: gh-pages
           fetch-depth: 1
+          path: gh-pages
+          ref: gh-pages
 
       - uses: ./.github/actions/git-bot-identity
         with:
+          path: gh-pages
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Remove preview
         shell: bash
+        working-directory: gh-pages
         env:
           BRANCH: ${{ github.event.ref }}
         run: |

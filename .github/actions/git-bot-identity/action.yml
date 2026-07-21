@@ -16,6 +16,15 @@ inputs:
       come from.
     required: false
     default: github-actions[bot]
+  path:
+    description: >-
+      Repository checkout to configure, relative to the workspace.
+      Defaults to the workspace root; set it when the repo that will
+      commit is a secondary checkout in a subdirectory (e.g. a gh-pages
+      checkout beside the default-branch checkout that provides this
+      action).
+    required: false
+    default: "."
   retries:
     description: Maximum lookup attempts before giving up.
     required: false
@@ -42,6 +51,7 @@ runs:
       env:
         ACCOUNT: ${{ inputs.account }}
         GH_TOKEN: ${{ inputs.token }}
+        REPO_PATH: ${{ inputs.path }}
         RETRIES: ${{ inputs.retries }}
       run: |
         set -euETo pipefail
@@ -78,7 +88,7 @@ runs:
         fi
 
         email="${id}+${ACCOUNT}@users.noreply.github.com"
-        git config user.name "${ACCOUNT}"
-        git config user.email "${email}"
+        git -C "${REPO_PATH}" config user.name "${ACCOUNT}"
+        git -C "${REPO_PATH}" config user.email "${email}"
         echo "email=${email}" >>"${GITHUB_OUTPUT}"
         echo "id=${id}" >>"${GITHUB_OUTPUT}"
