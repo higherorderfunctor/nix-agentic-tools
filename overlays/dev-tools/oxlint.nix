@@ -50,4 +50,8 @@ in
       builtins.filter
       (p: (p.pname or "") != "version-check-hook")
       (prev.nativeInstallCheckInputs or []);
+    # Base meta.changelog is `…/releases/tag/${src.tag}`, but our rev-based src
+    # has no `tag`, so accessing meta.changelog coerces null → eval throw.
+    # Re-point it at the pinned commit (also re-anchors meta.position here).
+    meta = prev.meta // {changelog = "https://github.com/oxc-project/oxc/commit/${rev}";};
   })
