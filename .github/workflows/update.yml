@@ -156,20 +156,30 @@ jobs:
 
             # Every run rebuilds this branch on the CURRENT base, so its
             # tip SHA always differs even when the dependency did not
-            # move — and the unconditional force-push below then fired a
+            # move — and an unconditional force-push would fire a
             # duplicate 4-job CI run to re-validate a byte-identical
             # patch. `git patch-id --stable` hashes the diff alone, so a
-            # pure rebase compares equal and we can skip the push.
+            # pure rebase onto an UNCHANGED base compares equal and the
+            # push is skipped.
             #
-            # Two conditions keep this honest:
+            # Three conditions keep this honest:
             #   - an empty patch-id means "could not compare", never a
             #     match, or every no-op branch would collapse together;
             #   - a CONFLICTING PR is force-pushed anyway, so branches
-            #     cannot rot against a base they no longer apply to.
-            #     (Renovate's rebaseWhen=conflicted, in effect.)
+            #     cannot rot against a base they no longer apply to
+            #     (Renovate's rebaseWhen=conflicted, in effect);
+            #   - a branch whose remote base has fallen behind the
+            #     current base_head (old_base != base_head) is rebased
+            #     and re-pushed even when the dep patch is identical, so
+            #     the PR is re-validated against the base it will merge
+            #     into (Renovate's rebaseWhen=behind-base-branch). This
+            #     is what lets a PR self-heal after a base-branch CI fix
+            #     instead of staying pinned to a stale, possibly broken
+            #     base.
             remote_ref="refs/remotes/origin/$branch"
             new_id=$(git diff "$base_head".."$branch" | git patch-id --stable | awk '{print $1}')
             old_id=""
+            old_base=""
             if git rev-parse --verify --quiet "$remote_ref" >/dev/null; then
               old_base=$(git merge-base "$remote_ref" "$base_head" || true)
               if [ -n "$old_base" ]; then
@@ -179,8 +189,9 @@ jobs:
             fi
 
             if [ -n "$new_id" ] && [ "$new_id" = "$old_id" ] \
-              && [ "$pr_mergeable" != "CONFLICTING" ]; then
-              echo "Skipping $branch (patch unchanged, PR still mergeable)"
+              && [ "$pr_mergeable" != "CONFLICTING" ] \
+              && [ "$old_base" = "$base_head" ]; then
+              echo "Skipping $branch (patch unchanged, already on current base)"
               # MUST still count as touched: the stale-PR step below
               # closes and DELETES any update/* PR missing from this
               # file, so a silent skip would make the pipeline close its

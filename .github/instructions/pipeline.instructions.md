@@ -155,9 +155,10 @@ heads `595acf55` (parent `010dbe15`) and `6b51fe30` (parent
 Before pushing, the workflow compares `git patch-id --stable` of
 `base_sha..<branch>` against the same computation for the remote
 branch over _its_ own merge-base. `patch-id` hashes the diff
-alone, so a pure rebase compares equal and the push is skipped.
+alone, so a pure rebase onto an _unchanged_ base compares equal
+and the push is skipped.
 
-Two conditions keep the guard honest:
+Three conditions keep the guard honest:
 
 - **Empty patch-id is never a match.** An empty diff hashes to
   the empty string; treating that as equality would collapse
@@ -167,6 +168,16 @@ Two conditions keep the guard honest:
   is Renovate's `rebaseWhen: conflicted` in effect. Note the
   working branch has no protection rule requiring branches be
   up to date, so an unrebased-but-mergeable PR still merges.
+- **A branch behind the current base is rebased anyway.** The
+  guard skips only when the remote branch's merge-base with the
+  current base equals the base tip (`old_base == base_head`). If
+  the base branch has advanced since the PR was last pushed, the
+  branch is force-pushed even when the dependency patch is
+  byte-identical, so the PR re-runs CI against the base it will
+  actually merge into. This is Renovate's
+  `rebaseWhen: behind-base-branch` layered on top of
+  `conflicted`; it lets a PR self-heal after a base-branch CI fix
+  instead of staying pinned to a stale, possibly broken base.
 
 **A skipped branch must still be recorded in
 `touched-branches`.** The stale-PR step closes _and deletes_ any
