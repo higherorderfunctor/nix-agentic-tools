@@ -199,9 +199,17 @@ living plan`. → **hook wiring**.
 
 **The unification insight:** (a) and (b) fix _how bytes reach the CLI_. (c) says
 that for Kiro global hooks, **no delivery mechanism works, because the scope
-isn't read.** A symlink→copy fix does not make global hooks fire. If the
-typed-hook surface in (b) targets `~/.kiro/hooks/`, that needs re-verification
-against (c)'s finding before it is called done.
+isn't read.**
+
+> **Correction (2026-07-21, from session (a) via the converged plan):** "(a)
+> fixes how bytes reach the CLI" is only half true — `f12aa5f1` converted the
+> REPO'S OWN generated files; the factory emitters (mkKiro steering/skills/
+> agents, mkClaude) were deliberately NOT converted and still ship store
+> symlinks to every consumer. Delivery is a third independent axis, not a
+> solved one. Canonical status:
+> `docs/plans/converge-agentic-foundations.md` § Verified base state. A symlink→copy fix does not make global hooks fire. If the
+> typed-hook surface in (b) targets `~/.kiro/hooks/`, that needs re-verification
+> against (c)'s finding before it is called done.
 
 **Corollary flagged but NOT established:** `~/.kiro/hooks/kiro-memory.json` was
 HM-delivered as a store symlink AND global — two independent failure reasons — so

@@ -43,7 +43,7 @@ Three sessions have been colliding on the same hook/delivery surface. **This ses
 
 | #   | Session (operator's words)                      | What it owns / did                                                                                                                                                                                                                                                                      |
 | --- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | ci fix → **symlink vs real-file fanout**        | The delivery mechanism. Origin `#433` moved **HM** hook delivery `home.file` → `home.activation` real-files; local commits `3050f894` (instruction files symlink→real-file copies) + `bd67936f` (idempotent copies over devenv symlinks). Owns HOW hook/instruction files land on disk. |
+| 1   | ci fix → **symlink vs real-file fanout**        | The delivery mechanism. Origin `#433` moved **HM** hook delivery `home.file` → `home.activation` real-files; local commits `f12aa5f1` (instruction files symlink→real-file copies) + `a7b3e29d` (idempotent copies over devenv symlinks). Owns HOW hook/instruction files land on disk. |
 | 2   | **hook implementation to wire into hooks** ← ME | The typed hook **option surface** (`ai.kiro.hooks` / `ai.claude.hooks`). This session added the per-record **`file` co-location** key so N typed records lower into one envelope — the typed path off the `hooksJson` escape hatch.                                                     |
 | 3   | **fixture/lab implementation to test hooks**    | The hook **test harness** (tier1b prototype / hook contract fixtures / agent-primitive labs). Would consume the typed surface (this session's output) as the thing-under-test, and P1c/P2 here overlap with it.                                                                         |
 
@@ -66,6 +66,13 @@ sessions are working in a local checkout that is **9 merged PRs behind origin**,
 building on divergent bases and overwriting each other.
 
 ## THE BASE DIVERGENCE (mechanical root cause)
+
+> **RESOLVED 2026-07-21 (converge-agentic-foundations P1):** the divergence
+> below is historical. Local == origin at `b3906bd9`; `#433` (`af53cf63`) is an
+> ancestor. The five local commits landed rewritten as `c80b1df0` (ci-perf),
+> `a7b3e29d` (devenv fix), `b861e783` (this plan doc), `53e01533` (instruction
+> regen), `f12aa5f1` (materialize); the pre-rewrite hashes below resolve as
+> loose objects but are NOT ancestors of HEAD.
 
 The local `refactor/ai-factory-architecture` checkout **diverged from origin at `010dbe15`**:
 
