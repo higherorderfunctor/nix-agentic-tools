@@ -69,9 +69,10 @@
       flags = "--version skip";
       git = "https://github.com/CaviraOSS/OpenMemory.git";
     };
-    # oxlint overrides THREE hashes (src, cargoDeps, pnpmDeps). If a future
-    # update leaves any stale (nix-update not bumping all three), switch to a
-    # bespoke `--use-update-script`. Empirical update-path validation deferred.
+    # oxlint overrides three hashes: src, cargoDeps (fetchCargoVendor), pnpmDeps
+    # (fetchPnpmDeps). Validated 2026-07-21: one `nix-update --version skip` pass
+    # re-derives all three to their distinct correct values (each via its own
+    # `outputHash=""` build), so the standard main-tracking flow works.
     oxlint = {
       flags = "--version skip";
       git = "https://github.com/oxc-project/oxc.git";
@@ -81,10 +82,10 @@
       git = "https://github.com/sdiehl/sympy-mcp.git";
     };
     # tsgolint src uses fetchSubmodules (typescript-go). The rev-bump pre-step's
-    # `nix flake prefetch` omits submodules, so if a future update commits a
-    # wrong src hash that nix-update does not self-correct, switch to a bespoke
-    # `--use-update-script` using `nix-prefetch-git --fetch-submodules`.
-    # Empirical update-path validation deferred.
+    # `nix flake prefetch` writes a submodule-less src hash, but nix-update then
+    # self-corrects it — its `outputHash=""` src rebuild respects fetchSubmodules,
+    # yielding the right hash (+ vendorHash) before the build-verify. Validated
+    # 2026-07-21: standard main-tracking flow works, no bespoke updateScript.
     tsgolint = {
       flags = "--version skip";
       git = "https://github.com/oxc-project/tsgolint.git";
