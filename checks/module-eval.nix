@@ -1948,6 +1948,65 @@ in {
       lib.hasInfix "raw-envelope-loaded" t
   );
 
+  # Hardening (PR #433 review): an unsafe hook name (path separator) fails the
+  # name-charset assertion before it can be interpolated into a hooks-dir path.
+  module-kiro-hooks-rejects-unsafe-name = mkTest "kiro-hooks-rejects-unsafe-name" (
+    let
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          hooksJson."../evil" = builtins.toJSON {
+            version = "v1";
+            hooks = [];
+          };
+        };
+      };
+      nameAsserts =
+        builtins.filter (a: lib.hasInfix "hook names must match" a.message)
+        (ev.config.assertions or []);
+    in
+      nameAsserts != [] && (builtins.head nameAsserts).assertion == false
+  );
+
+  # A safe hook name passes the same assertion (assertion == true).
+  module-kiro-hooks-accepts-safe-name = mkTest "kiro-hooks-accepts-safe-name" (
+    let
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          hooksJson."kiro-memory.pre_1" = builtins.toJSON {
+            version = "v1";
+            hooks = [];
+          };
+        };
+      };
+      nameAsserts =
+        builtins.filter (a: lib.hasInfix "hook names must match" a.message)
+        (ev.config.assertions or []);
+    in
+      nameAsserts != [] && (builtins.head nameAsserts).assertion == true
+  );
+
+  # Hardening (PR #433 review): the HM hook activation prunes stale *.json first,
+  # so a hook removed/renamed in config stops firing.
+  module-kiro-hooks-hm-prunes-stale = mkTest "kiro-hooks-hm-prunes-stale" (
+    let
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          hooksJson.demo = builtins.toJSON {
+            version = "v1";
+            hooks = [];
+          };
+        };
+      };
+      script = (ev.config.home.activation.kiroHooks or {}).text or "";
+    in
+      lib.hasInfix ''for f in "$HOOKS_DIR"/*.json'' script
+      && lib.hasInfix "rm -f" script
+      && lib.hasInfix "set -euETo pipefail" script
+  );
+
   # Devenv: mcp.json write.
   module-kiro-devenv-writes-mcp-json = mkTest "kiro-devenv-writes-mcp-json" (
     let

@@ -186,9 +186,16 @@ in rec {
     coreutils,
   }:
     ''
-      set -eu
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
       HOOKS_DIR="$HOME/${hooksDir}"
       ${coreutils}/bin/mkdir -p "$HOOKS_DIR"
+      # The hooks dir's *.json is Nix-owned (mirrors home.file recursive
+      # ownership): prune stale entries first so a hook removed or renamed in
+      # config actually stops firing — Kiro loads every *.json in the dir.
+      for f in "$HOOKS_DIR"/*.json; do
+        if [ -e "$f" ]; then ${coreutils}/bin/rm -f "$f"; fi
+      done
     ''
     + lib.concatStrings (lib.mapAttrsToList (
         name: content:

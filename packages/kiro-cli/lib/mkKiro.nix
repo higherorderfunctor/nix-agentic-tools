@@ -127,6 +127,21 @@
     cfg.hooksJson
     // lib.mapAttrs (name: record: builtins.toJSON (kiroHookEnvelope name record)) cfg.hooks;
 
+  # Hook names are attrset keys interpolated straight into activation-script
+  # paths (`$HOOKS_DIR/<name>.json`) and shell heredocs, so a `/`, `..`,
+  # whitespace, or quote would write outside the hooks dir or break the emitted
+  # script. Require a leading alphanumeric then `[A-Za-z0-9._-]` (covers
+  # kiro-memory, pre-commit, lint). Shared assertion for both backends.
+  hookNameSafe = name: builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" name != null;
+  hookNameAssertion = cfg: let
+    bad =
+      builtins.filter (n: !hookNameSafe n)
+      (builtins.attrNames cfg.hooks ++ builtins.attrNames cfg.hooksJson);
+  in {
+    assertion = bad == [];
+    message = "ai.kiro: hook names must match [A-Za-z0-9][A-Za-z0-9._-]* (no path separators, whitespace, or quotes); offending: ${lib.concatStringsSep ", " bad}";
+  };
+
   # Wrap kiro-cli so it launches the way the config asks — shared by BOTH
   # backends (DRY). `--tui`/`--v3` append to the top-level `kiro-cli` launcher;
   # `--trust-tools` appends to the `kiro-cli-chat` subcommand. The new TUI is
@@ -173,7 +188,7 @@
           ${lib.optionalString (hasEnv || hasTrust) ''
             wrapProgram $out/bin/kiro-cli-chat \
               ${setEnvArgs} \
-              ${lib.optionalString hasTrust ''--append-flags "--trust-tools='${trustToolsCsv}'"''}
+              ${lib.optionalString hasTrust ''--append-flags "--trust-tools=${trustToolsCsv}"''}
           ''}
         '';
       };
@@ -356,7 +371,7 @@ in
           rejected on the legacy engine). Applied by both backends.
         '';
       };
-      # MCP tools to auto-approve — appends `--trust-tools='<csv>'`
+      # MCP tools to auto-approve — appends `--trust-tools=<csv>`
       # to `kiro-cli-chat`. Eliminates the need for a bespoke
       # symlinkJoin wrapper in the consumer.
       trustedMcpTools = lib.mkOption {
@@ -573,6 +588,7 @@ in
                 assertion = !((cfg.hooks != {} || cfg.hooksJson != {}) && cfg.hooksDir != null);
                 message = "ai.kiro: cannot set both inline hooks (`hooks`/`hooksJson`) and `hooksDir` — choose one.";
               }
+              (hookNameAssertion cfg)
             ];
           }
           # settings/permissions.yaml — V3 capability rules (explicit
@@ -631,9 +647,15 @@ in
           # devenv cp -rL.
           (lib.mkIf (cfg.hooksDir != null) {
             home.activation.kiroHooksDir = lib.hm.dag.entryAfter ["writeBoundary"] ''
-              set -eu
+              set -euETo pipefail
+              shopt -s inherit_errexit 2>/dev/null || :
               HOOKS_DIR="$HOME/${cfg.configDir}/hooks"
               ${pkgs.coreutils}/bin/mkdir -p "$HOOKS_DIR"
+              # Nix-owned dir: prune stale *.json first so a hook removed or
+              # renamed in the source dir stops firing (Kiro loads every *.json).
+              for f in "$HOOKS_DIR"/*.json; do
+                if [ -e "$f" ]; then ${pkgs.coreutils}/bin/rm -f "$f"; fi
+              done
               ${pkgs.coreutils}/bin/cp -rL --no-preserve=mode -- ${lib.escapeShellArg "${toString cfg.hooksDir}/."} "$HOOKS_DIR/"
               ${pkgs.coreutils}/bin/chmod -R u+w "$HOOKS_DIR"
             '';
@@ -783,6 +805,7 @@ in
                 assertion = !((cfg.hooks != {} || cfg.hooksJson != {}) && cfg.hooksDir != null);
                 message = "ai.kiro: cannot set both inline hooks (`hooks`/`hooksJson`) and `hooksDir` — choose one.";
               }
+              (hookNameAssertion cfg)
             ];
           }
           # Environment variables — devenv has a native `env` attrset
@@ -836,6 +859,11 @@ in
           (lib.mkIf (cfg.hooks != {} || cfg.hooksJson != {}) {
             enterShell = ''
               ${pkgs.coreutils}/bin/mkdir -p ${lib.escapeShellArg "${cfg.configDir}/hooks"}
+              # devenv-owned dir: prune stale *.json so a hook removed or renamed
+              # in config stops firing (Kiro loads every *.json in the dir).
+              for f in ${lib.escapeShellArg "${cfg.configDir}/hooks"}/*.json; do
+                if [ -e "$f" ]; then ${pkgs.coreutils}/bin/rm -f "$f"; fi
+              done
               ${lib.concatStrings (lib.mapAttrsToList (name: content: ''
                   ${pkgs.coreutils}/bin/install -m 0644 ${pkgs.writeText "kiro-hook-${name}.json" content} ${lib.escapeShellArg "${cfg.configDir}/hooks/${name}.json"}
                 '')
@@ -847,6 +875,11 @@ in
           (lib.mkIf (cfg.hooksDir != null) {
             enterShell = ''
               ${pkgs.coreutils}/bin/mkdir -p ${lib.escapeShellArg "${cfg.configDir}/hooks"}
+              # devenv-owned dir: prune stale *.json so a hook removed or renamed
+              # in the source dir stops firing (Kiro loads every *.json in the dir).
+              for f in ${lib.escapeShellArg "${cfg.configDir}/hooks"}/*.json; do
+                if [ -e "$f" ]; then ${pkgs.coreutils}/bin/rm -f "$f"; fi
+              done
               ${pkgs.coreutils}/bin/cp -rL --no-preserve=mode -- ${lib.escapeShellArg "${toString cfg.hooksDir}/."} ${lib.escapeShellArg "${cfg.configDir}/hooks/"}
               ${pkgs.coreutils}/bin/chmod -R u+w ${lib.escapeShellArg "${cfg.configDir}/hooks"}
             '';
