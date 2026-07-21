@@ -23,7 +23,8 @@
     hash = "sha256-WEwlbbFjqs+ahJv3VRfVF6lJ+tC68I5WuU1IFP8PEwU=";
   };
   version = vu.mkVersion {
-    upstream = vu.readCargoVersion "${src}/apps/oxlint/Cargo.toml";
+    # upstream: readCargoVersion @ apps/oxlint/Cargo.toml
+    upstream = "1.74.0";
     inherit rev;
   };
 in
