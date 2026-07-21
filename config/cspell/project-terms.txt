@@ -169,6 +169,7 @@ optionset
 oraios
 osmani
 oxalica
+oxlint
 pagefind
 partialclone
 passthroughs
@@ -251,6 +252,8 @@ toolsets
 tophat
 toplevel
 treefmt
+tsgo
+tsgolint
 tummychow
 ultracode
 unapprove

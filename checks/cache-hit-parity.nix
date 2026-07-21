@@ -74,6 +74,12 @@
     "git-revise"
   ];
 
+  # Dev tools (linters) — live at `consumerPkgs.devTools.<name>`.
+  devToolPackages = [
+    "oxlint"
+    "tsgolint"
+  ];
+
   # agnix + its mainProgram-override siblings.
   # agnix itself is at `consumerPkgs.ai.agnix` (flatDrvs entry).
   # agnix-lsp / agnix-mcp are at the lspServers / mcpServers
@@ -158,6 +164,12 @@
       consumerLookup = p: p.gitTools.${name};
     })
   gitToolPackages;
+  devToolChecks = map (name:
+    mkCheck {
+      inherit name;
+      consumerLookup = p: p.devTools.${name};
+    })
+  devToolPackages;
   agnixChecks = map mkCheck agnixPackages;
   mcpServerChecks = map (name:
     mkCheck {
@@ -168,7 +180,7 @@
   specialChecks = map mkCheck specialPackages;
 
   allDrifts = lib.filter (x: x != null) (
-    aiCliChecks ++ gitToolChecks ++ agnixChecks ++ mcpServerChecks ++ specialChecks
+    aiCliChecks ++ gitToolChecks ++ devToolChecks ++ agnixChecks ++ mcpServerChecks ++ specialChecks
   );
 
   # agnix's CLI / LSP / MCP variants are ONE build: overlays/agnix.nix

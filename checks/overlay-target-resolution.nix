@@ -41,7 +41,11 @@ in
     source dev/scripts/resolve-overlay-file.sh
 
     failures=""
-    while IFS=$'\t' read -r name url; do
+    # `|| [ -n "$name" ]` processes the final line even though the TSV has no
+    # trailing newline (concatStringsSep produces none): otherwise bash `read`
+    # returns non-zero at EOF and the last alphabetical entry is silently
+    # skipped — never validated (was `sympy-mcp`, now would be `tsgolint`).
+    while IFS=$'\t' read -r name url || [ -n "$name" ]; do
       [ -z "$name" ] && continue
       if ! file=$(resolve_overlay_file "$url" overlays 2>&1); then
         failures="$failures"$'\n'"  $name: $file"

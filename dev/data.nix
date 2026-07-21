@@ -80,6 +80,12 @@ _: let
     kiro-gateway = "Python proxy API for Kiro";
   };
 
+  # ── Dev tool descriptions ────────────────────────────────────────────
+  devToolDescriptions = {
+    oxlint = "Fast JS/TS linter with type-aware (tsgo) linting and JS plugins";
+    tsgolint = "Type-aware linting backend for oxlint (typescript-go)";
+  };
+
   # ── Git tool descriptions ────────────────────────────────────────────
   gitToolDescriptions = {
     agnix = "Linter, LSP, and MCP for AI config files";
@@ -98,6 +104,10 @@ _: let
     coding-standards = {
       packages = ["coding-standards"];
       suffix = "fragment content";
+    };
+    dev-tools = {
+      packages = ["oxlint" "tsgolint"];
+      suffix = null;
     };
     git-tools = {
       packages = ["agnix" "git-absorb" "git-branchless" "git-revise"];
@@ -128,6 +138,7 @@ _: let
 in {
   inherit
     aiCliDescriptions
+    devToolDescriptions
     gitToolDescriptions
     mcpServerCount
     mcpServerMeta

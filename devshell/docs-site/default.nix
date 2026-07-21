@@ -100,6 +100,8 @@ _: final: _prev: let
     # ── Git tool table ─────────────────────────────────────────────
     gitToolNames = builtins.attrNames data.gitToolDescriptions;
     gitToolRows = mkSortedRows gitToolNames (name: "| `${name}` | ${data.gitToolDescriptions.${name}} |");
+    devToolNames = builtins.attrNames data.devToolDescriptions;
+    devToolRows = mkSortedRows devToolNames (name: "| `${name}` | ${data.devToolDescriptions.${name}} |");
 
     # ── MCP server table ───────────────────────────────────────────
     mcpNames = builtins.attrNames data.mcpServerMeta;
@@ -144,6 +146,12 @@ _: final: _prev: let
     | Package | Description |
     | ------- | ----------- |
     ${gitToolRows}
+
+    ### Dev Tools
+
+    | Package | Description |
+    | ------- | ----------- |
+    ${devToolRows}
 
     ### MCP Servers
 

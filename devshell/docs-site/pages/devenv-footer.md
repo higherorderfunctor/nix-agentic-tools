@@ -48,6 +48,7 @@ chunk lands.
 #   pkgs.ai.mcpServers.*   — MCP servers
 #   pkgs.ai.lspServers.*   — LSP server proxies
 #   pkgs.gitTools.*         — git workflow tools
+#   pkgs.devTools.*         — dev tools (linters)
 pkgs = import nixpkgs {
   inherit system;
   overlays = [inputs.nix-agentic-tools.overlays.default];

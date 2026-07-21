@@ -170,6 +170,21 @@ nix build .#git-absorb
 </details>
 
 <details>
+<summary><strong>Dev Tools</strong></summary>
+
+<!-- prettier-ignore -->
+| Package | Description |
+|---------|-------------|
+| `oxlint` | Fast JS/TS linter with type-aware (tsgo) linting and JS plugins |
+| `tsgolint` | Type-aware linting backend for oxlint (typescript-go) |
+
+```bash
+nix build .#oxlint
+```
+
+</details>
+
+<details>
 <summary><strong>AI CLIs</strong></summary>
 
 <!-- prettier-ignore -->

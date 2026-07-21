@@ -9,6 +9,7 @@
 #   pkgs.ai.mcpServers.*     — MCP server packages + proxies
 #   pkgs.ai.lspServers.*     — LSP server proxies
 #   pkgs.gitTools.*           — git workflow tools
+#   pkgs.devTools.*           — dev tools (linters)
 #
 # Each per-package file takes {inputs, final, ...} and manages its
 # own source — fetchFromGitHub with inline hashes for upstream
@@ -131,6 +132,15 @@
       inherit inputs final;
     };
   };
+  # ── Dev tools (linters/formatters) ─────────────────────────────────
+  devToolDrvs = {
+    oxlint = import ./dev-tools/oxlint.nix {
+      inherit inputs final;
+    };
+    tsgolint = import ./dev-tools/tsgolint.nix {
+      inherit inputs final;
+    };
+  };
   # Apply ensureUnfreeCheck to every package at the output level.
   # No manual per-package wrapping needed — if a package has an unfree
   # license, it gets the symlinkJoin wrapper automatically.
@@ -143,4 +153,5 @@ in {
       lspServers = guard {agnix-lsp = agnixLsp;};
     };
   gitTools = guard gitToolDrvs;
+  devTools = guard devToolDrvs;
 }
