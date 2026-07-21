@@ -15,16 +15,16 @@
   vu = import ../lib.nix;
   tsgolint = import ./tsgolint.nix {inherit inputs final;};
 
-  rev = "3fe5c87bbd926b060be134e0f1d233ad5b8b793c";
+  rev = "b287f29a51788f526d5b32bff6e9113273bdc13f";
   src = ourPkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "oxc";
     inherit rev;
-    hash = "sha256-RDEyY37NNDTeDvFl2Kb+wPpAe4rdqHOaGVuwD364Ric=";
+    hash = "sha256-tJ1qz//GriyijBo2+6fdMLoZyFI01G+thraT+1xykx4=";
   };
   version = vu.mkVersion {
     # upstream: readCargoVersion @ apps/oxlint/Cargo.toml
-    upstream = "1.74.0";
+    upstream = "1.75.0";
     inherit rev;
   };
 in
@@ -32,13 +32,13 @@ in
     inherit version src;
     cargoDeps = ourPkgs.rustPlatform.fetchCargoVendor {
       inherit (finalAttrs) pname version src;
-      hash = "sha256-e4ngtaNb9cSz3ACFlz7pM5jXHqlI5wXeFtYtS20bYhQ=";
+      hash = "sha256-Gr6FK7uSlJbJZafu6DO7QAWNkepQ41R4zWpi4NEItzQ=";
     };
     pnpmDeps = ourPkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
       pnpm = ourPkgs.pnpm_10;
       fetcherVersion = 3;
-      hash = "sha256-qdNzmPGHHXUQmoOcSEQY/pwawhnhDLBJ7lWxineJYRU=";
+      hash = "sha256-bknFTK45cyKXOVu4IfA5acrLLo5Eoo447wuNsS6F0Pc=";
     };
     # Strip versionCheckHook: `oxlint --version` prints the bare upstream
     # semver (e.g. 1.74.0) and drops the `+shortrev` build metadata that
