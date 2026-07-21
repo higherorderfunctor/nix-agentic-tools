@@ -1885,6 +1885,21 @@ in {
       && lib.hasInfix "install -m 0644" dvEnter
   );
 
+  # A PATH-valued hooksJson entry must emit the file CONTENT, not the path string
+  # (mkAllHookFiles resolves paths so devenv's writeText writes the body too).
+  module-kiro-hooks-json-path-resolves = mkTest "kiro-hooks-json-path-resolves" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          hooksJson.raw = ./fixtures/kiro-hook-raw.json;
+        };
+      };
+      t = (result.config.home.file.".kiro/hooks/raw.json" or {}).text or "";
+    in
+      lib.hasInfix "raw-envelope-loaded" t
+  );
+
   # Devenv: mcp.json write.
   module-kiro-devenv-writes-mcp-json = mkTest "kiro-devenv-writes-mcp-json" (
     let

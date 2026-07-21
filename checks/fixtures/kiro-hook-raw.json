@@ -1,0 +1,10 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "raw-envelope-loaded",
+      "trigger": "Stop",
+      "action": { "type": "command", "command": "true" }
+    }
+  ]
+}

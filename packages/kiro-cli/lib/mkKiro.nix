@@ -114,8 +114,16 @@
 
   # Combine raw `hooksJson` (verbatim escape hatch) + typed `hooks` (lowered to
   # envelope JSON) into one <name> → JSON-string attrset, consumed by BOTH
-  # backends. Typed wins on a name collision.
+  # backends. Typed wins on a name collision. A raw `hooksJson` value may be a
+  # PATH (read its contents) or a string; resolve to string CONTENT here so both
+  # backends write the file body — devenv's `writeText` would otherwise embed the
+  # path string, and HM's `mkSourceEntry` handles paths but resolving keeps them
+  # identical.
   mkAllHookFiles = cfg:
+    lib.mapAttrs (_: c:
+      if builtins.isPath c
+      then builtins.readFile c
+      else c)
     cfg.hooksJson
     // lib.mapAttrs (name: record: builtins.toJSON (kiroHookEnvelope name record)) cfg.hooks;
 
@@ -546,7 +554,7 @@ in
               }
               {
                 assertion = !((cfg.hooks != {} || cfg.hooksJson != {}) && cfg.hooksDir != null);
-                message = "ai.kiro: cannot set both `hooks` and `hooksDir` — choose one.";
+                message = "ai.kiro: cannot set both inline hooks (`hooks`/`hooksJson`) and `hooksDir` — choose one.";
               }
             ];
           }
@@ -734,7 +742,7 @@ in
               }
               {
                 assertion = !((cfg.hooks != {} || cfg.hooksJson != {}) && cfg.hooksDir != null);
-                message = "ai.kiro: cannot set both `hooks` and `hooksDir` — choose one.";
+                message = "ai.kiro: cannot set both inline hooks (`hooks`/`hooksJson`) and `hooksDir` — choose one.";
               }
             ];
           }
