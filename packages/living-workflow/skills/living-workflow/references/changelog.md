@@ -443,3 +443,41 @@ anchor is **derived from history** (the commit that assigned that version), not 
   found there is a blocking finding by the convergence criterion, not deferred to the build-diff
   review. **Upgraders: for design/build-separated plans, add a design-coherence review at design
   close rather than relying on the build-diff review to surface design-internal conflicts.**
+
+## Co-occupied commit vehicle + continue-past deferral + coverage-check before capture
+
+Migration entries folded in the pass that bumped the master to `v8-onyx-moor-rowan`. This section's
+anchor is **derived from history** (the commit that assigned that version), not embedded here. All
+three are behavior-changing master edits.
+
+### Master protocol (`living-plan-bootstrap.md`)
+
+- **Co-occupied working tree — a third commit-ownership condition:** COMMIT-OWNERSHIP now names a
+  case beyond we-commit / resident-commits: when the target working tree is CONCURRENTLY OCCUPIED by
+  another writer (a second session editing the same checkout), neither mode fits — a direct
+  we-commit risks capturing the other's uncommitted work, and no single resident will commit THIS
+  session's work. Resolve co-occupancy to an isolation-plus-integration vehicle (an isolated worktree
+  branched from the live tip, committed there, integrated by an open PR/MR), never a write to the
+  shared tree. **Upgraders: if you resolve commit_ownership in a repo whose working tree is
+  co-occupied by another live session, do not we-commit into the shared tree and do not leave it
+  dirty for a resident — branch an isolated worktree and integrate by PR/MR; use the plain we-commit
+  path only when the tree is exclusively yours.**
+- **Continue-past variant of the DEFERRAL shape:** SANCTIONED OPERATOR DEVIATION's DEFERRAL now
+  covers an operator deferring a gate only THEY can fire (a live-environment verification, an
+  external sign-off) while directing work to continue past it. The owed gate moves OFF the position
+  pointer and INTO the register as its own item, and phase-done SPLITS into session-provable (every
+  mechanized gate passes) versus operator-verified (the deferred gate fires); the owed verification
+  may batch across phases. This applies only when deferring the gate blocks nothing mechanical.
+  **Upgraders: when an operator defers an operator-only gate but directs work onward, do not rest the
+  pointer on the gate — record the owed gate as a register item and mark downstream phases
+  session-provable, not operator-verified, until it fires.**
+- **Coverage-check before capture (reflection inflow gate):** REFLECTION MODE now requires a
+  reflecting session, before filing a framework candidate, to check whether an existing named rule
+  family already addresses the friction. A covered instance is NOT filed as a new rule — the session
+  writes only an entry FILE (never the register): it appends a sighting to the existing entry file
+  that holds the friction, or files an enforcement/coverage-gap candidate when the rule is sound but
+  under-applied; grooming reconciles the sighting onto its register-resident entry. It is the
+  capture-side dual of grooming dropping a candidate an existing rule already covers. **Upgraders: at
+  reflection/capture, run the coverage-check before filing — do not file a fresh tuning candidate for
+  a friction an existing rule already covers; append a sighting to the existing entry file or file it
+  as an enforcement-gap instead, never writing the register.**

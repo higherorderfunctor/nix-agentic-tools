@@ -29,7 +29,7 @@ improvements land in this doc only by a deliberate grooming session, never self-
 > concerns become schema-backed state fields, not ad-hoc prose tokens). The backlog sub-workflow
 > this doc references lives at `living-workflow-backlog.md`.
 >
-> **Living-doc version: `v7-slate-marsh-aspen`.** The assigned VERSION dependents pin to — a
+> **Living-doc version: `v8-onyx-moor-rowan`.** The assigned VERSION dependents pin to — a
 > monotonic ORDINAL (for "am I behind?") paired with a DISTINCTIVE LABEL (so the exact version
 > stays searchable in history and in copied text). A modifying commit bumps it and authors a
 > migration entry if an upgrader needs one (see DRY-BY-REFERENCE → BASELINE PIN, MIGRATION GUIDE,
@@ -215,6 +215,20 @@ state.json.ecosystem.commit_ownership:
   validate + LEAVE THE TREE DIRTY + emit a "please commit these paths" note listing
   every path touched; the resident session commits and stamps the dependent baseline pin(s) (see
   DRY-BY-REFERENCE).
+CO-OCCUPIED WORKING TREE (a third condition, resolved like a capability): commit_ownership names
+who commits, but BOTH modes assume a SINGLE writer in the working tree at a time — we-commit commits
+its own work there; resident-commits hands its dirty paths to one resident that commits — neither
+expects a SECOND session editing the same checkout SIMULTANEOUSLY. When the tree is instead
+CONCURRENTLY OCCUPIED by another writer — a second session editing the same checkout at the same
+time — neither mode fits: a direct we-commit risks interleaving uncommitted changes and one
+session capturing the other's work, and resident-commits is wrong because no single resident will
+commit THIS session's work (it commits its own, just not in the shared tree). Resolve co-occupancy —
+a host CONDITION detected like any capability (the tree's tip moves between commands, or it carries
+another session's uncommitted work) — to an ISOLATION-PLUS-INTEGRATION vehicle: branch an isolated
+worktree from the live tip, commit THERE (not in the shared tree), and integrate by an open PR/MR, so
+the shared tree is never written and the change lands as a reviewable unit. Use the plain we-commit
+path only when the tree is exclusively this session's; the host may offer isolation vehicles other
+than a worktree, so bind the concrete one at resolve time.
 VERBATIM MEANS SEMANTIC, NOT BYTE: wherever a repo runs a formatting/normalizing hook,
 committed content (including "verbatim" embedded blocks and cached sources) is
 reflowed on commit — emphasis markers, wrapping, blank lines, pretty-printing. So "embed
@@ -398,7 +412,21 @@ is authoritative thereafter.
    current_position + the warm-start "open at earliest not-done" mechanism — no new
    machinery); deferred ≠ skipped and ≠ dropped, and deferral does not weaken the step's
    binding status; a hard gate that gates a downstream action, when deferred, also defers the
-   action it gates, so nothing the gate protects slips through. (b) OVERRIDE (gated reframe)
+   action it gates, so nothing the gate protects slips through.
+   CONTINUE-PAST VARIANT of DEFERRAL, for an OPERATOR-ONLY gate: the base shape rests the pointer ON
+   the deferred step and models "do this later, before anything else," which fits a gate whose
+   deferral blocks downstream work. It does NOT fit an operator deferring a gate only the OPERATOR
+   can fire (a live-environment verification, an external sign-off) while directing work to CONTINUE
+   PAST it into later phases — there the single pointer cannot both rest on the owed gate and
+   advance. Resolve this by moving the owed gate OFF the pointer and INTO the register as its own
+   item carrying what it still gates, and SPLITTING phase-done into session-provable (every mechanized
+   gate passes) versus operator-verified (the deferred gate fires): later phases may reach
+   session-provable completion while the operator verification stays owed and BATCHES across the
+   phases it covers. This variant applies ONLY when deferring the gate blocks nothing MECHANICAL —
+   downstream work is provable by session-runnable gates; a deferred gate that gates mechanical
+   downstream work still defers that work (the base rule), and "phase done" without its
+   operator verification is explicitly the session-provable half, never the full gate.
+   (b) OVERRIDE (gated reframe)
    — when a guardrail fires on a request, the override NARROWS rather than lifts it (one class
    of action permitted while a riskier class stays gated) and carries the operator's
    authorization as provenance in the decisions register. A blanket bypass and an unrecorded
@@ -558,6 +586,24 @@ candidates and write ONLY the entry file into the living-workflow-backlog's entr
 FRAMEWORK-CHANNEL LOCATION in the XDG namespace (the living workflow's own backlog, NOT the
 reflecting plan's own working dir — see STATE SUBSTRATE) — a reflecting session does NOT touch
 the register; the grooming session reconciles files into the register.
+COVERAGE-CHECK BEFORE CAPTURE (the inflow gate): before writing a candidate, CHECK whether an
+existing NAMED rule family already addresses the friction — reflection over-produces when every
+session files an INSTANCE of an already-covered rule as though it were a new gap, so covered
+instances re-enter as fresh candidates, inflate the backlog, and read as non-convergence even though
+the protocol already says what to do. If the friction is an instance of a rule whose spirit already
+reaches it, do NOT file a new tuning candidate; two honest alternatives remain, and BOTH write only an
+entry FILE at the framework-channel location (a reflecting session's only write surface — never the
+register, which grooming owns): append a SIGHTING to the existing entry file that already holds the
+friction if one is present, or, when the rule is SOUND but keeps FAILING IN PRACTICE, file a candidate
+scoped explicitly as an ENFORCEMENT/COVERAGE gap (rule X is correct but under-applied — does it want a
+tool, a sharper trigger, a checklist?), NEVER as a fresh rule restating X; grooming reconciles a
+file-level sighting onto its register-resident entry. A genuinely new gap no existing rule reaches
+files as normal. This is the capture-side dual of grooming dropping a candidate an existing rule
+already covers: catching a covered instance BEFORE it is filed is cheaper than filing, evaluating, and
+dropping it, and it is the load-bearing move for convergence, because an unchecked reflection stream's
+candidate supply is unbounded whenever the work surface is. The check narrows what is CAPTURED; it
+never licenses reflection to EDIT the workflow or to touch the register (AUTHORITY INVARIANT and the
+capture/grooming split both hold).
 GROOMING is the authorized edit, and a SEPARATE activity from reflection: a grooming session
 FOLDS groomed tunings INLINE into their target doc (this protocol, or the backlog's own rules)
 as its main work, and it ALSO reflects at its own end like every session — capturing any new
