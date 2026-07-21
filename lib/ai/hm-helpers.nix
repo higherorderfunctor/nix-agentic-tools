@@ -172,4 +172,37 @@ in rec {
     ${coreutils}/bin/rm -f "$NIX_SETTINGS"
     ${coreutils}/bin/chmod 644 "$CONFIG_FILE"
   '';
+
+  # Write Kiro hook envelope files as REAL files under $HOME/<hooksDir>/ during
+  # activation. Kiro v3 scans that dir but does NOT follow store symlinks
+  # (verified live on 2.13.0 — global scan fires real files, skips symlinks), so
+  # home.file (symlink) delivery never loads. Mirrors the devenv enterShell
+  # real-file install. `hooks` = { <name> = <json string>; }; `hooksDir` is
+  # relative to $HOME (e.g. ".kiro/hooks"). The content rides an inline heredoc
+  # (delimiter at col 0 via explicit newlines) so module-eval can read it.
+  mkHooksActivationScript = {
+    hooks,
+    hooksDir,
+    coreutils,
+  }:
+    ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      HOOKS_DIR="$HOME/${hooksDir}"
+      ${coreutils}/bin/mkdir -p "$HOOKS_DIR"
+      # The hooks dir's *.json is Nix-owned (mirrors home.file recursive
+      # ownership): prune stale entries first so a hook removed or renamed in
+      # config actually stops firing — Kiro loads every *.json in the dir.
+      for f in "$HOOKS_DIR"/*.json; do
+        if [ -e "$f" ]; then ${coreutils}/bin/rm -f "$f"; fi
+      done
+    ''
+    + lib.concatStrings (lib.mapAttrsToList (
+        name: content:
+          "${coreutils}/bin/cat > \"$HOOKS_DIR/${name}.json\" <<'NAT_KIRO_HOOK_EOF'\n"
+          + content
+          + "\nNAT_KIRO_HOOK_EOF\n"
+          + "${coreutils}/bin/chmod 644 \"$HOOKS_DIR/${name}.json\"\n"
+      )
+      hooks);
 }

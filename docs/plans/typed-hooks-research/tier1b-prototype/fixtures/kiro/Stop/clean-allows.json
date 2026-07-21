@@ -1,10 +1,10 @@
 {
   "description": "Kiro v3 Stop allows (no marker file) — silent exit 0, metadata-only stdin",
-  "provenance": "documented (assessment §5.3/§5.4); REPLACE with a Tier-2 TUI capture@2.13.0",
+  "provenance": "captured@2.13.0 (Tier-2 TUI probe 2026-07-20; scratchpad/kiro-probe-captures-2.13.0/stop.stdin). CONFIRMS Kiro Stop stdin is metadata-only: exactly {session_id, hook_event_name, cwd} — no assistant_response field at all (resolves §12 Q4). `cwd` re-spliced to @CWD@ for the hermetic temp dir; session_id preserved verbatim from the capture.",
   "hook": "kiro-stop-guard.sh",
   "setup": { "cwdFiles": [] },
   "stdin": {
-    "session_id": "kiro-sess-2",
+    "session_id": "sess_a44bce46-1d84-4063-a51a-2d4608709a44",
     "cwd": "@CWD@",
     "hook_event_name": "Stop"
   },

@@ -102,6 +102,36 @@ This is intentionally enough to express every PoC event's contract without a bes
 actually _fires_ (that is T2, and for Kiro v3 it is TUI-only). The prototype therefore tests the four
 `command`-style example hooks; the typed factory's real emitted scripts slot in unchanged.
 
+## Fixture backlog (seed ideas — GROOM before building)
+
+The harness proves out end-to-end today on **one captured fixture** (`kiro/Stop/clean-allows.json`,
+now `captured@2.13.0`). The rest below are **seed ideas, deliberately not built** — groom (dedupe,
+prioritise, confirm the contract per row) before authoring. Real Tier-2 payloads for the Kiro rows
+already sit in `captures/kiro-2.13.0/` (raw capture → wrap with `expect` = the authoring step).
+
+**Kiro (captured payloads on hand):**
+
+- `UserPromptSubmit` — replay `captures/…/userpromptsubmit.stdin.json`; assert a recall/context hook
+  reads `.prompt`. **Guards the empty-`prompt` regression** (capture shows `prompt:""`).
+- `PreToolUse` — replay `…/pretooluse.stdin.json` (`tool_name`,`tool_input.command`); assert a guard
+  blocks a dangerous command via the Kiro decision channel. Richest guard surface.
+- `PostToolUse` — replay `…/posttooluse.stdin.json`; assert a result-aware hook reads `.tool_response`
+  (exit code / output).
+- `SessionStart` — replay `…/sessionstart.stdin.json`; assert a startup context/flush hook.
+- `Manual` (`/remember`) — **blocked**: did not fire in the 2.13 probe (Q2). Backlog: re-probe the
+  slash path, then author.
+
+**Claude (documented today — upgrade on a Tier-2 Claude capture):**
+
+- Upgrade the existing `claude/{PreToolUse,SessionStart,Stop}/*.json` `stdin` blocks from documented to
+  captured once a Claude probe runs (flip `provenance`); schema-drift guard, same as Kiro.
+- `PostToolUse`, `UserPromptSubmit`, `Notification`, `PreCompact`, `SubagentStop` — not yet represented.
+
+**Cross-cutting (harness capability, not a single fixture):**
+
+- `action:agent` (Kiro) / `prompt`+`agent` (Claude) handlers are **emission-only** — T1b cannot execute
+  them (no subprocess). Coverage stays in `checks/module-eval.nix`; note the boundary, don't fake it.
+
 ## Graduation
 
 Promote to `checks/hook-contract-tests.nix` (unioned at `flake.nix:216`) when **all** hold:

@@ -1281,7 +1281,7 @@ in {
           hooksJson = mem.hooks;
         };
       };
-      hookText = (result.config.home.file.".kiro/hooks/kiro-memory.json" or {}).text or "";
+      hookText = (result.config.home.activation.kiroHooks or {}).text or "";
     in
       lib.hasInfix ''"version":"v1"'' hookText
       && lib.hasInfix ''"trigger":"Stop"'' hookText
@@ -1332,19 +1332,23 @@ in {
           inherit (mem) rules;
         };
       };
-      hmHook = (hm.config.home.file.".kiro/hooks/kiro-memory.json" or {}).text or "";
-      # HM writes the hook as home.file text; devenv writes it as a REAL file via
-      # enterShell (kiro v3 skips symlinked hooks — see the workspace-local
-      # finding). Parity is by construction (both emit `mem.hooks."kiro-memory"`):
-      # assert HM emits the generator output verbatim AND devenv's enterShell
-      # installs that hook into .kiro/hooks/.
+      hmHook = (hm.config.home.activation.kiroHooks or {}).text or "";
+      # BOTH backends now install the hook as a REAL file (kiro v3 skips symlinked
+      # hooks — verified live on 2.13.0): HM via home.activation, devenv via
+      # enterShell. Parity is by construction (both emit `mem.hooks."kiro-memory"`):
+      # assert each backend's script carries the generator output verbatim AND
+      # installs it into .kiro/hooks/.
       dvEnter = dv.config.enterShell or "";
       hmSteer = (hm.config.home.file.".kiro/steering/kiro-auto-memory.md" or {}).text or "";
       dvSteer = (dv.config.files.".kiro/steering/kiro-auto-memory.md" or {}).text or "";
     in
       hmHook
       != ""
-      && hmHook == mem.hooks."kiro-memory"
+      # `hasInfix` compiles the infix into a `builtins.match` regex, which rejects
+      # a pattern carrying string context; the generator output embeds the wrapper
+      # store paths, so strip context before matching (byte content is unchanged).
+      && lib.hasInfix (builtins.unsafeDiscardStringContext mem.hooks."kiro-memory") hmHook
+      && lib.hasInfix "kiro-memory.json" hmHook
       && lib.hasInfix ".kiro/hooks/kiro-memory.json" dvEnter
       && lib.hasInfix "install -m 0644" dvEnter
       && hmSteer != ""
@@ -1565,6 +1569,49 @@ in {
       packages = result.config.home.packages or [];
     in
       lib.any (p: (p.name or "") == "kiro-cli-wrapped") packages
+  );
+
+  # devenv parity: v3 = true must wrap on devenv too, so `devenv shell` launches
+  # the v3 engine like HM does (was HM-only before the shared wrapper). devenv
+  # exports env natively, so the wrapper carries flags only — but the symlinkJoin
+  # ("kiro-cli-wrapped") still fires on v3/tui alone.
+  module-kiro-devenv-v3-wraps-package = mkTest "kiro-devenv-v3-wraps-package" (
+    let
+      result = evalDevenv {
+        ai.kiro = {
+          enable = true;
+          v3 = true;
+        };
+      };
+      packages = result.config.packages or [];
+    in
+      lib.any (p: (p.name or "") == "kiro-cli-wrapped") packages
+  );
+
+  # devenv parity: tui implies --v3, so it must wrap on devenv too.
+  module-kiro-devenv-tui-implies-v3-wraps = mkTest "kiro-devenv-tui-implies-v3-wraps" (
+    let
+      result = evalDevenv {
+        ai.kiro = {
+          enable = true;
+          tui = true;
+        };
+      };
+      packages = result.config.packages or [];
+    in
+      lib.any (p: (p.name or "") == "kiro-cli-wrapped") packages
+  );
+
+  # devenv: with no tui/v3/trust and no env, the package is installed RAW (the
+  # shared wrapper returns the unwrapped derivation — no needless symlinkJoin).
+  module-kiro-devenv-no-flags-no-wrap = mkTest "kiro-devenv-no-flags-no-wrap" (
+    let
+      result = evalDevenv {
+        ai.kiro.enable = true;
+      };
+      packages = result.config.packages or [];
+    in
+      !(lib.any (p: (p.name or "") == "kiro-cli-wrapped") packages)
   );
 
   # HM: mcp.json — verify mergedServers writes mcp config.
@@ -1812,9 +1859,10 @@ in {
           hooksJson.pre-commit = ''{"event": "pre-commit"}'';
         };
       };
-      hookFile = result.config.home.file.".kiro/hooks/pre-commit.json" or null;
+      hookScript = (result.config.home.activation.kiroHooks or {}).text or "";
     in
-      hookFile != null
+      lib.hasInfix "pre-commit.json" hookScript
+      && lib.hasInfix ''"event": "pre-commit"'' hookScript
   );
 
   # HM: a TYPED hook record lowers to the correct v3 envelope JSON. name = attr
@@ -1832,7 +1880,7 @@ in {
           };
         };
       };
-      t = (result.config.home.file.".kiro/hooks/lint.json" or {}).text or "";
+      t = (result.config.home.activation.kiroHooks or {}).text or "";
     in
       lib.hasInfix ''"version":"v1"'' t
       && lib.hasInfix ''"name":"lint"'' t
@@ -1859,7 +1907,7 @@ in {
           };
         };
       };
-      t = (result.config.home.file.".kiro/hooks/fmt.json" or {}).text or "";
+      t = (result.config.home.activation.kiroHooks or {}).text or "";
     in
       lib.hasInfix ''"command":"/nix/store'' t && lib.hasInfix "/bin/hello" t
   );
@@ -1877,7 +1925,7 @@ in {
           };
         };
       };
-      hmT = (evalHm cfg).config.home.file.".kiro/hooks/lint.json".text or "";
+      hmT = ((evalHm cfg).config.home.activation.kiroHooks or {}).text or "";
       dvEnter = (evalDevenv cfg).config.enterShell or "";
     in
       lib.hasInfix ''"trigger":"PostToolUse"'' hmT
@@ -1895,9 +1943,68 @@ in {
           hooksJson.raw = ./fixtures/kiro-hook-raw.json;
         };
       };
-      t = (result.config.home.file.".kiro/hooks/raw.json" or {}).text or "";
+      t = (result.config.home.activation.kiroHooks or {}).text or "";
     in
       lib.hasInfix "raw-envelope-loaded" t
+  );
+
+  # Hardening (PR #433 review): an unsafe hook name (path separator) fails the
+  # name-charset assertion before it can be interpolated into a hooks-dir path.
+  module-kiro-hooks-rejects-unsafe-name = mkTest "kiro-hooks-rejects-unsafe-name" (
+    let
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          hooksJson."../evil" = builtins.toJSON {
+            version = "v1";
+            hooks = [];
+          };
+        };
+      };
+      nameAsserts =
+        builtins.filter (a: lib.hasInfix "hook names must match" a.message)
+        (ev.config.assertions or []);
+    in
+      nameAsserts != [] && (builtins.head nameAsserts).assertion == false
+  );
+
+  # A safe hook name passes the same assertion (assertion == true).
+  module-kiro-hooks-accepts-safe-name = mkTest "kiro-hooks-accepts-safe-name" (
+    let
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          hooksJson."kiro-memory.pre_1" = builtins.toJSON {
+            version = "v1";
+            hooks = [];
+          };
+        };
+      };
+      nameAsserts =
+        builtins.filter (a: lib.hasInfix "hook names must match" a.message)
+        (ev.config.assertions or []);
+    in
+      nameAsserts != [] && (builtins.head nameAsserts).assertion == true
+  );
+
+  # Hardening (PR #433 review): the HM hook activation prunes stale *.json first,
+  # so a hook removed/renamed in config stops firing.
+  module-kiro-hooks-hm-prunes-stale = mkTest "kiro-hooks-hm-prunes-stale" (
+    let
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          hooksJson.demo = builtins.toJSON {
+            version = "v1";
+            hooks = [];
+          };
+        };
+      };
+      script = (ev.config.home.activation.kiroHooks or {}).text or "";
+    in
+      lib.hasInfix ''for f in "$HOOKS_DIR"/*.json'' script
+      && lib.hasInfix "rm -f" script
+      && lib.hasInfix "set -euETo pipefail" script
   );
 
   # Devenv: mcp.json write.
