@@ -226,7 +226,20 @@ full-hookset [DEFAULT, carried] · devenv-dir-symlink-shortcut (project scope)
 
 Master's STANDING RULES apply verbatim (field-report laundering, completionist
 mode, mechanism creep, provenance laundering, convergence declarations,
-degradation-by-shrug, source-masking, prove-against-reality). Plus, from the
+degradation-by-shrug, source-masking, prove-against-reality).
+
+**CAUGHT-WHILE-WORKING REGISTRATION (operator rule, 2026-07-21):** anything
+out-of-place discovered while working this plan — defects, doc/code
+mismatches, design gaps, ideas — is REGISTERED in this plan's open_items as
+caught-while-working backlog, never silently fixed, defaulted, or dropped.
+The labs fix-little-stuff carve-out survives ONLY for mechanical
+zero-behavioral-risk corrections; anything carrying a DESIGN OR INTERFACE
+DECISION (even when one resolution looks obviously lower-risk) is registered
+with the alternatives stated and surfaced to the operator at the next gate —
+the operator makes interface calls, not the session. Precedent that minted
+the rule: the `ai.environmentVariables`/Claude contract mismatch was
+defaulted to a doc fix when the operator would have chosen interface
+harmonization. Plus, from the
 sessions: treat unverified command syntax in inherited docs as suspect (four
 defects came from asserted-but-unrun commands); Nix 2.34.4 error phrasing is
 "does not provide attribute" (never broaden); devenv tasks have no positional
