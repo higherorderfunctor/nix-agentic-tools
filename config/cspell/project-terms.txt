@@ -178,6 +178,7 @@ osmani
 oxalica
 oxlint
 pagefind
+parameterised
 partialclone
 passthroughs
 passthru
@@ -209,6 +210,7 @@ relpath
 remapper
 reparent
 repoint
+repointed
 reprioritize
 rerere
 revertibility
@@ -223,6 +225,7 @@ sadjow
 sarif
 scriptable
 sdiehl
+SECURESTORAGE
 sequentialthinking
 serena
 serialised

@@ -293,6 +293,27 @@
         "type": "github"
       }
     },
+    "home-manager": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1784582306,
+        "narHash": "sha256-y7dzvE6+X7toUG4d0z+fK7X0jKF2DQZnK+cSJyyi2Xo=",
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "rev": "a02190edf9a79d8da191da75eced1ce1ae5e2408",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "rev": "a02190edf9a79d8da191da75eced1ce1ae5e2408",
+        "type": "github"
+      }
+    },
     "mcp-nixos": {
       "inputs": {
         "devshell": "devshell",
@@ -565,6 +586,7 @@
         "devenv": "devenv",
         "git-branchless": "git-branchless",
         "git-hooks": "git-hooks_2",
+        "home-manager": "home-manager",
         "mcp-nixos": "mcp-nixos",
         "nix-fast-build": "nix-fast-build",
         "nix-update": "nix-update",
