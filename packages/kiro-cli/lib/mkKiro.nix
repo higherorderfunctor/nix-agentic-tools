@@ -853,9 +853,24 @@ in
           # devenv `files.*` (which symlinks into /nix/store). Kiro v3 discovers
           # workspace hooks by scanning `${cfg.configDir}/hooks/` with read_dir
           # and does NOT follow a store symlink (the scan skips it), so a
-          # symlinked hook never loads and `/hooks` shows nothing. Only hooks
-          # need this — steering and agents load fine as symlinks. See the
+          # symlinked hook never loads and `/hooks` shows nothing. See the
           # kiro-v3-hooks-workspace-local finding + docs/plans/kiro-cli-auto-memory.md.
+          #
+          # NOTE: this comment previously claimed "steering and agents load
+          # fine as symlinks". That is almost certainly WRONG, and the
+          # mechanism described just above is why: steering is discovered by
+          # the same directory scan, so the same skip applies. Upstream
+          # corroborates — kirodotdev/Kiro#2921 ("Follow symlinks for steering
+          # docs", still open) and #8121 ("Only a real file copy at
+          # .kiro/steering/AGENTS.md works").
+          #
+          # The steering/rules emitters below therefore still ship store
+          # symlinks to consumers. Converting them is NOT mechanical: the
+          # emission shape is asserted declaratively by
+          # checks/module-eval.nix (config.files / config.home.file), and an
+          # imperative copy would leave those assertions checking script text
+          # instead of an attrset. Tracked as follow-up, deliberately not
+          # bundled with the repo-local materializer change.
           (lib.mkIf (cfg.hooks != {} || cfg.hooksJson != {}) {
             enterShell = ''
               ${pkgs.coreutils}/bin/mkdir -p ${lib.escapeShellArg "${cfg.configDir}/hooks"}

@@ -304,7 +304,18 @@ Because both surfaces ride the existing HM↔devenv fanout, parity is
 `module-kiro-auto-memory-hm-devenv-parity`: HM emits the generator's hook JSON
 verbatim (`home.file` text), devenv's `enterShell` installs the SAME generator
 output as a real file, and steering is byte-identical on both (steering stays a
-symlink; only hooks are real-file'd — see the CRITICAL note above). The distiller sync-vs-background choice: **synchronous**
+symlink; only hooks are real-file'd — see the CRITICAL note above).
+
+> **Correction (2026-07-21):** "only hooks need real files" is almost
+> certainly wrong. Steering is discovered by the same `read_dir` scan that
+> skips symlinked hooks, so the same defect should apply — corroborated by
+> `kirodotdev/Kiro#2921` (open, "Follow symlinks for steering docs") and
+> `#8121` ("Only a real file copy at `.kiro/steering/AGENTS.md` works").
+> This repo's own instruction files were moved to real-file copies for
+> exactly this reason; the factory emitters have not been converted yet
+> because `checks/module-eval.nix` asserts on their declarative attr shape.
+
+The distiller sync-vs-background choice: **synchronous**
 (D8/D27) — debounced + a file-buffer write + sub-second in the default (no
 backend). The sync path also forks `git` once per `Stop` (for `project_id`) and,
 once the backend is live, `openmemory-mem` once per distilled turn (each capped
