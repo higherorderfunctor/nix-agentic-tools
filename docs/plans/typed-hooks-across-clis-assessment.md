@@ -777,6 +777,38 @@ lenses — consensus noted.)
   typed event with captured-fixture provenance and failure-handling tests; migrate autoMemory
   onto the typed surface; blocking drift guard.
 
+### Backlog — concrete follow-ups (do it right, not surgical)
+
+> **Operator framing (2026-07-20f):** the north star is a **complete, correct typed hook option
+> surface across BOTH ecosystems** — the foundation for wiring in **different memory systems** (to
+> eval/compare) and **telemetry** (to measure hook effectiveness). Options get designed RIGHT on
+> their own merits; **implementations map onto the options, never the reverse.** (`B1` — the
+> `extraExtract` sidecar auto-refresh — is already DONE via the `*-extracted.json` approach on both
+> CLIs, so it drops off this list.)
+
+- **B2 — retire the surgical `hooksJson` bridge; migrate consumers onto the typed surface.**
+  `ai.kiro.hooksJson` was shaped to accept the existing autoMemory _pilot_'s pre-baked envelope
+  verbatim (D9 "byte-identical"). The pilot is **not** the destination — de-emphasize the
+  byte-identical constraint and do NOT let the pilot shape the option surface. Once the done-right
+  typed surface is complete: migrate autoMemory (and any memory impl) onto typed `ai.kiro.hooks`
+  records; **remove anything shaped to the pilot** (pilot-matching `hooksJson` usage + test shapes);
+  accept that the pilot's on-disk output may change (e.g. per-record files vs. today's single
+  envelope). Design the typed surface to EXPRESS what consumers need so impls map cleanly — e.g. an
+  optional **envelope/group key** to co-locate records in one Kiro file, a **telemetry hook-fire**
+  channel, parity across the FULL hook set (not just the PoC subset). Whether `hooksJson` survives at
+  all (as a genuinely _generic_ escape hatch) or is dropped is part of this. This session: nothing to
+  undo — the bridge stays so autoMemory keeps working; B2 is the follow-up.
+
+- **B3 — investigate wiring the non-hermetic extraction into automation; assess the auth cost.**
+  The binary-grep extraction is hermetic + wired (`passthru.extracted` + blocking drift check). The
+  OTHER extraction paths are not: (a) **docs-diff contract extraction** (fetch the hook docs, diff for
+  stdin/stdout _contract_ drift — public URLs, no auth, but network → scheduled Action / flake app,
+  not a `nix flake check`); (b) **live Tier-2 capture** (fire hooks on the _authenticated_ CLI,
+  capture real stdin — needs an authed CLI + burns tokens → cannot be a sandboxed check). Investigate
+  whether/where each can be wired (scheduled Action, devenv task, HITL harness), **understand exactly
+  what needs auth** and what that constrains, and make a deliberate choice (token-secret CI vs.
+  stays-HITL) rather than defaulting.
+
 ---
 
 ## 15. Verification-pass corrections applied (transparency)
