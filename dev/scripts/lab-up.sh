@@ -14,7 +14,10 @@
 # ancestor directory for CLAUDE.md up to and including /home, so a lab under
 # $HOME silently inherits ~/.claude/CLAUDE.md regardless of CLAUDE_CONFIG_DIR.
 #
-# Usage: dev/scripts/lab-up.sh <name>
+# Usage: dev/scripts/lab-up.sh [--reset] <name>
+#   --reset wipes /var/tmp/nat-labs/<name> before rematerializing. Without
+#   it, re-running is additive: cp -rL never deletes, so files removed from
+#   labs/<name>/lab.nix since the last run would otherwise linger.
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 
@@ -24,19 +27,39 @@ lab_root="/var/tmp/nat-labs"
 
 log() { echo "==> $*" >&2; }
 
+reset=0
+if [ "${1:-}" = "--reset" ]; then
+  reset=1
+  shift
+fi
+
 name="${1:-}"
 if [ -z "$name" ]; then
-  log "usage: dev/scripts/lab-up.sh <name>"
+  log "usage: dev/scripts/lab-up.sh [--reset] <name>"
   log "defined labs:"
   ls -1 "${root}/labs" >&2
   exit 2
 fi
+case "$name" in
+*/* | *..*)
+  log "invalid lab name: '$name' (must not contain / or ..)"
+  exit 2
+  ;;
+esac
 if [ ! -f "${root}/labs/${name}/lab.nix" ]; then
   log "no such lab: $name (expected labs/$name/lab.nix)"
   exit 2
 fi
 
 lab="${lab_root}/${name}"
+
+if [ "$reset" -eq 1 ] && [ -d "$lab" ]; then
+  log "resetting $lab"
+  # u+w first: the copied tree includes dereferenced, still-read-only
+  # Nix store files/dirs that rm -rf can't otherwise remove.
+  chmod -R u+w "$lab"
+  rm -rf "$lab"
+fi
 
 log "building fake user-global for '$name'"
 hf=$(nix build "${root}#homeConfigurations.lab-${name}.config.home-files" \
@@ -55,13 +78,24 @@ chmod -R u+w "$lab/home"
 # home-files. They are $HOME-parameterized and reference absolute store
 # paths, so they run standalone with HOME repointed.
 for entry in claudeUnpinLaunchEffort copilotSettingsMerge kiroSettingsMerge; do
-  body=$(nix eval --raw \
+  eval_err="$(mktemp)"
+  if body=$(nix eval --raw \
     "${root}#homeConfigurations.lab-${name}.config.home.activation.${entry}.data" \
-    2>/dev/null || true)
-  if [ -z "$body" ]; then
+    2>"$eval_err"); then
+    rm -f "$eval_err"
+  elif grep -qE 'does not provide attribute|does not exist|missing attribute' "$eval_err"; then
+    # Genuinely absent — entries are only emitted when the relevant app
+    # is enabled. Expected and fine, unlike any other eval failure below.
     log "activation '$entry' not present — skipping"
+    rm -f "$eval_err"
     continue
+  else
+    log "nix eval failed for activation '$entry':"
+    cat "$eval_err" >&2
+    rm -f "$eval_err"
+    exit 1
   fi
+
   log "replaying activation '$entry'"
   # Stubs for the home-manager activation harness helpers that the
   # snippets may reference outside a real activation run.
@@ -77,13 +111,16 @@ for entry in claudeUnpinLaunchEffort copilotSettingsMerge kiroSettingsMerge; do
   "
 done
 
-# Seed the trust gate. Without hasTrustDialogAccepted a devenv-materialized
-# .claude/settings.json is inert in a fresh dir.
+# Seed the trust gate. Without hasTrustDialogAccepted, Claude Code treats
+# the freshly materialized $lab/home/.claude as an untrusted directory and
+# won't honor its settings.json.
 cj="$lab/home/.claude.json"
 [ -f "$cj" ] || echo '{}' >"$cj"
 tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
 jq '.hasTrustDialogAccepted = true' "$cj" >"$tmp"
 mv "$tmp" "$cj"
+trap - EXIT
 
 log "writing $lab/work/.envrc"
 cat >"$lab/work/.envrc" <<ENVRC
