@@ -2340,6 +2340,28 @@ in {
       && lib.hasInfix "not materialized as a real file" et
   );
 
+  # [B4] devenv task ordering edges: cleanup-first is unconditional; the
+  # devenv:files edge exists ONLY when files.* entries exist — an
+  # unconditional edge would TasksNotFound on all-copy consumers, the
+  # design's own end-state (review follow-up: this regression previously
+  # passed the whole suite).
+  module-kiro-steering-task-edges = mkTest "kiro-steering-task-edges" (
+    let
+      bare = evalDevenv {ai.kiro.enable = true;};
+      bareTask = (bare.config.tasks or {})."ai:kiro:materialize-steering" or {};
+      withFiles = evalDevenv {
+        ai.kiro.enable = true;
+        files."probe.txt".text = "probe";
+      };
+      filesTask = (withFiles.config.tasks or {})."ai:kiro:materialize-steering" or {};
+    in
+      (bareTask.after or [])
+      == ["devenv:files:cleanup"]
+      && lib.elem "devenv:enterShell" (bareTask.before or [])
+      && !(lib.elem "devenv:files" (bareTask.before or []))
+      && lib.elem "devenv:files" (filesTask.before or [])
+  );
+
   # `steeringStrategy = "symlink"` escape hatch: restores exactly the
   # legacy declarative shapes on both backends, and the copy writer
   # carries no entry for the symlinked name.

@@ -166,7 +166,7 @@
     ${coreutils}/bin/mkdir -p "$NAT_MAT_TARGET_DIR" "$NAT_MAT_STATE_DIR"
     nat_mat_backup() {
       ${coreutils}/bin/mkdir -p "$NAT_MAT_BACKUP_DIR"
-      ${coreutils}/bin/cp -p -- "$NAT_MAT_TARGET_DIR/$1" "$NAT_MAT_BACKUP_DIR/$1.$(${coreutils}/bin/date +%s)"
+      ${coreutils}/bin/cp -pf -- "$NAT_MAT_TARGET_DIR/$1" "$NAT_MAT_BACKUP_DIR/$1.$(${coreutils}/bin/date +%s)"
     }
   '';
 
