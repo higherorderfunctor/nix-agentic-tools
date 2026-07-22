@@ -166,7 +166,11 @@
     ${coreutils}/bin/mkdir -p "$NAT_MAT_TARGET_DIR" "$NAT_MAT_STATE_DIR"
     nat_mat_backup() {
       ${coreutils}/bin/mkdir -p "$NAT_MAT_BACKUP_DIR"
-      ${coreutils}/bin/cp -pf -- "$NAT_MAT_TARGET_DIR/$1" "$NAT_MAT_BACKUP_DIR/$1.$(${coreutils}/bin/date +%s)"
+      # mktemp guarantees uniqueness even for same-second backups of the
+      # same file (epoch kept so backups sort by time); cp -p then
+      # stamps the source's mode/times onto the reserved path.
+      nat_mat_bak="$(${coreutils}/bin/mktemp "$NAT_MAT_BACKUP_DIR/$1.$(${coreutils}/bin/date +%s).XXXXXX")"
+      ${coreutils}/bin/cp -pf -- "$NAT_MAT_TARGET_DIR/$1" "$nat_mat_bak"
     }
   '';
 
