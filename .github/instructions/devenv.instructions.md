@@ -7,8 +7,10 @@ applyTo: "lib/ai/hm-helpers.nix,packages/*/modules/devenv/**"
 
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-04-13 (commit pending — adds
-> auto-regeneration via `gen` import). devenv internals are pinned
+> **Last verified:** 2026-07-21 (commit pending — corrects the
+> Kiro-symlink citation to kirodotdev/Kiro#9787 with the engine
+> qualifier, and the `files.<name>.source` claim; earlier revision
+> added auto-regeneration via `gen` import). devenv internals are pinned
 > to whatever version is in flake.lock; if you touch
 > `modules/devenv/**`, `lib/hm-helpers.nix:mkDevenvSkillEntries`,
 > `devenv.nix` `files` block, or anywhere that uses
@@ -189,10 +191,14 @@ copies `CLAUDE.md`, `.claude/rules/*.md`, `AGENTS.md`,
 
 Why copies rather than `files.*`:
 
-- **Kiro cannot read symlinked steering.** It discovers by scanning
-  the directory, and the scan skips symlinks (kirodotdev/Kiro#2921,
-  #8121). This is the same reason the inline hook JSON is installed
-  via `enterShell` rather than `files.*`.
+- **Kiro v3 cannot read symlinked steering.** The v3 engine (the
+  shipped default via `--tui --v3`) discovers by scanning the
+  directory and keeps only `entry.isFile()` entries, silently
+  dropping symlinks (kirodotdev/Kiro#9787); the v2/classic engine
+  follows them fine. This is the same reason the inline hook JSON is
+  installed via `enterShell` rather than `files.*`, and why the
+  factory's steering emitters now deliver via the strategy-driven
+  materializer (`lib/ai/materialize.nix`) instead of symlinks.
 - **The tracked outputs cannot be symlinks at all.** A store symlink
   commits as mode `120000` holding an absolute `/nix/store` path —
   meaningless in any other clone.
@@ -205,9 +211,11 @@ mechanisms did.
 
 `devenv`'s own `files.<name>.copyMode = "copy"` was considered and
 rejected: it `rm -rf`s and re-`cp`s unconditionally on every entry
-(a read race plus mtime churn), it cannot prune, and `files.<name>`
-has no `.source` in the pinned version, so feeding it _formatted_
-content would require IFD on every eval.
+(a read race plus mtime churn), it cannot prune, and feeding it
+_formatted_ content would require `builtins.readFile` on the built
+derivation — IFD on every eval. (`files.<name>.source` does exist in
+the pinned version — mkKiro uses it — but it only takes a path, not
+formatted content.)
 
 **Prerequisite:** the `coding-standards` overlay must be applied to
 devenv's pkgs, because the fragment composition reads
