@@ -90,8 +90,12 @@ here first.
 
 1. Never `force = true` on a steering `home.file` (HM silently deletes the
    target; `contextFilename` defaults to `AGENTS.md`).
-2. Never fold emitter branches with `//` — collisions must stay ERRORS
-   (today's `mkMerge` fails loudly; `//` becomes silent last-wins).
+2. Never fold emitter branches with `//` — collisions must BECOME hard
+   eval errors. (The original "must stay errors" premise was false:
+   today's `home.file` text merge silently CONCATENATES colliding
+   definitions — only the module-eval stub errored. The materializer's
+   `nullOr str` upgrade on `steeringFiles.<n>.text` makes the error
+   real; `//` would instead be silent last-wins.)
 3. Never blind-prune `~/.kiro/steering/` (user-owned) — manifest-prune only.
 4. A user edit to a managed file must never be silently clobbered.
 5. HM copy-activation ordering: `entryAfter ["linkGeneration"]`, never
@@ -157,7 +161,8 @@ Highest fan-out. Synthesize ONE design honoring constraints 1–9 from the three
 fatally-flawed candidates (author's sketch: keep the four mkMerge branches, add
 a derived attrset for assertions, put `strategy` on it) + adversarial coherence
 review (DESIGN-PHASE COHERENCE REVIEW per master) → **HITL design decision** →
-implement: shared materializer; convert Kiro steering (HM ×2, devenv ×4);
+implement: shared materializer; convert Kiro steering (verified: 4 HM + 4
+devenv emitter sites);
 repo-wide `writeBoundary`→`linkGeneration`; `sync_file` guard; re-correct
 `mkKiro.nix:863-865` + engine qualifiers (same commit); fix
 `instruction-file-single-mechanism.md:169-171`; wire enterTest gate into CI;

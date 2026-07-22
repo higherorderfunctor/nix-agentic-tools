@@ -320,7 +320,7 @@ lib.ai.app.mkAiApp {
         # externally-managed settings.json. Matches upstream Claude HM
         # behavior. Devenv-side is unconditional (project-local).
         (lib.mkIf (cfg.settings != {}) {
-          home.activation.copilotSettingsMerge = lib.hm.dag.entryAfter ["writeBoundary"] (helpers.mkSettingsActivationScript {
+          home.activation.copilotSettingsMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
             configFile = "${cfg.configDir}/settings.json";
             settingsJson = builtins.toJSON cfg.settings;
             jq = "${pkgs.jq}/bin/jq";
@@ -363,6 +363,7 @@ lib.ai.app.mkAiApp {
       mergedEnvironmentVariables,
       mergedClaudeCopilotAgents,
       topContext,
+      ...
     }: let
       aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
       # Resolve effective context: per-CLI wins when set, else top-level.

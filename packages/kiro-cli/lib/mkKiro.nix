@@ -159,20 +159,137 @@
     cfg.hooksJson
     // lib.mapAttrs (_fileKey: envelope: builtins.toJSON envelope) (kiroTypedHookFiles cfg.hooks);
 
+  # Shared strategy-driven materializer (lib/ai/materialize.nix) — the
+  # steering writers for both backends, plus the single source of the
+  # name-safety regex shared by hook names and copy-mode steering names.
+  materializeLib = import ../../../lib/ai/materialize.nix {inherit lib;};
+
   # Hook names are attrset keys interpolated straight into activation-script
   # paths (`$HOOKS_DIR/<name>.json`) and shell heredocs, so a `/`, `..`,
   # whitespace, or quote would write outside the hooks dir or break the emitted
   # script. Require a leading alphanumeric then `[A-Za-z0-9._-]` (covers
-  # kiro-memory, pre-commit, lint). Shared assertion for both backends.
-  hookNameSafe = name: builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" name != null;
+  # kiro-memory, pre-commit, lint) — the same charset gating copy-mode
+  # steering names (materializeLib.nameSafe). Shared assertion for both
+  # backends.
+  hookNameSafe = materializeLib.nameSafe;
   hookNameAssertion = cfg: let
     bad =
       builtins.filter (n: !hookNameSafe n)
       (builtins.attrNames cfg.hooks ++ builtins.attrNames cfg.hooksJson);
   in {
     assertion = bad == [];
-    message = "ai.kiro: hook names must match [A-Za-z0-9][A-Za-z0-9._-]* (no path separators, whitespace, or quotes); offending: ${lib.concatStringsSep ", " bad}";
+    message = "ai.kiro: hook names must match ${materializeLib.nameRegex} (no path separators, whitespace, or quotes); offending: ${lib.concatStringsSep ", " bad}";
   };
+
+  # Shared assertion set for both backends: mutually exclusive
+  # inline/dir pairs, hook-name charset, and the steering-entry
+  # shape/name guards (exactly-one-of text/source; copy-mode names).
+  mkAssertions = cfg:
+    [
+      {
+        assertion = !(cfg.agents != {} && cfg.agentsDir != null);
+        message = "ai.kiro: cannot set both `agents` and `agentsDir` — choose one.";
+      }
+      {
+        assertion = !((cfg.hooks != {} || cfg.hooksJson != {}) && cfg.hooksDir != null);
+        message = "ai.kiro: cannot set both inline hooks (`hooks`/`hooksJson`) and `hooksDir` — choose one.";
+      }
+      (hookNameAssertion cfg)
+    ]
+    ++ materializeLib.mkEntryAssertions {
+      app = "kiro";
+      files = cfg.steeringFiles;
+    };
+
+  # The four steering emitters (named-instr / unnamed-instr / rules /
+  # context) are backend-agnostic: they populate `ai.kiro.steeringFiles`
+  # instead of writing home.file/files.* directly; the per-backend
+  # strategy-driven writer element does the delivery. Every emitter
+  # stamps `strategy = cfg.steeringStrategy` explicitly — the shared
+  # options block is inert data with no `config` access, so the
+  # submodule cannot default it. The four elements keep their mkMerge
+  # boundaries + mkIf gates; `steeringFiles.<n>.text` is `nullOr str`,
+  # so two emitters producing the same key with DIFFERENT content is a
+  # hard eval error and equal content dedupes.
+  mkSteeringEmitters = {
+    cfg,
+    mergedInstructions,
+    mergedRules,
+    topContext,
+  }: let
+    fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
+    inherit (import ../../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
+    # Resolve effective context: per-CLI wins when set, else top-level.
+    effectiveContext =
+      if cfg.context != null
+      then cfg.context
+      else topContext;
+    hasContext = effectiveContext != null && effectiveContext != "";
+    # Resolve rule body: path → readFile; string → passthrough.
+    resolveRuleText = rule:
+      if builtins.isPath rule.text
+      then builtins.readFile rule.text
+      else rule.text;
+    mkEntry = text: {
+      inherit text;
+      strategy = cfg.steeringStrategy;
+    };
+    named = builtins.filter (i: i ? name) mergedInstructions;
+    unnamed = builtins.filter (i: !(i ? name)) mergedInstructions;
+  in [
+    # Per-instruction steering entries — `<name>.md` for each
+    # instruction carrying a `name`. The kiro transformer emits
+    # `inclusion:` / `fileMatchPattern:` YAML frontmatter. CRITICAL:
+    # fileMatchPattern MUST be emitted as a YAML array for
+    # multi-element paths — a comma-joined string silently matches
+    # nothing. The kiro transformer handles this correctly.
+    {
+      ai.kiro.steeringFiles = lib.listToAttrs (map (instr: {
+          name = "${instr.name}.md";
+          value = mkEntry (fragmentsLib.mkRenderer kiroTransformer {inherit (instr) name;} instr);
+        })
+        named);
+    }
+    # Unnamed always-on instructions → a dedicated `instructions.md`
+    # steering entry. Kiro is directory-native, so (unlike
+    # Claude/Copilot) context is NOT composed with instructions —
+    # context stays standalone in AGENTS.md and the nameless remainder
+    # that previously fed the retired generic aggregate lands here
+    # (paths-less → `inclusion: always`).
+    (lib.mkIf (unnamed != []) {
+      ai.kiro.steeringFiles."instructions.md" =
+        mkEntry (lib.concatMapStringsSep "\n\n" (fragmentsLib.mkRenderer kiroTransformer {}) unnamed);
+    })
+    # Attrs-shape ai.rules / ai.kiro.rules → `<name>.md` entries,
+    # translated through kiroTransformer (inclusion: +
+    # fileMatchPattern: frontmatter). Rule paths resolve to text at
+    # eval via resolveRuleText.
+    {
+      ai.kiro.steeringFiles = lib.mapAttrs' (name: rule:
+        lib.nameValuePair "${name}.md" (mkEntry (fragmentsLib.mkRenderer kiroTransformer {inherit name;} (rule
+          // {
+            text = resolveRuleText rule;
+          }))))
+      mergedRules;
+    }
+    # Global context → `<contextFilename>` (default AGENTS.md — Kiro
+    # reads it natively as always-included content). Written without
+    # frontmatter; per-CLI wins over top-level. Under copy strategy a
+    # path-valued context normalizes to `text` at eval via readFile
+    # (the writer heredoc-embeds content); `source` is kept only for
+    # symlink strategy.
+    (lib.mkIf hasContext {
+      ai.kiro.steeringFiles.${cfg.contextFilename} =
+        if !(builtins.isPath effectiveContext)
+        then mkEntry effectiveContext
+        else if cfg.steeringStrategy == "copy"
+        then mkEntry (builtins.readFile effectiveContext)
+        else {
+          source = effectiveContext;
+          strategy = cfg.steeringStrategy;
+        };
+    })
+  ];
 
   # Wrap kiro-cli so it launches the way the config asks — shared by BOTH
   # backends (DRY). `--tui`/`--v3` append to the top-level `kiro-cli` launcher;
@@ -309,6 +426,46 @@ in
         type = lib.types.str;
         default = "AGENTS.md";
         description = "Filename for the context file inside `<configDir>/steering/`.";
+      };
+      # Derived steering-file set — populated by the factory's four
+      # steering emitters, consumed by the shared materializer
+      # (lib/ai/materialize.nix). Internal but readable by tests and
+      # consumers.
+      steeringFiles = lib.mkOption {
+        type = lib.types.attrsOf materializeLib.fileEntryType;
+        default = {};
+        internal = true;
+        description = ''
+          Derived steering-file set (`<name>` → `{ text | source,
+          strategy }`), keyed by filename under `<configDir>/steering/`.
+          Populated by the factory emitters (named/unnamed instructions,
+          rules, context); delivered by the shared materializer. `text`
+          is `nullOr str`, so two emitters producing the same key with
+          different content is a hard eval error (equal content
+          dedupes).
+        '';
+      };
+      # Per-surface delivery strategy — the escape hatch back to store
+      # symlinks (e.g. if upstream fixes kirodotdev/Kiro#9787).
+      steeringStrategy = lib.mkOption {
+        type = lib.types.enum ["copy" "symlink"];
+        default = "copy";
+        description = ''
+          How steering files are delivered. `copy` (default)
+          materializes REAL files via generated writers — required
+          because the Kiro v3 engine (the shipped default via
+          `--tui --v3`) silently drops symlinked steering files
+          (kirodotdev/Kiro#9787), while the v2/classic engine follows
+          them fine. `symlink` restores the legacy store-symlink
+          delivery.
+
+          Uninstall limitation: disabling `ai.kiro` removes the
+          materializer itself, so already-materialized copies are NOT
+          pruned and Kiro keeps loading them. To uninstall cleanly,
+          first empty the steering surface (or set
+          `steeringStrategy = "symlink"`) for one activation, THEN
+          disable.
+        '';
       };
       # Kiro-specific freeform settings with typed subkeys for known
       # knobs. Consumed by the settings/cli.json activation merge in
@@ -575,18 +732,10 @@ in
         helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
         aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
 
-        # Resolve effective context: per-CLI wins when set, else top-level.
-        effectiveContext =
-          if cfg.context != null
-          then cfg.context
-          else topContext;
-        hasContext = effectiveContext != null && effectiveContext != "";
-
-        # Resolve rule body: path → readFile; string → passthrough.
-        resolveRuleText = rule:
-          if builtins.isPath rule.text
-          then builtins.readFile rule.text
-          else rule.text;
+        steeringDir = "${cfg.configDir}/steering";
+        steeringEmitters = mkSteeringEmitters {
+          inherit cfg mergedInstructions mergedRules topContext;
+        };
 
         filteredSettings = aiCommon.filterNulls cfg.settings;
         # Kiro cli.json uses flat dot-notation keys ("chat.enableTangentMode")
@@ -609,189 +758,136 @@ in
             (helpers.mkSourceEntry content))
           attrs;
       in
-        lib.mkMerge [
-          # Package installation — wrapped with symlinkJoin when env
-          # vars are configured. Matches the legacy wrapper shape.
-          {home.packages = [kiroPackage];}
-          # Assertions: mutually exclusive inline/dir pairs for agents,
-          # hooks, skills (steering handled by the factory's baseline
-          # render + per-instruction file writes below).
-          {
-            assertions = [
-              {
-                assertion = !(cfg.agents != {} && cfg.agentsDir != null);
-                message = "ai.kiro: cannot set both `agents` and `agentsDir` — choose one.";
-              }
-              {
-                assertion = !((cfg.hooks != {} || cfg.hooksJson != {}) && cfg.hooksDir != null);
-                message = "ai.kiro: cannot set both inline hooks (`hooks`/`hooksJson`) and `hooksDir` — choose one.";
-              }
-              (hookNameAssertion cfg)
-            ];
-          }
-          # settings/permissions.yaml — V3 capability rules (explicit
-          # `permissions` ++ translated `trustedMcpTools` under v3). Static
-          # declarative write; Kiro's "Always allow" is session-scoped and
-          # never mutates this file.
-          (let
-            permissionRules = mkPermissionRules cfg;
-          in
-            lib.mkIf (permissionRules != []) {
-              home.file."${cfg.configDir}/settings/permissions.yaml".source = (pkgs.formats.yaml {}).generate "kiro-permissions.yaml" {
-                rules = permissionRules;
+        lib.mkMerge ([
+            # Package installation — wrapped with symlinkJoin when env
+            # vars are configured. Matches the legacy wrapper shape.
+            {home.packages = [kiroPackage];}
+            # Shared assertions (see mkAssertions): exclusive inline/dir
+            # pairs, hook-name charset, steering-entry guards.
+            {assertions = mkAssertions cfg;}
+            # settings/permissions.yaml — V3 capability rules (explicit
+            # `permissions` ++ translated `trustedMcpTools` under v3). Static
+            # declarative write; Kiro's "Always allow" is session-scoped and
+            # never mutates this file.
+            (let
+              permissionRules = mkPermissionRules cfg;
+            in
+              lib.mkIf (permissionRules != []) {
+                home.file."${cfg.configDir}/settings/permissions.yaml".source = (pkgs.formats.yaml {}).generate "kiro-permissions.yaml" {
+                  rules = permissionRules;
+                };
+              })
+            # settings/lsp.json — typed LSP server definitions.
+            (lib.mkIf (mergedLspServers != {}) {
+              home.file."${cfg.configDir}/settings/lsp.json".text =
+                builtins.toJSON (lib.mapAttrs aiCommon.mkLspConfig mergedLspServers);
+            })
+            # settings/mcp.json — merged MCP server pool. Kiro reads this
+            # natively from its config dir. Render typed entries into the
+            # freeform shape Kiro expects in mcp.json.
+            (lib.mkIf (mergedServers != {}) {
+              home.file."${cfg.configDir}/settings/mcp.json".text = builtins.toJSON {
+                mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
               };
             })
-          # settings/lsp.json — typed LSP server definitions.
-          (lib.mkIf (mergedLspServers != {}) {
-            home.file."${cfg.configDir}/settings/lsp.json".text =
-              builtins.toJSON (lib.mapAttrs aiCommon.mkLspConfig mergedLspServers);
-          })
-          # settings/mcp.json — merged MCP server pool. Kiro reads this
-          # natively from its config dir. Render typed entries into the
-          # freeform shape Kiro expects in mcp.json.
-          (lib.mkIf (mergedServers != {}) {
-            home.file."${cfg.configDir}/settings/mcp.json".text = builtins.toJSON {
-              mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
-            };
-          })
-          # Inline agent JSON files.
-          (lib.mkIf (cfg.agents != {}) {
-            home.file = mkJsonEntries "agents" cfg.agents;
-          })
-          # External agents directory — symlinked wholesale via
-          # `recursive = true` (Layout B).
-          (lib.mkIf (cfg.agentsDir != null) {
-            home.file."${cfg.configDir}/agents" = {
-              source = cfg.agentsDir;
-              recursive = true;
-            };
-          })
-          # Inline hook files — REAL files via home.activation, NOT home.file
-          # (which symlinks into /nix/store). Kiro v3 scans the hooks dir but does
-          # NOT follow store symlinks (verified live on 2.13.0: global scan fires
-          # real files, skips symlinks), so a symlinked hook never loads. Mirrors
-          # the devenv enterShell real-file install below.
-          (lib.mkIf (cfg.hooks != {} || cfg.hooksJson != {}) {
-            home.activation.kiroHooks = lib.hm.dag.entryAfter ["writeBoundary"] (
-              helpers.mkHooksActivationScript {
-                hooks = mkAllHookFiles cfg;
-                hooksDir = "${cfg.configDir}/hooks";
-                inherit (pkgs) coreutils;
-              }
-            );
-          })
-          # External hooks directory — REAL files via home.activation (same reason
-          # as inline hooks: kiro v3 skips symlinked hook files). Mirrors the
-          # devenv cp -rL.
-          (lib.mkIf (cfg.hooksDir != null) {
-            home.activation.kiroHooksDir = lib.hm.dag.entryAfter ["writeBoundary"] ''
-              set -euETo pipefail
-              shopt -s inherit_errexit 2>/dev/null || :
-              HOOKS_DIR="$HOME/${cfg.configDir}/hooks"
-              ${pkgs.coreutils}/bin/mkdir -p "$HOOKS_DIR"
-              # Nix-owned dir: prune stale *.json first so a hook removed or
-              # renamed in the source dir stops firing (Kiro loads every *.json).
-              for f in "$HOOKS_DIR"/*.json; do
-                if [ -e "$f" ]; then ${pkgs.coreutils}/bin/rm -f "$f"; fi
-              done
-              ${pkgs.coreutils}/bin/cp -rL --no-preserve=mode -- ${lib.escapeShellArg "${toString cfg.hooksDir}/."} "$HOOKS_DIR/"
-              ${pkgs.coreutils}/bin/chmod -R u+w "$HOOKS_DIR"
-            '';
-          })
-          # Per-instruction steering files — write
-          # `.kiro/steering/<name>.md` for each instruction entry that
-          # carries a `name` field. The kiro transformer emits
-          # `inclusion:` / `fileMatchPattern:` YAML frontmatter. CRITICAL:
-          # fileMatchPattern MUST be emitted as a YAML array for
-          # multi-element paths — a comma-joined string silently matches
-          # nothing. The kiro transformer handles this correctly.
-          # Nameless entries → a dedicated `<configDir>/steering/instructions.md`
-          # steering file (below); Kiro is directory-native, so context stays
-          # standalone in AGENTS.md.
-          (let
-            fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
-            inherit (import ../../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
-            named = builtins.filter (i: i ? name) mergedInstructions;
-          in {
-            home.file = lib.listToAttrs (map (instr: {
-                name = "${cfg.configDir}/steering/${instr.name}.md";
-                value.text = fragmentsLib.mkRenderer kiroTransformer {inherit (instr) name;} instr;
-              })
-              named);
-          })
-          # Unnamed always-on instructions → a dedicated
-          # `<configDir>/steering/instructions.md` steering file. Kiro is
-          # directory-native, so (unlike Claude/Copilot) context is NOT composed
-          # with instructions — context stays standalone in AGENTS.md and the
-          # nameless remainder that previously fed the retired generic aggregate
-          # lands here. Rendered via the kiro transformer (paths-less →
-          # `inclusion: always`).
-          (let
-            fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
-            inherit (import ../../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
-            unnamed = builtins.filter (i: !(i ? name)) mergedInstructions;
-          in
-            lib.mkIf (unnamed != []) {
-              home.file."${cfg.configDir}/steering/instructions.md".text =
-                lib.concatMapStringsSep "\n\n" (fragmentsLib.mkRenderer kiroTransformer {}) unnamed;
+            # Inline agent JSON files.
+            (lib.mkIf (cfg.agents != {}) {
+              home.file = mkJsonEntries "agents" cfg.agents;
             })
-          # Attrs-shape ai.rules / ai.kiro.rules → <configDir>/steering/<name>.md.
-          # Each entry becomes one steering file, translated through
-          # kiroTransformer (inclusion: + fileMatchPattern: frontmatter).
-          (let
-            fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
-            inherit (import ../../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
-          in {
-            home.file = lib.mapAttrs' (name: rule:
-              lib.nameValuePair "${cfg.configDir}/steering/${name}.md" {
-                text = fragmentsLib.mkRenderer kiroTransformer {inherit name;} (rule
-                  // {
-                    text = resolveRuleText rule;
-                  });
-              })
-            mergedRules;
-          })
-          # Global context → `<configDir>/steering/<contextFilename>`. Kiro
-          # reads AGENTS.md (default) natively as always-included content.
-          # Written without frontmatter; precedence is per-CLI > top-level.
-          (lib.mkIf hasContext {
-            home.file."${cfg.configDir}/steering/${cfg.contextFilename}" =
-              if builtins.isPath effectiveContext
-              then {source = effectiveContext;}
-              else {text = effectiveContext;};
-          })
-          # Skills fanout via mkSkillEntries, which uses
-          # `recursive = true` to produce Layout B (a real directory with
-          # per-file symlinks) and is path-type-agnostic.
-          {
-            home.file = helpers.mkSkillEntries cfg.configDir mergedSkills;
-          }
-          # settings/cli.json activation merge. Preserves user-added
-          # runtime keys (e.g. model selection, toggles) by merging
-          # Nix-declared values on top of the existing file via
-          # `jq -s '.[0] * .[1]'`. On first activation (no existing
-          # file) the Nix-rendered JSON is written as-is. Ported from
-          # legacy modules/kiro-cli/default.nix.
-          #
-          # HM-only: gated on non-empty settings so consumers who enable
-          # ai.kiro just for MCP fanout don't clobber an externally-
-          # managed cli.json. Matches upstream Claude HM behavior
-          # (settings.json only written when cfg.settings != {}).
-          # Devenv-side is unconditional (project-local, harmless).
-          (lib.mkIf (filteredSettings != {}) {
-            home.activation.kiroSettingsMerge = lib.hm.dag.entryAfter ["writeBoundary"] (helpers.mkSettingsActivationScript {
-              configFile = "${cfg.configDir}/settings/cli.json";
-              settingsJson = builtins.toJSON flatSettings;
-              jq = "${pkgs.jq}/bin/jq";
-              inherit (pkgs) coreutils;
-            });
-          })
-        ];
+            # External agents directory — symlinked wholesale via
+            # `recursive = true` (Layout B).
+            (lib.mkIf (cfg.agentsDir != null) {
+              home.file."${cfg.configDir}/agents" = {
+                source = cfg.agentsDir;
+                recursive = true;
+              };
+            })
+            # Inline hook files — REAL files via home.activation, NOT home.file
+            # (which symlinks into /nix/store). Kiro v3 scans the hooks dir but does
+            # NOT follow store symlinks (verified live on 2.13.0: global scan fires
+            # real files, skips symlinks), so a symlinked hook never loads. Mirrors
+            # the devenv enterShell real-file install below.
+            (lib.mkIf (cfg.hooks != {} || cfg.hooksJson != {}) {
+              home.activation.kiroHooks = lib.hm.dag.entryAfter ["linkGeneration"] (
+                helpers.mkHooksActivationScript {
+                  hooks = mkAllHookFiles cfg;
+                  hooksDir = "${cfg.configDir}/hooks";
+                  inherit (pkgs) coreutils;
+                }
+              );
+            })
+            # External hooks directory — REAL files via home.activation (same reason
+            # as inline hooks: kiro v3 skips symlinked hook files). Mirrors the
+            # devenv cp -rL.
+            (lib.mkIf (cfg.hooksDir != null) {
+              home.activation.kiroHooksDir = lib.hm.dag.entryAfter ["linkGeneration"] ''
+                set -euETo pipefail
+                shopt -s inherit_errexit 2>/dev/null || :
+                HOOKS_DIR="$HOME/${cfg.configDir}/hooks"
+                ${pkgs.coreutils}/bin/mkdir -p "$HOOKS_DIR"
+                # Nix-owned dir: prune stale *.json first so a hook removed or
+                # renamed in the source dir stops firing (Kiro loads every *.json).
+                for f in "$HOOKS_DIR"/*.json; do
+                  if [ -e "$f" ]; then ${pkgs.coreutils}/bin/rm -f "$f"; fi
+                done
+                ${pkgs.coreutils}/bin/cp -rL --no-preserve=mode -- ${lib.escapeShellArg "${toString cfg.hooksDir}/."} "$HOOKS_DIR/"
+                ${pkgs.coreutils}/bin/chmod -R u+w "$HOOKS_DIR"
+              '';
+            })
+            # Steering delivery — strategy-driven materializer (see
+            # lib/ai/materialize.nix). Symlink entries keep exactly the
+            # legacy home.file shape; copy entries are written as REAL
+            # files by a two-phase activation pair (prune entryBefore
+            # ["checkLinkTargets"]; write entryAfter ["linkGeneration"]).
+            # Emitted whenever the module is enabled — NOT gated on
+            # `steeringFiles != {}` — so emptying the surface still
+            # prunes (N→0); the mkIf gates live on the emitters only.
+            {
+              home.file = materializeLib.mkSymlinkEntries {
+                files = cfg.steeringFiles;
+                targetDir = steeringDir;
+              };
+              home.activation = materializeLib.mkHmActivation {
+                files = cfg.steeringFiles;
+                targetDir = steeringDir;
+                stateSlug = materializeLib.mkStateSlug steeringDir;
+                inherit (pkgs) coreutils diffutils gnugrep;
+              };
+            }
+            # Skills fanout via mkSkillEntries, which uses
+            # `recursive = true` to produce Layout B (a real directory with
+            # per-file symlinks) and is path-type-agnostic.
+            {
+              home.file = helpers.mkSkillEntries cfg.configDir mergedSkills;
+            }
+            # settings/cli.json activation merge. Preserves user-added
+            # runtime keys (e.g. model selection, toggles) by merging
+            # Nix-declared values on top of the existing file via
+            # `jq -s '.[0] * .[1]'`. On first activation (no existing
+            # file) the Nix-rendered JSON is written as-is. Ported from
+            # legacy modules/kiro-cli/default.nix.
+            #
+            # HM-only: gated on non-empty settings so consumers who enable
+            # ai.kiro just for MCP fanout don't clobber an externally-
+            # managed cli.json. Matches upstream Claude HM behavior
+            # (settings.json only written when cfg.settings != {}).
+            # Devenv-side is unconditional (project-local, harmless).
+            (lib.mkIf (filteredSettings != {}) {
+              home.activation.kiroSettingsMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
+                configFile = "${cfg.configDir}/settings/cli.json";
+                settingsJson = builtins.toJSON flatSettings;
+                jq = "${pkgs.jq}/bin/jq";
+                inherit (pkgs) coreutils;
+              });
+            })
+          ]
+          ++ steeringEmitters);
     };
     devenv = {
       options = {};
       config = {
         cfg,
+        config,
         mergedServers,
         mergedInstructions,
         mergedSkills,
@@ -804,201 +900,159 @@ in
         helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
         aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
 
-        effectiveContext =
-          if cfg.context != null
-          then cfg.context
-          else topContext;
-        hasContext = effectiveContext != null && effectiveContext != "";
-
-        resolveRuleText = rule:
-          if builtins.isPath rule.text
-          then builtins.readFile rule.text
-          else rule.text;
+        steeringDir = "${cfg.configDir}/steering";
+        steeringEmitters = mkSteeringEmitters {
+          inherit cfg mergedInstructions mergedRules topContext;
+        };
 
         filteredSettings = aiCommon.filterNulls cfg.settings;
         flatSettings = aiCommon.flattenDotKeys filteredSettings;
       in
-        lib.mkMerge [
-          # Package installation — devenv projects are shell-scoped, so
-          # env exports go in the devenv `env` attrset directly (below), not
-          # through the wrapper. But `--tui`/`--v3`/`--trust-tools` still need
-          # appending so `devenv shell` launches the v3 TUI like HM does, so we
-          # reuse the shared wrapper with an empty env set.
-          {
-            packages = [
-              (wrapKiroPackage {
-                inherit (cfg) package tui v3 trustedMcpTools;
-                environmentVariables = {};
-              })
-            ];
-          }
-          # Assertions: mutually exclusive inline/dir pairs.
-          {
-            assertions = [
-              {
-                assertion = !(cfg.agents != {} && cfg.agentsDir != null);
-                message = "ai.kiro: cannot set both `agents` and `agentsDir` — choose one.";
-              }
-              {
-                assertion = !((cfg.hooks != {} || cfg.hooksJson != {}) && cfg.hooksDir != null);
-                message = "ai.kiro: cannot set both inline hooks (`hooks`/`hooksJson`) and `hooksDir` — choose one.";
-              }
-              (hookNameAssertion cfg)
-            ];
-          }
-          # Environment variables — devenv has a native `env` attrset
-          # so no wrapper is required.
-          (lib.mkIf (mergedEnvironmentVariables != {}) {
-            env = lib.mapAttrs (_: lib.mkDefault) mergedEnvironmentVariables;
-          })
-          # settings/lsp.json — typed LSP server definitions.
-          (lib.mkIf (mergedLspServers != {}) {
-            files."${cfg.configDir}/settings/lsp.json".text =
-              builtins.toJSON (lib.mapAttrs aiCommon.mkLspConfig mergedLspServers);
-          })
-          # settings/mcp.json — merged MCP server pool. Render typed
-          # entries into the freeform shape Kiro expects.
-          (lib.mkIf (mergedServers != {}) {
-            files."${cfg.configDir}/settings/mcp.json".text = builtins.toJSON {
-              mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
-            };
-          })
-          # Inline agent JSON files.
-          (lib.mkIf (cfg.agents != {}) {
-            files =
-              lib.concatMapAttrs (name: content: {
-                "${cfg.configDir}/agents/${name}.json".text = content;
-              })
-              cfg.agents;
-          })
-          # External agents directory — devenv's `files.*.source`
-          # can't recurse, so we walk the directory at eval time.
-          (lib.mkIf (cfg.agentsDir != null) (let
-            walkDir = prefix: dir:
-              lib.concatMapAttrs (
-                name: kind:
-                  if kind == "directory"
-                  then walkDir "${prefix}/${name}" (dir + "/${name}")
-                  else if kind == "regular" || kind == "symlink"
-                  then {"${prefix}/${name}".source = dir + "/${name}";}
-                  else {}
-              )
-              (builtins.readDir dir);
-          in {
-            files = walkDir "${cfg.configDir}/agents" cfg.agentsDir;
-          }))
-          # Inline hook JSON files — written as REAL files via enterShell, NOT
-          # devenv `files.*` (which symlinks into /nix/store). Kiro v3 discovers
-          # workspace hooks by scanning `${cfg.configDir}/hooks/` with read_dir
-          # and does NOT follow a store symlink (the scan skips it), so a
-          # symlinked hook never loads and `/hooks` shows nothing. See the
-          # kiro-v3-hooks-workspace-local finding + docs/plans/kiro-cli-auto-memory.md.
-          #
-          # NOTE: this comment previously claimed "steering and agents load
-          # fine as symlinks". That is almost certainly WRONG, and the
-          # mechanism described just above is why: steering is discovered by
-          # the same directory scan, so the same skip applies. Upstream
-          # corroborates — kirodotdev/Kiro#2921 ("Follow symlinks for steering
-          # docs", still open) and #8121 ("Only a real file copy at
-          # .kiro/steering/AGENTS.md works").
-          #
-          # The steering/rules emitters below therefore still ship store
-          # symlinks to consumers. Converting them is NOT mechanical: the
-          # emission shape is asserted declaratively by
-          # checks/module-eval.nix (config.files / config.home.file), and an
-          # imperative copy would leave those assertions checking script text
-          # instead of an attrset. Tracked as follow-up, deliberately not
-          # bundled with the repo-local materializer change.
-          (lib.mkIf (cfg.hooks != {} || cfg.hooksJson != {}) {
-            enterShell = ''
-              ${pkgs.coreutils}/bin/mkdir -p ${lib.escapeShellArg "${cfg.configDir}/hooks"}
-              # devenv-owned dir: prune stale *.json so a hook removed or renamed
-              # in config stops firing (Kiro loads every *.json in the dir).
-              for f in ${lib.escapeShellArg "${cfg.configDir}/hooks"}/*.json; do
-                if [ -e "$f" ]; then ${pkgs.coreutils}/bin/rm -f "$f"; fi
-              done
-              ${lib.concatStrings (lib.mapAttrsToList (name: content: ''
-                  ${pkgs.coreutils}/bin/install -m 0644 ${pkgs.writeText "kiro-hook-${name}.json" content} ${lib.escapeShellArg "${cfg.configDir}/hooks/${name}.json"}
-                '')
-                (mkAllHookFiles cfg))}
-            '';
-          })
-          # External hooks directory — copied as REAL files (same reason as the
-          # inline hooks above: kiro v3 skips symlinked hook files).
-          (lib.mkIf (cfg.hooksDir != null) {
-            enterShell = ''
-              ${pkgs.coreutils}/bin/mkdir -p ${lib.escapeShellArg "${cfg.configDir}/hooks"}
-              # devenv-owned dir: prune stale *.json so a hook removed or renamed
-              # in the source dir stops firing (Kiro loads every *.json in the dir).
-              for f in ${lib.escapeShellArg "${cfg.configDir}/hooks"}/*.json; do
-                if [ -e "$f" ]; then ${pkgs.coreutils}/bin/rm -f "$f"; fi
-              done
-              ${pkgs.coreutils}/bin/cp -rL --no-preserve=mode -- ${lib.escapeShellArg "${toString cfg.hooksDir}/."} ${lib.escapeShellArg "${cfg.configDir}/hooks/"}
-              ${pkgs.coreutils}/bin/chmod -R u+w ${lib.escapeShellArg "${cfg.configDir}/hooks"}
-            '';
-          })
-          # Per-instruction steering files under `.kiro/steering/`.
-          # Same transformer as HM, same filter-by-name pattern.
-          (let
-            fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
-            inherit (import ../../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
-            named = builtins.filter (i: i ? name) mergedInstructions;
-          in {
-            files = lib.listToAttrs (map (instr: {
-                name = "${cfg.configDir}/steering/${instr.name}.md";
-                value.text = fragmentsLib.mkRenderer kiroTransformer {inherit (instr) name;} instr;
-              })
-              named);
-          })
-          # Unnamed always-on instructions → a dedicated
-          # `<configDir>/steering/instructions.md` steering file (parity with
-          # HM). Context stays standalone in AGENTS.md; this catches the
-          # nameless remainder that previously fed the retired generic aggregate.
-          (let
-            fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
-            inherit (import ../../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
-            unnamed = builtins.filter (i: !(i ? name)) mergedInstructions;
-          in
-            lib.mkIf (unnamed != []) {
-              files."${cfg.configDir}/steering/instructions.md".text =
-                lib.concatMapStringsSep "\n\n" (fragmentsLib.mkRenderer kiroTransformer {}) unnamed;
+        lib.mkMerge ([
+            # Package installation — devenv projects are shell-scoped, so
+            # env exports go in the devenv `env` attrset directly (below), not
+            # through the wrapper. But `--tui`/`--v3`/`--trust-tools` still need
+            # appending so `devenv shell` launches the v3 TUI like HM does, so we
+            # reuse the shared wrapper with an empty env set.
+            {
+              packages = [
+                (wrapKiroPackage {
+                  inherit (cfg) package tui v3 trustedMcpTools;
+                  environmentVariables = {};
+                })
+              ];
+            }
+            # Shared assertions (see mkAssertions): exclusive inline/dir
+            # pairs, hook-name charset, steering-entry guards.
+            {assertions = mkAssertions cfg;}
+            # Environment variables — devenv has a native `env` attrset
+            # so no wrapper is required.
+            (lib.mkIf (mergedEnvironmentVariables != {}) {
+              env = lib.mapAttrs (_: lib.mkDefault) mergedEnvironmentVariables;
             })
-          # Attrs-shape ai.rules / ai.kiro.rules → steering files (parity with HM).
-          (let
-            fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
-            inherit (import ../../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
-          in {
-            files = lib.mapAttrs' (name: rule:
-              lib.nameValuePair "${cfg.configDir}/steering/${name}.md" {
-                text = fragmentsLib.mkRenderer kiroTransformer {inherit name;} (rule
-                  // {
-                    text = resolveRuleText rule;
-                  });
-              })
-            mergedRules;
-          })
-          # Global context → `<configDir>/steering/<contextFilename>`.
-          # Mirrors HM side; no frontmatter, per-CLI wins over top-level.
-          (lib.mkIf hasContext {
-            files."${cfg.configDir}/steering/${cfg.contextFilename}" =
-              if builtins.isPath effectiveContext
-              then {source = effectiveContext;}
-              else {text = effectiveContext;};
-          })
-          # Skills via the user-space walker. devenv's `files.*.source`
-          # cannot walk a directory recursively, so we enumerate leaves
-          # at eval time via `mkDevenvSkillEntries`.
-          {
-            files = helpers.mkDevenvSkillEntries cfg.configDir mergedSkills;
-          }
-          # settings/cli.json — devenv does NOT support HM-style
-          # activation scripts. Devenv projects are project-local, so
-          # there's no runtime-mutation preservation concern. Static
-          # JSON write is sufficient.
-          (lib.mkIf (filteredSettings != {}) {
-            files."${cfg.configDir}/settings/cli.json".text =
-              builtins.toJSON flatSettings;
-          })
-        ];
+            # settings/lsp.json — typed LSP server definitions.
+            (lib.mkIf (mergedLspServers != {}) {
+              files."${cfg.configDir}/settings/lsp.json".text =
+                builtins.toJSON (lib.mapAttrs aiCommon.mkLspConfig mergedLspServers);
+            })
+            # settings/mcp.json — merged MCP server pool. Render typed
+            # entries into the freeform shape Kiro expects.
+            (lib.mkIf (mergedServers != {}) {
+              files."${cfg.configDir}/settings/mcp.json".text = builtins.toJSON {
+                mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
+              };
+            })
+            # Inline agent JSON files.
+            (lib.mkIf (cfg.agents != {}) {
+              files =
+                lib.concatMapAttrs (name: content: {
+                  "${cfg.configDir}/agents/${name}.json".text = content;
+                })
+                cfg.agents;
+            })
+            # External agents directory — devenv's `files.*.source`
+            # can't recurse, so we walk the directory at eval time.
+            (lib.mkIf (cfg.agentsDir != null) (let
+              walkDir = prefix: dir:
+                lib.concatMapAttrs (
+                  name: kind:
+                    if kind == "directory"
+                    then walkDir "${prefix}/${name}" (dir + "/${name}")
+                    else if kind == "regular" || kind == "symlink"
+                    then {"${prefix}/${name}".source = dir + "/${name}";}
+                    else {}
+                )
+                (builtins.readDir dir);
+            in {
+              files = walkDir "${cfg.configDir}/agents" cfg.agentsDir;
+            }))
+            # Inline hook JSON files — written as REAL files via enterShell, NOT
+            # devenv `files.*` (which symlinks into /nix/store). ENGINE-QUALIFIED:
+            # the Kiro v3 engine (Node; its directory scan keeps only
+            # `entry.isFile()` entries) silently DROPS symlinked leaf files —
+            # hooks and steering alike — while the v2/classic engine (Rust)
+            # follows leaf symlinks fine. The shipped default IS v3 (this
+            # factory's wrapper appends `--tui --v3`), so symlinked delivery is
+            # dead on arrival for v3 users. Upstream: kirodotdev/Kiro#9787
+            # (confirmed live on 2.13.0). See the kiro-v3-hooks-workspace-local
+            # finding + docs/plans/kiro-cli-auto-memory.md.
+            #
+            # Steering therefore no longer ships symlinks by default: the
+            # emitters populate `ai.kiro.steeringFiles` and the shared
+            # materializer delivers per the entry's `strategy` field ("copy"
+            # default materializes real files; "symlink" restores the legacy
+            # shape). Hooks keep their own real-file path below.
+            (lib.mkIf (cfg.hooks != {} || cfg.hooksJson != {}) {
+              enterShell = ''
+                ${pkgs.coreutils}/bin/mkdir -p ${lib.escapeShellArg "${cfg.configDir}/hooks"}
+                # devenv-owned dir: prune stale *.json so a hook removed or renamed
+                # in config stops firing (Kiro loads every *.json in the dir).
+                for f in ${lib.escapeShellArg "${cfg.configDir}/hooks"}/*.json; do
+                  if [ -e "$f" ]; then ${pkgs.coreutils}/bin/rm -f "$f"; fi
+                done
+                ${lib.concatStrings (lib.mapAttrsToList (name: content: ''
+                    ${pkgs.coreutils}/bin/install -m 0644 ${pkgs.writeText "kiro-hook-${name}.json" content} ${lib.escapeShellArg "${cfg.configDir}/hooks/${name}.json"}
+                  '')
+                  (mkAllHookFiles cfg))}
+              '';
+            })
+            # External hooks directory — copied as REAL files (same reason as the
+            # inline hooks above: kiro v3 skips symlinked hook files).
+            (lib.mkIf (cfg.hooksDir != null) {
+              enterShell = ''
+                ${pkgs.coreutils}/bin/mkdir -p ${lib.escapeShellArg "${cfg.configDir}/hooks"}
+                # devenv-owned dir: prune stale *.json so a hook removed or renamed
+                # in the source dir stops firing (Kiro loads every *.json in the dir).
+                for f in ${lib.escapeShellArg "${cfg.configDir}/hooks"}/*.json; do
+                  if [ -e "$f" ]; then ${pkgs.coreutils}/bin/rm -f "$f"; fi
+                done
+                ${pkgs.coreutils}/bin/cp -rL --no-preserve=mode -- ${lib.escapeShellArg "${toString cfg.hooksDir}/."} ${lib.escapeShellArg "${cfg.configDir}/hooks/"}
+                ${pkgs.coreutils}/bin/chmod -R u+w ${lib.escapeShellArg "${cfg.configDir}/hooks"}
+              '';
+            })
+            # Steering delivery — strategy-driven materializer (parity
+            # with HM; see lib/ai/materialize.nix). Symlink entries keep
+            # exactly the legacy files.* shape; copy entries are written
+            # as REAL files by the `ai:kiro:materialize-steering` task
+            # (prune+write, ordered before devenv:enterShell and —
+            # conditionally, the runner hard-errors on dangling refs —
+            # before devenv:files). Emitted whenever the module is
+            # enabled so emptying the surface still prunes (N→0). The
+            # enterTest fragment is the consumer backstop: every copy
+            # entry must exist as a real file or `devenv test` fails.
+            {
+              files = materializeLib.mkSymlinkEntries {
+                files = cfg.steeringFiles;
+                targetDir = steeringDir;
+              };
+              tasks."ai:kiro:materialize-steering" = materializeLib.mkDevenvTask {
+                files = cfg.steeringFiles;
+                targetDir = steeringDir;
+                stateSlug = materializeLib.mkStateSlug steeringDir;
+                hasFiles = config.files != {};
+                inherit (pkgs) coreutils diffutils gnugrep;
+              };
+              enterTest = materializeLib.mkEnterTest {
+                app = "kiro";
+                files = cfg.steeringFiles;
+                targetDir = steeringDir;
+              };
+            }
+            # Skills via the user-space walker. devenv's `files.*.source`
+            # cannot walk a directory recursively, so we enumerate leaves
+            # at eval time via `mkDevenvSkillEntries`.
+            {
+              files = helpers.mkDevenvSkillEntries cfg.configDir mergedSkills;
+            }
+            # settings/cli.json — devenv does NOT support HM-style
+            # activation scripts. Devenv projects are project-local, so
+            # there's no runtime-mutation preservation concern. Static
+            # JSON write is sufficient.
+            (lib.mkIf (filteredSettings != {}) {
+              files."${cfg.configDir}/settings/cli.json".text =
+                builtins.toJSON flatSettings;
+            })
+          ]
+          ++ steeringEmitters);
     };
   }

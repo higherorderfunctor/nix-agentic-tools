@@ -165,9 +165,10 @@ because:
 - It `rm -rf`s then `cp`s **unconditionally on every entry** — a read race
   for co-occupied agent sessions, and mtime churn on every reload.
 - It cannot prune orphans.
-- `files.<name>` has no `.source` in this version; only format options
-  (`text`/`json`/…). Feeding it _formatted_ content would require
-  `builtins.readFile` on the built derivation — IFD on every devenv eval.
+- `files.<name>.source` does exist in this version (mkKiro uses it), but
+  it only takes a path. Feeding `copyMode` _formatted_ content would
+  require `builtins.readFile` on the built derivation — IFD on every
+  devenv eval.
 
 ## Honest downsides
 

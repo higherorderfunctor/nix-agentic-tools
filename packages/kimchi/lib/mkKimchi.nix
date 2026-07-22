@@ -252,7 +252,7 @@ in
 
           # config.json activation merge.
           (lib.mkIf (filteredSettings != {}) {
-            home.activation.kimchiConfigMerge = lib.hm.dag.entryAfter ["writeBoundary"] (helpers.mkSettingsActivationScript {
+            home.activation.kimchiConfigMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
               configFile = "${cfg.configDir}/config.json";
               settingsJson = builtins.toJSON filteredSettings;
               jq = "${pkgs.jq}/bin/jq";
@@ -263,7 +263,7 @@ in
           # harness/settings.json activation merge (mutable-state
           # reconciliation — Kimchi writes this at runtime).
           (lib.mkIf (filteredHarnessSettings != {}) {
-            home.activation.kimchiHarnessSettingsMerge = lib.hm.dag.entryAfter ["writeBoundary"] (helpers.mkSettingsActivationScript {
+            home.activation.kimchiHarnessSettingsMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
               configFile = "${cfg.configDir}/harness/settings.json";
               settingsJson = builtins.toJSON filteredHarnessSettings;
               jq = "${pkgs.jq}/bin/jq";
