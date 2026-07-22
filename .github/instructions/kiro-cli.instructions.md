@@ -304,7 +304,11 @@ model's tool call or this hook.
   reads the global dir);
   **(b)** the **devenv** backend writes hooks as REAL files via `enterShell`
   (`install -m 0644 <writeText> .kiro/hooks/<name>.json`), NOT devenv `files.*`
-  symlinks (which v3 skips). Steering is real files too (see below); agents
+  symlinks (which v3 skips). Both enterShell fragments (inline hooks and
+  `hooksDir`) run in a subshell anchored to `$DEVENV_ROOT` — enterShell
+  executes in the CALLER's cwd (direnv activates in subdirectories), so an
+  unanchored relative `.kiro/hooks/...` write would land in whatever subdir
+  the shell was entered from. Steering is real files too (see below); agents
   still ship as symlinks (unconverted, probe-first). So delivery is
   per-workspace: devenv (project-local real files) for nix projects; a
   direnv/manual symlink→copy for non-nix repos (backlog).

@@ -907,6 +907,22 @@ in
 
         filteredSettings = aiCommon.filterNulls cfg.settings;
         flatSettings = aiCommon.flattenDotKeys filteredSettings;
+
+        # devenv's enterShell runs in the CALLER's cwd (direnv activates in
+        # subdirectories, and the hook fires on every shell entry), so the
+        # relative `${cfg.configDir}/...` writes below would land in the
+        # wrong directory when the shell is entered from a subdir. Anchor
+        # each fragment to the project root in a subshell — the user's
+        # shell cwd stays untouched, and a failed cd aborts only the
+        # subshell. Same anchoring precedent as the instruction sync task
+        # (dev/tasks/generate.nix) and the steering materializer task
+        # (lib/ai/materialize.nix), which both `cd "$DEVENV_ROOT"`.
+        anchorToDevenvRoot = body: ''
+          (
+            cd "$DEVENV_ROOT" || exit 1
+            ${body}
+          )
+        '';
       in
         lib.mkMerge ([
             # Package installation — devenv projects are shell-scoped, so
@@ -983,7 +999,7 @@ in
             # default materializes real files; "symlink" restores the legacy
             # shape). Hooks keep their own real-file path below.
             (lib.mkIf (cfg.hooks != {} || cfg.hooksJson != {}) {
-              enterShell = ''
+              enterShell = anchorToDevenvRoot ''
                 ${pkgs.coreutils}/bin/mkdir -p ${lib.escapeShellArg "${cfg.configDir}/hooks"}
                 # devenv-owned dir: prune stale *.json so a hook removed or renamed
                 # in config stops firing (Kiro loads every *.json in the dir).
@@ -999,7 +1015,7 @@ in
             # External hooks directory — copied as REAL files (same reason as the
             # inline hooks above: kiro v3 skips symlinked hook files).
             (lib.mkIf (cfg.hooksDir != null) {
-              enterShell = ''
+              enterShell = anchorToDevenvRoot ''
                 ${pkgs.coreutils}/bin/mkdir -p ${lib.escapeShellArg "${cfg.configDir}/hooks"}
                 # devenv-owned dir: prune stale *.json so a hook removed or renamed
                 # in the source dir stops firing (Kiro loads every *.json in the dir).

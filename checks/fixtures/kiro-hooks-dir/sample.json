@@ -1,0 +1,10 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "hooks-dir-sample",
+      "trigger": "Stop",
+      "action": { "type": "command", "command": "true" }
+    }
+  ]
+}

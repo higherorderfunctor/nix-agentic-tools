@@ -1452,6 +1452,10 @@ in {
       && lib.hasInfix "kiro-memory.json" hmHook
       && lib.hasInfix ".kiro/hooks/kiro-memory.json" dvEnter
       && lib.hasInfix "install -m 0644" dvEnter
+      # devenv enterShell runs in the caller's cwd (direnv activates in
+      # subdirectories), so the relative hook write must be anchored to
+      # the project root in a subshell.
+      && lib.hasInfix ''cd "$DEVENV_ROOT"'' dvEnter
       && hmSteer != ""
       && hmSteerFiles == dvSteerFiles
       && hmBody == expectedBody
@@ -2038,6 +2042,9 @@ in {
       lib.hasInfix ''"trigger":"PostToolUse"'' hmT
       && lib.hasInfix ".kiro/hooks/lint.json" dvEnter
       && lib.hasInfix "install -m 0644" dvEnter
+      # relative hook write anchored to the project root (enterShell runs
+      # in the caller's cwd).
+      && lib.hasInfix ''cd "$DEVENV_ROOT"'' dvEnter
   );
 
   # HM+devenv: records sharing a `file` co-locate into ONE envelope (N hooks in
@@ -2312,8 +2319,34 @@ in {
     in
       lib.hasInfix ".kiro/hooks/pre-commit.json" enter
       && lib.hasInfix "install -m 0644" enter
+      # relative hook write anchored to the project root (enterShell runs
+      # in the caller's cwd — direnv activates in subdirectories).
+      && lib.hasInfix ''cd "$DEVENV_ROOT"'' enter
       # not a devenv `files.*` symlink
       && !((result.config.files or {}) ? ".kiro/hooks/pre-commit.json")
+  );
+
+  # Devenv: the external `hooksDir` fragment copies the directory contents
+  # into `.kiro/hooks/` as real files via enterShell — same v3-symlink
+  # rationale as the inline fragment above, and the same project-root
+  # anchoring (the relative destination would otherwise land in whatever
+  # subdirectory the shell was entered from).
+  module-kiro-devenv-hooks-dir-copies-anchored = mkTest "kiro-devenv-hooks-dir-copies-anchored" (
+    let
+      result = evalDevenv {
+        ai.kiro = {
+          enable = true;
+          hooksDir = ./fixtures/kiro-hooks-dir;
+        };
+      };
+      enter = result.config.enterShell or "";
+    in
+      lib.hasInfix ''cd "$DEVENV_ROOT"'' enter
+      && lib.hasInfix "cp -rL --no-preserve=mode" enter
+      && lib.hasInfix "kiro-hooks-dir/." enter
+      && lib.hasInfix ".kiro/hooks/" enter
+      # real-file copy, not devenv `files.*` symlinks
+      && !(lib.any (n: lib.hasPrefix ".kiro/hooks/" n) (lib.attrNames (result.config.files or {})))
   );
 
   # ── Steering materializer (strategy-driven) ────────────────────────
