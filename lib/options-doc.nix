@@ -162,6 +162,13 @@
         default = "";
         description = "Devenv shell entry hook.";
       };
+      # Stub: devenv's enterTest hook — the steering materializer emits
+      # a real-file backstop fragment through it.
+      enterTest = lib.mkOption {
+        type = lib.types.lines;
+        default = "";
+        description = "Devenv test hook.";
+      };
       env = lib.mkOption {
         type = lib.types.attrsOf lib.types.str;
         default = {};
@@ -196,6 +203,13 @@
         type = lib.types.listOf lib.types.package;
         default = [];
         description = "Devenv packages.";
+      };
+      # Stub: devenv's task runner — the steering materializer emits its
+      # prune+write task here.
+      tasks = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+        description = "Devenv tasks.";
       };
     };
   };
