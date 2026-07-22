@@ -294,6 +294,14 @@ in {
   processes.docs.exec = ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
+    # `devenv test` (the CI devenv-test job) starts every process before
+    # its test phase and kills it after. Building docs-site + running a
+    # server is pure cost there -- and `mdbook serve` on a headless
+    # runner is a hang surface. Skip in CI; local `devenv up` unchanged.
+    if [ -n "''${CI:-}" ]; then
+      echo "docs process skipped in CI"
+      exit 0
+    fi
     src=$(nix build .#docs-site --no-link --print-out-paths)
     rm -rf docs/src
     cp -rL "$src" docs/src

@@ -151,6 +151,9 @@ jobs:
   # flake's nixConfig.
   devenv-test:
     runs-on: ubuntu-latest
+    # Cold-cache ceiling; the default is 6h, which would let a hung
+    # process leg burn a runner all day.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v31
