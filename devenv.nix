@@ -23,6 +23,24 @@
   # back, instead of racing the Edit tool on every PostToolUse). See the
   # claude.code.hooks block below.
   validateAtStop = import ./lib/validate-at-stop.nix {inherit pkgs config;};
+
+  # CI-lean closure — EVAL-time branch on $CI. Distinct from the RUNTIME
+  # $CI guard in processes.docs.exec below: that one skips work inside an
+  # already-built shell; this one changes what the shell closure CONTAINS,
+  # so CI never downloads it. Under CI (`devenv test` in
+  # .github/workflows/devenv-test.yml) the shell exists only to run the
+  # materialize/generate tasks and the enterTest assertions — both use
+  # interpolated store paths and never invoke the interactive tooling —
+  # so the LSP servers (packages, below) and the git-hooks suite are
+  # gated to !CI. The ai.* modules stay ENABLED under CI: their files
+  # fanout is exactly what enterTest gates (their CLI wrappers ride
+  # along in the closure; gating those needs a factory-level option).
+  # devenv evaluates impurely and its eval cache records env-var inputs
+  # (devenv-eval-cache EnvInputDesc), so flipping $CI re-evaluates
+  # instead of serving a stale shell. With CI unset this config is
+  # byte-identical to the pre-gate one; a dev who exports CI=1 in their
+  # environment gets the lean shell — accepted.
+  isCI = builtins.getEnv "CI" != "";
 in {
   imports = [
     ./lib/ai/sharedOptions.nix
@@ -55,25 +73,30 @@ in {
   cachix.pull = ["nix-agentic-tools"];
 
   # ── Packages ──────────────────────────────────────────────────────────
-  packages = with pkgs; [
-    # Dev tools
-    check-jsonschema
-    cspell
-    deadnix
-    mdbook
-    ninja
-    pagefind
-    prefetch-npm-deps
-    statix
-
-    # LSP servers (in PATH for ENABLE_LSP_TOOL and MCP bridging)
-    marksman
-    nixd
-    taplo
-
-    # Overlay packages — available via pkgs.ai.* after overlay
-    pkgs.ai.agnix
-  ];
+  packages = with pkgs;
+    [
+      # Dev tools
+      check-jsonschema
+      cspell
+      deadnix
+      mdbook
+      ninja
+      pagefind
+      prefetch-npm-deps
+      statix
+    ]
+    # LSP servers (in PATH for ENABLE_LSP_TOOL and MCP bridging) —
+    # interactive-only, dropped from the CI closure (~1GB: nixd pulls
+    # llvm, marksman pulls dotnet). See the isCI note above.
+    ++ lib.optionals (!isCI) [
+      marksman
+      nixd
+      taplo
+    ]
+    ++ [
+      # Overlay packages — available via pkgs.ai.* after overlay
+      pkgs.ai.agnix
+    ];
 
   # ── Unified AI Config ─────────────────────────────────────────────────
   ai = {
@@ -159,7 +182,14 @@ in {
   # validator: think first about whether it belongs in the agent
   # steering (most do) or as a CI hard gate (formatting, security).
   # Pre-commit should stay narrow.
-  git-hooks.hooks = {
+  #
+  # Gated to !CI (see the isCI note above): with every hook disabled,
+  # devenv's git-hooks integration emits no install/run tasks, so
+  # `devenv test` in CI skips the suite — it duplicates the flake-check
+  # formatting gate there — and the hook toolchain (gitleaks, convco,
+  # per-hook wrappers) drops out of the CI closure. prek itself stays:
+  # validate-at-stop carries it as a runtimeInput.
+  git-hooks.hooks = lib.optionalAttrs (!isCI) {
     treefmt.enable = true;
     deadnix = {
       enable = true;
