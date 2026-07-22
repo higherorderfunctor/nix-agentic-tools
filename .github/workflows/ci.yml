@@ -144,9 +144,11 @@ jobs:
   # pinned `devenv` input — the same rev devenv.yaml pins for the module
   # framework — so CI exercises the version the repo actually pins (a
   # bare `nixpkgs#devenv` would drift like the gitleaks note below
-  # describes). Cheap by design: one ubuntu leg, no build matrix; the
-  # shell closure substitutes from cachix + devenv.cachix.org (both in
-  # the flake's nixConfig, accepted via accept-flake-config).
+  # describes). Cheap by design: one ubuntu leg, no build matrix.
+  # Substitution: devenv.cachix.org serves the `nix run` fetching the
+  # devenv CLI (that flake's own nixConfig); devenv's INTERNAL builds
+  # read the system nix.conf the cachix-action step writes, not this
+  # flake's nixConfig.
   devenv-test:
     runs-on: ubuntu-latest
     steps:

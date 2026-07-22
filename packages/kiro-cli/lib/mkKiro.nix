@@ -913,8 +913,11 @@ in
         # relative `${cfg.configDir}/...` writes below would land in the
         # wrong directory when the shell is entered from a subdir. Anchor
         # each fragment to the project root in a subshell — the user's
-        # shell cwd stays untouched, and a failed cd aborts only the
-        # subshell. Same anchoring precedent as the instruction sync task
+        # shell cwd stays untouched. A failed cd fails the subshell,
+        # which under set -e contexts (direnv, devenv test) aborts the
+        # enterShell load: deliberate fail-fast, safer than writing hook
+        # files into whatever directory the caller happened to be in.
+        # Same anchoring precedent as the instruction sync task
         # (dev/tasks/generate.nix) and the steering materializer task
         # (lib/ai/materialize.nix), which both `cd "$DEVENV_ROOT"`.
         anchorToDevenvRoot = body: ''
