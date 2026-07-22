@@ -1,0 +1,91 @@
+# Runtime materialization gate — the ONLY place `devenv test` runs in CI.
+#
+# Standing decision (amended 2026-07-21 with operator approval):
+# `nix flake check` remains THE validation entrypoint; this workflow is
+# a NON-entrypoint runtime gate for exactly one defect class the flake
+# check structurally cannot see — whether generated instruction files
+# actually land on disk as REAL files at shell entry (kiro-cli v3
+# silently drops store symlinks; devenv.nix enterTest asserts the
+# materialized results). The original never-wire-devenv-test-to-CI rule
+# existed because of a cold-store eval bug on an older devenv; the
+# pinned 2.x rev runs green (proven live on PR #438).
+#
+# Cost containment: paths-filtered to the surfaces that can break
+# materialization (a docs/plans PR never pays the ~30-minute cold
+# closure), processes leg skipped under $CI (devenv.nix), 45-minute
+# ceiling.
+
+name: Devenv Test
+
+on:
+  pull_request:
+    paths:
+      - .github/actions/warm-ifd/**
+      - .github/workflows/devenv-test.yml
+      - config/**
+      - dev/generate.nix
+      - dev/instructions.nix
+      - dev/tasks/**
+      - devenv.lock
+      - devenv.nix
+      - devenv.yaml
+      - flake.lock
+      - flake.nix
+      - lib/**
+      - modules/**
+      - packages/**
+  push:
+    branches: [refactor/ai-factory-architecture, main]
+    paths:
+      - .github/actions/warm-ifd/**
+      - .github/workflows/devenv-test.yml
+      - config/**
+      - dev/generate.nix
+      - dev/instructions.nix
+      - dev/tasks/**
+      - devenv.lock
+      - devenv.nix
+      - devenv.yaml
+      - flake.lock
+      - flake.nix
+      - lib/**
+      - modules/**
+      - packages/**
+
+permissions:
+  contents: read
+
+jobs:
+  devenv-test:
+    runs-on: ubuntu-latest
+    # Cold-cache ceiling; the workflow-less default is 6h, which would
+    # let a hung process leg burn a runner all day.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+      - uses: cachix/cachix-action@v17
+        with:
+          name: nix-agentic-tools
+
+      # Same IFD-fetch guard as ci.yml's jobs: devenv.nix applies the
+      # repo overlays, whose eval reads fetchFromGitHub sources (IFD) —
+      # warm them so a transient fetch blip doesn't fail the job.
+      - name: Warm IFD sources (retry, best-effort)
+        uses: ./.github/actions/warm-ifd
+        with:
+          systems: x86_64-linux
+
+      # The devenv CLI resolves from THIS flake's pinned `devenv`
+      # input — the same rev devenv.yaml pins for the module framework —
+      # so CI exercises the version the repo actually pins (a bare
+      # `nixpkgs#devenv` would drift).
+      # Substitution note: devenv.cachix.org serves the `nix run`
+      # fetching the devenv CLI (that flake's own nixConfig); devenv's
+      # INTERNAL builds read the system nix.conf the cachix-action step
+      # writes, not this flake's nixConfig.
+      - name: Run devenv test
+        run: nix run --inputs-from . devenv -- test

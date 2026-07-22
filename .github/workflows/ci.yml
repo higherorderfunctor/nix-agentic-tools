@@ -136,44 +136,11 @@ jobs:
       - name: Run flake checks
         run: nix flake check
 
-  # Real-file gate: `devenv test` runs devenv.nix's enterTest — the ONLY
-  # check that the generated instruction files exist as REAL files rather
-  # than store symlinks (Kiro v3 discovers by directory scan and skips
-  # symlinks, and three of the generated groups are gitignored, so no
-  # flake check can see them). The devenv CLI resolves from THIS flake's
-  # pinned `devenv` input — the same rev devenv.yaml pins for the module
-  # framework — so CI exercises the version the repo actually pins (a
-  # bare `nixpkgs#devenv` would drift like the gitleaks note below
-  # describes). Cheap by design: one ubuntu leg, no build matrix.
-  # Substitution: devenv.cachix.org serves the `nix run` fetching the
-  # devenv CLI (that flake's own nixConfig); devenv's INTERNAL builds
-  # read the system nix.conf the cachix-action step writes, not this
-  # flake's nixConfig.
-  devenv-test:
-    runs-on: ubuntu-latest
-    # Cold-cache ceiling; the default is 6h, which would let a hung
-    # process leg burn a runner all day.
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@v31
-        with:
-          extra_nix_config: |
-            accept-flake-config = true
-      - uses: cachix/cachix-action@v17
-        with:
-          name: nix-agentic-tools
-
-      # Same IFD-fetch guard as the other jobs: devenv.nix applies the
-      # repo overlays, whose eval reads fetchFromGitHub sources (IFD) —
-      # warm them so a transient fetch blip doesn't fail the job.
-      - name: Warm IFD sources (retry, best-effort)
-        uses: ./.github/actions/warm-ifd
-        with:
-          systems: x86_64-linux
-
-      - name: Run devenv test
-        run: nix run --inputs-from . devenv -- test
+  # The `devenv test` runtime gate lives in its OWN workflow
+  # (devenv-test.yml): paths-filtered so only PRs touching the surfaces
+  # that can break instruction-file materialization pay its cold-closure
+  # cost. `nix flake check` (the test job above) remains THE validation
+  # entrypoint.
 
   # gitleaks runs locally as a pre-commit hook (see devenv.nix). This
   # CI job is the safety net for the `--no-verify` path: even when
