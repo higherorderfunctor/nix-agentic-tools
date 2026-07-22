@@ -495,6 +495,14 @@
     See [Home-Manager Setup](docs/src/getting-started/home-manager.md) for
     the full guide.
 
+    > **Note (Kiro steering uninstall):** Kiro steering files are
+    > materialized as read-only real files (the Kiro v3 engine ignores
+    > symlinks — kirodotdev/Kiro#9787). Disabling `ai.kiro` removes the
+    > materializer itself, so already-written steering files are NOT
+    > pruned. To uninstall cleanly, first empty the steering surface (or
+    > set `ai.kiro.steeringStrategy = "symlink"`) for one activation,
+    > then disable.
+
     </details>
 
     <details open>

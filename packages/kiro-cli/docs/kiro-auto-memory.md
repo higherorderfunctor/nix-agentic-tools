@@ -140,12 +140,13 @@ are temp+rename atomic (last-writer-wins), while `archive.md` is an
 
 The read side has three tiers; the recall hook reads two of them live (the
 recent tier from `now.md` + the best-effort archive query), while the steering
-anchor is a static store symlink, not a hook read:
+anchor is a static Nix-managed file, not a hook read:
 
 - **Steering anchor (static, always-on).** `.kiro/steering/kiro-auto-memory.md`
-  (`inclusion: always`) — an **immutable store symlink** framing HOW the memory
-  works + the `project_id` convention. It holds NO live content (F6: no
-  `outOfStoreSymlink`, store files are immutable — this is why a SessionStart
+  (`inclusion: always`) — a **Nix-managed static file** (a read-only real-file
+  copy since the strategy-driven steering materializer; a store symlink before
+  that) framing HOW the memory works + the `project_id` convention. It holds NO
+  live content (F6: content is fixed at eval — this is why a SessionStart
   hook can't "refresh" the steering file, only the buffer it reads).
 - **Recent working context (live).** `mainRead` → `recall()` reads
   `now.md` and injects it every turn.
@@ -296,29 +297,34 @@ model's tool call or this hook.
   reads the global dir);
   **(b)** the **devenv** backend writes hooks as REAL files via `enterShell`
   (`install -m 0644 <writeText> .kiro/hooks/<name>.json`), NOT devenv `files.*`
-  symlinks (which v3 skips). Steering/agents stay symlinks (they load fine).
-  So delivery is per-workspace: devenv (project-local real files) for nix
-  projects; a direnv/manual symlink→copy for non-nix repos (backlog).
-- `ai.kiro.rules` — attrs-shape ai-common ruleModule → `<configDir>/steering/<name>.md`
-  with `inclusion:`/`fileMatchPattern:` frontmatter (`paths=null` →
-  `inclusion: always`), BOTH backends.
+  symlinks (which v3 skips). Steering is real files too (see below); agents
+  still ship as symlinks (unconverted, probe-first). So delivery is
+  per-workspace: devenv (project-local real files) for nix projects; a
+  direnv/manual symlink→copy for non-nix repos (backlog).
+- `ai.kiro.rules` — attrs-shape ai-common ruleModule → an entry in the derived
+  `ai.kiro.steeringFiles` attrset (key `<name>.md`, rendered with
+  `inclusion:`/`fileMatchPattern:` frontmatter; `paths=null` →
+  `inclusion: always`), BOTH backends. The shared strategy-driven materializer
+  (`lib/ai/materialize.nix`) delivers it as a read-only REAL file under
+  `<configDir>/steering/` (copy strategy default; `ai.kiro.steeringStrategy =
+"symlink"` restores the legacy store-symlink shape).
 
 Because both surfaces ride the existing HM↔devenv fanout, parity is
 **structural-by-construction** — no new module axis. Proven by
 `module-kiro-auto-memory-hm-devenv-parity`: BOTH backends install hooks as
 REAL files carrying the generator output verbatim (PR #433: HM via the
 `home.activation.kiroHooks` script, devenv via `enterShell`), and steering is
-byte-identical on both (steering stays a symlink; only hooks are real-file'd
-— see the CRITICAL note above).
+identical on both (attrset equality over `ai.kiro.steeringFiles` plus a
+writer-output byte check per backend).
 
-> **Correction (2026-07-21):** "only hooks need real files" is almost
-> certainly wrong. Steering is discovered by the same `read_dir` scan that
-> skips symlinked hooks, so the same defect should apply — corroborated by
-> `kirodotdev/Kiro#2921` (open, "Follow symlinks for steering docs") and
-> `#8121` ("Only a real file copy at `.kiro/steering/AGENTS.md` works").
-> This repo's own instruction files were moved to real-file copies for
-> exactly this reason; the factory emitters have not been converted yet
-> because `checks/module-eval.nix` asserts on their declarative attr shape.
+> **Correction (settled):** the 2026-07-21 suspicion that "only hooks need
+> real files" was wrong has been CONFIRMED — the v3 engine's directory scan
+> keeps only `entry.isFile()` entries, dropping symlinked steering exactly as
+> it drops symlinked hooks (`kirodotdev/Kiro#9787`; the v2/classic engine
+> follows symlinks fine). The factory steering emitters are now converted:
+> they populate `ai.kiro.steeringFiles` and the shared materializer writes
+> real files; `checks/module-eval.nix` asserts on that attrset plus the
+> writers' heredoc bodies.
 
 The distiller sync-vs-background choice: **synchronous**
 (D8/D27) — debounced + a file-buffer write + sub-second in the default (no

@@ -109,6 +109,14 @@
         type = lib.types.lines;
         default = "";
       };
+      enterTest = lib.mkOption {
+        type = lib.types.lines;
+        default = "";
+      };
+      tasks = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+      };
       claude.code = lib.mkOption {
         type = lib.types.attrsOf lib.types.anything;
         default = {};
@@ -224,6 +232,35 @@
         else throw "FAIL: ${name}"
       }
     '';
+
+  # ── Steering materializer helpers ────────────────────────────────
+  # Kiro steering emission migrated from home.file/files.* symlinks to
+  # the derived `ai.kiro.steeringFiles` attrset + the shared
+  # strategy-driven materializer (lib/ai/materialize.nix). Accessors
+  # read the attrset; byte-level checks read the copy writers' heredoc
+  # bodies out of the generated scripts.
+  matLib = aiBase.materialize;
+  hmPruneScript = ev: (ev.config.home.activation."materialize-kiro-steering-prune" or {}).text or "";
+  hmWriteScript = ev: (ev.config.home.activation."materialize-kiro-steering-write" or {}).text or "";
+  dvTaskExec = ev: ((ev.config.tasks or {})."ai:kiro:materialize-steering" or {}).exec or "";
+  # Extract the heredoc body a copy writer embeds for <name> — the
+  # #433 heredoc-extraction idiom (see module-kiro-hooks-typed-
+  # colocation). The per-script EOF marker is content-hash-derived, so
+  # recover it from the `nat_mat_write '<name>' …<<'MARKER'` call line;
+  # the script embeds store paths, whose context the split helpers
+  # reject, so strip it (byte content is unchanged).
+  matHeredocBody = script: name: let
+    t = builtins.unsafeDiscardStringContext script;
+    parts = lib.splitString "${lib.escapeShellArg name} \"$nat_mat_prev\" <<'" t;
+  in
+    if builtins.length parts < 2
+    then null
+    else let
+      afterCall = builtins.elemAt parts 1;
+      marker = builtins.head (lib.splitString "'\n" afterCall);
+      body = lib.removePrefix "${marker}'\n" afterCall;
+    in
+      builtins.head (lib.splitString "\n${marker}\n" body);
 in {
   module-claude-default-disabled = mkTest "claude-default-disabled" (!(evalHm {}).config.ai.claude.enable);
 
@@ -526,10 +563,11 @@ in {
   );
 
   # Kiro HM parity (§6a.4). Directory-native: context stays standalone in
-  # `.kiro/steering/AGENTS.md` (context only); named → `.kiro/steering/<name>.md`;
-  # unnamed → a DEDICATED `.kiro/steering/instructions.md`; and NO stray at the
-  # trailing-slash aggregate path `.config/kiro/steering/`. RED today: the
-  # dedicated instructions file doesn't exist and the stray does.
+  # the `AGENTS.md` steering entry (context only); named → `<name>.md`;
+  # unnamed → a DEDICATED `instructions.md`; and NO stray path-shaped
+  # key (the old trailing-slash `.config/kiro/steering/` aggregate).
+  # Accessors read the derived ai.kiro.steeringFiles attrset (emission
+  # is via the strategy-driven materializer).
   module-kiro-hm-compose-context-and-unnamed = mkTest "kiro-hm-compose-context-and-unnamed" (
     let
       evaluated = evalHm {
@@ -551,20 +589,22 @@ in {
           ];
         };
       };
-      contextFile = (evaluated.config.home.file.".kiro/steering/AGENTS.md" or {}).text or "";
-      instrFile = evaluated.config.home.file.".kiro/steering/instructions.md" or null;
-      namedFile = evaluated.config.home.file.".kiro/steering/named-rule.md" or null;
+      steering = evaluated.config.ai.kiro.steeringFiles;
+      contextFile = (steering."AGENTS.md" or {}).text or "";
+      instrFile = steering."instructions.md" or null;
+      namedFile = steering."named-rule.md" or null;
     in
       lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
       && !(lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile)
       && instrFile != null
       && lib.hasInfix "UNNAMED-INSTR-TOKEN." (instrFile.text or "")
-      && !(evaluated.config.home.file ? ".config/kiro/steering/")
+      && !(lib.any (n: lib.hasInfix "/" n) (lib.attrNames steering))
       && namedFile != null
       && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (namedFile.text or "")
   );
 
-  # Kiro devenv parity (§6a.4). Same shape against `files.*`.
+  # Kiro devenv parity (§6a.4). Same shape against the devenv eval's
+  # steeringFiles.
   module-kiro-devenv-compose-context-and-unnamed = mkTest "kiro-devenv-compose-context-and-unnamed" (
     let
       evaluated = evalDevenv {
@@ -586,15 +626,16 @@ in {
           ];
         };
       };
-      contextFile = (evaluated.config.files.".kiro/steering/AGENTS.md" or {}).text or "";
-      instrFile = evaluated.config.files.".kiro/steering/instructions.md" or null;
-      namedFile = evaluated.config.files.".kiro/steering/named-rule.md" or null;
+      steering = evaluated.config.ai.kiro.steeringFiles;
+      contextFile = (steering."AGENTS.md" or {}).text or "";
+      instrFile = steering."instructions.md" or null;
+      namedFile = steering."named-rule.md" or null;
     in
       lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
       && !(lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile)
       && instrFile != null
       && lib.hasInfix "UNNAMED-INSTR-TOKEN." (instrFile.text or "")
-      && !(evaluated.config.files ? ".config/kiro/steering/")
+      && !(lib.any (n: lib.hasInfix "/" n) (lib.attrNames steering))
       && namedFile != null
       && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (namedFile.text or "")
   );
@@ -1257,12 +1298,12 @@ in {
           ];
         };
       };
-      instrFile = evaluated.config.home.file.".kiro/steering/instructions.md" or null;
+      instrFile = evaluated.config.ai.kiro.steeringFiles."instructions.md" or null;
     in
       instrFile
       != null
       && lib.hasInfix "Kiro steering content." (instrFile.text or "")
-      && !(evaluated.config.home.file ? ".config/kiro/steering/")
+      && !(lib.any (n: lib.hasInfix "/" n) (lib.attrNames evaluated.config.ai.kiro.steeringFiles))
   );
 
   # ── STAGE 3: kiro auto-memory wiring (lib/autoMemory.nix) ────
@@ -1295,8 +1336,8 @@ in {
       && lib.hasInfix "kiro-memory-recall" hookText
   );
 
-  # HM: the steering anchor reaches .kiro/steering/kiro-auto-memory.md with
-  # `inclusion: always` (paths = null) and the anchor body.
+  # HM: the steering anchor reaches the kiro-auto-memory.md steering
+  # entry with `inclusion: always` (paths = null) and the anchor body.
   module-kiro-auto-memory-hm-emits-steering = mkTest "kiro-auto-memory-hm-emits-steering" (
     let
       mem = kiroAutoMem {home = "/home/tester";};
@@ -1306,7 +1347,7 @@ in {
           inherit (mem) rules;
         };
       };
-      steerText = (result.config.home.file.".kiro/steering/kiro-auto-memory.md" or {}).text or "";
+      steerText = (result.config.ai.kiro.steeringFiles."kiro-auto-memory.md" or {}).text or "";
     in
       lib.hasInfix "inclusion: always" steerText
       && lib.hasInfix "Persistent project memory" steerText
@@ -1339,8 +1380,20 @@ in {
       # assert each backend's script carries the generator output verbatim AND
       # installs it into .kiro/hooks/.
       dvEnter = dv.config.enterShell or "";
-      hmSteer = (hm.config.home.file.".kiro/steering/kiro-auto-memory.md" or {}).text or "";
-      dvSteer = (dv.config.files.".kiro/steering/kiro-auto-memory.md" or {}).text or "";
+      # Steering is ALSO a real file now (the strategy-driven
+      # materializer, copy default). Parity keeps BOTH layers: attrset
+      # equality over steeringFiles (== is decidable over
+      # context-carrying strings) AND one writer-output byte check per
+      # backend via the heredoc-extraction idiom, so writer divergence
+      # stays caught.
+      hmSteerFiles = hm.config.ai.kiro.steeringFiles;
+      dvSteerFiles = dv.config.ai.kiro.steeringFiles;
+      hmSteer = (hmSteerFiles."kiro-auto-memory.md" or {}).text or "";
+      # The heredoc re-appends exactly one trailing newline, so the
+      # embedded body is the entry text minus that newline.
+      expectedBody = matLib.stripTrailingNewline hmSteer;
+      hmBody = matHeredocBody (hmWriteScript hm) "kiro-auto-memory.md";
+      dvBody = matHeredocBody (dvTaskExec dv) "kiro-auto-memory.md";
     in
       hmHook
       != ""
@@ -1352,7 +1405,9 @@ in {
       && lib.hasInfix ".kiro/hooks/kiro-memory.json" dvEnter
       && lib.hasInfix "install -m 0644" dvEnter
       && hmSteer != ""
-      && hmSteer == dvSteer
+      && hmSteerFiles == dvSteerFiles
+      && hmBody == expectedBody
+      && dvBody == expectedBody
   );
 
   # HOME is baked into the wrappers: a different `home` (and the null fail-loud
@@ -1700,7 +1755,7 @@ in {
       (result.config.home.file.".kiro/settings/permissions.yaml" or null) == null
   );
 
-  # HM: per-instruction steering files with kiro transformer frontmatter.
+  # HM: per-instruction steering entries with kiro transformer frontmatter.
   # Verifies the kiro transformer emits `inclusion:` and `name:` fields.
   module-kiro-hm-writes-steering-files = mkTest "kiro-hm-writes-steering-files" (
     let
@@ -1716,7 +1771,7 @@ in {
           ];
         };
       };
-      steeringFile = result.config.home.file.".kiro/steering/my-steering.md" or null;
+      steeringFile = result.config.ai.kiro.steeringFiles."my-steering.md" or null;
     in
       steeringFile
       != null
@@ -1728,7 +1783,9 @@ in {
       && lib.hasInfix "fileMatchPattern: [" (steeringFile.text or "")
   );
 
-  # HM: per-CLI context → `.kiro/steering/<contextFilename>` (default AGENTS.md).
+  # HM: per-CLI context → the `<contextFilename>` steering entry
+  # (default AGENTS.md), delivered by the copy writer — the legacy
+  # home.file symlink must be GONE under the default copy strategy.
   module-kiro-hm-writes-context = mkTest "kiro-hm-writes-context" (
     let
       result = evalHm {
@@ -1737,11 +1794,13 @@ in {
           context = "Project conventions go here.";
         };
       };
-      contextFile = result.config.home.file.".kiro/steering/AGENTS.md" or null;
+      contextFile = result.config.ai.kiro.steeringFiles."AGENTS.md" or null;
     in
       contextFile
       != null
       && lib.hasInfix "Project conventions" (contextFile.text or "")
+      && !(result.config.home.file ? ".kiro/steering/AGENTS.md")
+      && lib.hasInfix "AGENTS.md" (hmWriteScript result)
   );
 
   # HM: top-level ai.context fans out to kiro when per-CLI unset.
@@ -1751,7 +1810,7 @@ in {
         ai.kiro.enable = true;
         ai.context = "Top-level context flows everywhere.";
       };
-      contextFile = result.config.home.file.".kiro/steering/AGENTS.md" or null;
+      contextFile = result.config.ai.kiro.steeringFiles."AGENTS.md" or null;
     in
       contextFile
       != null
@@ -1768,7 +1827,7 @@ in {
         };
         ai.context = "Top-level loses.";
       };
-      contextFile = result.config.home.file.".kiro/steering/AGENTS.md" or null;
+      contextFile = result.config.ai.kiro.steeringFiles."AGENTS.md" or null;
     in
       contextFile
       != null
@@ -1786,8 +1845,8 @@ in {
           contextFilename = "custom.md";
         };
       };
-      customFile = result.config.home.file.".kiro/steering/custom.md" or null;
-      agentsFile = result.config.home.file.".kiro/steering/AGENTS.md" or null;
+      customFile = result.config.ai.kiro.steeringFiles."custom.md" or null;
+      agentsFile = result.config.ai.kiro.steeringFiles."AGENTS.md" or null;
     in
       customFile != null && agentsFile == null
   );
@@ -2140,7 +2199,9 @@ in {
       && lib.hasInfix "telemetry" (settingsFile.text or "")
   );
 
-  # Devenv: per-CLI context → `.kiro/steering/<contextFilename>` (parity with HM).
+  # Devenv: per-CLI context → the `<contextFilename>` steering entry
+  # (parity with HM), delivered by the materialize task — the legacy
+  # files.* symlink must be GONE under the default copy strategy.
   module-kiro-devenv-writes-context = mkTest "kiro-devenv-writes-context" (
     let
       result = evalDevenv {
@@ -2149,11 +2210,13 @@ in {
           context = "Project conventions go here.";
         };
       };
-      contextFile = result.config.files.".kiro/steering/AGENTS.md" or null;
+      contextFile = result.config.ai.kiro.steeringFiles."AGENTS.md" or null;
     in
       contextFile
       != null
       && lib.hasInfix "Project conventions" (contextFile.text or "")
+      && !(result.config.files ? ".kiro/steering/AGENTS.md")
+      && lib.hasInfix "AGENTS.md" (dvTaskExec result)
   );
 
   # Devenv: top-level ai.context fans to kiro when per-CLI unset.
@@ -2163,7 +2226,7 @@ in {
         ai.kiro.enable = true;
         ai.context = "Top-level context flows everywhere.";
       };
-      contextFile = result.config.files.".kiro/steering/AGENTS.md" or null;
+      contextFile = result.config.ai.kiro.steeringFiles."AGENTS.md" or null;
     in
       contextFile
       != null
@@ -2203,6 +2266,104 @@ in {
       && lib.hasInfix "install -m 0644" enter
       # not a devenv `files.*` symlink
       && !((result.config.files or {}) ? ".kiro/hooks/pre-commit.json")
+  );
+
+  # ── Steering materializer (strategy-driven) ────────────────────────
+  # lib/ai/materialize.nix + the ai.kiro.steeringFiles derived attrset.
+  # Known gap (recorded): the dag stub discards before/after, so the
+  # entryBefore ["checkLinkTargets"] / entryAfter ["linkGeneration"]
+  # ordering cannot be asserted here — an nmt-based check (P4) covers
+  # it.
+
+  # [B1] Two emitters producing the SAME steering key with DIFFERENT
+  # content must be a hard eval error (steeringFiles.<n>.text is
+  # nullOr str → conflicting definition values). A rule named "AGENTS"
+  # and the default contextFilename both land on "AGENTS.md" with
+  # different bodies — this exact pair silently CONCATENATED under the
+  # old home.file `lines` merge.
+  module-kiro-steering-collision-errors = mkTest "kiro-steering-collision-errors" (
+    let
+      attempt = builtins.tryEval (
+        let
+          ev = evalHm {
+            ai.kiro = {
+              enable = true;
+              context = "CONTEXT-COLLIDER.";
+              rules.AGENTS.text = "RULE-COLLIDER.";
+            };
+          };
+        in
+          builtins.seq ev.config.ai.kiro.steeringFiles."AGENTS.md".text true
+      );
+    in
+      !attempt.success
+  );
+
+  # [B6-partial] The copy writers exist whenever the module is enabled —
+  # even with an EMPTY steering set — so emptying the surface still
+  # prunes previously materialized files (N→0). Both backends.
+  module-kiro-steering-empty-set-still-prunes = mkTest "kiro-steering-empty-set-still-prunes" (
+    let
+      hm = evalHm {ai.kiro.enable = true;};
+      prune = hmPruneScript hm;
+      write = hmWriteScript hm;
+      dv = evalDevenv {ai.kiro.enable = true;};
+      task = (dv.config.tasks or {})."ai:kiro:materialize-steering" or null;
+    in
+      hm.config.ai.kiro.steeringFiles
+      == {}
+      # prune pass present (walks the previous manifest and removes)…
+      && lib.hasInfix "$NAT_MAT_MANIFEST" prune
+      && lib.hasInfix "rm -f" prune
+      # …and the write phase still rewrites the manifest (to empty)
+      && lib.hasInfix "NAT_MAT_NEW_MANIFEST" write
+      && task != null
+      && lib.hasInfix "$NAT_MAT_MANIFEST" (task.exec or "")
+  );
+
+  # [B7] devenv copy entries ship an enterTest backstop asserting each
+  # target is a REAL file (not a symlink) — a failed materialize task
+  # only warns at shell entry; the fragment makes `devenv test`/CI
+  # fail. Ships WITH the module to every consumer.
+  module-kiro-steering-devenv-enter-test = mkTest "kiro-steering-devenv-enter-test" (
+    let
+      dv = evalDevenv {
+        ai.kiro = {
+          enable = true;
+          context = "ENTER-TEST-TOKEN.";
+        };
+      };
+      et = dv.config.enterTest or "";
+    in
+      lib.hasInfix ".kiro/steering/AGENTS.md" et
+      && lib.hasInfix "[ -L" et
+      && lib.hasInfix "not materialized as a real file" et
+  );
+
+  # `steeringStrategy = "symlink"` escape hatch: restores exactly the
+  # legacy declarative shapes on both backends, and the copy writer
+  # carries no entry for the symlinked name.
+  module-kiro-steering-symlink-strategy = mkTest "kiro-steering-symlink-strategy" (
+    let
+      cfg = {
+        ai.kiro = {
+          enable = true;
+          steeringStrategy = "symlink";
+          context = "SYMLINK-CTX-TOKEN.";
+        };
+      };
+      hm = evalHm cfg;
+      dv = evalDevenv cfg;
+      hmEntry = hm.config.home.file.".kiro/steering/AGENTS.md" or null;
+      dvEntry = dv.config.files.".kiro/steering/AGENTS.md" or null;
+    in
+      hmEntry
+      != null
+      && lib.hasInfix "SYMLINK-CTX-TOKEN." (hmEntry.text or "")
+      && dvEntry != null
+      && (hm.config.ai.kiro.steeringFiles."AGENTS.md" or {}).strategy or null == "symlink"
+      && !(lib.hasInfix "AGENTS.md" (hmWriteScript hm))
+      && !(lib.hasInfix "AGENTS.md" (dvTaskExec dv))
   );
 
   # ── Stacked-workflows: skills + router, user-global (HM) + project (devenv) ──
@@ -2543,7 +2704,8 @@ in {
       && lib.hasInfix "src/**" (ruleFile.text or "")
   );
 
-  # Kiro HM: top-level ai.rules → .kiro/steering/<name>.md with inclusion frontmatter.
+  # Kiro HM: top-level ai.rules → a `<name>.md` steering entry with
+  # inclusion frontmatter.
   module-kiro-hm-writes-rules-from-top-level = mkTest "kiro-hm-writes-rules-from-top-level" (
     let
       result = evalHm {
@@ -2553,7 +2715,7 @@ in {
           paths = ["**/*.test.*"];
         };
       };
-      ruleFile = result.config.home.file.".kiro/steering/testing.md" or null;
+      ruleFile = result.config.ai.kiro.steeringFiles."testing.md" or null;
     in
       ruleFile
       != null
@@ -2589,7 +2751,7 @@ in {
         };
         ai.rules.same-name.text = "Top-level loses.";
       };
-      ruleFile = result.config.home.file.".kiro/steering/same-name.md" or null;
+      ruleFile = result.config.ai.kiro.steeringFiles."same-name.md" or null;
     in
       ruleFile
       != null
@@ -2609,7 +2771,7 @@ in {
       ruleFile != null && !(lib.hasInfix "paths:" (ruleFile.text or ""))
   );
 
-  # Devenv parity: Kiro devenv emits ai.rules to steering files.
+  # Devenv parity: Kiro devenv emits ai.rules to steering entries.
   module-kiro-devenv-writes-rules = mkTest "kiro-devenv-writes-rules" (
     let
       result = evalDevenv {
@@ -2619,7 +2781,7 @@ in {
           paths = ["**/*.test.*"];
         };
       };
-      ruleFile = result.config.files.".kiro/steering/testing.md" or null;
+      ruleFile = result.config.ai.kiro.steeringFiles."testing.md" or null;
     in
       ruleFile
       != null
@@ -3384,9 +3546,10 @@ in {
   # (fixes the `.md.md` doubled-extension bug).
 
   # Path-only form: `ai.kiro.rulesDir = ./fixtures/kiro-steering;`
-  # expands to three entries (alpha, beta, gamma). notes.txt is
-  # dropped by the default `.md` filter. Emission lands at
-  # `.kiro/steering/<name>.md` — no `.md.md`.
+  # expands to three steering entries (alpha, beta, gamma). notes.txt
+  # is dropped by the default `.md` filter. Keys land at `<name>.md` —
+  # no `.md.md` (vacuous-scan negatives re-pointed at attrNames of
+  # steeringFiles).
   module-kiro-rulesdir-path-form = mkTest "kiro-rulesdir-path-form" (
     let
       result = evalHm {
@@ -3395,15 +3558,15 @@ in {
           rulesDir = ./fixtures/kiro-steering;
         };
       };
-      files = result.config.home.file;
-      hasAlpha = files ? ".kiro/steering/alpha.md";
-      hasBeta = files ? ".kiro/steering/beta.md";
-      hasGamma = files ? ".kiro/steering/gamma.md";
-      # Key is stripped — no `.md.md` path ever emitted.
+      steering = result.config.ai.kiro.steeringFiles;
+      hasAlpha = steering ? "alpha.md";
+      hasBeta = steering ? "beta.md";
+      hasGamma = steering ? "gamma.md";
+      # Key is stripped — no `.md.md` name ever emitted.
       noDoubledMd =
-        !(lib.any (p: lib.hasSuffix ".md.md" p) (lib.attrNames files));
+        !(lib.any (p: lib.hasSuffix ".md.md" p) (lib.attrNames steering));
       # notes.txt is filtered out (default keeps only `.md`).
-      noNotes = !(files ? ".kiro/steering/notes.md");
+      noNotes = !(steering ? "notes.md");
     in
       hasAlpha
       && hasBeta
@@ -3424,12 +3587,12 @@ in {
           };
         };
       };
-      files = result.config.home.file;
+      steering = result.config.ai.kiro.steeringFiles;
     in
-      files
-      ? ".kiro/steering/alpha.md"
-      && !(files ? ".kiro/steering/beta.md")
-      && !(files ? ".kiro/steering/gamma.md")
+      steering
+      ? "alpha.md"
+      && !(steering ? "beta.md")
+      && !(steering ? "gamma.md")
   );
 
   # Top-level `ai.rulesDir` fans out to every enabled CLI via the
@@ -3442,9 +3605,8 @@ in {
           rulesDir = ./fixtures/kiro-steering;
         };
       };
-      files = result.config.home.file;
     in
-      files ? ".kiro/steering/alpha.md"
+      result.config.ai.kiro.steeringFiles ? "alpha.md"
   );
 
   # Collision between Dir-generated and explicit single (same key)
@@ -3473,11 +3635,11 @@ in {
           rulesDir = ./fixtures/kiro-steering;
         };
       };
-      inherit (result.config) files;
+      steering = result.config.ai.kiro.steeringFiles;
     in
-      files
-      ? ".kiro/steering/alpha.md"
-      && !(lib.any (p: lib.hasSuffix ".md.md" p) (lib.attrNames files))
+      steering
+      ? "alpha.md"
+      && !(lib.any (p: lib.hasSuffix ".md.md" p) (lib.attrNames steering))
   );
 
   # ── ai.*.skillsDir Dir helper ──────────────────────────────
@@ -3707,7 +3869,10 @@ in {
   # required again; rules always bake into the store with
   # transformer-injected frontmatter.
 
-  # HM: inline rule text still bakes and carries frontmatter.
+  # HM: inline rule text still bakes and carries frontmatter. Shape pin
+  # on the steeringFiles entry: text set, source null (attr-absence
+  # checks are meaningless on a submodule — every entry has the attr),
+  # strategy = copy (the default).
   module-kiro-hm-rule-text-bakes = mkTest "kiro-hm-rule-text-bakes" (
     let
       result = evalHm {
@@ -3716,16 +3881,18 @@ in {
           rules.my-rule.text = "Inline content";
         };
       };
-      entry = result.config.home.file.".kiro/steering/my-rule.md" or null;
+      entry = result.config.ai.kiro.steeringFiles."my-rule.md" or null;
     in
       entry
       != null
-      && (entry ? text)
-      && !(entry ? source)
+      && entry.text != null
+      && entry.source == null
+      && entry.strategy == "copy"
       && lib.hasInfix "Inline content" entry.text
   );
 
-  # HM: rule.text accepting a path literal still works.
+  # HM: rule.text accepting a path literal still works (resolved to
+  # baked text at eval — same shape pin).
   module-kiro-hm-rule-path-bakes = mkTest "kiro-hm-rule-path-bakes" (
     let
       result = evalHm {
@@ -3734,12 +3901,13 @@ in {
           rules.rule-from-path.text = ./fixtures/kiro-steering/alpha.md;
         };
       };
-      entry = result.config.home.file.".kiro/steering/rule-from-path.md" or null;
+      entry = result.config.ai.kiro.steeringFiles."rule-from-path.md" or null;
     in
       entry
       != null
-      && (entry ? text)
-      && !(entry ? source)
+      && entry.text != null
+      && entry.source == null
+      && entry.strategy == "copy"
       && lib.hasInfix "Alpha steering body" entry.text
   );
 

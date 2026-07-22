@@ -51,8 +51,11 @@
   defaults = appRecord.defaults or {};
   package = devenvDefaults.package or defaults.package or null;
 
+  # `config` rides along (parity with hmTransform) so callbacks can
+  # observe sibling devenv options — e.g. the materializer's conditional
+  # `devenv:files` task edge needs `config.files != {}`.
   customConfig = devenvConfigFn {
-    inherit cfg mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables mergedClaudeCopilotAgents topContext;
+    inherit cfg config mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables mergedClaudeCopilotAgents topContext;
   };
 in {
   options.ai.${appRecord.name} =

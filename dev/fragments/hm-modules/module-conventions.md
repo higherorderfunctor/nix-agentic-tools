@@ -161,8 +161,10 @@ generation's files into the home directory. `entryAfter
 ["writeBoundary"]` is NOT sufficient for that: `writeBoundary` is a
 sibling of `linkGeneration` (order between siblings comes from
 `lib.toposort`), so a writeBoundary-ordered script can run before
-`home.file` entries exist on disk. No use of
-`entryBefore` in this repo.
+`home.file` entries exist on disk. The one `entryBefore` user is the
+steering materializer's prune phase (`lib/ai/materialize.nix`,
+`entryBefore ["checkLinkTargets"]`), which must clear flipped
+copy-mode files before HM checks link targets.
 
 **NEVER use `exit` as a short-circuit.** `home.activation.<name>`
 blocks are **inlined** into a single outer bash script at

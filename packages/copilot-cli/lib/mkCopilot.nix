@@ -363,6 +363,7 @@ lib.ai.app.mkAiApp {
       mergedEnvironmentVariables,
       mergedClaudeCopilotAgents,
       topContext,
+      ...
     }: let
       aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
       # Resolve effective context: per-CLI wins when set, else top-level.

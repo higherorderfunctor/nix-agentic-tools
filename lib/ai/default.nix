@@ -8,6 +8,10 @@ in {
   # unnamed instructions (named live in their own per-name files). Consumed by
   # the Claude + Copilot per-app factories; see composeInstructionsFile.nix.
   composeInstructionsFile = import ./composeInstructionsFile.nix {inherit lib;};
+  # Strategy-driven file materializer (steering surfaces): symlink
+  # entries keep the legacy declarative shapes; copy entries become
+  # REAL files via generated HM activation / devenv task writers.
+  materialize = import ./materialize.nix {inherit lib;};
   mcpServer = import ./mcpServer {inherit lib;};
   mcpServers = import ./mcpServers {inherit lib;};
   # Module function — imported unevaluated so consumers can pass it directly
