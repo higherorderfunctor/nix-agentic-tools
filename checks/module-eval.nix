@@ -1001,6 +1001,54 @@ in {
       !(result.config.files ? ".claude/settings.json")
   );
 
+  # Devenv: typed ai.claude.mcpServers entries are RENDERED before they
+  # reach upstream `claude.code.mcpServers` (parity with the HM branch).
+  # Upstream's devenv server submodule has no `package` option, so a raw
+  # typed entry fails its strict type in a real devenv eval ("The option
+  # 'claude.code.mcpServers.<name>.package' does not exist") — the stub
+  # here is `attrsOf anything`, so the load-bearing assertion is that the
+  # rendered shape carries NO raw `package` key and the derived
+  # command/args. Uses a real server name (context7-mcp) so renderServer's
+  # package branch (loadServer + mode-string args) is exercised end-to-end.
+  module-claude-devenv-mcp-servers-rendered = mkTest "claude-devenv-mcp-servers-rendered" (
+    let
+      result = evalDevenv {
+        ai.claude = {
+          enable = true;
+          mcpServers.context7-mcp.package = pkgs.hello;
+        };
+      };
+      rendered = (result.config.claude.code.mcpServers or {})."context7-mcp" or null;
+    in
+      rendered
+      != null
+      && !(rendered ? package)
+      && rendered.type == "stdio"
+      && lib.hasSuffix "/bin/hello" rendered.command
+      && lib.take 2 rendered.args == ["--transport" "stdio"]
+  );
+
+  # Devenv/HM parity: the SAME typed config yields the SAME rendered
+  # server attrset on both backends (programs.claude-code.mcpServers vs
+  # claude.code.mcpServers) — the render is shared (lib.ai.renderServer),
+  # so any divergence is a factory regression. `==` is decidable over
+  # context-carrying strings (store paths in command/env).
+  module-claude-devenv-mcp-servers-hm-parity = mkTest "claude-devenv-mcp-servers-hm-parity" (
+    let
+      cfg = {
+        ai.claude = {
+          enable = true;
+          mcpServers.context7-mcp.package = pkgs.hello;
+        };
+      };
+      hmServers = (evalHm cfg).config.programs.claude-code.mcpServers or {};
+      dvServers = (evalDevenv cfg).config.claude.code.mcpServers or {};
+    in
+      hmServers
+      != {}
+      && hmServers == dvServers
+  );
+
   module-claude-hm-sets-lsp-env-when-servers-present = mkTest "claude-hm-sets-lsp-env-when-servers-present" (
     let
       result = evalHm {

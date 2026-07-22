@@ -656,7 +656,12 @@ in
           {
             claude.code = {
               enable = lib.mkDefault true;
-              mcpServers = mergedServers;
+              # Render typed ai.mcpServers / ai.claude.mcpServers entries into
+              # the freeform shape upstream's devenv module expects (parity
+              # with the HM branch above). Upstream's server submodule has no
+              # `package` option, so passing the raw typed entries through
+              # fails its strict type ("option ... .package does not exist").
+              mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
               settingsPath = lib.mkDefault ".claude/settings.json";
             };
           }
