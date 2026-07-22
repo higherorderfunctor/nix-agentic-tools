@@ -136,6 +136,12 @@ jobs:
       - name: Run flake checks
         run: nix flake check
 
+  # The `devenv test` runtime gate lives in its OWN workflow
+  # (devenv-test.yml): paths-filtered so only PRs touching the surfaces
+  # that can break instruction-file materialization pay its cold-closure
+  # cost. `nix flake check` (the test job above) remains THE validation
+  # entrypoint.
+
   # gitleaks runs locally as a pre-commit hook (see devenv.nix). This
   # CI job is the safety net for the `--no-verify` path: even when
   # damage is already done, the alert tells us to rotate credentials.
