@@ -241,3 +241,36 @@ linkGeneration`) unassertable under the stub → nmt (P4) covers; recorded.
   main body**; a stronger uninstall/cleanup mechanism is parked as a backlog
   item (register: oi-uninstall-cleanup-mechanism) to be re-decided when the
   plan's main body drains.
+
+## 9. Implementation record (2026-07-21)
+
+IMPLEMENTED as PR #437 (`feat/steering-materializer`: bc03db20 ordering fix ·
+cba33507 materializer · d91edb28 plan riders · 02cbdea1 options-doc stubs ·
+03cae974 review follow-ups). Three-lens adversarial review: 3× APPROVE, zero
+blocking. Builder deviations, all judged faithful-hardening: dot-escaped
+manifest greps; slug-uniqueness as documented limitation + `mkStateSlug`
+derivation (true cross-surface registry deferred — see below); temp sweep
+covers the state dir too; enterTest uses `exit 1` (devenv convention; the
+no-exit rule is HM-activation-specific); extra `symlink-strategy` test.
+
+Accepted nonblocking review findings (modify-time context for the next
+editor): HM prune-abort repeats loudly every activation while devenv's
+single-task shape drops the manifest entry after one failed prune (divergence
+noted, not spec-bound); phase B relies on phase A's sweep (same-activation
+coupling — do not lift `mkWriteCore` standalone); empty-content entries
+materialize as one newline; unreadable-foreign backup fails with a raw cp
+error (safe direction, worse message); `mkEnterTest` interpolates `configDir`
+unescaped (pre-existing repo-wide class).
+
+**Pin-bump caveats** (re-verify on bumps): devenv task names
+`devenv:files`/`devenv:files:cleanup` are undocumented internals (and
+`optionalAttrs` may define the empty attr, making the conditional edge
+belt-and-braces rather than load-bearing — safe either way); the prune phase
+is now the earliest activation entry and adds `-E -T inherit_errexit` to the
+shell HM core runs under (benign against current HM; re-check on HM bumps).
+
+**Gated on the SECOND copy surface** (Copilot git-tracked follow-up), tracked
+as `oi-mat-second-surface-prereqs`: cross-surface stateSlug uniqueness
+assertion; per-slug temp-sweep scope or inter-task ordering (parallel devenv
+tasks could sweep each other's live manifest temps); 0444 re-assert in the
+cmp-skip branch (mode drift).
