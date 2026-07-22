@@ -136,6 +136,40 @@ jobs:
       - name: Run flake checks
         run: nix flake check
 
+  # Real-file gate: `devenv test` runs devenv.nix's enterTest — the ONLY
+  # check that the generated instruction files exist as REAL files rather
+  # than store symlinks (Kiro v3 discovers by directory scan and skips
+  # symlinks, and three of the generated groups are gitignored, so no
+  # flake check can see them). The devenv CLI resolves from THIS flake's
+  # pinned `devenv` input — the same rev devenv.yaml pins for the module
+  # framework — so CI exercises the version the repo actually pins (a
+  # bare `nixpkgs#devenv` would drift like the gitleaks note below
+  # describes). Cheap by design: one ubuntu leg, no build matrix; the
+  # shell closure substitutes from cachix + devenv.cachix.org (both in
+  # the flake's nixConfig, accepted via accept-flake-config).
+  devenv-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+      - uses: cachix/cachix-action@v17
+        with:
+          name: nix-agentic-tools
+
+      # Same IFD-fetch guard as the other jobs: devenv.nix applies the
+      # repo overlays, whose eval reads fetchFromGitHub sources (IFD) —
+      # warm them so a transient fetch blip doesn't fail the job.
+      - name: Warm IFD sources (retry, best-effort)
+        uses: ./.github/actions/warm-ifd
+        with:
+          systems: x86_64-linux
+
+      - name: Run devenv test
+        run: nix run --inputs-from . devenv -- test
+
   # gitleaks runs locally as a pre-commit hook (see devenv.nix). This
   # CI job is the safety net for the `--no-verify` path: even when
   # damage is already done, the alert tells us to rotate credentials.

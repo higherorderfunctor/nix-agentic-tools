@@ -148,7 +148,10 @@ in {
   #      - Structural eval checks (cache-hit-parity, factory-eval, etc.)
   #      - Formatting hard gate: checks.<system>.formatting (treefmt --check)
   #      - Package builds (separate `build` job via nix-fast-build)
-  #      - NOT devenv test — devenv is a dev-UX tool, not a test runner.
+  #      - `devenv test` (separate `devenv-test` job): runs the
+  #        enterTest real-file gate below — the ONLY check on the
+  #        gitignored generated instruction files (symlink-vs-copy
+  #        class), which no flake check can see.
   #      - NOT the validators above — they're advisory until the
   #        steering migration.
   #

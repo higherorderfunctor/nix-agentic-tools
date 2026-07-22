@@ -1,6 +1,6 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-06-26. If you touch
+> **Last verified:** 2026-07-21. If you touch
 > `overlays/lib.nix`, any overlay `.nix` file that calls
 > `vu.mkVersion`, the shared `.github/actions/warm-ifd/action.yml`
 > composite, or the warm steps that consume it in
@@ -63,6 +63,11 @@ that evaluates before it builds:
 - `ci.yml` build job — `systems: ${{ matrix.system }}` (defaults:
   3 retries, best-effort) so a transient fetch doesn't flake the
   per-system build eval.
+- `ci.yml` devenv-test job — `systems: x86_64-linux` (defaults).
+  `devenv test` evaluates devenv.nix, which applies the repo
+  overlays, so its eval reads the same IFD sources; the fetches are
+  fixed-output, so warming via the flake fills the identical store
+  paths devenv's own lock resolves to.
 - `ci.yml` test job — `systems: x86_64-linux aarch64-darwin`
   because `nix flake check` evaluates ALL systems on one runner; IFD
   source fetches are system-agnostic, so cross-system eval on a
