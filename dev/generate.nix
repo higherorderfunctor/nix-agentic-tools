@@ -120,6 +120,8 @@
     # devenv: devenv files.* internals + skills layout walker. Scoped
     # to per-package devenv modules and the helper file.
     devenv = [
+      ".github/workflows/devenv-test.yml"
+      "devenv.nix"
       "lib/ai/hm-helpers.nix"
       "packages/*/modules/devenv/**"
     ];
@@ -209,7 +211,7 @@
         dir = "claude-code";
       }
     ];
-    devenv = ["files-internals"];
+    devenv = ["ci-lean-closure" "files-internals"];
     flake = ["binary-cache"];
     hm-modules = ["module-conventions"];
     kimchi = [
