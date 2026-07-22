@@ -67,6 +67,26 @@ jobs:
         with:
           extra_nix_config: |
             accept-flake-config = true
+
+      # Nix store cache: restore /nix from the GitHub Actions cache so
+      # the shell closure is unpacked once per lock/config change
+      # instead of re-fetched from cachix every run (the dominant cost
+      # of this job). Key over the files that pin the closure; on a
+      # miss, the prefix fallback restores the nearest older store and
+      # cachix serves only the delta. gc-max-store-size-linux bounds
+      # the saved cache: garbage is collected before saving until the
+      # store fits, keeping each generation comfortably inside GitHub's
+      # 10GB per-repo budget (older entries are LRU-evicted past that;
+      # no other workflow in this repo uses the actions cache). The
+      # store at save time is roughly: nix + flake inputs + IFD sources
+      # + the CI-lean devenv shell closure (~2GB, see devenv.nix) —
+      # about 4G; 5G leaves headroom without hoarding the budget.
+      - uses: nix-community/cache-nix-action@v7.0.2
+        with:
+          gc-max-store-size-linux: 5G
+          primary-key: nix-store-${{ runner.os }}-${{ hashFiles('flake.lock', 'devenv.lock', 'devenv.yaml', 'devenv.nix') }}
+          restore-prefixes-first-match: nix-store-${{ runner.os }}-
+
       - uses: cachix/cachix-action@v17
         with:
           name: nix-agentic-tools
