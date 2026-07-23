@@ -106,6 +106,7 @@ hooksdir
 hostable
 hotspots
 hsjobeki
+idempotently
 idents
 indexedlog
 inlines

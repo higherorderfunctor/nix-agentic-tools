@@ -16,6 +16,8 @@
   # under `lib.ai.*`. No top-level `lib.<helper>` exports exist.
   mcpLib = import ./../lib/mcp.nix {inherit lib;};
   aiBase = import ./../lib/ai {inherit lib;};
+  # Generic idempotent-flag helper shared with mkKiro's wrapper (lib/idempotentFlags.nix).
+  idempotentFlags = import ./../lib/idempotentFlags.nix {inherit lib;};
   hmLib =
     lib
     // {
@@ -262,6 +264,36 @@
     in
       builtins.head (lib.splitString "\n${marker}\n" body);
 in {
+  # ── Kiro launcher wrapper: idempotent --tui/--v3 injection ───────
+  # The factory wrapper injects the v3 launch flags; injecting them
+  # unconditionally doubles --tui when a caller already passes it (clap
+  # aborts). idempotentFlags.nix guards each flag with a per-arg case +
+  # conditional `set --`. Cases: both flags (tui⇒v3), v3 alone, neither.
+  module-kiro-wrapper-idempotent-both = mkTest "kiro-wrapper-idempotent-both" (
+    let
+      b = idempotentFlags.idempotentFlagBlock ["--tui" "--v3"];
+    in
+      lib.hasInfix "nat_seen_tui=0" b
+      && lib.hasInfix "nat_seen_v3=0" b
+      && lib.hasInfix "--tui) nat_seen_tui=1 ;;" b
+      && lib.hasInfix "--v3) nat_seen_v3=1 ;;" b
+      && lib.hasInfix ''if [ "$nat_seen_tui" = 0 ]; then set -- "$@" --tui; fi'' b
+      && lib.hasInfix ''if [ "$nat_seen_v3" = 0 ]; then set -- "$@" --v3; fi'' b
+  );
+
+  module-kiro-wrapper-idempotent-single = mkTest "kiro-wrapper-idempotent-single" (
+    let
+      b = idempotentFlags.idempotentFlagBlock ["--v3"];
+    in
+      lib.hasInfix "nat_seen_v3=0" b
+      && lib.hasInfix ''if [ "$nat_seen_v3" = 0 ]; then set -- "$@" --v3; fi'' b
+      && !(lib.hasInfix "tui" b)
+  );
+
+  module-kiro-wrapper-idempotent-none = mkTest "kiro-wrapper-idempotent-none" (
+    idempotentFlags.idempotentFlagBlock [] == ""
+  );
+
   module-claude-default-disabled = mkTest "claude-default-disabled" (!(evalHm {}).config.ai.claude.enable);
 
   module-claude-enable-toggles = mkTest "claude-enable-toggles" (
