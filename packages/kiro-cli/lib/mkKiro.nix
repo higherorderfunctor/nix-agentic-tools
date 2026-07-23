@@ -786,6 +786,10 @@ in
         #   settings.chat.enableTangentMode = true;
         flatSettings = aiCommon.flattenDotKeys filteredSettings;
 
+        # Resolve credential http headers → `${env:VAR}` placeholders in
+        # mcp.json + the runtime secret-env exports (Kiro-only delivery).
+        kiroSecrets = (import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers;
+
         # HM's only export mechanism is the symlinkJoin wrapper, so env vars
         # ride along with the --v3/--trust-tools flag injections. Shared
         # wrapper helper (also used by the devenv backend).
@@ -793,6 +797,7 @@ in
           inherit (cfg) v3 trustedMcpTools;
           package = resolvePackage cfg;
           environmentVariables = mergedEnvironmentVariables;
+          inherit (kiroSecrets) secretEnv;
         };
 
         # JSON entry generation for agents and hooks (legacy mkJsonEntries).
@@ -831,7 +836,7 @@ in
             # freeform shape Kiro expects in mcp.json.
             (lib.mkIf (mergedServers != {}) {
               home.file."${cfg.configDir}/settings/mcp.json".text = builtins.toJSON {
-                mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
+                mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) kiroSecrets.servers;
               };
             })
             # Inline agent JSON files.
@@ -952,6 +957,10 @@ in
         filteredSettings = aiCommon.filterNulls cfg.settings;
         flatSettings = aiCommon.flattenDotKeys filteredSettings;
 
+        # Resolve credential http headers → `${env:VAR}` placeholders in
+        # mcp.json + the runtime secret-env exports (Kiro-only delivery).
+        kiroSecrets = (import ./mcpSecrets.nix {inherit lib;}).renderKiroSecrets mergedServers;
+
         # devenv's enterShell runs in the CALLER's cwd (direnv activates in
         # subdirectories, and the hook fires on every shell entry), so the
         # relative `${cfg.configDir}/...` writes below would land in the
@@ -973,16 +982,19 @@ in
       in
         lib.mkMerge ([
             # Package installation — devenv projects are shell-scoped, so
-            # env exports go in the devenv `env` attrset directly (below), not
-            # through the wrapper. But `--v3`/`--trust-tools` still need
-            # appending so `devenv shell` launches the v3 TUI like HM does, so we
-            # reuse the shared wrapper with an empty env set.
+            # NON-secret env exports go in the devenv `env` attrset directly
+            # (below), not through the wrapper. But the `--v3`/`--trust-tools`
+            # flag injection AND runtime SECRET-env injection (secretEnv must
+            # cat the decrypted file at launch, not bake a static value) both
+            # need the wrapper, so we reuse the shared wrapper with an empty
+            # static env set.
             {
               packages = [
                 (wrapKiroPackage {
                   inherit (cfg) v3 trustedMcpTools;
                   package = resolvePackage cfg;
                   environmentVariables = {};
+                  inherit (kiroSecrets) secretEnv;
                 })
               ];
             }
@@ -1003,7 +1015,7 @@ in
             # entries into the freeform shape Kiro expects.
             (lib.mkIf (mergedServers != {}) {
               files."${cfg.configDir}/settings/mcp.json".text = builtins.toJSON {
-                mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
+                mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) kiroSecrets.servers;
               };
             })
             # Inline agent JSON files.

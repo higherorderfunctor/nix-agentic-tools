@@ -66,11 +66,13 @@ in
     v3,
     trustedMcpTools,
     environmentVariables ? {},
+    secretEnv ? {},
   }: let
     hasEnv = environmentVariables != {};
+    hasSecret = secretEnv != {};
     hasV3 = v3;
     hasTrust = trustedMcpTools != [];
-    needsWrapper = hasEnv || hasTrust || hasV3;
+    needsWrapper = hasEnv || hasSecret || hasTrust || hasV3;
     trustToolsCsv = lib.concatStringsSep "," trustedMcpTools;
     # env baked as `export`s (was makeWrapper `--set`), so the hand-written
     # wrapper can ALSO position the flags. makeWrapper only appends
@@ -81,6 +83,26 @@ in
       (lib.mapAttrsToList
         (k: v: "export ${lib.escapeShellArg k}=${lib.escapeShellArg v}")
         environmentVariables);
+
+    # SOPS/agenix secrets read at RUNTIME — the decrypted file is `cat`ed into
+    # the env just before `exec`, so the VALUE never enters the world-readable
+    # store (only the file PATH does). kiro-cli-chat's MCP client then
+    # substitutes `${env:VAR}` into http header values at launch.
+    #
+    # These are emitted AFTER `envExports` so a secret always wins over a
+    # same-named static value rather than being silently overwritten by it.
+    #
+    # Absolute coreutils path is mandatory (nix-standards): this wrapper can be
+    # spawned with a replaced or empty PATH, where a bare `cat` fails and the
+    # credential would silently end up empty.
+    secretExports =
+      lib.concatStringsSep "\n"
+      (lib.mapAttrsToList
+        (var: cred:
+          if (cred.file or null) != null
+          then "export ${lib.escapeShellArg var}=\"$(${pkgs.coreutils}/bin/cat ${lib.escapeShellArg cred.file})\""
+          else "export ${lib.escapeShellArg var}=\"$(${lib.escapeShellArg cred.helper})\"")
+        secretEnv);
 
     # `--v3` is injected for EVERY subcommand, because it is global and because
     # that is what makes it reach `acp`: the launcher rewrites its own `--v3`
@@ -188,6 +210,7 @@ in
         lib.concatStringsSep "\n" (
           ["set -euETo pipefail" "shopt -s inherit_errexit 2>/dev/null || :"]
           ++ lib.optional (envExports != "") envExports
+          ++ lib.optional (secretExports != "") secretExports
           ++ lib.optional (injection != "") injection
           ++ ["exec -a \"$0\" ${lib.escapeShellArg realBin} \"$@\""]
         )
@@ -200,14 +223,14 @@ in
         name = "kiro-cli-wrapped";
         paths = [package];
         postBuild = ''
-          ${lib.optionalString (hasEnv || hasV3) ''
+          ${lib.optionalString (hasEnv || hasSecret || hasV3) ''
             rm -f "$out/bin/kiro-cli"
             ln -s ${mkWrapper "kiro-cli-launcher" {
               realBin = "${package}/bin/kiro-cli";
               injection = launcherInjection;
             }} "$out/bin/kiro-cli"
           ''}
-          ${lib.optionalString (hasEnv || hasTrust) ''
+          ${lib.optionalString (hasEnv || hasSecret || hasTrust) ''
             rm -f "$out/bin/kiro-cli-chat"
             ln -s ${mkWrapper "kiro-cli-chat-wrapper" {
               realBin = "${package}/bin/kiro-cli-chat";

@@ -158,12 +158,32 @@
     env = srv.env or {};
     settings = srv.settings or {};
     type = srv.type or null;
+    headers = srv.headers or {};
+    timeout = srv.timeout or null;
   in
     if url != null
-    then {
-      type = "http";
-      inherit url;
-    }
+    then
+      {
+        type = "http";
+        inherit url;
+      }
+      # Plain-string headers pass through. A credential-valued header
+      # (an attrset { file|helper; ... }) must have been resolved to a
+      # `${env:VAR}` placeholder string by the Kiro preprocessor BEFORE
+      # reaching here; if one arrives raw, a non-Kiro ecosystem is
+      # rendering it (Kiro never hits this — it preprocesses first), so
+      # fail loud rather than serialize the secret's file path into JSON.
+      // lib.optionalAttrs (headers != {}) {
+        headers =
+          mapAttrs (
+            hn: hv:
+              if builtins.isAttrs hv
+              then throw "renderServer: credential-valued header '${hn}' on http server '${name}' is only supported for Kiro (ai.kiro.mcpServers); it reached the shared renderer unresolved. Non-Kiro ecosystems do not inject secret headers — use a plain-string header, or move the server to ai.kiro.mcpServers."
+              else hv
+          )
+          headers;
+      }
+      // lib.optionalAttrs (timeout != null) {inherit timeout;}
     else if command != null
     then {
       type =
