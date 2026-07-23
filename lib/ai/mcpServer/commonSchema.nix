@@ -17,11 +17,20 @@
 #       that doesn't need the server-module machinery (no credential
 #       injection, no settings translation).
 #
-#   (C) External HTTP — for already-running services
-#       { type = "http"; url = "..."; }
-#       Pass-through. Used by services.mcp-servers outputs and
-#       lib.ai.externalServers.
-{lib, ...}: {
+#   (C) External HTTP — for already-running / remote services
+#       { type = "http"; url = "..."; headers = {...}; timeout = <ms>; }
+#       Pass-through. Each `headers.<name>` value may be a plain string
+#       (baked into the store) OR a { file | helper; prefix?; suffix?;
+#       var?; } SOPS/agenix credential rendered as a `${env:VAR}`
+#       placeholder (the Kiro launcher injects the secret at runtime;
+#       delivered for Kiro only, other ecosystems throw). `url` is a
+#       plain string — Kiro does not env-substitute the url field
+#       (verified against 2.13.0), so a secret url would need the
+#       proxy-bridge approach, not native injection. See secretValue.nix.
+#       Used by services.mcp-servers outputs and lib.ai.externalServers.
+{lib, ...}: let
+  secretValue = import ./secretValue.nix lib;
+in {
   options = {
     type = lib.mkOption {
       type = lib.types.nullOr (lib.types.enum [
@@ -172,7 +181,30 @@
     url = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
-      description = "HTTP endpoint URL. Required for shape (C).";
+      description = ''
+        HTTP endpoint URL. Required for shape (C). Plain string only —
+        Kiro does not env-substitute the url field, so a secret url is
+        not supported via native injection (use a plain URL in your own
+        private config, or the proxy-bridge approach to keep it out of
+        the store).
+      '';
+    };
+    headers = lib.mkOption {
+      type = lib.types.attrsOf secretValue;
+      default = {};
+      description = ''
+        HTTP request headers for shape (C). Each value is a plain string
+        or a { file | helper; prefix?; suffix?; var?; } SOPS/agenix
+        credential rendered as a `''${env:VAR}` placeholder — the Kiro
+        launcher injects the secret into its environment at start
+        (delivered for Kiro only; other ecosystems throw on a credential
+        value).
+      '';
+    };
+    timeout = lib.mkOption {
+      type = lib.types.nullOr lib.types.ints.positive;
+      default = null;
+      description = "Request timeout in milliseconds for shape (C) http servers.";
     };
   };
 }
