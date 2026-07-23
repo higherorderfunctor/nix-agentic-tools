@@ -7,7 +7,7 @@ applyTo: ".github/workflows/update.yml,config/generate-update-ninja.nix,config/u
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-07-21. If you touch
+> **Last verified:** 2026-07-23. If you touch
 > `.github/workflows/update.yml`, `dev/scripts/update-common.sh`,
 > `dev/scripts/update-input.sh`, `dev/scripts/update-pkg.sh`, or the
 > PR creation logic, and this fragment isn't updated in the same
@@ -20,6 +20,14 @@ matching Renovate's model. Each dependency is independently
 validated on both platforms (x86_64-linux + aarch64-darwin) via
 the normal ci.yml PR pipeline. A failed darwin build only holds
 back that specific dependency, not the entire batch.
+
+### Trigger
+
+The workflow runs on a **nightly `schedule`** (cron) plus manual
+`workflow_dispatch`; it does NOT run on push. It opens per-dependency
+PRs against the default branch (the `BRANCH_NAME` env is the PR base).
+It previously ran on push to a long-lived integration branch; the
+trunk-based migration moved it to a time-based schedule.
 
 ### Workflow phases
 

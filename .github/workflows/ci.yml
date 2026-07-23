@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, refactor/ai-factory-architecture]
+    branches: [main]
   pull_request:
 
 concurrency:
