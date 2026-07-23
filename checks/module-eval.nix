@@ -3735,6 +3735,72 @@ in {
       (result.config.programs.claude-code.settings.env.ENABLE_LSP_TOOL or null) == "1"
   );
 
+  # Kiro: a credential-valued http header is delivered as a `${env:VAR}`
+  # placeholder in the generated mcp.json — the raw secret file path is
+  # NEVER serialized, and the `Bearer ` prefix composes. Exercises the
+  # full module wiring (kiroSecrets preprocessor -> renderServer ->
+  # home.file mcp.json). See packages/kiro-cli/lib/mcpSecrets.nix.
+  module-kiro-hm-mcp-secret-header-placeholder = mkTest "kiro-hm-mcp-secret-header-placeholder" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          mcpServers.jira = {
+            type = "http";
+            url = "https://gw/mcp/";
+            timeout = 300000;
+            headers = {
+              "X-MCP-Servers" = "jira";
+              "X-Jira-Token".file = "/run/secrets/jira-pat";
+              "X-Api-Key" = {
+                file = "/run/secrets/llm";
+                prefix = "Bearer ";
+              };
+            };
+          };
+        };
+      };
+      mcpJson = result.config.home.file.".kiro/settings/mcp.json".text or "";
+    in
+      lib.hasInfix "\${env:KIRO_MCP_JIRA_X_JIRA_TOKEN}" mcpJson
+      && lib.hasInfix "Bearer \${env:KIRO_MCP_JIRA_X_API_KEY}" mcpJson
+      && lib.hasInfix ''"X-MCP-Servers":"jira"'' mcpJson
+      && !(lib.hasInfix "/run/secrets/jira-pat" mcpJson)
+      && !(lib.hasInfix "/run/secrets/llm" mcpJson)
+  );
+
+  # Kiro HM<->devenv parity: the SAME credential-header config yields the
+  # SAME generated mcp.json on both backends (shared renderServer + shared
+  # mcpSecrets preprocessor -> parity is structural).
+  module-kiro-hm-devenv-mcp-secret-parity = mkTest "kiro-hm-devenv-mcp-secret-parity" (
+    let
+      cfg = {
+        ai.kiro = {
+          enable = true;
+          mcpServers.jira = {
+            type = "http";
+            url = "https://gw/mcp/";
+            headers."X-Jira-Token".file = "/run/secrets/jira-pat";
+          };
+        };
+      };
+      hmJson = (evalHm cfg).config.home.file.".kiro/settings/mcp.json".text or "";
+      dvJson = (evalDevenv cfg).config.files.".kiro/settings/mcp.json".text or "";
+    in
+      hmJson != "" && hmJson == dvJson
+  );
+
+  # A credential-valued http header reaching the shared renderServer via a
+  # non-Kiro path throws — non-Kiro ecosystems do not inject secret
+  # headers (rather than serialize the raw file path). Forced via toJSON.
+  module-mcp-credential-header-non-kiro-throws =
+    mkTest "mcp-credential-header-non-kiro-throws" (!(builtins.tryEval (builtins.toJSON (mcpLib.renderServer pkgs "x" {
+      type = "http";
+      url = "u";
+      headers.H.file = "/f";
+    })))
+    .success);
+
   # ── Task 5 (A4b): Claude launch-effort unpin reconciler ────────
 
   # Default reconciler: flags from the committed sidecar are merged into
