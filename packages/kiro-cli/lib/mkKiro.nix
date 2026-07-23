@@ -395,6 +395,99 @@
     if cfg.unlockedRolloutFeatures == []
     then cfg.package
     else cfg.package.withRolloutFeatures cfg.unlockedRolloutFeatures;
+
+  # Rendered mcp.json body (DRY: both backends AND the mkMcpJsonScript
+  # template use this — was duplicated inline per backend). `kiroServers`
+  # is the preprocessed pool: credential headers already `${env:VAR}`,
+  # credential urls already a `${VAR}` envsubst sentinel (mcpSecrets.nix).
+  mcpJsonText = kiroServers:
+    builtins.toJSON {
+      mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) kiroServers;
+    };
+
+  # Shell body that (re)assembles settings/mcp.json as a REAL file at
+  # activation (HM) / shell entry (devenv), shared by both backends so
+  # they stay at parity. `mode` = `ai.kiro.mcpWriteMode`:
+  #   * "overwrite" — write the rendered template and lock it read-only;
+  #     Nix is authoritative, hand edits do not survive.
+  #   * "merge" — deep-merge the Nix-managed servers onto whatever is on
+  #     disk (`jq '.[0] * .[1]'`, write-if-absent) and leave it writeable,
+  #     preserving hand-added servers/edits.
+  # A credential url is substituted in HERE: `urlSecretEnv` vars are
+  # exported from their decrypted secret and `envsubst`'d into the
+  # template with an EXPLICIT var list, so header `${env:...}`
+  # placeholders (which Kiro expands at launch) survive untouched. Empty
+  # `urlSecretEnv` → the template is used verbatim. `targetExpr` is a
+  # shell expression for the destination (absolute for HM, relative to
+  # $DEVENV_ROOT for devenv). Uniform real-file delivery (never a store
+  # symlink) is what lets a secret url land and dodges the
+  # symlink<->real-file toggle + the devenv files.* silent skip. NOTE:
+  # a credential url reads its secret at ACTIVATION, so a consumer wiring
+  # sops-nix/agenix must order this after the secret provider (P2).
+  mkMcpJsonScript = {
+    mode,
+    templateFile,
+    urlSecretEnv,
+    targetExpr,
+  }: let
+    hasUrlSecret = urlSecretEnv != {};
+    # r-- lock for overwrite; owner-writeable for merge; owner-only when
+    # a secret url is written into the file.
+    fileMode =
+      if mode == "overwrite"
+      then
+        (
+          if hasUrlSecret
+          then "0400"
+          else "0444"
+        )
+      else if hasUrlSecret
+      then "0600"
+      else "0644";
+    exports = lib.concatStrings (lib.mapAttrsToList (var: cred: let
+      reader =
+        if (cred.file or null) != null
+        then ''"$(${pkgs.coreutils}/bin/cat ${lib.escapeShellArg cred.file})"''
+        else ''"$(${lib.escapeShellArg cred.helper})"'';
+    in "export ${var}=${reader}\n")
+    urlSecretEnv);
+    envsubstVars =
+      lib.concatMapStringsSep " " (v: "\${${v}}") (builtins.attrNames urlSecretEnv);
+    # Produce $RENDERED from the store template (envsubst only the url
+    # vars when there is a secret url; a plain copy otherwise).
+    assemble =
+      if hasUrlSecret
+      then "${exports}${pkgs.gettext}/bin/envsubst ${lib.escapeShellArg envsubstVars} < ${templateFile} > \"$RENDERED\""
+      else ''${pkgs.coreutils}/bin/cp ${templateFile} "$RENDERED"'';
+    # Land $RENDERED at $TARGET per mode. `rm -f` first clears a stale
+    # store symlink from a prior generation (a bare `cp` would follow it
+    # into the read-only store and fail); merge only merges a REAL
+    # user-owned file, treating a symlink/absent target as write-fresh.
+    writeStep =
+      if mode == "overwrite"
+      then ''
+        ${pkgs.coreutils}/bin/rm -f "$TARGET"
+        ${pkgs.coreutils}/bin/cp "$RENDERED" "$TARGET"''
+      else ''
+        if [ -f "$TARGET" ] && [ ! -L "$TARGET" ]; then
+          MERGED="$(${pkgs.coreutils}/bin/mktemp)"
+          ${pkgs.jq}/bin/jq -s '.[0] * .[1]' "$TARGET" "$RENDERED" > "$MERGED"
+          ${pkgs.coreutils}/bin/mv "$MERGED" "$TARGET"
+        else
+          ${pkgs.coreutils}/bin/rm -f "$TARGET"
+          ${pkgs.coreutils}/bin/cp "$RENDERED" "$TARGET"
+        fi'';
+  in ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    TARGET="${targetExpr}"
+    ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$TARGET")"
+    RENDERED="$(${pkgs.coreutils}/bin/mktemp)"
+    ${assemble}
+    ${writeStep}
+    ${pkgs.coreutils}/bin/chmod ${fileMode} "$TARGET"
+    ${pkgs.coreutils}/bin/rm -f "$RENDERED"
+  '';
 in
   lib.ai.app.mkAiApp {
     name = "kiro";
@@ -561,6 +654,32 @@ in
           JSON settings merged into ~/.kiro/settings/cli.json on activation (HM)
           or written statically (devenv). Runtime-mutated keys are preserved in HM.
           Known keys are typed; unknown keys are accepted via freeformType.
+        '';
+      };
+      # How settings/mcp.json is delivered on activation. Governs the
+      # dedicated, Nix-owned mcp.json only (cli.json always merges to
+      # preserve oauth); a credential url forces a real file either way.
+      mcpWriteMode = lib.mkOption {
+        type = lib.types.enum ["overwrite" "merge"];
+        default = "overwrite";
+        description = ''
+          How `settings/mcp.json` is written on activation (HM) / shell
+          entry (devenv). It is always a REAL file (never a store
+          symlink) so a SOPS-injected secret `url` can be substituted in.
+
+          - `overwrite` (default): the file is re-assembled from the Nix
+            definition every activation and locked read-only. Nix is
+            authoritative; hand edits do not survive. Equivalent to the
+            old symlink-into-store guarantee, as a real file.
+          - `merge`: the Nix-managed servers are deep-merged onto whatever
+            is on disk (`jq '.[0] * .[1]'`, write-if-absent) and the file
+            is left writeable, so hand-added servers and manual edits are
+            preserved across activations.
+
+          Both modes deliver identical content for the Nix-managed
+          servers and handle secret `url`/`headers` the same way; the
+          only difference is whether the on-disk file is Nix-owned
+          (overwrite) or co-owned with the user (merge).
         '';
       };
       # Typed LSP server definitions for settings/lsp.json. Freeform
@@ -831,13 +950,21 @@ in
               home.file."${cfg.configDir}/settings/lsp.json".text =
                 builtins.toJSON (lib.mapAttrs aiCommon.mkLspConfig mergedLspServers);
             })
-            # settings/mcp.json — merged MCP server pool. Kiro reads this
-            # natively from its config dir. Render typed entries into the
-            # freeform shape Kiro expects in mcp.json.
+            # settings/mcp.json — merged MCP server pool, delivered as a
+            # REAL file assembled at activation (never a store symlink) so
+            # a SOPS-injected secret url can be substituted in and
+            # `mcpWriteMode` can govern overwrite-vs-merge. Uniform
+            # real-file across both backends dodges the symlink<->real-file
+            # toggle + the devenv files.* silent skip. See mkMcpJsonScript.
             (lib.mkIf (mergedServers != {}) {
-              home.file."${cfg.configDir}/settings/mcp.json".text = builtins.toJSON {
-                mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) kiroSecrets.servers;
-              };
+              home.activation.kiroMcpJson = lib.hm.dag.entryAfter ["linkGeneration"] (
+                mkMcpJsonScript {
+                  mode = cfg.mcpWriteMode;
+                  inherit (kiroSecrets) urlSecretEnv;
+                  templateFile = pkgs.writeText "kiro-mcp.json" (mcpJsonText kiroSecrets.servers);
+                  targetExpr = "$HOME/${cfg.configDir}/settings/mcp.json";
+                }
+              );
             })
             # Inline agent JSON files.
             (lib.mkIf (cfg.agents != {}) {
@@ -1011,12 +1138,16 @@ in
               files."${cfg.configDir}/settings/lsp.json".text =
                 builtins.toJSON (lib.mapAttrs aiCommon.mkLspConfig mergedLspServers);
             })
-            # settings/mcp.json — merged MCP server pool. Render typed
-            # entries into the freeform shape Kiro expects.
+            # settings/mcp.json — merged MCP server pool, delivered as a
+            # REAL file via enterShell (anchored to $DEVENV_ROOT), matching
+            # the HM activation write. See mkMcpJsonScript / mcpWriteMode.
             (lib.mkIf (mergedServers != {}) {
-              files."${cfg.configDir}/settings/mcp.json".text = builtins.toJSON {
-                mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) kiroSecrets.servers;
-              };
+              enterShell = anchorToDevenvRoot (mkMcpJsonScript {
+                mode = cfg.mcpWriteMode;
+                inherit (kiroSecrets) urlSecretEnv;
+                templateFile = pkgs.writeText "kiro-mcp.json" (mcpJsonText kiroSecrets.servers);
+                targetExpr = "${cfg.configDir}/settings/mcp.json";
+              });
             })
             # Inline agent JSON files.
             (lib.mkIf (cfg.agents != {}) {
