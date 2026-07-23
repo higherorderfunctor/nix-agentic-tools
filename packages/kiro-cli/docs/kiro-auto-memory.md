@@ -1,6 +1,6 @@
 # Kiro-CLI auto-memory
 
-> **Last verified:** 2026-07-21 (commit pending). If you touch
+> **Last verified:** 2026-07-23 (commit pending). If you touch
 > `packages/kiro-cli/memory/distiller.ts`,
 > `packages/kiro-cli/lib/autoMemory.nix`,
 > `packages/kiro-cli/lib/mkKiro.nix` (hook-file emission),
@@ -285,26 +285,33 @@ model's tool call or this hook.
   is the destination that retires the escape hatch. On a file-key collision
   TYPED records win: `mkAllHookFiles` merges `hooksJson // typed`, typed on
   the right.
-  **CRITICAL — hooks are WORKSPACE-local + must be REAL files (2026-07-14).**
-  Kiro v3 discovers hooks ONLY under the launch cwd's `.kiro/hooks/` — never
-  global `~/.kiro/hooks/` (docs `kiro.dev/docs/cli/v3/hooks`; issues
-  kirodotdev/Kiro #5440/#7737/#9075; only steering + skills load globally) —
-  and its `read_dir` scan SKIPS store symlinks. Consequences: **(a)** the HM
-  global install (`~/.kiro/hooks/`) never loads under v3, so HM `ai.kiro.hooks`
-  is effectively dead for v3 auto-memory (kept only as a source of truth —
-  since PR #433 HM writes it as REAL files via `home.activation.kiroHooks`,
-  not `home.file` symlinks, but v3's workspace-local discovery still never
-  reads the global dir);
+  **CRITICAL — hooks must be REAL files; global `~/.kiro/hooks/` IS read as of
+  2.13.0 (re-verified 2026-07-23).** v3's hook loader SKIPS store symlinks
+  (`read_dir` keeps only `entry.isFile()`; `kirodotdev/Kiro#9787`), so a
+  symlinked hook silently never loads on either scope. On SCOPE, 2.13.0 ADDED
+  global hooks: real files in `~/.kiro/hooks/` apply to every workspace (the
+  TUI's own 2.13.0 changelog; proven firing 2026-07-23 with an interactive
+  `tmux` probe — see `docs/plans/kiro-v3-scope-probes/`). The earlier
+  "workspace-local only" reading (issues kirodotdev/Kiro #5440/#7737/#9075) was
+  pre-2.13.0 behavior compounded by a **headless-harness false negative**:
+  `--no-interactive` runs the model but SKIPS the hook engine, so a one-shot
+  probe fires nothing. `KIRO_HOME` does NOT relocate the global-hooks dir — the
+  loader reads the real `$HOME/.kiro/hooks`. Consequences: **(a)** HM
+  `ai.kiro.hooks` delivered as REAL files to `~/.kiro/hooks/` (PR #433's
+  `home.activation.kiroHooks`, not `home.file` symlinks) DOES load under v3; a HM
+  generation predating that fix ships a store SYMLINK and is silently dropped —
+  this (NOT global-ness) is why live-system auto-memory dies under v3, and a
+  consumer repin + re-activation restores it.
   **(b)** the **devenv** backend writes hooks as REAL files via `enterShell`
   (`install -m 0644 <writeText> .kiro/hooks/<name>.json`), NOT devenv `files.*`
   symlinks (which v3 skips). Both enterShell fragments (inline hooks and
   `hooksDir`) run in a subshell anchored to `$DEVENV_ROOT` — enterShell
   executes in the CALLER's cwd (direnv activates in subdirectories), so an
   unanchored relative `.kiro/hooks/...` write would land in whatever subdir
-  the shell was entered from. Steering is real files too (see below); agents
-  still ship as symlinks (unconverted, probe-first). So delivery is
-  per-workspace: devenv (project-local real files) for nix projects; a
-  direnv/manual symlink→copy for non-nix repos (backlog).
+  the shell was entered from. Steering is real files too (see below). Agents
+  and skills, by contrast, LOAD when symlinked — the symlink drop is
+  **per-surface** (hooks + steering only; probed 2026-07-23) — so those emitters
+  stay on symlinks.
 - `ai.kiro.rules` — attrs-shape ai-common ruleModule → an entry in the derived
   `ai.kiro.steeringFiles` attrset (key `<name>.md`, rendered with
   `inclusion:`/`fileMatchPattern:` frontmatter; `paths=null` →
@@ -321,14 +328,19 @@ REAL files carrying the generator output verbatim (PR #433: HM via the
 identical on both (attrset equality over `ai.kiro.steeringFiles` plus a
 writer-output byte check per backend).
 
-> **Correction (settled):** the 2026-07-21 suspicion that "only hooks need
-> real files" was wrong has been CONFIRMED — the v3 engine's directory scan
-> keeps only `entry.isFile()` entries, dropping symlinked steering exactly as
-> it drops symlinked hooks (`kirodotdev/Kiro#9787`; the v2/classic engine
-> follows symlinks fine). The factory steering emitters are now converted:
-> they populate `ai.kiro.steeringFiles` and the shared materializer writes
-> real files; `checks/module-eval.nix` asserts on that attrset plus the
-> writers' heredoc bodies.
+> **Correction (settled):** "only hooks need real files" was wrong — the v3
+> hook AND steering loaders keep only `entry.isFile()` entries, dropping
+> symlinked steering as they drop symlinked hooks (`kirodotdev/Kiro#9787`,
+> maintainer-acknowledged; the v2/classic engine follows symlinks fine). The drop is
+> **per-surface, not engine-wide**: agents (`/agent`) and skills
+> (`/context show`) LOAD when symlinked (probed 2026-07-23). So the factory
+> delivers hooks + steering as real files (materializer copy strategy) while
+> agents/skills stay symlinks. The factory steering emitters populate
+> `ai.kiro.steeringFiles` and the shared materializer writes real files;
+> `checks/module-eval.nix` asserts on that attrset plus the writers' heredoc
+> bodies. (The steering symlink-drop is corroborated by #9787 but its original
+> reproducer is now stale — a `tmux`-driven re-verify is a queued P3 item; copy
+> delivery is safe either way and stays the default.)
 
 The distiller sync-vs-background choice: **synchronous**
 (D8/D27) — debounced + a file-buffer write + sub-second in the default (no
@@ -359,8 +371,9 @@ fragility. Revisit if the STAGE-5 network SDK write is felt (tuning path P3).
 10. Manual `/remember` forces (`KIRO_MEMORY_FORCE=1` baked) and Stop stays
     debounced (no force) — collapsing the two wrappers re-opens the D33 gap
     where `/remember` silently no-ops after a recent Stop.
-11. Hooks reach kiro as REAL files in a WORKSPACE `.kiro/hooks/` — never a store
-    symlink, never the global `~/.kiro/hooks/` (v3 skips both). The devenv
+11. Hooks reach kiro as REAL files — a store symlink is silently dropped by v3's
+    `entry.isFile()` hook scan on BOTH the workspace `.kiro/hooks/` and the
+    global `~/.kiro/hooks/` (which 2.13.0 DOES read for real files). The devenv
     `enterShell` copy is load-bearing: reverting it to devenv `files.*`
     (symlink) makes `/hooks` silently show 0.
 
@@ -372,11 +385,14 @@ fragility. Revisit if the STAGE-5 network SDK write is felt (tuning path P3).
   daemon's `settingsToEnv`. The pgvector HNSW-dimension create-race is fixed in
   the `openmemory-mcp` module's `settingsToPreStart`/`ExecStartPre`. Backend
   add→query round-trip verified against `automemory`.
-- **Per-workspace hook delivery (the live gap).** v3 hooks are workspace-local
-  real files (see the CRITICAL note under Module surface), so the auto-memory
-  hooks load ONLY where a project-local `.kiro/hooks/` is materialized. The
-  devenv backend does this (real-file `enterShell`); for non-nix repos a
-  direnv/manual symlink→copy is still a backlog item.
+- **Hook delivery + the live gap (activation lag, not scope).** v3 loads
+  REAL-file hooks in BOTH the workspace `.kiro/hooks/` and the global
+  `~/.kiro/hooks/` (2.13.0), dropping symlinked ones (see the CRITICAL note under
+  Module surface). devenv delivers project-local real files (`enterShell`); HM
+  delivers real files to the global dir (PR #433). The live gap is that a HM
+  generation predating the real-file fix installs a store SYMLINK, so auto-memory
+  is silently dead under v3 until the consumer repins + re-activates. (Non-nix
+  repos without devenv still want a direnv/manual real-file drop — backlog.)
 - **Tuning (post-flip, MEASURE first, B4):** per-prompt `openmemory-mem` spawn
   latency (P3 — add a short-TTL cache or async fork if felt); seed strategy
   (whole `now.md` vs last turn vs synthetic keywords); recent-tier depth (add a
