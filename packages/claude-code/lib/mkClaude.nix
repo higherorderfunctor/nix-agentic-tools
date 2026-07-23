@@ -125,6 +125,63 @@ in
         type = lib.types.submodule {
           freeformType = (pkgs.formats.json {}).type;
           options = {
+            attribution = lib.mkOption {
+              type = lib.types.submodule {
+                freeformType = (pkgs.formats.json {}).type;
+                options = {
+                  commit = lib.mkOption {
+                    type =
+                      lib.types.coercedTo lib.types.bool
+                      (b:
+                        if b
+                        then null
+                        else "")
+                      (lib.types.nullOr lib.types.str);
+                    default = null;
+                    example = false;
+                    description = ''
+                      Attribution line Claude appends to commit messages
+                      it authors (settings.json `attribution.commit`).
+                      `true` (or null, the default) leaves Claude's own
+                      default text ("Generated with Claude Code"); `false`
+                      disables it (writes ""), dropping the generated /
+                      co-author trailer; a string sets custom text. Coerced
+                      to a nullOr-str at the type layer so it rides the
+                      shared filterNulls lowering unchanged.
+                    '';
+                  };
+                  pr = lib.mkOption {
+                    type =
+                      lib.types.coercedTo lib.types.bool
+                      (b:
+                        if b
+                        then null
+                        else "")
+                      (lib.types.nullOr lib.types.str);
+                    default = null;
+                    example = false;
+                    description = ''
+                      Attribution footer Claude appends to pull-request
+                      bodies (settings.json `attribution.pr`). Unlike
+                      `commit`, Claude's own upstream default for `pr` is
+                      already "" (pull-request attribution off), so here
+                      `true`/null (keep Claude's default) and `false`
+                      (write "" explicitly) coincide - both leave it
+                      disabled; a string enables it with custom footer
+                      text.
+                    '';
+                  };
+                };
+              };
+              default = {};
+              description = ''
+                Commit / PR attribution (settings.json `attribution`).
+                Each field accepts `true` (Claude's default), `false`
+                (disabled - writes ""), or a literal string. Set
+                `commit = false` to drop the co-author / "Generated with
+                Claude Code" trailer.
+              '';
+            };
             effortLevel = lib.mkOption {
               type = lib.types.nullOr (lib.types.enum extracted.effortLevels);
               default = null;
@@ -192,12 +249,13 @@ in
         };
         default = {};
         description = ''
-          Typed Claude settings (effortLevel, enableWorkflows, model, tui,
-          workflowKeywordTriggerEnabled) plus freeform passthrough, written to
-          ~/.claude/settings.json by upstream. Null typed keys are filtered out
-          before reaching upstream. The undocumented `ultracode` session key is
-          intentionally NOT a typed option (see ultracodeOnLaunch) but remains
-          reachable here via freeform passthrough.
+          Typed Claude settings (attribution, effortLevel, enableWorkflows,
+          model, tui, workflowKeywordTriggerEnabled) plus freeform passthrough,
+          written to ~/.claude/settings.json by upstream. Null typed keys are
+          filtered out before reaching upstream. The undocumented `ultracode`
+          session key is intentionally NOT a typed option (see
+          ultracodeOnLaunch) but remains reachable here via freeform
+          passthrough.
         '';
       };
       unpinLaunchEffort = lib.mkOption {

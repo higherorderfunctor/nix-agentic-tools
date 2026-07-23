@@ -736,6 +736,48 @@ in {
       (result.config.programs.claude-code.settings.tui or null) == "fullscreen"
   );
 
+  # Attribution: `false` coerces to "" at the type layer (disables the
+  # commit trailer) and survives the null-filter (filterNulls keeps "").
+  module-claude-hm-attribution-false-disables-reaches-upstream = mkTest "claude-hm-attribution-false-disables-reaches-upstream" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          settings.attribution.commit = false;
+        };
+      };
+    in
+      (result.config.programs.claude-code.settings.attribution.commit or null) == ""
+  );
+
+  # Attribution: a custom string passes through unchanged.
+  module-claude-hm-attribution-string-reaches-upstream = mkTest "claude-hm-attribution-string-reaches-upstream" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          settings.attribution.pr = "Reviewed-by: me";
+        };
+      };
+    in
+      (result.config.programs.claude-code.settings.attribution.pr or null) == "Reviewed-by: me"
+  );
+
+  # Attribution: `true` coerces to null -> filtered; the attribution block
+  # collapses to empty and is dropped entirely (Claude keeps its defaults).
+  module-claude-hm-attribution-true-filtered = mkTest "claude-hm-attribution-true-filtered" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          settings.attribution.commit = true;
+        };
+      };
+      s = result.config.programs.claude-code.settings or {};
+    in
+      !(s ? attribution)
+  );
+
   # Null typed keys are filtered out — upstream never sees the typed keys
   # when unset, and the undocumented `ultracode` key is never written unless
   # ultracodeOnLaunch is set.
@@ -744,7 +786,8 @@ in {
       result = evalHm {ai.claude.enable = true;};
       s = result.config.programs.claude-code.settings or {};
     in
-      !(s ? effortLevel)
+      !(s ? attribution)
+      && !(s ? effortLevel)
       && !(s ? model)
       && !(s ? tui)
       && !(s ? enableWorkflows)
@@ -932,6 +975,23 @@ in {
       settingsFile
       != null
       && (settingsFile.json.enableWorkflows or null) == true
+  );
+
+  # Devenv: attribution `false` flows through the gap write as "" into
+  # files.".claude/settings.json".json.attribution (parity with HM).
+  module-claude-devenv-settings-gap-writes-attribution = mkTest "claude-devenv-settings-gap-writes-attribution" (
+    let
+      result = evalDevenv {
+        ai.claude = {
+          enable = true;
+          settings.attribution.commit = false;
+        };
+      };
+      settingsFile = result.config.files.".claude/settings.json" or null;
+    in
+      settingsFile
+      != null
+      && (settingsFile.json.attribution.commit or null) == ""
   );
 
   # Devenv: ultracodeOnLaunch = true writes both ultracode and
