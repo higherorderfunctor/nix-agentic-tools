@@ -16,8 +16,8 @@ against `kiro-cli 2.13.0` on 2026-07-23.
 > The older `docs/plans/steering-symlink-probe/run-probe.sh` is the
 > steering-specific ancestor and is now **stale**: it passes `--tui --v3` by hand
 > (the wrapper injects them now → clap aborts on the double) and uses the headless
-> path (which skips the hook engine). Re-do the steering check by adapting
-> `probe-hooks.sh` (workspace-steering re-verify is an open P3 agenda item).
+> path (which skips the hook engine). `probe-steering.sh` supersedes it (the
+> steering drop was re-verified 2026-07-23 via `/context show`).
 
 ## Run
 
@@ -26,6 +26,7 @@ against `kiro-cli 2.13.0` on 2026-07-23.
 ./probe-hooks.sh           # workspace + global hooks (real vs symlink) via the live TUI
 ./probe-global-realhome.sh # real-file vs symlinked GLOBAL hooks at the real ~/.kiro/hooks (additive, trap-cleaned)
 ./probe-skills-agents.sh   # skills + agents (real / symlinked-file / symlinked-dir), self-contained
+./probe-steering.sh        # workspace steering (real vs symlink) via /context show
 ```
 
 Requires `tmux` and `kiro-cli` on PATH, plus a logged-in Kiro account.
@@ -81,20 +82,21 @@ capture-pane` reads the screen. This runs the interactive-only hook path with
 
 **v3 symlink handling is surface-specific — not universal:**
 
-| Surface           | Symlinked file | Real file | How observed            |
-| ----------------- | -------------- | --------- | ----------------------- |
-| Hooks (workspace) | **dropped**    | loads     | `/hooks` + `fired.log`  |
-| Hooks (global)    | **dropped**    | loads     | `probe-global-realhome` |
-| Steering          | dropped\*      | loads     | model recites tokens    |
-| Agents            | **follows**    | loads     | `/agent`                |
-| Skills            | **follows**    | loads     | `/context show`         |
+| Surface              | Symlinked file | Real file | How observed                |
+| -------------------- | -------------- | --------- | --------------------------- |
+| Hooks (workspace)    | **dropped**    | loads     | `/hooks` + `fired.log`      |
+| Hooks (global)       | **dropped**    | loads     | `probe-global-realhome`     |
+| Steering (workspace) | **dropped**    | loads     | `/context show`             |
+| Steering (global)    | **dropped**    | loads     | `/context show` (real-home) |
+| Agents               | **follows**    | loads     | `/agent`                    |
+| Skills               | **follows**    | loads     | `/context show`             |
 
-\* Steering-drop is inherited from the stale `run-probe.sh`; **re-verify** with a
-tmux-driven probe before trusting it (hooks drop but agents/skills follow, so the
-symlink rule is per-surface, and the old steering finding shares the harness bugs
-above). Skill dir-symlinks and file-symlinks both loaded; the model reading files
-via `fs_read` can mask the loader's behavior, so trust `/context show`, not a
-"can you see skill X" question.
+Steering was re-verified directly 2026-07-23 (`probe-steering.sh` + an additive
+real-home global probe): the symlinked steering file is absent from `/context
+show` on both scopes while the real one loads — confirming `kirodotdev/Kiro#9787`
+independently of the stale `run-probe.sh`. Skill dir-symlinks and file-symlinks
+both loaded; the model reading files via `fs_read` can mask the loader's
+behavior, so trust `/context show`, not a "can you see skill X" question.
 
 **Consequences for the factory:** hooks and steering must be delivered as **real
 files** (copy materialization); agents and skills may stay cheap symlinks. Global

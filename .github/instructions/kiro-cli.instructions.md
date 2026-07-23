@@ -345,9 +345,10 @@ writer-output byte check per backend).
 > agents/skills stay symlinks. The factory steering emitters populate
 > `ai.kiro.steeringFiles` and the shared materializer writes real files;
 > `checks/module-eval.nix` asserts on that attrset plus the writers' heredoc
-> bodies. (The steering symlink-drop is corroborated by #9787 but its original
-> reproducer is now stale — a `tmux`-driven re-verify is a queued P3 item; copy
-> delivery is safe either way and stays the default.)
+> bodies. (The steering symlink-drop was RE-VERIFIED directly 2026-07-23 via
+> `/context show` on both workspace and global scopes — a symlinked steering file
+> is absent from loaded context while the real one loads — independently of the
+> now-stale `run-probe.sh`; see `docs/plans/kiro-v3-scope-probes/`.)
 
 The distiller sync-vs-background choice: **synchronous**
 (D8/D27) — debounced + a file-buffer write + sub-second in the default (no
