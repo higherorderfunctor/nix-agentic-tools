@@ -16,8 +16,8 @@ run it, not to reconstruct it.
 ## Run it
 
 ```bash
-devenv tasks run pr:merge-updates          # merge eligible PRs
-MERGE_DRY_RUN=1 devenv tasks run pr:merge-updates   # preview only
+devenv tasks run pr:merge-updates                    # merge eligible PRs
+MERGE_DRY_RUN=1 devenv tasks run pr:merge-updates    # preview only
 ```
 
 Equivalent without devenv:
@@ -27,26 +27,23 @@ bash dev/scripts/merge-update-prs.sh [--dry-run] [--base <branch>]
 ```
 
 Requires an authenticated `gh` (and `jq`). Runs with or without an AI
-agent driving it.
+agent driving it. `--help` on the script prints the eligibility rules
+and every env knob; each run prints a `merged / skipped / blocked`
+summary.
 
-## What it does
+The green-CI gate is enforced by the script itself, not by GitHub.
+Required status checks gate the **base** branch, and these PRs target
+whatever branch you run from — normally a long-lived `refactor/*`
+branch, which carries no protection (only `main` does). Nothing on the
+GitHub side would stop a red PR from merging there.
 
-- Finds open PRs authored by the update bot with head `update/*` into
-  the current branch.
-- Merges only those whose **every** CI check is green (build linux,
-  build darwin, test, gitleaks). It enforces this itself — the feature
-  branch is unprotected, so GitHub would otherwise allow a red merge.
-- Squash-merges + deletes the branch (matches the repo's UI button;
-  squash is the only enabled method).
-- Single pass, no polling. Prints a `merged / skipped / blocked`
-  summary.
+## Single pass by design
 
-## Expect to re-run
-
-Every update PR edits `flake.lock`, so after the first PR squash-merges
-the rest usually report `BLOCKED [conflict]` until the **Update**
-workflow (`on: push`) rebases them. That is the intended sequential
-behavior — just run the task again once the rebased PRs go green.
+The script never polls or loops. Every update PR edits `flake.lock`, so
+once the first one squash-merges, the rest usually report
+`BLOCKED [conflict]` until the **Update** workflow (`on: push`) rebases
+them. That is the intended sequential behavior — run the task again
+after the rebased PRs go green.
 
 ## Do not
 
