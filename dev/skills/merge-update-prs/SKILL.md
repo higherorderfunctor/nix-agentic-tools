@@ -31,16 +31,19 @@ agent driving it. `--help` on the script prints the eligibility rules
 and every env knob; each run prints a `merged / skipped / blocked`
 summary.
 
-The green-CI gate is enforced by the script itself, not by GitHub: the
-feature branch is unprotected, so a red PR would otherwise be mergeable.
+The green-CI gate is enforced by the script itself, not by GitHub.
+Required status checks gate the **base** branch, and these PRs target
+whatever branch you run from — normally a long-lived `refactor/*`
+branch, which carries no protection (only `main` does). Nothing on the
+GitHub side would stop a red PR from merging there.
 
 ## Single pass by design
 
 The script never polls or loops. Every update PR edits `flake.lock`, so
-once the first one squash-merges the rest usually report `BLOCKED
-[conflict]` until the **Update** workflow (`on: push`) rebases them.
-That is the intended sequential behavior — run the task again after the
-rebased PRs go green.
+once the first one squash-merges, the rest usually report
+`BLOCKED [conflict]` until the **Update** workflow (`on: push`) rebases
+them. That is the intended sequential behavior — run the task again
+after the rebased PRs go green.
 
 ## Do not
 
