@@ -15,12 +15,12 @@
   vu = import ../lib.nix;
   tsgolint = import ./tsgolint.nix {inherit inputs final;};
 
-  rev = "7c4634610cdba79f7963011ed61611d699998a00";
+  rev = "cdc941e5f81d00dfca63cc17cc39eb6d1462a9ed";
   src = ourPkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "oxc";
     inherit rev;
-    hash = "sha256-jSjHDuRKrEKL9sxrfYUwgzD0/1baeuJ+Eu8tf1FD4cU=";
+    hash = "sha256-YQkDfXTsozX+pGgUmb+4uDsiWN2OXWRvTWK77U2iE5Y=";
   };
   version = vu.mkVersion {
     # upstream: readCargoVersion @ apps/oxlint/Cargo.toml
