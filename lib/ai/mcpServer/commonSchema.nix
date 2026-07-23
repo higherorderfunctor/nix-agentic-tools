@@ -19,14 +19,16 @@
 #
 #   (C) External HTTP — for already-running / remote services
 #       { type = "http"; url = "..."; headers = {...}; timeout = <ms>; }
-#       Pass-through. Each `headers.<name>` value may be a plain string
-#       (baked into the store) OR a { file | helper; prefix?; suffix?;
-#       var?; } SOPS/agenix credential rendered as a `${env:VAR}`
-#       placeholder (the Kiro launcher injects the secret at runtime;
-#       delivered for Kiro only, other ecosystems throw). `url` is a
-#       plain string — Kiro does not env-substitute the url field
-#       (verified against 2.13.0), so a secret url would need the
-#       proxy-bridge approach, not native injection. See secretValue.nix.
+#       Pass-through. Each `headers.<name>` value AND `url` may be a
+#       plain string (baked into the store) OR a { file | helper;
+#       prefix?; suffix?; var?; } SOPS/agenix credential. A credential
+#       HEADER renders as a `${env:VAR}` placeholder the Kiro launcher
+#       substitutes at runtime. A credential URL cannot use that path
+#       (Kiro does not env-substitute the url field, verified against
+#       2.13.0), so the launcher instead assembles it into a real,
+#       private `mcp.json` at activation from the decrypted secret (see
+#       `ai.kiro.mcpWriteMode`). Both are delivered for Kiro only; other
+#       ecosystems throw on a credential value. See secretValue.nix.
 #       Used by services.mcp-servers outputs and lib.ai.externalServers.
 {lib, ...}: let
   secretValue = import ./secretValue.nix lib;
@@ -179,14 +181,18 @@ in {
       '';
     };
     url = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
+      type = lib.types.nullOr secretValue;
       default = null;
       description = ''
-        HTTP endpoint URL. Required for shape (C). Plain string only —
-        Kiro does not env-substitute the url field, so a secret url is
-        not supported via native injection (use a plain URL in your own
-        private config, or the proxy-bridge approach to keep it out of
-        the store).
+        HTTP endpoint URL for shape (C). A plain string (baked into the
+        world-readable store) OR a { file | helper; prefix?; suffix?;
+        var?; } SOPS/agenix credential. Kiro does NOT env-substitute the
+        url field, so a credential url is not injected as a
+        `''${env:VAR}` placeholder at launch like a header — instead the
+        Kiro launcher assembles it into a real, private `mcp.json` at
+        activation from the decrypted secret (see `ai.kiro.mcpWriteMode`).
+        Delivered for Kiro only; other ecosystems throw on a credential
+        url. See secretValue.nix.
       '';
     };
     headers = lib.mkOption {

@@ -165,7 +165,17 @@
     then
       {
         type = "http";
-        inherit url;
+        # A plain-string url passes through. A credential-valued url (an
+        # attrset { file|helper; ... }) must have been resolved to a
+        # sentinel placeholder string by the Kiro preprocessor BEFORE
+        # reaching here; if one arrives raw, a non-Kiro ecosystem is
+        # rendering it (Kiro never hits this — it preprocesses first), so
+        # fail loud rather than serialize the secret's file path into
+        # JSON. Mirrors the credential-header guard below.
+        url =
+          if builtins.isAttrs url
+          then throw "renderServer: credential-valued url on http server '${name}' is only supported for Kiro (ai.kiro.mcpServers); it reached the shared renderer unresolved. Non-Kiro ecosystems do not inject secret urls — use a plain-string url, or move the server to ai.kiro.mcpServers."
+          else url;
       }
       # Plain-string headers pass through. A credential-valued header
       # (an attrset { file|helper; ... }) must have been resolved to a
