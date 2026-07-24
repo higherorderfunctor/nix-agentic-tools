@@ -15,12 +15,12 @@
   vu = import ../lib.nix;
   tsgolint = import ./tsgolint.nix {inherit inputs final;};
 
-  rev = "7db82d839578d899cb687044e7c3558f598ba35a";
+  rev = "a065946a8ce95eb3374e08242cd9086ab050314b";
   src = ourPkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "oxc";
     inherit rev;
-    hash = "sha256-knoVJdbN0CJpcfLEhV6fJFHTYOF8OwzZRuynSdISDXk=";
+    hash = "sha256-hfepmR8BjEDBPhKNOODZaTdhACXWSY+CiyQyRWB7EvM=";
   };
   version = vu.mkVersion {
     # upstream: readCargoVersion @ apps/oxlint/Cargo.toml
@@ -38,7 +38,7 @@ in
       inherit (finalAttrs) pname version src;
       pnpm = ourPkgs.pnpm_10;
       fetcherVersion = 3;
-      hash = "sha256-7/GTSKTq34Bfh+9a5prVnqi0K4Zb3f/vXzwyqg7QnPU=";
+      hash = "sha256-VQ4BtwiiJINTZ5Y+d/wTXPcB9aay9w6DIO+IrSAEkFs=";
     };
     # Strip versionCheckHook: `oxlint --version` prints the bare upstream
     # semver (e.g. 1.74.0) and drops the `+shortrev` build metadata that
