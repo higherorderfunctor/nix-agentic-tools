@@ -49,13 +49,13 @@
   # overlay actually exposes the package to downstream users.
   #
   # Content-only packages (coding-standards, fragments-ai,
-  # fragments-docs, stacked-workflows-content) are excluded — they
-  # have no build inputs so their paths are already independent
-  # of the consumer pin.
+  # stacked-workflows-content) are excluded — they have no build
+  # inputs so their paths are already independent of the consumer
+  # pin.
   #
-  # Doc-site derivations (docs-*, instructions-*) are excluded —
-  # they're produced by `flake.nix` itself, not the overlay, so
-  # they don't exist on the consumer side.
+  # Instruction derivations (instructions-*) are excluded — they're
+  # produced by `flake.nix` itself, not the overlay, so they don't
+  # exist on the consumer side.
 
   # AI CLIs — live at `consumerPkgs.ai.<name>`.
   aiCliPackages = [

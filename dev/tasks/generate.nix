@@ -98,8 +98,7 @@
   # never anything under /nix/store.
   #
   # chmod because store files are 0444 and the copy inherits that,
-  # leaving a read-only file in the tree. generate:site:prose already
-  # does the same for its directory copies.
+  # leaving a read-only file in the tree.
   copyOut = ''
     copy_out() {
       rm -f "$2"
@@ -286,93 +285,11 @@ in {
       '';
     };
 
-    "generate:site:prose" = {
-      description = "Copy authored prose to docs/src/";
-      before = ["generate:site"];
-      exec = ''
-        ${bashPreamble}
-        ${log}
-        log "Copying prose to docs/src/"
-        src=$(nix build .#docs-site-prose --no-link --print-out-paths)
-        rm -rf docs/src
-        cp -rL "$src" docs/src
-        chmod -R u+w docs/src
-        log "Prose copied"
-      '';
-    };
-
-    "generate:site:snippets" = {
-      description = "Generate data table snippets for doc site";
-      after = ["generate:site:prose"];
-      before = ["generate:site"];
-      exec = ''
-        ${bashPreamble}
-        ${log}
-        log "Generating snippets"
-        src=$(nix build .#docs-site-snippets --no-link --print-out-paths)
-        mkdir -p docs/src/generated
-        cp -rL "$src"/* docs/src/generated/
-        chmod -R u+w docs/src/generated
-        log "Snippets generated"
-      '';
-    };
-
-    "generate:site:reference" = {
-      description = "Generate reference pages for doc site";
-      after = ["generate:site:prose"];
-      before = ["generate:site"];
-      exec = ''
-        ${bashPreamble}
-        ${log}
-        log "Generating reference pages"
-        src=$(nix build .#docs-site-reference --no-link --print-out-paths)
-        for dir in concepts guides reference; do
-          if [ -d "$src/$dir" ]; then
-            mkdir -p "docs/src/$dir"
-            cp -rL "$src/$dir"/* "docs/src/$dir/"
-            chmod -R u+w "docs/src/$dir/"
-          fi
-        done
-        log "Reference pages generated"
-      '';
-    };
-
-    "generate:site:search" = {
-      description = "Build Pagefind search index for doc site";
-      after = ["generate:site:prose" "generate:site:reference" "generate:site:snippets"];
-      before = ["generate:site"];
-      exec = ''
-        ${bashPreamble}
-        ${log}
-        log "Building mdbook site for indexing"
-        mdbook build docs/
-        log "Indexing with Pagefind"
-        pagefind --site result-docs
-        log "Search index built"
-      '';
-    };
-
-    "generate:site" = {
-      description = "Generate complete doc site";
-      after = [
-        "generate:site:prose"
-        "generate:site:reference"
-        "generate:site:search"
-        "generate:site:snippets"
-      ];
-      exec = ''
-        ${bashPreamble}
-        ${log}
-        log "Doc site generation complete"
-      '';
-    };
-
     "generate:all" = {
-      description = "Generate all content (instructions + repo + site)";
+      description = "Generate all content (instructions + repo)";
       after = [
         "generate:instructions"
         "generate:repo"
-        "generate:site"
       ];
       exec = ''
         ${bashPreamble}
