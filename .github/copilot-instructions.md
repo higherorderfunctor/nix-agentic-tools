@@ -292,11 +292,12 @@ for it across the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-07-24 (commit pending — documents the local
-> `reject-default-branch-commit` pre-commit guard and aligns the PR-draft
-> guidance with the review policy). If you change the branch-protection
-> ruleset, the worktree convention, the local commit guard, or the PR flow
-> and this fragment isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-07-24 (commit pending — adds the one-time devenv
+> bootstrap step a fresh worktree needs before its first commit, backed by a
+> preflight guard injected into the prek hooks). If you change the
+> branch-protection ruleset, the worktree convention, the bootstrap step, the
+> local commit guard, or the PR flow and this fragment isn't updated in the
+> same commit, stop and fix it.
 
 `main` is the trunk. It is protected: pull-request required, **squash-merge
 only**, no force-push, no deletion, and four required status checks —
@@ -324,19 +325,30 @@ safety net, not the workflow.
    `<type>` is a Conventional Commits type (`build`, `chore`, `ci`, `docs`,
    `feat`, `fix`, `perf`, `refactor`, `style`, `test`).
 
-2. **Push at the first commit** — not at the end — so the branch is a
+2. Bootstrap the new worktree **once**, before its first commit:
+
+   ```bash
+   cd ~/.cache/nat-worktrees/<slug> && devenv shell   # or any devenv task
+   ```
+
+   `.pre-commit-config.yaml` is a devenv `files.*` artifact materialized on
+   shell entry, and `git worktree add` runs no devenv — until you do this the
+   shared prek hooks have no config to validate against and the commit is
+   rejected.
+
+3. **Push at the first commit** — not at the end — so the branch is a
    continuous off-machine backup. Open the PR **ready (non-draft) as soon as
    the work is dev-complete**: Copilot review does **not** run on draft PRs in
    this repo, so a draft that is actually ready silently skips review. Reserve
    **draft** for genuine WIP, or when you explicitly want to preview the branch
    in GitHub without review. Draft and ready PRs both get full CI here.
 
-3. Keep pushing as work lands. Flip draft → ready the moment it is
+4. Keep pushing as work lands. Flip draft → ready the moment it is
    dev-complete so review can start.
 
-4. Merges are squash merges, performed by the operator.
+5. Merges are squash merges, performed by the operator.
 
-5. Tear the worktree down once merged:
+6. Tear the worktree down once merged:
 
    ```bash
    git worktree remove ~/.cache/nat-worktrees/<slug>
