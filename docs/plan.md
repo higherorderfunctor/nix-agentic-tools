@@ -355,7 +355,8 @@ High confidence, small scope. Good for review sessions.
 - [ ] **Add scope→fragment map to the self-maintenance directive** —
       the always-loaded `dev/fragments/monorepo/architecture-fragments.md`
       doesn't tell sessions which fragment covers which scope.
-      Hand-maintain a table or generate from `packagePaths`.
+      Hand-maintain a table or generate from
+      `config.fragments.categories`.
 
 - [ ] **Include commit subject in Last-verified markers** — extend
       the `Last verified:` format across all fragments.
@@ -397,10 +398,14 @@ Moderate confidence, needs some investigation or design.
       pattern. `memory/project_factory_known_gaps.md` open question
       \#1 closed.
 
-- [ ] **Consolidate fragment enumeration into single metadata table**
-      — `devFragmentNames`, `packagePaths`, and `flake.nix`'s
-      `siteArchitecture` all hand-list the same fragments. Extract a
-      single `fragmentMetadata` attrset in `dev/generate.nix`.
+- [x] **Consolidate fragment enumeration into single metadata table**
+      — DONE 2026-07-24. `devFragmentNames` and `packagePaths` were two
+      halves of one per-category record; both dissolved into
+      `config.fragments.categories` (`config/fragment-categories.nix`,
+      option declared in `lib/fragments-registry.nix`), read by
+      `dev/generate.nix` via `lib.evalModules`. The third leg,
+      `flake.nix`'s `siteArchitecture`, had already been removed with
+      the doc site.
 
 - [ ] **HM ↔ devenv ai module parity test** — add a parity-check
       eval test in `checks/module-eval.nix` that evaluates both HM

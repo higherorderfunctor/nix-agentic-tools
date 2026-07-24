@@ -176,18 +176,19 @@ apologising for this ("binaries are the flat-overlay exception to Bazel-style").
 `packages/default.nix`, `overlays/default.nix` (flatDrvs/mcpServerDrvs/gitToolDrvs/
 devToolDrvs), `packages/mcp-services/…/serverNames` (+ a
 `modelContextProtocolServers` sublist), `config/update-matrix.nix`, `flake.nix`
-package flattening, and `dev/generate.nix` (`devFragmentNames` + `packagePaths`).
+package flattening, and `dev/generate.nix` (`devFragmentNames` + `packagePaths`,
+since dissolved into `config.fragments.categories`).
 Adding or renaming one package touches all of them.
 
 The gap analysis catalogued **14 name-resolution smells → 4 patterns**
 (full table in Appendix A):
 
-| Pattern | Shape                                                    | Sites                                                                                                           | Cure                                                    |
-| ------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| **A**   | central registry decoupled from the data it describes    | #2 update-matrix, #6 data.nix, #7 packagePaths, #8 cache-hit-parity lists, #11 excludePatterns (+ #3 Rust list) | **merge-up**                                            |
-| **B**   | convention-based name→file lookup (grep / path template) | #1 update-pkg grep _(ACTIVE BUG, PR #91)_, #5 `lib/mcp.nix` loadServer _(latent: breaks when files move)_       | slice declares its own file, same merge-up              |
-| **C**   | within-file regex / comment parsing                      | #12 magic comments _(fails **silently**)_, #13 rev/hash sed                                                     | sidecar-JSON or typed decls — **independent of slices** |
-| **D**   | explicit registries that are fine as-is                  | #4 overlays/default.nix, #9 flake flatten, #10 bare-commands scope                                              | leave alone                                             |
+| Pattern | Shape                                                    | Sites                                                                                                                                                                   | Cure                                                    |
+| ------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| **A**   | central registry decoupled from the data it describes    | #2 update-matrix _(dissolved)_, #6 data.nix, #7 packagePaths _(dissolved)_, #8 cache-hit-parity lists _(dissolved)_, #11 excludePatterns _(dissolved)_ (+ #3 Rust list) | **merge-up**                                            |
+| **B**   | convention-based name→file lookup (grep / path template) | #1 update-pkg grep _(ACTIVE BUG, PR #91)_, #5 `lib/mcp.nix` loadServer _(latent: breaks when files move)_                                                               | slice declares its own file, same merge-up              |
+| **C**   | within-file regex / comment parsing                      | #12 magic comments _(fails **silently**)_, #13 rev/hash sed                                                                                                             | sidecar-JSON or typed decls — **independent of slices** |
+| **D**   | explicit registries that are fine as-is                  | #4 overlays/default.nix, #9 flake flatten, #10 bare-commands scope                                                                                                      | leave alone                                             |
 
 Scored: **8 HIGH** merge-up suitability, 3 medium, 3 low. **9 of 14 are naturally
 subsumed by the slice move; 5 are independent.** Site #14 (`*-sources.json`
@@ -273,14 +274,14 @@ system — loses the collision detection the factory relies on.)
 
 Registries expected to dissolve — roughly 5–7 namespaces:
 
-| Merged namespace        | Replaces                                                               |
-| ----------------------- | ---------------------------------------------------------------------- |
-| `update.targets`        | `config/update-matrix.nix` + the hardcoded Rust list (via `dependsOn`) |
-| `transformers`          | `lib/ai/transformers/default.nix` aggregator                           |
-| `mcp.serverModules`     | `packages/mcp-services` hardcoded `serverNames`                        |
-| `fragments.scopes`      | `dev/generate.nix` `packagePaths`                                      |
-| `docs.descriptions`     | `dev/data.nix` _(lower priority; couples to docsite)_                  |
-| `checks.cacheHitParity` | the 5 hardcoded lists in `checks/cache-hit-parity.nix`                 |
+| Merged namespace        | Replaces                                                                                            |
+| ----------------------- | --------------------------------------------------------------------------------------------------- |
+| `update.targets`        | `config/update-matrix.nix` + the hardcoded Rust list (via `dependsOn`)                              |
+| `transformers`          | `lib/ai/transformers/default.nix` aggregator                                                        |
+| `mcp.serverModules`     | `packages/mcp-services` hardcoded `serverNames`                                                     |
+| `fragments.categories`  | `dev/generate.nix` `packagePaths` **+ `devFragmentNames`** (both halves of one per-category record) |
+| `docs.descriptions`     | `dev/data.nix` _(lower priority; couples to docsite)_                                               |
+| `checks.cacheHitParity` | the 5 hardcoded lists in `checks/cache-hit-parity.nix`                                              |
 
 **Design the namespace shape ONCE, before the first slice lands** — otherwise
 slice 2 retrofits.
@@ -686,7 +687,7 @@ fails. The propagation surface is currently _partially broken already_ —
 - [ ] `packages/default.nix` barrel
 - [ ] `overlays/default.nix` group composition + export lists
 - [ ] `config/update-matrix.nix` (until dissolved)
-- [ ] `dev/generate.nix` — `devFragmentNames` + `packagePaths` globs
+- [ ] `config/fragment-categories.nix` rows (was: `dev/generate.nix` `devFragmentNames` + `packagePaths` globs — dissolved into `config.fragments.categories`)
 - [ ] `config/cache-hit-parity-targets.nix` rows (was: `checks/cache-hit-parity.nix` package lists — dissolved into `config.checks.cacheHitParity`); `checks/bare-commands.nix` glob
 - [ ] `packages/mcp-services/.../serverNames` (until dissolved)
 - [ ] HM module registrations; devshell's hand-listed 5 modules (`lib/devshell.nix`)
@@ -700,22 +701,22 @@ fails. The propagation surface is currently _partially broken already_ —
 
 ## Appendix A — the 14 name-resolution sites
 
-| #   | Site                                 | Smell                                                                          | Pattern | Severity                                                             |
-| --- | ------------------------------------ | ------------------------------------------------------------------------------ | ------- | -------------------------------------------------------------------- |
-| 1   | `update-pkg.sh:34-35`                | substring-greps `overlays/` for the git-URL basename, takes `head -1`          | B       | **ACTIVE BUG** — PR #91: `servers.git` matched `agnix.nix`'s comment |
-| 2   | `config/update-matrix.nix`           | central update registry decoupled from files                                   | A       | structural; **root of #1**                                           |
-| 3   | `generate-update-ninja.nix:38`       | hardcoded `elem name ["agnix" "git-absorb" "git-branchless"]` for Rust DAG dep | A-like  | silent foot-gun on a new Rust pkg                                    |
-| 4   | `overlays/default.nix`               | explicit per-package import list                                               | D       | clean today; structural target                                       |
-| 5   | `lib/mcp.nix:22`                     | `import ../packages/${name}/modules/mcp-server.nix` (string-interpolated path) | B       | **LATENT — breaks loudly when files move**                           |
-| 6   | `dev/data.nix`                       | repo-wide description registry                                                 | A       | structural; long-term DRY win                                        |
-| 7   | `dev/generate.nix:89`                | `packagePaths` glob registry                                                   | A       | **ACTIVE CHURN** — touched on every fragment move                    |
-| 8   | `checks/cache-hit-parity.nix:61-120` | 5 hardcoded package lists                                                      | A       | the drift check is **itself** a drift source                         |
-| 9   | `flake.nix:391-396`                  | manual flatten + hand-maintained rename                                        | D       | low friction                                                         |
-| 10  | `checks/bare-commands.nix:32`        | hardcoded scan-scope glob                                                      | D       | trivial one-line fix on move                                         |
-| 11  | `update-matrix.nix`                  | `excludePatterns` regex registry                                               | A       | marginal                                                             |
-| 12  | `update-pkg.sh:80-104`               | awk-parsed `# upstream:` magic comments                                        | C       | **fails SILENTLY** (no rebuild, wrong version persists)              |
-| 13  | `update-pkg.sh:38-51`                | regex sed of first `rev=`/`hash=`                                              | C       | latent for multi-source overlays                                     |
-| 14  | `*-sources.json` sidecars            | **NOT a smell — the good pattern**                                             | —       | reference for Pattern-C fixes                                        |
+| #   | Site                                 | Smell                                                                          | Pattern | Severity                                                                               |
+| --- | ------------------------------------ | ------------------------------------------------------------------------------ | ------- | -------------------------------------------------------------------------------------- |
+| 1   | `update-pkg.sh:34-35`                | substring-greps `overlays/` for the git-URL basename, takes `head -1`          | B       | **ACTIVE BUG** — PR #91: `servers.git` matched `agnix.nix`'s comment                   |
+| 2   | `config/update-matrix.nix`           | central update registry decoupled from files                                   | A       | **DISSOLVED** → `config.update.targets` (`config/update-targets.nix`)                  |
+| 3   | `generate-update-ninja.nix:38`       | hardcoded `elem name ["agnix" "git-absorb" "git-branchless"]` for Rust DAG dep | A-like  | silent foot-gun on a new Rust pkg                                                      |
+| 4   | `overlays/default.nix`               | explicit per-package import list                                               | D       | clean today; structural target                                                         |
+| 5   | `lib/mcp.nix:22`                     | `import ../packages/${name}/modules/mcp-server.nix` (string-interpolated path) | B       | **LATENT — breaks loudly when files move**                                             |
+| 6   | `dev/data.nix`                       | repo-wide description registry                                                 | A       | structural; long-term DRY win                                                          |
+| 7   | `dev/generate.nix:89`                | `packagePaths` glob registry (+ `devFragmentNames`)                            | A       | **DISSOLVED** → `config.fragments.categories` (`config/fragment-categories.nix`)       |
+| 8   | `checks/cache-hit-parity.nix:61-120` | 5 hardcoded package lists                                                      | A       | **DISSOLVED** → `config.checks.cacheHitParity` (`config/cache-hit-parity-targets.nix`) |
+| 9   | `flake.nix:391-396`                  | manual flatten + hand-maintained rename                                        | D       | low friction                                                                           |
+| 10  | `checks/bare-commands.nix:32`        | hardcoded scan-scope glob                                                      | D       | trivial one-line fix on move                                                           |
+| 11  | `update-matrix.nix`                  | `excludePatterns` regex registry                                               | A       | **DISSOLVED** → `config.update.excludePatterns`                                        |
+| 12  | `update-pkg.sh:80-104`               | awk-parsed `# upstream:` magic comments                                        | C       | **fails SILENTLY** (no rebuild, wrong version persists)                                |
+| 13  | `update-pkg.sh:38-51`                | regex sed of first `rev=`/`hash=`                                              | C       | latent for multi-source overlays                                                       |
+| 14  | `*-sources.json` sidecars            | **NOT a smell — the good pattern**                                             | —       | reference for Pattern-C fixes                                                          |
 
 ---
 
@@ -865,7 +866,8 @@ reads the merged set.
 - Dissolve `config/update-matrix.nix` → `config.update.targets` (+ the hardcoded
   Rust list, smell #3, via `dependsOn`)
 - Dissolve the transformer aggregator, `mcp-services` `serverNames`,
-  `dev/generate.nix` `packagePaths`, the 5 `cache-hit-parity` lists
+  `dev/generate.nix` `packagePaths` (**done** — merged with `devFragmentNames`
+  into `config.fragments.categories`), the 5 `cache-hit-parity` lists
 - Collapse the ~6-place package list toward one source of truth
 - Fix **#1** (active bug, wrong-file greps landing in main) and **#12** (silent
   failure — wrong version persists with no error)
@@ -962,7 +964,7 @@ state as of 2026-07-23; re-verify before acting — several are moving.)_
 | **`mcp-remote-http-secrets`** (draft PR #467)                | Carries known conflicts in `packages/kiro-cli/lib/mkKiro.nix` + `checks/module-eval.nix`. Now a **separate, operator-owned paused plan** (paused until this plan lands), **not** an in-flight migration                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Operator owns its resumption; land/migrate **before** any `packages/` move                                                                                                                                                                                                                                        |
 | **`converge-agentic-foundations` P3** (paused)               | Typed-surface work edits `lib/ai/`, `mkClaude.nix`, `mkKiro.nix`, `hooksJson` retirement — **the same files** Track B moves. Track A's `config.update.targets` option lives in a **new `lib/update.nix`** (RESOLVED d4 — deliberately _not_ `lib/ai/sharedOptions.nix`), so that seam no longer overlaps converge P3's typed-surface files. **Also:** the D-1 overlay split-prep's TOP-10 (`passthru.extracted` re-plumb — an _active_ phase, not deferred) edits `mkClaude.nix:186` (`effortLevels` enum) and `mkKiro.nix:75` (`hookTriggers` enum) — the same typed-surface files — landing **before** converge P3 resumes, so P3 rebases over the re-plumbed enum sources, not only over Track B's deferred file-moves | Option placement **resolved (d4): `lib/update.nix`**, which removes the option-placement conflict; the `mkClaude`/`mkKiro` overlap remains — now from **both** Track B's deferred moves _and_ TOP-10's active enum re-plumb, so converge P3 must rebase over the re-plumbed `effortLevels`/`hookTriggers` sources |
 | **Update pipeline v4 + transitive-hash gap (#144)**          | Track A's centrepiece **is** dissolving `update-matrix.nix` and changing `update-pkg.sh`. #144 (refresh only touches the named hash) is adjacent surgery on the same script                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Coordinate — do not run both independently                                                                                                                                                                                                                                                                        |
-| **Fragment pipeline** (`dev/generate.nix`)                   | Track A dissolves `packagePaths`, which lives in `dev/generate.nix` — owned by the fragment pipeline, not this plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Ownership needs assigning                                                                                                                                                                                                                                                                                         |
+| **Fragment pipeline** (`dev/generate.nix`)                   | Track A dissolves `packagePaths`, which lives in `dev/generate.nix` — owned by the fragment pipeline, not this plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | **RESOLVED (2026-07-24)** — dissolved under `converge-repo-foundations` together with `devFragmentNames` into `config.fragments.categories`                                                                                                                                                                       |
 | **`hmTransform`/`devenvTransform` de-dup**                   | Touches `lib/ai/app/`, which typed-surface work also touches                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Cheap and independent — but sequence against typed-surface                                                                                                                                                                                                                                                        |
 | **Repo defects (`mkClaude.nix:659`)**                        | `mkClaude.nix` is the ~800-line reference file; defect fixes there conflict with moving it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Fix defects first; they're smaller                                                                                                                                                                                                                                                                                |
 
@@ -981,8 +983,12 @@ state as of 2026-07-23; re-verify before acting — several are moving.)_
    _Rejected alternative:_ co-locating in `lib/ai/sharedOptions.nix` — dropped
    because it would couple update concerns to the typed-surface file converge P3
    edits, re-creating the two-way conflict this separation avoids.
-3. **Who owns `dev/generate.nix`** when `packagePaths` dissolves — this plan or the
-   fragment pipeline?
+3. **Who owns `dev/generate.nix`** when `packagePaths` dissolves — **RESOLVED
+   (2026-07-24): dissolved under the `converge-repo-foundations` plan**, not this
+   one. `packagePaths` and `devFragmentNames` merged into
+   `config.fragments.categories` (`config/fragment-categories.nix` +
+   `lib/fragments-registry.nix`), following the same option-module shape as
+   `config.update.targets` and `config.checks.cacheHitParity`.
 4. **Does Track A go before or after converge P3's typed-surface delivery?** They
    touch adjacent files in `lib/ai/`.
 5. **Is the update-pipeline work (#144 + Track A's `update-matrix` dissolution) one

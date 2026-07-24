@@ -44,6 +44,9 @@ working tree. Nix store caching means unchanged inputs skip rebuild.
 
 ### Source Layout
 
+- `config/fragment-categories.nix` — the fragment-category registry:
+  each category's scope globs and fragment sources. Option declared
+  in `lib/fragments-registry.nix`.
 - `dev/fragments/` — dev-only instruction fragments. Composed into
   instruction files and CLAUDE.md.
 - `dev/generate.nix` — shared fragment composition logic consumed by
@@ -165,7 +168,9 @@ files (CLAUDE.md, AGENTS.md, Copilot, Kiro) and CONTRIBUTING.md.
 To add a dev-only fragment:
 
 1. Create `dev/fragments/<pkg>/<name>.md`
-2. Add the name to `devFragmentNames.<pkg>` in `dev/generate.nix`
+2. Add the name to `config.fragments.categories.<pkg>.sources` in
+   `config/fragment-categories.nix` (scope globs for the category live
+   alongside it as `.scopes`)
 3. Run `devenv tasks run generate:instructions` to regenerate
 
 To add a published fragment (consumed by external users):

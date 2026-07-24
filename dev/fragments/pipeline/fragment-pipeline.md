@@ -1,7 +1,10 @@
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-07-24 (commit pending — removed the doc
-> site). If you touch `lib/fragments.nix`, `dev/generate.nix`,
+> **Last verified:** 2026-07-24 (commit pending — the
+> `packagePaths` + `devFragmentNames` registries dissolved into
+> `config.fragments.categories`). If you touch
+> `lib/fragments.nix`, `config/fragment-categories.nix`,
+> `lib/fragments-registry.nix`, `dev/generate.nix`,
 > `packages/fragments-ai/`, or any content-package
 > `passthru.fragments` surface and this fragment isn't updated in the
 > same commit, stop and fix it. This is a cross-cutting pipeline —
@@ -44,9 +47,10 @@ Concrete example: generating `.claude/rules/claude-code.md` from
 the `claude-code` category:
 
 1. `mkDevComposed "claude-code"` in `dev/generate.nix` reads the
-   fragment names from `devFragmentNames.claude-code` and calls
+   fragment sources from
+   `config.fragments.categories.claude-code.sources` and calls
    `mkDevFragment` on each. The location discriminator
-   (`"dev" | "package" | "module"`) controls where on disk the
+   (`"dev" | "devshell" | "package"`) controls where on disk the
    markdown is read from.
 2. `compose { fragments = devFrags; }` sorts by priority, dedupes
    by SHA256, and concatenates. Scoped categories do NOT include
@@ -54,7 +58,8 @@ the `claude-code` category:
    avoid duplicating shared content across always-loaded common.md
    and every scoped rule file.
 3. `mkEcosystemFile "claude-code"` looks up the path scope in
-   `packagePaths.claude-code` and returns a set of per-ecosystem
+   `config.fragments.categories.claude-code.scopes` and returns a
+   set of per-ecosystem
    renderers. The claude renderer wraps `aiTransforms.claude
 { package = "claude-code"; }` which emits `paths:` frontmatter
    as a YAML list.
@@ -102,16 +107,17 @@ transforms, all curried as `(transform-args)` then `(fragment)`:
   lines against always-loaded common.md. Fixed in
   `mkDevComposed` by gating `commonFragments` on `package == "monorepo"`.
 - **Dev fragment location discriminator.** Since commit de3dd12,
-  each entry in `devFragmentNames.<category>` may be either a
-  bare string (legacy, reads `dev/fragments/<category>/<name>.md`)
-  or an attrset `{ location, name, dir }`:
+  each entry in `config.fragments.categories.<category>.sources`
+  may be either a bare string (legacy, reads
+  `dev/fragments/<category>/<name>.md`) or an attrset
+  `{ location, name, dir }`:
   - `location = "dev"` (default) → `dev/fragments/<dir>/<name>.md`
-  - `location = "package"` → `packages/<dir>/fragments/dev/<name>.md`
-  - `location = "module"` → `modules/<dir>/fragments/dev/<name>.md`
-    The `dir` field defaults to the category key but is explicit
-    when they differ (e.g., category "ai-module" pointing at
-    `modules/ai/`).
-- **Path scoping is a list, not a string.** `packagePaths` must
+  - `location = "package"` → `packages/<dir>/docs/<name>.md`
+  - `location = "devshell"` → `devshell/<dir>/docs/<name>.md`
+    The `dir` field defaults to null, falling back to the category
+    key, and is explicit when they differ (e.g., a category name
+    that does not match its directory).
+- **Path scoping is a list, not a string.** The `scopes` field must
   hold Nix lists; pre-quoted comma-joined strings produced broken
   YAML for Claude and Kiro before commit 5a97f09.
 - **Priority is for intra-composition ordering only.** Never
@@ -123,8 +129,8 @@ transforms, all curried as `(transform-args)` then `(fragment)`:
 ### Extension points (how to add things)
 
 - **New dev fragment**: create markdown file at the right
-  location, add to `devFragmentNames.<category>` in
-  `dev/generate.nix`, run
+  location, add to `config.fragments.categories.<category>.sources`
+  in `config/fragment-categories.nix`, run
   `devenv tasks run --mode before generate:instructions`.
 - **New content package published fragment**: create markdown
   at `packages/<pkg>/fragments/<name>.md`, declare in the
