@@ -1,18 +1,25 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-07-24 (commit pending — first statement of the
-> trunk-based conventions after the `main` promotion). If you change the
-> branch-protection ruleset, the worktree convention, or the PR flow and
-> this fragment isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-07-24 (commit pending — documents the local
+> `reject-default-branch-commit` pre-commit guard and aligns the PR-draft
+> guidance with the review policy). If you change the branch-protection
+> ruleset, the worktree convention, the local commit guard, or the PR flow
+> and this fragment isn't updated in the same commit, stop and fix it.
 
 `main` is the trunk. It is protected: pull-request required, **squash-merge
 only**, no force-push, no deletion, and four required status checks —
 `build (x86_64-linux, ubuntu-latest)`, `build (aarch64-darwin, macos-latest)`,
 `test`, and `gitleaks`. Copilot review runs on every PR.
 
-**Never commit directly to `main`.** This is enforced at _push_ time, not
-locally: a local commit on `main` succeeds and only the push is rejected, so
-branch **before** you start rather than discovering it afterwards.
+**Never commit directly to `main`.** Two backstops enforce this. A local
+`reject-default-branch-commit` pre-commit hook (installed through devenv's
+git-hooks framework) rejects any commit made while the default branch (`main`)
+is the checked-out HEAD — caught at _commit_ time, in whichever worktree has
+`main` checked out (normally the primary checkout, since git allows a branch in
+only one worktree at a time); worktrees on other branches are unaffected, and
+`--no-verify` bypasses it by design. Independently, the branch-protection
+ruleset rejects the _push_. Still branch **before** you start — the guard is a
+safety net, not the workflow.
 
 ### Every change goes through an isolated worktree + PR
 
@@ -25,12 +32,15 @@ branch **before** you start rather than discovering it afterwards.
    `<type>` is a Conventional Commits type (`build`, `chore`, `ci`, `docs`,
    `feat`, `fix`, `perf`, `refactor`, `style`, `test`).
 
-2. **Push and open a DRAFT PR at the first commit** — not at the end. The
-   pushed branch is continuous off-machine backup, and the draft PR is a
-   progress surface reviewable without attaching to the session. Draft PRs
-   do get full CI in this repo.
+2. **Push at the first commit** — not at the end — so the branch is a
+   continuous off-machine backup. Open the PR **ready (non-draft) as soon as
+   the work is dev-complete**: Copilot review does **not** run on draft PRs in
+   this repo, so a draft that is actually ready silently skips review. Reserve
+   **draft** for genuine WIP, or when you explicitly want to preview the branch
+   in GitHub without review. Draft and ready PRs both get full CI here.
 
-3. Keep pushing as work lands. Flip draft → ready only when merge-ready.
+3. Keep pushing as work lands. Flip draft → ready the moment it is
+   dev-complete so review can start.
 
 4. Merges are squash merges, performed by the operator.
 

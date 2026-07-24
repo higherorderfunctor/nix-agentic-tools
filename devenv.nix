@@ -24,6 +24,44 @@
   # claude.code.hooks block below.
   validateAtStop = import ./lib/validate-at-stop.nix {inherit pkgs config;};
 
+  # Pre-commit guard: reject commits made while the default branch is the
+  # checked-out HEAD. This repo is trunk-based (see the git-workflow
+  # fragment) — `main` is never committed to directly. The branch-protection
+  # ruleset already rejects the push, but that only fires after work is done;
+  # this catches a mis-branched commit at commit time, in whichever worktree
+  # has `main` checked out (normally the primary checkout). It rides the
+  # git-hooks framework (never core.hooksPath), so it is SHARED across
+  # worktrees but INERT in any worktree not on the trunk.
+  # Wired into git-hooks.hooks below.
+  rejectDefaultBranchCommit = pkgs.writeShellApplication {
+    name = "reject-default-branch-commit";
+    runtimeInputs = [pkgs.git];
+    text = ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      # The protected trunk. Hardcoded on purpose: resolving origin/HEAD
+      # needs a network round-trip and a configured remote HEAD, neither
+      # guaranteed at commit time. If the trunk is ever renamed, edit this
+      # one string.
+      default_branch="main"
+      current_branch="$(git rev-parse --abbrev-ref HEAD)"
+      # A detached HEAD prints "HEAD" and every feature branch prints its own
+      # name — both are allowed. Only a commit while the default branch is the
+      # checked-out HEAD (the one worktree that has main checked out —
+      # normally the primary checkout) is rejected. This hook is SHARED across
+      # worktrees (it rides the git-hooks framework, never core.hooksPath),
+      # but it is INERT in any worktree not on the trunk.
+      if [ "$current_branch" = "$default_branch" ]; then
+        printf '%s\n' \
+          "error: refusing to commit directly on the default branch ('$default_branch')." \
+          "This repo is trunk-based — branch into a worktree first, e.g.:" \
+          "  git worktree add -b <type>/<slug> ~/.cache/nat-worktrees/<slug> origin/$default_branch" \
+          "(--no-verify bypasses this guard by design.)" >&2
+        exit 1
+      fi
+    '';
+  };
+
   # CI-lean closure — EVAL-time branch on $CI. Distinct from the RUNTIME
   # $CI guard in processes.docs.exec below: that one skips work inside an
   # already-built shell; this one changes what the shell closure CONTAINS,
@@ -226,6 +264,18 @@ in {
       name = "gitleaks";
       entry = "${pkgs.gitleaks}/bin/gitleaks protect --staged --verbose --redact";
       pass_filenames = false;
+      stages = ["pre-commit"];
+    };
+    # Trunk guard: reject a commit made while the default branch is the
+    # checked-out HEAD. always_run so it fires with no file match; INERT on
+    # every feature branch (fires only in the worktree that has `main`
+    # checked out — normally the primary checkout).
+    reject-default-branch-commit = {
+      enable = true;
+      name = "reject-default-branch-commit";
+      entry = lib.getExe rejectDefaultBranchCommit;
+      pass_filenames = false;
+      always_run = true;
       stages = ["pre-commit"];
     };
   };
