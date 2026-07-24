@@ -28,9 +28,10 @@
   # checked-out HEAD. This repo is trunk-based (see the git-workflow
   # fragment) — `main` is never committed to directly. The branch-protection
   # ruleset already rejects the push, but that only fires after work is done;
-  # this catches a mis-branched commit at commit time, in the primary
-  # checkout. It rides the git-hooks framework (never core.hooksPath), so it
-  # is SHARED across worktrees but INERT in any worktree not on the trunk.
+  # this catches a mis-branched commit at commit time, in whichever worktree
+  # has `main` checked out (normally the primary checkout). It rides the
+  # git-hooks framework (never core.hooksPath), so it is SHARED across
+  # worktrees but INERT in any worktree not on the trunk.
   # Wired into git-hooks.hooks below.
   rejectDefaultBranchCommit = pkgs.writeShellApplication {
     name = "reject-default-branch-commit";
@@ -46,9 +47,10 @@
       current_branch="$(git rev-parse --abbrev-ref HEAD)"
       # A detached HEAD prints "HEAD" and every feature branch prints its own
       # name — both are allowed. Only a commit while the default branch is the
-      # checked-out HEAD (the primary checkout) is rejected. This hook is
-      # SHARED across worktrees (it rides the git-hooks framework, never
-      # core.hooksPath), but it is INERT in any worktree not on the trunk.
+      # checked-out HEAD (the one worktree that has main checked out —
+      # normally the primary checkout) is rejected. This hook is SHARED across
+      # worktrees (it rides the git-hooks framework, never core.hooksPath),
+      # but it is INERT in any worktree not on the trunk.
       if [ "$current_branch" = "$default_branch" ]; then
         printf '%s\n' \
           "error: refusing to commit directly on the default branch ('$default_branch')." \
@@ -266,7 +268,8 @@ in {
     };
     # Trunk guard: reject a commit made while the default branch is the
     # checked-out HEAD. always_run so it fires with no file match; INERT on
-    # every feature branch (fires only in the primary checkout on `main`).
+    # every feature branch (fires only in the worktree that has `main`
+    # checked out — normally the primary checkout).
     reject-default-branch-commit = {
       enable = true;
       name = "reject-default-branch-commit";

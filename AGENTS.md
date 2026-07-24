@@ -300,10 +300,11 @@ only**, no force-push, no deletion, and four required status checks —
 
 **Never commit directly to `main`.** Two backstops enforce this. A local
 `reject-default-branch-commit` pre-commit hook (installed through devenv's
-git-hooks framework) rejects any commit made while the default branch is the
-checked-out HEAD — a mis-branched commit is caught at _commit_ time, in the
-primary checkout only; linked worktrees on feature branches are unaffected,
-and `--no-verify` bypasses it by design. Independently, the branch-protection
+git-hooks framework) rejects any commit made while the default branch (`main`)
+is the checked-out HEAD — caught at _commit_ time, in whichever worktree has
+`main` checked out (normally the primary checkout, since git allows a branch in
+only one worktree at a time); worktrees on other branches are unaffected, and
+`--no-verify` bypasses it by design. Independently, the branch-protection
 ruleset rejects the _push_. Still branch **before** you start — the guard is a
 safety net, not the workflow.
 
