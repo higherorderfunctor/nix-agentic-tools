@@ -264,7 +264,7 @@ it in the same commit:
 - Routing tables in skills
 - README feature matrix and server reference
 - flake.nix output lists
-- config/update-matrix.nix entries
+- config.update.targets entries (config/update-targets.nix)
 - CI workflow matrices
 - Home-manager module registrations
 - Overlay export lists
@@ -414,7 +414,7 @@ overlays/     Binary package overlays (pkgs.ai.*, pkgs.gitTools.*, pkgs.devTools
 lib/          Shared library: the ai factory (lib/ai/*), fragments, MCP helpers,
               credentials, devshell
 devshell/     Standalone devshell modules (mkAgenticShell)
-config/       update-matrix.nix and shared configuration data
+config/       update-targets.nix (config.update.targets) and shared configuration data
 dev/
   fragments/    Dev-only instruction fragments (not exported)
   references/   Dev-only reference docs (not exported)

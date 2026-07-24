@@ -52,7 +52,7 @@ a `python.withPackages` environment. The source is fetched via inline
 
 These packages pin versions inline (binary CLIs via a per-platform
 `sources.json` sidecar). Each uses an update strategy managed by
-`config/update-matrix.nix`:
+`config.update.targets` (see `config/update-targets.nix`):
 
 - `copilot-cli` — per-platform `sources.json` + `mkUpdateScript` fetches
   latest GitHub release and prefetches per-platform binaries
@@ -90,5 +90,5 @@ nix build .#copilot-cli         # Build Copilot CLI
 nix build .#kimchi              # Build Kimchi CLI
 nix build .#kiro-cli            # Build Kiro CLI
 nix build .#kiro-gateway        # Build Kiro Gateway
-nix run .#update                # Update all source versions via update matrix
+nix run .#update                # Update all source versions via config.update.targets
 ```

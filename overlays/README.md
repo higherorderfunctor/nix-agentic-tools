@@ -10,7 +10,8 @@ Versions computed at eval time via `overlays/lib.nix:mkVersion`
 `nix run .#generate-update-ninja && ninja -j4 -v -f .update.ninja update-report`
 
 - **Main-tracking**: `git ls-remote` for rev, `nix flake prefetch` for hash,
-  `nix-update --version skip` for dep hashes. Config in `config/update-matrix.nix`.
+  `nix-update --version skip` for dep hashes. Config in `config.update.targets`
+  (`config/update-targets.nix`).
 - **Binary packages**: custom `updateScript` via `mkUpdateScript` in `overlays/lib.nix`.
   Per-platform hashes in `<name>-sources.json`.
 - **Flake inputs**: consumed from `inputs.<name>.packages`, updated via `nix flake update`.

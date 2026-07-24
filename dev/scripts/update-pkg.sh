@@ -41,15 +41,15 @@ if [ -n "$git_url" ]; then
     # silently rewriting the wrong overlay — context7's HEAD rev landed in
     # effect-mcp's fetch block → nonexistent commit → source 404 → red CI.
     # See dev/scripts/resolve-overlay-file.sh.
-    # Coexistence (Track-A merge-up beachhead): prefer a declared
-    # config.update.targets entry (lib/update.nix + per-package
-    # <pkg>.update.nix, exposed as the `.#updateTargets` flake output) over
-    # the resolve_overlay_file fallback. Only `file` is consumed here;
-    # `flags`/`git` keep flowing positionally from config/update-matrix.nix
-    # via the ninja DAG, and `dependsOn` is declared-but-unused for now. The
-    # matrix stays the live fallback for every package without a declared
-    # target. checks.update-targets-parity asserts the declared `file` is
-    # byte-identical to resolve_overlay_file's output, so the two paths agree.
+    # config.update.targets is the single source of truth (config/update-matrix
+    # .nix was dissolved): read the declared overlay file for this package via
+    # `nix eval --raw .#updateTargets.<name>.file` (lib/update.nix +
+    # config/update-targets.nix + the co-located <pkg>.update.nix). Every
+    # main-tracking package declares one, so resolve_overlay_file below is a
+    # retained safety-net fallback. Only `file` is consumed here; `flags`/`git`
+    # flow positionally from the same registry via the ninja DAG.
+    # checks.update-targets-parity asserts the declared `file` is byte-identical
+    # to resolve_overlay_file's output, so the two paths agree.
     # cwd is still the main tree here (before the Phase 1 subshell `cd`), so
     # `.#updateTargets` resolves against the checked-out flake.
     declared_file=$(nix eval --raw ".#updateTargets.${name}.file" 2>/dev/null || true)

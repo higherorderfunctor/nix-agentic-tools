@@ -252,8 +252,8 @@ memory-mcp, sequential-thinking-mcp) have **different** npm-deps
 outPaths because the drv name embeds pname — but the underlying
 content (and therefore the hash they all assert) is identical.
 
-The mistake is in `config/update-matrix.nix`: it points
-`nix-update` at `modelcontextprotocol-all-mcps`, the meta-derivation
+The mistake is in `config.update.targets` (`config/update-targets.nix`):
+it points `nix-update` at `modelcontextprotocol-all-mcps`, the meta-derivation
 that exists only to symlink binaries. `all-mcps` has no
 `npmDepsHash` attribute itself, so nix-update sees nothing to
 refresh and exits clean. The shared let-binding stays stale.
@@ -268,13 +268,13 @@ refresh and exits clean. The shared let-binding stays stale.
    modelcontextprotocol-filesystem-mcp = pkgs.ai.mcpServers.modelContextProtocol.filesystem-mcp;
    ```
 
-2. Replace the matrix entry key in `config/update-matrix.nix`:
-   `modelcontextprotocol-all-mcps` → `modelcontextprotocol-filesystem-mcp`.
-   The `git` field stays the same.
+2. Replace the entry key in `config.update.targets`
+   (`config/update-targets.nix`): `modelcontextprotocol-all-mcps` →
+   `modelcontextprotocol-filesystem-mcp`. The `git` field stays the same.
 
 Phase 0 of `update-pkg.sh` is unaffected: rev-bump greps for the
 repo name "servers" in `overlays/`, finds the same file, and
-applies the same rev+src.hash sed regardless of the matrix key.
+applies the same rev+src.hash sed regardless of the config.update.targets key.
 The `# upstream:` markers continue to drive per-child version
 re-derivation.
 
@@ -515,7 +515,8 @@ build pnpm: pnpm-10.33.4`. PR #168 closed without merging.
 
 - **Gap 2 fix** in commit `4345fa3`. Adds
   `modelcontextprotocol-filesystem-mcp` as a top-level flake
-  output and renames the `config/update-matrix.nix` entry to
+  output and renames the update config entry (`config/update-matrix.nix`
+  at the time, since dissolved into `config.update.targets`) to
   point at it (instead of the meta-derivation `all-mcps`, which
   has no `npmDepsHash` attribute). Negative test confirmed
   `nix-update --flake modelcontextprotocol-filesystem-mcp`

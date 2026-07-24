@@ -171,24 +171,26 @@
       "packages/mcp-servers/*.nix"
     ];
     # packaging: naming conventions + platform handling for overlay
-    # packages. Scoped to the packages tree plus update-matrix.nix.
+    # packages. Scoped to the packages tree plus config/update-targets.nix.
     packaging = [
-      "config/update-matrix.nix"
+      "config/update-targets.nix"
       "packages/**/*.nix"
     ];
     # pipeline: fragment composition, ecosystem transforms, update
     # pipeline, and CI workflow. Scoped to every file in the dev
-    # fragment chain, update scripts, CI workflow, and ninja DAG
-    # generation.
+    # fragment chain, update scripts, CI workflow, ninja DAG
+    # generation, and the config.update.targets registry files.
     pipeline = [
       ".github/workflows/update.yml"
       "config/generate-update-ninja.nix"
-      "config/update-matrix.nix"
+      "config/update-targets.nix"
       "dev/generate.nix"
       "dev/scripts/update-*.sh"
       "dev/tasks/generate.nix"
       "lib/ai/transformers/**"
       "lib/fragments.nix"
+      "lib/update.nix"
+      "overlays/**/*.update.nix"
     ];
     stacked-workflows = ["packages/stacked-workflows/**"];
   };
@@ -779,7 +781,7 @@
 
     1. Create `overlays/<name>.nix` with inline `rev` + `hash`
     2. Register in `overlays/default.nix`
-    3. Add to `config/update-matrix.nix` with appropriate flags
+    3. Add a `config.update.targets.<name>` row in `config/update-targets.nix` with appropriate flags
     4. Export in `flake.nix` under `packages`
     5. Add HM and devenv modules in `packages/<name>/modules/`
     6. Run `nix flake check` to verify

@@ -141,7 +141,7 @@ instructions.
 
 1. Create `overlays/<name>.nix` with inline `rev` + `hash`
 2. Register in `overlays/default.nix`
-3. Add to `config/update-matrix.nix` with appropriate flags
+3. Add a `config.update.targets.<name>` row in `config/update-targets.nix` with appropriate flags
 4. Export in `flake.nix` under `packages`
 5. Add HM and devenv modules in `packages/<name>/modules/`
 6. Run `nix flake check` to verify

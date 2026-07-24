@@ -1,12 +1,28 @@
-# config/generate-update-ninja.nix — generate .update.ninja from update-matrix + flake.lock.
+# config/generate-update-ninja.nix — generate .update.ninja from config.update.targets + flake.lock.
 #
-# Reads flake.lock for input follows relationships and update-matrix.nix
+# Reads flake.lock for input follows relationships and config.update.targets
 # for package update flags. Outputs a ninja build file with the full DAG.
 #
-# Usage: nix eval --raw --impure --expr 'import ./config/generate-update-ninja.nix {}'
+# The flake passes `updateTargets = self.updateTargets`; the standalone doc
+# path below self-evaluates the registry so it works without the flake:
+#   nix eval --raw --impure --expr 'import ./config/generate-update-ninja.nix {}'
 {
   flakeLock ? builtins.fromJSON (builtins.readFile ../flake.lock),
-  updateMatrix ? import ./update-matrix.nix,
+  updateTargets ? (
+    let
+      inherit (import <nixpkgs> {}) lib;
+    in
+      (lib.evalModules {
+        modules = [
+          ./../lib/update.nix
+          ./update-targets.nix
+          ./../overlays/mcp-servers/effect-mcp.update.nix
+        ];
+      })
+      .config
+      .update
+      .targets
+  ),
 }: let
   inherit (flakeLock) nodes;
   rootInputs = nodes.root.inputs;
@@ -30,22 +46,20 @@
       )
       inputNames);
 
-  # Package dependencies beyond just nixpkgs
-  # Rust packages depend on rust-overlay; all nix-update packages depend on nix-update input
-  pkgDeps = name: let
+  # Package dependencies beyond just nixpkgs. baseDeps is the universal rule
+  # (every nix-update package depends on the nixpkgs + nix-update inputs);
+  # per-package DAG predecessors (e.g. rust-overlay) come from the target's
+  # own `dependsOn`, ordered AFTER baseDeps.
+  pkgDeps = cfg: let
     baseDeps = ["update-nixpkgs" "update-nix-update"];
-    rustDeps =
-      if builtins.elem name ["agnix" "git-absorb" "git-branchless"]
-      then ["update-rust-overlay"]
-      else [];
   in
-    baseDeps ++ rustDeps;
+    baseDeps ++ (map (d: "update-${d}") cfg.dependsOn);
 
   # treefmt-nix runs last — depends on ALL other targets
   allInputTargets = map (n: "update-${n}") (builtins.filter (n: n != "treefmt-nix") inputNames);
   allPkgTargets =
     builtins.attrValues
-    (builtins.mapAttrs (name: _: "update-${name}") updateMatrix.nixUpdate);
+    (builtins.mapAttrs (name: _: "update-${name}") updateTargets);
   allNonTreefmtTargets = allInputTargets ++ allPkgTargets;
 
   # Ninja rules
@@ -93,16 +107,19 @@
 
   # Package targets
   pkgTargets = builtins.concatStringsSep "\n" (builtins.attrValues (builtins.mapAttrs (name: cfg: let
-      deps = pkgDeps name;
+      deps = pkgDeps cfg;
       depStr = " | ${builtins.concatStringsSep " " deps}";
-      gitUrl = cfg.git or "";
+      gitUrl =
+        if cfg.git != null
+        then cfg.git
+        else "";
     in ''
       build update-${name}: update-pkg${depStr}
         name = ${name}
-        flags = ${cfg.flags}
+        flags = ${builtins.concatStringsSep " " cfg.flags}
         git = ${gitUrl}
     '')
-    updateMatrix.nixUpdate));
+    updateTargets));
 
   # treefmt last, then full format, then final build
   treefmtTarget = let
