@@ -873,8 +873,9 @@ reads the merged set.
 
 - It is **additive**. Coexistence (§9.1) means old and new paths work
   simultaneously; nothing has a flag day.
-- It requires **no directory churn**, so it does not fight `migrate-to-trunk-based`
-  or widen PR #467's conflicts (§13).
+- It requires **no directory churn**, so it never fought the now-folded
+  `migrate-to-trunk-based` and does not widen PR #467's conflicts — #467 is a
+  separate, operator-owned paused plan (§13).
 - It fixes **two live defects**, not just aesthetics.
 - **It does not depend on Forks 1, 2, or 3.** Merge-up works identically whether
   slices are coarse or flat and whether facets are discovered by barrel or by
@@ -943,8 +944,8 @@ standalone unit) intact.
    into the split-ready `overlays/` subtree (d4 decision 4).
 3. **Re-evaluate Track B.** Prediction: with the registries gone and `overlays/` a
    clean split-ready subtree, coarse topic dirs will feel like a nice-to-have. If it
-   still itches then, it's cheap to do as a pure `git mv` series — and by then the
-   trunk migration will have settled.
+   still itches then, it's cheap to do as a pure `git mv` series (the trunk
+   migration is already settled — `migrate-to-trunk-based` is folded).
 
 ## 13. Cross-workstream interfaces (for the convergence session)
 
