@@ -11,8 +11,9 @@
 name: Update
 
 on:
-  push:
-    branches: [refactor/ai-factory-architecture]
+  schedule:
+    # Nightly dependency sweep (was: push to the old integration branch).
+    - cron: "0 6 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -25,13 +26,15 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  BRANCH_NAME: refactor/ai-factory-architecture
+  BRANCH_NAME: main
 
 jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    # Skip if this push was made by the bot (prevents self-triggering).
+    # Vestigial guard from the old push trigger. Under schedule the actor
+    # is never the bot, so the first clause runs it; workflow_dispatch runs
+    # it via the second clause regardless of actor. Effectively always true.
     if: >-
       github.actor != 'nix-agentic-tools-bot[bot]'
       || github.event_name == 'workflow_dispatch'

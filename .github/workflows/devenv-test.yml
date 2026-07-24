@@ -35,7 +35,7 @@ on:
       - modules/**
       - packages/**
   push:
-    branches: [refactor/ai-factory-architecture, main]
+    branches: [main]
     paths:
       - .github/actions/warm-ifd/**
       - .github/workflows/devenv-test.yml
