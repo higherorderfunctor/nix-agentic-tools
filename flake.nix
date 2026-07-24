@@ -112,6 +112,22 @@
     # CI consumes via `nix eval --json .#updateMatrix` to generate GHA matrix.
     updateMatrix = import ./config/update-matrix.nix;
 
+    # Merged update-target registry (Track-A "config.update.targets merge-up"
+    # beachhead). COEXISTS with updateMatrix — only effect-mcp is migrated so
+    # far. Explicit 2-module import list (the barrel walker is deferred Track
+    # B): lib/update.nix declares the option, the co-located
+    # <pkg>.update.nix contributes each row. Consumed by update-pkg.sh (via
+    # `nix eval --raw .#updateTargets.<name>.file`) and asserted
+    # byte-identical to resolve_overlay_file by checks.update-targets-parity.
+    updateTargets =
+      (lib.evalModules {
+        modules = [
+          ./lib/update.nix
+          ./overlays/mcp-servers/effect-mcp.update.nix
+        ];
+      })
+      .config.update.targets;
+
     homeManagerModules.default = {
       imports =
         [./lib/ai/sharedOptions.nix]
@@ -201,9 +217,10 @@
       moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs;};
       overlayTargetResolutionCheck = {overlay-target-resolution = import ./checks/overlay-target-resolution.nix {inherit lib pkgs;};};
       pnpmFetcherParityCheck = import ./checks/pnpm-fetcher-parity.nix {inherit lib pkgs self;};
+      updateTargetsParityCheck = {update-targets-parity = import ./checks/update-targets-parity.nix {inherit lib pkgs self;};};
       validateAtStopCheck = {validate-at-stop = import ./checks/validate-at-stop.nix {inherit pkgs;};};
     in
-      bareCommandsCheck // cacheHitParityCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // instructionsDriftCheck // kiroExtractedCheck // modelStalenessClaudeCheck // moduleChecks // overlayTargetResolutionCheck // pnpmFetcherParityCheck // validateAtStopCheck);
+      bareCommandsCheck // cacheHitParityCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // instructionsDriftCheck // kiroExtractedCheck // modelStalenessClaudeCheck // moduleChecks // overlayTargetResolutionCheck // pnpmFetcherParityCheck // updateTargetsParityCheck // validateAtStopCheck);
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # from devenv.nix; nothing in this flake constructs it.

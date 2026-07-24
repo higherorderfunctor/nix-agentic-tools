@@ -496,9 +496,12 @@ devenv tasks run generate:all             # everything
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-07-16. If you touch
-> `dev/scripts/update-*.sh`, `dev/scripts/resolve-overlay-file.sh`,
-> `config/generate-update-ninja.nix`, `config/update-matrix.nix`, or
+> **Last verified:** 2026-07-24 (commit pending — introduces the
+> `config.update.targets` merge-up beachhead alongside the matrix).
+> If you touch `dev/scripts/update-*.sh`,
+> `dev/scripts/resolve-overlay-file.sh`,
+> `config/generate-update-ninja.nix`, `config/update-matrix.nix`,
+> `lib/update.nix`, any `overlays/**/<pkg>.update.nix`, or
 > `.github/workflows/update.yml` and this fragment isn't updated in
 > the same commit, stop and fix it.
 
@@ -552,9 +555,14 @@ For packages that track a git repo's HEAD (no tagged releases),
 `update-pkg.sh` receives the repo URL as a trailing argument:
 
 1. `git ls-remote <url> HEAD` fetches the latest commit SHA.
-2. `resolve_overlay_file` (`dev/scripts/resolve-overlay-file.sh`)
-   deterministically locates the single overlay `.nix` pinning this
-   upstream, by matching the fetch block's identity — either
+2. The overlay file to bump is resolved with a two-path
+   **coexistence** rule (see "config.update.targets merge-up"
+   below). `update-pkg.sh` first reads a declared target via
+   `nix eval --raw .#updateTargets.<name>.file`; if the package has
+   one it uses `$wt/<file>` directly. Otherwise it falls back to
+   `resolve_overlay_file` (`dev/scripts/resolve-overlay-file.sh`),
+   which deterministically locates the single overlay `.nix` pinning
+   this upstream by matching the fetch block's identity — either
    `fetchFromGitHub { owner = "<owner>"; repo = "<repo>"; }` or
    `fetchgit { url = "…github.com/<owner>/<repo>.git"; }` — and
    requiring **exactly one** match. 0 or >1 matches ⇒ the target is
@@ -582,6 +590,47 @@ froze packages whose mis-resolved file had no `rev`, e.g. mcp-proxy). The
 main-tracking matrix entry resolves to exactly one overlay carrying an
 inline rev, so the class fails at PR time rather than mid-pipeline.
 
+### config.update.targets merge-up (Track-A beachhead)
+
+The update config is migrating from the flat, top-level
+`config/update-matrix.nix` toward an option-merged registry each
+package contributes to itself. That migration is landing
+incrementally; **today only `effect-mcp` is migrated** and the two
+systems **coexist**. Do not dissolve the matrix — that is a later
+step.
+
+- **`lib/update.nix`** — a plain module declaring
+  `options.update.targets`, an `attrsOf (submodule { file; flags;
+dependsOn; })`. `file` is a repo-relative POSIX path STRING (never
+  a Nix path literal). Mirrors the reference submodule shape in
+  `private/slice-fixture/lib/concerns.nix`.
+- **`overlays/mcp-servers/effect-mcp.update.nix`** — effect-mcp's own
+  contribution row, co-located with the overlay it bumps:
+  `config.update.targets.effect-mcp = { file =
+"overlays/mcp-servers/effect-mcp.nix"; flags = ["--version"
+"skip"]; }`. It deliberately carries no `owner`/`repo` attrs or
+  `github.com/<owner>/<repo>` URL so `resolve_overlay_file` never
+  mistakes the sidecar for a second overlay pinning the same repo.
+- **`.#updateTargets`** — a top-level flake output built from an
+  explicit 2-module `lib.evalModules` list (`./lib/update.nix` +
+  `./overlays/mcp-servers/effect-mcp.update.nix`). The barrel walker
+  that would `readDir` every `<pkg>.update.nix` is deferred Track B —
+  new contributions are added to that list by hand for now.
+- **Coexistence fallback in `update-pkg.sh`** — inside the
+  `if [ -n "$git_url" ]` guard, `nix eval --raw
+.#updateTargets.<name>.file` is tried first; a hit sets
+  `target_file="$wt/<file>"`, a miss falls through to
+  `resolve_overlay_file`. Only `file` is consumed; `flags`/`git`
+  still flow positionally from the matrix via the ninja DAG, and
+  `dependsOn` is declared-but-unused.
+- **`checks/update-targets-parity.nix`** — a permanent CI gate. For
+  every package in BOTH `updateMatrix.nixUpdate` (with a `git` URL)
+  AND `updateTargets`, it asserts `updateTargets.<name>.file ==
+resolve_overlay_file(<git>, overlays)`. That keeps the declared
+  path and the resolver output byte-identical for as long as they
+  coexist. For the beachhead the intersection is exactly
+  `effect-mcp`.
+
 ### Report format
 
 Every target writes exactly one line to `.update-report.txt`:
@@ -595,15 +644,18 @@ Every target writes exactly one line to `.update-report.txt`:
 
 ### Key files
 
-| File                                   | Role                                                            |
-| -------------------------------------- | --------------------------------------------------------------- |
-| `checks/overlay-target-resolution.nix` | Flake check: every matrix pkg resolves to one overlay w/ rev    |
-| `config/generate-update-ninja.nix`     | Generates `.update.ninja` DAG from flake.lock + matrix          |
-| `config/update-matrix.nix`             | Declares packages with nix-update flags and git URLs            |
-| `dev/scripts/resolve-overlay-file.sh`  | Deterministic overlay resolution (fetch-block identity + guard) |
-| `dev/scripts/update-common.sh`         | Shared functions (worktree, version, report, colors)            |
-| `dev/scripts/update-init.sh`           | Pipeline initialization (clean stale state)                     |
-| `dev/scripts/update-input.sh`          | Per-input update script                                         |
-| `dev/scripts/update-pkg.sh`            | Per-package update script (rev bump + nix-update)               |
-| `dev/scripts/update-report.sh`         | Report printer                                                  |
-| `.github/workflows/update.yml`         | CI workflow (Renovate-style per-dependency PRs)                 |
+| File                                         | Role                                                            |
+| -------------------------------------------- | --------------------------------------------------------------- |
+| `checks/overlay-target-resolution.nix`       | Flake check: every matrix pkg resolves to one overlay w/ rev    |
+| `checks/update-targets-parity.nix`           | Flake check: declared `updateTargets.<name>.file` == resolver   |
+| `config/generate-update-ninja.nix`           | Generates `.update.ninja` DAG from flake.lock + matrix          |
+| `config/update-matrix.nix`                   | Declares packages with nix-update flags and git URLs            |
+| `dev/scripts/resolve-overlay-file.sh`        | Deterministic overlay resolution (fetch-block identity + guard) |
+| `dev/scripts/update-common.sh`               | Shared functions (worktree, version, report, colors)            |
+| `dev/scripts/update-init.sh`                 | Pipeline initialization (clean stale state)                     |
+| `dev/scripts/update-input.sh`                | Per-input update script                                         |
+| `dev/scripts/update-pkg.sh`                  | Per-package update script (rev bump + nix-update)               |
+| `dev/scripts/update-report.sh`               | Report printer                                                  |
+| `lib/update.nix`                             | Declares `config.update.targets` (merge-up; coexists w/ matrix) |
+| `overlays/mcp-servers/effect-mcp.update.nix` | effect-mcp's co-located update-target contribution row          |
+| `.github/workflows/update.yml`               | CI workflow (Renovate-style per-dependency PRs)                 |
