@@ -687,7 +687,7 @@ fails. The propagation surface is currently _partially broken already_ —
 - [ ] `overlays/default.nix` group composition + export lists
 - [ ] `config/update-matrix.nix` (until dissolved)
 - [ ] `dev/generate.nix` — `devFragmentNames` + `packagePaths` globs
-- [ ] `checks/cache-hit-parity.nix` package lists; `checks/bare-commands.nix` glob
+- [ ] `config/cache-hit-parity-targets.nix` rows (was: `checks/cache-hit-parity.nix` package lists — dissolved into `config.checks.cacheHitParity`); `checks/bare-commands.nix` glob
 - [ ] `packages/mcp-services/.../serverNames` (until dissolved)
 - [ ] HM module registrations; devshell's hand-listed 5 modules (`lib/devshell.nix`)
 - [ ] README feature matrix + server reference

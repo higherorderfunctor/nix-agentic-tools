@@ -44,89 +44,13 @@
     overlays = [self.overlays.default];
   };
 
-  # Each entry: { name, consumerPath } where consumerPath is a
-  # dotted lookup under `consumerPkgs` that mirrors where the
-  # overlay actually exposes the package to downstream users.
-  #
-  # Content-only packages (coding-standards, fragments-ai,
-  # stacked-workflows-content) are excluded — they have no build
-  # inputs so their paths are already independent of the consumer
-  # pin.
-  #
-  # Instruction derivations (instructions-*) are excluded — they're
-  # produced by `flake.nix` itself, not the overlay, so they don't
-  # exist on the consumer side.
-
-  # AI CLIs — live at `consumerPkgs.ai.<name>`.
-  aiCliPackages = [
-    "claude-code"
-    "copilot-cli"
-    "kimchi"
-    "kiro-cli"
-    "kiro-gateway"
-    "kiro-memory-distiller"
-  ];
-
-  # Git tools — live at `consumerPkgs.gitTools.<name>`.
-  gitToolPackages = [
-    "git-absorb"
-    "git-branchless"
-    "git-revise"
-  ];
-
-  # Dev tools (linters) — live at `consumerPkgs.devTools.<name>`.
-  devToolPackages = [
-    "oxlint"
-    "tsgolint"
-  ];
-
-  # agnix + its mainProgram-override siblings.
-  # agnix itself is at `consumerPkgs.ai.agnix` (flatDrvs entry).
-  # agnix-lsp / agnix-mcp are at the lspServers / mcpServers
-  # groups respectively.
-  agnixPackages = [
-    {
-      name = "agnix";
-      consumerLookup = p: p.ai.agnix;
-    }
-    {
-      name = "agnix-lsp";
-      consumerLookup = p: p.ai.lspServers.agnix-lsp;
-    }
-    {
-      name = "agnix-mcp";
-      consumerLookup = p: p.ai.mcpServers.agnix-mcp;
-    }
-  ];
-
-  # MCP servers — live at `consumerPkgs.ai.mcpServers.<name>`.
-  mcpServerPackages = [
-    "context7-mcp"
-    "effect-mcp"
-    "git-intel-mcp"
-    "github-mcp"
-    "gitlab-mcp"
-    "kagi-mcp"
-    "mcp-language-server"
-    "mcp-proxy"
-    "nixos-mcp"
-    "openmemory-mcp"
-    "serena-mcp"
-    "sympy-mcp"
-  ];
-
-  # Special entries — top-level names that don't match a grouped
-  # attr path directly.
-  specialPackages = [
-    {
-      # The modelcontextprotocol-all-mcps monorepo combined
-      # package is surfaced at the top level but lives under
-      # pkgs.ai.mcpServers.modelContextProtocol.all-mcps on the
-      # grouped side.
-      name = "modelcontextprotocol-all-mcps";
-      consumerLookup = p: p.ai.mcpServers.modelContextProtocol.all-mcps;
-    }
-  ];
+  # The set of packages to compare, and the `consumerPath` attr-path under
+  # `consumerPkgs` for each, comes from the merged `config.checks.cacheHitParity`
+  # registry — exposed as `self.cacheHitParityTargets` and declared across
+  # lib/checks.nix (the option) + config/cache-hit-parity-targets.nix (the rows,
+  # plus the notes on which package classes are intentionally excluded). Each
+  # registry row is `{ consumerPath = [ ... ]; }`; the standalone side is always
+  # `self.packages.${system}.<name>`.
 
   # For packages wrapped by `ensureUnfreeCheck` (overlays/default.nix:guard),
   # the top-level outPath is a `final.symlinkJoin` of the real derivation.
@@ -152,36 +76,14 @@
     then null
     else {inherit name standalone consumer;};
 
-  aiCliChecks = map (name:
+  allChecks = lib.mapAttrsToList (name: t:
     mkCheck {
       inherit name;
-      consumerLookup = p: p.ai.${name};
+      consumerLookup = p: lib.getAttrFromPath t.consumerPath p;
     })
-  aiCliPackages;
-  gitToolChecks = map (name:
-    mkCheck {
-      inherit name;
-      consumerLookup = p: p.gitTools.${name};
-    })
-  gitToolPackages;
-  devToolChecks = map (name:
-    mkCheck {
-      inherit name;
-      consumerLookup = p: p.devTools.${name};
-    })
-  devToolPackages;
-  agnixChecks = map mkCheck agnixPackages;
-  mcpServerChecks = map (name:
-    mkCheck {
-      inherit name;
-      consumerLookup = p: p.ai.mcpServers.${name};
-    })
-  mcpServerPackages;
-  specialChecks = map mkCheck specialPackages;
+  self.cacheHitParityTargets;
 
-  allDrifts = lib.filter (x: x != null) (
-    aiCliChecks ++ gitToolChecks ++ devToolChecks ++ agnixChecks ++ mcpServerChecks ++ specialChecks
-  );
+  allDrifts = lib.filter (x: x != null) allChecks;
 
   # agnix's CLI / LSP / MCP variants are ONE build: overlays/agnix.nix
   # compiles all three binaries, and the -lsp/-mcp attrs only re-point
