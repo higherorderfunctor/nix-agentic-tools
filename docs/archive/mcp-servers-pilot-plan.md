@@ -54,7 +54,7 @@ package contributes via a sibling `update.nix` to test
 | `packages/mcp-servers/packages/modelcontextprotocol/memory/default.nix`     | Stub MCP. Imports `../source.nix`. Same shape as filesystem.                                                                                    |
 | `packages/mcp-servers/packages/modelcontextprotocol/memory/update.nix`      | Contributes `config.update.targets.memory`.                                                                                                     |
 | `flake.nix`                                                                 | Modified: add `mcpServerSandbox` to per-system packages, add top-level `updateTargetsSandbox`. NO other changes.                                |
-| `docs/name-resolution-gap-analysis.md`                                      | Modified: append "Pilot findings" section as friction surfaces.                                                                                 |
+| `docs/archive/name-resolution-gap-analysis.md`                              | Modified: append "Pilot findings" section as friction surfaces.                                                                                 |
 
 **Naming:** `mcpServerSandbox` (not `mcpServerPackages`) for two
 reasons: (1) makes its provisional status obvious, (2) avoids
@@ -1152,7 +1152,7 @@ git commit -m "feat(mcp-servers): stress-test self-assembly with time package"
 
 **Files:**
 
-- Modify: `docs/name-resolution-gap-analysis.md` (append findings section)
+- Modify: `docs/archive/name-resolution-gap-analysis.md` (append findings section)
 
 - [ ] **Step 1: Identify friction**
 
@@ -1179,7 +1179,7 @@ without forced wiring. Self-assembly mechanism per nixpkgs
 
 * [ ] **Step 2: Append the section**
 
-Open `docs/name-resolution-gap-analysis.md` and append at the end:
+Open `docs/archive/name-resolution-gap-analysis.md` and append at the end:
 
 ```markdown
 ## mcp-servers pilot findings (YYYY-MM-DD)
@@ -1192,7 +1192,7 @@ Replace `YYYY-MM-DD` with today's date.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add docs/name-resolution-gap-analysis.md
+git add docs/archive/name-resolution-gap-analysis.md
 git commit -m "docs(mcp-servers): capture pilot findings"
 ```
 
@@ -1283,8 +1283,8 @@ Create `docs/mcp-servers-pilot-results.md`:
 ```markdown
 # mcp-servers Pilot Results
 
-Implementation reference: `docs/mcp-servers-pilot-plan.md`.
-Findings reference: `docs/name-resolution-gap-analysis.md`
+Implementation reference: `docs/archive/mcp-servers-pilot-plan.md`.
+Findings reference: `docs/archive/name-resolution-gap-analysis.md`
 "mcp-servers pilot findings" section.
 
 ## Outcome
@@ -1352,7 +1352,7 @@ When the plan is fully executed, ALL of these must hold:
 - [ ] All four sandbox derivations build (`mcpServerSandbox.everything`, `.modelcontextprotocol.{filesystem,memory,time}`).
 - [ ] `passthru.sharedSource` byte-identical across all three modelcontextprotocol sub-packages.
 - [ ] No edits to `lib/ai/mcpServer/`, `lib/ai/sharedOptions.nix`, `packages/<existing-name>/`, `homeManagerModules.default`, `devenvModules.nix-agentic-tools`, or `services.mcp-servers.*`.
-- [ ] `docs/name-resolution-gap-analysis.md` has a "mcp-servers pilot findings" section.
+- [ ] `docs/archive/name-resolution-gap-analysis.md` has a "mcp-servers pilot findings" section.
 - [ ] `docs/mcp-servers-pilot-results.md` exists with verdict.
 
 ---
@@ -1377,5 +1377,5 @@ for review** rather than power through:
    should be byte-identical).
 
 Each of these is a (D) finding — document in
-`docs/name-resolution-gap-analysis.md` and pause before
+`docs/archive/name-resolution-gap-analysis.md` and pause before
 proceeding.

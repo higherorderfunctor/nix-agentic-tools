@@ -6,7 +6,7 @@
 > ends with a HITL CHECKPOINT — STOP. Do not proceed without
 > explicit user approval.**
 >
-> **Supersedes:** `docs/mcp-servers-pilot-plan.md` (the
+> **Supersedes:** `docs/archive/mcp-servers-pilot-plan.md` (the
 > parallel-sandbox approach, abandoned in favor of direct
 > migration after grill 2 reframed the constraint).
 

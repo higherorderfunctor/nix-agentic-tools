@@ -227,8 +227,8 @@ and strengthens the case for pulling the shared helper (§9) into this session.
 agentic-ux.md` (the "sws- exception" note), `dev/docs/getting-started/
 devenv.md` example, ai-module fanout narrative.
 - Leave historical plan journals (`docs/plan.md`,
-  `docs/ai-factory-collision-refactor-plan.md`,
-  `docs/monorepo-restructure-assessment.md`) as point-in-time records.
+  `docs/archive/ai-factory-collision-refactor-plan.md`,
+  `docs/archive/monorepo-restructure-assessment.md`) as point-in-time records.
 
 ### Phase F — Validate
 

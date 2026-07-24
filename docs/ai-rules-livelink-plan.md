@@ -7,7 +7,7 @@
 > live-edit is not worth the impurity — devenv covers iteration
 > and pure-eval rules are simpler. Rules now always bake into the
 > store with transformer-injected frontmatter. See
-> `docs/ai-factory-collision-refactor-plan.md` §3.3 for the
+> `docs/archive/ai-factory-collision-refactor-plan.md` §3.3 for the
 > rationale.
 >
 > **Historical goal (for reference):** add `sourcePath` field to

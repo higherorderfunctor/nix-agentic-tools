@@ -6,7 +6,7 @@
 > produced on Claude web without repo access. Claims validated or refuted below.
 >
 > **Live plan in flight on a separate session:**
-> `docs/ai-factory-collision-refactor-plan.md` — collision-as-failure +
+> `docs/archive/ai-factory-collision-refactor-plan.md` — collision-as-failure +
 > Dir helpers + `lib.*` → `lib.ai.*` namespace move. This assessment is
 > additive to that plan, not a replacement. Overlap is flagged in §7.
 >
@@ -415,7 +415,7 @@ those are bugs in different layers.
 
 ## 7. Collision with the factory-collision-refactor plan
 
-The other session's plan (`docs/ai-factory-collision-refactor-plan.md`)
+The other session's plan (`docs/archive/ai-factory-collision-refactor-plan.md`)
 has concrete commits queued:
 
 1. `refactor(lib): move lib.* to lib.ai.*`
@@ -787,7 +787,7 @@ Original dump: `/home/caubut/Downloads/nix-agentic-tools-architecture.md`
 (821 lines, written without repo access).
 
 Other session's live plan:
-`docs/ai-factory-collision-refactor-plan.md` (702 lines, awaiting
+`docs/archive/ai-factory-collision-refactor-plan.md` (702 lines, awaiting
 execution).
 
 Durable findings captured to memory as
