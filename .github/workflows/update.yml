@@ -138,6 +138,17 @@ jobs:
           base_head="${{ steps.base.outputs.sha }}"
           : >"$RUNNER_TEMP/touched-branches"
 
+          # Read back the identity git-bot-identity configured above; the
+          # human-commit guard below compares every remote commit's author
+          # against it. Assert it is non-empty rather than let it degrade:
+          # an empty value makes EVERY commit look human, which would
+          # silently stop the pipeline pushing anything at all.
+          bot_email=$(git config user.email)
+          if [ -z "$bot_email" ]; then
+            echo "::error::git user.email is unset — the human-commit guard cannot run"
+            exit 1
+          fi
+
           # Find all update/* branches with commits ahead of base
           git branch --list 'update/*' | while read -r branch; do
             branch=$(echo "$branch" | tr -d ' *+')
@@ -201,6 +212,54 @@ jobs:
               # own valid PR and recreate it on the next run.
               echo "$branch" >>"$RUNNER_TEMP/touched-branches"
               continue
+            fi
+
+            # Never clobber human work. Every run REBUILDS this branch
+            # from base in a fresh worktree, so a commit someone pushed
+            # to the open PR exists only on the remote — the rebuilt
+            # local branch has never seen it, and the force-push below
+            # would destroy it silently.
+            #
+            # The patch-id guard above cannot catch this: a human commit
+            # CHANGES the remote diff, so old_id != new_id and the guard
+            # reads it as "the dependency moved, push".
+            #
+            # The stale-PR step's bot allowlist is also a different
+            # property — it decides whether to CLOSE a PR a human has
+            # engaged with, not whether to overwrite commits on its
+            # branch.
+            #
+            # So compare authorship directly against the identity
+            # git-bot-identity configured for this job, and REFUSE the
+            # push when anything else authored a commit in range. A
+            # refusal is the honest outcome: replaying the commits onto
+            # a freshly re-derived tree could silently combine a human's
+            # hand-fix with a bot hash that superseded it, and the human
+            # is the only one who can say which wins. The branch simply
+            # stops auto-updating until they resolve it.
+            human_range=""
+            if git rev-parse --verify --quiet "$remote_ref" >/dev/null; then
+              # Prefer the merge-base range; fall back to base_head when
+              # merge-base could not be computed. The fallback can only
+              # WIDEN the range, so it errs toward refusing to push.
+              human_range="${old_base:-$base_head}..$remote_ref"
+            fi
+            if [ -n "$human_range" ]; then
+              human_commits=$(git log --format='%H %ae' "$human_range" \
+                | awk -v bot="$bot_email" '$2 != bot {print $1}')
+              if [ -n "$human_commits" ]; then
+                n=$(printf '%s\n' "$human_commits" | wc -l | tr -d ' ')
+                echo "::warning title=Update branch has human commits::" \
+                  "Refusing to force-push $branch — $n non-bot commit(s)" \
+                  "on the remote branch would be destroyed."
+                printf '%s\n' "$human_commits" | while read -r sha; do
+                  git log --no-walk --format='  %h %an <%ae>: %s' "$sha"
+                done
+                # Same reasoning as the patch-id skip above: count it as
+                # touched so the stale-PR step does not close the PR.
+                echo "$branch" >>"$RUNNER_TEMP/touched-branches"
+                continue
+              fi
             fi
 
             echo "Pushing $branch ($subject)..."
