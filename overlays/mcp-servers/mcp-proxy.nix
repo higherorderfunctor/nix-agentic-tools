@@ -18,18 +18,18 @@
   # httpx-auth has test failures in nixpkgs (jwt InsecureKeyLengthWarning)
   httpx-auth = ourPkgs.python3Packages.httpx-auth.overridePythonAttrs {doCheck = false;};
 
-  rev = "a6720cc4f0bb3a09748d61207fb33f3c7c8a88e4";
+  rev = "153a96a61fde2bf5a23961c64a3dd96b5e385108";
   src = fetchFromGitHub {
     owner = "sparfenyuk";
     repo = "mcp-proxy";
     inherit rev;
-    hash = "sha256-Sx0YrCwTCV8wGmwzJPiEhOkHy4CcaKW4mtnLntE7qYU=";
+    hash = "sha256-LeQc1AWq+/iGEePN8ouYjowEt63K23AoKiKktX2EziQ=";
   };
 in
   ourPkgs.mcp-proxy.overridePythonAttrs (old: {
     version = vu.mkVersion {
       # upstream: readPyprojectVersion @ pyproject.toml
-      upstream = "0.10.0";
+      upstream = "0.12.0";
       inherit rev;
     };
     inherit src;
