@@ -3,8 +3,11 @@
 # resolution for the update pipeline. Sourced by update-common.sh (and
 # thus update-pkg.sh) and by checks/update-targets-parity.nix.
 #
-# Pure library: defines one function, no top-level side effects, safe to
-# source anywhere (script, test harness, nix sandbox).
+# Single-function library. It enables the repo-wide strict mode on source
+# (set -euETo pipefail + inherit_errexit, lines below) — a deliberate
+# top-level effect, consistent with every strict-mode caller — and defines no
+# other top-level state, so it is safe to source anywhere (script, test
+# harness, nix sandbox).
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 

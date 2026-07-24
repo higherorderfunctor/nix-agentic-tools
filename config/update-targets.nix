@@ -118,10 +118,10 @@ _: {
   # Packages excluded from the update loop entirely.
   # Regex patterns matched against flake package names.
   config.update.excludePatterns = [
-    "^instructions-"
-    "^docs"
     "^agnix-lsp$"
     "^agnix-mcp$"
+    "^docs"
+    "^instructions-"
     "^nixos-mcp$"
     "^serena-mcp$"
   ];
