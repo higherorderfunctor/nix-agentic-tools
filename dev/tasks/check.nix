@@ -40,6 +40,14 @@ in {
           fi
         fi
 
+        # ── Claude ──────────────────────────────────────────────────────
+        # Nothing to do here. Claude's model ids are pulled out of the
+        # packaged binary by vu.mkClaudeExtract into the committed
+        # overlays/claude-code-extracted.json, so they are covered by the
+        # blocking claude-code-extracted drift check in `nix flake check`
+        # — no live catalog, no auth, no curation.
+        log "Claude: covered by the claude-code-extracted drift check (skipped)"
+
         # ── Copilot ─────────────────────────────────────────────────────
         # No list-models command exists (V8 bytecode SEA). Manual curation
         # only — design doc §5.3. No automated check.

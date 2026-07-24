@@ -96,14 +96,20 @@
     '';
 
   # Grep claude's binary for its launch-effort pin keys, the effort enum,
-  # and the workflow/ultracode boolean settings keys we depend on, emitting
-  # `{launchEffortPins, effortLevels, settingsBooleanKeys}` to `dest`
+  # the workflow/ultracode boolean settings keys we depend on, the hook-event
+  # vocabulary, and the model catalog, emitting `{launchEffortPins,
+  # effortLevels, settingsBooleanKeys, hookEvents, models}` to `dest`
   # (default stdout). Single source of the grep logic — used by
   # claude-code.nix's passthru.extracted (and, transitively, by
-  # mkUpdateScript). Fails loud (exit 1) if the pin grep is empty, the
-  # effort anchor != exactly one match, or any tracked boolean settings key
-  # is missing/renamed — so an upstream change breaks the build instead of
-  # silently extracting nothing.
+  # mkUpdateScript). Fails loud (exit 1) if any anchor comes up empty (or,
+  # for the effort enum, != exactly one match) — so an upstream change
+  # breaks the build instead of silently extracting nothing.
+  #
+  # EVERY key here becomes an option surface in mkClaude.nix, so a dead
+  # anchor does not merely lose data: it puts the HM/devenv module options
+  # out of sync with the binary they are supposed to describe. That is the
+  # whole reason the guards below are hard failures rather than warnings,
+  # and why the emitted sidecar is committed and drift-checked.
   #
   # The `settingsBooleanKeys` guard covers `ultracode` (UNDOCUMENTED,
   # officially session-only — persisted via ai.claude.ultracodeOnLaunch),
@@ -114,7 +120,7 @@
   # `nix flake check` drift-check) failure. See mkClaude.nix for the option
   # surface and docs/plans/ultracode-typed-options-and-meta-option.md § 3.
   #   bin:  absolute path to the claude binary.
-  #   pkgs: nixpkgs set (gnugrep, coreutils, jq).
+  #   pkgs: nixpkgs set (gnugrep, gnused, coreutils, jq).
   #   dest: output path (default "/dev/stdout"; pass "$out" in runCommand).
   mkClaudeExtract = {
     bin,
@@ -123,8 +129,10 @@
   }: ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
+    comm="${pkgs.coreutils}/bin/comm"
     grep="${pkgs.gnugrep}/bin/grep"
     jq="${pkgs.jq}/bin/jq"
+    sed="${pkgs.gnused}/bin/sed"
     sort="${pkgs.coreutils}/bin/sort"
 
     pins=$("$grep" -aoE 'unpin[A-Za-z0-9]+LaunchEffort' "${bin}" | "$sort" -u || true)
@@ -186,11 +194,76 @@
     fi
     hookEventsJson=$(printf '%s\n' "$hookEvents" | "$jq" -s .)
 
+    # Model catalog — the soft enum behind mkClaude.nix's `model` option.
+    # Each catalog entry opens `{id:"claude-…",family:"…",display_name:…}`.
+    # Anchor on the id+family PAIR, never a bare `id:`, so unrelated minified
+    # `id:"…"` sites cannot masquerade as models. The pair also yields ALIAS
+    # ids only (claude-opus-5) — never the date-suffixed provider wire ids
+    # (claude-opus-4-20250514) carried in the sibling `provider_ids` block,
+    # which are not selectable option values.
+    #
+    # Do NOT reach for `provider_ids.first_party` here. A previous incarnation
+    # of this extraction grepped camelCase `firstParty:"claude-…"`; the catalog
+    # spells that key snake_case and the only camelCase site in the binary
+    # belongs to an unrelated table, so it silently matched a single stray id
+    # from 2.1.207 through 2.1.219 and the model option missed the entire
+    # Opus 5 / Sonnet 5 / Fable 5 generation.
+    catalogIds=$("$grep" -aoE '\{id:"claude-[a-z0-9-]+",family:"[a-z]+"' "${bin}" \
+      | "$sed" -E 's/^\{id:"//; s/",family:.*$//' | "$sort" -u || true)
+    if [ "$(printf '%s\n' "$catalogIds" | "$grep" -c . || true)" -lt 1 ]; then
+      echo "claude-extract: no {id:\"claude-…\",family:\"…\"} model catalog entries found (upstream changed the catalog shape)" >&2
+      exit 1
+    fi
+
+    # Models with an announced retirement, keyed by the same alias id. They
+    # stay in the catalog but are not selectable, so they are subtracted from
+    # the option's enum. PRESENCE in the table is the filter — deliberately
+    # not a comparison against the retirement date, because reading a
+    # build-time clock would make this sidecar non-reproducible.
+    retiredIds=$("$grep" -aoE '"claude-[a-z0-9.-]+":\{modelName:"[^"]*",retirementDates:' "${bin}" \
+      | "$sed" -E 's/^"//; s/":\{modelName:.*$//' | "$sort" -u || true)
+    if [ "$(printf '%s\n' "$retiredIds" | "$grep" -c . || true)" -lt 1 ]; then
+      echo "claude-extract: no retirement table found (upstream changed the deprecation shape)" >&2
+      exit 1
+    fi
+
+    models=$("$comm" -23 \
+      <(printf '%s\n' "$catalogIds") \
+      <(printf '%s\n' "$retiredIds") || true)
+    if [ "$(printf '%s\n' "$models" | "$grep" -c . || true)" -lt 1 ]; then
+      echo "claude-extract: every catalog id is marked retired (anchors disagree; refusing to emit an empty model enum)" >&2
+      exit 1
+    fi
+
+    # Shape assertion. A dead anchor can still match ONE stray id and sail
+    # past the non-empty guards above — that is precisely how the camelCase
+    # regression survived 12 releases. The committed sidecar's drift check
+    # does not catch that either: the update pipeline regenerates the sidecar
+    # in the SAME PR, so a collapsed extraction would just be committed as
+    # the new truth and the drift check would go green over it.
+    #
+    # So assert the catalog's shape rather than its size. claude-code has
+    # always shipped an opus, a sonnet and a haiku; if any family is missing
+    # the anchor is matching the wrong structure. Matching the family token
+    # ANYWHERE in the id keeps both naming schemes in play (claude-sonnet-5
+    # and the older claude-3-5-sonnet). Should upstream genuinely retire a
+    # whole family, this fails loud and a human decides — which is the
+    # correct outcome for a change that reshapes the model option.
+    for family in opus sonnet haiku; do
+      if ! printf '%s\n' "$models" | "$grep" -q "$family"; then
+        echo "claude-extract: no '$family' id among the extracted models (anchor is matching the wrong structure, or upstream dropped the family)" >&2
+        echo "claude-extract: extracted set was: $(printf '%s\n' "$models" | "$sort" | tr '\n' ' ')" >&2
+        exit 1
+      fi
+    done
+    modelsJson=$(printf '%s\n' "$models" | "$jq" -R . | "$jq" -s .)
+
     pinsJson=$(printf '%s\n' "$pins" | "$jq" -R . | "$jq" -s .)
     boolKeysJson=$(printf '%s\n' "''${boolKeys[@]}" | "$sort" -u | "$jq" -R . | "$jq" -s .)
     "$jq" -n --argjson pins "$pinsJson" --argjson levels "$levels" \
       --argjson boolKeys "$boolKeysJson" --argjson hookEvents "$hookEventsJson" \
-      '{launchEffortPins: $pins, effortLevels: $levels, settingsBooleanKeys: $boolKeys, hookEvents: $hookEvents}' > "${dest}"
+      --argjson models "$modelsJson" \
+      '{launchEffortPins: $pins, effortLevels: $levels, settingsBooleanKeys: $boolKeys, hookEvents: $hookEvents, models: $models}' > "${dest}"
   '';
 
   # Kiro hook triggers — the northbound soft-enum `knownTriggers`. Unlike Claude,
