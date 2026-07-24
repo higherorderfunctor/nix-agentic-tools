@@ -250,6 +250,11 @@
         instructions-claude = instr.claude;
         instructions-copilot = instr.copilot;
         instructions-kiro = instr.kiro;
+        # Repo-root documents, same pipeline. The `generate:repo:*` tasks
+        # build these by name; without them the tasks fail with
+        # "attribute missing" and both files fall back to hand-editing.
+        repo-contributing = instr.repoContributing;
+        repo-readme = instr.repoReadme;
       });
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)

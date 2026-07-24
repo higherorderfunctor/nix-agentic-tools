@@ -1,4 +1,5 @@
-# dev/instructions.nix — the four generated instruction-file derivations.
+# dev/instructions.nix — the generated instruction files, plus the two
+# generated repo-root documents (README.md, CONTRIBUTING.md).
 #
 # SINGLE SOURCE OF TRUTH for both consumers:
 #   flake.nix  → packages.<system>.instructions-*  (CI, `nix build`, checks)
@@ -108,4 +109,23 @@ in {
       gen.kiroFiles
     )
   );
+
+  # The two repo-root documents. Same shape as the instruction
+  # derivations above — a directory, treefmt-formatted inside the
+  # sandbox — so the copy `generate:repo:*` drops in the working tree is
+  # already what the formatter would produce, and a drift check can
+  # compare the two without re-formatting first.
+  #
+  # They render from the same memoized `gen` evaluation as everything
+  # else, so they cannot skew against the fragments the way a
+  # hand-maintained file can.
+  repoContributing = runFmt "repo-contributing" {} ''
+    mkdir -p $out
+    cp ${pkgs.writeText "CONTRIBUTING.md" gen.contributingMd} $out/CONTRIBUTING.md
+  '';
+
+  repoReadme = runFmt "repo-readme" {} ''
+    mkdir -p $out
+    cp ${pkgs.writeText "README.md" gen.readmeMd} $out/README.md
+  '';
 }
