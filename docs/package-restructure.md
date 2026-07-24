@@ -66,15 +66,20 @@ Since the docs were written, a lot landed. The plan's premises shifted:
 
 1. **Coarser slice regrouping** — `kiro/` owning kiro-cli + kiro-gateway,
    `mcp-servers/` owning all ~14 MCP packages, etc.
-2. **Overlay dissolution** — derivations still live in `overlays/<name>.nix`,
-   physically separated from every other facet of the same package.
+2. **Overlay split-prep (D-1)** — derivations live in `overlays/<name>.nix`,
+   physically separated from every other facet of the same package. The locked
+   direction is **not** to dissolve them into packages but to keep `overlays/` as a
+   **split-ready subtree**, sever its 4 relative-path seams via the two [OVL]
+   refactors, and extract the tree later if desired (§12).
 3. **Merge-up to kill the central registries** — the actual DRY win (§4.4).
 4. **Barrel-shape cleanup** — the mixed-eval barrel (§3.2).
 
-**Timing:** do **not** start the real file-moves yet. `migrate-to-trunk-based` is
-mid-flight (primary-checkout switch, PR #467/#469 migration, refactor-branch
-retirement, full docs-subsystem removal). A `packages/` move layered on that
-multiplies conflict surface. See §9.0.
+**Timing:** `migrate-to-trunk-based` is **FOLDED** into this convergence lineage and
+its blocking prerequisites are **satisfied** — the primary checkout switched to
+`main`, the docs-subsystem removal landed, and the checkout is synced to
+`origin/main` (reaudit X8). The real `packages/` file-moves are Track B, now
+**deferred** (Fork 2, d4), so they still don't start yet — but by decision, not
+because the trunk migration is in flight. See §9.0.
 
 ---
 
@@ -97,7 +102,8 @@ multiplies conflict surface. See §9.0.
   slices together; the merged `config.<concern>` _is_ the registry. The central
   file dissolves.
 - **Barrel** — a `default.nix` in a package/slice dir that lists its facets as an
-  attrset. Whether barrels survive is **open** (§8, Fork 1).
+  attrset. Whether barrels survive is **RESOLVED (d4): no barrels** — facet presence
+  is determined by the `<facet>.nix` filename (§8, Fork 1).
 
 ---
 
@@ -157,6 +163,10 @@ reconstructed inside slices instead of being available at the root. Worse,
 The derivation is in `overlays/<name>.nix` (+ `-sources.json` / `-extracted.json`
 sidecars); everything else is in `packages/<name>/`. Every barrel carries a comment
 apologising for this ("binaries are the flat-overlay exception to Bazel-style").
+
+> **Resolution (D-1):** the fix is **not** to dissolve these into `packages/` but to
+> keep `overlays/` as a split-ready subtree and sever its 4 relative-path seams (the
+> two [OVL] refactors), extracting the tree later if desired — see §12.
 
 ### 3.4 The registries (the actual DRY violation)
 
@@ -554,13 +564,14 @@ Stay combined-merge-only (D6), or eventually publish
 
 ### 9.0 Prerequisites (blocking)
 
-Do not start file-moves until:
+Prerequisites 1–3 are **satisfied** (reaudit X8); `migrate-to-trunk-based` is
+**FOLDED** into this convergence lineage:
 
-1. `migrate-to-trunk-based` completes — primary checkout switched to `main`,
-   PRs #467/#469 migrated/landed, `refactor/ai-factory-architecture` retired.
-2. The docs-subsystem removal lands (so the restructure reorganises the
-   post-removal shape, not a doomed subsystem).
-3. Local checkout is synced to `origin/main`.
+1. ~~`migrate-to-trunk-based` completes~~ — **✓ done.** Primary checkout switched to
+   `main`; `refactor/ai-factory-architecture` retired. (PR #467 is now a separate
+   operator-owned paused plan — see §13 — not a blocker.)
+2. ~~The docs-subsystem removal lands~~ — **✓ done.**
+3. ~~Local checkout synced to `origin/main`~~ — **✓ done.**
 4. **Forks 1–3 decided** (§8) — the fixture exists to settle them. **✓ met —
    d4 (2026-07-24): no-barrel / defer-coarse-slices / `readDir`.**
 
@@ -618,7 +629,7 @@ No commitment to rollout until the foundation is settled.
 Per the migration plan, phased with a **HITL STOP at every phase boundary**:
 
 - **Phase 1** — slice scaffold + wire the slice walker + migrate `effect-mcp`'s
-  barrel and `package.nix` (a **verbatim port** of `overlays/mcp-servers/effect-mcp.nix`,
+  `package.nix` (a **verbatim port** of `overlays/mcp-servers/effect-mcp.nix`,
   same `{inputs, final, ...}` signature, same `ourPkgs` pattern). Replace
   `overlays/default.nix`'s hand-rolled `mcpServerDrvs` with the slice walker.
 - **Phase 2** — the `modelContextProtocol` sub-slice: shared `source.nix` imported
@@ -633,7 +644,7 @@ an overlay layer); per-package files keep `{inputs, final, ...}`.
 **What to learn before doing the other six slices:**
 
 - Does merge-up hold at **both** HM and devenv eval sides, or does one surprise?
-- Does the top-level barrel/walker accommodate nested slice dirs?
+- Does the top-level walker accommodate nested slice dirs?
 - Do fragment scopes still work with the new paths?
 - Are there `lib/` files that looked shared but are actually slice-specific? (Move
   them — shrinks `lib/` further.)
@@ -878,7 +889,9 @@ full sweep; treat each namespace as its own small project.
 ### Track B — topic regrouping into ~7 slices ⏸️ defer
 
 Move `kiro-cli` + `kiro-gateway` into `kiro/`, all MCP servers into `mcp-servers/`,
-etc., and dissolve `overlays/` into the owning slices.
+etc. (The original framing also dissolved `overlays/` into the owning slices; that
+overlay-dissolution piece is now **REJECTED by gate D-1** — see "The overlay
+question" below — leaving Track B as the `packages/` topic regrouping only.)
 
 **Why this is the weak half — now:**
 
@@ -893,21 +906,45 @@ etc., and dissolve `overlays/` into the owning slices.
 - The original urgency argument — "restructure before promotion to avoid a second
   churn" — is **void**: promotion already happened (§1).
 
-**The one piece of Track B worth keeping near-term:** _overlay dissolution_
-(`overlays/<name>.nix` → the owning package dir). It fixes the real "facets live in
-two trees" complaint (§3.3), is mechanical, and does **not** require coarse slices —
-it can be done per-package inside today's layout. The greenfield doc sized the
-barrel+overlay migration at **~12–20 packages, ~8–16h aggregate**. Call it **Track
-A2** and sequence it after Track A.
+**The overlay question — RESOLVED by gate D-1 (keep `overlays/` split-ready):** the
+seam §3.3 complains about ("facets live in two trees") is real, but the locked
+resolution is **not** to dissolve `overlays/` into the package dirs. Instead, keep
+`overlays/` as **one split-ready subtree** and sever its 4 relative-path seams via
+the two [OVL] refactors — TOP-9 relocates the 2 cross-boundary build sources _into_
+`overlays/`; TOP-10 exposes `*-extracted.json` via `passthru.extracted` — then, per
+**d4 decision 4**, **absorb nixos-config's 14 `sources.json` overlays** into that
+same subtree so the whole tree can be **extracted later as one unit** if desired.
+This fixes the two-trees seam with no package-dir churn and keeps the overlay's
+`ourPkgs` cache-hit-parity architecture (which already treats the overlay as a
+standalone unit) intact.
+
+> **REJECTED — d4 (2026-07-24): overlay DISSOLUTION (Track A2) is rejected by gate
+> D-1.** The alternative was to dissolve `overlays/<name>.nix` into the owning
+> package dir — its appeal was fixing the "facets live in two trees" complaint
+> (§3.3) directly; it is mechanical, does **not** require coarse slices, and can be
+> done per-package inside today's layout (the greenfield doc sized the
+> barrel+overlay migration at **~12–20 packages, ~8–16h aggregate**). It was dropped
+> because dissolving INTO packages scatters today's single extraction-shaped tree
+> across N dirs and turns the 4 visible seams into intra-package edges — strictly
+> _harder_ to extract later, the opposite of the split-ready direction the operator
+> locked.
 
 ### Recommended sequencing
 
+> **RESOLVED — d4 (2026-07-24): overlay DISSOLUTION (Track A2) is REJECTED by gate
+> D-1; keep `overlays/` as a split-ready subtree and extract later.** Step 2 below is
+> therefore the two [OVL] split-prep refactors plus the 14-overlay absorption, not a
+> dissolution into package dirs.
+
 1. **Track A** (registries + the two live bugs + transform de-dup)
-2. **Track A2** (overlay dissolution, per-package, no regrouping)
-3. **Re-evaluate Track B.** Prediction: with the registries gone and derivations
-   co-located, coarse topic dirs will feel like a nice-to-have. If it still itches
-   then, it's cheap to do as a pure `git mv` series — and by then the trunk
-   migration will have settled.
+2. **Overlay split-prep (D-1)** — the two [OVL] refactors (TOP-9 relocates the 2
+   cross-boundary build sources _into_ `overlays/`; TOP-10 exposes `*-extracted.json`
+   via `passthru.extracted`), then absorb nixos-config's 14 `sources.json` overlays
+   into the split-ready `overlays/` subtree (d4 decision 4).
+3. **Re-evaluate Track B.** Prediction: with the registries gone and `overlays/` a
+   clean split-ready subtree, coarse topic dirs will feel like a nice-to-have. If it
+   still itches then, it's cheap to do as a pure `git mv` series — and by then the
+   trunk migration will have settled.
 
 ## 13. Cross-workstream interfaces (for the convergence session)
 
@@ -915,16 +952,16 @@ This restructure does not live alone. Below is what it touches, what must land
 first, and the open questions a convergence session has to resolve. _(Workstream
 state as of 2026-07-23; re-verify before acting — several are moving.)_
 
-| Workstream                                            | Overlap with this plan                                                                                                                                                                                                                                                                                                                     | Ordering                                                                                                                                                              |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`migrate-to-trunk-based`** (living plan, P2 active) | Checkout switch off `refactor`, PR #467/#469 migration, `refactor` retirement, **full docs-subsystem removal**. Any `packages/` move multiplies its conflict surface                                                                                                                                                                       | **Hard blocker for Track B.** Track A is compatible (additive, no moves)                                                                                              |
-| **Backlog grooming Initiative 1** (archive sweep)     | The 8 sources are meant to `git mv` → `docs/archive/`. **Initiative 2 was this synthesis — now done.**                                                                                                                                                                                                                                     | Blocked on the question below about `docs/` surviving                                                                                                                 |
-| **`mcp-remote-http-secrets`** (draft PR #467)         | Already carries known conflicts in `packages/kiro-cli/lib/mkKiro.nix` + `checks/module-eval.nix`; still based on `refactor`, not `main`                                                                                                                                                                                                    | Land/migrate **before** any `packages/` move                                                                                                                          |
-| **`converge-agentic-foundations` P3** (paused)        | Typed-surface work edits `lib/ai/`, `mkClaude.nix`, `mkKiro.nix`, `hooksJson` retirement — **the same files** Track B moves. Track A's `config.update.targets` option lives in a **new `lib/update.nix`** (RESOLVED d4 — deliberately _not_ `lib/ai/sharedOptions.nix`), so that seam no longer overlaps converge P3's typed-surface files | Option placement **resolved (d4): `lib/update.nix`**, which removes the option-placement conflict; only the `mkClaude`/`mkKiro` file-move overlap remains for Track B |
-| **Update pipeline v4 + transitive-hash gap (#144)**   | Track A's centrepiece **is** dissolving `update-matrix.nix` and changing `update-pkg.sh`. #144 (refresh only touches the named hash) is adjacent surgery on the same script                                                                                                                                                                | Coordinate — do not run both independently                                                                                                                            |
-| **Fragment pipeline** (`dev/generate.nix`)            | Track A dissolves `packagePaths`, which lives in `dev/generate.nix` — owned by the fragment pipeline, not this plan                                                                                                                                                                                                                        | Ownership needs assigning                                                                                                                                             |
-| **`hmTransform`/`devenvTransform` de-dup**            | Touches `lib/ai/app/`, which typed-surface work also touches                                                                                                                                                                                                                                                                               | Cheap and independent — but sequence against typed-surface                                                                                                            |
-| **Repo defects (`mkClaude.nix:659`)**                 | `mkClaude.nix` is the ~800-line reference file; defect fixes there conflict with moving it                                                                                                                                                                                                                                                 | Fix defects first; they're smaller                                                                                                                                    |
+| Workstream                                                   | Overlap with this plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Ordering                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`migrate-to-trunk-based`** (**FOLDED**; prereqs satisfied) | Checkout switch off `refactor`, `refactor` retirement, and the docs-subsystem removal are **done** (reaudit X8). Any `packages/` move (Track B, now deferred) would have multiplied its conflict surface                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | **No longer a live blocker** — it folded and its prereqs are met; Track B is deferred by decision                                                                                                                                                                                                                 |
+| **Backlog grooming Initiative 1** (archive sweep)            | The 8 sources are meant to `git mv` → `docs/archive/`. **Initiative 2 was this synthesis — now done.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Blocked on the question below about `docs/` surviving                                                                                                                                                                                                                                                             |
+| **`mcp-remote-http-secrets`** (draft PR #467)                | Carries known conflicts in `packages/kiro-cli/lib/mkKiro.nix` + `checks/module-eval.nix`. Now a **separate, operator-owned paused plan** (paused until this plan lands), **not** an in-flight migration                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Operator owns its resumption; land/migrate **before** any `packages/` move                                                                                                                                                                                                                                        |
+| **`converge-agentic-foundations` P3** (paused)               | Typed-surface work edits `lib/ai/`, `mkClaude.nix`, `mkKiro.nix`, `hooksJson` retirement — **the same files** Track B moves. Track A's `config.update.targets` option lives in a **new `lib/update.nix`** (RESOLVED d4 — deliberately _not_ `lib/ai/sharedOptions.nix`), so that seam no longer overlaps converge P3's typed-surface files. **Also:** the D-1 overlay split-prep's TOP-10 (`passthru.extracted` re-plumb — an _active_ phase, not deferred) edits `mkClaude.nix:186` (`effortLevels` enum) and `mkKiro.nix:75` (`hookTriggers` enum) — the same typed-surface files — landing **before** converge P3 resumes, so P3 rebases over the re-plumbed enum sources, not only over Track B's deferred file-moves | Option placement **resolved (d4): `lib/update.nix`**, which removes the option-placement conflict; the `mkClaude`/`mkKiro` overlap remains — now from **both** Track B's deferred moves _and_ TOP-10's active enum re-plumb, so converge P3 must rebase over the re-plumbed `effortLevels`/`hookTriggers` sources |
+| **Update pipeline v4 + transitive-hash gap (#144)**          | Track A's centrepiece **is** dissolving `update-matrix.nix` and changing `update-pkg.sh`. #144 (refresh only touches the named hash) is adjacent surgery on the same script                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Coordinate — do not run both independently                                                                                                                                                                                                                                                                        |
+| **Fragment pipeline** (`dev/generate.nix`)                   | Track A dissolves `packagePaths`, which lives in `dev/generate.nix` — owned by the fragment pipeline, not this plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Ownership needs assigning                                                                                                                                                                                                                                                                                         |
+| **`hmTransform`/`devenvTransform` de-dup**                   | Touches `lib/ai/app/`, which typed-surface work also touches                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Cheap and independent — but sequence against typed-surface                                                                                                                                                                                                                                                        |
+| **Repo defects (`mkClaude.nix:659`)**                        | `mkClaude.nix` is the ~800-line reference file; defect fixes there conflict with moving it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Fix defects first; they're smaller                                                                                                                                                                                                                                                                                |
 
 ### Questions the convergence session must answer
 
