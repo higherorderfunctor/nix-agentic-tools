@@ -1,8 +1,7 @@
-# Shared description mappings for README, doc site, and snippet generators.
+# Shared description mappings for README and CONTRIBUTING generation.
 #
 # Single source of truth for package/server/tool descriptions used by
-# both dev/generate.nix (README, CONTRIBUTING) and fragments-docs
-# (doc site snippets and reference pages).
+# dev/generate.nix (README, CONTRIBUTING).
 #
 # Using explicit descriptions rather than meta.description because
 # user-facing wording may differ from upstream/nixpkgs descriptions.

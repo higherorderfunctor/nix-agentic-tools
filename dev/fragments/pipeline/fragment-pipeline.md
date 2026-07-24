@@ -1,12 +1,12 @@
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-04-07 (commit a3c05f3). If you touch
-> `lib/fragments.nix`, `dev/generate.nix`, `packages/fragments-ai/`,
-> `packages/fragments-docs/`, or any content-package `passthru.fragments`
-> surface and this fragment isn't updated in the same commit, stop
-> and fix it. This is a cross-cutting pipeline — changes that look
-> small in one file frequently ripple into generator outputs for
-> four ecosystems plus the docsite.
+> **Last verified:** 2026-07-24 (commit pending — removed the doc
+> site). If you touch `lib/fragments.nix`, `dev/generate.nix`,
+> `packages/fragments-ai/`, or any content-package
+> `passthru.fragments` surface and this fragment isn't updated in the
+> same commit, stop and fix it. This is a cross-cutting pipeline —
+> changes that look small in one file frequently ripple into
+> generator outputs for four ecosystems.
 
 ### The four layers
 
@@ -20,13 +20,11 @@ source can fan out to many different consumers without duplication:
    `render` (applies a transform to a composed fragment). No file
    I/O, no ecosystem knowledge, no hardcoded paths.
 
-2. **Topic packages (`packages/fragments-ai/`,
-   `packages/fragments-docs/`)** — derivations that bundle content
-   templates together with per-ecosystem transforms. Transforms are
-   exposed via `passthru.transforms` (fragments-ai) or
-   `passthru.generators` (fragments-docs). These are the eval-time
-   API — callers pull them via `pkgs.fragments-ai.passthru.transforms.claude`
-   etc.
+2. **Topic packages (`packages/fragments-ai/`)** — derivations that
+   bundle content templates together with per-ecosystem transforms.
+   Transforms are exposed via `passthru.transforms` (fragments-ai).
+   These are the eval-time API — callers pull them via
+   `pkgs.fragments-ai.passthru.transforms.claude` etc.
 
 3. **Content packages (`packages/coding-standards/`,
    `packages/stacked-workflows/`, etc.)** — derivations that ship
@@ -122,27 +120,6 @@ transforms, all curried as `(transform-args)` then `(fragment)`:
 - **SHA256 dedup runs before priority sort.** Two fragments with
   identical text are collapsed; the survivor's priority wins.
 
-### docsite pipeline is different (and not yet DRY)
-
-`packages/fragments-docs/` is NOT a fragment-markdown reader.
-It exposes `passthru.generators`:
-
-- `snippets.*` — small tables embedded in prose pages via
-  `\{{#include ../generated/snippets/<name>.md}}`. Data-driven
-  from `dev/data.nix`.
-- Full-page generators (`overlayPackages`, `mcpServers`,
-  `libApi`, `typesRef`, `aiMapping`) — emit complete mdbook
-  pages from nix-evaluated data OR read static markdown from
-  `packages/fragments-docs/pages/`.
-
-**Dev fragments do not currently feed the docsite.** A future
-"Contributing / Architecture" section would need a new
-generator in `fragments-docs` that reads dev fragments by path
-(same inputs `mkDevFragment` uses), strips frontmatter, and
-wraps for mdbook. Single-source DRY across steering files
-AND docsite — tracked as Checkpoint 7 of the
-steering-fragments design spec.
-
 ### Extension points (how to add things)
 
 - **New dev fragment**: create markdown file at the right
@@ -161,9 +138,6 @@ steering-fragments design spec.
   `instructions-<ecosystem>` derivation in `flake.nix`, add
   the corresponding `generate:instructions:<ecosystem>` task in
   `dev/tasks/generate.nix`.
-- **New docsite snippet**: add function to
-  `packages/fragments-docs/default.nix` `passthru.generators.snippets`,
-  wire into the `site-snippets` runCommand in `flake.nix`.
 
 ### Gotchas
 

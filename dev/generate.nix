@@ -177,9 +177,9 @@
       "packages/**/*.nix"
     ];
     # pipeline: fragment composition, ecosystem transforms, update
-    # pipeline, CI workflow, and docsite generators. Scoped to every
-    # file in the dev fragment chain, update scripts, CI workflow,
-    # and ninja DAG generation.
+    # pipeline, and CI workflow. Scoped to every file in the dev
+    # fragment chain, update scripts, CI workflow, and ninja DAG
+    # generation.
     pipeline = [
       ".github/workflows/update.yml"
       "config/generate-update-ninja.nix"
@@ -187,7 +187,6 @@
       "dev/generate.nix"
       "dev/scripts/update-*.sh"
       "dev/tasks/generate.nix"
-      "devshell/docs-site/**"
       "lib/ai/transformers/**"
       "lib/fragments.nix"
     ];
@@ -319,9 +318,8 @@
   # but that bloated the file to ~19k tokens of content mostly
   # irrelevant to any given edit. Flat consumers (Codex,
   # generic agents.md-compatible tooling) get orientation;
-  # deep-dive architecture fragments are documented in the
-  # mdbook contributing section (siteArchitecture in flake.nix)
-  # and in per-ecosystem scoped files for Claude/Copilot/Kiro.
+  # deep-dive architecture fragments are documented in
+  # per-ecosystem scoped files for Claude/Copilot/Kiro.
   agentsContent = rootComposed.text;
 
   # ── Claude rule files ────────────────────────────────────────────────
@@ -375,8 +373,7 @@
 
     Deep-dive architecture documentation (fanout semantics, wrapper chains,
     fragment pipeline, overlay cache-hit parity, HM module conventions,
-    etc.) lives in the mdbook contributing section and in
-    path-scoped per-ecosystem files (`.claude/rules/<name>.md`,
+    etc.) lives in path-scoped per-ecosystem files (`.claude/rules/<name>.md`,
     `.github/instructions/<name>.instructions.md`,
     `.kiro/steering/<name>.md`). Those files load on demand when editing
     matching paths; they are not duplicated here to keep this file small.
@@ -494,9 +491,6 @@
     };
     ```
 
-    See [Home-Manager Setup](docs/src/getting-started/home-manager.md) for
-    the full guide.
-
     > **Note (Kiro steering uninstall):** Kiro steering files are
     > materialized as read-only real files (the Kiro v3 engine ignores
     > symlinks — kirodotdev/Kiro#9787). Disabling `ai.kiro` removes the
@@ -536,9 +530,6 @@
       };
     }
     ```
-
-    See [DevEnv Setup](docs/src/getting-started/devenv.md) for the full
-    guide.
 
     </details>
 
@@ -616,8 +607,7 @@
     | `stacked-workflows-content` | Skills, references, and routing-table fragment |
 
     Content packages are derivations with `passthru.fragments` for
-    composable instruction building. See
-    [Fragments & Composition](docs/src/concepts/fragments.md).
+    composable instruction building.
 
     </details>
 
@@ -670,9 +660,6 @@
     };
     ```
 
-    See [The Unified ai.\* Module](docs/src/concepts/unified-ai-module.md)
-    for the full fanout behavior and mapping table.
-
     </details>
 
     <details>
@@ -688,9 +675,6 @@
       context7-mcp.enable = true;
     };
     ```
-
-    See [MCP Server Configuration](docs/src/guides/mcp-servers.md) for
-    per-server settings and credential patterns.
 
     </details>
 
@@ -709,28 +693,10 @@
     };
     ```
 
-    See [Stacked Workflows](docs/src/guides/stacked-workflows.md) for git
-    presets and skill details.
+    See the `stacked-workflows` package for git presets and skill
+    details.
 
     </details>
-
-    ## Documentation
-
-    Full documentation is available in `docs/`:
-
-    ```bash
-    # Preview locally (requires mdbook)
-    mdbook serve docs/
-
-    # Or with devenv
-    devenv up  # starts docs server at localhost:3000
-    ```
-
-    - [Getting Started](docs/src/getting-started/choose-your-path.md)
-    - [Core Concepts](docs/src/concepts/unified-ai-module.md)
-    - [Guides](docs/src/guides/home-manager.md)
-    - [API Reference](docs/src/reference/lib-api.md)
-    - [Troubleshooting](docs/src/troubleshooting.md)
 
     ## License
 
@@ -752,7 +718,6 @@
 
     ```bash
     devenv shell          # enter dev shell with all tools
-    devenv up docs        # start doc preview at localhost:3000
     ```
 
     ${buildCommands}

@@ -35,11 +35,6 @@ inputs:
     url: github:NixOS/nixpkgs/241313f4e8e508cb9b13278c2b0fa25b9ca27163
   nixpkgs-test:
     url: github:NixOS/nixpkgs/ac62194c3917d5f474c1a844b6fd6da2db95077d
-  nuscht-search:
-    url: github:NuschtOS/search/36d55b5d41b1f0abd71ecdcee91553480689c376
-    inputs:
-      nixpkgs:
-        follows: nixpkgs
   rust-overlay:
     url: github:oxalica/rust-overlay/19a19f3921ae195f2fbd85f5dc57e6d1df63aa0b
     inputs:

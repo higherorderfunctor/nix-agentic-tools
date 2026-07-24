@@ -49,7 +49,8 @@
       treefmt --no-cache --walk filesystem --tree-root $out
     '';
 in {
-  # Re-exported: flake.nix still uses runFmt for the docs-site derivations.
+  # runFmt builds the instruction derivations below (treefmt runs inside
+  # the runCommand). Re-exported alongside gen/fmtDrv for external callers.
   inherit gen fmtDrv runFmt;
 
   agents = runFmt "instructions-agents" {} ''

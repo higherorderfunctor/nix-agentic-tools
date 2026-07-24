@@ -160,7 +160,7 @@ Each scoped fragment emits per-ecosystem frontmatter via the
   and an array `fileMatchPattern:`
 - Codex / AGENTS.md: orientation only (no scoped fragments).
   Deep-dive architecture content lives in the per-ecosystem
-  scoped files above and in the mdbook contributing section.
+  scoped files above.
   AGENTS.md used to concatenate every scoped fragment flat, but
   that bloated it to ~2k lines; Phase 2.4 trimmed it to just the
   monorepo orientation content (commit c4f4aff).

@@ -63,9 +63,6 @@ services.mcp-servers.servers.github-mcp = {
 };
 ```
 
-See [Home-Manager Setup](docs/src/getting-started/home-manager.md) for
-the full guide.
-
 > **Note (Kiro steering uninstall):** Kiro steering files are
 > materialized as read-only real files (the Kiro v3 engine ignores
 > symlinks — kirodotdev/Kiro#9787). Disabling `ai.kiro` removes the
@@ -109,9 +106,6 @@ inputs:
   };
 }
 ```
-
-See [DevEnv Setup](docs/src/getting-started/devenv.md) for the full
-guide.
 
 </details>
 
@@ -216,8 +210,7 @@ nix build .#oxlint
 | `stacked-workflows-content` | Skills, references, and routing-table fragment |
 
 Content packages are derivations with `passthru.fragments` for
-composable instruction building. See
-[Fragments & Composition](docs/src/concepts/fragments.md).
+composable instruction building.
 
 </details>
 
@@ -271,9 +264,6 @@ ai = {
 };
 ```
 
-See [The Unified ai.\* Module](docs/src/concepts/unified-ai-module.md)
-for the full fanout behavior and mapping table.
-
 </details>
 
 <details>
@@ -289,9 +279,6 @@ services.mcp-servers.servers = {
   context7-mcp.enable = true;
 };
 ```
-
-See [MCP Server Configuration](docs/src/guides/mcp-servers.md) for
-per-server settings and credential patterns.
 
 </details>
 
@@ -310,28 +297,9 @@ stacked-workflows = {
 };
 ```
 
-See [Stacked Workflows](docs/src/guides/stacked-workflows.md) for git
-presets and skill details.
+See the `stacked-workflows` package for git presets and skill details.
 
 </details>
-
-## Documentation
-
-Full documentation is available in `docs/`:
-
-```bash
-# Preview locally (requires mdbook)
-mdbook serve docs/
-
-# Or with devenv
-devenv up  # starts docs server at localhost:3000
-```
-
-- [Getting Started](docs/src/getting-started/choose-your-path.md)
-- [Core Concepts](docs/src/concepts/unified-ai-module.md)
-- [Guides](docs/src/guides/home-manager.md)
-- [API Reference](docs/src/reference/lib-api.md)
-- [Troubleshooting](docs/src/troubleshooting.md)
 
 ## License
 
