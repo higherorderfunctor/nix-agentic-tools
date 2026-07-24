@@ -417,5 +417,65 @@ in {
             --no-link
         '';
       };
+    }
+    // lib.optionalAttrs (!isCI) {
+      # ── Per-worktree commit-hook config isolation (no-cascade) ───────
+      # devenv's git-hooks install bakes an ABSOLUTE --config into the
+      # prek-generated hooks (pre-commit, commit-msg), pointing at
+      # whichever worktree last entered the shell. The hooks dir is
+      # SHARED across every worktree of a clone (one core.hooksPath into
+      # the common .git), so it is last-writer-wins: entering worktree
+      # B's shell rewrites the hook A commits through, and A then
+      # validates against B's config. This is the cross-worktree
+      # no-cascade gap.
+      #
+      # Fix: after install, rewrite that baked --config to resolve the
+      # config from the COMMITTING worktree's toplevel at hook-run time.
+      # Each worktree validates against its own devenv-generated
+      # .pre-commit-config.yaml, and entering one worktree's shell never
+      # changes another's commit-time validation.
+      #
+      # Why not a per-worktree core.hooksPath (physical isolation)?
+      # core.hooksPath REPLACES .git/hooks with no fallback, and the
+      # shared hooks dir also holds git-branchless's hooks (post-commit,
+      # post-rewrite, reference-transaction, post-checkout). Redirecting
+      # it per-worktree would stop those firing in linked worktrees,
+      # corrupting the shared branchless event log for every worktree
+      # commit. Keeping the shared dir + a dynamic config isolates the
+      # only thing that actually diverges (the prek config) without
+      # touching branchless.
+      "hooks:isolate-config" = {
+        description = "Make prek hooks resolve their config per-worktree (no-cascade)";
+        after = ["devenv:git-hooks:install"];
+        before = ["devenv:enterShell"];
+        exec = ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+
+          ${pkgs.git}/bin/git rev-parse --git-dir >/dev/null 2>&1 || exit 0
+          hooks_dir="$(${pkgs.git}/bin/git rev-parse --path-format=absolute --git-path hooks)"
+          [ -d "$hooks_dir" ] || exit 0
+
+          # Rewrite only prek-generated hooks (they carry a baked
+          # --config="<abs>"); git-branchless hooks have neither marker
+          # and are left untouched. Idempotent: re-running matches the
+          # already-dynamic value and rewrites it to the same text.
+          #
+          # GNU tools are pinned to store paths (the repo convention) so
+          # the rewrite behaves identically on darwin, where a host BSD
+          # sed would reject `-i` without a suffix argument. The
+          # `$(git ...)` INSIDE the replacement is written verbatim into
+          # the hook and runs at COMMIT time under git's own hook
+          # environment (git is always on PATH there), so it stays bare —
+          # pinning a store path there would break the hook if that path
+          # were garbage-collected.
+          for hook in "$hooks_dir"/*; do
+            [ -f "$hook" ] || continue
+            ${pkgs.gnugrep}/bin/grep -q 'prek' "$hook" || continue
+            ${pkgs.gnugrep}/bin/grep -q -- '--config=' "$hook" || continue
+            ${pkgs.gnused}/bin/sed -i 's#--config="[^"]*"#--config="$(git rev-parse --show-toplevel)/.pre-commit-config.yaml"#' "$hook"
+          done
+        '';
+      };
     };
 }
