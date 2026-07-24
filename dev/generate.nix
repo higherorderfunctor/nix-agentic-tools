@@ -235,6 +235,7 @@
       "architecture-fragments"
       "build-commands"
       "change-propagation"
+      "git-workflow"
       "linting"
       "project-overview"
     ];
