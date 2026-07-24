@@ -127,6 +127,20 @@
       })
       .config.update.targets;
 
+    # Merged cache-hit-parity registry — the six hardcoded package lists in
+    # checks/cache-hit-parity.nix were dissolved into this. lib/checks.nix
+    # declares the option and config/cache-hit-parity-targets.nix carries the
+    # rows; lib.evalModules merges them. Consumed by checks/cache-hit-parity.nix
+    # via self.cacheHitParityTargets.
+    cacheHitParityTargets =
+      (lib.evalModules {
+        modules = [
+          ./lib/checks.nix
+          ./config/cache-hit-parity-targets.nix
+        ];
+      })
+      .config.checks.cacheHitParity;
+
     homeManagerModules.default = {
       imports =
         [./lib/ai/sharedOptions.nix]
