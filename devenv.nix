@@ -55,7 +55,8 @@
         printf '%s\n' \
           "error: refusing to commit directly on the default branch ('$default_branch')." \
           "This repo is trunk-based — branch into a worktree first, e.g.:" \
-          "  git worktree add -b <type>/<slug> ~/.cache/nat-worktrees/<slug> origin/$default_branch" \
+          "  worktrees=\"\$(dirname \"\$(git rev-parse --path-format=absolute --git-common-dir)\")-worktrees\"" \
+          "  git worktree add -b <type>/<slug> \"\$worktrees/<slug>\" origin/$default_branch" \
           "(--no-verify bypasses this guard by design.)" >&2
         exit 1
       fi
@@ -519,11 +520,72 @@ in {
           # environment (git is always on PATH there), so it stays bare —
           # pinning a store path there would break the hook if that path
           # were garbage-collected.
+          #
+          # The same hooks also get a bootstrap preflight injected ahead
+          # of their `exec`. A brand-new worktree has NO
+          # .pre-commit-config.yaml at all: it is a devenv `files.*`
+          # artifact materialized on shell entry, and `git worktree add`
+          # runs no devenv. Left to itself prek then volunteers three
+          # remedies (PREK_ALLOW_NO_CONFIG=1, --allow-missing-config,
+          # prek uninstall) that all SKIP every check instead of fixing
+          # the bootstrap, so the preflight replaces that advice with the
+          # correct action. `-f` follows symlinks, so a dangling one (its
+          # store path garbage-collected) trips the guard too — the same
+          # fix applies. The injected text is POSIX sh: the emitted hook
+          # is #!/bin/sh, not bash. Its `$(git ...)` is verbatim hook
+          # text for the same reason as the --config rewrite above.
+          guard_marker="devenv worktree bootstrap guard"
+          IFS= read -r -d "" guard <<'GUARD' || :
+          # --- devenv worktree bootstrap guard (hooks:isolate-config) ---
+          _devenv_config="$(git rev-parse --show-toplevel)/.pre-commit-config.yaml"
+          if [ ! -f "$_devenv_config" ]; then
+              echo 'prek: this worktree has not been bootstrapped.' >&2
+              echo "  missing: $_devenv_config" >&2
+              echo >&2
+              echo '  .pre-commit-config.yaml is a devenv files.* artifact: it is' >&2
+              echo '  materialized on devenv shell entry, and "git worktree add"' >&2
+              echo '  does not run devenv.' >&2
+              echo >&2
+              echo '  Fix: run "devenv shell" (or any devenv task) in this worktree' >&2
+              echo '  once, then commit again.' >&2
+              echo >&2
+              echo '  Do NOT silence this with PREK_ALLOW_NO_CONFIG=1,' >&2
+              echo '  --allow-missing-config, or "prek uninstall". prek suggests' >&2
+              echo '  them, but they skip every pre-commit check instead of fixing' >&2
+              echo '  the bootstrap.' >&2
+              exit 1
+          fi
+          # --- end devenv worktree bootstrap guard ---
+          GUARD
+
           for hook in "$hooks_dir"/*; do
             [ -f "$hook" ] || continue
             ${pkgs.gnugrep}/bin/grep -q 'prek' "$hook" || continue
             ${pkgs.gnugrep}/bin/grep -q -- '--config=' "$hook" || continue
             ${pkgs.gnused}/bin/sed -i 's#--config="[^"]*"#--config="$(git rev-parse --show-toplevel)/.pre-commit-config.yaml"#' "$hook"
+
+            # Idempotent: the marker gates re-injection, so running this
+            # task twice leaves the hooks byte-identical.
+            if ${pkgs.gnugrep}/bin/grep -qF -- "$guard_marker" "$hook"; then
+              continue
+            fi
+            tmp="$(${pkgs.coreutils}/bin/mktemp)"
+            injected=""
+            while IFS= read -r line; do
+              case "$line" in
+                'exec '*)
+                  if [ -z "$injected" ]; then
+                    printf '%s' "$guard"
+                    injected=1
+                  fi
+                  ;;
+              esac
+              printf '%s\n' "$line"
+            done <"$hook" >"$tmp"
+            # Copy back THROUGH the original inode rather than moving the
+            # temp file over it: that preserves the hook's executable bit.
+            ${pkgs.coreutils}/bin/cat "$tmp" >"$hook"
+            ${pkgs.coreutils}/bin/rm -f "$tmp"
           done
         '';
       };
