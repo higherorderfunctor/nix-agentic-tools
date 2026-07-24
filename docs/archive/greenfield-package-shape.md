@@ -148,11 +148,11 @@ import. The tightening is at the _barrel_ level, not the factory.
 
 ## Where this fits with current pilots
 
-- The mcp-servers pilot (`docs/mcp-servers-pilot-plan.md`) tests
+- The mcp-servers pilot (`docs/archive/mcp-servers-pilot-plan.md`) tests
   composition mechanics (`makeScope`, `packagesFromDirectoryRecursive`,
   `evalModules` merge-up) regardless of barrel shape. Findings
   transfer to either shape.
 - The greenfield refactor is the END SHAPE the project converges
   on. Whether to pilot in greenfield shape directly or migrate
   later is a sequencing decision recorded in
-  `docs/mcp-servers-pilot-plan.md` and discussed in grill 2.
+  `docs/archive/mcp-servers-pilot-plan.md` and discussed in grill 2.
