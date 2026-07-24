@@ -301,12 +301,13 @@ for it across the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-07-24 (commit pending — adds the one-time devenv
-> bootstrap step a fresh worktree needs before its first commit, backed by a
-> preflight guard injected into the prek hooks). If you change the
-> branch-protection ruleset, the worktree convention, the bootstrap step, the
-> local commit guard, or the PR flow and this fragment isn't updated in the
-> same commit, stop and fix it.
+> **Last verified:** 2026-07-24 (commit pending — moves worktrees out of
+> `~/.cache` into a `<repo>-worktrees/` sibling of the checkout, on top of the
+> one-time devenv bootstrap step a fresh worktree needs before its first
+> commit, backed by a preflight guard injected into the prek hooks). If you
+> change the branch-protection ruleset, the worktree convention, the bootstrap
+> step, the local commit guard, or the PR flow and this fragment isn't updated
+> in the same commit, stop and fix it.
 
 `main` is the trunk. It is protected: pull-request required, **squash-merge
 only**, no force-push, no deletion, and four required status checks —
@@ -325,10 +326,31 @@ safety net, not the workflow.
 
 ### Every change goes through an isolated worktree + PR
 
+Worktrees live in `<repo>-worktrees/`, a **sibling of the primary checkout** —
+a clone at `~/src/nix-agentic-tools` puts them in
+`~/src/nix-agentic-tools-worktrees/<slug>`. Keeping them beside the clone means
+a direnv whitelist (or any editor/tooling trust root) covering the checkout
+covers new worktrees too, so `cd` alone enters the devenv shell and
+materializes the gitignored `files.*` artifacts with no manual step — and it
+keeps work out of `~/.cache`, which cache-cleaning tools treat as disposable.
+
+Derive that directory once per shell. This form is correct from **any**
+worktree, not just the primary checkout:
+
+```bash
+worktrees="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")-worktrees"
+```
+
+`--git-common-dir` resolves to the ORIGINAL clone's `.git` even when run from a
+linked worktree, so `dirname` of it is always the primary checkout. Do **not**
+substitute a bare `../<repo>-worktrees/<slug>`: from a linked worktree that
+silently resolves one level too deep, into
+`<repo>-worktrees/<repo>-worktrees/<slug>`.
+
 1. Branch off `main` into its own worktree:
 
    ```bash
-   git worktree add -b <type>/<slug> ~/.cache/nat-worktrees/<slug> origin/main
+   git worktree add -b <type>/<slug> "$worktrees/<slug>" origin/main
    ```
 
    `<type>` is a Conventional Commits type (`build`, `chore`, `ci`, `docs`,
@@ -337,13 +359,14 @@ safety net, not the workflow.
 2. Bootstrap the new worktree **once**, before its first commit:
 
    ```bash
-   cd ~/.cache/nat-worktrees/<slug> && devenv shell   # or any devenv task
+   cd "$worktrees/<slug>" && devenv shell   # or any devenv task
    ```
 
    `.pre-commit-config.yaml` is a devenv `files.*` artifact materialized on
    shell entry, and `git worktree add` runs no devenv — until you do this the
    shared prek hooks have no config to validate against and the commit is
-   rejected.
+   rejected. With direnv allowed for the parent directory the `cd` is enough on
+   its own; that is what the sibling location buys.
 
 3. **Push at the first commit** — not at the end — so the branch is a
    continuous off-machine backup. Open the PR **ready (non-draft) as soon as
@@ -360,7 +383,7 @@ safety net, not the workflow.
 6. Tear the worktree down once merged:
 
    ```bash
-   git worktree remove ~/.cache/nat-worktrees/<slug>
+   git worktree remove "$worktrees/<slug>"   # re-derive $worktrees if needed
    git branch -D <type>/<slug>   # squash-merged: -d refuses, -D is correct
    ```
 

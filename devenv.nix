@@ -55,7 +55,8 @@
         printf '%s\n' \
           "error: refusing to commit directly on the default branch ('$default_branch')." \
           "This repo is trunk-based — branch into a worktree first, e.g.:" \
-          "  git worktree add -b <type>/<slug> ~/.cache/nat-worktrees/<slug> origin/$default_branch" \
+          "  worktrees=\"\$(dirname \"\$(git rev-parse --path-format=absolute --git-common-dir)\")-worktrees\"" \
+          "  git worktree add -b <type>/<slug> \"\$worktrees/<slug>\" origin/$default_branch" \
           "(--no-verify bypasses this guard by design.)" >&2
         exit 1
       fi
