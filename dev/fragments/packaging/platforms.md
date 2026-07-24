@@ -8,7 +8,8 @@
 ### Nightly Packaging Pattern
 
 All binary packages track nightly/latest versions via inline hashes
-and `config/update-matrix.nix`. Never defer to nixpkgs upstream —
+and `config.update.targets` (`config/update-targets.nix`). Never defer
+to nixpkgs upstream —
 always override `src` and `version` from the overlay's inline source.
 
 When a package provides different artifacts per platform (e.g.,

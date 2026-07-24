@@ -442,7 +442,7 @@ in {
             exit 1
           fi
 
-          # Regenerate ninja build file from flake.lock + update matrix
+          # Regenerate ninja build file from flake.lock + config.update.targets
           nix run .#generate-update-ninja
 
           # Clear previous report

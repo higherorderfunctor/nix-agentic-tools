@@ -182,14 +182,15 @@ Dependency hashes (pnpmDeps, vendorHash) are also inline in the same file.
    if not in the upstream repo
 4. Export it in `flake.nix` under `packages`
 5. Add a server module in `modules/mcp-servers/servers/<name>.nix`
-6. Register it in `config/update-matrix.nix` under `nixUpdate` with
-   the git remote URL for automated rev bumping
+6. Register it as a `config.update.targets.<name>` row in
+   `config/update-targets.nix` with the git remote URL for automated
+   rev bumping
 
 ### Updating
 
 ```bash
 nix build .#<server-name>       # Build a single server
-nix run .#update                # Run all updates via update matrix
+nix run .#update                # Run all updates via config.update.targets
 nix flake check                 # Verify evaluation
 ```
 

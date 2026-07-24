@@ -261,7 +261,7 @@ adding a dispatch flag: `kiro-memory-distiller` (bare → `main`),
 ours as fallback) for the `project_id` derivation. `checkPhase` runs the
 80-test bun suite in-sandbox (a real failure fails the build); `installCheck`
 smokes all three bins with `{}` stdin (exit 0). In-repo source ⇒ `version="0.1.0"`,
-`license=unlicense`, NOT in `update-matrix`; cache-hit-parity allowlisted.
+`license=unlicense`, NOT in `config.update.targets`; cache-hit-parity allowlisted.
 
 **Backend helper (`openmemory-mem`, the 3rd bin of `openmemory-mcp`, D29).**
 Shipped from the openmemory package — NOT a separate overlay — so it shares the

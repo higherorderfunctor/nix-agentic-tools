@@ -8,7 +8,7 @@ it in the same commit:
 - Routing tables in skills
 - README feature matrix and server reference
 - flake.nix output lists
-- config/update-matrix.nix entries
+- config.update.targets entries (config/update-targets.nix)
 - CI workflow matrices
 - Home-manager module registrations
 - Overlay export lists

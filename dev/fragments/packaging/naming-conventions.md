@@ -5,5 +5,5 @@
 - Skills: `packages/stacked-workflows/skills/<name>/SKILL.md`
 - Published fragments: `packages/<pkg>/fragments/<name>.md`
 - Dev fragments: `dev/fragments/<pkg>/<name>.md`
-- update-matrix.nix keys use exported package names (matching the overlay attrset key)
+- config.update.targets keys use exported package names (matching the overlay attrset key)
 - Exported packages: lowercase with hyphens
