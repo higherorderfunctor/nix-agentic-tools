@@ -11,7 +11,12 @@
 # Order within a `scopes` list is load-bearing: the globs are emitted verbatim
 # into the generated per-ecosystem frontmatter, so reordering them churns every
 # generated instruction file. `scopes = null` means "always-loaded" (no
-# scoping).
+# scoping). Entries are sorted in BYTE order (LC_ALL=C) — what `lib.sort
+# lib.lessThan` produces, and what every other sorted list in this repo uses.
+# So `lib/fragments-registry.nix` correctly precedes `lib/fragments.nix`,
+# because `-` (0x2D) sorts below `.` (0x2E). A locale-aware collation that
+# ignores punctuation flips that pair; that is not the convention here, so do
+# not "correct" it.
 #
 # A `sources` entry is either a bare string (shorthand for a fragment in
 # dev/fragments/<category>/) or an attrset selecting a co-located fragment
