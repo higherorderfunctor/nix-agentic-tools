@@ -13,6 +13,7 @@
   "hookEvents": [
     "ConfigChange",
     "CwdChanged",
+    "DirectoryAdded",
     "Elicitation",
     "ElicitationResult",
     "FileChanged",
