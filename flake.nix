@@ -226,13 +226,12 @@
       fragmentsChecks = import ./checks/fragments-eval.nix {inherit lib pkgs;};
       instructionsDriftCheck = import ./checks/instructions-drift.nix {inherit pkgs self;};
       kiroExtractedCheck = import ./checks/kiro-cli-extracted.nix {inherit pkgs self;};
-      modelStalenessClaudeCheck = import ./checks/model-staleness-claude.nix {inherit pkgs self;};
       moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs;};
       pnpmFetcherParityCheck = import ./checks/pnpm-fetcher-parity.nix {inherit lib pkgs self;};
       updateTargetsParityCheck = {update-targets-parity = import ./checks/update-targets-parity.nix {inherit lib pkgs self;};};
       validateAtStopCheck = {validate-at-stop = import ./checks/validate-at-stop.nix {inherit pkgs;};};
     in
-      bareCommandsCheck // cacheHitParityCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // instructionsDriftCheck // kiroExtractedCheck // modelStalenessClaudeCheck // moduleChecks // pnpmFetcherParityCheck // updateTargetsParityCheck // validateAtStopCheck);
+      bareCommandsCheck // cacheHitParityCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // instructionsDriftCheck // kiroExtractedCheck // moduleChecks // pnpmFetcherParityCheck // updateTargetsParityCheck // validateAtStopCheck);
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # from devenv.nix; nothing in this flake constructs it.

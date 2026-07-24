@@ -226,7 +226,8 @@ universal-node layout we forked against.
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-07-21. If you touch
+> **Last verified:** 2026-07-24 (commit pending — adds the extracted-sidecar
+> section after the model-catalog anchor regression). If you touch
 > `overlays/lib.nix`, any overlay `.nix` file that calls
 > `vu.mkVersion`, the shared `.github/actions/warm-ifd/action.yml`
 > composite, or the warm steps that consume it in
@@ -318,6 +319,36 @@ on the fetched source, which triggers the fetch. The cachix
 daemon pushes fetched sources so subsequent evaluations (PR CI) can
 substitute them. The `--apply` expression is the load-bearing
 detail — keep the composite and this fragment in sync.
+
+### Extracted sidecars are the IFD-free path — and their drift check is not a correctness gate
+
+`mkClaudeExtract` / `mkKiroProbe` in `overlays/lib.nix` grep a packaged
+binary at BUILD time (`passthru.extracted`) and emit a JSON sidecar that is
+COMMITTED (`overlays/<pkg>-extracted.json`). Modules `builtins.readFile`
+the committed file, never the derivation, so option surfaces derived from a
+binary cost no IFD. `checks/<pkg>-extracted.nix` then compares committed
+against freshly-built to catch a stale sidecar.
+
+**That drift check does not tell you the extraction is CORRECT.** The
+update pipeline's `extraExtract` hook regenerates the sidecar inside the
+same bump PR, so an anchor that has gone stale and now matches the wrong
+structure is simply committed as the new truth — and the drift check goes
+green over it. The sidecar keys are module option surfaces, so the visible
+result is HM/devenv options quietly out of sync with the binary.
+
+This is not hypothetical. The model-catalog grep anchored on camelCase
+`firstParty:"claude-…"`; the catalog spells that key `first_party:` inside
+`provider_ids`, and the only camelCase site in the binary belongs to an
+unrelated table. It matched exactly one stray id from 2.1.207 through
+2.1.219, and the `model` option missed the entire Opus 5 / Sonnet 5 /
+Fable 5 generation without a single red build.
+
+So every extractor asserts the SHAPE of what it captured, not merely that
+it captured something — a non-empty guard is worthless here, because a dead
+anchor still matched one token. Concretely: the effort enum requires
+exactly one distinct match; the model catalog requires an id from each of
+the opus / sonnet / haiku families. When you add a key, add its shape
+assertion in the same commit.
 
 ### Gotchas when adding new packages
 

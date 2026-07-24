@@ -15,8 +15,7 @@
   # § IFD Patterns and memory project_claude_effort_pin_state.
   extracted =
     builtins.fromJSON (builtins.readFile ../../../overlays/claude-code-extracted.json);
-  knownClaudeModels =
-    builtins.fromJSON (builtins.readFile ../models.json);
+  knownClaudeModels = extracted.models;
 
   # Typed hook wiring (northbound). S1: a handler `command` accepts a package,
   # coerced to its executable path so its supporting files ride the /nix/store
@@ -210,9 +209,13 @@ in
                 (lib.types.either (lib.types.enum knownClaudeModels) lib.types.str);
               default = null;
               description = ''
-                Claude model id. Known ids (packages/claude-code/models.json)
-                autocomplete; any string is accepted (non-enforcing soft enum) —
-                the binary's runtime model set is not a safe closed enum.
+                Claude model id. The ${toString (builtins.length knownClaudeModels)}
+                non-retired ids in the packaged binary's model catalog
+                (extracted into the drift-checked
+                overlays/claude-code-extracted.json — never hand-curated) are
+                ${lib.concatStringsSep ", " knownClaudeModels}. Any string is
+                accepted (non-enforcing soft enum) — the binary's runtime model
+                set is not a safe closed enum.
               '';
             };
             tui = lib.mkOption {
