@@ -1,12 +1,13 @@
 # Package / module restructure — canonical plan
 
-> **Status:** synthesis complete, **execution not started (~0%)**.
-> This document replaces the 8-document restructure cluster in `docs/`.
-> Nothing here has been implemented on the real tree.
+> **Status:** canonical restructure plan, promoted to `docs/` on 2026-07-24;
+> the design decisions are **locked**. The restructure **execution itself has
+> not started** on the real tree (Track A/B — see §12).
+> This document replaces the 8-document restructure cluster, now archived
+> under `docs/archive/`.
 >
-> **Written:** 2026-07-23. Supersedes every source listed below.
-> Lives in `private/` (gitignored) until reviewed; promote to
-> `docs/package-restructure.md` when you're happy with it.
+> **Written:** 2026-07-23; consolidated + reconciled to the locked design
+> 2026-07-24. Supersedes every source listed below.
 >
 > **Two parts, deliberately separated:**
 > **Part I (§0–10 + Appendices A–C)** is a faithful synthesis of the 8 source
@@ -25,8 +26,9 @@
 
 The restructure thinking was spread across 8 docs written 2026-04-21 → 2026-05-08,
 re-derived across sessions because the constraint stack has no upstream pattern to
-copy. Everything load-bearing from each is folded in below. **Archive the sources
-only after you've read this and agree nothing was dropped.**
+copy. Everything load-bearing from each is folded in below. The sources are
+archived under `docs/archive/` (retained for provenance; nothing load-bearing
+was dropped).
 
 | Source doc                              | Date       | What it contributed                                                                                           | Disposition                                            |
 | --------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
@@ -968,9 +970,10 @@ state as of 2026-07-23; re-verify before acting — several are moving.)_
 
 1. **Does `docs/` survive the docs-subsystem removal?** The removal targets the
    _docsite_ (mdbook/pagefind, `.#docs`/`.#docs-site`, nuschtos, gh-pages, Pages
-   settings) — plain markdown under `docs/` most likely survives, but this is
-   **unconfirmed** and it determines (a) where this doc gets promoted to and
-   (b) whether `docs/archive/` is a valid destination for the 8 sources.
+   settings) — plain markdown under `docs/` most likely survives. This doc has
+   been promoted to `docs/` and the 8 sources archived under `docs/archive/` on
+   that assumption; the **unconfirmed** part is whether the removal will later
+   force them elsewhere.
 2. **Where does `config.update.targets` live** — **RESOLVED (d4, 2026-07-24,
    operator-approved): a new `lib/update.nix`**, _not_ `lib/ai/sharedOptions.nix`,
    to keep update-pipeline concerns separable from the shared AI option
@@ -996,7 +999,7 @@ state as of 2026-07-23; re-verify before acting — several are moving.)_
 | **Eval-cost regression** in the update pipeline                       | `nix eval` per target ≈ 1–2s cold × ~17 pkgs ≈ 30s/run           | Measure during the pre-pilot; batch into one eval if it bites                |
 | **Cache-hit parity regression**                                       | `checks.cache-hit-parity` red                                    | It's a gate at every commit; never introduce `final.X` inputs                |
 | **Propagation surface already broken**                                | `AGENTS.md`/`CLAUDE.md` still list `modules/`                    | Fix the stale orientation docs _before_ adding more moves                    |
-| **Doc rot round two**                                                 | This doc drifts like its 8 predecessors                          | It supersedes them _and they get archived_ — one doc, or the disease returns |
+| **Doc rot round two**                                                 | This doc drifts like its 8 predecessors                          | It supersedes them _and they are archived_ — one doc, or the disease returns |
 
 ### What would change my mind
 
