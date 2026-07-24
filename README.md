@@ -45,7 +45,6 @@ nixpkgs.overlays = [inputs.nix-agentic-tools.overlays.default];
 imports = [inputs.nix-agentic-tools.homeManagerModules.default];
 
 ai = {
-  enable = true;
   claude.enable = true;
   copilot.enable = true;
   kiro.enable = true;
@@ -91,13 +90,9 @@ inputs:
 {inputs, ...}: {
   imports = [inputs.nix-agentic-tools.devenvModules.nix-agentic-tools];
 
-  ai = {
-    enable = true;
-    claude.enable = true;
-  };
+  ai.claude.enable = true;
 
   claude.code = {
-    enable = true;
     mcpServers.github-mcp = {
       type = "stdio";
       command = "github-mcp-server";
@@ -240,7 +235,6 @@ always win.
 
 ```nix
 ai = {
-  enable = true;
   claude.enable = true;
   copilot.enable = true;
 
@@ -297,7 +291,8 @@ stacked-workflows = {
 };
 ```
 
-See the `stacked-workflows` package for git presets and skill details.
+See the `stacked-workflows` package for git presets and skill
+details.
 
 </details>
 

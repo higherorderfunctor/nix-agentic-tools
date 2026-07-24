@@ -134,16 +134,10 @@ in {
       '';
     };
 
-    # BROKEN: `.#repo-contributing` and `.#repo-readme` flake outputs
-    # don't exist. Running `devenv tasks run --mode before generate:repo`
-    # will fail with "attribute missing" on both tasks below. The
-    # `readmeMd` / `contributingMd` strings exist in `dev/generate.nix`
-    # but aren't exposed as flake packages the way `instructions-*` are.
-    # Fix: add `repo-readme` / `repo-contributing` packages to
-    # `flake.nix` that wrap those strings in `pkgs.writeText`, paralleling
-    # the existing `instructions-claude` / `instructions-copilot` / etc.
-    # Until then, README.md and CONTRIBUTING.md must be edited manually
-    # (use `dev/data.nix` as the source of truth for the data-driven rows).
+    # `.#repo-contributing` and `.#repo-readme` are DIRECTORY outputs, the
+    # same shape as `instructions-*`: treefmt runs inside the derivation,
+    # so the file copied out is already formatted and a drift check can
+    # compare it against the tracked copy without re-formatting first.
     "generate:repo:contributing" = {
       description = "Generate CONTRIBUTING.md from fragments and nix data";
       before = ["generate:repo"];
@@ -153,7 +147,7 @@ in {
         ${copyOut}
         log "Building CONTRIBUTING.md"
         src=$(nix build .#repo-contributing --no-link --print-out-paths)
-        copy_out "$src" CONTRIBUTING.md
+        copy_out "$src/CONTRIBUTING.md" CONTRIBUTING.md
         log "CONTRIBUTING.md updated"
       '';
     };
@@ -167,7 +161,7 @@ in {
         ${copyOut}
         log "Building README.md"
         src=$(nix build .#repo-readme --no-link --print-out-paths)
-        copy_out "$src" README.md
+        copy_out "$src/README.md" README.md
         log "README.md updated"
       '';
     };
