@@ -41,7 +41,22 @@ if [ -n "$git_url" ]; then
     # silently rewriting the wrong overlay — context7's HEAD rev landed in
     # effect-mcp's fetch block → nonexistent commit → source 404 → red CI.
     # See dev/scripts/resolve-overlay-file.sh.
-    if ! target_file=$(resolve_overlay_file "$git_url" "$wt/overlays"); then
+    # Coexistence (Track-A merge-up beachhead): prefer a declared
+    # config.update.targets entry (lib/update.nix + per-package
+    # <pkg>.update.nix, exposed as the `.#updateTargets` flake output) over
+    # the resolve_overlay_file fallback. Only `file` is consumed here;
+    # `flags`/`git` keep flowing positionally from config/update-matrix.nix
+    # via the ninja DAG, and `dependsOn` is declared-but-unused for now. The
+    # matrix stays the live fallback for every package without a declared
+    # target. checks.update-targets-parity asserts the declared `file` is
+    # byte-identical to resolve_overlay_file's output, so the two paths agree.
+    # cwd is still the main tree here (before the Phase 1 subshell `cd`), so
+    # `.#updateTargets` resolves against the checked-out flake.
+    declared_file=$(nix eval --raw ".#updateTargets.${name}.file" 2>/dev/null || true)
+    if [ -n "$declared_file" ]; then
+      target_file="$wt/$declared_file"
+      log_info "Target from config.update.targets: $declared_file"
+    elif ! target_file=$(resolve_overlay_file "$git_url" "$wt/overlays"); then
       report_held_back "$name" "could not uniquely resolve overlay file"
       exit 0
     fi
