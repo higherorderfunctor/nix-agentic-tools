@@ -14,6 +14,9 @@ working tree. Nix store caching means unchanged inputs skip rebuild.
 
 ### Source Layout
 
+- `config/fragment-categories.nix` — the fragment-category registry:
+  each category's scope globs and fragment sources. Option declared
+  in `lib/fragments-registry.nix`.
 - `dev/fragments/` — dev-only instruction fragments. Composed into
   instruction files and CLAUDE.md.
 - `dev/generate.nix` — shared fragment composition logic consumed by

@@ -18,21 +18,44 @@
 }: let
   fragments = import ../lib/fragments.nix {inherit lib;};
 
+  # ── Fragment category registry ───────────────────────────────────────
+  # The per-category scope globs + fragment sources, merged from
+  # config/fragment-categories.nix against the option declaration in
+  # lib/fragments-registry.nix. Replaces the two parallel hand-maintained
+  # attrsets (`packagePaths` and `devFragmentNames`) that used to sit
+  # inline here.
+  #
+  # This is an internal lib.evalModules rather than a flake output like
+  # `.#updateTargets` / `.#cacheHitParityTargets` because this file is
+  # imported directly as a bare `{lib, pkgs}` function by BOTH flake.nix
+  # (via dev/instructions.nix) and the standalone devenv path, neither of
+  # which passes `self` — so it structurally cannot read a flake output,
+  # and an output with no consumer would be dead surface. It already
+  # direct-imports ../lib/fragments.nix and ./data.nix the same way.
+  fragmentCategories =
+    (lib.evalModules {
+      modules = [
+        ../config/fragment-categories.nix
+        ../lib/fragments-registry.nix
+      ];
+    })
+    .config.fragments.categories;
+
   # ── Fragments from content packages (via overlay) ────────────────────
   commonFragments = builtins.attrValues pkgs.coding-standards.passthru.fragments;
   swsFragments = builtins.attrValues pkgs.stacked-workflows-content.passthru.fragments;
 
   # ── Dev-only fragment reader ─────────────────────────────────────────
-  # Each entry in devFragmentNames may be either:
+  # Each entry in a category's `sources` list may be either:
   #   - A bare string "name" (legacy form, equivalent to location = "dev")
   #     reads ./fragments/<pkg>/<name>.md
-  #   - An attrset { location, name, dir ? pkg } for co-located fragments:
+  #   - An attrset { location, name, dir } for co-located fragments:
   #     - location = "dev" (default): ./fragments/<dir>/<name>.md
   #     - location = "package": ../packages/<dir>/docs/<name>.md
   #     - location = "devshell": ../devshell/<dir>/docs/<name>.md
-  #     The `dir` field defaults to `pkg` (the devFragmentNames key) but can
-  #     be set explicitly when the category name differs from the directory
-  #     name.
+  #     The `dir` field defaults to null, which falls back to `pkg` (the
+  #     config.fragments.categories key), and is set explicitly when the
+  #     category name differs from the directory name.
   #
   #     Post-factory rollout, "package" location now reads from
   #     packages/<name>/docs/ (the Bazel-style per-package docs dir)
@@ -48,7 +71,12 @@
       else {
         location = entry.location or "dev";
         inherit (entry) name;
-        dir = entry.dir or pkg;
+        # The submodule always supplies `dir` (default null), so this is a
+        # present-but-null fallback rather than an absent-attr one.
+        dir =
+          if (entry.dir or null) != null
+          then entry.dir
+          else pkg;
       };
     inherit (normalized) location name dir;
     locationBases = {
@@ -80,187 +108,6 @@
       priority = 5;
     };
 
-  # ── Package path scoping (for ecosystem frontmatter) ─────────────────
-  # Lists are the canonical form. The fragments-ai transforms handle
-  # per-ecosystem emission: Claude as a YAML list, Copilot as a
-  # comma-joined string (native applyTo syntax), Kiro as an inline
-  # YAML array (native fileMatchPattern multi-pattern syntax).
-  # null means "always-loaded" (no scoping).
-  packagePaths = {
-    ai-clis = [
-      "packages/ai-clis/**"
-      "packages/copilot-cli/**"
-      "packages/kiro-cli/**"
-    ];
-    # ai-module: fanout semantics and per-CLI enable-as-sole-gate.
-    # Post-factory, the fanout logic lives in each per-package factory
-    # (packages/*/lib/mk*.nix + packages/*/modules/) and the shared
-    # options barrel (lib/ai/sharedOptions.nix).
-    ai-module = [
-      "lib/ai/sharedOptions.nix"
-      "packages/claude-code/modules/**"
-      "packages/copilot-cli/modules/**"
-      "packages/kiro-cli/modules/**"
-    ];
-    # ai-skills: uniform delegation pattern (all branches go through
-    # programs.<cli>.skills, no direct home.file). Scoped to the
-    # per-package factory modules + the skill helper.
-    ai-skills = [
-      "lib/ai/hm-helpers.nix"
-      "packages/claude-code/modules/**"
-      "packages/copilot-cli/modules/**"
-      "packages/kiro-cli/modules/**"
-    ];
-    # claude-code: wrapper chain. Spans the claude-code overlay
-    # package and the factory-built module.
-    claude-code = [
-      "overlays/claude-code.nix"
-      "packages/claude-code/**"
-    ];
-    # devenv: devenv files.* internals + skills layout walker. Scoped
-    # to per-package devenv modules and the helper file.
-    devenv = [
-      ".github/workflows/devenv-test.yml"
-      "devenv.nix"
-      "lib/ai/hm-helpers.nix"
-      "packages/*/modules/devenv/**"
-    ];
-    # flake: binary cache config + flake-level settings. Scoped to
-    # files that touch nixConfig or cachix settings so consumers
-    # editing their flake inputs get the rule, and consumers
-    # editing ai modules don't.
-    flake = [
-      "flake.nix"
-      "devenv.nix"
-    ];
-    # hm-modules: cross-cutting module conventions. Scoped to every
-    # HM module file so conventions load whenever a contributor is
-    # touching any module. Post-factory, HM modules live in
-    # packages/*/modules/homeManager/.
-    hm-modules = [
-      "packages/*/modules/homeManager/**"
-    ];
-    # kimchi: two-tree factory (config.json + harness/), runtime SOPS
-    # credential, wrapProgram separator + flattenDotKeys gotchas.
-    kimchi = [
-      "packages/kimchi/**"
-    ];
-    # kiro-cli: auto-memory system (distiller pipeline, v3 hook set,
-    # buffer/archive tiers, the openmemory-mem backend seam). Scoped to the
-    # kiro-cli package, the distiller overlay, and the backend helper source.
-    kiro-cli = [
-      "overlays/kiro-memory-distiller.nix"
-      "packages/kiro-cli/**"
-      "packages/openmemory-mcp/mem/**"
-    ];
-    mcp-servers = [
-      "overlays/mcp-servers/**"
-    ];
-    monorepo = null;
-    # nix-standards: broad Nix code conventions. Applies to any
-    # .nix file in the tree.
-    nix-standards = ["**/*.nix"];
-    # overlays: cache-hit parity + IFD patterns. Scoped to overlay
-    # package files and overlays/ (version helpers that trigger IFD).
-    # Excludes content-only fragments dirs.
-    overlays = [
-      "overlays/*.nix"
-      "overlays/**/*.nix"
-      "packages/ai-clis/*.nix"
-      "packages/git-tools/*.nix"
-      "packages/mcp-servers/*.nix"
-    ];
-    # packaging: naming conventions + platform handling for overlay
-    # packages. Scoped to the packages tree plus config/update-targets.nix.
-    packaging = [
-      "config/update-targets.nix"
-      "packages/**/*.nix"
-    ];
-    # pipeline: fragment composition, ecosystem transforms, update
-    # pipeline, and CI workflow. Scoped to every file in the dev
-    # fragment chain, update scripts, CI workflow, ninja DAG
-    # generation, and the config.update.targets registry files.
-    pipeline = [
-      ".github/workflows/update.yml"
-      "config/generate-update-ninja.nix"
-      "config/update-targets.nix"
-      "dev/generate.nix"
-      "dev/scripts/update-*.sh"
-      "dev/tasks/generate.nix"
-      "lib/ai/transformers/**"
-      "lib/fragments.nix"
-      "lib/update.nix"
-      "overlays/**/*.update.nix"
-    ];
-    stacked-workflows = ["packages/stacked-workflows/**"];
-  };
-
-  # ── Dev fragment names per package ───────────────────────────────────
-  devFragmentNames = {
-    ai-clis = ["packaging-guide"];
-    ai-module = [
-      "ai-module-fanout"
-      "collision-semantics"
-      "dir-helpers"
-      "layered-fanout"
-    ];
-    ai-skills = ["skills-fanout-pattern"];
-    claude-code = [
-      {
-        location = "package";
-        name = "claude-code-wrapper";
-        dir = "claude-code";
-      }
-    ];
-    devenv = ["ci-lean-closure" "files-internals"];
-    flake = ["binary-cache"];
-    hm-modules = ["module-conventions"];
-    kimchi = [
-      {
-        location = "package";
-        name = "kimchi-factory";
-        dir = "kimchi";
-      }
-    ];
-    kiro-cli = [
-      {
-        location = "package";
-        name = "kiro-auto-memory";
-        dir = "kiro-cli";
-      }
-    ];
-    mcp-servers = [
-      "js-server-packaging"
-      "overlay-guide"
-    ];
-    monorepo = [
-      "architecture-fragments"
-      "build-commands"
-      "change-propagation"
-      "git-workflow"
-      "linting"
-      "project-overview"
-    ];
-    nix-standards = ["nix-standards"];
-    overlays = [
-      "cache-hit-parity"
-      "ifd-patterns"
-      "overlay-pattern"
-      "unfree-guard"
-    ];
-    packaging = [
-      "naming-conventions"
-      "platforms"
-    ];
-    pipeline = [
-      "ci-update-workflow"
-      "fragment-pipeline"
-      "generation-architecture"
-      "update-pipeline"
-    ];
-    stacked-workflows = ["development"];
-  };
-
   # ── Extra published fragments per package (beyond commonFragments) ───
   extraPublishedFragments = {
     monorepo = swsFragments;
@@ -276,7 +123,7 @@
   # a scoped rule triggers alongside the always-loaded common.md).
   # Per Checkpoint 2 research on context dilution.
   mkDevComposed = package: let
-    devFrags = map (mkDevFragment package) (devFragmentNames.${package} or []);
+    devFrags = map (mkDevFragment package) (fragmentCategories.${package}.sources or []);
     extraFrags = extraPublishedFragments.${package} or [];
     isRoot = package == "monorepo";
   in
@@ -297,7 +144,7 @@
   # for kiro) and returns a rendered byte string.
   aiTransforms = (import ../lib/ai {inherit lib;}).transformers;
   mkEcosystemFile = package: let
-    paths = packagePaths.${package} or null;
+    paths = fragmentCategories.${package}.scopes or null;
     withPaths = composed:
       if paths != null
       then composed // {inherit paths;}
@@ -310,7 +157,7 @@
   };
 
   # ── Derived values ───────────────────────────────────────────────────
-  nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") devFragmentNames;
+  nonRootPackages = lib.filterAttrs (name: _: name != "monorepo") fragmentCategories;
   rootComposed = mkDevComposed "monorepo";
   monorepoEco = mkEcosystemFile "monorepo";
 
@@ -805,7 +652,9 @@
     To add a dev-only fragment:
 
     1. Create `dev/fragments/<pkg>/<name>.md`
-    2. Add the name to `devFragmentNames.<pkg>` in `dev/generate.nix`
+    2. Add the name to `config.fragments.categories.<pkg>.sources` in
+       `config/fragment-categories.nix` (scope globs for the category live
+       alongside it as `.scopes`)
     3. Run `devenv tasks run generate:instructions` to regenerate
 
     To add a published fragment (consumed by external users):

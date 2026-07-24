@@ -136,9 +136,9 @@ that manual commands miss.
 
 ## Architecture Fragments
 
-> **Last verified:** 2026-05-20 (commit pending — corrects stale
-> location paths after the post-factory `packages/<pkg>/docs/`
-> migration).
+> **Last verified:** 2026-07-24 (commit pending — the
+> `packagePaths` + `devFragmentNames` registries dissolved into
+> `config.fragments.categories`).
 
 This repo ships path-scoped architecture fragments as dev-only
 context for agents working on it. They are SEPARATE from the
@@ -156,8 +156,9 @@ supported by `dev/generate.nix`:
   co-located with a devshell module.
 
 Scope globs (which files the fragment loads for) live separately
-in `packagePaths.<category>` in `dev/generate.nix` and are
-independent of where the markdown source lives on disk.
+in `config.fragments.categories.<category>.scopes` (declared in
+`config/fragment-categories.nix`) and are independent of where the
+markdown source lives on disk.
 
 Each scoped fragment emits per-ecosystem frontmatter via the
 `fragments-ai.passthru.transforms` pipeline:
@@ -218,31 +219,44 @@ split by sub-concern with tighter scopes.
 
 ### Generator registration
 
-New fragments are registered in `dev/generate.nix` under
-`devFragmentNames`. The attribute key is the category (which
-becomes the output filename for scoped Claude rules, Copilot
-instructions, and Kiro steering). Each entry is either a bare
-string (legacy dev/fragments/ path) or an attrset with an
-explicit location:
+New fragments are registered in `config/fragment-categories.nix`
+under `config.fragments.categories`. The attribute key is the
+category (which becomes the output filename for scoped Claude
+rules, Copilot instructions, and Kiro steering). Each category is
+one record with two fields: `scopes` (the path globs it loads for)
+and `sources` (the markdown fragments composed into it). A
+`sources` entry is either a bare string (legacy dev/fragments/
+path) or an attrset with an explicit location:
 
 ```nix
-devFragmentNames.ai-clis = [
-  "packaging-guide"  # default location="dev"
-                     # → dev/fragments/ai-clis/packaging-guide.md
-];
-devFragmentNames.claude-code = [
-  {
-    location = "package";
-    name = "claude-code-wrapper";
-    dir = "claude-code";  # defaults to the category key
-    # → packages/claude-code/docs/claude-code-wrapper.md
-  }
-];
+config.fragments.categories = {
+  ai-clis = {
+    scopes = ["packages/ai-clis/**"];
+    sources = [
+      "packaging-guide"  # default location="dev"
+                         # → dev/fragments/ai-clis/packaging-guide.md
+    ];
+  };
+  claude-code = {
+    scopes = ["packages/claude-code/**"];
+    sources = [
+      {
+        location = "package";
+        name = "claude-code-wrapper";
+        dir = "claude-code";  # null defaults to the category key
+        # → packages/claude-code/docs/claude-code-wrapper.md
+      }
+    ];
+  };
+};
 ```
 
-Scope globs for each category live in `packagePaths` as Nix lists.
-`null` means always-loaded. The transforms handle per-ecosystem
-emission — do not hand-format frontmatter.
+`scopes` is a Nix list of globs, and `null` means always-loaded
+(what the `monorepo` orientation category uses). The option itself
+is declared in `lib/fragments-registry.nix`; `dev/generate.nix`
+merges the two with `lib.evalModules` and reads the result. The
+transforms handle per-ecosystem emission — do not hand-format
+frontmatter.
 
 After adding or editing fragments, run
 `devenv tasks run --mode before generate:instructions` to
