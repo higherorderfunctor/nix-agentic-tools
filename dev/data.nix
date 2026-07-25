@@ -94,6 +94,8 @@ _: let
     catppuccin-btop = "Catppuccin theme files for btop";
     dns-root-hints = "IANA DNS root name server hints (named.root)";
     fblog = "Command-line JSON log viewer";
+    pnpm_10 = "Fast, disk-space-efficient JavaScript package manager (10.x)";
+    pnpm_11 = "Fast, disk-space-efficient JavaScript package manager (11.x)";
   };
 
   # ── Git tool descriptions ────────────────────────────────────────────
@@ -120,7 +122,7 @@ _: let
       suffix = null;
     };
     generic = {
-      packages = ["arkenfox" "btop" "bun" "catppuccin-btop" "dns-root-hints" "fblog"];
+      packages = ["arkenfox" "btop" "bun" "catppuccin-btop" "dns-root-hints" "fblog" "pnpm_10" "pnpm_11"];
       suffix = null;
     };
     git-tools = {

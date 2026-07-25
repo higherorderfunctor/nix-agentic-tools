@@ -50,6 +50,8 @@ _: {
     catppuccin-btop = {consumerPath = ["generic" "catppuccin-btop"];};
     dns-root-hints = {consumerPath = ["generic" "dns-root-hints"];};
     fblog = {consumerPath = ["generic" "fblog"];};
+    pnpm_10 = {consumerPath = ["generic" "pnpm_10"];};
+    pnpm_11 = {consumerPath = ["generic" "pnpm_11"];};
 
     # ── agnix + its mainProgram-override siblings ──
     # agnix itself is a flatDrvs entry at `consumerPkgs.ai.agnix`; the

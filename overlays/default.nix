@@ -151,6 +151,17 @@
     fblog = import ./generic/fblog.nix {
       inherit inputs final;
     };
+    # Majored, namespaced-only. NEVER a top-level `pkgs.pnpm_<N>`:
+    # overlays/dev-tools/oxlint.nix binds `ourPkgs.pnpm_10` out of a
+    # fresh nixpkgs import that this overlay is not applied to, and the
+    # additive contract is what lets consumers adopt the overlay without
+    # auditing it. Both files delegate to ./generic/pnpm-major.nix.
+    pnpm_10 = import ./generic/pnpm_10.nix {
+      inherit inputs final;
+    };
+    pnpm_11 = import ./generic/pnpm_11.nix {
+      inherit inputs final;
+    };
   };
 
   # ── Git tools ──────────────────────────────────────────────────────

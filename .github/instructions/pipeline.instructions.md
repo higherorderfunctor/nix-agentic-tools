@@ -618,9 +618,12 @@ dependsOn; })`, plus the sibling `options.update.excludePatterns`.
   DAG predecessors (e.g. `["rust-overlay"]`). Mirrors the reference
   submodule shape in `private/slice-fixture/lib/concerns.nix`.
 - **`config/update-targets.nix`** — the central contribution: every
-  package's row EXCEPT effect-mcp (20 packages — 16 main-tracking + 4
+  package's row EXCEPT effect-mcp (29 packages — 16 main-tracking + 13
   binary), plus the `excludePatterns` list carried over from the
-  dissolved matrix.
+  dissolved matrix. The binary rows are all
+  `--use-update-script [--override-filename <path>]`; the
+  `--override-filename` is what lets several attributes of one upstream
+  (`pnpm_10`, `pnpm_11`) each own a file and a sidecar.
 - **`overlays/mcp-servers/effect-mcp.update.nix`** — effect-mcp's own
   row, co-located with the overlay it bumps:
   `config.update.targets.effect-mcp = { file =
