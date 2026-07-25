@@ -3,7 +3,13 @@
 # Each helper reads a manifest from a Nix store path (src) at eval
 # time and returns the upstream version string. Callers combine it
 # with `builtins.substring 0 7 rev` to produce "x.y.z+abc1234".
-{
+#
+# `rec` so a composed helper can call a sibling —
+# `ghArchiveUpdateScript` is `mkUpdateScript` + `ghLatestVersionCmd`
+# with one argument threaded through both, and duplicating either
+# body to avoid the self-reference would be the DRY loss this file
+# exists to prevent. Same shape as lib/ai/transformers/*.nix.
+rec {
   # Format: "{upstream}+{shortrev}"
   mkVersion = {
     upstream,
@@ -328,6 +334,41 @@
       '{hookTriggers: $hookTriggers, documentedAbsent: $documentedAbsent}' > "${dest}"
   '';
 
+  # Composed updateScript for packages whose src is a GitHub repo-archive
+  # tarball at a release tag (fetchzip consumers): one `repo` value
+  # derives BOTH the archive URL template and the version check, so the
+  # two can never be pointed at different repositories.
+  #
+  # `unpack = true` is not optional here: a repo-archive tarball consumed
+  # by fetchzip is hashed as the UNPACKED NAR, so a flat-file prefetch
+  # hash would be recorded and every consumer would then fail its
+  # fixed-output check.
+  #
+  # Composed over ghLatestVersionCmd and mkUpdateScript below — the set
+  # is `rec`, so the entries stay in the group's alphabetical order and
+  # definition order carries no meaning.
+  # `sourcesFile` is threaded through rather than left to
+  # mkUpdateScript's default: the default assumes the sidecar sits at
+  # `overlays/<pname>-sources.json`, which is only true of the packages
+  # at the overlays/ root. Grouped subtrees (overlays/generic/) keep the
+  # sidecar beside the package file and must say so.
+  ghArchiveUpdateScript = {
+    extraExtract ? "",
+    pkgs,
+    pname,
+    repo,
+    sourcesFile ? "overlays/${pname}-sources.json",
+    tagPrefix ? "v",
+  }:
+    mkUpdateScript {
+      inherit extraExtract pkgs pname sourcesFile;
+      platforms = {
+        src = ver: "https://github.com/${repo}/archive/${tagPrefix}${ver}.tar.gz";
+      };
+      unpack = true;
+      versionCheck.cmd = ghLatestVersionCmd {inherit pkgs repo tagPrefix;};
+    };
+
   # Shell command printing the latest GitHub release version, resolved
   # from the releases/latest redirect — no API call, so no token and no
   # rate-limit concerns, and GitHub excludes prereleases/drafts from
@@ -350,6 +391,11 @@
   # extraExtract: extra shell appended after the sources.json write (e.g.
   #   regenerating a committed sidecar from the freshly-bumped binary).
   #   Defaults to "" so callers that don't need it are unaffected.
+  # unpack: hash the UNPACKED tarball (`nix-prefetch-url --unpack`) — for
+  #   fetchzip consumers of repo-archive tarballs, whose fixed-output hash
+  #   is over the unpacked NAR, as opposed to the flat-file hash a
+  #   fetchurl consumer wants. Wrong either way round: the prefetch
+  #   succeeds and the recorded hash simply fails the consumer's check.
   # pkgs: nixpkgs set (for curl, jq, nix)
   mkUpdateScript = {
     extraExtract ? "",
@@ -357,6 +403,7 @@
     platforms,
     pname,
     sourcesFile ? "overlays/${pname}-sources.json",
+    unpack ? false,
     versionCheck,
   }:
     pkgs.writeShellScript "update-${pname}" ''
@@ -389,9 +436,13 @@
             if builtins.match ".*%20.*" url != null
             then "--name ${pname}-prefetch"
             else "";
+          unpackArg =
+            if unpack
+            then "--unpack"
+            else "";
         in ''
           url="${url}"
-          prefetched=$(${pkgs.nix}/bin/nix-prefetch-url --type sha256 ${nameArg} "$url")
+          prefetched=$(${pkgs.nix}/bin/nix-prefetch-url --type sha256 ${unpackArg} ${nameArg} "$url")
           hash=$(${pkgs.nix}/bin/nix hash convert --to sri --hash-algo sha256 "$prefetched")
           ${pkgs.jq}/bin/jq --arg sys "${system}" --arg u "$url" --arg h "$hash" \
             '. + {($sys): {url: $u, hash: $h}}' "$tmp" > "''${tmp}.new" && ${pkgs.coreutils}/bin/mv "''${tmp}.new" "$tmp"
