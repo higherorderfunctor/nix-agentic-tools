@@ -191,8 +191,11 @@ Nothing agentic about these — they live in a split-ready
 | Package | Description |
 |---------|-------------|
 | `arkenfox` | Hardened Firefox user.js preference set |
+| `btop` | Resource monitor for processes, CPU, memory, disks and network |
+| `bun` | JavaScript runtime, bundler, transpiler and package manager |
 | `catppuccin-btop` | Catppuccin theme files for btop |
 | `dns-root-hints` | IANA DNS root name server hints (named.root) |
+| `fblog` | Command-line JSON log viewer |
 
 ```bash
 nix build .#dns-root-hints

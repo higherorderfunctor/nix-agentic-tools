@@ -19,6 +19,12 @@ Versions computed at eval time via `overlays/lib.nix:mkVersion`
   release-tag version check, and prefetches with `--unpack` so the recorded
   hash is over the unpacked NAR. Grouped subtrees pass `sourcesFile`
   explicitly, since the default assumes `overlays/<pname>-sources.json`.
+  A Rust package on this pattern must NOT keep an inline `cargoHash`:
+  `ghArchiveUpdateScript` refreshes only the src hash, so the vendor hash
+  would go stale on every bump. Override `cargoDeps` with
+  `rustPlatform.importCargoLock { lockFile = "${src}/Cargo.lock"; }`
+  instead (IFD) so one hash covers both — see `generic/fblog.nix` and
+  `git-tools/git-branchless.nix`.
 - **Flake inputs**: consumed from `inputs.<name>.packages`, updated via `nix flake update`.
 - **In-repo source**: packaged from a path in this repo (no upstream rev/hash,
   not version-tracked). Currently only `kiro-memory-distiller`
@@ -57,7 +63,10 @@ Versions computed at eval time via `overlays/lib.nix:mkVersion`
 | oxlint                | devTools   | GitHub main           | pnpm (nixpkgs override)   | `oxlint`              | installCheck  | --type-aware        |
 | tsgolint              | devTools   | GitHub main           | go (nixpkgs override)     | `tsgolint`            | upstream      | --help              |
 | arkenfox              | generic    | GitHub archive        | files only                | —                     | —             | —                   |
+| btop                  | generic    | GitHub archive        | cmake (nixpkgs override)  | `btop`                | —             | --version           |
+| bun                   | generic    | GitHub releases       | pre-built binary          | `bun`                 | —             | —                   |
 | catppuccin-btop       | generic    | GitHub archive        | files only                | —                     | —             | —                   |
 | dns-root-hints        | generic    | InterNIC (no version) | files only                | —                     | —             | —                   |
+| fblog                 | generic    | GitHub archive        | cargo (nixpkgs override)  | `fblog`               | —             | --version           |
 | agnix-mcp             | mcpServers | mainProgram override  | —                         | —                     | —             | —                   |
 | agnix-lsp             | lspServers | mainProgram override  | —                         | —                     | —             | —                   |

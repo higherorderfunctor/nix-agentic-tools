@@ -1,9 +1,11 @@
 ## Overlay Grouping and the `generic` Subtree
 
-> **Last verified:** 2026-07-25 (commit pending — adds `pkgs.generic.*`
-> and this section). If you add, remove or rename an overlay namespace,
-> or move a package between namespaces, and this section isn't updated
-> in the same commit, stop and fix it.
+> **Last verified:** 2026-07-25 (commit pending — records the
+> namespaced-only rule and the store-path-parity expectation for thin
+> nixpkgs overrides). If you add, remove or rename an overlay namespace,
+> move a package between namespaces, or change how a `generic` package
+> relates to its nixpkgs original, and this section isn't updated in the
+> same commit, stop and fix it.
 
 `overlays/default.nix` aggregates per-package files into grouped
 namespaces: `pkgs.ai.*` (plus its `mcpServers` / `lspServers`
@@ -21,7 +23,8 @@ directory move rather than an archaeology exercise, which means the
 subtree must not acquire dependencies on the rest of the repo beyond
 `overlays/lib.nix`. Judge membership by whether the package would make
 sense in a repo called "agentic tools" — a hardened Firefox preference
-set, a btop theme, and the DNS root hints do not.
+set, a btop theme, the DNS root hints, a resource monitor, a JS runtime
+and a JSON log viewer do not.
 
 Two mechanical consequences of living in a subdirectory rather than at
 the `overlays/` root:
@@ -36,6 +39,51 @@ Nothing else is relaxed: cache-hit parity applies in full (see that
 fragment — shipping data files is NOT the same as being content-only),
 each package gets a `config.checks.cacheHitParity` row, and each
 version-tracked one gets a `config.update.targets` row.
+
+### Thin overrides of a nixpkgs package
+
+Several `generic` entries (`btop`, `bun`, `fblog`) are not fresh
+derivations but `ourPkgs.<name>.overrideAttrs` over the nixpkgs one,
+moving only `version`, `src` and `passthru.updateScript`. Two rules
+that are not obvious from reading such a file:
+
+- **Namespaced-only.** The overlay writes `pkgs.generic.<name>` and
+  NEVER a top-level `pkgs.<name>`. Shadowing a nixpkgs attribute would
+  turn this from an additive overlay into one that silently re-points
+  every unrelated consumer of that package; the additive contract is
+  what lets consumers apply the overlay without auditing it.
+- **An identical store path is EXPECTED, not a bug.** While our sidecar
+  pin and nixpkgs' pin name the same version, a thin override yields
+  the byte-identical derivation — a fixed-output `src` path follows its
+  hash, not its fetcher, so a `fetchzip` of the repo-archive tarball
+  lands on the same path `fetchFromGitHub` does. The package still
+  earns its place: it rides this repo's 4x/day update sweep instead of
+  a nixpkgs channel bump, and the paths diverge the moment upstream
+  moves. Do not "clean up" such a package on parity grounds.
+
+Rust packages on this pattern have one extra constraint.
+`ghArchiveUpdateScript` refreshes only the src hash in the sidecar, so
+an inline `cargoHash` would go stale on every bump — the known
+transitive-hash gap. Override `cargoDeps` with
+`rustPlatform.importCargoLock { lockFile = "${src}/Cargo.lock"; }`
+against the PINNED src instead, so one hash covers both and the vendor
+set self-updates.
+
+**The CI IFD warm step does not cover that kind of IFD.**
+`.github/actions/warm-ifd` pre-realizes sources by evaluating
+`p.version or p.name or "unknown"` across the package set. That works
+for packages whose version is `readFile`-derived FROM the source — the
+read forces the fetch. It does nothing for a package whose version
+comes from a `-sources.json` sidecar and whose only IFD is
+`cargoLock.lockFile`: `.version` resolves from the sidecar and
+short-circuits before `drvPath` (and therefore `cargoDeps`) is ever
+forced. Measured on `fblog` with `--option
+allow-import-from-derivation false`: `.version` evaluates clean,
+`.drvPath` fails with `cannot build '…-source.drv^out' during
+evaluation`. Not a build break — the later eval simply fetches the
+source itself, without the warm step's retry/backoff — but do not
+assume a sidecar-versioned package is warmed just because it is in
+`packages`.
 
 ## Overlay Lambda Signature
 
