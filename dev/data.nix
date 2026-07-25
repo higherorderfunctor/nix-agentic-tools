@@ -86,6 +86,13 @@ _: let
     tsgolint = "Type-aware linting backend for oxlint (typescript-go)";
   };
 
+  # ── Generic (non-agentic) package descriptions ───────────────────────
+  genericDescriptions = {
+    arkenfox = "Hardened Firefox user.js preference set";
+    catppuccin-btop = "Catppuccin theme files for btop";
+    dns-root-hints = "IANA DNS root name server hints (named.root)";
+  };
+
   # ── Git tool descriptions ────────────────────────────────────────────
   gitToolDescriptions = {
     agnix = "Linter, LSP, and MCP for AI config files";
@@ -107,6 +114,10 @@ _: let
     };
     dev-tools = {
       packages = ["oxlint" "tsgolint"];
+      suffix = null;
+    };
+    generic = {
+      packages = ["arkenfox" "catppuccin-btop" "dns-root-hints"];
       suffix = null;
     };
     git-tools = {
@@ -139,6 +150,7 @@ in {
   inherit
     aiCliDescriptions
     devToolDescriptions
+    genericDescriptions
     gitToolDescriptions
     mcpServerCount
     mcpServerMeta

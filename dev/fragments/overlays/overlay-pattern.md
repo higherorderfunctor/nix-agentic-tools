@@ -1,3 +1,42 @@
+## Overlay Grouping and the `generic` Subtree
+
+> **Last verified:** 2026-07-25 (commit pending — adds `pkgs.generic.*`
+> and this section). If you add, remove or rename an overlay namespace,
+> or move a package between namespaces, and this section isn't updated
+> in the same commit, stop and fix it.
+
+`overlays/default.nix` aggregates per-package files into grouped
+namespaces: `pkgs.ai.*` (plus its `mcpServers` / `lspServers`
+sub-groups), `pkgs.devTools.*`, `pkgs.generic.*`, and
+`pkgs.gitTools.*`. Every group is built the same way — an attrset of
+`import ./<dir>/<name>.nix {inherit inputs final;}` entries, passed
+through `guard` (the unfree wrapper) in the output set, and flattened
+into `packages.<system>` in `flake.nix` for CLI ergonomics — so a new
+group is one attrset, one output line, and one flatten line.
+
+`generic` is the group defined by what it is NOT: packages with nothing
+agentic about them, living in `overlays/generic/` and earmarked for a
+possible future repo split. The grouping exists so that split is a
+directory move rather than an archaeology exercise, which means the
+subtree must not acquire dependencies on the rest of the repo beyond
+`overlays/lib.nix`. Judge membership by whether the package would make
+sense in a repo called "agentic tools" — a hardened Firefox preference
+set, a btop theme, and the DNS root hints do not.
+
+Two mechanical consequences of living in a subdirectory rather than at
+the `overlays/` root:
+
+- `vu = import ../lib.nix` (one level up), not `./lib.nix`.
+- The update helpers default `sourcesFile` to
+  `overlays/<pname>-sources.json`, which is wrong here, so grouped
+  packages pass `sourcesFile` explicitly. The sidecar lives beside the
+  package file.
+
+Nothing else is relaxed: cache-hit parity applies in full (see that
+fragment — shipping data files is NOT the same as being content-only),
+each package gets a `config.checks.cacheHitParity` row, and each
+version-tracked one gets a `config.update.targets` row.
+
 ## Overlay Lambda Signature
 
 All overlays in this repo use a **three-argument signature** with the
@@ -33,12 +72,13 @@ all overlays remain uniformly callable from `flake.nix`'s
 
 ```nix
 # flake.nix
-aiOverlay = import ./overlays {inherit inputs;};           # all binary drvs under pkgs.ai.*
+aiOverlay = import ./overlays {inherit inputs;};           # every grouped drv namespace
 codingStandardsOverlay = import ./packages/coding-standards {};
 stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
 
 overlays.default = lib.composeManyExtensions [
-  aiOverlay                 # 24+ binary packages under pkgs.ai.* and pkgs.gitTools.*
+  aiOverlay                 # 27+ packages: pkgs.ai.*, pkgs.devTools.*,
+                            # pkgs.generic.*, pkgs.gitTools.*
   codingStandardsOverlay    # content package
   stackedWorkflowsOverlay   # content package
 ];

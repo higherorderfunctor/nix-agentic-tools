@@ -23,8 +23,11 @@ packages/
                       lib, docs, and fragments for that package
   stacked-workflows/  Content package: skills, references, routing-table fragment
   coding-standards/   Content package: reusable coding standard fragments
-overlays/     Binary package overlays (pkgs.ai.*, pkgs.gitTools.*, pkgs.devTools.*)
-              plus per-package -sources.json / -extracted.json sidecars
+overlays/     Binary package overlays (pkgs.ai.*, pkgs.devTools.*,
+              pkgs.generic.*, pkgs.gitTools.*) plus per-package
+              -sources.json / -extracted.json sidecars
+  generic/    Split-ready subtree: packages with nothing agentic about
+              them, earmarked for a possible future repo split
 lib/          Shared library: the ai factory (lib/ai/*), fragments, MCP helpers,
               credentials, devshell
 devshell/     Standalone devshell modules (mkAgenticShell)

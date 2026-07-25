@@ -109,9 +109,16 @@ _: {
     };
 
     # ── Binary packages (custom updateScript handles per-platform fetches) ──
+    # arkenfox / catppuccin-btop fetch a GitHub repo-archive tarball via
+    # ghArchiveUpdateScript rather than a per-platform release asset;
+    # dns-root-hints fetches one platform-independent file. Same
+    # --use-update-script contract either way — the script owns its sidecar.
+    arkenfox = {flags = ["--use-update-script" "--override-filename" "overlays/generic/arkenfox.nix"];};
+    catppuccin-btop = {flags = ["--use-update-script" "--override-filename" "overlays/generic/catppuccin-btop.nix"];};
     chatgpt-codex = {flags = ["--use-update-script" "--override-filename" "overlays/chatgpt-codex.nix"];};
     claude-code = {flags = ["--use-update-script"];};
     copilot-cli = {flags = ["--use-update-script" "--override-filename" "overlays/copilot-cli.nix"];};
+    dns-root-hints = {flags = ["--use-update-script" "--override-filename" "overlays/generic/dns-root-hints.nix"];};
     kimchi = {flags = ["--use-update-script" "--override-filename" "overlays/kimchi.nix"];};
     kiro-cli = {flags = ["--use-update-script" "--override-filename" "overlays/kiro-cli.nix"];};
   };

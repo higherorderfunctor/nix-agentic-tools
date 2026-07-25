@@ -1,10 +1,10 @@
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-06-04 (commit pending — agnix
-> mainProgram/NIX_MAIN_PROGRAM single-build gotcha). If you touch any
-> `overlays/<name>.nix` overlay file or the overlay composition
-> machinery and this fragment isn't updated in the same commit,
-> stop and fix it. Regressions are gated by the
+> **Last verified:** 2026-07-25 (commit pending — narrows what
+> "content-only" exempts, after the file-shipping `pkgs.generic.*`
+> packages landed). If you touch any `overlays/<name>.nix` overlay file
+> or the overlay composition machinery and this fragment isn't updated
+> in the same commit, stop and fix it. Regressions are gated by the
 > `checks.cache-hit-parity` flake check (see "Verification" below).
 
 ### The rule
@@ -189,6 +189,17 @@ ship markdown files (coding-standards, stacked-workflows-content,
 fragments-ai) have no compiled inputs, so their store paths are
 already byte-identical regardless of which nixpkgs evaluates
 them. Skip the ourPkgs pattern for these.
+
+"Content-only" means **no build inputs at all**. It does NOT mean
+"ships data files rather than binaries" — a distinction worth
+being precise about, because the `pkgs.generic.*` packages
+(arkenfox, catppuccin-btop, dns-root-hints) install nothing but
+data files and still need the full pattern: each runs a fetcher
+(`fetchzip` / `fetchurl`) inside an stdenv derivation, and both of
+those bind to whichever pkgs set supplies them. They are
+registered in `config.checks.cacheHitParity` for exactly that
+reason. The test is not what a package installs but whether it
+needs a `pkgs` set to evaluate; if it does, it needs `ourPkgs`.
 
 **Pure binary-fetch packages** (no build, just an `overrideAttrs`
 that swaps `src`/`version`) still route through `ourPkgs` to keep

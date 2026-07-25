@@ -182,6 +182,25 @@ nix build .#oxlint
 </details>
 
 <details>
+<summary><strong>Generic Packages</strong></summary>
+
+Nothing agentic about these — they live in a split-ready
+`overlays/generic/` subtree and are exposed as `pkgs.generic.*`.
+
+<!-- prettier-ignore -->
+| Package | Description |
+|---------|-------------|
+| `arkenfox` | Hardened Firefox user.js preference set |
+| `catppuccin-btop` | Catppuccin theme files for btop |
+| `dns-root-hints` | IANA DNS root name server hints (named.root) |
+
+```bash
+nix build .#dns-root-hints
+```
+
+</details>
+
+<details>
 <summary><strong>AI CLIs</strong></summary>
 
 <!-- prettier-ignore -->

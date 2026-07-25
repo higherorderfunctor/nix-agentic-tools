@@ -245,30 +245,31 @@
 
   # ── Shared description mappings (from dev/data.nix) ──────────────────
   data = import ./data.nix {inherit lib;};
-  inherit (data) aiCliDescriptions devToolDescriptions gitToolDescriptions mcpServerMeta skillDescriptions;
+  inherit (data) aiCliDescriptions devToolDescriptions genericDescriptions gitToolDescriptions mcpServerMeta skillDescriptions;
   inherit (data) mcpServerCount;
 
   # ── Table generators ─────────────────────────────────────────────────
+  # Four of the README package tables are the same two-column
+  # `| `name` | description |` shape over a name → description attrset,
+  # name-sorted. One generator serves all four so a fifth package group
+  # is a one-line call rather than a fourth copy of the same three lines.
+  # The MCP-server table (extra Credentials column) and the skill table
+  # (`/name` in the first cell) have their own shapes below.
+  mkDescriptionRows = descriptions:
+    lib.concatMapStringsSep "\n"
+    (name: "| `${name}` | ${descriptions.${name}} |")
+    (lib.sort lib.lessThan (builtins.attrNames descriptions));
+
+  aiCliRows = mkDescriptionRows aiCliDescriptions;
+  devToolRows = mkDescriptionRows devToolDescriptions;
+  genericRows = mkDescriptionRows genericDescriptions;
+  gitToolRows = mkDescriptionRows gitToolDescriptions;
+
   mcpServerNames = lib.sort lib.lessThan (builtins.attrNames mcpServerMeta);
   mcpServerRows = lib.concatMapStringsSep "\n" (name: let
     meta = mcpServerMeta.${name};
   in "| `${name}` | ${meta.description} | ${meta.credentials} |")
   mcpServerNames;
-
-  gitToolNames = lib.sort lib.lessThan (builtins.attrNames gitToolDescriptions);
-  gitToolRows =
-    lib.concatMapStringsSep "\n" (name: "| `${name}` | ${gitToolDescriptions.${name}} |")
-    gitToolNames;
-
-  devToolNames = lib.sort lib.lessThan (builtins.attrNames devToolDescriptions);
-  devToolRows =
-    lib.concatMapStringsSep "\n" (name: "| `${name}` | ${devToolDescriptions.${name}} |")
-    devToolNames;
-
-  aiCliNames = lib.sort lib.lessThan (builtins.attrNames aiCliDescriptions);
-  aiCliRows =
-    lib.concatMapStringsSep "\n" (name: "| `${name}` | ${aiCliDescriptions.${name}} |")
-    aiCliNames;
 
   skillNames = lib.sort lib.lessThan (builtins.attrNames skillDescriptions);
   skillRows =
@@ -433,6 +434,23 @@
 
     ```bash
     nix build .#oxlint
+    ```
+
+    </details>
+
+    <details>
+    <summary><strong>Generic Packages</strong></summary>
+
+    Nothing agentic about these — they live in a split-ready
+    `overlays/generic/` subtree and are exposed as `pkgs.generic.*`.
+
+    <!-- prettier-ignore -->
+    | Package | Description |
+    |---------|-------------|
+    ${genericRows}
+
+    ```bash
+    nix build .#dns-root-hints
     ```
 
     </details>

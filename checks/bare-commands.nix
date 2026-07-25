@@ -20,6 +20,23 @@
 # overlays/. It is added as a FILE rather than by widening the glob to
 # overlays/, which would false-positive on the legitimate bare
 # mkdir/cp/chmod in eight other overlays' build phases.
+#
+# overlays/lib.nix is nonetheless a MIXED file, and the check cannot tell
+# the two halves apart because context is a property of the CALLER, not of
+# the line:
+#
+#   - mkUpdateScript, mkGitRevUpdateScript emit `writeShellScript`
+#     wrappers — invoked directly, possibly with a replaced (PATH-less)
+#     environment. Absolute store paths REQUIRED.
+#   - mkMcpSmokeTest, mkClaudeExtract, mkKiroExtract emit build-context
+#     script bodies (installCheckPhase, runCommandLocal) that run inside
+#     stdenv with a full PATH from build inputs. Bare commands are
+#     CORRECT there.
+#
+# So a bare command in one of the build-context helpers is a false
+# positive and gets a `# bare-commands: ok` marker on its own line rather
+# than a rewrite. Expect to add more markers as those helpers grow; that
+# is the accepted cost of scanning the file as a whole.
 {pkgs, ...}:
 pkgs.runCommandLocal "bare-commands-check" {
   nativeBuildInputs = [pkgs.ripgrep];
@@ -32,6 +49,19 @@ pkgs.runCommandLocal "bare-commands-check" {
 
     # Bare coreutils commands that must use absolute paths in wrappers
     BARE_CMDS="cat|chmod|chown|cp|cut|head|mkdir|mktemp|mv|readlink|rm|sha256sum|tail|tr|uname|wc"
+
+    # Shell contexts in which a bare word is being RUN as a command, as
+    # opposed to being a nix attribute name that happens to collide with a
+    # coreutils binary. Three anchors, one per defect form observed in real
+    # regressions:
+    #
+    #   ^\s+cmd    line start          e.g. `mv "$tmp" "$dest"`
+    #   |\s*cmd    after a pipe        e.g. `printf … | tr '\n' ' '`
+    #   &&\s*cmd   after an AND list   e.g. `jq … > "$new" && mv "$new" "$f"`
+    #
+    # Defined once and shared by the scan below so a fourth anchor is a
+    # one-line change rather than an edit per pattern.
+    CMD_START="(^\s+|\|\s*|&&\s*)"
 
     FAILURES=""
 
@@ -61,8 +91,12 @@ pkgs.runCommandLocal "bare-commands-check" {
       exit 0
     fi
 
-    # Pattern 1: $(bare-cmd ...) — command substitution with bare command
-    if rg --no-heading -n "\\\$\(($BARE_CMDS) " \
+    # Pattern 1: $(bare-cmd) — command substitution with a bare command.
+    # The trailing \b (word boundary) rather than a literal space is what
+    # makes the ARGUMENT-LESS form visible: `tmp=$(mktemp)` closes the
+    # substitution immediately, so a space-anchored pattern walked straight
+    # past it while catching only `$(mktemp -d …)`.
+    if rg --no-heading -n "\\\$\(($BARE_CMDS)\b" \
       --glob '*.nix' \
       $SCAN_PATHS 2>/dev/null \
       | grep -v '# bare-commands: ok' > /tmp/bare-cmd-hits 2>/dev/null; then
@@ -70,10 +104,12 @@ pkgs.runCommandLocal "bare-commands-check" {
   $(${pkgs.coreutils}/bin/cat /tmp/bare-cmd-hits)"
     fi
 
-    # Pattern 2: line-start bare commands in shell strings
-    # Match: whitespace + bare-cmd + space (typical in heredoc shell blocks)
+    # Pattern 2: bare commands in shell strings, at any of the CMD_START
+    # anchors — not just line start. A line-start-only anchor missed every
+    # bare command that follows a pipe (`… | cut -f1`) or an AND list
+    # (`… && mv x y`), which between them are the majority of real hits.
     # Exclude: lines containing /bin/ (already absolute), comments, nix expressions
-    if rg --no-heading -n "^\s+($BARE_CMDS) " \
+    if rg --no-heading -n "$CMD_START($BARE_CMDS)\b" \
       --glob '*.nix' \
       $SCAN_PATHS 2>/dev/null \
       | grep -v '# bare-commands: ok' \
