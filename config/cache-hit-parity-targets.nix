@@ -40,13 +40,16 @@ _: {
     tsgolint = {consumerPath = ["devTools" "tsgolint"];};
 
     # ── Generic (non-agentic) — live at `consumerPkgs.generic.<name>` ──
-    # These ship files rather than binaries, but they are NOT the
+    # Some of these ship files rather than binaries, but none are the
     # content-only class excluded in the header: each one runs a fetcher
     # and an stdenv derivation, so both are build inputs and both can
     # drift onto the consumer's pin. They belong here.
     arkenfox = {consumerPath = ["generic" "arkenfox"];};
+    btop = {consumerPath = ["generic" "btop"];};
+    bun = {consumerPath = ["generic" "bun"];};
     catppuccin-btop = {consumerPath = ["generic" "catppuccin-btop"];};
     dns-root-hints = {consumerPath = ["generic" "dns-root-hints"];};
+    fblog = {consumerPath = ["generic" "fblog"];};
 
     # ── agnix + its mainProgram-override siblings ──
     # agnix itself is a flatDrvs entry at `consumerPkgs.ai.agnix`; the

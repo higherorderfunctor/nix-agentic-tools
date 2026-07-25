@@ -136,10 +136,19 @@
     arkenfox = import ./generic/arkenfox.nix {
       inherit inputs final;
     };
+    btop = import ./generic/btop.nix {
+      inherit inputs final;
+    };
+    bun = import ./generic/bun.nix {
+      inherit inputs final;
+    };
     catppuccin-btop = import ./generic/catppuccin-btop.nix {
       inherit inputs final;
     };
     dns-root-hints = import ./generic/dns-root-hints.nix {
+      inherit inputs final;
+    };
+    fblog = import ./generic/fblog.nix {
       inherit inputs final;
     };
   };

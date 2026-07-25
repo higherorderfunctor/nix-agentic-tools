@@ -12,6 +12,7 @@ APFS
 applyto
 argjson
 argstr
+aristocratos
 arkenfox
 arxanas
 attrset
@@ -28,6 +29,7 @@ bashpid
 berberman
 bitemporality
 boehm
+brocode
 btop
 burndown
 cachix
@@ -80,11 +82,13 @@ extensionless
 fanout
 fanouts
 fastmcp
+fblog
 fetchgit
 fetchurl
 fetchzip
 fileset
 findutils
+fixpoint
 foldl
 formedness
 frontloaded
@@ -201,6 +205,7 @@ pythonnousersite
 pythonpath
 qfdx
 quickstarts
+rcodesign
 readabilipy
 reauthor
 rebuildable
@@ -241,6 +246,7 @@ slurpfile
 smartlog
 sourcepath
 sparfenyuk
+srcs
 sshsign
 startswith
 statix
@@ -277,6 +283,7 @@ unhide
 unparseable
 unrebased
 unreviewed
+unscanned
 unskipped
 unstages
 unstash
