@@ -12,6 +12,7 @@ APFS
 applyto
 argjson
 argstr
+arkenfox
 arxanas
 attrset
 attrsets
@@ -27,9 +28,11 @@ bashpid
 berberman
 bitemporality
 boehm
+btop
 burndown
 cachix
 catchable
+catppuccin
 caubut
 cavira
 cclsp

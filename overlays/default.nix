@@ -8,8 +8,14 @@
 #   pkgs.ai.*                — flat AI CLIs and unique tools
 #   pkgs.ai.mcpServers.*     — MCP server packages + proxies
 #   pkgs.ai.lspServers.*     — LSP server proxies
-#   pkgs.gitTools.*           — git workflow tools
-#   pkgs.devTools.*           — dev tools (linters)
+#   pkgs.devTools.*          — dev tools (linters)
+#   pkgs.generic.*           — packages with nothing agentic about them
+#   pkgs.gitTools.*          — git workflow tools
+#
+# `generic` is a split-ready subtree (overlays/generic/) for packages
+# that are not agentic-tools-specific and are earmarked for a possible
+# future repo split. Keeping them in one directory + one namespace makes
+# that split a directory move rather than an archaeology exercise.
 #
 # Each per-package file takes {inputs, final, ...} and manages its
 # own source — fetchFromGitHub with inline hashes for upstream
@@ -123,6 +129,21 @@
   agnixMcp = import ./mcp-servers/agnix-mcp.nix {inherit (flatDrvs) agnix;};
   agnixLsp = import ./lsp-servers/agnix-lsp.nix {inherit (flatDrvs) agnix;};
 
+  # ── Generic (non-agentic) packages ─────────────────────────────────
+  # Split-ready subtree — see the header. Nothing here depends on the
+  # rest of the repo beyond overlays/lib.nix.
+  genericDrvs = {
+    arkenfox = import ./generic/arkenfox.nix {
+      inherit inputs final;
+    };
+    catppuccin-btop = import ./generic/catppuccin-btop.nix {
+      inherit inputs final;
+    };
+    dns-root-hints = import ./generic/dns-root-hints.nix {
+      inherit inputs final;
+    };
+  };
+
   # ── Git tools ──────────────────────────────────────────────────────
   gitToolDrvs = {
     git-absorb = import ./git-tools/git-absorb.nix {
@@ -155,6 +176,7 @@ in {
       mcpServers = guard (mcpServerDrvs // {agnix-mcp = agnixMcp;});
       lspServers = guard {agnix-lsp = agnixLsp;};
     };
-  gitTools = guard gitToolDrvs;
   devTools = guard devToolDrvs;
+  generic = guard genericDrvs;
+  gitTools = guard gitToolDrvs;
 }
