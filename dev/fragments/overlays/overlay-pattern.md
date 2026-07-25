@@ -1,11 +1,12 @@
 ## Overlay Grouping and the `generic` Subtree
 
-> **Last verified:** 2026-07-25 (commit pending — records the
-> namespaced-only rule and the store-path-parity expectation for thin
-> nixpkgs overrides). If you add, remove or rename an overlay namespace,
-> move a package between namespaces, or change how a `generic` package
-> relates to its nixpkgs original, and this section isn't updated in the
-> same commit, stop and fix it.
+> **Last verified:** 2026-07-25 (commit pending — adds the
+> multi-major-attribute shape introduced by `pnpm_10` / `pnpm_11` on top
+> of the namespaced-only rule and the store-path-parity expectation for
+> thin nixpkgs overrides). If you add, remove or rename an overlay
+> namespace, move a package between namespaces, or change how a
+> `generic` package relates to its nixpkgs original, and this section
+> isn't updated in the same commit, stop and fix it.
 
 `overlays/default.nix` aggregates per-package files into grouped
 namespaces: `pkgs.ai.*` (plus its `mcpServers` / `lspServers`
@@ -23,8 +24,8 @@ directory move rather than an archaeology exercise, which means the
 subtree must not acquire dependencies on the rest of the repo beyond
 `overlays/lib.nix`. Judge membership by whether the package would make
 sense in a repo called "agentic tools" — a hardened Firefox preference
-set, a btop theme, the DNS root hints, a resource monitor, a JS runtime
-and a JSON log viewer do not.
+set, a btop theme, the DNS root hints, a resource monitor, a JS runtime,
+a JS package manager and a JSON log viewer do not.
 
 Two mechanical consequences of living in a subdirectory rather than at
 the `overlays/` root:
@@ -42,10 +43,11 @@ version-tracked one gets a `config.update.targets` row.
 
 ### Thin overrides of a nixpkgs package
 
-Several `generic` entries (`btop`, `bun`, `fblog`) are not fresh
-derivations but `ourPkgs.<name>.overrideAttrs` over the nixpkgs one,
-moving only `version`, `src` and `passthru.updateScript`. Two rules
-that are not obvious from reading such a file:
+Several `generic` entries (`btop`, `bun`, `fblog`, `pnpm_10`,
+`pnpm_11`) are not fresh derivations but `ourPkgs.<name>.overrideAttrs`
+over the nixpkgs one, moving only `version`, `src` and
+`passthru.updateScript`. Two rules that are not obvious from reading
+such a file:
 
 - **Namespaced-only.** The overlay writes `pkgs.generic.<name>` and
   NEVER a top-level `pkgs.<name>`. Shadowing a nixpkgs attribute would
@@ -60,6 +62,45 @@ that are not obvious from reading such a file:
   earns its place: it rides this repo's 4x/day update sweep instead of
   a nixpkgs channel bump, and the paths diverge the moment upstream
   moves. Do not "clean up" such a package on parity grounds.
+
+Measured for `pnpm_10` at landing: `pkgs.generic.pnpm_10` and plain
+`pkgs.pnpm_10` share both `drvPath` and `outPath`
+(`…-pnpm-10.34.5.drv` / `…-pnpm-10.34.5`), and `nix build .#pnpm_10`
+substitutes straight from `cache.nixos.org`. That is the parity rule
+above working exactly as designed, not a redundant package.
+
+`passthru` is NOT a derivation input, which is what lets a thin
+override add an `updateScript` without moving the store path. Merge it
+(`passthru = (prev.passthru or {}) // { … }`) rather than replacing it:
+nixpkgs hangs real API there (pnpm alone carries `configHook`,
+`fetchDeps`, `majorVersion`, `nodejs-slim` and `tests`) and replacing
+the set drops all of it.
+
+### Carrying several majors of one package
+
+`pnpm` is carried at two majors (`pkgs.generic.pnpm_10`,
+`pkgs.generic.pnpm_11`) and the shape generalizes to any versioned
+attribute family:
+
+- One shared builder (`overlays/generic/pnpm-major.nix`) takes the
+  major as an argument; the per-major files are two-line delegations.
+  They exist because each major needs its own path for
+  `--override-filename` in `config/update-targets.nix` and its own
+  sidecar beside it — not because the logic differs.
+- The version check reads the registry's PER-MAJOR channel
+  (npm's `latest-<N>` dist-tag), not the global latest, so a major
+  never bumps itself out of its own attribute.
+- **Guard the major at eval time.** Anything in the upstream
+  expression that reads the ARGUMENT `version` rather than
+  `finalAttrs.version` does not follow an `overrideAttrs` bump —
+  for pnpm that is `passthru.majorVersion`, the `postInstall`
+  completion branch, and nixpkgs' own `updateScript`. A sidecar
+  pointed at the wrong major would therefore build a working
+  derivation that lies about which major it is. `pnpm-major.nix`
+  throws instead.
+- Expect exactly one of the majors to sit at nixpkgs parity and the
+  others to carry a delta; which one is which rotates as channels move.
+  Parity is not evidence that a major should be dropped.
 
 Rust packages on this pattern have one extra constraint.
 `ghArchiveUpdateScript` refreshes only the src hash in the sidecar, so

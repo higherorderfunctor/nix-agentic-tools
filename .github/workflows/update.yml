@@ -506,6 +506,48 @@ jobs:
               ;;
           esac
 
+      # Detect a pnpm major upstream that this repo does not carry yet.
+      # The per-major update rows keep each carried major current; only a
+      # HUMAN slides the window (adopt the new major, retire the oldest),
+      # because that is an add/remove across overlays, update-targets,
+      # cache-hit-parity, dev/data.nix and the generated docs. This step
+      # only prompts. See overlays/generic/pnpm-major.nix.
+      - name: Detect a new pnpm major upstream
+        if: always()
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+
+          # npm publishes per-major channels as BOTH `latest-<N>` and
+          # `next-<N>`. Key on `latest-<N>` and NEVER on `next-<N>`.
+          # Measured 2026-07-25: `next-12` ALREADY EXISTS (12.0.0-alpha.21)
+          # while no `latest-12` does. A next-keyed detector would therefore
+          # annotate on every single sweep starting immediately — it would
+          # look exactly like a working detector while being pure noise, and
+          # would burn the signal for the real event. `latest-<N>` appears
+          # only once a major has a stable release, which is precisely when a
+          # human should consider sliding the window. Do not "improve" this
+          # back to `next`.
+          tags=$(curl -fsSL https://registry.npmjs.org/pnpm | jq -r '.["dist-tags"] | keys[]' || true)
+          upstream_max=$(printf '%s\n' "$tags" | sed -n 's/^latest-\([0-9][0-9]*\)$/\1/p' | sort -n | tail -1)
+
+          # DERIVED from the repo, never hardcoded: a literal `11` here
+          # would rot silently the moment the window slides, and a detector
+          # that has quietly stopped detecting is worse than none.
+          ours=$(nix eval --json .#packages.x86_64-linux --apply builtins.attrNames 2>/dev/null \
+            | jq -r '.[] | select(test("^pnpm_[0-9]+$"))' | sed 's/^pnpm_//' | sort -n | tail -1 || true)
+
+          if [ -z "$upstream_max" ] || [ -z "$ours" ]; then
+            echo "pnpm: could not determine majors (upstream='${upstream_max}' ours='${ours}') — no annotation."
+            exit 0
+          fi
+
+          if [ "$upstream_max" -gt "$ours" ]; then
+            echo "::warning::pnpm: upstream publishes a stable latest-${upstream_max} dist-tag, but this repo carries up to pnpm_${ours}. Slide the window deliberately — add overlays/generic/pnpm_${upstream_max}.nix plus its sidecar, a config/update-targets.nix row, a config/cache-hit-parity-targets.nix row and a dev/data.nix description, then retire the oldest major. Not auto-bumped and not auto-PRed on purpose."
+          else
+            echo "pnpm: upstream stable majors top out at ${upstream_max}; this repo carries up to pnpm_${ours}. No annotation."
+          fi
+
       # Diagnostic dump — runs on success/fail/cancel/timeout.
       # Surfaces per-target sidecar logs and process state even when
       # ninja's stdout capture is lost (e.g., on cancellation).

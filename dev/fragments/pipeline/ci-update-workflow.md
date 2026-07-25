@@ -1,6 +1,8 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-07-23. If you touch
+> **Last verified:** 2026-07-25 (commit pending — adds the
+> non-blocking annotation-step family and the new-pnpm-major raise). If
+> you touch
 > `.github/workflows/update.yml`, `dev/scripts/update-common.sh`,
 > `dev/scripts/update-input.sh`, `dev/scripts/update-pkg.sh`, or the
 > PR creation logic, and this fragment isn't updated in the same
@@ -50,6 +52,38 @@ behavior as Renovate's rebasing strategy, with the same
 
 PRs trigger ci.yml's `pull_request` event, which runs builds on
 both linux and darwin runners. PRs that pass both can be merged.
+
+### Non-blocking annotation steps
+
+A small family of `if: always()` steps runs after PR creation. Each is
+strict-mode bash that only ever `echo "::warning::…"` — none can fail
+the sweep, and none opens a PR. They exist for changes the pipeline
+deliberately does NOT automate because a human has to decide:
+
+- **`Surface held-back updates as a warning`** — cosmetic red for
+  targets the sweep could not land.
+- **`Detect upstream copilot-cli SEA restoration`** — evaluates
+  `github-copilot-cli.sourceRoot` on nixos-unstable HEAD; if upstream
+  ships per-platform SEA again, our standalone derivation could go back
+  to being an `overrideAttrs`.
+- **`Detect a new pnpm major upstream`** — compares the highest npm
+  `latest-<N>` dist-tag against the highest `pnpm_<N>` this repo
+  carries, and prompts a human to slide the window (adopt the new
+  major, retire the oldest). Two rules, both load-bearing:
+  - **Key on `latest-<N>`, never `next-<N>`.** Measured 2026-07-25:
+    `next-12` already exists (an alpha) while `latest-12` does not, so
+    a next-keyed detector would fire on every sweep from now on. It
+    would look like a working detector while being pure noise.
+  - **Derive "ours" from the repo**, not a literal. The step reads
+    `pkgs.generic.pnpm_*` attribute names out of
+    `nix eval .#packages.<system>`; a hardcoded major rots silently the
+    moment the window slides, and a detector that has stopped detecting
+    is worse than none.
+
+When adding one of these, copy the shape: `if: always()`, no `${{ }}`
+interpolation of external data into the shell, and an explicit no-op
+message on the negative branch so a silent step is distinguishable from
+a dead one.
 
 ### Formatter passes (per-input and per-package)
 

@@ -111,8 +111,10 @@ _: {
     # ── Binary packages (custom updateScript handles per-platform fetches) ──
     # arkenfox / btop / catppuccin-btop / fblog fetch a GitHub repo-archive
     # tarball via ghArchiveUpdateScript rather than a per-platform release
-    # asset; dns-root-hints fetches one platform-independent file. Same
-    # --use-update-script contract either way — the script owns its sidecar.
+    # asset; dns-root-hints fetches one platform-independent file, as do
+    # pnpm_10 / pnpm_11 (one npm registry tarball each, tracked per major
+    # off npm's `latest-<N>` dist-tag). Same --use-update-script contract
+    # either way — the script owns its sidecar.
     arkenfox = {flags = ["--use-update-script" "--override-filename" "overlays/generic/arkenfox.nix"];};
     btop = {flags = ["--use-update-script" "--override-filename" "overlays/generic/btop.nix"];};
     bun = {flags = ["--use-update-script" "--override-filename" "overlays/generic/bun.nix"];};
@@ -124,6 +126,8 @@ _: {
     fblog = {flags = ["--use-update-script" "--override-filename" "overlays/generic/fblog.nix"];};
     kimchi = {flags = ["--use-update-script" "--override-filename" "overlays/kimchi.nix"];};
     kiro-cli = {flags = ["--use-update-script" "--override-filename" "overlays/kiro-cli.nix"];};
+    pnpm_10 = {flags = ["--use-update-script" "--override-filename" "overlays/generic/pnpm_10.nix"];};
+    pnpm_11 = {flags = ["--use-update-script" "--override-filename" "overlays/generic/pnpm_11.nix"];};
   };
 
   # Packages excluded from the update loop entirely.

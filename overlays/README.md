@@ -25,6 +25,16 @@ Versions computed at eval time via `overlays/lib.nix:mkVersion`
   `rustPlatform.importCargoLock { lockFile = "${src}/Cargo.lock"; }`
   instead (IFD) so one hash covers both — see `generic/fblog.nix` and
   `git-tools/git-branchless.nix`.
+- **Version-independent URLs** (`dns-root-hints`): the version-equality
+  early exit is not a valid change signal, so pass `alwaysPrefetch = true`
+  to `mkUpdateScript`. It prefetches every run and decides whether to write
+  by comparing the freshly built sidecar against the committed one.
+- **Several majors of one upstream** (`pnpm_10`, `pnpm_11`): one shared
+  builder (`generic/pnpm-major.nix`) parameterized by the major, with a
+  two-line file per major so each gets its own `--override-filename` path
+  and sidecar. The version check reads the registry's per-major channel,
+  and an eval-time guard rejects a sidecar whose major does not match the
+  attribute.
 - **Flake inputs**: consumed from `inputs.<name>.packages`, updated via `nix flake update`.
 - **In-repo source**: packaged from a path in this repo (no upstream rev/hash,
   not version-tracked). Currently only `kiro-memory-distiller`
@@ -68,5 +78,7 @@ Versions computed at eval time via `overlays/lib.nix:mkVersion`
 | catppuccin-btop       | generic    | GitHub archive        | files only                | —                     | —             | —                   |
 | dns-root-hints        | generic    | InterNIC (no version) | files only                | —                     | —             | —                   |
 | fblog                 | generic    | GitHub archive        | cargo (nixpkgs override)  | `fblog`               | —             | --version           |
+| pnpm_10               | generic    | npm `latest-10` tag   | files only (nixpkgs ovr)  | `pnpm_10`             | —             | --version           |
+| pnpm_11               | generic    | npm `latest-11` tag   | files only (nixpkgs ovr)  | `pnpm_11`             | —             | --version           |
 | agnix-mcp             | mcpServers | mainProgram override  | —                         | —                     | —             | —                   |
 | agnix-lsp             | lspServers | mainProgram override  | —                         | —                     | —             | —                   |
