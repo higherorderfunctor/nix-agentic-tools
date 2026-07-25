@@ -76,14 +76,35 @@
     then null
     else {inherit name standalone consumer;};
 
+  # A row may declare `platforms`. Absent (the default, null) means "every
+  # supported system", which is every row but gluetun's. A platform-gated
+  # package is not merely unbuildable elsewhere — overlays/default.nix
+  # omits the ATTRIBUTE, so `self.packages.<system>.<name>` would abort
+  # this whole check with attribute-missing rather than report drift.
+  # Skipping costs no coverage: the package is still compared on every
+  # system it exists on, and the ok message names what was skipped so a
+  # row that has quietly stopped being checked anywhere is visible.
+  targetsForSystem =
+    lib.filterAttrs
+    (_: t: t.platforms == null || lib.elem system t.platforms)
+    self.cacheHitParityTargets;
+
+  skipped = lib.attrNames (
+    removeAttrs self.cacheHitParityTargets (lib.attrNames targetsForSystem)
+  );
+
   allChecks = lib.mapAttrsToList (name: t:
     mkCheck {
       inherit name;
       consumerLookup = p: lib.getAttrFromPath t.consumerPath p;
     })
-  self.cacheHitParityTargets;
+  targetsForSystem;
 
   allDrifts = lib.filter (x: x != null) allChecks;
+
+  skippedNote =
+    lib.optionalString (skipped != [])
+    " — skipped on ${system} (platform-gated): ${lib.concatStringsSep ", " skipped}";
 
   # agnix's CLI / LSP / MCP variants are ONE build: overlays/agnix.nix
   # compiles all three binaries, and the -lsp/-mcp attrs only re-point
@@ -102,7 +123,7 @@ in {
   cache-hit-parity = pkgs.runCommand "cache-hit-parity" {} ''
     ${
       if allDrifts == [] && agnixSiblingOk
-      then "echo 'ok — no drift detected (every overlay package produces byte-identical store paths against both nixpkgs pins; agnix variants share one build)' > $out"
+      then "echo 'ok — no drift detected (every overlay package produces byte-identical store paths against both nixpkgs pins; agnix variants share one build)${skippedNote}' > $out"
       else
         lib.optionalString (allDrifts != []) (let
           drifts = builtins.concatStringsSep "\n" (map (d: ''

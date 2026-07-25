@@ -99,9 +99,17 @@ gitfile
 gitref
 gitrevise
 glpat
+gluetun
 gnugrep
 gnused
+GOARCH
+godebug
+gofont
+gomono
+GOOS
 gopls
+GOTOOLCHAIN
+GOWORK
 gpgsign
 heredocs
 higherorderfunctor
@@ -120,6 +128,7 @@ inlines
 ints
 isaacphi
 isready
+jandedobbeleer
 journaled
 kagi
 kagiapi
@@ -144,6 +153,7 @@ lockdown
 lockfiles
 lspservers
 ltrimstr
+manpages
 markdownify
 materializer
 mcpconfig
@@ -161,6 +171,7 @@ mystor
 narinfo
 neighbour
 neighbouring
+netlink
 nixbuild
 nixd
 nixdoc
@@ -173,6 +184,7 @@ numtide
 nuscht
 nuschtos
 nvfetcher
+ohmyposh
 oled
 ollama
 openclaw
@@ -186,6 +198,7 @@ oxalica
 oxlint
 pagefind
 partialclone
+passteque
 passthroughs
 passthru
 pasteable
@@ -197,6 +210,7 @@ pgvector
 pinnable
 pkgs
 pname
+posh
 posttooluse
 prek
 prestart
@@ -204,6 +218,7 @@ psql
 purpleclay
 pythonnousersite
 pythonpath
+qdm
 qfdx
 quickstarts
 rcodesign
@@ -257,6 +272,7 @@ subkeys
 subshell
 subshells
 substituters
+supersets
 sympy
 taplo
 testapp
@@ -275,6 +291,7 @@ tsgolint
 tummychow
 ultracode
 unapprove
+unbuildable
 undimensioned
 undmg
 unexecutable
@@ -289,14 +306,17 @@ unscanned
 unskipped
 unstages
 unstash
+untarring
 upgrader
 upgraders
 valkey
+vendorhash
 watchlist
 worktree
 worktrees
 wyhash
 xhigh
+ymtdzzz
 zdiff
 zereight
 zstd

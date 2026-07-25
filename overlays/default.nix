@@ -132,37 +132,61 @@
   # ── Generic (non-agentic) packages ─────────────────────────────────
   # Split-ready subtree — see the header. Nothing here depends on the
   # rest of the repo beyond overlays/lib.nix.
-  genericDrvs = {
-    arkenfox = import ./generic/arkenfox.nix {
-      inherit inputs final;
+  genericDrvs =
+    {
+      arkenfox = import ./generic/arkenfox.nix {
+        inherit inputs final;
+      };
+      btop = import ./generic/btop.nix {
+        inherit inputs final;
+      };
+      bun = import ./generic/bun.nix {
+        inherit inputs final;
+      };
+      catppuccin-btop = import ./generic/catppuccin-btop.nix {
+        inherit inputs final;
+      };
+      dns-root-hints = import ./generic/dns-root-hints.nix {
+        inherit inputs final;
+      };
+      fblog = import ./generic/fblog.nix {
+        inherit inputs final;
+      };
+      gh = import ./generic/gh.nix {
+        inherit inputs final;
+      };
+      oh-my-posh = import ./generic/oh-my-posh.nix {
+        inherit inputs final;
+      };
+      otel-tui = import ./generic/otel-tui.nix {
+        inherit inputs final;
+      };
+      # Majored, namespaced-only. NEVER a top-level `pkgs.pnpm_<N>`:
+      # overlays/dev-tools/oxlint.nix binds `ourPkgs.pnpm_10` out of a
+      # fresh nixpkgs import that this overlay is not applied to, and the
+      # additive contract is what lets consumers adopt the overlay without
+      # auditing it. Both files delegate to ./generic/pnpm-major.nix.
+      pnpm_10 = import ./generic/pnpm_10.nix {
+        inherit inputs final;
+      };
+      pnpm_11 = import ./generic/pnpm_11.nix {
+        inherit inputs final;
+      };
+    }
+    # gluetun is the one genuinely LINUX-ONLY package here: `internal/routing`
+    # uses `unix.RT_TABLE_MAIN`/`RT_TABLE_LOCAL`, which x/sys/unix defines on
+    # Linux only (measured by cross-compiling for darwin/arm64). Gating the
+    # ATTRIBUTE — not just `meta.platforms` — is what keeps the required
+    # aarch64-darwin leg green: a restrictive `meta.platforms` alone still
+    # leaves `packages.aarch64-darwin.gluetun` present, and forcing its
+    # `drvPath` (which both `nix flake check` and CI's darwin build do) throws
+    # "not available on the requested hostPlatform". Absent is the honest
+    # shape. `config.checks.cacheHitParity.gluetun.platforms` mirrors this.
+    // final.lib.optionalAttrs final.stdenv.hostPlatform.isLinux {
+      gluetun = import ./generic/gluetun.nix {
+        inherit inputs final;
+      };
     };
-    btop = import ./generic/btop.nix {
-      inherit inputs final;
-    };
-    bun = import ./generic/bun.nix {
-      inherit inputs final;
-    };
-    catppuccin-btop = import ./generic/catppuccin-btop.nix {
-      inherit inputs final;
-    };
-    dns-root-hints = import ./generic/dns-root-hints.nix {
-      inherit inputs final;
-    };
-    fblog = import ./generic/fblog.nix {
-      inherit inputs final;
-    };
-    # Majored, namespaced-only. NEVER a top-level `pkgs.pnpm_<N>`:
-    # overlays/dev-tools/oxlint.nix binds `ourPkgs.pnpm_10` out of a
-    # fresh nixpkgs import that this overlay is not applied to, and the
-    # additive contract is what lets consumers adopt the overlay without
-    # auditing it. Both files delegate to ./generic/pnpm-major.nix.
-    pnpm_10 = import ./generic/pnpm_10.nix {
-      inherit inputs final;
-    };
-    pnpm_11 = import ./generic/pnpm_11.nix {
-      inherit inputs final;
-    };
-  };
 
   # ── Git tools ──────────────────────────────────────────────────────
   gitToolDrvs = {

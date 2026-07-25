@@ -388,10 +388,11 @@ assertion in the same commit.
 
 ## Overlay Grouping and the `generic` Subtree
 
-> **Last verified:** 2026-07-25 (commit pending — adds the
-> multi-major-attribute shape introduced by `pnpm_10` / `pnpm_11` on top
-> of the namespaced-only rule and the store-path-parity expectation for
-> thin nixpkgs overrides). If you add, remove or rename an overlay
+> **Last verified:** 2026-07-25 (commit pending — adds the Go
+> sidecar-`vendorHash` mechanism, the derived-Go-toolchain seam, and the
+> platform-gated-attribute rule, on top of the multi-major-attribute
+> shape, the namespaced-only rule and the store-path-parity expectation
+> for thin nixpkgs overrides). If you add, remove or rename an overlay
 > namespace, move a package between namespaces, or change how a
 > `generic` package relates to its nixpkgs original, and this section
 > isn't updated in the same commit, stop and fix it.
@@ -413,7 +414,8 @@ subtree must not acquire dependencies on the rest of the repo beyond
 `overlays/lib.nix`. Judge membership by whether the package would make
 sense in a repo called "agentic tools" — a hardened Firefox preference
 set, a btop theme, the DNS root hints, a resource monitor, a JS runtime,
-a JS package manager and a JSON log viewer do not.
+a JS package manager, a JSON log viewer, the GitHub CLI, a VPN client, a
+shell prompt engine and an OpenTelemetry viewer do not.
 
 Two mechanical consequences of living in a subdirectory rather than at
 the `overlays/` root:
@@ -431,11 +433,13 @@ version-tracked one gets a `config.update.targets` row.
 
 ### Thin overrides of a nixpkgs package
 
-Several `generic` entries (`btop`, `bun`, `fblog`, `pnpm_10`,
-`pnpm_11`) are not fresh derivations but `ourPkgs.<name>.overrideAttrs`
-over the nixpkgs one, moving only `version`, `src` and
-`passthru.updateScript`. Two rules that are not obvious from reading
-such a file:
+Most `generic` entries (`btop`, `bun`, `fblog`, `gh`, `oh-my-posh`,
+`otel-tui`, `pnpm_10`, `pnpm_11`) are not fresh derivations but
+`ourPkgs.<name>.overrideAttrs` over the nixpkgs one, moving only
+`version`, `src`, `passthru.updateScript` and — for the Go ones —
+`vendorHash`. `gluetun` is the exception, and only because nixpkgs does
+not carry it at all. Two rules that are not obvious from reading such a
+file:
 
 - **Namespaced-only.** The overlay writes `pkgs.generic.<name>` and
   NEVER a top-level `pkgs.<name>`. Shadowing a nixpkgs attribute would
@@ -497,6 +501,87 @@ transitive-hash gap. Override `cargoDeps` with
 `rustPlatform.importCargoLock { lockFile = "${src}/Cargo.lock"; }`
 against the PINNED src instead, so one hash covers both and the vendor
 set self-updates.
+
+### Go packages: the vendorHash goes in the SIDECAR
+
+Go has the same transitive-hash problem and no `importCargoLock`
+equivalent — `go.sum` records module hashes, not a Nix-fetchable vendor
+tree — so `vendorHash` must be recorded somewhere. It goes in the
+sidecar (`gh`, `gluetun`, `oh-my-posh`, `otel-tui`), never inline, and
+the mechanism is worth understanding before touching it:
+
+- `mkUpdateScript` rebuilds the sidecar FROM SCRATCH on every write
+  (`jq -n --arg v "$latest" '{version: $v}'`), so any key it does not
+  itself produce is DESTROYED. `vendorHash` is exactly such a key.
+- Therefore each Go overlay reads `sources.vendorHash or lib.fakeHash` —
+  the `or` covers the window between the sidecar write and the fix — and
+  threads `extraExtract = "${fixVendorHash}"` so `vu.mkGoVendorFix` runs
+  immediately after. The fixer builds `<attr>.goModules` through the
+  flake's own `packages` output (this repo has NO `legacyPackages`) and
+  writes back the `got:` hash from a `-go-modules` mismatch only.
+- It is also `passthru.fixVendorHash`, because a nixpkgs or toolchain
+  bump can invalidate a vendor hash with no version bump at all.
+- `passthru` must be MERGED. `buildGoModule` hangs `goModules` and
+  `overrideModAttrs` there, `build-support/go/module.nix` warns loudly
+  when an overlay drops them, and the fixer resolves `.goModules`
+  through that very attrset.
+
+Two traps, both measured on `oh-my-posh` while landing it:
+
+- **`postPatch` is an INPUT to `goModules`.** module.nix threads it into
+  the vendor derivation, so which test files you remove changes the
+  vendor set — nixpkgs' list drops `cli/image/image_test.go`, the only
+  importer of `golang.org/x/image/font/gofont/gomono`, and
+  `vendor/modules.txt` loses that line. A vendorHash therefore does NOT
+  transfer across a `postPatch` change.
+- **"It built" does not validate a vendorHash.** A fixed-output path is
+  content-addressed, so an identically-named path already in the local
+  store (e.g. built by a sibling repo with a different `postPatch`) is
+  accepted without building anything. That is precisely how a wrong
+  vendorHash passed a full local build and would then have failed CI on
+  a clean store. Force the real computation: perturb the sidecar's
+  version so `mkUpdateScript` takes the prefetch-and-write path, run the
+  update script, and confirm the regenerated file is byte-identical.
+
+### Go toolchains are DERIVED from a floor, never pinned
+
+`vu.goToolchainForFloor` takes the package's own go.mod `go` directive
+(or a higher `toolchain` directive) as a FLOOR and returns `ourPkgs.go`
+whenever our pin satisfies it, otherwise the lowest `go-bin` RELEASE
+that does (`purpleclay/go-overlay`, applied inside `ourPkgs` the way
+`rust-overlay` already is), otherwise a throw naming package, floor and
+newest available.
+
+Do not "clean up" a floor that currently resolves to our own `go` — it
+is the mechanism, not a leftover. And do not replace it with a pinned
+toolchain version: a pin cannot distinguish "still filling a real gap"
+from "nixpkgs caught up and this is now a DOWNGRADE". The sibling repo
+demonstrates the failure — it pins oh-my-posh to Go 1.26.0, a gap-filler
+when written and a downgrade against our pin's 1.26.5. Prereleases are
+filtered out of the candidate set on purpose: `go-bin.latest` is
+currently a prerelease, and Nix sorts `1.27rc1` ABOVE `1.27.0`.
+`checks/go-toolchain-floor.nix` exercises all three branches plus two
+positive controls, which is also what keeps the input from shipping
+dormant.
+
+### A genuinely platform-specific package is gated at the ATTRIBUTE
+
+`gluetun` is the only one so far: `internal/routing` uses
+`unix.RT_TABLE_MAIN` / `RT_TABLE_LOCAL`, Linux-only constants (measured
+by cross-compiling `GOOS=darwin GOARCH=arm64`). A restrictive
+`meta.platforms` is NOT sufficient — the attribute still exists on
+darwin and forcing its `drvPath` throws "not available on the requested
+hostPlatform", which both `nix flake check` (it evaluates every system)
+and the required darwin CI leg do. So `overlays/default.nix` wraps the
+entry in `lib.optionalAttrs final.stdenv.hostPlatform.isLinux`, and the
+package is simply absent elsewhere.
+
+Two registries have to agree with that:
+`config.checks.cacheHitParity.<name>.platforms` (or the check aborts on
+darwin looking up a package that is not there) and, if a future case
+needs it, anything else that enumerates packages per system. This is the
+exception, not a licence to platform-gate anything inconvenient — a
+sidecar merely missing a platform is still the bug rule 6 describes.
 
 **The CI IFD warm step does not cover that kind of IFD.**
 `.github/actions/warm-ifd` pre-realizes sources by evaluating

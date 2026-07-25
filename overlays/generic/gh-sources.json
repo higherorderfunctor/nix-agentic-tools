@@ -1,0 +1,8 @@
+{
+  "version": "2.96.0",
+  "src": {
+    "url": "https://github.com/cli/cli/archive/v2.96.0.tar.gz",
+    "hash": "sha256-+Roh0eR3Cm+ktLRHwWkvTiEvMGxsj7ngODJnjajL2x4="
+  },
+  "vendorHash": "sha256-pQNepOGVEHF8rwdgnaUCnFe/mzDxabYqhouN2V0WkOo="
+}
