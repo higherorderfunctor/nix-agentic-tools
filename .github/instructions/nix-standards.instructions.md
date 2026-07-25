@@ -17,10 +17,11 @@ managed by `mkUpdateScript`.
 
 ### Shell Wrappers: Absolute Paths Required
 
-> **Last verified:** 2026-04-15 (commit 11a0dec). If you add a
-> new `writeShellScript`, `writeShellScriptBin`, or inline shell
-> snippet in any `.nix` file and this section isn't consulted,
-> stop and read it.
+> **Last verified:** 2026-07-25 (commit pending — records the
+> enforcing check, its three command-start anchors, and the
+> suppression marker). If you add a new `writeShellScript`,
+> `writeShellScriptBin`, or inline shell snippet in any `.nix`
+> file and this section isn't consulted, stop and read it.
 
 **Every command in generated shell wrapper scripts MUST use an
 absolute Nix store path.** Never use bare command names like `cat`,
@@ -56,6 +57,23 @@ for weeks before root-causing.
   paths for commands not in `runtimeInputs`
 - `installPhase` / `buildPhase` — run inside `stdenv` with full
   PATH from build inputs; absolute paths optional but acceptable
+
+**Enforcement:** `checks/bare-commands.nix` (part of
+`nix flake check`) scans `lib/`, `packages/*/lib/`, and the single
+file `overlays/lib.nix` for a bare command in any of four
+command-start contexts: `$(cmd`, line start, after a `|`, and
+after an `&&`. Anchoring only at line start (the original form)
+missed three of those four, so a file could look covered while
+most real defect shapes walked through.
+
+Because the scan is per-line and the wrapper-versus-build-phase
+distinction is a property of the CALLER, a legitimately bare
+command in build-context code inside a scanned file is suppressed
+with a `# bare-commands: ok` comment **on that same line** — never
+by rewriting correct code. `overlays/lib.nix` is the mixed case:
+`mkUpdateScript` / `mkGitRevUpdateScript` emit real wrappers,
+while `mkClaudeExtract` / `mkKiroExtract` / `mkMcpSmokeTest` emit
+build-script bodies.
 
 **Pattern:**
 

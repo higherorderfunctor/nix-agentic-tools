@@ -260,7 +260,10 @@
     for family in opus sonnet haiku; do
       if ! printf '%s\n' "$models" | "$grep" -q "$family"; then
         echo "claude-extract: no '$family' id among the extracted models (anchor is matching the wrong structure, or upstream dropped the family)" >&2
-        echo "claude-extract: extracted set was: $(printf '%s\n' "$models" | "$sort" | tr '\n' ' ')" >&2
+        # The bare `tr` below is correct: this body is a runCommandLocal
+        # build script, so stdenv supplies a full PATH. The marker has to
+        # sit ON the offending line — the check filters by line.
+        echo "claude-extract: extracted set was: $(printf '%s\n' "$models" | "$sort" | tr '\n' ' ')" >&2 # bare-commands: ok
         exit 1
       fi
     done
