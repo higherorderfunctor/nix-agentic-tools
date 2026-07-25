@@ -427,7 +427,6 @@ In `devenv.nix`, extend the `tasks` `let` block (currently lines 339-343) so the
     checkTasks = (import ./dev/tasks/check.nix {}).tasks;
     generateTasks = (import ./dev/tasks/generate.nix {inherit lib;}).tasks;
     labTasks = (import ./dev/tasks/lab.nix {}).tasks;
-    mergeTasks = (import ./dev/tasks/merge.nix {}).tasks;
 ```
 
 Then add `labTasks` to the union expression that follows (match the existing `//` chain, keeping alphabetical order).

@@ -301,18 +301,27 @@ for it across the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-07-24 (commit pending — moves worktrees out of
-> `~/.cache` into a `<repo>-worktrees/` sibling of the checkout, on top of the
-> one-time devenv bootstrap step a fresh worktree needs before its first
-> commit, backed by a preflight guard injected into the prek hooks). If you
-> change the branch-protection ruleset, the worktree convention, the bootstrap
-> step, the local commit guard, or the PR flow and this fragment isn't updated
-> in the same commit, stop and fix it.
+> **Last verified:** 2026-07-24 (commit pending — the bot's `update/*` PRs now
+> arm GitHub-native auto-merge and land themselves, the manual
+> `pr:merge-updates` task and `merge-update-prs` skill are deleted, the update
+> sweep runs 4x/day, and squash-only is re-attributed to the repository
+> settings rather than the ruleset). If you change the branch-protection
+> ruleset, the repository merge settings, the worktree convention, the
+> bootstrap step, the local commit guard, the auto-merge arming, or the PR flow
+> and this fragment isn't updated in the same commit, stop and fix it.
 
-`main` is the trunk. It is protected: pull-request required, **squash-merge
-only**, no force-push, no deletion, and four required status checks —
+`main` is the trunk. Its branch-protection ruleset requires a pull request, no
+force-push, no deletion, and four required status checks —
 `build (x86_64-linux, ubuntu-latest)`, `build (aarch64-darwin, macos-latest)`,
-`test`, and `gitleaks`. Copilot review runs on every PR.
+`test`, and `gitleaks`. It requires **zero approving reviews** and does not
+require review threads to be resolved.
+
+**Squash-merge only** — but that is the REPOSITORY settings, not the ruleset:
+`allow_squash_merge` true, `allow_merge_commit` and `allow_rebase_merge` false.
+The ruleset's own `allowed_merge_methods` still lists all three, so changing it
+there changes nothing. Copilot review runs on every PR from a separate ruleset
+rule that _requests_ a review: not a required approval, and no required status
+check, so it annotates a PR but never gates its merge.
 
 **Never commit directly to `main`.** Two backstops enforce this. A local
 `reject-default-branch-commit` pre-commit hook (installed through devenv's
@@ -378,7 +387,8 @@ silently resolves one level too deep, into
 4. Keep pushing as work lands. Flip draft → ready the moment it is
    dev-complete so review can start.
 
-5. Merges are squash merges, performed by the operator.
+5. Merges are squash merges. The operator performs them for **human** PRs; the
+   bot's `update/*` PRs land themselves (next section).
 
 6. Tear the worktree down once merged:
 
@@ -388,6 +398,26 @@ silently resolves one level too deep, into
    ```
 
    The remote branch auto-deletes on merge.
+
+### Bot `update/*` PRs land themselves
+
+`.github/workflows/update.yml` sweeps dependencies 4x/day (00:00, 06:00, 12:00,
+18:00 UTC) and opens one PR per dependency that actually moved. Each is armed
+with GitHub-native **auto-merge (squash)** as it is created, and re-armed on
+every later sweep, so it merges itself once the four required checks go green.
+Safe precisely because the ruleset requires no approving review and the Copilot
+review is advisory: those checks are the only gate, and they are exactly what
+auto-merge waits on.
+
+A merge conflict **disables** auto-merge, so a conflicted update PR drops out of
+the queue until the next sweep rebuilds its branch on the current base and
+re-arms it. Arming is non-fatal too: a failure logs an `Auto-merge not armed`
+warning naming the branch and PR, and that PR is the one needing a hand.
+
+There is **no manual merge path** — the `pr:merge-updates` task and
+`merge-update-prs` skill that used to batch-merge these are deleted. Do not
+reintroduce hand-merging of `update/*` PRs; land the individual stragglers the
+pipeline could not, and fix the reason.
 
 ### What is shared across worktrees — and what is not
 
