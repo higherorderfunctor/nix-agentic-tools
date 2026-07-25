@@ -72,6 +72,7 @@ _: let
 
   # ── AI CLI descriptions ──────────────────────────────────────────────
   aiCliDescriptions = {
+    chatgpt-codex = "OpenAI Codex CLI";
     claude-code = "Claude Code CLI";
     github-copilot-cli = "GitHub Copilot CLI";
     kimchi = "Kimchi CLI";
@@ -97,7 +98,7 @@ _: let
   # Maps overlay name to its user-visible packages and description suffix.
   overlayPackages = {
     ai-clis = {
-      packages = ["github-copilot-cli" "kimchi" "kiro-cli" "kiro-gateway"];
+      packages = ["chatgpt-codex" "github-copilot-cli" "kimchi" "kiro-cli" "kiro-gateway"];
       suffix = null;
     };
     coding-standards = {

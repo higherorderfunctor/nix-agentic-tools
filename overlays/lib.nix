@@ -81,8 +81,16 @@
     pkgs,
   }:
     pkgs.writeShellScript "update-rev" ''
-      set -eu
-      new_rev=$(${pkgs.git}/bin/git ls-remote "${url}" HEAD | cut -f1)
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      new_rev=$(${pkgs.git}/bin/git ls-remote "${url}" HEAD | ${pkgs.coreutils}/bin/cut -f1)
+      # Still reachable under pipefail, and still required. pipefail now
+      # catches the case this used to catch — ls-remote FAILING while cut
+      # succeeds on empty input — one step earlier, at the assignment.
+      # What it cannot catch is ls-remote SUCCEEDING and printing nothing
+      # (an empty remote, or HEAD matching no ref): status 0, empty
+      # capture, no errexit. That case lands here.
       if [ -z "$new_rev" ]; then
         echo "Failed to fetch latest rev from ${url}" >&2
         exit 1
@@ -317,6 +325,18 @@
       '{hookTriggers: $hookTriggers, documentedAbsent: $documentedAbsent}' > "${dest}"
   '';
 
+  # Shell command printing the latest GitHub release version, resolved
+  # from the releases/latest redirect — no API call, so no token and no
+  # rate-limit concerns, and GitHub excludes prereleases/drafts from
+  # "latest". tagPrefix is stripped from the tag to yield the bare
+  # version (e.g. tagPrefix = "rust-v" turns "rust-v0.145.0" into
+  # "0.145.0"). Pair with mkUpdateScript's versionCheck.cmd.
+  ghLatestVersionCmd = {
+    pkgs,
+    repo,
+    tagPrefix ? "v",
+  }: "${pkgs.curl}/bin/curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/${repo}/releases/latest | ${pkgs.gnused}/bin/sed -n 's|.*/tag/${tagPrefix}\\([0-9][^/]*\\)$|\\1|p'";
+
   # Generate an updateScript for per-platform binary packages that use
   # sources.json. Fetches the latest version, prefetches each platform's
   # binary, writes version + per-platform hashes to sourcesFile.
@@ -329,17 +349,22 @@
   #   Defaults to "" so callers that don't need it are unaffected.
   # pkgs: nixpkgs set (for curl, jq, nix)
   mkUpdateScript = {
-    pname,
-    versionCheck,
-    platforms,
-    sourcesFile ? "overlays/${pname}-sources.json",
     extraExtract ? "",
     pkgs,
+    platforms,
+    pname,
+    sourcesFile ? "overlays/${pname}-sources.json",
+    versionCheck,
   }:
     pkgs.writeShellScript "update-${pname}" ''
-      set -eu
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
       latest=$(${versionCheck.cmd})
-      [ -z "$latest" ] && echo "Failed to fetch latest version" >&2 && exit 1
+      if [ -z "$latest" ]; then
+        echo "${pname}: failed to fetch latest version" >&2
+        exit 1
+      fi
 
       current=$(${pkgs.jq}/bin/jq -r '.version' "${sourcesFile}")
       if [ "$latest" = "$current" ]; then
@@ -348,26 +373,29 @@
       fi
 
       echo "${pname}: $current -> $latest"
-      tmp=$(mktemp)
+      tmp=$(${pkgs.coreutils}/bin/mktemp)
       ${pkgs.jq}/bin/jq -n --arg v "$latest" '{version: $v}' > "$tmp"
 
       ${builtins.concatStringsSep "\n" (builtins.attrValues (builtins.mapAttrs (system: mkUrl: let
-          url = mkUrl "$latest";
-          # URLs with %20 need --name to avoid illegal store name
+          # Braced so the template stays safe when the next character is a
+          # valid identifier char (e.g. "..._''${ver}_amd64.deb" would
+          # otherwise expand the undefined "$latest_amd64").
+          url = mkUrl "\${latest}";
+          # URLs with %20 need --name to avoid an illegal store name
           nameArg =
             if builtins.match ".*%20.*" url != null
-            then "--name ${pname}.dmg"
+            then "--name ${pname}-prefetch"
             else "";
         in ''
-          url="${mkUrl "\$latest"}"
-          hash=$(${pkgs.nix}/bin/nix hash convert --to sri --hash-algo sha256 \
-            "$(${pkgs.nix}/bin/nix-prefetch-url --type sha256 ${nameArg} "$url" 2>/dev/null)")
+          url="${url}"
+          prefetched=$(${pkgs.nix}/bin/nix-prefetch-url --type sha256 ${nameArg} "$url")
+          hash=$(${pkgs.nix}/bin/nix hash convert --to sri --hash-algo sha256 "$prefetched")
           ${pkgs.jq}/bin/jq --arg sys "${system}" --arg u "$url" --arg h "$hash" \
-            '. + {($sys): {url: $u, hash: $h}}' "$tmp" > "''${tmp}.new" && mv "''${tmp}.new" "$tmp"
+            '. + {($sys): {url: $u, hash: $h}}' "$tmp" > "''${tmp}.new" && ${pkgs.coreutils}/bin/mv "''${tmp}.new" "$tmp"
         '')
         platforms))}
 
-      mv "$tmp" "${sourcesFile}"
+      ${pkgs.coreutils}/bin/mv "$tmp" "${sourcesFile}"
       echo "Updated ${sourcesFile}"
       ${extraExtract}
     '';

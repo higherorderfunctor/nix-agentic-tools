@@ -27,6 +27,7 @@ Versions computed at eval time via `overlays/lib.nix:mkVersion`
 | Package               | Group      | Source               | Build                     | nixpkgs               | Tests         | Smoke               |
 | --------------------- | ---------- | -------------------- | ------------------------- | --------------------- | ------------- | ------------------- |
 | agnix                 | root       | GitHub main          | cargo                     | —                     | cargo test    | --version + MCP/LSP |
+| chatgpt-codex         | root       | GitHub releases      | pre-built binary (musl)   | —                     | —             | --version           |
 | claude-code           | root       | GCS manifest         | pre-built binary          | —                     | —             | binary              |
 | copilot-cli           | root       | GitHub releases      | pre-built binary          | `github-copilot-cli`  | —             | binary              |
 | kimchi                | root       | GitHub releases      | pre-built binary (bun)    | —                     | —             | --version           |
