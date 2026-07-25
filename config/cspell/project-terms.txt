@@ -277,6 +277,7 @@ unhide
 unparseable
 unrebased
 unreviewed
+unscanned
 unskipped
 unstages
 unstash

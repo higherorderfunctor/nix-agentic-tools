@@ -10,11 +10,12 @@ managed by `mkUpdateScript`.
 
 ### Shell Wrappers: Absolute Paths Required
 
-> **Last verified:** 2026-07-25 (commit pending — records the
-> enforcing check, its three command-start anchors, and the
-> suppression marker). If you add a new `writeShellScript`,
-> `writeShellScriptBin`, or inline shell snippet in any `.nix`
-> file and this section isn't consulted, stop and read it.
+> **Last verified:** 2026-07-25 (commit pending — adds the
+> `versionCheck.cmd` scan across all of `overlays/`, its wider
+> `WRAPPER_CMDS` list, and the path-prefix-aware comment filter).
+> If you add a new `writeShellScript`, `writeShellScriptBin`,
+> `versionCheck.cmd`, or inline shell snippet in any `.nix` file and
+> this section isn't consulted, stop and read it.
 
 **Every command in generated shell wrapper scripts MUST use an
 absolute Nix store path.** Never use bare command names like `cat`,
@@ -52,12 +53,28 @@ for weeks before root-causing.
   PATH from build inputs; absolute paths optional but acceptable
 
 **Enforcement:** `checks/bare-commands.nix` (part of
-`nix flake check`) scans `lib/`, `packages/*/lib/`, and the single
-file `overlays/lib.nix` for a bare command in any of four
-command-start contexts: `$(cmd`, line start, after a `|`, and
-after an `&&`. Anchoring only at line start (the original form)
-missed three of those four, so a file could look covered while
-most real defect shapes walked through.
+`nix flake check`) runs two scans.
+
+The **whole-line scan** covers `lib/`, `packages/*/lib/`, and the
+single file `overlays/lib.nix`, looking for a coreutils command in
+any of four command-start contexts: `$(cmd`, line start, after a
+`|`, and after an `&&`. Anchoring only at line start (the original
+form) missed three of those four, so a file could look covered
+while most real defect shapes walked through.
+
+The **`versionCheck.cmd` scan** covers every `.nix` file under
+`overlays/`, but only lines mentioning `versionCheck.cmd`. That
+string is interpolated into a `writeShellScript` wrapper by
+`mkUpdateScript` and invoked directly by the update pipeline, so it
+is PATH-less — yet it is authored in the per-package file, which
+the whole-line scan does not read. Scoping by MECHANISM rather than
+by directory is what makes the wider file set affordable, and it is
+also why this scan uses a wider command list (`WRAPPER_CMDS`, which
+adds `curl`, `jq`, `sed`, `grep`, `awk`, `sort` and friends): a
+`versionCheck.cmd` has no legitimate bare commands at all, unlike
+the mixed files the whole-line scan reads. Prefer
+`vu.ghLatestVersionCmd` over a hand-written string — it builds the
+absolute paths for you.
 
 Because the scan is per-line and the wrapper-versus-build-phase
 distinction is a property of the CALLER, a legitimately bare
@@ -67,6 +84,13 @@ by rewriting correct code. `overlays/lib.nix` is the mixed case:
 `mkUpdateScript` / `mkGitRevUpdateScript` emit real wrappers,
 while `mkClaudeExtract` / `mkKiroExtract` / `mkMcpSmokeTest` emit
 build-script bodies.
+
+Being per-line also means comments are scanned, so the filters
+strip rg's `path:lineno:` prefix before testing for a leading `#`.
+An anchored `^\s*#` cannot match prefixed output and silently
+excluded nothing; with the pipe and AND-list anchors in play, a
+comment that merely _quotes_ a piped bare command is a live false
+positive. Do not re-anchor it.
 
 **Pattern:**
 
