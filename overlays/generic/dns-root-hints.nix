@@ -9,7 +9,10 @@
 # rather than a tag or a release redirect, and why the URL template
 # ignores its `ver` argument. `mkUpdateScript`'s per-platform mapping
 # collapses to the single `src` key for the same reason — the artifact is
-# platform-independent.
+# platform-independent. It is also the only consumer of
+# `mkUpdateScript`'s `alwaysPrefetch` mode; see the note beside that
+# argument below for why a version-independent URL cannot rely on the
+# version-equality early exit.
 #
 # Not agentic-tools-specific — it lives under overlays/generic/ so the
 # earmarked repo split can lift the subtree whole.
@@ -79,21 +82,33 @@ in
         # version — hence the ignored `ver` argument.
         src = _: url;
       };
+      # THIS is what guarantees hash freshness, not the version check
+      # below. `mkUpdateScript`'s default flow early-exits when the
+      # reported version equals the recorded one, so for a
+      # version-independent URL the version string would be the sole
+      # change signal: upstream re-serving modified content without
+      # advancing the serial would leave the committed hash stale and
+      # fetchurl failing until the serial happened to move. With
+      # alwaysPrefetch the file is fetched and hashed every sweep and the
+      # sidecar comparison decides whether to write, so no version
+      # capture — however careful — is load-bearing for correctness any
+      # more. Costs one ~3 KB fetch 4x/day.
+      alwaysPrefetch = true;
       # Absolute store paths: this string is interpolated into a
       # writeShellScript wrapper, which the update pipeline invokes
       # directly and which therefore cannot assume a PATH.
       #
-      # The serial is YYYYMMDD followed by a two-digit within-day
-      # revision counter, not a bare date. Capturing it with a fixed
-      # digit count (this was `[0-9]{8}`) truncated it to the date, so a
-      # same-day bump `…01` -> `…02` read as no change at all: the
-      # script exits "already at" without re-prefetching while the
-      # served file — and its hash — HAS moved, leaving the committed
-      # hash stale and fetchurl failing until the date rolls over. This
-      # URL is version-independent, so this check is the ONLY trigger
-      # for a hash refresh. Hence `+` rather than `{10}`: anchoring on
-      # a digit count is exactly what broke, and the literal
-      # `version of root zone:` prefix already bounds the match.
+      # The serial is retained as the HUMAN-FACING version — it names the
+      # root-zone revision in the store path and in the update PR — so it
+      # still has to be captured correctly. It is YYYYMMDD followed by a
+      # two-digit within-day revision counter, not a bare date. Capturing
+      # it with a fixed digit count (this was `[0-9]{8}`) truncated it to
+      # the date, so a same-day bump `…01` -> `…02` read as no change at
+      # all. Under alwaysPrefetch that no longer strands the hash — the
+      # prefetch runs regardless and the write is decided by comparison —
+      # but it would still mislabel the derivation. Hence `+` rather than
+      # `{10}`: anchoring on a digit count is exactly what broke, and the
+      # literal `version of root zone:` prefix already bounds the match.
       versionCheck.cmd = "${ourPkgs.curl}/bin/curl -fsSL ${url} | ${ourPkgs.gnugrep}/bin/grep -oP 'version of root zone:\\s+\\K[0-9]+' | ${ourPkgs.coreutils}/bin/head -1";
     };
 

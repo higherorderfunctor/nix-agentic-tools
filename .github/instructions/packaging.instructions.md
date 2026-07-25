@@ -45,3 +45,42 @@ Examples:
 
 - `kiro-cli`: `kiro-cli-sources.json` with Linux tarball + Darwin `.dmg`
 - `copilot-cli`: `copilot-cli-sources.json` with per-platform GitHub release tarballs
+
+A platform-independent artifact collapses the per-platform mapping to a
+single `src` key — `dns-root-hints`, `btop` and `fblog` all use that
+one-key shape.
+
+### Version-independent URLs need `alwaysPrefetch`
+
+> **Last verified:** 2026-07-25 (commit pending — records
+> `mkUpdateScript`'s `alwaysPrefetch` argument and why
+> `dns-root-hints` is its only consumer). If you change
+> `mkUpdateScript`'s change-detection flow or opt another package in
+> or out, update this in the same commit.
+
+`mkUpdateScript` normally early-exits when `versionCheck.cmd`'s output
+equals the sidecar's recorded `.version`, which avoids a network
+prefetch per package per sweep. That is sound only when the artifact
+URL carries the version: same version → same URL → same bytes.
+
+For a package whose URL is **version-independent**, the version string
+becomes the only change signal, and upstream re-serving modified
+content at the same URL leaves the committed hash stale and `fetchurl`
+failing until the version happens to move. Pass `alwaysPrefetch = true`
+in that case. It:
+
+- skips the version-equality early exit, so the prefetch always runs;
+- compares the freshly built sidecar against the committed one
+  normalized (`jq -S`), version and hashes, and **does not write** when
+  they match — an unconditional write would churn mtimes and hand the
+  pipeline empty-diff commits;
+- defers the transition message until after that comparison and names
+  what actually moved, because the default flow's pre-prefetch
+  `"$current -> $latest"` would read `X -> X` when only the hash moved.
+
+`overlays/generic/dns-root-hints.nix` is the only consumer (InterNIC
+re-serves one canonical URL; its "version" is a root-zone serial
+scraped out of the file body). It is opt-in, not the default, because
+it costs one prefetch per sweep whether or not anything moved —
+negligible for one ~3 KB file 4x/day, not negligible for a
+multi-hundred-MB per-platform release asset set.

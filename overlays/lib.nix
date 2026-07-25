@@ -385,6 +385,27 @@ rec {
   # sources.json. Fetches the latest version, prefetches each platform's
   # binary, writes version + per-platform hashes to sourcesFile.
   #
+  # alwaysPrefetch: skip the version-equality early exit and prefetch on
+  #   EVERY run, then decide whether to write by comparing the freshly
+  #   built sidecar against the committed one. Defaults to false, which
+  #   leaves every other caller on exactly today's control flow.
+  #
+  #   For a package whose artifact URL carries its version, the early
+  #   exit is free and correct: same version means same URL means same
+  #   bytes. For a package whose URL is VERSION-INDEPENDENT it is a
+  #   silent-staleness bug — the version string becomes the ONLY change
+  #   signal, so upstream re-serving modified content at the same URL
+  #   without advancing its version leaves the committed hash stale and
+  #   `fetchurl` failing until the version happens to move.
+  #   `overlays/generic/dns-root-hints.nix` is the only such consumer
+  #   today (InterNIC re-serves one canonical URL; its "version" is a
+  #   root-zone serial scraped out of the file body).
+  #
+  #   COST: one prefetch per opted-in package per sweep, every sweep,
+  #   whether or not anything moved. For one small file 4x/day that is
+  #   nothing; for a multi-hundred-MB per-platform release asset set it
+  #   would not be. That asymmetry is why this is opt-in rather than the
+  #   default, and why widening it should be argued per package.
   # versionCheck: { cmd = "curl ..."; } — shell command that prints the version
   # platforms: { "x86_64-linux" = ver: "https://.../${ver}/file.tar.gz"; ... }
   # sourcesFile: path to sources.json relative to repo root
@@ -398,6 +419,7 @@ rec {
   #   succeeds and the recorded hash simply fails the consumer's check.
   # pkgs: nixpkgs set (for curl, jq, nix)
   mkUpdateScript = {
+    alwaysPrefetch ? false,
     extraExtract ? "",
     pkgs,
     platforms,
@@ -405,24 +427,12 @@ rec {
     sourcesFile ? "overlays/${pname}-sources.json",
     unpack ? false,
     versionCheck,
-  }:
-    pkgs.writeShellScript "update-${pname}" ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-
-      latest=$(${versionCheck.cmd})
-      if [ -z "$latest" ]; then
-        echo "${pname}: failed to fetch latest version" >&2
-        exit 1
-      fi
-
-      current=$(${pkgs.jq}/bin/jq -r '.version' "${sourcesFile}")
-      if [ "$latest" = "$current" ]; then
-        echo "${pname}: already at $current"
-        exit 0
-      fi
-
-      echo "${pname}: $current -> $latest"
+  }: let
+    # Build the candidate sidecar in "$tmp": the version, then one
+    # {url, hash} entry per platform. Identical in both modes — the two
+    # flows differ only in whether they reach it and what they do with
+    # the result — so it is bound once rather than duplicated.
+    buildCandidate = ''
       tmp=$(${pkgs.coreutils}/bin/mktemp)
       ${pkgs.jq}/bin/jq -n --arg v "$latest" '{version: $v}' > "$tmp"
 
@@ -448,9 +458,82 @@ rec {
             '. + {($sys): {url: $u, hash: $h}}' "$tmp" > "''${tmp}.new" && ${pkgs.coreutils}/bin/mv "''${tmp}.new" "$tmp"
         '')
         platforms))}
+    '';
 
+    commitCandidate = ''
       ${pkgs.coreutils}/bin/mv "$tmp" "${sourcesFile}"
       echo "Updated ${sourcesFile}"
       ${extraExtract}
+    '';
+
+    # Default flow — the pre-alwaysPrefetch control flow, unchanged.
+    # Version equality means "nothing moved", which is true for every
+    # package whose artifact URL carries its version.
+    defaultFlow = ''
+      if [ "$latest" = "$current" ]; then
+        echo "${pname}: already at $current"
+        exit 0
+      fi
+
+      echo "${pname}: $current -> $latest"
+      ${buildCandidate}
+      ${commitCandidate}
+    '';
+
+    # Always-prefetch flow — the prefetch IS the change detector.
+    alwaysFlow = ''
+      # No version-equality early exit: for this package the version is
+      # not a reliable change signal (see `alwaysPrefetch` in the header),
+      # so the only way to learn whether upstream moved is to fetch and
+      # hash it.
+      ${buildCandidate}
+
+      # Compare NORMALIZED (jq -S), so key order or whitespace in the
+      # committed file cannot masquerade as a change. The version half and
+      # the everything-else (hash) half are compared separately only so
+      # the message below can name what actually moved; together they
+      # cover the whole document.
+      newHashes=$(${pkgs.jq}/bin/jq -S 'del(.version)' "$tmp")
+      oldHashes=$(${pkgs.jq}/bin/jq -S 'del(.version)' "${sourcesFile}")
+
+      if [ "$latest" = "$current" ] && [ "$newHashes" = "$oldHashes" ]; then
+        # Deliberately does NOT write. An unconditional mv would churn the
+        # file's mtime on every sweep and hand the update pipeline an
+        # empty diff to try to commit.
+        ${pkgs.coreutils}/bin/rm -f "$tmp"
+        echo "${pname}: already at $current (version and hashes unchanged)"
+        exit 0
+      fi
+
+      # Deferred until after the comparison on purpose. The default flow
+      # announces "$current -> $latest" BEFORE prefetching, which here
+      # would read "X -> X" whenever only the hash moved — the exact case
+      # this mode exists to catch.
+      if [ "$latest" != "$current" ] && [ "$newHashes" != "$oldHashes" ]; then
+        echo "${pname}: version and hash moved: $current -> $latest"
+      elif [ "$latest" != "$current" ]; then
+        echo "${pname}: version moved: $current -> $latest"
+      else
+        echo "${pname}: hash moved at unchanged version $current (upstream re-served the same URL)"
+      fi
+      ${commitCandidate}
+    '';
+  in
+    pkgs.writeShellScript "update-${pname}" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      latest=$(${versionCheck.cmd})
+      if [ -z "$latest" ]; then
+        echo "${pname}: failed to fetch latest version" >&2
+        exit 1
+      fi
+
+      current=$(${pkgs.jq}/bin/jq -r '.version' "${sourcesFile}")
+      ${
+        if alwaysPrefetch
+        then alwaysFlow
+        else defaultFlow
+      }
     '';
 }
