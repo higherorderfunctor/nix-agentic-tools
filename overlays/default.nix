@@ -49,6 +49,9 @@
     agnix = import ./agnix.nix {
       inherit inputs final;
     };
+    chatgpt-codex = import ./chatgpt-codex.nix {
+      inherit inputs final;
+    };
     claude-code = import ./claude-code.nix {
       inherit inputs final;
     };

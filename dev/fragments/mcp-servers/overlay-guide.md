@@ -8,8 +8,9 @@ The unified overlay in `overlays/default.nix` exposes all servers under
 
 - `overlays/default.nix` — unified overlay entry point, imports each
   per-package `.nix` file with `{inputs, final, ...}`
-- `overlays/lib.nix` — shared helpers: `mkVersion`, `mkGitRevUpdateScript`,
-  `mkUpdateScript`, `mkMcpSmokeTest`, version readers
+- `overlays/lib.nix` — shared helpers: `ghLatestVersionCmd`,
+  `mkGitRevUpdateScript`, `mkMcpSmokeTest`, `mkUpdateScript`,
+  `mkVersion`, version readers
 - `overlays/mcp-servers/<server>.nix` — individual server derivation
   (npm, Python, or Go) with inline `rev` + `hash`
 
@@ -80,4 +81,7 @@ Updates use two mechanisms depending on package type:
   commit via `git ls-remote`, then `nix-update --version skip` refreshes
   all hashes
 - **Per-platform binaries**: `mkUpdateScript` fetches the latest release
-  version, prefetches each platform's binary, and writes to `sources.json`
+  version, prefetches each platform's binary, and writes to `sources.json`.
+  For a GitHub-released upstream, pair it with `ghLatestVersionCmd` (reads
+  the `releases/latest` redirect — no API token, no rate limit) instead of
+  hand-rolling a `curl api.github.com | jq` version check.

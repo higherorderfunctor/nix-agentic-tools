@@ -22,6 +22,7 @@
 _: {
   config.checks.cacheHitParity = {
     # ── AI CLIs — live at `consumerPkgs.ai.<name>` ──
+    chatgpt-codex = {consumerPath = ["ai" "chatgpt-codex"];};
     claude-code = {consumerPath = ["ai" "claude-code"];};
     copilot-cli = {consumerPath = ["ai" "copilot-cli"];};
     kimchi = {consumerPath = ["ai" "kimchi"];};

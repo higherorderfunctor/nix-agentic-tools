@@ -11,6 +11,8 @@ applyTo: "packages/ai-clis/**,packages/copilot-cli/**,packages/kiro-cli/**"
 
 AI coding CLI tools are packaged as overlays under `overlays/`:
 
+- **chatgpt-codex** — OpenAI Codex CLI, pre-built static-musl binary
+  fetched from GitHub releases
 - **claude-code** — Claude Code CLI, pre-built binary
 - **copilot-cli** — GitHub Copilot CLI, pre-built SEA binary fetched
   from GitHub releases
@@ -22,8 +24,8 @@ AI coding CLI tools are packaged as overlays under `overlays/`:
   source with a Python runtime environment
 
 Packages live under `pkgs.ai.*` and are flattened to top-level flake
-outputs (`pkgs.claude-code`, `pkgs.copilot-cli`, `pkgs.kimchi`,
-`pkgs.kiro-cli`, `pkgs.kiro-gateway`).
+outputs (`pkgs.chatgpt-codex`, `pkgs.claude-code`, `pkgs.copilot-cli`,
+`pkgs.kimchi`, `pkgs.kiro-cli`, `pkgs.kiro-gateway`).
 
 ### Build Patterns
 
@@ -31,12 +33,18 @@ outputs (`pkgs.claude-code`, `pkgs.copilot-cli`, `pkgs.kimchi`,
 derivation to pin the version and `src` from a per-platform
 `sources.json`, inheriting upstream install/wrapper logic.
 
-**Standalone binary** (copilot-cli, kimchi): there is no nixpkgs base
-to inherit, so these are fresh `stdenv.mkDerivation`s over a
-per-platform release tarball selected from `sources.json`. On Linux
-they run `autoPatchelfHook` to repoint the interpreter/rpath at the
-nix glibc.
+**Standalone binary** (chatgpt-codex, copilot-cli, kimchi): there is no
+nixpkgs base to inherit, so these are fresh `stdenv.mkDerivation`s over
+a per-platform release tarball selected from `sources.json`. On Linux
+the dynamically-linked ones run `autoPatchelfHook` to repoint the
+interpreter/rpath at the nix glibc.
 
+- chatgpt-codex unpacks to ONE flat `codex-<target-triple>` file (no
+  wrapper directory, hence `sourceRoot = "."`) installed as
+  `$out/bin/codex`. Its Linux build is `static-pie` musl, so it is the
+  one standalone binary here that needs neither autoPatchelfHook nor an
+  interpreter patch. Apache-2.0 (free), so the unfree guard passes it
+  through unwrapped.
 - copilot-cli installs a single SEA binary (`copilot`).
 - kimchi ships an FHS tree (`bin/kimchi` + `share/kimchi/`, including a
   second ELF `share/kimchi/bin/proxy-helper`); the install copies the
@@ -54,6 +62,9 @@ These packages pin versions inline (binary CLIs via a per-platform
 `sources.json` sidecar). Each uses an update strategy managed by
 `config.update.targets` (see `config/update-targets.nix`):
 
+- `chatgpt-codex` — per-platform `sources.json` + `mkUpdateScript`;
+  version via `ghLatestVersionCmd` with `tagPrefix = "rust-v"` (openai/codex
+  cuts several tag series, so the prefix is load-bearing)
 - `copilot-cli` — per-platform `sources.json` + `mkUpdateScript` fetches
   latest GitHub release and prefetches per-platform binaries
 - `kimchi` — per-platform `sources.json` + `mkUpdateScript` fetches the
@@ -63,8 +74,12 @@ These packages pin versions inline (binary CLIs via a per-platform
 - `kiro-gateway` — inline `rev` + `hash` with `mkGitRevUpdateScript`
   for main-branch tracking; version via `mkVersion`
 
-The `overlays/lib.nix` file provides `mkVersion`, `mkUpdateScript`,
-and `mkGitRevUpdateScript` helpers consumed by each overlay file.
+The `overlays/lib.nix` file provides `ghLatestVersionCmd`,
+`mkGitRevUpdateScript`, `mkUpdateScript`, and `mkVersion` helpers
+consumed by each overlay file. `ghLatestVersionCmd`
+reads the `releases/latest` redirect rather than the GitHub API, so it
+needs no token and cannot be rate-limited; prefer it over a hand-rolled
+`curl … api.github.com | jq -r .tag_name` version check.
 
 ### The overrideAttrs Pattern
 
@@ -86,6 +101,7 @@ fixes) are picked up automatically on nixpkgs bumps.
 ### Building and Updating
 
 ```bash
+nix build .#chatgpt-codex       # Build OpenAI Codex CLI
 nix build .#copilot-cli         # Build Copilot CLI
 nix build .#kimchi              # Build Kimchi CLI
 nix build .#kiro-cli            # Build Kiro CLI

@@ -187,6 +187,7 @@ nix build .#oxlint
 <!-- prettier-ignore -->
 | Package | Description |
 |---------|-------------|
+| `chatgpt-codex` | OpenAI Codex CLI |
 | `claude-code` | Claude Code CLI |
 | `github-copilot-cli` | GitHub Copilot CLI |
 | `kimchi` | Kimchi CLI |

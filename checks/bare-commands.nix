@@ -6,11 +6,20 @@
 # `env` set that uses a bare command like `cat` will fail with
 # "command not found". This check catches these before they ship.
 #
-# Scope: only scans files under lib/ and packages/*/lib/ — the
-# directories that produce writeShellScript wrappers and HM
-# activation scripts. Overlays, dev/, and devshell/ are excluded
-# because they primarily contain installPhase/buildPhase code
-# that runs inside stdenv with full PATH.
+# Scope: scans lib/ and packages/*/lib/ — the directories that produce
+# writeShellScript wrappers and HM activation scripts — plus the single
+# FILE overlays/lib.nix. dev/ and devshell/ are excluded, and so is the
+# rest of overlays/, because they primarily contain
+# installPhase/buildPhase code that runs inside stdenv with full PATH.
+#
+# overlays/lib.nix is the exception that has to be named explicitly: it
+# is the ONLY file under overlays/ that emits writeShellScript wrappers
+# (mkUpdateScript, mkGitRevUpdateScript). Those run outside any builder
+# — the update pipeline invokes an updateScript directly — so they are
+# exactly the PATH-less case this check exists for, unlike the rest of
+# overlays/. It is added as a FILE rather than by widening the glob to
+# overlays/, which would false-positive on the legitimate bare
+# mkdir/cp/chmod in eight other overlays' build phases.
 {pkgs, ...}:
 pkgs.runCommandLocal "bare-commands-check" {
   nativeBuildInputs = [pkgs.ripgrep];
@@ -26,17 +35,27 @@ pkgs.runCommandLocal "bare-commands-check" {
 
     FAILURES=""
 
-    # Only scan lib/ and packages/*/lib/ — these produce wrapper scripts
-    # and activation scripts that may run without PATH.
-    SCAN_DIRS=""
+    # Scan lib/ and packages/*/lib/ — these produce wrapper scripts and
+    # activation scripts that may run without PATH.
+    SCAN_PATHS=""
     for d in lib packages/*/lib; do
       if [ -d "$d" ]; then
-        SCAN_DIRS="$SCAN_DIRS $d"
+        SCAN_PATHS="$SCAN_PATHS $d"
       fi
     done
 
-    if [ -z "$SCAN_DIRS" ]; then
-      echo "No directories to scan."
+    # Plus individually named FILES outside those trees that also emit
+    # wrappers. Guarded with -f, not -d, so the directory loop above stays
+    # a directory loop. See the header for why overlays/lib.nix is here
+    # and the rest of overlays/ is not.
+    for f in overlays/lib.nix; do
+      if [ -f "$f" ]; then
+        SCAN_PATHS="$SCAN_PATHS $f"
+      fi
+    done
+
+    if [ -z "$SCAN_PATHS" ]; then
+      echo "No paths to scan."
       ${pkgs.coreutils}/bin/mkdir -p "$out"
       ${pkgs.coreutils}/bin/touch "$out/ok"
       exit 0
@@ -45,7 +64,7 @@ pkgs.runCommandLocal "bare-commands-check" {
     # Pattern 1: $(bare-cmd ...) — command substitution with bare command
     if rg --no-heading -n "\\\$\(($BARE_CMDS) " \
       --glob '*.nix' \
-      $SCAN_DIRS 2>/dev/null \
+      $SCAN_PATHS 2>/dev/null \
       | grep -v '# bare-commands: ok' > /tmp/bare-cmd-hits 2>/dev/null; then
       FAILURES="$FAILURES
   $(${pkgs.coreutils}/bin/cat /tmp/bare-cmd-hits)"
@@ -56,7 +75,7 @@ pkgs.runCommandLocal "bare-commands-check" {
     # Exclude: lines containing /bin/ (already absolute), comments, nix expressions
     if rg --no-heading -n "^\s+($BARE_CMDS) " \
       --glob '*.nix' \
-      $SCAN_DIRS 2>/dev/null \
+      $SCAN_PATHS 2>/dev/null \
       | grep -v '# bare-commands: ok' \
       | grep -v '/bin/' \
       | grep -v '^\s*#' \
@@ -71,7 +90,7 @@ pkgs.runCommandLocal "bare-commands-check" {
     FAILURES="$(echo "$FAILURES" | ${pkgs.coreutils}/bin/tr -s '\n' | sed '/^$/d')"
 
     if [ -n "$FAILURES" ]; then
-      echo "ERROR: Bare commands found in lib/ or packages/*/lib/ .nix files."
+      echo "ERROR: Bare commands found in a wrapper-producing .nix file."
       echo "These will fail when spawned without PATH (e.g., Claude Code MCP env)."
       echo "Use \''${pkgs.coreutils}/bin/<cmd> instead."
       echo ""
