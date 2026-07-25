@@ -12,10 +12,11 @@ managed by `mkUpdateScript`.
 
 > **Last verified:** 2026-07-25 (commit pending — adds the
 > `versionCheck.cmd` scan across all of `overlays/`, its wider
-> `WRAPPER_CMDS` list, and the path-prefix-aware comment filter).
-> If you add a new `writeShellScript`, `writeShellScriptBin`,
-> `versionCheck.cmd`, or inline shell snippet in any `.nix` file and
-> this section isn't consulted, stop and read it.
+> `WRAPPER_CMDS` list, the path-prefix-aware comment filter, and the
+> reason that scan carries no `/bin/` filter). If you add a new
+> `writeShellScript`, `writeShellScriptBin`, `versionCheck.cmd`, or
+> inline shell snippet in any `.nix` file and this section isn't
+> consulted, stop and read it.
 
 **Every command in generated shell wrapper scripts MUST use an
 absolute Nix store path.** Never use bare command names like `cat`,
@@ -75,6 +76,18 @@ adds `curl`, `jq`, `sed`, `grep`, `awk`, `sort` and friends): a
 the mixed files the whole-line scan reads. Prefer
 `vu.ghLatestVersionCmd` over a hand-written string — it builds the
 absolute paths for you.
+
+That scan carries **no `/bin/` exclusion**, and adding one back would
+silently disable it. Every correct `versionCheck.cmd` opens with an
+absolute `curl`, so a regression that leaves a later command bare
+still produces a line containing `/bin/` — a per-line filter drops
+exactly the defect shape it is meant to catch, and measurably dropped
+all five of them. Nothing is lost by its absence: the command-start
+anchors require a command NAME after `"`, `|`, `&&` or `$(`, and an
+absolute invocation presents the `${...}` interpolation there instead,
+so it can never match. The whole-line scan keeps its `/bin/` filter
+because it reads unrestricted line shapes where the filter does real
+work.
 
 Because the scan is per-line and the wrapper-versus-build-phase
 distinction is a property of the CALLER, a legitimately bare

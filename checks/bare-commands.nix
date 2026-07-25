@@ -70,6 +70,46 @@
 # plus the fetch/filter tools; the wider list is safe here for the same
 # reason the wider file scan is.
 #
+# Pattern 3 carries NO `/bin/` filter, and that is deliberate. Do not
+# add one back "for consistency" with patterns 1 and 2.
+#
+# That filter is per LINE, not per match, so on this pattern it would
+# drop any MIXED command string — one invocation absolute, another bare,
+# as in `"<pkgs.curl>/bin/curl … | jq -r .x"`. Mixed is not an edge case
+# here, it is THE defect shape: every correct `versionCheck.cmd` in the
+# tree opens with an absolute `curl`, so a regression that leaves one
+# later command bare produces a line that still contains `/bin/`. With
+# the filter in place the pattern was inert on 100% of its intended
+# targets — measured, not inferred: all five inline command strings
+# (claude-code, copilot-cli, kimchi, kiro-cli, generic/dns-root-hints)
+# contain `/bin/`.
+#
+# It costs nothing to drop, because the anchors already do the job
+# structurally. `WRAPPER_CMD_START` requires the command name to follow
+# `"`, `|`, `&&` or `$(`; a properly absolute invocation presents a `$`
+# there (the `${pkgs.foo}` interpolation), never a command name, so it
+# cannot match in the first place. Verified against the two lines most
+# likely to bite: `generic/dns-root-hints.nix`, whose string contains
+# `/bin/grep` and `/bin/head` with both `grep` and `head` in
+# WRAPPER_CMDS, and `overlays/lib.nix`'s `latest=$(<versionCheck.cmd>)`,
+# which sits directly under the `$(` anchor. Neither matches the raw
+# regex — with the filter removed, it finds ZERO hits across all of
+# `overlays/` on a clean tree.
+#
+# Patterns 1 and 2 KEEP their `/bin/` filter. Not an oversight: they
+# scan mixed-context files with unrestricted line shapes, where it does
+# real work suppressing already-absolute invocations that their broader
+# `^\s+` anchor would otherwise pick up. Narrowing them is a separate
+# change with a separate blast radius.
+#
+# The lesson, since it cost a round trip: this check has now had one
+# filter that could NEVER match (`^\s*#` against path-prefixed output)
+# and one that ALWAYS matched (`/bin/` against a corpus where every real
+# target contains it). Same failure class, opposite polarity — a line
+# filter whose truth value is constant across the real corpus is dead
+# code either way, and only measuring it against that corpus reveals
+# which kind you have.
+#
 # Residual limitations, stated so they are not rediscovered as bugs:
 #
 #   - Pattern 3 is LINE-scoped. A `versionCheck.cmd` written as a
@@ -82,15 +122,6 @@
 #     PATH from build inputs, so absolute paths there are optional (see
 #     the nix-standards fragment); flagging them would cost a suppression
 #     marker per line for no risk.
-#   - The `/bin/` filter is applied per LINE, not per match, so a MIXED
-#     `versionCheck.cmd` — one command absolute, another bare, as in
-#     `"<pkgs.curl>/bin/curl … | jq -r .x"` — is skipped whole. The
-#     command-start anchors already exclude a properly absolute
-#     invocation on their own (after `|` comes the interpolation, not the
-#     command name), so the line filter buys nothing here and costs the mixed
-#     case. It is kept only for consistency with patterns 1 and 2, where
-#     the same weakness is pre-existing. Narrowing it is a candidate
-#     follow-up, not a silent change.
 {pkgs, ...}:
 pkgs.runCommandLocal "bare-commands-check" {
   nativeBuildInputs = [pkgs.ripgrep];
@@ -222,12 +253,16 @@ pkgs.runCommandLocal "bare-commands-check" {
     # file, which patterns 1 and 2 do not scan. Line-scoped and mechanism-
     # scoped: the wider WRAPPER_CMDS list and the wider file set are both
     # paid for by requiring `versionCheck.cmd` on the same line.
+    #
+    # NOTE the absent `/bin/` filter — see the header. It is not an
+    # oversight and must not be "restored": it would subtract only true
+    # positives here, because the anchors already exclude absolute
+    # invocations structurally.
     if [ -n "$WRAPPER_SCAN_PATHS" ] && rg --no-heading -n \
       "versionCheck\.cmd.*$WRAPPER_CMD_START($WRAPPER_CMDS)\b" \
       --glob '*.nix' \
       $WRAPPER_SCAN_PATHS 2>/dev/null \
       | grep -v '# bare-commands: ok' \
-      | grep -v '/bin/' \
       | grep -vE '^[^:]*:[0-9]+:[[:space:]]*#' > /tmp/bare-cmd-hits3 2>/dev/null; then
       FAILURES="$FAILURES
   $(${pkgs.coreutils}/bin/cat /tmp/bare-cmd-hits3)"
