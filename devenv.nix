@@ -174,7 +174,6 @@ in {
         # (a bare `./dir` handed to ai.skills is copied, never read inside, so
         # an edit would otherwise be served from a stale eval cache).
         index-repo-docs = traceSource.tracedPath ./dev/skills/index-repo-docs;
-        merge-update-prs = traceSource.tracedPath ./dev/skills/merge-update-prs;
         repo-review = traceSource.tracedPath ./dev/skills/repo-review;
       };
   };
@@ -391,7 +390,6 @@ in {
     test -f .claude/skills/dev-stack-fix/references/git-branchless.md || { echo "FAIL: dev-stack-fix reference git-branchless.md does not resolve"; exit 1; }
     test -f .claude/skills/dev-living-workflow/SKILL.md || { echo "FAIL: .claude/skills/dev-living-workflow/SKILL.md missing"; exit 1; }
     test -f .claude/skills/repo-review/SKILL.md || { echo "FAIL: .claude/skills/repo-review/SKILL.md missing"; exit 1; }
-    test -f .claude/skills/merge-update-prs/SKILL.md || { echo "FAIL: .claude/skills/merge-update-prs/SKILL.md missing"; exit 1; }
     test -f .github/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .github/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
     test -f .kiro/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .kiro/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
     test -L .claude/settings.json || { echo "FAIL: .claude/settings.json missing"; exit 1; }
@@ -420,11 +418,9 @@ in {
   tasks = let
     checkTasks = (import ./dev/tasks/check.nix {}).tasks;
     generateTasks = (import ./dev/tasks/generate.nix {inherit lib pkgs instr;}).tasks;
-    mergeTasks = (import ./dev/tasks/merge.nix {}).tasks;
   in
     checkTasks
     // generateTasks
-    // mergeTasks
     // {
       # ── Update pipeline (ninja DAG) ──────────────────────────────────
       # ninja handles the full dependency graph with -j4 concurrency.
