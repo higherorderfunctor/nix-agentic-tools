@@ -37,9 +37,50 @@
   # `fetchPnpmDeps`. Each must be reachable as a top-level
   # `self.packages.${system}.<name>` (see flake.nix's
   # grouped-namespace flattening at `pkgs.ai.mcpServers.*`).
+  #
+  # ENUMERATED, THOUGH THE RULE IN THE HEADER IS INTENSIONAL. The rule is
+  # "every overlay package that ships a pnpmDeps", and discovering that
+  # set — `filter (n: pkgSet.${n} ? pnpmDeps) (attrNames pkgSet)` — is
+  # both possible and correct. It was written, run, and rejected on cost;
+  # this list is what it found, plus nothing.
+  #
+  # Why it was rejected (measured 2026-07-25 on x86_64-linux, warm
+  # store):
+  #
+  #   - The intensional filter forces EVERY package in
+  #     `self.packages.${system}` to weak head normal form. A
+  #     `stdenv.mkDerivation` result only reaches that form through
+  #     `derivationStrict`, which is strict in
+  #     all of its arguments — so `drv ? pnpmDeps` is not a cheap
+  #     structural probe, it is a full evaluation of the derivation.
+  #   - That drags IFD in with it. Run under
+  #     `--option allow-import-from-derivation false` the intensional
+  #     form dies with `cannot build '…-source.drv^out' during
+  #     evaluation`; the two-name form evaluates clean. The offender is
+  #     the `importCargoLock { lockFile = "${src}/Cargo.lock"; }` pattern
+  #     used by fblog and git-branchless — and
+  #     dev/fragments/overlays/overlay-pattern.md records that CI's
+  #     warm-ifd step does NOT cover that shape. So the intensional form
+  #     turns a structural check into one that must fetch sources over
+  #     the network at eval time, un-warmed, when built on its own
+  #     (`nix build .#checks.<sys>.pnpm-fetcher-parity`).
+  #   - Eval cost: 2.88s user intensional vs 0.82s user for this list,
+  #     with the store already warm. The gap is worse cold.
+  #
+  # `nix flake check` evaluates every package anyway, so in THAT context
+  # the intensional form is nearly free — but the check is also built
+  # standalone, and losing hermetic evaluation is not worth trading for
+  # list maintenance. Revisit if warm-ifd ever covers sidecar-versioned
+  # packages.
+  #
+  # So: when you add an overlay package that builds with pnpm, add it
+  # here. oxlint was missing for exactly this reason (it was in parity —
+  # fetcher and buildPhase both pnpm 10.34.5, identical store path — so
+  # nothing broke, but the parity was unprotected).
   pnpmPackages = [
     "context7-mcp"
     "effect-mcp"
+    "oxlint"
   ];
 
   # Pull pnpm out of a derivation's nativeBuildInputs by pname.
