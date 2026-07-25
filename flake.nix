@@ -23,6 +23,18 @@
       url = "github:cachix/git-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Prebuilt Go toolchains (go.dev manifests) as `pkgs.go-bin`. Applied
+    # INSIDE a package's `ourPkgs`, the same way rust-overlay is, so the
+    # toolchain still comes from this repo's pin and cache-hit parity
+    # holds. Only reached when a package's declared go.mod floor outruns
+    # `ourPkgs.go` — see `goToolchainForFloor` in overlays/lib.nix.
+    go-overlay = {
+      url = "github:purpleclay/go-overlay";
+      inputs = {
+        git-hooks.follows = "git-hooks";
+        nixpkgs.follows = "nixpkgs";
+      };
+    };
     mcp-nixos = {
       url = "github:utensils/mcp-nixos";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -224,6 +236,7 @@
       factoryChecks = import ./checks/factory-eval.nix {inherit lib pkgs;};
       formattingCheck = import ./checks/formatting.nix {inherit inputs pkgs self;};
       fragmentsChecks = import ./checks/fragments-eval.nix {inherit lib pkgs;};
+      goToolchainFloorChecks = import ./checks/go-toolchain-floor.nix {inherit inputs lib pkgs;};
       instructionsDriftCheck = import ./checks/instructions-drift.nix {inherit pkgs self;};
       kiroExtractedCheck = import ./checks/kiro-cli-extracted.nix {inherit pkgs self;};
       moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs;};
@@ -231,7 +244,7 @@
       updateTargetsParityCheck = {update-targets-parity = import ./checks/update-targets-parity.nix {inherit lib pkgs self;};};
       validateAtStopCheck = {validate-at-stop = import ./checks/validate-at-stop.nix {inherit pkgs;};};
     in
-      bareCommandsCheck // cacheHitParityCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // instructionsDriftCheck // kiroExtractedCheck // moduleChecks // pnpmFetcherParityCheck // updateTargetsParityCheck // validateAtStopCheck);
+      bareCommandsCheck // cacheHitParityCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // goToolchainFloorChecks // instructionsDriftCheck // kiroExtractedCheck // moduleChecks // pnpmFetcherParityCheck // updateTargetsParityCheck // validateAtStopCheck);
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # from devenv.nix; nothing in this flake constructs it.

@@ -381,6 +381,154 @@ rec {
     tagPrefix ? "v",
   }: "${pkgs.curl}/bin/curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/${repo}/releases/latest | ${pkgs.gnused}/bin/sed -n 's|.*/tag/${tagPrefix}\\([0-9][^/]*\\)$|\\1|p'";
 
+  # Resolve the Go toolchain for a package from its DECLARED FLOOR — the
+  # `go` (or higher `toolchain`) directive in the package's own go.mod —
+  # rather than from a pinned toolchain version.
+  #
+  #   floor satisfied by our pin  -> `ourGo`, no override, go-bin untouched
+  #   floor above our pin         -> the LOWEST go-bin RELEASE that satisfies it
+  #   floor above everything      -> throw, naming package, floor and newest
+  #
+  # WHY A FLOOR AND NOT A PIN. A pinned toolchain rots silently: it cannot
+  # tell "still filling a real gap" from "nixpkgs caught up and this is now
+  # a DOWNGRADE", and nothing announces the transition. The sibling repo
+  # this was ported from demonstrates the failure live — it pins
+  # oh-my-posh to Go 1.26.0, which was a gap-filler when written and is a
+  # downgrade now that our pin ships 1.26.5. A floor is the durable fact
+  # ("this package needs Go >= X"); the toolchain is derived from it.
+  #
+  # The shape is self-clearing with no timer and no cleanup PR: the moment
+  # nixpkgs catches up, this returns `ourGo` and the go-bin path goes cold
+  # by itself. It CANNOT EXPRESS A DOWNGRADE by construction. And the
+  # requirement it exists for — a package raising its go.mod floor past
+  # nixpkgs-unstable — is met automatically on the next eval instead of
+  # waiting for a human to notice.
+  #
+  # Two alternatives were considered and rejected; do not reintroduce
+  # either. A 30-day expiry timer fires on the CALENDAR, not on the
+  # condition — it nags while the pin is still needed and stays silent
+  # when the pin goes bad early. A hard throw once nixpkgs catches up
+  # targets the right condition but turns a routine input bump into a red
+  # PR a human must clear. go-overlay's own `fromGoMod` selector is also
+  # out: it reads the floor from FETCHED SOURCE at eval time, which is
+  # import-from-derivation, and this repo already tracks an open defect
+  # where exactly that pattern dies under
+  # `--option allow-import-from-derivation false`.
+  #
+  # PRERELEASES ARE FILTERED OUT, and that is load-bearing rather than
+  # tidiness. go-bin carries 26 of them (1.17rc1 … 1.27rc2) alongside 127
+  # releases, and `go-bin.latest` is currently a PRERELEASE (1.27rc2) —
+  # which is one reason the selection resolves against `versions` instead
+  # of any moving `latest`/`latestStable` selector. Nix's component
+  # comparison also sorts "1.27rc1" ABOVE "1.27.0" (a non-numeric
+  # component loses a string compare to a numeric one), so an unfiltered
+  # "lowest satisfying" would hand a package an rc toolchain the first
+  # time a floor landed on an unreleased minor.
+  #
+  # Comparison is `lib.versionAtLeast` / `lib.versionOlder` throughout,
+  # never string comparison — a string compare gets "1.9.0" vs "1.26.0"
+  # backwards.
+  #
+  #   floor: bare version string from go.mod, e.g. "1.25.0"
+  #   goBin: `go-bin` from an ourPkgs carrying go-overlay's overlay
+  #   lib:   nixpkgs lib (for the version comparators)
+  #   ourGo: `ourPkgs.go` — this repo's pinned toolchain
+  #   pname: package name, for the throw message
+  goToolchainForFloor = {
+    floor,
+    goBin,
+    lib,
+    ourGo,
+    pname,
+  }:
+    if lib.versionAtLeast ourGo.version floor
+    then ourGo
+    else let
+      releases =
+        builtins.filter
+        (v: builtins.match "[0-9]+\\.[0-9]+(\\.[0-9]+)?" v != null)
+        (builtins.attrNames goBin.versions);
+      ascending = builtins.sort lib.versionOlder releases;
+      satisfying = builtins.filter (v: lib.versionAtLeast v floor) ascending;
+      newest =
+        if ascending == []
+        then "none"
+        else lib.last ascending;
+    in
+      if satisfying == []
+      then
+        throw ''
+          ${pname}: needs Go >= ${floor}, but no toolchain that new is available.
+            our nixpkgs pin ships go ${ourGo.version}
+            newest go-bin release is ${newest}
+          Run `nix flake update go-overlay` to pick up newly published toolchains.''
+      else goBin.versions.${builtins.head satisfying};
+
+  # Vendor-hash fixer for buildGoModule packages pinned via a sidecar:
+  # builds `<attr>.goModules` through the full flake overlay stack with
+  # the sidecar's current vendorHash and, on a hash mismatch, writes the
+  # correct hash back to sourcesFile. Runs from the repo root.
+  #
+  # REQUIRED, not a convenience, because of how mkUpdateScript writes.
+  # `buildCandidate` above opens with
+  # `jq -n --arg v "$latest" '{version: $v}' > "$tmp"` — the candidate
+  # sidecar is built FROM SCRATCH, so any key the writer does not itself
+  # produce is DESTROYED on every write. `vendorHash` is exactly such a
+  # key. That is why every Go overlay here reads
+  # `sources.vendorHash or lib.fakeHash` (the `or` covers the transient
+  # mid-update state) and why this runs as `extraExtract`, immediately
+  # after the sidecar write.
+  #
+  # Exposed standalone as `passthru.fixVendorHash` as well, because a
+  # nixpkgs or toolchain bump can invalidate vendorHash with no version
+  # bump at all — the update job re-runs it after flake updates.
+  #
+  #   attr:        name under `packages.<system>` (flake.nix flattens
+  #                `pkgs.generic` into it, so a generic package is
+  #                reachable by its bare name). This repo has NO
+  #                `legacyPackages` output — do not reach for one.
+  #   sourcesFile: threaded explicitly by every caller. The default
+  #                assumes `overlays/<pname>-sources.json`, true only of
+  #                packages at the overlays/ root; grouped subtrees keep
+  #                the sidecar beside the package file.
+  mkGoVendorFix = {
+    attr,
+    pkgs,
+    pname,
+    sourcesFile ? "overlays/${pname}-sources.json",
+  }:
+    pkgs.writeShellScript "fix-vendor-${pname}" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      # Consumes the flake's own `packages` output, so the derivation
+      # under test is the one consumers get — overlay stack and all.
+      # getAttr keeps the expression free of \''${..} so bash never sees
+      # a substitution.
+      expr="(builtins.getAttr builtins.currentSystem (builtins.getFlake (toString ./.)).packages).${attr}.goModules"
+
+      if output=$(${pkgs.nix}/bin/nix build --impure --no-link --expr "$expr" 2>&1); then
+        echo "${pname}: vendorHash ok"
+      else
+        # Only trust a mismatch that names the go-modules derivation — a
+        # failing src (or other) fixed-output drv also prints "got:" and
+        # must not be written into vendorHash.
+        hash=""
+        if echo "$output" | ${pkgs.gnugrep}/bin/grep -q "fixed-output derivation '[^']*-go-modules"; then
+          hash=$(echo "$output" | ${pkgs.gnugrep}/bin/grep -oP 'got:\s+\Ksha256-[A-Za-z0-9+/=]+' | ${pkgs.coreutils}/bin/head -n1 || :)
+        fi
+        if [ -z "$hash" ]; then
+          echo "${pname}: goModules build failed without a go-modules hash mismatch:" >&2
+          echo "$output" >&2
+          exit 1
+        fi
+        echo "${pname}: vendorHash -> $hash"
+        tmp=$(${pkgs.coreutils}/bin/mktemp)
+        ${pkgs.jq}/bin/jq --arg h "$hash" '.vendorHash = $h' "${sourcesFile}" > "$tmp"
+        ${pkgs.coreutils}/bin/mv "$tmp" "${sourcesFile}"
+      fi
+    '';
+
   # Generate an updateScript for per-platform binary packages that use
   # sources.json. Fetches the latest version, prefetches each platform's
   # binary, writes version + per-platform hashes to sourcesFile.
