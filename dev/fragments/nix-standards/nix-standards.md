@@ -10,10 +10,11 @@ managed by `mkUpdateScript`.
 
 ### Shell Wrappers: Absolute Paths Required
 
-> **Last verified:** 2026-07-25 (commit pending — adds the
-> `versionCheck.cmd` scan across all of `overlays/`, its wider
-> `WRAPPER_CMDS` list, the path-prefix-aware comment filter, and the
-> reason that scan carries no `/bin/` filter). If you add a new
+> **Last verified:** 2026-07-25 (commit pending — records the measured
+> enumeration behind the whole-line scan's surviving `/bin/` filter, on
+> top of the `versionCheck.cmd` scan across all of `overlays/`, its
+> wider `WRAPPER_CMDS` list, the path-prefix-aware comment filter, and
+> the reason that scan carries no `/bin/` filter). If you add a new
 > `writeShellScript`, `writeShellScriptBin`, `versionCheck.cmd`, or
 > inline shell snippet in any `.nix` file and this section isn't
 > consulted, stop and read it.
@@ -85,9 +86,21 @@ exactly the defect shape it is meant to catch, and measurably dropped
 all five of them. Nothing is lost by its absence: the command-start
 anchors require a command NAME after `"`, `|`, `&&` or `$(`, and an
 absolute invocation presents the `${...}` interpolation there instead,
-so it can never match. The whole-line scan keeps its `/bin/` filter
-because it reads unrestricted line shapes where the filter does real
-work.
+so it can never match.
+
+The whole-line scan keeps a `/bin/` filter on ONE of its two patterns
+(the anchored one; the `$(cmd` pattern never had one and needs none,
+for the same structural reason pattern 3 does not). That filter is a
+blind spot on the same MIXED-line shape, and it is kept only because
+the corpus says it is currently free — measured 2026-07-25 by
+enumerating every line it subtracts. Four, all four genuine false
+positives: two `wc=`/`tr=` variable ASSIGNMENTS in `overlays/lib.nix`
+whose values are already absolute, and two bare `rm -f "$out/bin/…"`
+in a `symlinkJoin` `postBuild` in `packages/kiro-cli/lib/mkKiro.nix`
+— a build context this check deliberately does not police, where the
+`/bin/` is a path ARGUMENT rather than a command path. Whether the
+filter is free is a property of the CORPUS, not of the regex, so
+re-run that enumeration rather than reasoning about it.
 
 Because the scan is per-line and the wrapper-versus-build-phase
 distinction is a property of the CALLER, a legitimately bare
