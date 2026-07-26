@@ -117,19 +117,29 @@ jobs:
           shopt -s inherit_errexit 2>/dev/null || :
           mkdir -p "$RUNNER_TEMP"
           export WORKTREE_LOCK="$RUNNER_TEMP/nix-update-worktree"
+          # Read `-j` back from the pipeline library rather than straight
+          # from the env var: update-common.sh CLAMPS NAT_UPDATE_JOBS to
+          # the core count and re-exports it, and ninja's fan-out has to
+          # be the same number the evaluator budget was derived from. A
+          # bare `-j${{ env.NAT_UPDATE_JOBS }}` here would silently ignore
+          # that clamp and re-create the overcommit on any runner with
+          # fewer cores than the requested job count.
+          # shellcheck source=dev/scripts/update-common.sh
+          source dev/scripts/update-common.sh
           nix run .#generate-update-ninja
           ninja -j"$NAT_UPDATE_JOBS" -v -k0 -f .update.ninja update-report
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-          # Target fan-out. ONE knob on purpose: it bounds ninja's -j
-          # here AND, through update-common.sh's nfb_eval_flags, the
-          # evaluator budget of every nix-fast-build those targets spawn.
-          # The two MULTIPLY — a bare `-j4` against nix-fast-build's
-          # solo-sized defaults (--eval-workers $(nproc),
-          # --eval-max-memory-size 4096 per worker) is 64 GiB of
-          # evaluator heap budget on a 16 GiB runner, which is what took
-          # the runner down in run 30181958460. Do not raise this without
-          # reading nfb_eval_flags.
+          # Requested target fan-out; update-common.sh clamps it to the
+          # core count. ONE knob on purpose: it bounds ninja's -j here
+          # AND, through nfb_eval_flags, the evaluator budget of every
+          # nix-fast-build those targets spawn. The two MULTIPLY — a bare
+          # `-j4` against nix-fast-build's solo-sized defaults
+          # (--eval-workers $(nproc), --eval-max-memory-size 4096 per
+          # worker) is 64 GiB of evaluator heap budget on a 16 GiB
+          # runner, which is what took the runner down in run
+          # 30181958460. Do not raise this without reading
+          # nfb_eval_flags.
           NAT_UPDATE_JOBS: 4
           # Per-job worktree root, OUTSIDE $GITHUB_WORKSPACE (the flake root)
           # so devenv/Nix doesn't scan it, and under $RUNNER_TEMP (per-job,

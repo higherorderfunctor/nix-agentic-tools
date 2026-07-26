@@ -124,12 +124,32 @@ run_build() {
   "$@"
 }
 
+# Core count, resolved once. Both bounds below are expressed against it.
+NAT_UPDATE_CORES=$(nproc 2>/dev/null) || NAT_UPDATE_CORES=0
+
 # Target fan-out for the whole pipeline. ONE knob, because it bounds two
 # things that MULTIPLY (see nfb_eval_flags): ninja's `-j` and, through
 # it, the per-target evaluator budget. CI sets it explicitly; this
 # default is for running the pipeline by hand.
+#
+# CLAMPED TO THE CORE COUNT, and that clamp is load-bearing rather than
+# tidiness. `nfb_eval_flags` cannot give an invocation fewer than ONE
+# evaluator, so once there are more concurrent targets than cores the
+# evaluator total is pinned at the target count and no per-invocation
+# budget can bring it back under the cores. Fewer targets is the only
+# lever. Measured, cores=2 with jobs=4: workers/invocation clamps to 1
+# and the total lands at 4 evaluators on 2 cores.
+#
+# EXPORTED because ninja's `-j` has to come from the SAME number — the
+# workflow sources this file rather than reading its own env var, so the
+# two can never disagree. Clamping here while ninja still ran `-j4`
+# would fix nothing.
 NAT_UPDATE_JOBS="${NAT_UPDATE_JOBS:-4}"
 [ "$NAT_UPDATE_JOBS" -ge 1 ] 2>/dev/null || NAT_UPDATE_JOBS=1
+if [ "$NAT_UPDATE_CORES" -gt 0 ] && [ "$NAT_UPDATE_JOBS" -gt "$NAT_UPDATE_CORES" ]; then
+  NAT_UPDATE_JOBS="$NAT_UPDATE_CORES"
+fi
+export NAT_UPDATE_JOBS
 
 # Resource budget for a single nix-fast-build invocation.
 #
@@ -162,15 +182,27 @@ NAT_UPDATE_JOBS="${NAT_UPDATE_JOBS:-4}"
 # So bound the PRODUCT. Both knobs are derived from the machine, never
 # hardcoded, so a larger runner automatically uses its headroom:
 #
-#   * total evaluator workers across all concurrent invocations == cores
-#   * total evaluator heap ceiling                              <= 60% RAM
+#   * never more than ONE evaluator per core, across all concurrent
+#     invocations — `jobs * floor(cores/jobs) <= cores`, which holds only
+#     because NAT_UPDATE_JOBS is itself clamped to the core count above
+#   * total evaluator heap ceiling <= 60% RAM, and this one holds for ANY
+#     jobs value: per-worker is `(RAM*0.6)/(jobs*workers)`, so the
+#     product telescopes back to `RAM*0.6` exactly
 #
 # The remaining 40% is the nix daemon, git, and the runner agent itself —
 # the agent being the process whose death produces the shutdown signal.
+#
+# Do NOT "make this consistent" by substituting `min(jobs, cores)` into
+# the memory divisor as well. The divisor has to be the number of
+# invocations that will ACTUALLY run concurrently; shrinking it while
+# ninja still spawns `jobs` of them inflates the per-worker ceiling and
+# breaks the heap bound. Measured, cores=2 / jobs=4 / 16 GiB: that
+# variant yields 119% of RAM — the exact failure class this exists to
+# prevent.
 nfb_eval_flags() {
-  local cores workers mem_mib mem_per_worker
+  local workers mem_mib mem_per_worker cores="$NAT_UPDATE_CORES"
 
-  cores=$(nproc 2>/dev/null) || cores="$NAT_UPDATE_JOBS"
+  [ "$cores" -gt 0 ] || cores="$NAT_UPDATE_JOBS"
   workers=$((cores / NAT_UPDATE_JOBS))
   [ "$workers" -ge 1 ] || workers=1
 

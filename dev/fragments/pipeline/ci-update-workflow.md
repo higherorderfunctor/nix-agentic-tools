@@ -290,14 +290,37 @@ does a `cancel-in-progress` kill. Both attempts here reported
 both knobs from the machine so a bigger runner uses its headroom
 automatically:
 
-- total evaluator workers across all concurrent invocations == cores
+- never more than ONE evaluator per core across all concurrent
+  invocations — `jobs * floor(cores/jobs) <= cores`
 - total evaluator heap ceiling <= 60% of RAM (the rest is the nix
   daemon, git, and the runner agent — the agent being the process
   whose death produces the shutdown signal)
 
-`NAT_UPDATE_JOBS` is ONE knob feeding both consumers on purpose.
-Changing ninja's `-j` without changing the evaluator budget silently
-re-creates the overcommit.
+The first invariant holds only because **`NAT_UPDATE_JOBS` is itself
+clamped to the core count**. `nfb_eval_flags` cannot give an invocation
+fewer than one evaluator, so once there are more concurrent targets than
+cores the evaluator total is pinned at the target count and no
+per-invocation budget can pull it back. Fewer targets is the only lever.
+Measured, cores=2 / jobs=4: workers-per-invocation clamps to 1 and the
+total lands at 4 evaluators on 2 cores.
+
+The second invariant is stronger — it holds for ANY jobs value, because
+per-worker is `(RAM*0.6)/(jobs*workers)` and the product telescopes back
+to `RAM*0.6` exactly.
+
+**Do not "make this consistent"** by substituting `min(jobs, cores)`
+into the memory divisor as well. The divisor must be the number of
+invocations that will ACTUALLY run concurrently; shrinking it while
+ninja still spawns `jobs` of them inflates the per-worker ceiling.
+Measured, cores=2 / jobs=4 / 16 GiB: that variant yields **119% of RAM**
+— the exact failure class this machinery exists to prevent.
+
+`NAT_UPDATE_JOBS` is ONE knob feeding both consumers on purpose, and the
+workflow **sources `update-common.sh`** rather than reading its own env
+var so it gets the CLAMPED value. Clamping in the library while ninja
+still ran `-j4` from the raw env var would fix nothing. Changing ninja's
+`-j` without changing the evaluator budget silently re-creates the
+overcommit.
 
 ### Build verification gate (`run_nfb_build` / `verify_all_packages`)
 
