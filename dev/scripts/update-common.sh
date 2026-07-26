@@ -353,14 +353,30 @@ fix_sidecar_hashes() {
         ];
     in builtins.concatMap fixersOf (builtins.attrNames ps)'
 
-  if ! paths=$(nix build --impure --no-link --print-out-paths --expr "$expr" 2>&1); then
-    log_failure "could not resolve sidecar hash fixers:"
-    printf '%s\n' "$paths" >&2
+  # stderr is deliberately NOT merged into this capture. `nix build`
+  # writes diagnostics there even when it SUCCEEDS — measured on a dirty
+  # worktree: `warning: Nix search path entry ... ignoring`, and on a cold
+  # store also `these N derivations will be built:`, the indented `.drv`
+  # lines under it, and `building '...'`. Merged, every one of those is
+  # read back below as if it were a store path and EXECUTED, so a repair
+  # in which every fixer succeeded still reports failure. Letting stderr
+  # flow to the inherited stream keeps it visible in real time: the ninja
+  # rule already tees the whole target through
+  # `2>&1 | tee .update-logs/input-<name>.log`.
+  if ! paths=$(nix build --impure --no-link --print-out-paths --expr "$expr"); then
+    log_failure "could not resolve sidecar hash fixers (nix error above)"
     return 1
   fi
 
   while IFS= read -r p; do
-    [ -n "$p" ] || continue
+    # Belt and braces on top of the stream split: only ever execute
+    # something that is actually an executable store path, so a stray
+    # diagnostic line can never be run as a command.
+    case "$p" in
+    /nix/store/*) ;;
+    *) continue ;;
+    esac
+    [ -x "$p" ] || continue
     # Collect rather than abort: one package genuinely broken by the
     # bump must not stop the others self-healing. The retry build is the
     # authority on whether the tree is good.
