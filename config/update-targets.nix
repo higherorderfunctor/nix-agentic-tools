@@ -122,7 +122,15 @@ _: {
     # Cargo.lock. mkUpdateScript rebuilds the sidecar from scratch on every
     # write, so each of them threads `extraExtract = "${fixVendorHash}"` to put
     # the vendor hash back immediately afterwards. Nothing extra is needed here.
+    #
+    # bruno is the same --use-update-script contract with a THIRD variation:
+    # its src hash cannot come from a prefetch at all, because the overlay
+    # re-points nixpkgs' fetcher and that fetcher's `postFetch` mutates the
+    # tree the hash covers. It therefore passes `platforms = {}` (version
+    # only) and threads `extraExtract = "${fixNpmDepsHash}"`, which restores
+    # `srcHash` then `npmDepsHash`. Nothing extra is needed here either.
     arkenfox = {flags = ["--use-update-script" "--override-filename" "overlays/generic/arkenfox.nix"];};
+    bruno = {flags = ["--use-update-script" "--override-filename" "overlays/generic/bruno.nix"];};
     btop = {flags = ["--use-update-script" "--override-filename" "overlays/generic/btop.nix"];};
     bun = {flags = ["--use-update-script" "--override-filename" "overlays/generic/bun.nix"];};
     catppuccin-btop = {flags = ["--use-update-script" "--override-filename" "overlays/generic/catppuccin-btop.nix"];};

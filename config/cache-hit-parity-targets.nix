@@ -45,6 +45,7 @@ _: {
     # and an stdenv derivation, so both are build inputs and both can
     # drift onto the consumer's pin. They belong here.
     arkenfox = {consumerPath = ["generic" "arkenfox"];};
+    bruno = {consumerPath = ["generic" "bruno"];};
     btop = {consumerPath = ["generic" "btop"];};
     bun = {consumerPath = ["generic" "bun"];};
     catppuccin-btop = {consumerPath = ["generic" "catppuccin-btop"];};

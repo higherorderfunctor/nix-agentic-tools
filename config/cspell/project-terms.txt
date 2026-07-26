@@ -241,6 +241,8 @@ revsets
 revwalk
 rnix
 rollup
+rsbuild
+rspack
 rulesdir
 rustc
 sadjow
@@ -309,6 +311,7 @@ unstash
 untarring
 upgrader
 upgraders
+usebruno
 valkey
 vendorhash
 watchlist
