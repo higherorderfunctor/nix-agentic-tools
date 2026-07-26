@@ -1,7 +1,8 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-07-24 (commit pending — adds the extracted-sidecar
-> section after the model-catalog anchor regression). If you touch
+> **Last verified:** 2026-07-25 (commit pending — corrects the claim that
+> the check job's `nix flake check` evaluates ALL systems; it does not,
+> and the devenv-test job moved to its own workflow). If you touch
 > `overlays/lib.nix`, any overlay `.nix` file that calls
 > `vu.mkVersion`, the shared `.github/actions/warm-ifd/action.yml`
 > composite, or the warm steps that consume it in
@@ -64,19 +65,50 @@ that evaluates before it builds:
 - `ci.yml` build job — `systems: ${{ matrix.system }}` (defaults:
   3 retries, best-effort) so a transient fetch doesn't flake the
   per-system build eval.
-- `ci.yml` devenv-test job — `systems: x86_64-linux` (defaults).
+- `devenv-test.yml` — `systems: x86_64-linux` (defaults).
   `devenv test` evaluates devenv.nix, which applies the repo
   overlays, so its eval reads the same IFD sources; the fetches are
   fixed-output, so warming via the flake fills the identical store
   paths devenv's own lock resolves to.
-- `ci.yml` test job — `systems: x86_64-linux aarch64-darwin`
-  because `nix flake check` evaluates ALL systems on one runner; IFD
-  source fetches are system-agnostic, so cross-system eval on a
-  linux runner is fine.
+- `ci.yml` test job — `systems: x86_64-linux aarch64-darwin`, and the
+  darwin half is NOT there because the check needs it. Plain
+  `nix flake check` reports "The check omitted these incompatible
+  systems: aarch64-darwin", and the job does not pass `--all-systems`,
+  so it evaluates x86_64-linux ONLY. The repo's darwin coverage —
+  evaluation included — is the required `aarch64-darwin` leg of the
+  BUILD job; nothing in the check job covers it. The darwin warm entry
+  is kept because IFD source fetches are system-agnostic and
+  content-addressed, so it is nearly free and stays correct if
+  `--all-systems` is ever adopted. Adopting it is an open operator
+  decision, not an oversight: it changes what a required check does.
+
 - `update.yml` — `systems: x86_64-linux`, `retries: "1"`,
   `best-effort: "false"`. The ninja pipeline cannot proceed
   without warm sources (nix-update crashes), so it keeps the
   original single-shot, fail-hard behavior via the inputs.
+
+Do not reach for `--all-systems` casually — it would turn the required
+check red today. Measured 2026-07-25 on a linux host:
+
+- It only EVALUATES the foreign system; it never builds it. Verified on
+  a throwaway two-system flake, where `checks.aarch64-darwin.foreign`
+  reports `derivation evaluated to …drv` and the run then says
+  `running 0 flake checks`. So its whole cost is evaluation.
+- That cost is roughly +43s wall and a ~7.8 GB RSS ceiling for the
+  darwin check set, against 36s / 6.2 GB for the linux one (282 checks,
+  eval cache disabled, warm store).
+- But instantiating the darwin checks on a linux host FAILS, twice
+  over. Two checks perform IFD on derivations that must be BUILT for
+  `aarch64-darwin` (`living-workflow-skill.drv` via
+  `module-living-workflow-kiro-hm-writes-skill-dir`, and
+  `stacked-workflows-skills.drv`), which a linux runner cannot do
+  without a darwin builder; and
+  `module-mcp-services-rotation-restart-entry` is a genuine darwin
+  assertion failure. `builtins.tryEval` does not catch the first class,
+  so they surface as hard eval errors.
+
+Fixing those is the prerequisite. The flag is the last step, not the
+first.
 
 The composite runs, per system with backoff:
 
