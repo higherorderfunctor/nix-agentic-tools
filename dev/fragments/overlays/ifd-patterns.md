@@ -1,8 +1,10 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-07-25 (commit pending — corrects the claim that
-> the check job's `nix flake check` evaluates ALL systems; it does not,
-> and the devenv-test job moved to its own workflow). If you touch
+> **Last verified:** 2026-07-25 (commit pending — the warm composite now
+> forces `drvPath` instead of `version`, so sidecar-versioned packages
+> are covered; also corrects the claim that the check job's
+> `nix flake check` evaluates ALL systems, which it does not, and the
+> devenv-test job moved to its own workflow). If you touch
 > `overlays/lib.nix`, any overlay `.nix` file that calls
 > `vu.mkVersion`, the shared `.github/actions/warm-ifd/action.yml`
 > composite, or the warm steps that consume it in
@@ -115,16 +117,43 @@ The composite runs, per system with backoff:
 ```bash
 nix eval --json \
   --option allow-import-from-derivation true \
-  --apply 'pkgs: builtins.mapAttrs (n: p: p.version or p.name or "unknown") pkgs' \
+  --apply 'pkgs: builtins.mapAttrs (_: p: p.drvPath or p.name or "unknown") pkgs' \
   ".#packages.${system}" >/dev/null
 ```
 
-`builtins.mapAttrs` with `p.version` forces evaluation of each
-package's version attribute, which triggers `builtins.readFile`
-on the fetched source, which triggers the fetch. The cachix
-daemon pushes fetched sources so subsequent evaluations (PR CI) can
-substitute them. The `--apply` expression is the load-bearing
-detail — keep the composite and this fragment in sync.
+`builtins.mapAttrs` forcing `p.drvPath` puts every package through
+`derivationStrict`, which forces every IFD on its path — the
+`builtins.readFile` version extractors AND anything else that reads a
+file out of a fetched source. The cachix daemon pushes fetched sources
+so subsequent evaluations (PR CI) can substitute them. The `--apply`
+expression is the load-bearing detail — keep the composite and this
+fragment in sync.
+
+**It forces `drvPath` and not `version`, deliberately.** `version` only
+reaches an IFD when the version is itself `readFile`-derived FROM the
+source; a package versioned from a `-sources.json` sidecar resolves it
+out of the sidecar and short-circuits, leaving IFD elsewhere on its path
+— `cargoLock.lockFile` on `fblog` and `git-branchless` — never forced,
+and so never warmed. Measured on `fblog` under
+`--option allow-import-from-derivation false`: `.version` evaluates
+clean while `.drvPath` fails with `cannot build '…-source.drv^out'
+during evaluation`, and the same split holds for the two `--apply`
+expressions scoped to that one package. `drvPath` subsumes `version`
+(the derivation name embeds it), so the narrower form buys nothing.
+
+The cost is real and was measured before adopting it: eval cache
+disabled, warm store, 2026-07-25 — `version` 1.2s / 0.9 GB RSS versus
+`drvPath` 19.2s / 3.0 GB on `x86_64-linux`, and 23.4s / 3.8 GB for the
+`aarch64-darwin` set evaluated on a linux host. Both evaluate clean:
+`allowUnfree` is set by `pkgsFor` so the unfree guard does not throw,
+and the one genuinely Linux-only package (`gluetun`) is gated out of the
+darwin attrset entirely rather than left to throw on `drvPath`.
+
+Note the `or` chain does NOT swallow a throwing `drvPath` — it only
+covers a MISSING attribute. That is intended: a fetch failure must fail
+the warm so the retry/backoff loop sees it. In `update.yml`, which runs
+this fail-hard, it also means an unrelated eval error now surfaces at
+the warm step rather than a few minutes later inside `nix-update`.
 
 ### Extracted sidecars are the IFD-free path — and their drift check is not a correctness gate
 

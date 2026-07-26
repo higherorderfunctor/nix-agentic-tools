@@ -237,9 +237,11 @@ universal-node layout we forked against.
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-07-25 (commit pending — corrects the claim that
-> the check job's `nix flake check` evaluates ALL systems; it does not,
-> and the devenv-test job moved to its own workflow). If you touch
+> **Last verified:** 2026-07-25 (commit pending — the warm composite now
+> forces `drvPath` instead of `version`, so sidecar-versioned packages
+> are covered; also corrects the claim that the check job's
+> `nix flake check` evaluates ALL systems, which it does not, and the
+> devenv-test job moved to its own workflow). If you touch
 > `overlays/lib.nix`, any overlay `.nix` file that calls
 > `vu.mkVersion`, the shared `.github/actions/warm-ifd/action.yml`
 > composite, or the warm steps that consume it in
@@ -352,16 +354,43 @@ The composite runs, per system with backoff:
 ```bash
 nix eval --json \
   --option allow-import-from-derivation true \
-  --apply 'pkgs: builtins.mapAttrs (n: p: p.version or p.name or "unknown") pkgs' \
+  --apply 'pkgs: builtins.mapAttrs (_: p: p.drvPath or p.name or "unknown") pkgs' \
   ".#packages.${system}" >/dev/null
 ```
 
-`builtins.mapAttrs` with `p.version` forces evaluation of each
-package's version attribute, which triggers `builtins.readFile`
-on the fetched source, which triggers the fetch. The cachix
-daemon pushes fetched sources so subsequent evaluations (PR CI) can
-substitute them. The `--apply` expression is the load-bearing
-detail — keep the composite and this fragment in sync.
+`builtins.mapAttrs` forcing `p.drvPath` puts every package through
+`derivationStrict`, which forces every IFD on its path — the
+`builtins.readFile` version extractors AND anything else that reads a
+file out of a fetched source. The cachix daemon pushes fetched sources
+so subsequent evaluations (PR CI) can substitute them. The `--apply`
+expression is the load-bearing detail — keep the composite and this
+fragment in sync.
+
+**It forces `drvPath` and not `version`, deliberately.** `version` only
+reaches an IFD when the version is itself `readFile`-derived FROM the
+source; a package versioned from a `-sources.json` sidecar resolves it
+out of the sidecar and short-circuits, leaving IFD elsewhere on its path
+— `cargoLock.lockFile` on `fblog` and `git-branchless` — never forced,
+and so never warmed. Measured on `fblog` under
+`--option allow-import-from-derivation false`: `.version` evaluates
+clean while `.drvPath` fails with `cannot build '…-source.drv^out'
+during evaluation`, and the same split holds for the two `--apply`
+expressions scoped to that one package. `drvPath` subsumes `version`
+(the derivation name embeds it), so the narrower form buys nothing.
+
+The cost is real and was measured before adopting it: eval cache
+disabled, warm store, 2026-07-25 — `version` 1.2s / 0.9 GB RSS versus
+`drvPath` 19.2s / 3.0 GB on `x86_64-linux`, and 23.4s / 3.8 GB for the
+`aarch64-darwin` set evaluated on a linux host. Both evaluate clean:
+`allowUnfree` is set by `pkgsFor` so the unfree guard does not throw,
+and the one genuinely Linux-only package (`gluetun`) is gated out of the
+darwin attrset entirely rather than left to throw on `drvPath`.
+
+Note the `or` chain does NOT swallow a throwing `drvPath` — it only
+covers a MISSING attribute. That is intended: a fetch failure must fail
+the warm so the retry/backoff loop sees it. In `update.yml`, which runs
+this fail-hard, it also means an unrelated eval error now surfaces at
+the warm step rather than a few minutes later inside `nix-update`.
 
 ### Extracted sidecars are the IFD-free path — and their drift check is not a correctness gate
 
@@ -420,9 +449,11 @@ assertion in the same commit.
 
 ## Overlay Grouping and the `generic` Subtree
 
-> **Last verified:** 2026-07-25 (commit pending — adds the Go
-> sidecar-`vendorHash` mechanism, the derived-Go-toolchain seam, and the
-> platform-gated-attribute rule, on top of the multi-major-attribute
+> **Last verified:** 2026-07-25 (commit pending — records that the warm
+> step now forces `drvPath` and therefore DOES cover sidecar-versioned
+> packages, on top of the Go sidecar-`vendorHash` mechanism, the
+> derived-Go-toolchain seam, and the platform-gated-attribute rule, on
+> top of the multi-major-attribute
 > shape, the namespaced-only rule and the store-path-parity expectation
 > for thin nixpkgs overrides). If you add, remove or rename an overlay
 > namespace, move a package between namespaces, or change how a
@@ -615,21 +646,23 @@ needs it, anything else that enumerates packages per system. This is the
 exception, not a licence to platform-gate anything inconvenient — a
 sidecar merely missing a platform is still the bug rule 6 describes.
 
-**The CI IFD warm step does not cover that kind of IFD.**
-`.github/actions/warm-ifd` pre-realizes sources by evaluating
-`p.version or p.name or "unknown"` across the package set. That works
-for packages whose version is `readFile`-derived FROM the source — the
-read forces the fetch. It does nothing for a package whose version
-comes from a `-sources.json` sidecar and whose only IFD is
-`cargoLock.lockFile`: `.version` resolves from the sidecar and
-short-circuits before `drvPath` (and therefore `cargoDeps`) is ever
-forced. Measured on `fblog` with `--option
-allow-import-from-derivation false`: `.version` evaluates clean,
-`.drvPath` fails with `cannot build '…-source.drv^out' during
-evaluation`. Not a build break — the later eval simply fetches the
-source itself, without the warm step's retry/backoff — but do not
-assume a sidecar-versioned package is warmed just because it is in
-`packages`.
+**The CI IFD warm step DOES cover that kind of IFD — since it started
+forcing `drvPath`.** `.github/actions/warm-ifd` pre-realizes sources by
+evaluating `p.drvPath or p.name or "unknown"` across the package set,
+which puts every package through `derivationStrict` and so forces every
+IFD on its path, `cargoLock.lockFile` included.
+
+It used to force `p.version` instead, and that left this exact shape
+uncovered: a package versioned from a `-sources.json` sidecar resolves
+`.version` out of the sidecar and short-circuits before `drvPath` (and
+therefore `cargoDeps`) is ever forced. Measured on `fblog` with
+`--option allow-import-from-derivation false`: `.version` evaluates
+clean, `.drvPath` fails with `cannot build '…-source.drv^out' during
+evaluation`. That was never a build break — the later eval simply
+fetched the source itself, just without the warm step's retry/backoff —
+but it meant a sidecar-versioned package was NOT warmed merely by being
+in `packages`. See the ifd-patterns fragment for the measured cost of
+the wider forcing and for why the `or` chain does not swallow a throw.
 
 ## Overlay Lambda Signature
 

@@ -58,11 +58,9 @@
   #     form dies with `cannot build '…-source.drv^out' during
   #     evaluation`; the two-name form evaluates clean. The offender is
   #     the `importCargoLock { lockFile = "${src}/Cargo.lock"; }` pattern
-  #     used by fblog and git-branchless — and
-  #     dev/fragments/overlays/overlay-pattern.md records that CI's
-  #     warm-ifd step does NOT cover that shape. So the intensional form
-  #     turns a structural check into one that must fetch sources over
-  #     the network at eval time, un-warmed, when built on its own
+  #     used by fblog and git-branchless. So the intensional form turns a
+  #     structural check into one that must fetch sources over the
+  #     network at eval time when built on its own
   #     (`nix build .#checks.<sys>.pnpm-fetcher-parity`).
   #   - Eval cost: 2.88s user intensional vs 0.82s user for this list,
   #     with the store already warm. The gap is worse cold.
@@ -70,8 +68,16 @@
   # `nix flake check` evaluates every package anyway, so in THAT context
   # the intensional form is nearly free — but the check is also built
   # standalone, and losing hermetic evaluation is not worth trading for
-  # list maintenance. Revisit if warm-ifd ever covers sidecar-versioned
-  # packages.
+  # list maintenance.
+  #
+  # ONE HALF OF THAT OBJECTION IS NOW GONE. The warm-ifd composite forces
+  # `drvPath` rather than `version` as of 2026-07-25, so those sources ARE
+  # pre-realized with retry/backoff in CI, and the intensional form no
+  # longer takes an un-warmed network fetch there. What survives is the
+  # standalone case — a developer or a cold machine running
+  # `nix build .#checks.<sys>.pnpm-fetcher-parity` alone gets no warm step
+  # — plus the eval-cost gap. Flipping to the intensional form is now a
+  # judgement call about those two, not a blocked one.
   #
   # So: when you add an overlay package that builds with pnpm, add it
   # here. oxlint was missing for exactly this reason (it was in parity —
