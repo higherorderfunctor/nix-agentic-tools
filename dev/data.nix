@@ -111,39 +111,6 @@ _: let
     git-revise = "In-memory commit rewriting";
   };
 
-  # ── Overlay package listings ─────────────────────────────────────────
-  # Maps overlay name to its user-visible packages and description suffix.
-  overlayPackages = {
-    ai-clis = {
-      packages = ["chatgpt-codex" "github-copilot-cli" "kimchi" "kiro-cli" "kiro-gateway"];
-      suffix = null;
-    };
-    coding-standards = {
-      packages = ["coding-standards"];
-      suffix = "fragment content";
-    };
-    dev-tools = {
-      packages = ["oxlint" "tsgolint"];
-      suffix = null;
-    };
-    generic = {
-      packages = ["arkenfox" "bruno" "btop" "bun" "catppuccin-btop" "dns-root-hints" "fblog" "gh" "gluetun" "oh-my-posh" "otel-tui" "pnpm_10" "pnpm_11"];
-      suffix = null;
-    };
-    git-tools = {
-      packages = ["agnix" "git-absorb" "git-branchless" "git-revise"];
-      suffix = null;
-    };
-    mcp-servers = {
-      packages = [];
-      display = "`nix-mcp-servers.*` (${toString mcpServerCount} servers)";
-    };
-    stacked-workflows = {
-      packages = ["stacked-workflows-content"];
-      suffix = "skills, references";
-    };
-  };
-
   # ── Skill descriptions ──────────────────────────────────────────────
   skillDescriptions = {
     stack-fix = "Absorb fixes into correct stack commits";
@@ -164,7 +131,6 @@ in {
     gitToolDescriptions
     mcpServerCount
     mcpServerMeta
-    overlayPackages
     skillDescriptions
     ;
 }
