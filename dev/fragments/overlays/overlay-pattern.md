@@ -1,8 +1,10 @@
 ## Overlay Grouping and the `generic` Subtree
 
-> **Last verified:** 2026-07-25 (commit pending — adds the Go
-> sidecar-`vendorHash` mechanism, the derived-Go-toolchain seam, and the
-> platform-gated-attribute rule, on top of the multi-major-attribute
+> **Last verified:** 2026-07-25 (commit pending — records that the warm
+> step now forces `drvPath` and therefore DOES cover sidecar-versioned
+> packages, on top of the Go sidecar-`vendorHash` mechanism, the
+> derived-Go-toolchain seam, and the platform-gated-attribute rule, on
+> top of the multi-major-attribute
 > shape, the namespaced-only rule and the store-path-parity expectation
 > for thin nixpkgs overrides). If you add, remove or rename an overlay
 > namespace, move a package between namespaces, or change how a
@@ -195,21 +197,23 @@ needs it, anything else that enumerates packages per system. This is the
 exception, not a licence to platform-gate anything inconvenient — a
 sidecar merely missing a platform is still the bug rule 6 describes.
 
-**The CI IFD warm step does not cover that kind of IFD.**
-`.github/actions/warm-ifd` pre-realizes sources by evaluating
-`p.version or p.name or "unknown"` across the package set. That works
-for packages whose version is `readFile`-derived FROM the source — the
-read forces the fetch. It does nothing for a package whose version
-comes from a `-sources.json` sidecar and whose only IFD is
-`cargoLock.lockFile`: `.version` resolves from the sidecar and
-short-circuits before `drvPath` (and therefore `cargoDeps`) is ever
-forced. Measured on `fblog` with `--option
-allow-import-from-derivation false`: `.version` evaluates clean,
-`.drvPath` fails with `cannot build '…-source.drv^out' during
-evaluation`. Not a build break — the later eval simply fetches the
-source itself, without the warm step's retry/backoff — but do not
-assume a sidecar-versioned package is warmed just because it is in
-`packages`.
+**The CI IFD warm step DOES cover that kind of IFD — since it started
+forcing `drvPath`.** `.github/actions/warm-ifd` pre-realizes sources by
+evaluating `p.drvPath or p.name or "unknown"` across the package set,
+which puts every package through `derivationStrict` and so forces every
+IFD on its path, `cargoLock.lockFile` included.
+
+It used to force `p.version` instead, and that left this exact shape
+uncovered: a package versioned from a `-sources.json` sidecar resolves
+`.version` out of the sidecar and short-circuits before `drvPath` (and
+therefore `cargoDeps`) is ever forced. Measured on `fblog` with
+`--option allow-import-from-derivation false`: `.version` evaluates
+clean, `.drvPath` fails with `cannot build '…-source.drv^out' during
+evaluation`. That was never a build break — the later eval simply
+fetched the source itself, just without the warm step's retry/backoff —
+but it meant a sidecar-versioned package was NOT warmed merely by being
+in `packages`. See the ifd-patterns fragment for the measured cost of
+the wider forcing and for why the `or` chain does not swallow a throw.
 
 ## Overlay Lambda Signature
 

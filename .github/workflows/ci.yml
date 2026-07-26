@@ -81,7 +81,10 @@ jobs:
       # own eval would fetch them and a transient network blip ("HTTP2
       # framing layer") fails the whole job. Best-effort: if all attempts
       # fail we warn and continue — the build step still gets its own eval.
-      # Only this runner's system; the test job's flake check covers both.
+      # Only this runner's system, and nothing else covers the other one:
+      # the test job runs a plain `nix flake check`, which evaluates ONLY
+      # its own runner's system. This matrix leg is the repo's ONLY
+      # aarch64-darwin coverage, evaluation included.
       - name: Warm IFD sources (retry, best-effort)
         uses: ./.github/actions/warm-ifd
         with:
@@ -123,11 +126,33 @@ jobs:
 
       # Warm the flake eval cache BEFORE the check. Same IFD-fetch flake as
       # the build job: overlays read fetchFromGitHub sources at eval time,
-      # and a transient fetch blip fails the whole job. Unlike the build
-      # job, `nix flake check` evaluates ALL systems on one runner, so warm
-      # both x86_64-linux and aarch64-darwin here — IFD source fetches are
-      # system-agnostic, so cross-system eval on a linux runner is fine.
-      # Best-effort: flake check still gets its own eval if warm fails.
+      # and a transient fetch blip fails the whole job. Best-effort: flake
+      # check still gets its own eval if warm fails.
+      #
+      # `systems` names BOTH, but do NOT read that as darwin coverage.
+      # Plain `nix flake check` reports "The check omitted these
+      # incompatible systems: aarch64-darwin", and the step below does not
+      # pass `--all-systems`, so this job evaluates x86_64-linux ONLY. The
+      # repo's darwin coverage is the required aarch64-darwin leg of the
+      # build job above — there is no darwin evaluation here to warm for.
+      # The darwin entry is kept anyway because IFD source fetches are
+      # system-agnostic and content-addressed, so it costs almost nothing
+      # and stays correct if `--all-systems` is ever adopted.
+      #
+      # Adopting it is NOT a one-word change, and measuring that was the
+      # point of writing this down. `--all-systems` only EVALUATES the
+      # foreign system (it never builds it — verified on a throwaway
+      # two-system flake), so the cost would be evaluation alone: roughly
+      # +43s and a ~7.8 GB RSS ceiling, against a 36s / 6.2 GB linux
+      # baseline. But instantiating the darwin checks on a linux host
+      # currently FAILS outright, for two separate reasons:
+      #   - IFD on derivations that must be BUILT for aarch64-darwin
+      #     (living-workflow-skill.drv, stacked-workflows-skills.drv) —
+      #     a linux runner cannot build those at all.
+      #   - at least one real darwin assertion failure,
+      #     module-mcp-services-rotation-restart-entry.
+      # So `--all-systems` would turn this required check red today. Fix
+      # those first; the flag is not the starting point.
       - name: Warm IFD sources (retry, best-effort)
         uses: ./.github/actions/warm-ifd
         with:

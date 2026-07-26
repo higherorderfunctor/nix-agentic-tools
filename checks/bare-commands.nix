@@ -71,7 +71,7 @@
 # reason the wider file scan is.
 #
 # Pattern 3 carries NO `/bin/` filter, and that is deliberate. Do not
-# add one back "for consistency" with patterns 1 and 2.
+# add one back "for consistency" with pattern 2.
 #
 # That filter is per LINE, not per match, so on this pattern it would
 # drop any MIXED command string — one invocation absolute, another bare,
@@ -96,11 +96,41 @@
 # regex — with the filter removed, it finds ZERO hits across all of
 # `overlays/` on a clean tree.
 #
-# Patterns 1 and 2 KEEP their `/bin/` filter. Not an oversight: they
-# scan mixed-context files with unrestricted line shapes, where it does
-# real work suppressing already-absolute invocations that their broader
-# `^\s+` anchor would otherwise pick up. Narrowing them is a separate
-# change with a separate blast radius.
+# Pattern 2 KEEPS its `/bin/` filter. Pattern 1 never had one and needs
+# none, for the same structural reason pattern 3 does not: an absolute
+# invocation puts `$` after the `$(`, never a command NAME.
+#
+# Pattern 2's filter was re-measured on 2026-07-25 by enumerating
+# exactly what it subtracts — its own raw hits that contain `/bin/`,
+# with the sibling filters applied. Four lines, all four genuine false
+# positives:
+#
+#   overlays/lib.nix:309-310 — `wc="${pkgs.coreutils}/bin/wc"` and the
+#     same for `tr`. A variable ASSIGNMENT, not an invocation: `^\s+`
+#     then `wc` then `\b`, and `=` satisfies that word boundary. The
+#     value assigned is already absolute.
+#   packages/kiro-cli/lib/mkKiro.nix:359,366 — `rm -f "$out/bin/kiro-cli"`
+#     and its `-chat` twin. A genuinely bare `rm`, but inside a
+#     `symlinkJoin` `postBuild`: stdenv, full PATH, the build context
+#     this check deliberately does not police. The `/bin/` on those
+#     lines is a path ARGUMENT, not a command path.
+#
+# So the filter subtracts zero true positives today. Removing it would
+# buy no coverage and cost two `# bare-commands: ok` markers — the
+# mirror image of pattern 3, where the same filter subtracted five true
+# positives and no false ones. That asymmetry is why the pattern-3
+# argument does NOT transfer: there the anchors excluded absolute
+# invocations structurally, here `^\s+` genuinely lands on lines that
+# are not invocations at all.
+#
+# The blind spot is real regardless, so re-run the enumeration rather
+# than trusting this paragraph. The filter is per LINE, so a MIXED line
+# — one absolute command AND one bare command at a command-start anchor
+# — is dropped whole. Confirmed by injecting one
+# (`${pkgs.coreutils}/bin/printf … | head -1`) into a scanned file: the
+# raw pattern matches it and `grep -v '/bin/'` removes it. Whether the
+# filter is free is a property of the CORPUS, not of the regex, so the
+# question is settled by re-measuring and never by re-arguing.
 #
 # The lesson, since it cost a round trip: this check has now had one
 # filter that could NEVER match (`^\s*#` against path-prefixed output)
@@ -223,7 +253,10 @@ pkgs.runCommandLocal "bare-commands-check" {
     # anchors — not just line start. A line-start-only anchor missed every
     # bare command that follows a pipe (`… | cut -f1`) or an AND list
     # (`… && mv x y`), which between them are the majority of real hits.
-    # Exclude: lines containing /bin/ (already absolute), comments, nix expressions
+    # Exclude: lines containing /bin/, comments, nix expressions. The
+    # `/bin/` filter is a blind spot on MIXED lines and is kept only
+    # because it currently subtracts four false positives and no true
+    # ones — re-measure before touching it, see the header.
     #
     # The comment filter is PATH-PREFIX aware. rg emits `path:lineno:content`,
     # so a line NEVER begins with whitespace-then-hash and the anchored

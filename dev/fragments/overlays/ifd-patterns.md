@@ -1,7 +1,10 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-07-24 (commit pending — adds the extracted-sidecar
-> section after the model-catalog anchor regression). If you touch
+> **Last verified:** 2026-07-25 (commit pending — the warm composite now
+> forces `drvPath` instead of `version`, so sidecar-versioned packages
+> are covered; also corrects the claim that the check job's
+> `nix flake check` evaluates ALL systems, which it does not, and the
+> devenv-test job moved to its own workflow). If you touch
 > `overlays/lib.nix`, any overlay `.nix` file that calls
 > `vu.mkVersion`, the shared `.github/actions/warm-ifd/action.yml`
 > composite, or the warm steps that consume it in
@@ -64,35 +67,93 @@ that evaluates before it builds:
 - `ci.yml` build job — `systems: ${{ matrix.system }}` (defaults:
   3 retries, best-effort) so a transient fetch doesn't flake the
   per-system build eval.
-- `ci.yml` devenv-test job — `systems: x86_64-linux` (defaults).
+- `devenv-test.yml` — `systems: x86_64-linux` (defaults).
   `devenv test` evaluates devenv.nix, which applies the repo
   overlays, so its eval reads the same IFD sources; the fetches are
   fixed-output, so warming via the flake fills the identical store
   paths devenv's own lock resolves to.
-- `ci.yml` test job — `systems: x86_64-linux aarch64-darwin`
-  because `nix flake check` evaluates ALL systems on one runner; IFD
-  source fetches are system-agnostic, so cross-system eval on a
-  linux runner is fine.
+- `ci.yml` test job — `systems: x86_64-linux aarch64-darwin`, and the
+  darwin half is NOT there because the check needs it. Plain
+  `nix flake check` reports "The check omitted these incompatible
+  systems: aarch64-darwin", and the job does not pass `--all-systems`,
+  so it evaluates x86_64-linux ONLY. The repo's darwin coverage —
+  evaluation included — is the required `aarch64-darwin` leg of the
+  BUILD job; nothing in the check job covers it. The darwin warm entry
+  is kept because IFD source fetches are system-agnostic and
+  content-addressed, so it is nearly free and stays correct if
+  `--all-systems` is ever adopted. Adopting it is an open operator
+  decision, not an oversight: it changes what a required check does.
+
 - `update.yml` — `systems: x86_64-linux`, `retries: "1"`,
   `best-effort: "false"`. The ninja pipeline cannot proceed
   without warm sources (nix-update crashes), so it keeps the
   original single-shot, fail-hard behavior via the inputs.
+
+Do not reach for `--all-systems` casually — it would turn the required
+check red today. Measured 2026-07-25 on a linux host:
+
+- It only EVALUATES the foreign system; it never builds it. Verified on
+  a throwaway two-system flake, where `checks.aarch64-darwin.foreign`
+  reports `derivation evaluated to …drv` and the run then says
+  `running 0 flake checks`. So its whole cost is evaluation.
+- That cost is roughly +43s wall and a ~7.8 GB RSS ceiling for the
+  darwin check set, against 36s / 6.2 GB for the linux one (282 checks,
+  eval cache disabled, warm store).
+- But instantiating the darwin checks on a linux host FAILS, twice
+  over. Two checks perform IFD on derivations that must be BUILT for
+  `aarch64-darwin` (`living-workflow-skill.drv` via
+  `module-living-workflow-kiro-hm-writes-skill-dir`, and
+  `stacked-workflows-skills.drv`), which a linux runner cannot do
+  without a darwin builder; and
+  `module-mcp-services-rotation-restart-entry` is a genuine darwin
+  assertion failure. `builtins.tryEval` does not catch the first class,
+  so they surface as hard eval errors.
+
+Fixing those is the prerequisite. The flag is the last step, not the
+first.
 
 The composite runs, per system with backoff:
 
 ```bash
 nix eval --json \
   --option allow-import-from-derivation true \
-  --apply 'pkgs: builtins.mapAttrs (n: p: p.version or p.name or "unknown") pkgs' \
+  --apply 'pkgs: builtins.mapAttrs (_: p: p.drvPath or p.name or "unknown") pkgs' \
   ".#packages.${system}" >/dev/null
 ```
 
-`builtins.mapAttrs` with `p.version` forces evaluation of each
-package's version attribute, which triggers `builtins.readFile`
-on the fetched source, which triggers the fetch. The cachix
-daemon pushes fetched sources so subsequent evaluations (PR CI) can
-substitute them. The `--apply` expression is the load-bearing
-detail — keep the composite and this fragment in sync.
+`builtins.mapAttrs` forcing `p.drvPath` puts every package through
+`derivationStrict`, which forces every IFD on its path — the
+`builtins.readFile` version extractors AND anything else that reads a
+file out of a fetched source. The cachix daemon pushes fetched sources
+so subsequent evaluations (PR CI) can substitute them. The `--apply`
+expression is the load-bearing detail — keep the composite and this
+fragment in sync.
+
+**It forces `drvPath` and not `version`, deliberately.** `version` only
+reaches an IFD when the version is itself `readFile`-derived FROM the
+source; a package versioned from a `-sources.json` sidecar resolves it
+out of the sidecar and short-circuits, leaving IFD elsewhere on its path
+— `cargoLock.lockFile` on `fblog` and `git-branchless` — never forced,
+and so never warmed. Measured on `fblog` under
+`--option allow-import-from-derivation false`: `.version` evaluates
+clean while `.drvPath` fails with `cannot build '…-source.drv^out'
+during evaluation`, and the same split holds for the two `--apply`
+expressions scoped to that one package. `drvPath` subsumes `version`
+(the derivation name embeds it), so the narrower form buys nothing.
+
+The cost is real and was measured before adopting it: eval cache
+disabled, warm store, 2026-07-25 — `version` 1.2s / 0.9 GB RSS versus
+`drvPath` 19.2s / 3.0 GB on `x86_64-linux`, and 23.4s / 3.8 GB for the
+`aarch64-darwin` set evaluated on a linux host. Both evaluate clean:
+`allowUnfree` is set by `pkgsFor` so the unfree guard does not throw,
+and the one genuinely Linux-only package (`gluetun`) is gated out of the
+darwin attrset entirely rather than left to throw on `drvPath`.
+
+Note the `or` chain does NOT swallow a throwing `drvPath` — it only
+covers a MISSING attribute. That is intended: a fetch failure must fail
+the warm so the retry/backoff loop sees it. In `update.yml`, which runs
+this fail-hard, it also means an unrelated eval error now surfaces at
+the warm step rather than a few minutes later inside `nix-update`.
 
 ### Extracted sidecars are the IFD-free path — and their drift check is not a correctness gate
 
