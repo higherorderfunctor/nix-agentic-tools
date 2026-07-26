@@ -334,6 +334,72 @@ rec {
       '{hookTriggers: $hookTriggers, documentedAbsent: $documentedAbsent}' > "${dest}"
   '';
 
+  # Shared body for the sidecar hash fixers below (`mkGoVendorFix`,
+  # `mkNpmDepsFix`). Emits a bash function
+  # `fix_fod_hash <attrPath> <drvPattern> <sidecarKey>` that builds
+  # `<attr>.<attrPath>` through the FLAKE'S OWN `packages` output — so the
+  # derivation under test is the one consumers get, overlay stack and all
+  # — and, on a fixed-output hash mismatch, writes the scraped `got:` hash
+  # back to `sourcesFile` under `sidecarKey`.
+  #
+  # `drvPattern` is not decoration. A failing `src` — or any other
+  # fixed-output derivation on the path — also prints `got:`, and writing
+  # THAT into a vendor/deps key produces a plausible-looking WRONG hash
+  # that nothing downstream would flag. So a mismatch is only trusted when
+  # the message names a derivation matching the pattern.
+  #
+  # It is a shell FUNCTION rather than an inlined body because the npm
+  # shape needs it TWICE in one script: `npmDeps` is downstream of `src`,
+  # so a stale `srcHash` makes the `npmDeps` build fail on the SRC
+  # mismatch and never reach the deps one. Two sequential invocations,
+  # each its own `nix build`, is what lets the second read the sidecar the
+  # first just wrote.
+  #
+  # Runs from the repo root, and the sidecar must be GIT-TRACKED: a flake
+  # only sees tracked files, so an untracked sidecar is invisible to the
+  # eval this drives.
+  #
+  #   attr:        name under `packages.<system>` (flake.nix flattens
+  #                `pkgs.generic` into it, so a generic package is
+  #                reachable by its bare name). This repo has NO
+  #                `legacyPackages` output — do not reach for one.
+  #   sourcesFile: threaded explicitly by every caller.
+  fodHashFixFn = {
+    attr,
+    pkgs,
+    pname,
+    sourcesFile,
+  }: ''
+    fix_fod_hash() {
+      local attrPath="$1" drvPattern="$2" key="$3"
+      local expr output hash tmp
+
+      # builtins.getAttr keeps the expression free of a brace substitution
+      # sequence, so bash never tries to expand any part of it.
+      expr="(builtins.getAttr builtins.currentSystem (builtins.getFlake (toString ./.)).packages).${attr}.$attrPath"
+
+      if output=$(${pkgs.nix}/bin/nix build --impure --no-link --expr "$expr" 2>&1); then
+        echo "${pname}: $key ok"
+        return 0
+      fi
+
+      hash=""
+      if echo "$output" | ${pkgs.gnugrep}/bin/grep -q "fixed-output derivation '[^']*$drvPattern"; then
+        hash=$(echo "$output" | ${pkgs.gnugrep}/bin/grep -oP 'got:\s+\Ksha256-[A-Za-z0-9+/=]+' | ${pkgs.coreutils}/bin/head -n1 || :)
+      fi
+      if [ -z "$hash" ]; then
+        echo "${pname}: $attrPath build failed without a '$drvPattern' hash mismatch:" >&2
+        echo "$output" >&2
+        exit 1
+      fi
+
+      echo "${pname}: $key -> $hash"
+      tmp=$(${pkgs.coreutils}/bin/mktemp)
+      ${pkgs.jq}/bin/jq --arg h "$hash" --arg k "$key" '.[$k] = $h' "${sourcesFile}" > "$tmp"
+      ${pkgs.coreutils}/bin/mv "$tmp" "${sourcesFile}"
+    }
+  '';
+
   # Composed updateScript for packages whose src is a GitHub repo-archive
   # tarball at a release tag (fetchzip consumers): one `repo` value
   # derives BOTH the archive URL template and the version check, so the
@@ -483,14 +549,9 @@ rec {
   # nixpkgs or toolchain bump can invalidate vendorHash with no version
   # bump at all — the update job re-runs it after flake updates.
   #
-  #   attr:        name under `packages.<system>` (flake.nix flattens
-  #                `pkgs.generic` into it, so a generic package is
-  #                reachable by its bare name). This repo has NO
-  #                `legacyPackages` output — do not reach for one.
-  #   sourcesFile: threaded explicitly by every caller. The default
-  #                assumes `overlays/<pname>-sources.json`, true only of
-  #                packages at the overlays/ root; grouped subtrees keep
-  #                the sidecar beside the package file.
+  # The build-and-scrape body lives in `fodHashFixFn` above; see its
+  # header for the argument contract and for why the `-go-modules`
+  # derivation-name pattern is load-bearing rather than decorative.
   mkGoVendorFix = {
     attr,
     pkgs,
@@ -501,32 +562,54 @@ rec {
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
 
-      # Consumes the flake's own `packages` output, so the derivation
-      # under test is the one consumers get — overlay stack and all.
-      # getAttr keeps the expression free of \''${..} so bash never sees
-      # a substitution.
-      expr="(builtins.getAttr builtins.currentSystem (builtins.getFlake (toString ./.)).packages).${attr}.goModules"
+      ${fodHashFixFn {inherit attr pkgs pname sourcesFile;}}
 
-      if output=$(${pkgs.nix}/bin/nix build --impure --no-link --expr "$expr" 2>&1); then
-        echo "${pname}: vendorHash ok"
-      else
-        # Only trust a mismatch that names the go-modules derivation — a
-        # failing src (or other) fixed-output drv also prints "got:" and
-        # must not be written into vendorHash.
-        hash=""
-        if echo "$output" | ${pkgs.gnugrep}/bin/grep -q "fixed-output derivation '[^']*-go-modules"; then
-          hash=$(echo "$output" | ${pkgs.gnugrep}/bin/grep -oP 'got:\s+\Ksha256-[A-Za-z0-9+/=]+' | ${pkgs.coreutils}/bin/head -n1 || :)
-        fi
-        if [ -z "$hash" ]; then
-          echo "${pname}: goModules build failed without a go-modules hash mismatch:" >&2
-          echo "$output" >&2
-          exit 1
-        fi
-        echo "${pname}: vendorHash -> $hash"
-        tmp=$(${pkgs.coreutils}/bin/mktemp)
-        ${pkgs.jq}/bin/jq --arg h "$hash" '.vendorHash = $h' "${sourcesFile}" > "$tmp"
-        ${pkgs.coreutils}/bin/mv "$tmp" "${sourcesFile}"
-      fi
+      fix_fod_hash "goModules" "-go-modules" "vendorHash"
+    '';
+
+  # Hash fixer for buildNpmPackage packages pinned via a sidecar. Same
+  # role as `mkGoVendorFix` and the same `extraExtract` wiring, but it
+  # restores TWO keys, in order: `srcHash` then `npmDepsHash`.
+  #
+  # Both keys, and not just the deps one, because a `buildNpmPackage`
+  # overlay that re-points `src` by OVERRIDING the upstream fetcher
+  # (`upstream.src.override { tag; hash; }` — the only way to keep an
+  # upstream `postFetch` without restating it) cannot get its src hash
+  # from `mkUpdateScript`'s prefetch path. Measured on bruno v4.0.0:
+  # `nix-prefetch-url --unpack` of the repo-archive tarball yields
+  # sha256-uZswYGMwVfiIG+dNec6mEno05UVbsWlVHoNFadipQlg=, while the
+  # fetcher — whose `postFetch` runs `npm-lockfile-fix` over
+  # package-lock.json — yields
+  # sha256-M4oNx3nSe8hSAtZMVyXIW0qQIQkaOeQgpPsfjmmJ30E=. Recording the
+  # prefetch hash would simply fail the consumer's fixed-output check. So
+  # such a package passes `platforms = {}` to `mkUpdateScript` — the
+  # sidecar then carries the version alone — and lets this restore both
+  # hashes immediately afterwards.
+  #
+  # The order is forced: `npmDeps` is derived FROM `src`
+  # (`build-support/node/build-npm-package` threads `src` and the patch
+  # hooks into `fetchNpmDeps`), so a stale `srcHash` makes the deps build
+  # fail on the SRC mismatch and never reach the deps one.
+  #
+  # Exposed standalone as `passthru.fixNpmDepsHash` for the same reason
+  # its Go sibling is: a nixpkgs-side fetcher or builder change can
+  # invalidate either hash with no version bump at all, and the sidecar's
+  # version-equality early exit means that case fails LOUDLY on a hash
+  # mismatch rather than self-healing.
+  mkNpmDepsFix = {
+    attr,
+    pkgs,
+    pname,
+    sourcesFile ? "overlays/${pname}-sources.json",
+  }:
+    pkgs.writeShellScript "fix-npm-deps-${pname}" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      ${fodHashFixFn {inherit attr pkgs pname sourcesFile;}}
+
+      fix_fod_hash "src" "-source" "srcHash"
+      fix_fod_hash "npmDeps" "-npm-deps" "npmDepsHash"
     '';
 
   # Generate an updateScript for per-platform binary packages that use
@@ -556,6 +639,14 @@ rec {
   #   default, and why widening it should be argued per package.
   # versionCheck: { cmd = "curl ..."; } — shell command that prints the version
   # platforms: { "x86_64-linux" = ver: "https://.../${ver}/file.tar.gz"; ... }
+  #   An EMPTY set is legal and means "record the version only". Use it
+  #   when the package's src hash is not a plain prefetch of a URL — an
+  #   overlay that re-points an upstream fetcher carrying a `postFetch`
+  #   gets a hash over the POST-postFetch tree, which `nix-prefetch-url`
+  #   cannot reproduce. Such a package pairs `platforms = {}` with an
+  #   `extraExtract` fixer that scrapes the real hashes out of a build
+  #   (see `mkNpmDepsFix`); recording the prefetch hash instead would put
+  #   a plausible, wrong value in the sidecar.
   # sourcesFile: path to sources.json relative to repo root
   # extraExtract: extra shell appended after the sources.json write (e.g.
   #   regenerating a committed sidecar from the freshly-bumped binary).

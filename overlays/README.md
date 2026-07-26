@@ -47,6 +47,24 @@ Versions computed at eval time via `overlays/lib.nix:mkVersion`
   fixed-output path already in the local store is accepted without
   building. Force the real computation by perturbing the sidecar's version
   and running the update script.
+- **npm packages with a sidecar `npmDepsHash`** (`bruno`): override the
+  BUILDER (`pkg.override { buildNpmPackage = …; }`), never `overrideAttrs`.
+  `buildNpmPackage` is a `lib.extendMkDerivation` whose `extendDrvArgs`
+  computes `npmDeps = fetchNpmDeps { hash = npmDepsHash; src; postPatch; }`
+  from the INCOMING args, so an `npmDepsHash` set through `overrideAttrs`
+  composes on top of that output and is INERT — measured on bruno: the
+  version moved to 4.0.0 while `npmDeps` stayed `bruno-3.5.2-npm-deps` with
+  3.5.2's hash, and the build produced no error at all. Re-point `src` by
+  overriding the upstream fetcher (`pkg.src.override { tag; hash; }`) so an
+  upstream `postFetch` survives byte-identically. That `postFetch` is why
+  the src hash is ALSO in the sidecar and why neither hash comes from a
+  prefetch: it mutates the tree the hash covers, so
+  `nix-prefetch-url --unpack` records a different value than the fetcher
+  produces. Pass `platforms = {}` to `mkUpdateScript` (version only) and
+  `extraExtract = "${fixNpmDepsHash}"`; `vu.mkNpmDepsFix` restores `srcHash`
+  then `npmDepsHash`, in that order because `npmDeps` is derived from `src`.
+  It is also `passthru.fixNpmDepsHash`, for a nixpkgs-side change that
+  invalidates a hash with no version bump.
 - **Go toolchain gaps** (`gluetun`, `oh-my-posh`): declare the package's
   go.mod floor and let `vu.goToolchainForFloor` DERIVE the toolchain —
   `ourPkgs.go` while our pin satisfies the floor, otherwise the lowest
@@ -102,6 +120,7 @@ Versions computed at eval time via `overlays/lib.nix:mkVersion`
 | oxlint                | devTools   | GitHub main           | pnpm (nixpkgs override)   | `oxlint`              | installCheck  | --type-aware        |
 | tsgolint              | devTools   | GitHub main           | go (nixpkgs override)     | `tsgolint`            | upstream      | --help              |
 | arkenfox              | generic    | GitHub archive        | files only                | —                     | —             | —                   |
+| bruno                 | generic    | GitHub tag (fetcher)  | npm (nixpkgs override)    | `bruno`               | —             | —                   |
 | btop                  | generic    | GitHub archive        | cmake (nixpkgs override)  | `btop`                | —             | --version           |
 | bun                   | generic    | GitHub releases       | pre-built binary          | `bun`                 | —             | —                   |
 | catppuccin-btop       | generic    | GitHub archive        | files only                | —                     | —             | —                   |

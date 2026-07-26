@@ -137,6 +137,12 @@
       arkenfox = import ./generic/arkenfox.nix {
         inherit inputs final;
       };
+      # Wraps the BUILDER via `.override`, not the output attrs: an
+      # `npmDepsHash` injected with `overrideAttrs` on a `buildNpmPackage`
+      # is inert. See the header of ./generic/bruno.nix.
+      bruno = import ./generic/bruno.nix {
+        inherit inputs final;
+      };
       btop = import ./generic/btop.nix {
         inherit inputs final;
       };

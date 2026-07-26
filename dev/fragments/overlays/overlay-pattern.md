@@ -1,15 +1,18 @@
 ## Overlay Grouping and the `generic` Subtree
 
-> **Last verified:** 2026-07-25 (commit pending — records that the warm
-> step now forces `drvPath` and therefore DOES cover sidecar-versioned
-> packages, on top of the Go sidecar-`vendorHash` mechanism, the
-> derived-Go-toolchain seam, and the platform-gated-attribute rule, on
-> top of the multi-major-attribute
-> shape, the namespaced-only rule and the store-path-parity expectation
-> for thin nixpkgs overrides). If you add, remove or rename an overlay
-> namespace, move a package between namespaces, or change how a
-> `generic` package relates to its nixpkgs original, and this section
-> isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-07-25 — two changes, both wanted. `bc23e34b`
+> (LANDED) records that the CI warm step now forces `drvPath` and
+> therefore DOES cover sidecar-versioned packages; the commit adding
+> this line (pending) adds the sidecar-vs-inline decision rule and the
+> `.override`-vs-`overrideAttrs` rule for `lib.extendMkDerivation`
+> builders. Both sit on top of the Go sidecar-`vendorHash` mechanism,
+> the derived-Go-toolchain seam, and the platform-gated-attribute rule,
+> on top of the multi-major-attribute shape, the namespaced-only rule
+> and the store-path-parity expectation for thin nixpkgs overrides. If
+> you add, remove or rename an overlay namespace, move a package between
+> namespaces, or change how a `generic` package relates to its nixpkgs
+> original, and this section isn't updated in the same commit, stop and
+> fix it.
 
 `overlays/default.nix` aggregates per-package files into grouped
 namespaces: `pkgs.ai.*` (plus its `mcpServers` / `lspServers`
@@ -52,8 +55,10 @@ Most `generic` entries (`btop`, `bun`, `fblog`, `gh`, `oh-my-posh`,
 `ourPkgs.<name>.overrideAttrs` over the nixpkgs one, moving only
 `version`, `src`, `passthru.updateScript` and — for the Go ones —
 `vendorHash`. `gluetun` is the exception, and only because nixpkgs does
-not carry it at all. Two rules that are not obvious from reading such a
-file:
+not carry it at all; `bruno` is deliberately absent from that list because
+`overrideAttrs` cannot express its override at all (see the
+`.override` section below). Two rules that are not obvious from reading
+such a file:
 
 - **Namespaced-only.** The overlay writes `pkgs.generic.<name>` and
   NEVER a top-level `pkgs.<name>`. Shadowing a nixpkgs attribute would
@@ -81,6 +86,90 @@ override add an `updateScript` without moving the store path. Merge it
 nixpkgs hangs real API there (pnpm alone carries `configHook`,
 `fetchDeps`, `majorVersion`, `nodejs-slim` and `tests`) and replacing
 the set drops all of it.
+
+### `.override` the builder, never `overrideAttrs`, on an `extendMkDerivation`
+
+The thin-`overrideAttrs` shape above works because `cmake`/`buildGoModule`
+read `version` and `src` as ordinary attrs. It does NOT transfer to a
+builder written with `lib.extendMkDerivation`, and the failure is SILENT —
+the one genuinely silent failure in this area, and shape-independent.
+
+Such a builder derives attrs from its INCOMING arguments inside
+`extendDrvArgs`, before `overrideAttrs` ever runs. `buildNpmPackage`
+computes `npmDeps = fetchNpmDeps { hash = npmDepsHash; src; postPatch; }`
+there, so an `npmDepsHash` set through `overrideAttrs` composes on top of
+that already-computed output and is INERT. Measured on bruno:
+
+```nix
+pkgs.bruno.overrideAttrs (_: { version = "4.0.0"; npmDepsHash = <fake>; })
+#  version              = "4.0.0"                  <- moved
+#  npmDeps.name         = "bruno-3.5.2-npm-deps"   <- did NOT
+#  npmDeps.outputHash   = sha256-4VsSXiHj/…        <- 3.5.2's hash
+```
+
+That builds 4.0.0 source against 3.5.2's dependency set and reports no
+error at all. Wrap the BUILDER instead — `pkg.override (_: {
+buildNpmPackage = args: realBuilder (finalAttrs: (lib.toFunction args)
+finalAttrs // { … }); })` — which puts the new values in the incoming args
+where `extendDrvArgs` reads them. `overlays/generic/bruno.nix` is the ONLY
+worked example in this tree — cite it, and do not reach for
+`git-tools/git-branchless.nix`, which is a plain `overrideAttrs` and has
+been one since well before this was written.
+
+`lib.toFunction` is load-bearing in that snippet: upstream expressions come
+in both `attrs` and `finalAttrs: attrs` flavors, and it normalizes them.
+
+### Sidecar or inline: what actually decides it
+
+A version-tracked overlay records its pin either INLINE in its `.nix` file
+(bumped by plain `nix-update` — the shape most `config.update.targets` rows
+use) or in a `<name>-sources.json` SIDECAR written by a custom
+`updateScript`. The choice usually gets read as a question about the source
+shape. It mostly is not.
+
+- **HARD CONSTRAINT, decides by itself: per-platform fanout.**
+  `nix-update` models exactly ONE `src` and structurally cannot express N
+  systems, so a package needing per-platform sources REQUIRES a sidecar.
+  Not a preference — there is no inline form of it.
+- **Otherwise it is a COST TRADE on the NO-OP sweep**, not a shape
+  mismatch. Both shapes are correct. They differ in what a sweep that
+  finds nothing costs. Inline + `nix-update` re-derives every hashed
+  dependency on EVERY run, because it prefetches with `outputHash = ""`,
+  which normalizes to an all-zeros hash whose store path is never
+  registered valid — uncacheable by construction, so nothing carries over
+  between sweeps. A sidecar's version-equality early exit pays zero: one
+  HEAD against `releases/latest` and it stops.
+- **So the deciding variable is the SIZE of the fetched dependency tree**,
+  not the source shape. Measured on bruno, whose npm dependency set is
+  607 MB (roughly 40x anything else here): ~28 s and ~642 MB per sweep
+  inline, against ~1 s and 0 bytes on the sidecar. At 4x/day that is
+  ~2.5 GB/day for zero information, which is what tipped it. A package
+  whose only hash is a small `src` is fine inline and costs less code —
+  the inline rows here are not an oversight.
+- **State the counter-cost honestly.** A sidecar does NOT self-heal a hash
+  invalidated WITHOUT a version bump — a nixpkgs-side fetcher or builder
+  change, say. It early-exits on version equality and never re-derives, so
+  the build fails LOUDLY on a hash mismatch until someone runs the
+  standalone fixer by hand (`passthru.fixVendorHash`,
+  `passthru.fixNpmDepsHash` — which exist for exactly this). Inline
+  re-derives every sweep and therefore self-heals that case. **Neither
+  shape fails silently**; do not write that one does.
+- **Record the inversion.** It corrects a belief this repo held: the rows
+  still on plain `nix-update` are paying that uncacheable per-sweep cost
+  TODAY, so "sidecars are legacy overhead from an older design" is close
+  to backwards. Noted as unexamined rather than as a migration proposal —
+  for a small `src` the cost is small, and the counter-cost above is real.
+
+One sidecar consequence worth knowing before reaching for
+`ghArchiveUpdateScript`: it records the hash of a `nix-prefetch-url
+--unpack`, which is only the right value when the src is a plain fetch of
+that URL. An overlay that re-points an upstream fetcher carrying a
+`postFetch` gets a hash over the POST-`postFetch` tree, and the two differ
+— measured on bruno v4.0.0, where `postFetch` runs `npm-lockfile-fix`:
+`sha256-uZsw…` from the prefetch versus `sha256-M4oN…` from the fetcher.
+Recording the prefetch value puts a plausible, wrong hash in the sidecar.
+Such a package passes `platforms = {}` (version only) and lets an
+`extraExtract` fixer scrape both hashes out of a real build.
 
 ### Carrying several majors of one package
 

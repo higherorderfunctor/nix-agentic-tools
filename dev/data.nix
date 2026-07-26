@@ -89,6 +89,7 @@ _: let
   # ── Generic (non-agentic) package descriptions ───────────────────────
   genericDescriptions = {
     arkenfox = "Hardened Firefox user.js preference set";
+    bruno = "Open-source IDE for exploring and testing APIs";
     btop = "Resource monitor for processes, CPU, memory, disks and network";
     bun = "JavaScript runtime, bundler, transpiler and package manager";
     catppuccin-btop = "Catppuccin theme files for btop";
@@ -126,7 +127,7 @@ _: let
       suffix = null;
     };
     generic = {
-      packages = ["arkenfox" "btop" "bun" "catppuccin-btop" "dns-root-hints" "fblog" "gh" "gluetun" "oh-my-posh" "otel-tui" "pnpm_10" "pnpm_11"];
+      packages = ["arkenfox" "bruno" "btop" "bun" "catppuccin-btop" "dns-root-hints" "fblog" "gh" "gluetun" "oh-my-posh" "otel-tui" "pnpm_10" "pnpm_11"];
       suffix = null;
     };
     git-tools = {
