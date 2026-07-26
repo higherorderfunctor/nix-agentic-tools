@@ -7,12 +7,15 @@ applyTo: "overlays/*.nix,overlays/**/*.nix,packages/ai-clis/*.nix,packages/git-t
 
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-07-25 (commit pending — narrows what
-> "content-only" exempts, after the file-shipping `pkgs.generic.*`
-> packages landed). If you touch any `overlays/<name>.nix` overlay file
-> or the overlay composition machinery and this fragment isn't updated
-> in the same commit, stop and fix it. Regressions are gated by the
-> `checks.cache-hit-parity` flake check (see "Verification" below).
+> **Last verified:** 2026-07-25 (commit pending — the worked example
+> moved off `git-branchless`, which had not carried this shape for a
+> long time, onto `git-absorb`, which does; also corrects the
+> new-package signature, the namespacing in the manual verification
+> snippet, and the pure-binary-fetch package list). If you touch any
+> `overlays/<name>.nix` overlay file or the overlay composition
+> machinery and this fragment isn't updated in the same commit, stop
+> and fix it. Regressions are gated by the `checks.cache-hit-parity`
+> flake check (see "Verification" below).
 
 ### The rule
 
@@ -31,37 +34,41 @@ every consumer rebuild.
 ### The pattern
 
 ```nix
-# overlays/git-tools/git-branchless.nix — CORRECT
+# overlays/git-tools/git-absorb.nix — CORRECT
 {inputs, final, ...}: let
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
-    overlays = [(import inputs.rust-overlay)];
-    config.allowUnfree = true;
+    overlays = [inputs.rust-overlay.overlays.default];
   };
+  inherit (ourPkgs) fetchFromGitHub;
+
   vu = import ../lib.nix;
 
-  rev = "abc1234...";
-  src = ourPkgs.fetchFromGitHub {
-    owner = "arxanas";
-    repo = "git-branchless";
+  rust = ourPkgs.rust-bin.stable.latest.default;
+  rustPlatform = ourPkgs.makeRustPlatform {
+    cargo = rust;
+    rustc = rust;
+  };
+
+  rev = "debdcd28d9db2ac6b36205bda307b6693a6a91e7";
+  src = fetchFromGitHub {
+    owner = "tummychow";
+    repo = "git-absorb";
     inherit rev;
     hash = "sha256-...";
   };
-  rust = ourPkgs.rust-bin.stable."1.88.0".default;
-  rustPlatform = ourPkgs.makeRustPlatform { cargo = rust; rustc = rust; };
 in
-  ourPkgs.git-branchless.override (_: {
+  ourPkgs.git-absorb.override (_: {
     rustPlatform.buildRustPackage = args:
       rustPlatform.buildRustPackage (finalAttrs: let
         a = (ourPkgs.lib.toFunction args) finalAttrs;
-      in a // {
-        inherit src;
-        version = vu.mkVersion {
-          upstream = vu.readCargoWorkspaceVersion "${src}/Cargo.toml";
-          inherit rev;
-        };
-        cargoHash = "sha256-...";
-      });
+      in
+        a
+        // {
+          version = vu.mkVersion {upstream = "0.9.0"; inherit rev;};
+          inherit src;
+          cargoHash = "sha256-...";
+        });
   })
 ```
 
@@ -70,14 +77,30 @@ in
   `ourPkgs` for.
 - `ourPkgs` is built from THIS repo's `inputs.nixpkgs` plus any
   sub-overlays the package needs (rust-overlay here).
-- Every downstream reference (`ourPkgs.git-branchless`,
+- Every downstream reference (`ourPkgs.git-absorb`,
   `ourPkgs.rust-bin`, `ourPkgs.makeRustPlatform`, `ourPkgs.lib`)
   routes through `ourPkgs`, not `final`/`prev`.
-- Version is computed at eval time from the source via `mkVersion`,
-  producing `"x.y.z+abc1234"` (upstream version + short rev).
+- Version is computed at eval time via `mkVersion`, producing
+  `"x.y.z+debdcd2"` (upstream version + short rev).
 - The per-package file takes `{inputs, final, ...}` and is imported
   by `overlays/default.nix` which composes all packages into the
   unified overlay.
+
+**Why this vehicle, and not `git-branchless`.** This example was headed
+`overlays/git-tools/git-branchless.nix` for a long time after that file
+stopped having this shape — it now takes its `src` from the
+`inputs.git-branchless` flake input rather than a pinned rev+hash, needs
+no sub-overlay in `ourPkgs`, and reaches its base with `overrideAttrs`.
+`git-absorb` is the vehicle because composing a sub-overlay into
+`ourPkgs` is part of the lesson, and `git-branchless` cannot teach it.
+Keep the two in sync or move the example again — do not re-point the
+heading at a file that does not match the body.
+
+Note that the `.override`-on-the-builder seam above is a SEPARATE
+question from cache-hit parity. Parity only cares that the base
+derivation and every build input come from `ourPkgs`; which override
+seam is correct depends on how the upstream builder is written. See the
+overlay-pattern fragment for that decision.
 
 ### The trade-off (accepted in commit e5406977)
 
@@ -99,14 +122,17 @@ entirely: every consumer builds from source on every rebuild.
 
 ### When you're writing a new overlay package
 
-1. Accept `{inputs}: sources: final: _prev:` as the function
-   signature (threading `inputs` is done in
-   `packages/<group>/default.nix`).
+1. Accept `{inputs, final, ...}` as the function signature, and add
+   the file to the right group attrset in `overlays/default.nix`,
+   which is what threads `inputs` and `final` in.
 2. Instantiate `ourPkgs = import inputs.nixpkgs { ... }` with any
    required sub-overlays.
 3. Use `ourPkgs.X` for every build input.
-4. Use `ourPkgs.package.override` (or similar) for the base
-   derivation, not `prev.package.override`.
+4. Base the derivation on `ourPkgs.<package>`, never
+   `prev.<package>`. Whether you reach it with `.override` or
+   `overrideAttrs` is a separate decision (overlay-pattern
+   fragment) — parity only cares where the base and the build
+   inputs come from.
 5. Verify: `nix eval --raw .#<package>` from this repo, then eval
    the same package through a consumer's nixpkgs with the overlay
    applied, and confirm the store path is byte-identical. If they
@@ -163,10 +189,18 @@ refactored — will turn the check red before it ships.
 
 Manual (legacy, for ad-hoc debugging):
 
+The two sides are spelled differently on purpose. `flake.nix` flattens
+every package into `packages.<system>` for CLI ergonomics, so the
+standalone side is `.#git-absorb`. The overlay itself is namespaced-only
+(`pkgs.gitTools.*`, `pkgs.generic.*`, …) and never writes a top-level
+attribute, so the consumer side MUST use the namespaced path — a bare
+`pkgs.git-absorb` there silently resolves to plain nixpkgs' package and
+reports drift that is not real.
+
 ```bash
 # 1. Standalone path (what CI builds and pushes to cachix)
 cd ~/Documents/projects/nix-agentic-tools
-STANDALONE=$(nix eval --raw .#git-branchless)
+STANDALONE=$(nix eval --raw .#git-absorb)
 
 # 2. Consumer path (what your consumer gets via the overlay)
 cd ~/Documents/projects/<consumer>
@@ -178,7 +212,7 @@ CONSUMER=$(nix eval --raw --impure --expr '
       overlays = [ flake.inputs.nix-agentic-tools.overlays.default ];
       config.allowUnfree = true;
     };
-  in pkgs.git-branchless.outPath')
+  in pkgs.gitTools.git-absorb.outPath')
 
 # 3. MUST be identical
 [ "$STANDALONE" = "$CONSUMER" ] && echo "OK" || echo "DRIFT"
@@ -210,10 +244,12 @@ needs a `pkgs` set to evaluate; if it does, it needs `ourPkgs`.
 
 **Pure binary-fetch packages** (no build, just an `overrideAttrs`
 that swaps `src`/`version`) still route through `ourPkgs` to keep
-the starting derivation tied to this repo's nixpkgs pin. The
-`copilot-cli`, `github-copilot-cli`, `kiro-cli`, and
-`kiro-gateway` overlays in `packages/ai-clis/` follow this shape
-and are covered by the `checks.cache-hit-parity` flake check.
+the starting derivation tied to this repo's nixpkgs pin.
+`overlays/kiro-cli.nix` is the current example of exactly that
+shape, and it is covered by the `checks.cache-hit-parity` flake
+check. `copilot-cli` and `kiro-gateway` also ship prebuilt
+binaries, but they are standalone `mkDerivation`s rather than
+`overrideAttrs` — that is the next paragraph, not this one.
 
 **Standalone variant.** When upstream's attrs become incompatible
 with the artifact we want to ship (different `sourceRoot`,
