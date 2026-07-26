@@ -94,6 +94,10 @@ _: let
     catppuccin-btop = "Catppuccin theme files for btop";
     dns-root-hints = "IANA DNS root name server hints (named.root)";
     fblog = "Command-line JSON log viewer";
+    gh = "GitHub CLI";
+    gluetun = "VPN client for multiple providers (Linux only)";
+    oh-my-posh = "Prompt theme engine for any shell";
+    otel-tui = "Terminal OpenTelemetry viewer";
     pnpm_10 = "Fast, disk-space-efficient JavaScript package manager (10.x)";
     pnpm_11 = "Fast, disk-space-efficient JavaScript package manager (11.x)";
   };
@@ -122,7 +126,7 @@ _: let
       suffix = null;
     };
     generic = {
-      packages = ["arkenfox" "btop" "bun" "catppuccin-btop" "dns-root-hints" "fblog" "pnpm_10" "pnpm_11"];
+      packages = ["arkenfox" "btop" "bun" "catppuccin-btop" "dns-root-hints" "fblog" "gh" "gluetun" "oh-my-posh" "otel-tui" "pnpm_10" "pnpm_11"];
       suffix = null;
     };
     git-tools = {

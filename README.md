@@ -196,6 +196,10 @@ Nothing agentic about these — they live in a split-ready
 | `catppuccin-btop` | Catppuccin theme files for btop |
 | `dns-root-hints` | IANA DNS root name server hints (named.root) |
 | `fblog` | Command-line JSON log viewer |
+| `gh` | GitHub CLI |
+| `gluetun` | VPN client for multiple providers (Linux only) |
+| `oh-my-posh` | Prompt theme engine for any shell |
+| `otel-tui` | Terminal OpenTelemetry viewer |
 | `pnpm_10` | Fast, disk-space-efficient JavaScript package manager (10.x) |
 | `pnpm_11` | Fast, disk-space-efficient JavaScript package manager (11.x) |
 

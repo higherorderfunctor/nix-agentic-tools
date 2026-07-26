@@ -50,6 +50,18 @@ _: {
     catppuccin-btop = {consumerPath = ["generic" "catppuccin-btop"];};
     dns-root-hints = {consumerPath = ["generic" "dns-root-hints"];};
     fblog = {consumerPath = ["generic" "fblog"];};
+    gh = {consumerPath = ["generic" "gh"];};
+    # The one platform-gated row. gluetun's `internal/routing` uses
+    # Linux-only x/sys/unix constants, so overlays/default.nix omits the
+    # ATTRIBUTE on non-Linux rather than only restricting meta.platforms —
+    # and this row has to say the same thing, or the check aborts on
+    # aarch64-darwin looking up a package that is not there.
+    gluetun = {
+      consumerPath = ["generic" "gluetun"];
+      platforms = ["x86_64-linux"];
+    };
+    oh-my-posh = {consumerPath = ["generic" "oh-my-posh"];};
+    otel-tui = {consumerPath = ["generic" "otel-tui"];};
     pnpm_10 = {consumerPath = ["generic" "pnpm_10"];};
     pnpm_11 = {consumerPath = ["generic" "pnpm_11"];};
 

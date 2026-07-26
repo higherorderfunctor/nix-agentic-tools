@@ -38,6 +38,27 @@ in {
           as `self.packages.<system>.<the attr key>`.
         '';
       };
+      options.platforms = mkOption {
+        type = types.nullOr (types.listOf types.str);
+        default = null;
+        description = ''
+          Nix systems on which this package EXISTS. `null` — the default, and
+          the right answer for all but the rare platform-specific package —
+          means every supported system.
+
+          The cache-hit-parity check SKIPS a row whose `platforms` excludes the
+          system being evaluated. That is not a way to silence drift: a
+          platform-gated package is absent from `self.packages.<system>`
+          entirely (see the `lib.optionalAttrs` in overlays/default.nix), so
+          looking it up there would abort the whole check with an
+          attribute-missing error rather than report anything. Restricting only
+          `meta.platforms` and leaving the attribute in place does not help
+          either — forcing its `drvPath` throws.
+
+          Set this ONLY alongside an attribute-level gate in the overlay, and
+          keep the two in agreement.
+        '';
+      };
     });
   };
 }

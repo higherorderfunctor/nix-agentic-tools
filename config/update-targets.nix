@@ -115,6 +115,13 @@ _: {
     # pnpm_10 / pnpm_11 (one npm registry tarball each, tracked per major
     # off npm's `latest-<N>` dist-tag). Same --use-update-script contract
     # either way — the script owns its sidecar.
+    #
+    # gh / gluetun / oh-my-posh / otel-tui are on the same ghArchiveUpdateScript
+    # contract but carry a SECOND hash: `vendorHash`, which a Go package cannot
+    # derive from a lockfile the way importCargoLock derives one from
+    # Cargo.lock. mkUpdateScript rebuilds the sidecar from scratch on every
+    # write, so each of them threads `extraExtract = "${fixVendorHash}"` to put
+    # the vendor hash back immediately afterwards. Nothing extra is needed here.
     arkenfox = {flags = ["--use-update-script" "--override-filename" "overlays/generic/arkenfox.nix"];};
     btop = {flags = ["--use-update-script" "--override-filename" "overlays/generic/btop.nix"];};
     bun = {flags = ["--use-update-script" "--override-filename" "overlays/generic/bun.nix"];};
@@ -124,8 +131,12 @@ _: {
     copilot-cli = {flags = ["--use-update-script" "--override-filename" "overlays/copilot-cli.nix"];};
     dns-root-hints = {flags = ["--use-update-script" "--override-filename" "overlays/generic/dns-root-hints.nix"];};
     fblog = {flags = ["--use-update-script" "--override-filename" "overlays/generic/fblog.nix"];};
+    gh = {flags = ["--use-update-script" "--override-filename" "overlays/generic/gh.nix"];};
+    gluetun = {flags = ["--use-update-script" "--override-filename" "overlays/generic/gluetun.nix"];};
     kimchi = {flags = ["--use-update-script" "--override-filename" "overlays/kimchi.nix"];};
     kiro-cli = {flags = ["--use-update-script" "--override-filename" "overlays/kiro-cli.nix"];};
+    oh-my-posh = {flags = ["--use-update-script" "--override-filename" "overlays/generic/oh-my-posh.nix"];};
+    otel-tui = {flags = ["--use-update-script" "--override-filename" "overlays/generic/otel-tui.nix"];};
     pnpm_10 = {flags = ["--use-update-script" "--override-filename" "overlays/generic/pnpm_10.nix"];};
     pnpm_11 = {flags = ["--use-update-script" "--override-filename" "overlays/generic/pnpm_11.nix"];};
   };

@@ -25,6 +25,35 @@ Versions computed at eval time via `overlays/lib.nix:mkVersion`
   `rustPlatform.importCargoLock { lockFile = "${src}/Cargo.lock"; }`
   instead (IFD) so one hash covers both — see `generic/fblog.nix` and
   `git-tools/git-branchless.nix`.
+- **Go packages with a sidecar `vendorHash`** (`gh`, `gluetun`,
+  `oh-my-posh`, `otel-tui`): a Go vendor set cannot be derived from a
+  lockfile the way `importCargoLock` derives one from `Cargo.lock`, so
+  `vendorHash` has to be recorded — and it goes in the sidecar, never
+  inline, because `ghArchiveUpdateScript` would otherwise leave it stale on
+  every bump (the same transitive-hash gap as an inline `cargoHash`).
+  `mkUpdateScript` rebuilds the sidecar from scratch, destroying any key it
+  does not write itself, so each
+  package passes `extraExtract = "${fixVendorHash}"` and reads
+  `sources.vendorHash or lib.fakeHash` to cover the window between the two
+  writes. `vu.mkGoVendorFix` builds `<attr>.goModules` through the flake's
+  own `packages` output and scrapes the `got:` hash out of a `-go-modules`
+  mismatch; it is also exposed standalone as `passthru.fixVendorHash`,
+  because a nixpkgs or toolchain bump can invalidate a vendor hash with no
+  version bump at all. `passthru` must be MERGED — `buildGoModule` hangs
+  `goModules` and `overrideModAttrs` there and warns loudly if an overlay
+  drops them. Two traps: `postPatch` is an INPUT to `goModules`, so
+  changing which test files are removed changes the vendor hash; and a
+  vendorHash is NOT validated by "it built", because an identically-named
+  fixed-output path already in the local store is accepted without
+  building. Force the real computation by perturbing the sidecar's version
+  and running the update script.
+- **Go toolchain gaps** (`gluetun`, `oh-my-posh`): declare the package's
+  go.mod floor and let `vu.goToolchainForFloor` DERIVE the toolchain —
+  `ourPkgs.go` while our pin satisfies the floor, otherwise the lowest
+  `go-bin` (purpleclay/go-overlay) release that does, and a throw if
+  nothing does. Never pin a toolchain version; a pin cannot tell a live gap
+  from a rotted downgrade. `checks/go-toolchain-floor.nix` covers all three
+  branches.
 - **Version-independent URLs** (`dns-root-hints`): the version-equality
   early exit is not a valid change signal, so pass `alwaysPrefetch = true`
   to `mkUpdateScript`. It prefetches every run and decides whether to write
@@ -78,6 +107,10 @@ Versions computed at eval time via `overlays/lib.nix:mkVersion`
 | catppuccin-btop       | generic    | GitHub archive        | files only                | —                     | —             | —                   |
 | dns-root-hints        | generic    | InterNIC (no version) | files only                | —                     | —             | —                   |
 | fblog                 | generic    | GitHub archive        | cargo (nixpkgs override)  | `fblog`               | —             | --version           |
+| gh                    | generic    | GitHub archive        | go (nixpkgs override)     | `gh`                  | — (doCheck 0) | --version           |
+| gluetun               | generic    | GitHub archive        | go (linux only)           | —                     | — (subPkg)    | starts + exits      |
+| oh-my-posh            | generic    | GitHub archive        | go (nixpkgs override)     | `oh-my-posh`          | go test       | --version           |
+| otel-tui              | generic    | GitHub archive        | go (nixpkgs override)     | `otel-tui`            | go test       | --version           |
 | pnpm_10               | generic    | npm `latest-10` tag   | files only (nixpkgs ovr)  | `pnpm_10`             | —             | --version           |
 | pnpm_11               | generic    | npm `latest-11` tag   | files only (nixpkgs ovr)  | `pnpm_11`             | —             | --version           |
 | agnix-mcp             | mcpServers | mainProgram override  | —                         | —                     | —             | —                   |
