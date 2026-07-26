@@ -124,6 +124,71 @@ run_build() {
   "$@"
 }
 
+# Target fan-out for the whole pipeline. ONE knob, because it bounds two
+# things that MULTIPLY (see nfb_eval_flags): ninja's `-j` and, through
+# it, the per-target evaluator budget. CI sets it explicitly; this
+# default is for running the pipeline by hand.
+NAT_UPDATE_JOBS="${NAT_UPDATE_JOBS:-4}"
+[ "$NAT_UPDATE_JOBS" -ge 1 ] 2>/dev/null || NAT_UPDATE_JOBS=1
+
+# Resource budget for a single nix-fast-build invocation.
+#
+# WHY THIS EXISTS. ninja runs $NAT_UPDATE_JOBS targets concurrently and
+# every target that actually changed runs its OWN nix-fast-build, whose
+# defaults are sized for it running ALONE on the box (verified in
+# nix_fast_build/options.py @ 1.6.0):
+#
+#     --eval-workers          multiprocessing.cpu_count()
+#     --eval-max-memory-size  4096      # MiB, PER WORKER
+#
+# Under ninja they multiply. On the 4-vCPU / 16 GiB `ubuntu-latest`
+# runner that is 4 targets x 4 workers x 4 GiB = 64 GiB of evaluator heap
+# budget against 16 GiB of RAM — a 4x overcommit, and 16 evaluator
+# processes fighting over 4 cores and one eval-cache SQLite file.
+#
+# It stays INVISIBLE while targets are unchanged: an unchanged target
+# exits before build verification and never spawns an evaluator at all.
+# It bites when several inputs move at once against a COLD eval cache —
+# exactly what a `nixpkgs` bump guarantees, since that invalidates the
+# eval cache for the whole package set. Run 30181958460 died that way
+# twice in a row: nixpkgs, nixpkgs-test and devenv all updated, the
+# pipeline went silent with four nix-eval-jobs processes live, and the
+# runner was torn down ("The runner has received a shutdown signal",
+# exit 143/SIGTERM) 6m59s into attempt 1 and 19m27s into attempt 2.
+# Neither the 60-minute workflow timeout nor the concurrency cancel
+# fired — a cancel reports `cancelled`, and both attempts reported
+# `failure`.
+#
+# So bound the PRODUCT. Both knobs are derived from the machine, never
+# hardcoded, so a larger runner automatically uses its headroom:
+#
+#   * total evaluator workers across all concurrent invocations == cores
+#   * total evaluator heap ceiling                              <= 60% RAM
+#
+# The remaining 40% is the nix daemon, git, and the runner agent itself —
+# the agent being the process whose death produces the shutdown signal.
+nfb_eval_flags() {
+  local cores workers mem_mib mem_per_worker
+
+  cores=$(nproc 2>/dev/null) || cores="$NAT_UPDATE_JOBS"
+  workers=$((cores / NAT_UPDATE_JOBS))
+  [ "$workers" -ge 1 ] || workers=1
+
+  printf -- '--eval-workers %s' "$workers"
+
+  # /proc/meminfo is Linux-only. The update job runs on ubuntu-latest,
+  # but these scripts are runnable by hand on darwin, so degrade to
+  # nix-fast-build's own default rather than emit a bogus ceiling.
+  mem_mib=$(awk '/^MemTotal:/ {printf "%d", $2 / 1024; exit}' /proc/meminfo 2>/dev/null) || mem_mib=0
+  if [ "${mem_mib:-0}" -gt 0 ]; then
+    mem_per_worker=$(((mem_mib * 60 / 100) / (NAT_UPDATE_JOBS * workers)))
+    # Floor: below ~1 GiB a worker thrashes on restart instead of
+    # evaluating, trading an OOM for a livelock.
+    [ "$mem_per_worker" -ge 1024 ] || mem_per_worker=1024
+    printf -- ' --eval-max-memory-size %s' "$mem_per_worker"
+  fi
+}
+
 # nix-fast-build wrapper that gates on four independent signals.
 #
 # Upstream bug: nix-fast-build's async_main `finally: stack.aclose()` can
@@ -171,7 +236,14 @@ run_nfb_build() {
   # `|| exit_code=$?` localizes errexit suppression to this single call
   # (NOT a blanket `set +e`) — we want to inspect the exit code AND
   # continue to the JSON/stderr gates regardless.
-  "$@" --result-file "$rf" --result-format json \
+  # nfb_eval_flags bounds the evaluator fan-out, which ninja's -j would
+  # otherwise multiply into a memory overcommit that kills the runner.
+  # Word-splitting is intended and safe: the function emits only flag
+  # names and integers it computed itself.
+  local -a eval_flags
+  read -r -a eval_flags <<<"$(nfb_eval_flags)"
+
+  "$@" "${eval_flags[@]}" --result-file "$rf" --result-format json \
     2>"$stderr_log" || exit_code=$?
   cat "$stderr_log" >&2
 
@@ -226,6 +298,76 @@ run_nfb_build() {
 
   rm -f "$rf" "$stderr_log"
   return 0
+}
+
+# The pipeline's whole-package-set build verification. Defined once
+# because the invocation has to be IDENTICAL across its callers —
+# update-input.sh's Phase 2, its repair retry, and the ninja
+# `final-build` rule in config/generate-update-ninja.nix. When these
+# drifted apart they silently verified different things.
+verify_all_packages() {
+  run_nfb_build nix run --inputs-from . nix-fast-build -- \
+    --skip-cached --no-nom --no-link \
+    --flake ".#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem')"
+}
+
+# Re-derive every sidecar-recorded fixed-output hash whose package
+# exposes a standalone fixer, then leave the corrected sidecar in the
+# working tree for the caller to commit.
+#
+# WHY. `mkUpdateScript`'s `buildCandidate` rebuilds the sidecar FROM
+# SCRATCH (`jq -n --arg v "$latest" '{version: $v}'`), so any key the
+# writer does not itself produce is destroyed on every write —
+# `vendorHash` is exactly such a key. Go overlays therefore read
+# `sources.vendorHash or lib.fakeHash` and re-derive it through
+# `extraExtract` in the same run. That covers the VERSION-BUMP path.
+#
+# It does NOT cover a nixpkgs or Go-toolchain bump, which can invalidate
+# a `vendorHash` with no version change at all. `extraExtract` only runs
+# on a version bump, so nothing re-derives the hash; the stale hash then
+# fails the input bump's build verification and the whole input is HELD
+# BACK, parking every later nixpkgs update behind a hash a human has to
+# fix by hand.
+#
+# `passthru.fixVendorHash` / `passthru.fixNpmDepsHash` were exposed
+# standalone for precisely this, and until now had no caller at all.
+#
+# The roster is DISCOVERED from the flake, never listed here: a hardcoded
+# list would silently stop covering the next absorbed Go package, and a
+# fixer that has quietly stopped firing is worse than no fixer. The
+# fixers are idempotent — on a correct hash each one is a cache-hit
+# build that prints "<pname>: <key> ok" and writes nothing.
+fix_sidecar_hashes() {
+  local expr paths p rc=0
+
+  # `builtins.getAttr` keeps the expression free of brace-substitution
+  # sequences, so bash never tries to expand any part of it.
+  expr='let
+      flake = builtins.getFlake (toString ./.);
+      ps = builtins.getAttr builtins.currentSystem flake.packages;
+      fixersOf = n:
+        let p = builtins.getAttr n ps;
+        in builtins.filter (x: x != null) [
+          (p.fixVendorHash or null)
+          (p.fixNpmDepsHash or null)
+        ];
+    in builtins.concatMap fixersOf (builtins.attrNames ps)'
+
+  if ! paths=$(nix build --impure --no-link --print-out-paths --expr "$expr" 2>&1); then
+    log_failure "could not resolve sidecar hash fixers:"
+    printf '%s\n' "$paths" >&2
+    return 1
+  fi
+
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    # Collect rather than abort: one package genuinely broken by the
+    # bump must not stop the others self-healing. The retry build is the
+    # authority on whether the tree is good.
+    "$p" || rc=1
+  done <<<"$paths"
+
+  return "$rc"
 }
 
 # ── Version parsing ───────────────────────────────────────────────────────────
