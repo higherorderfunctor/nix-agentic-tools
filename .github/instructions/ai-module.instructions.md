@@ -7,8 +7,10 @@ applyTo: "lib/ai/sharedOptions.nix,packages/claude-code/modules/**,packages/copi
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-04-08 (commit pending — A10 delete
-> modules/ tree). If you change the gating, the
+> **Last verified:** 2026-07-27 (commit pending — re-points the
+> claude-code wrapping cite from `packages/ai-clis/claude-code.nix`,
+> a path that no longer exists, to `overlays/claude-code.nix`;
+> prior 2026-04-08, A10 delete modules/ tree). If you change the gating, the
 > `programs.*.enable` flipping, or the cross-ecosystem data flow
 > in the per-package factories (`packages/*/lib/mk*.nix`) or
 > shared options (`lib/ai/sharedOptions.nix`) and this fragment
@@ -112,7 +114,7 @@ mkIf gate to skip them):
 ### What's NOT in the ai module
 
 - The package wrapping (Bun runtime) for claude-code — handled
-  in `packages/ai-clis/claude-code.nix` at overlay level.
+  in `overlays/claude-code.nix` at overlay level.
 - MCP server config — ai has no `mcpServers` option. Consumers
   configure `programs.mcp.servers` or per-CLI `mcpServers`
   directly. This is intentional: the ai module stayed focused

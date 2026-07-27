@@ -58,6 +58,7 @@ createdb
 creds
 crystallise
 cuda
+customisation
 deadnix
 dedup
 deprioritized

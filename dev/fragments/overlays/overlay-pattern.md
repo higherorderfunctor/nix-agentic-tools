@@ -1,10 +1,15 @@
 ## Overlay Grouping and the `generic` Subtree
 
-> **Last verified:** 2026-07-25 — the commit adding THIS line wires
+> **Last verified:** 2026-07-27 — the commit adding THIS line retires the
+> "bruno is the ONLY worked example" claim (`overlays/git-tools/git-absorb.nix`
+> is a second one and PREDATES it), replaces the heuristic with the
+> INPUT-vs-OUTPUT rule read out of the pinned nixpkgs' `lib.extendMkDerivation`,
+> and corrects "the failure is SILENT … shape-independent" — silent for
+> `buildNpmPackage`, LOUD for `buildRustPackage`. Prior: 2026-07-25 wired
 > `passthru.fixVendorHash` / `passthru.fixNpmDepsHash` to a real caller
-> (`fix_sidecar_hashes`) for the first time and corrects the
+> (`fix_sidecar_hashes`) for the first time and corrected the
 > `overlays/lib.nix` comment that claimed a re-run which did not exist;
-> see the Go-vendorHash section below. Prior: two changes, both wanted.
+> see the Go-vendorHash section below. Before that: two changes, both wanted.
 > `bc23e34b`
 > (LANDED) records that the CI warm step now forces `drvPath` and
 > therefore DOES cover sidecar-versioned packages; the commit adding
@@ -96,33 +101,83 @@ the set drops all of it.
 
 The thin-`overrideAttrs` shape above works because `cmake`/`buildGoModule`
 read `version` and `src` as ordinary attrs. It does NOT transfer to a
-builder written with `lib.extendMkDerivation`, and the failure is SILENT —
-the one genuinely silent failure in this area, and shape-independent.
+builder written with `lib.extendMkDerivation`.
 
-Such a builder derives attrs from its INCOMING arguments inside
-`extendDrvArgs`, before `overrideAttrs` ever runs. `buildNpmPackage`
-computes `npmDeps = fetchNpmDeps { hash = npmDepsHash; src; postPatch; }`
-there, so an `npmDepsHash` set through `overrideAttrs` composes on top of
-that already-computed output and is INERT. Measured on bruno:
+**Sort the attr into INPUT or OUTPUT — that makes the rule decidable in
+advance instead of a per-package surprise.** `lib.extendMkDerivation`
+(`lib/customisation.nix`) builds the derivation as `constructDrv (final:
+removeAttrs previous excludeDrvArgNames // extendDrvArgs final previous)`, so
+`extendDrvArgs` runs exactly ONCE, at call time, over the INCOMING args;
+`overrideAttrs` is plain `stdenv.mkDerivation`'s and only ever composes on
+the merged result. Therefore:
 
-```nix
-pkgs.bruno.overrideAttrs (_: { version = "4.0.0"; npmDepsHash = <fake>; })
-#  version              = "4.0.0"                  <- moved
-#  npmDeps.name         = "bruno-3.5.2-npm-deps"   <- did NOT
-#  npmDeps.outputHash   = sha256-4VsSXiHj/…        <- 3.5.2's hash
-```
+- An attr the builder **derived** (`cargoDeps`, `npmDeps`) IS movable
+  through `overrideAttrs` — you are replacing the finished value.
+- An attr the builder **consumed** to derive one (`cargoHash`,
+  `npmDepsHash`) is NOT: the derived value already exists, computed from
+  the old input. Neither hash is listed in `excludeDrvArgNames`, so the new
+  value is not even dropped — it lands in the final attrs as a dead env var
+  nothing reads.
 
-That builds 4.0.0 source against 3.5.2's dependency set and reports no
-error at all. Wrap the BUILDER instead — `pkg.override (_: {
+Read out of the pinned nixpkgs (26.11) rather than inferred:
+`pkgs/build-support/rust/build-rust-package/default.nix` and
+`pkgs/build-support/node/build-npm-package/default.nix` are both
+`lib.extendMkDerivation`, and each computes its vendor derivation inside
+`extendDrvArgs` — `fetchCargoVendor { … hash = args.cargoHash; }` and
+`fetchNpmDeps { … hash = npmDepsHash; }` respectively.
+
+**How that failure PRESENTS is builder-specific — do not generalize one
+measurement.** Both take the hash from the incoming args, but they differ in
+where the vendor derivation's OTHER inputs come from:
+
+- `buildNpmPackage` reads `src`, `postPatch` and `name` for `fetchNpmDeps`
+  from the destructured **args** as well, so an `overrideAttrs` bump moves
+  NOTHING in the deps derivation and the build succeeds SILENTLY against the
+  old dependency set. Measured on bruno:
+
+  ```nix
+  pkgs.bruno.overrideAttrs (_: { version = "4.0.0"; npmDepsHash = <fake>; })
+  #  version              = "4.0.0"                  <- moved
+  #  npmDeps.name         = "bruno-3.5.2-npm-deps"   <- did NOT
+  #  npmDeps.outputHash   = sha256-4VsSXiHj/…        <- 3.5.2's hash
+  ```
+
+  That builds 4.0.0 source against 3.5.2's dependency set and reports no
+  error at all.
+
+- `buildRustPackage` reads `name`/`pname`/`version`/`src`/`sourceRoot` for
+  `fetchCargoVendor` from **`finalAttrs`** — the overridden fixed point —
+  while still taking `hash` from `args.cargoHash`. The same bump therefore
+  vendors the NEW source against the OLD hash and fails LOUDLY on the
+  mismatch.
+
+The seam is the same either way: wrap the BUILDER — `pkg.override (_: {
 buildNpmPackage = args: realBuilder (finalAttrs: (lib.toFunction args)
 finalAttrs // { … }); })` — which puts the new values in the incoming args
-where `extendDrvArgs` reads them. `overlays/generic/bruno.nix` is the ONLY
-worked example in this tree — cite it, and do not reach for
-`git-tools/git-branchless.nix`, which is a plain `overrideAttrs` and has
-been one since well before this was written.
+where `extendDrvArgs` reads them.
 
 `lib.toFunction` is load-bearing in that snippet: upstream expressions come
 in both `attrs` and `finalAttrs: attrs` flavors, and it normalizes them.
+
+Two worked examples in this tree, both moving an INPUT hash — cite either:
+
+- `overlays/git-tools/git-absorb.nix` — `cargoHash`, via
+  `ourPkgs.git-absorb.override (_: { rustPlatform.buildRustPackage = … })`.
+  It PREDATES bruno.
+- `overlays/generic/bruno.nix` — `npmDepsHash`, via
+  `ourPkgs.bruno.override (_: { buildNpmPackage = … })`.
+
+`overlays/git-tools/git-branchless.nix` is a plain `overrideAttrs` and is
+CORRECT as one: it sets `cargoDeps` — an
+`ourPkgs.rustPlatform.importCargoLock` over the pinned src, i.e. the derived
+OUTPUT — and never `cargoHash`. Do not cite it as a builder-wrap example,
+and do not "fix" it into one.
+
+One trap in the git-absorb spelling: `.override (_: {
+rustPlatform.buildRustPackage = … })` REPLACES the whole `rustPlatform`
+argument with a one-key attrset. It is safe there only because nixpkgs'
+`git-absorb` expression reads nothing else off `rustPlatform`. Check the
+package's argument list before copying that shape.
 
 ### Sidecar or inline: what actually decides it
 

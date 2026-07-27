@@ -1,6 +1,11 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-07-24 (commit pending — dissolves
+> **Last verified:** 2026-07-27 (commit pending — re-points the
+> reference-submodule-shape pointer from the gitignored
+> `private/slice-fixture/lib/concerns.nix` at the tracked in-tree registries
+> `lib/fragments-registry.nix` and `lib/checks.nix`; also deletes the hardcoded
+> "29 packages — 16 main-tracking + 13 binary" target count, which had gone
+> stale, in favour of a derivation command; prior 2026-07-24, dissolves
 > `config/update-matrix.nix` into `config.update.targets`, now the
 > single source of truth). If you touch `dev/scripts/update-*.sh`,
 > `dev/scripts/resolve-overlay-file.sh`,
@@ -110,15 +115,40 @@ dependsOn; })`, plus the sibling `options.update.excludePatterns`.
   `file` is a repo-relative POSIX path STRING (never a Nix path
   literal), `null` for binary packages; `git` is the upstream URL for
   main-tracking rev-bump, `null` for binary packages; `dependsOn` names
-  DAG predecessors (e.g. `["rust-overlay"]`). Mirrors the reference
-  submodule shape in `private/slice-fixture/lib/concerns.nix`.
+  DAG predecessors (e.g. `["rust-overlay"]`). For the reference
+  submodule shape, read the sibling option-merged registries
+  `lib/fragments-registry.nix` and `lib/checks.nix` — same
+  `attrsOf (submodule …)` declaration, same central-contribution
+  split. Both are tracked. This bullet used to cite
+  `private/slice-fixture/lib/concerns.nix` instead; `/private/` is
+  gitignored local working material, so that pointer resolves for
+  nobody but its author. The fixture itself is described in
+  `docs/package-restructure.md`.
 - **`config/update-targets.nix`** — the central contribution: every
-  package's row EXCEPT effect-mcp (29 packages — 16 main-tracking + 13
-  binary), plus the `excludePatterns` list carried over from the
-  dissolved matrix. The binary rows are all
-  `--use-update-script [--override-filename <path>]`; the
-  `--override-filename` is what lets several attributes of one upstream
-  (`pnpm_10`, `pnpm_11`) each own a file and a sidecar.
+  package's row EXCEPT effect-mcp, plus the `excludePatterns` list carried
+  over from the dissolved matrix. Rows split into main-tracking (a `git`
+  URL and a non-null `file`) and binary (`git = null`, `file = null`).
+  **No total is written here on purpose.** A hardcoded one rots by
+  construction — this bullet carried "29 packages — 16 main-tracking + 13
+  binary" long after the sweep had grown past it. Derive it instead:
+
+  ```bash
+  nix eval --json .#updateTargets --apply 'ts: with builtins;
+    let n = attrNames ts; in {
+      total = length n;
+      mainTracking = length (filter (k: ts.${k}.git != null) n);
+    }'
+  ```
+
+  `.#updateTargets` is the merged registry, so that count includes
+  effect-mcp's co-located row; this file carries one fewer. It is not the
+  size of a sweep either — the ninja DAG adds one Inputs target per root
+  flake input, read from `flake.lock`, so a sweep's PR ceiling is targets
+  PLUS inputs. The binary rows all pass `--use-update-script`, optionally
+  with `--override-filename <path>`; that second flag is what lets several
+  attributes of one upstream (`pnpm_10`, `pnpm_11`) each own a file and a
+  sidecar.
+
 - **`overlays/mcp-servers/effect-mcp.update.nix`** — effect-mcp's own
   row, co-located with the overlay it bumps:
   `config.update.targets.effect-mcp = { file =

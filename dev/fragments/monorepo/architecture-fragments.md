@@ -1,8 +1,13 @@
 ## Architecture Fragments
 
-> **Last verified:** 2026-07-24 (commit pending — the
-> `packagePaths` + `devFragmentNames` registries dissolved into
-> `config.fragments.categories`).
+> **Last verified:** 2026-07-27 (commit pending — the worked
+> registration example is now explicitly fictional, so it can no
+> longer drift out of sync with a real category's `scopes`; it
+> previously named `ai-clis` and `claude-code` and had gone stale
+> against both. Prior 2026-07-27, that example stopped teaching
+> `packages/ai-clis/**`, a directory that does not exist; prior
+> 2026-07-24, the `packagePaths` + `devFragmentNames` registries
+> dissolved into `config.fragments.categories`).
 
 This repo ships path-scoped architecture fragments as dev-only
 context for agents working on it. They are SEPARATE from the
@@ -93,27 +98,42 @@ and `sources` (the markdown fragments composed into it). A
 path) or an attrset with an explicit location:
 
 ```nix
+# ILLUSTRATIVE ONLY — neither category below exists. Real rows
+# live in config/fragment-categories.nix; read that file for them.
 config.fragments.categories = {
-  ai-clis = {
-    scopes = ["packages/ai-clis/**"];
+  example-dev-sourced = {
+    scopes = ["overlays/example.nix" "packages/example/**"];
     sources = [
-      "packaging-guide"  # default location="dev"
-                         # → dev/fragments/ai-clis/packaging-guide.md
+      # bare string: location="dev", dir defaults to the category key
+      "packaging-guide"
+      # → dev/fragments/example-dev-sourced/packaging-guide.md
     ];
   };
-  claude-code = {
-    scopes = ["packages/claude-code/**"];
+  example-co-located = {
+    scopes = ["packages/example/**"];
     sources = [
       {
         location = "package";
-        name = "claude-code-wrapper";
-        dir = "claude-code";  # null defaults to the category key
-        # → packages/claude-code/docs/claude-code-wrapper.md
+        name = "example-wrapper";
+        # dir overrides the category key; null (the default) would
+        # look under packages/example-co-located/docs/ instead
+        dir = "example";
+        # → packages/example/docs/example-wrapper.md
       }
     ];
   };
 };
 ```
+
+Both categories above are **fictional on purpose.** A worked
+example that names a real category is a standing drift liability:
+it goes stale every time that category's `scopes` change, and the
+maintenance rule above will not catch it, because re-pointing a
+glob does not alter the _shape_ this snippet teaches. That is
+exactly how this snippet rotted once — it taught
+`packages/ai-clis/**`, a directory that no longer exists. Keep the
+example about the record's shape and let
+`config/fragment-categories.nix` be the source of real rows.
 
 `scopes` is a Nix list of globs, and `null` means always-loaded
 (what the `monorepo` orientation category uses). The option itself
