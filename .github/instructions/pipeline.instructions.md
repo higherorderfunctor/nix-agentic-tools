@@ -8,6 +8,9 @@ applyTo: ".github/workflows/update.yml,config/fragment-categories.nix,config/gen
 ## CI Update Workflow
 
 > **Last verified:** 2026-07-25 (commit pending — adds the
+> `NAT_UPDATE_JOBS` evaluator budget that killed run 30181958460, the
+> `verify_all_packages` single-definition build gate and the
+> `fix_sidecar_hashes` repair-on-failure retry; earlier that day, the
 > non-blocking annotation-step family and the new-pnpm-major raise). If
 > you touch
 > `.github/workflows/update.yml`, `dev/scripts/update-common.sh`,
@@ -252,13 +255,89 @@ errors about branches named `+ update/foo`.
 | `CACHIX_AUTH_TOKEN` | Repository secret                  | Pushes fetched sources + built outputs               |
 | `GITHUB_TOKEN`      | App token step output              | Authenticates git push + gh CLI                      |
 | `NIX_PATH`          | `nixpkgs=flake:nixpkgs`            | Required by nix-update (uses `import <nixpkgs>`)     |
+| `NAT_UPDATE_JOBS`   | `update.yml` step env (`4`)        | Bounds ninja `-j` AND the evaluator budget (below)   |
 | `WORKTREE_LOCK`     | `$RUNNER_TEMP/nix-update-worktree` | Serializes `git worktree add` (not concurrency-safe) |
 
-### Build verification gate (`run_nfb_build`)
+### The evaluator budget is MULTIPLICATIVE — `NAT_UPDATE_JOBS`
+
+ninja runs `$NAT_UPDATE_JOBS` targets concurrently, and every
+target that actually changed runs its OWN `nix-fast-build`, whose
+defaults are sized for it running ALONE on the box (verified in
+`nix_fast_build/options.py` @ 1.6.0):
+
+    --eval-workers          multiprocessing.cpu_count()
+    --eval-max-memory-size  4096      # MiB, PER WORKER
+
+Under ninja those MULTIPLY. On the 4-vCPU / 16 GiB `ubuntu-latest`
+runner a bare `-j4` is `4 x 4 x 4 GiB` = **64 GiB of evaluator heap
+budget against 16 GiB of RAM**, plus 16 evaluator processes fighting
+over 4 cores and one eval-cache SQLite file.
+
+This is INVISIBLE while targets are unchanged — an unchanged target
+exits before build verification and never spawns an evaluator at
+all — which is why the sweep looks healthy for months. It bites when
+several inputs move at once against a COLD eval cache, exactly what a
+`nixpkgs` bump guarantees, since that invalidates the eval cache for
+the whole package set.
+
+That is what killed run `30181958460`, twice on the same commit:
+`nixpkgs`, `nixpkgs-test` and `devenv` all updated, the pipeline went
+silent with four `nix-eval-jobs` processes live, and the runner was
+torn down with `The runner has received a shutdown signal` +
+exit 143 (SIGTERM) — 6m59s into attempt 1, 19m27s into attempt 2.
+
+**Diagnostic trap:** that is NOT a timeout and NOT a concurrency
+cancel. A 60-minute `timeout-minutes` hit reports conclusion
+`cancelled` (control: run `30074075218`, duration `1:00:22`), and so
+does a `cancel-in-progress` kill. Both attempts here reported
+`failure`. Do not "fix" this class of death by raising
+`timeout-minutes` — it is a resource bound, not a time bound.
+
+`nfb_eval_flags` in `update-common.sh` bounds the PRODUCT, deriving
+both knobs from the machine so a bigger runner uses its headroom
+automatically:
+
+- never more than ONE evaluator per core across all concurrent
+  invocations — `jobs * floor(cores/jobs) <= cores`
+- total evaluator heap ceiling <= 60% of RAM (the rest is the nix
+  daemon, git, and the runner agent — the agent being the process
+  whose death produces the shutdown signal)
+
+The first invariant holds only because **`NAT_UPDATE_JOBS` is itself
+clamped to the core count**. `nfb_eval_flags` cannot give an invocation
+fewer than one evaluator, so once there are more concurrent targets than
+cores the evaluator total is pinned at the target count and no
+per-invocation budget can pull it back. Fewer targets is the only lever.
+Measured, cores=2 / jobs=4: workers-per-invocation clamps to 1 and the
+total lands at 4 evaluators on 2 cores.
+
+The second invariant is stronger — it holds for ANY jobs value, because
+per-worker is `(RAM*0.6)/(jobs*workers)` and the product telescopes back
+to `RAM*0.6` exactly.
+
+**Do not "make this consistent"** by substituting `min(jobs, cores)`
+into the memory divisor as well. The divisor must be the number of
+invocations that will ACTUALLY run concurrently; shrinking it while
+ninja still spawns `jobs` of them inflates the per-worker ceiling.
+Measured, cores=2 / jobs=4 / 16 GiB: that variant yields **119% of RAM**
+— the exact failure class this machinery exists to prevent.
+
+`NAT_UPDATE_JOBS` is ONE knob feeding both consumers on purpose, and the
+workflow **sources `update-common.sh`** rather than reading its own env
+var so it gets the CLAMPED value. Clamping in the library while ninja
+still ran `-j4` from the raw env var would fix nothing. Changing ninja's
+`-j` without changing the evaluator budget silently re-creates the
+overcommit.
+
+### Build verification gate (`run_nfb_build` / `verify_all_packages`)
 
 `update-input.sh` and the `final-build` ninja rule both invoke
 `nix-fast-build` to verify peer packages still build after an
-input change. Upstream has a known bug where `async_main`'s
+input change. The invocation itself lives in ONE place,
+`verify_all_packages` — three callers need it byte-identical, and
+when the copies drifted they silently verified different things.
+
+Upstream has a known bug where `async_main`'s
 `finally: stack.aclose()` can swallow non-zero exit on the
 build-failure path — per-build failures silently exit 0. Effect:
 a broken peer package would let `nixpkgs` (or any other input
@@ -287,6 +366,40 @@ four independent gates — any of them tripping fails the build:
 `|| exit_code=$?` localizes errexit suppression to the single
 nix-fast-build call — no blanket `set +e`. All four gates run
 unconditionally so failure signals are always logged together.
+
+### Stale sidecar hashes self-heal (`fix_sidecar_hashes`)
+
+`mkUpdateScript` rebuilds a sidecar FROM SCRATCH on every write, so
+`vendorHash` (and bruno's `srcHash`/`npmDepsHash`) survive only
+because the overlays re-derive them through `extraExtract`. That
+covers the VERSION-BUMP path and nothing else.
+
+A **nixpkgs or Go-toolchain bump can invalidate a `vendorHash` with
+no version change at all.** `extraExtract` never fires, so nothing
+re-derives the hash. The stale hash then fails the input bump's own
+build verification and the input is reported HELD BACK — the
+breakage does NOT leak into the tree, but every later `nixpkgs`
+update parks behind a hash a human has to fix by hand.
+
+So Phase 2 retries ONCE through `fix_sidecar_hashes`: it discovers
+every `passthru.fixVendorHash` / `passthru.fixNpmDepsHash` across
+`packages.<system>` and runs it, then re-verifies. The correction
+lands in the same commit as the lock change, so the PR is green.
+
+Three properties are load-bearing:
+
+- **Repair-on-failure, not a prophylactic sweep.** A healthy bump
+  pays nothing. Running the fixers up-front would drive a separate
+  `nix build` per fixer per changed input.
+- **The roster is DISCOVERED, never listed.** A hardcoded list would
+  silently stop covering the next absorbed Go package, and a fixer
+  that has quietly stopped firing is worse than no fixer.
+- **Collect, don't abort.** One package genuinely broken by the bump
+  must not stop the others self-healing; the retry build is the
+  authority on whether the tree is good.
+
+Exposure grew from zero to four Go packages in a single slice
+(`#513`), so this widens with every Go absorption.
 
 ### Sidecar logging and forensic preservation
 

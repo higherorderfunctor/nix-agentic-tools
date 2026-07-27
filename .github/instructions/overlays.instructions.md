@@ -449,7 +449,12 @@ assertion in the same commit.
 
 ## Overlay Grouping and the `generic` Subtree
 
-> **Last verified:** 2026-07-25 — two changes, both wanted. `bc23e34b`
+> **Last verified:** 2026-07-25 — the commit adding THIS line wires
+> `passthru.fixVendorHash` / `passthru.fixNpmDepsHash` to a real caller
+> (`fix_sidecar_hashes`) for the first time and corrects the
+> `overlays/lib.nix` comment that claimed a re-run which did not exist;
+> see the Go-vendorHash section below. Prior: two changes, both wanted.
+> `bc23e34b`
 > (LANDED) records that the CI warm step now forces `drvPath` and
 > therefore DOES cover sidecar-versioned packages; the commit adding
 > this line (pending) adds the sidecar-vs-inline decision rule and the
@@ -671,8 +676,15 @@ the mechanism is worth understanding before touching it:
   immediately after. The fixer builds `<attr>.goModules` through the
   flake's own `packages` output (this repo has NO `legacyPackages`) and
   writes back the `got:` hash from a `-go-modules` mismatch only.
-- It is also `passthru.fixVendorHash`, because a nixpkgs or toolchain
-  bump can invalidate a vendor hash with no version bump at all.
+- It is also `passthru.fixVendorHash`, because a nixpkgs or Go-toolchain
+  bump can invalidate a vendor hash with no version bump at all — and
+  `extraExtract` fires only on a VERSION bump, so nothing else would
+  re-derive it. `fix_sidecar_hashes` (`dev/scripts/update-common.sh`)
+  discovers this attr across `packages.<system>` and runs it when an
+  input bump's build verification fails, so that case self-heals into the
+  same commit instead of parking the input update as HELD BACK. Until
+  2026-07-25 the standalone had NO caller and `overlays/lib.nix` claimed
+  a re-run that did not exist; if you unwire it, fix both.
 - `passthru` must be MERGED. `buildGoModule` hangs `goModules` and
   `overrideModAttrs` there, `build-support/go/module.nix` warns loudly
   when an overlay drops them, and the fixer resolves `.goModules`

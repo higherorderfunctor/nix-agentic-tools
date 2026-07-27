@@ -50,8 +50,27 @@ if ! (
     exit 0
   fi
 
-  # Phase 2: Build verification
-  run_nfb_build nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --flake ".#packages.$(nix eval --impure --raw --expr 'builtins.currentSystem')"
+  # Phase 2: Build verification.
+  #
+  # On failure, re-derive the sidecar fixed-output hashes and retry ONCE.
+  # A nixpkgs or Go-toolchain bump can invalidate a sidecar `vendorHash`
+  # (or bruno's `srcHash`/`npmDepsHash`) with no version change, and
+  # `extraExtract` — which only runs on a version bump — never gets a
+  # chance to correct it. Without this the input bump is HELD BACK and
+  # every later nixpkgs update parks behind a hash a human must fix by
+  # hand. See fix_sidecar_hashes in update-common.sh.
+  #
+  # Repair-on-failure, not a prophylactic sweep: a healthy bump pays
+  # NOTHING, which matters because this runs once per changed input and
+  # the fixers each drive their own `nix build`.
+  if ! verify_all_packages; then
+    log_info "Build failed — re-deriving sidecar hashes and retrying once..."
+    # Non-fatal: the retry below is the authority on whether the tree is
+    # good, and it reports the real failure if the hashes were not the
+    # problem.
+    fix_sidecar_hashes || :
+    verify_all_packages
+  fi
 
   # Phase 2.5: Formatter pass — only when this input bump actually
   # moved `formatter.<system>`'s store path. Most inputs (devenv,

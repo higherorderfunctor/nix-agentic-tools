@@ -62,31 +62,45 @@
     (builtins.mapAttrs (name: _: "update-${name}") updateTargets);
   allNonTreefmtTargets = allInputTargets ++ allPkgTargets;
 
+  # Full strict mode for every generated rule body. The repo standard
+  # applies to generated wrappers too, not just files on disk, and these
+  # `bash -c` bodies are exactly that.
+  #
+  # SEPARATORS ARE `;`, NEVER `&&`. `shopt ... || :` has to bind to the
+  # shopt alone; in an `&&` chain the trailing `|| :` binds to the WHOLE
+  # chain, so `false && set -e && shopt ... || :` exits 0 and silently
+  # swallows the earlier failure. Verified both ways before landing this.
+  #
+  # `pipefail` is the load-bearing member for these particular bodies:
+  # every one of them ends in `| tee`, and without it tee's exit status
+  # would mask a failing target.
+  strictPrelude = "set -euETo pipefail; shopt -s inherit_errexit 2>/dev/null || :; mkdir -p .update-logs;";
+
   # Ninja rules
   rules = ''
     # Rules
     rule pipeline-init
-      command = bash -c 'mkdir -p .update-logs && set -o pipefail && bash dev/scripts/update-init.sh 2>&1 | tee .update-logs/init.log'
+      command = bash -c '${strictPrelude} bash dev/scripts/update-init.sh 2>&1 | tee .update-logs/init.log'
       description = Pipeline init
 
     rule update-input
-      command = bash -c 'mkdir -p .update-logs && set -o pipefail && bash dev/scripts/update-input.sh $name 2>&1 | tee .update-logs/input-$name.log'
+      command = bash -c '${strictPrelude} bash dev/scripts/update-input.sh $name 2>&1 | tee .update-logs/input-$name.log'
       description = Updating input: $name
 
     rule update-pkg
-      command = bash -c 'mkdir -p .update-logs && set -o pipefail && bash dev/scripts/update-pkg.sh $name $flags $git 2>&1 | tee .update-logs/pkg-$name.log'
+      command = bash -c '${strictPrelude} bash dev/scripts/update-pkg.sh $name $flags $git 2>&1 | tee .update-logs/pkg-$name.log'
       description = Updating package: $name
 
     rule full-format
-      command = bash -c 'mkdir -p .update-logs && set -o pipefail && { nix fmt && git add -A && git diff --staged --quiet || git commit -m "style: treefmt full reformat after updates"; } 2>&1 | tee .update-logs/full-format.log'
+      command = bash -c '${strictPrelude} { nix fmt && git add -A && git diff --staged --quiet || git commit -m "style: treefmt full reformat after updates"; } 2>&1 | tee .update-logs/full-format.log'
       description = Full treefmt (formatter config may have changed)
 
     rule final-build
-      command = bash -c 'mkdir -p .update-logs && set -o pipefail && source dev/scripts/update-common.sh && run_nfb_build nix run --inputs-from . nix-fast-build -- --skip-cached --no-nom --no-link --flake ".#packages.$$(nix eval --impure --raw --expr builtins.currentSystem)" 2>&1 | tee .update-logs/final-build.log'
+      command = bash -c '${strictPrelude} source dev/scripts/update-common.sh; verify_all_packages 2>&1 | tee .update-logs/final-build.log'
       description = Final build verification (should be cached)
 
     rule report
-      command = bash -c 'mkdir -p .update-logs && set -o pipefail && bash dev/scripts/update-report.sh 2>&1 | tee .update-logs/report.log'
+      command = bash -c '${strictPrelude} bash dev/scripts/update-report.sh 2>&1 | tee .update-logs/report.log'
       description = Update report
   '';
 

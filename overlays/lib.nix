@@ -546,8 +546,15 @@ rec {
   # after the sidecar write.
   #
   # Exposed standalone as `passthru.fixVendorHash` as well, because a
-  # nixpkgs or toolchain bump can invalidate vendorHash with no version
-  # bump at all — the update job re-runs it after flake updates.
+  # nixpkgs or Go-toolchain bump can invalidate vendorHash with no
+  # version bump at all, and `extraExtract` only fires on a version bump.
+  # `fix_sidecar_hashes` (dev/scripts/update-common.sh) discovers this
+  # attr across `packages.<system>` and runs it when an input bump's
+  # build verification fails, so that case self-heals into the same
+  # commit instead of parking the whole input update as HELD BACK.
+  # Until 2026-07-25 that standalone had NO caller at all and this
+  # comment claimed a re-run that did not exist — if you unwire
+  # `fix_sidecar_hashes`, fix this sentence too.
   #
   # The build-and-scrape body lives in `fodHashFixFn` above; see its
   # header for the argument contract and for why the `-go-modules`
