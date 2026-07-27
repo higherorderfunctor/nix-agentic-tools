@@ -3053,6 +3053,60 @@ in {
       && lib.hasInfix "Copilot devenv context" (contextFile.text or "")
   );
 
+  # HM: ai.claude.plugins routes to programs.claude-code.plugins as an
+  # ATTRSET, key and value intact. The per-entry mkDefault in mkClaude
+  # must resolve away, leaving the bare source.
+  module-claude-hm-plugins-route-to-upstream = mkTest "claude-hm-plugins-route-to-upstream" (
+    let
+      src = ./../packages/stacked-workflows/skills/stack-fix;
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          plugins.my-plugin = src;
+        };
+      };
+      upstream = result.config.programs.claude-code.plugins or {};
+    in
+      lib.attrNames upstream == ["my-plugin"] && upstream.my-plugin == src
+  );
+
+  # HM: the ATTRIBUTE NAME — not the source's base name — is what becomes
+  # the plugin's on-disk directory name. This is the whole point of the
+  # list → attrset conversion: upstream's list form derives each name from
+  # `baseNameOf` the entry, so a bare flake-input store path yields an
+  # unstable `<hash>-source` that is renamed by every unrelated input bump.
+  #
+  # Upstream (home-manager modules/programs/claude-code, verified at rev
+  # cbb77679) consumes the attrset via `lib.mapAttrsToList mkPluginEntry`
+  # and links each entry at `<configDir>/skills/<name>`, so the key here IS
+  # the delivered directory name. Our boundary is the key handed to
+  # upstream; this asserts a key that shares nothing with its value's store
+  # base name still arrives verbatim, and that no name is derived from the
+  # source.
+  module-claude-hm-plugins-key-is-directory-name = mkTest "claude-hm-plugins-key-is-directory-name" (
+    let
+      # A package whose store base name (…-hello-<version>) is nothing like
+      # the key, standing in for a flake-input root.
+      pluginPkg = pkgs.hello;
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          plugins.remember = pluginPkg;
+        };
+      };
+      upstream = result.config.programs.claude-code.plugins or {};
+      # `unsafeDiscardStringContext` mirrors upstream's own
+      # `derivePluginName`; without it the store-path context makes this
+      # illegal to use as an attribute name.
+      derivedName =
+        builtins.unsafeDiscardStringContext (baseNameOf (toString pluginPkg));
+    in
+      lib.attrNames upstream
+      == ["remember"]
+      && upstream.remember == pluginPkg
+      && !(upstream ? ${derivedName})
+  );
+
   # HM: ai.claude.marketplaces routes to programs.claude-code.marketplaces
   # via identity translation. Regression guard.
   module-claude-hm-marketplaces-route-to-upstream = mkTest "claude-hm-marketplaces-route-to-upstream" (

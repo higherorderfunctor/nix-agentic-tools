@@ -1,7 +1,11 @@
 ## claude-code Wrapper Chain
 
-> **Last verified:** 2026-04-15 (buddy removal — anthropics/claude-code#45517).
-> If you touch `overlays/claude-code.nix` or the HM plugin wrapper
+> **Last verified:** 2026-07-27 (commit pending — `ai.claude.plugins`
+> became attrset-only, and re-reading upstream at home-manager rev
+> `cbb77679` showed this fragment had gone stale on the delivery
+> mechanism: there is no wrapper at all at the version we package.
+> Prior 2026-04-15, buddy removal — anthropics/claude-code#45517.)
+> If you touch `overlays/claude-code.nix` or the HM plugin
 > integration and this fragment isn't updated in the same commit,
 > stop and fix it.
 
@@ -9,20 +13,43 @@ Claude Code ships as a **pre-built compiled binary** (a Bun
 single-exec). The base package (`overlays/claude-code.nix`)
 installs it directly as `$out/bin/claude`.
 
-### The chain
+### There is no wrapper on the live path
 
-```
-claude             (HM plugin wrapper, from nixpkgs claude-code module)
-  → $out/bin/claude  (pre-built binary from overlays/claude-code.nix)
-```
+The plugin integration comes from **home-manager's**
+`programs.claude-code` module (not nixpkgs'), and it has two
+mutually exclusive delivery paths, chosen from the packaged
+Claude Code version:
 
-1. **HM plugin wrapper** (`$out/bin/claude`): a short bash script
-   produced by nixpkgs' `programs.claude-code` module. It execs
-   the underlying binary with a `--plugin-dir <store-path>`
-   argument pointing at a generated plugin store path.
-2. **Pre-built binary**: the compiled Bun single-exec fetched from
-   Anthropic's GPG-signed manifest. Bun is embedded in the
-   binary — no external Bun dependency needed at runtime.
+- **2.1.157 and later — personal plugins, no wrapper.** Upstream
+  sets `finalPackage = cfg.package`, so `$out/bin/claude` is the
+  pre-built binary itself. Each plugin is symlinked as a whole
+  directory at `<configDir>/skills/<name>` (yes, `skills/`, not
+  `plugins/`) and discovered from there. **This is the live path**
+  — `overlays/claude-code-sources.json` tracks 2.1.220.
+- **2.1.76 through 2.1.156, or a package with no detectable
+  version — the legacy `--plugin-dir` wrapper.** Upstream wraps
+  the binary in a `symlinkJoin` whose `$out/bin/claude` is a short
+  bash script that execs `.claude-wrapped`, passing one
+  `--plugin-dir` plus its store path per plugin. Upstream warns on
+  this path; strict-parser subcommands such as `claude rc` may
+  reject the arguments. Below 2.1.76 an upstream assertion fails
+  outright.
+
+Only whole-directory symlinks work for a plugin. Recursive linking
+materializes a real directory of per-file symlinks, and Claude
+Code's `agents/` and `commands/` scanners accept only regular
+files, so every agent and command would be silently dropped.
+
+### `<name>` is the attribute key
+
+`ai.claude.plugins` is an attrset (`attrsOf (either package
+path)`), and the key is what upstream uses verbatim as `<name>`
+above. It is deliberately not derived from the source: upstream's
+deprecated list form derives names with `baseNameOf`, which turns
+a bare flake-input store path into an unstable `<hash>-source`
+that gets renamed by every unrelated input bump. Upstream asserts
+these names are unique among themselves and disjoint from skill
+names.
 
 ### The base package
 
