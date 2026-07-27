@@ -27,7 +27,14 @@ tmux new-session -d -s "$S" -x 220 -y 60 -c "$RIG/work" \
 ready=0
 for _ in $(seq 1 45); do
   sleep 1
-  if tmux capture-pane -p -S -400 -t "$S" 2>/dev/null | grep -qiE 'ask a question|describe a task'; then
+  # Capture then match with a here-string, as the three sibling probes do.
+  # Piping capture-pane straight into `grep -qiE` breaks under this script's
+  # `set -euETo pipefail`: the readiness banner repeats throughout 400 lines
+  # of scrollback, so grep matches and exits long before tmux finishes
+  # writing, tmux dies with SIGPIPE (141), and the poisoned pipeline status
+  # makes the poll report "not ready" forever.
+  pane="$(tmux capture-pane -p -S -400 -t "$S" 2>/dev/null || true)"
+  if grep -qiE 'ask a question|describe a task' <<<"$pane"; then
     ready=1
     break
   fi

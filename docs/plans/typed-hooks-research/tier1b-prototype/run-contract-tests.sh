@@ -78,7 +78,11 @@ run_fixture() {
   local sc
   sc="$(jq -r '.expect.stderrContains // empty' "$fx")"
   if [ -n "$sc" ]; then
-    printf '%s' "$err" | grep -qF -- "$sc" || {
+    # Here-string, not `printf … | grep -qF`: under this script's
+    # `set -euETo pipefail`, grep exiting at its first match leaves printf's
+    # remaining per-line writes to EPIPE, which would report a stderr
+    # substring that IS present as missing.
+    grep -qF -- "$sc" <<<"$err" || {
       ok=0
       msg+=" stderr lacks '$sc';"
     }

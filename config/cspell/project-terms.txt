@@ -262,6 +262,7 @@ serialising
 sess
 shellharden
 shortrev
+sigpipe
 sigtool
 sixel
 skillname

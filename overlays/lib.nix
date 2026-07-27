@@ -52,7 +52,13 @@ rec {
     check =
       if marker != null
       then ''
-        if echo "$output" | grep -Fq "${marker}"; then
+        # Here-string, not `echo "$output" | grep -Fq`. stdenv arms
+        # `set -o pipefail` for every build phase (setup line 12), and bash's
+        # echo builtin writes a captured multi-line string a line at a time —
+        # so `grep -Fq` exiting at its first match leaves the remaining writes
+        # to EPIPE, poisoning the pipeline status and flipping this `if` to the
+        # "marker not found" branch on output that DOES contain the marker.
+        if grep -Fq "${marker}" <<<"$output"; then
           echo "smoke-test: found marker '${marker}'"
         else
           echo "smoke-test: marker '${marker}' not found in output:" >&2
@@ -403,7 +409,16 @@ rec {
       fi
 
       hash=""
-      if echo "$output" | ${pkgs.gnugrep}/bin/grep -q "fixed-output derivation '[^']*$drvPattern"; then
+      # Here-string, not `echo "$output" | grep -q`. This runs under the
+      # enclosing writeShellScript's `set -euETo pipefail`, `$output` is a
+      # whole failed `nix build` transcript (tens of KB), and bash's echo
+      # builtin writes it a line at a time — so `grep -q` exiting at its first
+      # match sends the remaining writes to EPIPE and poisons the pipeline's
+      # status even though the match SUCCEEDED. That flips this `if` false,
+      # leaves `hash` empty, and reports a real hash mismatch as the unrelated
+      # "build failed without a hash mismatch" error below. Measured at 3/200
+      # on a 34 KB transcript.
+      if ${pkgs.gnugrep}/bin/grep -q "fixed-output derivation '[^']*$drvPattern" <<<"$output"; then
         hash=$(echo "$output" | ${pkgs.gnugrep}/bin/grep -oP 'got:\s+\Ksha256-[A-Za-z0-9+/=]+' | ${pkgs.coreutils}/bin/head -n1 || :)
       fi
       if [ -z "$hash" ]; then
