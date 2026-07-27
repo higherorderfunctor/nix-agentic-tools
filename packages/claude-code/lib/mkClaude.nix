@@ -111,13 +111,36 @@ in
         example = lib.literalExpression "./claude-memory.md";
       };
       plugins = lib.mkOption {
-        type = with lib.types; listOf (either package path);
-        default = [];
+        type = with lib.types; attrsOf (either package path);
+        default = {};
         description = ''
-          Claude plugin directories or packages. Each entry is either
-          a path to a plugin directory or a package derivation. Passed
-          through to programs.claude-code.plugins; each produces a
-          --plugin-dir argument in the claude wrapper.
+          Claude plugins, keyed by plugin directory name. The value is
+          either a path to a plugin directory or a package derivation.
+          Routed to `programs.claude-code.plugins`.
+
+          The ATTRIBUTE NAME is load-bearing: upstream uses it
+          verbatim as the plugin's on-disk directory name
+          (`<configDir>/skills/<name>` on Claude Code 2.1.157+; the
+          derivation name and the synthesized
+          `.claude-plugin/plugin.json` `name` field on every version),
+          and its uniqueness — against other plugins and against
+          `ai.skills` names — is asserted upstream.
+
+          Attrset-only by design. Upstream still tolerates a plain list,
+          but then derives each name from the entry's base name, so a
+          bare flake-input store path yields an unstable
+          `<hash>-source` that is renamed by every unrelated input bump.
+          An explicit key pins the directory name across bumps. A list
+          fails the type check here — convert it to an attrset.
+
+          HM only — upstream devenv `claude.code` has no plugins surface,
+          so devenv ignores this option.
+        '';
+        example = lib.literalExpression ''
+          {
+            my-local-plugin = ./my-local-plugin;
+            remember = inputs.claude-remember;
+          }
         '';
       };
       settings = lib.mkOption {
@@ -536,7 +559,13 @@ in
               package = lib.mkDefault cfg.package;
               skills = lib.mapAttrs (_: lib.mkDefault) mergedSkills;
               context = lib.mkDefault composedContext;
-              plugins = lib.mkDefault cfg.plugins;
+              # Per-ENTRY mkDefault, like `skills` above — not a whole-attrset
+              # one. `filterOverrides` keeps only the highest-priority
+              # definitions of an option, so a single normal-priority
+              # `programs.claude-code.plugins.<name>` from a consumer would
+              # discard a whole-attrset mkDefault outright. Per-entry keeps the
+              # other plugins and overrides just the named one.
+              plugins = lib.mapAttrs (_: lib.mkDefault) cfg.plugins;
               inherit (cfg) marketplaces outputStyles commands;
               # Renamed script-bodies option → upstream script files. The typed
               # `ai.claude.hooks` event map lowers to settings.json separately
