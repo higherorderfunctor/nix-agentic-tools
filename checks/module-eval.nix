@@ -2844,6 +2844,63 @@ in {
       && lib.hasInfix "/run/secrets/gh-token" (activation.text or "")
   );
 
+  # DRY-RUN INERTNESS. Every MUTATING command in the rotation script must be
+  # routed through home-manager's `run` helper, which echoes instead of
+  # executing when DRY_RUN is set. Reads stay unwrapped on purpose, so a dry
+  # run still evaluates its conditions and can report accurately.
+  #
+  # The NEGATIVE assertion is the load-bearing one. `printf … > "$hash_file"`
+  # is the exact form this replaced, and it is what a future "simplification"
+  # of the tee would reintroduce: `run` wraps a COMMAND AND ITS ARGUMENTS, so
+  # a shell redirection attached to it is performed by the CALLING shell and
+  # writes on a dry run regardless. Writing the hash during a dry run is worse
+  # than merely failing to be inert -- the next REAL activation then sees an
+  # unchanged hash and skips a restart that was genuinely needed, so the dry
+  # run silently destroys pending rotation work.
+  #
+  # The positive assertions double as the CONTROL for the negative: they prove
+  # the infix match reaches this script at all, so a passing negative cannot
+  # be a match against an empty or wrongly-scoped string.
+  module-mcp-services-rotation-dry-run-routed = mkTest "mcp-services-rotation-dry-run-routed" (
+    let
+      result = evalHm {
+        services.mcp-servers.servers.github-mcp = {
+          enable = true;
+          settings.credentials.file = "/run/secrets/gh-token";
+        };
+      };
+      text = result.config.home.activation.mcpRestartOnSecretRotation.text or "";
+      allLines = lib.splitString "\n" text;
+      # COMMENT LINES ARE EXCLUDED, and that is not incidental tidiness: the
+      # emitted script carries a comment naming `printf > "$hash_file"` as the
+      # form to avoid, so a scan over raw lines matches the very prose warning
+      # against the defect and fails a correct script. Same shape as the
+      # repo's bare-commands scan, which is per-line and therefore reads
+      # comments too.
+      lines = lib.filter (l: builtins.match "[[:space:]]*#.*" l == null) allLines;
+      # Matched per LINE and WITHOUT interpolating any store path. Building
+      # the needle from `${pkgs.coreutils}` instead would drag store-path
+      # string context into this check's own derivation, which nix rejects
+      # outright -- the assertion cannot reference a store path.
+      runs = frag: lib.any (l: lib.hasInfix "run " l && lib.hasInfix frag l) lines;
+    in
+      # LINUX-GATED, deliberately. The module emits this entry only under
+      # `pkgs.stdenv.isLinux` (systemd user units), so on darwin the entry does
+      # not exist, `text` is empty and every assertion below would be false --
+      # a check that fails by construction on one required platform. The
+      # sibling rotation test lacks this guard and is a recorded aarch64-darwin
+      # failure blocking `--all-systems`; adding a second one would deepen that
+      # blocker rather than merely inherit it.
+      !pkgs.stdenv.isLinux
+      || (
+        runs "/bin/mkdir -p"
+        && runs "/bin/chmod 700"
+        && runs "/bin/systemctl --user restart"
+        && lib.any (l: lib.hasInfix "| run --quiet " l && lib.hasInfix "/bin/tee -- \"$hash_file\"" l) lines
+        && !(lib.any (l: lib.hasInfix "> \"$hash_file\"" l) lines)
+      )
+  );
+
   # Helper-based credentials have no stable file to fingerprint, so they
   # contribute no rotation entry (the path-based restart cannot apply).
   module-mcp-services-rotation-skips-helper-creds = mkTest "mcp-services-rotation-skips-helper-creds" (

@@ -208,17 +208,38 @@
         if [ -n "$old_hash" ] && [ "$old_hash" != "$new_hash" ] \
           && ${pkgs.systemd}/bin/systemctl --user is-active --quiet ${escapeShellArg unit}; then
           $VERBOSE_ECHO "mcp-servers: credential for ${unit} rotated -- restarting"
-          ${pkgs.systemd}/bin/systemctl --user restart ${escapeShellArg unit} || true
+          run ${pkgs.systemd}/bin/systemctl --user restart ${escapeShellArg unit} || true
         fi
-        printf '%s' "$new_hash" > "$hash_file" || true
+        # The hash write goes through `tee`, NOT `printf > "$hash_file"`, and
+        # that is load-bearing rather than stylistic: home-manager's `run`
+        # wraps a COMMAND AND ITS ARGUMENTS, so a shell redirection attached
+        # to it is performed by the CALLING shell and fires on a dry run
+        # regardless. `run printf '%s' "$h" > "$hash_file"` would therefore
+        # still truncate-and-write under DRY_RUN. Routing the write through a
+        # command `run` can actually suppress is the only form that is inert.
+        #
+        # The ordering matters too, and is why the write is inside `run` at
+        # all rather than merely after the restart: writing the hash during a
+        # dry run makes the NEXT real activation see an unchanged hash and
+        # skip a restart that was genuinely needed, so a "harmless" dry run
+        # would silently destroy pending rotation work.
+        printf '%s' "$new_hash" | run --quiet ${pkgs.coreutils}/bin/tee -- "$hash_file" || true
       fi
     fi
   '';
 
+  # Every MUTATING command below is routed through home-manager's `run`
+  # helper, which is a no-op-plus-echo when DRY_RUN is set. Reads are
+  # deliberately NOT wrapped -- a dry run must still evaluate its conditions
+  # in order to report accurately what a real run would do.
+  #
+  # `run` is the CURRENT mechanism: the activation script's own preamble
+  # marks DRY_RUN_CMD, DRY_RUN_NULL and VERBOSE_ECHO deprecated and
+  # back-compat-only, so new code must not reach for them.
   rotationRestartScript = ''
     state_dir="''${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/mcp-cred-hashes"
-    ${pkgs.coreutils}/bin/mkdir -p "$state_dir" || true
-    ${pkgs.coreutils}/bin/chmod 700 "$state_dir" || true
+    run ${pkgs.coreutils}/bin/mkdir -p "$state_dir" || true
+    run ${pkgs.coreutils}/bin/chmod 700 "$state_dir" || true
     ${concatStringsSep "\n" (mapAttrsToList mkRotationCheck credentialedServiceFiles)}
   '';
 in {
