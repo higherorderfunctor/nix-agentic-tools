@@ -151,9 +151,25 @@ _: {
 
   # Packages excluded from the update loop entirely.
   # Regex patterns matched against flake package names.
+  #
+  # aihubmix-mcp is the one entry here excluded for a REASON THAT CAN
+  # CHANGE, so it is the one to re-examine. It carries a local patch against
+  # upstream's published build output, and no update script can re-author a
+  # patch. Note what this is NOT about: the package tracks npm
+  # `dist-tags.latest` (1.1.0). Being current did not make it sweepable —
+  # getting there required re-authoring the patch BY HAND, because
+  # build/tools/painting-tools.js was rewritten 288 -> 624 lines and 2 of
+  # its 3 hunks stopped applying. A targets row would go RED the next time
+  # upstream does that, permanently occupying a channel meant for TRANSIENT
+  # failures. Currency is surfaced instead by update.yml's non-blocking
+  # "Detect a newer @aihubmix/mcp on npm" step. Delete this line, delete
+  # that step, and add a `--use-update-script` row the moment the patch can
+  # be dropped entirely (upstream grows a native save-to-disk argument, or
+  # takes the change) — the two mechanisms must never both be live.
   config.update.excludePatterns = [
     "^agnix-lsp$"
     "^agnix-mcp$"
+    "^aihubmix-mcp$"
     "^docs"
     "^instructions-"
     "^nixos-mcp$"

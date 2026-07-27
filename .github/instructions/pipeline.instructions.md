@@ -7,11 +7,15 @@ applyTo: ".github/workflows/update.yml,config/fragment-categories.nix,config/gen
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-07-25 (commit pending — adds the
-> `NAT_UPDATE_JOBS` evaluator budget that killed run 30181958460, the
-> `verify_all_packages` single-definition build gate and the
-> `fix_sidecar_hashes` repair-on-failure retry; earlier that day, the
-> non-blocking annotation-step family and the new-pnpm-major raise). If
+> **Last verified:** 2026-07-27 (commit pending — adds the
+> `Detect a newer @aihubmix/mcp on npm` annotation step and the
+> excluded-because-a-local-patch-cannot-be-swept rule behind it, which
+> is about SWEEPABILITY and not about lagging: aihubmix-mcp tracks
+> `dist-tags.latest` and is still excluded. Earlier:
+> the `NAT_UPDATE_JOBS` evaluator budget that killed run 30181958460,
+> the `verify_all_packages` single-definition build gate and the
+> `fix_sidecar_hashes` repair-on-failure retry, and the
+> non-blocking annotation-step family plus the new-pnpm-major raise). If
 > you touch
 > `.github/workflows/update.yml`, `dev/scripts/update-common.sh`,
 > `dev/scripts/update-input.sh`, `dev/scripts/update-pkg.sh`, or the
@@ -89,6 +93,33 @@ deliberately does NOT automate because a human has to decide:
     `nix eval .#packages.<system>`; a hardcoded major rots silently the
     moment the window slides, and a detector that has stopped detecting
     is worse than none.
+- **`Detect a newer @aihubmix/mcp on npm`** — compares the registry's
+  `dist-tags.latest` against the version this repo pins, derived (never
+  hardcoded) from
+  `nix eval --raw .#packages.x86_64-linux.aihubmix-mcp.version` with the
+  `+<local>` suffix stripped.
+
+  This one is worth understanding as a RULE, not a special case. A
+  package carrying a local patch against upstream's published BUILD
+  OUTPUT cannot be swept: no update script can re-author a patch, and
+  that is true whether or not the package is currently up to date.
+  aihubmix-mcp now tracks `dist-tags.latest`, so the detector is
+  normally silent — but the exclusion stays, because CURRENCY IS NOT
+  SWEEPABILITY. The measured proof, 2026-07-27: the patch written
+  against 1.0.0 took hunk 1 with fuzz and FAILED hunks 2 and 3 against
+  1.1.0, because `build/tools/painting-tools.js` was rewritten
+  (288 -> 624 lines). It had to be re-authored by hand. A targets row
+  would go RED the next time upstream does that, occupying a channel
+  meant for TRANSIENT failures and training operators to ignore it.
+
+  The pairing — a `config.update.excludePatterns` entry recording the
+  exclusion, plus an annotation step keyed on a repo-derived version —
+  is the honest shape: one HTTP GET per sweep, and any lag stays
+  visible. Do NOT run both this and a targets row; and when a patch is
+  finally dropped (upstream absorbs the feature, or the fork lands),
+  delete the exclusion AND the detector in the same commit that adds
+  the targets row. Detection machinery left behind after the thing it
+  detects became sweepable is dead code.
 
 When adding one of these, copy the shape: `if: always()`, no `${{ }}`
 interpolation of external data into the shell, and an explicit no-op

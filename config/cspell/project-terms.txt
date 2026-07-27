@@ -7,6 +7,7 @@ agentsdir
 agentskills
 agentsmd
 agnix
+aihubmix
 anthropics
 APFS
 applyto
@@ -72,6 +73,7 @@ direnv
 direnvrc
 docnix
 docsite
+doubao
 drainedness
 drvs
 dsolve
@@ -79,6 +81,7 @@ dunder
 endgroup
 envrc
 extensionless
+extname
 fanout
 fanouts
 fastmcp
@@ -124,6 +127,7 @@ hsjobeki
 idempotently
 idents
 indexedlog
+inferera
 inlines
 ints
 isaacphi
@@ -222,6 +226,7 @@ pythonpath
 qdm
 qfdx
 quickstarts
+qwen
 rcodesign
 readabilipy
 reauthor
@@ -276,6 +281,8 @@ subshell
 subshells
 substituters
 supersets
+sweepability
+sweepable
 sympy
 taplo
 testapp
@@ -318,6 +325,7 @@ usebruno
 valkey
 vendorhash
 watchlist
+webp
 worktree
 worktrees
 wyhash
