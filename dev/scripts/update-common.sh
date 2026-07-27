@@ -99,6 +99,11 @@ log_info() {
 #
 # `|| rc=$?` is the single place errexit is suppressed, so the ordinary
 # exit-1 path still cannot kill the caller.
+#
+# CALL IT FROM INSIDE A TARGET'S REPORTING SUBSHELL — the `( … )` whose
+# failure the caller turns into `report_held_back`. That is what converts the
+# error exit into the one report line every target owes; called from a
+# target's MAIN shell it would exit with no report entry at all.
 git_diff_quiet() {
   local rc=0
   git "$@" --quiet || rc=$?

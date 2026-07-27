@@ -220,6 +220,12 @@ status. Callers therefore stay free to chain with `||`: a
 short-circuit can only skip a diff that is already answered, never
 one that errored.
 
+Call it from inside a target's **reporting subshell** — the `( … )`
+whose failure the caller turns into `report_held_back`. That is
+what converts the error exit into the one report line every target
+owes; from a target's main shell it would exit with no report entry
+at all.
+
 Two properties are worth keeping in mind when reading these gates:
 
 - **A short-circuited pair is ONE gate, not two.**
