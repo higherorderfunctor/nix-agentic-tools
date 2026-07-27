@@ -16,13 +16,18 @@ inputs:
     inputs:
       nixpkgs:
         follows: nixpkgs
+  go-overlay:
+    url: github:purpleclay/go-overlay/3a2f3dfa589b463c8f20504f74d44d2a66b90640
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
   mcp-nixos:
     url: github:utensils/mcp-nixos/de85ae4cf8817709866fe91fef58774ef439d0a8
     inputs:
       nixpkgs:
         follows: nixpkgs
   nix-fast-build:
-    url: github:Mic92/nix-fast-build/fff0af6d694ac24fea0995297959a63bb5ef74b4
+    url: github:Mic92/nix-fast-build/bdf1bfcdc979d12f3c4a5768f5a2cf689b0f9884
     inputs:
       nixpkgs:
         follows: nixpkgs
