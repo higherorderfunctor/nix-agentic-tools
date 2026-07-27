@@ -48,6 +48,16 @@ pkgs.runCommandLocal "validate-at-stop-check" {
   pass=0; fail=0
   ok() { if eval "$1"; then pass=$((pass+1)); else echo "FAIL: $2"; fail=$((fail+1)); fi; }
 
+  # Assertions below match with `grep -q … <<<"$out"`, NEVER
+  # `printf "%s" "$out" | grep -q …`. `ok` runs `eval` on its argument, so the
+  # pipeline would inherit this script's `set -euETo pipefail`; `grep -q`
+  # exits at its first match and bash's printf builtin writes a multi-line
+  # capture a line at a time, so the writes after the match EPIPE and poison
+  # the pipeline's status. That silently inverts every assertion here: the
+  # positive forms report FAIL on output that matched, and the `!` forms
+  # report PASS on output that also matched. A here-string has no writer
+  # process, so neither can happen.
+
   # T1 no-diff -> silent exit 0
   reset; out="$(payload false | bash validate.sh)"; rc=$?
   ok '[ "$rc" -eq 0 ]' "T1 rc"; ok '[ -z "$out" ]' "T1 silent"
@@ -56,28 +66,28 @@ pkgs.runCommandLocal "validate-at-stop-check" {
   reset; printf 'hi   \n' > "$repo/foo.txt"
   out="$(payload false | JUDGMENT_HOOKS_OVERRIDE=cspell bash validate.sh)"; rc=$?
   ok '[ "$rc" -eq 0 ]' "T2 rc"
-  ok '! printf "%s" "$out" | grep -q decision' "T2 no block"
+  ok '! grep -q decision <<<"$out"' "T2 no block"
   ok '! grep -nP "[ ]+\$" "$repo/foo.txt"' "T2 WS removed"
 
   # T3 judgment failure (stub cspell-BAD) first pass -> block w/ reason
   reset; printf 'wibble\n' > "$repo/bar.txt"
   out="$(payload false | JUDGMENT_HOOKS_OVERRIDE=cspell-BAD bash validate.sh)"; rc=$?
   ok '[ "$rc" -eq 0 ]' "T3 rc"
-  ok 'printf "%s" "$out" | grep -q "\"decision\": \"block\""' "T3 block"
-  ok 'printf "%s" "$out" | grep -q project-terms' "T3 reason mentions escape"
+  ok 'grep -q "\"decision\": \"block\"" <<<"$out"' "T3 block"
+  ok 'grep -q project-terms <<<"$out"' "T3 reason mentions escape"
 
   # T4 same failure, stop_hook_active=true -> loop-guard, no block
   reset; printf 'wibble\n' > "$repo/bar.txt"
   out="$(payload true | JUDGMENT_HOOKS_OVERRIDE=cspell-BAD bash validate.sh)"; rc=$?
   ok '[ "$rc" -eq 0 ]' "T4 rc"
-  ok '! printf "%s" "$out" | grep -q "\"decision\""' "T4 no block"
-  ok 'printf "%s" "$out" | grep -q systemMessage' "T4 advisory"
+  ok '! grep -q "\"decision\"" <<<"$out"' "T4 no block"
+  ok 'grep -q systemMessage <<<"$out"' "T4 advisory"
 
   # T5 deleted tracked file in changeset -> excluded, no false block
   reset; ( cd "$repo"; echo x > gone.txt; git add gone.txt; git commit -qm addgone; rm gone.txt; echo ok > keep.txt )
   out="$(payload false | JUDGMENT_HOOKS_OVERRIDE=missingfails bash validate.sh)"; rc=$?
   ok '[ "$rc" -eq 0 ]' "T5 rc"
-  ok '! printf "%s" "$out" | grep -q "\"decision\""' "T5 deleted file excluded"
+  ok '! grep -q "\"decision\"" <<<"$out"' "T5 deleted file excluded"
 
   echo "validate-at-stop: $pass passed, $fail failed"
   [ "$fail" -eq 0 ]

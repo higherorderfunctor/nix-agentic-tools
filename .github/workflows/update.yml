@@ -227,7 +227,13 @@ jobs:
               continue
             fi
 
-            subject=$(git log "$base_head".."$branch" --format='%s' | head -1)
+            # `git log -1 …`, NOT `git log … | head -1`. This step runs under
+            # `set -euETo pipefail`; `head -1` closes the pipe after the first
+            # subject, so on any branch with more than one commit ahead of base
+            # git dies with SIGPIPE (141), pipefail promotes it, and errexit
+            # aborts the ENTIRE branch sweep — every other dependency included.
+            # `-1` selects the same newest commit with no pipe at all.
+            subject=$(git log -1 --format='%s' "$base_head".."$branch")
 
             # Look up the existing PR once: its number and its
             # mergeability both feed the push decision below.
