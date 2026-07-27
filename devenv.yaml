@@ -16,6 +16,11 @@ inputs:
     inputs:
       nixpkgs:
         follows: nixpkgs
+  go-overlay:
+    url: github:purpleclay/go-overlay/3a2f3dfa589b463c8f20504f74d44d2a66b90640
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
   mcp-nixos:
     url: github:utensils/mcp-nixos/de85ae4cf8817709866fe91fef58774ef439d0a8
     inputs:
@@ -36,7 +41,7 @@ inputs:
   nixpkgs-test:
     url: github:NixOS/nixpkgs/ac62194c3917d5f474c1a844b6fd6da2db95077d
   rust-overlay:
-    url: github:oxalica/rust-overlay/a163bd01a6e11ac58d4f8d11669da550b5afbbc6
+    url: github:oxalica/rust-overlay/c67ce00525464a710971351c183ce67acb6ca827
     inputs:
       nixpkgs:
         follows: nixpkgs
