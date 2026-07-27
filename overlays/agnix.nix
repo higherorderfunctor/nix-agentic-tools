@@ -34,23 +34,23 @@
     rustc = rust;
   };
 
-  rev = "95f5f4ec19ec5608cdc725f25ab37e2410c35bba";
+  rev = "778333f8d261dac01a3ce3e1bfd41d4903ead003";
   src = fetchFromGitHub {
     owner = "agent-sh";
     repo = "agnix";
     inherit rev;
-    hash = "sha256-rf8hpkM7JBMO/LtfLNS5C6L9Jf+DcYveaTeXB3p1/D8=";
+    hash = "sha256-3NW/APxvNhz9BJdzxa4bmtX4IM7bMOjykIcgBIv7gaM=";
   };
 in
   rustPlatform.buildRustPackage {
     pname = "agnix";
     version = vu.mkVersion {
       # upstream: readCargoWorkspaceVersion @ Cargo.toml
-      upstream = "0.40.0";
+      upstream = "0.41.1";
       inherit rev;
     };
     inherit src;
-    cargoHash = "sha256-qnDjI4+x82V8QMIzvwmup7hFOc9DT5TlkcpykMqM8H0=";
+    cargoHash = "sha256-CpK28YQ6F4k3zkZvtcSscQCzFOYly5yUSGVYJ7ZdxUU=";
 
     nativeBuildInputs = [ourPkgs.pkg-config];
     buildInputs = ourPkgs.lib.optionals ourPkgs.stdenv.hostPlatform.isDarwin [
