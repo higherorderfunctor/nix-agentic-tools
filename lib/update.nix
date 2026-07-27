@@ -14,7 +14,11 @@
 # ninja generator (config/generate-update-ninja.nix) and update-pkg.sh.
 #
 # Mirrors the authoring style of lib/ai/sharedOptions.nix and the reference
-# submodule shape in private/slice-fixture/lib/concerns.nix.
+# submodule shape of the sibling option-merged registries
+# lib/fragments-registry.nix and lib/checks.nix. This line used to cite
+# private/slice-fixture/lib/concerns.nix; /private/ is gitignored local working
+# material, so that pointer resolved for nobody but its author (the fixture is
+# described in docs/package-restructure.md).
 {lib, ...}: let
   inherit (lib) mkOption types;
 in {
