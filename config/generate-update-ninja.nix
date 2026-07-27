@@ -76,22 +76,29 @@
   # would mask a failing target.
   strictPrelude = "set -euETo pipefail; shopt -s inherit_errexit 2>/dev/null || :; mkdir -p .update-logs;";
 
-  # `full-format` has to keep THREE outcomes distinct, and the obvious
-  # one-liner collapses two of them:
+  # `full-format` has to keep FOUR outcomes distinct, and every convenient
+  # one-liner collapses at least two of them:
   #
   #   1. formatter fails            -> fail the target, commit nothing
-  #   2. formatter ok, empty diff   -> no commit, NO failure (a real no-op)
-  #   3. formatter ok, non-empty    -> commit
+  #   2. diff exits 0 (no changes)  -> no commit, NO failure (a real no-op)
+  #   3. diff exits 1 (changes)     -> commit
+  #   4. diff exits >1 (git ERROR)  -> fail the target, commit nothing
   #
-  # The body used to be `nix fmt && git add -A && git diff --staged --quiet
-  # || git commit -m ...`, which parses as `((A && B) && C) || D` because
-  # `&&` and `||` share precedence and associate left. A FAILING `nix fmt`
-  # therefore falls through to the COMMIT. `errexit` does not rescue it: by
-  # design it never fires for a command on the left of `||`, which is
-  # exactly why this survived the commit that added strictPrelude to all
-  # six rule bodies. The prelude is not, and cannot be, the fix here.
+  # `git diff --quiet` is a THREE-valued signal, not a boolean: 0 = no
+  # difference, 1 = difference, >1 (commonly 128) = git itself failed. Both
+  # earlier shapes read it as a boolean, and both therefore routed a failure
+  # into the commit branch.
   #
-  # Measured before the change: with anything already in the index, a broken
+  # The body was originally `nix fmt && git add -A && git diff --staged
+  # --quiet || git commit -m ...`, which parses as `((A && B) && C) || D`
+  # because `&&` and `||` share precedence and associate left. A FAILING
+  # `nix fmt` therefore fell through to the COMMIT. `errexit` does not
+  # rescue that: by design it never fires for a command on the left of
+  # `||`, which is exactly why it survived the commit that added
+  # strictPrelude to all six rule bodies. The prelude is not, and cannot
+  # be, the fix here.
+  #
+  # Measured on that shape: with anything already in the index, a broken
   # formatter produced an exit-0 target carrying a "style: treefmt full
   # reformat after updates" commit that reformatted nothing — green sweep,
   # unformatted repo. With a clean index it failed only by ACCIDENT, because
@@ -99,13 +106,26 @@
   # git refusing to make an empty commit, not the pipeline detecting
   # anything, and it reports the formatter error as "nothing to commit".
   #
-  # The fix: `;` separators put `nix fmt` and `git add -A` back under
-  # errexit, and the diff test moves into an `if` condition. `git diff
-  # --staged --quiet` signals through its EXIT CODE (0 = no difference,
-  # 1 = difference), so it has to sit somewhere errexit is suppressed — an
-  # `if` condition is exactly that, and the ordinary "there is a difference"
-  # path can no longer kill the target.
-  fullFormatBody = ''nix fmt; git add -A; if ! git diff --staged --quiet; then git commit -m "style: treefmt full reformat after updates"; fi;'';
+  # Replacing it with `if ! git diff --staged --quiet; then git commit ...`
+  # fixed outcome 1 but NOT outcome 4: `!` maps every non-zero status to
+  # "true", so an erroring `git diff` still selected the commit branch.
+  # Measured on that shape too — with `git diff` forced to exit 128 the
+  # target exited 0 and carried the same bogus style commit. The
+  # failure-becomes-a-commit path had been narrowed, not closed.
+  #
+  # The fix keeps the `;` separators (which put `nix fmt` and `git add -A`
+  # back under errexit) and replaces the boolean test with an explicit
+  # status capture. `|| rc=$$?` is the one place errexit is suppressed, so
+  # the ordinary exit-1 path cannot kill the target, and the `case` then
+  # discriminates all three diff statuses by value instead of by
+  # truthiness.
+  #
+  # NINJA ESCAPING: `$$` is mandatory. Ninja owns `$` in a `command =`
+  # value — a bare `$rc` silently expands to the empty ninja variable, and
+  # a bare `$?` is a hard parse error ("bad $-escape") that takes the
+  # WHOLE .update.ninja down, not just this rule. `$$` is ninja's literal
+  # `$`, so the shell receives `rc=$?` / `"$rc"`. Verified both ways.
+  fullFormatBody = ''nix fmt; git add -A; rc=0; git diff --staged --quiet || rc=$$?; case "$$rc" in 0) ;; 1) git commit -m "style: treefmt full reformat after updates" ;; *) exit "$$rc" ;; esac;'';
 
   # Ninja rules
   rules = ''
