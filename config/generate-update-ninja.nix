@@ -76,6 +76,37 @@
   # would mask a failing target.
   strictPrelude = "set -euETo pipefail; shopt -s inherit_errexit 2>/dev/null || :; mkdir -p .update-logs;";
 
+  # `full-format` has to keep THREE outcomes distinct, and the obvious
+  # one-liner collapses two of them:
+  #
+  #   1. formatter fails            -> fail the target, commit nothing
+  #   2. formatter ok, empty diff   -> no commit, NO failure (a real no-op)
+  #   3. formatter ok, non-empty    -> commit
+  #
+  # The body used to be `nix fmt && git add -A && git diff --staged --quiet
+  # || git commit -m ...`, which parses as `((A && B) && C) || D` because
+  # `&&` and `||` share precedence and associate left. A FAILING `nix fmt`
+  # therefore falls through to the COMMIT. `errexit` does not rescue it: by
+  # design it never fires for a command on the left of `||`, which is
+  # exactly why this survived the commit that added strictPrelude to all
+  # six rule bodies. The prelude is not, and cannot be, the fix here.
+  #
+  # Measured before the change: with anything already in the index, a broken
+  # formatter produced an exit-0 target carrying a "style: treefmt full
+  # reformat after updates" commit that reformatted nothing — green sweep,
+  # unformatted repo. With a clean index it failed only by ACCIDENT, because
+  # the fall-through `git commit` then errored on an empty index; that is
+  # git refusing to make an empty commit, not the pipeline detecting
+  # anything, and it reports the formatter error as "nothing to commit".
+  #
+  # The fix: `;` separators put `nix fmt` and `git add -A` back under
+  # errexit, and the diff test moves into an `if` condition. `git diff
+  # --staged --quiet` signals through its EXIT CODE (0 = no difference,
+  # 1 = difference), so it has to sit somewhere errexit is suppressed — an
+  # `if` condition is exactly that, and the ordinary "there is a difference"
+  # path can no longer kill the target.
+  fullFormatBody = ''nix fmt; git add -A; if ! git diff --staged --quiet; then git commit -m "style: treefmt full reformat after updates"; fi;'';
+
   # Ninja rules
   rules = ''
     # Rules
@@ -92,7 +123,7 @@
       description = Updating package: $name
 
     rule full-format
-      command = bash -c '${strictPrelude} { nix fmt && git add -A && git diff --staged --quiet || git commit -m "style: treefmt full reformat after updates"; } 2>&1 | tee .update-logs/full-format.log'
+      command = bash -c '${strictPrelude} { ${fullFormatBody} } 2>&1 | tee .update-logs/full-format.log'
       description = Full treefmt (formatter config may have changed)
 
     rule final-build
