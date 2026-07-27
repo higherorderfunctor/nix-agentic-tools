@@ -74,6 +74,11 @@ _: {
     agnix-mcp = {consumerPath = ["ai" "mcpServers" "agnix-mcp"];};
 
     # ── MCP servers — live at `consumerPkgs.ai.mcpServers.<name>` ──
+    # aihubmix-mcp is ABSENT from nixpkgs, so it is a 100%-delta fresh
+    # derivation. That does not exempt it: this check compares OUR pin
+    # against a CONSUMER pin, never against nixpkgs, so a from-scratch
+    # derivation still has to route every build input through `ourPkgs`.
+    aihubmix-mcp = {consumerPath = ["ai" "mcpServers" "aihubmix-mcp"];};
     context7-mcp = {consumerPath = ["ai" "mcpServers" "context7-mcp"];};
     effect-mcp = {consumerPath = ["ai" "mcpServers" "effect-mcp"];};
     git-intel-mcp = {consumerPath = ["ai" "mcpServers" "git-intel-mcp"];};

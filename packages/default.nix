@@ -3,6 +3,7 @@
 # devenvModules, and flake.lib contributions.
 {
   agnix = import ./agnix;
+  aihubmix-mcp = import ./aihubmix-mcp;
   claude-code = import ./claude-code;
   context7-mcp = import ./context7-mcp;
   copilot-cli = import ./copilot-cli;

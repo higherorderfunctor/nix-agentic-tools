@@ -122,11 +122,12 @@ git-revise.
 ## Packages
 
 <details>
-<summary><strong>MCP Servers</strong> (15 servers)</summary>
+<summary><strong>MCP Servers</strong> (16 servers)</summary>
 
 <!-- prettier-ignore -->
 | Server | Description | Credentials |
 |--------|-------------|-------------|
+| `aihubmix-mcp` | AIHubMix image generation | Required |
 | `context7-mcp` | Library documentation lookup | None |
 | `effect-mcp` | Effect-TS documentation | None |
 | `fetch-mcp` | HTTP fetch + HTML-to-markdown | None |

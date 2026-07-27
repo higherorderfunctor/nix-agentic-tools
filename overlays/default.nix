@@ -86,6 +86,14 @@
 
   mcpServerDrvs = {
     inherit modelContextProtocol;
+    # Pinned at 1.0.0 and deliberately absent from config.update.targets —
+    # a local patch against upstream's build output cannot be carried across
+    # the 1.1.0 rewrite by any update script. update.yml's "Detect a newer
+    # @aihubmix/mcp on npm" step annotates the lag instead. See the header
+    # of ./mcp-servers/aihubmix-mcp.nix.
+    aihubmix-mcp = import ./mcp-servers/aihubmix-mcp.nix {
+      inherit inputs final;
+    };
     context7-mcp = import ./mcp-servers/context7-mcp.nix {
       inherit inputs final;
     };

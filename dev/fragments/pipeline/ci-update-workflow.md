@@ -1,10 +1,12 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-07-25 (commit pending — adds the
-> `NAT_UPDATE_JOBS` evaluator budget that killed run 30181958460, the
-> `verify_all_packages` single-definition build gate and the
-> `fix_sidecar_hashes` repair-on-failure retry; earlier that day, the
-> non-blocking annotation-step family and the new-pnpm-major raise). If
+> **Last verified:** 2026-07-27 (commit pending — adds the
+> `Detect a newer @aihubmix/mcp on npm` annotation step and the
+> pinned-because-a-local-patch-cannot-be-swept rule behind it. Earlier:
+> the `NAT_UPDATE_JOBS` evaluator budget that killed run 30181958460,
+> the `verify_all_packages` single-definition build gate and the
+> `fix_sidecar_hashes` repair-on-failure retry, and the
+> non-blocking annotation-step family plus the new-pnpm-major raise). If
 > you touch
 > `.github/workflows/update.yml`, `dev/scripts/update-common.sh`,
 > `dev/scripts/update-input.sh`, `dev/scripts/update-pkg.sh`, or the
@@ -82,6 +84,27 @@ deliberately does NOT automate because a human has to decide:
     `nix eval .#packages.<system>`; a hardcoded major rots silently the
     moment the window slides, and a detector that has stopped detecting
     is worse than none.
+- **`Detect a newer @aihubmix/mcp on npm`** — compares the registry's
+  `dist-tags.latest` against the version this repo pins, derived (never
+  hardcoded) from
+  `nix eval --raw .#packages.x86_64-linux.aihubmix-mcp.version` with the
+  `+<local>` suffix stripped.
+
+  This one is worth understanding as a RULE, not a special case. A
+  package carrying a local patch against upstream's published BUILD
+  OUTPUT cannot be swept: no update script can re-author a patch. Test
+  the patch against the current upstream release before writing a
+  `config.update.targets` row — for aihubmix-mcp, measured 2026-07-27,
+  2 of 3 hunks fail against 1.1.0 because
+  `build/tools/painting-tools.js` was rewritten (288 -> 624 lines) and
+  the `image_generate` model enum was replaced wholesale, which is
+  additionally a BREAKING change for anything already calling the tool.
+  A targets row would therefore report HELD BACK on its first sweep and
+  every sweep after, permanently occupying a channel meant for
+  TRANSIENT failures and training operators to ignore it. The pairing —
+  a `config.update.excludePatterns` entry recording the exclusion, plus
+  an annotation step keyed on a repo-derived version — is the honest
+  shape: one HTTP GET per sweep, and the lag stays visible.
 
 When adding one of these, copy the shape: `if: always()`, no `${{ }}`
 interpolation of external data into the shell, and an explicit no-op

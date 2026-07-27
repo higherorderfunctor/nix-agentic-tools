@@ -1,0 +1,50 @@
+--- a/build/tools/painting-tools.js
++++ b/build/tools/painting-tools.js
+@@ -1,3 +1,5 @@
++import fs from "fs";
++import path from "path";
+ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
+ import fetch from 'node-fetch';
+ // Helper function to poll for completion
+@@ -151,6 +153,11 @@
+                     default: "0",
+                     description: "安全容忍度，flux 系列模型支持",
+                 },
++                save_path: {
++                    type: "string",
++                    description: "Optional path to save generated image(s). Directory path for multiple images, full file path for single. Images are only saved when this is provided.",
++                    default: "",
++                },
+             },
+             required: ["prompt", "model"],
+         },
+@@ -272,6 +279,29 @@
+                         }
+                     }
+                 }
++                // Save generated images to disk only when save_path is provided
++                const savePath = args.save_path || "";
++                if (savePath) {
++                    const savedPaths = [];
++                    for (let i = 0; i < contents.length; i++) {
++                        const item = contents[i];
++                        if (item.type === "image" && item.data) {
++                            let filePath;
++                            if (savePath.endsWith(".png")) {
++                                filePath = savePath;
++                            } else {
++                                fs.mkdirSync(savePath, { recursive: true });
++                                filePath = path.join(savePath, "aihubmix-" + Date.now() + "-" + i + ".png");
++                            }
++                            fs.mkdirSync(path.dirname(filePath), { recursive: true });
++                            fs.writeFileSync(filePath, Buffer.from(item.data, "base64"));
++                            savedPaths.push(filePath);
++                        }
++                    }
++                    if (savedPaths.length > 0) {
++                        contents.push({ type: "text", text: "Saved to: " + savedPaths.join(", ") });
++                    }
++                }
+                 return {
+                     content: contents,
+                     isError: false,
