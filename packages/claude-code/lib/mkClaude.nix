@@ -118,12 +118,13 @@ in
           either a path to a plugin directory or a package derivation.
           Routed to `programs.claude-code.plugins`.
 
-          The ATTRIBUTE NAME is load-bearing: upstream uses it verbatim
-          as the plugin's on-disk directory name (`<configDir>/skills/
-          <name>` on Claude Code 2.1.157+; the derivation name and the
-          synthesized `.claude-plugin/plugin.json` `name` field on every
-          version), and its uniqueness — against other plugins and
-          against `ai.skills` names — is asserted upstream.
+          The ATTRIBUTE NAME is load-bearing: upstream uses it
+          verbatim as the plugin's on-disk directory name
+          (`<configDir>/skills/<name>` on Claude Code 2.1.157+; the
+          derivation name and the synthesized
+          `.claude-plugin/plugin.json` `name` field on every version),
+          and its uniqueness — against other plugins and against
+          `ai.skills` names — is asserted upstream.
 
           Attrset-only by design. Upstream still tolerates a plain list,
           but then derives each name from the entry's base name, so a
