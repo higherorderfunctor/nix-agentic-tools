@@ -29,9 +29,21 @@
 # its fragments) is deferred; for now add rows here.
 _: {
   config.fragments.categories = {
+    # ai-clis: how the AI coding-CLI binaries are packaged. The guide
+    # documents six overlay files by name, so it is scoped to those six
+    # explicitly. It used to lean on `packages/ai-clis/**`, a directory that
+    # no longer exists — nothing else in this row covered those overlays, so
+    # the glob was RE-POINTED at them rather than deleted. Do not collapse it
+    # to `overlays/*.nix`: that would also load this AI-CLI-specific guide for
+    # agnix and kiro-memory-distiller.
     ai-clis = {
       scopes = [
-        "packages/ai-clis/**"
+        "overlays/chatgpt-codex.nix"
+        "overlays/claude-code.nix"
+        "overlays/copilot-cli.nix"
+        "overlays/kimchi.nix"
+        "overlays/kiro-cli.nix"
+        "overlays/kiro-gateway.nix"
         "packages/copilot-cli/**"
         "packages/kiro-cli/**"
       ];
@@ -174,14 +186,16 @@ _: {
     };
     # overlays: cache-hit parity + IFD patterns. Scoped to overlay
     # package files and overlays/ (version helpers that trigger IFD).
-    # Excludes content-only fragments dirs.
+    # Excludes content-only fragments dirs, and deliberately does NOT scope
+    # `packages/*/overlay.nix` (stacked-workflows) — those are content
+    # overlays with no `ourPkgs` seam. Three globs
+    # (`packages/{ai-clis,git-tools,mcp-servers}/*.nix`) were dropped here:
+    # all three directories are gone, and every file they aimed at now lives
+    # under `overlays/`, covered by the two globs below.
     overlays = {
       scopes = [
         "overlays/*.nix"
         "overlays/**/*.nix"
-        "packages/ai-clis/*.nix"
-        "packages/git-tools/*.nix"
-        "packages/mcp-servers/*.nix"
       ];
       sources = [
         "cache-hit-parity"

@@ -136,7 +136,9 @@ that manual commands miss.
 
 ## Architecture Fragments
 
-> **Last verified:** 2026-07-24 (commit pending — the
+> **Last verified:** 2026-07-27 (commit pending — the worked
+> `scopes` example no longer teaches `packages/ai-clis/**`, a
+> directory that does not exist; prior 2026-07-24, the
 > `packagePaths` + `devFragmentNames` registries dissolved into
 > `config.fragments.categories`).
 
@@ -231,7 +233,7 @@ path) or an attrset with an explicit location:
 ```nix
 config.fragments.categories = {
   ai-clis = {
-    scopes = ["packages/ai-clis/**"];
+    scopes = ["overlays/claude-code.nix" "packages/copilot-cli/**"];
     sources = [
       "packaging-guide"  # default location="dev"
                          # → dev/fragments/ai-clis/packaging-guide.md
