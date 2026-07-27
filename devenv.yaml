@@ -5,7 +5,7 @@ allowUnfree: true
 
 inputs:
   devenv:
-    url: github:cachix/devenv/126fa142775d8a6d89c97d69297f7095b6585e4e
+    url: github:cachix/devenv/6319d63344675f65c2c213be95084544866d8951
   git-branchless:
     url: github:arxanas/git-branchless/03d6ab8dc1a2ff8a2bc44709b93ea6a9038147eb
     inputs:
@@ -13,6 +13,11 @@ inputs:
         follows: nixpkgs
   git-hooks:
     url: github:cachix/git-hooks.nix/43b3c1ab9d40fb1dbb008f451988a91e375825e9
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
+  go-overlay:
+    url: github:purpleclay/go-overlay/3a2f3dfa589b463c8f20504f74d44d2a66b90640
     inputs:
       nixpkgs:
         follows: nixpkgs
