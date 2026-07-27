@@ -44,9 +44,16 @@ if ! (
   # Sync devenv.lock
   devenv update
 
-  # Check if anything changed
+  # Check if anything changed. `git diff --staged --quiet` signals through its
+  # exit code, and that code is THREE-valued (0 / 1 / >1), so it goes through
+  # git_diff_quiet rather than being tested for truthiness — see the rationale
+  # there. Read as a boolean, an erroring git took the "there ARE changes"
+  # branch: measured on this script with `git diff` forced to exit 128 and
+  # nothing actually moved, the target ran the FULL nix-fast-build
+  # verification of every package before failing on an empty commit, and
+  # reported the cause as "update or build failed".
   git add flake.lock devenv.yaml devenv.lock
-  if git diff --staged --quiet; then
+  if git_diff_quiet diff --staged; then
     exit 0
   fi
 

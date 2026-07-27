@@ -66,6 +66,56 @@ log_info() {
   echo "${YELLOW}  … $1${RESET}"
 }
 
+# ── Git status helpers ───────────────────────────────────────────────────────
+
+# Run one quiet `git diff` and discriminate its status by VALUE.
+#
+# `git diff --quiet` is a THREE-valued signal, not a boolean: 0 = no
+# difference, 1 = difference, >1 (commonly 128) = git ITSELF failed — a bad
+# revision, an unreadable path, a corrupt index. Every construct that tests
+# that status for mere truthiness folds the error into one of the two normal
+# answers, and WHICH one it folds into depends on whether the test is negated.
+# The same defect therefore presents in OPPOSITE directions at different call
+# sites, and neither presentation looks wrong when read locally:
+#
+#   `if git diff --staged --quiet; then skip; fi`   error => "there ARE changes"
+#   `if ! git diff --quiet; then commit; fi`        error => "the tree is dirty"
+#
+# The second shape is the failure-becomes-a-commit path that
+# config/generate-update-ninja.nix's `full-format` rule body had to close
+# with the same idiom.
+#
+# Usage mirrors `git` itself, minus the trailing `--quiet` this appends:
+#
+#   git_diff_quiet diff --staged            # -> `git diff --staged --quiet`
+#   git_diff_quiet -C "$wt" diff            # -> `git -C "$wt" diff --quiet`
+#
+# Returns 0 (no difference) or 1 (difference), so a call site reads exactly
+# like the bare command it replaces. On git's own failure it does NOT return:
+# it names the real cause and exits the calling shell with git's status, so no
+# caller can absorb an error into either answer, and callers stay free to
+# chain with `||` — a short-circuit can only skip a diff that is already
+# answered, never one that errored.
+#
+# `|| rc=$?` is the single place errexit is suppressed, so the ordinary
+# exit-1 path still cannot kill the caller.
+#
+# CALL IT FROM INSIDE A TARGET'S REPORTING SUBSHELL — the `( … )` whose
+# failure the caller turns into `report_held_back`. That is what converts the
+# error exit into the one report line every target owes; called from a
+# target's MAIN shell it would exit with no report entry at all.
+git_diff_quiet() {
+  local rc=0
+  git "$@" --quiet || rc=$?
+  case "$rc" in
+  0 | 1) return "$rc" ;;
+  *)
+    log_failure "git $* --quiet failed (exit $rc) — refusing to read a git error as a diff answer"
+    exit "$rc"
+    ;;
+  esac
+}
+
 # ── Worktree management ──────────────────────────────────────────────────────
 
 # Create or reset a worktree on a named branch (update/<name>).

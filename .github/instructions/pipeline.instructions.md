@@ -8,6 +8,11 @@ applyTo: ".github/workflows/update.yml,config/fragment-categories.nix,config/gen
 ## CI Update Workflow
 
 > **Last verified:** 2026-07-27 (commit pending — adds the
+> three-valued `git diff --quiet` rule and the `git_diff_quiet`
+> helper every dirtiness gate in the update scripts now goes
+> through; the bare form had routed a git ERROR into "there are
+> changes" in `update-input.sh` and into "the tree is dirty" at
+> both of `update-pkg.sh`'s gates. Earlier: the
 > `Detect a newer @aihubmix/mcp on npm` annotation step and the
 > excluded-because-a-local-patch-cannot-be-swept rule behind it, which
 > is about SWEEPABILITY and not about lagging: aihubmix-mcp tracks
@@ -191,6 +196,71 @@ The base-branch `full-format` ninja rule still runs after the
 per-input pipeline as a safety net for the rare case where two
 simultaneous input bumps interact in a way the per-input passes
 do not catch on their own.
+
+### `git diff --quiet` is three-valued — use `git_diff_quiet`
+
+Every dirtiness gate in the update scripts goes through
+`git_diff_quiet` in `update-common.sh`. Do not open-code
+`git diff --quiet` in a test position; the helper exists because
+that status is **not a boolean**:
+
+    0   no difference
+    1   difference
+    >1  git ITSELF failed (commonly 128 — bad revision,
+        unreadable path, corrupt index)
+
+Testing it for truthiness folds the error into one of the two
+normal answers, and **which** one depends on whether the test is
+negated — so one defect presents in OPPOSITE directions at
+different call sites and neither looks wrong read locally.
+`if git diff --quiet` reads an error as "there ARE changes";
+`if ! git diff --quiet` reads it as "the tree is dirty". The
+second is the failure-becomes-a-commit shape that
+`config/generate-update-ninja.nix`'s `full-format` rule body had
+to close with the same discriminate-by-value idiom (that rule body
+cannot call the helper — it is a ninja `command =` string, so it
+carries the `case` inline, with `$$` escaping).
+
+`git_diff_quiet` returns 0 or 1 exactly like the bare command, and
+on >1 names the real cause and exits the calling shell with git's
+status. Callers therefore stay free to chain with `||`: a
+short-circuit can only skip a diff that is already answered, never
+one that errored.
+
+Call it from inside a target's **reporting subshell** — the `( … )`
+whose failure the caller turns into `report_held_back`. That is
+what converts the error exit into the one report line every target
+owes; from a target's main shell it would exit with no report entry
+at all.
+
+Two properties are worth keeping in mind when reading these gates:
+
+- **A short-circuited pair is ONE gate, not two.**
+  `update-pkg.sh` tests `! …diff || ! …diff --staged` twice. Under
+  the bare form a failure of the FIRST invocation skipped the
+  second entirely, so a single fault flipped BOTH gates at once —
+  the redundant reformat AND the commit/amend. Reasoning about
+  either gate in isolation understates it.
+- **Do not sweep this class by grepping the shape you last saw.**
+  The first sweep matched `git diff --quiet` literally and missed
+  the two `git -C "$wt" diff --quiet` call sites for that reason
+  alone. Enumerate every invocation whose exit status is consumed,
+  then judge each.
+
+Prove changes here with a **four-outcome** control set — 0, 1, >1,
+and the negated/short-circuit variant — driving the >1 case with a
+stubbed `git` whose `diff` exits above 1 while every other
+subcommand execs the real binary. Reasoning is not a substitute:
+the `full-format` fix read as correct twice before a control caught
+that it still routed an error into the commit branch. Measured on
+the pre-fix scripts, with `git diff` forced to 128 and the tree
+genuinely unchanged: `update-input.sh` ran the FULL
+`nix-fast-build` verification of every package and reported the
+cause as "update or build failed", and when the input HAD moved it
+reported plain `UPDATED` with the git fault invisible;
+`update-pkg.sh` ran a pointless `nix fmt` and then
+`commit --amend --no-edit`, which succeeds on an unchanged tree, so
+a green sweep silently rewrote the update commit.
 
 ### GitHub App token
 

@@ -264,12 +264,26 @@ if ! (
   # spurious reformat commit. `nix fmt` exits 0 on successful in-place
   # format (no --fail-on-change); a non-zero exit is a real formatter
   # error and correctly aborts the subshell -> reports HELD BACK.
-  if ! git -C "$wt" diff --quiet || ! git -C "$wt" diff --staged --quiet; then
+  #
+  # Both dirtiness gates below go through git_diff_quiet, which discriminates
+  # the THREE-valued diff status by value instead of by truthiness. Under the
+  # bare `! git … diff --quiet` form an ERRORING git read as "the tree is
+  # dirty" at both gates at once: the `||` short-circuits, so a failure of the
+  # FIRST invocation skipped the second entirely and flipped both gates from
+  # one fault. Reasoning about either gate in isolation understated it. The
+  # gate below is the harmless half (a redundant reformat); the gate after it
+  # is the one that stages everything and commits or amends.
+  if ! git_diff_quiet -C "$wt" diff || ! git_diff_quiet -C "$wt" diff --staged; then
     run_build nix fmt
   fi
 
-  # Commit dep hash changes (amend if update commit exists, new commit otherwise)
-  if ! git -C "$wt" diff --quiet || ! git -C "$wt" diff --staged --quiet; then
+  # Commit dep hash changes (amend if update commit exists, new commit
+  # otherwise). This is the failure-becomes-a-commit shape that
+  # config/generate-update-ninja.nix's `full-format` rule body had to close:
+  # with the tree genuinely clean and `git diff` merely erroring, the bare
+  # form reached `commit --amend`, which succeeds on an unchanged tree and
+  # rewrote the update commit for no reason.
+  if ! git_diff_quiet -C "$wt" diff || ! git_diff_quiet -C "$wt" diff --staged; then
     git -C "$wt" add -A
     if [ "$(git -C "$wt" rev-parse HEAD)" != "$base_head" ]; then
       git -C "$wt" commit --amend --no-edit
