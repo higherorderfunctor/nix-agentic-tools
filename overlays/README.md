@@ -82,6 +82,22 @@ Versions computed at eval time via `overlays/lib.nix:mkVersion`
   and sidecar. The version check reads the registry's per-major channel,
   and an eval-time guard rejects a sidecar whose major does not match the
   attribute.
+- **Pinned, with the lag annotated instead of swept** (`aihubmix-mcp`): a
+  package carrying a local patch against upstream's published BUILD OUTPUT
+  cannot ride the sweep — no update script can re-author a patch. Test the
+  patch against the current upstream release before writing a
+  `config.update.targets` row; if it does not apply, a row would report
+  HELD BACK on its first sweep and every sweep after, permanently occupying
+  a channel meant for TRANSIENT failures. Pin it, record the exclusion in
+  `config.update.excludePatterns`, and add a non-blocking annotation step
+  to `.github/workflows/update.yml` comparing upstream's version against
+  one DERIVED from the repo (never a literal). The npm-registry version
+  source is the registry document's `dist-tags` — the same shape
+  `generic/pnpm-major.nix` uses. Note `ghArchiveUpdateScript` /
+  `ghLatestVersionCmd` do NOT transfer to an npm-registry package: the
+  source is not GitHub-hosted, and the former records a
+  `nix-prefetch-url --unpack` hash, which fails a flat `fetchurl`'s
+  fixed-output check.
 - **Flake inputs**: consumed from `inputs.<name>.packages`, updated via `nix flake update`.
 - **In-repo source**: packaged from a path in this repo (no upstream rev/hash,
   not version-tracked). Currently only `kiro-memory-distiller`
@@ -102,6 +118,7 @@ Versions computed at eval time via `overlays/lib.nix:mkVersion`
 | kiro-cli              | root       | AWS manifest          | pre-built binary          | `kiro-cli`            | —             | binary              |
 | kiro-gateway          | root       | GitHub main           | python                    | —                     | pytest (1413) | —                   |
 | kiro-memory-distiller | root       | in-repo               | bun wrapper               | —                     | bun test (80) | stdin exit 0        |
+| aihubmix-mcp          | mcpServers | npm tarball (pinned)  | npm (vendored lock+patch) | —                     | —             | MCP stdio marker    |
 | context7-mcp          | mcpServers | GitHub main           | pnpm (nixpkgs override)   | `context7-mcp`        | vitest (2)    | version check       |
 | effect-mcp            | mcpServers | GitHub main           | pnpm                      | —                     | —             | MCP stdin           |
 | git-intel-mcp         | mcpServers | GitHub main           | npm                       | —                     | vitest (40)   | MCP stdin           |
