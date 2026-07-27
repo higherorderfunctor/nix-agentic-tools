@@ -2882,7 +2882,29 @@ in {
       # the needle from `${pkgs.coreutils}` instead would drag store-path
       # string context into this check's own derivation, which nix rejects
       # outright -- the assertion cannot reference a store path.
-      runs = frag: lib.any (l: lib.hasInfix "run " l && lib.hasInfix frag l) lines;
+      #
+      # A line counts as wrapped when it STARTS with `run ` (the standalone
+      # commands) or pipes into it (the tee write). Testing for a bare `run `
+      # infix instead would be satisfied by an unrelated `--dry-run ` token on
+      # the same line, which is a false pass rather than a stylistic nit.
+      lstrip = l: let
+        m = builtins.match "[[:space:]]*(.*)" l;
+      in
+        if m == null
+        then l
+        else builtins.head m;
+      runWrapped = l: lib.hasPrefix "run " (lstrip l) || lib.hasInfix "| run --quiet " l;
+      # UNIVERSALLY quantified, and that is the whole point. An existential
+      # ("SOME line is wrapped") passes while an UNWRAPPED mutating command
+      # sits beside a wrapped one, so reintroducing the defect next to the fix
+      # would leave this green and DRY_RUN mutating again. `hits != []` is the
+      # positive control that stops the `all` passing vacuously when a
+      # fragment stops appearing at all -- without it, DELETING a command
+      # would look like compliance.
+      everyOccurrenceWrapped = frag: let
+        hits = lib.filter (l: lib.hasInfix frag l) lines;
+      in
+        hits != [] && lib.all runWrapped hits;
     in
       # LINUX-GATED, deliberately. The module emits this entry only under
       # `pkgs.stdenv.isLinux` (systemd user units), so on darwin the entry does
@@ -2893,10 +2915,14 @@ in {
       # blocker rather than merely inherit it.
       !pkgs.stdenv.isLinux
       || (
-        runs "/bin/mkdir -p"
-        && runs "/bin/chmod 700"
-        && runs "/bin/systemctl --user restart"
-        && lib.any (l: lib.hasInfix "| run --quiet " l && lib.hasInfix "/bin/tee -- \"$hash_file\"" l) lines
+        everyOccurrenceWrapped "/bin/mkdir -p"
+        && everyOccurrenceWrapped "/bin/chmod 700"
+        && everyOccurrenceWrapped "/bin/systemctl --user restart"
+        && everyOccurrenceWrapped "/bin/tee -- \"$hash_file\""
+        # The read-only `is-active` probe must stay UNWRAPPED: a dry run has
+        # to evaluate its conditions to report accurately. Asserted so the
+        # rule above is not "over-applied" into wrapping reads as well.
+        && lib.any (l: lib.hasInfix "/bin/systemctl --user is-active" l && !(runWrapped l)) lines
         && !(lib.any (l: lib.hasInfix "> \"$hash_file\"" l) lines)
       )
   );
