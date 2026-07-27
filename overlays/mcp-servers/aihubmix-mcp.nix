@@ -23,16 +23,16 @@
 # PREBUILT JS. The published tarball ships `build/`, so `dontNpmBuild`.
 #
 # THE LOCKFILE IS VENDORED because the npm tarball does not ship one and
-# `fetchNpmDeps` requires one. It is byte-identical to the sibling's, which
-# is what makes this absorption behavior-preserving rather than a silent
-# re-resolution of every `^` range. `.*-package-lock\.json$` is already a
-# cspell exclusion in devenv.nix, which is why the file is named
-# `aihubmix-mcp-package-lock.json` rather than living in a subdirectory.
+# `fetchNpmDeps` requires one. It is regenerated per upstream release with
+# `npm install --package-lock-only --ignore-scripts` in an extracted copy of
+# the tarball. `.*-package-lock\.json$` is already a cspell exclusion in
+# devenv.nix, which is why the file is named `aihubmix-mcp-package-lock.json`
+# rather than living in a subdirectory.
 #
 # THE PATCH ADDS A FEATURE UPSTREAM DOES NOT HAVE: an optional `save_path`
-# argument on `image_generate` that writes generated images to disk. Neither
-# 1.0.0 nor 1.1.0 has any equivalent (`grep -c save_path` -> 0 in both), so
-# dropping it would remove a capability the consumer uses.
+# argument on `image_generate` that writes generated images to disk.
+# Re-verified against 1.1.0 on 2026-07-27 and the capability is still absent
+# — see the fork note below.
 #
 # ── WHY THIS PACKAGE IS PINNED AND NOT IN THE 4x/DAY SWEEP ──────────────
 #
@@ -41,26 +41,38 @@
 # nobody had ever automated it. Absorbing it silently un-automated would
 # reproduce that, so the gap is stated here and machine-detected in CI.
 #
-# Upstream is AHEAD: npm `dist-tags.latest` is 1.1.0 (published 2026-07-01);
-# we pin 1.0.0. That is not an oversight — measured 2026-07-27:
+# We now track `dist-tags.latest` (1.1.0, published 2026-07-01) by operator
+# decision: be current, and adapt to interface changes as they land. What is
+# pinned is the RELEASE, not the currency policy — the pin exists because the
+# bump is human work, not because we want to lag.
 #
-#   1. THE LOCAL PATCH DOES NOT APPLY TO 1.1.0. `patch -p1 --dry-run` against
-#      the 1.1.0 tarball: hunk 1 applies with fuzz, hunks 2 and 3 FAIL.
-#      `build/tools/painting-tools.js` was rewritten, 288 -> 624 lines.
-#   2. 1.1.0 IS A BREAKING INTERFACE CHANGE FOR CONSUMERS. `image_generate`'s
-#      `model` enum was replaced wholesale: 1.0.0 lists five provider wire
-#      names, 1.1.0 lists ~25 friendly aliases resolved through a new
-#      internal registry, and NOT ONE of 1.0.0's five values survives. Every
-#      existing tool call stops resolving. 1.1.0 also pulls in a new
-#      `@aihubmix/media-adapters` dependency and adds video tooling.
+# THE PATCH STILL CANNOT BE AUTOMATED, measured against 1.1.0 on 2026-07-27:
 #
-# So a version bump is not a hash refresh — it needs a human to re-author the
-# patch against a rewritten file and to accept a breaking tool-schema change.
-# No update script can carry a local patch across an upstream rewrite. Wiring
-# a `config.update.targets` row would therefore land a target that is HELD
-# BACK on its very first sweep and every sweep after, permanently occupying
-# the channel reserved for TRANSIENT failures and training operators to
-# ignore it.
+#   1. THE CAPABILITY IS NOT NATIVE. 1.1.0's `build/tools/painting-tools.js`
+#      imports no `fs` and no `path` at all; `image_generate.execute` returns
+#      base64 blobs and URLs and never touches disk. The new
+#      `@aihubmix/media-adapters@0.2.2` dependency does not add one either —
+#      zero `fs`/`writeFile`/download hits across its whole `dist/`. And
+#      `build/tools/file-tools.js` (which does have a `write_file`) is
+#      COMPILED BUT NEVER REGISTERED: `build/tools/index.js` exports
+#      `{...paintingTools}` only, byte-identical in both releases, and
+#      `server.js` dispatches from that. So there is no native save path and
+#      no in-server fallback.
+#   2. THE PATCH MUST BE RE-AUTHORED ON EVERY UPSTREAM REWRITE. The 1.0.0
+#      patch did not apply to 1.1.0 — `patch -p1 --dry-run` took hunk 1 with
+#      fuzz and FAILED hunks 2 and 3; painting-tools.js went 288 -> 624
+#      lines. No update script can re-author a patch. A
+#      `config.update.targets` row would therefore land a target that goes
+#      RED the next time upstream rewrites that file, permanently occupying
+#      the channel reserved for TRANSIENT failures and training operators to
+#      ignore it.
+#
+# The re-authored patch is structured to survive as much drift as it can: the
+# helper and both imports are ONE contiguous prepend at the top of the file
+# (upstream's first two import lines are the only context, and they survived
+# the 1.0.0 -> 1.1.0 rewrite verbatim), leaving just two small anchored
+# insertions below. It is still a context diff against generated build output
+# and WILL break on a sufficiently large rewrite. That is the honest ceiling.
 #
 # Instead the gap is LOUD but cheap, joining update.yml's established
 # non-blocking annotation family (the copilot-cli SEA detector, the pnpm
@@ -72,13 +84,18 @@
 #
 # TO BUMP (human, deliberate):
 #   1. Re-author aihubmix-mcp-save-to-file.patch against the new
-#      build/tools/painting-tools.js.
+#      build/tools/painting-tools.js. Confirm it applies with NO fuzz —
+#      `patch` accepting a hunk with fuzz means it guessed at the location.
 #   2. Regenerate aihubmix-mcp-package-lock.json:
 #      `npm install --package-lock-only --ignore-scripts` in an extracted
 #      copy of the new tarball (npm does not publish one).
 #   3. Update `upstreamVersion` + both hashes below. Never hand-write a hash:
 #      set it to `lib.fakeHash`, build, and take the `got:` value.
 #   4. Re-check the annotation step still derives the version correctly.
+#   5. Re-check whether upstream has grown a native save-to-disk argument. If
+#      it ever does, DELETE the patch, drop the `config.update.excludePatterns`
+#      entry and the update.yml detector, and add a real targets row — the
+#      patch is the only thing keeping this package out of the sweep.
 #
 # Cache-hit parity: every build input comes from THIS repo's nixpkgs pin,
 # never the consumer's `final`. `final.stdenv.hostPlatform.system` is the
@@ -95,24 +112,25 @@
   inherit (ourPkgs) buildNpmPackage fetchurl lib;
   vu = import ../lib.nix;
 
-  # The published npm version we pin. The URL embeds it, so it cannot be
-  # derived from the source: a flat `fetchurl` yields the .tgz FILE, not a
-  # tree, so `vu.readPackageJsonVersion` has nothing to read and
-  # `vu.mkVersion` has no rev to combine. Both are therefore unused here.
-  upstreamVersion = "1.0.0";
+  # The published npm version we carry — currently npm `dist-tags.latest`.
+  # The URL embeds it, so it cannot be derived from the source: a flat
+  # `fetchurl` yields the .tgz FILE, not a tree, so
+  # `vu.readPackageJsonVersion` has nothing to read and `vu.mkVersion` has
+  # no rev to combine. Both are therefore unused here.
+  upstreamVersion = "1.1.0";
 in
   buildNpmPackage {
     pname = "aihubmix-mcp";
 
     # `+<local>` is this repo's established local-delta separator
     # (`vu.mkVersion` emits `<upstream>+<shortrev>`). It says plainly that
-    # this is not stock 1.0.0, and the annotation step in update.yml reads
-    # the part before `+` as the upstream version.
+    # this is not a stock upstream release, and the annotation step in
+    # update.yml reads the part before `+` as the upstream version.
     version = "${upstreamVersion}+save-to-file";
 
     src = fetchurl {
       url = "https://registry.npmjs.org/@aihubmix/mcp/-/mcp-${upstreamVersion}.tgz";
-      hash = "sha256-xsAssFc3Y6wJPYsxU/ZsNrBhA3QTYZOqHsv0Dw6cz3Q=";
+      hash = "sha256-h6IaQ+PCk5UdzD/IIYtTIufbWiotZWrxTkCZmU9uKu0=";
     };
 
     # npm tarballs extract to package/
@@ -122,7 +140,7 @@ in
     dontNpmBuild = true;
 
     # Generated via: nix run nixpkgs#prefetch-npm-deps -- package-lock.json
-    npmDepsHash = "sha256-bBOgia+NSuEk2cqsJr0ZnvStS04qiU7B7F0qIThKdw4=";
+    npmDepsHash = "sha256-qn8MKMElLquIifuTxel3WiqHP+vRNZYNvVHR7EjhNHg=";
 
     # Lockfile not shipped in the tarball — use our vendored one. This runs
     # BEFORE `patches` (stdenv applies patches in patchPhase, and postPatch
@@ -154,7 +172,7 @@ in
     };
 
     meta = {
-      description = "AIHubMix image-generation MCP server";
+      description = "AIHubMix image- and video-generation MCP server";
       homepage = "https://www.npmjs.com/package/@aihubmix/mcp";
       license = lib.licenses.mit;
       # Plain Node, no platform-specific code. The aarch64-darwin BUILD is

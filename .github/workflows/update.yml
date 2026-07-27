@@ -568,13 +568,14 @@ jobs:
             echo "pnpm: upstream stable majors top out at ${upstream_max}; this repo carries up to pnpm_${ours}. No annotation."
           fi
 
-      # Detect a newer @aihubmix/mcp than the version this repo pins.
+      # Detect a newer @aihubmix/mcp than the version this repo carries.
       # aihubmix-mcp is deliberately NOT a config.update.targets row: it
       # carries a local patch against upstream's published build output,
       # and no update script can re-author a patch across an upstream
-      # rewrite. A targets row would report HELD BACK forever. This step
-      # is the honest substitute — it costs one HTTP GET per sweep and
-      # names the human work. See overlays/mcp-servers/aihubmix-mcp.nix.
+      # rewrite. That is about SWEEPABILITY, not about lagging — the repo
+      # tracks dist-tags.latest, so this step is normally SILENT and only
+      # speaks when a new release lands. It costs one HTTP GET per sweep
+      # and names the human work. See overlays/mcp-servers/aihubmix-mcp.nix.
       - name: Detect a newer @aihubmix/mcp on npm
         if: always()
         run: |
@@ -592,7 +593,9 @@ jobs:
           # "<upstream>+save-to-file" — `+` is this repo's local-delta
           # separator — so strip the suffix. A literal here would rot
           # silently on the next bump, and a detector that has quietly
-          # stopped detecting is worse than none.
+          # stopped detecting is worse than none. This form is
+          # version-agnostic on purpose: it survived the 1.0.0 -> 1.1.0
+          # bump untouched, which is the property to preserve.
           ours=$(nix eval --raw .#packages.x86_64-linux.aihubmix-mcp.version 2>/dev/null | cut -d+ -f1 || true)
 
           if [ -z "$upstream" ] || [ -z "$ours" ]; then
@@ -601,9 +604,9 @@ jobs:
           fi
 
           if [ "$upstream" != "$ours" ]; then
-            echo "::warning::aihubmix-mcp: npm dist-tags.latest is ${upstream}, this repo pins ${ours}. Bumping is HUMAN work, not a hash refresh: re-author overlays/mcp-servers/aihubmix-mcp-save-to-file.patch against the new build/tools/painting-tools.js, regenerate aihubmix-mcp-package-lock.json (npm publishes none), and accept any image_generate model-enum change. Not auto-bumped and not auto-PRed on purpose."
+            echo "::warning::aihubmix-mcp: npm dist-tags.latest is ${upstream}, this repo carries ${ours}. Bumping is HUMAN work, not a hash refresh: re-author overlays/mcp-servers/aihubmix-mcp-save-to-file.patch against the new build/tools/painting-tools.js and confirm it applies with NO fuzz, regenerate aihubmix-mcp-package-lock.json (npm publishes none), re-derive both hashes via lib.fakeHash, and check whether image_generate's model enum or tool set changed. If upstream has grown a native save-to-disk argument, drop the patch instead and convert this package to a real config.update.targets row, deleting this step. Not auto-bumped and not auto-PRed on purpose."
           else
-            echo "aihubmix-mcp: npm dist-tags.latest is ${upstream}; this repo pins ${ours}. No annotation."
+            echo "aihubmix-mcp: npm dist-tags.latest is ${upstream}; this repo carries ${ours}. No annotation."
           fi
 
       # Diagnostic dump — runs on success/fail/cancel/timeout.

@@ -125,7 +125,8 @@ If a JS MCP server fails with `Cannot find module 'X'`:
 > Server" checklist below: `overlays/mcp-servers/locks/` has never
 > existed, `flake.nix` needs no per-package edit, and the top-level
 > `modules/` directory is gone. It also adds the vendored-lockfile +
-> local-patch shape and the pinned-with-an-annotation update class). If
+> local-patch shape and the excluded-with-an-annotation update class,
+> which is about sweepability and not about lagging upstream). If
 > you add or remove an `overlays/mcp-servers/*.nix` file, or change how
 > one is wired into the flake, and this fragment isn't updated in the
 > same commit, stop and fix it.
@@ -215,11 +216,12 @@ rather than a git repo, and three things follow that do NOT follow for the
 OUTPUT (not source) is maximally fragile: any upstream rebuild of the
 patched file breaks it, and no update script can re-author a patch.
 
-Before wiring a `config.update.targets` row for such a package, actually
-test the patch against the current upstream release. If it does not apply,
-a targets row lands a target that reports HELD BACK on its FIRST sweep and
-every sweep after, permanently occupying a channel meant for TRANSIENT
-failures. Pin it instead, and make the lag loud the cheap way:
+The decision this drives is about SWEEPABILITY, not about which version to
+carry. Tracking `dist-tags.latest` is normal and expected; what the patch
+costs is the ability to get there AUTOMATICALLY. A targets row on such a
+package goes RED the first time upstream rebuilds the patched file,
+occupying a channel meant for TRANSIENT failures. So carry whatever version
+the operator wants, bump it BY HAND, and make the machinery honest:
 
 1. a `config.update.excludePatterns` entry recording the exclusion and why;
 2. a non-blocking annotation step in `.github/workflows/update.yml` — the
@@ -229,7 +231,19 @@ failures. Pin it instead, and make the lag loud the cheap way:
    never a literal;
 3. the reasoning, measured, in the overlay's own header.
 
-`aihubmix-mcp` is the worked example.
+Keep the two mechanisms mutually exclusive: excludePattern + detector, OR a
+targets row — never both. The day the patch can be dropped (upstream grows
+the feature, or the change lands upstream), delete the exclusion and the
+detector in the SAME commit that adds the targets row.
+
+`aihubmix-mcp` is the worked example, and it also shows the trap: when it
+moved to `dist-tags.latest` the patch had to be re-authored by hand (hunk 1
+applied with fuzz, hunks 2 and 3 failed outright), which is precisely why
+being current did not make it sweepable. Structure such a patch to minimize
+anchors — a single contiguous prepend at the top of the file, where
+upstream's first import lines are the most stable context available, plus
+the smallest possible insertions elsewhere. And confirm it applies with NO
+fuzz: `patch` taking a hunk with fuzz means it guessed at the location.
 
 ### Adding a New Server
 

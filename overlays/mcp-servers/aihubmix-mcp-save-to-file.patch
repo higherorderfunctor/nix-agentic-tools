@@ -1,50 +1,85 @@
 --- a/build/tools/painting-tools.js
 +++ b/build/tools/painting-tools.js
-@@ -1,3 +1,5 @@
+@@ -1,3 +1,59 @@
 +import fs from "fs";
 +import path from "path";
++// ─── Local addition (not upstream): save generated images to disk ───────────
++// Returns the absolute-or-relative paths written, [] when nothing was saved.
++//
++// `savePath` ending in an image extension is treated as a FILE:
++//   - one image  -> written to exactly that path
++//   - N images   -> written to <stem>-1<ext>, <stem>-2<ext>, ... <stem>-N<ext>
++// Anything else is treated as a DIRECTORY and each image gets a generated,
++// collision-free name inside it. Parent directories are created either way.
++//
++// The per-image suffix is the point: assigning every image the same target
++// makes writes 1..N-1 dead, and the caller cannot tell because the tool still
++// reports success. Suffixing is lossless and keeps the caller's chosen name.
++function saveGeneratedImages(contents, savePath) {
++    if (!savePath) {
++        return [];
++    }
++    const images = contents.filter((item) => item && item.type === "image" && item.data);
++    if (images.length === 0) {
++        return [];
++    }
++    // Honour the real payload type: `output_format` offers png/jpeg/webp and
++    // Gemini returns its own mimeType, so a hardcoded .png would mislabel.
++    const extensionFor = (mimeType) => {
++        const subtype = String(mimeType || "image/png").split("/")[1] || "png";
++        const cleaned = subtype.split(";")[0].trim().toLowerCase().replace(/[^a-z0-9]/g, "");
++        if (cleaned === "jpeg") {
++            return ".jpg";
++        }
++        return "." + (cleaned || "png");
++    };
++    const asFile = /\.(png|jpe?g|webp|gif)$/i.test(savePath);
++    const stamp = Date.now();
++    const written = [];
++    images.forEach((item, index) => {
++        let filePath;
++        if (asFile) {
++            if (images.length === 1) {
++                filePath = savePath;
++            }
++            else {
++                const ext = path.extname(savePath);
++                filePath = path.join(path.dirname(savePath), path.basename(savePath, ext) + "-" + (index + 1) + ext);
++            }
++        }
++        else {
++            filePath = path.join(savePath, "aihubmix-" + stamp + "-" + index + extensionFor(item.mimeType));
++        }
++        fs.mkdirSync(path.dirname(filePath), { recursive: true });
++        fs.writeFileSync(filePath, Buffer.from(item.data, "base64"));
++        written.push(filePath);
++    });
++    return written;
++}
++// ─── Upstream file begins ───────────────────────────────────────────────────
  import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
  import fetch from 'node-fetch';
- // Helper function to poll for completion
-@@ -151,6 +153,11 @@
-                     default: "0",
-                     description: "安全容忍度，flux 系列模型支持",
-                 },
+ import { aihubmixMediaRegistry, buildVideoRequest, normalizeVideoResponse, } from '@aihubmix/media-adapters';
+@@ -420,6 +476,11 @@
+                 watermark: { type: 'boolean', description: 'Add watermark (Doubao/Wan/Qwen)' },
+                 seed: { type: 'integer', description: 'Random seed for reproducibility' },
+                 input_reference: { type: 'string', description: 'Reference image URL for image-to-image (supported models only)' },
 +                save_path: {
 +                    type: "string",
-+                    description: "Optional path to save generated image(s). Directory path for multiple images, full file path for single. Images are only saved when this is provided.",
++                    description: "Optional local path to save the generated image(s). Ending in .png/.jpg/.jpeg/.webp/.gif means a FILE: one image is written to exactly that path, and several are written as <stem>-1<ext>, <stem>-2<ext>, ... so none overwrites another. Any other value means a DIRECTORY: each image gets a generated filename inside it, with the extension taken from the returned image type. Missing parent directories are created. Images are only written to disk when this is provided.",
 +                    default: "",
 +                },
              },
-             required: ["prompt", "model"],
+             required: ['prompt', 'model'],
          },
-@@ -272,6 +279,29 @@
-                         }
-                     }
+@@ -469,6 +530,10 @@
+                             : `No image found in response: ${JSON.stringify(data).slice(0, 500)}`,
+                     });
                  }
-+                // Save generated images to disk only when save_path is provided
-+                const savePath = args.save_path || "";
-+                if (savePath) {
-+                    const savedPaths = [];
-+                    for (let i = 0; i < contents.length; i++) {
-+                        const item = contents[i];
-+                        if (item.type === "image" && item.data) {
-+                            let filePath;
-+                            if (savePath.endsWith(".png")) {
-+                                filePath = savePath;
-+                            } else {
-+                                fs.mkdirSync(savePath, { recursive: true });
-+                                filePath = path.join(savePath, "aihubmix-" + Date.now() + "-" + i + ".png");
-+                            }
-+                            fs.mkdirSync(path.dirname(filePath), { recursive: true });
-+                            fs.writeFileSync(filePath, Buffer.from(item.data, "base64"));
-+                            savedPaths.push(filePath);
-+                        }
-+                    }
-+                    if (savedPaths.length > 0) {
-+                        contents.push({ type: "text", text: "Saved to: " + savedPaths.join(", ") });
-+                    }
++                const savedPaths = saveGeneratedImages(contents, args.save_path || "");
++                if (savedPaths.length > 0) {
++                    contents.push({ type: "text", text: "Saved to: " + savedPaths.join(", ") });
 +                }
-                 return {
-                     content: contents,
-                     isError: false,
+                 return { content: contents, isError: false };
+             }
+             catch (error) {

@@ -2,7 +2,9 @@
 
 > **Last verified:** 2026-07-27 (commit pending — adds the
 > `Detect a newer @aihubmix/mcp on npm` annotation step and the
-> pinned-because-a-local-patch-cannot-be-swept rule behind it. Earlier:
+> excluded-because-a-local-patch-cannot-be-swept rule behind it, which
+> is about SWEEPABILITY and not about lagging: aihubmix-mcp tracks
+> `dist-tags.latest` and is still excluded. Earlier:
 > the `NAT_UPDATE_JOBS` evaluator budget that killed run 30181958460,
 > the `verify_all_packages` single-definition build gate and the
 > `fix_sidecar_hashes` repair-on-failure retry, and the
@@ -92,19 +94,25 @@ deliberately does NOT automate because a human has to decide:
 
   This one is worth understanding as a RULE, not a special case. A
   package carrying a local patch against upstream's published BUILD
-  OUTPUT cannot be swept: no update script can re-author a patch. Test
-  the patch against the current upstream release before writing a
-  `config.update.targets` row — for aihubmix-mcp, measured 2026-07-27,
-  2 of 3 hunks fail against 1.1.0 because
-  `build/tools/painting-tools.js` was rewritten (288 -> 624 lines) and
-  the `image_generate` model enum was replaced wholesale, which is
-  additionally a BREAKING change for anything already calling the tool.
-  A targets row would therefore report HELD BACK on its first sweep and
-  every sweep after, permanently occupying a channel meant for
-  TRANSIENT failures and training operators to ignore it. The pairing —
-  a `config.update.excludePatterns` entry recording the exclusion, plus
-  an annotation step keyed on a repo-derived version — is the honest
-  shape: one HTTP GET per sweep, and the lag stays visible.
+  OUTPUT cannot be swept: no update script can re-author a patch, and
+  that is true whether or not the package is currently up to date.
+  aihubmix-mcp now tracks `dist-tags.latest`, so the detector is
+  normally silent — but the exclusion stays, because CURRENCY IS NOT
+  SWEEPABILITY. The measured proof, 2026-07-27: the patch written
+  against 1.0.0 took hunk 1 with fuzz and FAILED hunks 2 and 3 against
+  1.1.0, because `build/tools/painting-tools.js` was rewritten
+  (288 -> 624 lines). It had to be re-authored by hand. A targets row
+  would go RED the next time upstream does that, occupying a channel
+  meant for TRANSIENT failures and training operators to ignore it.
+
+  The pairing — a `config.update.excludePatterns` entry recording the
+  exclusion, plus an annotation step keyed on a repo-derived version —
+  is the honest shape: one HTTP GET per sweep, and any lag stays
+  visible. Do NOT run both this and a targets row; and when a patch is
+  finally dropped (upstream absorbs the feature, or the fork lands),
+  delete the exclusion AND the detector in the same commit that adds
+  the targets row. Detection machinery left behind after the thing it
+  detects became sweepable is dead code.
 
 When adding one of these, copy the shape: `if: always()`, no `${{ }}`
 interpolation of external data into the shell, and an explicit no-op

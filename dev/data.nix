@@ -9,7 +9,7 @@ _: let
   # ── MCP server metadata ──────────────────────────────────────────────
   mcpServerMeta = {
     aihubmix-mcp = {
-      description = "AIHubMix image generation";
+      description = "AIHubMix image and video generation";
       credentials = "Required";
     };
     context7-mcp = {

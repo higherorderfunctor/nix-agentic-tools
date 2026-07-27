@@ -25,7 +25,11 @@ lib.ai.mcpServer.mkMcpServer {
     command = "aihubmix-mcp";
     args = [];
   };
-  # No custom options — aihubmix-mcp has no config knobs beyond the
-  # common schema plus AIHUBMIX_API_KEY in `env`.
+  # No custom options — aihubmix-mcp has no config knobs beyond the common
+  # schema plus environment variables in `env`: AIHUBMIX_API_KEY (required),
+  # and since 1.1.0 the optional AIHUBMIX_BASE_URL (origin only, no `/v1`;
+  # defaults to https://aihubmix.com) and AIHUBMIX_VIDEO_POLL_TIMEOUT_MS
+  # (the video_generate poll budget, default 480000). Promote one to a typed
+  # option only when a consumer actually needs it declaratively.
   options = {};
 }
