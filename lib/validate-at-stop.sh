@@ -14,8 +14,38 @@ active="$(get stop_hook_active)"
 repo="$(get cwd)"
 [ -n "$repo" ] && cd "$repo"
 
+# Not a work tree — Claude Code runs anywhere, and a cwd outside a repo has
+# no changeset to validate. This is the ONE git failure that is expected and
+# is a legitimate no-op, so answer it explicitly and up front; every other
+# git failure below is a real fault and is reported rather than absorbed.
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
+
+# `git diff --quiet` is a THREE-valued signal, not a boolean: 0 = no
+# difference, 1 = difference, >1 (commonly 128) = git ITSELF failed. Under
+# the bare `git diff --quiet && …` form, `&&` read every non-zero status as
+# "there IS a difference", so an erroring git fell through to the changeset
+# scan below — where the same failing git produced an EMPTY file list and the
+# hook exited 0. Validation was silently skipped, indistinguishable from a
+# clean tree. Discriminate by value instead; `|| rc=$?` is the one place
+# errexit is suppressed, so the ordinary exit-1 path still cannot kill the
+# hook. Exit 1 rather than git's own status on error: a Stop hook's exit 2 is
+# the reserved block-with-reason channel, and a git fault must not land on it
+# by coincidence.
+diff_quiet() {
+  local rc=0
+  git "$@" --quiet || rc=$?
+  case "$rc" in
+  0 | 1) return "$rc" ;;
+  *)
+    echo "validate-at-stop: git $* --quiet failed (exit $rc); refusing to" \
+      "read a git error as a diff answer" >&2
+    exit 1
+    ;;
+  esac
+}
+
 # (1) no-diff early exit — pure-conversation turns cost nothing
-if git diff --quiet && git diff --cached --quiet &&
+if diff_quiet diff && diff_quiet diff --cached &&
   [ -z "$(git ls-files --others --exclude-standard)" ]; then
   exit 0
 fi
