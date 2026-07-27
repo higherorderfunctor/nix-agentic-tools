@@ -45,9 +45,26 @@ diff_quiet() {
 }
 
 # (1) no-diff early exit — pure-conversation turns cost nothing
-if diff_quiet diff && diff_quiet diff --cached &&
-  [ -z "$(git ls-files --others --exclude-standard)" ]; then
-  exit 0
+if diff_quiet diff && diff_quiet diff --cached; then
+  # `git ls-files` is only TWO-valued, but its ANSWER arrives on stdout, so a
+  # failure yields an EMPTY capture that `[ -z … ]` reads as "no untracked
+  # files" — the same silent skip by another route, and it is the ONLY thing
+  # holding the gate open when the whole changeset is untracked. Check the
+  # status, not just the string.
+  #
+  # The capture cannot stay inside the `&&` chain above. A helper that
+  # `exit`s would run inside `$( … )`, so the exit would kill only that
+  # command-substitution subshell and the empty string would answer the test
+  # anyway — the guard would read as correct and do nothing.
+  untracked_rc=0
+  untracked=$(git ls-files --others --exclude-standard) || untracked_rc=$?
+  if [ "$untracked_rc" -ne 0 ]; then
+    echo "validate-at-stop: git ls-files --others --exclude-standard failed" \
+      "(exit $untracked_rc); refusing to read a git error as an empty" \
+      "changeset" >&2
+    exit 1
+  fi
+  [ -n "$untracked" ] || exit 0
 fi
 
 # working-tree changeset (unstaged ∪ staged ∪ untracked), NUL-safe
