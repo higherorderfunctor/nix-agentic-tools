@@ -263,15 +263,34 @@ rec {
     # and the older claude-3-5-sonnet). Should upstream genuinely retire a
     # whole family, this fails loud and a human decides — which is the
     # correct outcome for a change that reshapes the model option.
+    #
+    # The membership test is a bash `case`, NOT `printf … | grep -q`. Do not
+    # "simplify" it back into a pipeline. `grep -q` exits at its FIRST match
+    # and closes the read end; bash's printf builtin writes this list roughly
+    # a line at a time (strace: 9 write(2) calls for the 12-model set), so the
+    # writes after the match land on a closed pipe. printf then exits non-zero
+    # ("printf: write error: Broken pipe") and `pipefail` promotes that writer
+    # failure to the pipeline's status — so `if !` fires and the guard reports
+    # a family that is plainly PRESENT as missing. It is a scheduling race, so
+    # it is intermittent, and it is worst for the family matching EARLIEST in
+    # the sorted list (`sonnet`, via claude-3-5-sonnet) because that leaves the
+    # most unwritten lines behind. `case` has no subprocess and no pipe, so the
+    # failure mode cannot occur. Semantics are unchanged: the families are
+    # plain lowercase tokens with no regex metacharacters and no newlines, so
+    # an unanchored substring match over the whole list is exactly what
+    # `grep -q "$family"` computed.
     for family in opus sonnet haiku; do
-      if ! printf '%s\n' "$models" | "$grep" -q "$family"; then
-        echo "claude-extract: no '$family' id among the extracted models (anchor is matching the wrong structure, or upstream dropped the family)" >&2
-        # The bare `tr` below is correct: this body is a runCommandLocal
-        # build script, so stdenv supplies a full PATH. The marker has to
-        # sit ON the offending line — the check filters by line.
-        echo "claude-extract: extracted set was: $(printf '%s\n' "$models" | "$sort" | tr '\n' ' ')" >&2 # bare-commands: ok
-        exit 1
-      fi
+      case "$models" in
+        *"$family"*) ;;
+        *)
+          echo "claude-extract: no '$family' id among the extracted models (anchor is matching the wrong structure, or upstream dropped the family)" >&2
+          # The bare `tr` below is correct: this body is a runCommandLocal
+          # build script, so stdenv supplies a full PATH. The marker has to
+          # sit ON the offending line — the check filters by line.
+          echo "claude-extract: extracted set was: $(printf '%s\n' "$models" | "$sort" | tr '\n' ' ')" >&2 # bare-commands: ok
+          exit 1
+          ;;
+      esac
     done
     modelsJson=$(printf '%s\n' "$models" | "$jq" -R . | "$jq" -s .)
 
