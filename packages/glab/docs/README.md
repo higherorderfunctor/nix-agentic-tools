@@ -50,6 +50,13 @@ forget.
 | `file`   | path read at invocation time; nothing enters the store         |
 | `helper` | executable run at invocation time; nothing enters the store    |
 
+`file` and `helper` both **abort** when the value comes back empty, rather
+than exporting nothing and letting glab fall back to its own default. That
+matters most for `host`, whose default is `gitlab.com`: an empty
+self-managed URI would otherwise send your token to the wrong instance,
+silently. A half-applied sops rotation, or a key the reader cannot
+decrypt, produces exactly that empty file.
+
 `token` and `job_token` are secret-capable because glab's own schema
 marks them keyring-eligible. `host` is included on top of that: a
 self-hosted instance URL is often information an operator would rather
