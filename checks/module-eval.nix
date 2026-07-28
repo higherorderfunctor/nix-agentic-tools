@@ -2923,7 +2923,13 @@ in {
         # to evaluate its conditions to report accurately. Asserted so the
         # rule above is not "over-applied" into wrapping reads as well.
         && lib.any (l: lib.hasInfix "/bin/systemctl --user is-active" l && !(runWrapped l)) lines
-        && !(lib.any (l: lib.hasInfix "> \"$hash_file\"" l) lines)
+        # ANY redirection at the hash file, whatever the spacing. A plain
+        # substring test for the exact `> "$hash_file"` form matched only that
+        # one spelling, so `>"$hash_file"` -- valid shell, identical effect --
+        # walked straight through the assertion meant to forbid it. Matching
+        # `>` followed by optional whitespace covers the no-space, extra-space
+        # and append spellings alike.
+        && !(lib.any (l: builtins.match ".*>[[:space:]]*\"\\$hash_file\".*" l != null) lines)
       )
   );
 

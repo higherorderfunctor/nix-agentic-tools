@@ -233,9 +233,19 @@
   # deliberately NOT wrapped -- a dry run must still evaluate its conditions
   # in order to report accurately what a real run would do.
   #
-  # `run` is the CURRENT mechanism: the activation script's own preamble
-  # marks DRY_RUN_CMD, DRY_RUN_NULL and VERBOSE_ECHO deprecated and
-  # back-compat-only, so new code must not reach for them.
+  # `run` is the CURRENT mechanism for DRY-RUN ROUTING: the activation
+  # script's own preamble marks DRY_RUN_CMD and DRY_RUN_NULL deprecated and
+  # back-compat-only, so new mutating commands must not reach for those.
+  #
+  # THE SAME PREAMBLE ALSO DEPRECATES VERBOSE_ECHO, and the status message in
+  # mkRotationCheck above STILL USES IT. That is INTENTIONALLY RETAINED, not
+  # an oversight: swapping it for the current `verboseEcho` helper is a
+  # behavior change that nothing available at build time can verify, since
+  # the difference only shows up during a real activation. It is tracked
+  # separately rather than folded into a change whose live acceptance checks
+  # already have to be run by hand. Scope this paragraph's rule to the
+  # DRY-RUN helpers; it is deliberately NOT a claim that the snippet is free
+  # of every deprecated variable.
   rotationRestartScript = ''
     state_dir="''${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/mcp-cred-hashes"
     run ${pkgs.coreutils}/bin/mkdir -p "$state_dir" || true
