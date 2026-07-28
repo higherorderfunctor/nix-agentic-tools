@@ -29,7 +29,7 @@ improvements land in this doc only by a deliberate grooming session, never self-
 > concerns become schema-backed state fields, not ad-hoc prose tokens). The backlog sub-workflow
 > this doc references lives at `living-workflow-backlog.md`.
 >
-> **Living-doc version: `v9-basalt-fenland-hazel`.** The assigned VERSION dependents pin to — a
+> **Living-doc version: `v10-cobalt-scarp-alder`.** The assigned VERSION dependents pin to — a
 > monotonic ORDINAL (for "am I behind?") paired with a DISTINCTIVE LABEL (so the exact version
 > stays searchable in history and in copied text). A modifying commit bumps it and authors a
 > migration entry if an upgrader needs one (see DRY-BY-REFERENCE → BASELINE PIN, MIGRATION GUIDE,
@@ -111,9 +111,21 @@ working state file and/or the plan doc itself), the close ritual's mutate-state-
 have nothing left to operate on. As with any drained transient buffer, the durable record REDIRECTS
 to the surviving settled artifact — its changelog/append-only record, the terminal commit message,
 and git history carry the final bookkeeping, not the deleted state. The settled-artifact update and
-the deletion MUST land in the SAME commit (or the update immediately before), so the durable record
-and the removal are atomic — never a two-step that can half-land and leave a deletion with no
+the deletion OF ANY COMMITTED SUBSTRATE MUST land in the SAME commit (or the update immediately
+before), so the durable record and the removal are atomic — never a two-step that can half-land and leave a deletion with no
 recorded provenance.
+THAT REDIRECT-TO-HISTORY ASSURANCE HOLDS ONLY FOR A COMMITTED SUBSTRATE, and the master mandates
+TWO. Working state lives OUTSIDE any repository (see STATE SUBSTRATE), so version control never saw
+it: there is no history to redirect to, and deleting it is UNRECOVERABLE. A terminal close must
+therefore never lean on that assurance for out-of-repo state — the settled committed artifact
+carries the record of the WORK, but it is not a backstop for the deleted working state itself. The
+exposure is worst exactly where supervision is thinnest: a close running unsupervised under a
+standing pre-authorization has neither a human confirmation nor a version-control backstop in play.
+Where a delete would remove out-of-repo state, the safe default is to RETAIN it, recording IN the
+retained state that the terminal fold has occurred and that its deletion is OWED — reusing the
+recorded-DEFERRAL bookkeeping (log the deferral; leave the step not-done with the position pointer
+resting ON it), here as an agent-owned safe default rather than an operator deviation — so an
+operator-present session performs the deletion.
 FIRST-COMMIT TRIAGE OF A DURABLE BASELINE (the committed-baseline counterpart to
 distill-and-delete): when an artifact is committed as a durable baseline rather than
 distilled-and-deleted — the perpetual exception, or any artifact whose committed doc IS its durable
@@ -193,7 +205,27 @@ degrades every later session to the fallback while the real primitive sits on th
 trust-no-clean-negative discipline applied to capability resolution. Recording the probe keeps
 resolved-once intact (the standing negative is still read every session, never re-derived) while
 making it FALSIFIABLE: a session that wants the capability re-checks cheaply against the recorded
-probe instead of inheriting an unfalsifiable false negative. Do NOT re-probe every capability every
+probe instead of inheriting an unfalsifiable false negative.
+PRESENT IS SELF-PROVING ONLY FOR WHAT IS ACTUALLY EXERCISED — extend the same record-the-probe move
+from the absent slot to every UNEXERCISED edge, at zero extra probing cost. A FALLBACK recorded
+beside a working primary is by construction never exercised, and a named SUB-IDENTITY the primitive
+must reach (a delegation role, a named instance, a target account) is not resolved at all; for both,
+self-proving-on-use is affirmatively FALSE, and the failure surfaces exactly when the primary has
+already failed — a false safety net converting into a hard block at the worst moment. So LABEL each
+such record as VERIFIED against the actual target, or merely OBSERVED PRESENT. This adds a label,
+not a probe: do NOT eagerly exercise fallbacks, which is the re-derivation resolved-once exists to
+kill.
+A RESOLVED BINDING MAY STILL FAIL AT USE TIME, and that is NOT evidence the binding is wrong — do
+not re-resolve or thrash the capability on a use-time refusal; preserve durable partial progress and
+defer.
+ADJUDICATE A WAIT ON OBSERVABLE SIDE EFFECTS, NEVER ON CHANNEL SILENCE. Where a capability reports
+completion through a notification channel, treating that channel as push-driven and infallible turns
+a finished worker into an indefinite silent stall, because silence is indistinguishable from
+legitimate long work. Record the channel's known failure modes on the capability itself, and check
+the effect the work would have produced rather than waiting for the announcement. The safety
+properties any watch must carry are stated once under the step-6 WAIT CONTRACT — read them there;
+they are not restated here.
+Do NOT re-probe every capability every
 session — that is the re-derivation resolved-once exists to kill; the asymmetry is the point, since
 only negatives are cheap to get wrong and expensive to notice. The probe rides inline in the
 existing capability record (the capabilities map is freeform); no new state field is needed.
@@ -435,6 +467,30 @@ is authoritative thereafter.
    that currently force a reason (a deferral, a park, a drop). A disposition whose reason is
    implicit is re-litigated or mis-executed by the next reader (a "deferred" note read as
    doable-now).
+   JOIN THE RECORDED DECISIONS TO THE WORK STREAM, IN BOTH DIRECTIONS. The decisions record and the
+   items being worked never meet on their own, and the verification pipeline does not close the gap:
+   it checks an artifact's CORRECTNESS, never its CONFORMANCE with what was already decided.
+   FORWARD — an item that is newly minted, or INHERITED from a handoff or prior recon, is checked
+   against the recorded decisions BEFORE it is built, not after. Otherwise an item can be designed,
+   adversarially reviewed, built, verified green and shipped while violating a decision already
+   taken; review DEPTH amplifies rather than catches this, because every reviewer inherits the same
+   unexamined framing and produces confidence without coverage.
+   BACKWARD — a decision recorded as settled can still be FALSIFIED by contact with the real system
+   (it named a mechanism or a scope that does not survive), and a high-fan-out decision resolved
+   mid-phase retro-invalidates work written before it existed. The protocol defines the operator's
+   routes PAST a binding rule precisely so a session cannot invent one mid-flight; this is the
+   mirror case and needs the same treatment, or the route back gets improvised differently every
+   time. Fork it by OWNERSHIP, using the DECISION-SCOPE FILTER: an agent-owned decision is re-decided
+   and re-recorded on the spot; an operator-owned one is PAUSED and re-asked, never quietly
+   reinterpreted. Either way the superseded decision is MARKED superseded where it sits, as an
+   in-place replacement of that decision's rule-bearing text (MUTATION MODE FOLLOWS WHAT A FIELD
+   HOLDS) — that
+   marking is the load-bearing half, because a superseded-but-unmarked decision reads exactly like a
+   live one, and re-opening a settled decision presents as diligence from the inside.
+   Reconciling a falsified decision may require WIDENING the item to keep it coherent, which is
+   outwardly indistinguishable from scope-chaining: the fix must still land as ONE reviewable unit
+   (the FIX-ON-CONTACT bound), so where coherence cannot be restored within that bound, the
+   widened work is recorded and re-scoped rather than absorbed.
    DECISION-SCOPE FILTER: escalate to the human ONLY (a) high-impact or hard-to-reverse
    calls, (b) decisions turning on human intent the agent cannot infer, (c) issues where the
    agent is genuinely low-confidence after doing the work. Everything artifact-internal
@@ -474,7 +530,19 @@ is authoritative thereafter.
    declarative source is broken, fix the SOURCE and re-derive from the clean starting state
    with ZERO manual steps — never hand-patch the live runtime/output, which hides whether
    the source is correct and cannot be reproduced; poking runtime to diagnose is fine, the
-   accepted fix lands in the source). PROVE AGAINST REALITY is the family these share: the
+   accepted fix lands in the source).
+   AN EXPIRED JUSTIFICATION IS A FIRST-CLASS FINDING — the narrow counterpart to the prohibitions
+   above, which it does NOT weaken. Each of those bars a removal that MASKS a failure; none of them
+   bars a removal whose REASON TO EXIST has lapsed. But stated only as prohibitions they read as a
+   one-way ratchet, so a session weighing a removal sees only reasons not to and takes the cheap
+   safe action of preserving — often while spending real effort maintaining an artifact with no
+   consumer. That bias is self-reinforcing and invisible: nothing records a removal that was never
+   proposed, and each maintenance pass makes the artifact look like stronger evidence of intent to
+   the next reader. So when ABSORBING or CARRYING FORWARD material, verifying that its justification
+   still holds is an EXPECTED check, and a justification that has expired is a finding to raise —
+   raised, logged and decided like any other, never a silent deletion. This licenses looking, not
+   dropping: every prohibition above governs the removal itself unchanged.
+   PROVE AGAINST REALITY is the family these share: the
    runnable increment runs on the real shipping path (above); opaque/third-party assumptions
    are grounded in the exact artifact in play before iterating (bootstrap "load only the
    working set"); a human/interactive gate is reached only after every mechanizable unknown
@@ -649,6 +717,22 @@ is authoritative thereafter.
   before any redo — never "I think I did this."
 - Phase-close compaction: append a compact phase-summary; later phases read that,
   not raw earlier slices.
+- THE DURABLE RECORD IS THE AUTHORITY ON WHAT THIS SESSION DID — it must receive the writes, and it
+  must be what gets read. Both halves fail silently on their own.
+  WRITE side: the WAL duty above is stated per UNIT, so work that does not decompose into crisp
+  units — investigation, measurement, review rounds, correcting an earlier record — fires no
+  trigger at all, while structured state absorbs everything because every finding has an obvious
+  home there. A session can therefore make dozens of state mutations and zero narrative entries, and
+  an empty narrative is indistinguishable from a session that never started. Do NOT auto-derive
+  narrative entries from state mutations — that produces a voluminous record nobody reads.
+  READ side: answer authorship, presence and ABSENCE claims about this session's own work from the
+  durable record, never from recollection. The session's own visible history is a HOST artifact that
+  may be truncated, summarized, or restored from a checkpoint with no gap marker, so a coordinator
+  reasons correctly from complete-looking evidence to a false conclusion about its own work. The
+  verify-against-source discipline is framed for EXTERNAL sources and so is never thought to apply
+  here — precisely where the session is simultaneously source, subject and verifier.
+  At CLOSE, assert both: that the narrative record carries an entry from this session, and that the
+  position marker was RE-DERIVED rather than inherited unchanged.
 
 ── REFLECTION MODE: standing self-improvement of the WORKFLOW ITSELF, default ON ──
 Reflection captures candidate improvements to the LIVING WORKFLOW ITSELF — the reusable
@@ -1010,8 +1094,10 @@ defined by the backlog sub-workflow beside this doc, not duplicated here.
    displaces the load-bearing deliverable it was meant to serve. Off-purpose work is delegated
    however small it looks.
 8. Session close (ACCEPTANCE-GATED): a close is OFFERED — never presumed — on ANY of these: an
-   explicit human stop/close instruction; no un-gated work remains this session (the runnable
-   increment(s) done, every remaining agenda item human-gated); or budget soft-close (step 7).
+   explicit human stop/close instruction; no un-gated work remains this session (nothing this
+   session can advance without a gate — the runnable increment(s) done, every remaining agenda item
+   human-gated, and no delivered unit still carrying a signal in flight, see PRECONDITION below); or
+   budget soft-close (step 7).
    - PRESENT, then ask. In the single-pass chat register, present (i) what this session
      accomplished (results; units flipped done; commits or dirty paths), (ii) the remaining
      agenda — the plan's whole open_items register at a HIGH level (every active/held/parked item,
@@ -1026,7 +1112,45 @@ defined by the backlog sub-workflow beside this doc, not duplicated here.
      plain-chat approval is where the operator steers the next session; CAPTURE the approved
      direction here, BEFORE the close ritual's state mutation (a), so the recorded next position and
      the kickoff both encode the approved plan rather than an unreviewed one.
-   - ONLY on acceptance (or an explicit close instruction) run the close ritual IN ORDER:
+   - PRECONDITION — NO DELIVERED UNIT MAY STILL HAVE A SIGNAL IN FLIGHT. Where the host has an
+     integration vehicle (this is CONDITIONAL and vacuous where it has none), a unit leaves the
+     session as a change only an integrator may land, so ACCEPTANCE and COMPLETION are different
+     events separated by an unbounded wait. Before the ritual runs, every unit this session
+     delivered must have reached a TERMINAL state on every signal attached to it — the automated
+     check pipeline AND any automated reviewer, which reports on its own schedule and is a SECOND
+     signal, not part of the first. WATCH those signals and ACT on them: fix a failure, address the
+     findings. Handing back a unit whose verification the session never saw makes the integrator the
+     first responder for the session's own defects, and forfeits the cheapest moment to fix — while
+     the session still holds full context and the vehicle is still open. This wait is governed by
+     the step-6 WAIT CONTRACT like any other. A signal still in flight is UN-GATED WORK REMAINING,
+     so the close is not yet OFFERED on that trigger. This
+     does NOT deadlock the budget soft-close, which routes to this same gate: once every signal is
+     terminal and acted on, and the only thing left is the integrator's merge, the session has
+     reached its RESTING STATE — no un-gated work, waiting on integration — and the close proceeds
+     from there. TWO EXITS, so this can never hold a close open indefinitely. An explicit operator
+     stop/close instruction fires the ritual REGARDLESS of what is still in flight — the operator's
+     instruction is not gated by this precondition. And a signal that cannot be brought terminal
+     within the sitting (a queue that never reports, a reviewer that never arms for this unit class)
+     is not waited on: distinguish never-armed from in-flight by ADJUDICATING ON OBSERVABLE SIDE
+     EFFECTS, never on channel silence (see the ECOSYSTEM ADAPTER), then take the exit. On either
+     exit the affected units reach SESSION-PROVABLE completion and flip done, while the owed landing
+     is recorded as its own register item naming what it still gates — the CONTINUE-PAST VARIANT
+     shape under STANDING RULES, not a new unit status.
+   - ONLY on acceptance (or an explicit close instruction) run the close ritual. It is NOT atomic
+     and NOT a WAL unit, so the unit-classing discipline is not scoped to it and no session applies
+     idempotency thinking to its own close. Its steps ride DISTINCT
+     capability channels with independent failure modes and sharply unequal REVERSIBILITY:
+     key-addressed state is rewritable, the handoff is inert, and an append-only capture the
+     capturing session may not itself groom cannot be unwound. That irreversible step is the
+     reflection capture (c), and it stays LAST — REFLECTION MODE fixes it after the kickoff, and
+     because it cannot be unwound it must fire only once (a) and (b) have landed. The ordering duty
+     is therefore WITHIN the sequence, not a reordering of it: where interruption is a live risk,
+     complete (a) — the validated state write — before starting (b), so a half-run close leaves a
+     re-verifiable residue rather than an unrecoverable one. A
+     close that fires early or is interrupted is RETRACTED explicitly: reverse what is reversible,
+     mark what is not, and record that a retraction occurred — a half-run close whose surviving
+     artifacts read as authoritative, with no recorded event saying otherwise, is the failure mode.
+     Run the ritual IN ORDER:
      (a) mutate state.json (validated write-then-replace per STATE SUBSTRATE: key-addressed
      transform → validate the temp → atomically replace), append logs, validate against the schema
      (or a structural assertion if no validator resolved) — but in a SELF-DELETING TERMINAL CLOSE the
