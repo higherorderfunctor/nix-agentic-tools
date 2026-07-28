@@ -2844,6 +2844,95 @@ in {
       && lib.hasInfix "/run/secrets/gh-token" (activation.text or "")
   );
 
+  # DRY-RUN INERTNESS. Every MUTATING command in the rotation script must be
+  # routed through home-manager's `run` helper, which echoes instead of
+  # executing when DRY_RUN is set. Reads stay unwrapped on purpose, so a dry
+  # run still evaluates its conditions and can report accurately.
+  #
+  # The NEGATIVE assertion is the load-bearing one. `printf … > "$hash_file"`
+  # is the exact form this replaced, and it is what a future "simplification"
+  # of the tee would reintroduce: `run` wraps a COMMAND AND ITS ARGUMENTS, so
+  # a shell redirection attached to it is performed by the CALLING shell and
+  # writes on a dry run regardless. Writing the hash during a dry run is worse
+  # than merely failing to be inert -- the next REAL activation then sees an
+  # unchanged hash and skips a restart that was genuinely needed, so the dry
+  # run silently destroys pending rotation work.
+  #
+  # The positive assertions double as the CONTROL for the negative: they prove
+  # the infix match reaches this script at all, so a passing negative cannot
+  # be a match against an empty or wrongly-scoped string.
+  module-mcp-services-rotation-dry-run-routed = mkTest "mcp-services-rotation-dry-run-routed" (
+    let
+      result = evalHm {
+        services.mcp-servers.servers.github-mcp = {
+          enable = true;
+          settings.credentials.file = "/run/secrets/gh-token";
+        };
+      };
+      text = result.config.home.activation.mcpRestartOnSecretRotation.text or "";
+      allLines = lib.splitString "\n" text;
+      # COMMENT LINES ARE EXCLUDED, and that is not incidental tidiness: the
+      # emitted script carries a comment naming `printf > "$hash_file"` as the
+      # form to avoid, so a scan over raw lines matches the very prose warning
+      # against the defect and fails a correct script. Same shape as the
+      # repo's bare-commands scan, which is per-line and therefore reads
+      # comments too.
+      lines = lib.filter (l: builtins.match "[[:space:]]*#.*" l == null) allLines;
+      # Matched per LINE and WITHOUT interpolating any store path. Building
+      # the needle from `${pkgs.coreutils}` instead would drag store-path
+      # string context into this check's own derivation, which nix rejects
+      # outright -- the assertion cannot reference a store path.
+      #
+      # A line counts as wrapped when it STARTS with `run ` (the standalone
+      # commands) or pipes into it (the tee write). Testing for a bare `run `
+      # infix instead would be satisfied by an unrelated `--dry-run ` token on
+      # the same line, which is a false pass rather than a stylistic nit.
+      lstrip = l: let
+        m = builtins.match "[[:space:]]*(.*)" l;
+      in
+        if m == null
+        then l
+        else builtins.head m;
+      runWrapped = l: lib.hasPrefix "run " (lstrip l) || lib.hasInfix "| run --quiet " l;
+      # UNIVERSALLY quantified, and that is the whole point. An existential
+      # ("SOME line is wrapped") passes while an UNWRAPPED mutating command
+      # sits beside a wrapped one, so reintroducing the defect next to the fix
+      # would leave this green and DRY_RUN mutating again. `hits != []` is the
+      # positive control that stops the `all` passing vacuously when a
+      # fragment stops appearing at all -- without it, DELETING a command
+      # would look like compliance.
+      everyOccurrenceWrapped = frag: let
+        hits = lib.filter (l: lib.hasInfix frag l) lines;
+      in
+        hits != [] && lib.all runWrapped hits;
+    in
+      # LINUX-GATED, deliberately. The module emits this entry only under
+      # `pkgs.stdenv.isLinux` (systemd user units), so on darwin the entry does
+      # not exist, `text` is empty and every assertion below would be false --
+      # a check that fails by construction on one required platform. The
+      # sibling rotation test lacks this guard and is a recorded aarch64-darwin
+      # failure blocking `--all-systems`; adding a second one would deepen that
+      # blocker rather than merely inherit it.
+      !pkgs.stdenv.isLinux
+      || (
+        everyOccurrenceWrapped "/bin/mkdir -p"
+        && everyOccurrenceWrapped "/bin/chmod 700"
+        && everyOccurrenceWrapped "/bin/systemctl --user restart"
+        && everyOccurrenceWrapped "/bin/tee -- \"$hash_file\""
+        # The read-only `is-active` probe must stay UNWRAPPED: a dry run has
+        # to evaluate its conditions to report accurately. Asserted so the
+        # rule above is not "over-applied" into wrapping reads as well.
+        && lib.any (l: lib.hasInfix "/bin/systemctl --user is-active" l && !(runWrapped l)) lines
+        # ANY redirection at the hash file, whatever the spacing. A plain
+        # substring test for the exact `> "$hash_file"` form matched only that
+        # one spelling, so `>"$hash_file"` -- valid shell, identical effect --
+        # walked straight through the assertion meant to forbid it. Matching
+        # `>` followed by optional whitespace covers the no-space, extra-space
+        # and append spellings alike.
+        && !(lib.any (l: builtins.match ".*>[[:space:]]*\"\\$hash_file\".*" l != null) lines)
+      )
+  );
+
   # Helper-based credentials have no stable file to fingerprint, so they
   # contribute no rotation entry (the path-based restart cannot apply).
   module-mcp-services-rotation-skips-helper-creds = mkTest "mcp-services-rotation-skips-helper-creds" (
