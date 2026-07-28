@@ -35,7 +35,7 @@
         "commit_ownership": { "enum": ["we-commit", "resident-commits"] },
         "integration_posture": {
           "type": "object",
-          "description": "The host's standing ROUTE from a local change to a landed one, resolved at cold start from host properties (never branched on a host name) as a THIRD per-repo property beside commit_ownership and the co-occupancy condition. Typed rather than left to the freeform capabilities map because it is a per-repo PROPERTY like commit_ownership, not a capability binding, and because downstream rules dereference it: with no fixed shape, two sessions resolving the same host record non-comparable answers. Every field is optional and additive, so plans authored before it stay schema-valid and backfill when they re-pin.",
+          "description": "The host's standing ROUTE from a local change to a landed one, resolved at cold start from host properties (never branched on a host name) as a THIRD per-repo property beside commit_ownership and the co-occupancy condition. Typed rather than left to the freeform capabilities map because it is a per-repo PROPERTY like commit_ownership, not a capability binding, and because downstream rules dereference it: with no fixed shape, two sessions resolving the same host record non-comparable answers. TWO LEVELS, deliberately not the same: no field is schema-REQUIRED, so plans authored before this stay valid and backfill when they re-pin; but a session that actually RESOLVES a posture is expected to record all four, including where an answer is the permissive default, because a reader cannot distinguish an unresolved posture from a resolved permissive one. Validation stays lenient so the obligation is the protocol's, not the harness's.",
           "properties": {
             "default_vehicle": {
               "type": "string",
@@ -47,7 +47,7 @@
             },
             "phase_branch_review_binding": {
               "type": "string",
-              "description": "How phase, branch and review unit bind on this host. Recorded ALWAYS, including where the answer is the default phase = branch = review sitting — the rules that read it cannot distinguish an unresolved posture from a resolved permissive one, so an omitted field defeats the purpose of resolving it. The case that motivated typing it is a host whose review unit spans several phases."
+              "description": "How phase, branch and review unit bind on this host. Recorded like every sibling once a posture is resolved — including where the answer is the default phase = branch = review sitting, per the record-all-four expectation above — since an omitted field is indistinguishable from an unresolved one. The case that motivated typing it is a host whose review unit spans several phases."
             },
             "push_point": {
               "type": "string",
