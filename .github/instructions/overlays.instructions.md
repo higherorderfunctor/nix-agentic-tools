@@ -485,7 +485,15 @@ assertion in the same commit.
 
 ## Overlay Grouping and the `generic` Subtree
 
-> **Last verified:** 2026-07-27 — the commit adding THIS line retires the
+> **Last verified:** 2026-07-28 — the commit adding THIS line lands `glab`:
+> the first Go package whose SRC hash also lives in the sidecar
+> (`vu.mkGoSrcVendorFix`), the first GitLab-hosted version check
+> (`vu.glLatestVersionCmd`), and the collapse of the three sidecar hash
+> fixers onto one `vu.mkHashFix` body driven by `hashFixTargets`. It also
+> corrects the thin-override list, which now has to distinguish the
+> SIDECAR contract (where a hash comes from) from the OVERRIDE SEAM
+> (`.override` vs `overrideAttrs`) — `glab` shares bruno's former but not
+> its latter. Prior: 2026-07-27 retired the
 > "bruno is the ONLY worked example" claim (`overlays/git-tools/git-absorb.nix`
 > is a second one and PREDATES it), replaces the heuristic with the
 > INPUT-vs-OUTPUT rule read out of the pinned nixpkgs' `lib.extendMkDerivation`,
@@ -545,15 +553,19 @@ version-tracked one gets a `config.update.targets` row.
 
 ### Thin overrides of a nixpkgs package
 
-Most `generic` entries (`btop`, `bun`, `fblog`, `gh`, `oh-my-posh`,
-`otel-tui`, `pnpm_10`, `pnpm_11`) are not fresh derivations but
-`ourPkgs.<name>.overrideAttrs` over the nixpkgs one, moving only
+Most `generic` entries (`btop`, `bun`, `fblog`, `gh`, `glab`,
+`oh-my-posh`, `otel-tui`, `pnpm_10`, `pnpm_11`) are not fresh derivations
+but `ourPkgs.<name>.overrideAttrs` over the nixpkgs one, moving only
 `version`, `src`, `passthru.updateScript` and — for the Go ones —
 `vendorHash`. `gluetun` is the exception, and only because nixpkgs does
 not carry it at all; `bruno` is deliberately absent from that list because
 `overrideAttrs` cannot express its override at all (see the
-`.override` section below). Two rules that are not obvious from reading
-such a file:
+`.override` section below). `glab` IS on the list and belongs there —
+`buildGoModule` reads `vendorHash` and `src` off `finalAttrs`, so
+composing on the output works — even though it shares bruno's SIDECAR
+contract, because that contract is about where the hash comes from, not
+about which override seam is correct. Two rules that are not obvious from
+reading such a file:
 
 - **Namespaced-only.** The overlay writes `pkgs.generic.<name>` and
   NEVER a top-level `pkgs.<name>`. Shadowing a nixpkgs attribute would
@@ -755,8 +767,8 @@ set self-updates.
 Go has the same transitive-hash problem and no `importCargoLock`
 equivalent — `go.sum` records module hashes, not a Nix-fetchable vendor
 tree — so `vendorHash` must be recorded somewhere. It goes in the
-sidecar (`gh`, `gluetun`, `oh-my-posh`, `otel-tui`), never inline, and
-the mechanism is worth understanding before touching it:
+sidecar (`gh`, `glab`, `gluetun`, `oh-my-posh`, `otel-tui`), never
+inline, and the mechanism is worth understanding before touching it:
 
 - `mkUpdateScript` rebuilds the sidecar FROM SCRATCH on every write
   (`jq -n --arg v "$latest" '{version: $v}'`), so any key it does not
@@ -780,6 +792,32 @@ the mechanism is worth understanding before touching it:
   `overrideModAttrs` there, `build-support/go/module.nix` warns loudly
   when an overlay drops them, and the fixer resolves `.goModules`
   through that very attrset.
+
+`glab` is the one Go package where the SRC hash goes in the sidecar too,
+and it is `vu.mkGoSrcVendorFix` rather than `mkGoVendorFix` for exactly
+the reason bruno is not on the plain prefetch path: nixpkgs' `glab`
+fetches with `leaveDotGit = true` and a `postFetch` that records the
+short commit into `COMMIT` and then strips `.git`, so the recorded hash
+is over the POST-`postFetch` tree and `nix-prefetch-url --unpack` cannot
+reproduce it. It pairs `platforms = {}` with an `extraExtract` that
+restores `srcHash` then `vendorHash` — **that order is forced**, because
+`goModules` derives FROM `src`, so a stale `srcHash` fails the vendor
+build on the src mismatch and never reaches the vendor one.
+
+The three fixers (`mkGoVendorFix`, `mkGoSrcVendorFix`, `mkNpmDepsFix`)
+are now one body — `vu.mkHashFix` — parameterized by an ordered list of
+`hashFixTargets` entries, each a `(attrPath, drvPattern, key)` triple.
+Add a target to that attrset rather than open-coding a fourth
+`writeShellScript`; the derivation-name patterns are load-bearing (see
+`fodHashFixFn`) and a copy is how they drift.
+
+`glab` also does NOT use the `gh` shape for its version check: it is
+hosted on gitlab.com, which has no `releases/latest` redirect to read a
+tag out of, so `vu.glLatestVersionCmd` makes an unauthenticated API call
+to `releases/permalink/latest` (which, like GitHub's "latest", excludes
+upcoming releases) and reads `.tag_name`. It takes a URL-ENCODED project
+path — `owner%2Frepo` — and does not encode for you, so that a caller
+which already encoded is not silently mangled.
 
 Two traps, both measured on `oh-my-posh` while landing it:
 
