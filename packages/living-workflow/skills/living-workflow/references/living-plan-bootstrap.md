@@ -112,8 +112,8 @@ have nothing left to operate on. As with any drained transient buffer, the durab
 to the surviving settled artifact — its changelog/append-only record, the terminal commit message,
 and git history carry the final bookkeeping, not the deleted state. The settled-artifact update and
 the deletion OF ANY COMMITTED SUBSTRATE MUST land in the SAME commit (or the update immediately
-before), so the durable record and the removal are atomic — never a two-step that can half-land and leave a deletion with no
-recorded provenance.
+before), so the durable record and the removal are atomic — never a two-step that can half-land
+and leave a deletion with no recorded provenance.
 THAT REDIRECT-TO-HISTORY ASSURANCE HOLDS ONLY FOR A COMMITTED SUBSTRATE, and the master mandates
 TWO. Working state lives OUTSIDE any repository (see STATE SUBSTRATE), so version control never saw
 it: there is no history to redirect to, and deleting it is UNRECOVERABLE. A terminal close must
@@ -169,8 +169,8 @@ steering; ask the human only if unresolvable).
 ── ECOSYSTEM ADAPTER: resolve capabilities at cold start ──
 This prompt is ecosystem-agnostic; it never assumes a host runtime, forge, or toolset.
 Name capabilities GENERICALLY — concurrent-progress-during-dispatch, delegate-subagent,
-delegation-depth,
-open-PR/MR, post-review-thread, run/format-hook, schema-validate — and RESOLVE each to a
+delegation-depth, open-PR/MR, post-review-thread, run/format-hook, schema-validate — and
+RESOLVE each to a
 concrete primitive (or, where the capability is a host property rather than an action, to
 that property) at COLD START, recorded in state.json.ecosystem (resolved_at, runtime,
 forge, repo, commit_ownership, capabilities map). Encode divergences as "if capability X
@@ -484,8 +484,7 @@ is authoritative thereafter.
    and re-recorded on the spot; an operator-owned one is PAUSED and re-asked, never quietly
    reinterpreted. Either way the superseded decision is MARKED superseded where it sits, as an
    in-place replacement of that decision's rule-bearing text (MUTATION MODE FOLLOWS WHAT A FIELD
-   HOLDS) — that
-   marking is the load-bearing half, because a superseded-but-unmarked decision reads exactly like a
+   HOLDS) — that marking is the load-bearing half, because a superseded-but-unmarked decision reads exactly like a
    live one, and re-opening a settled decision presents as diligence from the inside.
    Reconciling a falsified decision may require WIDENING the item to keep it coherent, which is
    outwardly indistinguishable from scope-chaining: the fix must still land as ONE reviewable unit
@@ -1123,8 +1122,8 @@ defined by the backlog sub-workflow beside this doc, not duplicated here.
      first responder for the session's own defects, and forfeits the cheapest moment to fix — while
      the session still holds full context and the vehicle is still open. This wait is governed by
      the step-6 WAIT CONTRACT like any other. A signal still in flight is UN-GATED WORK REMAINING,
-     so the close is not yet OFFERED on that trigger. This
-     does NOT deadlock the budget soft-close, which routes to this same gate: once every signal is
+     so the close is not yet OFFERED on that trigger. This does NOT deadlock the budget soft-close,
+     which routes to this same gate: once every signal is
      terminal and acted on, and the only thing left is the integrator's merge, the session has
      reached its RESTING STATE — no un-gated work, waiting on integration — and the close proceeds
      from there. TWO EXITS, so this can never hold a close open indefinitely. An explicit operator
@@ -1146,8 +1145,8 @@ defined by the backlog sub-workflow beside this doc, not duplicated here.
      because it cannot be unwound it must fire only once (a) and (b) have landed. The ordering duty
      is therefore WITHIN the sequence, not a reordering of it: where interruption is a live risk,
      complete (a) — the validated state write — before starting (b), so a half-run close leaves a
-     re-verifiable residue rather than an unrecoverable one. A
-     close that fires early or is interrupted is RETRACTED explicitly: reverse what is reversible,
+     re-verifiable residue rather than an unrecoverable one. A close that fires early or is
+     interrupted is RETRACTED explicitly: reverse what is reversible,
      mark what is not, and record that a retraction occurred — a half-run close whose surviving
      artifacts read as authoritative, with no recorded event saying otherwise, is the failure mode.
      Run the ritual IN ORDER:
