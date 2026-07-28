@@ -749,3 +749,78 @@ here. All are behavior-changing master edits.
   reads "skip" and "validate" for the same session. Both arms of the gate hang off that single
   widened antecedent, so the DRY-SYNC arm's own text is unchanged but it now fires in the wider
   case too.**
+
+## Integration posture + selection-not-breakage + a register checkpoint
+
+Migration entries folded in the pass that bumped the master to `v12-cinnabar-drumlin-hornbeam`. This
+section's anchor is **derived from history** (the commit that assigned that version), not embedded
+here. All are behavior-changing master or shared-harness edits. Behavior-neutral repairs landed in
+the same commit are git-history-only and add no entry here.
+
+### Master protocol (`living-plan-bootstrap.md`)
+
+- **INTEGRATION POSTURE — a THIRD per-repo property resolved at cold start:** `commit_ownership`
+  answers WHO commits and the co-occupancy condition answers whether the tree is exclusively yours;
+  neither answered what the host's standing ROUTE from a local change to a landed one is, so that
+  route was re-derived every session and guessed differently each time. **Upgraders: resolve an
+  integration posture at cold start from HOST PROPERTIES — branching on the property, never on a
+  host name — and record it in the new `ecosystem.integration_posture` slot described under the
+  shared harness below, one field per output. It fixes four things. (1) THE DEFAULT VEHICLE:
+  where the host protects its trunk and lands every change through a reviewed unit, make the
+  isolation-plus-integration vehicle the STANDING DEFAULT rather than a response to DETECTED
+  co-occupancy — detection is unreliable and the failure is asymmetric. Co-occupancy still FORCES
+  isolation where a posture would permit a direct commit, never the reverse, and the vehicle's
+  location property binds in both cases. (2) THE PUSH POINT: pushing is warranted by DURABILITY and
+  cross-session VISIBILITY, NOT by concurrency, so where your posture pushes at all, push at the
+  FIRST commit and keep pushing — if you derived your push point from the concurrency condition, you
+  derived it from the narrow case. (3) THE DRAFT-VERSUS-READY GATE: resolve whether your host's
+  draft state SUPPRESSES automated review, because where it does, dev-complete work handed over as a
+  draft starts no review at all; then split by INTENT — a progress surface for in-flight work stays
+  draft, work handed over for review is opened READY. (4) HOW PHASE, BRANCH AND REVIEW BIND: this is
+  now a posture OUTPUT rather than the constant `phase = branch = review sitting`, so record the
+  resolved binding instead of re-deriving it against a steer each time. A posture never overrides
+  `commit_ownership` and never promises isolation the substrate does not deliver.**
+- **Source-masking now fires on SELECTION, not only on breakage:** the rule was written for
+  "something generated is BROKEN, fix the source", so it slipped past the two moments that most need
+  it, neither of which presents as brokenness. **Upgraders: treat the rule as firing whenever a value
+  determined by its inputs is about to be SELECTED by a cheap structural shortcut rather than
+  RE-DERIVED from those inputs, broken or not. Two concrete consequences. A generated artifact in a
+  merge conflict has NO correct side — both parents can be stale relative to the merged inputs — and
+  the ours/theirs labels INVERT with merge direction, so side-selection is both semantically wrong
+  and easy to apply backwards; regenerate from the merged source instead. A remediation pin-back has
+  a FLOOR as well as a ceiling: every input your CURRENT configuration already consumes bounds the
+  hold from below, so a revision chosen against the breakage alone fails for the opposite reason —
+  prefer a revision a sibling consumer has already PROVEN over one read off topology. And after ANY
+  such resolution, re-verify the PARTICULAR derived values that carry current intent against what the
+  durable record says they should be; the shortcut's product is internally valid and passes every
+  gate, so a green whole is not evidence.**
+- **STANCE gains a structural pre-send CHECK for the chat register:** the two-register rule was sound
+  and kept failing, because generation adopts the register of whatever was most recently read or
+  written and register — unlike content — has no checkpoint, so drift is never caught while it
+  happens. **Upgraders: before sending a chat reply, run a decidable test over its SURFACE rather
+  than its meaning — does it carry section headers, tables, nested label-lists, or a bare internal
+  label as the sole handle? Any hit means the wrong register; rewrite before sending. Scope the test
+  to the reply's PROSE — a fenced handoff or kickoff block, and a register/agenda snapshot the
+  protocol mandates, are dense BY INSTRUCTION and are exempt, or the check would fire on the
+  presentations the close ritual requires. It binds hardest immediately after emitting a dense
+  artifact, which is where the drift concentrates. This replaces exhortation with a checkpoint; the
+  register rule itself is unchanged.**
+- **The close PRECONDITION's never-armed exit now excludes a suppressor you can lift yourself:**
+  adjudicating a reviewer's silence on observable side effects cannot distinguish "never armed for
+  this unit class" from "armed but SUPPRESSED", and the commonest suppressor is a session's own
+  integration request left in a draft state on a host where draft gates the reviewer. **Upgraders:
+  before taking the never-armed exit at close, rule out a suppressor the session can itself lift —
+  chiefly your own draft state; a liftable suppressor is un-gated work remaining, not an exit.
+  Otherwise the exit discharges the precondition by forfeiting exactly the review it exists to
+  secure.**
+
+### Shared harness (`state.schema.json`)
+
+- **New additive `ecosystem.integration_posture` object:** the posture is a per-repo PROPERTY that
+  downstream rules dereference, so it needed an address and a shape rather than the freeform
+  capabilities map that holds capability BINDINGS. **Upgraders: nothing breaks — every field is
+  optional and additive, so a plan authored before this stays schema-valid. When you re-pin, resolve
+  the posture at your next cold start and record it with one field per output:
+  `default_vehicle`, `push_point`, `draft_policy`, `phase_branch_review_binding`. Record it even
+  where the answer is the old default (direct commits on a branch, phase = branch = review sitting),
+  because the rules that read it cannot tell an unresolved posture from a resolved permissive one.**

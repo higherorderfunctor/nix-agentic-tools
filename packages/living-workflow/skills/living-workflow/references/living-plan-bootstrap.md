@@ -24,12 +24,12 @@ improvements land in this doc only by a deliberate grooming session, never self-
 > (`state.schema.json`), shared and reusable (DRY-by-reference); it is REFERENCED by each
 > plan, never re-embedded — there is no second copy in the prompt block below. The protocol
 > block carries the full feature register: the reflection protocol, the backlog sub-workflow &
-> nesting model, DRY-by-reference + the baseline pin, the ecosystem adapter, commit-ownership,
-> and the backlog-entry contract, plus the state-over-tokens principle (new cross-session
-> concerns become schema-backed state fields, not ad-hoc prose tokens). The backlog sub-workflow
-> this doc references lives at `living-workflow-backlog.md`.
+> nesting model, DRY-by-reference + the baseline pin, the ecosystem adapter, commit-ownership and
+> integration posture, and the backlog-entry contract, plus the state-over-tokens principle (new
+> cross-session concerns become schema-backed state fields, not ad-hoc prose tokens). The backlog
+> sub-workflow this doc references lives at `living-workflow-backlog.md`.
 >
-> **Living-doc version: `v11-verdigris-tarn-linden`.** The assigned VERSION dependents pin to — a
+> **Living-doc version: `v12-cinnabar-drumlin-hornbeam`.** The assigned VERSION dependents pin to — a
 > monotonic ORDINAL (for "am I behind?") paired with a DISTINCTIVE LABEL (so the exact version
 > stays searchable in history and in copied text). A modifying commit bumps it and authors a
 > migration entry if an upgrader needs one (see DRY-BY-REFERENCE → BASELINE PIN, MIGRATION GUIDE,
@@ -172,12 +172,15 @@ Name capabilities GENERICALLY — concurrent-progress-during-dispatch, delegate-
 delegation-depth, open-PR/MR, post-review-thread, run/format-hook, schema-validate — and
 RESOLVE each to a
 concrete primitive (or, where the capability is a host property rather than an action, to
-that property) at COLD START, recorded in state.json.ecosystem (resolved_at, runtime,
-forge, repo, commit_ownership, capabilities map). Encode divergences as "if capability X
-is absent -> do Y", never as branches on host names. Precedent: the
-delegate-subagent primitive differs by runtime (one CLI's orchestrate-subagent vs another
-IDE's invoke-subagent-with-context-files); a resolved capability hides that from the
-protocol.
+that property) at COLD START, recorded in state.json.ecosystem alongside resolved_at, runtime, forge
+and repo. That record holds EVERY environmental property this protocol says to resolve once and read
+thereafter, and its scope is stated as that PROPERTY rather than as a list that rots each time one is
+added (AUTHOR COVERAGE INTENSIONALLY) — so the capabilities map, the host execution constraints, and
+every named per-repo property below, commit_ownership and the INTEGRATION POSTURE among them, are in
+scope without being enumerated here. Encode divergences as "if capability X is absent -> do Y",
+never as branches on host names. Precedent: the delegate-subagent primitive differs by runtime
+(one CLI's orchestrate-subagent vs another IDE's invoke-subagent-with-context-files); a resolved
+capability hides that from the protocol.
 If a named capability resolves to absent (e.g. no schema validator), record its
 fallback (e.g. structural jq assertion) in the same map. Resolve each capability into ONE of
 THREE states, not two: present (bound to a primitive, or to the host property where the
@@ -239,7 +242,7 @@ a per-repo, per-tool capability resolved for the TARGET repo — inspect its own
 before committing. NEVER carry a trailer or identity convention from one repo into
 another; "this is how the other repo does it" is a red flag, not a justification.
 
-── COMMIT-OWNERSHIP: per-repo, we-commit vs resident-commits ──
+── COMMIT-OWNERSHIP & INTEGRATION POSTURE: per-repo properties, resolved at cold start ──
 Commit ownership is a per-repo property, resolved at cold start into
 state.json.ecosystem.commit_ownership:
 - we-commit: normal git workflow — this session commits its own work.
@@ -253,13 +256,13 @@ who commits, but BOTH modes assume a SINGLE writer in the working tree at a time
 its own work there; resident-commits hands its dirty paths to one resident that commits — neither
 expects a SECOND session editing the same checkout SIMULTANEOUSLY. When the tree is instead
 CONCURRENTLY OCCUPIED by another writer — a second session editing the same checkout at the same
-time — neither mode fits: a direct we-commit risks interleaving uncommitted changes and one
-session capturing the other's work, and resident-commits is wrong because no single resident will
-commit THIS session's work (it commits its own, just not in the shared tree). Resolve co-occupancy —
-a host CONDITION detected like any capability (the tree's tip moves between commands, or it carries
-another session's uncommitted work) — to an ISOLATION-PLUS-INTEGRATION vehicle: branch an isolated
-worktree from the live tip, commit THERE (not in the shared tree), and integrate by an open PR/MR, so
-the shared tree is never written and the change lands as a reviewable unit. Use the plain we-commit
+time — neither mode ALONE fits: a direct we-commit risks interleaving uncommitted changes and one
+session capturing the other's work, and handing dirty paths to a resident of the SHARED tree is wrong
+because no resident owns THIS session's work there. Resolve co-occupancy — a host CONDITION detected
+like any capability (the tree's tip moves between commands, or it carries another session's
+uncommitted work) — to an ISOLATION-PLUS-INTEGRATION vehicle: branch an isolated worktree from the
+live tip, commit THERE (not in the shared tree), and integrate by an open PR/MR, so the shared
+tree is never written and the change lands as a reviewable unit. Use the plain we-commit
 path only when the tree is exclusively this session's; the host may offer isolation vehicles other
 than a worktree, so bind the concrete one at resolve time.
 THE VEHICLE'S LOCATION IS CONSTRAINED BY A PROPERTY, NOT LEFT FREE: it must sit INSIDE the host's
@@ -278,7 +281,51 @@ in one clone diverged. Two cautions when binding the concrete vehicle. Derive it
 clone's COMMON git directory, which resolves correctly from anywhere in the clone — a naive relative
 form is WRONG when run from an already-linked vehicle, resolving one level too deep and nesting
 inside it. And do not promise isolation the substrate does not deliver: isolating a working tree
-does NOT isolate a shared hook directory or event database, which stay common to the clone.
+does NOT isolate a shared hook directory or event database, which stay common to the clone. This
+derivation READS the common git directory the way the state substrate below does, but for a different
+object: there it is the NAMESPACE KEY a working dir is filed under, here it is the anchor a vehicle's
+LOCATION is derived from. Same source, two objects — neither rule licenses the other's use of it.
+INTEGRATION POSTURE (a THIRD resolved property, resolved like the two above): commit_ownership says
+WHO commits and co-occupancy says whether the tree is exclusively ours; neither says what the host's
+standing ROUTE from a local change to a landed one is. Unresolved, that route is re-derived every
+session and guessed differently each time, so resolve it at COLD START from host properties under the
+ECOSYSTEM ADAPTER's rules, and record it — per state-over-tokens, in its own schema-backed slot
+state.json.ecosystem.integration_posture, NOT as prose — with one field per output below. Naming the
+slot AND the shape is the load-bearing half: a property that downstream rules dereference but that
+nothing addresses is the ad-hoc prose token state-over-tokens exists to bar, and with no fixed shape
+two sessions resolving the SAME host record answers that cannot be compared. A posture fixes four
+things.
+(i) THE DEFAULT VEHICLE: whether ordinary work commits directly on a branch in the shared checkout or
+always goes through the isolation-plus-integration vehicle above. Where the host protects its trunk
+and lands every change as a reviewed unit, isolation is the STANDING DEFAULT and co-occupancy
+detection stops carrying the decision — detection is unreliable and the failure is ASYMMETRIC, since
+a session that guesses "exclusive" and commits directly can interleave with, or cascade a failure
+into, another, while a session that isolates unnecessarily pays only the vehicle's bootstrap and the
+serialization its review unit imposes, both of which are bounded and visible. Co-occupancy still
+FORCES isolation wherever a posture would otherwise permit a direct commit; it never licenses the
+reverse. The location property stated above governs the vehicle in either case — posture-default or
+co-occupancy-forced — since it is a property of the vehicle, not of whatever raised it.
+(ii) THE PUSH POINT, whose WARRANT is the load-bearing half because the warrant fixes the default:
+pushing is warranted by DURABILITY and cross-session VISIBILITY, not by concurrency. History that
+lives on one machine announces nothing until it is gone, and work nobody can see cannot be steered.
+So where a posture pushes at all, push at the FIRST commit rather than at the end and keep pushing
+as work lands; deriving the push point from a concurrency condition is the narrow case mistaken for
+the general warrant.
+(iii) THE DRAFT-VERSUS-READY GATE, where the host's integration request has one. Draft-ness is not
+merely a visibility hint: on some hosts a draft SUPPRESSES automated review, so work handed over as a
+draft because it is dev-complete silently starts no review at all and the handover does nothing.
+Resolve whether draft suppresses review as a host property, then split by INTENT rather than by
+polish — a request opened as a progress surface for genuinely in-flight work stays draft, while one
+opened because the work is ready for review is opened READY wherever draft would gate it.
+(iv) HOW PHASE, BRANCH AND REVIEW BIND, because the git-workflow default below binds all three
+together and a host whose review unit spans several phases does not fit that shape. The binding is a
+posture OUTPUT, not a constant: record the resolved one, so downstream rules read one answer instead
+of re-deriving it against the operator's steer each time.
+ONE BOUND ON A RESOLVED POSTURE: it never overrides commit_ownership. A resident-commits repo still
+leaves its tree dirty for its resident, whatever route the resident then takes to land it — and
+where a resident-commits repo is ALSO co-occupied, co-occupancy governs the vehicle while
+commit_ownership still governs who commits, so the write-only session never commits either way. The
+substrate caution stated above binds the posture's vehicle too; it is not restated here.
 VERBATIM MEANS SEMANTIC, NOT BYTE: wherever a repo runs a formatting/normalizing hook,
 committed content (including "verbatim" embedded blocks and cached sources) is
 reflowed on commit — emphasis markers, wrapping, blank lines, pretty-printing. So "embed
@@ -345,9 +392,14 @@ per-file judgment is needed.
   changelog both append-only: append, mark done, never delete/patch.
 - MUTATION MODE FOLLOWS WHAT A FIELD HOLDS, NOT WHICH ARTIFACT IT SITS IN. A RECORD-BEARING field
   (narrative, history, accrued sightings) is append-only. A RULE-BEARING field — one holding a
-  CURRENT rule, disposition or convention — is REPLACED IN PLACE. Appending a correction to a
-  rule-bearing field leaves the field carrying its own contradiction, decidable only by a
-  newest-clause-wins convention nothing states, so the superseded text keeps being read as live.
+  CURRENT rule, disposition or convention — is REPLACED IN PLACE: in a structured artifact by key,
+  and in a prose artifact by the full-section replacement on fences allowed below. That names the
+  mechanism for REPLACING a rule and adds no prohibition: a behavior-NEUTRAL repair leaves every
+  instruction saying what it already said, so it is not a replacement at all, and the lighter
+  token-level repairs a fix path may sanction are reached by neither this clause NOR the
+  full-section-replacement bullet it imports below. Appending a correction to a rule-bearing field
+  leaves the field carrying its own contradiction, decidable only by a newest-clause-wins convention
+  nothing states, so the superseded text keeps being read as live.
 - NO rendered status board. Read state.json directly; if a transient human view is ever wanted,
   regenerate it on demand and never commit it. There is no render step and no status file in the
   standing machinery.
@@ -525,11 +577,27 @@ is authoritative thereafter.
    laundering; completionist mode; mechanism creep; provenance laundering;
    convergence declarations (never declare approval/completion on my behalf);
    degradation-by-shrug (incompleteness is a STOP: investigate, restore from git,
-   drops are explicit-and-logged only); source-masking (when something generated from a
-   declarative source is broken, fix the SOURCE and re-derive from the clean starting state
-   with ZERO manual steps — never hand-patch the live runtime/output, which hides whether
-   the source is correct and cannot be reproduced; poking runtime to diagnose is fine, the
-   accepted fix lands in the source).
+   drops are explicit-and-logged only); source-masking (when a value or artifact generated from a
+   declarative source is BROKEN — or, the same failure reached earlier, is about to be SELECTED by a
+   cheap structural shortcut rather than RE-DERIVED from its inputs, broken or not — fix the SOURCE
+   and re-derive from the clean starting state with ZERO manual steps; never hand-patch the live
+   runtime/output, which hides whether the source is correct and cannot be reproduced; poking
+   runtime to diagnose is fine, the accepted fix lands in the source).
+   WHY THE TRIGGER NEEDED WIDENING, and the two moments it now reaches: neither presents as
+   brokenness, which is why the narrow reading slipped past both. A generated artifact caught in a
+   merge conflict presents as a routine tooling affordance, and the tool OFFERS side-selection
+   exactly there — yet where both parents have moved, neither side is the merged answer, and the
+   ours/theirs labels INVERT with merge direction, so the affordance is semantically wrong AND easy
+   to apply backwards. A remediation pin-back presents as a choice among valid revisions, and
+   choosing against the breakage CEILING alone ignores the FLOOR the consumer's own evolution has
+   raised — every input its CURRENT configuration already consumes — so the "safe older" choice
+   fails for the opposite reason; prefer a revision a sibling consumer has already PROVEN over a
+   guess read off topology. What makes the shortcut's product silent is that it stays internally
+   valid — it parses, it evaluates, it can pass every gate — and diverges from intent only at
+   specific derived values nobody re-checks. So after any such resolution, RE-VERIFY the particular
+   derived values that carry current intent against what the durable record says they should be.
+   That last step is ASSERT THE POSTCONDITION, NOT THE INVOCATION applied to this trigger: the green
+   is read off the resolution having run, not off the values it was supposed to produce.
    AN EXPIRED JUSTIFICATION IS A FIRST-CLASS FINDING — the narrow counterpart to the prohibitions
    above, which it does NOT weaken. Each of those bars a removal that MASKS a failure; none of them
    bars a removal whose REASON TO EXIST has lapsed. But stated only as prohibitions they read as a
@@ -591,9 +659,12 @@ is authoritative thereafter.
    this wholesale" and "here is the substance, apply it under our rules" — treat it as the
    second, and ask when it matters.
 6. GIT WORKFLOW (binding):
-   - Phase = branch = review sitting. At implementation start of a phase, create/
-     checkout a branch for that work (conventional-commit naming, e.g.
-     feat/<slug>). Never commit implementation to the default branch.
+   - Phase = branch = review sitting — the DEFAULT binding, which the resolved INTEGRATION POSTURE
+     (see COMMIT-OWNERSHIP & INTEGRATION POSTURE) may bind otherwise; read the resolved binding
+     rather than re-deriving one. At implementation start of a phase, create/checkout a branch for
+     that work (conventional-commit naming, e.g. feat/<slug>), inside the isolation vehicle whenever
+     EITHER raiser calls for one — the posture by default, or a co-occupied tree forcing it. Never
+     commit implementation to the default branch.
    - Commit OFTEN (we-commit only) — each completed unit is a commit. Conventional Commits: LEAD THE SUBJECT
      WITH A LOWERCASE VERB (conventional-commit-safe); keep any unit/work identifier in the
      body, never at subject start (id-led subjects bounce commit-message lint).
@@ -610,7 +681,9 @@ is authoritative thereafter.
    - SYNC BEFORE PUSH on any branch that can receive commits from other writers
      (automation/bots, other sessions): sync with the remote first (rebase/autostash) so the
      local commit lands ON TOP OF, not over, intervening work. Never force-push in a way that
-     discards divergent remote commits; if divergence cannot be cleanly reconciled, STOP.
+     discards divergent remote commits; if divergence cannot be cleanly reconciled, STOP. WHEN the
+     first push happens is the resolved posture's call, not this rule's; this rule keeps its own
+     scope unchanged and governs how each push lands once the posture has called for one.
    - WRITING INTO A GITIGNORED-BUT-TRACKED SUBTREE: verify tracked/committable status up
      front (a normal add can silently fail; a force-add may be required) — a successful write
      does not imply a committable path. (Searching the same subtree has a matching gotcha —
@@ -1044,8 +1117,11 @@ defined by the backlog sub-workflow beside this doc, not duplicated here.
    see STATE SUBSTRATE; an ordinary plan captures reflection to the framework-channel location and
    tracks its own work in open_items, so it needs no entries/). WEB/no-repo: there is no harness
    file to write and nothing to copy from — track the machine state in the IN-DOC STATE BLOCK.
-   Init state.json from the CURRENT POSITION marker, RESOLVE ecosystem capabilities into
-   state.json.ecosystem including commit_ownership and execution_mode, validate against the
+   Init state.json from the CURRENT POSITION marker, RESOLVE into state.json.ecosystem every
+   environmental property the ECOSYSTEM ADAPTER says to resolve once — capabilities, execution
+   constraints, and each named per-repo property, commit_ownership and the INTEGRATION POSTURE among
+   them — reading that section for the set rather than this line, and record the CONFIRMED
+   execution_mode there too (STEP 0 owns it: it is asked, never resolved). Then validate against the
    schema. (Get repo access first if you don't have it.)
    WARM START: read state.json; position = earliest not-done unit (FULL) or the
    Next task (LITE); first commit any orphaned prior-session status-flip (SKIP the
@@ -1083,7 +1159,9 @@ defined by the backlog sub-workflow beside this doc, not duplicated here.
    prerequisite is actually PRESENT. A missing prerequisite is a cheap boundary STOP, never a
    failure surfaced only after the expensive pass has run. Keep it to a single precondition
    check — do not add ceremony to trivial passes.
-5. On implementation start: create/checkout the phase branch (git workflow above).
+5. On implementation start: materialize the resolved posture's vehicle where it calls for one, or
+   where the tree is co-occupied, THEN create/checkout the work branch in it, at whatever granularity
+   the resolved binding gives (git workflow above).
 6. Subagents: root holds state + orchestrates, never implements the bulk; flat-by-default
    dispatch; parallelize independent fan-out. Four contracts govern a dispatch — what goes out,
    what comes back, how wide it may run, and what the root does while it waits.
@@ -1145,8 +1223,10 @@ defined by the backlog sub-workflow beside this doc, not duplicated here.
    principle; count those, not workers, when estimating achievable throughput.
    WAIT CONTRACT. Where the host permits progress while the session WAITS (resolve as a capability
    — concurrent-progress-during-dispatch, resolved at cold start like any other; where it does not
-   resolve to available, the root simply blocks), the root does not idle. This governs ANY wait,
-   not only a wait on the session's OWN in-flight dispatch: a wait on an EXTERNAL actor — a
+   resolve to available, the root simply blocks; the KEY NAME is dispatch-scoped for legacy reasons
+   and dependents' resolved records use it, so do NOT rename it — the one resolution it holds
+   governs every wait below, and no wait needs its own), the root does not idle. This governs ANY
+   wait, not only a wait on the session's OWN in-flight dispatch: a wait on an EXTERNAL actor — a
    reviewer, a check queue, an integrator — has no dispatch to be concurrent with, and is the
    longer and commoner wait, precisely where unclaimed work accumulates. Work anything whose inputs
    do not intersect the wait's outputs and whose outputs do not intersect its inputs. The OPERAND
@@ -1218,10 +1298,16 @@ defined by the backlog sub-workflow beside this doc, not duplicated here.
      instruction is not gated by this precondition. And a signal that cannot be brought terminal
      within the sitting (a queue that never reports, a reviewer that never arms for this unit class)
      is not waited on: distinguish never-armed from in-flight by ADJUDICATING ON OBSERVABLE SIDE
-     EFFECTS, never on channel silence (see the ECOSYSTEM ADAPTER), then take the exit. On either
-     exit the affected units reach SESSION-PROVABLE completion and flip done, while the owed landing
-     is recorded as its own register item naming what it still gates — the CONTINUE-PAST VARIANT
-     shape under STANDING RULES, not a new unit status.
+     EFFECTS, never on channel silence (see the ECOSYSTEM ADAPTER), then take the exit. Before
+     taking it, RULE OUT A SUPPRESSOR THIS SESSION CAN ITSELF LIFT — canonically an integration
+     request left in a draft state on a host where draft GATES the reviewer (see the resolved
+     posture's draft policy). A suppressed reviewer emits no side effect, so it is indistinguishable
+     from never-armed by the very test above, and the exit would then discharge the precondition by
+     forfeiting exactly the review it exists to secure. A suppressor the session can lift is
+     un-gated work remaining, not an exit. On either exit the affected units reach SESSION-PROVABLE
+     completion and flip done, while the owed landing is recorded as its own register item naming
+     what it still gates — the CONTINUE-PAST VARIANT shape under STANDING RULES, not a new unit
+     status.
    - ONLY on acceptance (or an explicit close instruction) run the close ritual. It is NOT atomic
      and NOT a WAL unit, so the unit-classing discipline is not scoped to it and no session applies
      idempotency thinking to its own close. Its steps ride DISTINCT
@@ -1271,4 +1357,17 @@ correct; CHAT is SINGLE-PASS — one inference per sentence, connectives explici
 alone. Never use a handoff-internal label as the sole handle in chat — pair every label with
 its meaning. The dial between registers is PARSE COST, not depth: longer chat is fine, density
 is the failure mode.
+CHECK THE REGISTER STRUCTURALLY BEFORE SENDING. The rule above is sound and still keeps failing,
+because generation adopts the register of whatever was most recently read or written — so chat
+inherits the density of a dense artifact just emitted — and because register, unlike content, carries
+no checkpoint: you can tell whether you answered the question, never whether you answered it in the
+right register. What is missing is a CHECKPOINT, not another restatement. So before sending, run a
+decidable test over the reply's PROSE, exempting whatever the reply carries that is dense BY
+INSTRUCTION and therefore not drift — a handoff or kickoff block however it is carried, and a
+register/agenda snapshot this protocol MANDATES — since keying the exemption to one CARRIER would
+un-exempt the same block in a mode that carries it another way. Does the prose carry markdown
+section headings, tables, nested label-lists, or — the checkpoint form of the pair-every-label rule
+above — a handoff-internal label as its sole handle?
+Any hit means the wrong register; rewrite before sending. It binds hardest immediately after a dense
+artifact, which is where the drift concentrates.
 ```
