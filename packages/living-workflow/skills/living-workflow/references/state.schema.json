@@ -26,13 +26,35 @@
     },
     "ecosystem": {
       "type": "object",
-      "description": "Ecosystem capabilities resolved at COLD START. Never assume host/runtime/tools; encode divergences as 'if capability absent -> do Y'. Capability names are ecosystem-agnostic; values are the resolved primitive for this ecosystem.",
+      "description": "Every environmental property resolved at COLD START and read thereafter — capabilities, host execution constraints, and the named per-repo properties (commit_ownership, integration_posture) — not capabilities alone. Never assume host/runtime/tools; encode divergences as 'if capability absent -> do Y'. Capability names are ecosystem-agnostic; values are the resolved primitive for this ecosystem.",
       "properties": {
         "resolved_at": { "type": "string" },
         "runtime": { "type": "string" },
         "forge": { "type": "string" },
         "repo": { "type": "string" },
         "commit_ownership": { "enum": ["we-commit", "resident-commits"] },
+        "integration_posture": {
+          "type": "object",
+          "description": "The host's standing ROUTE from a local change to a landed one, resolved at cold start from host properties (never branched on a host name) as a THIRD per-repo property beside commit_ownership and the co-occupancy condition. Typed rather than left to the freeform capabilities map because it is a per-repo PROPERTY like commit_ownership, not a capability binding, and because downstream rules dereference it: with no fixed shape, two sessions resolving the same host record non-comparable answers. TWO LEVELS, deliberately not the same: no field is schema-REQUIRED, so plans authored before this stay valid and backfill when they re-pin; but a session that actually RESOLVES a posture is expected to record all four, including where an answer is the permissive default, because a reader cannot distinguish an unresolved posture from a resolved permissive one. Validation stays lenient so the obligation is the protocol's, not the harness's.",
+          "properties": {
+            "default_vehicle": {
+              "type": "string",
+              "description": "Whether ordinary work commits directly on a branch in the shared checkout or always goes through the isolation-plus-integration vehicle; carries the concrete vehicle bound at resolve time and the location that satisfies the dev-environment activation/trust-scope property."
+            },
+            "draft_policy": {
+              "type": "string",
+              "description": "Whether the host's integration request has a draft state and whether draft SUPPRESSES automated review, plus the resolved intent split — a progress surface stays draft, work handed over for review is opened ready wherever draft would gate it."
+            },
+            "phase_branch_review_binding": {
+              "type": "string",
+              "description": "How phase, branch and review unit bind on this host. Recorded like every sibling once a posture is resolved — including where the answer is the default phase = branch = review sitting, per the record-all-four expectation above — since an omitted field is indistinguishable from an unresolved one. The case that motivated typing it is a host whose review unit spans several phases."
+            },
+            "push_point": {
+              "type": "string",
+              "description": "When work is pushed, warranted by durability and cross-session visibility rather than by concurrency."
+            }
+          }
+        },
         "execution_mode": {
           "enum": ["web-run", "cli"],
           "description": "Operating mode resolved at cold start, a confirmed input not an inference: 'web-run' (no-repo/document-only — everything in the single regenerated plan doc; leak-safety relaxed) or 'cli' (repo-backed, single machine — working state out-of-repo under <xdg-state-base>/<clone-name>/<workflow-name>/, durable knowledge committed)."

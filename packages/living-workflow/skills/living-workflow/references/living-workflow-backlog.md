@@ -23,11 +23,11 @@ plan submits framework candidates here.
 ## DRY-by-reference: this doc adds only what is backlog-specific
 
 The **general living-plan protocol** — reflection mode, the entry contract, the entry lifecycle,
-commit-ownership, nesting, the state substrate, state-over-tokens — lives **once** in the master
-living doc (`living-plan-bootstrap.md`) that every living plan references. This
-doc does **not** restate it; it references it and adds only what is unique to the backlog
+commit-ownership and integration posture, nesting, the state substrate, state-over-tokens — lives
+**once** in the master living doc (`living-plan-bootstrap.md`) that every living plan references.
+This doc does **not** restate it; it references it and adds only what is unique to the backlog
 sub-workflow: **the grooming loop**, plus a few operational specifics (the capture/grooming split,
-git posture). The shared harness (`state.schema.json`) sits beside the master, and the
+commit hygiene). The shared harness (`state.schema.json`) sits beside the master, and the
 master's judgment-based migration guide lives beside the master doc (`changelog.md`);
 `state.json`'s `living_doc_baseline` pins the master-doc VERSION this backlog is authored
 against.
@@ -275,7 +275,11 @@ semantics — the folded tuning plus its migration entry is the record, the entr
 are the master's entry contract, not restated here. (Web/no-repo mode has no files; the master
 defines how it tracks in the doc and drains to files on the first CLI session.)
 
-## Git posture (soft guardrails, not a hard gate)
+## Commit hygiene here (soft guardrails, not a hard gate)
+
+Distinct from the master's INTEGRATION POSTURE, which is a binding per-repo property resolved at cold
+start and defined there. This section is about WHAT may be committed out of this sub-workflow, and it
+is a review habit rather than a gate.
 
 Working state lives OUT-OF-REPO (the master's XDG STATE SUBSTRATE), so entries, the journal, and
 `state.json` are **never committed** — being outside any repo, they cannot be — an entry can carry sensitive or in-progress work material
