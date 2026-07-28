@@ -132,16 +132,41 @@
   #
   # `plain` DOES use escapeShellArg, because it is new code and its value
   # is arbitrary user text rather than a path.
+  # ── Empty-value guard ─────────────────────────────────────────────
+  # An empty secret is never a usable one, and letting it through is a
+  # SILENT failure with real consequences: the consuming program falls
+  # back to its own default. For an MCP server that means starting
+  # unauthenticated (a mode this repo has already lost weeks to — see the
+  # nix-standards fragment's account of github-mcp/kagi-mcp); for glab it
+  # means `host` falling back to gitlab.com and a self-managed token being
+  # sent to the wrong instance.
+  #
+  # A sops/agenix file is empty far more often than one would like: a
+  # rotation that half-applied, a key the reader cannot decrypt, a
+  # template that rendered nothing. None of those announce themselves.
+  #
+  # `${ref}` rather than an indirect expansion because envVar is known at
+  # generation time — the emitted line is a plain `[ -z "$GITLAB_TOKEN" ]`.
+  emptyGuard = envVar: source: let
+    ref = "$" + envVar;
+  in ''
+    if [ -z "${ref}" ]; then
+      echo "${envVar} resolved empty from ${source} — refusing to continue, since the program would silently fall back to its default" >&2
+      exit 1
+    fi'';
+
   mkSecretExport = pkgs: envVar: secret:
     if secret == null
     then ""
     else if secret ? helper
     then ''
       ${envVar}="$("${secret.helper}")"
+      ${emptyGuard envVar secret.helper}
       export ${envVar}''
     else if secret ? file
     then ''
       ${envVar}="$(${pkgs.coreutils}/bin/cat "${secret.file}")"
+      ${emptyGuard envVar secret.file}
       export ${envVar}''
     else if secret ? plain
     then ''

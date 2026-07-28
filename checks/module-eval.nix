@@ -4504,10 +4504,77 @@ in {
     wrapped = builtins.head result.config.home.packages;
   in
     pkgs.runCommand "module-test-kimchi-wrapper-builds" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
       bin=${wrapped}/bin/kimchi
       grep -q "KIMCHI_NO_UPDATE_CHECK" "$bin"
       grep -q "KIMCHI_EXTRA" "$bin"
       grep -q 'cat "/run/secrets/kimchi-test"' "$bin"
+      # An empty credential file must abort the wrapper rather than let the
+      # program start with the variable unset. Asserted on a REAL MCP
+      # wrapper, not only glab's, because the guard lives in the shared
+      # lib/credentials.nix and every server inherits it.
+      grep -q 'KIMCHI_API_KEY resolved empty' "$bin"
+      echo PASS > "$out"
+    '';
+
+  # The guard is the point of the change, so exercise it as SHELL rather
+  # than as a grep: run a generated snippet against a genuinely empty file
+  # and against a populated one. A grep proves the line was emitted; only
+  # running it proves the line works.
+  module-credential-empty-guard-aborts = let
+    credLib = import ./../lib/credentials.nix {inherit lib;};
+    # `mkSecretExport` bakes the path in at generation time and the test
+    # needs two different files, so the path is a placeholder substituted
+    # per-case below.
+    runner = pkgs.writeShellScript "empty-guard-runner" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      ${credLib.mkSecretExport pkgs "TEST_TOKEN" {file = "@SECRET@";}}
+      echo "REACHED-PROGRAM"
+    '';
+  in
+    pkgs.runCommand "module-test-credential-empty-guard-aborts" {
+      nativeBuildInputs = [pkgs.gnused];
+    } ''
+      # stdenv's buildCommand already runs with errexit, pipefail AND
+      # inherit_errexit on (measured against the pinned nixpkgs), so this
+      # line is not what makes a failing assertion below fail the build.
+      # It adds the three stdenv deliberately leaves off — `-u`, `-E`, `-T`
+      # — and brings the snippet in line with the repo-wide strict-mode
+      # rule. Verified safe here: setting them inside a buildCommand does
+      # not upset the phases stdenv runs afterwards.
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      empty=$(mktemp) && : > "$empty"
+      full=$(mktemp) && printf 'a-real-token' > "$full"
+      sed "s|@SECRET@|$full|"  ${runner} > full.sh
+      sed "s|@SECRET@|$empty|" ${runner} > empty.sh
+
+      # Positive control. Without it, a guard that rejected EVERYTHING would
+      # still pass the negative case below and look correct.
+      got=$(${pkgs.bash}/bin/bash full.sh 2>&1)
+      [ "$got" = "REACHED-PROGRAM" ] || {
+        echo "FAIL: populated secret was rejected (got: $got)" >&2
+        exit 1
+      }
+
+      # The real case: an empty file must abort, non-zero, before the
+      # program is reached.
+      if got=$(${pkgs.bash}/bin/bash empty.sh 2>&1); then
+        echo "FAIL: empty secret did not abort the wrapper (got: $got)" >&2
+        exit 1
+      fi
+      case "$got" in
+        *REACHED-PROGRAM*)
+          echo "FAIL: reached the program despite the guard" >&2; exit 1 ;;
+        *"TEST_TOKEN resolved empty"*) : ;;
+        *)
+          echo "FAIL: aborted, but not via the guard (got: $got)" >&2; exit 1 ;;
+      esac
+
       echo PASS > "$out"
     '';
 
