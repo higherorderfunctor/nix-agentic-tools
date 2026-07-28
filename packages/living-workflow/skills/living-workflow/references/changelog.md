@@ -688,3 +688,64 @@ here. All are behavior-changing master edits.
   material, verify its justification still holds — that check is expected, and an expired
   justification is a finding to raise, log and decide. This licenses LOOKING, not dropping: every
   existing prohibition governs the removal itself unchanged.**
+
+## Proof reach — assert the postcondition, across five dimensions
+
+Migration entries folded in the pass that bumped the master to `v11-verdigris-tarn-linden`. This
+section's anchor is **derived from history** (the commit that assigned that version), not embedded
+here. All are behavior-changing master edits.
+
+### Master protocol (`living-plan-bootstrap.md`)
+
+- **New VALIDATION-ON-UPDATE rule — ASSERT THE POSTCONDITION, NOT THE INVOCATION:** the two existing
+  verification rules there govern a result's EMPTINESS (TRUST NO CLEAN NEGATIVE) and its FIDELITY TO
+  THE SOURCE (VERIFY AGAINST THE SOURCE); neither governs its REACH, and PROVE AGAINST REALITY bars
+  green-against-a-proxy without naming any way to tell that a given green IS one. Both are
+  unchanged; this is a third sibling beside them. **Upgraders: stop reading a verdict off the
+  INVOCATION (it ran, it printed, it exited zero, the standing gate is green) and read it off the
+  POSTCONDITION (the target was actually processed, a known-present control was actually found, the
+  guarded branch actually executed). Both polarities fail silently — a false CLEAN from a swallowed
+  error stream, an exit status read through a pipe or filter, an always-true or always-false
+  condition over the real corpus, a cache satisfying the request above the code under test, or a
+  call site hardened not to abort a batch (which therefore CANNOT report that a change to it was
+  wrong, raising rather than lowering its verification bar); and a false POSITIVE from a
+  recall-oriented net whose hits are candidates, promoted to a finding with no precision probe for
+  the failure signature.**
+- **The INSTRUMENT TEST is the concrete discharge, and it binds committed instruments too:**
+  **Upgraders: before consuming any instrument's output as fact, exercise it where the answer is
+  ALREADY KNOWN, in BOTH polarities — it must FIND a known-present control and MISS a known-absent
+  one; where the instrument does not exist yet, enumerate the corpus BEFORE choosing the condition.
+  This is not scoped to ad-hoc probes: a long-lived committed filter, a standing gate and a detector
+  earn the same treatment, and being purpose-built earns an instrument no trust. Apply it hardest
+  when WIDENING an existing check's scope, which converts an honest "we do not check there" into a
+  load-bearing "we check there and it is clean" that nobody revisits — detection coverage and scope
+  coverage are independent, and only scope is visible in a diff.**
+- **Five named dimensions, each carrying its own CHECK:** **Upgraders: run each check, RECORD the
+  uncovered delta where the work's own durable record lives, and either close it cheaply or LOG AN
+  EXPLICIT ACCEPTANCE (the silent third option is already barred by degradation-by-shrug; a delta
+  named only in passing is that option wearing a name). SCOPE — enumerate the surfaces a change ships
+  on plus every authoritative artifact its dispositions will be read from, and subtract what your
+  gate exercises; the shipping path is PLURAL. DEPTH — name the deepest operation the proof performs
+  versus the deepest real use performs; a gate that evaluates but realizes only a subset leaves a
+  covered surface unproven. INSTANCE — list what varies per instance across a fan-out and treat
+  every unsampled instance as unproven on those; sampling proves the shared MECHANISM only, and the
+  runnable-increment constraint is fully satisfied by an under-covering proof. DURATION — record a
+  result's moment and scope and what would RETIRE it, and re-establish it at point of use; a sample
+  licenses an ABORT, never a PROCEED, and a stale ASSERTION can INVERT where a stale COUNT merely
+  under-reports — but prescribing a value stays CORRECT where deriving it is expensive,
+  non-deterministic or needs data unavailable at authoring, provided you record the CONSTRAINT that
+  generates it, and this dimension does NOT reopen resolved-once capability records, which the
+  ECOSYSTEM ADAPTER already discharges. OPERAND — cross-check any set reached through a PROXY
+  against a direct enumeration of the underlying thing; a selection property must describe the
+  item's INTRINSIC shape, never tooling or process residue, or it correlates inversely with need.**
+- **SESSION-CLOSE VALIDATION's scope is now quantified, not enumerated:** it named "any living-plan
+  doc", so it never reached other authoritative surfaces a plan's dispositions are actually read
+  from. **Upgraders: widen the trigger to any authoritative artifact a plan's dispositions or
+  standing rules are read from — a large accreting working index and the machine state included —
+  and run the internal-consistency arm ACROSS SECTIONS of each artifact, not only per item, since a
+  disposition table and a completion register inside one artifact can each be well-formed while
+  contradicting each other. RIPPLE THE WIDENED TRIGGER TO WHEREVER YOUR CLOSE RITUAL RESTATES IT: a
+  gate whose definition widened while its invocation still names the narrow scope is a gate that
+  reads "skip" and "validate" for the same session. Both arms of the gate hang off that single
+  widened antecedent, so the DRY-SYNC arm's own text is unchanged but it now fires in the wider
+  case too.**
