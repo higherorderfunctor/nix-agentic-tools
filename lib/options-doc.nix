@@ -235,6 +235,7 @@
 
   hmPrefixes = [
     "ai."
+    "glab."
     "living-workflow."
     "programs.copilot-cli."
     "programs.kiro-cli."
@@ -269,6 +270,7 @@
   devenvPrefixes = [
     "ai."
     "copilot."
+    "glab."
     "kiro."
     "living-workflow."
     "stacked-workflows."

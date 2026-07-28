@@ -162,6 +162,7 @@
         ./../lib/ai/sharedOptions.nix
         ./../packages/claude-code/modules/homeManager
         ./../packages/copilot-cli/modules/homeManager
+        ./../packages/glab/modules/homeManager
         ./../packages/kimchi/modules/homeManager
         ./../packages/kiro-cli/modules/homeManager
         ./../packages/living-workflow/modules/homeManager
@@ -182,6 +183,7 @@
         ./../lib/ai/sharedOptions.nix
         ./../packages/claude-code/modules/devenv
         ./../packages/copilot-cli/modules/devenv
+        ./../packages/glab/modules/devenv
         ./../packages/kimchi/modules/devenv
         ./../packages/kiro-cli/modules/devenv
         ./../packages/living-workflow/modules/devenv
@@ -295,6 +297,118 @@ in {
   );
 
   module-claude-default-disabled = mkTest "claude-default-disabled" (!(evalHm {}).config.ai.claude.enable);
+
+  # ── glab ───────────────────────────────────────────────────────────
+  module-glab-default-disabled = mkTest "glab-default-disabled" (
+    !(evalHm {}).config.glab.enable && (evalHm {}).config.home.packages == []
+  );
+
+  # The settings surface is GENERATED from overlays/generic/glab-extracted.json.
+  # Assert the shape of what was generated rather than a count: a key that
+  # upstream renames must show up as a failure here, and an option tree that
+  # collapsed to nothing must not read as "fine".
+  module-glab-settings-generated-from-schema = mkTest "glab-settings-generated-from-schema" (
+    let
+      opts = (evalHm {}).options.glab;
+      settingNames =
+        builtins.attrNames
+        (lib.filterAttrs (n: _: n != "_module") (opts.settings.type.getSubOptions []));
+    in
+      builtins.elem "git_protocol" settingNames
+      && builtins.elem "check_update" settingNames
+      && builtins.elem "glamour_style" settingNames
+      # host/token/job_token are secret-capable and live at the top level,
+      # so they must NOT also appear as plain settings.
+      && !(builtins.elem "host" settingNames)
+      && !(builtins.elem "token" settingNames)
+      && !(builtins.elem "job_token" settingNames)
+      # custom_headers is list-typed and has no single-env-var spelling.
+      && !(builtins.elem "custom_headers" settingNames)
+      && builtins.length settingNames > 20
+  );
+
+  # The three-branch union must accept each branch, and the type system
+  # (not a runtime throw) is what forbids setting two at once.
+  module-glab-secret-branches-accepted = mkTest "glab-secret-branches-accepted" (
+    let
+      ev = evalHm {
+        glab = {
+          enable = true;
+          host.plain = "gitlab.example.com";
+          token.file = "/run/secrets/gitlab-token";
+          job_token.helper = "/run/wrappers/bin/job-token";
+        };
+      };
+    in
+      ev.config.glab.host
+      == {plain = "gitlab.example.com";}
+      && ev.config.glab.token == {file = "/run/secrets/gitlab-token";}
+      && ev.config.glab.job_token == {helper = "/run/wrappers/bin/job-token";}
+      && builtins.length ev.config.home.packages == 1
+  );
+
+  # The whole point of the wrapper: a `file` secret must appear as a
+  # RUNTIME read, and its contents must never be interpolated. A `plain`
+  # value is allowed in the script; a file path is only ever `cat`ed.
+  module-glab-wrapper-reads-secrets-at-runtime = mkTest "glab-wrapper-reads-secrets-at-runtime" (
+    let
+      ev = evalHm {
+        glab = {
+          enable = true;
+          host.file = "/run/secrets/gitlab-url";
+          token.file = "/run/secrets/gitlab-token";
+          settings.git_protocol = "ssh";
+          extraSettings.brand_new_key = "value";
+        };
+      };
+      wrapped = builtins.head ev.config.home.packages;
+      # The script SOURCE — reading its store path back would be IFD
+      # inside `nix flake check`.
+      script = wrapped.passthru.wrapperText;
+    in
+      # Secrets: read at invocation, never baked.
+      lib.hasInfix ''GITLAB_HOST="$('' script
+      && lib.hasInfix "/run/secrets/gitlab-url" script
+      && lib.hasInfix ''GITLAB_TOKEN="$('' script
+      # Non-secret setting exports under its real env var. Asserting the
+      # assignment and the export, NOT the quoting: nixpkgs'
+      # `escapeShellArg` elides quotes for shell-safe values, so
+      # "GIT_PROTOCOL='ssh'" would be an assertion about lib internals.
+      && lib.hasInfix "GIT_PROTOCOL=" script
+      && lib.hasInfix "export GIT_PROTOCOL" script
+      # extraSettings uses glab's uppercase fallback.
+      && lib.hasInfix "BRAND_NEW_KEY=" script
+      # Absolute store path for cat — the wrapper may run without PATH.
+      && !(lib.hasInfix "$(cat " script)
+      # Each env var is exported exactly once. A duplicated export is
+      # harmless at runtime but means the key partitioning has drifted
+      # between the options and the wrapper — which it once had.
+      && builtins.length
+      (builtins.filter (l: l == "export GITLAB_HOST")
+        (lib.splitString "\n" script))
+      == 1
+  );
+
+  # HM and devenv must expose the SAME option tree — that is the whole
+  # reason the declarations are one shared file.
+  module-glab-hm-devenv-option-parity = mkTest "glab-hm-devenv-option-parity" (
+    let
+      names = ev: builtins.attrNames (lib.filterAttrs (n: _: n != "_module") ev.options.glab);
+    in
+      names (evalHm {}) == names (evalDevenv {})
+  );
+
+  module-glab-devenv-installs-wrapper = mkTest "glab-devenv-installs-wrapper" (
+    let
+      ev = evalDevenv {
+        glab = {
+          enable = true;
+          host.plain = "gitlab.example.com";
+        };
+      };
+    in
+      builtins.length ev.config.packages == 1
+  );
 
   module-claude-enable-toggles = mkTest "claude-enable-toggles" (
     let

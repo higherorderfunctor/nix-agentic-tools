@@ -2,13 +2,10 @@
   inherit
     (lib)
     any
-    concatStringsSep
     evalModules
     getExe
     mapAttrs
     mapAttrsToList
-    mkOption
-    types
     ;
 
   # ── Load a server definition by name ───────────────────────────────
@@ -60,32 +57,14 @@
     (serverDef.settingsToArgs cfgShim mode) ++ extraArgs;
 
   # ── Credentials option generator ──────────────────────────────────
-  # Creates a discriminated union (attrTag) option for a single credential.
-  # Exactly one of `file` or `helper` may be set; the type system enforces
-  # mutual exclusion (no runtime assertion needed). Wrapped in nullOr so
-  # optional credentials default to null.
-  mkCredentialsOption = envVar:
-    mkOption {
-      type = types.nullOr (types.attrTag {
-        file = mkOption {
-          type = types.str;
-          description = ''
-            Path to a file containing the raw secret value, read at runtime.
-            Not stored in the Nix store. Works with sops-nix, agenix, or any
-            tool that decrypts secrets to files. Mapped to ${envVar}.
-          '';
-        };
-        helper = mkOption {
-          type = types.str;
-          description = ''
-            Path to an executable that outputs the raw secret value on stdout.
-            Executed at service start. Mapped to ${envVar}.
-          '';
-        };
-      });
-      default = null;
-      description = "Credential mapped to ${envVar}. Set exactly one of file or helper.";
-    };
+  # MOVED to lib/credentials.nix and re-exported here unchanged, so every
+  # MCP server module keeps the exact option type it had. The move
+  # happened when packages/glab — not an MCP server — needed the same
+  # runtime-secret primitives. Do not fork a second copy back into this
+  # file; add to credentials.nix instead.
+  inherit (credentialsLib) mkCredentialsOption mkCredentialsSnippet;
+
+  credentialsLib = import ./credentials.nix {inherit lib;};
 
   # ── Credentials helpers ──────────────────────────────────────────
   # credentialVars: { settingsOptionName = { envVar = "ENV_VAR"; required = bool; }; }
@@ -114,24 +93,11 @@
       else null)
     credentialVars);
 
-  # Use absolute paths for all commands — Claude Code's MCP `env` field
-  # replaces the process environment (no PATH inheritance), so bare
-  # command names like `cat` fail with "command not found".
-  mkCredentialsSnippet = pkgs: credentialVars: settings:
-    concatStringsSep "\n" (mapAttrsToList (optName: spec: let
-      cred = settings.${optName};
-      inherit (spec) envVar;
-    in
-      if cred.helper or null != null
-      then ''
-        ${envVar}="$("${cred.helper}")"
-        export ${envVar}''
-      else if cred.file or null != null
-      then ''
-        ${envVar}="$(${pkgs.coreutils}/bin/cat "${cred.file}")"
-        export ${envVar}''
-      else "")
-    credentialVars);
+  # `mkCredentialsSnippet` also lives in lib/credentials.nix now (it is
+  # inherited above). It still uses absolute store paths for every
+  # command — Claude Code's MCP `env` field REPLACES the process
+  # environment, so a bare `cat` there fails with "command not found"
+  # and the server starts silently unauthenticated.
 
   # ── Secrets wrapper for stdio servers with credentials ─────────────
   # Returns a string (store path) for use directly as a command.

@@ -1,7 +1,10 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-07-21 (commit pending — repo-wide
-> activation reordering `entryAfter ["writeBoundary"]` →
+> **Last verified:** 2026-07-28 (commit pending — records the
+> ONE-SHARED-DECLARATION form of the config-parity rule, landed by
+> `packages/glab` and asserted by
+> `module-glab-hm-devenv-option-parity`; prior 2026-07-21 was the
+> repo-wide activation reordering `entryAfter ["writeBoundary"]` →
 > `["linkGeneration"]`; earlier revisions added the activation
 > script `exit` warning + Nix path type strictness section).
 > If you touch any `modules/<subdir>/default.nix` file, add a new
@@ -252,6 +255,22 @@ at code review.
 types from `lib/ai-common.nix` (`instructionModule`,
 `lspServerModule`, `mkCopilotLspConfig`, `mkLspConfig`) so the
 surfaces stay in sync by construction.
+
+**Stronger than shared types: one shared DECLARATION.**
+`packages/glab` puts its entire `options.glab` block in
+`packages/glab/modules/options.nix` and both facets `imports` it,
+so the two surfaces are the same expression rather than two that
+currently agree. Prefer this whenever the facets differ only in
+where the result is installed — glab's HM file sets
+`home.packages`, its devenv file sets `packages`, and nothing else
+differs. `checks/module-eval.nix` asserts the two option trees are
+equal (`module-glab-hm-devenv-option-parity`), which is a real
+test rather than a code-review convention.
+
+Note this is NOT free for every module: it only works when the
+options carry no facet-specific defaults or `defaultText`. Modules
+whose options reference `home.` or `files.` paths still need the
+per-facet declaration.
 
 **Intentional differences** exist and are NOT parity gaps:
 
