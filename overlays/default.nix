@@ -170,6 +170,12 @@
       gh = import ./generic/gh.nix {
         inherit inputs final;
       };
+      # Sidecar-pinned like gh, but on the bruno CONTRACT, not gh's:
+      # nixpkgs' fetcher carries a `postFetch`, so neither hash can come
+      # from a prefetch. See the header of ./generic/glab.nix.
+      glab = import ./generic/glab.nix {
+        inherit inputs final;
+      };
       oh-my-posh = import ./generic/oh-my-posh.nix {
         inherit inputs final;
       };

@@ -123,12 +123,19 @@ _: {
     # write, so each of them threads `extraExtract = "${fixVendorHash}"` to put
     # the vendor hash back immediately afterwards. Nothing extra is needed here.
     #
-    # bruno is the same --use-update-script contract with a THIRD variation:
-    # its src hash cannot come from a prefetch at all, because the overlay
-    # re-points nixpkgs' fetcher and that fetcher's `postFetch` mutates the
-    # tree the hash covers. It therefore passes `platforms = {}` (version
-    # only) and threads `extraExtract = "${fixNpmDepsHash}"`, which restores
-    # `srcHash` then `npmDepsHash`. Nothing extra is needed here either.
+    # bruno and glab are the same --use-update-script contract with a THIRD
+    # variation: their src hash cannot come from a prefetch at all, because
+    # the overlay re-points nixpkgs' fetcher and that fetcher's `postFetch`
+    # mutates the tree the hash covers. Both therefore pass
+    # `platforms = {}` (version only) and thread an `extraExtract` fixer
+    # that restores `srcHash` FIRST and then the deps hash —
+    # `fixNpmDepsHash` for bruno, `fixHashes` (vu.mkGoSrcVendorFix) for
+    # glab. Nothing extra is needed here either.
+    #
+    # glab is also the one row whose version check is NOT a GitHub one: the
+    # project lives on gitlab.com, so its overlay uses
+    # `vu.glLatestVersionCmd` instead. That is entirely inside the
+    # updateScript and invisible to this registry.
     arkenfox = {flags = ["--use-update-script" "--override-filename" "overlays/generic/arkenfox.nix"];};
     bruno = {flags = ["--use-update-script" "--override-filename" "overlays/generic/bruno.nix"];};
     btop = {flags = ["--use-update-script" "--override-filename" "overlays/generic/btop.nix"];};
@@ -140,6 +147,7 @@ _: {
     dns-root-hints = {flags = ["--use-update-script" "--override-filename" "overlays/generic/dns-root-hints.nix"];};
     fblog = {flags = ["--use-update-script" "--override-filename" "overlays/generic/fblog.nix"];};
     gh = {flags = ["--use-update-script" "--override-filename" "overlays/generic/gh.nix"];};
+    glab = {flags = ["--use-update-script" "--override-filename" "overlays/generic/glab.nix"];};
     gluetun = {flags = ["--use-update-script" "--override-filename" "overlays/generic/gluetun.nix"];};
     kimchi = {flags = ["--use-update-script" "--override-filename" "overlays/kimchi.nix"];};
     kiro-cli = {flags = ["--use-update-script" "--override-filename" "overlays/kiro-cli.nix"];};

@@ -9,12 +9,13 @@
     }
   ],
   "ignorePaths": [
+    "*.lock",
+    "*.png",
     ".direnv",
     ".git",
     "config/cspell",
-    "*.lock",
-    "*.png",
     "docs/**",
+    "overlays/generic/glab-extracted.json",
     "overlays/sources",
     "result"
   ],

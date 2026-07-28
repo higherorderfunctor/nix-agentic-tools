@@ -52,6 +52,7 @@ _: {
     dns-root-hints = {consumerPath = ["generic" "dns-root-hints"];};
     fblog = {consumerPath = ["generic" "fblog"];};
     gh = {consumerPath = ["generic" "gh"];};
+    glab = {consumerPath = ["generic" "glab"];};
     # The one platform-gated row. gluetun's `internal/routing` uses
     # Linux-only x/sys/unix constants, so overlays/default.nix omits the
     # ATTRIBUTE on non-Linux rather than only restricting meta.platforms —

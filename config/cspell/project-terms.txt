@@ -19,6 +19,7 @@ arxanas
 attrset
 attrsets
 aubut
+autologin
 automemory
 autosquash
 autostash
@@ -88,6 +89,7 @@ fanout
 fanouts
 fastmcp
 fblog
+fcli
 fetchgit
 fetchurl
 fetchzip
@@ -96,6 +98,7 @@ findutils
 fixpoint
 foldl
 formedness
+frepo
 frontloaded
 frontmatter
 getkimchi
@@ -103,16 +106,20 @@ gitbook
 gitfile
 gitref
 gitrevise
+glab
 glpat
 gluetun
 gnugrep
 gnused
 GOARCH
+gocache
 godebug
+goflags
 gofont
 gomono
 GOOS
 gopls
+goproxy
 GOTOOLCHAIN
 GOWORK
 gpgsign
@@ -325,6 +332,7 @@ untarring
 unwire
 upgrader
 upgraders
+uppercased
 usebruno
 valkey
 vendorhash

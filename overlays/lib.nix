@@ -481,6 +481,34 @@ rec {
     tagPrefix ? "v",
   }: "${pkgs.curl}/bin/curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/${repo}/releases/latest | ${pkgs.gnused}/bin/sed -n 's|.*/tag/${tagPrefix}\\([0-9][^/]*\\)$|\\1|p'";
 
+  # GitLab sibling of ghLatestVersionCmd. Prints the latest release
+  # version of a project hosted on gitlab.com.
+  #
+  # An API call, unlike the GitHub one, because GitLab has no
+  # releases/latest redirect to read a tag out of. Unauthenticated GET
+  # against a public project, so still no token: gitlab.com allows 2000
+  # unauthenticated GETs per minute per IP and the update sweep makes one
+  # call per package 4x/day.
+  #
+  # `releases/permalink/latest` resolves to the release with the newest
+  # `released_at` and EXCLUDES upcoming (future-dated) releases, which is
+  # the property that makes it the analogue of GitHub's "latest".
+  #
+  # `project` is the URL-encoded path — the `/` in `owner/repo` must be
+  # written `%2F`, which is why this takes an encoded string rather than
+  # `repo` and encoding it here. Encoding it here would silently mangle a
+  # caller that already encoded.
+  #
+  # Absolute store paths throughout: this string is interpolated into a
+  # PATH-less writeShellScript by mkUpdateScript, and the
+  # `versionCheck.cmd` scan in checks/bare-commands.nix carries no
+  # `/bin/` exclusion for exactly that reason.
+  glLatestVersionCmd = {
+    pkgs,
+    project,
+    tagPrefix ? "v",
+  }: "${pkgs.curl}/bin/curl -fsSL https://gitlab.com/api/v4/projects/${project}/releases/permalink/latest | ${pkgs.jq}/bin/jq -r '.tag_name' | ${pkgs.gnused}/bin/sed -n 's|^${tagPrefix}\\([0-9].*\\)$|\\1|p'";
+
   # Resolve the Go toolchain for a package from its DECLARED FLOOR — the
   # `go` (or higher `toolchain`) directive in the package's own go.mod —
   # rather than from a pinned toolchain version.
@@ -564,6 +592,51 @@ rec {
           Run `nix flake update go-overlay` to pick up newly published toolchains.''
       else goBin.versions.${builtins.head satisfying};
 
+  # The (attrPath, drvPattern, key) triples that the sidecar hash fixers
+  # below compose. Declared once and named, so the derivation-name
+  # patterns — which are load-bearing rather than decorative; see
+  # `fodHashFixFn` — cannot drift between the three fixers that use them.
+  hashFixTargets = {
+    goVendor = {
+      attrPath = "goModules";
+      drvPattern = "-go-modules";
+      key = "vendorHash";
+    };
+    npmDeps = {
+      attrPath = "npmDeps";
+      drvPattern = "-npm-deps";
+      key = "npmDepsHash";
+    };
+    src = {
+      attrPath = "src";
+      drvPattern = "-source";
+      key = "srcHash";
+    };
+  };
+
+  # Hash fixer for a buildGoModule package whose src ALSO comes from the
+  # sidecar rather than from a prefetch — the Go counterpart of
+  # `mkNpmDepsFix`. Restores `srcHash` then `vendorHash`.
+  #
+  # `mkGoVendorFix` is not enough for such a package: it assumes the src
+  # hash arrived from `mkUpdateScript`'s prefetch path, which is only
+  # true when `src` is a plain fetch of a URL. An overlay that re-points
+  # an upstream fetcher carrying a `postFetch` gets a hash over the
+  # POST-postFetch tree, which `nix-prefetch-url --unpack` cannot
+  # reproduce. `overlays/generic/glab.nix` is the current consumer:
+  # nixpkgs' glab fetches with `leaveDotGit` and a `postFetch` that
+  # records COMMIT and then strips `.git`.
+  #
+  # The order is forced for the same reason it is in `mkNpmDepsFix`:
+  # `goModules` is derived FROM `src`, so a stale `srcHash` fails the
+  # vendor build on the SRC mismatch and never reaches the vendor one.
+  mkGoSrcVendorFix = args:
+    mkHashFix (args
+      // {
+        name = "src-vendor";
+        targets = [hashFixTargets.src hashFixTargets.goVendor];
+      });
+
   # Vendor-hash fixer for buildGoModule packages pinned via a sidecar:
   # builds `<attr>.goModules` through the full flake overlay stack with
   # the sidecar's current vendorHash and, on a hash mismatch, writes the
@@ -593,19 +666,42 @@ rec {
   # The build-and-scrape body lives in `fodHashFixFn` above; see its
   # header for the argument contract and for why the `-go-modules`
   # derivation-name pattern is load-bearing rather than decorative.
-  mkGoVendorFix = {
+  mkGoVendorFix = args:
+    mkHashFix (args
+      // {
+        name = "vendor";
+        targets = [hashFixTargets.goVendor];
+      });
+
+  # Shared body of every sidecar hash fixer. Emits a writeShellScript
+  # that sources `fodHashFixFn`'s `fix_fod_hash` and then calls it once
+  # per target, in the order given.
+  #
+  # Extracted when a THIRD caller appeared: `mkGoVendorFix`,
+  # `mkNpmDepsFix` and `mkGoSrcVendorFix` differ only in the script name
+  # and in which (attrPath, drvPattern, key) triples they replay, and
+  # three copies of the same `set -euETo pipefail` + interpolate +
+  # call-in-order body is the duplication this file exists to prevent.
+  #
+  # ORDER IS SIGNIFICANT and is the caller's responsibility: a derived
+  # hash (`goModules`, `npmDeps`) is computed FROM `src`, so `src` must
+  # be fixed first or the derived build fails on the src mismatch and
+  # never reaches its own.
+  mkHashFix = {
     attr,
+    name,
     pkgs,
     pname,
     sourcesFile ? "overlays/${pname}-sources.json",
+    targets,
   }:
-    pkgs.writeShellScript "fix-vendor-${pname}" ''
+    pkgs.writeShellScript "fix-${name}-${pname}" ''
       set -euETo pipefail
       shopt -s inherit_errexit 2>/dev/null || :
 
       ${fodHashFixFn {inherit attr pkgs pname sourcesFile;}}
 
-      fix_fod_hash "goModules" "-go-modules" "vendorHash"
+      ${builtins.concatStringsSep "\n" (map (t: ''fix_fod_hash "${t.attrPath}" "${t.drvPattern}" "${t.key}"'') targets)}
     '';
 
   # Hash fixer for buildNpmPackage packages pinned via a sidecar. Same
@@ -637,21 +733,12 @@ rec {
   # invalidate either hash with no version bump at all, and the sidecar's
   # version-equality early exit means that case fails LOUDLY on a hash
   # mismatch rather than self-healing.
-  mkNpmDepsFix = {
-    attr,
-    pkgs,
-    pname,
-    sourcesFile ? "overlays/${pname}-sources.json",
-  }:
-    pkgs.writeShellScript "fix-npm-deps-${pname}" ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-
-      ${fodHashFixFn {inherit attr pkgs pname sourcesFile;}}
-
-      fix_fod_hash "src" "-source" "srcHash"
-      fix_fod_hash "npmDeps" "-npm-deps" "npmDepsHash"
-    '';
+  mkNpmDepsFix = args:
+    mkHashFix (args
+      // {
+        name = "npm-deps";
+        targets = [hashFixTargets.src hashFixTargets.npmDeps];
+      });
 
   # Generate an updateScript for per-platform binary packages that use
   # sources.json. Fetches the latest version, prefetches each platform's

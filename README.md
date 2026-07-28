@@ -199,6 +199,7 @@ Nothing agentic about these — they live in a split-ready
 | `dns-root-hints` | IANA DNS root name server hints (named.root) |
 | `fblog` | Command-line JSON log viewer |
 | `gh` | GitHub CLI |
+| `glab` | GitLab CLI |
 | `gluetun` | VPN client for multiple providers (Linux only) |
 | `oh-my-posh` | Prompt theme engine for any shell |
 | `otel-tui` | Terminal OpenTelemetry viewer |
