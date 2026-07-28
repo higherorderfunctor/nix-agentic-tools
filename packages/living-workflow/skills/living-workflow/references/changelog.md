@@ -609,3 +609,82 @@ here. All are behavior-changing master edits.
   before v9 stay schema-valid. **Upgraders: extend your harness copy with the field, then BACKFILL a
   done-condition for every phase in your plan's state, including phases already in flight. A missing
   `done_condition` no longer means "no exit criterion exists" — it means one is OWED.**
+
+## Close-ritual preconditions + decision joins + durable-record authority
+
+Migration entries folded in the pass that bumped the master to `v10-cobalt-scarp-alder`. This
+section's anchor is **derived from history** (the commit that assigned that version), not embedded
+here. All are behavior-changing master edits.
+
+### Master protocol (`living-plan-bootstrap.md`)
+
+- **The redirect-to-history assurance is FALSE for out-of-repo state (correction):** SELF-DELETING
+  TERMINAL CLOSE justified deleting a plan's own substrate by saying the durable record redirects to
+  the settled artifact and version-control history. That holds only for a COMMITTED substrate, and
+  the master mandates two — working state lives outside any repository, so version control never saw
+  it and the deletion is unrecoverable. **Upgraders: do not let a terminal close lean on that
+  assurance for out-of-repo working state. Where a delete would remove it, RETAIN it with a
+  terminal-fold marker and leave the deletion OWED via the recorded-DEFERRAL shape, for an
+  operator-present session to perform. This matters most when the close runs unsupervised under a
+  standing pre-authorization, where neither a human confirmation nor a VCS backstop is in play.**
+- **Close ritual gains a PRECONDITION on in-flight signals:** acceptance and completion are
+  different events wherever a unit leaves the session as a change only an integrator may land.
+  **Upgraders: before running the ritual, every unit you delivered must have reached a TERMINAL
+  state on every attached signal — the automated check pipeline AND any automated reviewer, which
+  reports on its own schedule and is a SECOND signal, not part of the first. Watch them and ACT
+  (fix failures, address findings) before handing back; a signal in flight is un-gated work
+  remaining. This is CONDITIONAL — vacuous where the host has no integration vehicle — and does not
+  deadlock the budget soft-close, and it has TWO EXITS so it can never hold a close open
+  indefinitely: an explicit operator stop/close instruction fires the ritual regardless of what is in
+  flight, and a signal that cannot be brought terminal within the sitting is not waited on (tell
+  never-armed from in-flight by adjudicating on observable SIDE EFFECTS, never channel silence). On
+  any exit the affected units reach SESSION-PROVABLE completion and flip done, and the owed landing
+  is recorded as its own register item naming what it still gates — the CONTINUE-PAST VARIANT shape.
+  Do NOT invent a new unit status; `units[].status` is unchanged.**
+- **The close ritual is not atomic, and is ordered by REVERSIBILITY where interruption is possible:**
+  it is not a WAL unit, so the reversible/side_effecting classing was never scoped to it. **Upgraders:
+  treat its steps as riding distinct capability channels with unequal reversibility (state is
+  rewritable, the handoff inert, an append-only capture the capturing session may not groom cannot be
+  unwound). The irreversible step is the reflection capture (c) and it stays LAST, exactly as
+  REFLECTION MODE already fixes it — the ordering duty is WITHIN the sequence, not a reordering of
+  it: where interruption is a live risk, complete (a), the validated state write, before starting
+  (b), so a half-run close leaves a re-verifiable residue. A close fired early or interrupted must be RETRACTED
+  explicitly — reverse what is reversible, mark what is not, and record that a retraction occurred.**
+- **Join the recorded decisions to the work stream, both directions:** the verification pipeline
+  checks an artifact's CORRECTNESS and never its CONFORMANCE with what was already decided.
+  **Upgraders: FORWARD — check every newly-minted or INHERITED item against the recorded decisions
+  BEFORE building it; review depth amplifies this miss rather than catching it, because every
+  reviewer inherits the same framing. BACKWARD — when contact with the real system falsifies a
+  settled decision, fork by ownership (agent-owned: re-decide and re-record; operator-owned: pause
+  and re-ask), and in both cases MARK the superseded decision superseded where it sits — that
+  marking is the load-bearing half, since a superseded-but-unmarked decision reads exactly like a
+  live one. If reconciling requires WIDENING the item, it must still land as one reviewable unit;
+  otherwise record and re-scope rather than absorb.**
+- **The durable record is the authority on what THIS session did:** **Upgraders: the WAL duty is
+  stated per UNIT, so work that does not decompose into units (investigation, measurement, review
+  rounds, corrections) fires no trigger and leaves a narrative indistinguishable from an unstarted
+  session — write it anyway. Do NOT auto-derive narrative entries from state mutations. And answer
+  authorship/presence/ABSENCE claims about your own work from the durable record, never from
+  recollection: your visible history is a host artifact that may be truncated, summarized or
+  restored with no gap marker. At close, assert the narrative carries an entry from this session and
+  that the position marker was RE-DERIVED, not inherited.**
+- **Present is self-proving only for what is actually EXERCISED:** **Upgraders: label a recorded
+  FALLBACK, and any named SUB-IDENTITY the primitive must reach, as VERIFIED against the real target
+  or merely OBSERVED PRESENT — neither is exercised in normal operation, so self-proving-on-use is
+  affirmatively false for them, and they fail exactly when the primary already has. This adds a
+  LABEL, not a probe: do not eagerly exercise fallbacks. The label rides inline in the existing
+  freeform capabilities map; no harness change.**
+- **A resolved binding may still fail at USE time:** **Upgraders: treat a use-time refusal as a
+  transient condition, NOT as evidence the binding is wrong — do not re-resolve or thrash the
+  capability; preserve durable partial progress and defer.**
+- **Adjudicate a wait on observable SIDE EFFECTS, not channel silence:** **Upgraders: where a
+  capability reports completion over a notification channel, do not treat that channel as infallible
+  — silence is indistinguishable from legitimate long work, so a finished worker becomes an
+  indefinite stall. Check the effect the work would have produced, and record the channel's known
+  failure modes on the capability itself.**
+- **An expired justification is a first-class finding:** the standing prohibitions each bar a removal
+  that MASKS a failure; none bars one whose reason to exist has lapsed, but stated only as
+  prohibitions they read as a one-way ratchet. **Upgraders: when ABSORBING or CARRYING FORWARD
+  material, verify its justification still holds — that check is expected, and an expired
+  justification is a finding to raise, log and decide. This licenses LOOKING, not dropping: every
+  existing prohibition governs the removal itself unchanged.**
