@@ -29,7 +29,7 @@ improvements land in this doc only by a deliberate grooming session, never self-
 > concerns become schema-backed state fields, not ad-hoc prose tokens). The backlog sub-workflow
 > this doc references lives at `living-workflow-backlog.md`.
 >
-> **Living-doc version: `v10-cobalt-scarp-alder`.** The assigned VERSION dependents pin to — a
+> **Living-doc version: `v11-verdigris-tarn-linden`.** The assigned VERSION dependents pin to — a
 > monotonic ORDINAL (for "am I behind?") paired with a DISTINCTIVE LABEL (so the exact version
 > stays searchable in history and in copied text). A modifying commit bumps it and authors a
 > migration entry if an upgrader needs one (see DRY-BY-REFERENCE → BASELINE PIN, MIGRATION GUIDE,
@@ -676,11 +676,98 @@ is authoritative thereafter.
      the coverage grep that confirms every referencing surface was updated — checking no malformed
      or partially-rewritten token was produced. Where such a check is mechanically decidable and
      recurs, prefer a tool over prose (a manifest-driven remapper).
+   - ASSERT THE POSTCONDITION, NOT THE INVOCATION — A PROOF COVERS LESS THAN IT APPEARS TO. TRUST NO
+     CLEAN NEGATIVE and VERIFY AGAINST THE SOURCE govern a result's EMPTINESS and its FIDELITY TO THE
+     SOURCE; this one governs its REACH, and it is the instrument-side companion to PROVE AGAINST
+     REALITY under STANDING RULES, which bars green-against-a-proxy but names no way to tell that a
+     given green IS one.
+     The root failure is reading a verdict off the INVOCATION — it ran, it printed, it exited zero,
+     the standing gate is green — instead of off the POSTCONDITION: the target was actually
+     processed, a known-present control was actually found, the guarded branch actually executed.
+     BOTH POLARITIES FAIL SILENTLY. A false CLEAN comes from a swallowed error stream, an exit
+     status read through a pipe or filter (which reports the FILTER's success, not the command's),
+     a condition whose truth value is CONSTANT over the real corpus (always-false excludes nothing;
+     always-true passes while covering nothing), a cache or content-addressed store satisfying the
+     request ABOVE the code under test, or a call site deliberately hardened not to abort a batch —
+     error tolerance and error visibility are one dial turned opposite ways, so such a site CANNOT
+     report that a change made to it was wrong, and hardening RAISES its verification bar rather
+     than lowering it. A false POSITIVE comes from a recall-oriented net, whose hits are CANDIDATES
+     and not findings, promoted to a finding with no precision probe for the actual failure
+     SIGNATURE — sharpest when a plausible hypothesis is already on the table and a broad match set
+     appears to confirm it. A wrong result reads exactly as fluently as a right one, so re-reading
+     can never separate them.
+     THE INSTRUMENT TEST — the check that discharges the property above, inherited by every
+     dimension below: before consuming an instrument's output as fact, EXERCISE IT WHERE THE ANSWER
+     IS ALREADY KNOWN, IN BOTH POLARITIES — it must FIND a known-present control and MISS a
+     known-absent one. Where the instrument does not exist yet, the equivalent is enumerating the
+     corpus BEFORE choosing the condition. This binds a long-lived committed filter, a standing gate
+     and a detector exactly as it binds a probe written moments ago; being purpose-built earns an
+     instrument no trust. It binds hardest when WIDENING an existing check's scope, which converts
+     an honest "we do not check there" — which readers treat with due suspicion — into a
+     load-bearing "we check there and it is clean" that nobody revisits; detection coverage and
+     scope coverage are independent, and only scope is visible in a diff.
+     FIVE DIMENSIONS along which a proof under-covers while still reading green. Each states a
+     CHECK, not a principle: run it, RECORD the uncovered delta where the work's own durable record
+     lives, and either close it cheaply or LOG AN EXPLICIT ACCEPTANCE — degradation-by-shrug already
+     bars the silent third option, and a delta named only in passing is the silent option wearing a
+     name.
+     (a) SCOPE — WHICH surfaces. CHECK: enumerate the surfaces the change actually ships on, plus
+     every authoritative artifact its dispositions and standing rules will be READ from, then
+     subtract what the gate you are leaning on actually exercises. The shipping path is PLURAL —
+     other consumers' artifacts, alternate variants, whole alternate configurations, and this unit's
+     own deliverable when it is CONSUMED rather than built — and everything outside a habitual
+     gate's closure rots invisibly behind that gate's green, each discovery costing a mid-work
+     detour plus archaeology through a newer failure masking an older one. AUTHOR COVERAGE
+     INTENSIONALLY governs how NEW rules are authored; apply it with equal force to the EXISTING
+     gates nobody has re-read, whose enumerated scopes have been rotting exactly as it predicts.
+     (b) DEPTH — HOW FAR on a surface that IS covered. CHECK: name the deepest operation the proof
+     performs and the deepest operation real use performs; where they differ the surface is covered
+     and NOT proven. A gate that EVALUATES every output for well-formedness while REALIZING only a
+     designated subset is green-against-a-proxy for precisely what a change introduced, since a
+     newly added output is where evaluate and build diverge.
+     (c) INSTANCE — WHICH members of a fanned-out set. CHECK: list what varies PER INSTANCE — a
+     template, a per-item argument, an escaping context, a payload carrying its own flags into a
+     replaced runtime — and treat every unsampled instance as unproven on those. Exercising a
+     representative subset proves the shared MECHANISM only, and the sampled instance genuinely IS
+     the real shipping path FOR ITSELF, so the runnable-increment constraint is fully SATISFIED by
+     an under-covering proof and cannot flag the miss.
+     (d) DURATION — for HOW LONG, and under WHAT SCOPE, a recorded result holds. CHECK: record with
+     any positive result the moment and the scope that produced it and what would RETIRE it, then
+     re-establish it at the point of use rather than reading it off the record. A check answers for
+     an INSTANT while the action it authorizes occupies a WINDOW, so one sample licenses an ABORT (a
+     hazard observed is a hazard) and never a PROCEED (a hazard unobserved at one instant is not a
+     hazard absent over an interval). A "validated" stamp on an inherited artifact records that it
+     worked ONCE, never the environment, tool version or wrapper layer that made it work — which is
+     the part that drifts, silently. Where a value MUST be prescribed because deriving it is
+     expensive, non-deterministic, or needs data unavailable at authoring, record the CONSTRAINT
+     that generates it alongside the value, so the record is self-clearing. Unlike a stale COUNT,
+     which under-reports and is therefore conservative, a stale ASSERTION can INVERT: an instruction
+     to correct something since corrected makes right content wrong. This does NOT reopen a
+     resolved-once capability record: the ECOSYSTEM ADAPTER already discharges this dimension for
+     those — a PRESENT binding is self-proving on use, an ABSENT one carries the probe that produced
+     it, and an unexercised edge carries its VERIFIED-versus-OBSERVED label — so re-probing every
+     capability every session remains barred.
+     (e) OPERAND — WHAT the check actually ranges over. CHECK: cross-check any set reached through a
+     PROXY once against a direct enumeration of the underlying thing. A selection or coverage scope
+     can be stated by PROPERTY, as required, and still be the WRONG property — most damagingly when
+     the property is a SIDE-EFFECT of the work already having been done (a tooling-generated
+     auxiliary artifact, a process record, prior handling), because it then correlates INVERSELY
+     with need and excludes with perfect reliability the items in the worst condition. So a
+     selection property describes the item's INTRINSIC shape, never tooling or process residue. This
+     blind spot is SELF-SEALING and defeats the standing remedy: re-enumerating from source
+     reproduces the same number, because the source is filtered by the same proxy, so the
+     lower-bound-pointer discipline actively CERTIFIES the omission.
    - SESSION-CLOSE VALIDATION (when this session made updates): the living workflow scopes a
-     session's work, so if any living-plan doc was edited, validate before close that (a) the
-     changes are internally consistent — no rule contradicts a neighbour or the rest of its
-     doc — and (b) DRY-SYNC holds — every dependent doc (a sub-workflow rules doc, a spun-off
-     plan) REFERENCES the single master living doc all plans point back to and does not
+     session's work, so if any living-plan doc was edited — or any OTHER authoritative artifact a
+     plan's dispositions or standing rules are read from, a large accreting working index and the
+     machine state included; this gate's own scope is stated by that property and never as a list of
+     the artifacts it currently covers, per AUTHOR COVERAGE INTENSIONALLY, and the close ritual
+     restates it the same way — validate before close that (a) the changes are internally consistent
+     — no rule contradicts a neighbour or the rest of its doc, checked ACROSS SECTIONS of each
+     artifact and not only per item, since a disposition table and a completion register in one can
+     each be well-formed while contradicting each other and the per-item verify-at-use checks fire
+     on single items only — and (b) DRY-SYNC holds — every dependent doc (a sub-workflow rules doc,
+     a spun-off plan) REFERENCES the single master living doc all plans point back to and does not
      duplicate protocol that belongs to the master. DRY-by-reference is an actively verified
      invariant at close, not just an authoring intention. A read-only session skips this.
    - CONVERGENCE — A GREEN VERDICT IS A REAL VERDICT: a review or grooming pass CONVERGES when no
@@ -1154,18 +1241,20 @@ defined by the backlog sub-workflow beside this doc, not duplicated here.
      transform → validate the temp → atomically replace), append logs, validate against the schema
      (or a structural assertion if no validator resolved) — but in a SELF-DELETING TERMINAL CLOSE the
      state substrate is gone, so redirect the final bookkeeping to the surviving settled doc per
-     PLAN LIFECYCLE; if this session edited any living-plan
-     doc, run the SESSION-CLOSE VALIDATION (internal consistency + DRY-sync against the master —
-     see VALIDATION-ON-UPDATE); then by commit-ownership: we-commit → run the repo's format-hook +
-     commit (Conventional Commit, lowercase-verb subject, final status-flip atomic with the work);
-     resident-commits → leave the tree dirty and emit a "please commit these paths" note (never
-     commit here). (b) THEN generate the kickoff prompt; in WEB mode, where the host renders a copy
-     affordance on fenced code blocks, emit any prompt the operator copies verbatim into a fresh
-     session — the kickoff, or a proposed next-session prompt — inside a FENCED CODE BLOCK rather
-     than a blockquote, so the operator relaunches in one click (moot in CLI, which has no such
-     affordance; the fenced block stays a dense handoff artifact and the single-pass chat that
-     introduces it is unchanged, per TWO REGISTERS). (c) THEN, in reflection mode, distill this
-     session's friction into the backlog sub-workflow (author only there, never this doc).
+     PLAN LIFECYCLE; if this session edited any artifact in the SESSION-CLOSE VALIDATION's stated
+     scope (any living-plan doc, or any other authoritative artifact a plan's dispositions or
+     standing rules are read from), run the SESSION-CLOSE VALIDATION (internal consistency +
+     DRY-sync against the master — see VALIDATION-ON-UPDATE); then by commit-ownership: we-commit →
+     run the repo's format-hook + commit (Conventional Commit, lowercase-verb subject, final
+     status-flip atomic with the work); resident-commits → leave the tree dirty and emit a "please
+     commit these paths" note (never commit here). (b) THEN generate the kickoff prompt; in WEB
+     mode, where the host renders a copy affordance on fenced code blocks, emit any prompt the
+     operator copies verbatim into a fresh session — the kickoff, or a proposed next-session prompt
+     — inside a FENCED CODE BLOCK rather than a blockquote, so the operator relaunches in one click
+     (moot in CLI, which has no such affordance; the fenced block stays a dense handoff artifact
+     and the single-pass chat that introduces it is unchanged, per TWO REGISTERS). (c) THEN, in
+     reflection mode, distill this session's friction into the backlog sub-workflow (author only
+     there, never this doc).
    The KICKOFF is a REQUIRED output the close gate produces (not skippable) — but it stays
    NON-AUTHORITATIVE: THE PLAN ITSELF IS THE CROSS-SESSION HANDOFF, a separate "handoff"/"session
    summary" doc is an anti-pattern that duplicates state and drifts, and the kickoff is a
