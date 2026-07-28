@@ -481,3 +481,131 @@ three are behavior-changing master edits.
   reflection/capture, run the coverage-check before filing — do not file a fresh tuning candidate for
   a friction an existing rule already covers; append a sighting to the existing entry file or file it
   as an enforcement-gap instead, never writing the register.**
+
+## Dispatch contracts + phase exit criterion + state-write integrity
+
+Migration entries folded in the pass that bumped the master to `v9-basalt-fenland-hazel`. This
+section's anchor is **derived from history** (the commit that assigned that version), not embedded
+here. All are behavior-changing master edits.
+
+### Master protocol (`living-plan-bootstrap.md`)
+
+- **Every phase states its DONE-CONDITION:** the GREEDY SCHEDULER now requires each phase to state
+  what must be TRUE for it to be finished, not only what it must produce. With that slot empty the
+  open-items register drifts into the completion criterion by default, and "done" becomes "the
+  register is empty" — unsatisfiable by construction, because the register grows with discovery and
+  discovery scales with carefulness, so carefulness pushes the off-ramp away. **Upgraders: write a
+  done-condition for every phase that does not have one, including phases already in flight —
+  evaluating them is cheap and may show a phase is already complete. Record it in state as
+  `phases[].done_condition` (see the shared-harness section below), not as plan prose alone, and
+  BACKFILL the field for existing phases when you re-pin. Do not write a condition that
+  verifies against an upstream source the work itself absorbs or deletes; over an absorption or
+  migration target, state the condition against what SURVIVES the work, or it becomes unsatisfiable
+  exactly by succeeding.**
+- **Fix-on-contact — the timing arm of the DECISION-SCOPE FILTER:** the filter allocated OWNERSHIP
+  of a call but said nothing about TIMING, so the conservative reading (record it for later) won by
+  default and inflated the register with items whose fix costs less than the bookkeeping about
+  them. A defect met while working elsewhere is now FIXED ON CONTACT when four bounds hold: in
+  scope already being touched; agent-owned by the filter; provable by controls already running; and
+  it does not widen the change beyond ONE REVIEWABLE UNIT. **Upgraders: stop routing agent-owned
+  trivia into the register by default. Apply the fourth bound in both directions — carve out an
+  adjacent defect that would widen the diff along an unrelated axis, and decline any fix nothing
+  available can verify, however small. This is a timing default only; it is NOT an intake filter
+  deciding what gates a phase, and it does NOT override a standing authority or change-channel
+  rule — a defect in a surface another authority owns (notably the living workflow itself) still
+  routes through that channel however small, and fix-on-contact never licenses a behavior-CHANGING
+  edit that would owe a version bump, nor an edit a binding rule bars. Where a gated-review brief
+  has DECLARED its fix-versus-report handling, that declaration governs its own findings.**
+- **Step 6 restructured into four dispatch contracts (brief / return / bounds / wait):** the
+  subagent step now separates what goes out, what comes back, how wide a dispatch may run, and what
+  the root does while waiting.
+  - _Brief contract:_ a brief's INSTRUCTION content is authoritative; its DESCRIPTIVE content is a
+    secondhand account and is NOT authoritative over what the worker observes. **Upgraders: mark
+    which is which in every brief; state the factual half as carried context the worker must
+    re-ground; add divergence reporting in BOTH directions as a named deliverable slot; supply a
+    SHAPE rather than ready-to-paste syntax for any context you have not exercised; carry the
+    DECISION a measurement feeds alongside the question; state rules by property, not by the one
+    instance you noticed; and grant standing permission to widen a scope drawn too narrowly.
+    Reviewing a brief harder does not catch these — exercising it does.**
+  - _Return contract:_ the duty to verify a worker's return widens from facts/anchors/citations to
+    EVERYTHING a worker returns, as one property rather than an enumeration. **Upgraders: treat a
+    worker's JUDGMENTS (notably the severity it assigns its own disclosed limitation), CORRECTIONS
+    to your stated facts, and COMPLIANCE claims about where it put an artifact as claims under
+    test, not as already assessed. Verification MAY now be delegated, but only if the verifier's
+    brief frames the worker's output as claims-under-test rather than context, and only if you read
+    PER-CLAIM verdicts rather than a rollup. Note the anti-reading: cheaper verification finds
+    MORE, so it makes a plan correct, not convergent — it pulls against the phase exit criterion.**
+  - _Dispatch bounds:_ the fan-out ceiling is restated in the RESOURCE that actually binds
+    (per-worker cost against a host budget that concurrent non-dispatch load also consumes) rather
+    than a bare count of in-flight workers, and must COMPOSE. **Upgraders: a count-legal dispatch
+    can still exhaust the host; resolve `delegation-depth` as a generically-named capability at
+    cold start (it joins the standard roster, so resolved records stay comparable across
+    dependents) and, where nesting is
+    permitted, apply the ceiling over TOTAL live workers rather than per level (N per level across
+    two levels admits N², invisible to the root). Prefer fatter dispatches over more concurrent
+    ones, and when estimating throughput count serialization points — a single-invocation
+    verification step, or an integration vehicle admitting one reviewable unit at a time. Where the
+    host budget does not resolve, fall back to a conservative in-flight count (order ~10) recorded
+    as that constraint's flagged fallback; never leave a wide dispatch nominally unbounded.**
+  - _Wait contract:_ the non-idle licence extends from a wait on the session's OWN dispatch to ANY
+    wait, including on an external actor (reviewer, check queue, integrator). The independence
+    test's OPERAND is now defined. **Upgraders: intersect the PROPAGATION CLOSURE of what a unit
+    causes to change — including whatever an environment rule obliges to move with an edit, and
+    every artifact regenerated from an edited source — not the artifacts its subject visibly
+    occupies; computed over the visible set the test returns a confident clean negative over the
+    wrong operand. Every standing gate still binds; a watcher armed to fill a wait must cover EVERY
+    terminal state, not only success, or a loud failure inverts into an apparent ongoing wait; keep
+    it non-blocking, disarm it on fire, and arm sequential waits separately.**
+- **Declare a session's scope up front, and protect its purpose (step 7):** nothing bounded the
+  TOTAL work a session took on — the soft-close reacts only after consumption is already high — so
+  sessions accreted units until they degraded or were killed, dropping in-flight work. **Upgraders:
+  declare each sitting's scope at session start as a WEIGHT with a size test (isolate large, group
+  small and medium), never as a COUNT — a count is satisfied by one small item. Key the
+  inline-versus-delegate call to protecting the declared purpose's context rather than to
+  implementation volume: off-purpose mechanical side work is delegated however small it looks.**
+- **State-write integrity (STATE SUBSTRATE):** the prescribed mutation idiom was
+  destructive-by-construction — write-to-temp then atomically replace, with nothing validating
+  between the halves, so a transform erroring mid-write annihilates good state. **Upgraders:
+  validate the TEMP file (parses, satisfies the schema, holds expected invariants such as an
+  element count) BEFORE the atomic replace; the validate step is part of the idiom, not optional
+  discipline around it. Never hand-assemble a structured record — build it with a serializer and
+  parse it back before it lands, since a malformed append is silent until a LATER session reads it.
+  Feed payloads via a file or stdin rather than command arguments: state prose routinely quotes
+  tool invocations as data, and a host guard scanning command text cannot tell a quoted example
+  from a live invocation. The ban is scoped to SCHEMA-BACKED or machine-parsed records; free-form
+  human narrative is exempt. Where this recurs and the property is mechanically decidable, build a
+  write HELPER that makes the guard un-skippable rather than restating the rule in prose.**
+- **Mutation mode follows what a field HOLDS, not which artifact it sits in:** append-only was
+  previously a property of the ARTIFACT, which made appending the default for every field inside
+  one — including fields holding a current rule. **Upgraders: a
+  RECORD-bearing field (narrative, history, accrued sightings) is append-only; a RULE-bearing field
+  (a current rule, disposition or convention) is REPLACED IN PLACE. Appending a correction to a
+  rule-bearing field leaves it carrying its own contradiction, resolvable only by a
+  newest-clause-wins convention nothing states, so superseded text keeps being read as live.**
+- **An instruction-bearing artifact carries the authority of the context that AUTHORED it:** a
+  relayed brief or design, or a self-contained skill invoked as the session's main work, arrives
+  with working practices attached, and nothing said which governs. **Upgraders: where those
+  conflict with a binding rule of the RECEIVING context, the receiving context's rules win, and the
+  conflict is SURFACED, never silently resolved either way; adopting the foreign instruction
+  re-enters through the recorded OVERRIDE form with the operator's authorization as provenance.
+  Correct the reliable asymmetry — an artifact's technical claims get checked against the live
+  system while its procedural claims are adopted uncritically.**
+- **The isolation vehicle's LOCATION is constrained by a property:** CO-OCCUPIED WORKING TREE said
+  only to bind a vehicle at resolve time, leaving its location free once working state moved
+  out-of-repo. **Upgraders: place the vehicle INSIDE the host's dev-environment auto-activation and
+  trust scope. Outside it, a vehicle contains none of the project's generated configuration while
+  LOOKING fully set up (tooling is on PATH, inherited from the parent process) and fails at the
+  first commit. State the property alongside any default you adopt, so a consumer who cannot use
+  the default knows what to preserve. Derive the path from the clone's COMMON git directory — a
+  naive relative form resolves one level too deep when run from an already-linked vehicle — and do
+  not assume isolating a working tree isolates a shared hook directory or event database.**
+
+### Shared harness (`state.schema.json`)
+
+- **`phases[].done_condition` added (additive/optional):** the new per-phase exit criterion is
+  schema-backed, matching the precedent of its `ordering_rationale` and `budget_estimate` siblings
+  and honouring STATE-OVER-TOKENS — the criterion that decides phase closure now lives where the
+  phase record lives, not only in plan prose. The field is OPTIONAL in the schema so plans authored
+  before v9 stay schema-valid. **Upgraders: extend your harness copy with the field, then BACKFILL a
+  done-condition for every phase in your plan's state, including phases already in flight. A missing
+  `done_condition` no longer means "no exit criterion exists" — it means one is OWED.**

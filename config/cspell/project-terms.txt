@@ -81,6 +81,7 @@ dsolve
 dunder
 endgroup
 envrc
+epistemics
 extensionless
 extname
 fanout

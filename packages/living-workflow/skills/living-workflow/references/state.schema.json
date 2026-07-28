@@ -87,7 +87,11 @@
           "title": { "type": "string" },
           "status": { "enum": ["pending", "open", "done"] },
           "ordering_rationale": { "type": "string" },
-          "budget_estimate": { "type": "string" }
+          "budget_estimate": { "type": "string" },
+          "done_condition": {
+            "type": "string",
+            "description": "What must be TRUE for this phase to be FINISHED — its exit criterion, distinct from the runnable-increment constraint (which says only what a phase must PRODUCE). Required by the master's GREEDY SCHEDULER when a phase is written; additive/optional here so plans authored before it stay schema-valid, and backfilled when a dependent re-pins. With this slot empty the open-items register drifts into the completion criterion by default and 'done' becomes 'the register is empty' — unsatisfiable by construction, since the register grows with discovery and discovery scales with carefulness. Write it to stay satisfiable: a clause that verifies against an upstream source the work itself absorbs or deletes becomes unsatisfiable exactly by succeeding."
+          }
         }
       }
     },
