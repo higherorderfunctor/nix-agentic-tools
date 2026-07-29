@@ -173,7 +173,7 @@ on first append, like the working dir.
   session's own close/reflection, and BEFORE the gated commit-readiness review when that review is
   eligible this pass (the review is the LAST of the pass's grooming actions and must see the swept
   body). It runs the collector down: verify each nit against source, apply the behavior-neutral
-  fix, re-grep **with a positive control** to confirm the drift is gone, journal, drain the fixed
+  fix, re-grep to confirm the drift is gone, journal, drain the fixed
   line. That re-grep settles the projection it ranges over and no other, so what it may conclude —
   and what a broader claim like "nothing was corrupted" would additionally owe — is governed by the
   master's ASSERT THE POSTCONDITION rule and its OPERAND dimension, not decided here.

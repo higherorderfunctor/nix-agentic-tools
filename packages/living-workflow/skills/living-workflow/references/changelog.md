@@ -1016,7 +1016,8 @@ a check ranges over, the second on the change-class rule that assigns authorizat
   proof-reach dimension that governs what a check ranges over was written for a check reaching the
   wrong SET through a proxy, and said nothing about a check reaching the right subject through the
   wrong PROJECTION of it. **Upgraders: where you rely on a preservation or equivalence check, treat
-  its answer as covering ONE projection only — over a single artifact and over a set alike. A token
+  its answer as covering ONE projection only; the duty binds a check over one artifact exactly as it
+  binds one ranging over a set. A token
   or word SET answers whether the vocabulary CHANGED and, being permutation-invariant, nothing about
   arrangement; a line-survival check answers whether each base line's content still appears
   contiguously; a block-structure check answers whether the units that begin a line still begin one.
@@ -1044,8 +1045,9 @@ a check ranges over, the second on the change-class rule that assigns authorizat
   still make a behavior-changing edit riding beside it effectively invisible. Do NOT respond by
   refusing formatters or structured transforms — they are the correct tools — but separate what the
   tool rewrote from what the change meant: preserve the base's form wherever the content is
-  unchanged AND your repo's own hook leaves that form standing, else land the mechanical re-emission
-  as its own unit. Judge the DIFF
+  unchanged and your repo's own hook leaves that form standing (VERBATIM MEANS SEMANTIC, NOT BYTE
+  governs what a hook may reflow); where the hook will reflow it anyway, land the mechanical
+  re-emission as its own unit instead. Judge the DIFF
   by whether a reader can locate the change, never by a line-count threshold. This duty and the
   operand arm above reinforce rather than substitute for one another: re-emitting text is also the
   operation during which content silently disappears, so this duty reduces the INCIDENCE of that

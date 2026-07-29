@@ -819,9 +819,10 @@ is authoritative thereafter.
      authorization at all, it can still make a behavior-CHANGING edit riding beside it effectively
      invisible. The remedy is NOT refusing formatters or structured transforms, which are the
      correct tools, but SEPARATING what the tool rewrote from what the change meant — preserve the
-     base's form wherever the content is unchanged AND the repo's own hook leaves that form standing
-     (VERBATIM MEANS SEMANTIC, NOT BYTE governs what a hook may reflow out from under you), else
-     land the mechanical re-emission as its own unit. Judge the DIFF by whether a reader can LOCATE
+     base's form wherever the content is unchanged and the repo's own hook leaves that form standing
+     (VERBATIM MEANS SEMANTIC, NOT BYTE governs what a hook may reflow out from under you); where
+     the hook will reflow it anyway, land the mechanical re-emission as its own unit instead. Judge
+     the DIFF by whether a reader can LOCATE
      the change, never by a line-count threshold. This duty and the OPERAND dimension below REINFORCE
      rather than substitute for one another: re-emitting text is also the operation during which
      content silently disappears, so this duty reduces the INCIDENCE of that loss while the operand
@@ -963,8 +964,8 @@ is authoritative thereafter.
      unmeasured property stops being examined at all. It binds hardest over a MECHANICAL
      WHOLE-ARTIFACT TRANSFORM, whose edits are unreviewed by construction: enumerate the projections
      there BEFORE the output is believed, and prefer a transform that asserts, over the content it
-     moves, its own postcondition — which fails safe where one carrying no such assertion deletes
-     silently. The POST-REPLACE CORRUPTION SCAN above is one instance of this duty, not a substitute
+     moves, its own postcondition, since one carrying no such assertion deletes silently. The
+     POST-REPLACE CORRUPTION SCAN above is one instance of this projection duty, not a substitute
      for it.
    - SESSION-CLOSE VALIDATION (when this session made updates): the living workflow scopes a
      session's work, so if any living-plan doc was edited — or any OTHER authoritative artifact a
