@@ -961,3 +961,43 @@ the same commit are git-history-only and add no entry here.
   asking for it — setting `proceed_past_phase_boundaries` to true without `provenance` and
   `conditions` is schema-invalid. Validation is lenient about ABSENCE and strict about ASSERTION, so
   the conditional cannot invalidate a plan authored before the field: such a plan asserts nothing.**
+
+## Graded bounds + a round over the fix text
+
+Migration entries folded in the pass that bumped the master to `v14-realgar-moraine-rowan`. This
+section's anchor is **derived from history** (the commit that assigned that version), not embedded
+here. Both are behavior-changing master edits, and each adds an arm to a rule family that was
+already sound — the first to the dispatch-bounds dropped-item clause, the second to the review
+family. Behavior-neutral repairs landed in the same commit are git-history-only and add no entry
+here.
+
+### Master protocol (`living-plan-bootstrap.md`)
+
+- **A bound over a GRADED work-list consults the grade, and the stage reports coverage by
+  grade:** the dropped-item clause under dispatch bounds fixes WHETHER an omission is visible and
+  settles nothing about WHICH items may be omitted, so a bound blind to the grade strands the
+  highest-graded items exactly as readily as the lowest, and the duty to log the overflow is
+  discharged without anyone learning what the overflow contained. **Upgraders: where a stage bounds
+  work over a set whose items carry their own severity or priority, order the drop from the
+  LOW-GRADE end first, and report that stage's coverage BY grade rather than as one total. A stage
+  reporting zero survivors over a set it never reached the top of has exactly the shape of a clean
+  pass — the qualifier lives in a count and a log line the headline does not carry, so the more the
+  stage produced the more confident and the more wrong its reader becomes. Treat an item of the
+  BLOCKING class that went untested as not disposed of at all: CONVERGENCE turns on no blocking
+  finding REMAINING, and one never tested has not been shown not to, so it holds convergence open
+  exactly as a surviving one does. Nothing here loosens the existing duty to surface every dropped
+  item; it says what to do when what was dropped is the part that mattered most.**
+- **The text written to fix a review round is itself reviewed, in a round scoped to it:** the
+  review family had no account of its own last step. A round finds defects, the author fixes them,
+  and those fixes are new text no round has read — written last, under the most fatigue, and
+  covered by none of the confidence the completed rounds earned. **Upgraders: before handing a
+  change over, run ONE further round scoped to the fix text and its neighbours, rather than a
+  further FULL round. No round eliminates the hazard — its own fixes inherit it — so the asymmetry
+  is not termination but corpus: the scoped round reads only what the fixes touch, while a full
+  round re-reads the whole change again. Log an explicit acceptance of the residual the scoped
+  round leaves rather than assuming it away. Treat it as required rather than as polish. And when a
+  fix resolves a CONTRADICTION by editing one side of a coupled pair, re-check the edited statement
+  against its immediate NEIGHBOURS and not only against the statement it was reconciled with: the
+  pair contradicted only because it described one thing from two angles or at two levels, so the
+  edited side commonly now disagrees with a THIRD statement the original wording satisfied, and
+  that third statement is usually the nearest one.**

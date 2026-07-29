@@ -185,6 +185,7 @@ mystor
 narinfo
 neighbour
 neighbouring
+neighbours
 netlink
 nixbuild
 nixd
