@@ -70,7 +70,7 @@ the shared assertion per the collision-semantics fragment).
 Earlier iterations let a `sourcePath` field on `ruleModule` trigger out-of-store
 symlink emission for live-edit. Rolled back in the same refactor (plan §3.3).
 Rationale: devenv already covers the live-iteration use case, and pure-eval
-keeps the factory easier to reason about. All rule/agent/skill/ hook content
+keeps the factory easier to reason about. All rule/agent/skill/hook content
 bakes into the store at eval time with transformer frontmatter injected.
 
 ### Why per-file (not wholesale symlink)

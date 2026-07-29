@@ -3,7 +3,7 @@
 > **Status:** COMPLETE. Refactor landed, consumer migrated, CI green. All
 > outstanding items from prior session resolved — see status roll-up below.
 >
-> **Origin:** failed `nixos-config` pin bump on 2026-04-21. Post- activation
+> **Origin:** failed `nixos-config` pin bump on 2026-04-21. Post-activation
 > audit exposed three bugs (kiro `.md.md` doubled extension, HM orphan-cleanup
 > misses, consumer migration UX), and conversation surfaced wider architectural
 > gaps across the `ai.*` factory. User directed comprehensive revision before
@@ -148,7 +148,7 @@ grew:
   decided live-edit is not worth the impurity (devenv covers iteration). Roll
   back.
 - **Directory-based ingestion UX** — consumer wants to point at a directory and
-  have each file become a rule/skill/agent/ hook, WITHOUT the directory being
+  have each file become a rule/skill/agent/hook, WITHOUT the directory being
   taken over wholesale (leave room for other derivations to contribute to the
   same dir).
 
@@ -221,9 +221,8 @@ All shared pools fail on duplicate keys. No silent winner. Retroactive across:
 Plus the new Dir surfaces (see §4).
 
 Implementation: replace `//` merges with an explicit collision-detecting merge
-helper. Emit NixOS `assertions` (eval- time failure, user-friendly message
-naming the duplicate key and both contributing sources) — not `throw` (no source
-info).
+helper. Emit NixOS `assertions` (eval-time failure, user-friendly message naming
+the duplicate key and both contributing sources) — not `throw` (no source info).
 
 ### 3.3 Pure eval + deprecate live-edit
 
@@ -558,7 +557,7 @@ rulesFromDirStripsExtension = testHmEval {
 
 ## 8. Architecture fragments to author
 
-These go in `modules/ai/fragments/dev/` and emit to per- ecosystem
+These go in `modules/ai/fragments/dev/` and emit to per-ecosystem
 `.claude/rules/`, `.github/instructions/`, `.kiro/steering/` via
 `dev/generate.nix`.
 
@@ -616,7 +615,7 @@ Separate commit in `nixos-config` repo. Not touched by this plan's commits.
   rm ~/.config/github-copilot/copilot-instructions.md
   rm ~/.config/github-copilot/mcp-config.json
   ```
-- Pin bump to `refactor/ai-factory-architecture` HEAD (post- implementation)
+- Pin bump to `refactor/ai-factory-architecture` HEAD (post-implementation)
 
 ### 9.2 Edits in `home/caubut/features/cli/code/ai/default.nix`
 
@@ -656,7 +655,7 @@ round once implementation lands:
 3. **Just after activation**: audit vs the fresh pre-snapshot (task #58).
    Confirm:
    - All 15 kiro steering files named `NN-name.md` (no `.md.md`)
-   - Steering symlinks point at current HM gen (not out-of- store — live-edit
+   - Steering symlinks point at current HM gen (not out-of-store — live-edit
      deprecated)
    - No new orphans introduced
    - `home-manager switch` clean exit
@@ -735,7 +734,7 @@ guess/check tho". Once root cause is known, fix becomes one of:
 - Whether `ai.mcpServers` collision error should include
   `renderServer`-generated vs user-provided entries with different error
   phrasing
-- Whether we want a `ai.<X>Dir` that produces BOTH L2 (top- level) and L2b
+- Whether we want a `ai.<X>Dir` that produces BOTH L2 (top-level) and L2b
   (per-CLI) entries from a single dir (probably not — unnecessary confusion)
 - `lib.ai.<X>FromDir` return type: attrset of the itemModule shape, or attrset
   pre-wrapped with `mkMerge`? Attrs is simpler — let module system handle
