@@ -351,7 +351,7 @@ A `home.file.<dir>.source = <path>` with `recursive = true` takes the
 destination dir over — no other derivation can contribute files alongside.
 Per-file expansion preserves that escape hatch. This matters in Claude's rules
 dir, which a consumer may also populate directly from
-`programs.claude-code. marketplaces` or via a separate module.
+`programs.claude-code.marketplaces` or via a separate module.
 
 ### Pitfall — path type strictness
 
@@ -462,7 +462,7 @@ the contribution into the per-CLI factory's L4 emission.
 ### Why 4 layers instead of inline
 
 Earlier iterations wrote emission logic inline in each branch of per-CLI config
-— directly setting `home.file.".claude/ rules/${name}.md".text` from the
+— directly setting `home.file.".claude/rules/${name}.md".text` from the
 `ai.rules` attrset. That coupled the source shape (list vs attrset, with or
 without Dir-backed ingestion) to each CLI's emission. When the rules attrs grew
 a `sourcePath` field and then dropped it, every CLI had to change in lockstep.

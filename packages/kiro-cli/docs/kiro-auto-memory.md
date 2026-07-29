@@ -204,7 +204,7 @@ in { ai.kiro.hooksJson = mem.hooks; ai.kiro.rules = mem.rules; }
 ```
 
 Each hook is a strict-mode `writeShellScript` wrapper
-(`kiro-memory-{stop, flush,manual,recall}`) that `exec`s a distiller bin by
+(`kiro-memory-{stop,flush,manual,recall}`) that `exec`s a distiller bin by
 **absolute store path** (`getExe' pkgs.ai.kiro-memory-distiller`). The env
 contract, in order:
 

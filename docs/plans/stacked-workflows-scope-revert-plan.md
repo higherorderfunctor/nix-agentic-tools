@@ -254,8 +254,8 @@ and strengthens the case for pulling the shared helper (§9) into this session.
   (it describes the removed `stacked-workflows.integrations` option and the old
   `modules/stacked-workflows/` layout).
 - Update `sws-` mentions on live surfaces:
-  `dev/skills/repo-review/personalities/ agentic-ux.md` (the "sws- exception"
-  note), `dev/docs/getting-started/ devenv.md` example, ai-module fanout
+  `dev/skills/repo-review/personalities/agentic-ux.md` (the "sws- exception"
+  note), `dev/docs/getting-started/devenv.md` example, ai-module fanout
   narrative.
 - Leave historical plan journals (`docs/plan.md`,
   `docs/archive/ai-factory-collision-refactor-plan.md`,
