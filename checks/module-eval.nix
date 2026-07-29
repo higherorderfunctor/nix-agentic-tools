@@ -95,6 +95,15 @@
         type = lib.types.listOf lib.types.anything;
         default = [];
       };
+      # Real devenv exposes this at EVAL time — `devenv eval devenv.state`
+      # returns an absolute path — which is what lets packages/glab derive
+      # a project-local configDir with no runtime shell expansion. Same
+      # stub shape checks/claude-devenv-hooks-real-type.nix uses for
+      # devenv.root.
+      devenv.state = lib.mkOption {
+        type = lib.types.str;
+        default = "/tmp/devenv-state";
+      };
       env = lib.mkOption {
         type = lib.types.attrsOf lib.types.str;
         default = {};
@@ -409,6 +418,337 @@ in {
     in
       builtins.length ev.config.packages == 1
   );
+
+  # The ONE intentional HM/devenv difference: devenv defaults configDir to
+  # the project state dir, so a project-local glab does not mutate the
+  # user's global ~/.config/glab-cli. It is a `config` default and NOT a
+  # different option declaration, which is why the option-tree parity test
+  # still holds — assert both halves so a later edit cannot quietly turn
+  # this into a declaration difference.
+  module-glab-configdir-facet-defaults = mkTest "glab-configdir-facet-defaults" (
+    let
+      base = {
+        enable = true;
+        host.plain = "gitlab.example.com";
+      };
+      hm = evalHm {glab = base;};
+      dv = evalDevenv {glab = base;};
+      overridden = evalDevenv {glab = base // {configDir = "/tmp/explicit";};};
+    in
+      hm.config.glab.configDir
+      == null
+      && dv.config.glab.configDir == "/tmp/devenv-state/glab-cli"
+      # mkDefault, so a project can still point it elsewhere.
+      && overridden.config.glab.configDir == "/tmp/explicit"
+  );
+
+  # Runtime test of the preflight, with a STUB standing in for glab so the
+  # check needs no Go build. Covers what the wrapper does to the
+  # filesystem before exec: create the config dir 0700, seed the hosts:
+  # entry using the BARE hostname (scheme and path stripped), repair a
+  # too-permissive config.yml to 0600, and then NOT re-seed.
+  #
+  # Behavior, not emitted text: a grep proving the line exists says
+  # nothing about whether the shell actually does it.
+  #
+  # configDir is RELATIVE on purpose, so it lands in the build directory.
+  # An absolute `/tmp/…` is not hermetic: Nix's per-build private /tmp is
+  # a SANDBOX feature, and the sandbox is off by default on Darwin — one
+  # of this repo's two CI platforms — so the test would touch (and
+  # `rm -rf`) a shared host path. It also makes the `-d` assertions
+  # stronger, since a leftover directory from an earlier run cannot
+  # satisfy them.
+  module-glab-preflight-runtime = let
+    stub =
+      (pkgs.writeShellScriptBin "glab" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        printf '%s\n' "$*" >> "''${GLAB_STUB_LOG:-/dev/null}"
+      '')
+      .overrideAttrs (_: {version = "0-test";});
+    cfg = {
+      enable = true;
+      package = stub;
+      configDir = "glab-preflight-cfg";
+      host.plain = "https://gitlab.example.com/some/path";
+      token.plain = "t0ken";
+      job_token = null;
+      settings = {};
+      extraSettings = {};
+    };
+    wrapped = import ./../packages/glab/lib/mkGlab.nix {inherit lib pkgs cfg;};
+  in
+    pkgs.runCommand "module-test-glab-preflight-runtime" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      export HOME="$PWD/home"
+      # Matches cfg.configDir above; the wrapper resolves it against the
+      # build directory, which is this script's cwd.
+      cfg=glab-preflight-cfg
+      rm -rf "$cfg"
+      export GLAB_STUB_LOG="$PWD/seed.log"
+      : > "$GLAB_STUB_LOG"
+
+      [ ! -d "$cfg" ] || {
+        echo "FAIL: precondition — config dir already exists" >&2
+        exit 1
+      }
+
+      ${wrapped}/bin/glab version >/dev/null
+
+      mode=$(${pkgs.coreutils}/bin/stat -c '%a' "$cfg")
+      [ "$mode" = "700" ] || {
+        echo "FAIL: config dir mode $mode, expected 700" >&2
+        exit 1
+      }
+
+      grep -qxF -- 'config set --host gitlab.example.com api_protocol https' "$GLAB_STUB_LOG" || {
+        echo "FAIL: seeding not invoked with the bare host + https. log:" >&2
+        cat "$GLAB_STUB_LOG" >&2
+        exit 1
+      }
+
+      printf 'hosts:\n  gitlab.example.com:\n' > "$cfg/config.yml"
+      chmod 664 "$cfg/config.yml"
+      ${wrapped}/bin/glab version >/dev/null
+      mode=$(${pkgs.coreutils}/bin/stat -c '%a' "$cfg/config.yml")
+      [ "$mode" = "600" ] || {
+        echo "FAIL: config.yml mode $mode after repair, expected 600" >&2
+        exit 1
+      }
+
+      : > "$GLAB_STUB_LOG"
+      ${wrapped}/bin/glab version >/dev/null
+      if grep -q 'config set' "$GLAB_STUB_LOG"; then
+        echo "FAIL: re-seeded although the hosts: entry was already present" >&2
+        exit 1
+      fi
+
+      # The fast path must not FALSE-POSITIVE on a host differing only
+      # where the dots are. This is the regression test for the pattern
+      # matching the preflight must NOT go back to: as an ERE,
+      # `gitlab.example.com` also matches `gitlab-example-com:`, so
+      # seeding would be skipped while the real entry is absent — this
+      # preflight's own bug, one layer down. The current implementation
+      # compares fixed strings and has no such failure mode; this guards
+      # against a future edit reintroducing pattern matching. A false
+      # NEGATIVE is harmless here; a false positive is not.
+      : > "$GLAB_STUB_LOG"
+      printf 'hosts:\n  gitlab-example-com:\n' > "$cfg/config.yml"
+      chmod 600 "$cfg/config.yml"
+      ${wrapped}/bin/glab version >/dev/null
+      grep -qF -- 'config set --host gitlab.example.com ' "$GLAB_STUB_LOG" || {
+        echo "FAIL: a near-miss host suppressed seeding — the fast path is matching patterns, not fixed strings" >&2
+        exit 1
+      }
+
+      echo PASS > "$out"
+    '';
+
+  # A bracketed IPv6 host must round-trip. The fast path used to be an
+  # ERE with only `.` escaped, on the claim that hostnames are
+  # [A-Za-z0-9.-]; `[` and `]` in an IPv6 literal either change the match
+  # or make grep error, so the entry was never found and the wrapper
+  # reseeded on every invocation. Now a fixed-string compare, which has no
+  # escaping question at all.
+  module-glab-ipv6-host-fast-path = let
+    stub =
+      (pkgs.writeShellScriptBin "glab" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        printf '%s\n' "$*" >> "''${GLAB_STUB_LOG:-/dev/null}"
+      '')
+      .overrideAttrs (_: {version = "0-test";});
+    wrapped = import ./../packages/glab/lib/mkGlab.nix {
+      inherit lib pkgs;
+      cfg = {
+        enable = true;
+        package = stub;
+        # Build-relative, for the reason given on
+        # module-glab-preflight-runtime.
+        configDir = "glab-ipv6-cfg";
+        host.plain = "http://[2001:db8::1]/gitlab";
+        token.plain = "t0ken";
+        job_token = null;
+        settings = {};
+        extraSettings = {};
+      };
+    };
+  in
+    pkgs.runCommand "module-test-glab-ipv6-host-fast-path" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      export HOME="$PWD/home"
+      export GLAB_STUB_LOG="$PWD/seed.log"
+      # Bound once; must match cfg.configDir above.
+      cfg=glab-ipv6-cfg
+      rm -rf "$cfg"
+      : > "$GLAB_STUB_LOG"
+
+      # First run seeds, with the bracket host intact and http from scheme.
+      ${wrapped}/bin/glab version >/dev/null
+      grep -qF -- 'config set --host [2001:db8::1] api_protocol http' "$GLAB_STUB_LOG" || {
+        echo "FAIL: IPv6 host not seeded correctly. log:" >&2
+        cat "$GLAB_STUB_LOG" >&2
+        exit 1
+      }
+      [ -d "$cfg" ] || {
+        echo "FAIL: configDir $cfg was not created" >&2
+        exit 1
+      }
+
+      # With the entry present, the fast path must MATCH and not reseed.
+      # A pattern match could not: `[`/`]` are regex metacharacters.
+      printf 'hosts:\n    [2001:db8::1]:\n' > "$cfg/config.yml"
+      chmod 600 "$cfg/config.yml"
+      : > "$GLAB_STUB_LOG"
+      ${wrapped}/bin/glab version >/dev/null
+      if grep -q 'config set' "$GLAB_STUB_LOG"; then
+        echo "FAIL: reseeded despite the IPv6 entry being present" >&2
+        cat "$GLAB_STUB_LOG" >&2
+        exit 1
+      fi
+
+      echo PASS > "$out"
+    '';
+
+  # With configDir unset AND no HOME/XDG_CONFIG_HOME, the wrapper must
+  # report what to set rather than dying on bash's bare
+  # `HOME: unbound variable` from `set -u`. Reachable in practice: a tool
+  # that REPLACES the environment (Claude Code's MCP `env` field) can
+  # spawn this with no HOME at all.
+  module-glab-preflight-no-home = let
+    stub =
+      (pkgs.writeShellScriptBin "glab" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        echo "REACHED-PROGRAM"
+      '')
+      .overrideAttrs (_: {version = "0-test";});
+    wrapped = import ./../packages/glab/lib/mkGlab.nix {
+      inherit lib pkgs;
+      cfg = {
+        enable = true;
+        package = stub;
+        configDir = null;
+        host.plain = "gitlab.example.com";
+        token.plain = "t0ken";
+        job_token = null;
+        settings = {};
+        extraSettings = {};
+      };
+    };
+  in
+    pkgs.runCommand "module-test-glab-preflight-no-home" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      if got=$(env -u HOME -u XDG_CONFIG_HOME -u GLAB_CONFIG_DIR \
+                 ${wrapped}/bin/glab version 2>&1); then
+        echo "FAIL: expected a non-zero exit with no HOME (got: $got)" >&2
+        exit 1
+      fi
+      case "$got" in
+        *"unbound variable"*)
+          echo "FAIL: died on bash's unbound-variable error, not the guard: $got" >&2
+          exit 1 ;;
+        *"cannot locate a config directory"*) : ;;
+        *)
+          echo "FAIL: aborted, but not via the guard (got: $got)" >&2
+          exit 1 ;;
+      esac
+
+      # The stub prints REACHED-PROGRAM, so assert it did not. The
+      # non-zero check above already rules out "warned, then exec'd
+      # successfully" — the stub exits 0, so that path would have made the
+      # `if` fire. This closes the remaining gap: a guard that warns and
+      # then reaches a program which itself fails. Without it the stub's
+      # marker is a control nothing reads.
+      case "$got" in
+        *REACHED-PROGRAM*)
+          echo "FAIL: guard fired but the program was still reached: $got" >&2
+          exit 1 ;;
+      esac
+
+      echo PASS > "$out"
+    '';
+
+  # `api_protocol` must follow the scheme on the configured host rather
+  # than being hardcoded https, or an http:// instance gets a config entry
+  # contradicting how it is actually reached. Separate test because it
+  # needs a differently-configured wrapper.
+  module-glab-seeds-http-protocol = let
+    stub =
+      (pkgs.writeShellScriptBin "glab" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        printf '%s\n' "$*" >> "''${GLAB_STUB_LOG:-/dev/null}"
+      '')
+      .overrideAttrs (_: {version = "0-test";});
+    mkWrapped = cfgDir: hostValue:
+      import ./../packages/glab/lib/mkGlab.nix {
+        inherit lib pkgs;
+        cfg = {
+          enable = true;
+          package = stub;
+          configDir = cfgDir;
+          host.plain = hostValue;
+          token.plain = "t0ken";
+          job_token = null;
+          settings = {};
+          extraSettings = {};
+        };
+      };
+    # Build-relative, for the reason given on
+    # module-glab-preflight-runtime.
+    httpWrapped = mkWrapped "glab-proto-http" "http://gitlab.internal";
+    bareWrapped = mkWrapped "glab-proto-bare" "gitlab.internal";
+  in
+    pkgs.runCommand "module-test-glab-seeds-http-protocol" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      export HOME="$PWD/home"
+      export GLAB_STUB_LOG="$PWD/seed.log"
+
+      # Must match the configDirs passed to mkWrapped above.
+      httpCfg=glab-proto-http
+      bareCfg=glab-proto-bare
+
+      rm -rf "$httpCfg" "$bareCfg"
+      : > "$GLAB_STUB_LOG"
+      ${httpWrapped}/bin/glab version >/dev/null
+      grep -qxF -- 'config set --host gitlab.internal api_protocol http' "$GLAB_STUB_LOG" || {
+        echo "FAIL: http:// host was not seeded with api_protocol http. log:" >&2
+        cat "$GLAB_STUB_LOG" >&2
+        exit 1
+      }
+      # The configured dir must be the one actually created. Without this
+      # a wrong configDir (e.g. a literal "$cfg" left by a bad refactor)
+      # still satisfies the grep above, so the test would pass while
+      # exercising the wrong path — which is exactly what deadnix caught.
+      [ -d "$httpCfg" ] || {
+        echo "FAIL: configDir $httpCfg was not created" >&2
+        exit 1
+      }
+
+      # No scheme falls back to https, matching glab's own default.
+      : > "$GLAB_STUB_LOG"
+      ${bareWrapped}/bin/glab version >/dev/null
+      grep -qxF -- 'config set --host gitlab.internal api_protocol https' "$GLAB_STUB_LOG" || {
+        echo "FAIL: scheme-less host did not fall back to https. log:" >&2
+        cat "$GLAB_STUB_LOG" >&2
+        exit 1
+      }
+      [ -d "$bareCfg" ] || {
+        echo "FAIL: configDir $bareCfg was not created" >&2
+        exit 1
+      }
+
+      echo PASS > "$out"
+    '';
 
   module-claude-enable-toggles = mkTest "claude-enable-toggles" (
     let
@@ -4560,6 +4900,23 @@ in {
         echo "FAIL: populated secret was rejected (got: $got)" >&2
         exit 1
       }
+
+      # A DIRECTORY must abort with the guard's own message. `-r` alone is
+      # true for a readable directory, so without the `-d` branch this
+      # sails past and dies on `cat: …: Is a directory`, losing the
+      # variable name and the path the guard exists to report.
+      mkdir -p secret-dir
+      sed "s|@SECRET@|$PWD/secret-dir|" ${runner} > dir.sh
+      if got=$(${pkgs.bash}/bin/bash dir.sh 2>&1); then
+        echo "FAIL: a directory as the secret path did not abort (got: $got)" >&2
+        exit 1
+      fi
+      case "$got" in
+        *"is a directory, not a secret file"*) : ;;
+        *)
+          echo "FAIL: directory aborted, but not via the guard (got: $got)" >&2
+          exit 1 ;;
+      esac
 
       # The real case: an empty file must abort, non-zero, before the
       # program is reached.

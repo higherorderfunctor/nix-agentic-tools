@@ -92,6 +92,71 @@ does for any key without an explicit override — exact for genuinely new
 keys, wrong for one that has aliases. If such a key starts behaving
 oddly, bump the package: the typed option appears on its own.
 
+## `auth status` and the seeded `hosts:` entry
+
+`glab auth status` is the one command that does **not** read the resolved
+configuration. It enumerates `cfg.Hosts()` — the `hosts:` block of
+`config.yml` — so an env-only setup makes it report `gitlab.com` and
+"No token found" while every other command works fine. That is a trap: it
+is the first thing anyone runs when debugging auth.
+
+The wrapper therefore seeds a `hosts:` entry on first run, by invoking
+glab itself (`glab config set --host <host> api_protocol <proto>`) rather
+than editing YAML. glab owns and reformats that file, so hand-written
+YAML would drift — and this way nothing like `yq` enters the closure.
+
+Note the flag is `--host`, **not** `-h`: `-h` collides with help and
+silently writes a `gitlab.com` entry instead.
+
+`api_protocol` is derived from the scheme on the configured host rather
+than hardcoded, so an `http://` instance is not seeded with a
+contradictory `https`. With no scheme given it falls back to `https`,
+matching glab's own default for that key.
+
+A fast path means the seed runs once, not on every invocation: the
+wrapper scans `config.yml` for a line that, trimmed, equals `<host>:`.
+That comparison is a **fixed string**, deliberately not a pattern —
+`grep` was tried and rejected, because a bracketed IPv6 host
+(`[2001:db8::1]`) puts regex metacharacters in the hostname, and a
+pattern that matched too much would skip seeding while the entry is
+genuinely absent. It is also pure bash builtins, so it costs no process
+and works with no `PATH`.
+
+The hostname lands in `config.yml` in cleartext at mode 0600 — which is
+where glab would write it anyway on `glab auth login`, but worth knowing
+if your instance URL comes from sops.
+
+The wrapper also, before every `exec`:
+
+- creates the config directory at mode `0700` when absent;
+- repairs `config.yml` to `0600` when a stray umask left it looser, since
+  glab hard-refuses anything else;
+- fails when a credential file is missing or resolves empty, with a
+  message naming the environment variable and the path it was read from
+  (for example `GITLAB_TOKEN … from /run/secrets/gitlab-token`) — not the
+  Nix option, which the wrapper does not know at runtime.
+
+## `configDir` — project-local state
+
+`glab.configDir` sets `GLAB_CONFIG_DIR`. It is a **literal path** — it is
+shell-quoted into the wrapper, so nothing in it expands: no `$VAR`, no
+`$(…)`, no `~`. Build the path in Nix, where the values already live.
+
+| facet        | default                              | why                                                                                                                                           |
+| ------------ | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| home-manager | `null` → glab's `~/.config/glab-cli` | a user-global install should own the user-global config                                                                                       |
+| devenv       | `"${config.devenv.state}/glab-cli"`  | per-project hosts and aliases, so two projects on different instances cannot fight over one file, and the state is disposable with `.devenv/` |
+
+For a custom location use `"${config.home.homeDirectory}/…"` under
+home-manager or `"${config.devenv.state}/…"` under devenv, rather than a
+shell string. `devenv.state` is available at evaluation time — verified
+with `devenv eval devenv.state` — which is why the devenv default needs no
+runtime expansion.
+
+That difference is a `config` default, not a differing option
+_declaration_ — the two facets' option trees stay identical, which
+`module-glab-hm-devenv-option-parity` asserts.
+
 ## Why a wrapper rather than a managed `config.yml`
 
 Two independent blockers, both measured against glab 1.110.0:

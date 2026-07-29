@@ -155,6 +155,37 @@
       exit 1
     fi'';
 
+  # ── Missing-file guard ────────────────────────────────────────────
+  # Sibling of `emptyGuard`, for the failure one step earlier. Without it
+  # a missing secret surfaces as a bare `cat: /run/…: No such file or
+  # directory` — true, but it names neither the variable nor the option
+  # that is misconfigured, and under `set -e` it aborts before the empty
+  # guard's much better message can fire.
+  #
+  # The distinction is worth keeping separate from `emptyGuard`: a MISSING
+  # file usually means the secret was never declared or the path is wrong,
+  # while an EMPTY one usually means decryption or templating produced
+  # nothing. Those send the reader to different places.
+  # Two conditions, not one. `-r` alone is TRUE for a readable DIRECTORY
+  # (measured), so a path pointing at a secrets directory rather than a
+  # secret inside it sails past the guard and dies one line later on
+  # `cat: …: Is a directory` — a message with none of the context this
+  # guard exists to add.
+  #
+  # Testing `-d` rather than switching to `-f` on purpose: `-f` would also
+  # reject a FIFO or character device, and those are readable by `cat` and
+  # are a legitimate, if unusual, way to hand a process a secret. Reject
+  # the case that is definitely wrong, not everything that is unusual.
+  missingFileGuard = envVar: source: ''
+    if [ -d "${source}" ]; then
+      echo "${envVar} cannot be read from ${source} — that path is a directory, not a secret file" >&2
+      exit 1
+    fi
+    if [ ! -r "${source}" ]; then
+      echo "${envVar} cannot be read from ${source} — the file is missing or unreadable; check that the secret is declared and decrypted" >&2
+      exit 1
+    fi'';
+
   mkSecretExport = pkgs: envVar: secret:
     if secret == null
     then ""
@@ -165,6 +196,7 @@
       export ${envVar}''
     else if secret ? file
     then ''
+      ${missingFileGuard envVar secret.file}
       ${envVar}="$(${pkgs.coreutils}/bin/cat "${secret.file}")"
       ${emptyGuard envVar secret.file}
       export ${envVar}''
