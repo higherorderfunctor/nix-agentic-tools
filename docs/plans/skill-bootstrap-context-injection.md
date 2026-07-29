@@ -169,7 +169,7 @@ cost of Claude-only machinery and the entry-point wrinkle below.
   `${config.xdg.stateHome}/living-workflows`) and the devenv module
   (`packages/living-workflow/modules/devenv/default.nix:31-34`). Natural home
   for Layer 2's concat and for a per-target SKILL.md render (Layer 3).
-- **A `Skill` PostToolUse hook (if pursued instead of / with `!`command`)**
+- **A `Skill` PostToolUse hook (if pursued instead of / with `` !`command` ``)**
   wires cleanly in `devenv.nix`'s `claude.code.hooks` block (~lines 168–185),
   as a sibling to `validate-at-stop`. The devenv `hookSubmodule` supports
   `hookType = "PostToolUse"` + a regex `matcher` (precedent: upstream
@@ -188,13 +188,14 @@ cost of Claude-only machinery and the entry-point wrinkle below.
 
 1. **Entry-point disambiguation.** A `Skill`-hook (or a single injection line)
    can't easily tell resume vs create vs groom unless the skill `args` carry it.
-   `!`command`` in the _resume section_ of SKILL.md sidesteps this — it only
+   `` !`command` `` in the _resume section_ of SKILL.md sidesteps this — it only
    renders on the resume path — so inline injection is cleaner than a hook here.
-2. **Kiro portability.** `!`command``is Claude skill syntax; Kiro renders it
-literally / ignores it. Clean fix: per-target SKILL.md rendering in`mkSkill.nix` (Claude gets the injection line; Kiro keeps the plain numbered
+2. **Kiro portability.** `` !`command` `` is Claude skill syntax; Kiro renders
+   it literally / ignores it. Clean fix: per-target SKILL.md rendering in
+   `mkSkill.nix` (Claude gets the injection line; Kiro keeps the plain numbered
    read steps). Deferred — Claude-first for now.
 3. **Verify before wiring:** (a) the `tool_input` skill key name; (b) whether
-   `!`command`` is supported in _skills_ (docs section title implies yes; the
+   `` !`command` `` is supported in _skills_ (docs section title implies yes; the
    operator linked it) and its load-time timeout / size behavior; (c) exact
    subagent frontmatter keys if Q1 is ever revisited.
 

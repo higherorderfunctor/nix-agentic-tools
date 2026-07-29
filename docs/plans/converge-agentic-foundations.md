@@ -135,9 +135,9 @@ Everything rebases onto one tip; kills all cross-session staleness. Units:
 
 - u1-labs-rebase: rebase `refactor/agent-primitive-labs` onto `b3906bd9` in its
   worktree. Hand-resolve `flake.nix` only; regenerate `devenv.yaml`
-  (`nix eval --raw --impure --expr 'import ./config/generate-devenv-yaml.nix {}'
-  > devenv.yaml`), `flake.lock`/`devenv.lock`; union
-`config/cspell/project-terms.txt`. Then targeted single-job check builds.
+  (`nix eval --raw --impure --expr 'import ./config/generate-devenv-yaml.nix {}' > devenv.yaml`),
+  `flake.lock`/`devenv.lock`; union `config/cspell/project-terms.txt`. Then
+  targeted single-job check builds.
 - u2-land-u1: in `kiro-hook-colocation` worktree, rebase `0222a0eb` onto tip;
   re-point golden `module-kiro-hooks-typed-colocation` at #433
   `home.activation` delivery; reconcile `kiro-auto-memory.md` fragment;
