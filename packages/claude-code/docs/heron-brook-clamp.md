@@ -15,9 +15,9 @@ disables it, and it **never appears in the transcript** — so a session with
 delegation suppressed looks identical to a normal one. It also contradicts
 `ai.claude.ultracodeOnLaunch`, which asks for the opposite.
 
-Evidence, reproduction commands, dead-end workarounds, and the full
-verification record live in `private/heron-brook-delegation-clamp.md`
-(untracked). Do not re-derive them here.
+Evidence, reproduction commands, dead-end workarounds, and the full verification
+record live in `private/heron-brook-delegation-clamp.md` (untracked). Do not
+re-derive them here.
 
 ### Why the mitigation is user-side context, not a patch
 
@@ -31,8 +31,8 @@ the **human turn**; `SessionStart`'s carries a
 `SessionStart` is the obvious cheaper choice and it is wrong — the single most
 likely thing for a future session to "simplify" into a regression.
 
-**But not for the reason first written here**, and the difference matters if
-you reword the payload. The injection is not mistaken for typed input: a live
+**But not for the reason first written here**, and the difference matters if you
+reword the payload. The injection is not mistaken for typed input: a live
 session placed it as "system-level in **channel** […] but **user-authored in
 content**", then accepted it as "a genuine standing instruction from you". The
 mechanism does not rely on concealment — the channel is plainly visible. The
@@ -73,10 +73,10 @@ since there is then nothing to inject.
 
 `UserPromptSubmit` stdin is
 `{session_id, prompt_id, cwd, permission_mode, prompt}` — **no `model`**. Only
-`SessionStart` carries it, so gating on Opus 5
-would need a `SessionStart` companion writing session-keyed state. At
-once-per-session cadence the waste on other models is ~75 tokens once, cheaper
-than that state file and its staleness modes. So there is no gate, deliberately.
+`SessionStart` carries it, so gating on Opus 5 would need a `SessionStart`
+companion writing session-keyed state. At once-per-session cadence the waste on
+other models is ~75 tokens once, cheaper than that state file and its staleness
+modes. So there is no gate, deliberately.
 
 An Opus 5 / Sonnet 5 control pair confirmed the whole chain end-to-end: the hook
 fires, injects once, the clamp is present on Opus 5 and **absent on Sonnet 5**,
@@ -143,4 +143,5 @@ Discharging either means re-verifying against the new binary (the procedure,
 with its **mandatory positive control**, is in
 `private/heron-brook-delegation-clamp.md` § 5), then either recording the new
 version/date or — if upstream fixed it — **deleting the mitigation and both
-tripwires**. An expired justification is a finding, not a formality to bump past.
+tripwires**. An expired justification is a finding, not a formality to bump
+past.

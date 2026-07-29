@@ -1,22 +1,19 @@
 # Kiro CLI V3 — typed `agentEngine` + `mode` launch flags
 
-> Status: SUPERSEDED by the CORRECTION below. The original
-> `agentEngine`/`mode` design targeted the wrong parser surface and was
-> reverted to a `v3` boolean. Branch: refactor/ai-factory-architecture.
-> Date: 2026-06-18.
+> Status: SUPERSEDED by the CORRECTION below. The original `agentEngine`/`mode`
+> design targeted the wrong parser surface and was reverted to a `v3` boolean.
+> Branch: refactor/ai-factory-architecture. Date: 2026-06-18.
 >
-> The sections from "What the flags actually are" through the original
-> Tasks below are kept for history but describe the chat-subcommand
-> surface, NOT the launcher the wrapper actually wraps. Read the
-> CORRECTION first.
+> The sections from "What the flags actually are" through the original Tasks
+> below are kept for history but describe the chat-subcommand surface, NOT the
+> launcher the wrapper actually wraps. Read the CORRECTION first.
 
 ## CORRECTION (2026-06-18) — wrong parser surface
 
-The first implementation validated against `kiro-cli **chat** --help`
-and emitted `--agent-engine=<v>` / `--mode=<m>`. But the HM wrapper
-appends to the **top-level `kiro-cli` launcher**, whose parser is
-different and **rejects** `--agent-engine`/`--mode` (they are
-chat-subcommand-only):
+The first implementation validated against `kiro-cli **chat** --help` and
+emitted `--agent-engine=<v>` / `--mode=<m>`. But the HM wrapper appends to the
+**top-level `kiro-cli` launcher**, whose parser is different and **rejects**
+`--agent-engine`/`--mode` (they are chat-subcommand-only):
 
 ```
 $ kiro-cli --tui --agent-engine=v2
@@ -33,15 +30,15 @@ Usage: kiro-cli --tui --agent <AGENT>
 | `--tui --v3`                      | ✅ works — the target combo                                |
 | `--agent-engine` / `--mode`       | ❌ rejected (chat-only)                                    |
 
-So the launcher's only engine selector is the **`--v3` boolean**, and
-`--tui` must pair with `--v3`.
+So the launcher's only engine selector is the **`--v3` boolean**, and `--tui`
+must pair with `--v3`.
 
 **Final design (shipped in the fix):**
 
 - Replace `agentEngine`/`mode`/`engines.json`/`effectiveAgentEngine`/the
   `tui`+`v1` assertion with a single `v3 = bool` option → appends `--v3`.
-- `hasV3 = cfg.v3 || cfg.tui` (tui implies `--v3`), wrapper emits
-  `--tui` and/or `--v3`. HM-only, like `tui`.
+- `hasV3 = cfg.v3 || cfg.tui` (tui implies `--v3`), wrapper emits `--tui` and/or
+  `--v3`. HM-only, like `tui`.
 - 2 eval tests: `module-kiro-hm-v3-wraps-package`,
   `module-kiro-hm-tui-implies-v3-wraps`.
 - Consumer nixos-config: drop `agentEngine`; `tui = true` now yields
@@ -53,9 +50,9 @@ So the launcher's only engine selector is the **`--v3` boolean**, and
 
 ## Motivation
 
-Kiro CLI 2.8.1 ships an early-access "next generation agent" (V3).
-The consumer wants to opt in declaratively, the same way they already
-force `--tui` from their nixos-config.
+Kiro CLI 2.8.1 ships an early-access "next generation agent" (V3). The consumer
+wants to opt in declaratively, the same way they already force `--tui` from
+their nixos-config.
 
 ### What the flags actually are (from `kiro-cli chat --help`, 2.8.1)
 
@@ -67,14 +64,14 @@ force `--tui` from their nixos-config.
 | `--v3`                        | bool  | "Launch the next generation Kiro agent" — sugar, ≈ `--agent-engine v3` |
 | `--mode <default\|spec>`      | value | V3 sub-mode                                                            |
 
-We expose the **explicit** `--agent-engine` + `--mode` surface (the
-typed-enum choice) rather than the `--v3` boolean sugar.
+We expose the **explicit** `--agent-engine` + `--mode` surface (the typed-enum
+choice) rather than the `--v3` boolean sugar.
 
 ### Validated behavior — kiro-cli 2.8.1 (empirical, this machine)
 
-Probed via `kiro-cli chat <flags> --no-interactive </dev/null` (clap +
-app-level conflict checks fire before the input check) and the
-interactive path (confirms it's not a `--no-interactive` artifact):
+Probed via `kiro-cli chat <flags> --no-interactive </dev/null` (clap + app-level
+conflict checks fire before the input check) and the interactive path (confirms
+it's not a `--no-interactive` artifact):
 
 | Combination                            | Result                                                                                                        |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -91,69 +88,68 @@ interactive path (confirms it's not a `--no-interactive` artifact):
 
 1. **`--tui` is NOT deprecated.** It's the new UI; orthogonal to engine.
 2. **You can run `--tui` together with v3** (`--tui --v3` or
-   `--tui --agent-engine v3`). UI harness × agent engine are independent
-   axes — answers the original question: yes, combinable.
+   `--tui --agent-engine v3`). UI harness × agent engine are independent axes —
+   answers the original question: yes, combinable.
 3. **⚠️ Bare `--tui` is REJECTED on 2.8.1.** The new TUI refuses the
-   implicit/legacy `v1` engine and demands an explicit `--agent-engine`
-   of v2 or v3. **The consumer's current forced bare `--tui` therefore
-   errors on every launch on 2.8.1** — this is almost certainly the real
-   trigger for the question. Fixing `--tui` now _requires_ the engine
-   option, independent of whether they want V3.
+   implicit/legacy `v1` engine and demands an explicit `--agent-engine` of v2 or
+   v3. **The consumer's current forced bare `--tui` therefore errors on every
+   launch on 2.8.1** — this is almost certainly the real trigger for the
+   question. Fixing `--tui` now _requires_ the engine option, independent of
+   whether they want V3.
 4. `--v3` and `--agent-engine` are mutually exclusive (clap). The typed
-   `agentEngine` enum must emit **`--agent-engine <v>` and never `--v3`**
-   to avoid the conflict.
+   `agentEngine` enum must emit **`--agent-engine <v>` and never `--v3`** to
+   avoid the conflict.
 
 ## Where it lives (resolved)
 
-- **Mechanism → this repo.** The wrapper has no generic flag
-  passthrough; only `tui` and `trustedMcpTools` are wired. The consumer
-  cannot inject a launch flag today.
-- **Toggle → consumer nixos-config.** Like `tui = true`, the consumer
-  sets `agentEngine = "v3"` / `mode = "spec"`.
+- **Mechanism → this repo.** The wrapper has no generic flag passthrough; only
+  `tui` and `trustedMcpTools` are wired. The consumer cannot inject a launch
+  flag today.
+- **Toggle → consumer nixos-config.** Like `tui = true`, the consumer sets
+  `agentEngine = "v3"` / `mode = "spec"`.
 
 ## Design
 
 Reuse two existing patterns already in `mkKiro.nix`:
 
 1. **Soft-enum typing** — copy the `defaultModel` shape
-   (`nullOr (either (enum known) str)`), known list read eval-pure from
-   a committed JSON sidecar. Soft so v4 / a new mode never breaks eval.
+   (`nullOr (either (enum known) str)`), known list read eval-pure from a
+   committed JSON sidecar. Soft so v4 / a new mode never breaks eval.
 2. **Launch-flag delivery** — append to the existing
-   `wrapProgram $out/bin/kiro-cli` block, exactly like `--tui`.
-   **HM-only**, same acknowledged gap as `tui` (devenv runs the raw
-   binary, no wrapper). Documented in the option descriptions.
+   `wrapProgram $out/bin/kiro-cli` block, exactly like `--tui`. **HM-only**,
+   same acknowledged gap as `tui` (devenv runs the raw binary, no wrapper).
+   Documented in the option descriptions.
 
 These are NOT `cli.json` settings — there is no known settings key for
 engine/mode; they are `chat` CLI flags only.
 
-3. **`tui ⇒ engine` coupling (new, from validation).** Because bare
-   `--tui` errors on v1, the module must guarantee an engine is emitted
-   whenever `tui = true`. Chosen handling (Open Q-A below):
+3. **`tui ⇒ engine` coupling (new, from validation).** Because bare `--tui`
+   errors on v1, the module must guarantee an engine is emitted whenever
+   `tui = true`. Chosen handling (Open Q-A below):
    - If `tui = true` and `agentEngine == null` → **auto-emit
-     `--agent-engine v2`** (matches the binary's own "Use
-     --agent-engine=v2" guidance; transparently un-breaks existing
-     `tui = true` consumers).
-   - If `tui = true` and `agentEngine == "v1"` → **eval-time assertion**
-     fails with the binary's guidance (mirror the runtime rule at
-     config-eval time instead of letting the launch error).
+     `--agent-engine v2`** (matches the binary's own "Use --agent-engine=v2"
+     guidance; transparently un-breaks existing `tui = true` consumers).
+   - If `tui = true` and `agentEngine == "v1"` → **eval-time assertion** fails
+     with the binary's guidance (mirror the runtime rule at config-eval time
+     instead of letting the launch error).
    - Always emit `--agent-engine`, never `--v3` (mutual exclusion).
 
 ## Tasks
 
 ### T1 — `engines.json` sidecar (SSOT)
 
-- Create `packages/kiro-cli/engines.json` = `["v1","v2","v3"]`.
-  Mirrors `models.json`; one source feeds both the enum and the
-  (optional) staleness check. DRY.
-- `mode` values (`default`, `spec`) are low-churn → inline list in
-  `mkKiro.nix` rather than a sidecar. (Open Q1: sidecar instead?)
+- Create `packages/kiro-cli/engines.json` = `["v1","v2","v3"]`. Mirrors
+  `models.json`; one source feeds both the enum and the (optional) staleness
+  check. DRY.
+- `mode` values (`default`, `spec`) are low-churn → inline list in `mkKiro.nix`
+  rather than a sidecar. (Open Q1: sidecar instead?)
 
 ### T2 — typed options in `mkKiro.nix`
 
 - `knownKiroEngines = builtins.fromJSON (builtins.readFile ../engines.json);`
   next to `knownKiroModels`.
-- New options under `options` (top level, alongside `tui` — these are
-  flags, not `settings.*` keys):
+- New options under `options` (top level, alongside `tui` — these are flags, not
+  `settings.*` keys):
   ```nix
   agentEngine = lib.mkOption {
     type = lib.types.nullOr
@@ -180,60 +176,58 @@ engine/mode; they are `chat` CLI flags only.
   ${lib.optionalString hasEngine ''--append-flags "--agent-engine ${cfg.agentEngine}"''}
   ${lib.optionalString hasMode ''--append-flags "--mode ${cfg.mode}"''}
   ```
-  (Matches the existing `--tui` append idiom — `--append-flags` inserts
-  after `"$@"`; clap parses options after the positional, same as `--tui`.)
+  (Matches the existing `--tui` append idiom — `--append-flags` inserts after
+  `"$@"`; clap parses options after the positional, same as `--tui`.)
 
 ### T4 — advisory staleness check (OPTIONAL / Open Q2)
 
 - `checks/engine-staleness-kiro.nix`, mirroring `model-staleness-claude.nix`:
-  parse `--agent-engine` possible-values, compare to `engines.json`,
-  **warn never fail**.
-- Wrinkle: model-staleness greps the binary statically (`firstParty:`
-  literals). Engine tokens (`v1`/`v2`/`v3`) are too generic to grep, so
-  this check must _run_ `kiro-cli chat --help` in the sandbox. That's
-  fine on linux-x64; the darwin `.dmg` binary can't run in a linux
-  sandbox → gate the check to the host platform only (the claude check
-  is already per-`system`). Decision below.
+  parse `--agent-engine` possible-values, compare to `engines.json`, **warn
+  never fail**.
+- Wrinkle: model-staleness greps the binary statically (`firstParty:` literals).
+  Engine tokens (`v1`/`v2`/`v3`) are too generic to grep, so this check must
+  _run_ `kiro-cli chat --help` in the sandbox. That's fine on linux-x64; the
+  darwin `.dmg` binary can't run in a linux sandbox → gate the check to the host
+  platform only (the claude check is already per-`system`). Decision below.
 - Register in `flake.nix` next to `modelStalenessClaudeCheck`; add a
   `check:engine-staleness` devenv task mirroring `check:model-staleness`.
 
 ### T5 — docs / fragments / propagation
 
-- Update any kiro-cli wrapper fragment with a `Last verified:` marker
-  that documents the flag surface (grep `packages/kiro-cli/docs/`,
-  `fragments/`). Mandatory per AGENTS.md if the shape changed.
+- Update any kiro-cli wrapper fragment with a `Last verified:` marker that
+  documents the flag surface (grep `packages/kiro-cli/docs/`, `fragments/`).
+  Mandatory per AGENTS.md if the shape changed.
 - README / option-reference surfaces that list kiro options.
 - `treefmt` every touched file; `nix flake check`.
 
 ## Open questions for review
 
-- **Q-A (new, primary) — `tui ⇒ engine` coupling handling.** Since bare
-  `--tui` errors on 2.8.1:
-  - (a) **Auto-default to `--agent-engine v2` when `tui = true` &
-    engine unset** + assert on explicit `v1`. Transparently fixes the
-    current broken setup. **← my lean.**
-  - (b) Hard assertion only — force the consumer to set `agentEngine`
-    explicitly whenever `tui = true` (no magic default).
+- **Q-A (new, primary) — `tui ⇒ engine` coupling handling.** Since bare `--tui`
+  errors on 2.8.1:
+  - (a) **Auto-default to `--agent-engine v2` when `tui = true` & engine
+    unset** + assert on explicit `v1`. Transparently fixes the current broken
+    setup. **← my lean.**
+  - (b) Hard assertion only — force the consumer to set `agentEngine` explicitly
+    whenever `tui = true` (no magic default).
   - (c) Do nothing — emit only what's set, let the binary error.
-- **Q1 — `mode` source** — inline `["default" "spec"]`, or commit
-  `modes.json` for symmetry with engines? (Lean inline: 2 stable values.)
-- **Q2 — staleness check now or later?** The one piece needing the
-  binary run + platform gating.
+- **Q1 — `mode` source** — inline `["default" "spec"]`, or commit `modes.json`
+  for symmetry with engines? (Lean inline: 2 stable values.)
+- **Q2 — staleness check now or later?** The one piece needing the binary run +
+  platform gating.
   - (a) Ship T4 now, linux-only advisory check.
-  - (b) Defer T4; rely on soft-enum + manual curation (engines change
-    slowly; v4 isn't out). **← my lean**, given "early release"
-    volatility and the cross-platform run wrinkle.
-- **Q3 — RESOLVED by validation.** Do **not** expose the `--v3` boolean;
-  it's mutually exclusive with `--agent-engine`. `agentEngine = "v3"` is
-  the surface; the wrapper emits `--agent-engine v3` only.
-- **Q4 — devenv parity** — accept HM-only (mirrors `tui`), documented?
-  A devenv story needs devenv to wrap/alias the binary — larger change,
-  out of scope.
+  - (b) Defer T4; rely on soft-enum + manual curation (engines change slowly; v4
+    isn't out). **← my lean**, given "early release" volatility and the
+    cross-platform run wrinkle.
+- **Q3 — RESOLVED by validation.** Do **not** expose the `--v3` boolean; it's
+  mutually exclusive with `--agent-engine`. `agentEngine = "v3"` is the surface;
+  the wrapper emits `--agent-engine v3` only.
+- **Q4 — devenv parity** — accept HM-only (mirrors `tui`), documented? A devenv
+  story needs devenv to wrap/alias the binary — larger change, out of scope.
 
 ## Verification
 
 - `nix flake check`
-- `nix build .#kiro-cli` then inspect the HM-wrapped binary's
-  `--append-flags` (build a throwaway HM eval or read the generated
-  wrapper) to confirm `--agent-engine v3 --mode spec` land.
+- `nix build .#kiro-cli` then inspect the HM-wrapped binary's `--append-flags`
+  (build a throwaway HM eval or read the generated wrapper) to confirm
+  `--agent-engine v3 --mode spec` land.
 - Manually: `kiro-cli --tui --agent-engine v3 --mode spec` behaves as V3.

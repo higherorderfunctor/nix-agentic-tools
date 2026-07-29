@@ -15,8 +15,9 @@ changes made.**
 | **v2 / classic** | `kiro-cli chat --no-interactive` (no pty)        | Rust: `getdents64` → path-based `statx` **without** `AT_SYMLINK_NOFOLLOW` → `openat`. Follows.       | **loads**            |
 | **v3**           | `--tui --v3` **under a pty**; logs `[KiroAgent]` | Node/Bun (`.kiro-cli-chat-wrapped`, 555 MB): `fs.readdir(…,{withFileTypes:true})` + `entry.isFile()` | **silently dropped** |
 
-**The repo's own wrapper appends `--tui --v3`** (`kiro-cli-wrapped/bin/kiro-cli`),
-so every consumer gets v3. The defect is real and shipping.
+**The repo's own wrapper appends `--tui --v3`**
+(`kiro-cli-wrapped/bin/kiro-cli`), so every consumer gets v3. The defect is real
+and shipping.
 
 ### The decisive experiment
 
@@ -42,27 +43,29 @@ skipped**, siblings still load. No error surfaces. (v2; v3 untested.)
 ### Corrections this forces
 
 1. **`mkKiro.nix:794` (commit `88f1fc8b`) cites the wrong issues.**
-   `kirodotdev/Kiro#2921` and `#8121` are **Kiro IDE**, a different product with a
-   different loader (Electron/VSCode `vscode.FileType`). `#8121` was moreover
+   `kirodotdev/Kiro#2921` and `#8121` are **Kiro IDE**, a different product with
+   a different loader (Electron/VSCode `vscode.FileType`). `#8121` was moreover
    **auto-closed by a duplicate bot, not by a fix.** The correct citation is
-   **`kirodotdev/Kiro#9787`** — _"[kiro-cli][--v3] Global steering files that are
-   symlinks are silently ignored"_, `cli`/`steering`/`bug`, OPEN,
+   **`kirodotdev/Kiro#9787`** — _"[kiro-cli][--v3] Global steering files that
+   are symlinks are silently ignored"_, `cli`/`steering`/`bug`, OPEN,
    maintainer-acknowledged 2026-07-02, quoting the bundled scanner source and
    confirming v2 loads them fine.
 
    Note the probe is not redundant with upstream: `#9787` was filed against
    **2.10.0 on macOS**, and no 2.11/2.12/2.13 changelog entry mentions a symlink
    or scanner fix — there was **no upstream evidence for the pinned 2.13.0 on
-   Linux**. Upstream also independently corroborates the leaf-vs-directory split:
-   the lone "worked fine" report concerns a symlinked **directory**, matching §1's
-   nuance rather than contradicting it.
+   Linux**. Upstream also independently corroborates the leaf-vs-directory
+   split: the lone "worked fine" report concerns a symlinked **directory**,
+   matching §1's nuance rather than contradicting it.
 
 2. **The comment `88f1fc8b` replaced was half right.** "Steering and agents load
    fine as symlinks" was **true for v2** and false for v3. Both the old and new
-   comments are wrong because neither names the engine. The engine is the whole story.
+   comments are wrong because neither names the engine. The engine is the whole
+   story.
 3. **`f12aa5f1` still stands.** It was independently justified — two writers
-   producing divergent content, and git-tracked outputs that cannot be mode-120000
-   symlinks. Only its supporting symlink sentence needs the engine qualifier.
+   producing divergent content, and git-tracked outputs that cannot be
+   mode-120000 symlinks. Only its supporting symlink sentence needs the engine
+   qualifier.
 
 ---
 
@@ -83,26 +86,27 @@ files" advantage is real but _narrow_, and it **evaporates the instant you
 convert** — HM refuses to delete real files. It also never protected against the
 case that matters. So "declarative keeps the lifecycle guarantee" is true only
 while the mode stays `symlink`; **every real-file answer needs its own prune
-design.** Blind pruning of a consumer's `~/.kiro/steering/` is unsafe (user files
-live there); this repo's `sync_dir` is safe only because it prunes a 100%-generated
-gitignored dir. The safe shape is what devenv itself does: **persist a manifest and
-delete only previously-ours-now-gone entries.**
+design.** Blind pruning of a consumer's `~/.kiro/steering/` is unsafe (user
+files live there); this repo's `sync_dir` is safe only because it prunes a
+100%-generated gitignored dir. The safe shape is what devenv itself does:
+**persist a manifest and delete only previously-ours-now-gone entries.**
 
 ---
 
 ## 3. Is there a shape that keeps the assertions? **Yes — and it already exists in-repo**
 
-The brief's §3 hypothesis is correct, and the hooks precedent already proves it —
-**twice, once per backend, with zero assertions deleted**:
+The brief's §3 hypothesis is correct, and the hooks precedent already proves it
+— **twice, once per backend, with zero assertions deleted**:
 
 - **HM (`af53cf63`)**: 7 tests rewritten, 3 added, 0 deleted. Each rewrite is a
-  one-line accessor swap; `lib.hasInfix` payload assertions carried over verbatim.
-  It works because `lib/ai/hm-helpers.nix:mkHooksActivationScript` **inlines each
-  file's content as a shell heredoc**, with a comment saying exactly why: _"The
-  content rides an inline heredoc … so module-eval can read it."_
-- **devenv (`38b7088f`)**: 2 tests rewritten, content assertions **lost** — because
-  `enterShell` interpolates a `pkgs.writeText` store path, so the bytes are not in
-  the script.
+  one-line accessor swap; `lib.hasInfix` payload assertions carried over
+  verbatim. It works because `lib/ai/hm-helpers.nix:mkHooksActivationScript`
+  **inlines each file's content as a shell heredoc**, with a comment saying
+  exactly why: _"The content rides an inline heredoc … so module-eval can read
+  it."_
+- **devenv (`38b7088f`)**: 2 tests rewritten, content assertions **lost** —
+  because `enterShell` interpolates a `pkgs.writeText` store path, so the bytes
+  are not in the script.
 
 **Conclusion: the embedding strategy, not declarative-vs-imperative, decides
 whether the test surface survives.** Scale: ~21 tests / ~64 conjuncts touch Kiro
@@ -117,8 +121,8 @@ attrset instead of on the backend output.
 
 Do **not** hard-code "copy" into the emitters. Make materialization a **property
 of a declarative attrset**, so one shared materializer serves every surface and
-every backend, and `module-eval` asserts on the attrset regardless of which branch
-it takes.
+every backend, and `module-eval` asserts on the attrset regardless of which
+branch it takes.
 
 ```nix
 # SSOT — declared once in the shared options block, reachable from BOTH backends
@@ -130,20 +134,22 @@ ai.kiro.steeringFiles."named-rule.md" = {
 ```
 
 - **HM**: `strategy = "symlink"` → `home.file`; `"copy"` → a derived activation
-  script, heredoc-embedded, ordered `entryAfter [ "linkGeneration" ]`, manifest-pruned.
+  script, heredoc-embedded, ordered `entryAfter [ "linkGeneration" ]`,
+  manifest-pruned.
 - **devenv**: `"symlink"` → `files.*`; `"copy"` → a task with
   `before = [ "devenv:enterShell" ]`, reusing `sync_file`.
-- **Shared** `lib/ai/materialize.nix` renders the copy script for both backends, so
-  the DRY rule holds and skills/agents/hooks can adopt it later.
+- **Shared** `lib/ai/materialize.nix` renders the copy script for both backends,
+  so the DRY rule holds and skills/agents/hooks can adopt it later.
 
 ### This is what answers the GitHub / committed-files case
 
 Git-tracked generated files (`AGENTS.md`, `.github/copilot-instructions.md`,
-`.github/instructions/*`) **cannot be symlinks** — a store symlink commits as mode
-120000 holding an absolute `/nix/store` path, which is broken in every clone and on
-CI. Under this design that is **not a special case bolted on**: it is one value of
-`strategy`, chosen for the same reason as every other surface. The store path is
-only ever the _build input_; the committed artifact is always plain bytes.
+`.github/instructions/*`) **cannot be symlinks** — a store symlink commits as
+mode 120000 holding an absolute `/nix/store` path, which is broken in every
+clone and on CI. Under this design that is **not a special case bolted on**: it
+is one value of `strategy`, chosen for the same reason as every other surface.
+The store path is only ever the _build input_; the committed artifact is always
+plain bytes.
 
 ### Defaults, chosen per surface from evidence
 
@@ -158,8 +164,8 @@ only ever the _build input_; the committed artifact is always plain bytes.
 
 Tempting — v3 follows it, it is zero-copy, and it keeps HM's lifecycle. Rejected
 because it takes **exclusive ownership of a user-owned directory**: a consumer
-could no longer put their own file in `~/.kiro/steering/`. It also has a nasty HM
-migration (real dir → symlink trips `checkLinkTargets`' clobber guard). Worth
+could no longer put their own file in `~/.kiro/steering/`. It also has a nasty
+HM migration (real dir → symlink trips `checkLinkTargets`' clobber guard). Worth
 reconsidering **only** for the project-local devenv scope, as a follow-up.
 
 ---
@@ -177,36 +183,40 @@ reconsidering **only** for the project-local devenv scope, as a follow-up.
 
 ## 6. Defects found along the way (independent of this decision)
 
-1. **HM activation ordering is wrong repo-wide.** `entryAfter [ "writeBoundary" ]`
-   does **not** guarantee running after linking — `linkGeneration` is a
-   `writeBoundary` sibling and sibling order comes from `lib.toposort`, i.e.
-   config-dependent. The correct entry is `entryAfter [ "linkGeneration" ]`.
-   **Every existing HM activation block in this repo uses the wrong one**, including
-   the landed hooks work. Worse, `module-eval`'s dag stub **discards the
-   `after`/`before` lists**, so it structurally cannot catch this.
-2. **`sync_file`'s `cmp` follows symlinks.** A destination symlink whose target has
-   identical content compares EQUAL and the symlink **survives**. This never fired
-   repo-locally (content changed too), but a factory port emits the same bytes the
-   symlink already targets — i.e. it breaks _exactly_ the migration case. Needs a
-   `[ -L "$2" ]` force-write before any port.
+1. **HM activation ordering is wrong repo-wide.**
+   `entryAfter [ "writeBoundary" ]` does **not** guarantee running after linking
+   — `linkGeneration` is a `writeBoundary` sibling and sibling order comes from
+   `lib.toposort`, i.e. config-dependent. The correct entry is
+   `entryAfter [ "linkGeneration" ]`. **Every existing HM activation block in
+   this repo uses the wrong one**, including the landed hooks work. Worse,
+   `module-eval`'s dag stub **discards the `after`/`before` lists**, so it
+   structurally cannot catch this.
+2. **`sync_file`'s `cmp` follows symlinks.** A destination symlink whose target
+   has identical content compares EQUAL and the symlink **survives**. This never
+   fired repo-locally (content changed too), but a factory port emits the same
+   bytes the symlink already targets — i.e. it breaks _exactly_ the migration
+   case. Needs a `[ -L "$2" ]` force-write before any port.
 3. **The HM-side Kiro hooks emitter was never converted** — still `home.file` at
    `mkKiro.nix:600-602`. HM consumers' hooks are broken today, independently.
-4. **`enterShell` runs with the caller's cwd**, not the project root, and fires at
-   least twice per `devenv shell`. `mkKiro.nix:812-819`'s shipped hooks emitter
-   appears not to anchor to `$DEVENV_ROOT`.
+4. **`enterShell` runs with the caller's cwd**, not the project root, and fires
+   at least twice per `devenv shell`. `mkKiro.nix:812-819`'s shipped hooks
+   emitter appears not to anchor to `$DEVENV_ROOT`.
 5. **The only real-file-vs-symlink gate in the repo never runs in CI** —
    `devenv.nix:318-333` `enterTest` is not invoked by any workflow.
-6. **`instruction-file-single-mechanism.md:169-171` is factually wrong**: it rejects
-   `copyMode = "copy"` partly because "`files.<name>` has no `.source`". It does —
-   and `mkKiro.nix:783` already uses it.
+6. **`instruction-file-single-mechanism.md:169-171` is factually wrong**: it
+   rejects `copyMode = "copy"` partly because "`files.<name>` has no `.source`".
+   It does — and `mkKiro.nix:783` already uses it.
 
 ---
 
 ## 7. Open questions
 
-- Kiro **skills / agents / hooks** under v3 — all need probes with working controls.
-- Whether v3 also drops symlinked **global** `~/.kiro/steering/*` (v2 read them fine).
-- Whether upstream fixes #9787, which would make the Kiro `strategy` default revisable.
+- Kiro **skills / agents / hooks** under v3 — all need probes with working
+  controls.
+- Whether v3 also drops symlinked **global** `~/.kiro/steering/*` (v2 read them
+  fine).
+- Whether upstream fixes #9787, which would make the Kiro `strategy` default
+  revisable.
 
 Fixture/regression follow-up is banked as **P14** in
 `docs/plans/agent-primitive-labs-impl-plan.md`.

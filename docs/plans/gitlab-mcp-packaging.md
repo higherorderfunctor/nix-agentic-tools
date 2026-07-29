@@ -9,8 +9,8 @@ between each.
 
 Package `github.com/zereight/gitlab-mcp` (npm `@zereight/mcp-gitlab`) as a
 Node-based MCP server using the standard monorepo template. Output: a working
-`pkgs.ai.mcpServers.gitlab-mcp` derivation plus the typed server module and
-all registration entries, fanned out automatically to Claude / Copilot / Kiro
+`pkgs.ai.mcpServers.gitlab-mcp` derivation plus the typed server module and all
+registration entries, fanned out automatically to Claude / Copilot / Kiro
 through the existing factory.
 
 ## Upstream facts (frozen)
@@ -36,11 +36,11 @@ through the existing factory.
 Two options on the typed schema (per (A) from the design discussion):
 
 - `instanceUrl` — `nullOr str`, plain typed config, flows through
-  `settingsToEnv` → `GITLAB_API_URL`. Use when the URL is OK to land in the
-  Nix store.
-- `apiUrl` (file/helper credential via `mcpLib.mkCredentialsOption`) — use
-  when the URL must be kept out of the Nix store (encrypted at rest, e.g.
-  sops). Resolved at exec time by `mkSecretsWrapper`.
+  `settingsToEnv` → `GITLAB_API_URL`. Use when the URL is OK to land in the Nix
+  store.
+- `apiUrl` (file/helper credential via `mcpLib.mkCredentialsOption`) — use when
+  the URL must be kept out of the Nix store (encrypted at rest, e.g. sops).
+  Resolved at exec time by `mkSecretsWrapper`.
 
 Module-level assertion: `instanceUrl != null && apiUrl (file or helper) set`
 fails eval with a message instructing the user to pick one. PAT has only the
@@ -61,14 +61,14 @@ default `null`).
 
 OAuth-related env vars (`GITLAB_USE_OAUTH`, `GITLAB_MCP_OAUTH`, stateless mode,
 etc.) are **out of v1 scope**. The escape hatch is the standard `env = { … }`
-freeform passthrough on `mkStdioEntry` — consumers who need OAuth set those
-env vars directly.
+freeform passthrough on `mkStdioEntry` — consumers who need OAuth set those env
+vars directly.
 
 ### Conflict assertion (instanceUrl vs apiUrl)
 
 `evalSettings` in `lib/mcp.nix:27-37` discards `eval.assertions`, so
-module-level assertions silently no-op. None of the existing mcp-server
-modules use assertions. Encode the constraint as `if/throw` at the top of
+module-level assertions silently no-op. None of the existing mcp-server modules
+use assertions. Encode the constraint as `if/throw` at the top of
 `settingsToEnv` — that function is called every time `renderServer` runs
 (`lib/mcp.nix:203` → `effectiveEnv`), so the throw fires whenever a consumer
 evaluates the config:
@@ -112,31 +112,30 @@ omitted when `false`. List envs join with `,` and are omitted when empty.
 
 ### Transport
 
-Upstream supports stdio, SSE, and Streamable HTTP natively. v1 ships stdio
-only — HTTP mode is `"bridge"` (use `mcp-proxy`) until a consumer asks for
-native HTTP. Rationale: matches every other MCP in this repo; native HTTP
-adds an `STREAMABLE_HTTP=true` env knob + port wiring that nothing currently
-exercises.
+Upstream supports stdio, SSE, and Streamable HTTP natively. v1 ships stdio only
+— HTTP mode is `"bridge"` (use `mcp-proxy`) until a consumer asks for native
+HTTP. Rationale: matches every other MCP in this repo; native HTTP adds an
+`STREAMABLE_HTTP=true` env knob + port wiring that nothing currently exercises.
 
 ### Tool taxonomy
 
 154 tools total. The `meta.tools` list mirrors the full upstream list (the
-implementing session embeds it verbatim from §A2 below). Read vs write split
-is documented in `packages/gitlab-mcp/docs/README.md` for consumers building
-their `trustedMcpTools` lists.
+implementing session embeds it verbatim from §A2 below). Read vs write split is
+documented in `packages/gitlab-mcp/docs/README.md` for consumers building their
+`trustedMcpTools` lists.
 
 ### Reserved port
 
 `defaultPort = 19761`. Used ports: 19750 (context7), 19751 (github), 19752
-(nixos), 19753 (kagi), 19754 (effect), 19755 (fetch), 19756 (git-intel),
-19757 (git), 19758 (openmemory), 19759 (sequential-thinking), 19760 (sympy).
+(nixos), 19753 (kagi), 19754 (effect), 19755 (fetch), 19756 (git-intel), 19757
+(git), 19758 (openmemory), 19759 (sequential-thinking), 19760 (sympy).
 
 ### Template reference
 
 Closest match: `overlays/mcp-servers/git-intel-mcp.nix` (single-package npm
-repo, single binary, source-built via tsc, no monorepo workspace). Do NOT
-copy `openmemory-mcp.nix` — it has `sourceRoot` + `postUnpack` for a workspace
-which this package doesn't need.
+repo, single binary, source-built via tsc, no monorepo workspace). Do NOT copy
+`openmemory-mcp.nix` — it has `sourceRoot` + `postUnpack` for a workspace which
+this package doesn't need.
 
 ### Commit shape
 
@@ -185,39 +184,37 @@ Supervisor-worker-verifier with HITL gates between phases.
 ### Rules for the supervisor
 
 1. **No two phases dispatched without a HITL approval between them.**
-2. **No improvising past the plan.** If a verifier reports a failure mode
-   not enumerated below, escalate to HITL — do not have the worker retry
-   blindly.
-3. **TaskCreate / TaskUpdate** for cross-phase state. One task per phase;
-   mark `in_progress` at dispatch, `completed` after HITL approval, never
-   batch.
+2. **No improvising past the plan.** If a verifier reports a failure mode not
+   enumerated below, escalate to HITL — do not have the worker retry blindly.
+3. **TaskCreate / TaskUpdate** for cross-phase state. One task per phase; mark
+   `in_progress` at dispatch, `completed` after HITL approval, never batch.
 4. **Diff summary to HITL** = `git diff --stat` plus the first ~40 lines of
    `git diff` per file. Don't dump the entire diff inline.
-5. **Verifier prompts are read-only.** They run `nix build`, `nix flake
-check`, `grep`, file-existence checks. They do not modify files.
+5. **Verifier prompts are read-only.** They run `nix build`, `nix flake check`,
+   `grep`, file-existence checks. They do not modify files.
 
 ### Rules for workers
 
 1. **Self-contained prompts.** Each worker prompt below stands alone — the
-   worker does not need to read prior phase outputs except for the file
-   list the supervisor passes through.
+   worker does not need to read prior phase outputs except for the file list the
+   supervisor passes through.
 2. **Failure escalation.** When a documented failure mode trips, the worker
    reports it back with the classification token (e.g.
-   `[hash-mismatch round-1]`) — does NOT retry beyond the budget specified
-   in the phase.
+   `[hash-mismatch round-1]`) — does NOT retry beyond the budget specified in
+   the phase.
 3. **No skill invocation inside the worker** unless this plan tells it to.
    Skills can pull in patterns that conflict with the frozen design.
-4. **Absolute paths in shell wrappers.** `${pkgs.coreutils}/bin/cat`, never
-   bare `cat`. Bash strict mode (`set -euETo pipefail; shopt -s
-inherit_errexit`). These are non-negotiable repo rules.
+4. **Absolute paths in shell wrappers.** `${pkgs.coreutils}/bin/cat`, never bare
+   `cat`. Bash strict mode (`set -euETo pipefail; shopt -s inherit_errexit`).
+   These are non-negotiable repo rules.
 
 ### Rules for verifiers
 
 1. **Read-only.** Tools restricted to Explore's set (no Edit, no Write).
-2. **Evidence per claim.** Every pass/fail line cites a file path + line
-   number or a command's exit status. No vibes.
-3. **Stop at first hard failure.** No need to run later checks once an
-   earlier criterion failed — report and return.
+2. **Evidence per claim.** Every pass/fail line cites a file path + line number
+   or a command's exit status. No vibes.
+3. **Stop at first hard failure.** No need to run later checks once an earlier
+   criterion failed — report and return.
 
 ## Phases
 
@@ -835,8 +832,8 @@ Verify treefmt is clean:
 Report pass/fail per criterion with evidence.
 ```
 
-**Success criteria:** all 9 file insertions present + `nix flake check`
-exits 0 + treefmt clean.
+**Success criteria:** all 9 file insertions present + `nix flake check` exits
+0 + treefmt clean.
 
 **HITL checkpoint:** supervisor posts `git diff --stat` + verifier report.
 
@@ -844,8 +841,8 @@ exits 0 + treefmt clean.
 
 ### Phase 4 — Documentation + tool taxonomy
 
-**Goal:** `packages/gitlab-mcp/docs/README.md` exists with the read/write
-tool split so consumers can build `trustedMcpTools` lists.
+**Goal:** `packages/gitlab-mcp/docs/README.md` exists with the read/write tool
+split so consumers can build `trustedMcpTools` lists.
 
 **Files touched:**
 
@@ -1055,8 +1052,8 @@ Report pass/fail per criterion with evidence.
 
 **Success criteria:** all 5 verifier checks pass.
 
-**HITL checkpoint:** supervisor posts `git log -5` + verifier report.
-HITL decides whether to push.
+**HITL checkpoint:** supervisor posts `git log -5` + verifier report. HITL
+decides whether to push.
 
 ---
 
@@ -1083,16 +1080,15 @@ Workers report failures with classification tokens. Supervisor responds:
 | `[validation-pre-commit]`       | Surface to HITL with the failing hook name.                                                                                                        |
 | `[commit-rejection]`            | Surface to HITL. Do NOT --no-verify. Fix and recommit.                                                                                             |
 
-Any error not in this table is also surfaced to HITL — workers do not
-improvise.
+Any error not in this table is also surfaced to HITL — workers do not improvise.
 
 ---
 
 ## Appendix A1 — Reserved (server-module template)
 
-The Phase 2 worker prompt embeds the necessary template structure inline.
-Use packages/github-mcp/modules/mcp-server.nix as the reference shape for
-the surrounding lib bindings (mkOption / types / etc.).
+The Phase 2 worker prompt embeds the necessary template structure inline. Use
+packages/github-mcp/modules/mcp-server.nix as the reference shape for the
+surrounding lib bindings (mkOption / types / etc.).
 
 ## Appendix A2 — Tool lists
 
@@ -1261,24 +1257,23 @@ update_work_item
 upload_markdown
 ```
 
-The full `knownTools` list embedded in `meta.tools` is the union of the
-two above, sorted alphabetically — 154 entries.
+The full `knownTools` list embedded in `meta.tools` is the union of the two
+above, sorted alphabetically — 154 entries.
 
 ## Appendix A3 — Inline guardrails (mistakes the prior LLM handoff would have caused)
 
-Embedded in the relevant phases above as `DO NOT` lists. Three guardrails
-worth restating in one place because the original handoff prompt would have
-led a fresh implementer astray on each:
+Embedded in the relevant phases above as `DO NOT` lists. Three guardrails worth
+restating in one place because the original handoff prompt would have led a
+fresh implementer astray on each:
 
 1. **Don't introduce nvfetcher** — this repo uses inline `rev` + `hash` for
    source-built packages and per-platform JSON sidecars for binary-only
-   packages. `nix-update` handles bumps. Phase 1's hash-bootstrap procedure
-   is the standard mechanism.
-2. **Don't set `meta.external = true`** — that flag is for MCP servers that
-   _are themselves_ hosted as remote HTTP services. Self-hosted GitLab is
-   a runtime configuration on a locally-running stdio server; `instanceUrl`
-   handles it.
+   packages. `nix-update` handles bumps. Phase 1's hash-bootstrap procedure is
+   the standard mechanism.
+2. **Don't set `meta.external = true`** — that flag is for MCP servers that _are
+   themselves_ hosted as remote HTTP services. Self-hosted GitLab is a runtime
+   configuration on a locally-running stdio server; `instanceUrl` handles it.
 3. **Don't extend `mkCredentialsOption` with a literal-value tag** — the
    per-credential file/helper schema must stay closed so PATs can't be
-   accidentally placed in the Nix store. The `instanceUrl` plain-string
-   option is declared separately at the module level, opt-in per field.
+   accidentally placed in the Nix store. The `instanceUrl` plain-string option
+   is declared separately at the module level, opt-in per field.

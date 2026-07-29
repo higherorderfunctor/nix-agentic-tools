@@ -2,25 +2,23 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
-> superpowers:executing-plans to implement this plan task-by-task.
-> Steps use checkbox (`- [ ]`) syntax for tracking.
+> superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a parallel-sandbox `packages/mcp-servers/` that
-proves the pythonPackages-style scope pattern works for MCP
-servers (self-assembly + multi-output sub-grouping +
-`config.update.targets` merge-up) without touching any interface
-nixos-config currently consumes.
+**Goal:** Build a parallel-sandbox `packages/mcp-servers/` that proves the
+pythonPackages-style scope pattern works for MCP servers (self-assembly +
+multi-output sub-grouping + `config.update.targets` merge-up) without touching
+any interface nixos-config currently consumes.
 
-**Architecture:** New top-level `packages/mcp-servers/` directory.
-Internally split into `lib/` (factory copy, NOT walked) and
-`packages/` (walked by `lib.filesystem.packagesFromDirectoryRecursive`).
-Three stub MCP packages — one at scope root, two under a
-`modelcontextprotocol/` sub-scope sharing one `source.nix` — exercise
-the scope mechanic, sub-grouping, and shared-source pattern. Each
-package contributes via a sibling `update.nix` to test
+**Architecture:** New top-level `packages/mcp-servers/` directory. Internally
+split into `lib/` (factory copy, NOT walked) and `packages/` (walked by
+`lib.filesystem.packagesFromDirectoryRecursive`). Three stub MCP packages — one
+at scope root, two under a `modelcontextprotocol/` sub-scope sharing one
+`source.nix` — exercise the scope mechanic, sub-grouping, and shared-source
+pattern. Each package contributes via a sibling `update.nix` to test
 `config.update.targets` namespace merge-up. Flake exposes
-`packages.<system>.mcpServerSandbox.*` and a top-level
-`updateTargetsSandbox` attribute. NO existing output is modified.
+`packages.<system>.mcpServerSandbox.*` and a top-level `updateTargetsSandbox`
+attribute. NO existing output is modified.
 
 **Tech Stack:**
 
@@ -30,8 +28,8 @@ package contributes via a sibling `update.nix` to test
 - `lib.filesystem.listFilesRecursive` (update-target walker)
 - `lib.evalModules` (merge-up evaluator)
 - Existing `mkMcpServer` factory copied from `lib/ai/mcpServer/`
-- Stub `pkgs.runCommand` derivations (no real upstream fetches —
-  pilot tests composition, not packaging fidelity)
+- Stub `pkgs.runCommand` derivations (no real upstream fetches — pilot tests
+  composition, not packaging fidelity)
 
 ---
 
@@ -56,25 +54,23 @@ package contributes via a sibling `update.nix` to test
 | `flake.nix`                                                                 | Modified: add `mcpServerSandbox` to per-system packages, add top-level `updateTargetsSandbox`. NO other changes.                                |
 | `docs/archive/name-resolution-gap-analysis.md`                              | Modified: append "Pilot findings" section as friction surfaces.                                                                                 |
 
-**Naming:** `mcpServerSandbox` (not `mcpServerPackages`) for two
-reasons: (1) makes its provisional status obvious, (2) avoids
-collision with future production naming after dedupe.
+**Naming:** `mcpServerSandbox` (not `mcpServerPackages`) for two reasons: (1)
+makes its provisional status obvious, (2) avoids collision with future
+production naming after dedupe.
 
 ---
 
 ## Constraints (apply to every task)
 
-- **Don't break the current interface.** No edits to existing
-  packages, overlays, modules, or shared lib. Sandbox is purely
-  additive. Verification: `nix eval` for `pkgs.effect-mcp` and
-  `homeManagerModules.default` produces byte-identical output
-  before and after this branch.
-- **No nix-store mutations.** Don't `chmod` or `sed` files under
-  `/nix/store/`. (See `.claude/rules/nix-standards.md`.)
-- **`git add` new files** before running `nix flake check` — flakes
-  only see git-tracked files.
-- **Inline hashes only** for any real packaging. (Pilot uses stubs;
-  N/A.)
+- **Don't break the current interface.** No edits to existing packages,
+  overlays, modules, or shared lib. Sandbox is purely additive. Verification:
+  `nix eval` for `pkgs.effect-mcp` and `homeManagerModules.default` produces
+  byte-identical output before and after this branch.
+- **No nix-store mutations.** Don't `chmod` or `sed` files under `/nix/store/`.
+  (See `.claude/rules/nix-standards.md`.)
+- **`git add` new files** before running `nix flake check` — flakes only see
+  git-tracked files.
+- **Inline hashes only** for any real packaging. (Pilot uses stubs; N/A.)
 - **`nix flake check` stays green** after each commit.
 
 ---
@@ -90,7 +86,8 @@ collision with future production naming after dedupe.
 - Create: `packages/mcp-servers/packages/.gitkeep`
 - Create: `packages/mcp-servers/packages/everything/.gitkeep`
 - Create: `packages/mcp-servers/packages/modelcontextprotocol/.gitkeep`
-- Create: `packages/mcp-servers/packages/modelcontextprotocol/filesystem/.gitkeep`
+- Create:
+  `packages/mcp-servers/packages/modelcontextprotocol/filesystem/.gitkeep`
 - Create: `packages/mcp-servers/packages/modelcontextprotocol/memory/.gitkeep`
 
 - [ ] **Step 1: Create the seven empty directories with .gitkeep**
@@ -144,10 +141,14 @@ git commit -m "chore(mcp-servers): create sandbox skeleton"
 
 **Files:**
 
-- Create: `packages/mcp-servers/lib/mkMcpServer.nix` (copy of `lib/ai/mcpServer/mkMcpServer.nix`)
-- Create: `packages/mcp-servers/lib/commonSchema.nix` (copy of `lib/ai/mcpServer/commonSchema.nix`)
-- Create: `packages/mcp-servers/lib/mkServiceModule.nix` (copy of `lib/ai/mcpServer/mkServiceModule.nix`)
-- Create: `packages/mcp-servers/lib/serviceSchema.nix` (copy of `lib/ai/mcpServer/serviceSchema.nix`)
+- Create: `packages/mcp-servers/lib/mkMcpServer.nix` (copy of
+  `lib/ai/mcpServer/mkMcpServer.nix`)
+- Create: `packages/mcp-servers/lib/commonSchema.nix` (copy of
+  `lib/ai/mcpServer/commonSchema.nix`)
+- Create: `packages/mcp-servers/lib/mkServiceModule.nix` (copy of
+  `lib/ai/mcpServer/mkServiceModule.nix`)
+- Create: `packages/mcp-servers/lib/serviceSchema.nix` (copy of
+  `lib/ai/mcpServer/serviceSchema.nix`)
 - Delete: `packages/mcp-servers/lib/.gitkeep`
 
 - [ ] **Step 1: Copy the four factory files**
@@ -162,7 +163,8 @@ rm packages/mcp-servers/lib/.gitkeep
 
 - [ ] **Step 2: Verify byte-identical copies**
 
-Run: `for f in mkMcpServer commonSchema mkServiceModule serviceSchema; do diff -q "lib/ai/mcpServer/${f}.nix" "packages/mcp-servers/lib/${f}.nix"; done`
+Run:
+`for f in mkMcpServer commonSchema mkServiceModule serviceSchema; do diff -q "lib/ai/mcpServer/${f}.nix" "packages/mcp-servers/lib/${f}.nix"; done`
 
 Expected output: empty (no diffs reported).
 
@@ -185,16 +187,19 @@ git commit -m "chore(mcp-servers): copy mkMcpServer factory into sandbox lib"
 
 ### Task 1.1: Verify the scope output does not yet exist
 
-This is the failing-test step. We assert what we want to build by
-verifying it currently fails.
+This is the failing-test step. We assert what we want to build by verifying it
+currently fails.
 
 - [ ] **Step 1: Confirm the output is absent**
 
-Run: `nix eval .#packages.x86_64-linux.mcpServerSandbox 2>&1 || echo PASS-EXPECTED`
+Run:
+`nix eval .#packages.x86_64-linux.mcpServerSandbox 2>&1 || echo PASS-EXPECTED`
 
-Expected output: ends with `error: attribute 'mcpServerSandbox' missing` followed by `PASS-EXPECTED`.
+Expected output: ends with `error: attribute 'mcpServerSandbox' missing`
+followed by `PASS-EXPECTED`.
 
-(If the command succeeds, the sandbox already exists and Phase 1 is no-op — investigate before proceeding.)
+(If the command succeeds, the sandbox already exists and Phase 1 is no-op —
+investigate before proceeding.)
 
 ---
 
@@ -250,11 +255,15 @@ rm -f packages/mcp-servers/.gitkeep packages/mcp-servers/packages/.gitkeep
 
 - [ ] **Step 3: Verify the file evaluates without packages present**
 
-The `packages/` directory is empty of default.nix files at this point, so the scope is empty.
+The `packages/` directory is empty of default.nix files at this point, so the
+scope is empty.
 
-Run: `nix eval --impure --json --expr 'let pkgs = import <nixpkgs> {}; scope = (import ./packages/mcp-servers { inherit (pkgs) lib; inherit pkgs; }).scope; in { hasMkMcpServer = builtins.hasAttr "mkMcpServer" scope; hasCallPackage = builtins.hasAttr "callPackage" scope; hasEverythingPackage = builtins.hasAttr "everything" scope; }'`
+Run:
+`nix eval --impure --json --expr 'let pkgs = import <nixpkgs> {}; scope = (import ./packages/mcp-servers { inherit (pkgs) lib; inherit pkgs; }).scope; in { hasMkMcpServer = builtins.hasAttr "mkMcpServer" scope; hasCallPackage = builtins.hasAttr "callPackage" scope; hasEverythingPackage = builtins.hasAttr "everything" scope; }'`
 
-Expected output: `{"hasCallPackage":true,"hasEverythingPackage":false,"hasMkMcpServer":true}` — factory exposed, no package children yet because the walker found nothing.
+Expected output:
+`{"hasCallPackage":true,"hasEverythingPackage":false,"hasMkMcpServer":true}` —
+factory exposed, no package children yet because the walker found nothing.
 
 - [ ] **Step 4: Commit**
 
@@ -270,17 +279,20 @@ git commit -m "feat(mcp-servers): add sandbox barrel + scope wiring"
 
 **Files:**
 
-- Modify: `flake.nix:215-496` (the `packages = forAllSystems (system: ...)` block — add `mcpServerSandbox` to the returned attrset)
+- Modify: `flake.nix:215-496` (the `packages = forAllSystems (system: ...)`
+  block — add `mcpServerSandbox` to the returned attrset)
 
 - [ ] **Step 1: Read the current `packages` output structure**
 
 Run: `awk '/packages = forAllSystems/,/^    });/' flake.nix | head -40`
 
-Confirm the structure matches what the modification expects: a `let ... in <expr>` whose `<expr>` is an attrset (built via `// { ... }`).
+Confirm the structure matches what the modification expects: a
+`let ... in <expr>` whose `<expr>` is an attrset (built via `// { ... }`).
 
 - [ ] **Step 2: Add the sandbox import inside the `let` binding**
 
-In `flake.nix`, inside the `packages = forAllSystems (system: let ... in ...)` block, locate the existing `let` bindings (around line 217). Add this binding:
+In `flake.nix`, inside the `packages = forAllSystems (system: let ... in ...)`
+block, locate the existing `let` bindings (around line 217). Add this binding:
 
 ```nix
       mcpServerSandbox = (import ./packages/mcp-servers {inherit lib pkgs;}).scope;
@@ -290,7 +302,10 @@ Place it immediately after the `pkgs = pkgsFor system;` line.
 
 - [ ] **Step 3: Add the sandbox to the returned attrset**
 
-The packages output is constructed as `<expr1> // <expr2> // { ... }`. Locate the final `// { ... }` block (starts around line 394 with `// {` after `modelcontextprotocol-all-mcps = ...;`). Add this entry inside that final block, alphabetically between `instructions-kiro` and `modelcontextprotocol-all-mcps`:
+The packages output is constructed as `<expr1> // <expr2> // { ... }`. Locate
+the final `// { ... }` block (starts around line 394 with `// {` after
+`modelcontextprotocol-all-mcps = ...;`). Add this entry inside that final block,
+alphabetically between `instructions-kiro` and `modelcontextprotocol-all-mcps`:
 
 ```nix
         mcpServerSandbox = mcpServerSandbox;
@@ -298,7 +313,8 @@ The packages output is constructed as `<expr1> // <expr2> // { ... }`. Locate th
 
 - [ ] **Step 4: Verify the sandbox shows up under packages**
 
-Run: `nix eval --json .#packages.x86_64-linux.mcpServerSandbox --apply 'scope: { hasMkMcpServer = builtins.hasAttr "mkMcpServer" scope; hasCallPackage = builtins.hasAttr "callPackage" scope; }'`
+Run:
+`nix eval --json .#packages.x86_64-linux.mcpServerSandbox --apply 'scope: { hasMkMcpServer = builtins.hasAttr "mkMcpServer" scope; hasCallPackage = builtins.hasAttr "callPackage" scope; }'`
 
 Expected output: `{"hasCallPackage":true,"hasMkMcpServer":true}`
 
@@ -306,13 +322,16 @@ Expected output: `{"hasCallPackage":true,"hasMkMcpServer":true}`
 
 Run: `nix eval .#packages.x86_64-linux.effect-mcp --apply 'p: p.name'`
 
-Expected output: a string starting with `"effect-mcp-"` followed by a version. (The package itself unchanged.)
+Expected output: a string starting with `"effect-mcp-"` followed by a version.
+(The package itself unchanged.)
 
 - [ ] **Step 6: Run flake check**
 
 Run: `nix flake check 2>&1 | tail -5`
 
-Expected: no new failures versus baseline. (Baseline status: capture before this phase via `git stash; nix flake check 2>&1 | tail -5; git stash pop` if not already known.)
+Expected: no new failures versus baseline. (Baseline status: capture before this
+phase via `git stash; nix flake check 2>&1 | tail -5; git stash pop` if not
+already known.)
 
 - [ ] **Step 7: Commit**
 
@@ -332,7 +351,8 @@ git commit -m "feat(mcp-servers): expose sandbox scope at packages.<system>.mcpS
 
 - [ ] **Step 1: Write the failing assertion (no `everything` yet)**
 
-Run: `nix eval --json .#packages.x86_64-linux.mcpServerSandbox --apply 'scope: builtins.hasAttr "everything" scope'`
+Run:
+`nix eval --json .#packages.x86_64-linux.mcpServerSandbox --apply 'scope: builtins.hasAttr "everything" scope'`
 
 Expected output: `false`
 
@@ -381,15 +401,18 @@ rm packages/mcp-servers/packages/everything/.gitkeep
 
 - [ ] **Step 4: Verify everything appears in the scope without barrel edits**
 
-Run: `nix eval --json .#packages.x86_64-linux.mcpServerSandbox --apply 'scope: builtins.hasAttr "everything" scope'`
+Run:
+`nix eval --json .#packages.x86_64-linux.mcpServerSandbox --apply 'scope: builtins.hasAttr "everything" scope'`
 
 Expected output: `true`
 
-**This is the first self-assembly milestone.** No edit to `packages/mcp-servers/default.nix` was required — the walker picked it up.
+**This is the first self-assembly milestone.** No edit to
+`packages/mcp-servers/default.nix` was required — the walker picked it up.
 
 - [ ] **Step 5: Verify it builds**
 
-Run: `nix build .#packages.x86_64-linux.mcpServerSandbox.everything --no-link --print-out-paths`
+Run:
+`nix build .#packages.x86_64-linux.mcpServerSandbox.everything --no-link --print-out-paths`
 
 Expected output: a `/nix/store/...-mcp-server-everything-stub` path.
 
@@ -423,9 +446,11 @@ git commit -m "feat(mcp-servers): add 'everything' stub — self-assembly milest
 
 - [ ] **Step 1: Confirm absence**
 
-Run: `nix eval .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol 2>&1 || echo PASS-EXPECTED`
+Run:
+`nix eval .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol 2>&1 || echo PASS-EXPECTED`
 
-Expected output: ends with `error: attribute 'modelcontextprotocol' missing` followed by `PASS-EXPECTED`.
+Expected output: ends with `error: attribute 'modelcontextprotocol' missing`
+followed by `PASS-EXPECTED`.
 
 ---
 
@@ -465,9 +490,12 @@ rm packages/mcp-servers/packages/modelcontextprotocol/.gitkeep
 
 - [ ] **Step 3: Verify the sub-scope appears empty (no children yet)**
 
-Run: `nix eval --json .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol --apply 'sub: { hasFilesystem = builtins.hasAttr "filesystem" sub; hasMemory = builtins.hasAttr "memory" sub; hasCallPackage = builtins.hasAttr "callPackage" sub; }'`
+Run:
+`nix eval --json .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol --apply 'sub: { hasFilesystem = builtins.hasAttr "filesystem" sub; hasMemory = builtins.hasAttr "memory" sub; hasCallPackage = builtins.hasAttr "callPackage" sub; }'`
 
-Expected output: `{"hasCallPackage":true,"hasFilesystem":false,"hasMemory":false}` — scope plumbing present, package children not yet contributed.
+Expected output:
+`{"hasCallPackage":true,"hasFilesystem":false,"hasMemory":false}` — scope
+plumbing present, package children not yet contributed.
 
 - [ ] **Step 4: Add to git**
 
@@ -514,15 +542,18 @@ Create `packages/mcp-servers/packages/modelcontextprotocol/source.nix`:
 
 - [ ] **Step 2: Verify it imports without error**
 
-Run: `nix eval --impure --expr 'let pkgs = import <nixpkgs> {}; in (import ./packages/mcp-servers/packages/modelcontextprotocol/source.nix {inherit pkgs;}).name'`
+Run:
+`nix eval --impure --expr 'let pkgs = import <nixpkgs> {}; in (import ./packages/mcp-servers/packages/modelcontextprotocol/source.nix {inherit pkgs;}).name'`
 
 Expected output: `"modelcontextprotocol-servers-source-stub"`
 
 - [ ] **Step 3: Verify packagesFromDirectoryRecursive ignores `source.nix`**
 
-The walker only picks up `default.nix` files in subdirectories, not arbitrary `.nix` files at the same level.
+The walker only picks up `default.nix` files in subdirectories, not arbitrary
+`.nix` files at the same level.
 
-Run: `nix eval --json .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol --apply 'sub: builtins.attrNames sub'`
+Run:
+`nix eval --json .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol --apply 'sub: builtins.attrNames sub'`
 
 Expected output: same as Task 2.2 Step 3 — NO `source` attribute.
 
@@ -539,18 +570,22 @@ git commit -m "feat(mcp-servers): add shared source.nix for modelcontextprotocol
 
 **Files:**
 
-- Create: `packages/mcp-servers/packages/modelcontextprotocol/filesystem/default.nix`
-- Delete: `packages/mcp-servers/packages/modelcontextprotocol/filesystem/.gitkeep`
+- Create:
+  `packages/mcp-servers/packages/modelcontextprotocol/filesystem/default.nix`
+- Delete:
+  `packages/mcp-servers/packages/modelcontextprotocol/filesystem/.gitkeep`
 
 - [ ] **Step 1: Verify filesystem absent**
 
-Run: `nix eval .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol.filesystem 2>&1 || echo PASS-EXPECTED`
+Run:
+`nix eval .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol.filesystem 2>&1 || echo PASS-EXPECTED`
 
 Expected output: ends with attribute missing error and `PASS-EXPECTED`.
 
 - [ ] **Step 2: Write the sub-package**
 
-Create `packages/mcp-servers/packages/modelcontextprotocol/filesystem/default.nix`:
+Create
+`packages/mcp-servers/packages/modelcontextprotocol/filesystem/default.nix`:
 
 ```nix
 # modelcontextprotocol/filesystem stub. Demonstrates shared-source
@@ -599,13 +634,15 @@ rm packages/mcp-servers/packages/modelcontextprotocol/filesystem/.gitkeep
 
 - [ ] **Step 4: Verify it appears in sub-scope**
 
-Run: `nix eval --json .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol --apply 'sub: builtins.hasAttr "filesystem" sub'`
+Run:
+`nix eval --json .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol --apply 'sub: builtins.hasAttr "filesystem" sub'`
 
 Expected output: `true`
 
 - [ ] **Step 5: Verify it builds**
 
-Run: `nix build .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol.filesystem --no-link --print-out-paths`
+Run:
+`nix build .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol.filesystem --no-link --print-out-paths`
 
 Expected: a store path.
 
@@ -623,12 +660,14 @@ git commit -m "feat(mcp-servers): add modelcontextprotocol/filesystem stub"
 
 **Files:**
 
-- Create: `packages/mcp-servers/packages/modelcontextprotocol/memory/default.nix`
+- Create:
+  `packages/mcp-servers/packages/modelcontextprotocol/memory/default.nix`
 - Delete: `packages/mcp-servers/packages/modelcontextprotocol/memory/.gitkeep`
 
 - [ ] **Step 1: Verify memory absent**
 
-Run: `nix eval .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol.memory 2>&1 || echo PASS-EXPECTED`
+Run:
+`nix eval .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol.memory 2>&1 || echo PASS-EXPECTED`
 
 Expected output: attribute missing error followed by `PASS-EXPECTED`.
 
@@ -683,13 +722,15 @@ rm packages/mcp-servers/packages/modelcontextprotocol/memory/.gitkeep
 
 - [ ] **Step 4: Verify it appears**
 
-Run: `nix eval --json .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol --apply 'sub: { hasFilesystem = builtins.hasAttr "filesystem" sub; hasMemory = builtins.hasAttr "memory" sub; }'`
+Run:
+`nix eval --json .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol --apply 'sub: { hasFilesystem = builtins.hasAttr "filesystem" sub; hasMemory = builtins.hasAttr "memory" sub; }'`
 
 Expected output: `{"hasFilesystem":true,"hasMemory":true}`
 
 - [ ] **Step 5: Verify shared-source identity (the multi-output check)**
 
-Both sub-packages should reference the _same_ upstream store path via their `passthru.sharedSource` attribute.
+Both sub-packages should reference the _same_ upstream store path via their
+`passthru.sharedSource` attribute.
 
 Run:
 
@@ -699,11 +740,11 @@ mem_src=$(nix eval --raw .#packages.x86_64-linux.mcpServerSandbox.modelcontextpr
 [ "$fs_src" = "$mem_src" ] && echo "SHARED OK: $fs_src" || echo "DIVERGED: fs=$fs_src mem=$mem_src"
 ```
 
-Expected output: `SHARED OK: /nix/store/...-modelcontextprotocol-servers-source-stub`
+Expected output:
+`SHARED OK: /nix/store/...-modelcontextprotocol-servers-source-stub`
 
-**This is the multi-output-from-one-source milestone.** Both
-sub-packages compose with the same source pin; one source pin
-produces two derivations.
+**This is the multi-output-from-one-source milestone.** Both sub-packages
+compose with the same source pin; one source pin produces two derivations.
 
 - [ ] **Step 6: Build both, run flake check**
 
@@ -760,7 +801,8 @@ Create `packages/mcp-servers/lib/update-options.nix`:
 
 - [ ] **Step 2: Verify it parses by importing it standalone**
 
-Run: `nix eval --impure --expr 'let lib = (import <nixpkgs> {}).lib; in (lib.evalModules { modules = [./packages/mcp-servers/lib/update-options.nix]; }).config.update.targets'`
+Run:
+`nix eval --impure --expr 'let lib = (import <nixpkgs> {}).lib; in (lib.evalModules { modules = [./packages/mcp-servers/lib/update-options.nix]; }).config.update.targets'`
 
 Expected output: `{ }`
 
@@ -834,7 +876,8 @@ in {
 
 - [ ] **Step 3: Verify barrel still evaluates with no contributors**
 
-Run: `nix eval --impure --expr 'let pkgs = import <nixpkgs> {}; in (import ./packages/mcp-servers { inherit (pkgs) lib; inherit pkgs; }).updateTargets'`
+Run:
+`nix eval --impure --expr 'let pkgs = import <nixpkgs> {}; in (import ./packages/mcp-servers { inherit (pkgs) lib; inherit pkgs; }).updateTargets'`
 
 Expected output: `{ }`
 
@@ -857,11 +900,13 @@ git commit -m "feat(mcp-servers): wire update.targets merge-up walker"
 
 Run: `grep -n 'updateMatrix' flake.nix`
 
-Expected output: a line near the start of the flake outputs (around line 126) showing `updateMatrix = import ./config/update-matrix.nix;`.
+Expected output: a line near the start of the flake outputs (around line 126)
+showing `updateMatrix = import ./config/update-matrix.nix;`.
 
 - [ ] **Step 2: Add `updateTargetsSandbox` immediately after `updateMatrix`**
 
-Edit `flake.nix`. Find the `updateMatrix = import ./config/update-matrix.nix;` line and add this directly after it:
+Edit `flake.nix`. Find the `updateMatrix = import ./config/update-matrix.nix;`
+line and add this directly after it:
 
 ```nix
 
@@ -884,7 +929,8 @@ Expected output: `{}` (empty, no contributors yet — that's Task 3.4).
 
 Run: `nix eval --raw .#packages.x86_64-linux.effect-mcp.name`
 
-Expected output: a string starting with `effect-mcp-`. (Existing flat package untouched.)
+Expected output: a string starting with `effect-mcp-`. (Existing flat package
+untouched.)
 
 - [ ] **Step 5: Commit**
 
@@ -929,14 +975,17 @@ Run: `nix eval --json .#updateTargetsSandbox --apply 'builtins.attrNames'`
 
 Expected output: `["everything"]`
 
-**This is the namespace merge-up self-assembly milestone.** No edit
-to any barrel, registry, or list — just creating the file.
+**This is the namespace merge-up self-assembly milestone.** No edit to any
+barrel, registry, or list — just creating the file.
 
 - [ ] **Step 4: Verify the file path resolves correctly**
 
 Run: `nix eval --raw .#updateTargetsSandbox.everything.file`
 
-Expected output: `/nix/store/...-source/packages/mcp-servers/packages/everything/default.nix` (or similar — the important assertion is the suffix `packages/everything/default.nix`).
+Expected output:
+`/nix/store/...-source/packages/mcp-servers/packages/everything/default.nix` (or
+similar — the important assertion is the suffix
+`packages/everything/default.nix`).
 
 - [ ] **Step 5: git add (so flake sees the file), then commit**
 
@@ -951,12 +1000,14 @@ git commit -m "feat(mcp-servers): contribute everything to update.targets merge-
 
 **Files:**
 
-- Create: `packages/mcp-servers/packages/modelcontextprotocol/filesystem/update.nix`
+- Create:
+  `packages/mcp-servers/packages/modelcontextprotocol/filesystem/update.nix`
 - Create: `packages/mcp-servers/packages/modelcontextprotocol/memory/update.nix`
 
 - [ ] **Step 1: Write filesystem contribution**
 
-Create `packages/mcp-servers/packages/modelcontextprotocol/filesystem/update.nix`:
+Create
+`packages/mcp-servers/packages/modelcontextprotocol/filesystem/update.nix`:
 
 ```nix
 {
@@ -987,7 +1038,8 @@ git add packages/mcp-servers/packages/modelcontextprotocol/filesystem/update.nix
 
 - [ ] **Step 4: Verify all three appear**
 
-Run: `nix eval --json .#updateTargetsSandbox --apply 'targets: builtins.sort builtins.lessThan (builtins.attrNames targets)'`
+Run:
+`nix eval --json .#updateTargetsSandbox --apply 'targets: builtins.sort builtins.lessThan (builtins.attrNames targets)'`
 
 Expected output: `["everything","filesystem","memory"]`
 
@@ -1000,7 +1052,9 @@ for name in everything filesystem memory; do
 done
 ```
 
-Expected output: three lines, each ending with the matching package's `default.nix` path (e.g. `everything: /nix/store/...-source/packages/mcp-servers/packages/everything/default.nix`).
+Expected output: three lines, each ending with the matching package's
+`default.nix` path (e.g.
+`everything: /nix/store/...-source/packages/mcp-servers/packages/everything/default.nix`).
 
 - [ ] **Step 6: Run flake check**
 
@@ -1018,9 +1072,9 @@ git commit -m "feat(mcp-servers): contribute modelcontextprotocol/{filesystem,me
 
 ## Phase 4: Self-assembly stress test
 
-This phase validates the (D) feasibility test: adding a NEW
-package after all wiring is done should require ZERO edits to any
-barrel, registry, scope, or walker — just dropping files in place.
+This phase validates the (D) feasibility test: adding a NEW package after all
+wiring is done should require ZERO edits to any barrel, registry, scope, or
+walker — just dropping files in place.
 
 ### Task 4.1: Add `time` as a fourth package
 
@@ -1040,7 +1094,9 @@ Expected output: both lines contain `attribute 'time' missing` errors.
 
 - [ ] **Step 2: Update source.nix to include a `time` subdirectory**
 
-Edit `packages/mcp-servers/packages/modelcontextprotocol/source.nix`. Modify the runCommand body to add a third subdirectory. Replace the existing builder script line that creates `filesystem` and `memory` with one that also creates `time`:
+Edit `packages/mcp-servers/packages/modelcontextprotocol/source.nix`. Modify the
+runCommand body to add a third subdirectory. Replace the existing builder script
+line that creates `filesystem` and `memory` with one that also creates `time`:
 
 ```nix
   pkgs.runCommand "modelcontextprotocol-servers-source-stub" {} ''
@@ -1051,7 +1107,10 @@ Edit `packages/mcp-servers/packages/modelcontextprotocol/source.nix`. Modify the
   ''
 ```
 
-(This is the ONE allowed edit during stress test — the source pin itself needs to know about the new sub-output. If the real implementation moves to `fetchFromGitHub`, this edit becomes unnecessary because the upstream tree already contains all sub-packages.)
+(This is the ONE allowed edit during stress test — the source pin itself needs
+to know about the new sub-output. If the real implementation moves to
+`fetchFromGitHub`, this edit becomes unnecessary because the upstream tree
+already contains all sub-packages.)
 
 - [ ] **Step 3: Write the time package**
 
@@ -1113,19 +1172,22 @@ git add packages/mcp-servers/packages/modelcontextprotocol/source.nix \
 
 - [ ] **Step 6: Verify time appears in scope WITHOUT barrel edits**
 
-Run: `nix eval --json .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol --apply 'sub: { hasFilesystem = builtins.hasAttr "filesystem" sub; hasMemory = builtins.hasAttr "memory" sub; hasTime = builtins.hasAttr "time" sub; }'`
+Run:
+`nix eval --json .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol --apply 'sub: { hasFilesystem = builtins.hasAttr "filesystem" sub; hasMemory = builtins.hasAttr "memory" sub; hasTime = builtins.hasAttr "time" sub; }'`
 
 Expected output: `{"hasFilesystem":true,"hasMemory":true,"hasTime":true}`
 
 - [ ] **Step 7: Verify time appears in update.targets WITHOUT walker edits**
 
-Run: `nix eval --json .#updateTargetsSandbox --apply 'targets: builtins.sort builtins.lessThan (builtins.attrNames targets)'`
+Run:
+`nix eval --json .#updateTargetsSandbox --apply 'targets: builtins.sort builtins.lessThan (builtins.attrNames targets)'`
 
 Expected output: `["everything","filesystem","memory","time"]`
 
 - [ ] **Step 8: Verify the time derivation builds**
 
-Run: `nix build .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol.time --no-link --print-out-paths`
+Run:
+`nix build .#packages.x86_64-linux.mcpServerSandbox.modelcontextprotocol.time --no-link --print-out-paths`
 
 Expected output: a store path.
 
@@ -1138,7 +1200,8 @@ time_src=$(nix eval --raw .#packages.x86_64-linux.mcpServerSandbox.modelcontextp
 [ "$fs_src" = "$mem_src" ] && [ "$mem_src" = "$time_src" ] && echo "ALL SHARED: $fs_src" || echo "DIVERGED"
 ```
 
-Expected output: `ALL SHARED: /nix/store/...-modelcontextprotocol-servers-source-stub`
+Expected output:
+`ALL SHARED: /nix/store/...-modelcontextprotocol-servers-source-stub`
 
 - [ ] **Step 10: Commit**
 
@@ -1152,30 +1215,30 @@ git commit -m "feat(mcp-servers): stress-test self-assembly with time package"
 
 **Files:**
 
-- Modify: `docs/archive/name-resolution-gap-analysis.md` (append findings section)
+- Modify: `docs/archive/name-resolution-gap-analysis.md` (append findings
+  section)
 
 - [ ] **Step 1: Identify friction**
 
-Review the work in Phases 0–4. For each instance where the
-composition felt forced, hand-wired, or required a workaround,
-write a one-paragraph entry. Examples of legitimate findings:
+Review the work in Phases 0–4. For each instance where the composition felt
+forced, hand-wired, or required a workaround, write a one-paragraph entry.
+Examples of legitimate findings:
 
-- "Source.nix had to be edited when adding a new sub-package." (If
-  this surfaced — fetchFromGitHub vs fabricated stub trade-off.)
-- "packagesFromDirectoryRecursive picked up `lib/`-style dirs and
-  required filtering." (If the structure had to be split.)
-- "Update-target walker needed manual filter for `update.nix`
-  suffix; nixpkgs has no built-in primitive."
-- "evalModules required explicit `_module.args.pkgs` injection for
-  contributing files to be importable as modules." (If this came
-  up.)
+- "Source.nix had to be edited when adding a new sub-package." (If this surfaced
+  — fetchFromGitHub vs fabricated stub trade-off.)
+- "packagesFromDirectoryRecursive picked up `lib/`-style dirs and required
+  filtering." (If the structure had to be split.)
+- "Update-target walker needed manual filter for `update.nix` suffix; nixpkgs
+  has no built-in primitive."
+- "evalModules required explicit `_module.args.pkgs` injection for contributing
+  files to be importable as modules." (If this came up.)
 
-If nothing felt forced, write that explicitly: "Pilot composed
-without forced wiring. Self-assembly mechanism per nixpkgs
-`packagesFromDirectoryRecursive` + `lib.filesystem.listFilesRecursive`
+If nothing felt forced, write that explicitly: "Pilot composed without forced
+wiring. Self-assembly mechanism per nixpkgs `packagesFromDirectoryRecursive` +
+`lib.filesystem.listFilesRecursive`
 
-- `evalModules` is sufficient. Multi-output via shared `source.nix`
-  imported by sub-packages requires no special API."
+- `evalModules` is sufficient. Multi-output via shared `source.nix` imported by
+  sub-packages requires no special API."
 
 * [ ] **Step 2: Append the section**
 
@@ -1184,7 +1247,8 @@ Open `docs/archive/name-resolution-gap-analysis.md` and append at the end:
 ```markdown
 ## mcp-servers pilot findings (YYYY-MM-DD)
 
-[One paragraph per finding from Step 1, OR the explicit "no friction" statement.]
+[One paragraph per finding from Step 1, OR the explicit "no friction"
+statement.]
 ```
 
 Replace `YYYY-MM-DD` with today's date.
@@ -1202,8 +1266,8 @@ git commit -m "docs(mcp-servers): capture pilot findings"
 
 ### Task 5.1: Verify nixos-config interface unchanged
 
-This phase confirms the load-bearing constraint: nothing the
-nixos-config consumer reads has changed.
+This phase confirms the load-bearing constraint: nothing the nixos-config
+consumer reads has changed.
 
 - [ ] **Step 1: Capture sample of pre-existing flake outputs**
 
@@ -1225,15 +1289,20 @@ nix eval --json .#lib.ai --apply 'l: builtins.sort builtins.lessThan (builtins.a
 
 - [ ] **Step 2: Compare to baseline**
 
-If a pre-pilot baseline was captured (recommended: capture on `main` or before Phase 0), diff. Otherwise, manual review:
+If a pre-pilot baseline was captured (recommended: capture on `main` or before
+Phase 0), diff. Otherwise, manual review:
 
-- `effect-mcp.name` — should be `effect-mcp-<version>`, no `-sandbox` or `-pilot` suffix.
-- Module import counts should match what they were before Phase 0 (sandbox is NOT imported into either module).
+- `effect-mcp.name` — should be `effect-mcp-<version>`, no `-sandbox` or
+  `-pilot` suffix.
+- Module import counts should match what they were before Phase 0 (sandbox is
+  NOT imported into either module).
 - `lib.ai` keys should be unchanged — no new keys added.
 
 - [ ] **Step 3: Run the cache-hit-parity check**
 
-The repo's existing `checks.cache-hit-parity` validates that overlay packages produce byte-identical store paths across two different nixpkgs pins. If sandbox additions accidentally pulled into the overlay, this would fail.
+The repo's existing `checks.cache-hit-parity` validates that overlay packages
+produce byte-identical store paths across two different nixpkgs pins. If sandbox
+additions accidentally pulled into the overlay, this would fail.
 
 Run: `nix flake check --keep-going 2>&1 | grep -E 'cache-hit-parity|FAIL'`
 
@@ -1283,9 +1352,9 @@ Create `docs/mcp-servers-pilot-results.md`:
 ```markdown
 # mcp-servers Pilot Results
 
-Implementation reference: `docs/archive/mcp-servers-pilot-plan.md`.
-Findings reference: `docs/archive/name-resolution-gap-analysis.md`
-"mcp-servers pilot findings" section.
+Implementation reference: `docs/archive/mcp-servers-pilot-plan.md`. Findings
+reference: `docs/archive/name-resolution-gap-analysis.md` "mcp-servers pilot
+findings" section.
 
 ## Outcome
 
@@ -1294,42 +1363,37 @@ Findings reference: `docs/archive/name-resolution-gap-analysis.md`
 ## Self-assembly verification
 
 - [ ] Adding a new package directory at
-      `packages/mcp-servers/packages/<name>/default.nix` makes it
-      appear at `pkgs.mcpServerSandbox.<name>` without barrel edits.
+      `packages/mcp-servers/packages/<name>/default.nix` makes it appear at
+      `pkgs.mcpServerSandbox.<name>` without barrel edits.
 - [ ] Adding a sibling `update.nix` makes it appear at
       `updateTargetsSandbox.<name>` without walker edits.
-- [ ] Sub-scope (`modelcontextprotocol/`) follows the same pattern
-      recursively.
+- [ ] Sub-scope (`modelcontextprotocol/`) follows the same pattern recursively.
 
 ## Multi-output verification
 
-- [ ] Two+ sub-packages share one `source.nix` via
-      `import ../source.nix`.
+- [ ] Two+ sub-packages share one `source.nix` via `import ../source.nix`.
 - [ ] `passthru.sharedSource` is byte-identical across siblings.
 - [ ] Adding a third sibling reuses the same shared source.
 
 ## (D) feasibility verdict
 
-[1-2 paragraphs: did the composition feel pipe-natural, or did
-specific points require hand-wiring? If hand-wiring was needed,
-which points and why?]
+[1-2 paragraphs: did the composition feel pipe-natural, or did specific points
+require hand-wiring? If hand-wiring was needed, which points and why?]
 
 ## Next steps
 
-If pass: scope dedupe (move/replace `lib/ai/mcpServer/` with the
-sandbox copy), then begin migrating real packages from `packages/<name>-mcp/`
-to `packages/mcp-servers/<name>/` per the slice-nav stay-green
-discipline.
+If pass: scope dedupe (move/replace `lib/ai/mcpServer/` with the sandbox copy),
+then begin migrating real packages from `packages/<name>-mcp/` to
+`packages/mcp-servers/<name>/` per the slice-nav stay-green discipline.
 
-If partial/fail: revise the pattern based on findings; do NOT
-proceed with migration.
+If partial/fail: revise the pattern based on findings; do NOT proceed with
+migration.
 ```
 
 - [ ] **Step 2: Fill in the verdict and checkboxes from actual run results**
 
-Edit the file in place. Replace `[Pass / Fail / Partial]`,
-checkbox states, and the (D) feasibility paragraph with the
-actual outcomes from Phases 1–4.
+Edit the file in place. Replace `[Pass / Fail / Partial]`, checkbox states, and
+the (D) feasibility paragraph with the actual outcomes from Phases 1–4.
 
 - [ ] **Step 3: Commit**
 
@@ -1345,37 +1409,44 @@ git commit -m "docs(mcp-servers): pilot results and (D) feasibility verdict"
 When the plan is fully executed, ALL of these must hold:
 
 - [ ] `nix flake check` passes.
-- [ ] `nix build .#packages.x86_64-linux.effect-mcp` produces an unchanged store path versus pre-pilot baseline.
-- [ ] `nix eval .#homeManagerModules.default.imports` length matches pre-pilot baseline.
-- [ ] `nix eval --json .#packages.x86_64-linux.mcpServerSandbox --apply 'scope: { hasEverything = builtins.hasAttr "everything" scope; hasMkMcpServer = builtins.hasAttr "mkMcpServer" scope; hasModelContextProtocol = builtins.hasAttr "modelcontextprotocol" scope; }'` returns all three booleans `true`.
-- [ ] `nix eval --json .#updateTargetsSandbox --apply 'builtins.attrNames'` returns `["everything","filesystem","memory","time"]`.
-- [ ] All four sandbox derivations build (`mcpServerSandbox.everything`, `.modelcontextprotocol.{filesystem,memory,time}`).
-- [ ] `passthru.sharedSource` byte-identical across all three modelcontextprotocol sub-packages.
-- [ ] No edits to `lib/ai/mcpServer/`, `lib/ai/sharedOptions.nix`, `packages/<existing-name>/`, `homeManagerModules.default`, `devenvModules.nix-agentic-tools`, or `services.mcp-servers.*`.
-- [ ] `docs/archive/name-resolution-gap-analysis.md` has a "mcp-servers pilot findings" section.
+- [ ] `nix build .#packages.x86_64-linux.effect-mcp` produces an unchanged store
+      path versus pre-pilot baseline.
+- [ ] `nix eval .#homeManagerModules.default.imports` length matches pre-pilot
+      baseline.
+- [ ] `nix eval --json .#packages.x86_64-linux.mcpServerSandbox --apply 'scope: { hasEverything = builtins.hasAttr "everything" scope; hasMkMcpServer = builtins.hasAttr "mkMcpServer" scope; hasModelContextProtocol = builtins.hasAttr "modelcontextprotocol" scope; }'`
+      returns all three booleans `true`.
+- [ ] `nix eval --json .#updateTargetsSandbox --apply 'builtins.attrNames'`
+      returns `["everything","filesystem","memory","time"]`.
+- [ ] All four sandbox derivations build (`mcpServerSandbox.everything`,
+      `.modelcontextprotocol.{filesystem,memory,time}`).
+- [ ] `passthru.sharedSource` byte-identical across all three
+      modelcontextprotocol sub-packages.
+- [ ] No edits to `lib/ai/mcpServer/`, `lib/ai/sharedOptions.nix`,
+      `packages/<existing-name>/`, `homeManagerModules.default`,
+      `devenvModules.nix-agentic-tools`, or `services.mcp-servers.*`.
+- [ ] `docs/archive/name-resolution-gap-analysis.md` has a "mcp-servers pilot
+      findings" section.
 - [ ] `docs/mcp-servers-pilot-results.md` exists with verdict.
 
 ---
 
 ## Stop conditions (the (D) test branch)
 
-If during execution any of the following surface, **stop and ask
-for review** rather than power through:
+If during execution any of the following surface, **stop and ask for review**
+rather than power through:
 
-1. `packagesFromDirectoryRecursive` requires a workaround that
-   isn't a simple filter — e.g., custom recursion, manual attr
-   construction, special-case handling for sub-scopes.
-2. `evalModules` rejects the `update.nix` files for any reason
-   other than missing options or syntax errors.
-3. The merge-up walker double-counts files, includes non-update
-   files, or requires post-hoc filtering of its output.
-4. Adding a new package requires ANY edit outside its own
-   directory (other than the `source.nix` edit explicitly allowed
-   in Task 4.1 Step 2 for the multi-output stub).
-5. The factory in `packages/mcp-servers/lib/mkMcpServer.nix`
-   needs modification to work in the sandbox scope (the copy
-   should be byte-identical).
+1. `packagesFromDirectoryRecursive` requires a workaround that isn't a simple
+   filter — e.g., custom recursion, manual attr construction, special-case
+   handling for sub-scopes.
+2. `evalModules` rejects the `update.nix` files for any reason other than
+   missing options or syntax errors.
+3. The merge-up walker double-counts files, includes non-update files, or
+   requires post-hoc filtering of its output.
+4. Adding a new package requires ANY edit outside its own directory (other than
+   the `source.nix` edit explicitly allowed in Task 4.1 Step 2 for the
+   multi-output stub).
+5. The factory in `packages/mcp-servers/lib/mkMcpServer.nix` needs modification
+   to work in the sandbox scope (the copy should be byte-identical).
 
 Each of these is a (D) finding — document in
-`docs/archive/name-resolution-gap-analysis.md` and pause before
-proceeding.
+`docs/archive/name-resolution-gap-analysis.md` and pause before proceeding.

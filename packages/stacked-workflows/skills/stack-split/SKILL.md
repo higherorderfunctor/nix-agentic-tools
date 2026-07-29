@@ -1,10 +1,10 @@
 ---
 name: stack-split
 description: >-
-  Use when you need to break up, split, or decompose a large commit into
-  smaller atomic commits. Use INSTEAD of manual git rebase -i + edit or
-  git reset HEAD^. Prevents: non-working intermediate commits, wrong split
-  ordering, missed downstream restack.
+  Use when you need to break up, split, or decompose a large commit into smaller
+  atomic commits. Use INSTEAD of manual git rebase -i + edit or git reset HEAD^.
+  Prevents: non-working intermediate commits, wrong split ordering, missed
+  downstream restack.
 argument-hint: "[commit]"
 disable-model-invocation: false
 compatibility: "Requires git-branchless"
@@ -51,8 +51,8 @@ defaults to HEAD if not specified.
    - Edge cases / error handling
    - Tests
 
-   Documentation belongs with the feature it documents, not as a separate
-   split. Dependencies and config files go in the commit that first uses them.
+   Documentation belongs with the feature it documents, not as a separate split.
+   Dependencies and config files go in the commit that first uses them.
 
 3. **Propose a split plan** to the user. For each proposed commit:
    - One-sentence description
@@ -103,8 +103,8 @@ defaults to HEAD if not specified.
    ```bash
    git sl
    ```
-   Show the user the new stack. If a test command is available, run tests
-   across the new commits:
+   Show the user the new stack. If a test command is available, run tests across
+   the new commits:
    ```bash
    git test run -x '<test-command>' 'stack()'
    ```
@@ -116,15 +116,15 @@ If the user wants to restructure multiple commits (not just split one), use
 
 ## Tips
 
-- **`git revise -c <hash>` for two-way splits:** Splits a commit into
-  exactly two pieces in-memory (no checkout). Select hunks for the first
-  commit; remainder becomes the second. Faster for simple splits, but
-  limited: no 3+ way splits, no binary files, no empty file additions.
-  Requires `git restack` afterward.
+- **`git revise -c <hash>` for two-way splits:** Splits a commit into exactly
+  two pieces in-memory (no checkout). Select hunks for the first commit;
+  remainder becomes the second. Faster for simple splits, but limited: no 3+ way
+  splits, no binary files, no empty file additions. Requires `git restack`
+  afterward.
 - Format changes should ALWAYS be a separate commit (they dominate diffs and
   hide functional changes)
-- If a file has both refactoring and new logic, use `git add -p` to split
-  hunks within the file
+- If a file has both refactoring and new logic, use `git add -p` to split hunks
+  within the file
 - Prefer too many small commits over too few large ones — they can always be
   squashed later
 - Each commit message should explain WHY, not just WHAT

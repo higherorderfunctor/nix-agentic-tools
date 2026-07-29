@@ -2,33 +2,31 @@
 
 > **Last verified:** 2026-07-23 (commit pending). If you touch
 > `packages/kiro-cli/memory/distiller.ts`,
-> `packages/kiro-cli/lib/autoMemory.nix`,
-> `packages/kiro-cli/lib/mkKiro.nix` (hook-file emission),
-> `overlays/kiro-memory-distiller.nix`,
+> `packages/kiro-cli/lib/autoMemory.nix`, `packages/kiro-cli/lib/mkKiro.nix`
+> (hook-file emission), `overlays/kiro-memory-distiller.nix`,
 > `packages/openmemory-mcp/mem/openmemory-mem.ts`,
 > `packages/openmemory-mcp/modules/mcp-server.nix` (pgvector prestart), or the
 > auto-memory module-eval checks, and this fragment isn't updated in the same
-> commit, stop and fix it. An out-of-date architecture fragment
-> actively misleads the next session — a lie is worse than silence.
+> commit, stop and fix it. An out-of-date architecture fragment actively
+> misleads the next session — a lie is worse than silence.
 
-Persistent, cross-session memory for `kiro-cli` that works **without the
-model choosing to call a tool** — deterministic, harness-driven, a port of
-Claude Code's `.remember/` tiered buffer + `openmemory` archive. The full
-design record + session history is `docs/plans/kiro-cli-auto-memory.md`
-(decision IDs `D#` below reference it); this fragment is the end-to-end
-implementation map.
+Persistent, cross-session memory for `kiro-cli` that works **without the model
+choosing to call a tool** — deterministic, harness-driven, a port of Claude
+Code's `.remember/` tiered buffer + `openmemory` archive. The full design
+record + session history is `docs/plans/kiro-cli-auto-memory.md` (decision IDs
+`D#` below reference it); this fragment is the end-to-end implementation map.
 
 ## The two-problem frame
 
 Every memory design splits into **auto-READ** (get memory into context) and
 **auto-WRITE** (persist memory). On kiro, READ is easy and WRITE is the hard
-half: **v3 has no `SessionEnd`/on-exit hook** — `Stop` fires **per turn**
-(D11) — and **hook stdin is metadata-only** (`{session_id, cwd}`; the
+half: **v3 has no `SessionEnd`/on-exit hook** — `Stop` fires **per turn** (D11)
+— and **hook stdin is metadata-only** (`{session_id, cwd}`; the
 `UserPromptSubmit` `prompt` field is empty, D12). So the write side must
-debounce and read the transcript off disk itself, and the read side cannot
-query on the user's prompt. Both sides are driven by deterministic hooks, "no
-LLM on the hot path" — a shell-hook "distiller" that does deterministic
-extraction + formatting, never summarization.
+debounce and read the transcript off disk itself, and the read side cannot query
+on the user's prompt. Both sides are driven by deterministic hooks, "no LLM on
+the hot path" — a shell-hook "distiller" that does deterministic extraction +
+formatting, never summarization.
 
 ## End-to-end data flow
 
@@ -45,10 +43,10 @@ UserPromptSubmit      →  kiro-memory-recall     read      mainRead()      → 
            READ   ←  now.md (recent tier)  +  openmemory (best-effort: `openmemory-mem query`, seeded by now.md)
 ```
 
-All four hooks live in **one** `.kiro/hooks/kiro-memory.json` `{version:"v1",
-hooks:[…]}` envelope (D30 confirmed kiro fires 3+ hooks from one file live —
-no per-hook split). The three distiller entry points ship as three role bins
-from **one** derivation (`overlays/kiro-memory-distiller.nix`); the
+All four hooks live in **one** `.kiro/hooks/kiro-memory.json`
+`{version:"v1", hooks:[…]}` envelope (D30 confirmed kiro fires 3+ hooks from one
+file live — no per-hook split). The three distiller entry points ship as three
+role bins from **one** derivation (`overlays/kiro-memory-distiller.nix`); the
 `openmemory-mem` backend helper is a fourth bin from a **different** package
 (`openmemory-mcp`).
 
@@ -67,26 +65,26 @@ thin injected wrappers.
 `~/.kiro/sessions/<workspace-hash>/<session_id>/messages.jsonl` is typed-event
 JSONL; each line is `{id, payload, timestamp}` with the discriminator at
 **`payload.type`** (NOT top-level `.type`). A turn is
-`user (no executionId) → turn_start(execId) → assistant*(execId) →
-usage_summary(execId) → turn_end(execId)`, the user prompt associated
-**positionally** (it precedes `turn_start`). Distillation derives from
-`user.content` + `assistant.content where operationType=="Say"` (Reasoning is
-excluded as internal CoT). **`promptTurnSummaries` is BILLING data**
+`user (no executionId) → turn_start(execId) → assistant*(execId) → usage_summary(execId) → turn_end(execId)`,
+the user prompt associated **positionally** (it precedes `turn_start`).
+Distillation derives from `user.content` +
+`assistant.content where operationType=="Say"` (Reasoning is excluded as
+internal CoT). **`promptTurnSummaries` is BILLING data**
 (`usage_summary.promptTurnSummaries[].{usage,usedTools}`), NOT a semantic
-summary — only `usedTools` is kept, as cheap metadata. The transcript is
-located by a **glob** on `session_id` (`locateTranscript`) so the code never
-reproduces kiro's workspace-hash algorithm.
+summary — only `usedTools` is kept, as cheap metadata. The transcript is located
+by a **glob** on `session_id` (`locateTranscript`) so the code never reproduces
+kiro's workspace-hash algorithm.
 
 **Dedup by `execId`, not line offset.** `selectUndistilledTurns` returns only
-`complete && !distilled` turns keyed on the `turn_start` executionId, so a
-turn straddling two runs (turn_start seen, turn_end arrives later) is picked
-up exactly once. Line count feeds ONLY the debounce gate.
+`complete && !distilled` turns keyed on the `turn_start` executionId, so a turn
+straddling two runs (turn_start seen, turn_end arrives later) is picked up
+exactly once. Line count feeds ONLY the debounce gate.
 
 **Debounce OR-gate (D24 — load-bearing).** `shouldDistill` returns
 `enoughNew || cooledDown` (≥`minNewLines` new lines since last run OR
 `cooldownMs` elapsed), skipping only when BOTH are false. The OR is the
-tail-loss fix: under an AND gate a session's final sub-threshold turn was
-never distilled (v3 has no SessionEnd). A fresh session has `lastRunMs=0` ⇒
+tail-loss fix: under an AND gate a session's final sub-threshold turn was never
+distilled (v3 has no SessionEnd). A fresh session has `lastRunMs=0` ⇒
 `cooledDown` trivially true ⇒ the **first `Stop` always distills** the opening
 turn — which also guarantees a `.state` file exists for the flush scan.
 
@@ -94,47 +92,48 @@ turn — which also guarantees a `.state` file exists for the flush scan.
 sub-threshold tail ending within the cooldown) is swept on the next
 `SessionStart` by `flushSessionTails` (`mainFlush`): scan the project's
 `.state/*.json`, and for each **other** session whose transcript grew past its
-recorded `lastTranscriptSize`, `force`-distill it (idempotent via execId
-dedup). A **stat-only size gate** keeps a caught-up session at locate+stat, no
+recorded `lastTranscriptSize`, `force`-distill it (idempotent via execId dedup).
+A **stat-only size gate** keeps a caught-up session at locate+stat, no
 read/parse. A grown-but-no-new-complete-turn run advances **only** the
 `lastTranscriptSize` watermark (not the debounce baselines), so an
-aborted/in-flight tail or a legacy pre-D24 state is stat-skipped after one
-flush instead of re-parsed forever (the review-caught watermark defect).
+aborted/in-flight tail or a legacy pre-D24 state is stat-skipped after one flush
+instead of re-parsed forever (the review-caught watermark defect).
 
 **Tiered file buffer + roll.** `rollTiers` appends new blocks to `now`, then
 cascades oldest-first `now → recent → archive` at `maxNowTurns` (6) /
 `maxRecentTurns` (20). `buffer.json` persists `{now, recent}`; `now.md` /
-`recent.md` are rendered mirrors; `archive.md` is **append-only** (the cold
-tier — its recall counterpart is openmemory, not this file). A corrupt
-`buffer.json` is preserved as `.corrupt` and never silently wiped.
+`recent.md` are rendered mirrors; `archive.md` is **append-only** (the cold tier
+— its recall counterpart is openmemory, not this file). A corrupt `buffer.json`
+is preserved as `.corrupt` and never silently wiped.
 
 **Buffer O_EXCL lock (D23b — load-bearing).** Because `project_id` is
 worktree-shared (below), concurrent distillers in sibling worktrees RMW ONE
 buffer. `withBufferLock` wraps **only** the shared-buffer critical section
 (`loadBuffer → rollTiers → writeAtomic`) with a `linkSync` temp→`.buffer.lock`
-mutex (atomic EEXIST-on-collision, no empty-file window), a `ttlMs`
-stale-break, and an `Atomics.wait` sync backoff (no event loop — matches the
-sync distiller). The per-session `.state/<sid>.json` stays OUTSIDE the lock.
-It is **best-effort by design**: the stale-break/release unlink by path with
-no holder-identity check, so a suspended holder past `ttlMs` admits a
-concurrent section — but the blast radius is bounded to a lost/torn file tier,
-never a lost turn: the whole-file tiers (`buffer.json`, `now.md`, `recent.md`)
-are temp+rename atomic (last-writer-wins), while `archive.md` is an
-`appendFileSync` append (worst case a rare interleave). Dropped turns survive in
-`.state` distilled[] + the backend, missing only from the rebuildable file tier.
+mutex (atomic EEXIST-on-collision, no empty-file window), a `ttlMs` stale-break,
+and an `Atomics.wait` sync backoff (no event loop — matches the sync distiller).
+The per-session `.state/<sid>.json` stays OUTSIDE the lock. It is **best-effort
+by design**: the stale-break/release unlink by path with no holder-identity
+check, so a suspended holder past `ttlMs` admits a concurrent section — but the
+blast radius is bounded to a lost/torn file tier, never a lost turn: the
+whole-file tiers (`buffer.json`, `now.md`, `recent.md`) are temp+rename atomic
+(last-writer-wins), while `archive.md` is an `appendFileSync` append (worst case
+a rare interleave). Dropped turns survive in `.state` distilled[] + the backend,
+missing only from the rebuildable file tier.
 
 **Ordering guarantees inside `distill()`:**
 
 1. State is persisted **before** the backend call — the turns are already
    durably in the file buffer, so a slow/killed backend can't cause a re-
    distill + duplicate.
-2. The file-buffer write is **unconditional** (the tier must survive the
-   backend being down); the backend is a swallowed best-effort loop.
+2. The file-buffer write is **unconditional** (the tier must survive the backend
+   being down); the backend is a swallowed best-effort loop.
 3. On lock-timeout: write NOTHING to the buffer, call NO backend, advance NO
-   baseline, but STILL write `.state` with the loaded values (`skipped:"locked"`)
-   — else a session whose only/final `Stop` timed out on the lock leaves no
-   `.state` and `flushSessionTails` (which discovers by scanning `.state/*.json`)
-   can never rediscover its tail. This was a review-caught data-loss regression.
+   baseline, but STILL write `.state` with the loaded values
+   (`skipped:"locked"`) — else a session whose only/final `Stop` timed out on
+   the lock leaves no `.state` and `flushSessionTails` (which discovers by
+   scanning `.state/*.json`) can never rediscover its tail. This was a
+   review-caught data-loss regression.
 
 ## READ — the hybrid recall hook (`recall`, D31)
 
@@ -146,10 +145,10 @@ anchor is a static Nix-managed file, not a hook read:
   (`inclusion: always`) — a **Nix-managed static file** (a read-only real-file
   copy since the strategy-driven steering materializer; a store symlink before
   that) framing HOW the memory works + the `project_id` convention. It holds NO
-  live content (F6: content is fixed at eval — this is why a SessionStart
-  hook can't "refresh" the steering file, only the buffer it reads).
-- **Recent working context (live).** `mainRead` → `recall()` reads
-  `now.md` and injects it every turn.
+  live content (F6: content is fixed at eval — this is why a SessionStart hook
+  can't "refresh" the steering file, only the buffer it reads).
+- **Recent working context (live).** `mainRead` → `recall()` reads `now.md` and
+  injects it every turn.
 - **Archive RAG (live, best-effort).** A semantic `openmemory` query.
 
 **Option C hybrid (the resolved open question, D31).** The `UserPromptSubmit`
@@ -159,53 +158,55 @@ bounded composer: `<!-- header -->` + `## Recent working context` +
 `## Related from project memory`, each rendered only when non-empty), then
 `boundedTruncate`s to `maxChars` (4000) — a true `length <= maxChars` bound for
 every input, dropping a trailing lone high surrogate so an astral codepoint
-never renders as U+FFFD. Degrades gracefully: backend absent/down ⇒ recent
-tier alone (works TODAY, no daemon). A read hook must NEVER break the turn —
-every failure path injects nothing and exits 0.
+never renders as U+FFFD. Degrades gracefully: backend absent/down ⇒ recent tier
+alone (works TODAY, no daemon). A read hook must NEVER break the turn — every
+failure path injects nothing and exits 0.
 
 **The `BackendQuery` seam** is symmetric with `BackendWrite`: `recall()` takes
 an injected `backendQuery`, and `defaultBackendQuery` shells
-`openmemory-mem query --project-id <id> --limit <n>` (seed on stdin, `""` on
-any failure — stderr dropped so a daemon warning can't leak into context).
+`openmemory-mem query --project-id <id> --limit <n>` (seed on stdin, `""` on any
+failure — stderr dropped so a daemon warning can't leak into context).
 `archiveLimit` is coerced to a positive integer (a fractional
 `KIRO_MEMORY_RECALL_LIMIT` would make the helper exit-2 and silently kill the
 archive tier).
 
 ## `project_id` — the scope key (D19/D20, load-bearing)
 
-`deriveProjectId(gitCommonDir, cwd)` = `${slug(basename(root))}-${sha256(root)[:8]}`
-where `root = dirname(gitCommonDir)`. `git rev-parse
---path-format=absolute --git-common-dir` resolves to the **MAIN** repo's `.git`
-for every linked worktree, so **all worktrees of one repo share one
-`project_id`** (the user requirement). The 8-char hash disambiguates same-
+`deriveProjectId(gitCommonDir, cwd)` =
+`${slug(basename(root))}-${sha256(root)[:8]}` where
+`root = dirname(gitCommonDir)`.
+`git rev-parse --path-format=absolute --git-common-dir` resolves to the **MAIN**
+repo's `.git` for every linked worktree, so **all worktrees of one repo share
+one `project_id`** (the user requirement). The 8-char hash disambiguates same-
 basename repos. Non-git cwd → the cwd itself (with a stderr warning if git is
 missing on PATH, since that silently breaks the worktree-shared scope).
 
 **One key, two consumers.** `project_id` keys BOTH the `~/.kiro-memory/<id>/`
-buffer path AND the openmemory query/write scope — so the read side sees
-exactly what the write side produced. It is derived identically in all three
-role bins (`main`/`mainFlush`/`mainRead` all call `deriveProjectId`);
-reimplementing the git→slug derivation in bash would be a DRY violation + a
-drift risk (D31). Cross-cutting facts (preferences, coding standards) go to
-openmemory's `system_global` scope, not the per-project buffer.
+buffer path AND the openmemory query/write scope — so the read side sees exactly
+what the write side produced. It is derived identically in all three role bins
+(`main`/`mainFlush`/`mainRead` all call `deriveProjectId`); reimplementing the
+git→slug derivation in bash would be a DRY violation + a drift risk (D31).
+Cross-cutting facts (preferences, coding standards) go to openmemory's
+`system_global` scope, not the per-project buffer.
 
 ## Hooks + the env contract (`autoMemory.nix`, D31)
 
-`lib.ai.apps.kiroAutoMemory { lib, pkgs, home?null, env?{}, omEnv?{},
-omPgPasswordFile?null, timeout?30 }` returns `{ hooks; rules; }` — VALUES for
-the `ai.kiro.hooksJson` (raw envelope escape hatch) / `ai.kiro.rules` options
-(no new module axis, B5). `mem.hooks` is a pre-baked JSON envelope, so it rides
-the raw `hooksJson` surface; the typed `ai.kiro.hooks` records are the preferred
-surface for new hooks. A consumer splices:
+`lib.ai.apps.kiroAutoMemory { lib, pkgs, home?null, env?{}, omEnv?{}, omPgPasswordFile?null, timeout?30 }`
+returns `{ hooks; rules; }` — VALUES for the `ai.kiro.hooksJson` (raw envelope
+escape hatch) / `ai.kiro.rules` options (no new module axis, B5). `mem.hooks` is
+a pre-baked JSON envelope, so it rides the raw `hooksJson` surface; the typed
+`ai.kiro.hooks` records are the preferred surface for new hooks. A consumer
+splices:
 
 ```nix
 let mem = lib.ai.apps.kiroAutoMemory { inherit pkgs; home = config.home.homeDirectory; };
 in { ai.kiro.hooksJson = mem.hooks; ai.kiro.rules = mem.rules; }
 ```
 
-Each hook is a strict-mode `writeShellScript` wrapper (`kiro-memory-{stop,
-flush,manual,recall}`) that `exec`s a distiller bin by **absolute store path**
-(`getExe' pkgs.ai.kiro-memory-distiller`). The env contract, in order:
+Each hook is a strict-mode `writeShellScript` wrapper
+(`kiro-memory-{stop, flush,manual,recall}`) that `exec`s a distiller bin by
+**absolute store path** (`getExe' pkgs.ai.kiro-memory-distiller`). The env
+contract, in order:
 
 - **PATH.** `openmemory-mem`'s bin dir (`makeBinPath [openmemory-mcp]`) is
   prepended — bound HERE, not in the distiller overlay, so that package stays
@@ -219,42 +220,42 @@ flush,manual,recall}`) that `exec`s a distiller bin by **absolute store path**
   exactly like `null` (never baked — `export HOME=''` would defeat the guard).
 - **Baked env** = `env // omEnv` (`KIRO_MEMORY_*` tuning + `OM_*` Postgres
   connection), sorted for determinism.
-- **Secret, never baked ([[feedback_mimic_sops_secrets]]).** `OM_PG_PASSWORD`
-  is `cat` from `omPgPasswordFile` (a runtime **string** path — a Nix path
-  would copy the secret into the world-readable store) at wrapper start,
-  best-effort (`|| :`). An `assert` rejects `OM_PG_PASSWORD` in the merged
-  `bakedEnv` (guarding BOTH `env` and `omEnv`, since a secret via either would
-  bake — the review-caught guard gap). Defaults (`omEnv={}`,
-  `omPgPasswordFile=null`) ⇒ backend best-effort-fails ⇒ file buffer alone.
+- **Secret, never baked ([[feedback_mimic_sops_secrets]]).** `OM_PG_PASSWORD` is
+  `cat` from `omPgPasswordFile` (a runtime **string** path — a Nix path would
+  copy the secret into the world-readable store) at wrapper start, best-effort
+  (`|| :`). An `assert` rejects `OM_PG_PASSWORD` in the merged `bakedEnv`
+  (guarding BOTH `env` and `omEnv`, since a secret via either would bake — the
+  review-caught guard gap). Defaults (`omEnv={}`, `omPgPasswordFile=null`) ⇒
+  backend best-effort-fails ⇒ file buffer alone.
 - **Manual forces (D33).** The `kiro-memory-manual` (`/remember`) wrapper — and
   only it — additionally bakes `export KIRO_MEMORY_FORCE=1` (placed AFTER the
   baked env so it wins over a consumer's `env`), making `/remember` bypass the
   debounce for a deterministic immediate distill (D3). `mkWrapper` takes a
-  `force` flag; Manual is exactly the Stop wrapper `+ force`, every other wrapper
-  stays on the normal debounced path.
+  `force` flag; Manual is exactly the Stop wrapper `+ force`, every other
+  wrapper stays on the normal debounced path.
 
 **Env tuning knobs** (all read in `distiller.ts`, defaults in parens):
 `KIRO_MEMORY_SESSIONS_DIR` (`$HOME/.kiro/sessions`), `KIRO_MEMORY_DIR`
 (`$HOME/.kiro-memory`), `KIRO_MEMORY_MAX_NOW` (6), `KIRO_MEMORY_MAX_RECENT`
 (20), `KIRO_MEMORY_MIN_NEW_LINES` (12), `KIRO_MEMORY_COOLDOWN_MS` (90000),
-`KIRO_MEMORY_FORCE` (`"1"` bypasses debounce — baked by the Manual wrapper, D33),
-`KIRO_MEMORY_RECALL_LIMIT` (3),
-`KIRO_MEMORY_RECALL_MAX_CHARS` (4000).
+`KIRO_MEMORY_FORCE` (`"1"` bypasses debounce — baked by the Manual wrapper,
+D33), `KIRO_MEMORY_RECALL_LIMIT` (3), `KIRO_MEMORY_RECALL_MAX_CHARS` (4000).
 
 ## Packaging — the bins (D25/D29)
 
-**Distiller (`overlays/kiro-memory-distiller.nix`, `pkgs.ai.kiro-memory-distiller`).**
-A dependency-free (node: built-ins only — no `buildNpmPackage`/`npmDepsHash`)
-`stdenvNoCC.mkDerivation` over `packages/kiro-cli/memory/`. The repo's bun-
-wrapper idiom (`makeWrapper ${bun}/bin/bun --add-flags <entry>`, not
-`bun build --compile`) emits **three role bins** from one derivation, each
-adding a dispatch flag: `kiro-memory-distiller` (bare → `main`),
-`kiro-memory-flush` (`--flush` → `mainFlush`), `kiro-memory-recall` (`--read`
-→ `mainRead`). `git` is `--suffix`ed onto the wrapper PATH (ambient-first,
-ours as fallback) for the `project_id` derivation. `checkPhase` runs the
-80-test bun suite in-sandbox (a real failure fails the build); `installCheck`
-smokes all three bins with `{}` stdin (exit 0). In-repo source ⇒ `version="0.1.0"`,
-`license=unlicense`, NOT in `config.update.targets`; cache-hit-parity allowlisted.
+**Distiller (`overlays/kiro-memory-distiller.nix`,
+`pkgs.ai.kiro-memory-distiller`).** A dependency-free (node: built-ins only — no
+`buildNpmPackage`/`npmDepsHash`) `stdenvNoCC.mkDerivation` over
+`packages/kiro-cli/memory/`. The repo's bun- wrapper idiom
+(`makeWrapper ${bun}/bin/bun --add-flags <entry>`, not `bun build --compile`)
+emits **three role bins** from one derivation, each adding a dispatch flag:
+`kiro-memory-distiller` (bare → `main`), `kiro-memory-flush` (`--flush` →
+`mainFlush`), `kiro-memory-recall` (`--read` → `mainRead`). `git` is
+`--suffix`ed onto the wrapper PATH (ambient-first, ours as fallback) for the
+`project_id` derivation. `checkPhase` runs the 80-test bun suite in-sandbox (a
+real failure fails the build); `installCheck` smokes all three bins with `{}`
+stdin (exit 0). In-repo source ⇒ `version="0.1.0"`, `license=unlicense`, NOT in
+`config.update.targets`; cache-hit-parity allowlisted.
 
 **Backend helper (`openmemory-mem`, the 3rd bin of `openmemory-mcp`, D29).**
 Shipped from the openmemory package — NOT a separate overlay — so it shares the
@@ -267,9 +268,9 @@ calls). `OM_USER_ID` aligns the write user_id to the daemon tenant
 (`dev-no-auth`) at the consumer flip. Pure core (`parseArgs`/`formatHits`/
 `normalizeRows`/`runMem`) with an injected `MemoryBackend`; the real backend is
 lazy-imported (`./dist/index.js`) only in the `import.meta.main` entry, so the
-bun suite never touches PG. `formatHits` mirrors openmemory's own
-`fmt_matches` so injected context reads identically whether it came from the
-model's tool call or this hook.
+bun suite never touches PG. `formatHits` mirrors openmemory's own `fmt_matches`
+so injected context reads identically whether it came from the model's tool call
+or this hook.
 
 ## Module surface + parity (B5)
 
@@ -281,10 +282,9 @@ model's tool call or this hook.
   record's `file` co-location key groups several records into ONE envelope
   (multiple hooks per file). The memory hooks currently ship as a pre-baked
   envelope through the raw `ai.kiro.hooksJson` escape hatch (`builtins.toJSON`
-  in-module); migrating them to typed records sharing `file = "kiro-memory"`
-  is the destination that retires the escape hatch. On a file-key collision
-  TYPED records win: `mkAllHookFiles` merges `hooksJson // typed`, typed on
-  the right.
+  in-module); migrating them to typed records sharing `file = "kiro-memory"` is
+  the destination that retires the escape hatch. On a file-key collision TYPED
+  records win: `mkAllHookFiles` merges `hooksJson // typed`, typed on the right.
   **CRITICAL — hooks must be REAL files; global `~/.kiro/hooks/` IS read as of
   2.13.0 (re-verified 2026-07-23).** v3's hook loader SKIPS store symlinks
   (`read_dir` keeps only `entry.isFile()`; `kirodotdev/Kiro#9787`), so a
@@ -298,59 +298,59 @@ model's tool call or this hook.
   probe fires nothing. `KIRO_HOME` does NOT relocate the global-hooks dir — the
   loader reads the real `$HOME/.kiro/hooks`. Consequences: **(a)** HM
   `ai.kiro.hooks` delivered as REAL files to `~/.kiro/hooks/` (PR #433's
-  `home.activation.kiroHooks`, not `home.file` symlinks) DOES load under v3; a HM
-  generation predating that fix ships a store SYMLINK and is silently dropped —
-  this (NOT global-ness) is why live-system auto-memory dies under v3, and a
-  consumer repin + re-activation restores it.
-  **(b)** the **devenv** backend writes hooks as REAL files via `enterShell`
+  `home.activation.kiroHooks`, not `home.file` symlinks) DOES load under v3; a
+  HM generation predating that fix ships a store SYMLINK and is silently dropped
+  — this (NOT global-ness) is why live-system auto-memory dies under v3, and a
+  consumer repin + re-activation restores it. **(b)** the **devenv** backend
+  writes hooks as REAL files via `enterShell`
   (`install -m 0644 <writeText> .kiro/hooks/<name>.json`), NOT devenv `files.*`
   symlinks (which v3 skips). Both enterShell fragments (inline hooks and
-  `hooksDir`) run in a subshell anchored to `$DEVENV_ROOT` — enterShell
-  executes in the CALLER's cwd (direnv activates in subdirectories), so an
-  unanchored relative `.kiro/hooks/...` write would land in whatever subdir
-  the shell was entered from. Steering is real files too (see below). Agents
-  and skills, by contrast, LOAD when symlinked — the symlink drop is
-  **per-surface** (hooks + steering only; probed 2026-07-23) — so those emitters
-  stay on symlinks.
+  `hooksDir`) run in a subshell anchored to `$DEVENV_ROOT` — enterShell executes
+  in the CALLER's cwd (direnv activates in subdirectories), so an unanchored
+  relative `.kiro/hooks/...` write would land in whatever subdir the shell was
+  entered from. Steering is real files too (see below). Agents and skills, by
+  contrast, LOAD when symlinked — the symlink drop is **per-surface** (hooks +
+  steering only; probed 2026-07-23) — so those emitters stay on symlinks.
 - `ai.kiro.rules` — attrs-shape ai-common ruleModule → an entry in the derived
   `ai.kiro.steeringFiles` attrset (key `<name>.md`, rendered with
   `inclusion:`/`fileMatchPattern:` frontmatter; `paths=null` →
   `inclusion: always`), BOTH backends. The shared strategy-driven materializer
   (`lib/ai/materialize.nix`) delivers it as a read-only REAL file under
-  `<configDir>/steering/` (copy strategy default; `ai.kiro.steeringStrategy =
-"symlink"` restores the legacy store-symlink shape).
+  `<configDir>/steering/` (copy strategy default;
+  `ai.kiro.steeringStrategy = "symlink"` restores the legacy store-symlink
+  shape).
 
 Because both surfaces ride the existing HM↔devenv fanout, parity is
 **structural-by-construction** — no new module axis. Proven by
-`module-kiro-auto-memory-hm-devenv-parity`: BOTH backends install hooks as
-REAL files carrying the generator output verbatim (PR #433: HM via the
+`module-kiro-auto-memory-hm-devenv-parity`: BOTH backends install hooks as REAL
+files carrying the generator output verbatim (PR #433: HM via the
 `home.activation.kiroHooks` script, devenv via `enterShell`), and steering is
 identical on both (attrset equality over `ai.kiro.steeringFiles` plus a
 writer-output byte check per backend).
 
-> **Correction (settled):** "only hooks need real files" was wrong — the v3
-> hook AND steering loaders keep only `entry.isFile()` entries, dropping
-> symlinked steering as they drop symlinked hooks (`kirodotdev/Kiro#9787`,
-> maintainer-acknowledged; the v2/classic engine follows symlinks fine). The drop is
-> **per-surface, not engine-wide**: agents (`/agent`) and skills
+> **Correction (settled):** "only hooks need real files" was wrong — the v3 hook
+> AND steering loaders keep only `entry.isFile()` entries, dropping symlinked
+> steering as they drop symlinked hooks (`kirodotdev/Kiro#9787`,
+> maintainer-acknowledged; the v2/classic engine follows symlinks fine). The
+> drop is **per-surface, not engine-wide**: agents (`/agent`) and skills
 > (`/context show`) LOAD when symlinked (probed 2026-07-23). So the factory
 > delivers hooks + steering as real files (materializer copy strategy) while
 > agents/skills stay symlinks. The factory steering emitters populate
 > `ai.kiro.steeringFiles` and the shared materializer writes real files;
 > `checks/module-eval.nix` asserts on that attrset plus the writers' heredoc
 > bodies. (The steering symlink-drop was RE-VERIFIED directly 2026-07-23 via
-> `/context show` on both workspace and global scopes — a symlinked steering file
-> is absent from loaded context while the real one loads — independently of the
-> now-stale `run-probe.sh`; see `docs/plans/kiro-v3-scope-probes/`.)
+> `/context show` on both workspace and global scopes — a symlinked steering
+> file is absent from loaded context while the real one loads — independently of
+> the now-stale `run-probe.sh`; see `docs/plans/kiro-v3-scope-probes/`.)
 
-The distiller sync-vs-background choice: **synchronous**
-(D8/D27) — debounced + a file-buffer write + sub-second in the default (no
-backend). The sync path also forks `git` once per `Stop` (for `project_id`) and,
-once the backend is live, `openmemory-mem` once per distilled turn (each capped
-at a 5 s `SIGKILL` timeout) — so with the backend absent/fast kiro's `Stop`
-`timeout` wait is negligible, and the worst case with a reachable-but-slow
-backend is ~5 s per distilled turn. A store-path `nohup &` fork would only add
-fragility. Revisit if the STAGE-5 network SDK write is felt (tuning path P3).
+The distiller sync-vs-background choice: **synchronous** (D8/D27) — debounced +
+a file-buffer write + sub-second in the default (no backend). The sync path also
+forks `git` once per `Stop` (for `project_id`) and, once the backend is live,
+`openmemory-mem` once per distilled turn (each capped at a 5 s `SIGKILL`
+timeout) — so with the backend absent/fast kiro's `Stop` `timeout` wait is
+negligible, and the worst case with a reachable-but-slow backend is ~5 s per
+distilled turn. A store-path `nohup &` fork would only add fragility. Revisit if
+the STAGE-5 network SDK write is felt (tuning path P3).
 
 ## Invariants a reviser MUST NOT break
 
@@ -388,12 +388,13 @@ fragility. Revisit if the STAGE-5 network SDK write is felt (tuning path P3).
   add→query round-trip verified against `automemory`.
 - **Hook delivery + the live gap (activation lag, not scope).** v3 loads
   REAL-file hooks in BOTH the workspace `.kiro/hooks/` and the global
-  `~/.kiro/hooks/` (2.13.0), dropping symlinked ones (see the CRITICAL note under
-  Module surface). devenv delivers project-local real files (`enterShell`); HM
-  delivers real files to the global dir (PR #433). The live gap is that a HM
-  generation predating the real-file fix installs a store SYMLINK, so auto-memory
-  is silently dead under v3 until the consumer repins + re-activates. (Non-nix
-  repos without devenv still want a direnv/manual real-file drop — backlog.)
+  `~/.kiro/hooks/` (2.13.0), dropping symlinked ones (see the CRITICAL note
+  under Module surface). devenv delivers project-local real files
+  (`enterShell`); HM delivers real files to the global dir (PR #433). The live
+  gap is that a HM generation predating the real-file fix installs a store
+  SYMLINK, so auto-memory is silently dead under v3 until the consumer repins +
+  re-activates. (Non-nix repos without devenv still want a direnv/manual
+  real-file drop — backlog.)
 - **Tuning (post-flip, MEASURE first, B4):** per-prompt `openmemory-mem` spawn
   latency (P3 — add a short-TTL cache or async fork if felt); seed strategy
   (whole `now.md` vs last turn vs synthetic keywords); recent-tier depth (add a
@@ -404,7 +405,8 @@ fragility. Revisit if the STAGE-5 network SDK write is felt (tuning path P3).
 - Every run writes a result line to stderr: `[kiro-memory] {…}` /
   `[kiro-memory] flush {…}` / `[kiro-memory] recall error: …`.
 - On-disk state: `~/.kiro-memory/<project_id>/{now,recent,archive}.md`,
-  `buffer.json`, `.state/<session_id>.json`, `.buffer.lock`, `buffer.json.corrupt`.
+  `buffer.json`, `.state/<session_id>.json`, `.buffer.lock`,
+  `buffer.json.corrupt`.
 - Scratch-test without touching real config: set `KIRO_MEMORY_DIR` +
   `KIRO_MEMORY_SESSIONS_DIR` to temp dirs; drive a bin with
   `echo '{"session_id":"…","cwd":"…"}' | kiro-memory-stop` (or `-recall`).

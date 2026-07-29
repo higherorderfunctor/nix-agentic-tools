@@ -1,10 +1,10 @@
 ---
 name: stack-submit
 description: >-
-  Use when you need to push, submit, or create pull requests for a commit
-  stack. Syncs, validates, and pushes INSTEAD of manual git sync + git submit
-  + PR/MR creation. Handles branch creation, stacked PR/MR creation with
-  correct base branches.
+  Use when you need to push, submit, or create pull requests for a commit stack.
+  Syncs, validates, and pushes INSTEAD of manual git sync + git submit + PR/MR
+  creation. Handles branch creation, stacked PR/MR creation with correct base
+  branches.
 argument-hint: "[revset]"
 disable-model-invocation: false
 compatibility: "Requires git-branchless"
@@ -37,8 +37,8 @@ as a revset to select which commits to submit. Default is the current stack.
    git remote -v
    git config remote.pushDefault
    ```
-   If no remote exists, ask the user for the remote URL.
-   If `remote.pushDefault` is not set, set it:
+   If no remote exists, ask the user for the remote URL. If `remote.pushDefault`
+   is not set, set it:
    ```bash
    git config remote.pushDefault origin
    ```
@@ -73,10 +73,9 @@ as a revset to select which commits to submit. Default is the current stack.
    If this is the first push (remote main doesn't exist or has fewer commits),
    sync may be a no-op — that's fine.
 
-   If conflicts are reported (without `--merge`), stop and inform the user
-   which commits conflict. Ask if they want to resolve with
-   `git sync --merge` or handle individually with
-   `git move -b <hash> -d main --merge`.
+   If conflicts are reported (without `--merge`), stop and inform the user which
+   commits conflict. Ask if they want to resolve with `git sync --merge` or
+   handle individually with `git move -b <hash> -d main --merge`.
 
 4. **Run tests across the stack** to validate each commit independently:
 
@@ -88,8 +87,8 @@ as a revset to select which commits to submit. Default is the current stack.
    Cargo.toml, etc.). If no obvious test command exists, ask the user. If the
    project has no tests, skip this step.
 
-   If any commit fails, stop and report which commit(s) failed. Do not submit
-   a stack with failing tests.
+   If any commit fails, stop and report which commit(s) failed. Do not submit a
+   stack with failing tests.
 
 5. **Verify commit messages** — review `git sl` output. Flag any commits with
    vague messages ("fix", "WIP", "update") and suggest rewording with
@@ -125,9 +124,9 @@ as a revset to select which commits to submit. Default is the current stack.
    Ready to push N branches and create N PRs. Proceed? (y/n)
    ```
 
-   **Wait for explicit user approval.** Pushing creates remote branches
-   and PRs — these are visible side effects that cannot be easily undone.
-   This gate is especially important when the skill is auto-invoked via
+   **Wait for explicit user approval.** Pushing creates remote branches and PRs
+   — these are visible side effects that cannot be easily undone. This gate is
+   especially important when the skill is auto-invoked via
    `disable-model-invocation: false`.
 
 8. **Push branches** with `git submit` or `git push`:
@@ -145,11 +144,11 @@ as a revset to select which commits to submit. Default is the current stack.
    git push -u origin <branch-1> <branch-2> ... <branch-N>
    ```
 
-   The `-u` flag sets upstream tracking so tools like lazygit show branches
-   as in-sync with remote.
+   The `-u` flag sets upstream tracking so tools like lazygit show branches as
+   in-sync with remote.
 
-   **Gotcha:** `git submit` skips commits with 2+ branches attached. Ensure
-   one branch per commit.
+   **Gotcha:** `git submit` skips commits with 2+ branches attached. Ensure one
+   branch per commit.
 
    **Gotcha:** `git submit` requires `remote.pushDefault` to be set for
    `--create` mode:
@@ -158,10 +157,10 @@ as a revset to select which commits to submit. Default is the current stack.
    git config remote.pushDefault origin
    ```
 
-9. **Create stacked PRs/MRs** — for each branch, create a
-   pull/merge request targeting the previous branch in the stack (or `main`
-   for the first). Use the commit message as the title. Keep the body
-   minimal — the commit diff speaks for itself.
+9. **Create stacked PRs/MRs** — for each branch, create a pull/merge request
+   targeting the previous branch in the stack (or `main` for the first). Use the
+   commit message as the title. Keep the body minimal — the commit diff speaks
+   for itself.
 
 #### GitHub
 
@@ -209,12 +208,12 @@ branches manually:
 git push --force-with-lease origin <branch-1> <branch-2> ... <branch-N>
 ```
 
-PRs/MRs auto-update when their branches are force-pushed. No need to recreate them.
-Only branches downstream of the changed commit need updating, but pushing all
-is safe — unchanged branches are skipped automatically.
+PRs/MRs auto-update when their branches are force-pushed. No need to recreate
+them. Only branches downstream of the changed commit need updating, but pushing
+all is safe — unchanged branches are skipped automatically.
 
-After each squash-merged PR/MR, you MUST sync, update the next PR/MR's base,
-and force-push remaining branches. Without this, downstream PRs/MRs show the full
+After each squash-merged PR/MR, you MUST sync, update the next PR/MR's base, and
+force-push remaining branches. Without this, downstream PRs/MRs show the full
 diff of all prior commits (the squash merge creates a new commit hash that
 downstream branches don't share).
 
@@ -252,8 +251,8 @@ git fetch origin && git branch -f main origin/main
 git sync --pull     # may only skip one of the two commits
 ```
 
-If `git sync` doesn't skip the already-merged commit, move the remaining
-stack past it:
+If `git sync` doesn't skip the already-merged commit, move the remaining stack
+past it:
 
 ```bash
 git move -s <first-unskipped-hash> -d main
@@ -284,9 +283,9 @@ When a reviewer (human, Copilot, etc.) comments on a specific PR in the stack:
    git checkout <tip-branch>   # e.g. todo/pre-publish or the last PR branch
    ```
 
-5. **Reply to and resolve** each review thread. Replying alone does NOT
-   close the conversation — you must explicitly resolve each thread in the
-   UI or via the platform's API/CLI.
+5. **Reply to and resolve** each review thread. Replying alone does NOT close
+   the conversation — you must explicitly resolve each thread in the UI or via
+   the platform's API/CLI.
 
    #### GitHub
 
@@ -313,14 +312,15 @@ When a reviewer (human, Copilot, etc.) comments on a specific PR in the stack:
 ## Tips
 
 - Always start with `git sl` to understand the stack before submitting.
-- One branch per commit. If a commit has multiple branches, `git submit` skips it.
+- One branch per commit. If a commit has multiple branches, `git submit` skips
+  it.
 - For very large stacks (20+ PRs), consider batching — submit the first 5-10,
   get them merged, then submit the next batch. Reviewers struggle with 20+ open
   PRs at once.
-- **For stacks > 10 commits, script branch creation and PR creation.** Write
-  a standalone bash script (not inline shell — zsh doesn't support bashisms
-  like `${!array[@]}`). Use `#!/usr/bin/env bash` with strict mode. Add
-  `sleep 1` between `gh pr create` calls to avoid GitHub rate limiting.
+- **For stacks > 10 commits, script branch creation and PR creation.** Write a
+  standalone bash script (not inline shell — zsh doesn't support bashisms like
+  `${!array[@]}`). Use `#!/usr/bin/env bash` with strict mode. Add `sleep 1`
+  between `gh pr create` calls to avoid GitHub rate limiting.
 
   Template for scripted stacked PR creation:
 

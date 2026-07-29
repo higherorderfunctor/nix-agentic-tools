@@ -1,28 +1,25 @@
 name: Git bot identity
 description: >-
-  Configure git's author/committer identity for commits a workflow makes
-  on its own behalf. The account's numeric user ID is looked up at run
-  time rather than hardcoded: GitHub's noreply form is
-  "<id>+<login>@users.noreply.github.com", and it is the numeric prefix
-  that makes a commit resolve to the account's profile instead of showing
-  as an unattributed author string. Retried with backoff, since this adds
-  a network dependency to any job that commits.
+  Configure git's author/committer identity for commits a workflow makes on its
+  own behalf. The account's numeric user ID is looked up at run time rather than
+  hardcoded: GitHub's noreply form is "<id>+<login>@users.noreply.github.com",
+  and it is the numeric prefix that makes a commit resolve to the account's
+  profile instead of showing as an unattributed author string. Retried with
+  backoff, since this adds a network dependency to any job that commits.
 
 inputs:
   account:
     description: >-
-      Login of the account to attribute commits to. Defaults to the
-      built-in Actions bot, which is who commits made with GITHUB_TOKEN
-      come from.
+      Login of the account to attribute commits to. Defaults to the built-in
+      Actions bot, which is who commits made with GITHUB_TOKEN come from.
     required: false
     default: github-actions[bot]
   path:
     description: >-
-      Repository checkout to configure, relative to the workspace.
-      Defaults to the workspace root; set it when the repo that will
-      commit is a secondary checkout in a subdirectory (e.g. a gh-pages
-      checkout beside the default-branch checkout that provides this
-      action).
+      Repository checkout to configure, relative to the workspace. Defaults to
+      the workspace root; set it when the repo that will commit is a secondary
+      checkout in a subdirectory (e.g. a gh-pages checkout beside the
+      default-branch checkout that provides this action).
     required: false
     default: "."
   retries:
@@ -31,8 +28,8 @@ inputs:
     default: "3"
   token:
     description: >-
-      Token used for the user lookup. GITHUB_TOKEN is sufficient — the
-      endpoint only reads public profile data.
+      Token used for the user lookup. GITHUB_TOKEN is sufficient — the endpoint
+      only reads public profile data.
     required: true
 
 outputs:

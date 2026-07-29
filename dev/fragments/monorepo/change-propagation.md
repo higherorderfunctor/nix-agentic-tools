@@ -1,7 +1,7 @@
 ## Change Propagation
 
-When removing or renaming a concept, update ALL surfaces that reference
-it in the same commit:
+When removing or renaming a concept, update ALL surfaces that reference it in
+the same commit:
 
 - Fragments and generated instruction files
 - CLAUDE.md, AGENTS.md, Kiro steering, Copilot instructions
@@ -14,6 +14,6 @@ it in the same commit:
 - Overlay export lists
 - Structural check expectations
 
-The structural check (`nix flake check`) validates cross-references.
-The pre-commit hook runs a fast subset. If something is removed, grep
-for it across the repo before committing.
+The structural check (`nix flake check`) validates cross-references. The
+pre-commit hook runs a fast subset. If something is removed, grep for it across
+the repo before committing.

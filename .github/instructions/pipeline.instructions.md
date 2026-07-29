@@ -7,268 +7,236 @@ applyTo: ".github/workflows/update.yml,config/fragment-categories.nix,config/gen
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-07-27 (commit pending — adds the
-> three-valued `git diff --quiet` rule and the `git_diff_quiet`
-> helper every dirtiness gate in the update scripts now goes
-> through; the bare form had routed a git ERROR into "there are
-> changes" in `update-input.sh` and into "the tree is dirty" at
+> **Last verified:** 2026-07-27 (commit pending — adds the three-valued
+> `git diff --quiet` rule and the `git_diff_quiet` helper every dirtiness gate
+> in the update scripts now goes through; the bare form had routed a git ERROR
+> into "there are changes" in `update-input.sh` and into "the tree is dirty" at
 > both of `update-pkg.sh`'s gates. Earlier: the
 > `Detect a newer @aihubmix/mcp on npm` annotation step and the
-> excluded-because-a-local-patch-cannot-be-swept rule behind it, which
-> is about SWEEPABILITY and not about lagging: aihubmix-mcp tracks
-> `dist-tags.latest` and is still excluded. Earlier:
-> the `NAT_UPDATE_JOBS` evaluator budget that killed run 30181958460,
-> the `verify_all_packages` single-definition build gate and the
-> `fix_sidecar_hashes` repair-on-failure retry, and the
-> non-blocking annotation-step family plus the new-pnpm-major raise). If
-> you touch
+> excluded-because-a-local-patch-cannot-be-swept rule behind it, which is about
+> SWEEPABILITY and not about lagging: aihubmix-mcp tracks `dist-tags.latest` and
+> is still excluded. Earlier: the `NAT_UPDATE_JOBS` evaluator budget that killed
+> run 30181958460, the `verify_all_packages` single-definition build gate and
+> the `fix_sidecar_hashes` repair-on-failure retry, and the non-blocking
+> annotation-step family plus the new-pnpm-major raise). If you touch
 > `.github/workflows/update.yml`, `dev/scripts/update-common.sh`,
-> `dev/scripts/update-input.sh`, `dev/scripts/update-pkg.sh`, or the
-> PR creation logic, and this fragment isn't updated in the same
-> commit, stop and fix it.
+> `dev/scripts/update-input.sh`, `dev/scripts/update-pkg.sh`, or the PR creation
+> logic, and this fragment isn't updated in the same commit, stop and fix it.
 
 ### Design: Renovate-style per-dependency PRs
 
-The CI update workflow creates one PR per updated dependency,
-matching Renovate's model. Each dependency is independently
-validated on both platforms (x86_64-linux + aarch64-darwin) via
-the normal ci.yml PR pipeline. A failed darwin build only holds
-back that specific dependency, not the entire batch.
+The CI update workflow creates one PR per updated dependency, matching
+Renovate's model. Each dependency is independently validated on both platforms
+(x86_64-linux + aarch64-darwin) via the normal ci.yml PR pipeline. A failed
+darwin build only holds back that specific dependency, not the entire batch.
 
 ### Trigger
 
 The workflow runs on a **nightly `schedule`** (cron) plus manual
-`workflow_dispatch`; it does NOT run on push. It opens per-dependency
-PRs against the default branch (the `BRANCH_NAME` env is the PR base).
-It previously ran on push to a long-lived integration branch; the
-trunk-based migration moved it to a time-based schedule.
+`workflow_dispatch`; it does NOT run on push. It opens per-dependency PRs
+against the default branch (the `BRANCH_NAME` env is the PR base). It previously
+ran on push to a long-lived integration branch; the trunk-based migration moved
+it to a time-based schedule.
 
 ### Workflow phases
 
 **Phase 1 — Ninja pipeline** (ubuntu runner):
 
-The workflow runs the ninja DAG. Each target updates its
-dependency in an isolated worktree and leaves the resulting
-commits on a per-dependency branch (`update/<name>`). Branches
-are not pushed or merged at this stage — that happens in Phase 2.
+The workflow runs the ninja DAG. Each target updates its dependency in an
+isolated worktree and leaves the resulting commits on a per-dependency branch
+(`update/<name>`). Branches are not pushed or merged at this stage — that
+happens in Phase 2.
 
 **Phase 2 — PR creation** (same ubuntu runner):
 
-After ninja completes, the workflow iterates all `update/*`
-branches. For each branch with commits ahead of the base SHA:
+After ninja completes, the workflow iterates all `update/*` branches. For each
+branch with commits ahead of the base SHA:
 
-1. Force-pushes the branch to origin — unless the change is
-   unchanged from what is already on the remote branch (see
-   "Patch-identity guard" below).
-2. Creates a PR against the working branch (or updates an
-   existing PR's title if one already exists for that branch).
+1. Force-pushes the branch to origin — unless the change is unchanged from what
+   is already on the remote branch (see "Patch-identity guard" below).
+2. Creates a PR against the working branch (or updates an existing PR's title if
+   one already exists for that branch).
 
-On re-run, branches are force-updated and PRs are reused. Same
-behavior as Renovate's rebasing strategy, with the same
-`rebaseWhen: conflicted` exception.
+On re-run, branches are force-updated and PRs are reused. Same behavior as
+Renovate's rebasing strategy, with the same `rebaseWhen: conflicted` exception.
 
 **Phase 3 — Validation** (triggered automatically):
 
-PRs trigger ci.yml's `pull_request` event, which runs builds on
-both linux and darwin runners. PRs that pass both can be merged.
+PRs trigger ci.yml's `pull_request` event, which runs builds on both linux and
+darwin runners. PRs that pass both can be merged.
 
 ### Non-blocking annotation steps
 
 A small family of `if: always()` steps runs after PR creation. Each is
-strict-mode bash that only ever `echo "::warning::…"` — none can fail
-the sweep, and none opens a PR. They exist for changes the pipeline
-deliberately does NOT automate because a human has to decide:
+strict-mode bash that only ever `echo "::warning::…"` — none can fail the sweep,
+and none opens a PR. They exist for changes the pipeline deliberately does NOT
+automate because a human has to decide:
 
-- **`Surface held-back updates as a warning`** — cosmetic red for
-  targets the sweep could not land.
+- **`Surface held-back updates as a warning`** — cosmetic red for targets the
+  sweep could not land.
 - **`Detect upstream copilot-cli SEA restoration`** — evaluates
-  `github-copilot-cli.sourceRoot` on nixos-unstable HEAD; if upstream
-  ships per-platform SEA again, our standalone derivation could go back
-  to being an `overrideAttrs`.
-- **`Detect a new pnpm major upstream`** — compares the highest npm
-  `latest-<N>` dist-tag against the highest `pnpm_<N>` this repo
-  carries, and prompts a human to slide the window (adopt the new
-  major, retire the oldest). Two rules, both load-bearing:
-  - **Key on `latest-<N>`, never `next-<N>`.** Measured 2026-07-25:
-    `next-12` already exists (an alpha) while `latest-12` does not, so
-    a next-keyed detector would fire on every sweep from now on. It
-    would look like a working detector while being pure noise.
+  `github-copilot-cli.sourceRoot` on nixos-unstable HEAD; if upstream ships
+  per-platform SEA again, our standalone derivation could go back to being an
+  `overrideAttrs`.
+- **`Detect a new pnpm major upstream`** — compares the highest npm `latest-<N>`
+  dist-tag against the highest `pnpm_<N>` this repo carries, and prompts a human
+  to slide the window (adopt the new major, retire the oldest). Two rules, both
+  load-bearing:
+  - **Key on `latest-<N>`, never `next-<N>`.** Measured 2026-07-25: `next-12`
+    already exists (an alpha) while `latest-12` does not, so a next-keyed
+    detector would fire on every sweep from now on. It would look like a working
+    detector while being pure noise.
   - **Derive "ours" from the repo**, not a literal. The step reads
-    `pkgs.generic.pnpm_*` attribute names out of
-    `nix eval .#packages.<system>`; a hardcoded major rots silently the
-    moment the window slides, and a detector that has stopped detecting
-    is worse than none.
+    `pkgs.generic.pnpm_*` attribute names out of `nix eval .#packages.<system>`;
+    a hardcoded major rots silently the moment the window slides, and a detector
+    that has stopped detecting is worse than none.
 - **`Detect a newer @aihubmix/mcp on npm`** — compares the registry's
   `dist-tags.latest` against the version this repo pins, derived (never
-  hardcoded) from
-  `nix eval --raw .#packages.x86_64-linux.aihubmix-mcp.version` with the
-  `+<local>` suffix stripped.
+  hardcoded) from `nix eval --raw .#packages.x86_64-linux.aihubmix-mcp.version`
+  with the `+<local>` suffix stripped.
 
-  This one is worth understanding as a RULE, not a special case. A
-  package carrying a local patch against upstream's published BUILD
-  OUTPUT cannot be swept: no update script can re-author a patch, and
-  that is true whether or not the package is currently up to date.
-  aihubmix-mcp now tracks `dist-tags.latest`, so the detector is
-  normally silent — but the exclusion stays, because CURRENCY IS NOT
-  SWEEPABILITY. The measured proof, 2026-07-27: the patch written
-  against 1.0.0 took hunk 1 with fuzz and FAILED hunks 2 and 3 against
-  1.1.0, because `build/tools/painting-tools.js` was rewritten
-  (288 -> 624 lines). It had to be re-authored by hand. A targets row
-  would go RED the next time upstream does that, occupying a channel
-  meant for TRANSIENT failures and training operators to ignore it.
+  This one is worth understanding as a RULE, not a special case. A package
+  carrying a local patch against upstream's published BUILD OUTPUT cannot be
+  swept: no update script can re-author a patch, and that is true whether or not
+  the package is currently up to date. aihubmix-mcp now tracks
+  `dist-tags.latest`, so the detector is normally silent — but the exclusion
+  stays, because CURRENCY IS NOT SWEEPABILITY. The measured proof, 2026-07-27:
+  the patch written against 1.0.0 took hunk 1 with fuzz and FAILED hunks 2 and 3
+  against 1.1.0, because `build/tools/painting-tools.js` was rewritten (288 ->
+  624 lines). It had to be re-authored by hand. A targets row would go RED the
+  next time upstream does that, occupying a channel meant for TRANSIENT failures
+  and training operators to ignore it.
 
-  The pairing — a `config.update.excludePatterns` entry recording the
-  exclusion, plus an annotation step keyed on a repo-derived version —
-  is the honest shape: one HTTP GET per sweep, and any lag stays
-  visible. Do NOT run both this and a targets row; and when a patch is
-  finally dropped (upstream absorbs the feature, or the fork lands),
-  delete the exclusion AND the detector in the same commit that adds
-  the targets row. Detection machinery left behind after the thing it
-  detects became sweepable is dead code.
+  The pairing — a `config.update.excludePatterns` entry recording the exclusion,
+  plus an annotation step keyed on a repo-derived version — is the honest shape:
+  one HTTP GET per sweep, and any lag stays visible. Do NOT run both this and a
+  targets row; and when a patch is finally dropped (upstream absorbs the
+  feature, or the fork lands), delete the exclusion AND the detector in the same
+  commit that adds the targets row. Detection machinery left behind after the
+  thing it detects became sweepable is dead code.
 
 When adding one of these, copy the shape: `if: always()`, no `${{ }}`
-interpolation of external data into the shell, and an explicit no-op
-message on the negative branch so a silent step is distinguishable from
-a dead one.
+interpolation of external data into the shell, and an explicit no-op message on
+the negative branch so a silent step is distinguishable from a dead one.
 
 ### Formatter passes (per-input and per-package)
 
 Both worktree update scripts run `nix fmt` before their commit so the
 per-dependency PR ships treefmt-clean files. PR CI's `treefmt-check`
-(`checks.formatting`) runs on each PR branch in isolation, and the
-base-branch `full-format` ninja rule only runs post-merge — too late
-to gate a PR — so each branch must normalize its own tree. The two
-paths differ in their **trigger**:
+(`checks.formatting`) runs on each PR branch in isolation, and the base-branch
+`full-format` ninja rule only runs post-merge — too late to gate a PR — so each
+branch must normalize its own tree. The two paths differ in their **trigger**:
 
-- **`update-input.sh` (Phase 2.5)** runs `nix fmt` only when the input
-  bump moves `formatter.<system>`'s store path (a new
-  prettier/alejandra/biome version wants different output across the
-  whole tree). Detail below.
-- **`update-pkg.sh`** runs `run_build nix fmt` whenever the update left
-  a dirty tree. The trigger is "the updateScript regenerated a file,"
-  not "the formatter moved": a package's custom updateScript can emit
-  non-canonical output even when the formatter is unchanged. The
-  motivating case is `claude-code`'s `extraExtract`, which `cp`'s
-  `jq`-pretty-printed JSON (every array multi-line) over
-  `overlays/claude-code-extracted.json`; biome collapses short arrays
-  (e.g. `effortLevels`) onto one line, so the raw `cp` drifts from
-  treefmt-clean. The `extraExtract` hook also formats its own output
-  directly (defense in depth — the hook stays correct when invoked
-  outside the pipeline); the `update-pkg.sh` pass is the general net
-  for any future package updateScript. Gated on a dirty tree so a
-  no-op update doesn't create a spurious reformat commit.
+- **`update-input.sh` (Phase 2.5)** runs `nix fmt` only when the input bump
+  moves `formatter.<system>`'s store path (a new prettier/alejandra/biome
+  version wants different output across the whole tree). Detail below.
+- **`update-pkg.sh`** runs `run_build nix fmt` whenever the update left a dirty
+  tree. The trigger is "the updateScript regenerated a file," not "the formatter
+  moved": a package's custom updateScript can emit non-canonical output even
+  when the formatter is unchanged. The motivating case is `claude-code`'s
+  `extraExtract`, which `cp`'s `jq`-pretty-printed JSON (every array multi-line)
+  over `overlays/claude-code-extracted.json`; biome collapses short arrays (e.g.
+  `effortLevels`) onto one line, so the raw `cp` drifts from treefmt-clean. The
+  `extraExtract` hook also formats its own output directly (defense in depth —
+  the hook stays correct when invoked outside the pipeline); the `update-pkg.sh`
+  pass is the general net for any future package updateScript. Gated on a dirty
+  tree so a no-op update doesn't create a spurious reformat commit.
 
 #### Per-input formatter pass (`update-input.sh` Phase 2.5)
 
-Between build verification and the commit, `update-input.sh`
-conditionally runs `nix fmt` inside the per-input worktree —
-only when the input bump actually moves `formatter.<system>`'s
-store path — and `git add -A`'s any reformatted files into the
-pending commit. The gate captures `nix eval --raw
-.#formatter.x86_64-linux.outPath` before `nix flake update` and
-again after build verification; identical store paths mean the
-formatter hasn't changed and `nix fmt` is skipped. Most inputs
-(devenv, git-branchless, rust-overlay, etc.) don't carry new
-prettier / alejandra / biome versions, so unconditionally running
-`nix fmt` per target added ~15–20 minutes per pipeline run for
-no benefit.
+Between build verification and the commit, `update-input.sh` conditionally runs
+`nix fmt` inside the per-input worktree — only when the input bump actually
+moves `formatter.<system>`'s store path — and `git add -A`'s any reformatted
+files into the pending commit. The gate captures
+`nix eval --raw .#formatter.x86_64-linux.outPath` before `nix flake update` and
+again after build verification; identical store paths mean the formatter hasn't
+changed and `nix fmt` is skipped. Most inputs (devenv, git-branchless,
+rust-overlay, etc.) don't carry new prettier / alejandra / biome versions, so
+unconditionally running `nix fmt` per target added ~15–20 minutes per pipeline
+run for no benefit.
 
-When the formatter does move (typically a `nixpkgs` bump, or an
-input that follows nixpkgs for treefmt-nix), the pass catches the
-case where a new formatter version wants different output than
-the existing repo files. Without it, the `update/<name>` PR ships
-only the lock change and PR CI's `treefmt-check` fails because
-the docs / other files no longer round-trip through the bumped
-formatter.
+When the formatter does move (typically a `nixpkgs` bump, or an input that
+follows nixpkgs for treefmt-nix), the pass catches the case where a new
+formatter version wants different output than the existing repo files. Without
+it, the `update/<name>` PR ships only the lock change and PR CI's
+`treefmt-check` fails because the docs / other files no longer round-trip
+through the bumped formatter.
 
-`nix fmt` exits 0 on successful in-place formatting regardless
-of whether files changed (we do not pass `--fail-on-change`), so
-a non-zero exit here is a real formatter error and correctly
-aborts the worktree subshell → reports HELD BACK.
+`nix fmt` exits 0 on successful in-place formatting regardless of whether files
+changed (we do not pass `--fail-on-change`), so a non-zero exit here is a real
+formatter error and correctly aborts the worktree subshell → reports HELD BACK.
 
-This requires `projectRootFile = "flake.nix"` in `treefmt.nix`:
-treefmt-nix's default `projectRootFile = ".git/config"` does not
-exist inside a git worktree (where `.git` is a gitfile pointer,
-not a directory), so the default would make `nix fmt` error in
-every worktree.
+This requires `projectRootFile = "flake.nix"` in `treefmt.nix`: treefmt-nix's
+default `projectRootFile = ".git/config"` does not exist inside a git worktree
+(where `.git` is a gitfile pointer, not a directory), so the default would make
+`nix fmt` error in every worktree.
 
-The base-branch `full-format` ninja rule still runs after the
-per-input pipeline as a safety net for the rare case where two
-simultaneous input bumps interact in a way the per-input passes
-do not catch on their own.
+The base-branch `full-format` ninja rule still runs after the per-input pipeline
+as a safety net for the rare case where two simultaneous input bumps interact in
+a way the per-input passes do not catch on their own.
 
 ### `git diff --quiet` is three-valued — use `git_diff_quiet`
 
-Every dirtiness gate in the update scripts goes through
-`git_diff_quiet` in `update-common.sh`. Do not open-code
-`git diff --quiet` in a test position; the helper exists because
-that status is **not a boolean**:
+Every dirtiness gate in the update scripts goes through `git_diff_quiet` in
+`update-common.sh`. Do not open-code `git diff --quiet` in a test position; the
+helper exists because that status is **not a boolean**:
 
     0   no difference
     1   difference
     >1  git ITSELF failed (commonly 128 — bad revision,
         unreadable path, corrupt index)
 
-Testing it for truthiness folds the error into one of the two
-normal answers, and **which** one depends on whether the test is
-negated — so one defect presents in OPPOSITE directions at
-different call sites and neither looks wrong read locally.
-`if git diff --quiet` reads an error as "there ARE changes";
-`if ! git diff --quiet` reads it as "the tree is dirty". The
-second is the failure-becomes-a-commit shape that
-`config/generate-update-ninja.nix`'s `full-format` rule body had
-to close with the same discriminate-by-value idiom (that rule body
-cannot call the helper — it is a ninja `command =` string, so it
+Testing it for truthiness folds the error into one of the two normal answers,
+and **which** one depends on whether the test is negated — so one defect
+presents in OPPOSITE directions at different call sites and neither looks wrong
+read locally. `if git diff --quiet` reads an error as "there ARE changes";
+`if ! git diff --quiet` reads it as "the tree is dirty". The second is the
+failure-becomes-a-commit shape that `config/generate-update-ninja.nix`'s
+`full-format` rule body had to close with the same discriminate-by-value idiom
+(that rule body cannot call the helper — it is a ninja `command =` string, so it
 carries the `case` inline, with `$$` escaping).
 
-`git_diff_quiet` returns 0 or 1 exactly like the bare command, and
-on >1 names the real cause and exits the calling shell with git's
-status. Callers therefore stay free to chain with `||`: a
-short-circuit can only skip a diff that is already answered, never
-one that errored.
+`git_diff_quiet` returns 0 or 1 exactly like the bare command, and on >1 names
+the real cause and exits the calling shell with git's status. Callers therefore
+stay free to chain with `||`: a short-circuit can only skip a diff that is
+already answered, never one that errored.
 
-Call it from inside a target's **reporting subshell** — the `( … )`
-whose failure the caller turns into `report_held_back`. That is
-what converts the error exit into the one report line every target
-owes; from a target's main shell it would exit with no report entry
-at all.
+Call it from inside a target's **reporting subshell** — the `( … )` whose
+failure the caller turns into `report_held_back`. That is what converts the
+error exit into the one report line every target owes; from a target's main
+shell it would exit with no report entry at all.
 
 Two properties are worth keeping in mind when reading these gates:
 
-- **A short-circuited pair is ONE gate, not two.**
-  `update-pkg.sh` tests `! …diff || ! …diff --staged` twice. Under
-  the bare form a failure of the FIRST invocation skipped the
-  second entirely, so a single fault flipped BOTH gates at once —
-  the redundant reformat AND the commit/amend. Reasoning about
+- **A short-circuited pair is ONE gate, not two.** `update-pkg.sh` tests
+  `! …diff || ! …diff --staged` twice. Under the bare form a failure of the
+  FIRST invocation skipped the second entirely, so a single fault flipped BOTH
+  gates at once — the redundant reformat AND the commit/amend. Reasoning about
   either gate in isolation understates it.
-- **Do not sweep this class by grepping the shape you last saw.**
-  The first sweep matched `git diff --quiet` literally and missed
-  the two `git -C "$wt" diff --quiet` call sites for that reason
-  alone. Enumerate every invocation whose exit status is consumed,
-  then judge each.
+- **Do not sweep this class by grepping the shape you last saw.** The first
+  sweep matched `git diff --quiet` literally and missed the two
+  `git -C "$wt" diff --quiet` call sites for that reason alone. Enumerate every
+  invocation whose exit status is consumed, then judge each.
 
-Prove changes here with a **four-outcome** control set — 0, 1, >1,
-and the negated/short-circuit variant — driving the >1 case with a
-stubbed `git` whose `diff` exits above 1 while every other
-subcommand execs the real binary. Reasoning is not a substitute:
-the `full-format` fix read as correct twice before a control caught
-that it still routed an error into the commit branch. Measured on
-the pre-fix scripts, with `git diff` forced to 128 and the tree
-genuinely unchanged: `update-input.sh` ran the FULL
-`nix-fast-build` verification of every package and reported the
-cause as "update or build failed", and when the input HAD moved it
-reported plain `UPDATED` with the git fault invisible;
-`update-pkg.sh` ran a pointless `nix fmt` and then
-`commit --amend --no-edit`, which succeeds on an unchanged tree, so
-a green sweep silently rewrote the update commit.
+Prove changes here with a **four-outcome** control set — 0, 1, >1, and the
+negated/short-circuit variant — driving the >1 case with a stubbed `git` whose
+`diff` exits above 1 while every other subcommand execs the real binary.
+Reasoning is not a substitute: the `full-format` fix read as correct twice
+before a control caught that it still routed an error into the commit branch.
+Measured on the pre-fix scripts, with `git diff` forced to 128 and the tree
+genuinely unchanged: `update-input.sh` ran the FULL `nix-fast-build`
+verification of every package and reported the cause as "update or build
+failed", and when the input HAD moved it reported plain `UPDATED` with the git
+fault invisible; `update-pkg.sh` ran a pointless `nix fmt` and then
+`commit --amend --no-edit`, which succeeds on an unchanged tree, so a green
+sweep silently rewrote the update commit.
 
 ### GitHub App token
 
-PRs created with the default `GITHUB_TOKEN` do NOT trigger
-cross-workflow events (GitHub security feature to prevent
-recursive workflow triggers). This workflow uses a GitHub App
-token (`nix-agentic-tools-bot`) instead. App installation tokens
-DO trigger `pull_request` events in ci.yml.
+PRs created with the default `GITHUB_TOKEN` do NOT trigger cross-workflow events
+(GitHub security feature to prevent recursive workflow triggers). This workflow
+uses a GitHub App token (`nix-agentic-tools-bot`) instead. App installation
+tokens DO trigger `pull_request` events in ci.yml.
 
 The App needs these permissions:
 
@@ -280,74 +248,65 @@ Self-triggering is prevented by checking the actor:
 
 ### IFD warm step
 
-Before the ninja pipeline runs, a warm step forces all IFD
-source fetches (see the IFD patterns fragment for details). This
-ensures `nix-update` (which internally runs `nix-instantiate`)
-can evaluate packages that use `builtins.readFile` on fetched
-sources. Without this step, nix-update crashes on cold runners.
+Before the ninja pipeline runs, a warm step forces all IFD source fetches (see
+the IFD patterns fragment for details). This ensures `nix-update` (which
+internally runs `nix-instantiate`) can evaluate packages that use
+`builtins.readFile` on fetched sources. Without this step, nix-update crashes on
+cold runners.
 
 ### Patch-identity guard
 
-The base SHA comparison below only detects "this branch has no
-commits". It cannot detect "this branch has the same commits as
-last run, rebased onto a newer base" — and because every run
-rebuilds each worktree from the _current_ base, the tip SHA
-always differs. The unconditional force-push therefore fired a
-duplicate 4-job CI run per dependency on every pipeline run, to
-re-validate a byte-identical patch. Measured on `update/devenv`:
-heads `595acf55` (parent `010dbe15`) and `6b51fe30` (parent
-`06da1e47`) both hash to patch-id `692bc6a5…`.
+The base SHA comparison below only detects "this branch has no commits". It
+cannot detect "this branch has the same commits as last run, rebased onto a
+newer base" — and because every run rebuilds each worktree from the _current_
+base, the tip SHA always differs. The unconditional force-push therefore fired a
+duplicate 4-job CI run per dependency on every pipeline run, to re-validate a
+byte-identical patch. Measured on `update/devenv`: heads `595acf55` (parent
+`010dbe15`) and `6b51fe30` (parent `06da1e47`) both hash to patch-id
+`692bc6a5…`.
 
 Before pushing, the workflow compares `git patch-id --stable` of
-`base_sha..<branch>` against the same computation for the remote
-branch over _its_ own merge-base. `patch-id` hashes the diff
-alone, so a pure rebase onto an _unchanged_ base compares equal
-and the push is skipped.
+`base_sha..<branch>` against the same computation for the remote branch over
+_its_ own merge-base. `patch-id` hashes the diff alone, so a pure rebase onto an
+_unchanged_ base compares equal and the push is skipped.
 
 Three conditions keep the guard honest:
 
-- **Empty patch-id is never a match.** An empty diff hashes to
-  the empty string; treating that as equality would collapse
-  every no-op branch together.
-- **A `CONFLICTING` PR is pushed anyway.** Otherwise a skipped
-  branch could rot against a base it no longer applies to. This
-  is Renovate's `rebaseWhen: conflicted` in effect. Note the
-  working branch has no protection rule requiring branches be
-  up to date, so an unrebased-but-mergeable PR still merges.
-- **A branch behind the current base is rebased anyway.** The
-  guard skips only when the remote branch's merge-base with the
-  current base equals the base tip (`old_base == base_head`). If
-  the base branch has advanced since the PR was last pushed, the
-  branch is force-pushed even when the dependency patch is
-  byte-identical, so the PR re-runs CI against the base it will
-  actually merge into. This is Renovate's
-  `rebaseWhen: behind-base-branch` layered on top of
-  `conflicted`; it lets a PR self-heal after a base-branch CI fix
-  instead of staying pinned to a stale, possibly broken base.
+- **Empty patch-id is never a match.** An empty diff hashes to the empty string;
+  treating that as equality would collapse every no-op branch together.
+- **A `CONFLICTING` PR is pushed anyway.** Otherwise a skipped branch could rot
+  against a base it no longer applies to. This is Renovate's
+  `rebaseWhen: conflicted` in effect. Note the working branch has no protection
+  rule requiring branches be up to date, so an unrebased-but-mergeable PR still
+  merges.
+- **A branch behind the current base is rebased anyway.** The guard skips only
+  when the remote branch's merge-base with the current base equals the base tip
+  (`old_base == base_head`). If the base branch has advanced since the PR was
+  last pushed, the branch is force-pushed even when the dependency patch is
+  byte-identical, so the PR re-runs CI against the base it will actually merge
+  into. This is Renovate's `rebaseWhen: behind-base-branch` layered on top of
+  `conflicted`; it lets a PR self-heal after a base-branch CI fix instead of
+  staying pinned to a stale, possibly broken base.
 
-**A skipped branch must still be recorded in
-`touched-branches`.** The stale-PR step closes _and deletes_ any
-`update/*` PR missing from that file, so a silent skip would
-make the pipeline close its own valid PR and recreate it on the
-next run — strictly worse than the duplicate CI it was meant to
-avoid.
+**A skipped branch must still be recorded in `touched-branches`.** The stale-PR
+step closes _and deletes_ any `update/*` PR missing from that file, so a silent
+skip would make the pipeline close its own valid PR and recreate it on the next
+run — strictly worse than the duplicate CI it was meant to avoid.
 
 ### Base SHA comparison
 
-The workflow records the branch HEAD before the ninja pipeline
-as `base_sha`. After ninja completes, each `update/*` branch is
-compared against this SHA. Branches where HEAD equals `base_sha`
-are skipped (no changes — the dependency was already at latest).
-This avoids creating empty PRs or force-pushing unchanged
-branches.
+The workflow records the branch HEAD before the ninja pipeline as `base_sha`.
+After ninja completes, each `update/*` branch is compared against this SHA.
+Branches where HEAD equals `base_sha` are skipped (no changes — the dependency
+was already at latest). This avoids creating empty PRs or force-pushing
+unchanged branches.
 
 ### Branch name extraction
 
-`git branch --list 'update/*'` output includes markers for
-worktree-checked-out branches (prefixed with `+`). The workflow
-strips these with `tr -d ' *+'` before using the branch name.
-Forgetting this causes branch operations to fail with cryptic
-errors about branches named `+ update/foo`.
+`git branch --list 'update/*'` output includes markers for worktree-checked-out
+branches (prefixed with `+`). The workflow strips these with `tr -d ' *+'`
+before using the branch name. Forgetting this causes branch operations to fail
+with cryptic errors about branches named `+ update/foo`.
 
 ### Environment requirements
 
@@ -361,162 +320,151 @@ errors about branches named `+ update/foo`.
 
 ### The evaluator budget is MULTIPLICATIVE — `NAT_UPDATE_JOBS`
 
-ninja runs `$NAT_UPDATE_JOBS` targets concurrently, and every
-target that actually changed runs its OWN `nix-fast-build`, whose
-defaults are sized for it running ALONE on the box (verified in
-`nix_fast_build/options.py` @ 1.6.0):
+ninja runs `$NAT_UPDATE_JOBS` targets concurrently, and every target that
+actually changed runs its OWN `nix-fast-build`, whose defaults are sized for it
+running ALONE on the box (verified in `nix_fast_build/options.py` @ 1.6.0):
 
     --eval-workers          multiprocessing.cpu_count()
     --eval-max-memory-size  4096      # MiB, PER WORKER
 
-Under ninja those MULTIPLY. On the 4-vCPU / 16 GiB `ubuntu-latest`
-runner a bare `-j4` is `4 x 4 x 4 GiB` = **64 GiB of evaluator heap
-budget against 16 GiB of RAM**, plus 16 evaluator processes fighting
-over 4 cores and one eval-cache SQLite file.
+Under ninja those MULTIPLY. On the 4-vCPU / 16 GiB `ubuntu-latest` runner a bare
+`-j4` is `4 x 4 x 4 GiB` = **64 GiB of evaluator heap budget against 16 GiB of
+RAM**, plus 16 evaluator processes fighting over 4 cores and one eval-cache
+SQLite file.
 
-This is INVISIBLE while targets are unchanged — an unchanged target
-exits before build verification and never spawns an evaluator at
-all — which is why the sweep looks healthy for months. It bites when
-several inputs move at once against a COLD eval cache, exactly what a
-`nixpkgs` bump guarantees, since that invalidates the eval cache for
-the whole package set.
+This is INVISIBLE while targets are unchanged — an unchanged target exits before
+build verification and never spawns an evaluator at all — which is why the sweep
+looks healthy for months. It bites when several inputs move at once against a
+COLD eval cache, exactly what a `nixpkgs` bump guarantees, since that
+invalidates the eval cache for the whole package set.
 
-That is what killed run `30181958460`, twice on the same commit:
-`nixpkgs`, `nixpkgs-test` and `devenv` all updated, the pipeline went
-silent with four `nix-eval-jobs` processes live, and the runner was
-torn down with `The runner has received a shutdown signal` +
-exit 143 (SIGTERM) — 6m59s into attempt 1, 19m27s into attempt 2.
+That is what killed run `30181958460`, twice on the same commit: `nixpkgs`,
+`nixpkgs-test` and `devenv` all updated, the pipeline went silent with four
+`nix-eval-jobs` processes live, and the runner was torn down with
+`The runner has received a shutdown signal` + exit 143 (SIGTERM) — 6m59s into
+attempt 1, 19m27s into attempt 2.
 
-**Diagnostic trap:** that is NOT a timeout and NOT a concurrency
-cancel. A 60-minute `timeout-minutes` hit reports conclusion
-`cancelled` (control: run `30074075218`, duration `1:00:22`), and so
-does a `cancel-in-progress` kill. Both attempts here reported
-`failure`. Do not "fix" this class of death by raising
-`timeout-minutes` — it is a resource bound, not a time bound.
+**Diagnostic trap:** that is NOT a timeout and NOT a concurrency cancel. A
+60-minute `timeout-minutes` hit reports conclusion `cancelled` (control: run
+`30074075218`, duration `1:00:22`), and so does a `cancel-in-progress` kill.
+Both attempts here reported `failure`. Do not "fix" this class of death by
+raising `timeout-minutes` — it is a resource bound, not a time bound.
 
-`nfb_eval_flags` in `update-common.sh` bounds the PRODUCT, deriving
-both knobs from the machine so a bigger runner uses its headroom
-automatically:
+`nfb_eval_flags` in `update-common.sh` bounds the PRODUCT, deriving both knobs
+from the machine so a bigger runner uses its headroom automatically:
 
-- never more than ONE evaluator per core across all concurrent
-  invocations — `jobs * floor(cores/jobs) <= cores`
-- total evaluator heap ceiling <= 60% of RAM (the rest is the nix
-  daemon, git, and the runner agent — the agent being the process
-  whose death produces the shutdown signal)
+- never more than ONE evaluator per core across all concurrent invocations —
+  `jobs * floor(cores/jobs) <= cores`
+- total evaluator heap ceiling <= 60% of RAM (the rest is the nix daemon, git,
+  and the runner agent — the agent being the process whose death produces the
+  shutdown signal)
 
-The first invariant holds only because **`NAT_UPDATE_JOBS` is itself
-clamped to the core count**. `nfb_eval_flags` cannot give an invocation
-fewer than one evaluator, so once there are more concurrent targets than
-cores the evaluator total is pinned at the target count and no
-per-invocation budget can pull it back. Fewer targets is the only lever.
-Measured, cores=2 / jobs=4: workers-per-invocation clamps to 1 and the
-total lands at 4 evaluators on 2 cores.
+The first invariant holds only because **`NAT_UPDATE_JOBS` is itself clamped to
+the core count**. `nfb_eval_flags` cannot give an invocation fewer than one
+evaluator, so once there are more concurrent targets than cores the evaluator
+total is pinned at the target count and no per-invocation budget can pull it
+back. Fewer targets is the only lever. Measured, cores=2 / jobs=4:
+workers-per-invocation clamps to 1 and the total lands at 4 evaluators on 2
+cores.
 
 The second invariant is stronger — it holds for ANY jobs value, because
-per-worker is `(RAM*0.6)/(jobs*workers)` and the product telescopes back
-to `RAM*0.6` exactly.
+per-worker is `(RAM*0.6)/(jobs*workers)` and the product telescopes back to
+`RAM*0.6` exactly.
 
-**Do not "make this consistent"** by substituting `min(jobs, cores)`
-into the memory divisor as well. The divisor must be the number of
-invocations that will ACTUALLY run concurrently; shrinking it while
-ninja still spawns `jobs` of them inflates the per-worker ceiling.
-Measured, cores=2 / jobs=4 / 16 GiB: that variant yields **119% of RAM**
-— the exact failure class this machinery exists to prevent.
+**Do not "make this consistent"** by substituting `min(jobs, cores)` into the
+memory divisor as well. The divisor must be the number of invocations that will
+ACTUALLY run concurrently; shrinking it while ninja still spawns `jobs` of them
+inflates the per-worker ceiling. Measured, cores=2 / jobs=4 / 16 GiB: that
+variant yields **119% of RAM** — the exact failure class this machinery exists
+to prevent.
 
 `NAT_UPDATE_JOBS` is ONE knob feeding both consumers on purpose, and the
-workflow **sources `update-common.sh`** rather than reading its own env
-var so it gets the CLAMPED value. Clamping in the library while ninja
-still ran `-j4` from the raw env var would fix nothing. Changing ninja's
-`-j` without changing the evaluator budget silently re-creates the
-overcommit.
+workflow **sources `update-common.sh`** rather than reading its own env var so
+it gets the CLAMPED value. Clamping in the library while ninja still ran `-j4`
+from the raw env var would fix nothing. Changing ninja's `-j` without changing
+the evaluator budget silently re-creates the overcommit.
 
 ### Build verification gate (`run_nfb_build` / `verify_all_packages`)
 
-`update-input.sh` and the `final-build` ninja rule both invoke
-`nix-fast-build` to verify peer packages still build after an
-input change. The invocation itself lives in ONE place,
-`verify_all_packages` — three callers need it byte-identical, and
-when the copies drifted they silently verified different things.
+`update-input.sh` and the `final-build` ninja rule both invoke `nix-fast-build`
+to verify peer packages still build after an input change. The invocation itself
+lives in ONE place, `verify_all_packages` — three callers need it
+byte-identical, and when the copies drifted they silently verified different
+things.
 
-Upstream has a known bug where `async_main`'s
-`finally: stack.aclose()` can swallow non-zero exit on the
-build-failure path — per-build failures silently exit 0. Effect:
-a broken peer package would let `nixpkgs` (or any other input
+Upstream has a known bug where `async_main`'s `finally: stack.aclose()` can
+swallow non-zero exit on the build-failure path — per-build failures silently
+exit 0. Effect: a broken peer package would let `nixpkgs` (or any other input
 update) ship as UPDATED instead of HELD BACK.
 
-`run_nfb_build` in `update-common.sh` defends against this with
-four independent gates — any of them tripping fails the build:
+`run_nfb_build` in `update-common.sh` defends against this with four independent
+gates — any of them tripping fails the build:
 
 1. **Exit code** — `nix-fast-build`'s own exit code is non-zero.
-2. **JSON result file** — `--result-file <path> --result-format json`
-   is appended to the caller's command, then `jq` checks for any
-   `success: false` entry. Empty/missing file is also a failure
-   (we asked for one; not getting one means verification was
-   incomplete).
+2. **JSON result file** — `--result-file <path> --result-format json` is
+   appended to the caller's command, then `jq` checks for any `success: false`
+   entry. Empty/missing file is also a failure (we asked for one; not getting
+   one means verification was incomplete).
 3. **Stderr grep — build failures** — the consistent
-   `ERROR:nix_fast_build:BUILD: N successes, M failures` line
-   with `M > 0` is matched against captured stderr. This is the
-   tripwire that caught CI run 26473689694 when (1) and (2)
-   both missed.
+   `ERROR:nix_fast_build:BUILD: N successes, M failures` line with `M > 0` is
+   matched against captured stderr. This is the tripwire that caught CI run
+   26473689694 when (1) and (2) both missed.
 4. **Stderr grep — evaluation failures** — the distinct
-   `ERROR:nix_fast_build:EVAL: N successes, M failures` line with
-   `M > 0` is matched against captured stderr. Eval-time throws
-   (e.g. an input bump that breaks a package's `fetchPnpmDeps`)
-   never become builds, so they are invisible to gates 1-3.
+   `ERROR:nix_fast_build:EVAL: N successes, M failures` line with `M > 0` is
+   matched against captured stderr. Eval-time throws (e.g. an input bump that
+   breaks a package's `fetchPnpmDeps`) never become builds, so they are
+   invisible to gates 1-3.
 
-`|| exit_code=$?` localizes errexit suppression to the single
-nix-fast-build call — no blanket `set +e`. All four gates run
-unconditionally so failure signals are always logged together.
+`|| exit_code=$?` localizes errexit suppression to the single nix-fast-build
+call — no blanket `set +e`. All four gates run unconditionally so failure
+signals are always logged together.
 
 ### Stale sidecar hashes self-heal (`fix_sidecar_hashes`)
 
-`mkUpdateScript` rebuilds a sidecar FROM SCRATCH on every write, so
-`vendorHash` (and bruno's `srcHash`/`npmDepsHash`) survive only
-because the overlays re-derive them through `extraExtract`. That
-covers the VERSION-BUMP path and nothing else.
+`mkUpdateScript` rebuilds a sidecar FROM SCRATCH on every write, so `vendorHash`
+(and bruno's `srcHash`/`npmDepsHash`) survive only because the overlays
+re-derive them through `extraExtract`. That covers the VERSION-BUMP path and
+nothing else.
 
-A **nixpkgs or Go-toolchain bump can invalidate a `vendorHash` with
-no version change at all.** `extraExtract` never fires, so nothing
-re-derives the hash. The stale hash then fails the input bump's own
-build verification and the input is reported HELD BACK — the
-breakage does NOT leak into the tree, but every later `nixpkgs`
-update parks behind a hash a human has to fix by hand.
+A **nixpkgs or Go-toolchain bump can invalidate a `vendorHash` with no version
+change at all.** `extraExtract` never fires, so nothing re-derives the hash. The
+stale hash then fails the input bump's own build verification and the input is
+reported HELD BACK — the breakage does NOT leak into the tree, but every later
+`nixpkgs` update parks behind a hash a human has to fix by hand.
 
-So Phase 2 retries ONCE through `fix_sidecar_hashes`: it discovers
-every `passthru.fixVendorHash` / `passthru.fixNpmDepsHash` across
-`packages.<system>` and runs it, then re-verifies. The correction
-lands in the same commit as the lock change, so the PR is green.
+So Phase 2 retries ONCE through `fix_sidecar_hashes`: it discovers every
+`passthru.fixVendorHash` / `passthru.fixNpmDepsHash` across `packages.<system>`
+and runs it, then re-verifies. The correction lands in the same commit as the
+lock change, so the PR is green.
 
 Three properties are load-bearing:
 
-- **Repair-on-failure, not a prophylactic sweep.** A healthy bump
-  pays nothing. Running the fixers up-front would drive a separate
-  `nix build` per fixer per changed input.
-- **The roster is DISCOVERED, never listed.** A hardcoded list would
-  silently stop covering the next absorbed Go package, and a fixer
-  that has quietly stopped firing is worse than no fixer.
-- **Collect, don't abort.** One package genuinely broken by the bump
-  must not stop the others self-healing; the retry build is the
-  authority on whether the tree is good.
+- **Repair-on-failure, not a prophylactic sweep.** A healthy bump pays nothing.
+  Running the fixers up-front would drive a separate `nix build` per fixer per
+  changed input.
+- **The roster is DISCOVERED, never listed.** A hardcoded list would silently
+  stop covering the next absorbed Go package, and a fixer that has quietly
+  stopped firing is worse than no fixer.
+- **Collect, don't abort.** One package genuinely broken by the bump must not
+  stop the others self-healing; the retry build is the authority on whether the
+  tree is good.
 
-Exposure grew from zero to four Go packages in a single slice
-(`#513`), so this widens with every Go absorption.
+Exposure grew from zero to four Go packages in a single slice (`#513`), so this
+widens with every Go absorption.
 
 ### Sidecar logging and forensic preservation
 
 Every ninja rule wraps its script invocation in
-`2>&1 | tee .update-logs/<target>.log` to capture per-target
-output independently of ninja's stdout capture (which buffers
-until child exit). The `Diagnostic dump` step (`if: always()`)
-in `update.yml` globs `.update-logs/*` and surfaces every file
-under `::group::log: <name>` collapsible sections — works on
-success, failure, cancel, and timeout.
+`2>&1 | tee .update-logs/<target>.log` to capture per-target output
+independently of ninja's stdout capture (which buffers until child exit). The
+`Diagnostic dump` step (`if: always()`) in `update.yml` globs `.update-logs/*`
+and surfaces every file under `::group::log: <name>` collapsible sections —
+works on success, failure, cancel, and timeout.
 
-`run_nfb_build` writes its forensic data
-(`nfb-result-XXXXXX.json` + `nfb-stderr-XXXXXX.log`) into the
-same `.update-logs/` dir. On gate failure the files are
-preserved for the Diagnostic dump to surface; on success they
-are cleaned up.
+`run_nfb_build` writes its forensic data (`nfb-result-XXXXXX.json` +
+`nfb-stderr-XXXXXX.log`) into the same `.update-logs/` dir. On gate failure the
+files are preserved for the Diagnostic dump to surface; on success they are
+cleaned up.
 
 The directory is gitignored.
 
@@ -532,213 +480,193 @@ The directory is gitignored.
 
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-07-24 (commit pending — the
-> `packagePaths` + `devFragmentNames` registries dissolved into
-> `config.fragments.categories`). If you touch
-> `lib/fragments.nix`, `config/fragment-categories.nix`,
-> `lib/fragments-registry.nix`, `dev/generate.nix`,
-> `packages/fragments-ai/`, or any content-package
-> `passthru.fragments` surface and this fragment isn't updated in the
-> same commit, stop and fix it. This is a cross-cutting pipeline —
-> changes that look small in one file frequently ripple into
-> generator outputs for four ecosystems.
+> **Last verified:** 2026-07-24 (commit pending — the `packagePaths` +
+> `devFragmentNames` registries dissolved into `config.fragments.categories`).
+> If you touch `lib/fragments.nix`, `config/fragment-categories.nix`,
+> `lib/fragments-registry.nix`, `dev/generate.nix`, `packages/fragments-ai/`, or
+> any content-package `passthru.fragments` surface and this fragment isn't
+> updated in the same commit, stop and fix it. This is a cross-cutting pipeline
+> — changes that look small in one file frequently ripple into generator outputs
+> for four ecosystems.
 
 ### The four layers
 
-The fragment pipeline is deliberately layered so the same markdown
-source can fan out to many different consumers without duplication:
+The fragment pipeline is deliberately layered so the same markdown source can
+fan out to many different consumers without duplication:
 
-1. **Primitives (`lib/fragments.nix`)** — pure, target-agnostic.
-   Defines `mkFragment { text, description, paths, priority }`,
-   `compose { fragments, ... }` (priority sort + SHA256 dedup +
-   concat), `mkFrontmatter` (flat attrset → YAML header), and
-   `render` (applies a transform to a composed fragment). No file
-   I/O, no ecosystem knowledge, no hardcoded paths.
+1. **Primitives (`lib/fragments.nix`)** — pure, target-agnostic. Defines
+   `mkFragment { text, description, paths, priority }`,
+   `compose { fragments, ... }` (priority sort + SHA256 dedup + concat),
+   `mkFrontmatter` (flat attrset → YAML header), and `render` (applies a
+   transform to a composed fragment). No file I/O, no ecosystem knowledge, no
+   hardcoded paths.
 
-2. **Topic packages (`packages/fragments-ai/`)** — derivations that
-   bundle content templates together with per-ecosystem transforms.
-   Transforms are exposed via `passthru.transforms` (fragments-ai).
-   These are the eval-time API — callers pull them via
-   `pkgs.fragments-ai.passthru.transforms.claude` etc.
+2. **Topic packages (`packages/fragments-ai/`)** — derivations that bundle
+   content templates together with per-ecosystem transforms. Transforms are
+   exposed via `passthru.transforms` (fragments-ai). These are the eval-time API
+   — callers pull them via `pkgs.fragments-ai.passthru.transforms.claude` etc.
 
 3. **Content packages (`packages/coding-standards/`,
-   `packages/stacked-workflows/`, etc.)** — derivations that ship
-   markdown files in the store AND expose the same files as
-   typed fragments via `passthru.fragments` and `passthru.presets`.
-   Consumers and the dev generator both read from the same
-   passthru surface.
+   `packages/stacked-workflows/`, etc.)** — derivations that ship markdown files
+   in the store AND expose the same files as typed fragments via
+   `passthru.fragments` and `passthru.presets`. Consumers and the dev generator
+   both read from the same passthru surface.
 
-4. **Orchestration (`dev/generate.nix`)** — composes dev-only
-   fragments with published fragments, applies transforms, and
-   produces the final output strings for each ecosystem +
-   AGENTS.md + README + CONTRIBUTING.
+4. **Orchestration (`dev/generate.nix`)** — composes dev-only fragments with
+   published fragments, applies transforms, and produces the final output
+   strings for each ecosystem + AGENTS.md + README + CONTRIBUTING.
 
 ### Data flow for a scoped rule file
 
-Concrete example: generating `.claude/rules/claude-code.md` from
-the `claude-code` category:
+Concrete example: generating `.claude/rules/claude-code.md` from the
+`claude-code` category:
 
-1. `mkDevComposed "claude-code"` in `dev/generate.nix` reads the
-   fragment sources from
-   `config.fragments.categories.claude-code.sources` and calls
+1. `mkDevComposed "claude-code"` in `dev/generate.nix` reads the fragment
+   sources from `config.fragments.categories.claude-code.sources` and calls
    `mkDevFragment` on each. The location discriminator
-   (`"dev" | "devshell" | "package"`) controls where on disk the
-   markdown is read from.
-2. `compose { fragments = devFrags; }` sorts by priority, dedupes
-   by SHA256, and concatenates. Scoped categories do NOT include
-   commonFragments — only the root `monorepo` profile does, to
-   avoid duplicating shared content across always-loaded common.md
-   and every scoped rule file.
+   (`"dev" | "devshell" | "package"`) controls where on disk the markdown is
+   read from.
+2. `compose { fragments = devFrags; }` sorts by priority, dedupes by SHA256, and
+   concatenates. Scoped categories do NOT include commonFragments — only the
+   root `monorepo` profile does, to avoid duplicating shared content across
+   always-loaded common.md and every scoped rule file.
 3. `mkEcosystemFile "claude-code"` looks up the path scope in
-   `config.fragments.categories.claude-code.scopes` and returns a
-   set of per-ecosystem
-   renderers. The claude renderer wraps `aiTransforms.claude
-{ package = "claude-code"; }` which emits `paths:` frontmatter
-   as a YAML list.
-4. The flake derivation `packages.<system>.instructions-claude`
-   stores the result at a nix store path.
+   `config.fragments.categories.claude-code.scopes` and returns a set of
+   per-ecosystem renderers. The claude renderer wraps
+   `aiTransforms.claude { package = "claude-code"; }` which emits `paths:`
+   frontmatter as a YAML list.
+4. The flake derivation `packages.<system>.instructions-claude` stores the
+   result at a nix store path.
 5. The devenv task `generate:instructions:claude` runs
-   `nix build .#instructions-claude`, then copies
-   `$out/rules/claude-code.md` to the working tree.
+   `nix build .#instructions-claude`, then copies `$out/rules/claude-code.md` to
+   the working tree.
 
-The same composed fragment runs through `copilot`, `kiro`, and
-`agentsmd` transforms for the other outputs. Single source,
-four ecosystem shapes.
+The same composed fragment runs through `copilot`, `kiro`, and `agentsmd`
+transforms for the other outputs. Single source, four ecosystem shapes.
 
 ### The transforms in detail
 
-`packages/fragments-ai/default.nix` defines exactly four
-transforms, all curried as `(transform-args)` then `(fragment)`:
+`packages/fragments-ai/default.nix` defines exactly four transforms, all curried
+as `(transform-args)` then `(fragment)`:
 
-- `claude { package }` — emits a YAML header with `description:`
-  and `paths:`. Handles three `paths` shapes: null (no paths
-  key), list (YAML list with quoted entries), string (verbatim).
-  Description has a smart default: "Instructions for the
-  ${package} package" when paths are set and description is null,
+- `claude { package }` — emits a YAML header with `description:` and `paths:`.
+  Handles three `paths` shapes: null (no paths key), list (YAML list with quoted
+  entries), string (verbatim). Description has a smart default: "Instructions
+  for the ${package} package" when paths are set and description is null,
   otherwise omitted or passed through.
-- `copilot` — emits `applyTo:` as a quoted string. List input
-  is joined with commas (Copilot's native multi-glob syntax).
-  Null input defaults to `applyTo: "**"` (global fallback).
-- `kiro { name }` — emits `inclusion: always | fileMatch`,
-  `name: ${name}`, and optionally `description:` +
-  `fileMatchPattern:`. The pattern uses a quoted string for
-  single-element lists and inline YAML array syntax for
-  multi-element lists. Kiro docs explicitly require array
-  form for multi-pattern — a previous comma-joined string
-  form was silently interpreted as one literal pattern and
+- `copilot` — emits `applyTo:` as a quoted string. List input is joined with
+  commas (Copilot's native multi-glob syntax). Null input defaults to
+  `applyTo: "**"` (global fallback).
+- `kiro { name }` — emits `inclusion: always | fileMatch`, `name: ${name}`, and
+  optionally `description:` + `fileMatchPattern:`. The pattern uses a quoted
+  string for single-element lists and inline YAML array syntax for multi-element
+  lists. Kiro docs explicitly require array form for multi-pattern — a previous
+  comma-joined string form was silently interpreted as one literal pattern and
   matched nothing. Fix landed in commit 5a97f09.
-- `agentsmd` — identity function. Returns `fragment.text` raw,
-  no frontmatter. AGENTS.md is a flat, always-loaded file; there's
-  nothing to scope.
+- `agentsmd` — identity function. Returns `fragment.text` raw, no frontmatter.
+  AGENTS.md is a flat, always-loaded file; there's nothing to scope.
 
 ### Orchestration details worth knowing
 
-- **Scoped files skip commonFragments.** Before commit 1075bc4,
-  every scoped rule file prepended the full coding-standards
-  header on top of its scope-specific content, duplicating ~80
-  lines against always-loaded common.md. Fixed in
-  `mkDevComposed` by gating `commonFragments` on `package == "monorepo"`.
-- **Dev fragment location discriminator.** Since commit de3dd12,
-  each entry in `config.fragments.categories.<category>.sources`
-  may be either a bare string (legacy, reads
-  `dev/fragments/<category>/<name>.md`) or an attrset
+- **Scoped files skip commonFragments.** Before commit 1075bc4, every scoped
+  rule file prepended the full coding-standards header on top of its
+  scope-specific content, duplicating ~80 lines against always-loaded common.md.
+  Fixed in `mkDevComposed` by gating `commonFragments` on
+  `package == "monorepo"`.
+- **Dev fragment location discriminator.** Since commit de3dd12, each entry in
+  `config.fragments.categories.<category>.sources` may be either a bare string
+  (legacy, reads `dev/fragments/<category>/<name>.md`) or an attrset
   `{ location, name, dir }`:
   - `location = "dev"` (default) → `dev/fragments/<dir>/<name>.md`
   - `location = "package"` → `packages/<dir>/docs/<name>.md`
-  - `location = "devshell"` → `devshell/<dir>/docs/<name>.md`
-    The `dir` field defaults to null, falling back to the category
-    key, and is explicit when they differ (e.g., a category name
-    that does not match its directory).
-- **Path scoping is a list, not a string.** The `scopes` field must
-  hold Nix lists; pre-quoted comma-joined strings produced broken
-  YAML for Claude and Kiro before commit 5a97f09.
-- **Priority is for intra-composition ordering only.** Never
-  emitted to frontmatter. Dev fragments default to priority 5,
-  published fragments typically 10.
-- **SHA256 dedup runs before priority sort.** Two fragments with
-  identical text are collapsed; the survivor's priority wins.
+  - `location = "devshell"` → `devshell/<dir>/docs/<name>.md` The `dir` field
+    defaults to null, falling back to the category key, and is explicit when
+    they differ (e.g., a category name that does not match its directory).
+- **Path scoping is a list, not a string.** The `scopes` field must hold Nix
+  lists; pre-quoted comma-joined strings produced broken YAML for Claude and
+  Kiro before commit 5a97f09.
+- **Priority is for intra-composition ordering only.** Never emitted to
+  frontmatter. Dev fragments default to priority 5, published fragments
+  typically 10.
+- **SHA256 dedup runs before priority sort.** Two fragments with identical text
+  are collapsed; the survivor's priority wins.
 
 ### Extension points (how to add things)
 
-- **New dev fragment**: create markdown file at the right
-  location, add to `config.fragments.categories.<category>.sources`
-  in `config/fragment-categories.nix`, run
+- **New dev fragment**: create markdown file at the right location, add to
+  `config.fragments.categories.<category>.sources` in
+  `config/fragment-categories.nix`, run
   `devenv tasks run --mode before generate:instructions`.
-- **New content package published fragment**: create markdown
-  at `packages/<pkg>/fragments/<name>.md`, declare in the
-  package's `passthru.fragments.<name>` using
-  `fragmentsLib.mkFragment { text = builtins.readFile ...; }`.
-  If dev instruction files should include it, add to
+- **New content package published fragment**: create markdown at
+  `packages/<pkg>/fragments/<name>.md`, declare in the package's
+  `passthru.fragments.<name>` using
+  `fragmentsLib.mkFragment { text = builtins.readFile ...; }`. If dev
+  instruction files should include it, add to
   `extraPublishedFragments.<category>` in `dev/generate.nix`.
 - **New ecosystem transform** (e.g., Codex): add function to
-  `packages/fragments-ai/default.nix` `passthru.transforms.<name>`,
-  wire into `mkEcosystemFile` in `dev/generate.nix`, add a new
-  `instructions-<ecosystem>` derivation in `flake.nix`, add
-  the corresponding `generate:instructions:<ecosystem>` task in
-  `dev/tasks/generate.nix`.
+  `packages/fragments-ai/default.nix` `passthru.transforms.<name>`, wire into
+  `mkEcosystemFile` in `dev/generate.nix`, add a new `instructions-<ecosystem>`
+  derivation in `flake.nix`, add the corresponding
+  `generate:instructions:<ecosystem>` task in `dev/tasks/generate.nix`.
 
 ### Gotchas
 
-- **DevEnv task DAG requires `--mode before` for DAG
-  resolution.** Running `devenv tasks run generate:instructions`
-  alone only runs the top-level task, not its dependencies.
-  Use `devenv tasks run --mode before generate:instructions`
-  or run the sub-tasks directly.
-- **New untracked files must be `git add`-ed before
-  `nix build`** can see them in the flake context. This trips
-  new fragment creation every time — add the file, THEN run
-  the generate task, or the nix build won't find it.
-- **devenv caches nix eval** in `.devenv/nix-eval-cache.db`.
-  If task definitions change and the tasks look stale, delete
-  that file.
-- **Monorepo profile vs scoped profile differs semantically**.
-  Only `monorepo` gets commonFragments + swsFragments. Scoped
-  categories are intentionally lean. Don't "fix" this by
-  re-adding commonFragments — that's the context-rot bug that
-  was removed.
+- **DevEnv task DAG requires `--mode before` for DAG resolution.** Running
+  `devenv tasks run generate:instructions` alone only runs the top-level task,
+  not its dependencies. Use
+  `devenv tasks run --mode before generate:instructions` or run the sub-tasks
+  directly.
+- **New untracked files must be `git add`-ed before `nix build`** can see them
+  in the flake context. This trips new fragment creation every time — add the
+  file, THEN run the generate task, or the nix build won't find it.
+- **devenv caches nix eval** in `.devenv/nix-eval-cache.db`. If task definitions
+  change and the tasks look stale, delete that file.
+- **Monorepo profile vs scoped profile differs semantically**. Only `monorepo`
+  gets commonFragments + swsFragments. Scoped categories are intentionally lean.
+  Don't "fix" this by re-adding commonFragments — that's the context-rot bug
+  that was removed.
 
 <!-- Fragment: dev/fragments/pipeline/generation-architecture.md -->
 
 ## Generation Architecture
 
-Content is generated via Nix derivations wrapped in devenv tasks,
-organized by scope:
+Content is generated via Nix derivations wrapped in devenv tasks, organized by
+scope:
 
-- `generate:instructions:*` — AI instruction files (CLAUDE.md,
-  AGENTS.md, Copilot, Kiro) from fragments + ecosystem transforms
-- `generate:repo:*` — repo front-door files (README.md,
-  CONTRIBUTING.md) from fragments + nix-evaluated data
+- `generate:instructions:*` — AI instruction files (CLAUDE.md, AGENTS.md,
+  Copilot, Kiro) from fragments + ecosystem transforms
+- `generate:repo:*` — repo front-door files (README.md, CONTRIBUTING.md) from
+  fragments + nix-evaluated data
 - `generate:all` — runs all scopes
 
-Each task wraps a `nix build .#<derivation>` and copies output to the
-working tree. Nix store caching means unchanged inputs skip rebuild.
+Each task wraps a `nix build .#<derivation>` and copies output to the working
+tree. Nix store caching means unchanged inputs skip rebuild.
 
 ### Source Layout
 
-- `config/fragment-categories.nix` — the fragment-category registry:
-  each category's scope globs and fragment sources. Option declared
-  in `lib/fragments-registry.nix`.
-- `dev/fragments/` — dev-only instruction fragments. Composed into
-  instruction files and CLAUDE.md.
-- `dev/generate.nix` — shared fragment composition logic consumed by
-  both devenv tasks and flake derivations.
+- `config/fragment-categories.nix` — the fragment-category registry: each
+  category's scope globs and fragment sources. Option declared in
+  `lib/fragments-registry.nix`.
+- `dev/fragments/` — dev-only instruction fragments. Composed into instruction
+  files and CLAUDE.md.
+- `dev/generate.nix` — shared fragment composition logic consumed by both devenv
+  tasks and flake derivations.
 - `packages/coding-standards/fragments/` — published coding standards.
 - `packages/stacked-workflows/fragments/` — published routing table.
 - `packages/fragments-ai/` — AI ecosystem transforms (passthru).
 
 ### What Stays in Module System
 
-Skills, settings.json, MCP config, and CLI settings use `files.*`
-(devenv) or `home.file` (HM). These are symlinks to immutable store
-paths — no generation step.
+Skills, settings.json, MCP config, and CLI settings use `files.*` (devenv) or
+`home.file` (HM). These are symlinks to immutable store paths — no generation
+step.
 
-Instruction files are the exception: they are **copies**, not
-symlinks, materialized on every shell entry by
-`generate:instructions:materialize` (`before = ["devenv:enterShell"]`).
-Kiro cannot read symlinked steering — it discovers by scanning the
-directory and the scan skips symlinks — and the git-tracked outputs
-cannot be symlinks either, since a store symlink commits as an
-absolute `/nix/store` path. See the devenv files-internals fragment.
+Instruction files are the exception: they are **copies**, not symlinks,
+materialized on every shell entry by `generate:instructions:materialize`
+(`before = ["devenv:enterShell"]`). Kiro cannot read symlinked steering — it
+discovers by scanning the directory and the scan skips symlinks — and the
+git-tracked outputs cannot be symlinks either, since a store symlink commits as
+an absolute `/nix/store` path. See the devenv files-internals fragment.
 
 ### Running Generation
 
@@ -759,131 +687,118 @@ devenv tasks run generate:all             # everything
 > `lib/fragments-registry.nix` and `lib/checks.nix`; also deletes the hardcoded
 > "29 packages — 16 main-tracking + 13 binary" target count, which had gone
 > stale, in favour of a derivation command; prior 2026-07-24, dissolves
-> `config/update-matrix.nix` into `config.update.targets`, now the
-> single source of truth). If you touch `dev/scripts/update-*.sh`,
-> `dev/scripts/resolve-overlay-file.sh`,
-> `config/generate-update-ninja.nix`, `config/update-targets.nix`,
-> `lib/update.nix`, any `overlays/**/<pkg>.update.nix`, or
-> `.github/workflows/update.yml` and this fragment isn't updated in
-> the same commit, stop and fix it.
+> `config/update-matrix.nix` into `config.update.targets`, now the single source
+> of truth). If you touch `dev/scripts/update-*.sh`,
+> `dev/scripts/resolve-overlay-file.sh`, `config/generate-update-ninja.nix`,
+> `config/update-targets.nix`, `lib/update.nix`, any
+> `overlays/**/<pkg>.update.nix`, or `.github/workflows/update.yml` and this
+> fragment isn't updated in the same commit, stop and fix it.
 
 ### Execution model: ninja DAG
 
 The update pipeline uses ninja as a DAG executor. A nix expression
 (`config/generate-update-ninja.nix`) reads `flake.lock` and
 `config.update.targets` (the `.#updateTargets` flake output) to emit
-`.update.ninja` with dependency edges (e.g., agnix and git-absorb
-depend on `rust-overlay` input being updated first, via their
-`dependsOn`). `update-init.sh` runs once as the root target to
-clean stale state (abort stuck git ops, delete old `update/*`
-branches, clear the report file).
+`.update.ninja` with dependency edges (e.g., agnix and git-absorb depend on
+`rust-overlay` input being updated first, via their `dependsOn`).
+`update-init.sh` runs once as the root target to clean stale state (abort stuck
+git ops, delete old `update/*` branches, clear the report file).
 
 Targets fall into three categories:
 
-- **Inputs** (`update-input.sh <name>`) — `nix flake update <name>`
-  in a worktree, then `devenv update` to sync `devenv.lock`.
-- **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs
-  `nix-update` in a worktree, optionally preceded by a rev bump
-  for main-tracking packages.
-  The final target `update-report` runs `update-report.sh` to print
-  a summary grouped by status.
+- **Inputs** (`update-input.sh <name>`) — `nix flake update <name>` in a
+  worktree, then `devenv update` to sync `devenv.lock`.
+- **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs `nix-update` in
+  a worktree, optionally preceded by a rev bump for main-tracking packages. The
+  final target `update-report` runs `update-report.sh` to print a summary
+  grouped by status.
 
 ### Worktree isolation
 
-Every update target runs in its own **ephemeral** git worktree
-under `$WORKTREES_DIR/update-<name>/` — a binned temp root
-(default `${TMPDIR:-/tmp}/nat-update-worktrees`, override
-`NAT_UPDATE_WORKTREES_DIR`) deliberately OUTSIDE the flake root:
-devenv/Nix enumerates all untracked + gitignored files under the
-flake root on every shell entry (`git ls-files --others`;
-cachix/devenv#257, #2042), so in-tree worktrees were re-scanned on
-every `direnv reload`. Each worktree checks out a named branch
-`update/<name>` reset to the current branch HEAD.
-`.pre-commit-config.yaml` is symlinked from the main tree so hooks
-work in worktrees. Worktrees are torn down on exit
-(`teardown_worktree`) and any registration stranded by a crash or
-wiped temp is reaped by `git worktree prune` in `update-init.sh`,
-so nothing persists between runs.
+Every update target runs in its own **ephemeral** git worktree under
+`$WORKTREES_DIR/update-<name>/` — a binned temp root (default
+`${TMPDIR:-/tmp}/nat-update-worktrees`, override `NAT_UPDATE_WORKTREES_DIR`)
+deliberately OUTSIDE the flake root: devenv/Nix enumerates all untracked +
+gitignored files under the flake root on every shell entry
+(`git ls-files --others`; cachix/devenv#257, #2042), so in-tree worktrees were
+re-scanned on every `direnv reload`. Each worktree checks out a named branch
+`update/<name>` reset to the current branch HEAD. `.pre-commit-config.yaml` is
+symlinked from the main tree so hooks work in worktrees. Worktrees are torn down
+on exit (`teardown_worktree`) and any registration stranded by a crash or wiped
+temp is reaped by `git worktree prune` in `update-init.sh`, so nothing persists
+between runs.
 
-After each target finishes its update + build verification in
-the worktree, it leaves the resulting commits on its named
-branch and emits a single report line. The pipeline never merges
-those branches itself; the CI workflow's PR-creation step pushes
-each `update/<name>` branch that has commits ahead of the base
-SHA and opens (or updates) one PR per dependency.
+After each target finishes its update + build verification in the worktree, it
+leaves the resulting commits on its named branch and emits a single report line.
+The pipeline never merges those branches itself; the CI workflow's PR-creation
+step pushes each `update/<name>` branch that has commits ahead of the base SHA
+and opens (or updates) one PR per dependency.
 
 ### Rev bump flow (main-tracking packages)
 
-For packages that track a git repo's HEAD (no tagged releases),
-`update-pkg.sh` receives the repo URL as a trailing argument:
+For packages that track a git repo's HEAD (no tagged releases), `update-pkg.sh`
+receives the repo URL as a trailing argument:
 
 1. `git ls-remote <url> HEAD` fetches the latest commit SHA.
 2. The overlay file to bump comes from the package's declared
    `config.update.targets.<name>.file`, read via
-   `nix eval --raw .#updateTargets.<name>.file`. Every main-tracking
-   package declares one, so this is the live path;
-   `resolve_overlay_file` (`dev/scripts/resolve-overlay-file.sh`) is a
-   retained safety-net fallback that deterministically locates the
-   single overlay `.nix` pinning this upstream by matching the fetch
-   block's identity — either
+   `nix eval --raw .#updateTargets.<name>.file`. Every main-tracking package
+   declares one, so this is the live path; `resolve_overlay_file`
+   (`dev/scripts/resolve-overlay-file.sh`) is a retained safety-net fallback
+   that deterministically locates the single overlay `.nix` pinning this
+   upstream by matching the fetch block's identity — either
    `fetchFromGitHub { owner = "<owner>"; repo = "<repo>"; }` or
-   `fetchgit { url = "…github.com/<owner>/<repo>.git"; }` — and
-   requiring **exactly one** match. 0 or >1 matches ⇒ the target is
-   reported `HELD BACK` (never a silent guess). `checks.update-targets-parity`
-   asserts the declared `file` is byte-identical to what the resolver
-   would print, so the two paths can never diverge. `sed` then
-   replaces the old `rev` in that resolved file.
-3. `nix flake prefetch github:<owner>/<repo>/<new-rev>` fetches
-   the new source hash.
+   `fetchgit { url = "…github.com/<owner>/<repo>.git"; }` — and requiring
+   **exactly one** match. 0 or >1 matches ⇒ the target is reported `HELD BACK`
+   (never a silent guess). `checks.update-targets-parity` asserts the declared
+   `file` is byte-identical to what the resolver would print, so the two paths
+   can never diverge. `sed` then replaces the old `rev` in that resolved file.
+3. `nix flake prefetch github:<owner>/<repo>/<new-rev>` fetches the new source
+   hash.
 4. `sed` replaces the old `hash` in the overlay `.nix` file.
 5. `git commit` creates a commit with the rev + src hash change.
-6. `nix-update --version skip` runs to update dependency hashes
-   (cargo, pnpm, vendor, etc.). If changes occur, they amend into
-   the existing commit.
+6. `nix-update --version skip` runs to update dependency hashes (cargo, pnpm,
+   vendor, etc.). If changes occur, they amend into the existing commit.
 
-If the rev is unchanged (already at latest), steps 1-6 are
-skipped entirely and the target reports NO UPDATES.
+If the rev is unchanged (already at latest), steps 1-6 are skipped entirely and
+the target reports NO UPDATES.
 
 **Why the resolver is deterministic.** Step 2 replaced an earlier
-`grep -rl "<repo-basename>" | head -1`, which matched any overlay merely
-naming the basename (e.g. `effect-mcp.nix`'s "Mirrors context7-mcp.nix."
-comment) and raced on `head -1`'s early pipe close. On 2026-07-15 that
-wrote context7's HEAD rev into effect-mcp's `tim-smart/effect-mcp` fetch
-block, pinning a nonexistent commit → source 404 → red CI (and silently
-froze packages whose mis-resolved file had no `rev`, e.g. mcp-proxy). The
-`checks.update-targets-parity` flake check now asserts every
-main-tracking target resolves to exactly one overlay carrying an inline
-rev AND that its declared `file` matches that resolver output, so the
-class fails at PR time rather than mid-pipeline.
+`grep -rl "<repo-basename>" | head -1`, which matched any overlay merely naming
+the basename (e.g. `effect-mcp.nix`'s "Mirrors context7-mcp.nix." comment) and
+raced on `head -1`'s early pipe close. On 2026-07-15 that wrote context7's HEAD
+rev into effect-mcp's `tim-smart/effect-mcp` fetch block, pinning a nonexistent
+commit → source 404 → red CI (and silently froze packages whose mis-resolved
+file had no `rev`, e.g. mcp-proxy). The `checks.update-targets-parity` flake
+check now asserts every main-tracking target resolves to exactly one overlay
+carrying an inline rev AND that its declared `file` matches that resolver
+output, so the class fails at PR time rather than mid-pipeline.
 
 ### config.update.targets (single source of truth)
 
-The per-package update config lives in `config.update.targets`, an
-option-merged registry every package contributes a row to. It replaced
-the flat, top-level `config/update-matrix.nix`, which was dissolved.
+The per-package update config lives in `config.update.targets`, an option-merged
+registry every package contributes a row to. It replaced the flat, top-level
+`config/update-matrix.nix`, which was dissolved.
 
-- **`lib/update.nix`** — a plain module declaring
-  `options.update.targets`, an `attrsOf (submodule { file; flags; git;
-dependsOn; })`, plus the sibling `options.update.excludePatterns`.
-  `file` is a repo-relative POSIX path STRING (never a Nix path
-  literal), `null` for binary packages; `git` is the upstream URL for
-  main-tracking rev-bump, `null` for binary packages; `dependsOn` names
-  DAG predecessors (e.g. `["rust-overlay"]`). For the reference
-  submodule shape, read the sibling option-merged registries
-  `lib/fragments-registry.nix` and `lib/checks.nix` — same
-  `attrsOf (submodule …)` declaration, same central-contribution
-  split. Both are tracked. This bullet used to cite
-  `private/slice-fixture/lib/concerns.nix` instead; `/private/` is
-  gitignored local working material, so that pointer resolves for
-  nobody but its author. The fixture itself is described in
-  `docs/package-restructure.md`.
-- **`config/update-targets.nix`** — the central contribution: every
-  package's row EXCEPT effect-mcp, plus the `excludePatterns` list carried
-  over from the dissolved matrix. Rows split into main-tracking (a `git`
-  URL and a non-null `file`) and binary (`git = null`, `file = null`).
-  **No total is written here on purpose.** A hardcoded one rots by
-  construction — this bullet carried "29 packages — 16 main-tracking + 13
-  binary" long after the sweep had grown past it. Derive it instead:
+- **`lib/update.nix`** — a plain module declaring `options.update.targets`, an
+  `attrsOf (submodule { file; flags; git; dependsOn; })`, plus the sibling
+  `options.update.excludePatterns`. `file` is a repo-relative POSIX path STRING
+  (never a Nix path literal), `null` for binary packages; `git` is the upstream
+  URL for main-tracking rev-bump, `null` for binary packages; `dependsOn` names
+  DAG predecessors (e.g. `["rust-overlay"]`). For the reference submodule shape,
+  read the sibling option-merged registries `lib/fragments-registry.nix` and
+  `lib/checks.nix` — same `attrsOf (submodule …)` declaration, same
+  central-contribution split. Both are tracked. This bullet used to cite
+  `private/slice-fixture/lib/concerns.nix` instead; `/private/` is gitignored
+  local working material, so that pointer resolves for nobody but its author.
+  The fixture itself is described in `docs/package-restructure.md`.
+- **`config/update-targets.nix`** — the central contribution: every package's
+  row EXCEPT effect-mcp, plus the `excludePatterns` list carried over from the
+  dissolved matrix. Rows split into main-tracking (a `git` URL and a non-null
+  `file`) and binary (`git = null`, `file = null`). **No total is written here
+  on purpose.** A hardcoded one rots by construction — this bullet carried "29
+  packages — 16 main-tracking + 13 binary" long after the sweep had grown past
+  it. Derive it instead:
 
   ```bash
   nix eval --json .#updateTargets --apply 'ts: with builtins;
@@ -893,39 +808,35 @@ dependsOn; })`, plus the sibling `options.update.excludePatterns`.
     }'
   ```
 
-  `.#updateTargets` is the merged registry, so that count includes
-  effect-mcp's co-located row; this file carries one fewer. It is not the
-  size of a sweep either — the ninja DAG adds one Inputs target per root
-  flake input, read from `flake.lock`, so a sweep's PR ceiling is targets
-  PLUS inputs. The binary rows all pass `--use-update-script`, optionally
-  with `--override-filename <path>`; that second flag is what lets several
-  attributes of one upstream (`pnpm_10`, `pnpm_11`) each own a file and a
-  sidecar.
+  `.#updateTargets` is the merged registry, so that count includes effect-mcp's
+  co-located row; this file carries one fewer. It is not the size of a sweep
+  either — the ninja DAG adds one Inputs target per root flake input, read from
+  `flake.lock`, so a sweep's PR ceiling is targets PLUS inputs. The binary rows
+  all pass `--use-update-script`, optionally with `--override-filename <path>`;
+  that second flag is what lets several attributes of one upstream (`pnpm_10`,
+  `pnpm_11`) each own a file and a sidecar.
 
-- **`overlays/mcp-servers/effect-mcp.update.nix`** — effect-mcp's own
-  row, co-located with the overlay it bumps:
-  `config.update.targets.effect-mcp = { file =
-"overlays/mcp-servers/effect-mcp.nix"; flags = ["--version" "skip"];
-git = "https://github.com/tim-smart/effect-mcp.git"; }`. The sidecar
-  carries its own `git` URL; `resolve_overlay_file` skips `*.update.nix`
-  files (update metadata, never source-pinning overlays), so the URL
-  does not make it a second match for `tim-smart/effect-mcp`.
-- **`.#updateTargets`** — a top-level flake output built from an
-  explicit 3-module `lib.evalModules` list (`./lib/update.nix` +
+- **`overlays/mcp-servers/effect-mcp.update.nix`** — effect-mcp's own row,
+  co-located with the overlay it bumps:
+  `config.update.targets.effect-mcp = { file = "overlays/mcp-servers/effect-mcp.nix"; flags = ["--version" "skip"]; git = "https://github.com/tim-smart/effect-mcp.git"; }`.
+  The sidecar carries its own `git` URL; `resolve_overlay_file` skips
+  `*.update.nix` files (update metadata, never source-pinning overlays), so the
+  URL does not make it a second match for `tim-smart/effect-mcp`.
+- **`.#updateTargets`** — a top-level flake output built from an explicit
+  3-module `lib.evalModules` list (`./lib/update.nix` +
   `./config/update-targets.nix` +
-  `./overlays/mcp-servers/effect-mcp.update.nix`). The barrel walker
-  that would `readDir` every `<pkg>.update.nix` is deferred Track B —
-  new contributions are added to that list by hand for now.
-- **Consumers** — `config/generate-update-ninja.nix` reads
-  `updateTargets` for the ninja DAG (flags space-joined, git, and
-  `dependsOn` → `update-<dep>` edges); `update-pkg.sh` reads
-  `.#updateTargets.<name>.file` for the rev-bump target.
-- **`checks/update-targets-parity.nix`** — the permanent CI gate (and
-  sole update-target check; the former `overlay-target-resolution.nix`
-  folded into it). For every main-tracking target (with a `git` URL) it
-  asserts `file` is non-null, `file ==
-resolve_overlay_file(<git>, overlays)`, and the resolved overlay carries
-  an inline 40-hex `rev`.
+  `./overlays/mcp-servers/effect-mcp.update.nix`). The barrel walker that would
+  `readDir` every `<pkg>.update.nix` is deferred Track B — new contributions are
+  added to that list by hand for now.
+- **Consumers** — `config/generate-update-ninja.nix` reads `updateTargets` for
+  the ninja DAG (flags space-joined, git, and `dependsOn` → `update-<dep>`
+  edges); `update-pkg.sh` reads `.#updateTargets.<name>.file` for the rev-bump
+  target.
+- **`checks/update-targets-parity.nix`** — the permanent CI gate (and sole
+  update-target check; the former `overlay-target-resolution.nix` folded into
+  it). For every main-tracking target (with a `git` URL) it asserts `file` is
+  non-null, `file == resolve_overlay_file(<git>, overlays)`, and the resolved
+  overlay carries an inline 40-hex `rev`.
 
 ### Report format
 
@@ -933,8 +844,8 @@ Every target writes exactly one line to `.update-report.txt`:
 
 - `UPDATED: <name> | <version-detail>` — successfully updated.
 - `NO UPDATES: <name>` — already at latest.
-- `HELD BACK: <name> | <version-detail> (<reason>)` — update
-  found but build or merge failed.
+- `HELD BACK: <name> | <version-detail> (<reason>)` — update found but build or
+  merge failed.
 
 `update-report.sh` sorts entries by status and prints a summary.
 

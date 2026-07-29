@@ -16,12 +16,12 @@ This applies everywhere: standalone scripts, generated wrappers,
 ### Ordering
 
 Keep entries sorted alphabetically within categorical groups. Use section
-headers for readability, sort entries within each group. This applies to
-lists, attribute sets, JSON objects, markdown tables, TOML sections, and
-similar collections.
+headers for readability, sort entries within each group. This applies to lists,
+attribute sets, JSON objects, markdown tables, TOML sections, and similar
+collections.
 
 ### DRY Principle
 
-Never duplicate logic, configuration, or patterns. When the same thing
-appears twice, extract it. Three similar lines is better than a premature
-abstraction, but three similar blocks means it is time to extract.
+Never duplicate logic, configuration, or patterns. When the same thing appears
+twice, extract it. Three similar lines is better than a premature abstraction,
+but three similar blocks means it is time to extract.

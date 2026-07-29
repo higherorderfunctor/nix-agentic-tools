@@ -2,18 +2,18 @@
 name: stack-fix
 description: >-
   Use when you need to fix, correct, or update content in an earlier commit.
-  Absorbs staged changes into correct stack commits INSTEAD of running
-  git absorb or git commit --fixup via Bash. Prevents: missed dry-run preview,
-  leftover staged changes going unnoticed, forgetting to restack. Falls back
-  to guided manual amend when absorb cannot route hunks.
+  Absorbs staged changes into correct stack commits INSTEAD of running git
+  absorb or git commit --fixup via Bash. Prevents: missed dry-run preview,
+  leftover staged changes going unnoticed, forgetting to restack. Falls back to
+  guided manual amend when absorb cannot route hunks.
 argument-hint: "[--dry-run]"
 disable-model-invocation: false
 compatibility: "Requires git-branchless and git-absorb"
 ---
 
 Fix earlier commits in the stack. Tries git-absorb first (automatic hunk
-routing), falls back to guided manual amend with conflict resolution when
-absorb cannot help.
+routing), falls back to guided manual amend with conflict resolution when absorb
+cannot help.
 
 ## Pre-flight
 
@@ -66,10 +66,10 @@ introduced (typos, bug fixes, adjustments to existing code).
    git absorb --dry-run
    ```
 
-   **Always use `--base` when the target is known.** Without it, absorb
-   searches the full stack by diff context matching and may route to a later
-   commit that has more matching context — especially for files built
-   incrementally across commits (README.md, CLAUDE.md, etc.).
+   **Always use `--base` when the target is known.** Without it, absorb searches
+   the full stack by diff context matching and may route to a later commit that
+   has more matching context — especially for files built incrementally across
+   commits (README.md, CLAUDE.md, etc.).
 
    **Note:** `--base <X>` means "search commits AFTER X" — the base commit
    itself is excluded from candidates. To include commit X, use `--base <X>^`
@@ -111,8 +111,8 @@ introduced (typos, bug fixes, adjustments to existing code).
 ## Path B: Manual amend (guided conflict resolution)
 
 Use this path when absorb cannot route the changes: content moves between
-commits, adding to files that descendants also touch, structural edits, or
-new file additions to earlier commits.
+commits, adding to files that descendants also touch, structural edits, or new
+file additions to earlier commits.
 
 ### Identify the target
 
@@ -156,10 +156,10 @@ new file additions to earlier commits.
    git log --oneline -1   # works in detached HEAD (git branch --show-current does not)
    ```
 
-   If checkout fails (e.g. "local changes would be overwritten"), you are
-   still on the PREVIOUS commit. Stash or commit changes first, then retry.
-   Never proceed with `git add` + `git amend` after a failed checkout — the
-   amend goes into whatever commit you are currently on.
+   If checkout fails (e.g. "local changes would be overwritten"), you are still
+   on the PREVIOUS commit. Stash or commit changes first, then retry. Never
+   proceed with `git add` + `git amend` after a failed checkout — the amend goes
+   into whatever commit you are currently on.
 
 4. **Make the edit**. The user (or you) modifies files as needed.
 
@@ -192,9 +192,9 @@ new file additions to earlier commits.
    ```
 
    **Watch for orphaned additions**: when removing content from an earlier
-   commit, conflict resolution may drop additions that later commits made to
-   the same block. After each resolution, verify the resolved file contains
-   all expected content.
+   commit, conflict resolution may drop additions that later commits made to the
+   same block. After each resolution, verify the resolved file contains all
+   expected content.
 
 ### Return and verify
 
@@ -208,10 +208,9 @@ new file additions to earlier commits.
 
 ## Path C: In-memory amend (git-revise)
 
-Use this path when the fix is small (a few lines), the target is deep in
-the stack (5+ commits back), and you want to avoid checking out the target
-commit (preserves build cache, avoids "local changes would be overwritten"
-errors).
+Use this path when the fix is small (a few lines), the target is deep in the
+stack (5+ commits back), and you want to avoid checking out the target commit
+(preserves build cache, avoids "local changes would be overwritten" errors).
 
 **Limitations:** No rename detection. Requires `git restack` afterward
 (branchless can't track git-revise rewrites). Not suitable for structural
@@ -229,9 +228,9 @@ changes, new file additions, or complex multi-hunk edits.
    git revise <target-hash>
    ```
 
-   If conflicts occur, git-revise opens an editor for resolution. If
-   the conflict is too complex for editor-based resolution, abort and
-   use Path B instead.
+   If conflicts occur, git-revise opens an editor for resolution. If the
+   conflict is too complex for editor-based resolution, abort and use Path B
+   instead.
 
 3. **Fix branchless tracking**:
 
@@ -239,8 +238,8 @@ changes, new file additions, or complex multi-hunk edits.
    git restack
    ```
 
-   If restack reports conflicts, resolve with `git restack --merge`
-   (same as Path B step 6-7).
+   If restack reports conflicts, resolve with `git restack --merge` (same as
+   Path B step 6-7).
 
 4. **Post-fix verification** (see below).
 
@@ -254,16 +253,16 @@ Run after either path to confirm the stack is healthy.
    git sl
    ```
 
-2. **Verify no unintended changes** (the diff should show ONLY the intended
-   fix — unexpected files or regions indicate content lost/duplicated during
+2. **Verify no unintended changes** (the diff should show ONLY the intended fix
+   — unexpected files or regions indicate content lost/duplicated during
    conflict resolution):
 
    ```bash
    git diff $BEFORE_SHA..HEAD --stat
    ```
 
-   For commit message fixes (not content), use `git reword <hash>` directly
-   — this skill handles content changes only.
+   For commit message fixes (not content), use `git reword <hash>` directly —
+   this skill handles content changes only.
 
 3. **Run tests** if a test command is readily identifiable:
    ```bash

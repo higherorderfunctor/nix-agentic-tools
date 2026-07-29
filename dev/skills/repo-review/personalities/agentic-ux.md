@@ -10,12 +10,11 @@ tools might fail to use these skills and fix the root causes.
 
 - Are skill descriptions clear enough for auto-discovery?
 - Does `disable-model-invocation: true` work as intended across platforms?
-- **Known exception:** in THIS dev repo, `.claude/skills/dev-*` directory
-  names (e.g. `dev-stack-fix`, `dev-living-workflow`) intentionally don't
-  match SKILL.md `name` fields. The `dev-` prefix keeps the in-repo working
-  copies from being shadowed by the user-global installs of the same skills
-  (personal > project precedence in Claude Code). Do not flag this as a spec
-  violation.
+- **Known exception:** in THIS dev repo, `.claude/skills/dev-*` directory names
+  (e.g. `dev-stack-fix`, `dev-living-workflow`) intentionally don't match
+  SKILL.md `name` fields. The `dev-` prefix keeps the in-repo working copies
+  from being shadowed by the user-global installs of the same skills (personal >
+  project precedence in Claude Code). Do not flag this as a spec violation.
 - Is the routing table effective? Would the AI actually choose the skill over
   running raw commands?
 - Test: given a user prompt like "fix a typo in an earlier commit", would the
@@ -25,24 +24,24 @@ tools might fail to use these skills and fix the root causes.
 
 - Is the CLAUDE.md too large? Does critical information get buried?
 - Is the routing table prominent enough vs other content?
-- Does the instruction hierarchy (global CLAUDE.md → project CLAUDE.md →
-  skill) create conflicts or confusion?
+- Does the instruction hierarchy (global CLAUDE.md → project CLAUDE.md → skill)
+  create conflicts or confusion?
 - Are there competing instructions that could cause the model to ignore skills?
 
 ### Skill Loading Behavior
 
 - Does progressive loading work correctly? (name + description first, full
   content on demand)
-- Are skill frontmatter fields compatible across Claude Code, Kiro, and
-  Copilot?
+- Are skill frontmatter fields compatible across Claude Code, Kiro, and Copilot?
 - Does the `compatibility:` field in skill frontmatter affect loading?
 
 ### Cross-Platform Parity
 
 - Do skills work identically across Claude Code, Kiro, and Copilot?
 - Are there platform-specific features that break portability?
-- Is the skill directory structure (`packages/stacked-workflows/skills/<name>/SKILL.md`) the standard
-  expected by all platforms?
+- Is the skill directory structure
+  (`packages/stacked-workflows/skills/<name>/SKILL.md`) the standard expected by
+  all platforms?
 
 ### Instruction File Size
 
@@ -51,14 +50,14 @@ tools might fail to use these skills and fix the root causes.
   session). Use your judgment — there is no hard byte threshold, but bigger
   files increase the risk that routing rules get buried.
 - Flag competing or overlapping routing/tool-selection tables
-- Apply the test: "Would removing this line cause Claude to make mistakes?
-  If not, cut it."
+- Apply the test: "Would removing this line cause Claude to make mistakes? If
+  not, cut it."
 
 ### Reference Loading
 
-- Do the per-skill `references/` symlinks work in all contexts?
-  (Nix store derefs symlinks, manual `cp -rL` derefs, but raw symlinks may
-  break in some tool sandboxes)
+- Do the per-skill `references/` symlinks work in all contexts? (Nix store
+  derefs symlinks, manual `cp -rL` derefs, but raw symlinks may break in some
+  tool sandboxes)
 - Is the pre-flight "load references" instruction clear enough that the model
   actually does it?
 

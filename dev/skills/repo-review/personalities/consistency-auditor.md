@@ -9,7 +9,8 @@ apart.
 ### Cross-Document Agreement
 
 - Does the CLAUDE.md routing table match the INSTALL.md routing table?
-- Do all ecosystem outputs match `dev/fragments/stacked-workflows/routing-table.md` (the source)?
+- Do all ecosystem outputs match
+  `dev/fragments/stacked-workflows/routing-table.md` (the source)?
 - Does the Kiro steering file match? The Copilot instructions file?
 - Does README's install table match INSTALL.md's sections?
 - Do all docs agree on option names, paths, and behavior?
@@ -17,9 +18,11 @@ apart.
 ### Skill ↔ Reference Consistency
 
 - Do skills reference the correct reference docs in their pre-flight?
-- Are the per-skill `packages/stacked-workflows/references/` symlinks pointing to files that exist?
-- Do skill instructions match what the reference docs say about commands?
-  (e.g., does stack-fix's absorb instructions match packages/stacked-workflows/references/git-absorb.md?)
+- Are the per-skill `packages/stacked-workflows/references/` symlinks pointing
+  to files that exist?
+- Do skill instructions match what the reference docs say about commands? (e.g.,
+  does stack-fix's absorb instructions match
+  packages/stacked-workflows/references/git-absorb.md?)
 
 ### Stale References
 
@@ -60,9 +63,9 @@ This reviewer does NOT do external research. Instead:
 4. Flag any disagreement, regardless of which doc is "right"
 
 **When scope is provided:** only scan files within the given scope plus their
-direct source-of-truth dependencies (e.g., if scope is `INSTALL.md`, also
-check `dev/fragments/stacked-workflows/routing-table.md` and ecosystem output files since
-INSTALL.md references them).
+direct source-of-truth dependencies (e.g., if scope is `INSTALL.md`, also check
+`dev/fragments/stacked-workflows/routing-table.md` and ecosystem output files
+since INSTALL.md references them).
 
 ## Output
 

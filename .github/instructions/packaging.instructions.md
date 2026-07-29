@@ -7,24 +7,25 @@ applyTo: "config/update-targets.nix,packages/**/*.nix"
 
 ## Naming Conventions
 
-- Package overlays: `overlays/<group>/<name>.nix` (`mcp-servers`,
-  `lsp-servers`, `git-tools`, `dev-tools`, `generic`; ungrouped ones sit at
+- Package overlays: `overlays/<group>/<name>.nix` (`mcp-servers`, `lsp-servers`,
+  `git-tools`, `dev-tools`, `generic`; ungrouped ones sit at
   `overlays/<name>.nix`)
-- Per-package overlay support files: `overlays/<group>/<name>-<kind>.json`
-  / `-<kind>.patch` beside the `.nix` — `-sources.json`, `-extracted.json`,
+- Per-package overlay support files: `overlays/<group>/<name>-<kind>.json` /
+  `-<kind>.patch` beside the `.nix` — `-sources.json`, `-extracted.json`,
   `-package-lock.json`, `-<topic>.patch`. Flat, never a subdirectory: two
   configs (`treefmt.nix` global excludes, `devenv.nix` cspell excludes) are
   keyed on the `<name>-package-lock.json` glob.
 - Server modules: `packages/<name>/modules/mcp-server.nix` — and only for
   servers this repo runs as a managed service (they are enumerated in
-  `serverNames` in `packages/mcp-services/modules/homeManager/default.nix`).
-  A client-launched stdio server is barrel-only: `packages/<name>/` with
-  `lib/mk<Name>.nix` and no `modules/`. The top-level `modules/` directory
-  named by earlier revisions of this list no longer exists.
+  `serverNames` in `packages/mcp-services/modules/homeManager/default.nix`). A
+  client-launched stdio server is barrel-only: `packages/<name>/` with
+  `lib/mk<Name>.nix` and no `modules/`. The top-level `modules/` directory named
+  by earlier revisions of this list no longer exists.
 - Skills: `packages/stacked-workflows/skills/<name>/SKILL.md`
 - Published fragments: `packages/<pkg>/fragments/<name>.md`
 - Dev fragments: `dev/fragments/<pkg>/<name>.md`
-- config.update.targets keys use exported package names (matching the overlay attrset key)
+- config.update.targets keys use exported package names (matching the overlay
+  attrset key)
 - Exported packages: lowercase with hyphens
 
 <!-- Fragment: dev/fragments/packaging/platforms.md -->
@@ -38,61 +39,58 @@ applyTo: "config/update-targets.nix,packages/**/*.nix"
 
 ### Nightly Packaging Pattern
 
-All binary packages track nightly/latest versions via inline hashes
-and `config.update.targets` (`config/update-targets.nix`). Never defer
-to nixpkgs upstream —
-always override `src` and `version` from the overlay's inline source.
+All binary packages track nightly/latest versions via inline hashes and
+`config.update.targets` (`config/update-targets.nix`). Never defer to nixpkgs
+upstream — always override `src` and `version` from the overlay's inline source.
 
-When a package provides different artifacts per platform (e.g.,
-`.tar.gz` on Linux, `.dmg` on Darwin):
+When a package provides different artifacts per platform (e.g., `.tar.gz` on
+Linux, `.dmg` on Darwin):
 
-1. Create a `<name>-sources.json` sidecar with version and
-   per-platform `{url, hash}` entries keyed by Nix system string
+1. Create a `<name>-sources.json` sidecar with version and per-platform
+   `{url, hash}` entries keyed by Nix system string
 2. Select the correct source in the `.nix` overlay via
    `ourPkgs.stdenv.hostPlatform.system`
-3. Use `mkUpdateScript` from `overlays/lib.nix` to automate
-   version bumps and hash prefetching for all platforms
+3. Use `mkUpdateScript` from `overlays/lib.nix` to automate version bumps and
+   hash prefetching for all platforms
 
 Examples:
 
 - `kiro-cli`: `kiro-cli-sources.json` with Linux tarball + Darwin `.dmg`
-- `copilot-cli`: `copilot-cli-sources.json` with per-platform GitHub release tarballs
+- `copilot-cli`: `copilot-cli-sources.json` with per-platform GitHub release
+  tarballs
 
-A platform-independent artifact collapses the per-platform mapping to a
-single `src` key — `dns-root-hints`, `btop`, `fblog` and the `pnpm_<N>`
-attributes all use that one-key shape.
+A platform-independent artifact collapses the per-platform mapping to a single
+`src` key — `dns-root-hints`, `btop`, `fblog` and the `pnpm_<N>` attributes all
+use that one-key shape.
 
 ### Version-independent URLs need `alwaysPrefetch`
 
-> **Last verified:** 2026-07-25 (commit pending — records
-> `mkUpdateScript`'s `alwaysPrefetch` argument and why
-> `dns-root-hints` is its only consumer). If you change
-> `mkUpdateScript`'s change-detection flow or opt another package in
+> **Last verified:** 2026-07-25 (commit pending — records `mkUpdateScript`'s
+> `alwaysPrefetch` argument and why `dns-root-hints` is its only consumer). If
+> you change `mkUpdateScript`'s change-detection flow or opt another package in
 > or out, update this in the same commit.
 
-`mkUpdateScript` normally early-exits when `versionCheck.cmd`'s output
-equals the sidecar's recorded `.version`, which avoids a network
-prefetch per package per sweep. That is sound only when the artifact
-URL carries the version: same version → same URL → same bytes.
+`mkUpdateScript` normally early-exits when `versionCheck.cmd`'s output equals
+the sidecar's recorded `.version`, which avoids a network prefetch per package
+per sweep. That is sound only when the artifact URL carries the version: same
+version → same URL → same bytes.
 
-For a package whose URL is **version-independent**, the version string
-becomes the only change signal, and upstream re-serving modified
-content at the same URL leaves the committed hash stale and `fetchurl`
-failing until the version happens to move. Pass `alwaysPrefetch = true`
-in that case. It:
+For a package whose URL is **version-independent**, the version string becomes
+the only change signal, and upstream re-serving modified content at the same URL
+leaves the committed hash stale and `fetchurl` failing until the version happens
+to move. Pass `alwaysPrefetch = true` in that case. It:
 
 - skips the version-equality early exit, so the prefetch always runs;
-- compares the freshly built sidecar against the committed one
-  normalized (`jq -S`), version and hashes, and **does not write** when
-  they match — an unconditional write would churn mtimes and hand the
-  pipeline empty-diff commits;
-- defers the transition message until after that comparison and names
-  what actually moved, because the default flow's pre-prefetch
+- compares the freshly built sidecar against the committed one normalized
+  (`jq -S`), version and hashes, and **does not write** when they match — an
+  unconditional write would churn mtimes and hand the pipeline empty-diff
+  commits;
+- defers the transition message until after that comparison and names what
+  actually moved, because the default flow's pre-prefetch
   `"$current -> $latest"` would read `X -> X` when only the hash moved.
 
-`overlays/generic/dns-root-hints.nix` is the only consumer (InterNIC
-re-serves one canonical URL; its "version" is a root-zone serial
-scraped out of the file body). It is opt-in, not the default, because
-it costs one prefetch per sweep whether or not anything moved —
-negligible for one ~3 KB file 4x/day, not negligible for a
-multi-hundred-MB per-platform release asset set.
+`overlays/generic/dns-root-hints.nix` is the only consumer (InterNIC re-serves
+one canonical URL; its "version" is a root-zone serial scraped out of the file
+body). It is opt-in, not the default, because it costs one prefetch per sweep
+whether or not anything moved — negligible for one ~3 KB file 4x/day, not
+negligible for a multi-hundred-MB per-platform release asset set.

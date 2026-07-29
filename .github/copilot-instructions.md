@@ -23,15 +23,15 @@ This applies everywhere: standalone scripts, generated wrappers,
 ### Ordering
 
 Keep entries sorted alphabetically within categorical groups. Use section
-headers for readability, sort entries within each group. This applies to
-lists, attribute sets, JSON objects, markdown tables, TOML sections, and
-similar collections.
+headers for readability, sort entries within each group. This applies to lists,
+attribute sets, JSON objects, markdown tables, TOML sections, and similar
+collections.
 
 ### DRY Principle
 
-Never duplicate logic, configuration, or patterns. When the same thing
-appears twice, extract it. Three similar lines is better than a premature
-abstraction, but three similar blocks means it is time to extract.
+Never duplicate logic, configuration, or patterns. When the same thing appears
+twice, extract it. Three similar lines is better than a premature abstraction,
+but three similar blocks means it is time to extract.
 
 <!-- Fragment: packages/coding-standards/fragments/commit-convention.md -->
 
@@ -47,8 +47,8 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 [optional footer(s)]
 ```
 
-**Types:** `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`,
-`refactor`, `style`, `test`
+**Types:** `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`,
+`style`, `test`
 
 **Scopes** (optional but encouraged): package or module name (e.g.,
 `context7-mcp`, `copilot-cli`, `fragments`), directory name (`overlay`,
@@ -66,16 +66,16 @@ Three configuration methods exist with the same rough interface:
 - **HM modules** (`modules/`) — declarative home-manager (system-level)
 - **devenv modules** (`modules/devenv/`) — project-local dev shell
 
-If a feature can be configured in HM, it must also be configurable in
-devenv and vice versa. Gaps between methods are bugs.
+If a feature can be configured in HM, it must also be configurable in devenv and
+vice versa. Gaps between methods are bugs.
 
 Surfaces to keep aligned across all three methods: skills,
-instructions/steering, MCP servers, LSP servers, settings, hooks,
-agents, environment variables, permissions.
+instructions/steering, MCP servers, LSP servers, settings, hooks, agents,
+environment variables, permissions.
 
-The `ai.*` module (both HM and devenv) provides a unified interface
-that fans out to all enabled ecosystems (Claude, Copilot, Kiro) with
-ecosystem-specific translation.
+The `ai.*` module (both HM and devenv) provides a unified interface that fans
+out to all enabled ecosystems (Claude, Copilot, Kiro) with ecosystem-specific
+translation.
 
 <!-- Fragment: packages/coding-standards/fragments/tooling-preference.md -->
 
@@ -86,7 +86,8 @@ available:
 
 1. **MCP server** — richest context, structured responses, stays in-conversation
 2. **CLI tool** (e.g., `gh`, `curl`) — scriptable, good for batch operations
-3. **Direct web access** — last resort, use only when MCP and CLI are unavailable
+3. **Direct web access** — last resort, use only when MCP and CLI are
+   unavailable
 
 <!-- Fragment: packages/coding-standards/fragments/validation.md -->
 
@@ -94,16 +95,16 @@ available:
 
 ### Formatting
 
-After editing any file — regardless of how it was modified (Edit, Write,
-Bash, sed, etc.) — run `treefmt <file>` on the changed file. treefmt
-handles Nix (via alejandra) and markdown (via prettier).
+After editing any file — regardless of how it was modified (Edit, Write, Bash,
+sed, etc.) — run `treefmt <file>` on the changed file. treefmt handles Nix (via
+alejandra) and markdown (via prettier).
 
 <!-- Fragment: packages/stacked-workflows/fragments/routing-table.md -->
 
 ## Skill Routing — MANDATORY
 
-When the user is working with stacked commits, use the appropriate skill
-instead of running commands manually via Bash.
+When the user is working with stacked commits, use the appropriate skill instead
+of running commands manually via Bash.
 
 <!-- prettier-ignore -->
 | Operation                                               | Skill            | Use INSTEAD of                                                 |
@@ -118,87 +119,82 @@ instead of running commands manually via Bash.
 | Split a large commit                                    | `/stack-split`   | `git rebase -i` + edit, `git reset HEAD^`                      |
 | Test across stack                                       | `/stack-test`    | Manual `git test run` or looping `git checkout` + test         |
 
-**RULE: Before running any git-branchless, git-absorb, or git-revise command
-via Bash, check if a skill covers the operation.** Skills include pre-flight
-checks, dry-run previews, conflict guidance, and post-operation verification
-that manual commands miss.
+**RULE: Before running any git-branchless, git-absorb, or git-revise command via
+Bash, check if a skill covers the operation.** Skills include pre-flight checks,
+dry-run previews, conflict guidance, and post-operation verification that manual
+commands miss.
 
 <!-- Fragment: dev/fragments/monorepo/architecture-fragments.md -->
 
 ## Architecture Fragments
 
-> **Last verified:** 2026-07-27 (commit pending — the worked
-> registration example is now explicitly fictional, so it can no
-> longer drift out of sync with a real category's `scopes`; it
-> previously named `ai-clis` and `claude-code` and had gone stale
-> against both. Prior 2026-07-27, that example stopped teaching
-> `packages/ai-clis/**`, a directory that does not exist; prior
-> 2026-07-24, the `packagePaths` + `devFragmentNames` registries
-> dissolved into `config.fragments.categories`).
+> **Last verified:** 2026-07-27 (commit pending — the worked registration
+> example is now explicitly fictional, so it can no longer drift out of sync
+> with a real category's `scopes`; it previously named `ai-clis` and
+> `claude-code` and had gone stale against both. Prior 2026-07-27, that example
+> stopped teaching `packages/ai-clis/**`, a directory that does not exist; prior
+> 2026-07-24, the `packagePaths` + `devFragmentNames` registries dissolved into
+> `config.fragments.categories`).
 
-This repo ships path-scoped architecture fragments as dev-only
-context for agents working on it. They are SEPARATE from the
-published consumer-facing content. Three location flavors are
-supported by `dev/generate.nix`:
+This repo ships path-scoped architecture fragments as dev-only context for
+agents working on it. They are SEPARATE from the published consumer-facing
+content. Three location flavors are supported by `dev/generate.nix`:
 
-- `dev/fragments/<category>/<name>.md` (default
-  `location = "dev"`) — orientation and topic-scoped categories
-  not tied to a single package. `dev/fragments/monorepo/`
-  specifically holds the always-loaded orientation, composed into
-  `common.md` and the equivalent for each ecosystem.
-- `packages/<pkg>/docs/<name>.md` (`location = "package"`) —
-  co-located with the package whose abstractions it documents.
-- `devshell/<group>/docs/<name>.md` (`location = "devshell"`) —
-  co-located with a devshell module.
+- `dev/fragments/<category>/<name>.md` (default `location = "dev"`) —
+  orientation and topic-scoped categories not tied to a single package.
+  `dev/fragments/monorepo/` specifically holds the always-loaded orientation,
+  composed into `common.md` and the equivalent for each ecosystem.
+- `packages/<pkg>/docs/<name>.md` (`location = "package"`) — co-located with the
+  package whose abstractions it documents.
+- `devshell/<group>/docs/<name>.md` (`location = "devshell"`) — co-located with
+  a devshell module.
 
-Scope globs (which files the fragment loads for) live separately
-in `config.fragments.categories.<category>.scopes` (declared in
-`config/fragment-categories.nix`) and are independent of where the
-markdown source lives on disk.
+Scope globs (which files the fragment loads for) live separately in
+`config.fragments.categories.<category>.scopes` (declared in
+`config/fragment-categories.nix`) and are independent of where the markdown
+source lives on disk.
 
 Each scoped fragment emits per-ecosystem frontmatter via the
 `fragments-ai.passthru.transforms` pipeline:
 
 - Claude: `.claude/rules/<name>.md` with `paths:` YAML list
-- Copilot: `.github/instructions/<name>.instructions.md` with
-  `applyTo:` comma-joined globs
-- Kiro: `.kiro/steering/<name>.md` with `inclusion: fileMatch`
-  and an array `fileMatchPattern:`
-- Codex / AGENTS.md: orientation only (no scoped fragments).
-  Deep-dive architecture content lives in the per-ecosystem
-  scoped files above.
-  AGENTS.md used to concatenate every scoped fragment flat, but
-  that bloated it to ~2k lines; Phase 2.4 trimmed it to just the
-  monorepo orientation content (commit c4f4aff).
+- Copilot: `.github/instructions/<name>.instructions.md` with `applyTo:`
+  comma-joined globs
+- Kiro: `.kiro/steering/<name>.md` with `inclusion: fileMatch` and an array
+  `fileMatchPattern:`
+- Codex / AGENTS.md: orientation only (no scoped fragments). Deep-dive
+  architecture content lives in the per-ecosystem scoped files above. AGENTS.md
+  used to concatenate every scoped fragment flat, but that bloated it to ~2k
+  lines; Phase 2.4 trimmed it to just the monorepo orientation content (commit
+  c4f4aff).
 
 ### Maintenance is mandatory
 
-**When you make changes that alter the shape of any abstraction a
-scoped fragment describes, update the fragment in the same commit.**
-Out-of-date architecture fragments actively mislead future sessions
-and are worse than no fragment at all.
+**When you make changes that alter the shape of any abstraction a scoped
+fragment describes, update the fragment in the same commit.** Out-of-date
+architecture fragments actively mislead future sessions and are worse than no
+fragment at all.
 
-Each scoped fragment opens with a `Last verified: <date> (commit
-<hash>)` marker. If that marker predates your change to the area
-the fragment scopes, the fragment is stale. Stop and update it
-before landing the commit — in the same commit, not a follow-up.
+Each scoped fragment opens with a `Last verified: <date> (commit <hash>)`
+marker. If that marker predates your change to the area the fragment scopes, the
+fragment is stale. Stop and update it before landing the commit — in the same
+commit, not a follow-up.
 
-This is not an etiquette rule. Research on LLM context shows
-out-of-date instructions degrade task success more than missing
-instructions. A lie is worse than silence.
+This is not an etiquette rule. Research on LLM context shows out-of-date
+instructions degrade task success more than missing instructions. A lie is worse
+than silence.
 
 ### When to add a new fragment
 
-Add a fragment when you encounter a piece of non-inferable
-knowledge during debugging or implementation — something the
-next session would burn a lot of tokens rediscovering. Examples
-of the kind of content worth writing down:
+Add a fragment when you encounter a piece of non-inferable knowledge during
+debugging or implementation — something the next session would burn a lot of
+tokens rediscovering. Examples of the kind of content worth writing down:
 
-- **Why** a non-obvious design decision was made (trade-offs,
-  abandoned alternatives)
+- **Why** a non-obvious design decision was made (trade-offs, abandoned
+  alternatives)
 - **Cross-cutting invariants** that span multiple files
-- **Shapes of abstractions** (fanout patterns, wrapper chains,
-  activation lifecycles)
+- **Shapes of abstractions** (fanout patterns, wrapper chains, activation
+  lifecycles)
 - **Known pitfalls** (subtle bugs, gotchas, migrations in flight)
 - **Debugging entry points** (what to grep, what to eval)
 
@@ -207,22 +203,20 @@ Do NOT add fragments for content that is:
 - Discoverable by reading the code itself in under 10 seconds
 - Already covered by existing code comments (DRY)
 - A restatement of function signatures, file paths, or line numbers
-- Ephemeral (in-progress state goes in plan.md or memory, not
-  fragments)
+- Ephemeral (in-progress state goes in plan.md or memory, not fragments)
 
-Target under 150 lines per fragment. If a topic outgrows that,
-split by sub-concern with tighter scopes.
+Target under 150 lines per fragment. If a topic outgrows that, split by
+sub-concern with tighter scopes.
 
 ### Generator registration
 
-New fragments are registered in `config/fragment-categories.nix`
-under `config.fragments.categories`. The attribute key is the
-category (which becomes the output filename for scoped Claude
-rules, Copilot instructions, and Kiro steering). Each category is
-one record with two fields: `scopes` (the path globs it loads for)
-and `sources` (the markdown fragments composed into it). A
-`sources` entry is either a bare string (legacy dev/fragments/
-path) or an attrset with an explicit location:
+New fragments are registered in `config/fragment-categories.nix` under
+`config.fragments.categories`. The attribute key is the category (which becomes
+the output filename for scoped Claude rules, Copilot instructions, and Kiro
+steering). Each category is one record with two fields: `scopes` (the path globs
+it loads for) and `sources` (the markdown fragments composed into it). A
+`sources` entry is either a bare string (legacy dev/fragments/ path) or an
+attrset with an explicit location:
 
 ```nix
 # ILLUSTRATIVE ONLY — neither category below exists. Real rows
@@ -252,26 +246,23 @@ config.fragments.categories = {
 };
 ```
 
-Both categories above are **fictional on purpose.** A worked
-example that names a real category is a standing drift liability:
-it goes stale every time that category's `scopes` change, and the
-maintenance rule above will not catch it, because re-pointing a
-glob does not alter the _shape_ this snippet teaches. That is
-exactly how this snippet rotted once — it taught
-`packages/ai-clis/**`, a directory that no longer exists. Keep the
-example about the record's shape and let
-`config/fragment-categories.nix` be the source of real rows.
+Both categories above are **fictional on purpose.** A worked example that names
+a real category is a standing drift liability: it goes stale every time that
+category's `scopes` change, and the maintenance rule above will not catch it,
+because re-pointing a glob does not alter the _shape_ this snippet teaches. That
+is exactly how this snippet rotted once — it taught `packages/ai-clis/**`, a
+directory that no longer exists. Keep the example about the record's shape and
+let `config/fragment-categories.nix` be the source of real rows.
 
-`scopes` is a Nix list of globs, and `null` means always-loaded
-(what the `monorepo` orientation category uses). The option itself
-is declared in `lib/fragments-registry.nix`; `dev/generate.nix`
-merges the two with `lib.evalModules` and reads the result. The
-transforms handle per-ecosystem emission — do not hand-format
-frontmatter.
+`scopes` is a Nix list of globs, and `null` means always-loaded (what the
+`monorepo` orientation category uses). The option itself is declared in
+`lib/fragments-registry.nix`; `dev/generate.nix` merges the two with
+`lib.evalModules` and reads the result. The transforms handle per-ecosystem
+emission — do not hand-format frontmatter.
 
 After adding or editing fragments, run
-`devenv tasks run --mode before generate:instructions` to
-regenerate steering files for all ecosystems.
+`devenv tasks run --mode before generate:instructions` to regenerate steering
+files for all ecosystems.
 
 <!-- Fragment: dev/fragments/monorepo/build-commands.md -->
 
@@ -290,8 +281,8 @@ treefmt                       # Format all files (Nix, markdown, JSON, TOML, she
 
 ## Change Propagation
 
-When removing or renaming a concept, update ALL surfaces that reference
-it in the same commit:
+When removing or renaming a concept, update ALL surfaces that reference it in
+the same commit:
 
 - Fragments and generated instruction files
 - CLAUDE.md, AGENTS.md, Kiro steering, Copilot instructions
@@ -304,9 +295,9 @@ it in the same commit:
 - Overlay export lists
 - Structural check expectations
 
-The structural check (`nix flake check`) validates cross-references.
-The pre-commit hook runs a fast subset. If something is removed, grep
-for it across the repo before committing.
+The structural check (`nix flake check`) validates cross-references. The
+pre-commit hook runs a fast subset. If something is removed, grep for it across
+the repo before committing.
 
 <!-- Fragment: dev/fragments/monorepo/git-workflow.md -->
 
@@ -316,17 +307,16 @@ for it across the repo before committing.
 > `required_review_thread_resolution: true`, so an unresolved review thread
 > blocks merge including on auto-merging `update/*` PRs, and the claim that
 > Copilot "never gates its merge" is retired; adds the rule that Copilot's
-> SUPPRESSED findings must be read on every review, since they create no
-> thread; gates re-review polling on `commit_id` rather than a timestamp, and
-> caps the fix-and-re-review loop at 5 rounds). Prior: 2026-07-24 — the bot's
-> `update/*` PRs now
-> arm GitHub-native auto-merge and land themselves, the manual
+> SUPPRESSED findings must be read on every review, since they create no thread;
+> gates re-review polling on `commit_id` rather than a timestamp, and caps the
+> fix-and-re-review loop at 5 rounds). Prior: 2026-07-24 — the bot's `update/*`
+> PRs now arm GitHub-native auto-merge and land themselves, the manual
 > `pr:merge-updates` task and `merge-update-prs` skill are deleted, the update
-> sweep runs 4x/day, and squash-only is re-attributed to the repository
-> settings rather than the ruleset. If you change the branch-protection
-> ruleset, the repository merge settings, the worktree convention, the
-> bootstrap step, the local commit guard, the auto-merge arming, or the PR flow
-> and this fragment isn't updated in the same commit, stop and fix it.
+> sweep runs 4x/day, and squash-only is re-attributed to the repository settings
+> rather than the ruleset. If you change the branch-protection ruleset, the
+> repository merge settings, the worktree convention, the bootstrap step, the
+> local commit guard, the auto-merge arming, or the PR flow and this fragment
+> isn't updated in the same commit, stop and fix it.
 
 `main` is the trunk. Its branch-protection ruleset requires a pull request, no
 force-push, no deletion, and four required status checks —
@@ -344,9 +334,9 @@ required approval and not a required status check.
 
 **But it can now block a merge indirectly**, and that is deliberate. Since
 threads must be resolved, an unaddressed Copilot comment holds the PR — a bot
-`update/*` PR included, which is the intended trade: nothing auto-merges while
-a reviewer has an open question on it. A stalled update PR is not lost; the
-next 4x/day sweep rebuilds and re-arms it.
+`update/*` PR included, which is the intended trade: nothing auto-merges while a
+reviewer has an open question on it. A stalled update PR is not lost; the next
+4x/day sweep rebuilds and re-arms it.
 
 ### Copilot review: ALWAYS read the suppressed-comments block
 
@@ -355,18 +345,18 @@ thread:
 
 1. **Inline review comments** — these become resolvable threads, appear in
    `pull_request_read` with `method: get_review_comments`, and now gate merge.
-2. **A `<details>Comments suppressed due to low confidence (N)</details>`
-   block inside the review BODY** — no thread, nothing to resolve, invisible to
-   any thread query.
+2. **A `<details>Comments suppressed due to low confidence (N)</details>` block
+   inside the review BODY** — no thread, nothing to resolve, invisible to any
+   thread query.
 
 **Reading only the threads is not reading the review.** Measured on PR #568
 across seven review rounds: the suppressed bucket produced **7 findings, all
-genuine**, including a functional bug (`api_protocol` hardcoded while the
-scheme was stripped), a regex that could not match bracketed IPv6 hosts, and a
-doc that would have had readers create a directory literally named `~`. The
-gating bucket over the same period produced two, one of which was a
-diagnostics improvement over already-correct behavior. On that sample the
-confidence signal was inverted.
+genuine**, including a functional bug (`api_protocol` hardcoded while the scheme
+was stripped), a regex that could not match bracketed IPv6 hosts, and a doc that
+would have had readers create a directory literally named `~`. The gating bucket
+over the same period produced two, one of which was a diagnostics improvement
+over already-correct behavior. On that sample the confidence signal was
+inverted.
 
 So whenever you check Copilot feedback — CLI, MCP, a monitor loop, anything —
 fetch the review BODY too, not just the threads:
@@ -377,8 +367,8 @@ gh api --paginate "repos/OWNER/REPO/pulls/N/reviews" \
         | last | .body' | sed -n '/low confidence/,$p'
 ```
 
-`--paginate` is load-bearing, not tidiness. The endpoint pages at 30, and a
-PR that has been through a review loop reaches that easily — #568 took twenty.
+`--paginate` is load-bearing, not tidiness. The endpoint pages at 30, and a PR
+that has been through a review loop reaches that easily — #568 took twenty.
 Without it `last` returns the last review on the FIRST page, which is an OLD
 one, and the answer looks exactly like a fresh clean review.
 
@@ -391,18 +381,18 @@ gh api --paginate "repos/OWNER/REPO/pulls/N/reviews" \
         | last | .commit_id'
 ```
 
-This was arrived at by getting it wrong three times in a row, each fix
-looking sufficient until it wasn't:
+This was arrived at by getting it wrong three times in a row, each fix looking
+sufficient until it wasn't:
 
 1. reading `.[-1]` → returns a stale review, reported as new;
-2. taking `submitted_at` as a baseline → better, but a review of an OLDER
-   commit still advances the timestamp, so it reads as fresh;
+2. taking `submitted_at` as a baseline → better, but a review of an OLDER commit
+   still advances the timestamp, so it reads as fresh;
 3. requiring `commit_id == head` → correct.
 
 A related tell, useful because it needs no baseline at all: **check whether a
 check run named `copilot-pull-request-reviewer` exists on the head commit.** A
-push does not always trigger a review, and this distinguishes "not run yet"
-from "ran and found nothing" — which otherwise look identical.
+push does not always trigger a review, and this distinguishes "not run yet" from
+"ran and found nothing" — which otherwise look identical.
 
 ```bash
 gh api --paginate "repos/OWNER/REPO/commits/<head-sha>/check-runs" \
@@ -428,10 +418,10 @@ decision rather than an emergent property.
 
 At the cap, summarize what was found, what was fixed, and what is outstanding.
 
-Suppressed findings have no thread to resolve, so reply on the PR itself
-saying what you did with each. Resolve each gating thread as you fix it —
-they gate the merge now, and a PAT-authenticated MCP client cannot resolve
-them, so use the GraphQL `resolveReviewThread` mutation through `gh api`.
+Suppressed findings have no thread to resolve, so reply on the PR itself saying
+what you did with each. Resolve each gating thread as you fix it — they gate the
+merge now, and a PAT-authenticated MCP client cannot resolve them, so use the
+GraphQL `resolveReviewThread` mutation through `gh api`.
 
 **Never commit directly to `main`.** Two backstops enforce this. A local
 `reject-default-branch-commit` pre-commit hook (installed through devenv's
@@ -445,13 +435,13 @@ safety net, not the workflow.
 
 ### Every change goes through an isolated worktree + PR
 
-Worktrees live in `<repo>-worktrees/`, a **sibling of the primary checkout** —
-a clone at `~/src/nix-agentic-tools` puts them in
+Worktrees live in `<repo>-worktrees/`, a **sibling of the primary checkout** — a
+clone at `~/src/nix-agentic-tools` puts them in
 `~/src/nix-agentic-tools-worktrees/<slug>`. Keeping them beside the clone means
 a direnv whitelist (or any editor/tooling trust root) covering the checkout
-covers new worktrees too, so `cd` alone enters the devenv shell and
-materializes the gitignored `files.*` artifacts with no manual step — and it
-keeps work out of `~/.cache`, which cache-cleaning tools treat as disposable.
+covers new worktrees too, so `cd` alone enters the devenv shell and materializes
+the gitignored `files.*` artifacts with no manual step — and it keeps work out
+of `~/.cache`, which cache-cleaning tools treat as disposable.
 
 Derive that directory once per shell. This form is correct from **any**
 worktree, not just the primary checkout:
@@ -487,15 +477,15 @@ silently resolves one level too deep, into
    rejected. With direnv allowed for the parent directory the `cd` is enough on
    its own; that is what the sibling location buys.
 
-3. **Push at the first commit** — not at the end — so the branch is a
-   continuous off-machine backup. Open the PR **ready (non-draft) as soon as
-   the work is dev-complete**: Copilot review does **not** run on draft PRs in
-   this repo, so a draft that is actually ready silently skips review. Reserve
-   **draft** for genuine WIP, or when you explicitly want to preview the branch
-   in GitHub without review. Draft and ready PRs both get full CI here.
+3. **Push at the first commit** — not at the end — so the branch is a continuous
+   off-machine backup. Open the PR **ready (non-draft) as soon as the work is
+   dev-complete**: Copilot review does **not** run on draft PRs in this repo, so
+   a draft that is actually ready silently skips review. Reserve **draft** for
+   genuine WIP, or when you explicitly want to preview the branch in GitHub
+   without review. Draft and ready PRs both get full CI here.
 
-4. Keep pushing as work lands. Flip draft → ready the moment it is
-   dev-complete so review can start.
+4. Keep pushing as work lands. Flip draft → ready the moment it is dev-complete
+   so review can start.
 
 5. Merges are squash merges. The operator performs them for **human** PRs; the
    bot's `update/*` PRs land themselves (next section).
@@ -588,12 +578,12 @@ nix-agentic-tools is a Nix flake monorepo providing:
 
 - **Stacked workflow skills** — SKILL.md files for stacked commit workflows
   using git-branchless, git-absorb, and git-revise
-- **MCP server packages** — 12+ Model Context Protocol servers packaged as
-  Nix derivations with typed settings and credential handling
-- **Home-manager modules** — declarative configuration for Claude Code,
-  Copilot CLI, Kiro CLI, stacked workflows, and MCP services
-- **DevShell modules** — per-project AI tool configuration without
-  home-manager (`mkAgenticShell`)
+- **MCP server packages** — 12+ Model Context Protocol servers packaged as Nix
+  derivations with typed settings and credential handling
+- **Home-manager modules** — declarative configuration for Claude Code, Copilot
+  CLI, Kiro CLI, stacked workflows, and MCP services
+- **DevShell modules** — per-project AI tool configuration without home-manager
+  (`mkAgenticShell`)
 - **Git tool overlays** — git-absorb, git-branchless, git-revise
 
 Skills work without Nix. Nix unlocks overlays, home-manager modules, and

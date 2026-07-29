@@ -3,10 +3,10 @@
 > Status: **RESEARCH / DESIGN — not planned, not implemented.** Picked up
 > 2026-07-18 on branch `refactor/ai-factory-architecture`. Question from the
 > operator: when a skill fires, can we hook it / auto-switch to a subagent /
-> pre-inject its multi-turn bootstrap reads so the content is already in
-> context on the first turn instead of burning 3–4 tool-call turns.
-> Concretely targets the `living-workflow` skill's resume path. Claude-first;
-> Kiro parity is a noted seam, not solved here.
+> pre-inject its multi-turn bootstrap reads so the content is already in context
+> on the first turn instead of burning 3–4 tool-call turns. Concretely targets
+> the `living-workflow` skill's resume path. Claude-first; Kiro parity is a
+> noted seam, not solved here.
 >
 > No code was changed. Two mechanism claims below are flagged **UNVERIFIED** —
 > confirm against a live payload before wiring anything.
@@ -16,8 +16,8 @@
 `living-workflow`'s resume bootstrap is a **pointer-chase**, not a fixed file
 set: `state.json.current_position` → the relevant slice → its phase brief →
 phase-summaries. Because each read names the next, they can't be batched in
-parallel, so the model spends 3–4 sequential tool-call turns just getting to
-the point where it can act.
+parallel, so the model spends 3–4 sequential tool-call turns just getting to the
+point where it can act.
 
 Goal: collapse those bootstrap reads to **zero** tool-call turns — the resolved
 working set already in context when the model takes its first turn.
@@ -41,10 +41,10 @@ wrong tool for `living-workflow`.**
 
 ### Q2. Hook when a specific skill runs?
 
-**Yes.** A skill invocation is a call to the `Skill` tool, so a
-`PreToolUse` / `PostToolUse` hook with `matcher: "^Skill$"` fires on it, and you
-branch on the skill name inside `tool_input`. There is **no** dedicated
-`SkillStart` / `PreSkill` event — everything rides the generic tool hooks.
+**Yes.** A skill invocation is a call to the `Skill` tool, so a `PreToolUse` /
+`PostToolUse` hook with `matcher: "^Skill$"` fires on it, and you branch on the
+skill name inside `tool_input`. There is **no** dedicated `SkillStart` /
+`PreSkill` event — everything rides the generic tool hooks.
 
 - **UNVERIFIED — field name.** A research agent claimed the branch key is
   `tool_input.skill_name`. But this session's `Skill` tool takes a parameter
@@ -133,16 +133,16 @@ raw read, while still writing nothing.
 
 ## Recommended approach — layered, cheapest first
 
-**Layer 1 — parallelize the non-chained reads (free, portable to Kiro).**
-Where the resume/create/groom steps load _independent_ files (e.g. the two
-static protocol docs), instruct reading them in a single message. Does not solve
-the pointer-chase, but trims easy turns and is Kiro-safe. SKILL.md today
-prescribes numbered sequential steps with no batching instruction.
+**Layer 1 — parallelize the non-chained reads (free, portable to Kiro).** Where
+the resume/create/groom steps load _independent_ files (e.g. the two static
+protocol docs), instruct reading them in a single message. Does not solve the
+pointer-chase, but trims easy turns and is Kiro-safe. SKILL.md today prescribes
+numbered sequential steps with no batching instruction.
 
 **Layer 2 — pre-bundle the static protocol in `mkSkill.nix` (portable).** The
 run-time static set is exactly `references/living-plan-bootstrap.md` +
-`references/state.schema.json` (groom additionally `living-workflow-backlog.md`).
-Add one build step to the `runCommand` in
+`references/state.schema.json` (groom additionally
+`living-workflow-backlog.md`). Add one build step to the `runCommand` in
 `packages/living-workflow/lib/mkSkill.nix` (~lines 25–29, alongside the existing
 `@XDG_STATE_BASE@` sed) that concatenates them into
 `references/bootstrap-bundle.md`, and point SKILL.md at the bundle. One read
@@ -170,8 +170,8 @@ cost of Claude-only machinery and the entry-point wrinkle below.
   (`packages/living-workflow/modules/devenv/default.nix:31-34`). Natural home
   for Layer 2's concat and for a per-target SKILL.md render (Layer 3).
 - **A `Skill` PostToolUse hook (if pursued instead of / with `` !`command` ``)**
-  wires cleanly in `devenv.nix`'s `claude.code.hooks` block (~lines 168–185),
-  as a sibling to `validate-at-stop`. The devenv `hookSubmodule` supports
+  wires cleanly in `devenv.nix`'s `claude.code.hooks` block (~lines 168–185), as
+  a sibling to `validate-at-stop`. The devenv `hookSubmodule` supports
   `hookType = "PostToolUse"` + a regex `matcher` (precedent: upstream
   `git-hooks-run` uses `matcher = "^(Edit|MultiEdit|Write)$"`). Reuse the
   `lib/validate-at-stop.{nix,sh}` authoring pattern (a `writeShellApplication`
@@ -195,8 +195,8 @@ cost of Claude-only machinery and the entry-point wrinkle below.
    `mkSkill.nix` (Claude gets the injection line; Kiro keeps the plain numbered
    read steps). Deferred — Claude-first for now.
 3. **Verify before wiring:** (a) the `tool_input` skill key name; (b) whether
-   `` !`command` `` is supported in _skills_ (docs section title implies yes; the
-   operator linked it) and its load-time timeout / size behavior; (c) exact
+   `` !`command` `` is supported in _skills_ (docs section title implies yes;
+   the operator linked it) and its load-time timeout / size behavior; (c) exact
    subagent frontmatter keys if Q1 is ever revisited.
 
 ## Suggested next step

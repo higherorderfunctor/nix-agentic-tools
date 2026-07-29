@@ -60,8 +60,8 @@ commit. git-absorb creates fixup commits for each such match.
 
 ## Installation & Setup
 
-Available in nixpkgs, Homebrew, Arch, Debian, Fedora, and others. From crates.io:
-`cargo install git-absorb`.
+Available in nixpkgs, Homebrew, Arch, Debian, Fedora, and others. From
+crates.io: `cargo install git-absorb`.
 
 ### Recommended Configuration
 
@@ -85,9 +85,8 @@ git config absorb.fixupTargetAlwaysSHA true
 
 git-absorb checks whether a staged hunk can be unambiguously attributed to a
 single ancestor commit. If the lines modified in the hunk were last touched by
-exactly one commit in the stack, the hunk "commutes" to that commit. If
-multiple commits touched those lines, git-absorb skips the hunk (it's
-ambiguous).
+exactly one commit in the stack, the hunk "commutes" to that commit. If multiple
+commits touched those lines, git-absorb skips the hunk (it's ambiguous).
 
 ### Fixup Commits
 
@@ -98,8 +97,8 @@ consumed by `git rebase --autosquash` to fold into their targets. The
 ### Stack Depth
 
 By default, only the last 10 commits are candidates. Set `absorb.maxStack=50`
-for deeper stacks. Use `--no-limit` to consider all commits until root, a
-merge, or a different author. Use `--base <commit>` for explicit targeting.
+for deeper stacks. Use `--no-limit` to consider all commits until root, a merge,
+or a different author. Use `--base <commit>` for explicit targeting.
 
 ### Stack Boundaries
 
@@ -240,9 +239,9 @@ git absorb --and-rebase -- --update-refs
 
 ### 10. Use --whole-file for new-line additions
 
-When absorb can't match new lines (e.g., an `import` statement added to
-support code in an earlier commit), `--whole-file` matches to the last
-commit that touched the same file:
+When absorb can't match new lines (e.g., an `import` statement added to support
+code in an earlier commit), `--whole-file` matches to the last commit that
+touched the same file:
 
 ```bash
 git add -p
@@ -258,11 +257,11 @@ require manual `git commit --amend` or `git checkout` + amend instead:
 - **New files** — absorb reports "not in-place file modifications"
 - **Deleted files** — same; can't route a deletion to a commit
 - **Renamed/moved files** — same
-- **Multi-line format changes** (e.g., YAML list → string) where the hunk
-  spans both added and removed lines that don't match a single commit's
-  context — absorb can't find a unique target
-- **Content that commutes with all candidates** — if the staged hunk could
-  apply cleanly to any commit in the stack, absorb can't choose and skips it
+- **Multi-line format changes** (e.g., YAML list → string) where the hunk spans
+  both added and removed lines that don't match a single commit's context —
+  absorb can't find a unique target
+- **Content that commutes with all candidates** — if the staged hunk could apply
+  cleanly to any commit in the stack, absorb can't choose and skips it
 
 When absorb can't route a hunk, it remains staged. Check `git diff --cached`
 after absorb to see what's left, then handle manually.
@@ -276,8 +275,8 @@ after absorb to see what's left, then handle manually.
 
 ### Don't expect hook support
 
-git-absorb uses libgit2 for commits, which does **not** run pre-commit hooks.
-If your workflow requires hooks, run them manually after absorb:
+git-absorb uses libgit2 for commits, which does **not** run pre-commit hooks. If
+your workflow requires hooks, run them manually after absorb:
 
 ```bash
 git absorb --and-rebase
@@ -290,9 +289,9 @@ git absorb --and-rebase -- -x "pre-commit run --all-files"
 
 libgit2 doesn't fully support `includeIf` directives. If you use conditional
 includes (e.g., for work email), put overrides in the repo's `.git/config`
-instead. This also affects `GIT_AUTHOR_EMAIL` / `GIT_COMMITTER_EMAIL` env
-vars -- libgit2 may not respect them for the author check. Use
-`--force-author` or `absorb.forceAuthor` as a workaround.
+instead. This also affects `GIT_AUTHOR_EMAIL` / `GIT_COMMITTER_EMAIL` env vars
+-- libgit2 may not respect them for the author check. Use `--force-author` or
+`absorb.forceAuthor` as a workaround.
 
 ### Don't expect signed commits
 
@@ -301,9 +300,9 @@ libgit2 limitation with no current workaround.
 
 ### Don't absorb through merge commits
 
-git-absorb only works with linear history. Merge commits in the stack will
-stop the revwalk. Use `--base` to explicitly target past a merge if you know
-what you're doing.
+git-absorb only works with linear history. Merge commits in the stack will stop
+the revwalk. Use `--base` to explicitly target past a merge if you know what
+you're doing.
 
 ### Don't expect git CLI `-c` overrides to work
 
@@ -313,16 +312,14 @@ libgit2 reads config independently from the git CLI. Use `.git/config`,
 
 ### Don't expect new file additions to be absorbed
 
-Staging a brand-new file or re-adding a deleted file shows "No additions
-staged" because absorb only considers line-level diffs against ancestor
-commits. New files have no ancestor attribution. Create manual fixup commits
-for these.
+Staging a brand-new file or re-adding a deleted file shows "No additions staged"
+because absorb only considers line-level diffs against ancestor commits. New
+files have no ancestor attribution. Create manual fixup commits for these.
 
 ### Don't expect submodule changes to be absorbed
 
-Submodule pointer updates are not handled. Absorb reports "No additions
-staged" for submodule diffs. Create manual fixup commits for submodule
-updates.
+Submodule pointer updates are not handled. Absorb reports "No additions staged"
+for submodule diffs. Create manual fixup commits for submodule updates.
 
 ## Known Limitations (libgit2 / upstream)
 
@@ -369,12 +366,12 @@ git revise --autosquash       # in-memory autosquash (faster than rebase)
 ```
 
 > **Caveat:** Requires `absorb.fixupTargetAlwaysSHA = false`. With the
-> recommended config (`= true`), absorb creates `fixup! <SHA>` messages
-> that git-revise cannot match (mystor/git-revise#79). Prefer
+> recommended config (`= true`), absorb creates `fixup! <SHA>` messages that
+> git-revise cannot match (mystor/git-revise#79). Prefer
 > `git absorb --and-rebase` with the recommended config.
 
-A native `--and-revise` flag has been requested (tummychow/git-absorb#188) but is not yet
-implemented.
+A native `--and-revise` flag has been requested (tummychow/git-absorb#188) but
+is not yet implemented.
 
 ### Recovery
 

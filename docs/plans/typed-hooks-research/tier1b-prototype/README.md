@@ -1,27 +1,32 @@
 # Tier-1b contract-test scaffolding — PROTOTYPE
 
 Working prototype of the **hermetic hook contract-test** tier from
-`../../typed-hooks-across-clis-assessment.md` §9 (Tier-1b). It generalises the existing
-`checks/validate-at-stop.nix` pattern — _feed a documented stdin payload to a generated hook script,
-assert its stdout + exit code, with stub tools and no network/auth_ — to **every PoC event's documented
-I/O contract**, across both CLIs.
+`../../typed-hooks-across-clis-assessment.md` §9 (Tier-1b). It generalises the
+existing `checks/validate-at-stop.nix` pattern — _feed a documented stdin
+payload to a generated hook script, assert its stdout + exit code, with stub
+tools and no network/auth_ — to **every PoC event's documented I/O contract**,
+across both CLIs.
 
-> **Status:** prototype, **deliberately NOT wired into `checks/` or `flake.nix`.** It runs standalone and
-> as a `runCommandLocal` (proven building green: `11 passed, 0 failed`). Promote to
-> `checks/hook-contract-tests.nix` only after Phase 1 (see [Graduation](#graduation)).
+> **Status:** prototype, **deliberately NOT wired into `checks/` or
+> `flake.nix`.** It runs standalone and as a `runCommandLocal` (proven building
+> green: `11 passed, 0 failed`). Promote to `checks/hook-contract-tests.nix`
+> only after Phase 1 (see [Graduation](#graduation)).
 
 ## What it demonstrates
 
-The whole Tier-1b loop end-to-end on real, primary-sourced contracts — **the deterministic wrapper logic
-of a hook is fully testable without a live CLI**:
+The whole Tier-1b loop end-to-end on real, primary-sourced contracts — **the
+deterministic wrapper logic of a hook is fully testable without a live CLI**:
 
-- **Claude JSON decision-control path** — `PreToolUse` deny via `hookSpecificOutput.permissionDecision`
-  (not a top-level `decision`), `SessionStart` context injection, `Stop` `decision:"block"` + the
+- **Claude JSON decision-control path** — `PreToolUse` deny via
+  `hookSpecificOutput.permissionDecision` (not a top-level `decision`),
+  `SessionStart` context injection, `Stop` `decision:"block"` + the
   `stop_hook_active` loop-guard (the validate-at-stop contract).
-- **Claude exit-code path** — `PreToolUse` block via `exit 2` (+ stderr→Claude), mirroring the anthropics
-  reference impl; and the trap that **exit 1 does not block**.
-- **Kiro path** — `Stop` `{"decision":"block"}` JSON channel driven off a **cwd side-channel** because
-  Kiro stdin is metadata-only (the exact constraint autoMemory hit; §12 Q4).
+- **Claude exit-code path** — `PreToolUse` block via `exit 2` (+ stderr→Claude),
+  mirroring the anthropics reference impl; and the trap that **exit 1 does not
+  block**.
+- **Kiro path** — `Stop` `{"decision":"block"}` JSON channel driven off a **cwd
+  side-channel** because Kiro stdin is metadata-only (the exact constraint
+  autoMemory hit; §12 Q4).
 
 ## Layout
 
@@ -51,16 +56,19 @@ bash run-contract-tests.sh -v     # + PASS lines
 nix-build --max-jobs 1 contract-test.nix
 ```
 
-The harness is self-checking: a deliberately-wrong `expect` block is reported as `FAIL` and the suite
-exits non-zero (verified against 3 injected corruptions during authoring).
+The harness is self-checking: a deliberately-wrong `expect` block is reported as
+`FAIL` and the suite exits non-zero (verified against 3 injected corruptions
+during authoring).
 
 ## Fixture format (capture→replay)
 
-Each fixture is one JSON file = **a documented stdin payload + its expected assertions**. This is the
-`capture→replay` layout from §9: today the `stdin` blocks are **hand-authored from the hashed docs
-snapshot** (`../primary-source-hardening.md`); the **Tier-2 live probe replaces each `stdin` with a real
-captured payload** (`v3-<Trigger>-stdin.json` style), and the same fixtures then guard against CLI
-stdin-schema drift on upgrade — which would have caught the Kiro empty-`prompt` regression.
+Each fixture is one JSON file = **a documented stdin payload + its expected
+assertions**. This is the `capture→replay` layout from §9: today the `stdin`
+blocks are **hand-authored from the hashed docs snapshot**
+(`../primary-source-hardening.md`); the **Tier-2 live probe replaces each
+`stdin` with a real captured payload** (`v3-<Trigger>-stdin.json` style), and
+the same fixtures then guard against CLI stdin-schema drift on upgrade — which
+would have caught the Kiro empty-`prompt` regression.
 
 ```jsonc
 {
@@ -86,8 +94,9 @@ stdin-schema drift on upgrade — which would have caught the Kiro empty-`prompt
 }
 ```
 
-Assertion kinds: `exit`, `stdoutEmpty`, `stderrContains`, and per-path `eq` / `present` / `absent`.
-This is intentionally enough to express every PoC event's contract without a bespoke assertion DSL.
+Assertion kinds: `exit`, `stdoutEmpty`, `stderrContains`, and per-path `eq` /
+`present` / `absent`. This is intentionally enough to express every PoC event's
+contract without a bespoke assertion DSL.
 
 ## Where this sits in the three tiers (§9)
 
@@ -97,50 +106,62 @@ This is intentionally enough to express every PoC event's contract without a bes
 | **T1b contract** | documented stdin → generated hook → assert stdout/exit (hermetic)                    | **this dir**                                         |
 | **T2 live**      | real CLI fires the hook, observe real stdin (token-burning → NOT a check)            | HITL probe seeds the fixtures here                   |
 
-**Coverage boundary (§9):** T1b covers `command`-action wrapper _logic_ only. It **cannot** exercise Kiro
-`action:agent` or Claude `prompt`/`agent` handlers (no subprocess — emission-only), nor prove a hook
-actually _fires_ (that is T2, and for Kiro v3 it is TUI-only). The prototype therefore tests the four
-`command`-style example hooks; the typed factory's real emitted scripts slot in unchanged.
+**Coverage boundary (§9):** T1b covers `command`-action wrapper _logic_ only. It
+**cannot** exercise Kiro `action:agent` or Claude `prompt`/`agent` handlers (no
+subprocess — emission-only), nor prove a hook actually _fires_ (that is T2, and
+for Kiro v3 it is TUI-only). The prototype therefore tests the four
+`command`-style example hooks; the typed factory's real emitted scripts slot in
+unchanged.
 
 ## Fixture backlog (seed ideas — GROOM before building)
 
-The harness proves out end-to-end today on **one captured fixture** (`kiro/Stop/clean-allows.json`,
-now `captured@2.13.0`). The rest below are **seed ideas, deliberately not built** — groom (dedupe,
-prioritise, confirm the contract per row) before authoring. Real Tier-2 payloads for the Kiro rows
-already sit in `captures/kiro-2.13.0/` (raw capture → wrap with `expect` = the authoring step).
+The harness proves out end-to-end today on **one captured fixture**
+(`kiro/Stop/clean-allows.json`, now `captured@2.13.0`). The rest below are
+**seed ideas, deliberately not built** — groom (dedupe, prioritise, confirm the
+contract per row) before authoring. Real Tier-2 payloads for the Kiro rows
+already sit in `captures/kiro-2.13.0/` (raw capture → wrap with `expect` = the
+authoring step).
 
 **Kiro (captured payloads on hand):**
 
-- `UserPromptSubmit` — replay `captures/…/userpromptsubmit.stdin.json`; assert a recall/context hook
-  reads `.prompt`. **Guards the empty-`prompt` regression** (capture shows `prompt:""`).
-- `PreToolUse` — replay `…/pretooluse.stdin.json` (`tool_name`,`tool_input.command`); assert a guard
-  blocks a dangerous command via the Kiro decision channel. Richest guard surface.
-- `PostToolUse` — replay `…/posttooluse.stdin.json`; assert a result-aware hook reads `.tool_response`
-  (exit code / output).
-- `SessionStart` — replay `…/sessionstart.stdin.json`; assert a startup context/flush hook.
-- `Manual` (`/remember`) — **blocked**: did not fire in the 2.13 probe (Q2). Backlog: re-probe the
-  slash path, then author.
+- `UserPromptSubmit` — replay `captures/…/userpromptsubmit.stdin.json`; assert a
+  recall/context hook reads `.prompt`. **Guards the empty-`prompt` regression**
+  (capture shows `prompt:""`).
+- `PreToolUse` — replay `…/pretooluse.stdin.json`
+  (`tool_name`,`tool_input.command`); assert a guard blocks a dangerous command
+  via the Kiro decision channel. Richest guard surface.
+- `PostToolUse` — replay `…/posttooluse.stdin.json`; assert a result-aware hook
+  reads `.tool_response` (exit code / output).
+- `SessionStart` — replay `…/sessionstart.stdin.json`; assert a startup
+  context/flush hook.
+- `Manual` (`/remember`) — **blocked**: did not fire in the 2.13 probe (Q2).
+  Backlog: re-probe the slash path, then author.
 
 **Claude (documented today — upgrade on a Tier-2 Claude capture):**
 
-- Upgrade the existing `claude/{PreToolUse,SessionStart,Stop}/*.json` `stdin` blocks from documented to
-  captured once a Claude probe runs (flip `provenance`); schema-drift guard, same as Kiro.
-- `PostToolUse`, `UserPromptSubmit`, `Notification`, `PreCompact`, `SubagentStop` — not yet represented.
+- Upgrade the existing `claude/{PreToolUse,SessionStart,Stop}/*.json` `stdin`
+  blocks from documented to captured once a Claude probe runs (flip
+  `provenance`); schema-drift guard, same as Kiro.
+- `PostToolUse`, `UserPromptSubmit`, `Notification`, `PreCompact`,
+  `SubagentStop` — not yet represented.
 
 **Cross-cutting (harness capability, not a single fixture):**
 
-- `action:agent` (Kiro) / `prompt`+`agent` (Claude) handlers are **emission-only** — T1b cannot execute
-  them (no subprocess). Coverage stays in `checks/module-eval.nix`; note the boundary, don't fake it.
+- `action:agent` (Kiro) / `prompt`+`agent` (Claude) handlers are
+  **emission-only** — T1b cannot execute them (no subprocess). Coverage stays in
+  `checks/module-eval.nix`; note the boundary, don't fake it.
 
 ## Graduation
 
-Promote to `checks/hook-contract-tests.nix` (unioned at `flake.nix:216`) when **all** hold:
+Promote to `checks/hook-contract-tests.nix` (unioned at `flake.nix:216`) when
+**all** hold:
 
-1. The typed `ai.claude.hooks.*` / `ai.kiro.hooks.*` factory emits real hook scripts → replace the
-   `hooks-under-test/` stand-ins with the factory output (or generate them in-derivation).
-2. The Tier-2 probe has run once → replace each fixture's documented `stdin` with a captured payload and
-   flip its `provenance` to `captured@<cli ver>`.
+1. The typed `ai.claude.hooks.*` / `ai.kiro.hooks.*` factory emits real hook
+   scripts → replace the `hooks-under-test/` stand-ins with the factory output
+   (or generate them in-derivation).
+2. The Tier-2 probe has run once → replace each fixture's documented `stdin`
+   with a captured payload and flip its `provenance` to `captured@<cli ver>`.
 3. `git add` the tree (flake `src` only sees tracked files).
 
-Until then it lives here, runnable but unwired, so a `nix flake check` never depends on prototype hooks or
-un-captured fixtures.
+Until then it lives here, runnable but unwired, so a `nix flake check` never
+depends on prototype hooks or un-captured fixtures.

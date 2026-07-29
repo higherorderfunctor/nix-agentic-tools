@@ -77,8 +77,8 @@ git log --reverse --stat --format="=== %h %s ===" --root
 git diff --stat $(git hash-object -t tree /dev/null) HEAD
 ```
 
-For commits flagged during audit (oversized, potentially bundled), read the
-full diff to understand the content:
+For commits flagged during audit (oversized, potentially bundled), read the full
+diff to understand the content:
 
 ```bash
 git show <hash> --stat
@@ -124,8 +124,8 @@ Check each commit against `references/philosophy.md` rules:
 
 ### Incremental Content (§ Incremental Content)
 
-- Flag README/CLAUDE.md content that appears in a late batch commit instead
-  of with the feature it documents
+- Flag README/CLAUDE.md content that appears in a late batch commit instead of
+  with the feature it documents
 - Flag doc-only commits whose content belongs with earlier feature commits
 - Flag monolithic doc commits (>100 lines of docs added at once)
 
@@ -142,29 +142,28 @@ Check each commit against `references/philosophy.md` rules:
 ### Grouping Opportunities
 
 - Identify adjacent commits with the same type AND scope that could merge
-  without exceeding 200 lines (e.g., two 30-line `docs` commits touching
-  the same file)
+  without exceeding 200 lines (e.g., two 30-line `docs` commits touching the
+  same file)
 - Identify commits that are logical continuations (commit N adds a feature,
   commit N+1 adds docs for that same feature — they belong together)
-- Check for "thin wrapper" commits that just wire up something from the
-  previous commit (e.g., a commit that only adds a flake output for a module
-  introduced in the prior commit)
+- Check for "thin wrapper" commits that just wire up something from the previous
+  commit (e.g., a commit that only adds a flake output for a module introduced
+  in the prior commit)
 - Don't suggest merging commits that serve different review purposes even if
   they're small (e.g., a 20-line refactor and a 20-line feature should stay
   separate for revertibility)
 
 ### Single-Topic Validation
 
-- For each commit, read the full diff (not just the stat) and verify that
-  every changed line serves the commit message's stated purpose
-- Flag commits where the diff contains unrelated changes: a "fix typo"
-  commit that also reformats imports, an "add feature" commit that also
-  cleans up whitespace in unrelated files
-- Flag commits where the message says one thing but the diff does another
-  (e.g., message says "refactor" but the diff adds new functionality)
-- Use the test: "If I reverted this commit, would only one concern be
-  affected?" If reverting would undo two unrelated things, the commit
-  should be split
+- For each commit, read the full diff (not just the stat) and verify that every
+  changed line serves the commit message's stated purpose
+- Flag commits where the diff contains unrelated changes: a "fix typo" commit
+  that also reformats imports, an "add feature" commit that also cleans up
+  whitespace in unrelated files
+- Flag commits where the message says one thing but the diff does another (e.g.,
+  message says "refactor" but the diff adds new functionality)
+- Use the test: "If I reverted this commit, would only one concern be affected?"
+  If reverting would undo two unrelated things, the commit should be split
 
 ### History Hygiene (§ History Hygiene)
 
@@ -190,14 +189,16 @@ Stack: <range> (<N> commits, <total lines> lines)
 Use these flag labels:
 
 - `OVERSIZED` — exceeds 200 lines
-- `UNDERSIZED` — single commit under 50 lines that is too small to stand on its own
+- `UNDERSIZED` — single commit under 50 lines that is too small to stand on its
+  own
 - `BUNDLED` — multiple features in one commit
 - `BATCHED-DOCS` — docs that should be distributed to feature commits
 - `FORWARD-REF` — references something from a later commit
 - `MIXED-CONCERNS` — touches unrelated concerns
 - `EARLY-DEP` — dependency added before first use
 - `HYGIENE` — fix/WIP/tweaks commit message
-- `MERGEABLE` — adjacent commits that are individually reasonable but serve the same concern and could combine
+- `MERGEABLE` — adjacent commits that are individually reasonable but serve the
+  same concern and could combine
 - `OFF-TOPIC` — diff contains changes unrelated to the commit message
 
 ### Violations
@@ -232,9 +233,9 @@ If mergeable commits are found, list them:
    items — could merge with an adjacent metadata commit if one exists.
 ```
 
-Only suggest groupings where the merged result would still be a single
-coherent concern under 200 lines. Don't suggest merging across concern
-boundaries just because commits are small.
+Only suggest groupings where the merged result would still be a single coherent
+concern under 200 lines. Don't suggest merging across concern boundaries just
+because commits are small.
 
 ### Planner Handoff
 
@@ -258,20 +259,19 @@ Stack is clean. No restructuring needed.
 
 ## Tips
 
-- Don't over-flag. A 210-line commit for a single large reference doc is
-  fine — it's one coherent document. Flag the pattern, not the number.
+- Don't over-flag. A 210-line commit for a single large reference doc is fine —
+  it's one coherent document. Flag the pattern, not the number.
 - Bundled commits are the most impactful violation to catch — they affect
   revertibility and review quality.
 - The summary table should be copy-pasteable into a conversation with
   `/stack-plan` for restructuring.
 - When unsure if content is "batched docs" vs. legitimate cross-cutting
   packaging docs, note the ambiguity rather than hard-flagging.
-- **`--root` mode for tip-only redistribution:** when a branch has
-  accumulated experimental commits, pivots, and failed approaches,
-  `--root` mode produces the total diff against the empty tree (or use a
-  range like `main..HEAD` for the total diff against a base). This output
-  shows the FINAL file state, which is the input for
-  `/stack-plan --tip-only` redistribution. When the majority of commits
-  are flagged with `HYGIENE`, `MIXED-CONCERNS`, or `OFF-TOPIC`, suggest
+- **`--root` mode for tip-only redistribution:** when a branch has accumulated
+  experimental commits, pivots, and failed approaches, `--root` mode produces
+  the total diff against the empty tree (or use a range like `main..HEAD` for
+  the total diff against a base). This output shows the FINAL file state, which
+  is the input for `/stack-plan --tip-only` redistribution. When the majority of
+  commits are flagged with `HYGIENE`, `MIXED-CONCERNS`, or `OFF-TOPIC`, suggest
   tip-only redistribution in the planner handoff instead of standard
   restructure.

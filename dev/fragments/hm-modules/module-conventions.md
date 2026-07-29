@@ -2,57 +2,51 @@
 
 > **Last verified:** 2026-07-28 (commit pending — records the
 > ONE-SHARED-DECLARATION form of the config-parity rule, landed by
-> `packages/glab` and asserted by
-> `module-glab-hm-devenv-option-parity`; prior 2026-07-21 was the
-> repo-wide activation reordering `entryAfter ["writeBoundary"]` →
-> `["linkGeneration"]`; earlier revisions added the activation
-> script `exit` warning + Nix path type strictness section).
-> If you touch any `modules/<subdir>/default.nix` file, add a new
-> option, or change an assertion/activation pattern and this
-> fragment isn't updated in the same commit, stop and fix it.
+> `packages/glab` and asserted by `module-glab-hm-devenv-option-parity`; prior
+> 2026-07-21 was the repo-wide activation reordering
+> `entryAfter ["writeBoundary"]` → `["linkGeneration"]`; earlier revisions added
+> the activation script `exit` warning + Nix path type strictness section). If
+> you touch any `modules/<subdir>/default.nix` file, add a new option, or change
+> an assertion/activation pattern and this fragment isn't updated in the same
+> commit, stop and fix it.
 
-These conventions are enforced by code review and the
-`checks/module-eval.nix` evaluation tests, not by the module
-system itself. Follow them when adding or modifying any HM module
-under `modules/**`.
+These conventions are enforced by code review and the `checks/module-eval.nix`
+evaluation tests, not by the module system itself. Follow them when adding or
+modifying any HM module under `modules/**`.
 
 ### Option shape conventions
 
 **Use explicit types.** Rare `types.anything` appears only as an
-`internal = true` escape hatch in the MCP module's `mcpConfig`.
-Everywhere else, declare the real type: `types.submodule`,
-`types.nullOr`, `types.attrsOf`, `types.enum`, `types.attrTag`,
-`types.listOf`, etc.
+`internal = true` escape hatch in the MCP module's `mcpConfig`. Everywhere else,
+declare the real type: `types.submodule`, `types.nullOr`, `types.attrsOf`,
+`types.enum`, `types.attrTag`, `types.listOf`, etc.
 
-**Submodules as containers.** Per-ecosystem config lives in a
-submodule: `ai.claude`, `ai.copilot`, `ai.kiro` are each a
-`types.submodule { options = { enable; package; ... }; }`. The
-submodule is the logical grouping — do not flatten per-ecosystem
-options into the top level.
+**Submodules as containers.** Per-ecosystem config lives in a submodule:
+`ai.claude`, `ai.copilot`, `ai.kiro` are each a
+`types.submodule { options = { enable; package; ... }; }`. The submodule is the
+logical grouping — do not flatten per-ecosystem options into the top level.
 
-**Flat at top level for cross-ecosystem.** `ai.skills`,
-`ai.instructions`, `ai.lspServers`, and
-`ai.environmentVariables` are NOT nested inside a per-ecosystem
-submodule. They fan out to whichever ecosystems are enabled at
-`mkDefault` priority. Anything that's "one option, many
-destinations" lives flat.
+**Flat at top level for cross-ecosystem.** `ai.skills`, `ai.instructions`,
+`ai.lspServers`, and `ai.environmentVariables` are NOT nested inside a
+per-ecosystem submodule. They fan out to whichever ecosystems are enabled at
+`mkDefault` priority. Anything that's "one option, many destinations" lives
+flat.
 
-**Settings pattern: freeformType + typed subkeys.** When wrapping
-a CLI's settings.json, use `freeformType = jsonFormat.type` plus
-explicit `mkOption` declarations for known typed keys (e.g.
-`settings.model`, `settings.telemetry`). Unknown keys flow
-through freely; known keys get type-checked.
+**Settings pattern: freeformType + typed subkeys.** When wrapping a CLI's
+settings.json, use `freeformType = jsonFormat.type` plus explicit `mkOption`
+declarations for known typed keys (e.g. `settings.model`, `settings.telemetry`).
+Unknown keys flow through freely; known keys get type-checked.
 
-**Defaults via `mkOption { default = ...; }`**, not `mkDefault`
-in the declaration. Reserve `mkDefault` for fanout values in the
-config block (so consumers can override).
+**Defaults via `mkOption { default = ...; }`**, not `mkDefault` in the
+declaration. Reserve `mkDefault` for fanout values in the config block (so
+consumers can override).
 
 ### Gating and mkIf patterns
 
-**Per-CLI enable is the SOLE gate.** Each `ai.{claude,copilot,kiro}.enable`
-is its own mkIf block. There is **no master `ai.enable`** — it
-was dropped in commit f2e911c after causing a silent no-op bug
-(see `ai-module-fanout` fragment for the full story).
+**Per-CLI enable is the SOLE gate.** Each `ai.{claude,copilot,kiro}.enable` is
+its own mkIf block. There is **no master `ai.enable`** — it was dropped in
+commit f2e911c after causing a silent no-op bug (see `ai-module-fanout` fragment
+for the full story).
 
 The `config` block shape:
 
@@ -65,8 +59,7 @@ config = mkMerge [
 ];
 ```
 
-**Each per-CLI block also flips the corresponding
-`programs.<cli>.enable`:**
+**Each per-CLI block also flips the corresponding `programs.<cli>.enable`:**
 
 ```nix
 (mkIf cfg.claude.enable {
@@ -75,9 +68,10 @@ config = mkMerge [
 })
 ```
 
-`mkDefault` lets the consumer override with `programs.claude-code.enable = false`
-explicitly if they want to turn it off while keeping `ai.claude.enable = true`
-for other reasons. In practice they don't — it's an escape hatch.
+`mkDefault` lets the consumer override with
+`programs.claude-code.enable = false` explicitly if they want to turn it off
+while keeping `ai.claude.enable = true` for other reasons. In practice they
+don't — it's an escape hatch.
 
 **hasModule checks upstream availability**:
 
@@ -85,10 +79,9 @@ for other reasons. In practice they don't — it's an escape hatch.
 hasModule = path: (attrByPath path null options) != null;
 ```
 
-This queries the OPTION space, not the config values. Used in
-assertions to verify `programs.copilot-cli.enable` exists as an
-option path before trying to reference it. Different from runtime
-checks — runs at eval time.
+This queries the OPTION space, not the config values. Used in assertions to
+verify `programs.copilot-cli.enable` exists as an option path before trying to
+reference it. Different from runtime checks — runs at eval time.
 
 **Nested mkIf for conditional fanout:**
 
@@ -98,16 +91,15 @@ checks — runs at eval time.
 })
 ```
 
-Check both the data condition (`lspServers != {}`) and the module
-availability (`hasModule ...`) before touching an upstream option
-path. Keeps the module robust to consumers who haven't imported
-everything.
+Check both the data condition (`lspServers != {}`) and the module availability
+(`hasModule ...`) before touching an upstream option path. Keeps the module
+robust to consumers who haven't imported everything.
 
 ### Assertion conventions
 
-**Always outside mkIf.** Assertions live in an unguarded block
-inside `mkMerge [...]`. This ensures misconfigurations surface
-even when the feature itself isn't enabled:
+**Always outside mkIf.** Assertions live in an unguarded block inside
+`mkMerge [...]`. This ensures misconfigurations surface even when the feature
+itself isn't enabled:
 
 ```nix
 config = mkMerge [
@@ -122,15 +114,14 @@ config = mkMerge [
 ];
 ```
 
-**Precise messages naming the option path.** Don't say "module
-error" or "configuration invalid." Say
+**Precise messages naming the option path.** Don't say "module error" or
+"configuration invalid." Say
 `ai.copilot.enable requires programs.copilot-cli to be available`.
 
 ### Package override pattern
 
-**Every per-CLI submodule exposes a `package` option.** Consumers
-can swap out the package entirely. Wrapping pattern (claude-code,
-copilot-cli, kiro-cli):
+**Every per-CLI submodule exposes a `package` option.** Consumers can swap out
+the package entirely. Wrapping pattern (claude-code, copilot-cli, kiro-cli):
 
 ```nix
 pkgs.symlinkJoin {
@@ -158,26 +149,24 @@ pkgs.symlinkJoin {
 home.activation.<name> = lib.hm.dag.entryAfter ["linkGeneration"] (script);
 ```
 
-All file-writing/merging activation scripts run `entryAfter
-["linkGeneration"]`, i.e. after HM has actually linked the
-generation's files into the home directory. `entryAfter
-["writeBoundary"]` is NOT sufficient for that: `writeBoundary` is a
-sibling of `linkGeneration` (order between siblings comes from
-`lib.toposort`), so a writeBoundary-ordered script can run before
-`home.file` entries exist on disk. The one `entryBefore` user is the
-steering materializer's prune phase (`lib/ai/materialize.nix`,
-`entryBefore ["checkLinkTargets"]`), which must clear flipped
-copy-mode files before HM checks link targets.
+All file-writing/merging activation scripts run `entryAfter ["linkGeneration"]`,
+i.e. after HM has actually linked the generation's files into the home
+directory. `entryAfter ["writeBoundary"]` is NOT sufficient for that:
+`writeBoundary` is a sibling of `linkGeneration` (order between siblings comes
+from `lib.toposort`), so a writeBoundary-ordered script can run before
+`home.file` entries exist on disk. The one `entryBefore` user is the steering
+materializer's prune phase (`lib/ai/materialize.nix`,
+`entryBefore ["checkLinkTargets"]`), which must clear flipped copy-mode files
+before HM checks link targets.
 
-**NEVER use `exit` as a short-circuit.** `home.activation.<name>`
-blocks are **inlined** into a single outer bash script at
-`$out/home-manager-generation/activate` that runs under
-`set -eu -o pipefail`. Any `exit 0` or `exit 1` inside an
-activation block terminates the **entire** activation — every
-subsequent hook (including `linkGeneration`, `home.file` writes,
-plugin installs, `reload-secrets`, service reloads) is silently
-skipped. Symptom: activation output stops cleanly mid-run with no
-error, and downstream state changes never land.
+**NEVER use `exit` as a short-circuit.** `home.activation.<name>` blocks are
+**inlined** into a single outer bash script at
+`$out/home-manager-generation/activate` that runs under `set -eu -o pipefail`.
+Any `exit 0` or `exit 1` inside an activation block terminates the **entire**
+activation — every subsequent hook (including `linkGeneration`, `home.file`
+writes, plugin installs, `reload-secrets`, service reloads) is silently skipped.
+Symptom: activation output stops cleanly mid-run with no error, and downstream
+state changes never land.
 
 Use structured control flow for fast paths:
 
@@ -192,126 +181,112 @@ if [ "$NEW_FP" != "$OLD_FP" ]; then
 fi
 ```
 
-Reserve `exit 1` for cases where you actually want to abort the
-whole activation on an error. Never `exit 0` for a cache-hit
-fast path.
+Reserve `exit 1` for cases where you actually want to abort the whole activation
+on an error. Never `exit 0` for a cache-hit fast path.
 
-**Settings merge pattern** (copilot-cli, kiro-cli): runtime
-config.json files are merged with Nix-declared values using
-`jq -s '.[0] * .[1]'` so user runtime edits (e.g.,
-`trusted_folders`) are preserved across rebuilds. The Nix
-settings override on conflict, user-added keys pass through.
+**Settings merge pattern** (copilot-cli, kiro-cli): runtime config.json files
+are merged with Nix-declared values using `jq -s '.[0] * .[1]'` so user runtime
+edits (e.g., `trusted_folders`) are preserved across rebuilds. The Nix settings
+override on conflict, user-added keys pass through.
 
-**HM settings writes are conditional; devenv writes are not.**
-The HM activation merge (copilot `copilotSettingsMerge`, kiro
-`kiroSettingsMerge`) is gated on non-empty settings — if the
-consumer enables the ecosystem just for MCP/skills fanout and
-doesn't set any `ai.<cli>.settings`, the activation script
-doesn't fire and an externally-managed settings file is left
-untouched. Matches upstream Claude HM behavior where
-`settings.json` is only written when `cfg.settings != {}`.
+**HM settings writes are conditional; devenv writes are not.** The HM activation
+merge (copilot `copilotSettingsMerge`, kiro `kiroSettingsMerge`) is gated on
+non-empty settings — if the consumer enables the ecosystem just for MCP/skills
+fanout and doesn't set any `ai.<cli>.settings`, the activation script doesn't
+fire and an externally-managed settings file is left untouched. Matches upstream
+Claude HM behavior where `settings.json` is only written when
+`cfg.settings != {}`.
 
-Devenv-side writes are unconditional (always write the file
-when `enable = true`). This is intentional: devenv files are
-project-local symlinks, not home-dir writes. An empty `{}`
-settings file is harmless — the CLI merges it with global
-config. Upstream devenv claude does the same (unconditional).
+Devenv-side writes are unconditional (always write the file when
+`enable = true`). This is intentional: devenv files are project-local symlinks,
+not home-dir writes. An empty `{}` settings file is harmless — the CLI merges it
+with global config. Upstream devenv claude does the same (unconditional).
 
 **Secrets at activation time, not eval time.** Sops-nix paths
-(`cfg.userId.file`) are read by the activation script at run
-time via `cat "$path"`. Do NOT `builtins.readFile` them at
-eval time — sops decryption happens after nix eval finishes.
+(`cfg.userId.file`) are read by the activation script at run time via
+`cat "$path"`. Do NOT `builtins.readFile` them at eval time — sops decryption
+happens after nix eval finishes.
 
 ### home.file vs home.activation vs outOfStoreSymlink
 
-**`home.file` with `source =`** — immutable store-backed content.
-Used for skills directory symlinks and static config files. If
-the content is already in the store (a derivation output, a
-file inside the flake), this is the right tool.
+**`home.file` with `source =`** — immutable store-backed content. Used for
+skills directory symlinks and static config files. If the content is already in
+the store (a derivation output, a file inside the flake), this is the right
+tool.
 
-**`home.file` with `text =`** — content built at eval time from
-Nix data. Used for transformed instructions (e.g., the
-`fragments-ai` transforms emit strings that become
-`home.file.".claude/rules/<name>.md".text`).
+**`home.file` with `text =`** — content built at eval time from Nix data. Used
+for transformed instructions (e.g., the `fragments-ai` transforms emit strings
+that become `home.file.".claude/rules/<name>.md".text`).
 
-**`home.activation`** — stateful operations that need runtime
-info: reading sops files, computing fingerprints, merging
-runtime-mutable config files, resetting cached state.
+**`home.activation`** — stateful operations that need runtime info: reading sops
+files, computing fingerprints, merging runtime-mutable config files, resetting
+cached state.
 
-**`outOfStoreSymlink`** is NOT used in this repo's modules. See
-the backlog item about runtime state dirs for Claude's
-`~/.claude/projects`, which would need it.
+**`outOfStoreSymlink`** is NOT used in this repo's modules. See the backlog item
+about runtime state dirs for Claude's `~/.claude/projects`, which would need it.
 
 ### Config parity rule (HM ↔ devenv)
 
-**Every option on an HM module under `modules/<subdir>/` MUST
-have a matching option on the corresponding devenv module under
-`modules/devenv/<subdir>.nix`** — same types, same semantics,
-same fanout behavior. If you add an option to one, add it to
-the other in the same commit. Enforced by convention, checked
-at code review.
+**Every option on an HM module under `modules/<subdir>/` MUST have a matching
+option on the corresponding devenv module under `modules/devenv/<subdir>.nix`**
+— same types, same semantics, same fanout behavior. If you add an option to one,
+add it to the other in the same commit. Enforced by convention, checked at code
+review.
 
-**Shared types live in `lib/`.** Both HM and devenv modules import
-types from `lib/ai-common.nix` (`instructionModule`,
-`lspServerModule`, `mkCopilotLspConfig`, `mkLspConfig`) so the
-surfaces stay in sync by construction.
+**Shared types live in `lib/`.** Both HM and devenv modules import types from
+`lib/ai-common.nix` (`instructionModule`, `lspServerModule`,
+`mkCopilotLspConfig`, `mkLspConfig`) so the surfaces stay in sync by
+construction.
 
-**Stronger than shared types: one shared DECLARATION.**
-`packages/glab` puts its entire `options.glab` block in
-`packages/glab/modules/options.nix` and both facets `imports` it,
-so the two surfaces are the same expression rather than two that
-currently agree. Prefer this whenever the facets differ only in
-where the result is installed — glab's HM file sets
-`home.packages`, its devenv file sets `packages`, and nothing else
-differs. `checks/module-eval.nix` asserts the two option trees are
-equal (`module-glab-hm-devenv-option-parity`), which is a real
+**Stronger than shared types: one shared DECLARATION.** `packages/glab` puts its
+entire `options.glab` block in `packages/glab/modules/options.nix` and both
+facets `imports` it, so the two surfaces are the same expression rather than two
+that currently agree. Prefer this whenever the facets differ only in where the
+result is installed — glab's HM file sets `home.packages`, its devenv file sets
+`packages`, and nothing else differs. `checks/module-eval.nix` asserts the two
+option trees are equal (`module-glab-hm-devenv-option-parity`), which is a real
 test rather than a code-review convention.
 
-Note this is NOT free for every module: it only works when the
-options carry no facet-specific defaults or `defaultText`. Modules
-whose options reference `home.` or `files.` paths still need the
-per-facet declaration.
+Note this is NOT free for every module: it only works when the options carry no
+facet-specific defaults or `defaultText`. Modules whose options reference
+`home.` or `files.` paths still need the per-facet declaration.
 
 **Intentional differences** exist and are NOT parity gaps:
 
 - Activation scripts are HM-only (devenv lifecycle is different)
-- HM uses `home.file` / `home.activation`; devenv uses `files.*`
-  (per-project writable tree, not home dir)
+- HM uses `home.file` / `home.activation`; devenv uses `files.*` (per-project
+  writable tree, not home dir)
 
-If you touch one and the other is "intentionally different," say
-so in the commit message. If the mismatch is accidental, it's a
-bug.
+If you touch one and the other is "intentionally different," say so in the
+commit message. If the mismatch is accidental, it's a bug.
 
 ### Validation
 
-`checks/module-eval.nix` runs module evaluation tests via
-`evalModule` with the full `homeManagerModules.default` set.
-Add test cases there whenever you add new module behavior —
-especially for:
+`checks/module-eval.nix` runs module evaluation tests via `evalModule` with the
+full `homeManagerModules.default` set. Add test cases there whenever you add new
+module behavior — especially for:
 
 - Option discoverability (set an option, verify it evaluates)
 - Fanout correctness (set an option, verify it propagates)
-- Assertion firing (intentionally misconfigure, verify the
-  right assertion triggers)
+- Assertion firing (intentionally misconfigure, verify the right assertion
+  triggers)
 
-The tests caught the `ai.enable` master-switch bug during
-the f2e911c fix because the post-fix tests didn't reference
-`ai.enable` anymore. Regression protection via the eval harness.
+The tests caught the `ai.enable` master-switch bug during the f2e911c fix
+because the post-fix tests didn't reference `ai.enable` anymore. Regression
+protection via the eval harness.
 
-**Eval-only checks DON'T catch everything.** Some bugs only
-manifest during real HM activation against real consumer
-state (e.g., the Nix path type strictness bug below). When
-touching anything that
-affects activation scripts or on-disk layout, verify
-end-to-end against a consumer (`home-manager switch` on a
-real system), not just `nix flake check`.
+**Eval-only checks DON'T catch everything.** Some bugs only manifest during real
+HM activation against real consumer state (e.g., the Nix path type strictness
+bug below). When touching anything that affects activation scripts or on-disk
+layout, verify end-to-end against a consumer (`home-manager switch` on a real
+system), not just `nix flake check`.
 
 ### Nix path types — strict `lib.isPath` checks
 
-**Filter/copy operations on source paths return STRINGS, not
-path-typed values.** Only `./` path literals in Nix source
-produce `builtins.typeOf` result `"path"`. Everything that
-copies a source into the store returns a store-path string:
+**Filter/copy operations on source paths return STRINGS, not path-typed
+values.** Only `./` path literals in Nix source produce `builtins.typeOf` result
+`"path"`. Everything that copies a source into the store returns a store-path
+string:
 
 | Form                                     | `typeOf` result              |
 | ---------------------------------------- | ---------------------------- |
@@ -324,45 +299,41 @@ copies a source into the store returns a store-path string:
 | `"${./x}/suffix"` (string interpolation) | `"string"`                   |
 | `pkg.passthru.foo = ./x` then read back  | usually `"string"` (coerced) |
 
-This matters when passing values to options that gate on
-`lib.isPath` or `builtins.isPath`:
+This matters when passing values to options that gate on `lib.isPath` or
+`builtins.isPath`:
 
-- **Upstream HM `programs.claude-code.skills`.** MODERN
-  home-manager's `mkSkillEntry` gates on
+- **Upstream HM `programs.claude-code.skills`.** MODERN home-manager's
+  `mkSkillEntry` gates on
   `lib.hm.strings.isPathLike content && lib.pathIsDirectory content`.
-  `isPathLike` accepts store-path STRINGS, so a string that
-  resolves (via IFD) to a directory takes the recursive-directory
-  branch and materializes correctly; its fall-through also uses
-  `isPathLike` (`{ source = content; }`), never writing a store
-  path as text. This is why the current stacked-workflows /
-  living-workflow skill packages can feed store-path strings
+  `isPathLike` accepts store-path STRINGS, so a string that resolves (via IFD)
+  to a directory takes the recursive-directory branch and materializes
+  correctly; its fall-through also uses `isPathLike` (`{ source = content; }`),
+  never writing a store path as text. This is why the current stacked-workflows
+  / living-workflow skill packages can feed store-path strings
   (`packages/*/overlay.nix`, `lib/mkSkill.nix`,
-  `lib/ai/mkSkillPackageModule.nix`) — verified against the pinned
-  home-manager source (2026-07). It requires an HM pin recent
-  enough to carry `isPathLike` in `mkSkillEntry`.
-  **Historically (pre-`isPathLike`)** it checked the strict
-  `lib.isPath`, and a string input silently fell through to writing
-  the value as **TEXT CONTENT** to `.claude/skills/<name>/SKILL.md`
-  — a single line like `/nix/store/abc-skills/stack-fix` instead of
-  real YAML frontmatter, so Claude couldn't load the skill.
+  `lib/ai/mkSkillPackageModule.nix`) — verified against the pinned home-manager
+  source (2026-07). It requires an HM pin recent enough to carry `isPathLike` in
+  `mkSkillEntry`. **Historically (pre-`isPathLike`)** it checked the strict
+  `lib.isPath`, and a string input silently fell through to writing the value as
+  **TEXT CONTENT** to `.claude/skills/<name>/SKILL.md` — a single line like
+  `/nix/store/abc-skills/stack-fix` instead of real YAML frontmatter, so Claude
+  couldn't load the skill.
 
-- Our `lib/hm-helpers.nix:mkSkillEntries` had the same bug
-  until commit `1f1ad35`. It now uses
-  `(isPath || isString) && (readFileType == "directory")`
+- Our `lib/hm-helpers.nix:mkSkillEntries` had the same bug until commit
+  `1f1ad35`. It now uses `(isPath || isString) && (readFileType == "directory")`
   to handle both types correctly.
 
-- Our `mkDevenvSkillEntries` walker (commit `8655130`) also
-  uses `builtins.readFileType` — agnostic to path vs string.
+- Our `mkDevenvSkillEntries` walker (commit `8655130`) also uses
+  `builtins.readFileType` — agnostic to path vs string.
 
-**How to apply.** For **skills** on a modern HM pin either form
-works (path literal OR store-path string), so the skill packages
-deliberately use strings. But the type distinction still bites for
-values flowing into sinks that gate on the STRICT `lib.isPath` —
-`mkSourceEntry` (e.g. rule/instruction `source =`) and
-`cfg.context` both write a string as **text**, not a symlink — and
-for older HM pins. When the sink's tolerance is unknown, the safe
-form is a `./` path literal (introduce a module-relative one in the
-`let` block so filtering doesn't coerce it to a string):
+**How to apply.** For **skills** on a modern HM pin either form works (path
+literal OR store-path string), so the skill packages deliberately use strings.
+But the type distinction still bites for values flowing into sinks that gate on
+the STRICT `lib.isPath` — `mkSourceEntry` (e.g. rule/instruction `source =`) and
+`cfg.context` both write a string as **text**, not a symlink — and for older HM
+pins. When the sink's tolerance is unknown, the safe form is a `./` path literal
+(introduce a module-relative one in the `let` block so filtering doesn't coerce
+it to a string):
 
 ```nix
 { ... }: let
@@ -379,20 +350,18 @@ in {
 }
 ```
 
-**Historical failure mode (pre-`isPathLike`).** Surfaced 2026-04-08
-during skills-fanout-fix Task 3: the stacked-workflows HM module
-used `swsContent.passthru.skillsDir + "/stack-*"` where `skillsDir`
-came from `builtins.path` (a string). Against the then-strict
-`mkSkillEntry`, every consumer had garbage
-`~/.claude/skills/stack-*/SKILL.md` files (the store path written as
-text) for weeks. Worked around in commit `5a14a0c` with a
-module-relative `skillsRepo` path literal; the root cause is gone
-now that upstream `mkSkillEntry` uses `isPathLike` (above).
+**Historical failure mode (pre-`isPathLike`).** Surfaced 2026-04-08 during
+skills-fanout-fix Task 3: the stacked-workflows HM module used
+`swsContent.passthru.skillsDir + "/stack-*"` where `skillsDir` came from
+`builtins.path` (a string). Against the then-strict `mkSkillEntry`, every
+consumer had garbage `~/.claude/skills/stack-*/SKILL.md` files (the store path
+written as text) for weeks. Worked around in commit `5a14a0c` with a
+module-relative `skillsRepo` path literal; the root cause is gone now that
+upstream `mkSkillEntry` uses `isPathLike` (above).
 
 **Both our helpers and modern upstream are string-tolerant.** Our
-`mkSkillEntries` / `mkDevenvSkillEntries` and modern upstream
-`mkSkillEntry` all accept path-typed values AND store-path strings.
-A generated store-path string is now a supported, deliberate
-pattern (living-workflow bakes its XDG state base into a generated
-skill dir and feeds the outPath string). Reserve the `./`-literal
-discipline for the strict-`isPath` sinks noted above.
+`mkSkillEntries` / `mkDevenvSkillEntries` and modern upstream `mkSkillEntry` all
+accept path-typed values AND store-path strings. A generated store-path string
+is now a supported, deliberate pattern (living-workflow bakes its XDG state base
+into a generated skill dir and feeds the outPath string). Reserve the
+`./`-literal discipline for the strict-`isPath` sinks noted above.

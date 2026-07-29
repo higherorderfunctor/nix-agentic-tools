@@ -5,11 +5,11 @@
 > superpowers:executing-plans to implement this plan task-by-task. Steps use
 > checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Move the git-hooks validation Claude Code fires from the
-`PostToolUse` boundary (where a formatter rewrite desyncs the Edit tool's
-read-snapshot → "modified since read" failures) to the `Stop` boundary (after
-the chunk's last edit), auto-fixing formatting silently and blocking-with-reason
-on judgment lint.
+**Goal:** Move the git-hooks validation Claude Code fires from the `PostToolUse`
+boundary (where a formatter rewrite desyncs the Edit tool's read-snapshot →
+"modified since read" failures) to the `Stop` boundary (after the chunk's last
+edit), auto-fixing formatting silently and blocking-with-reason on judgment
+lint.
 
 **Architecture:** A `Stop` hook (`validate-at-stop`) runs when Claude hands
 control back. It (1) early-exits on a no-diff turn, (2) auto-applies formatting
@@ -28,17 +28,17 @@ mode), `python3` (JSON), flake `checks/*.nix` as the test surface.
 **Prior art / evidence:** Design is POC-validated end-to-end (headless
 `claude -p` in a scratch repo, 2026-07-17): Stop fires at hand-back; the
 `{"decision":"block","reason":…}` channel reaches the model; `stop_hook_active`
-flips true on the continuation (loop guard); an 11-assertion branch suite +
-a live block→fix→clean run all passed. See memory
+flips true on the continuation (loop guard); an 11-assertion branch suite + a
+live block→fix→clean run all passed. See memory
 `project_stop_hook_validation_poc`. Root-cause of the race: memory
 `project_edit_tool_prek_desync` and assessment
 `docs/plans/prek-posttooluse-hook-feedback-channel.md`.
 
 ## Global Constraints
 
-- **Strict bash everywhere:** `set -euETo pipefail` + `shopt -s inherit_errexit
-2>/dev/null || :` (project standard; the abbreviated `set -euo pipefail` is
-  forbidden).
+- **Strict bash everywhere:** `set -euETo pipefail` +
+  `shopt -s inherit_errexit 2>/dev/null || :` (project standard; the abbreviated
+  `set -euo pipefail` is forbidden).
 - **No bare commands in shipped wrappers:** the hook is a
   `writeShellApplication`; every external command it uses (`git`, `python3`,
   `prek`, coreutils) must come from `runtimeInputs` so it works under a stripped
@@ -84,7 +84,8 @@ The whole design assumes `prek run <hook-id> --files <paths>` runs a single hook
 against **working-tree** content (not staged-only, and without a stash cycle
 that would matter). Confirm before building.
 
-**Files:** none (investigation; record findings in the commit message of Task 2).
+**Files:** none (investigation; record findings in the commit message of Task
+2).
 
 - [ ] **Step 1: Confirm the hook-ids present in the suite**
 
@@ -94,8 +95,9 @@ Run:
 grep -nE '^\s+(treefmt|deadnix|statix|cspell|shellcheck|gitleaks|convco|treefmt-restage)\b' devenv.nix
 ```
 
-Expected: the ids `treefmt, deadnix, statix, cspell, shellcheck, gitleaks,
-convco, treefmt-restage` (from `git-hooks.hooks`, devenv.nix:118-159).
+Expected: the ids
+`treefmt, deadnix, statix, cspell, shellcheck, gitleaks, convco, treefmt-restage`
+(from `git-hooks.hooks`, devenv.nix:118-159).
 
 Classify:
 
@@ -119,8 +121,8 @@ prek run treefmt --files s.sh; echo "exit=$?"
 grep -nP '[ ]+$' s.sh && echo "STILL DIRTY" || echo "treefmt rewrote the UNSTAGED working-tree file"
 ```
 
-Expected: `treefmt` reformats `s.sh` even though the edit is unstaged →
-confirms `--files` uses working-tree content (fixes the staged-only blind spot).
+Expected: `treefmt` reformats `s.sh` even though the edit is unstaged → confirms
+`--files` uses working-tree content (fixes the staged-only blind spot).
 
 - [ ] **Step 3: Confirm a single judgment hook can be run in isolation and its
       nonzero exit + output are capturable**
@@ -156,13 +158,14 @@ chosen strategy for Task 2. Do NOT proceed on an unverified assumption.
 
 - Produces: a `validate-at-stop` executable (via `lib/validate-at-stop.nix`,
   `writeShellApplication`, exe name `validate-at-stop`) consumed by Task 3.
-- Contract: reads the Stop-hook JSON payload on **stdin** (keys used:
-  `cwd`, `stop_hook_active`); on a judgment failure prints
+- Contract: reads the Stop-hook JSON payload on **stdin** (keys used: `cwd`,
+  `stop_hook_active`); on a judgment failure prints
   `{"decision":"block","reason":<string>}` to **stdout** and exits 0; on a
   persistent failure with `stop_hook_active=="True"` prints
   `{"systemMessage":<string>}` and exits 0; otherwise exits 0 silently.
 
-- [ ] **Step 1: Write the hermetic branch test FIRST (it will fail — no script yet)**
+- [ ] **Step 1: Write the hermetic branch test FIRST (it will fail — no script
+      yet)**
 
 Create `checks/validate-at-stop.nix`. It runs the **raw** script against
 **stub** `prek`/`treefmt` on PATH so the orchestration branches are
@@ -257,9 +260,10 @@ existing `//`-merge idiom, keeping alphabetical order:
 
 - [ ] **Step 2: Run the check — verify it FAILS (script missing)**
 
-Run: `nix build .#checks.$(nix eval --raw --impure --expr builtins.currentSystem).validate-at-stop -L`
-Expected: FAIL — `lib/validate-at-stop.sh` does not exist (`src = ../lib/…`
-path error), or the eval errors on the missing file.
+Run:
+`nix build .#checks.$(nix eval --raw --impure --expr builtins.currentSystem).validate-at-stop -L`
+Expected: FAIL — `lib/validate-at-stop.sh` does not exist (`src = ../lib/…` path
+error), or the eval errors on the missing file.
 
 - [ ] **Step 3: Write `lib/validate-at-stop.sh`**
 
@@ -329,10 +333,12 @@ exit 0
 
 - [ ] **Step 4: Run the check — verify it PASSES (all four branches)**
 
-Run: `nix build .#checks.$(nix eval --raw --impure --expr builtins.currentSystem).validate-at-stop -L`
+Run:
+`nix build .#checks.$(nix eval --raw --impure --expr builtins.currentSystem).validate-at-stop -L`
 Expected: `validate-at-stop: 11 passed, 0 failed`, build succeeds.
 
-- [ ] **Step 5: Write `lib/validate-at-stop.nix` and smoke-build it (shellcheck gate)**
+- [ ] **Step 5: Write `lib/validate-at-stop.nix` and smoke-build it (shellcheck
+      gate)**
 
 ```nix
 # writeShellApplication wrapper for the Stop-hook validator. runtimeInputs
@@ -452,8 +458,8 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 agent run is a user-driven test — spoon-fed step-by-step, never async
 (`feedback_hitl_walk_through_live`, `feedback_nixos_config_hitl`).
 
-- [ ] **Step 1: Reload the devshell** (user runs) — `direnv reload` /
-      re-enter `devenv shell`. Then verify materialization:
+- [ ] **Step 1: Reload the devshell** (user runs) — `direnv reload` / re-enter
+      `devenv shell`. Then verify materialization:
 
   ```bash
   python3 -c "import json;h=json.load(open('.claude/settings.json'))['hooks'];print('Stop:',[x for g in h.get('Stop',[]) for x in g['hooks']]);print('PostToolUse:',h.get('PostToolUse','none'))"
@@ -463,10 +469,11 @@ agent run is a user-driven test — spoon-fed step-by-step, never async
   longer contains `git-hooks-run`.
 
 - [ ] **Step 2: Live block→fix→clean, in a NEW session** (mirrors the POC live
-      run). Introduce a deliberate cspell-flaggable word in a tracked file, let the
-      turn end, and confirm the Stop hook blocks with the finding, the fix pass
-      clears it, and the turn then hands back clean. Confirm a pure-conversation
-      turn (no file changes) does NOT run the suite (no-diff early-exit).
+      run). Introduce a deliberate cspell-flaggable word in a tracked file, let
+      the turn end, and confirm the Stop hook blocks with the finding, the fix
+      pass clears it, and the turn then hands back clean. Confirm a
+      pure-conversation turn (no file changes) does NOT run the suite (no-diff
+      early-exit).
 
 - [ ] **Step 3: Confirm the race is gone.** Do a multi-edit sequence on one
       already-tracked file within a single turn; verify no "modified since read"
@@ -477,10 +484,10 @@ agent run is a user-driven test — spoon-fed step-by-step, never async
 ## Task 5: Record the decision
 
 - [ ] **Step 1** — In `docs/plans/prek-posttooluse-hook-feedback-channel.md`,
-      replace the "Fix directions (decide later)" framing with a short "Resolved"
-      note pointing to this plan and the chosen direction (Stop hook; formatters
-      auto-fix; judgment lint blocks-with-reason). Additive, mark-don't-delete
-      (`feedback_no_plan_removals`).
+      replace the "Fix directions (decide later)" framing with a short
+      "Resolved" note pointing to this plan and the chosen direction (Stop hook;
+      formatters auto-fix; judgment lint blocks-with-reason). Additive,
+      mark-don't-delete (`feedback_no_plan_removals`).
 - [ ] **Step 2** — Update memory `project_edit_tool_prek_desync` to note the
       resolution supersedes the S12 matcher-scoping stopgap.
 

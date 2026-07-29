@@ -1,8 +1,8 @@
 # agnix Quick Reference
 
-agnix is a cross-platform linter and LSP for AI coding assistant config
-files. It validates SKILL.md, CLAUDE.md, AGENTS.md, Kiro steering files,
-Copilot instructions, MCP configs, and more.
+agnix is a cross-platform linter and LSP for AI coding assistant config files.
+It validates SKILL.md, CLAUDE.md, AGENTS.md, Kiro steering files, Copilot
+instructions, MCP configs, and more.
 
 - **Repo**: https://github.com/agent-sh/agnix
 - **Version in devShell**: tracking latest GitHub release via nix-update
@@ -97,8 +97,8 @@ This repo runs agnix in CI:
   run: nix develop --command agnix --strict .
 ```
 
-SARIF output can be uploaded to GitHub Code Scanning for inline
-annotations on PRs.
+SARIF output can be uploaded to GitHub Code Scanning for inline annotations on
+PRs.
 
 ## Adding/Suppressing Rules
 
@@ -109,6 +109,6 @@ To suppress a rule, add it to `disabled_rules` in `.agnix.toml`:
 disabled_rules = ["RULE-ID"]
 ```
 
-Document WHY each rule is suppressed (as comments in `.agnix.toml`).
-When upgrading agnix, review suppressed rules — false positives may
-be fixed in newer versions.
+Document WHY each rule is suppressed (as comments in `.agnix.toml`). When
+upgrading agnix, review suppressed rules — false positives may be fixed in newer
+versions.

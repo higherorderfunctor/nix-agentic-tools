@@ -3,9 +3,9 @@ name: stack-plan
 description: >-
   Use when you need to plan commits, restructure a stack, or commit uncommitted
   work as organized atomic commits. Builds a stack from a description,
-  uncommitted work, or existing commits INSTEAD of manual git rebase -i,
-  git reset --soft, or ad-hoc git move sequences. Prevents: wrong commit
-  ordering, forward references, git move -F panics, untested intermediates.
+  uncommitted work, or existing commits INSTEAD of manual git rebase -i, git
+  reset --soft, or ad-hoc git move sequences. Prevents: wrong commit ordering,
+  forward references, git move -F panics, untested intermediates.
 argument-hint: "<plan | range | (none for working tree)>"
 disable-model-invocation: false
 compatibility: "Requires git-branchless"
@@ -17,8 +17,8 @@ Plan and execute a commit stack. Determines mode automatically based on input:
   produces the commit ordering and executes it
 - **From uncommitted work** — working tree has changes; skill classifies and
   commits them as an atomic stack
-- **From existing commits** — range like `main..HEAD`; skill restructures into
-  a clean atomic stack
+- **From existing commits** — range like `main..HEAD`; skill restructures into a
+  clean atomic stack
 
 ## Pre-flight
 
@@ -48,8 +48,8 @@ Examine `$ARGUMENTS` and repo state to select the mode:
   **Restructure mode (from-root)**
 - If `$ARGUMENTS` looks like a commit range (`main..HEAD`, `hash1..hash2`,
   branch name) → **Restructure mode**
-- If `$ARGUMENTS` is a natural-language description of work to do →
-  **Plan mode**
+- If `$ARGUMENTS` is a natural-language description of work to do → **Plan
+  mode**
 - If `$ARGUMENTS` is empty and the working tree has uncommitted changes →
   **Working tree mode**
 - If `$ARGUMENTS` is empty and the working tree is clean → ask the user what
@@ -129,11 +129,11 @@ Uncommitted changes exist. Classify and commit them as a stack.
    - A one-sentence commit message
    - Estimated line count (target 50-200 per commit)
 
-   If a file has changes spanning multiple groups, it will need `git add -p`
-   to split hunks across commits.
+   If a file has changes spanning multiple groups, it will need `git add -p` to
+   split hunks across commits.
 
-3. **Present the plan** to the user (same format as Plan mode step 4).
-   **Wait for user approval.**
+3. **Present the plan** to the user (same format as Plan mode step 4). **Wait
+   for user approval.**
 
 4. **Commit each group** in plan order:
 
@@ -189,19 +189,19 @@ Existing commits need to be reorganized into a clean atomic stack.
 
    Read the full diff and per-commit stats. Count total lines changed.
 
-3. **Classify every change** into logical groups (same as Working Tree mode
-   step 2).
+3. **Classify every change** into logical groups (same as Working Tree mode step
+   2).
 
 4. **Identify files with intermediate states**: before planning the commit
    sequence, list every file that will have DIFFERENT content across multiple
-   commits (e.g. README.md, CLAUDE.md, flake.nix growing incrementally).
-   For each, write out EXACTLY what content it should have at each commit
-   boundary. Plan ALL intermediate states BEFORE flattening — discovering
-   them as you go leads to fixups and tree hash mismatches. This is the #1
-   source of rework during restructure.
+   commits (e.g. README.md, CLAUDE.md, flake.nix growing incrementally). For
+   each, write out EXACTLY what content it should have at each commit boundary.
+   Plan ALL intermediate states BEFORE flattening — discovering them as you go
+   leads to fixups and tree hash mismatches. This is the #1 source of rework
+   during restructure.
 
-5. **Present the plan** (same format as Plan mode step 4).
-   **Wait for user approval.**
+5. **Present the plan** (same format as Plan mode step 4). **Wait for user
+   approval.**
 
 6. **Check for uncommitted work** before flattening:
 
@@ -209,8 +209,8 @@ Existing commits need to be reorganized into a clean atomic stack.
    git status --short
    ```
 
-   If there are uncommitted changes, warn the user and ask whether to stash
-   or commit them first.
+   If there are uncommitted changes, warn the user and ask whether to stash or
+   commit them first.
 
 7. **Create a backup branch**:
 
@@ -228,9 +228,9 @@ Existing commits need to be reorganized into a clean atomic stack.
    ```
 
 9. **Extract intermediate file states** before flattening. For every file
-   identified in step 4 as having multiple states, save each version to a
-   temp directory using `git show`. After flattening, the working tree only
-   contains the final state — earlier versions are gone.
+   identified in step 4 as having multiple states, save each version to a temp
+   directory using `git show`. After flattening, the working tree only contains
+   the final state — earlier versions are gone.
 
    ```bash
    STATES_DIR=$(mktemp -d /tmp/restructure-states.XXXXXX)
@@ -239,9 +239,8 @@ Existing commits need to be reorganized into a clean atomic stack.
    ```
 
    Include stub files (placeholder modules, `.gitkeep` files) that scaffold
-   commits create before later commits replace them with real content.
-   Restore these with `cp` or `touch` before staging each intermediate
-   commit.
+   commits create before later commits replace them with real content. Restore
+   these with `cp` or `touch` before staging each intermediate commit.
 
 10. **Flatten the range** into the working tree:
 
@@ -268,34 +267,34 @@ git diff --stat   # should match step 2's total diff
 git status --short | wc -l   # should match step 2's file count
 ```
 
-11. **Commit each group** in plan order (same as Working Tree mode step 4).
-    For files with intermediate states (identified in step 4), restore the
-    correct version from `$STATES_DIR` BEFORE staging for each commit.
-    Do not rely on the final working tree content — it represents the end
-    state, not intermediate states.
+11. **Commit each group** in plan order (same as Working Tree mode step 4). For
+    files with intermediate states (identified in step 4), restore the correct
+    version from `$STATES_DIR` BEFORE staging for each commit. Do not rely on
+    the final working tree content — it represents the end state, not
+    intermediate states.
 
     After staging each commit, check for common mistakes:
-    - **Orphaned deletions**: when staging renamed/moved files, the old
-      paths remain as unstaged deletions. Check `git status` and stage
-      them in the same commit.
-    - **`git add -u` during multi-commit rebuild**: stages ALL modified
-      tracked files, not just the ones for this commit. Always use
-      explicit `git add <file>` paths.
-    - **Verify staged content**: run `git diff --cached --stat` to
-      confirm only intended files are staged.
+    - **Orphaned deletions**: when staging renamed/moved files, the old paths
+      remain as unstaged deletions. Check `git status` and stage them in the
+      same commit.
+    - **`git add -u` during multi-commit rebuild**: stages ALL modified tracked
+      files, not just the ones for this commit. Always use explicit
+      `git add <file>` paths.
+    - **Verify staged content**: run `git diff --cached --stat` to confirm only
+      intended files are staged.
 
 ### Tip-Only Redistribution
 
-A variant of restructure mode for branches where the commit history is noise
-and only the final tree state matters.
+A variant of restructure mode for branches where the commit history is noise and
+only the final tree state matters.
 
 **When to use:**
 
 - More than 50% of commits are pivots, experiments, or failed approaches
 - The stack has been restacked 3+ times
 - Failed approaches were tried and abandoned in the history
-- Commit messages are mostly "fix", "WIP", "try again", or no longer match
-  their diffs
+- Commit messages are mostly "fix", "WIP", "try again", or no longer match their
+  diffs
 
 **Approach:**
 
@@ -316,29 +315,29 @@ and only the final tree state matters.
    - A one-sentence commit message
    - Estimated line count (target 50-200 per commit)
 
-3. **Apply dependency timing audit** to determine ordering. Each planned
-   commit must only reference files, imports, and config that exist in it or
-   earlier commits. Documentation goes WITH the feature it documents.
+3. **Apply dependency timing audit** to determine ordering. Each planned commit
+   must only reference files, imports, and config that exist in it or earlier
+   commits. Documentation goes WITH the feature it documents.
 
-4. **Present the plan** to the user (same format as Plan mode step 4).
-   **Wait for user approval.**
+4. **Present the plan** to the user (same format as Plan mode step 4). **Wait
+   for user approval.**
 
-5. **Flatten to base and recommit from scratch** using Restructure mode
-   steps 6-11 (check for uncommitted work, create backup, save tree hash,
-   flatten, commit each group).
+5. **Flatten to base and recommit from scratch** using Restructure mode steps
+   6-11 (check for uncommitted work, create backup, save tree hash, flatten,
+   commit each group).
 
-6. The resulting stack should tell a clean incremental story for reviewers —
-   not the story of how development actually happened.
+6. The resulting stack should tell a clean incremental story for reviewers — not
+   the story of how development actually happened.
 
 **Key differences from standard restructure:**
 
 - Standard restructure preserves and reorders existing commits
 - Tip-only redistribution ignores history and plans from the final tree
-- No need to identify intermediate file states (step 4 of standard
-  restructure) because the history is not a meaningful input — only the
-  final diff against the base matters
-- No need to extract intermediate file states (step 9 of standard
-  restructure) — intermediate content is authored fresh from the plan
+- No need to identify intermediate file states (step 4 of standard restructure)
+  because the history is not a meaningful input — only the final diff against
+  the base matters
+- No need to extract intermediate file states (step 9 of standard restructure) —
+  intermediate content is authored fresh from the plan
 
 ## Post-execution
 
@@ -371,13 +370,13 @@ and only the final tree state matters.
    git diff backup-before-restructure HEAD -- <file>
    ```
 
-   Do NOT proceed if trees don't match. Fix the diverging files first
-   using fixup commits (`git commit --fixup <hash>` + autosquash rebase).
-   Common causes: intermediate file state written incorrectly, orphaned
-   deletions missed, or `git add -u` pulling unrelated changes.
+   Do NOT proceed if trees don't match. Fix the diverging files first using
+   fixup commits (`git commit --fixup <hash>` + autosquash rebase). Common
+   causes: intermediate file state written incorrectly, orphaned deletions
+   missed, or `git add -u` pulling unrelated changes.
 
-4. **Clean up stale artifacts**: check for self-referencing symlinks or
-   other working tree debris:
+4. **Clean up stale artifacts**: check for self-referencing symlinks or other
+   working tree debris:
 
    ```bash
    git status --short   # should be clean
@@ -394,38 +393,36 @@ and only the final tree state matters.
 ## Tips
 
 - **Don't lose changes.** After flattening, double-check `git diff --stat`
-  matches the original range diff. If anything is missing, stop and
-  investigate.
-- Prefer `git add <files>` over `git add -p` when the changeset groups by
-  file without needing hunk splitting.
+  matches the original range diff. If anything is missing, stop and investigate.
+- Prefer `git add <files>` over `git add -p` when the changeset groups by file
+  without needing hunk splitting.
 - Respect user-requested commit boundaries — not every restructure needs to
   flatten everything.
 - **From-root restructures** flatten the entire history. Use
-  `git checkout --orphan` + `git reset` (not `git reset --soft` which needs
-  a parent commit). The branchless hook will panic — ignore it.
-- **Intermediate file states are the #1 source of rework.** Files like
-  README.md and CLAUDE.md that grow across many commits must be written with
-  partial content at each step. Plan these states BEFORE flattening.
-- For files with complex structure (nested sections, cross-references), a
-  full rewrite at the appropriate commit is often cleaner than incremental
-  Edit operations that can cause structural nesting errors.
-- **Expect hook failures during restructure.** PostToolUse hooks (agnix
-  linting, treefmt formatting, etc.) fire when using Write/Edit during a
-  restructure. The working tree is intentionally inconsistent between
-  commits — hook errors are harmless and will pass once all files are
-  committed. Use `--no-verify` on intermediate commits if needed.
-- **Fixup pattern for post-hoc corrections:** when you discover a missed
-  change after a commit is already made, use `git commit --fixup <hash>`
-  to create a fixup commit, then squash it with
-  `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <hash>~1`
-  (the no-op editor `:` lets `--autosquash` do the work).
-  Follow with `git restack` to update branchless tracking.
-  This is faster than checking out each commit to amend.
+  `git checkout --orphan` + `git reset` (not `git reset --soft` which needs a
+  parent commit). The branchless hook will panic — ignore it.
+- **Intermediate file states are the #1 source of rework.** Files like README.md
+  and CLAUDE.md that grow across many commits must be written with partial
+  content at each step. Plan these states BEFORE flattening.
+- For files with complex structure (nested sections, cross-references), a full
+  rewrite at the appropriate commit is often cleaner than incremental Edit
+  operations that can cause structural nesting errors.
+- **Expect hook failures during restructure.** PostToolUse hooks (agnix linting,
+  treefmt formatting, etc.) fire when using Write/Edit during a restructure. The
+  working tree is intentionally inconsistent between commits — hook errors are
+  harmless and will pass once all files are committed. Use `--no-verify` on
+  intermediate commits if needed.
+- **Fixup pattern for post-hoc corrections:** when you discover a missed change
+  after a commit is already made, use `git commit --fixup <hash>` to create a
+  fixup commit, then squash it with
+  `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <hash>~1` (the no-op editor
+  `:` lets `--autosquash` do the work). Follow with `git restack` to update
+  branchless tracking. This is faster than checking out each commit to amend.
 - **Avoid scripted `GIT_SEQUENCE_EDITOR` reorders when files are built
-  incrementally.** Use `git move -x <hash> -d <dest>` for individual
-  commit reorders — it's in-memory and avoids context-dependent conflicts.
-- **`git revise -i` for pure reorders** (no content changes, no splits,
-  no drops). Operates in-memory, faster than scripted editors. But same
-  logical conflicts with incrementally-built files, no `drop`/`exec`
-  support, and requires `git restack` afterward for branchless tracking.
-  Use `git move -x` for individual reorders, `git revise -i` for bulk.
+  incrementally.** Use `git move -x <hash> -d <dest>` for individual commit
+  reorders — it's in-memory and avoids context-dependent conflicts.
+- **`git revise -i` for pure reorders** (no content changes, no splits, no
+  drops). Operates in-memory, faster than scripted editors. But same logical
+  conflicts with incrementally-built files, no `drop`/`exec` support, and
+  requires `git restack` afterward for branchless tracking. Use `git move -x`
+  for individual reorders, `git revise -i` for bulk.

@@ -9,8 +9,8 @@ Your job is to evaluate whether a human can go from "never heard of this" to
 ### README First Impression
 
 - Can someone understand what this project does in 30 seconds?
-- Is the value proposition clear? Why would someone use skills instead of
-  just learning git-branchless directly?
+- Is the value proposition clear? Why would someone use skills instead of just
+  learning git-branchless directly?
 - Are prerequisites obvious before they hit errors?
 
 ### Installation Friction
@@ -24,8 +24,8 @@ Your job is to evaluate whether a human can go from "never heard of this" to
 ### Routing Table Clarity
 
 - Does a human reading the routing table understand when to use each skill?
-- Is there overlap or ambiguity between skills? (e.g., when to use
-  `/stack-fix` vs `/stack-plan` for restructuring)
+- Is there overlap or ambiguity between skills? (e.g., when to use `/stack-fix`
+  vs `/stack-plan` for restructuring)
 - Are the "Use INSTEAD of" examples helpful or confusing?
 
 ### Documentation Flow

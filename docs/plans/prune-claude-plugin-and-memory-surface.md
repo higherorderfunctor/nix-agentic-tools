@@ -14,7 +14,8 @@
 > - Plugin _enablement_ lives in the user's separate **nixos-config** repo; this
 >   repo only ships the HM/devenv _module_. **Never edit nixos-config without
 >   explicit HITL approval.** The deliverable here is either a module-level
->   default change (in THIS repo) or a handed-over nixos-config diff — user's call.
+>   default change (in THIS repo) or a handed-over nixos-config diff — user's
+>   call.
 > - **Verify-before-delete** (never-drop-features discipline): before any
 >   `rm -rf .remember`, grep the archive for sole-record content. Belief is
 >   "fully duplicated"; that is not yet proven.
@@ -27,8 +28,8 @@
 
 The user asked which enabled Claude plugins are dead weight, whether `remember`
 earns its keep, and whether superpowers conflicts with their own workflow. This
-doc records the assessment (evidence-backed) so the next session can turn it into
-an executable living plan instead of re-investigating.
+doc records the assessment (evidence-backed) so the next session can turn it
+into an executable living plan instead of re-investigating.
 
 ## 1. Ground truth (what is actually enabled)
 
@@ -59,18 +60,19 @@ Evidence gathered:
   session.
 - **The useful content is real but non-additive.** Example: `now.md`'s "daemon
   bootstrap race → needs ExecStartPre fix" is a genuine open thread — but the
-  identical thread is already in native memory (`project_openmemory_http_daemon.md`)
-  and the plan SSOT (`kiro-cli-auto-memory.md`). Everything decision-relevant in
-  the remember injection is duplicated at equal-or-better curation in systems the
-  session already reads.
+  identical thread is already in native memory
+  (`project_openmemory_http_daemon.md`) and the plan SSOT
+  (`kiro-cli-auto-memory.md`). Everything decision-relevant in the remember
+  injection is duplicated at equal-or-better curation in systems the session
+  already reads.
 - Its ONE genuine edge: **auto-capture without user curation** — a safety net if
-  a session dies before a native memory is written. That role is exactly what the
-  kiro distiller + `kiro-memory-recall` read-path (S5b, just built) is designed to
-  own, into systems you actually read on cold start.
+  a session dies before a native memory is written. That role is exactly what
+  the kiro distiller + `kiro-memory-recall` read-path (S5b, just built) is
+  designed to own, into systems you actually read on cold start.
 
-**Verdict:** retiring `remember` is defensible. It is a stopgap for a job your own
-tooling is about to do better. Sequence with the distiller so the auto-capture
-safety-net role is covered (or accept a small gap window).
+**Verdict:** retiring `remember` is defensible. It is a stopgap for a job your
+own tooling is about to do better. Sequence with the distiller so the
+auto-capture safety-net role is covered (or accept a small gap window).
 
 ## 3. Proposed cuts (assessment — to be ratified in the living plan)
 
@@ -88,17 +90,18 @@ safety-net role is covered (or accept a small gap window).
 | code-review / code-simplifier                                                   | **Keep**              | Used.                                                                                                                                                                                          |
 | claude-md-management / gh-repo-settings / security-guidance / claude-code-setup | **Keep (occasional)** | Low cost, real use.                                                                                                                                                                            |
 
-Cutting searchfit-seo + remember + ralph-loop + pr-review-toolkit + frontend-design
-removes ~25–30 skill descriptions from the system prompt and their misfire
-surface — which directly addresses the "superpowers triggers are hit or miss"
-feeling (half of that is too many skills competing for one intent).
+Cutting searchfit-seo + remember + ralph-loop + pr-review-toolkit +
+frontend-design removes ~25–30 skill descriptions from the system prompt and
+their misfire surface — which directly addresses the "superpowers triggers are
+hit or miss" feeling (half of that is too many skills competing for one intent).
 
 ## 4. Superpowers — the conflict has a precise mechanism
 
 Superpowers ships a **SessionStart hook** (`hooks/session-start`) that
 force-injects the entire `using-superpowers` SKILL.md wrapped in
 `<EXTREMELY_IMPORTANT>` — the "if there's even a 1% chance a skill applies you
-MUST invoke it" mandate + "before entering plan mode, invoke brainstorming first."
+MUST invoke it" mandate + "before entering plan mode, invoke brainstorming
+first."
 
 That injection, every session, overrides:
 
@@ -111,8 +114,8 @@ That injection, every session, overrides:
 The living-workflow bootstrap is functionally a hand-authored replacement for
 superpowers' **entire planning/execution half** (writing-plans + executing-plans
 
-- brainstorming + subagent-driven-development) — more disciplined and HITL-aware.
-  So that half is superseded, not merely overlapping.
+- brainstorming + subagent-driven-development) — more disciplined and
+  HITL-aware. So that half is superseded, not merely overlapping.
 
 **Options for the living plan to choose between (HITL):**
 
@@ -132,11 +135,12 @@ superpowers' **entire planning/execution half** (writing-plans + executing-plans
 - **[HITL@P1] Delivery surface.** Module-level default change in THIS repo, or a
   handed-over nixos-config diff? (Never edit nixos-config unprompted.)
 - **[HITL@P1] Superpowers disposition.** Option A / B / C from §4.
-- **[HITL@P2] `remember` data deletion.** After retiring the plugin: `rm -rf
-.remember` (5.6 MB) — gated on the verify-before-delete grep pass. Also decide
-  whether other projects' `.remember/` dirs get the same treatment.
-- **[HITL@P2] Distiller sequencing.** Confirm kiro distiller read-path covers the
-  auto-capture safety-net role before/at remember retirement, or accept the gap.
+- **[HITL@P2] `remember` data deletion.** After retiring the plugin:
+  `rm -rf .remember` (5.6 MB) — gated on the verify-before-delete grep pass.
+  Also decide whether other projects' `.remember/` dirs get the same treatment.
+- **[HITL@P2] Distiller sequencing.** Confirm kiro distiller read-path covers
+  the auto-capture safety-net role before/at remember retirement, or accept the
+  gap.
 - **[AI-OWNED] Config-parity sweep.** Whatever is cut, keep lib / HM / devenv
   aligned and update any README feature matrix / structural checks in the same
   change (change-propagation rule).
@@ -145,13 +149,15 @@ superpowers' **entire planning/execution half** (writing-plans + executing-plans
 
 Highest fan-out / cheapest-to-revise first:
 
-1. **P1 — Decide + scope (HITL opening).** Resolve the §5 P1 items in one batched
-   agenda. Output: ratified cut list + delivery surface + superpowers option.
-2. **P2 — Retire `remember`.** Disable hook/skill in the chosen surface; verify a
-   session runs clean on native memory alone; then verify-before-delete the data.
-3. **P3 — Cut dead-weight plugins** (searchfit-seo, ralph-loop, pr-review-toolkit,
-   frontend-design per P1 outcome). One testable increment: rebuild, confirm the
-   skill list shrinks, run structural checks.
+1. **P1 — Decide + scope (HITL opening).** Resolve the §5 P1 items in one
+   batched agenda. Output: ratified cut list + delivery surface + superpowers
+   option.
+2. **P2 — Retire `remember`.** Disable hook/skill in the chosen surface; verify
+   a session runs clean on native memory alone; then verify-before-delete the
+   data.
+3. **P3 — Cut dead-weight plugins** (searchfit-seo, ralph-loop,
+   pr-review-toolkit, frontend-design per P1 outcome). One testable increment:
+   rebuild, confirm the skill list shrinks, run structural checks.
 4. **P4 — Superpowers trim** per §4 option. Extract keep-skills as standalone if
    (A); rebuild; confirm no SessionStart force-inject remains.
 5. **P5 — Parity + docs.** lib/HM/devenv alignment, README/feature-matrix, any
@@ -159,16 +165,15 @@ Highest fan-out / cheapest-to-revise first:
 
 ## 7. Evidence appendix (so next session doesn't re-investigate)
 
-- Enabled skills dir: `~/.claude/skills/` (18 entries; searchfit-seo, superpowers,
-  ralph-loop, remember, hookify, security-guidance, pr-review-toolkit,
-  frontend-design, feature-dev, code-review, code-simplifier, skill-creator,
-  plugin-dev, mcp-server-dev, claude-md-management, claude-code-setup,
-  gh-repo-settings, claude-code-home-manager).
-- `remember` active store path:
-  `/nix/store/…-claude-remember-31626fd/` (hooks.json → SessionStart +
-  PostToolUse). Simpler older variant `…-f1a0038` also in store.
-- superpowers force-inject:
-  `…-superpowers-d884ae0/hooks/session-start` +
+- Enabled skills dir: `~/.claude/skills/` (18 entries; searchfit-seo,
+  superpowers, ralph-loop, remember, hookify, security-guidance,
+  pr-review-toolkit, frontend-design, feature-dev, code-review, code-simplifier,
+  skill-creator, plugin-dev, mcp-server-dev, claude-md-management,
+  claude-code-setup, gh-repo-settings, claude-code-home-manager).
+- `remember` active store path: `/nix/store/…-claude-remember-31626fd/`
+  (hooks.json → SessionStart + PostToolUse). Simpler older variant `…-f1a0038`
+  also in store.
+- superpowers force-inject: `…-superpowers-d884ae0/hooks/session-start` +
   `hooks/hooks.json` (SessionStart matcher `startup|clear|compact`).
 - `.remember/`: 5.6 MB / 909 files, gitignored; `now.md` / `recent.md` /
   `today-*.md` / `archive.md` (no `core-memories.md` in this project despite the

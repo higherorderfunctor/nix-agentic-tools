@@ -1,43 +1,37 @@
 # Slice Architecture Assessment
 
-> **Status:** distillation of an in-progress design dialog
-> (2026-05-08). Captures decided direction, dropped options
-> with rationale, and open questions the fixture exists to
-> answer. **This is an assessment, not a plan** — input for a
-> fresh session to draft execution against.
+> **Status:** distillation of an in-progress design dialog (2026-05-08).
+> Captures decided direction, dropped options with rationale, and open questions
+> the fixture exists to answer. **This is an assessment, not a plan** — input
+> for a fresh session to draft execution against.
 >
-> Earlier exploration in `greenfield-package-shape.md` is
-> partially superseded. That doc was scoped to one package's
-> internal shape; this doc widens to slice composition and
-> fixture-first validation.
+> Earlier exploration in `greenfield-package-shape.md` is partially superseded.
+> That doc was scoped to one package's internal shape; this doc widens to slice
+> composition and fixture-first validation.
 
 ## Background
 
-`nix-agentic-tools` is a Nix flake monorepo whose packages
-are **multi-facet**: each ships a derivation, a home-manager
-module, a devenv module, lib helpers, and content
-(markdown fragments, skills). Nixpkgs convention is
-single-derivation packages, so its canonical composition
-patterns don't fully apply.
+`nix-agentic-tools` is a Nix flake monorepo whose packages are **multi-facet**:
+each ships a derivation, a home-manager module, a devenv module, lib helpers,
+and content (markdown fragments, skills). Nixpkgs convention is
+single-derivation packages, so its canonical composition patterns don't fully
+apply.
 
 Three constraints stack and shape the architecture:
 
-1. **Multi-facet per unit** — several distinct facets per
-   package, all expected to be configurable.
-2. **HM / devenv parity** — every config surface available
-   in home-manager must also be available in devenv and
-   vice versa.
-3. **devenv as external CLI** — devenv is consumed
-   externally (system profile, HM, NixOS, project shell),
-   not as a flake-input runner. devenv's CLI mode reads
-   `devenv.nix` directly and does not compose with
-   flake-parts' `perSystem`. This blocks flake-parts as the
-   composition layer.
+1. **Multi-facet per unit** — several distinct facets per package, all expected
+   to be configurable.
+2. **HM / devenv parity** — every config surface available in home-manager must
+   also be available in devenv and vice versa.
+3. **devenv as external CLI** — devenv is consumed externally (system profile,
+   HM, NixOS, project shell), not as a flake-input runner. devenv's CLI mode
+   reads `devenv.nix` directly and does not compose with flake-parts'
+   `perSystem`. This blocks flake-parts as the composition layer.
 
-The architecture has been re-derived across sessions because
-this constraint stack is unusual — there is no upstream
-pattern to copy wholesale. The fixture-first approach below
-is the discipline that breaks the re-derivation loop.
+The architecture has been re-derived across sessions because this constraint
+stack is unusual — there is no upstream pattern to copy wholesale. The
+fixture-first approach below is the discipline that breaks the re-derivation
+loop.
 
 ## Decided
 
@@ -65,15 +59,24 @@ is the discipline that breaks the re-derivation loop.
 
 ## Open — fixture is the experiment that answers these
 
-1. **Cross-slice lib dependency.** Does the lib rollup make slice-b's helpers accessible to slice-a's `package.nix` at eval time without ordering tricks? The fixture exercises this directly.
-2. **Walker placement and shape.** Where does the walker live (`flake.nix` inline vs `lib/walker.nix`)? What's its public API? The fixture's walker is the answer by example.
-3. **Structural-check surface.** What does a useful root structural check actually assert? At least one example must earn its keep.
-4. **Mixed-combinator ergonomics.** Does "`pkg` and `lib` plain merge, `hm` and `devenv` via module-system" feel coherent on the page or fractured? The fixture is the read-test.
-5. **Filesystem-walk vs barrel discovery.** Fixture uses filesystem. If listing facets becomes cumbersome at slice level, a barrel re-enters consideration.
+1. **Cross-slice lib dependency.** Does the lib rollup make slice-b's helpers
+   accessible to slice-a's `package.nix` at eval time without ordering tricks?
+   The fixture exercises this directly.
+2. **Walker placement and shape.** Where does the walker live (`flake.nix`
+   inline vs `lib/walker.nix`)? What's its public API? The fixture's walker is
+   the answer by example.
+3. **Structural-check surface.** What does a useful root structural check
+   actually assert? At least one example must earn its keep.
+4. **Mixed-combinator ergonomics.** Does "`pkg` and `lib` plain merge, `hm` and
+   `devenv` via module-system" feel coherent on the page or fractured? The
+   fixture is the read-test.
+5. **Filesystem-walk vs barrel discovery.** Fixture uses filesystem. If listing
+   facets becomes cumbersome at slice level, a barrel re-enters consideration.
 
 ## Fixture spec sketch
 
-Three slices, asymmetric. Filesystem-walked: each `<facet>.nix` file's presence at the slice root determines what facets the slice contributes. No barrel.
+Three slices, asymmetric. Filesystem-walked: each `<facet>.nix` file's presence
+at the slice root determines what facets the slice contributes. No barrel.
 
 ```
 fixture/
@@ -97,30 +100,41 @@ fixture/
 
 **Per-slice file shapes** (idiomatic, no project-specific wrapping):
 
-- `package.nix` — `{lib, stdenv, ...}: stdenv.mkDerivation { ... }` (callPackage-style). Stub via `runCommand` or `writeText`; no real builds.
-- `lib.nix` — `{lib, ...}: { someHelper = ...; }` (pure function returning attrset). Consumed via recursive merge.
-- `hm.nix` — `{config, lib, pkgs, ...}: { options.fixture.<slice> = ...; config = mkIf ...; }` (standard NixOS module shape).
+- `package.nix` — `{lib, stdenv, ...}: stdenv.mkDerivation { ... }`
+  (callPackage-style). Stub via `runCommand` or `writeText`; no real builds.
+- `lib.nix` — `{lib, ...}: { someHelper = ...; }` (pure function returning
+  attrset). Consumed via recursive merge.
+- `hm.nix` —
+  `{config, lib, pkgs, ...}: { options.fixture.<slice> = ...; config = mkIf ...; }`
+  (standard NixOS module shape).
 - `devenv.nix` — same shape as `hm.nix`, with devenv-side option locations.
 
 **Asymmetry intent:**
 
-- **slice-a** (pkg + hm): "subset of facets is allowed; missing facets do not break the rollup."
+- **slice-a** (pkg + hm): "subset of facets is allowed; missing facets do not
+  break the rollup."
 - **slice-b** (lib-only): leaf dependency consumed by another slice.
 - **slice-c** (full-spectrum): worst-case slice exercising every facet.
 
-**Cross-slice dependency:** `slice-a/package.nix` calls `slice-b.lib.someHelper` (resolved via the rolled-up lib). This is the load-bearing test that lib composition works across slices.
+**Cross-slice dependency:** `slice-a/package.nix` calls `slice-b.lib.someHelper`
+(resolved via the rolled-up lib). This is the load-bearing test that lib
+composition works across slices.
 
 **Root structural checks (examples):**
 
 - The cross-slice dep evaluates without error and produces a derivation.
 - The `lib` rollup contains no name collisions across slices.
-- Every `hm.nix` and `devenv.nix` declares its options under a predictable namespace (`fixture.<slice>.*`).
+- Every `hm.nix` and `devenv.nix` declares its options under a predictable
+  namespace (`fixture.<slice>.*`).
 
 **Bar for "fixture is solid":**
 
 - `nix flake check` passes.
 - `nix eval .#lib --json` shows the merged lib shape across slices.
-- `nix build .#packages.<system>.slice-a` succeeds and exercises the cross-slice lib dep.
-- A reviewer can read `flake.nix` + `lib/walker.nix` + one slice in under five minutes and explain how composition works.
+- `nix build .#packages.<system>.slice-a` succeeds and exercises the cross-slice
+  lib dep.
+- A reviewer can read `flake.nix` + `lib/walker.nix` + one slice in under five
+  minutes and explain how composition works.
 
-End-to-end consumer wiring (a real HM config or `devenv shell` consuming fixture outputs) is **out of v0 scope**.
+End-to-end consumer wiring (a real HM config or `devenv shell` consuming fixture
+outputs) is **out of v0 scope**.

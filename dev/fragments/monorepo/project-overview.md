@@ -4,12 +4,12 @@ nix-agentic-tools is a Nix flake monorepo providing:
 
 - **Stacked workflow skills** — SKILL.md files for stacked commit workflows
   using git-branchless, git-absorb, and git-revise
-- **MCP server packages** — 12+ Model Context Protocol servers packaged as
-  Nix derivations with typed settings and credential handling
-- **Home-manager modules** — declarative configuration for Claude Code,
-  Copilot CLI, Kiro CLI, stacked workflows, and MCP services
-- **DevShell modules** — per-project AI tool configuration without
-  home-manager (`mkAgenticShell`)
+- **MCP server packages** — 12+ Model Context Protocol servers packaged as Nix
+  derivations with typed settings and credential handling
+- **Home-manager modules** — declarative configuration for Claude Code, Copilot
+  CLI, Kiro CLI, stacked workflows, and MCP services
+- **DevShell modules** — per-project AI tool configuration without home-manager
+  (`mkAgenticShell`)
 - **Git tool overlays** — git-absorb, git-branchless, git-revise
 
 Skills work without Nix. Nix unlocks overlays, home-manager modules, and

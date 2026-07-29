@@ -6,8 +6,7 @@ Full code-grounding pass done — see **§10 Grounding delta** for three
 corrections/expansions to the original design (Copilot is a split-brain, not a
 hard collision; devenv-Claude context-drop repaired by the same change; ~3
 existing module-eval tests must be rewritten). **Next: TDD (§6) — write the
-failing Claude fixture first.**
-**Branch:** `refactor/ai-factory-architecture`
+failing Claude fixture first.** **Branch:** `refactor/ai-factory-architecture`
 **Scope:** FACTORY fix (`lib/ai/*` + per-app `mk*.nix`). This is **beyond S1's
 SWS revert** — S1 only _exposed_ a pre-existing latent design flaw.
 **Execution:** systematic-debugging Phase 4 (failing test FIRST) →
@@ -26,8 +25,8 @@ error: Failed assertions:
 ```
 
 Trigger conditions (all now true): nix-agentic-tools pin = `afd98e2e` (S1),
-`stacked-workflows.enable = true`, and `claude.context =
-./claude-config/global-instructions.md` set.
+`stacked-workflows.enable = true`, and
+`claude.context = ./claude-config/global-instructions.md` set.
 
 ## 2. Root cause (confirmed)
 
@@ -76,21 +75,22 @@ writer, which also fixes the drop.
 | **Kiro**    | **directory** of steering files; context and each named instruction get their _own_ file (`mkKiro.nix:496,521`)            | ✅ no context/instruction collision — only a **stale `outputPath = ".config/kiro/steering/"`** (trailing-slash dir) that makes the generic render emit a stray |
 
 **Copilot path detail (§10 correction).** The context writer targets
-`<configDir|projectDir>/<contextFilename>` — HM `.copilot/copilot-instructions.md`
-(`configDir = .copilot`), devenv `.github/copilot-instructions.md`
-(`projectDir = .github`) — while the generic aggregate targets
-`defaults.outputPath = .config/github-copilot/copilot-instructions.md`. Those are
-**different paths**, so Copilot never raised the "pick one pathway" eval error the
-`mkCopilot.nix:277-280` comment claims. Only **Claude** hard-collides (aggregate
-`.claude/CLAUDE.md` == upstream context path). The compose fix still applies to
-Copilot (collapses the split into one native file).
+`<configDir|projectDir>/<contextFilename>` — HM
+`.copilot/copilot-instructions.md` (`configDir = .copilot`), devenv
+`.github/copilot-instructions.md` (`projectDir = .github`) — while the generic
+aggregate targets
+`defaults.outputPath = .config/github-copilot/copilot-instructions.md`. Those
+are **different paths**, so Copilot never raised the "pick one pathway" eval
+error the `mkCopilot.nix:277-280` comment claims. Only **Claude** hard-collides
+(aggregate `.claude/CLAUDE.md` == upstream context path). The compose fix still
+applies to Copilot (collapses the split into one native file).
 
 **Project-scope parallel:** `lib/ai/app/devenvTransform.nix:145`
 (`files.${outputPath}.text = renderedInstructions`) is the same mechanism at the
 devenv scope — the fix must cover it too (DRY).
 
-Kiro is the tell: it already does what we want (many always-on files, composed at
-_load_ time). The aggregate CLIs force one file and then forbid mixing.
+Kiro is the tell: it already does what we want (many always-on files, composed
+at _load_ time). The aggregate CLIs force one file and then forbid mixing.
 
 ## 4. Why CI is green but activation fails
 
@@ -127,9 +127,10 @@ helper. The separate per-app context writer no longer races the aggregate.
 - **Claude:** HM → `programs.claude-code.context = compose(...)` (upstream owns
   the single writer). devenv → `files.".claude/CLAUDE.md".text = compose(...)`
   (**new** — devenv Claude had no context writer; this also fixes the §2 drop).
-- **Copilot:** HM → `home.file."<configDir>/<contextFilename>".text = compose(...)`;
-  devenv → `files."<projectDir>/<contextFilename>".text = compose(...)`. The
-  emit gate widens from `hasContext` to `hasContext || hasUnnamed`.
+- **Copilot:** HM →
+  `home.file."<configDir>/<contextFilename>".text = compose(...)`; devenv →
+  `files."<projectDir>/<contextFilename>".text = compose(...)`. The emit gate
+  widens from `hasContext` to `hasContext || hasUnnamed`.
 - **Kiro** (directory model — **decision 2026-07-20**): does **not** compose.
   `context` stays its own standalone `<configDir>/steering/<contextFilename>`
   (AGENTS.md, unchanged); named → own steering files (unchanged); unnamed
@@ -138,20 +139,20 @@ helper. The separate per-app context writer no longer races the aggregate.
   Claude + Copilot only.
 - **Retire the generic aggregate entirely.** Once Writer B is gone from both
   transforms, `defaults.outputPath` is vestigial for every app (precedent:
-  `mkKimchi.nix` already sets `outputPath = null`). Remove/neutralize it and
-  the now-dead `renderedInstructions`/`hasInstructions`/`hasOutputPath`
-  bindings; update the stale "nameless entries fall through to the baseline
-  aggregate render at `defaults.outputPath`" comments in `mkCopilot.nix` /
-  `mkKiro.nix` (they become lies).
-- **Helper signature (final):** `composeInstructionsFile { effectiveContext ?
-null, unnamedInstructions ? [], render }` → markdown string. `render` is the
-  app's `lib.ai.transformers.<x>.render`. **Short-circuits** to
-  `effectiveContext` unchanged when `unnamedInstructions == []` — so a path
-  context stays a path (`{source = …}`) and the operator's actual case (context
-  path + only a _named_ router, zero unnamed) is byte-for-byte unchanged except
-  the colliding aggregate write disappears. With unnamed present it
-  `readFile`s a path context and concatenates `[context]\n\n[rendered]`,
-  dropping empty parts.
+  `mkKimchi.nix` already sets `outputPath = null`). Remove/neutralize it and the
+  now-dead `renderedInstructions`/`hasInstructions`/`hasOutputPath` bindings;
+  update the stale "nameless entries fall through to the baseline aggregate
+  render at `defaults.outputPath`" comments in `mkCopilot.nix` / `mkKiro.nix`
+  (they become lies).
+- **Helper signature (final):**
+  `composeInstructionsFile { effectiveContext ? null, unnamedInstructions ? [], render }`
+  → markdown string. `render` is the app's `lib.ai.transformers.<x>.render`.
+  **Short-circuits** to `effectiveContext` unchanged when
+  `unnamedInstructions == []` — so a path context stays a path (`{source = …}`)
+  and the operator's actual case (context path + only a _named_ router, zero
+  unnamed) is byte-for-byte unchanged except the colliding aggregate write
+  disappears. With unnamed present it `readFile`s a path context and
+  concatenates `[context]\n\n[rendered]`, dropping empty parts.
 
 ### Implementation approach — **(B) per-app composes via a shared helper** (recommended)
 
@@ -161,7 +162,8 @@ Retire the generic aggregate render (`hmTransform.nix:165-167` +
 
 - Claude → `programs.claude-code.context = compose(...)` (keep upstream
   integration; single writer).
-- Copilot → `home.file."<configDir>/copilot-instructions.md".text = compose(...)`.
+- Copilot →
+  `home.file."<configDir>/copilot-instructions.md".text = compose(...)`.
 - Kiro → no aggregate; unnamed-only steering file if needed.
 
 New helper `lib/ai/composeInstructionsFile.nix`:
@@ -169,11 +171,11 @@ New helper `lib/ai/composeInstructionsFile.nix`:
 (readFile a path context, render+concat unnamed instructions, context first).
 Consumed by both backends and all aggregate apps → single source of truth (DRY).
 
-> **Alternative (A) considered + rejected:** make the _generic_ transform own the
-> composed aggregate for all file-output apps. Rejected because it would pull
-> per-CLI context resolution + each app's native writer (upstream vs home.file)
-> into the generic layer, whereas (B) localizes each app's mechanism and simply
-> removes the double-writer. Open to override.
+> **Alternative (A) considered + rejected:** make the _generic_ transform own
+> the composed aggregate for all file-output apps. Rejected because it would
+> pull per-CLI context resolution + each app's native writer (upstream vs
+> home.file) into the generic layer, whereas (B) localizes each app's mechanism
+> and simply removes the double-writer. Open to override.
 
 ## 6. TDD — failing tests FIRST (systematic-debugging Phase 4)
 
@@ -183,13 +185,13 @@ Add to `checks/module-eval.nix`:
 
 1. **Claude HM**: `context` + one **named** + one **unnamed** instruction.
    Assert: (a) **no** `home.file.".claude/CLAUDE.md"` (generic aggregate gone);
-   (b) `programs.claude-code.context` contains **both** the context baseline
-   AND the unnamed text; (c) the named instruction is in
-   `.claude/rules/<name>.md` and its body is **not** in
-   `programs.claude-code.context`. _(Fails today: the aggregate writes
-   `home.file` AND duplicates the named entry; context is separate.)_
-2. **Claude devenv**: same shape → assert `files.".claude/CLAUDE.md".text`
-   holds context + unnamed (this is the drop-repair), named only in
+   (b) `programs.claude-code.context` contains **both** the context baseline AND
+   the unnamed text; (c) the named instruction is in `.claude/rules/<name>.md`
+   and its body is **not** in `programs.claude-code.context`. _(Fails today: the
+   aggregate writes `home.file` AND duplicates the named entry; context is
+   separate.)_
+2. **Claude devenv**: same shape → assert `files.".claude/CLAUDE.md".text` holds
+   context + unnamed (this is the drop-repair), named only in
    `.claude/rules/<name>.md`.
 3. **Copilot HM + devenv**: `context` + unnamed → assert the **single** native
    context file (`.copilot/…` HM, `.github/…` devenv) holds context + unnamed,
@@ -208,7 +210,8 @@ assert the new routing (this is the TDD "watch it flip" signal):
   `home.file.".claude/CLAUDE.md"`; **now** `programs.claude-code.context`).
 - `module-claude-per-app-instructions-rendered` (same reroute).
 - `module-kiro-instructions-rendered` (**was** the stray
-  `home.file.".config/kiro/steering/"`; **now** `.kiro/steering/instructions.md`).
+  `home.file.".config/kiro/steering/"`; **now**
+  `.kiro/steering/instructions.md`).
 - `module-claude-no-instructions-no-file` — still passes (aggregate stays gone);
   keep as a regression guard, refresh its comment.
 
@@ -222,19 +225,20 @@ unnamed instructions are present.
 - **Load-bearing — CONFIRMED 2026-07-20 (Claude Code memory docs):** Claude Code
   natively auto-discovers `.claude/rules/*.md` (recursively; project
   `.claude/rules/` + user `~/.claude/rules/`) with **no `CLAUDE.md` reference**.
-  `paths:` present ⇒ conditional (loads only when Claude touches matching files);
-  **`paths:` absent ⇒ always-on, "same priority as `.claude/CLAUDE.md`".** The
-  stacked-workflows router carries no `paths:`, so its `.claude/rules/` file is
-  always-on — Layer 1 is SAFE, the aggregate copy was pure redundancy. (Local
-  proof: dev rule files `stacked-workflows.md` `paths:["packages/stacked-workflows/**"]`
+  `paths:` present ⇒ conditional (loads only when Claude touches matching
+  files); **`paths:` absent ⇒ always-on, "same priority as
+  `.claude/CLAUDE.md`".** The stacked-workflows router carries no `paths:`, so
+  its `.claude/rules/` file is always-on — Layer 1 is SAFE, the aggregate copy
+  was pure redundancy. (Local proof: dev rule files `stacked-workflows.md`
+  `paths:["packages/stacked-workflows/**"]`
   - `nix-standards.md` `paths:["**/*.nix"]` loaded this session by matching my
-    reads; `CLAUDE.md` only `@AGENTS.md`, never @-imports rules.)
-    Source: code.claude.com/docs/en/memory — "Organize rules with `.claude/rules/`"
+    reads; `CLAUDE.md` only `@AGENTS.md`, never @-imports rules.) Source:
+    code.claude.com/docs/en/memory — "Organize rules with `.claude/rules/`"
   - "Path-specific rules".
-- **Minor (non-blocking):** docs document only `paths:` as frontmatter; our claude
-  transformer also emits `description:`. Worst case it's ignored — cannot break
-  always-on loading (no-paths ⇒ always-on regardless). Optional: drop `description`
-  for paths-less named instructions. Verify once on-disk.
+- **Minor (non-blocking):** docs document only `paths:` as frontmatter; our
+  claude transformer also emits `description:`. Worst case it's ignored — cannot
+  break always-on loading (no-paths ⇒ always-on regardless). Optional: drop
+  `description` for paths-less named instructions. Verify once on-disk.
 - **Ordering:** context first, then unnamed instructions — asserted by test.
 - **Copilot** `applyTo:` frontmatter on `.github/instructions/<name>` unchanged.
 - **Kiro** `inclusion: always` on named steering files still auto-loads.
@@ -254,9 +258,10 @@ unnamed instructions are present.
 - ✅ Approach **(B)** over (A).
 - ✅ Reverse the double-emit — CONFIRMED safe (§7: paths-less rule = always-on).
 - ✅ Separate factory commit on the S1 branch.
-- ✅ **Kiro unnamed instructions → dedicated `<configDir>/steering/instructions.md`**
-  (not merged into AGENTS.md). Kiro is directory-native, so context stays
-  standalone; the compose helper is used by **Claude + Copilot only**.
+- ✅ **Kiro unnamed instructions → dedicated
+  `<configDir>/steering/instructions.md`** (not merged into AGENTS.md). Kiro is
+  directory-native, so context stays standalone; the compose helper is used by
+  **Claude + Copilot only**.
 - ✅ **Update this plan doc first** (this pass), then TDD.
 
 All approved. Next: TDD (§6a) — write the failing Claude HM fixture first.
@@ -269,8 +274,8 @@ corrections/expansions (folded into §2/§3/§5/§6 above):
 1. **Copilot is a split-brain, not a hard collision** — context writer path ≠
    aggregate `outputPath` (§3). Only Claude hard-collides.
 2. **devenv Claude has no context writer** — the aggregate was its only
-   `CLAUDE.md` source and dropped context (§2). Retiring the aggregate _requires_
-   a new devenv-Claude compose writer, which repairs the drop.
+   `CLAUDE.md` source and dropped context (§2). Retiring the aggregate
+   _requires_ a new devenv-Claude compose writer, which repairs the drop.
 3. **~3 existing module-eval tests encode the retired aggregate** and must be
    rewritten (§6b), beyond the new fixtures the original §6 listed.
 
@@ -280,24 +285,25 @@ transform's aggregate render was the one L4 violation.
 
 ### Concrete change set
 
-- **New** `lib/ai/composeInstructionsFile.nix` (helper, §5 signature) +
-  export from `lib/ai/default.nix` as `lib.ai.composeInstructionsFile`.
+- **New** `lib/ai/composeInstructionsFile.nix` (helper, §5 signature) + export
+  from `lib/ai/default.nix` as `lib.ai.composeInstructionsFile`.
 - **`lib/ai/app/hmTransform.nix` + `devenvTransform.nix`:** delete the
-  `home.file.${outputPath}` / `files.${outputPath}` aggregate block and the
-  dead `renderedInstructions`/`hasInstructions`/`hasOutputPath`/`outputPath`
+  `home.file.${outputPath}` / `files.${outputPath}` aggregate block and the dead
+  `renderedInstructions`/`hasInstructions`/`hasOutputPath`/`outputPath`
   bindings. `mergedInstructions` is still passed to `customConfig` (per-app
   splits named/unnamed itself via `builtins.filter (i: i ? name)`).
-- **`packages/claude-code/lib/mkClaude.nix`:** HM `context = mkDefault
-compose(...)`; devenv adds `files.".claude/CLAUDE.md".text = compose(...)`
-  (gated `hasContext || unnamed != []`). `render =
-lib.ai.transformers.claude.render`.
+- **`packages/claude-code/lib/mkClaude.nix`:** HM
+  `context = mkDefault compose(...)`; devenv adds
+  `files.".claude/CLAUDE.md".text = compose(...)` (gated
+  `hasContext || unnamed != []`). `render = lib.ai.transformers.claude.render`.
 - **`packages/copilot-cli/lib/mkCopilot.nix`:** widen both context-writer gates
-  to `hasContext || hasUnnamed`; when unnamed present write `.text =
-compose(...)`, else keep `{source|text}`. Drop `defaults.outputPath` /
-  update stale comment.
-- **`packages/kiro-cli/lib/mkKiro.nix`:** add a `<configDir>/steering/instructions.md`
-  writer for unnamed instructions (both backends); context writer unchanged;
-  drop `defaults.outputPath = ".config/kiro/steering/"` / update stale comment.
+  to `hasContext || hasUnnamed`; when unnamed present write
+  `.text = compose(...)`, else keep `{source|text}`. Drop `defaults.outputPath`
+  / update stale comment.
+- **`packages/kiro-cli/lib/mkKiro.nix`:** add a
+  `<configDir>/steering/instructions.md` writer for unnamed instructions (both
+  backends); context writer unchanged; drop
+  `defaults.outputPath = ".config/kiro/steering/"` / update stale comment.
 - **Tests:** §6a new fixtures + §6b rewrites.
 - **Out of scope (follow-up):** stripping `description:` frontmatter from
   paths-less named instructions (§7 minor); kimchi already `outputPath = null`

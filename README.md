@@ -1,8 +1,8 @@
 # nix-agentic-tools
 
-Stacked commit workflows, MCP servers, and declarative configuration for
-AI coding CLIs (Claude Code, Copilot, Kiro). Works without Nix; Nix
-unlocks overlays, home-manager modules, and devshell integration.
+Stacked commit workflows, MCP servers, and declarative configuration for AI
+coding CLIs (Claude Code, Copilot, Kiro). Works without Nix; Nix unlocks
+overlays, home-manager modules, and devshell integration.
 
 ## Quick Start
 
@@ -62,13 +62,12 @@ services.mcp-servers.servers.github-mcp = {
 };
 ```
 
-> **Note (Kiro steering uninstall):** Kiro steering files are
-> materialized as read-only real files (the Kiro v3 engine ignores
-> symlinks — kirodotdev/Kiro#9787). Disabling `ai.kiro` removes the
-> materializer itself, so already-written steering files are NOT
-> pruned. To uninstall cleanly, first empty the steering surface (or
-> set `ai.kiro.steeringStrategy = "symlink"`) for one activation,
-> then disable.
+> **Note (Kiro steering uninstall):** Kiro steering files are materialized as
+> read-only real files (the Kiro v3 engine ignores symlinks —
+> kirodotdev/Kiro#9787). Disabling `ai.kiro` removes the materializer itself, so
+> already-written steering files are NOT pruned. To uninstall cleanly, first
+> empty the steering surface (or set `ai.kiro.steeringStrategy = "symlink"`) for
+> one activation, then disable.
 
 </details>
 
@@ -106,8 +105,7 @@ inputs:
 
 ## Skills
 
-Stacked commit workflow skills using git-branchless, git-absorb, and
-git-revise.
+Stacked commit workflow skills using git-branchless, git-absorb, and git-revise.
 
 <!-- prettier-ignore -->
 | Skill | Description |
@@ -185,8 +183,8 @@ nix build .#oxlint
 <details>
 <summary><strong>Generic Packages</strong></summary>
 
-Nothing agentic about these — they live in a split-ready
-`overlays/generic/` subtree and are exposed as `pkgs.generic.*`.
+Nothing agentic about these — they live in a split-ready `overlays/generic/`
+subtree and are exposed as `pkgs.generic.*`.
 
 <!-- prettier-ignore -->
 | Package | Description |
@@ -236,8 +234,8 @@ nix build .#dns-root-hints
 | `coding-standards` | Reusable coding standard fragments (DRY, conventional commits, etc.) |
 | `stacked-workflows-content` | Skills, references, and routing-table fragment |
 
-Content packages are derivations with `passthru.fragments` for
-composable instruction building.
+Content packages are derivations with `passthru.fragments` for composable
+instruction building.
 
 </details>
 
@@ -263,9 +261,8 @@ composable instruction building.
 <details>
 <summary><strong>Unified ai.* Module</strong></summary>
 
-Single source of truth for shared config across Claude, Copilot, and
-Kiro. Settings fan out at `mkDefault` priority — per-CLI overrides
-always win.
+Single source of truth for shared config across Claude, Copilot, and Kiro.
+Settings fan out at `mkDefault` priority — per-CLI overrides always win.
 
 ```nix
 ai = {
@@ -299,17 +296,17 @@ ai = {
 
 Claude Code injects a system-prompt section telling the model not to use
 subagents, workflows, or deep research "unless the user requested it". It is
-gated on a **model capability**, not on your configuration — on by default
-for Opus 5 — and no setting, flag, or environment variable turns it off. It
-never appears in the transcript, so a session with delegation silently
-suppressed looks identical to a normal one. It also directly contradicts
+gated on a **model capability**, not on your configuration — on by default for
+Opus 5 — and no setting, flag, or environment variable turns it off. It never
+appears in the transcript, so a session with delegation silently suppressed
+looks identical to a normal one. It also directly contradicts
 `ai.claude.ultracodeOnLaunch`, which asks for the opposite.
 
 Enabling Claude through `ai.claude` installs a mitigation automatically. It
-patches nothing: a `UserPromptSubmit` hook supplies the request that the
-clamp's own escape clause is asking for, as user-side context. It is
-injected once per session and re-armed by a `PreCompact` hook, so the cost
-is roughly 75 tokens per session rather than per turn.
+patches nothing: a `UserPromptSubmit` hook supplies the request that the clamp's
+own escape clause is asking for, as user-side context. It is injected once per
+session and re-armed by a `PreCompact` hook, so the cost is roughly 75 tokens
+per session rather than per turn.
 
 ```nix
 ai.claude.delegationClamp = {
@@ -318,10 +315,11 @@ ai.claude.delegationClamp = {
 };
 ```
 
-Upstream: [anthropics/claude-code#80988](https://github.com/anthropics/claude-code/issues/80988).
+Upstream:
+[anthropics/claude-code#80988](https://github.com/anthropics/claude-code/issues/80988).
 Two tripwires force re-evaluation instead of letting this calcify — a flake
-check fails when the pinned Claude Code version moves, and a dated CI step
-fails once `config/heron-brook-tripwire.json`'s `reviewBy` passes. See
+check fails when the pinned Claude Code version moves, and a dated CI step fails
+once `config/heron-brook-tripwire.json`'s `reviewBy` passes. See
 `packages/claude-code/docs/heron-brook-clamp.md`.
 
 </details>
@@ -357,8 +355,7 @@ stacked-workflows = {
 };
 ```
 
-See the `stacked-workflows` package for git presets and skill
-details.
+See the `stacked-workflows` package for git presets and skill details.
 
 </details>
 

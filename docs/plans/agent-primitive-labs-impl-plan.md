@@ -1,36 +1,75 @@
 # Agent-Primitive Labs Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: use `superpowers:subagent-driven-development` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Do **not** use `superpowers:executing-plans`.
+> **For agentic workers:** REQUIRED SUB-SKILL: use
+> `superpowers:subagent-driven-development` to implement this plan task-by-task.
+> Steps use checkbox (`- [ ]`) syntax for tracking. Do **not** use
+> `superpowers:executing-plans`.
 
-**Goal:** Stand up `labs/<name>/lab.nix` definitions plus a `lab:*` task family that materializes each lab into an isolated clean-room directory outside `$HOME`, with a home-manager-generated fake user-global config root and a devenv-generated project scope, for manual experimentation with agentic primitives against the real Claude and Kiro CLIs.
+**Goal:** Stand up `labs/<name>/lab.nix` definitions plus a `lab:*` task family
+that materializes each lab into an isolated clean-room directory outside
+`$HOME`, with a home-manager-generated fake user-global config root and a
+devenv-generated project scope, for manual experimentation with agentic
+primitives against the real Claude and Kiro CLIs.
 
-**Architecture:** One file per lab declares two optional scopes. `global` feeds an auto-discovered `homeConfigurations.lab-<name>`; building `config.home-files` yields the materialized dotfile farm, which is copied (never activated) into the lab's writable fake home and pointed at via `CLAUDE_CONFIG_DIR`/`KIRO_HOME`. `project` feeds a generated `devenv.nix` in the lab that imports this repo's devenv modules **by absolute path** — devenv 2.x imposes no source boundary, so repo edits invalidate the lab's eval cache live.
+**Architecture:** One file per lab declares two optional scopes. `global` feeds
+an auto-discovered `homeConfigurations.lab-<name>`; building `config.home-files`
+yields the materialized dotfile farm, which is copied (never activated) into the
+lab's writable fake home and pointed at via `CLAUDE_CONFIG_DIR`/`KIRO_HOME`.
+`project` feeds a generated `devenv.nix` in the lab that imports this repo's
+devenv modules **by absolute path** — devenv 2.x imposes no source boundary, so
+repo edits invalidate the lab's eval cache live.
 
-**Tech Stack:** Nix flakes, home-manager (new input), devenv 2.1.3, direnv, bash.
+**Tech Stack:** Nix flakes, home-manager (new input), devenv 2.1.3, direnv,
+bash.
 
 ## Global Constraints
 
-- **Where the docs live vs. where the work happens.** This plan and its companion spec are canonical in the **main checkout** on `refactor/ai-factory-architecture`:
-  - plan — `/home/caubut/Documents/projects/nix-agentic-tools/docs/plans/agent-primitive-labs-impl-plan.md`
-  - spec — `/home/caubut/Documents/projects/nix-agentic-tools/docs/plans/agent-primitive-labs-design.md`
+- **Where the docs live vs. where the work happens.** This plan and its
+  companion spec are canonical in the **main checkout** on
+  `refactor/ai-factory-architecture`:
+  - plan —
+    `/home/caubut/Documents/projects/nix-agentic-tools/docs/plans/agent-primitive-labs-impl-plan.md`
+  - spec —
+    `/home/caubut/Documents/projects/nix-agentic-tools/docs/plans/agent-primitive-labs-design.md`
 
-  **All code changes happen in the worktree** at `/home/caubut/Documents/projects/nix-agentic-tools-worktrees/agent-primitive-labs` (branch `refactor/agent-primitive-labs`). Do not copy the docs into the worktree — they are read from the absolute paths above and updated in place there. Step-tick updates and any spec corrections go to the main-checkout copies.
+  **All code changes happen in the worktree** at
+  `/home/caubut/Documents/projects/nix-agentic-tools-worktrees/agent-primitive-labs`
+  (branch `refactor/agent-primitive-labs`). Do not copy the docs into the
+  worktree — they are read from the absolute paths above and updated in place
+  there. Step-tick updates and any spec corrections go to the main-checkout
+  copies.
 
-- **Companion spec:** read it before starting. Every empirical claim below is verified there; do not re-derive.
+- **Companion spec:** read it before starting. Every empirical claim below is
+  verified there; do not re-derive.
 - **All shell scripts use full strict mode.** Never the abbreviated form:
   ```bash
   set -euETo pipefail
   shopt -s inherit_errexit 2>/dev/null || :
   ```
-  This applies to task `exec` bodies, generated `.envrc` files, and heredocs in Nix.
-- **Labs materialize under `/var/tmp/nat-labs/`.** Load-bearing: anything under `$HOME` inherits `~/.claude/CLAUDE.md` via Claude's ancestor walk, which no env var suppresses without also killing the lab's own `CLAUDE.md`. `$XDG_STATE_HOME` resolves under `$HOME` and is **not** acceptable.
-- **Never set `XDG_DATA_HOME` or `HOME`** in lab environments — both destroy Kiro's auth DB (`~/.local/share/kiro-cli/data.sqlite3`).
-- **Copy home-files with `cp -rL … && chmod -R u+w`.** `--no-preserve=mode` silently strips the exec bit off `.claude/hooks/*`.
-- **Alphabetical ordering** within categorical groups — flake inputs, task attrsets, option declarations.
-- **Conventional Commits**, lowercase imperative, no trailing period. Scope `labs` for this workstream.
-- **Do not touch** `packages/claude-code/lib/mkClaude.nix:659` or the `devenvModules.default` doc bug during Tasks 1-6 — they are parked as P1 and P3 below. Labs work around them. Anything else out-of-scope you discover mid-task gets **parked**, not chased: append it to the Parked items section with evidence and keep going.
-- **`statix` W20 fires at 3+ keys sharing a top-level prefix in one attrset.** Three flat `ai.*` entries fail the pre-commit hook; nest them under a single `ai = { … };`. Two flat entries are fine.
-- **Do not add assertions, golden files, or `checks/` entries.** A regression layer is an explicit non-goal (spec §1).
+  This applies to task `exec` bodies, generated `.envrc` files, and heredocs in
+  Nix.
+- **Labs materialize under `/var/tmp/nat-labs/`.** Load-bearing: anything under
+  `$HOME` inherits `~/.claude/CLAUDE.md` via Claude's ancestor walk, which no
+  env var suppresses without also killing the lab's own `CLAUDE.md`.
+  `$XDG_STATE_HOME` resolves under `$HOME` and is **not** acceptable.
+- **Never set `XDG_DATA_HOME` or `HOME`** in lab environments — both destroy
+  Kiro's auth DB (`~/.local/share/kiro-cli/data.sqlite3`).
+- **Copy home-files with `cp -rL … && chmod -R u+w`.** `--no-preserve=mode`
+  silently strips the exec bit off `.claude/hooks/*`.
+- **Alphabetical ordering** within categorical groups — flake inputs, task
+  attrsets, option declarations.
+- **Conventional Commits**, lowercase imperative, no trailing period. Scope
+  `labs` for this workstream.
+- **Do not touch** `packages/claude-code/lib/mkClaude.nix:659` or the
+  `devenvModules.default` doc bug during Tasks 1-6 — they are parked as P1 and
+  P3 below. Labs work around them. Anything else out-of-scope you discover
+  mid-task gets **parked**, not chased: append it to the Parked items section
+  with evidence and keep going.
+- **`statix` W20 fires at 3+ keys sharing a top-level prefix in one attrset.**
+  Three flat `ai.*` entries fail the pre-commit hook; nest them under a single
+  `ai = { … };`. Two flat entries are fine.
+- **Do not add assertions, golden files, or `checks/` entries.** A regression
+  layer is an explicit non-goal (spec §1).
 - **`nix flake check` must stay green** after every task.
 
 ---
@@ -52,9 +91,9 @@ different cheapest tools:
 
 The sharpest finding: **a home-manager fixture is epistemically inert for
 precedence.** Precedence is resolved by the CLI reading files off disk; whether
-the fake global came from `home-files`, `mkdir -p`, or `printf`, the CLI's answer
-is byte-identical. The HM machinery earns its keep for _emission fidelity_, not
-for precedence.
+the fake global came from `home-files`, `mkdir -p`, or `printf`, the CLI's
+answer is byte-identical. The HM machinery earns its keep for _emission
+fidelity_, not for precedence.
 
 **User intent, clarified 2026-07-21:** the goal is **both** — test CLI behaviour
 in order to write good modules, then verify those modules work. That is a
@@ -84,9 +123,9 @@ HM-delivered Kiro config changes materially. Its answer should inform the rest.
 dev/scripts/lab-up.sh <name>
 ```
 
-_Why:_ `devenv tasks run <task> -- <arg>` has **no positional-argument channel**.
-devenv 2.1.3 treats everything after `run` — including after `--` — as further
-task names, so `devenv tasks run lab:up -- hello` fails with
+_Why:_ `devenv tasks run <task> -- <arg>` has **no positional-argument
+channel**. devenv 2.1.3 treats everything after `run` — including after `--` —
+as further task names, so `devenv tasks run lab:up -- hello` fails with
 `× Task does not exist: hello`. Verified against `--help`, two alternate
 invocation shapes, and `strings` on the installed binary: the only parameter
 channel is a declared `tasks.<name>.input` consumed via `--input name=hello` →
@@ -114,11 +153,11 @@ so the reasoning survives if a later experiment resurrects them.
 
 **What would resurrect Task 3:** a specific _cross-backend divergence_ concern —
 `hmTransform` and `devenvTransform` lowering the same typed input to different
-shapes, which only a live CLI reading both scopes at once would reveal. Test that
-cheaply first: `printf` a project `.claude/settings.json` next to a materialized
-lab and run `claude --debug`. If that surfaces a divergence, generating the
-project scope from the real devenv module stops being ceremony and becomes the
-point.
+shapes, which only a live CLI reading both scopes at once would reveal. Test
+that cheaply first: `printf` a project `.claude/settings.json` next to a
+materialized lab and run `claude --debug`. If that surfaces a divergence,
+generating the project scope from the real devenv module stops being ceremony
+and becomes the point.
 
 ---
 
@@ -126,7 +165,8 @@ point.
 
 **Files:**
 
-- Modify: `flake.nix` (inputs block ~line 17-77; new `homeConfigurations` output after `devenvModules`, ~line 139)
+- Modify: `flake.nix` (inputs block ~line 17-77; new `homeConfigurations` output
+  after `devenvModules`, ~line 139)
 - Create: `labs/hello/lab.nix`
 - Modify: `devenv.yaml` (regenerated, not hand-edited)
 - Modify: `flake.lock` (generated)
@@ -134,7 +174,11 @@ point.
 **Interfaces:**
 
 - Consumes: nothing.
-- Produces: flake output `homeConfigurations.lab-<name>` for every directory under `labs/`. Each lab file is an attrset `{ description :: str, global :: attrs ? {}, project :: attrs ? {} }`. Task 2 builds `homeConfigurations.lab-<name>.config.home-files`; Task 3 reads `.project`.
+- Produces: flake output `homeConfigurations.lab-<name>` for every directory
+  under `labs/`. Each lab file is an attrset
+  `{ description :: str, global :: attrs ? {}, project :: attrs ? {} }`. Task 2
+  builds `homeConfigurations.lab-<name>.config.home-files`; Task 3 reads
+  `.project`.
 
 - [ ] **Step 1: Add the `home-manager` flake input**
 
@@ -184,10 +228,11 @@ Create `labs/hello/lab.nix`:
 
 **Nesting is mandatory, not stylistic.** This repo's `statix` pre-commit hook
 raises W20 ("repeated keys") once an attrset has **3 or more** entries sharing a
-top-level prefix, so three flat `ai.*` keys fail the commit. Two are fine — which
-is why `project` above stays flat. Any lab or snippet that stacks 3+ `ai.*` keys
-must use the nested form. Verified semantically identical: same `nix eval` result
-and an unchanged `home-manager-files` store path before and after.
+top-level prefix, so three flat `ai.*` keys fail the commit. Two are fine —
+which is why `project` above stays flat. Any lab or snippet that stacks 3+
+`ai.*` keys must use the nested form. Verified semantically identical: same
+`nix eval` result and an unchanged `home-manager-files` store path before and
+after.
 
 - [ ] **Step 3: Add lab discovery and the `homeConfigurations` output**
 
@@ -242,9 +287,17 @@ nix flake lock
 nix eval --raw --impure --expr 'import ./config/generate-devenv-yaml.nix {}' >devenv.yaml
 ```
 
-Expected: `flake.lock` gains a `home-manager` node; `devenv.yaml` gains a `home-manager:` entry with `follows: nixpkgs`. The generator emits every root input — there is no exclusion mechanism and we are not adding one.
+Expected: `flake.lock` gains a `home-manager` node; `devenv.yaml` gains a
+`home-manager:` entry with `follows: nixpkgs`. The generator emits every root
+input — there is no exclusion mechanism and we are not adding one.
 
-**Do not run `devenv tasks run generate:devenv-yaml` — that task does not exist.** The generated `devenv.yaml` header and `config/generate-devenv-yaml.nix:3` both name it, but `dev/tasks/generate.nix` never defined it. The `nix eval` line above is the real mechanism, copied from `dev/scripts/update-input.sh:42`. (Discovered during Task 1 execution; the stale comment is logged as a follow-up below and is deliberately NOT fixed here — out of scope.)
+**Do not run `devenv tasks run generate:devenv-yaml` — that task does not
+exist.** The generated `devenv.yaml` header and
+`config/generate-devenv-yaml.nix:3` both name it, but `dev/tasks/generate.nix`
+never defined it. The `nix eval` line above is the real mechanism, copied from
+`dev/scripts/update-input.sh:42`. (Discovered during Task 1 execution; the stale
+comment is logged as a follow-up below and is deliberately NOT fixed here — out
+of scope.)
 
 - [ ] **Step 5: Verify the fake global builds**
 
@@ -252,13 +305,15 @@ Expected: `flake.lock` gains a `home-manager` node; `devenv.yaml` gains a `home-
 nix build .#homeConfigurations.lab-hello.config.home-files --max-jobs 1 --no-link --print-out-paths
 ```
 
-Expected: a single `/nix/store/…-home-manager-files` path, roughly 1s after the first eval. Then:
+Expected: a single `/nix/store/…-home-manager-files` path, roughly 1s after the
+first eval. Then:
 
 ```bash
 ls -R "$(nix build .#homeConfigurations.lab-hello.config.home-files --no-link --print-out-paths)" | head -30
 ```
 
-Expected: a `.claude/` directory containing at minimum `CLAUDE.md` and `settings.json`.
+Expected: a `.claude/` directory containing at minimum `CLAUDE.md` and
+`settings.json`.
 
 - [ ] **Step 6: Verify nothing else regressed**
 
@@ -266,7 +321,8 @@ Expected: a `.claude/` directory containing at minimum `CLAUDE.md` and `settings
 nix flake check --max-jobs 1
 ```
 
-Expected: passes. If `checks.formatting` fails on `labs/hello/lab.nix`, run `nix fmt labs/hello/lab.nix` and re-run.
+Expected: passes. If `checks.formatting` fails on `labs/hello/lab.nix`, run
+`nix fmt labs/hello/lab.nix` and re-run.
 
 - [ ] **Step 7: Commit**
 
@@ -287,17 +343,27 @@ git commit -m "feat(labs): add home-manager input and lab homeConfigurations dis
 **Interfaces:**
 
 - Consumes: `homeConfigurations.lab-<name>.config.home-files` from Task 1.
-- Produces: `/var/tmp/nat-labs/<name>/home/` — a writable fake user-global root — and `/var/tmp/nat-labs/<name>/.envrc` exporting the isolation contract. Task 3 adds the project scope alongside; Task 4 adds the sibling lifecycle tasks into the same `tasks` attrset in this file.
+- Produces: `/var/tmp/nat-labs/<name>/home/` — a writable fake user-global root
+  — and `/var/tmp/nat-labs/<name>/.envrc` exporting the isolation contract. Task
+  3 adds the project scope alongside; Task 4 adds the sibling lifecycle tasks
+  into the same `tasks` attrset in this file.
 
 - [ ] **Step 1: Discover the activation-entry option path**
 
-The three activation snippets (`claudeUnpinLaunchEffort`, `copilotSettingsMerge`, `kiroSettingsMerge`) are **not** in `home-files` — they only run at activation time. We replay them. First confirm the attribute that carries the script body, because home-manager's `home.activation` is a DAG type whose entries expose `.data`, not `.text`:
+The three activation snippets (`claudeUnpinLaunchEffort`,
+`copilotSettingsMerge`, `kiroSettingsMerge`) are **not** in `home-files` — they
+only run at activation time. We replay them. First confirm the attribute that
+carries the script body, because home-manager's `home.activation` is a DAG type
+whose entries expose `.data`, not `.text`:
 
 ```bash
 nix eval --json .#homeConfigurations.lab-hello.config.home.activation.claudeUnpinLaunchEffort 2>&1 | head -c 400
 ```
 
-Expected: a JSON object with keys including `after`, `before`, and **`data`**. Use whichever key holds the shell body in the next step. If the entry does not exist for `lab-hello`, that is fine — it is only emitted when the relevant app is enabled; the task must tolerate absence.
+Expected: a JSON object with keys including `after`, `before`, and **`data`**.
+Use whichever key holds the shell body in the next step. If the entry does not
+exist for `lab-hello`, that is fine — it is only emitted when the relevant app
+is enabled; the task must tolerate absence.
 
 - [ ] **Step 2: Create the lab task file**
 
@@ -420,7 +486,8 @@ in {
 
 - [ ] **Step 3: Wire the task file into devenv**
 
-In `devenv.nix`, extend the `tasks` `let` block (currently lines 339-343) so the bindings stay alphabetical:
+In `devenv.nix`, extend the `tasks` `let` block (currently lines 339-343) so the
+bindings stay alphabetical:
 
 ```nix
   tasks = let
@@ -429,7 +496,8 @@ In `devenv.nix`, extend the `tasks` `let` block (currently lines 339-343) so the
     labTasks = (import ./dev/tasks/lab.nix {}).tasks;
 ```
 
-Then add `labTasks` to the union expression that follows (match the existing `//` chain, keeping alphabetical order).
+Then add `labTasks` to the union expression that follows (match the existing
+`//` chain, keeping alphabetical order).
 
 - [ ] **Step 4: Run it**
 
@@ -437,7 +505,9 @@ Then add `labTasks` to the union expression that follows (match the existing `//
 devenv tasks run lab:up -- hello
 ```
 
-Expected: `==>` progress lines ending in `/var/tmp/nat-labs/hello/work`. Activation entries absent for this lab log `not present — skipping` rather than failing.
+Expected: `==>` progress lines ending in `/var/tmp/nat-labs/hello/work`.
+Activation entries absent for this lab log `not present — skipping` rather than
+failing.
 
 - [ ] **Step 5: Verify the fake global is writable and correct**
 
@@ -450,9 +520,14 @@ find "$L/home" -xtype l | head          # must print NOTHING
 grep -c 'CLAUDE_SECURESTORAGE_CONFIG_DIR=""' "$L/.envrc"
 ```
 
-Expected: `settings OK`, `writable OK`, `trust OK`, no dangling-symlink output, and `1`.
+Expected: `settings OK`, `writable OK`, `trust OK`, no dangling-symlink output,
+and `1`.
 
-If `find … -xtype l` prints anything, a lab used a raw skill source directory. Those contain relative symlinks (`references/*.md -> ../../../references/*.md`) that home-manager copies verbatim. Fix the **lab definition** to use `stacked-workflows.enable = true` (the packaged, dereferenced path) rather than pointing `ai.skills.*` at a repo source dir. Do not work around it in the task.
+If `find … -xtype l` prints anything, a lab used a raw skill source directory.
+Those contain relative symlinks (`references/*.md -> ../../../references/*.md`)
+that home-manager copies verbatim. Fix the **lab definition** to use
+`stacked-workflows.enable = true` (the packaged, dereferenced path) rather than
+pointing `ai.skills.*` at a repo source dir. Do not work around it in the task.
 
 - [ ] **Step 6: Commit**
 
@@ -465,7 +540,11 @@ git commit -m "feat(labs): add lab:up task materializing the fake user-global"
 
 ### Task 3 [CUT]: project scope — generated devenv importing repo modules by absolute path
 
-> **CUT 2026-07-21.** Existed to observe repo-vs-global interaction, which is already answered (spec §2.2). Skill / model / effort / subagent experiments are user-scope-only. Retained for the record; see "What would resurrect Task 3" in REVISED SCOPE. Until then `mkdir -p .claude && cp` covers any ad-hoc project scope a lab needs.
+> **CUT 2026-07-21.** Existed to observe repo-vs-global interaction, which is
+> already answered (spec §2.2). Skill / model / effort / subagent experiments
+> are user-scope-only. Retained for the record; see "What would resurrect Task
+> 3" in REVISED SCOPE. Until then `mkdir -p .claude && cp` covers any ad-hoc
+> project scope a lab needs.
 
 **Files:**
 
@@ -473,8 +552,10 @@ git commit -m "feat(labs): add lab:up task materializing the fake user-global"
 
 **Interfaces:**
 
-- Consumes: `labs/<name>/lab.nix` `.project` attrset; `$repo` and `$lab` from Task 2's `lab:up`.
-- Produces: `/var/tmp/nat-labs/<name>/work/{devenv.nix,devenv.yaml,.envrc}` — a devenv project that materializes `.claude/`, `AGENTS.md` etc. in place.
+- Consumes: `labs/<name>/lab.nix` `.project` attrset; `$repo` and `$lab` from
+  Task 2's `lab:up`.
+- Produces: `/var/tmp/nat-labs/<name>/work/{devenv.nix,devenv.yaml,.envrc}` — a
+  devenv project that materializes `.claude/`, `AGENTS.md` etc. in place.
 
 - [ ] **Step 1: Read the devenv rev the repo pins**
 
@@ -482,11 +563,14 @@ git commit -m "feat(labs): add lab:up task materializing the fake user-global"
 grep -A1 '^  devenv:' devenv.yaml
 ```
 
-Expected: a `url: github:cachix/devenv/<rev>` line. The lab must pin the **same** rev so the upstream `claude.code` module schema matches what our modules feed it. Capture it dynamically rather than hardcoding.
+Expected: a `url: github:cachix/devenv/<rev>` line. The lab must pin the
+**same** rev so the upstream `claude.code` module schema matches what our
+modules feed it. Capture it dynamically rather than hardcoding.
 
 - [ ] **Step 2: Extend `lab:up` to emit the project scope**
 
-Insert this block into the `lab:up` exec body, immediately before the final `log "lab '$name' ready:"`:
+Insert this block into the `lab:up` exec body, immediately before the final
+`log "lab '$name' ready:"`:
 
 ```bash
         # ── Project scope ────────────────────────────────────────────
@@ -550,11 +634,13 @@ test -L /var/tmp/nat-labs/hello/work/.claude/settings.json && echo "project sett
 readlink /var/tmp/nat-labs/hello/work/.claude/settings.json
 ```
 
-Expected: `project settings OK`, and a `/nix/store/…-claude-settings.json` target.
+Expected: `project settings OK`, and a `/nix/store/…-claude-settings.json`
+target.
 
 - [ ] **Step 4: Verify live invalidation of repo module edits**
 
-This is the property that justifies absolute-path imports over a flake input. Confirm it holds:
+This is the property that justifies absolute-path imports over a flake input.
+Confirm it holds:
 
 ```bash
 cd /var/tmp/nat-labs/hello/work
@@ -562,7 +648,8 @@ grep -c "$OLDPWD" .devenv/input-paths.txt 2>/dev/null || \
   grep -c 'nix-agentic-tools' .devenv/input-paths.txt
 ```
 
-Expected: a non-zero count — the repo's module files are registered as tracked eval inputs.
+Expected: a non-zero count — the repo's module files are registered as tracked
+eval inputs.
 
 - [ ] **Step 5: Commit**
 
@@ -576,7 +663,9 @@ git commit -m "feat(labs): generate lab project scope from absolute-path module 
 
 ### Task 4 [CUT to one verb]: `lab:down`, `lab:reset`, `lab:ls`
 
-> **DESCOPED 2026-07-21.** Keep only `lab:reset` = `rm -rf "$LAB" && lab:up`. `lab:ls` is `ls`; `lab:down` is `rm -rf`. Three lifecycle verbs for a `/var/tmp` directory is ceremony. Full text retained below for reference.
+> **DESCOPED 2026-07-21.** Keep only `lab:reset` = `rm -rf "$LAB" && lab:up`.
+> `lab:ls` is `ls`; `lab:down` is `rm -rf`. Three lifecycle verbs for a
+> `/var/tmp` directory is ceremony. Full text retained below for reference.
 
 **Files:**
 
@@ -589,7 +678,8 @@ git commit -m "feat(labs): generate lab project scope from absolute-path module 
 
 - [ ] **Step 1: Add the three tasks**
 
-Add to the `tasks` attrset in `dev/tasks/lab.nix`, keeping keys alphabetical (`lab:down`, `lab:ls`, `lab:reset`, `lab:up`):
+Add to the `tasks` attrset in `dev/tasks/lab.nix`, keeping keys alphabetical
+(`lab:down`, `lab:ls`, `lab:reset`, `lab:up`):
 
 ```nix
     "lab:down" = {
@@ -650,7 +740,9 @@ test ! -d /var/tmp/nat-labs/hello && echo "down OK"
 devenv tasks run lab:down -- hello
 ```
 
-Expected: `lab:ls` shows `hello` as `defined` then `materialized` then `defined`; `down OK`; and the second `lab:down` exits 0 with `is not materialized — nothing to do` (idempotent, not an error).
+Expected: `lab:ls` shows `hello` as `defined` then `materialized` then
+`defined`; `down OK`; and the second `lab:down` exits 0 with
+`is not materialized — nothing to do` (idempotent, not an error).
 
 - [ ] **Step 3: Commit**
 
@@ -674,7 +766,8 @@ git commit -m "feat(labs): add lab:down, lab:ls and lab:reset lifecycle tasks"
 - Consumes: the whole harness from Tasks 1-4.
 - Produces: the reference shape every later lab copies.
 
-This lab answers the question the clean room exists for: **does a skill trigger on its description alone, with nothing else competing?**
+This lab answers the question the clean room exists for: **does a skill trigger
+on its description alone, with nothing else competing?**
 
 - [ ] **Step 1: Write the skill under test**
 
@@ -692,7 +785,8 @@ Announce "NEEDLE-SKILL-FIRED" as the first line of your response, then convert
 the duration the user gave into fortnights (1 fortnight = 14 days).
 ```
 
-The sentinel string exists so triggering is observable without interpreting prose.
+The sentinel string exists so triggering is observable without interpreting
+prose.
 
 - [ ] **Step 2: Write the lab definition**
 
@@ -714,7 +808,8 @@ Create `labs/skill-trigger/lab.nix`:
 }
 ```
 
-Note the deliberate absence of `project` — skill triggering is a user-scope concern, and omitting the project scope keeps the lab minimal.
+Note the deliberate absence of `project` — skill triggering is a user-scope
+concern, and omitting the project scope keeps the lab minimal.
 
 - [ ] **Step 3: Write the lab README**
 
@@ -723,8 +818,8 @@ Create `labs/skill-trigger/README.md`:
 ```markdown
 # skill-trigger
 
-**Question:** does a skill trigger on its `description` alone, with no
-competing skills, no global CLAUDE.md, and no MCP servers?
+**Question:** does a skill trigger on its `description` alone, with no competing
+skills, no global CLAUDE.md, and no MCP servers?
 
 **Run:**
 
@@ -765,7 +860,8 @@ ls "$L/home/.claude/skills/"          # expect: needle, and nothing else
 test ! -e "$L/home/.claude/rules/stacked-workflows.md" && echo "no sws leak"
 ```
 
-Expected: `needle` alone, and `no sws leak`. If other skills appear, the lab's `global` is pulling in a package module it should not — fix the lab definition.
+Expected: `needle` alone, and `no sws leak`. If other skills appear, the lab's
+`global` is pulling in a package module it should not — fix the lab definition.
 
 - [ ] **Step 6: Commit**
 
@@ -780,17 +876,32 @@ git commit -m "feat(labs): add skill-trigger lab probing description-only trigge
 
 **Files:**
 
-- Modify: the spec's §5 open items — record the outcome. **Absolute path, main checkout:** `/home/caubut/Documents/projects/nix-agentic-tools/docs/plans/agent-primitive-labs-design.md` (it is deliberately not present in the worktree)
-- Modify: `dev/tasks/lab.nix` **only if** the probe shows `KIRO_HOME` does not cover `hooks/`
+- Modify: the spec's §5 open items — record the outcome. **Absolute path, main
+  checkout:**
+  `/home/caubut/Documents/projects/nix-agentic-tools/docs/plans/agent-primitive-labs-design.md`
+  (it is deliberately not present in the worktree)
+- Modify: `dev/tasks/lab.nix` **only if** the probe shows `KIRO_HOME` does not
+  cover `hooks/`
 
 **Interfaces:**
 
 - Consumes: a materialized lab from Task 2.
-- Produces: a CONFIRMED or REFUTED answer replacing the UNVERIFIED entry in the spec.
+- Produces: a CONFIRMED or REFUTED answer replacing the UNVERIFIED entry in the
+  spec.
 
-**Why this is a separate task:** whether `KIRO_HOME` relocates `hooks/` is the one load-bearing unknown left in the design. It is absent from Kiro's in-binary 2.3.0 changelog list, and `$KIRO_HOME/hooks` was never opened during a non-interactive run — consistent with the recorded finding that v3 hooks fire only in the TUI, and with Kiro 2.13.0 having added global `~/.kiro/hooks/` firing in every workspace. **If `KIRO_HOME` does not cover `hooks/`, then any Kiro-hook lab silently fires the developer's real global hooks and the clean room is broken for that class of experiment.**
+**Why this is a separate task:** whether `KIRO_HOME` relocates `hooks/` is the
+one load-bearing unknown left in the design. It is absent from Kiro's in-binary
+2.3.0 changelog list, and `$KIRO_HOME/hooks` was never opened during a
+non-interactive run — consistent with the recorded finding that v3 hooks fire
+only in the TUI, and with Kiro 2.13.0 having added global `~/.kiro/hooks/`
+firing in every workspace. **If `KIRO_HOME` does not cover `hooks/`, then any
+Kiro-hook lab silently fires the developer's real global hooks and the clean
+room is broken for that class of experiment.**
 
-**This task requires a live interactive Kiro session and therefore cannot be automated.** The implementing agent must walk the user through it synchronously, one step at a time, waiting for the user's output after each — not batch the instructions and not run it unattended.
+**This task requires a live interactive Kiro session and therefore cannot be
+automated.** The implementing agent must walk the user through it synchronously,
+one step at a time, waiting for the user's output after each — not batch the
+instructions and not run it unattended.
 
 - [ ] **Step 1: Agent — prepare the probe lab**
 
@@ -807,7 +918,8 @@ EOF
 rm -f /tmp/nat-lab-hook-probe.log
 ```
 
-Adjust the JSON to the real Kiro hook schema first by reading an existing example under `packages/kiro-cli/`; do not guess the field names.
+Adjust the JSON to the real Kiro hook schema first by reading an existing
+example under `packages/kiro-cli/`; do not guess the field names.
 
 - [ ] **Step 2: Agent — ask the user to run one command and paste the result**
 
@@ -817,7 +929,8 @@ Ask the user to run exactly:
 cd /var/tmp/nat-labs/hello/work && direnv allow && kiro
 ```
 
-…send one trivial message, exit, then report back. Wait for their response before continuing.
+…send one trivial message, exit, then report back. Wait for their response
+before continuing.
 
 - [ ] **Step 3: Agent — check whether the lab hook fired**
 
@@ -826,15 +939,24 @@ cat /tmp/nat-lab-hook-probe.log 2>/dev/null || echo "NOT FIRED"
 ```
 
 - `LAB-HOOK-FIRED` present → `KIRO_HOME` **does** cover `hooks/`. CONFIRMED.
-- `NOT FIRED` → `KIRO_HOME` does not cover `hooks/`. Ask the user whether any of their **real** global hooks fired during that session; if so, the leak is confirmed and Kiro-hook labs are unsafe until mitigated.
+- `NOT FIRED` → `KIRO_HOME` does not cover `hooks/`. Ask the user whether any of
+  their **real** global hooks fired during that session; if so, the leak is
+  confirmed and Kiro-hook labs are unsafe until mitigated.
 
 - [ ] **Step 4: Record the outcome in the spec**
 
-Replace the `KIRO_HOME` bullet under `## 5. Open items` in `/home/caubut/Documents/projects/nix-agentic-tools/docs/plans/agent-primitive-labs-design.md` with the verified result, including the Kiro version tested and the method. If REFUTED, add a `Known blockers` entry stating that Kiro-hook labs are not isolated, and **stop** — do not invent a mitigation without checking with the user first, per the standing rule against unilaterally choosing workarounds.
+Replace the `KIRO_HOME` bullet under `## 5. Open items` in
+`/home/caubut/Documents/projects/nix-agentic-tools/docs/plans/agent-primitive-labs-design.md`
+with the verified result, including the Kiro version tested and the method. If
+REFUTED, add a `Known blockers` entry stating that Kiro-hook labs are not
+isolated, and **stop** — do not invent a mitigation without checking with the
+user first, per the standing rule against unilaterally choosing workarounds.
 
 - [ ] **Step 5: Commit the spec update**
 
-The spec is an untracked working doc. Do **not** `git add` it. Report the outcome to the user instead and let them decide whether it graduates into tracked docs.
+The spec is an untracked working doc. Do **not** `git add` it. Report the
+outcome to the user instead and let them decide whether it graduates into
+tracked docs.
 
 ---
 
@@ -869,14 +991,34 @@ The working rule during execution:
 
 ## Self-review
 
-**Spec coverage.** §2.1 isolation levers → Task 2 Step 2 `.envrc`. §2.2 outside-`$HOME` → global constraint + `labRoot`. §2.3 absolute-path imports → Task 3. §2.4 `home-files` not `activationPackage`, `cp -rL`+`chmod`, `mkForce null`, no raw skill dirs → Tasks 1-2 and Task 2 Step 5. §2.5 activation replay + `CLAUDE_CONFIG_DIR` export → Task 2 Step 2. §3.1 lab schema → Task 1. §3.3 layout → Tasks 2-3. §3.5 lifecycle → Tasks 2 and 4. §4 blockers → global constraint (untouched, worked around). §5 Kiro hooks → Task 6; cspell/treefmt → Task 1 Step 6 handles it at the point it first bites, per the spec's "decide when the first lab lands".
+**Spec coverage.** §2.1 isolation levers → Task 2 Step 2 `.envrc`. §2.2
+outside-`$HOME` → global constraint + `labRoot`. §2.3 absolute-path imports →
+Task 3. §2.4 `home-files` not `activationPackage`, `cp -rL`+`chmod`,
+`mkForce null`, no raw skill dirs → Tasks 1-2 and Task 2 Step 5. §2.5 activation
+replay + `CLAUDE_CONFIG_DIR` export → Task 2 Step 2. §3.1 lab schema → Task 1.
+§3.3 layout → Tasks 2-3. §3.5 lifecycle → Tasks 2 and 4. §4 blockers → global
+constraint (untouched, worked around). §5 Kiro hooks → Task 6; cspell/treefmt →
+Task 1 Step 6 handles it at the point it first bites, per the spec's "decide
+when the first lab lands".
 
-**Placeholder scan.** No TBD/TODO. Every code step carries complete content. Task 6 Step 1 deliberately instructs reading the real hook schema rather than trusting the illustrative JSON — that is a directed action, not a placeholder.
+**Placeholder scan.** No TBD/TODO. Every code step carries complete content.
+Task 6 Step 1 deliberately instructs reading the real hook schema rather than
+trusting the illustrative JSON — that is a directed action, not a placeholder.
 
-**Type consistency.** `labRoot`, `bashPreamble`, `log`, `requireName` are defined once in Task 2 and referenced by name in Tasks 3-4. Lab schema `{description, global?, project?}` is consistent across Tasks 1, 3 and 5. `homeConfigurations.lab-<name>.config.home-files` is spelled identically in Tasks 1, 2 and 3.
+**Type consistency.** `labRoot`, `bashPreamble`, `log`, `requireName` are
+defined once in Task 2 and referenced by name in Tasks 3-4. Lab schema
+`{description, global?, project?}` is consistent across Tasks 1, 3 and 5.
+`homeConfigurations.lab-<name>.config.home-files` is spelled identically in
+Tasks 1, 2 and 3.
 
 **Known soft spots** — verify rather than assume during execution:
 
-- Task 2 Step 1 exists precisely because `.data` vs `.text` on activation DAG entries was not confirmed. Do not skip it.
-- Task 3 Step 2's `? project` existence check via `nix eval --impure` is the least-certain construct in the plan. If it misbehaves, substitute a `grep -q '^\s*project\s*=' "labs/$name/lab.nix"` guard and note the change.
-- Heredoc indent-stripping via `sed -i 's/^        //'` assumes exactly eight leading spaces. If the surrounding Nix indentation shifts, the generated files gain stray indentation — check the emitted `.envrc` and `devenv.nix` visually the first time.
+- Task 2 Step 1 exists precisely because `.data` vs `.text` on activation DAG
+  entries was not confirmed. Do not skip it.
+- Task 3 Step 2's `? project` existence check via `nix eval --impure` is the
+  least-certain construct in the plan. If it misbehaves, substitute a
+  `grep -q '^\s*project\s*=' "labs/$name/lab.nix"` guard and note the change.
+- Heredoc indent-stripping via `sed -i 's/^        //'` assumes exactly eight
+  leading spaces. If the surrounding Nix indentation shifts, the generated files
+  gain stray indentation — check the emitted `.envrc` and `devenv.nix` visually
+  the first time.

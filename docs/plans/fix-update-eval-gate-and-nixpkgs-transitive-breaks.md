@@ -4,8 +4,8 @@
 > autonomous coding agent. It is being used to exercise Kimchi's `/ferment`
 > mode: point Kimchi at this file after activating `/ferment`, and it should
 > execute the plan end to end. A maintainer will review the resulting commit
-> stack afterward. Please keep commits small and reviewable — see
-> **Commit discipline** below; that section is the part a prior run got wrong.
+> stack afterward. Please keep commits small and reviewable — see **Commit
+> discipline** below; that section is the part a prior run got wrong.
 
 ---
 
@@ -13,17 +13,17 @@
 
 You are implementing four independent fixes in a Nix flake monorepo
 (`nix-agentic-tools`). All four trace back to a single upstream event: a
-`nixpkgs` input bump whose transitive effects broke three packages and exposed
-a blind spot in the update pipeline's verification gate.
+`nixpkgs` input bump whose transitive effects broke three packages and exposed a
+blind spot in the update pipeline's verification gate.
 
 Your working rules for this task, in priority order:
 
 1. **Do not run heavy Nix locally.** This machine OOMs on `nix build`,
-   `nix-fast-build`, `nix flake check`, `nix-update`, and full-flake
-   `nix eval` (our overlays use import-from-derivation, so even eval realises
-   sources). **Make source edits, commit them as a stack, and push — CI does
-   all building and verification.** If a step seems to need a local build to
-   proceed, stop and leave a note in the commit/PR body instead.
+   `nix-fast-build`, `nix flake check`, `nix-update`, and full-flake `nix eval`
+   (our overlays use import-from-derivation, so even eval realises sources).
+   **Make source edits, commit them as a stack, and push — CI does all building
+   and verification.** If a step seems to need a local build to proceed, stop
+   and leave a note in the commit/PR body instead.
 2. **Use the repository's stacked-workflow skills for all commit work**, and
    produce **small, reviewable, atomic commits** — one logical change per
    commit. See **Commit discipline**. Do not hand-roll `git commit` /
@@ -31,9 +31,9 @@ Your working rules for this task, in priority order:
 3. **Follow the repo conventions** inlined under **Conventions** below (Bash
    strict mode, alphabetical ordering, DRY, Conventional Commits, `treefmt`
    after edits).
-4. **Make exactly the changes specified.** Each task gives the precise file,
-   the current code, and the replacement. Do not refactor surrounding code,
-   rename things, or "improve" adjacent lines.
+4. **Make exactly the changes specified.** Each task gives the precise file, the
+   current code, and the replacement. Do not refactor surrounding code, rename
+   things, or "improve" adjacent lines.
 
 Deliverable: a 4-commit stack (optionally submitted as stacked PRs against
 `refactor/ai-factory-architecture`) implementing Tasks 1–4, pushed so CI can
@@ -43,13 +43,13 @@ verify it.
 
 ## Context
 
-A recent `nixpkgs` bump shipped through the update pipeline as PR
-**#350 (`update/nixpkgs`)**. The exact nixpkgs revision on that branch
-changes as the update bot refreshes it (as of 2026-07-13,
+A recent `nixpkgs` bump shipped through the update pipeline as PR **#350
+(`update/nixpkgs`)**. The exact nixpkgs revision on that branch changes as the
+update bot refreshes it (as of 2026-07-13,
 `e7a3ca8092b61ff85b6a45bf863ea2b2d6a661b3`); the fixes below are
-revision-agnostic. That PR's CI fails on two packages
-at build time, a third is held back by the update pipeline, and — separately —
-the pipeline _should have withheld the bump_ but did not. The four fixes:
+revision-agnostic. That PR's CI fails on two packages at build time, a third is
+held back by the update pipeline, and — separately — the pipeline _should have
+withheld the bump_ but did not. The four fixes:
 
 1. **`effect-mcp` fails to evaluate under the new nixpkgs.** New nixpkgs makes
    the default `pnpm` be `pnpm_11`, which dropped support for
@@ -58,12 +58,11 @@ the pipeline _should have withheld the bump_ but did not. The four fixes:
    `fetchPnpmDeps 'fetcherVersion = 3' is no longer supported for 'pnpm_11'`.
    (Its sibling `context7-mcp` already pins `pnpm_10`, so it is unaffected —
    that overlay is the template for the fix.)
-2. **`git-revise` throws during `nix-update`.** nixpkgs' `git-revise`
-   expression builds `meta.changelog` by interpolating `finalAttrs.src.tag`.
-   Our overlay pins `src` to a bare commit `rev` (no tag), so `src.tag` is
-   `null` and reading `meta.changelog` throws
-   `cannot coerce null to a string`. This holds `git-revise` back from every
-   update run.
+2. **`git-revise` throws during `nix-update`.** nixpkgs' `git-revise` expression
+   builds `meta.changelog` by interpolating `finalAttrs.src.tag`. Our overlay
+   pins `src` to a bare commit `rev` (no tag), so `src.tag` is `null` and
+   reading `meta.changelog` throws `cannot coerce null to a string`. This holds
+   `git-revise` back from every update run.
 3. **`kagi-mcp` fails its runtime-deps check under the new nixpkgs.** Upstream
    `kagimcp` pins `pydantic~=2.12.5`; the new nixpkgs ships `pydantic 2.13.4`,
    so `pythonRuntimeDepsCheckHook` fails the build with
@@ -73,8 +72,8 @@ the pipeline _should have withheld the bump_ but did not. The four fixes:
    keyed on _build_ outcomes. `nix-fast-build` reports eval failures on a
    separate line (`ERROR:nix_fast_build:EVAL: N successes, M failures`) that no
    gate inspects, so the `effect-mcp` eval break above was invisible and the
-   `nixpkgs` bump shipped as `UPDATED` instead of `HELD BACK`. Add a fourth
-   gate for eval failures.
+   `nixpkgs` bump shipped as `UPDATED` instead of `HELD BACK`. Add a fourth gate
+   for eval failures.
 
 The four fixes touch disjoint files and have no ordering dependency on each
 other, which is exactly why they must be **four separate commits**.
@@ -84,32 +83,32 @@ other, which is exactly why they must be **four separate commits**.
 - **`git-absorb`.** PR #350's CI did _not_ flag it, so it is presumed to build
   under the new nixpkgs — do not touch it. (An earlier consumer-side report
   suspected it, but that traced to a stale evaluation state, not a real break.)
-- **Resolving the `effect-mcp` `pnpmDeps` hash yourself by building.** See
-  Task 1 — keep the existing hash; CI reports the correct one if it changed,
-  and the correction is absorbed into the Task 1 commit.
+- **Resolving the `effect-mcp` `pnpmDeps` hash yourself by building.** See Task
+  1 — keep the existing hash; CI reports the correct one if it changed, and the
+  correction is absorbed into the Task 1 commit.
 
 ---
 
 ## Conventions (load-bearing; inlined so you need not read anything else)
 
-- **Bash strict mode** — every shell script begins with, and this repo's
-  scripts already use:
+- **Bash strict mode** — every shell script begins with, and this repo's scripts
+  already use:
   ```bash
   set -euETo pipefail
   shopt -s inherit_errexit 2>/dev/null || :
   ```
 - **Ordering** — keep entries alphabetically sorted within their group.
-- **DRY** — no duplicated logic; mirror existing patterns rather than
-  inventing new ones.
+- **DRY** — no duplicated logic; mirror existing patterns rather than inventing
+  new ones.
 - **Conventional Commits** — `type(scope): description`, lowercase, imperative,
-  no trailing period. Types: `feat fix refactor docs chore build ci style perf
-test`.
-- **Formatting** — after editing any file, it must be `treefmt`-clean
-  (`treefmt` orchestrates alejandra for Nix, prettier for Markdown, shfmt +
-  shellcheck + shellharden for shell). `treefmt <file>` on a single file is
-  lightweight and safe to run locally; it is not a Nix build.
-- **Maintainer conventions & memory** (optional deeper context; the
-  load-bearing pieces are already inlined above):
+  no trailing period. Types:
+  `feat fix refactor docs chore build ci style perf test`.
+- **Formatting** — after editing any file, it must be `treefmt`-clean (`treefmt`
+  orchestrates alejandra for Nix, prettier for Markdown, shfmt + shellcheck +
+  shellharden for shell). `treefmt <file>` on a single file is lightweight and
+  safe to run locally; it is not a Nix build.
+- **Maintainer conventions & memory** (optional deeper context; the load-bearing
+  pieces are already inlined above):
   `/home/caubut/Documents/projects/nixos-config/home/caubut/features/cli/code/ai/claude-config/projects/-home-caubut-Documents-projects-nix-agentic-tools`
 
 ---
@@ -117,15 +116,17 @@ test`.
 ## Repo invariants you will not see auto-loaded
 
 Most of this repo's architecture rules live in **path-scoped** files
-(`.claude/rules/*.md` with `paths:` frontmatter, Copilot `.github/instructions/*`
-with `applyTo:`, Kiro `.kiro/steering/*` with `inclusion: fileMatch`). Claude
-Code auto-loads the matching rule when you open a file; **Kimchi and other
-flat-orientation harnesses do not — they read only `AGENTS.md`.** Every task
-edit below is given verbatim, so you do not strictly need these; honor them if
-you touch anything adjacent, and do not "clean up" or refactor around them.
+(`.claude/rules/*.md` with `paths:` frontmatter, Copilot
+`.github/instructions/*` with `applyTo:`, Kiro `.kiro/steering/*` with
+`inclusion: fileMatch`). Claude Code auto-loads the matching rule when you open
+a file; **Kimchi and other flat-orientation harnesses do not — they read only
+`AGENTS.md`.** Every task edit below is given verbatim, so you do not strictly
+need these; honor them if you touch anything adjacent, and do not "clean up" or
+refactor around them.
 
 - **`ourPkgs`, never `final`/`prev`, for build inputs.** Each compiled overlay
-  instantiates `ourPkgs = import inputs.nixpkgs { inherit (final.stdenv.hostPlatform) system; ... }`
+  instantiates
+  `ourPkgs = import inputs.nixpkgs { inherit (final.stdenv.hostPlatform) system; ... }`
   and routes ALL build inputs through `ourPkgs`; `final`/`prev` are read only
   for `final.system`. Using them for build inputs binds to the consumer's
   nixpkgs → cachix cache miss. (The three overlay files here already do this —
@@ -157,10 +158,9 @@ mandated by `AGENTS.md` § "Skill Routing — MANDATORY":
 | Route a correction into an existing stack commit | `stack-fix`    |
 | Push the stack (and open stacked PRs)            | `stack-submit` |
 
-**Where they are / fallback (important for non-Claude harnesses).** These
-skills are plain markdown at
-`packages/stacked-workflows/skills/<name>/SKILL.md` in this repo — e.g.
-`packages/stacked-workflows/skills/stack-plan/SKILL.md`,
+**Where they are / fallback (important for non-Claude harnesses).** These skills
+are plain markdown at `packages/stacked-workflows/skills/<name>/SKILL.md` in
+this repo — e.g. `packages/stacked-workflows/skills/stack-plan/SKILL.md`,
 `.../stack-fix/SKILL.md`, `.../stack-submit/SKILL.md` (also installed at
 `~/.claude/skills/<name>/SKILL.md`). **Kimchi does not read `~/.claude/skills`
 by default and does not honor path-scoped steering**, so if your harness does
@@ -180,8 +180,8 @@ stands on its own and needs no later commit to "complete" it.
 
 **Anti-pattern — do NOT repeat this (it is what the last run did):**
 
-> ❌ One large commit containing all of the code, followed by a second
-> one-line commit that merely "enables" or "wires up" the new code.
+> ❌ One large commit containing all of the code, followed by a second one-line
+> commit that merely "enables" or "wires up" the new code.
 
 Split commits by **logical change**, never by **"write the code" vs. "turn it
 on."** Every fix in this plan is already whole in a single edit — there is no
@@ -189,15 +189,14 @@ code-vs-activation seam to split on, and no reason to combine the four fixes
 into one commit. **One fix = one commit. Four fixes = four commits.**
 
 **Interaction with the no-local-build rule:** use the stacking skills for
-_structure_ only. **Do not run their local build/test/validation phases**
-(e.g. `stack-test`, or any `nix flake check` a skill offers) — those trigger
-heavy Nix this machine cannot run. Plan and push with the skills; CI is the
-verifier.
+_structure_ only. **Do not run their local build/test/validation phases** (e.g.
+`stack-test`, or any `nix flake check` a skill offers) — those trigger heavy Nix
+this machine cannot run. Plan and push with the skills; CI is the verifier.
 
 **Corrections go _into_ the right commit, not on top.** If CI later reports a
-changed hash for Task 1 (see below), absorb the corrected hash into the
-**Task 1 commit** with `stack-fix` — do **not** add a trailing "fix hash"
-commit. This is the discipline in miniature.
+changed hash for Task 1 (see below), absorb the corrected hash into the **Task 1
+commit** with `stack-fix` — do **not** add a trailing "fix hash" commit. This is
+the discipline in miniature.
 
 ---
 
@@ -245,8 +244,8 @@ Current (lines 34–38):
     };
 ```
 
-Replace with (adds `inherit pnpm;`; **keep the existing `hash` verbatim** —
-do not blank it and do not try to compute a new one locally):
+Replace with (adds `inherit pnpm;`; **keep the existing `hash` verbatim** — do
+not blank it and do not try to compute a new one locally):
 
 ```nix
     pnpmDeps = fetchPnpmDeps {
@@ -349,8 +348,8 @@ Replace with (adds only the `meta` block; leave everything else byte-for-byte):
 - [ ] **Step 3 — commit this change alone**, as the second commit of the stack:
       `fix(git-revise): repoint meta.changelog at pinned rev`.
 
-**Verification (deferred to CI):** on push, the `git-revise` package builds,
-and the next update run no longer reports `HELD BACK: git-revise`.
+**Verification (deferred to CI):** on push, the `git-revise` package builds, and
+the next update run no longer reports `HELD BACK: git-revise`.
 
 ---
 
@@ -364,8 +363,8 @@ and the next update run no longer reports `HELD BACK: git-revise`.
 `pydantic 2.13.4`, so `pythonRuntimeDepsCheckHook` fails the build with
 `pydantic~=2.12.5 not satisfied by version 2.13.4`. Relax the `pydantic` bound
 so the newer point release satisfies it; the MCP-initialize smoke test
-(`installCheckPhase`) still gates real runtime compatibility. This is a
-metadata relaxation — **no hashes change.**
+(`installCheckPhase`) still gates real runtime compatibility. This is a metadata
+relaxation — **no hashes change.**
 
 - [ ] **Step 1 — add `pythonRelaxDeps` for `pydantic`.**
 
@@ -394,8 +393,8 @@ Immediately **after** that line, insert:
 **Verification (deferred to CI):** on push, the `kagi-mcp` build passes
 `pythonRuntimeDepsCheck` and the MCP-initialize smoke test. If the smoke test
 _fails at runtime_ under pydantic 2.13.4 (i.e. relaxing the bound is not enough
-because 2.13 is genuinely incompatible), stop and leave a note — the fallback
-is to pin `pydantic` rather than relax it, and the maintainer decides.
+because 2.13 is genuinely incompatible), stop and leave a note — the fallback is
+to pin `pydantic` rather than relax it, and the maintainer decides.
 
 ---
 
@@ -404,24 +403,24 @@ is to pin `pydantic` rather than relax it, and the maintainer decides.
 **Files:**
 
 - Modify: `dev/scripts/update-common.sh`
-- Modify (documentation sync): the fragment that documents the gates — grep
-  for it (see Step 3).
+- Modify (documentation sync): the fragment that documents the gates — grep for
+  it (see Step 3).
 
-**Why:** `run_nfb_build` gates build verification on three tripwires (exit
-code, JSON result file, and a stderr grep for
-`ERROR:nix_fast_build:BUILD: N successes, M failures`). `nix-fast-build`
-reports **evaluation** failures on a _different_ line —
+**Why:** `run_nfb_build` gates build verification on three tripwires (exit code,
+JSON result file, and a stderr grep for
+`ERROR:nix_fast_build:BUILD: N successes, M failures`). `nix-fast-build` reports
+**evaluation** failures on a _different_ line —
 `ERROR:nix_fast_build:EVAL: N successes, M failures` — which no gate inspects.
-An attribute that throws during evaluation never becomes a build, so it
-produces no `success: false` result entry and does not increment the BUILD
-failure count: it is invisible to all three current gates. This is exactly how
-the `effect-mcp` eval break slipped through and the `nixpkgs` bump shipped as
-`UPDATED`. Add a fourth gate mirroring gate 3 but matching the `EVAL:` line.
+An attribute that throws during evaluation never becomes a build, so it produces
+no `success: false` result entry and does not increment the BUILD failure count:
+it is invisible to all three current gates. This is exactly how the `effect-mcp`
+eval break slipped through and the `nixpkgs` bump shipped as `UPDATED`. Add a
+fourth gate mirroring gate 3 but matching the `EVAL:` line.
 
 - [ ] **Step 1 — add the eval gate after gate 3.**
 
-In `dev/scripts/update-common.sh`, gate 3 currently ends here (around
-lines 159–163):
+In `dev/scripts/update-common.sh`, gate 3 currently ends here (around lines
+159–163):
 
 ```bash
   if grep -qE "ERROR:nix_fast_build:BUILD: [0-9]+ successes, [1-9][0-9]* failures" "$stderr_log"; then
@@ -464,8 +463,8 @@ Immediately **after** that `fi`, insert:
   #      eval-time throws are invisible to gates 1-3.
   ```
 
-- [ ] **Step 3 — sync the architecture fragment.** This repo requires that
-      docs describing an abstraction are updated in the same commit as the code
+- [ ] **Step 3 — sync the architecture fragment.** This repo requires that docs
+      describing an abstraction are updated in the same commit as the code
       (`AGENTS.md` § "Architecture Fragments" / "Maintenance is mandatory"). The
       update-pipeline fragment describes `run_nfb_build`'s gates and calls them
       "three independent gates." Find it and update the count and description to
@@ -501,9 +500,9 @@ maintainer's audit.
 ## Submit
 
 - [ ] Push the 4-commit stack with `stack-submit` (stacked PRs against
-      `refactor/ai-factory-architecture` are fine; a single branch carrying the 4
-      commits is also acceptable). CI (`ci.yml`, `pull_request` event) then builds
-      and verifies on both `x86_64-linux` and `aarch64-darwin`.
+      `refactor/ai-factory-architecture` are fine; a single branch carrying the
+      4 commits is also acceptable). CI (`ci.yml`, `pull_request` event) then
+      builds and verifies on both `x86_64-linux` and `aarch64-darwin`.
 - [ ] Do **not** merge anything. The maintainer reviews the stack and CI.
 
 ## Success criteria
@@ -518,13 +517,13 @@ maintainer's audit.
 
 ## Notes for the reviewer (maintainer)
 
-- Task 1 hash: confirm whether the pinned `pnpm_10` changed the `pnpmDeps`
-  hash; if CI surfaced a new value, verify it was absorbed into the Task 1
-  commit (not trailing).
+- Task 1 hash: confirm whether the pinned `pnpm_10` changed the `pnpmDeps` hash;
+  if CI surfaced a new value, verify it was absorbed into the Task 1 commit (not
+  trailing).
 - Task 3 kagi-mcp: confirm `pythonRelaxDeps` cleared `pythonRuntimeDepsCheck`
   and the smoke test still passes under pydantic 2.13.4 (a runtime break there
   means pin instead of relax).
-- Task 4 eval gate: sanity-check the grep pattern against an observed line
-  like `ERROR:nix_fast_build:EVAL: 38 successes, 1 failures` (the success
-  count varies; the nonzero failure count is what the gate keys on).
+- Task 4 eval gate: sanity-check the grep pattern against an observed line like
+  `ERROR:nix_fast_build:EVAL: 38 successes, 1 failures` (the success count
+  varies; the nonzero failure count is what the gate keys on).
 - `git-absorb` is intentionally excluded — PR #350's CI did not flag it.
