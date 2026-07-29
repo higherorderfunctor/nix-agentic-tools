@@ -321,11 +321,18 @@ for it across the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-07-24 (commit pending — the bot's `update/*` PRs now
+> **Last verified:** 2026-07-29 (commit pending — the ruleset now sets
+> `required_review_thread_resolution: true`, so an unresolved review thread
+> blocks merge including on auto-merging `update/*` PRs, and the claim that
+> Copilot "never gates its merge" is retired; adds the rule that Copilot's
+> SUPPRESSED findings must be read on every review, since they create no
+> thread; gates re-review polling on `commit_id` rather than a timestamp, and
+> caps the fix-and-re-review loop at 5 rounds). Prior: 2026-07-24 — the bot's
+> `update/*` PRs now
 > arm GitHub-native auto-merge and land themselves, the manual
 > `pr:merge-updates` task and `merge-update-prs` skill are deleted, the update
 > sweep runs 4x/day, and squash-only is re-attributed to the repository
-> settings rather than the ruleset). If you change the branch-protection
+> settings rather than the ruleset. If you change the branch-protection
 > ruleset, the repository merge settings, the worktree convention, the
 > bootstrap step, the local commit guard, the auto-merge arming, or the PR flow
 > and this fragment isn't updated in the same commit, stop and fix it.
@@ -333,15 +340,107 @@ for it across the repo before committing.
 `main` is the trunk. Its branch-protection ruleset requires a pull request, no
 force-push, no deletion, and four required status checks —
 `build (x86_64-linux, ubuntu-latest)`, `build (aarch64-darwin, macos-latest)`,
-`test`, and `gitleaks`. It requires **zero approving reviews** and does not
-require review threads to be resolved.
+`test`, and `gitleaks`. It requires **zero approving reviews** but it DOES
+require **every review thread to be resolved**
+(`required_review_thread_resolution`, enabled 2026-07-29).
 
 **Squash-merge only** — but that is the REPOSITORY settings, not the ruleset:
 `allow_squash_merge` true, `allow_merge_commit` and `allow_rebase_merge` false.
 The ruleset's own `allowed_merge_methods` still lists all three, so changing it
 there changes nothing. Copilot review runs on every PR from a separate ruleset
-rule that _requests_ a review: not a required approval, and no required status
-check, so it annotates a PR but never gates its merge.
+rule (`Copilot review for default branch`) that _requests_ a review: not a
+required approval and not a required status check.
+
+**But it can now block a merge indirectly**, and that is deliberate. Since
+threads must be resolved, an unaddressed Copilot comment holds the PR — a bot
+`update/*` PR included, which is the intended trade: nothing auto-merges while
+a reviewer has an open question on it. A stalled update PR is not lost; the
+next 4x/day sweep rebuilds and re-arms it.
+
+### Copilot review: ALWAYS read the suppressed-comments block
+
+Copilot records its findings in two places, and only one of them creates a
+thread:
+
+1. **Inline review comments** — these become resolvable threads, appear in
+   `pull_request_read` with `method: get_review_comments`, and now gate merge.
+2. **A `<details>Comments suppressed due to low confidence (N)</details>`
+   block inside the review BODY** — no thread, nothing to resolve, invisible to
+   any thread query.
+
+**Reading only the threads is not reading the review.** Measured on PR #568
+across seven review rounds: the suppressed bucket produced **7 findings, all
+genuine**, including a functional bug (`api_protocol` hardcoded while the
+scheme was stripped), a regex that could not match bracketed IPv6 hosts, and a
+doc that would have had readers create a directory literally named `~`. The
+gating bucket over the same period produced two, one of which was a
+diagnostics improvement over already-correct behavior. On that sample the
+confidence signal was inverted.
+
+So whenever you check Copilot feedback — CLI, MCP, a monitor loop, anything —
+fetch the review BODY too, not just the threads:
+
+```bash
+gh api --paginate "repos/OWNER/REPO/pulls/N/reviews" \
+  --jq '[.[] | select(.user.login=="copilot-pull-request-reviewer[bot]")]
+        | last | .body' | sed -n '/low confidence/,$p'
+```
+
+`--paginate` is load-bearing, not tidiness. The endpoint pages at 30, and a
+PR that has been through a review loop reaches that easily — #568 took twenty.
+Without it `last` returns the last review on the FIRST page, which is an OLD
+one, and the answer looks exactly like a fresh clean review.
+
+**Gate on `commit_id`, not on the timestamp.** The only condition that means
+"this review saw my code" is the review's `commit_id` equalling the PR head:
+
+```bash
+gh api --paginate "repos/OWNER/REPO/pulls/N/reviews" \
+  --jq '[.[] | select(.user.login=="copilot-pull-request-reviewer[bot]")]
+        | last | .commit_id'
+```
+
+This was arrived at by getting it wrong three times in a row, each fix
+looking sufficient until it wasn't:
+
+1. reading `.[-1]` → returns a stale review, reported as new;
+2. taking `submitted_at` as a baseline → better, but a review of an OLDER
+   commit still advances the timestamp, so it reads as fresh;
+3. requiring `commit_id == head` → correct.
+
+A related tell, useful because it needs no baseline at all: **check whether a
+check run named `copilot-pull-request-reviewer` exists on the head commit.** A
+push does not always trigger a review, and this distinguishes "not run yet"
+from "ran and found nothing" — which otherwise look identical.
+
+```bash
+gh api --paginate "repos/OWNER/REPO/commits/<head-sha>/check-runs" \
+  --jq '.check_runs[] | select(.name=="copilot-pull-request-reviewer") | .status'
+```
+
+Absent means it never started, so re-request it; `in_progress` means wait;
+`completed` means the review is there to read. Ask for the run BY NAME rather
+than counting the checks: a total count is only correct until the CI matrix
+changes.
+
+### Cap the fix-and-re-review loop at 5 rounds
+
+Run at most **five** fix → push → re-trigger → verify rounds, then STOP and get
+explicit approval before continuing. Exit earlier if a round returns clean in
+BOTH buckets — that is the real terminus.
+
+The failure mode this prevents is not a bad round, it is a good one repeating.
+On PR #568 every round produced a genuine finding, so each was individually
+defensible while the aggregate churned the PR through eight force-pushes. An
+uncapped loop has no guaranteed terminus; the cap makes continuing an operator
+decision rather than an emergent property.
+
+At the cap, summarize what was found, what was fixed, and what is outstanding.
+
+Suppressed findings have no thread to resolve, so reply on the PR itself
+saying what you did with each. Resolve each gating thread as you fix it —
+they gate the merge now, and a PAT-authenticated MCP client cannot resolve
+them, so use the GraphQL `resolveReviewThread` mutation through `gh api`.
 
 **Never commit directly to `main`.** Two backstops enforce this. A local
 `reject-default-branch-commit` pre-commit hook (installed through devenv's
