@@ -173,15 +173,18 @@ on first append, like the working dir.
   session's own close/reflection, and BEFORE the gated commit-readiness review when that review is
   eligible this pass (the review is the LAST of the pass's grooming actions and must see the swept
   body). It runs the collector down: verify each nit against source, apply the behavior-neutral
-  fix, re-grep **with a positive control** to confirm the drift is gone and nothing was corrupted,
-  journal, drain the fixed line.
+  fix, re-grep **with a positive control** to confirm the drift is gone, journal, drain the fixed
+  line. That re-grep settles the projection it ranges over and no other, so what it may conclude —
+  and what a broader claim like "nothing was corrupted" would additionally owe — is governed by the
+  master's ASSERT THE POSTCONDITION rule and its OPERAND dimension, not decided here.
 
 The sweep is a **grooming step, not reflection-at-close**, and **never fires in a non-grooming
 session** — a session at its end only CAPTURES (master REFLECTION MODE); one that spots a nit appends it
 to the collector and moves on. What gets lighter is the **ceremony** — the adversarial eval, the HITL,
 and the migration entry — **never the checking**: EVERY light fix, by either arm, verifies against
-source before and re-greps with a positive control after, because a light fix that trusts a
-false-clean is worse than the nit. Light fixes are **git-history-only**: they change no dependent-facing convention, and a
+source before and re-greps after, exercising that instrument as the master's INSTRUMENT TEST
+requires rather than on the positive control alone, because a light fix that trusts a false-clean is
+worse than the nit. Light fixes are **git-history-only**: they change no dependent-facing convention, and a
 migration entry for a typo fix would itself be a fresh drift surface. This is the master's
 version-bump boundary seen from the fix side: a light fix is behavior-neutral, so like every
 behavior-neutral master edit it is git-history-only — one rule (behavior-neutral versus

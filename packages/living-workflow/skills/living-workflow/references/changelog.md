@@ -1004,33 +1004,34 @@ here.
 
 ## Which projection a check measures + a diff's legibility
 
-Migration entries folded in the pass that bumped the master to `v15-cinnabar-drumlin-hornbeam`.
+Migration entries folded in the pass that bumped the master to `v15-malachite-corrie-whitebeam`.
 This section's anchor is **derived from history** (the commit that assigned that version), not
 embedded here. Both are behavior-changing master edits, and both are arms on rule families that
 were already sound rather than new families — the first on the proof-reach dimension that asks what
-a check ranges over, the second on the change-class rule that assigns authorization. They are
-deliberately TWO arms and not one: they share a mechanism but not a failure class, and each has
-evidence the other does not reach.
+a check ranges over, the second on the change-class rule that assigns authorization.
 
 ### Master protocol (`living-plan-bootstrap.md`)
 
 - **A check's OPERAND is also which PROPERTY it measures, not only which items it selects:** the
   proof-reach dimension that governs what a check ranges over was written for a check reaching the
   wrong SET through a proxy, and said nothing about a check reaching the right subject through the
-  wrong PROJECTION of it. **Upgraders: where you rely on a preservation or equivalence check over
-  an artifact, treat its answer as covering ONE projection only. A token or word SET answers
-  whether the vocabulary moved; a line-survival check answers whether each base line's content
-  still appears contiguously; a block-structure check answers whether the units that begin a line
-  still begin one. These do not substitute for one another, so a green certifies its own projection
+  wrong PROJECTION of it. **Upgraders: where you rely on a preservation or equivalence check, treat
+  its answer as covering ONE projection only — over a single artifact and over a set alike. A token
+  or word SET answers whether the vocabulary CHANGED and, being permutation-invariant, nothing about
+  arrangement; a line-survival check answers whether each base line's content still appears
+  contiguously; a block-structure check answers whether the units that begin a line still begin one.
+  These do not substitute for one another, so a green certifies its own projection
   and nothing else, and each instrument you ADD narrows the blind spot rather than closing it. Name
   the projections nothing has ranged over and treat every one as unproven — the question to ask a
-  green is not whether the check passed but which operands nothing measured. This under-covers most
+  green is not whether the check passed but which projections nothing measured. This under-covers most
   dangerously where it is most reassuring, because the check is green for exactly the right reason,
   and adopting a mechanical check is precisely a decision to stop looking, so the check's operand
   silently becomes the session's. It binds hardest over a mechanical whole-artifact transform,
   whose edits are unreviewed by construction: enumerate the projections BEFORE believing such a
-  transform's output, and prefer a transform that asserts its own postcondition over the content it
-  moves, since one carrying no such assertion deletes silently.**
+  transform's output, and prefer a transform that asserts, over the content it moves, its own
+  postcondition, since one carrying no such assertion deletes silently. The post-replace corruption
+  scan you already owe after a bulk token replacement is one instance of this duty, not a substitute
+  for it.**
 - **A change's LEGIBILITY is a second property the change class does not settle:** the
   behavior-neutral versus behavior-changing split assigns authorization and says nothing about
   whether the resulting diff can be read. **Upgraders: treat a diff dominated by text the change
@@ -1041,9 +1042,11 @@ evidence the other does not reach.
   and heaviest exactly where the change is large enough to need careful review. So a
   behavior-neutral re-emission is not thereby harmless: needing no authorization at all, it can
   still make a behavior-changing edit riding beside it effectively invisible. Do NOT respond by
-  refusing formatters or structured transforms — they are the correct tools and are mandated
-  elsewhere — but separate what the tool rewrote from what the change meant: preserve the base's
-  form wherever the content is unchanged, or land the mechanical re-emission as its own unit. Judge
+  refusing formatters or structured transforms — they are the correct tools — but separate what the
+  tool rewrote from what the change meant: preserve the base's form wherever the content is
+  unchanged AND your repo's own hook leaves that form standing, else land the mechanical re-emission
+  as its own unit. Judge the DIFF
   by whether a reader can locate the change, never by a line-count threshold. This duty and the
-  operand arm above reinforce rather than substitute for one another, because re-emitting text is
-  also the operation during which content silently disappears.**
+  operand arm above reinforce rather than substitute for one another: re-emitting text is also the
+  operation during which content silently disappears, so this duty reduces the INCIDENCE of that
+  loss while the operand check detects its OCCURRENCE, and neither discharges the other.**
