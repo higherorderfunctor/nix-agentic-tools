@@ -1,48 +1,53 @@
 # Living-plan bootstrap prompt
 
-A reusable drop-in prompt. Hand it a source file/context and it drafts a
-_living plan_ — a doc maintained across sessions whose git history is the WORKING
-history of the effort. A living plan is development-time scaffolding, not a durable
-deliverable: in most cases it completes, its durable knowledge is distilled into
-self-contained artifacts (plus an optional arch doc), and the plan is then removed —
-never merged as a reviewable artifact (see PLAN LIFECYCLE). The perpetual backlog
-sub-workflow is the deliberate exception. The generated plan carries its own embedded
-per-session resume protocol and references the shared scaffold (state.json +
-state.schema.json), so a fresh session can materialize its working state from the plan
-alone.
+A reusable drop-in prompt. Hand it a source file/context and it drafts a _living
+plan_ — a doc maintained across sessions whose git history is the WORKING
+history of the effort. A living plan is development-time scaffolding, not a
+durable deliverable: in most cases it completes, its durable knowledge is
+distilled into self-contained artifacts (plus an optional arch doc), and the
+plan is then removed — never merged as a reviewable artifact (see PLAN
+LIFECYCLE). The perpetual backlog sub-workflow is the deliberate exception. The
+generated plan carries its own embedded per-session resume protocol and
+references the shared scaffold (state.json + state.schema.json), so a fresh
+session can materialize its working state from the plan alone.
 
-Distilled from prior planning workflows. Design rationale: location encodes durability —
-committed docs carry durable knowledge while out-of-repo side-files carry clone-scoped working
-state; structured machine state lives in `state.json` (key-addressed jq mutation — no surgical
-markdown editing) and human narrative is append-only markdown. This
-prompt is itself under continuous improvement: sessions running under it reflect at close
-and drop sanitized, generalized candidates into its **backlog sub-workflow**
-(`living-workflow-backlog.md`), a perpetual grooming loop that folds them back in;
-improvements land in this doc only by a deliberate grooming session, never self-ratified.
+Distilled from prior planning workflows. Design rationale: location encodes
+durability — committed docs carry durable knowledge while out-of-repo side-files
+carry clone-scoped working state; structured machine state lives in `state.json`
+(key-addressed jq mutation — no surgical markdown editing) and human narrative
+is append-only markdown. This prompt is itself under continuous improvement:
+sessions running under it reflect at close and drop sanitized, generalized
+candidates into its **backlog sub-workflow** (`living-workflow-backlog.md`), a
+perpetual grooming loop that folds them back in; improvements land in this doc
+only by a deliberate grooming session, never self-ratified.
 
 > **Structure note.** The scaffold harness is canonical beside this doc
-> (`state.schema.json`), shared and reusable (DRY-by-reference); it is REFERENCED by each
-> plan, never re-embedded — there is no second copy in the prompt block below. The protocol
-> block carries the full feature register: the reflection protocol, the backlog sub-workflow &
-> nesting model, DRY-by-reference + the baseline pin, the ecosystem adapter, commit-ownership and
-> integration posture, and the backlog-entry contract, plus the state-over-tokens principle (new
-> cross-session concerns become schema-backed state fields, not ad-hoc prose tokens). The backlog
-> sub-workflow this doc references lives at `living-workflow-backlog.md`.
+> (`state.schema.json`), shared and reusable (DRY-by-reference); it is
+> REFERENCED by each plan, never re-embedded — there is no second copy in the
+> prompt block below. The protocol block carries the full feature register: the
+> reflection protocol, the backlog sub-workflow & nesting model,
+> DRY-by-reference + the baseline pin, the ecosystem adapter, commit-ownership
+> and integration posture, and the backlog-entry contract, plus the
+> state-over-tokens principle (new cross-session concerns become schema-backed
+> state fields, not ad-hoc prose tokens). The backlog sub-workflow this doc
+> references lives at `living-workflow-backlog.md`.
 >
-> **Living-doc version: `v15-malachite-corrie-whitebeam`.** The assigned VERSION dependents pin to
-> —
-> a monotonic ORDINAL (for "am I behind?") paired with a DISTINCTIVE LABEL (so the exact version
-> stays searchable in history and in copied text). A modifying commit bumps it and authors a
-> migration entry if an upgrader needs one (see DRY-BY-REFERENCE → BASELINE PIN, MIGRATION GUIDE,
-> and the VERSION-BUMP STEP).
+> **Living-doc version: `v15-malachite-corrie-whitebeam`.** The assigned VERSION
+> dependents pin to — a monotonic ORDINAL (for "am I behind?") paired with a
+> DISTINCTIVE LABEL (so the exact version stays searchable in history and in
+> copied text). A modifying commit bumps it and authors a migration entry if an
+> upgrader needs one (see DRY-BY-REFERENCE → BASELINE PIN, MIGRATION GUIDE, and
+> the VERSION-BUMP STEP).
 >
 > **Baseline pin, state-tracked.** Anything authored against this doc (backlog
-> entries, child plans, external reconciles) records — in a `living_doc_baseline` field in
-> its own `state.json`, not an ad-hoc prose token — the assigned VERSION it was written against,
-> and reads that version. A version is content the doc assigns itself (not a self-named commit
-> hash, not a build-tool-injected identity like a Nix flake's `self.rev`), so it resolves to a commit by derive-from-history and also
-> travels to a document-only artifact that has no commit. In a resident-commits repo the resident
-> stamps the shipped version (dependents carry the sentinel `PENDING-RESIDENT-STAMP` until then).
+> entries, child plans, external reconciles) records — in a
+> `living_doc_baseline` field in its own `state.json`, not an ad-hoc prose token
+> — the assigned VERSION it was written against, and reads that version. A
+> version is content the doc assigns itself (not a self-named commit hash, not a
+> build-tool-injected identity like a Nix flake's `self.rev`), so it resolves to
+> a commit by derive-from-history and also travels to a document-only artifact
+> that has no commit. In a resident-commits repo the resident stamps the shipped
+> version (dependents carry the sentinel `PENDING-RESIDENT-STAMP` until then).
 > When the doc is tuned, dependents re-pin.
 
 Copy everything in the block below into a new session.

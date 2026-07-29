@@ -7,29 +7,27 @@ applyTo: "overlays/*.nix,overlays/**/*.nix"
 
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-07-25 (commit pending — the worked example
-> moved off `git-branchless`, which had not carried this shape for a
-> long time, onto `git-absorb`, which does; also corrects the
-> new-package signature, the namespacing in the manual verification
-> snippet, and the pure-binary-fetch package list). If you touch any
-> `overlays/<name>.nix` overlay file or the overlay composition
-> machinery and this fragment isn't updated in the same commit, stop
-> and fix it. Regressions are gated by the `checks.cache-hit-parity`
-> flake check (see "Verification" below).
+> **Last verified:** 2026-07-25 (commit pending — the worked example moved off
+> `git-branchless`, which had not carried this shape for a long time, onto
+> `git-absorb`, which does; also corrects the new-package signature, the
+> namespacing in the manual verification snippet, and the pure-binary-fetch
+> package list). If you touch any `overlays/<name>.nix` overlay file or the
+> overlay composition machinery and this fragment isn't updated in the same
+> commit, stop and fix it. Regressions are gated by the
+> `checks.cache-hit-parity` flake check (see "Verification" below).
 
 ### The rule
 
-**Every compiled overlay package in this repo must instantiate its
-own `pkgs` from `inputs.nixpkgs` and use THAT for all build inputs
-and the base derivation.** Do not use the `final` / `prev` arguments
-for anything other than discovering `final.system`.
+**Every compiled overlay package in this repo must instantiate its own `pkgs`
+from `inputs.nixpkgs` and use THAT for all build inputs and the base
+derivation.** Do not use the `final` / `prev` arguments for anything other than
+discovering `final.system`.
 
-If you use `final` or `prev` for build inputs, the derivation binds
-to the **consumer's** nixpkgs pin. CI builds against this repo's
-own nixpkgs pin. Different pins → different store paths →
-`nix-agentic-tools.cachix.org` does not serve the consumer because
-the hash they're asking for was never computed. Cache miss on
-every consumer rebuild.
+If you use `final` or `prev` for build inputs, the derivation binds to the
+**consumer's** nixpkgs pin. CI builds against this repo's own nixpkgs pin.
+Different pins → different store paths → `nix-agentic-tools.cachix.org` does not
+serve the consumer because the hash they're asking for was never computed. Cache
+miss on every consumer rebuild.
 
 ### The pattern
 
@@ -72,87 +70,79 @@ in
   })
 ```
 
-- `final.stdenv.hostPlatform.system` is the only thing we read from
-  the consumer — we need it to know which platform to instantiate
-  `ourPkgs` for.
-- `ourPkgs` is built from THIS repo's `inputs.nixpkgs` plus any
-  sub-overlays the package needs (rust-overlay here).
-- Every downstream reference (`ourPkgs.git-absorb`,
-  `ourPkgs.rust-bin`, `ourPkgs.makeRustPlatform`, `ourPkgs.lib`)
-  routes through `ourPkgs`, not `final`/`prev`.
-- Version is computed at eval time via `mkVersion`, producing
-  `"x.y.z+debdcd2"` (upstream version + short rev).
-- The per-package file takes `{inputs, final, ...}` and is imported
-  by `overlays/default.nix` which composes all packages into the
-  unified overlay.
+- `final.stdenv.hostPlatform.system` is the only thing we read from the consumer
+  — we need it to know which platform to instantiate `ourPkgs` for.
+- `ourPkgs` is built from THIS repo's `inputs.nixpkgs` plus any sub-overlays the
+  package needs (rust-overlay here).
+- Every downstream reference (`ourPkgs.git-absorb`, `ourPkgs.rust-bin`,
+  `ourPkgs.makeRustPlatform`, `ourPkgs.lib`) routes through `ourPkgs`, not
+  `final`/`prev`.
+- Version is computed at eval time via `mkVersion`, producing `"x.y.z+debdcd2"`
+  (upstream version + short rev).
+- The per-package file takes `{inputs, final, ...}` and is imported by
+  `overlays/default.nix` which composes all packages into the unified overlay.
 
 **Why this vehicle, and not `git-branchless`.** This example was headed
-`overlays/git-tools/git-branchless.nix` for a long time after that file
-stopped having this shape — it now takes its `src` from the
-`inputs.git-branchless` flake input rather than a pinned rev+hash, needs
-no sub-overlay in `ourPkgs`, and reaches its base with `overrideAttrs`.
-`git-absorb` is the vehicle because composing a sub-overlay into
-`ourPkgs` is part of the lesson, and `git-branchless` cannot teach it.
-Keep the two in sync or move the example again — do not re-point the
-heading at a file that does not match the body.
+`overlays/git-tools/git-branchless.nix` for a long time after that file stopped
+having this shape — it now takes its `src` from the `inputs.git-branchless`
+flake input rather than a pinned rev+hash, needs no sub-overlay in `ourPkgs`,
+and reaches its base with `overrideAttrs`. `git-absorb` is the vehicle because
+composing a sub-overlay into `ourPkgs` is part of the lesson, and
+`git-branchless` cannot teach it. Keep the two in sync or move the example again
+— do not re-point the heading at a file that does not match the body.
 
-Note that the `.override`-on-the-builder seam above is a SEPARATE
-question from cache-hit parity. Parity only cares that the base
-derivation and every build input come from `ourPkgs`; which override
-seam is correct depends on how the upstream builder is written. See the
-overlay-pattern fragment for that decision.
+Note that the `.override`-on-the-builder seam above is a SEPARATE question from
+cache-hit parity. Parity only cares that the base derivation and every build
+input come from `ourPkgs`; which override seam is correct depends on how the
+upstream builder is written. See the overlay-pattern fragment for that decision.
 
 ### The trade-off (accepted in commit e5406977)
 
-This pattern means **consumers get TWO nixpkgs evaluations in
-their /nix/store**: their own (used for everything else) and
-this repo's (used to build our packages). Most of the closure
-dedupes via content-addressing (glibc, bash, coreutils are
-byte-identical when the source content matches between pins),
-but anything that drifted between the two pins gets duplicated.
+This pattern means **consumers get TWO nixpkgs evaluations in their
+/nix/store**: their own (used for everything else) and this repo's (used to
+build our packages). Most of the closure dedupes via content-addressing (glibc,
+bash, coreutils are byte-identical when the source content matches between
+pins), but anything that drifted between the two pins gets duplicated.
 
-`flake.lock` grows because `nix-agentic-tools`'s inputs are
-not deduped against the consumer's inputs (no `follows`).
-Disk usage goes up. Evaluation is slightly slower.
+`flake.lock` grows because `nix-agentic-tools`'s inputs are not deduped against
+the consumer's inputs (no `follows`). Disk usage goes up. Evaluation is slightly
+slower.
 
-**We accept this cost because cache hits are only reachable
-this way.** The alternative (using `follows` to share inputs)
-produces a cleaner closure but defeats the cachix substituter
-entirely: every consumer builds from source on every rebuild.
+**We accept this cost because cache hits are only reachable this way.** The
+alternative (using `follows` to share inputs) produces a cleaner closure but
+defeats the cachix substituter entirely: every consumer builds from source on
+every rebuild.
 
 ### When you're writing a new overlay package
 
-1. Accept `{inputs, final, ...}` as the function signature, and add
-   the file to the right group attrset in `overlays/default.nix`,
-   which is what threads `inputs` and `final` in.
-2. Instantiate `ourPkgs = import inputs.nixpkgs { ... }` with any
-   required sub-overlays.
+1. Accept `{inputs, final, ...}` as the function signature, and add the file to
+   the right group attrset in `overlays/default.nix`, which is what threads
+   `inputs` and `final` in.
+2. Instantiate `ourPkgs = import inputs.nixpkgs { ... }` with any required
+   sub-overlays.
 3. Use `ourPkgs.X` for every build input.
-4. Base the derivation on `ourPkgs.<package>`, never
-   `prev.<package>`. Whether you reach it with `.override` or
-   `overrideAttrs` is a separate decision (overlay-pattern
-   fragment) — parity only cares where the base and the build
+4. Base the derivation on `ourPkgs.<package>`, never `prev.<package>`. Whether
+   you reach it with `.override` or `overrideAttrs` is a separate decision
+   (overlay-pattern fragment) — parity only cares where the base and the build
    inputs come from.
-5. Verify: `nix eval --raw .#<package>` from this repo, then eval
-   the same package through a consumer's nixpkgs with the overlay
-   applied, and confirm the store path is byte-identical. If they
-   differ, cache hits won't happen.
+5. Verify: `nix eval --raw .#<package>` from this repo, then eval the same
+   package through a consumer's nixpkgs with the overlay applied, and confirm
+   the store path is byte-identical. If they differ, cache hits won't happen.
 
 ### Meta-only overrides can still fork the hash (`mainProgram`)
 
-`overrideAttrs` is NOT free when it touches `meta.mainProgram`.
-Current nixpkgs injects `NIX_MAIN_PROGRAM = meta.mainProgram` into the
-**build environment** (`pkgs/stdenv/generic/make-derivation.nix`), so
-`mainProgram` is a derivation input — an `overrideAttrs` that re-points
-it re-runs `mkDerivation`, re-derives `NIX_MAIN_PROGRAM`, and forks the
-output hash. For a package whose base build produces several role
-binaries (e.g. `agnix` builds `agnix` / `agnix-lsp` / `agnix-mcp` in one
-derivation), exposing the role variants via `overrideAttrs` therefore
-triggers a FULL, redundant rebuild per variant — invisible when cached,
-but multiplied on every cold / toolchain-bump build.
+`overrideAttrs` is NOT free when it touches `meta.mainProgram`. Current nixpkgs
+injects `NIX_MAIN_PROGRAM = meta.mainProgram` into the **build environment**
+(`pkgs/stdenv/generic/make-derivation.nix`), so `mainProgram` is a derivation
+input — an `overrideAttrs` that re-points it re-runs `mkDerivation`, re-derives
+`NIX_MAIN_PROGRAM`, and forks the output hash. For a package whose base build
+produces several role binaries (e.g. `agnix` builds `agnix` / `agnix-lsp` /
+`agnix-mcp` in one derivation), exposing the role variants via `overrideAttrs`
+therefore triggers a FULL, redundant rebuild per variant — invisible when
+cached, but multiplied on every cold / toolchain-bump build.
 
-Expose such variants with a plain attrset overlay instead, which does
-not re-run `mkDerivation`:
+Expose such variants with a plain attrset overlay instead, which does not re-run
+`mkDerivation`:
 
 ```nix
 # overlays/lsp-servers/agnix-lsp.nix
@@ -160,42 +150,40 @@ not re-run `mkDerivation`:
 ```
 
 `//` overrides only the eval-time `meta` that `lib.getExe` reads, so all
-variants share ONE derivation and ONE build while `getExe` still
-resolves the correct per-role binary. Trade-off: the variant becomes a
-plain attrset (keeps `type` / `drvPath` / `outPath` / `passthru`) and
-loses `.overrideAttrs` / `.override` — fine when nothing overrides it
-further. The `checks.cache-hit-parity` check asserts that `agnix`,
-`agnix-lsp`, and `agnix-mcp` share one `drvPath`, so a regression back
-to `overrideAttrs` turns it red.
+variants share ONE derivation and ONE build while `getExe` still resolves the
+correct per-role binary. Trade-off: the variant becomes a plain attrset (keeps
+`type` / `drvPath` / `outPath` / `passthru`) and loses `.overrideAttrs` /
+`.override` — fine when nothing overrides it further. The
+`checks.cache-hit-parity` check asserts that `agnix`, `agnix-lsp`, and
+`agnix-mcp` share one `drvPath`, so a regression back to `overrideAttrs` turns
+it red.
 
 ### Verification
 
-Automated (preferred): the `checks.cache-hit-parity` flake check
-evaluates every compiled overlay package twice — once against
-`inputs.nixpkgs` (the "standalone" / CI path) and once against a
-deliberately divergent `inputs.nixpkgs-test` pin playing the role
-of a consumer pkgs set. If any package's store path differs
-between the two, the check fails with a drift report naming the
-offender. Run it locally with:
+Automated (preferred): the `checks.cache-hit-parity` flake check evaluates every
+compiled overlay package twice — once against `inputs.nixpkgs` (the "standalone"
+/ CI path) and once against a deliberately divergent `inputs.nixpkgs-test` pin
+playing the role of a consumer pkgs set. If any package's store path differs
+between the two, the check fails with a drift report naming the offender. Run it
+locally with:
 
 ```bash
 nix build .#checks.x86_64-linux.cache-hit-parity
 cat result   # "ok — no drift detected" on success
 ```
 
-Any regression — a new overlay package that uses `final.X` or
-`prev.X` for a build input, or an existing one that was
-refactored — will turn the check red before it ships.
+Any regression — a new overlay package that uses `final.X` or `prev.X` for a
+build input, or an existing one that was refactored — will turn the check red
+before it ships.
 
 Manual (legacy, for ad-hoc debugging):
 
-The two sides are spelled differently on purpose. `flake.nix` flattens
-every package into `packages.<system>` for CLI ergonomics, so the
-standalone side is `.#git-absorb`. The overlay itself is namespaced-only
-(`pkgs.gitTools.*`, `pkgs.generic.*`, …) and never writes a top-level
-attribute, so the consumer side MUST use the namespaced path — a bare
-`pkgs.git-absorb` there silently resolves to plain nixpkgs' package and
-reports drift that is not real.
+The two sides are spelled differently on purpose. `flake.nix` flattens every
+package into `packages.<system>` for CLI ergonomics, so the standalone side is
+`.#git-absorb`. The overlay itself is namespaced-only (`pkgs.gitTools.*`,
+`pkgs.generic.*`, …) and never writes a top-level attribute, so the consumer
+side MUST use the namespaced path — a bare `pkgs.git-absorb` there silently
+resolves to plain nixpkgs' package and reports drift that is not real.
 
 ```bash
 # 1. Standalone path (what CI builds and pushes to cachix)
@@ -225,72 +213,64 @@ curl -sI "https://nix-agentic-tools.cachix.org/${HASH}.narinfo" | head -1
 
 ### Exceptions
 
-**Content-only packages don't need this.** Packages that just
-ship markdown files (coding-standards, stacked-workflows-content,
-fragments-ai) have no compiled inputs, so their store paths are
-already byte-identical regardless of which nixpkgs evaluates
-them. Skip the ourPkgs pattern for these.
+**Content-only packages don't need this.** Packages that just ship markdown
+files (coding-standards, stacked-workflows-content, fragments-ai) have no
+compiled inputs, so their store paths are already byte-identical regardless of
+which nixpkgs evaluates them. Skip the ourPkgs pattern for these.
 
-"Content-only" means **no build inputs at all**. It does NOT mean
-"ships data files rather than binaries" — a distinction worth
-being precise about, because the `pkgs.generic.*` packages
-(arkenfox, catppuccin-btop, dns-root-hints) install nothing but
-data files and still need the full pattern: each runs a fetcher
-(`fetchzip` / `fetchurl`) inside an stdenv derivation, and both of
-those bind to whichever pkgs set supplies them. They are
-registered in `config.checks.cacheHitParity` for exactly that
-reason. The test is not what a package installs but whether it
-needs a `pkgs` set to evaluate; if it does, it needs `ourPkgs`.
+"Content-only" means **no build inputs at all**. It does NOT mean "ships data
+files rather than binaries" — a distinction worth being precise about, because
+the `pkgs.generic.*` packages (arkenfox, catppuccin-btop, dns-root-hints)
+install nothing but data files and still need the full pattern: each runs a
+fetcher (`fetchzip` / `fetchurl`) inside an stdenv derivation, and both of those
+bind to whichever pkgs set supplies them. They are registered in
+`config.checks.cacheHitParity` for exactly that reason. The test is not what a
+package installs but whether it needs a `pkgs` set to evaluate; if it does, it
+needs `ourPkgs`.
 
-**Pure binary-fetch packages** (no build, just an `overrideAttrs`
-that swaps `src`/`version`) still route through `ourPkgs` to keep
-the starting derivation tied to this repo's nixpkgs pin.
-`overlays/kiro-cli.nix` is the current example of exactly that
-shape, and it is covered by the `checks.cache-hit-parity` flake
-check. `copilot-cli` and `kiro-gateway` also ship prebuilt
-binaries, but they are standalone `mkDerivation`s rather than
-`overrideAttrs` — that is the next paragraph, not this one.
+**Pure binary-fetch packages** (no build, just an `overrideAttrs` that swaps
+`src`/`version`) still route through `ourPkgs` to keep the starting derivation
+tied to this repo's nixpkgs pin. `overlays/kiro-cli.nix` is the current example
+of exactly that shape, and it is covered by the `checks.cache-hit-parity` flake
+check. `copilot-cli` and `kiro-gateway` also ship prebuilt binaries, but they
+are standalone `mkDerivation`s rather than `overrideAttrs` — that is the next
+paragraph, not this one.
 
-**Standalone variant.** When upstream's attrs become incompatible
-with the artifact we want to ship (different `sourceRoot`,
-`installPhase`, `buildInputs`, wrapper shape, etc.), a per-platform
-overlay can instead be a standalone `ourPkgs.stdenv.mkDerivation { ... }`
-rather than an `overrideAttrs`. The cache-hit parity rule is
-unchanged — all build inputs still route through `ourPkgs` — but
-no upstream attrs are inherited. `overlays/copilot-cli.nix` is the
-current example: upstream rewrote `github-copilot-cli` from the
-per-platform SEA tarball to a universal Node tarball, which would
-have required overriding ~every interesting attr, so the overlay
-holds its own SEA-shaped derivation instead. Upstream-state
-detection lives in the Update workflow as a non-blocking
+**Standalone variant.** When upstream's attrs become incompatible with the
+artifact we want to ship (different `sourceRoot`, `installPhase`, `buildInputs`,
+wrapper shape, etc.), a per-platform overlay can instead be a standalone
+`ourPkgs.stdenv.mkDerivation { ... }` rather than an `overrideAttrs`. The
+cache-hit parity rule is unchanged — all build inputs still route through
+`ourPkgs` — but no upstream attrs are inherited. `overlays/copilot-cli.nix` is
+the current example: upstream rewrote `github-copilot-cli` from the per-platform
+SEA tarball to a universal Node tarball, which would have required overriding
+~every interesting attr, so the overlay holds its own SEA-shaped derivation
+instead. Upstream-state detection lives in the Update workflow as a non-blocking
 annotation step ("Detect upstream copilot-cli SEA restoration" in
-`.github/workflows/update.yml`). It surfaces in the Update job's
-annotation panel — same UX as the held-back-PR warnings — when
-upstream nixos-unstable HEAD changes mechanism away from the
-universal-node layout we forked against.
+`.github/workflows/update.yml`). It surfaces in the Update job's annotation
+panel — same UX as the held-back-PR warnings — when upstream nixos-unstable HEAD
+changes mechanism away from the universal-node layout we forked against.
 
 <!-- Fragment: dev/fragments/overlays/ifd-patterns.md -->
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-07-25 (commit pending — the warm composite now
-> forces `drvPath` instead of `version`, so sidecar-versioned packages
-> are covered; also corrects the claim that the check job's
-> `nix flake check` evaluates ALL systems, which it does not, and the
-> devenv-test job moved to its own workflow). If you touch
-> `overlays/lib.nix`, any overlay `.nix` file that calls
-> `vu.mkVersion`, the shared `.github/actions/warm-ifd/action.yml`
-> composite, or the warm steps that consume it in
-> `.github/workflows/ci.yml` / `.github/workflows/update.yml`, and
-> this fragment isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-07-25 (commit pending — the warm composite now forces
+> `drvPath` instead of `version`, so sidecar-versioned packages are covered;
+> also corrects the claim that the check job's `nix flake check` evaluates ALL
+> systems, which it does not, and the devenv-test job moved to its own
+> workflow). If you touch `overlays/lib.nix`, any overlay `.nix` file that calls
+> `vu.mkVersion`, the shared `.github/actions/warm-ifd/action.yml` composite, or
+> the warm steps that consume it in `.github/workflows/ci.yml` /
+> `.github/workflows/update.yml`, and this fragment isn't updated in the same
+> commit, stop and fix it.
 
 ### What is IFD in this repo
 
-Our overlays compute package versions at eval time by reading
-manifest files from fetched sources. `overlays/lib.nix` provides
-helpers like `readPackageJsonVersion`, `readCargoVersion`, and
-`readPyprojectVersion` that call `builtins.readFile` on paths
-inside a `fetchFromGitHub` output:
+Our overlays compute package versions at eval time by reading manifest files
+from fetched sources. `overlays/lib.nix` provides helpers like
+`readPackageJsonVersion`, `readCargoVersion`, and `readPyprojectVersion` that
+call `builtins.readFile` on paths inside a `fetchFromGitHub` output:
 
 ```nix
 version = vu.mkVersion {
@@ -299,91 +279,83 @@ version = vu.mkVersion {
 };
 ```
 
-This is Import From Derivation (IFD): nix must realize (fetch)
-the `fetchFromGitHub` derivation before evaluation can continue.
-The source tarball must exist in the local nix store for eval to
-succeed.
+This is Import From Derivation (IFD): nix must realize (fetch) the
+`fetchFromGitHub` derivation before evaluation can continue. The source tarball
+must exist in the local nix store for eval to succeed.
 
 ### Why this matters
 
-On a warm machine (prior builds cached), IFD is invisible.
-On a cold machine (fresh CI runner, new contributor), evaluation
-of the flake fails with `error: path '/nix/store/...-source.drv'
-is not valid` if the source derivation hasn't been fetched.
+On a warm machine (prior builds cached), IFD is invisible. On a cold machine
+(fresh CI runner, new contributor), evaluation of the flake fails with
+`error: path '/nix/store/...-source.drv' is not valid` if the source derivation
+hasn't been fetched.
 
 Key properties of IFD in nix:
 
-- **`.drv` files are machine-local.** They are NOT cached by
-  binary substituters (cachix). Only build outputs are cached.
-- **`fetchFromGitHub` outputs are content-addressed.** Same
-  `rev` + `hash` = same store path on any machine. Once fetched,
-  the output IS cached by substituters.
-- **`builtins.attrNames` is lazy.** It does NOT trigger IFD.
-  Only accessing a value that depends on a `builtins.readFile`
-  inside a derivation output forces the fetch. This cost hours
-  of debugging — `nix eval .#packages.x86_64-linux` with
-  `builtins.attrNames` succeeds on cold runners but produces
-  no source fetches.
-- **`NIX_CONFIG="eval-cache = false"` does not help.** Tools
-  like `nix-instantiate` (used internally by nix-update) predate
-  the eval cache and are not affected by it.
-- **`--allow-import-from-derivation true` is required** on
-  nix commands when `restrict-eval` or sandbox settings would
-  otherwise block IFD.
+- **`.drv` files are machine-local.** They are NOT cached by binary substituters
+  (cachix). Only build outputs are cached.
+- **`fetchFromGitHub` outputs are content-addressed.** Same `rev` + `hash` =
+  same store path on any machine. Once fetched, the output IS cached by
+  substituters.
+- **`builtins.attrNames` is lazy.** It does NOT trigger IFD. Only accessing a
+  value that depends on a `builtins.readFile` inside a derivation output forces
+  the fetch. This cost hours of debugging — `nix eval .#packages.x86_64-linux`
+  with `builtins.attrNames` succeeds on cold runners but produces no source
+  fetches.
+- **`NIX_CONFIG="eval-cache = false"` does not help.** Tools like
+  `nix-instantiate` (used internally by nix-update) predate the eval cache and
+  are not affected by it.
+- **`--allow-import-from-derivation true` is required** on nix commands when
+  `restrict-eval` or sandbox settings would otherwise block IFD.
 
 ### CI warm step
 
 The warm logic is a single composite action,
-`.github/actions/warm-ifd/action.yml`, consumed by every workflow
-that evaluates before it builds:
+`.github/actions/warm-ifd/action.yml`, consumed by every workflow that evaluates
+before it builds:
 
-- `ci.yml` build job — `systems: ${{ matrix.system }}` (defaults:
-  3 retries, best-effort) so a transient fetch doesn't flake the
-  per-system build eval.
-- `devenv-test.yml` — `systems: x86_64-linux` (defaults).
-  `devenv test` evaluates devenv.nix, which applies the repo
-  overlays, so its eval reads the same IFD sources; the fetches are
-  fixed-output, so warming via the flake fills the identical store
-  paths devenv's own lock resolves to.
-- `ci.yml` test job — `systems: x86_64-linux aarch64-darwin`, and the
-  darwin half is NOT there because the check needs it. Plain
-  `nix flake check` reports "The check omitted these incompatible
-  systems: aarch64-darwin", and the job does not pass `--all-systems`,
-  so it evaluates x86_64-linux ONLY. The repo's darwin coverage —
-  evaluation included — is the required `aarch64-darwin` leg of the
-  BUILD job; nothing in the check job covers it. The darwin warm entry
-  is kept because IFD source fetches are system-agnostic and
-  content-addressed, so it is nearly free and stays correct if
-  `--all-systems` is ever adopted. Adopting it is an open operator
-  decision, not an oversight: it changes what a required check does.
+- `ci.yml` build job — `systems: ${{ matrix.system }}` (defaults: 3 retries,
+  best-effort) so a transient fetch doesn't flake the per-system build eval.
+- `devenv-test.yml` — `systems: x86_64-linux` (defaults). `devenv test`
+  evaluates devenv.nix, which applies the repo overlays, so its eval reads the
+  same IFD sources; the fetches are fixed-output, so warming via the flake fills
+  the identical store paths devenv's own lock resolves to.
+- `ci.yml` test job — `systems: x86_64-linux aarch64-darwin`, and the darwin
+  half is NOT there because the check needs it. Plain `nix flake check` reports
+  "The check omitted these incompatible systems: aarch64-darwin", and the job
+  does not pass `--all-systems`, so it evaluates x86_64-linux ONLY. The repo's
+  darwin coverage — evaluation included — is the required `aarch64-darwin` leg
+  of the BUILD job; nothing in the check job covers it. The darwin warm entry is
+  kept because IFD source fetches are system-agnostic and content-addressed, so
+  it is nearly free and stays correct if `--all-systems` is ever adopted.
+  Adopting it is an open operator decision, not an oversight: it changes what a
+  required check does.
 
 - `update.yml` — `systems: x86_64-linux`, `retries: "1"`,
-  `best-effort: "false"`. The ninja pipeline cannot proceed
-  without warm sources (nix-update crashes), so it keeps the
-  original single-shot, fail-hard behavior via the inputs.
+  `best-effort: "false"`. The ninja pipeline cannot proceed without warm sources
+  (nix-update crashes), so it keeps the original single-shot, fail-hard behavior
+  via the inputs.
 
-Do not reach for `--all-systems` casually — it would turn the required
-check red today. Measured 2026-07-25 on a linux host:
+Do not reach for `--all-systems` casually — it would turn the required check red
+today. Measured 2026-07-25 on a linux host:
 
-- It only EVALUATES the foreign system; it never builds it. Verified on
-  a throwaway two-system flake, where `checks.aarch64-darwin.foreign`
-  reports `derivation evaluated to …drv` and the run then says
-  `running 0 flake checks`. So its whole cost is evaluation.
-- That cost is roughly +43s wall and a ~7.8 GB RSS ceiling for the
-  darwin check set, against 36s / 6.2 GB for the linux one (282 checks,
-  eval cache disabled, warm store).
-- But instantiating the darwin checks on a linux host FAILS, twice
-  over. Two checks perform IFD on derivations that must be BUILT for
-  `aarch64-darwin` (`living-workflow-skill.drv` via
+- It only EVALUATES the foreign system; it never builds it. Verified on a
+  throwaway two-system flake, where `checks.aarch64-darwin.foreign` reports
+  `derivation evaluated to …drv` and the run then says `running 0 flake checks`.
+  So its whole cost is evaluation.
+- That cost is roughly +43s wall and a ~7.8 GB RSS ceiling for the darwin check
+  set, against 36s / 6.2 GB for the linux one (282 checks, eval cache disabled,
+  warm store).
+- But instantiating the darwin checks on a linux host FAILS, twice over. Two
+  checks perform IFD on derivations that must be BUILT for `aarch64-darwin`
+  (`living-workflow-skill.drv` via
   `module-living-workflow-kiro-hm-writes-skill-dir`, and
-  `stacked-workflows-skills.drv`), which a linux runner cannot do
-  without a darwin builder; and
-  `module-mcp-services-rotation-restart-entry` is a genuine darwin
-  assertion failure. `builtins.tryEval` does not catch the first class,
+  `stacked-workflows-skills.drv`), which a linux runner cannot do without a
+  darwin builder; and `module-mcp-services-rotation-restart-entry` is a genuine
+  darwin assertion failure. `builtins.tryEval` does not catch the first class,
   so they surface as hard eval errors.
 
-Fixing those is the prerequisite. The flag is the last step, not the
-first.
+Fixing those is the prerequisite. The flag is the last step, not the first.
 
 The composite runs, per system with backoff:
 
@@ -395,226 +367,214 @@ nix eval --json \
 ```
 
 `builtins.mapAttrs` forcing `p.drvPath` puts every package through
-`derivationStrict`, which forces every IFD on its path — the
-`builtins.readFile` version extractors AND anything else that reads a
-file out of a fetched source. The cachix daemon pushes fetched sources
-so subsequent evaluations (PR CI) can substitute them. The `--apply`
-expression is the load-bearing detail — keep the composite and this
-fragment in sync.
+`derivationStrict`, which forces every IFD on its path — the `builtins.readFile`
+version extractors AND anything else that reads a file out of a fetched source.
+The cachix daemon pushes fetched sources so subsequent evaluations (PR CI) can
+substitute them. The `--apply` expression is the load-bearing detail — keep the
+composite and this fragment in sync.
 
-**It forces `drvPath` and not `version`, deliberately.** `version` only
-reaches an IFD when the version is itself `readFile`-derived FROM the
-source; a package versioned from a `-sources.json` sidecar resolves it
-out of the sidecar and short-circuits, leaving IFD elsewhere on its path
-— `cargoLock.lockFile` on `fblog` and `git-branchless` — never forced,
-and so never warmed. Measured on `fblog` under
-`--option allow-import-from-derivation false`: `.version` evaluates
-clean while `.drvPath` fails with `cannot build '…-source.drv^out'
-during evaluation`, and the same split holds for the two `--apply`
-expressions scoped to that one package. `drvPath` subsumes `version`
-(the derivation name embeds it), so the narrower form buys nothing.
+**It forces `drvPath` and not `version`, deliberately.** `version` only reaches
+an IFD when the version is itself `readFile`-derived FROM the source; a package
+versioned from a `-sources.json` sidecar resolves it out of the sidecar and
+short-circuits, leaving IFD elsewhere on its path — `cargoLock.lockFile` on
+`fblog` and `git-branchless` — never forced, and so never warmed. Measured on
+`fblog` under `--option allow-import-from-derivation false`: `.version`
+evaluates clean while `.drvPath` fails with
+`cannot build '…-source.drv^out' during evaluation`, and the same split holds
+for the two `--apply` expressions scoped to that one package. `drvPath` subsumes
+`version` (the derivation name embeds it), so the narrower form buys nothing.
 
-The cost is real and was measured before adopting it: eval cache
-disabled, warm store, 2026-07-25 — `version` 1.2s / 0.9 GB RSS versus
-`drvPath` 19.2s / 3.0 GB on `x86_64-linux`, and 23.4s / 3.8 GB for the
-`aarch64-darwin` set evaluated on a linux host. Both evaluate clean:
-`allowUnfree` is set by `pkgsFor` so the unfree guard does not throw,
-and the one genuinely Linux-only package (`gluetun`) is gated out of the
-darwin attrset entirely rather than left to throw on `drvPath`.
+The cost is real and was measured before adopting it: eval cache disabled, warm
+store, 2026-07-25 — `version` 1.2s / 0.9 GB RSS versus `drvPath` 19.2s / 3.0 GB
+on `x86_64-linux`, and 23.4s / 3.8 GB for the `aarch64-darwin` set evaluated on
+a linux host. Both evaluate clean: `allowUnfree` is set by `pkgsFor` so the
+unfree guard does not throw, and the one genuinely Linux-only package
+(`gluetun`) is gated out of the darwin attrset entirely rather than left to
+throw on `drvPath`.
 
-Note the `or` chain does NOT swallow a throwing `drvPath` — it only
-covers a MISSING attribute. That is intended: a fetch failure must fail
-the warm so the retry/backoff loop sees it. In `update.yml`, which runs
-this fail-hard, it also means an unrelated eval error now surfaces at
-the warm step rather than a few minutes later inside `nix-update`.
+Note the `or` chain does NOT swallow a throwing `drvPath` — it only covers a
+MISSING attribute. That is intended: a fetch failure must fail the warm so the
+retry/backoff loop sees it. In `update.yml`, which runs this fail-hard, it also
+means an unrelated eval error now surfaces at the warm step rather than a few
+minutes later inside `nix-update`.
 
 ### Extracted sidecars are the IFD-free path — and their drift check is not a correctness gate
 
-`mkClaudeExtract` / `mkKiroProbe` in `overlays/lib.nix` grep a packaged
-binary at BUILD time (`passthru.extracted`) and emit a JSON sidecar that is
-COMMITTED (`overlays/<pkg>-extracted.json`). Modules `builtins.readFile`
-the committed file, never the derivation, so option surfaces derived from a
-binary cost no IFD. `checks/<pkg>-extracted.nix` then compares committed
-against freshly-built to catch a stale sidecar.
+`mkClaudeExtract` / `mkKiroProbe` in `overlays/lib.nix` grep a packaged binary
+at BUILD time (`passthru.extracted`) and emit a JSON sidecar that is COMMITTED
+(`overlays/<pkg>-extracted.json`). Modules `builtins.readFile` the committed
+file, never the derivation, so option surfaces derived from a binary cost no
+IFD. `checks/<pkg>-extracted.nix` then compares committed against freshly-built
+to catch a stale sidecar.
 
-**That drift check does not tell you the extraction is CORRECT.** The
-update pipeline's `extraExtract` hook regenerates the sidecar inside the
-same bump PR, so an anchor that has gone stale and now matches the wrong
-structure is simply committed as the new truth — and the drift check goes
-green over it. The sidecar keys are module option surfaces, so the visible
-result is HM/devenv options quietly out of sync with the binary.
+**That drift check does not tell you the extraction is CORRECT.** The update
+pipeline's `extraExtract` hook regenerates the sidecar inside the same bump PR,
+so an anchor that has gone stale and now matches the wrong structure is simply
+committed as the new truth — and the drift check goes green over it. The sidecar
+keys are module option surfaces, so the visible result is HM/devenv options
+quietly out of sync with the binary.
 
 This is not hypothetical. The model-catalog grep anchored on camelCase
 `firstParty:"claude-…"`; the catalog spells that key `first_party:` inside
 `provider_ids`, and the only camelCase site in the binary belongs to an
-unrelated table. It matched exactly one stray id from 2.1.207 through
-2.1.219, and the `model` option missed the entire Opus 5 / Sonnet 5 /
-Fable 5 generation without a single red build.
+unrelated table. It matched exactly one stray id from 2.1.207 through 2.1.219,
+and the `model` option missed the entire Opus 5 / Sonnet 5 / Fable 5 generation
+without a single red build.
 
-So every extractor asserts the SHAPE of what it captured, not merely that
-it captured something — a non-empty guard is worthless here, because a dead
-anchor still matched one token. Concretely: the effort enum requires
-exactly one distinct match; the model catalog requires an id from each of
-the opus / sonnet / haiku families. When you add a key, add its shape
-assertion in the same commit.
+So every extractor asserts the SHAPE of what it captured, not merely that it
+captured something — a non-empty guard is worthless here, because a dead anchor
+still matched one token. Concretely: the effort enum requires exactly one
+distinct match; the model catalog requires an id from each of the opus / sonnet
+/ haiku families. When you add a key, add its shape assertion in the same
+commit.
 
 ### Gotchas when adding new packages
 
-- If a new overlay uses `vu.mkVersion` with a `readFile`-based
-  version extractor, its source must be fetchable at eval time.
-  The warm step handles this automatically for CI.
-- `nix flake check` and `nix flake show` both trigger full eval,
-  which means they trigger IFD. A cold machine running these
-  commands will fetch all sources.
-- `nix-update` internally runs `nix-instantiate`, which also
-  triggers IFD. If the source isn't in the store, nix-update
-  crashes. The update pipeline handles this by committing the
-  rev+hash first, then running nix-update from a clean state.
+- If a new overlay uses `vu.mkVersion` with a `readFile`-based version
+  extractor, its source must be fetchable at eval time. The warm step handles
+  this automatically for CI.
+- `nix flake check` and `nix flake show` both trigger full eval, which means
+  they trigger IFD. A cold machine running these commands will fetch all
+  sources.
+- `nix-update` internally runs `nix-instantiate`, which also triggers IFD. If
+  the source isn't in the store, nix-update crashes. The update pipeline handles
+  this by committing the rev+hash first, then running nix-update from a clean
+  state.
 
 ### Alternatives considered and rejected
 
-1. **Literal version strings** written by the update script
-   (eliminates IFD). Loses auto-computed version feature. Would
-   require the update script to also write version strings, adding
-   another sed target per package.
-2. **`passthru.version` instead of top-level `version`.**
-   Still IFD — just moves where it triggers.
+1. **Literal version strings** written by the update script (eliminates IFD).
+   Loses auto-computed version feature. Would require the update script to also
+   write version strings, adding another sed target per package.
+2. **`passthru.version` instead of top-level `version`.** Still IFD — just moves
+   where it triggers.
 3. **`--impure` on CI eval.** Weakens eval purity guarantees.
 
 <!-- Fragment: dev/fragments/overlays/overlay-pattern.md -->
 
 ## Overlay Grouping and the `generic` Subtree
 
-> **Last verified:** 2026-07-28 — the commit adding THIS line lands `glab`:
-> the first Go package whose SRC hash also lives in the sidecar
+> **Last verified:** 2026-07-28 — the commit adding THIS line lands `glab`: the
+> first Go package whose SRC hash also lives in the sidecar
 > (`vu.mkGoSrcVendorFix`), the first GitLab-hosted version check
-> (`vu.glLatestVersionCmd`), and the collapse of the three sidecar hash
-> fixers onto one `vu.mkHashFix` body driven by `hashFixTargets`. It also
-> corrects the thin-override list, which now has to distinguish the
-> SIDECAR contract (where a hash comes from) from the OVERRIDE SEAM
-> (`.override` vs `overrideAttrs`) — `glab` shares bruno's former but not
-> its latter. Prior: 2026-07-27 retired the
+> (`vu.glLatestVersionCmd`), and the collapse of the three sidecar hash fixers
+> onto one `vu.mkHashFix` body driven by `hashFixTargets`. It also corrects the
+> thin-override list, which now has to distinguish the SIDECAR contract (where a
+> hash comes from) from the OVERRIDE SEAM (`.override` vs `overrideAttrs`) —
+> `glab` shares bruno's former but not its latter. Prior: 2026-07-27 retired the
 > "bruno is the ONLY worked example" claim (`overlays/git-tools/git-absorb.nix`
 > is a second one and PREDATES it), replaces the heuristic with the
 > INPUT-vs-OUTPUT rule read out of the pinned nixpkgs' `lib.extendMkDerivation`,
 > and corrects "the failure is SILENT … shape-independent" — silent for
 > `buildNpmPackage`, LOUD for `buildRustPackage`. Prior: 2026-07-25 wired
 > `passthru.fixVendorHash` / `passthru.fixNpmDepsHash` to a real caller
-> (`fix_sidecar_hashes`) for the first time and corrected the
-> `overlays/lib.nix` comment that claimed a re-run which did not exist;
-> see the Go-vendorHash section below. Before that: two changes, both wanted.
-> `bc23e34b`
-> (LANDED) records that the CI warm step now forces `drvPath` and
-> therefore DOES cover sidecar-versioned packages; the commit adding
-> this line (pending) adds the sidecar-vs-inline decision rule and the
-> `.override`-vs-`overrideAttrs` rule for `lib.extendMkDerivation`
-> builders. Both sit on top of the Go sidecar-`vendorHash` mechanism,
-> the derived-Go-toolchain seam, and the platform-gated-attribute rule,
-> on top of the multi-major-attribute shape, the namespaced-only rule
-> and the store-path-parity expectation for thin nixpkgs overrides. If
-> you add, remove or rename an overlay namespace, move a package between
-> namespaces, or change how a `generic` package relates to its nixpkgs
-> original, and this section isn't updated in the same commit, stop and
-> fix it.
+> (`fix_sidecar_hashes`) for the first time and corrected the `overlays/lib.nix`
+> comment that claimed a re-run which did not exist; see the Go-vendorHash
+> section below. Before that: two changes, both wanted. `bc23e34b` (LANDED)
+> records that the CI warm step now forces `drvPath` and therefore DOES cover
+> sidecar-versioned packages; the commit adding this line (pending) adds the
+> sidecar-vs-inline decision rule and the `.override`-vs-`overrideAttrs` rule
+> for `lib.extendMkDerivation` builders. Both sit on top of the Go
+> sidecar-`vendorHash` mechanism, the derived-Go-toolchain seam, and the
+> platform-gated-attribute rule, on top of the multi-major-attribute shape, the
+> namespaced-only rule and the store-path-parity expectation for thin nixpkgs
+> overrides. If you add, remove or rename an overlay namespace, move a package
+> between namespaces, or change how a `generic` package relates to its nixpkgs
+> original, and this section isn't updated in the same commit, stop and fix it.
 
-`overlays/default.nix` aggregates per-package files into grouped
-namespaces: `pkgs.ai.*` (plus its `mcpServers` / `lspServers`
-sub-groups), `pkgs.devTools.*`, `pkgs.generic.*`, and
-`pkgs.gitTools.*`. Every group is built the same way — an attrset of
-`import ./<dir>/<name>.nix {inherit inputs final;}` entries, passed
-through `guard` (the unfree wrapper) in the output set, and flattened
-into `packages.<system>` in `flake.nix` for CLI ergonomics — so a new
+`overlays/default.nix` aggregates per-package files into grouped namespaces:
+`pkgs.ai.*` (plus its `mcpServers` / `lspServers` sub-groups),
+`pkgs.devTools.*`, `pkgs.generic.*`, and `pkgs.gitTools.*`. Every group is built
+the same way — an attrset of `import ./<dir>/<name>.nix {inherit inputs final;}`
+entries, passed through `guard` (the unfree wrapper) in the output set, and
+flattened into `packages.<system>` in `flake.nix` for CLI ergonomics — so a new
 group is one attrset, one output line, and one flatten line.
 
-`generic` is the group defined by what it is NOT: packages with nothing
-agentic about them, living in `overlays/generic/` and earmarked for a
-possible future repo split. The grouping exists so that split is a
-directory move rather than an archaeology exercise, which means the
-subtree must not acquire dependencies on the rest of the repo beyond
-`overlays/lib.nix`. Judge membership by whether the package would make
-sense in a repo called "agentic tools" — a hardened Firefox preference
-set, a btop theme, the DNS root hints, a resource monitor, a JS runtime,
-a JS package manager, a JSON log viewer, the GitHub CLI, a VPN client, a
-shell prompt engine and an OpenTelemetry viewer do not.
+`generic` is the group defined by what it is NOT: packages with nothing agentic
+about them, living in `overlays/generic/` and earmarked for a possible future
+repo split. The grouping exists so that split is a directory move rather than an
+archaeology exercise, which means the subtree must not acquire dependencies on
+the rest of the repo beyond `overlays/lib.nix`. Judge membership by whether the
+package would make sense in a repo called "agentic tools" — a hardened Firefox
+preference set, a btop theme, the DNS root hints, a resource monitor, a JS
+runtime, a JS package manager, a JSON log viewer, the GitHub CLI, a VPN client,
+a shell prompt engine and an OpenTelemetry viewer do not.
 
-Two mechanical consequences of living in a subdirectory rather than at
-the `overlays/` root:
+Two mechanical consequences of living in a subdirectory rather than at the
+`overlays/` root:
 
 - `vu = import ../lib.nix` (one level up), not `./lib.nix`.
-- The update helpers default `sourcesFile` to
-  `overlays/<pname>-sources.json`, which is wrong here, so grouped
-  packages pass `sourcesFile` explicitly. The sidecar lives beside the
-  package file.
+- The update helpers default `sourcesFile` to `overlays/<pname>-sources.json`,
+  which is wrong here, so grouped packages pass `sourcesFile` explicitly. The
+  sidecar lives beside the package file.
 
-Nothing else is relaxed: cache-hit parity applies in full (see that
-fragment — shipping data files is NOT the same as being content-only),
-each package gets a `config.checks.cacheHitParity` row, and each
-version-tracked one gets a `config.update.targets` row.
+Nothing else is relaxed: cache-hit parity applies in full (see that fragment —
+shipping data files is NOT the same as being content-only), each package gets a
+`config.checks.cacheHitParity` row, and each version-tracked one gets a
+`config.update.targets` row.
 
 ### Thin overrides of a nixpkgs package
 
-Most `generic` entries (`btop`, `bun`, `fblog`, `gh`, `glab`,
-`oh-my-posh`, `otel-tui`, `pnpm_10`, `pnpm_11`) are not fresh derivations
-but `ourPkgs.<name>.overrideAttrs` over the nixpkgs one, moving only
-`version`, `src`, `passthru.updateScript` and — for the Go ones —
-`vendorHash`. `gluetun` is the exception, and only because nixpkgs does
-not carry it at all; `bruno` is deliberately absent from that list because
-`overrideAttrs` cannot express its override at all (see the
-`.override` section below). `glab` IS on the list and belongs there —
-`buildGoModule` reads `vendorHash` and `src` off `finalAttrs`, so
-composing on the output works — even though it shares bruno's SIDECAR
-contract, because that contract is about where the hash comes from, not
-about which override seam is correct. Two rules that are not obvious from
-reading such a file:
+Most `generic` entries (`btop`, `bun`, `fblog`, `gh`, `glab`, `oh-my-posh`,
+`otel-tui`, `pnpm_10`, `pnpm_11`) are not fresh derivations but
+`ourPkgs.<name>.overrideAttrs` over the nixpkgs one, moving only `version`,
+`src`, `passthru.updateScript` and — for the Go ones — `vendorHash`. `gluetun`
+is the exception, and only because nixpkgs does not carry it at all; `bruno` is
+deliberately absent from that list because `overrideAttrs` cannot express its
+override at all (see the `.override` section below). `glab` IS on the list and
+belongs there — `buildGoModule` reads `vendorHash` and `src` off `finalAttrs`,
+so composing on the output works — even though it shares bruno's SIDECAR
+contract, because that contract is about where the hash comes from, not about
+which override seam is correct. Two rules that are not obvious from reading such
+a file:
 
-- **Namespaced-only.** The overlay writes `pkgs.generic.<name>` and
-  NEVER a top-level `pkgs.<name>`. Shadowing a nixpkgs attribute would
-  turn this from an additive overlay into one that silently re-points
-  every unrelated consumer of that package; the additive contract is
-  what lets consumers apply the overlay without auditing it.
-- **An identical store path is EXPECTED, not a bug.** While our sidecar
-  pin and nixpkgs' pin name the same version, a thin override yields
-  the byte-identical derivation — a fixed-output `src` path follows its
-  hash, not its fetcher, so a `fetchzip` of the repo-archive tarball
-  lands on the same path `fetchFromGitHub` does. The package still
-  earns its place: it rides this repo's 4x/day update sweep instead of
-  a nixpkgs channel bump, and the paths diverge the moment upstream
-  moves. Do not "clean up" such a package on parity grounds.
+- **Namespaced-only.** The overlay writes `pkgs.generic.<name>` and NEVER a
+  top-level `pkgs.<name>`. Shadowing a nixpkgs attribute would turn this from an
+  additive overlay into one that silently re-points every unrelated consumer of
+  that package; the additive contract is what lets consumers apply the overlay
+  without auditing it.
+- **An identical store path is EXPECTED, not a bug.** While our sidecar pin and
+  nixpkgs' pin name the same version, a thin override yields the byte-identical
+  derivation — a fixed-output `src` path follows its hash, not its fetcher, so a
+  `fetchzip` of the repo-archive tarball lands on the same path
+  `fetchFromGitHub` does. The package still earns its place: it rides this
+  repo's 4x/day update sweep instead of a nixpkgs channel bump, and the paths
+  diverge the moment upstream moves. Do not "clean up" such a package on parity
+  grounds.
 
 Measured for `pnpm_10` at landing: `pkgs.generic.pnpm_10` and plain
-`pkgs.pnpm_10` share both `drvPath` and `outPath`
-(`…-pnpm-10.34.5.drv` / `…-pnpm-10.34.5`), and `nix build .#pnpm_10`
-substitutes straight from `cache.nixos.org`. That is the parity rule
-above working exactly as designed, not a redundant package.
+`pkgs.pnpm_10` share both `drvPath` and `outPath` (`…-pnpm-10.34.5.drv` /
+`…-pnpm-10.34.5`), and `nix build .#pnpm_10` substitutes straight from
+`cache.nixos.org`. That is the parity rule above working exactly as designed,
+not a redundant package.
 
-`passthru` is NOT a derivation input, which is what lets a thin
-override add an `updateScript` without moving the store path. Merge it
-(`passthru = (prev.passthru or {}) // { … }`) rather than replacing it:
-nixpkgs hangs real API there (pnpm alone carries `configHook`,
-`fetchDeps`, `majorVersion`, `nodejs-slim` and `tests`) and replacing
-the set drops all of it.
+`passthru` is NOT a derivation input, which is what lets a thin override add an
+`updateScript` without moving the store path. Merge it
+(`passthru = (prev.passthru or {}) // { … }`) rather than replacing it: nixpkgs
+hangs real API there (pnpm alone carries `configHook`, `fetchDeps`,
+`majorVersion`, `nodejs-slim` and `tests`) and replacing the set drops all of
+it.
 
 ### `.override` the builder, never `overrideAttrs`, on an `extendMkDerivation`
 
-The thin-`overrideAttrs` shape above works because `cmake`/`buildGoModule`
-read `version` and `src` as ordinary attrs. It does NOT transfer to a
-builder written with `lib.extendMkDerivation`.
+The thin-`overrideAttrs` shape above works because `cmake`/`buildGoModule` read
+`version` and `src` as ordinary attrs. It does NOT transfer to a builder written
+with `lib.extendMkDerivation`.
 
-**Sort the attr into INPUT or OUTPUT — that makes the rule decidable in
-advance instead of a per-package surprise.** `lib.extendMkDerivation`
-(`lib/customisation.nix`) builds the derivation as `constructDrv (final:
-removeAttrs previous excludeDrvArgNames // extendDrvArgs final previous)`, so
-`extendDrvArgs` runs exactly ONCE, at call time, over the INCOMING args;
-`overrideAttrs` is plain `stdenv.mkDerivation`'s and only ever composes on
-the merged result. Therefore:
+**Sort the attr into INPUT or OUTPUT — that makes the rule decidable in advance
+instead of a per-package surprise.** `lib.extendMkDerivation`
+(`lib/customisation.nix`) builds the derivation as
+`constructDrv (final: removeAttrs previous excludeDrvArgNames // extendDrvArgs final previous)`,
+so `extendDrvArgs` runs exactly ONCE, at call time, over the INCOMING args;
+`overrideAttrs` is plain `stdenv.mkDerivation`'s and only ever composes on the
+merged result. Therefore:
 
-- An attr the builder **derived** (`cargoDeps`, `npmDeps`) IS movable
-  through `overrideAttrs` — you are replacing the finished value.
-- An attr the builder **consumed** to derive one (`cargoHash`,
-  `npmDepsHash`) is NOT: the derived value already exists, computed from
-  the old input. Neither hash is listed in `excludeDrvArgNames`, so the new
-  value is not even dropped — it lands in the final attrs as a dead env var
-  nothing reads.
+- An attr the builder **derived** (`cargoDeps`, `npmDeps`) IS movable through
+  `overrideAttrs` — you are replacing the finished value.
+- An attr the builder **consumed** to derive one (`cargoHash`, `npmDepsHash`) is
+  NOT: the derived value already exists, computed from the old input. Neither
+  hash is listed in `excludeDrvArgNames`, so the new value is not even dropped —
+  it lands in the final attrs as a dead env var nothing reads.
 
 Read out of the pinned nixpkgs (26.11) rather than inferred:
 `pkgs/build-support/rust/build-rust-package/default.nix` and
@@ -627,10 +587,10 @@ Read out of the pinned nixpkgs (26.11) rather than inferred:
 measurement.** Both take the hash from the incoming args, but they differ in
 where the vendor derivation's OTHER inputs come from:
 
-- `buildNpmPackage` reads `src`, `postPatch` and `name` for `fetchNpmDeps`
-  from the destructured **args** as well, so an `overrideAttrs` bump moves
-  NOTHING in the deps derivation and the build succeeds SILENTLY against the
-  old dependency set. Measured on bruno:
+- `buildNpmPackage` reads `src`, `postPatch` and `name` for `fetchNpmDeps` from
+  the destructured **args** as well, so an `overrideAttrs` bump moves NOTHING in
+  the deps derivation and the build succeeds SILENTLY against the old dependency
+  set. Measured on bruno:
 
   ```nix
   pkgs.bruno.overrideAttrs (_: { version = "4.0.0"; npmDepsHash = <fake>; })
@@ -639,293 +599,277 @@ where the vendor derivation's OTHER inputs come from:
   #  npmDeps.outputHash   = sha256-4VsSXiHj/…        <- 3.5.2's hash
   ```
 
-  That builds 4.0.0 source against 3.5.2's dependency set and reports no
-  error at all.
+  That builds 4.0.0 source against 3.5.2's dependency set and reports no error
+  at all.
 
 - `buildRustPackage` reads `name`/`pname`/`version`/`src`/`sourceRoot` for
-  `fetchCargoVendor` from **`finalAttrs`** — the overridden fixed point —
-  while still taking `hash` from `args.cargoHash`. The same bump therefore
-  vendors the NEW source against the OLD hash and fails LOUDLY on the
-  mismatch.
+  `fetchCargoVendor` from **`finalAttrs`** — the overridden fixed point — while
+  still taking `hash` from `args.cargoHash`. The same bump therefore vendors the
+  NEW source against the OLD hash and fails LOUDLY on the mismatch.
 
-The seam is the same either way: wrap the BUILDER — `pkg.override (_: {
-buildNpmPackage = args: realBuilder (finalAttrs: (lib.toFunction args)
-finalAttrs // { … }); })` — which puts the new values in the incoming args
-where `extendDrvArgs` reads them.
+The seam is the same either way: wrap the BUILDER —
+`pkg.override (_: { buildNpmPackage = args: realBuilder (finalAttrs: (lib.toFunction args) finalAttrs // { … }); })`
+— which puts the new values in the incoming args where `extendDrvArgs` reads
+them.
 
-`lib.toFunction` is load-bearing in that snippet: upstream expressions come
-in both `attrs` and `finalAttrs: attrs` flavors, and it normalizes them.
+`lib.toFunction` is load-bearing in that snippet: upstream expressions come in
+both `attrs` and `finalAttrs: attrs` flavors, and it normalizes them.
 
 Two worked examples in this tree, both moving an INPUT hash — cite either:
 
 - `overlays/git-tools/git-absorb.nix` — `cargoHash`, via
-  `ourPkgs.git-absorb.override (_: { rustPlatform.buildRustPackage = … })`.
-  It PREDATES bruno.
+  `ourPkgs.git-absorb.override (_: { rustPlatform.buildRustPackage = … })`. It
+  PREDATES bruno.
 - `overlays/generic/bruno.nix` — `npmDepsHash`, via
   `ourPkgs.bruno.override (_: { buildNpmPackage = … })`.
 
 `overlays/git-tools/git-branchless.nix` is a plain `overrideAttrs` and is
-CORRECT as one: it sets `cargoDeps` — an
-`ourPkgs.rustPlatform.importCargoLock` over the pinned src, i.e. the derived
-OUTPUT — and never `cargoHash`. Do not cite it as a builder-wrap example,
-and do not "fix" it into one.
+CORRECT as one: it sets `cargoDeps` — an `ourPkgs.rustPlatform.importCargoLock`
+over the pinned src, i.e. the derived OUTPUT — and never `cargoHash`. Do not
+cite it as a builder-wrap example, and do not "fix" it into one.
 
-One trap in the git-absorb spelling: `.override (_: {
-rustPlatform.buildRustPackage = … })` REPLACES the whole `rustPlatform`
-argument with a one-key attrset. It is safe there only because nixpkgs'
-`git-absorb` expression reads nothing else off `rustPlatform`. Check the
-package's argument list before copying that shape.
+One trap in the git-absorb spelling:
+`.override (_: { rustPlatform.buildRustPackage = … })` REPLACES the whole
+`rustPlatform` argument with a one-key attrset. It is safe there only because
+nixpkgs' `git-absorb` expression reads nothing else off `rustPlatform`. Check
+the package's argument list before copying that shape.
 
 ### Sidecar or inline: what actually decides it
 
 A version-tracked overlay records its pin either INLINE in its `.nix` file
-(bumped by plain `nix-update` — the shape most `config.update.targets` rows
-use) or in a `<name>-sources.json` SIDECAR written by a custom
-`updateScript`. The choice usually gets read as a question about the source
-shape. It mostly is not.
+(bumped by plain `nix-update` — the shape most `config.update.targets` rows use)
+or in a `<name>-sources.json` SIDECAR written by a custom `updateScript`. The
+choice usually gets read as a question about the source shape. It mostly is not.
 
-- **HARD CONSTRAINT, decides by itself: per-platform fanout.**
-  `nix-update` models exactly ONE `src` and structurally cannot express N
-  systems, so a package needing per-platform sources REQUIRES a sidecar.
-  Not a preference — there is no inline form of it.
-- **Otherwise it is a COST TRADE on the NO-OP sweep**, not a shape
-  mismatch. Both shapes are correct. They differ in what a sweep that
-  finds nothing costs. Inline + `nix-update` re-derives every hashed
-  dependency on EVERY run, because it prefetches with `outputHash = ""`,
-  which normalizes to an all-zeros hash whose store path is never
-  registered valid — uncacheable by construction, so nothing carries over
-  between sweeps. A sidecar's version-equality early exit pays zero: one
-  HEAD against `releases/latest` and it stops.
-- **So the deciding variable is the SIZE of the fetched dependency tree**,
-  not the source shape. Measured on bruno, whose npm dependency set is
-  607 MB (roughly 40x anything else here): ~28 s and ~642 MB per sweep
-  inline, against ~1 s and 0 bytes on the sidecar. At 4x/day that is
-  ~2.5 GB/day for zero information, which is what tipped it. A package
-  whose only hash is a small `src` is fine inline and costs less code —
-  the inline rows here are not an oversight.
+- **HARD CONSTRAINT, decides by itself: per-platform fanout.** `nix-update`
+  models exactly ONE `src` and structurally cannot express N systems, so a
+  package needing per-platform sources REQUIRES a sidecar. Not a preference —
+  there is no inline form of it.
+- **Otherwise it is a COST TRADE on the NO-OP sweep**, not a shape mismatch.
+  Both shapes are correct. They differ in what a sweep that finds nothing costs.
+  Inline + `nix-update` re-derives every hashed dependency on EVERY run, because
+  it prefetches with `outputHash = ""`, which normalizes to an all-zeros hash
+  whose store path is never registered valid — uncacheable by construction, so
+  nothing carries over between sweeps. A sidecar's version-equality early exit
+  pays zero: one HEAD against `releases/latest` and it stops.
+- **So the deciding variable is the SIZE of the fetched dependency tree**, not
+  the source shape. Measured on bruno, whose npm dependency set is 607 MB
+  (roughly 40x anything else here): ~28 s and ~642 MB per sweep inline, against
+  ~1 s and 0 bytes on the sidecar. At 4x/day that is ~2.5 GB/day for zero
+  information, which is what tipped it. A package whose only hash is a small
+  `src` is fine inline and costs less code — the inline rows here are not an
+  oversight.
 - **State the counter-cost honestly.** A sidecar does NOT self-heal a hash
-  invalidated WITHOUT a version bump — a nixpkgs-side fetcher or builder
-  change, say. It early-exits on version equality and never re-derives, so
-  the build fails LOUDLY on a hash mismatch until someone runs the
-  standalone fixer by hand (`passthru.fixVendorHash`,
-  `passthru.fixNpmDepsHash` — which exist for exactly this). Inline
-  re-derives every sweep and therefore self-heals that case. **Neither
-  shape fails silently**; do not write that one does.
-- **Record the inversion.** It corrects a belief this repo held: the rows
-  still on plain `nix-update` are paying that uncacheable per-sweep cost
-  TODAY, so "sidecars are legacy overhead from an older design" is close
-  to backwards. Noted as unexamined rather than as a migration proposal —
-  for a small `src` the cost is small, and the counter-cost above is real.
+  invalidated WITHOUT a version bump — a nixpkgs-side fetcher or builder change,
+  say. It early-exits on version equality and never re-derives, so the build
+  fails LOUDLY on a hash mismatch until someone runs the standalone fixer by
+  hand (`passthru.fixVendorHash`, `passthru.fixNpmDepsHash` — which exist for
+  exactly this). Inline re-derives every sweep and therefore self-heals that
+  case. **Neither shape fails silently**; do not write that one does.
+- **Record the inversion.** It corrects a belief this repo held: the rows still
+  on plain `nix-update` are paying that uncacheable per-sweep cost TODAY, so
+  "sidecars are legacy overhead from an older design" is close to backwards.
+  Noted as unexamined rather than as a migration proposal — for a small `src`
+  the cost is small, and the counter-cost above is real.
 
 One sidecar consequence worth knowing before reaching for
-`ghArchiveUpdateScript`: it records the hash of a `nix-prefetch-url
---unpack`, which is only the right value when the src is a plain fetch of
-that URL. An overlay that re-points an upstream fetcher carrying a
-`postFetch` gets a hash over the POST-`postFetch` tree, and the two differ
-— measured on bruno v4.0.0, where `postFetch` runs `npm-lockfile-fix`:
-`sha256-uZsw…` from the prefetch versus `sha256-M4oN…` from the fetcher.
-Recording the prefetch value puts a plausible, wrong hash in the sidecar.
-Such a package passes `platforms = {}` (version only) and lets an
-`extraExtract` fixer scrape both hashes out of a real build.
+`ghArchiveUpdateScript`: it records the hash of a `nix-prefetch-url --unpack`,
+which is only the right value when the src is a plain fetch of that URL. An
+overlay that re-points an upstream fetcher carrying a `postFetch` gets a hash
+over the POST-`postFetch` tree, and the two differ — measured on bruno v4.0.0,
+where `postFetch` runs `npm-lockfile-fix`: `sha256-uZsw…` from the prefetch
+versus `sha256-M4oN…` from the fetcher. Recording the prefetch value puts a
+plausible, wrong hash in the sidecar. Such a package passes `platforms = {}`
+(version only) and lets an `extraExtract` fixer scrape both hashes out of a real
+build.
 
 ### Carrying several majors of one package
 
-`pnpm` is carried at two majors (`pkgs.generic.pnpm_10`,
-`pkgs.generic.pnpm_11`) and the shape generalizes to any versioned
-attribute family:
+`pnpm` is carried at two majors (`pkgs.generic.pnpm_10`, `pkgs.generic.pnpm_11`)
+and the shape generalizes to any versioned attribute family:
 
-- One shared builder (`overlays/generic/pnpm-major.nix`) takes the
-  major as an argument; the per-major files are two-line delegations.
-  They exist because each major needs its own path for
-  `--override-filename` in `config/update-targets.nix` and its own
-  sidecar beside it — not because the logic differs.
-- The version check reads the registry's PER-MAJOR channel
-  (npm's `latest-<N>` dist-tag), not the global latest, so a major
-  never bumps itself out of its own attribute.
-- **Guard the major at eval time.** Anything in the upstream
-  expression that reads the ARGUMENT `version` rather than
-  `finalAttrs.version` does not follow an `overrideAttrs` bump —
-  for pnpm that is `passthru.majorVersion`, the `postInstall`
-  completion branch, and nixpkgs' own `updateScript`. A sidecar
-  pointed at the wrong major would therefore build a working
-  derivation that lies about which major it is. `pnpm-major.nix`
-  throws instead.
-- Expect exactly one of the majors to sit at nixpkgs parity and the
-  others to carry a delta; which one is which rotates as channels move.
-  Parity is not evidence that a major should be dropped.
+- One shared builder (`overlays/generic/pnpm-major.nix`) takes the major as an
+  argument; the per-major files are two-line delegations. They exist because
+  each major needs its own path for `--override-filename` in
+  `config/update-targets.nix` and its own sidecar beside it — not because the
+  logic differs.
+- The version check reads the registry's PER-MAJOR channel (npm's `latest-<N>`
+  dist-tag), not the global latest, so a major never bumps itself out of its own
+  attribute.
+- **Guard the major at eval time.** Anything in the upstream expression that
+  reads the ARGUMENT `version` rather than `finalAttrs.version` does not follow
+  an `overrideAttrs` bump — for pnpm that is `passthru.majorVersion`, the
+  `postInstall` completion branch, and nixpkgs' own `updateScript`. A sidecar
+  pointed at the wrong major would therefore build a working derivation that
+  lies about which major it is. `pnpm-major.nix` throws instead.
+- Expect exactly one of the majors to sit at nixpkgs parity and the others to
+  carry a delta; which one is which rotates as channels move. Parity is not
+  evidence that a major should be dropped.
 
-Rust packages on this pattern have one extra constraint.
-`ghArchiveUpdateScript` refreshes only the src hash in the sidecar, so
-an inline `cargoHash` would go stale on every bump — the known
-transitive-hash gap. Override `cargoDeps` with
-`rustPlatform.importCargoLock { lockFile = "${src}/Cargo.lock"; }`
-against the PINNED src instead, so one hash covers both and the vendor
-set self-updates.
+Rust packages on this pattern have one extra constraint. `ghArchiveUpdateScript`
+refreshes only the src hash in the sidecar, so an inline `cargoHash` would go
+stale on every bump — the known transitive-hash gap. Override `cargoDeps` with
+`rustPlatform.importCargoLock { lockFile = "${src}/Cargo.lock"; }` against the
+PINNED src instead, so one hash covers both and the vendor set self-updates.
 
 ### Go packages: the vendorHash goes in the SIDECAR
 
-Go has the same transitive-hash problem and no `importCargoLock`
-equivalent — `go.sum` records module hashes, not a Nix-fetchable vendor
-tree — so `vendorHash` must be recorded somewhere. It goes in the
-sidecar (`gh`, `glab`, `gluetun`, `oh-my-posh`, `otel-tui`), never
-inline, and the mechanism is worth understanding before touching it:
+Go has the same transitive-hash problem and no `importCargoLock` equivalent —
+`go.sum` records module hashes, not a Nix-fetchable vendor tree — so
+`vendorHash` must be recorded somewhere. It goes in the sidecar (`gh`, `glab`,
+`gluetun`, `oh-my-posh`, `otel-tui`), never inline, and the mechanism is worth
+understanding before touching it:
 
 - `mkUpdateScript` rebuilds the sidecar FROM SCRATCH on every write
-  (`jq -n --arg v "$latest" '{version: $v}'`), so any key it does not
-  itself produce is DESTROYED. `vendorHash` is exactly such a key.
-- Therefore each Go overlay reads `sources.vendorHash or lib.fakeHash` —
-  the `or` covers the window between the sidecar write and the fix — and
-  threads `extraExtract = "${fixVendorHash}"` so `vu.mkGoVendorFix` runs
-  immediately after. The fixer builds `<attr>.goModules` through the
-  flake's own `packages` output (this repo has NO `legacyPackages`) and
-  writes back the `got:` hash from a `-go-modules` mismatch only.
-- It is also `passthru.fixVendorHash`, because a nixpkgs or Go-toolchain
-  bump can invalidate a vendor hash with no version bump at all — and
-  `extraExtract` fires only on a VERSION bump, so nothing else would
-  re-derive it. `fix_sidecar_hashes` (`dev/scripts/update-common.sh`)
-  discovers this attr across `packages.<system>` and runs it when an
-  input bump's build verification fails, so that case self-heals into the
-  same commit instead of parking the input update as HELD BACK. Until
-  2026-07-25 the standalone had NO caller and `overlays/lib.nix` claimed
-  a re-run that did not exist; if you unwire it, fix both.
+  (`jq -n --arg v "$latest" '{version: $v}'`), so any key it does not itself
+  produce is DESTROYED. `vendorHash` is exactly such a key.
+- Therefore each Go overlay reads `sources.vendorHash or lib.fakeHash` — the
+  `or` covers the window between the sidecar write and the fix — and threads
+  `extraExtract = "${fixVendorHash}"` so `vu.mkGoVendorFix` runs immediately
+  after. The fixer builds `<attr>.goModules` through the flake's own `packages`
+  output (this repo has NO `legacyPackages`) and writes back the `got:` hash
+  from a `-go-modules` mismatch only.
+- It is also `passthru.fixVendorHash`, because a nixpkgs or Go-toolchain bump
+  can invalidate a vendor hash with no version bump at all — and `extraExtract`
+  fires only on a VERSION bump, so nothing else would re-derive it.
+  `fix_sidecar_hashes` (`dev/scripts/update-common.sh`) discovers this attr
+  across `packages.<system>` and runs it when an input bump's build verification
+  fails, so that case self-heals into the same commit instead of parking the
+  input update as HELD BACK. Until 2026-07-25 the standalone had NO caller and
+  `overlays/lib.nix` claimed a re-run that did not exist; if you unwire it, fix
+  both.
 - `passthru` must be MERGED. `buildGoModule` hangs `goModules` and
-  `overrideModAttrs` there, `build-support/go/module.nix` warns loudly
-  when an overlay drops them, and the fixer resolves `.goModules`
-  through that very attrset.
+  `overrideModAttrs` there, `build-support/go/module.nix` warns loudly when an
+  overlay drops them, and the fixer resolves `.goModules` through that very
+  attrset.
 
-`glab` is the one Go package where the SRC hash goes in the sidecar too,
-and it is `vu.mkGoSrcVendorFix` rather than `mkGoVendorFix` for exactly
-the reason bruno is not on the plain prefetch path: nixpkgs' `glab`
-fetches with `leaveDotGit = true` and a `postFetch` that records the
-short commit into `COMMIT` and then strips `.git`, so the recorded hash
-is over the POST-`postFetch` tree and `nix-prefetch-url --unpack` cannot
-reproduce it. It pairs `platforms = {}` with an `extraExtract` that
-restores `srcHash` then `vendorHash` — **that order is forced**, because
-`goModules` derives FROM `src`, so a stale `srcHash` fails the vendor
-build on the src mismatch and never reaches the vendor one.
+`glab` is the one Go package where the SRC hash goes in the sidecar too, and it
+is `vu.mkGoSrcVendorFix` rather than `mkGoVendorFix` for exactly the reason
+bruno is not on the plain prefetch path: nixpkgs' `glab` fetches with
+`leaveDotGit = true` and a `postFetch` that records the short commit into
+`COMMIT` and then strips `.git`, so the recorded hash is over the
+POST-`postFetch` tree and `nix-prefetch-url --unpack` cannot reproduce it. It
+pairs `platforms = {}` with an `extraExtract` that restores `srcHash` then
+`vendorHash` — **that order is forced**, because `goModules` derives FROM `src`,
+so a stale `srcHash` fails the vendor build on the src mismatch and never
+reaches the vendor one.
 
-The three fixers (`mkGoVendorFix`, `mkGoSrcVendorFix`, `mkNpmDepsFix`)
-are now one body — `vu.mkHashFix` — parameterized by an ordered list of
-`hashFixTargets` entries, each a `(attrPath, drvPattern, key)` triple.
-Add a target to that attrset rather than open-coding a fourth
-`writeShellScript`; the derivation-name patterns are load-bearing (see
-`fodHashFixFn`) and a copy is how they drift.
+The three fixers (`mkGoVendorFix`, `mkGoSrcVendorFix`, `mkNpmDepsFix`) are now
+one body — `vu.mkHashFix` — parameterized by an ordered list of `hashFixTargets`
+entries, each a `(attrPath, drvPattern, key)` triple. Add a target to that
+attrset rather than open-coding a fourth `writeShellScript`; the derivation-name
+patterns are load-bearing (see `fodHashFixFn`) and a copy is how they drift.
 
-`glab` also does NOT use the `gh` shape for its version check: it is
-hosted on gitlab.com, which has no `releases/latest` redirect to read a
-tag out of, so `vu.glLatestVersionCmd` makes an unauthenticated API call
-to `releases/permalink/latest` (which, like GitHub's "latest", excludes
-upcoming releases) and reads `.tag_name`. It takes a URL-ENCODED project
-path — `owner%2Frepo` — and does not encode for you, so that a caller
-which already encoded is not silently mangled.
+`glab` also does NOT use the `gh` shape for its version check: it is hosted on
+gitlab.com, which has no `releases/latest` redirect to read a tag out of, so
+`vu.glLatestVersionCmd` makes an unauthenticated API call to
+`releases/permalink/latest` (which, like GitHub's "latest", excludes upcoming
+releases) and reads `.tag_name`. It takes a URL-ENCODED project path —
+`owner%2Frepo` — and does not encode for you, so that a caller which already
+encoded is not silently mangled.
 
 Two traps, both measured on `oh-my-posh` while landing it:
 
-- **`postPatch` is an INPUT to `goModules`.** module.nix threads it into
-  the vendor derivation, so which test files you remove changes the
-  vendor set — nixpkgs' list drops `cli/image/image_test.go`, the only
-  importer of `golang.org/x/image/font/gofont/gomono`, and
-  `vendor/modules.txt` loses that line. A vendorHash therefore does NOT
-  transfer across a `postPatch` change.
+- **`postPatch` is an INPUT to `goModules`.** module.nix threads it into the
+  vendor derivation, so which test files you remove changes the vendor set —
+  nixpkgs' list drops `cli/image/image_test.go`, the only importer of
+  `golang.org/x/image/font/gofont/gomono`, and `vendor/modules.txt` loses that
+  line. A vendorHash therefore does NOT transfer across a `postPatch` change.
 - **"It built" does not validate a vendorHash.** A fixed-output path is
-  content-addressed, so an identically-named path already in the local
-  store (e.g. built by a sibling repo with a different `postPatch`) is
-  accepted without building anything. That is precisely how a wrong
-  vendorHash passed a full local build and would then have failed CI on
-  a clean store. Force the real computation: perturb the sidecar's
-  version so `mkUpdateScript` takes the prefetch-and-write path, run the
-  update script, and confirm the regenerated file is byte-identical.
+  content-addressed, so an identically-named path already in the local store
+  (e.g. built by a sibling repo with a different `postPatch`) is accepted
+  without building anything. That is precisely how a wrong vendorHash passed a
+  full local build and would then have failed CI on a clean store. Force the
+  real computation: perturb the sidecar's version so `mkUpdateScript` takes the
+  prefetch-and-write path, run the update script, and confirm the regenerated
+  file is byte-identical.
 
 ### Go toolchains are DERIVED from a floor, never pinned
 
-`vu.goToolchainForFloor` takes the package's own go.mod `go` directive
-(or a higher `toolchain` directive) as a FLOOR and returns `ourPkgs.go`
-whenever our pin satisfies it, otherwise the lowest `go-bin` RELEASE
-that does (`purpleclay/go-overlay`, applied inside `ourPkgs` the way
-`rust-overlay` already is), otherwise a throw naming package, floor and
-newest available.
+`vu.goToolchainForFloor` takes the package's own go.mod `go` directive (or a
+higher `toolchain` directive) as a FLOOR and returns `ourPkgs.go` whenever our
+pin satisfies it, otherwise the lowest `go-bin` RELEASE that does
+(`purpleclay/go-overlay`, applied inside `ourPkgs` the way `rust-overlay`
+already is), otherwise a throw naming package, floor and newest available.
 
-Do not "clean up" a floor that currently resolves to our own `go` — it
-is the mechanism, not a leftover. And do not replace it with a pinned
-toolchain version: a pin cannot distinguish "still filling a real gap"
-from "nixpkgs caught up and this is now a DOWNGRADE". The sibling repo
-demonstrates the failure — it pins oh-my-posh to Go 1.26.0, a gap-filler
-when written and a downgrade against our pin's 1.26.5. Prereleases are
-filtered out of the candidate set on purpose: `go-bin.latest` is
-currently a prerelease, and Nix sorts `1.27rc1` ABOVE `1.27.0`.
-`checks/go-toolchain-floor.nix` exercises all three branches plus two
-positive controls, which is also what keeps the input from shipping
-dormant.
+Do not "clean up" a floor that currently resolves to our own `go` — it is the
+mechanism, not a leftover. And do not replace it with a pinned toolchain
+version: a pin cannot distinguish "still filling a real gap" from "nixpkgs
+caught up and this is now a DOWNGRADE". The sibling repo demonstrates the
+failure — it pins oh-my-posh to Go 1.26.0, a gap-filler when written and a
+downgrade against our pin's 1.26.5. Prereleases are filtered out of the
+candidate set on purpose: `go-bin.latest` is currently a prerelease, and Nix
+sorts `1.27rc1` ABOVE `1.27.0`. `checks/go-toolchain-floor.nix` exercises all
+three branches plus two positive controls, which is also what keeps the input
+from shipping dormant.
 
 ### A genuinely platform-specific package is gated at the ATTRIBUTE
 
-`gluetun` is the only one so far: `internal/routing` uses
-`unix.RT_TABLE_MAIN` / `RT_TABLE_LOCAL`, Linux-only constants (measured
-by cross-compiling `GOOS=darwin GOARCH=arm64`). A restrictive
-`meta.platforms` is NOT sufficient — the attribute still exists on
-darwin and forcing its `drvPath` throws "not available on the requested
-hostPlatform", which both `nix flake check` (it evaluates every system)
-and the required darwin CI leg do. So `overlays/default.nix` wraps the
-entry in `lib.optionalAttrs final.stdenv.hostPlatform.isLinux`, and the
-package is simply absent elsewhere.
+`gluetun` is the only one so far: `internal/routing` uses `unix.RT_TABLE_MAIN` /
+`RT_TABLE_LOCAL`, Linux-only constants (measured by cross-compiling
+`GOOS=darwin GOARCH=arm64`). A restrictive `meta.platforms` is NOT sufficient —
+the attribute still exists on darwin and forcing its `drvPath` throws "not
+available on the requested hostPlatform", which both `nix flake check` (it
+evaluates every system) and the required darwin CI leg do. So
+`overlays/default.nix` wraps the entry in
+`lib.optionalAttrs final.stdenv.hostPlatform.isLinux`, and the package is simply
+absent elsewhere.
 
 Two registries have to agree with that:
-`config.checks.cacheHitParity.<name>.platforms` (or the check aborts on
-darwin looking up a package that is not there) and, if a future case
-needs it, anything else that enumerates packages per system. This is the
-exception, not a licence to platform-gate anything inconvenient — a
-sidecar merely missing a platform is still the bug rule 6 describes.
+`config.checks.cacheHitParity.<name>.platforms` (or the check aborts on darwin
+looking up a package that is not there) and, if a future case needs it, anything
+else that enumerates packages per system. This is the exception, not a licence
+to platform-gate anything inconvenient — a sidecar merely missing a platform is
+still the bug rule 6 describes.
 
-**The CI IFD warm step DOES cover that kind of IFD — since it started
-forcing `drvPath`.** `.github/actions/warm-ifd` pre-realizes sources by
-evaluating `p.drvPath or p.name or "unknown"` across the package set,
-which puts every package through `derivationStrict` and so forces every
-IFD on its path, `cargoLock.lockFile` included.
+**The CI IFD warm step DOES cover that kind of IFD — since it started forcing
+`drvPath`.** `.github/actions/warm-ifd` pre-realizes sources by evaluating
+`p.drvPath or p.name or "unknown"` across the package set, which puts every
+package through `derivationStrict` and so forces every IFD on its path,
+`cargoLock.lockFile` included.
 
-It used to force `p.version` instead, and that left this exact shape
-uncovered: a package versioned from a `-sources.json` sidecar resolves
-`.version` out of the sidecar and short-circuits before `drvPath` (and
-therefore `cargoDeps`) is ever forced. Measured on `fblog` with
-`--option allow-import-from-derivation false`: `.version` evaluates
-clean, `.drvPath` fails with `cannot build '…-source.drv^out' during
-evaluation`. That was never a build break — the later eval simply
-fetched the source itself, just without the warm step's retry/backoff —
-but it meant a sidecar-versioned package was NOT warmed merely by being
-in `packages`. See the ifd-patterns fragment for the measured cost of
-the wider forcing and for why the `or` chain does not swallow a throw.
+It used to force `p.version` instead, and that left this exact shape uncovered:
+a package versioned from a `-sources.json` sidecar resolves `.version` out of
+the sidecar and short-circuits before `drvPath` (and therefore `cargoDeps`) is
+ever forced. Measured on `fblog` with
+`--option allow-import-from-derivation false`: `.version` evaluates clean,
+`.drvPath` fails with `cannot build '…-source.drv^out' during evaluation`. That
+was never a build break — the later eval simply fetched the source itself, just
+without the warm step's retry/backoff — but it meant a sidecar-versioned package
+was NOT warmed merely by being in `packages`. See the ifd-patterns fragment for
+the measured cost of the wider forcing and for why the `or` chain does not
+swallow a throw.
 
 ## Overlay Lambda Signature
 
-All overlays in this repo use a **three-argument signature** with the
-first argument typically discarded:
+All overlays in this repo use a **three-argument signature** with the first
+argument typically discarded:
 
 ```nix
 _: final: _prev: { ... }
 ```
 
-This is **deliberate**, not a typo. Reviewers (especially automated
-ones) frequently flag this as "atypical" because the standard nixpkgs
-overlay convention is `final: prev:` (two arguments). Both forms work,
-but the three-argument form is the convention here.
+This is **deliberate**, not a typo. Reviewers (especially automated ones)
+frequently flag this as "atypical" because the standard nixpkgs overlay
+convention is `final: prev:` (two arguments). Both forms work, but the
+three-argument form is the convention here.
 
 ### Why three arguments
 
-The first argument is reserved for an **inputs blob** that some
-overlays may need (e.g., a future AI CLI overlay that consumes
-`inputs.rust-overlay` for Rust toolchain pinning, or a git-tools
-overlay that pulls version data from external inputs). To keep all
-overlays uniformly callable from `flake.nix`, every overlay takes the
-same three-argument shape regardless of whether it actually uses the
+The first argument is reserved for an **inputs blob** that some overlays may
+need (e.g., a future AI CLI overlay that consumes `inputs.rust-overlay` for Rust
+toolchain pinning, or a git-tools overlay that pulls version data from external
+inputs). To keep all overlays uniformly callable from `flake.nix`, every overlay
+takes the same three-argument shape regardless of whether it actually uses the
 inputs.
 
-After the factory rollout (Milestones 1–10), the overlays at the
-flake level are split between the unified binary-package overlay
-(`./overlays`, which consumes `inputs` for cache-hit parity via
-per-package `ourPkgs`) and the content-only overlays under
-`packages/` (which don't need extra flake inputs and are called
-with an empty `{}`). All keep the same three-argument shape so
-all overlays remain uniformly callable from `flake.nix`'s
-`bind-once → reuse` composition pattern:
+After the factory rollout (Milestones 1–10), the overlays at the flake level are
+split between the unified binary-package overlay (`./overlays`, which consumes
+`inputs` for cache-hit parity via per-package `ourPkgs`) and the content-only
+overlays under `packages/` (which don't need extra flake inputs and are called
+with an empty `{}`). All keep the same three-argument shape so all overlays
+remain uniformly callable from `flake.nix`'s `bind-once → reuse` composition
+pattern:
 
 ```nix
 # flake.nix
@@ -941,54 +885,49 @@ overlays.default = lib.composeManyExtensions [
 ];
 ```
 
-The content overlays (`codingStandardsOverlay`,
-`stackedWorkflowsOverlay`) are called with an empty `{}` first
-argument because they don't need flake inputs. The binary
-overlay (`aiOverlay`) consumes `{inherit inputs;}` because its
-per-package files in `overlays/<name>.nix` need `inputs.nixpkgs`
-for cache-hit parity and `inputs.rust-overlay` for Rust toolchain
-pinning. The first `_:` (or `{...}:`) swallows the import-time
-argument so the resulting function is the standard
-`final: prev:` shape `composeManyExtensions` expects regardless.
-Without this, overlays that need inputs would have a different
-binding pattern at the call site than overlays that don't, breaking
-the DRY composition.
+The content overlays (`codingStandardsOverlay`, `stackedWorkflowsOverlay`) are
+called with an empty `{}` first argument because they don't need flake inputs.
+The binary overlay (`aiOverlay`) consumes `{inherit inputs;}` because its
+per-package files in `overlays/<name>.nix` need `inputs.nixpkgs` for cache-hit
+parity and `inputs.rust-overlay` for Rust toolchain pinning. The first `_:` (or
+`{...}:`) swallows the import-time argument so the resulting function is the
+standard `final: prev:` shape `composeManyExtensions` expects regardless.
+Without this, overlays that need inputs would have a different binding pattern
+at the call site than overlays that don't, breaking the DRY composition.
 
 ### Why `_prev`
 
-The vast majority of overlays in this repo only **add** packages
-(via `passthru`-rich derivations) and never **modify** existing ones.
-When you don't read from `prev`, leading-underscore-prefix it as
-`_prev` so deadnix and human reviewers see at a glance "this overlay
-doesn't depend on the previous overlay's state". The few overlays
-that DO read from `prev` (e.g., to wrap an upstream package) drop
-the underscore prefix and inherit from `prev` explicitly.
+The vast majority of overlays in this repo only **add** packages (via
+`passthru`-rich derivations) and never **modify** existing ones. When you don't
+read from `prev`, leading-underscore-prefix it as `_prev` so deadnix and human
+reviewers see at a glance "this overlay doesn't depend on the previous overlay's
+state". The few overlays that DO read from `prev` (e.g., to wrap an upstream
+package) drop the underscore prefix and inherit from `prev` explicitly.
 
 ### Don't "fix" the signature
 
-If you see a Copilot or human reviewer suggest changing
-`_: final: _prev:` → `final: prev:`, **decline**. The three-argument
-form is the established convention and is required for the bind-once
-overlay composition pattern in `flake.nix`.
+If you see a Copilot or human reviewer suggest changing `_: final: _prev:` →
+`final: prev:`, **decline**. The three-argument form is the established
+convention and is required for the bind-once overlay composition pattern in
+`flake.nix`.
 
 <!-- Fragment: dev/fragments/overlays/unfree-guard.md -->
 
 ## Unfree Package Guard (`ensureUnfreeCheck`)
 
 > **Last verified:** 2026-04-13 (commit pending). If you touch
-> `overlays/default.nix`, add a new unfree package to any overlay,
-> or change how `guard` is applied to output attrsets and this
-> fragment isn't updated in the same commit, stop and fix it.
+> `overlays/default.nix`, add a new unfree package to any overlay, or change how
+> `guard` is applied to output attrsets and this fragment isn't updated in the
+> same commit, stop and fix it.
 
 ### The problem
 
-Nix overlays that build unfree packages with `ourPkgs` (pinned
-nixpkgs, `config.allowUnfree = true`) silently bypass the
-consumer's unfree preference. The nixpkgs unfree check
-(`pkgs/stdenv/generic/check-meta.nix`) fires at `mkDerivation`
-eval time, bound to the nixpkgs instance's config — not the
-consumer's. Once a permissive `ourPkgs` produces the derivation,
-the consumer gets the pre-evaluated result with no check.
+Nix overlays that build unfree packages with `ourPkgs` (pinned nixpkgs,
+`config.allowUnfree = true`) silently bypass the consumer's unfree preference.
+The nixpkgs unfree check (`pkgs/stdenv/generic/check-meta.nix`) fires at
+`mkDerivation` eval time, bound to the nixpkgs instance's config — not the
+consumer's. Once a permissive `ourPkgs` produces the derivation, the consumer
+gets the pre-evaluated result with no check.
 
 ### The solution
 
@@ -1029,22 +968,20 @@ Applied universally at the output level:
 
 ### How it works
 
-1. `ourPkgs` (overlay-internal, `allowUnfree = true`) builds the
-   real derivation. CI pushes it to cachix.
-2. `ensureUnfreeCheck` inspects `meta.license.free`. If unfree,
-   wraps in `final.symlinkJoin` (consumer's nixpkgs) carrying
-   `meta = drv.meta`. The consumer's `check-meta.nix` fires on
-   the wrapper — standard error if they haven't set `allowUnfree`.
+1. `ourPkgs` (overlay-internal, `allowUnfree = true`) builds the real
+   derivation. CI pushes it to cachix.
+2. `ensureUnfreeCheck` inspects `meta.license.free`. If unfree, wraps in
+   `final.symlinkJoin` (consumer's nixpkgs) carrying `meta = drv.meta`. The
+   consumer's `check-meta.nix` fires on the wrapper — standard error if they
+   haven't set `allowUnfree`.
 3. If free, returns the derivation unwrapped (zero overhead).
-4. Applied via `builtins.mapAttrs` — new packages are
-   automatically guarded.
+4. Applied via `builtins.mapAttrs` — new packages are automatically guarded.
 
 ### Cache-hit parity is preserved
 
-The unfree check is purely eval-time (`check-meta.nix`). It does
-NOT affect derivation hashes. The wrapper's dependency on the
-real derivation (from `ourPkgs`) has the same store path CI
-built, so cachix serves it.
+The unfree check is purely eval-time (`check-meta.nix`). It does NOT affect
+derivation hashes. The wrapper's dependency on the real derivation (from
+`ourPkgs`) has the same store path CI built, so cachix serves it.
 
 ### Consumer UX
 
@@ -1061,15 +998,14 @@ No existing community solution was found (researched 2026-04-10):
 - Discourse advice: "just set allowUnfree" when importing
 - Official nixpkgs/Hydra: does NOT build unfree at all
 
-Our wrapper pattern appears unique in the Nix ecosystem. Document
-any changes to it thoroughly.
+Our wrapper pattern appears unique in the Nix ecosystem. Document any changes to
+it thoroughly.
 
 ### When adding new packages
 
-No manual per-package work needed. The `guard` function wraps
-everything at the output level. Just ensure your new package's
-`meta.license` is set correctly — the guard reads it to decide
-whether to wrap.
+No manual per-package work needed. The `guard` function wraps everything at the
+output level. Just ensure your new package's `meta.license` is set correctly —
+the guard reads it to decide whether to wrap.
 
 ### Packages currently unfree
 
@@ -1077,5 +1013,5 @@ whether to wrap.
 - `copilot-cli` / `github-copilot-cli` (proprietary)
 - `kiro-cli` / `kiro-gateway` (proprietary)
 
-All other packages (MCP servers, git tools, agnix) are free and
-pass through the guard unwrapped.
+All other packages (MCP servers, git tools, agnix) are free and pass through the
+guard unwrapped.

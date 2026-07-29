@@ -1,7 +1,7 @@
 ## Skill Routing — MANDATORY
 
-When the user is working with stacked commits, use the appropriate skill
-instead of running commands manually via Bash.
+When the user is working with stacked commits, use the appropriate skill instead
+of running commands manually via Bash.
 
 <!-- prettier-ignore -->
 | Operation                                               | Skill            | Use INSTEAD of                                                 |
@@ -16,7 +16,7 @@ instead of running commands manually via Bash.
 | Split a large commit                                    | `/stack-split`   | `git rebase -i` + edit, `git reset HEAD^`                      |
 | Test across stack                                       | `/stack-test`    | Manual `git test run` or looping `git checkout` + test         |
 
-**RULE: Before running any git-branchless, git-absorb, or git-revise command
-via Bash, check if a skill covers the operation.** Skills include pre-flight
-checks, dry-run previews, conflict guidance, and post-operation verification
-that manual commands miss.
+**RULE: Before running any git-branchless, git-absorb, or git-revise command via
+Bash, check if a skill covers the operation.** Skills include pre-flight checks,
+dry-run previews, conflict guidance, and post-operation verification that manual
+commands miss.

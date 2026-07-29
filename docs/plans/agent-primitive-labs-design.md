@@ -1,14 +1,13 @@
 # Agent-Primitive Labs — Design
 
-Status: draft, awaiting review
-Date: 2026-07-20
-Branch: `refactor/ai-factory-architecture`
+Status: draft, awaiting review Date: 2026-07-20 Branch:
+`refactor/ai-factory-architecture`
 
 ## 1. Purpose
 
 A set of small, isolated environments for experimenting with agentic-workflow
-primitives against the real Claude Code and Kiro CLIs. Each lab exercises **one**
-idea:
+primitives against the real Claude Code and Kiro CLIs. Each lab exercises
+**one** idea:
 
 - skill authoring — what actually makes a skill trigger, and trigger precisely
 - dynamic model selection, and effort / thinking-level selection
@@ -21,10 +20,10 @@ local implementation where the two harnesses diverge.
 ### Why isolation is the whole point
 
 Testing whether a skill triggers is meaningless against the developer's real
-user-global config, which carries the `superpowers` family, the `stack-*` skills,
-`living-workflow`, ~20 MCP servers, and a large `CLAUDE.md`. A lab is a **clean
-room**: the primitive under test is the only thing present. The Nix modules are
-the delivery mechanism, not the subject.
+user-global config, which carries the `superpowers` family, the `stack-*`
+skills, `living-workflow`, ~20 MCP servers, and a large `CLAUDE.md`. A lab is a
+**clean room**: the primitive under test is the only thing present. The Nix
+modules are the delivery mechanism, not the subject.
 
 ### Non-goals
 
@@ -37,9 +36,9 @@ the delivery mechanism, not the subject.
 
 ## 2. Empirical findings
 
-Everything below was verified against the installed toolchain
-(claude-code 2.1.215, kiro 2.12.3, devenv 2.1.3+37e75f5, nix 2.34.4) — not
-inferred. Evidence lives in the probe transcripts.
+Everything below was verified against the installed toolchain (claude-code
+2.1.215, kiro 2.12.3, devenv 2.1.3+37e75f5, nix 2.34.4) — not inferred. Evidence
+lives in the probe transcripts.
 
 ### 2.1 Config-root isolation
 
@@ -57,8 +56,8 @@ inferred. Evidence lives in the probe transcripts.
 `strace` shows Claude resolves exactly four settings paths — user scope,
 `<cwd>/.claude/settings.json`, `<cwd>/.claude/settings.local.json`, and
 `/etc/claude-code/managed-settings.json`. **There is no ancestor walk for
-settings.** A planted ancestor `settings.local.json` that existed was absent from
-the resolved chain.
+settings.** A planted ancestor `settings.local.json` that existed was absent
+from the resolved chain.
 
 `CLAUDE.md` is the opposite. The walk probes **two paths per ancestor level**
 (`<dir>/CLAUDE.md` and `<dir>/.claude/CLAUDE.md`) from cwd up to and including
@@ -73,8 +72,9 @@ the resolved chain.
 ```
 
 `CLAUDE_CONFIG_DIR` does **not** suppress this — the real global `CLAUDE.md`
-arrives via the ancestor walk, not the user scope. `CLAUDE_CODE_DISABLE_CLAUDE_MDS=1`
-stops it but also suppresses the lab's own `CLAUDE.md`, so it is not usable.
+arrives via the ancestor walk, not the user scope.
+`CLAUDE_CODE_DISABLE_CLAUDE_MDS=1` stops it but also suppresses the lab's own
+`CLAUDE.md`, so it is not usable.
 
 **Consequence — load-bearing:** labs must be materialized **outside `$HOME`**.
 `/var/tmp/nat-labs/` satisfies this (persists across reboot, unlike `/tmp` on
@@ -85,17 +85,18 @@ systems with tmpfs `/tmp`). `$XDG_STATE_HOME` does **not** — it resolves under
 
 devenv 2.x generates no `.devenv/flake.nix`. The eval entrypoint is
 `.devenv/bootstrap/default.nix`, and `resolve-lock.nix` leaves the project root
-as a raw filesystem path (`outPath = src` where `src = devenv_root`). There is no
-flake store copy and no git-tracked-files filter.
+as a raw filesystem path (`outPath = src` where `src = devenv_root`). There is
+no flake store copy and no git-tracked-files filter.
 
-Verified: a devenv project outside the repo can `imports = [ /abs/path/to/repo/... ]`
-(relative and absolute behave identically, producing byte-identical store paths),
-materialize `.claude/{settings.json,CLAUDE.md,rules/*,skills/*}` correctly, and —
-critically — the out-of-root files are registered in `.devenv/input-paths.txt`,
-so **edits to repo modules invalidate the lab's eval cache live**.
+Verified: a devenv project outside the repo can
+`imports = [ /abs/path/to/repo/... ]` (relative and absolute behave identically,
+producing byte-identical store paths), materialize
+`.claude/{settings.json,CLAUDE.md,rules/*,skills/*}` correctly, and — critically
+— the out-of-root files are registered in `.devenv/input-paths.txt`, so **edits
+to repo modules invalidate the lab's eval cache live**.
 
-This supersedes the `path:../..` flake-input approach, which would have cost
-~70 MiB of `fetchTree` copying per eval (`.git` included), a 940-line lock, a
+This supersedes the `path:../..` flake-input approach, which would have cost ~70
+MiB of `fetchTree` copying per eval (`.git` included), a 940-line lock, a
 recursion hazard when nested, and a stale-eval-cache workaround.
 
 **Caveat:** the lab's `devenv.yaml` must pin the same `devenv` input as the repo
@@ -105,10 +106,11 @@ recursion hazard when nested, and a stale-eval-cache workaround.
 ### 2.4 home-manager `home-files` is a usable fake global
 
 `nix build` of a `homeConfigurations.<lab>` succeeded first try with no repo
-changes. `home-manager` is the **only** new pin required — `programs.claude-code`
-is home-manager upstream (`modules/programs/claude-code/`), auto-imported by
-`modules/modules.nix` via `readDir`. Rev `a02190edf9a79d8da191da75eced1ce1ae5e2408`
-is already pinned by nixos-config and therefore already in the store.
+changes. `home-manager` is the **only** new pin required —
+`programs.claude-code` is home-manager upstream
+(`modules/programs/claude-code/`), auto-imported by `modules/modules.nix` via
+`readDir`. Rev `a02190edf9a79d8da191da75eced1ce1ae5e2408` is already pinned by
+nixos-config and therefore already in the store.
 
 Build **`config.home-files` directly**, not `activationPackage`:
 
@@ -117,9 +119,9 @@ Build **`config.home-files` directly**, not `activationPackage`:
 | `config.home-files` | **0.9 s**                      | 222 MiB (222 of it `glibc-locales`, irrelevant after copy) |
 | `activationPackage` | 8.3 s cold / 4.9 s incremental | 1.5 GiB (pulls the `claude` CLI itself)                    |
 
-Emitted tree (verified contents, not just presence): `.claude/{CLAUDE.md,
-settings.json, agents/, commands/, hooks/, rules/, skills/}`, `.copilot/`,
-`.github/instructions/`, `.kiro/{settings,skills,steering}/`.
+Emitted tree (verified contents, not just presence):
+`.claude/{CLAUDE.md, settings.json, agents/, commands/, hooks/, rules/, skills/}`,
+`.copilot/`, `.github/instructions/`, `.kiro/{settings,skills,steering}/`.
 
 Notes that bite:
 
@@ -128,9 +130,9 @@ Notes that bite:
   `.claude/skills/claude-code-home-manager/.mcp.json`.
 - **Copy with `cp -rL … && chmod -R u+w`.** `--no-preserve=mode` silently strips
   the exec bit off `.claude/hooks/*`.
-- **Use `stacked-workflows.enable = true`, never raw skill source dirs.** Raw dirs
-  contain relative symlinks (`references/*.md -> ../../../references/*.md`) that
-  HM copies verbatim, making `cp -rL` hard-fail.
+- **Use `stacked-workflows.enable = true`, never raw skill source dirs.** Raw
+  dirs contain relative symlinks (`references/*.md -> ../../../references/*.md`)
+  that HM copies verbatim, making `cp -rL` hard-fail.
 - `ai.claude.package = null` is rejected (`types.package`). To drop the 1.3 GiB
   tail, use `programs.claude-code.package = lib.mkForce null`.
 
@@ -251,40 +253,42 @@ Then `cd /var/tmp/nat-labs/<name>/work` and run `claude` or `kiro` normally.
 Both surfaced during probing, both independent of this work, both agreed to be
 fixed separately.
 
-1. **`packages/claude-code/lib/mkClaude.nix:659` — `ai.mcpServers` is hard-broken
-   on the devenv backend.** The devenv branch passes the raw typed schema
-   through; the HM branch renders first via `lib.ai.renderServer` (`:494`).
-   Upstream `claude.code.mcpServers` has no `package` option, so:
+1. **`packages/claude-code/lib/mkClaude.nix:659` — `ai.mcpServers` is
+   hard-broken on the devenv backend.** The devenv branch passes the raw typed
+   schema through; the HM branch renders first via `lib.ai.renderServer`
+   (`:494`). Upstream `claude.code.mcpServers` has no `package` option, so:
    `error: The option 'claude.code.mcpServers.probe.package' does not exist`.
    Reproduced with the repo subtree copied in-root, so it is not a lab artifact.
    The repo never trips it because `devenv.nix:186` sets upstream
    `claude.code.mcpServers` directly, bypassing the documented surface — meaning
-   **any consumer following the README hits this immediately.**
-   _Impact:_ labs cannot declare `project.ai.mcpServers` until fixed. The `global`
-   scope is unaffected (HM branch renders correctly).
+   **any consumer following the README hits this immediately.** _Impact:_ labs
+   cannot declare `project.ai.mcpServers` until fixed. The `global` scope is
+   unaffected (HM branch renders correctly).
 
 2. **`devenvModules.default` does not exist** — the real attr is
    `devenvModules.nix-agentic-tools`. Wrong in `README.md:87`,
    `dev/docs/getting-started/{devenv,choose-your-path}.md`,
-   `dev/docs/troubleshooting.md:55`, `devshell/docs-site/pages/devenv-header.md`,
-   `checks/devshell-eval.nix` (itself dead code), and `dev/generate.nix:511`,
-   which bakes the wrong name into _generated_ instruction files.
+   `dev/docs/troubleshooting.md:55`,
+   `devshell/docs-site/pages/devenv-header.md`, `checks/devshell-eval.nix`
+   (itself dead code), and `dev/generate.nix:511`, which bakes the wrong name
+   into _generated_ instruction files.
 
 Unchased observation worth a follow-up: `ai.environmentVariables` evaluated
 cleanly but appeared neither in the devenv shell env nor in the emitted
-`settings.json`. `lib/ai/app/devenvTransform.nix:28` computes `envMerge`; whether
-`mkClaude` consumes it on the devenv path was not traced.
+`settings.json`. `lib/ai/app/devenvTransform.nix:28` computes `envMerge`;
+whether `mkClaude` consumes it on the devenv path was not traced.
 
 ## 5. Open items
 
-- **Tracked `labs/` and the format gates.** Tracked files enter `checks.formatting`
-  (a hard treefmt gate) and the pre-commit `cspell`/`statix`/`deadnix` chain.
-  Lab prose is deliberately weird (it is prompt material), so `labs/` likely needs
-  a cspell exclusion. Decide when the first lab lands rather than pre-emptively.
+- **Tracked `labs/` and the format gates.** Tracked files enter
+  `checks.formatting` (a hard treefmt gate) and the pre-commit
+  `cspell`/`statix`/`deadnix` chain. Lab prose is deliberately weird (it is
+  prompt material), so `labs/` likely needs a cspell exclusion. Decide when the
+  first lab lands rather than pre-emptively.
 - **Kiro hooks under `KIRO_HOME`.** Whether `KIRO_HOME` covers `hooks/` is
-  UNVERIFIED — it is absent from the in-binary changelog list and was never opened
-  in a non-interactive run, consistent with v3 hooks firing only in the TUI. Needs
-  a live TUI probe before a lab targets typed Kiro hooks.
+  UNVERIFIED — it is absent from the in-binary changelog list and was never
+  opened in a non-interactive run, consistent with v3 hooks firing only in the
+  TUI. Needs a live TUI probe before a lab targets typed Kiro hooks.
 - **Naming.** `checks/fixtures/` already exists and means "input data for eval
   assertions". `labs/` is used here to avoid overloading the word.
 

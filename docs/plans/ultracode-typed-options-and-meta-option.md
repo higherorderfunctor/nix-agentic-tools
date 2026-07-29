@@ -1,15 +1,18 @@
 # Ultracode: typed settings options + "ultracode-on-launch" meta option
 
 > **Status:** ✅ IMPLEMENTED 2026-07-08 on `refactor/ai-factory-architecture`
-> and committed as one commit. `nix flake check` green.
-> **Owner:** Christopher Aubut. **Started:** 2026-07-07.
-> **Committed 2026-07-08 at user request** (normally untracked working
-> context per repo convention — do not commit unless explicitly asked).
+> and committed as one commit. `nix flake check` green. **Owner:** Christopher
+> Aubut. **Started:** 2026-07-07. **Committed 2026-07-08 at user request**
+> (normally untracked working context per repo convention — do not commit unless
+> explicitly asked).
 >
 > **Decisions locked (2026-07-07):** option **A1** — thin meta option, **NO
 > wrapper**, persisted undocumented `ultracode` key + **required `extraExtract`
 > guard**. Persisted key honored at launch (Test A + code trace). Binary
-> verified: `claude-code 2.1.197`. **Meta-option name chosen: `ultracodeOnLaunch`.** Re-verified against the shipped binary `claude-code 2.1.202` at implementation time (a bump landed past 2.1.197; all three keys still present with matching describe text).
+> verified: `claude-code 2.1.197`. **Meta-option name chosen:
+> `ultracodeOnLaunch`.** Re-verified against the shipped binary
+> `claude-code 2.1.202` at implementation time (a bump landed past 2.1.197; all
+> three keys still present with matching describe text).
 
 ## 0. TL;DR for the executor
 
@@ -20,8 +23,8 @@ All are plain settings-key writes — no wrapper, no launch flag.
 Exact upstream settings.json key names (must match byte-for-byte — they pass
 through the freeform identity-map verbatim):
 
-1. **`enableWorkflows`** — `nullOr bool`, typed option. Master Workflows
-   toggle (the `/config` "Dynamic workflows" row). Binary default `true`.
+1. **`enableWorkflows`** — `nullOr bool`, typed option. Master Workflows toggle
+   (the `/config` "Dynamic workflows" row). Binary default `true`.
 2. **`workflowKeywordTriggerEnabled`** — `nullOr bool`, typed option. Per-turn
    keyword trigger (the `/config` "Ultracode keyword trigger" row). Binary
    default `true`. ⚠ **NOT** `ultracodeKeywordTrigger` — that string is only an
@@ -41,16 +44,16 @@ Documented as **session-setup, not the per-turn keyword.**
 > for power users who accept the risk.
 
 The two typed keys mirror the `effortLevel`/`model` pattern exactly (typed keys
-inside the freeform `settings` submodule, null-filtered before upstream).
-Config parity across HM + devenv is **automatic — zero new devenv code** (§5).
+inside the freeform `settings` submodule, null-filtered before upstream). Config
+parity across HM + devenv is **automatic — zero new devenv code** (§5).
 
 **✅ RISK DECISION — DECIDED (user, 2026-07-07): option A1.** Ship
 `ultracodeOnLaunch` writing the **undocumented persisted `ultracode` key**, **no
 wrapper**, **with the `extraExtract` guard** (now REQUIRED, not optional) so any
 future claude-code bump that drops the key fails the update pipeline loudly.
 Rationale: delivers the on-by-default goal, stays wrapper-free, and the guard
-converts the undocumented-behavior risk into a loud failure. (A2 wrapper+`--settings`
-and B don't-default were considered and declined — see §3.)
+converts the undocumented-behavior risk into a loud failure. (A2
+wrapper+`--settings` and B don't-default were considered and declined — see §3.)
 
 ## 1. Goal & keyword/mode reference
 
@@ -76,24 +79,25 @@ Not workflows at all (don't conflate):
   (Claude-Code-on-web) planning / code-review, not the local Workflow tool.
 
 Keyword matching facts (binary): exact contiguous word-boundary regex, **no
-dash/space normalization** — `ultracode` triggers, `ultra-code` / `ultra code`
-/ `ultracoder` do NOT; matches inside slash-commands, code spans, and quotes
-are excluded. **The literal keyword changed at v2.1.160** (was `workflow`,
-now `ultracode`) — the claudefa.st blog is stale on this. Natural-language
-("use a workflow") is a per-turn opt-in in both versions.
+dash/space normalization** — `ultracode` triggers, `ultra-code` / `ultra code` /
+`ultracoder` do NOT; matches inside slash-commands, code spans, and quotes are
+excluded. **The literal keyword changed at v2.1.160** (was `workflow`, now
+`ultracode`) — the claudefa.st blog is stale on this. Natural-language ("use a
+workflow") is a per-turn opt-in in both versions.
 
 Enable-by-default reality: `ultracode` mode cannot ride any _effort_ surface —
 `effortLevel:"ultracode"` (enum-rejected), `--effort ultracode` (not a level),
 `CLAUDE_CODE_EFFORT_LEVEL=ultracode` (effort only) ALL fail. It rides the
 `ultracode` boolean settings key, which **is honored from persisted
 `~/.claude/settings.json`, not only `--settings`** — but this persisted path is
-**undocumented and officially session-only** (§3), the crux of the risk decision.
+**undocumented and officially session-only** (§3), the crux of the risk
+decision.
 
 ## 2. Confirmed findings (binary 2.1.197 + user live tests)
 
-Real binary: `/nix/store/…-claude-code/bin/.claude-wrapped` (the `bin/claude`
-on PATH is the HM plugin wrapper). Verified by a 17-agent adversarial workflow
-(run `wf_760c3e82-bc6`); all load-bearing claims returned **SUPPORTED**.
+Real binary: `/nix/store/…-claude-code/bin/.claude-wrapped` (the `bin/claude` on
+PATH is the HM plugin wrapper). Verified by a 17-agent adversarial workflow (run
+`wf_760c3e82-bc6`); all load-bearing claims returned **SUPPORTED**.
 
 | Fact                                                                                                                                                                 | Status                             |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
@@ -133,9 +137,9 @@ ultracode with **no `--settings`, no wrapper**. Two independent proofs:
 
 ### Q2 (merge vs replace) = MERGE
 
-`--settings` is one high-precedence layer (`flagSettings`), folded over the
-file layers; Test B's file-level `env` var survived. Moot for the design (no
-flag needed) but recorded.
+`--settings` is one high-precedence layer (`flagSettings`), folded over the file
+layers; Test B's file-level `env` var survived. Moot for the design (no flag
+needed) but recorded.
 
 ### Q5 (implies xhigh) = YES
 
@@ -145,11 +149,10 @@ override ultracode; only an explicit `--effort` flag does.)
 
 ### Q4 (gates)
 
-Org effort cap `QUi` can clamp xhigh→lower at launch with a warning; the
-user's own test showed xhigh, so their account isn't capped. The
-workflow-orchestration half additionally needs `iE()` (plan availability +
-`enableWorkflows` + not disabled) — which is why the meta option sets
-`enableWorkflows = true` too.
+Org effort cap `QUi` can clamp xhigh→lower at launch with a warning; the user's
+own test showed xhigh, so their account isn't capped. The workflow-orchestration
+half additionally needs `iE()` (plan availability + `enableWorkflows` + not
+disabled) — which is why the meta option sets `enableWorkflows = true` too.
 
 ### "Hidden vs documented" — SETTLED against official docs (2026-07-07)
 
@@ -216,12 +219,12 @@ workflowKeywordTriggerEnabled = lib.mkOption {
 };
 ```
 
-Identity-map is preserved (VERIFIED): HM projection `settings =
-aiCommon.filterNulls cfg.settings;` (mkClaude.nix:284; `filterNulls` at
-lib/ai/ai-common.nix:247-257) strips nulls so upstream sees only explicitly-set
-bools — the same JSON shape settings.json already accepts via the
-freeformType. `docs/plan.md:189`'s warning is about replacing the submodule
-with a _closed_ typed schema, NOT about adding null-defaulted keys inside the
+Identity-map is preserved (VERIFIED): HM projection
+`settings = aiCommon.filterNulls cfg.settings;` (mkClaude.nix:284; `filterNulls`
+at lib/ai/ai-common.nix:247-257) strips nulls so upstream sees only
+explicitly-set bools — the same JSON shape settings.json already accepts via the
+freeformType. `docs/plan.md:189`'s warning is about replacing the submodule with
+a _closed_ typed schema, NOT about adding null-defaulted keys inside the
 still-freeform submodule. Proof it works today: checks/module-eval.nix:384-390.
 
 ### 4B. Meta option: ultracode on at launch (thin, no wrapper)
@@ -245,9 +248,9 @@ config = lib.mkIf cfg.ultracodeOnLaunch {
 };
 ```
 
-- The option's `description` MUST carry the §3 caveat: undocumented +
-  officially session-only + `verified on claude-code 2.1.197`. This is where
-  the risk is disclosed to consumers (only the meta option writes `ultracode`).
+- The option's `description` MUST carry the §3 caveat: undocumented + officially
+  session-only + `verified on claude-code 2.1.197`. This is where the risk is
+  disclosed to consumers (only the meta option writes `ultracode`).
 - `mkDefault` lets an explicit `ai.claude.settings.*` win.
 - Does NOT set `effortLevel` (ultracode implies xhigh — §3 Q5) or
   `workflowKeywordTriggerEnabled` (orthogonal per-turn concern).
@@ -264,14 +267,14 @@ config = lib.mkIf cfg.ultracodeOnLaunch {
     effortLevel :55-64, model :65-75); update outer description :79-82
   - meta option → shared options block (model on `unpinLaunchEffort` :85-99);
     config fan-out in hm.config (cfg at :220) and devenv.config (cfg at :363)
-  - HM identity-map already routes settings: `settings = filterNulls
-cfg.settings` at :284 — **no change needed**
+  - HM identity-map already routes settings:
+    `settings = filterNulls cfg.settings` at :284 — **no change needed**
 - **devenv parity = AUTOMATIC, zero new code (VERIFIED).** The shared settings
-  submodule feeds the devenv gap-write: `gapSettings = filterNulls (removeAttrs
-cfg.settings ["hooks" "mcpServers"])` (:392-396) → `files.".claude/
-settings.json".json = gapSettings` (:423-425). The new keys aren't
-  hooks/mcpServers, so they flow straight through — exactly where
-  effortLevel/model already land (proof: checks/module-eval.nix:448-461).
+  submodule feeds the devenv gap-write:
+  `gapSettings = filterNulls (removeAttrs cfg.settings ["hooks" "mcpServers"])`
+  (:392-396) → `files.".claude/ settings.json".json = gapSettings` (:423-425).
+  The new keys aren't hooks/mcpServers, so they flow straight through — exactly
+  where effortLevel/model already land (proof: checks/module-eval.nix:448-461).
 - **Tests** — `checks/module-eval.nix`, copy the effortLevel pattern per key:
   - HM null-filter (broaden :384-390 to assert the three keys absent when unset)
   - HM valid-value reaches `programs.claude-code.settings` (mirror :371-381)
@@ -280,10 +283,10 @@ settings.json".json = gapSettings` (:423-425). The new keys aren't
   - meta-option test: `ultracodeOnLaunch = true` ⇒ settings.ultracode/
     enableWorkflows true; and explicit `settings.ultracode = false` still wins
 - **Docs/fragment** — `packages/claude-code/docs/claude-code-wrapper.md`
-  (registered dev/generate.nix:197-203; scope globs :116-119). Pure
-  settings-key additions do **not** require the wrapper fragment (its gate is
-  "touch the HM plugin wrapper integration" — we don't). The option
-  `description` strings are the primary doc. Regenerate after edits:
+  (registered dev/generate.nix:197-203; scope globs :116-119). Pure settings-key
+  additions do **not** require the wrapper fragment (its gate is "touch the HM
+  plugin wrapper integration" — we don't). The option `description` strings are
+  the primary doc. Regenerate after edits:
   `devenv tasks run --mode before generate:instructions`.
 - **Bonus cleanup (optional, found en route):** dev/generate.nix:116-119 scope
   glob `packages/ai-clis/claude-code.nix` is **stale** — that path doesn't
@@ -292,8 +295,11 @@ settings.json".json = gapSettings` (:423-425). The new keys aren't
 
 ## 6. Config parity checklist (AGENTS.md "Config Parity")
 
-- [x] HM: `ai.claude.settings.{enableWorkflows,ultracode,workflowKeywordTriggerEnabled}` + `ai.claude.ultracodeOnLaunch`
-- [x] devenv: same — automatic via shared submodule + gap-write (add a test to prove it)
+- [x] HM:
+      `ai.claude.settings.{enableWorkflows,ultracode,workflowKeywordTriggerEnabled}` +
+      `ai.claude.ultracodeOnLaunch`
+- [x] devenv: same — automatic via shared submodule + gap-write (add a test to
+      prove it)
 - [x] lib/: n/a (no manual helper affected)
 - [x] `nix flake check` green (structural + module-eval)
 
@@ -338,28 +344,31 @@ ai.claude = {
 
 Both produce the same `~/.claude/settings.json`. Prefer the meta option — it's
 where the undocumented-`ultracode` risk is disclosed. No wrapper either way.
-**If risk decision = (B) don't default**, drop the `ultracode` line entirely
-and keep only `enableWorkflows` + `workflowKeywordTriggerEnabled`, then use
+**If risk decision = (B) don't default**, drop the `ultracode` line entirely and
+keep only `enableWorkflows` + `workflowKeywordTriggerEnabled`, then use
 `/effort ultracode` per session.
 
 ## 9. Handoff checklist
 
 - [x] Q2 (merge), Q3 (persistent key works), Q5 (implies xhigh) resolved
 - [x] Wrapper-flag path DROPPED — plain settings keys (user-confirmed)
-- [x] Correct key names locked: `enableWorkflows`, `workflowKeywordTriggerEnabled`
-      (NOT `ultracodeKeywordTrigger`), `ultracode`
+- [x] Correct key names locked: `enableWorkflows`,
+      `workflowKeywordTriggerEnabled` (NOT `ultracodeKeywordTrigger`),
+      `ultracode`
 - [x] Keyword/mode behavior mapped (§1) — documented, no rediscovery needed
 - [x] Documentation status SETTLED (§3): `ultracode` persisted = undocumented +
       officially session-only; only `disableWorkflows` is in the settings ref
 - [x] **RISK DECISION = A1** (user, 2026-07-07): persisted undocumented
       `ultracode` key + required guard, no wrapper (§0/§3)
 - [x] Meta-option name chosen: `ultracodeOnLaunch` (user, AskUserQuestion)
-- [x] Add **2** typed keys (+ meta option writing `ultracode`) to mkClaude.nix (§4)
+- [x] Add **2** typed keys (+ meta option writing `ultracode`) to mkClaude.nix
+      (§4)
 - [x] `extraExtract` key-parse guard (§3) — REQUIRED (A1) + stale-glob fix (§5).
       Guard lives in `mkClaudeExtract` (DRY: fires in update pipeline AND
-      `nix flake check` drift check). Review-fix: uses a PRESENCE check
-      (>=1), not exactly-one-distinct — `ultracode` appears TWICE in 2.1.202,
-      so a distinct-count guard would false-fail on future re-minification.
+      `nix flake check` drift check). Review-fix: uses a PRESENCE check (>=1),
+      not exactly-one-distinct — `ultracode` appears TWICE in 2.1.202, so a
+      distinct-count guard would false-fail on future re-minification.
 - [x] Add module-eval tests (§5); `nix flake check` green
 - [x] Regenerate instructions; verify no stray drift
-- [x] Journal reviewed by user before any code change (feedback: wait-for-review)
+- [x] Journal reviewed by user before any code change (feedback:
+      wait-for-review)

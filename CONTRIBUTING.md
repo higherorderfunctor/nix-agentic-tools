@@ -30,44 +30,43 @@ nix flake check       # linters + evaluation (does NOT build packages)
 
 ## Generation Architecture
 
-Content is generated via Nix derivations wrapped in devenv tasks,
-organized by scope:
+Content is generated via Nix derivations wrapped in devenv tasks, organized by
+scope:
 
-- `generate:instructions:*` — AI instruction files (CLAUDE.md,
-  AGENTS.md, Copilot, Kiro) from fragments + ecosystem transforms
-- `generate:repo:*` — repo front-door files (README.md,
-  CONTRIBUTING.md) from fragments + nix-evaluated data
+- `generate:instructions:*` — AI instruction files (CLAUDE.md, AGENTS.md,
+  Copilot, Kiro) from fragments + ecosystem transforms
+- `generate:repo:*` — repo front-door files (README.md, CONTRIBUTING.md) from
+  fragments + nix-evaluated data
 - `generate:all` — runs all scopes
 
-Each task wraps a `nix build .#<derivation>` and copies output to the
-working tree. Nix store caching means unchanged inputs skip rebuild.
+Each task wraps a `nix build .#<derivation>` and copies output to the working
+tree. Nix store caching means unchanged inputs skip rebuild.
 
 ### Source Layout
 
-- `config/fragment-categories.nix` — the fragment-category registry:
-  each category's scope globs and fragment sources. Option declared
-  in `lib/fragments-registry.nix`.
-- `dev/fragments/` — dev-only instruction fragments. Composed into
-  instruction files and CLAUDE.md.
-- `dev/generate.nix` — shared fragment composition logic consumed by
-  both devenv tasks and flake derivations.
+- `config/fragment-categories.nix` — the fragment-category registry: each
+  category's scope globs and fragment sources. Option declared in
+  `lib/fragments-registry.nix`.
+- `dev/fragments/` — dev-only instruction fragments. Composed into instruction
+  files and CLAUDE.md.
+- `dev/generate.nix` — shared fragment composition logic consumed by both devenv
+  tasks and flake derivations.
 - `packages/coding-standards/fragments/` — published coding standards.
 - `packages/stacked-workflows/fragments/` — published routing table.
 - `packages/fragments-ai/` — AI ecosystem transforms (passthru).
 
 ### What Stays in Module System
 
-Skills, settings.json, MCP config, and CLI settings use `files.*`
-(devenv) or `home.file` (HM). These are symlinks to immutable store
-paths — no generation step.
+Skills, settings.json, MCP config, and CLI settings use `files.*` (devenv) or
+`home.file` (HM). These are symlinks to immutable store paths — no generation
+step.
 
-Instruction files are the exception: they are **copies**, not
-symlinks, materialized on every shell entry by
-`generate:instructions:materialize` (`before = ["devenv:enterShell"]`).
-Kiro cannot read symlinked steering — it discovers by scanning the
-directory and the scan skips symlinks — and the git-tracked outputs
-cannot be symlinks either, since a store symlink commits as an
-absolute `/nix/store` path. See the devenv files-internals fragment.
+Instruction files are the exception: they are **copies**, not symlinks,
+materialized on every shell entry by `generate:instructions:materialize`
+(`before = ["devenv:enterShell"]`). Kiro cannot read symlinked steering — it
+discovers by scanning the directory and the scan skips symlinks — and the
+git-tracked outputs cannot be symlinks either, since a store symlink commits as
+an absolute `/nix/store` path. See the devenv files-internals fragment.
 
 ### Running Generation
 
@@ -90,14 +89,14 @@ After updating, rebuild affected packages to verify hashes:
 nix build .#<package>
 ```
 
-If a hash mismatch occurs, copy the expected hash from the error and
-update `packages/mcp-servers/hashes.json` (or the relevant sidecar).
+If a hash mismatch occurs, copy the expected hash from the error and update
+`packages/mcp-servers/hashes.json` (or the relevant sidecar).
 
 ## Code Standards
 
-Coding standards, ordering rules, DRY principle, and Bash strict mode
-are documented in [CLAUDE.md](CLAUDE.md) and [AGENTS.md](AGENTS.md).
-Do not duplicate — read those files first.
+Coding standards, ordering rules, DRY principle, and Bash strict mode are
+documented in [CLAUDE.md](CLAUDE.md) and [AGENTS.md](AGENTS.md). Do not
+duplicate — read those files first.
 
 ## Linting
 
@@ -108,8 +107,8 @@ treefmt              # format and lint everything
 treefmt <file>       # format a single file after editing
 ```
 
-All commits must pass `nix flake check` (includes formatting, linting,
-spelling, structural checks, and module evaluation).
+All commits must pass `nix flake check` (includes formatting, linting, spelling,
+structural checks, and module evaluation).
 
 ## Commit Convention
 
@@ -123,8 +122,8 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 [optional footer(s)]
 ```
 
-**Types:** `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`,
-`refactor`, `style`, `test`
+**Types:** `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`,
+`style`, `test`
 
 **Scopes** (optional but encouraged): package or module name (e.g.,
 `context7-mcp`, `copilot-cli`, `fragments`), directory name (`overlay`,
@@ -144,18 +143,19 @@ instructions.
 
 1. Create `overlays/<name>.nix` with inline `rev` + `hash`
 2. Register in `overlays/default.nix`
-3. Add a `config.update.targets.<name>` row in `config/update-targets.nix` with appropriate flags
+3. Add a `config.update.targets.<name>` row in `config/update-targets.nix` with
+   appropriate flags
 4. Export in `flake.nix` under `packages`
 5. Add HM and devenv modules in `packages/<name>/modules/`
 6. Run `nix flake check` to verify
 
-See [Change Propagation](AGENTS.md#change-propagation) — when removing
-or renaming a concept, all surfaces must be updated in the same commit.
+See [Change Propagation](AGENTS.md#change-propagation) — when removing or
+renaming a concept, all surfaces must be updated in the same commit.
 
 ## Adding a Fragment
 
-Fragments are composable instruction blocks used to build AI instruction
-files (CLAUDE.md, AGENTS.md, Copilot, Kiro) and CONTRIBUTING.md.
+Fragments are composable instruction blocks used to build AI instruction files
+(CLAUDE.md, AGENTS.md, Copilot, Kiro) and CONTRIBUTING.md.
 
 <!-- TODO: refine with maintainer input -->
 
@@ -169,8 +169,8 @@ To add a dev-only fragment:
 
 1. Create `dev/fragments/<pkg>/<name>.md`
 2. Add the name to `config.fragments.categories.<pkg>.sources` in
-   `config/fragment-categories.nix` (scope globs for the category live
-   alongside it as `.scopes`)
+   `config/fragment-categories.nix` (scope globs for the category live alongside
+   it as `.scopes`)
 3. Run `devenv tasks run generate:instructions` to regenerate
 
 To add a published fragment (consumed by external users):
@@ -185,8 +185,8 @@ To add a published fragment (consumed by external users):
 
 - One logical change per PR
 - CI must pass (formatting, linting, spelling, module evaluation)
-- Generated files (CLAUDE.md, AGENTS.md, README.md, CONTRIBUTING.md,
-  Copilot and Kiro instruction files) must be regenerated if their
-  source fragments changed: run `devenv tasks run generate:all`
-- Keep commits atomic using the stacked workflow skills
-  (`/stack-plan`, `/stack-fix`, `/stack-submit`)
+- Generated files (CLAUDE.md, AGENTS.md, README.md, CONTRIBUTING.md, Copilot and
+  Kiro instruction files) must be regenerated if their source fragments changed:
+  run `devenv tasks run generate:all`
+- Keep commits atomic using the stacked workflow skills (`/stack-plan`,
+  `/stack-fix`, `/stack-submit`)

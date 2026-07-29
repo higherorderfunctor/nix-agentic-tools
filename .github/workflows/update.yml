@@ -40,8 +40,8 @@ jobs:
     # is never the bot, so the first clause runs it; workflow_dispatch runs
     # it via the second clause regardless of actor. Effectively always true.
     if: >-
-      github.actor != 'nix-agentic-tools-bot[bot]'
-      || github.event_name == 'workflow_dispatch'
+      github.actor != 'nix-agentic-tools-bot[bot]' || github.event_name ==
+      'workflow_dispatch'
     steps:
       - name: Generate App token
         id: app-token

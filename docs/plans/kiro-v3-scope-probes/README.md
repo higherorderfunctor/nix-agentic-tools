@@ -14,10 +14,10 @@ against `kiro-cli 2.13.0` on 2026-07-23.
 > harness instead of reconstructing it.
 >
 > The older `docs/plans/steering-symlink-probe/run-probe.sh` is the
-> steering-specific ancestor and is now **stale**: it passes `--tui --v3` by hand
-> (the wrapper injects them now → clap aborts on the double) and uses the headless
-> path (which skips the hook engine). `probe-steering.sh` supersedes it (the
-> steering drop was re-verified 2026-07-23 via `/context show`).
+> steering-specific ancestor and is now **stale**: it passes `--tui --v3` by
+> hand (the wrapper injects them now → clap aborts on the double) and uses the
+> headless path (which skips the hook engine). `probe-steering.sh` supersedes it
+> (the steering drop was re-verified 2026-07-23 via `/context show`).
 
 ## Run
 
@@ -35,26 +35,26 @@ Requires `tmux` and `kiro-cli` on PATH, plus a logged-in Kiro account.
 
 1. **`timeout … script -qec "…"` deadlocks in a live terminal.** `script` tries
    to arbitrate the controlling tty and never opens its typescript → exit 124,
-   no output. Run from a no-controlling-tty context (`setsid`, or an agent shell),
-   or drive the TUI with `tmux` instead.
+   no output. Run from a no-controlling-tty context (`setsid`, or an agent
+   shell), or drive the TUI with `tmux` instead.
 2. **The `kiro-cli` wrapper appends `--tui --v3` unconditionally.** Passing them
-   by hand doubles `--tui` and clap aborts (`cannot be used multiple times`). Pass
-   only your own args; let the wrapper add the engine flags. (Fixed to be
+   by hand doubles `--tui` and clap aborts (`cannot be used multiple times`).
+   Pass only your own args; let the wrapper add the engine flags. (Fixed to be
    idempotent in PR #463, but a reproducer should still not pass them.)
-3. **`--no-interactive` runs the model but SKIPS the hook engine.** v3 hooks fire
-   only in the live TUI, per turn. A headless one-shot answers the prompt yet
-   fires nothing — even the real-file control. You must drive a real interactive
-   turn (hence `tmux`).
+3. **`--no-interactive` runs the model but SKIPS the hook engine.** v3 hooks
+   fire only in the live TUI, per turn. A headless one-shot answers the prompt
+   yet fires nothing — even the real-file control. You must drive a real
+   interactive turn (hence `tmux`).
 4. **The `/hooks` modal eats typed input as its filter.** Send the chat turn
-   FIRST, capture `fired.log`, THEN open `/hooks` — otherwise your prompt lands in
-   the modal's search box and no turn runs.
+   FIRST, capture `fired.log`, THEN open `/hooks` — otherwise your prompt lands
+   in the modal's search box and no turn runs.
 
 ## Methodology
 
 - **Drive a real TUI with tmux.** `tmux new-session -d … kiro-cli chat` launches
-  a real pty; `tmux send-keys` injects the prompt and slash commands; `tmux
-capture-pane` reads the screen. This runs the interactive-only hook path with
-  no human at the keyboard.
+  a real pty; `tmux send-keys` injects the prompt and slash commands;
+  `tmux capture-pane` reads the screen. This runs the interactive-only hook path
+  with no human at the keyboard.
 - **Two signals.** _Firing_: hooks append a marker to `fired.log` when they run
   (ground truth). _Loading_: on-screen enumerations — `/hooks` (modal list),
   `/agent` (list/switch agents), `/context show` (lists steering + skill files).
@@ -92,14 +92,16 @@ capture-pane` reads the screen. This runs the interactive-only hook path with
 | Skills               | **follows**    | loads     | `/context show`             |
 
 Steering was re-verified directly 2026-07-23 (`probe-steering.sh` + an additive
-real-home global probe): the symlinked steering file is absent from `/context
-show` on both scopes while the real one loads — confirming `kirodotdev/Kiro#9787`
-independently of the stale `run-probe.sh`. Skill dir-symlinks and file-symlinks
-both loaded; the model reading files via `fs_read` can mask the loader's
-behavior, so trust `/context show`, not a "can you see skill X" question.
+real-home global probe): the symlinked steering file is absent from
+`/context show` on both scopes while the real one loads — confirming
+`kirodotdev/Kiro#9787` independently of the stale `run-probe.sh`. Skill
+dir-symlinks and file-symlinks both loaded; the model reading files via
+`fs_read` can mask the loader's behavior, so trust `/context show`, not a "can
+you see skill X" question.
 
 **Consequences for the factory:** hooks and steering must be delivered as **real
-files** (copy materialization); agents and skills may stay cheap symlinks. Global
-hooks read the real `~/.kiro/hooks` and honor real files — so `autoMemory`,
-delivered there as a **store symlink** on the live system, is silently dropped
-under v3; the on-branch real-file delivery restores it once activated.
+files** (copy materialization); agents and skills may stay cheap symlinks.
+Global hooks read the real `~/.kiro/hooks` and honor real files — so
+`autoMemory`, delivered there as a **store symlink** on the live system, is
+silently dropped under v3; the on-branch real-file delivery restores it once
+activated.

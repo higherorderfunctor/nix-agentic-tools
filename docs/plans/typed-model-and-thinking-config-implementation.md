@@ -36,8 +36,8 @@ These gates apply to **every** task. They are not repeated verbatim in each step
    "Validation → Formatting".
 2. **`git add` new files before any `nix flake check` / `nix build`.** Nix
    flakes only see git-tracked files; an untracked `.json`/`.nix` is invisible
-   to checks and to derivations that scan the tree. `.claude/rules/nix-standards.md`
-   § Flake Source Visibility.
+   to checks and to derivations that scan the tree.
+   `.claude/rules/nix-standards.md` § Flake Source Visibility.
 3. **Validation entrypoint is `nix flake check`** (eval + all `checks.*`). Run a
    single check with `nix build .#checks.x86_64-linux.<name>`.
 4. **Never hand-edit generated instruction files.** `.claude/rules/*.md`,
@@ -45,15 +45,15 @@ These gates apply to **every** task. They are not repeated verbatim in each step
    are generated from `dev/fragments/**`. Regenerate with
    `devenv tasks run --mode before generate:instructions`.
 5. **Commits go through the repo's stacked-commit skills, not raw git.** Each
-   task ends with one commit; use `/stack-plan` (or the appropriate
-   `/stack-*` skill) to record it with the exact conventional-commit message
-   given. AGENTS.md "Skill Routing — MANDATORY". Do **not** hand-run
+   task ends with one commit; use `/stack-plan` (or the appropriate `/stack-*`
+   skill) to record it with the exact conventional-commit message given.
+   AGENTS.md "Skill Routing — MANDATORY". Do **not** hand-run
    git-branchless/absorb/revise.
 6. **Each commit must be independently `nix flake check`-green.** The ordering
    below guarantees this; do not reorder.
 7. **Shell in activation/heredocs:** the shared activation helper keeps
-   `set -eu` (matching the existing kiro/copilot activation scripts it
-   replaces) and uses absolute `${coreutils}/bin/…` / `${jq}` paths
+   `set -eu` (matching the existing kiro/copilot activation scripts it replaces)
+   and uses absolute `${coreutils}/bin/…` / `${jq}` paths
    (`.claude/rules/nix-standards.md` § Shell Wrappers). Standalone update/task
    scripts use full strict mode `set -euETo pipefail; shopt -s inherit_errexit`
    (AGENTS.md "Bash"). **Never `exit` inside a `home.activation` block** (it
@@ -61,8 +61,8 @@ These gates apply to **every** task. They are not repeated verbatim in each step
 8. **IFD rule (inviolable):** eval-time `readFile`/`fromJSON` may target only
    **committed source files**, never a derivation/`runCommand` output. The grep
    outputs (`passthru.extracted`) are consumed only by `nix build` (the drift
-   check + the update script), never read at eval. `.claude/rules/overlays.md`
-   § IFD Patterns.
+   check + the update script), never read at eval. `.claude/rules/overlays.md` §
+   IFD Patterns.
 
 ---
 
@@ -113,9 +113,11 @@ Remove every doc reference; models/settings are per-CLI only. No code changes.
 - Modify: `dev/docs/concepts/config-parity.md`
 - Modify: `dev/docs/concepts/unified-ai-module.md`
 - Modify: `dev/docs/getting-started/home-manager.md`
-- Leave (design archive, optionally annotate): `dev/notes/ai-transformer-design.md`
-- Regenerated: `.claude/rules/ai-module.md`, `.claude/rules/hm-module-conventions.md`
-  (+ Copilot/Kiro twins) — produced by the regenerate step, never hand-edited.
+- Leave (design archive, optionally annotate):
+  `dev/notes/ai-transformer-design.md`
+- Regenerated: `.claude/rules/ai-module.md`,
+  `.claude/rules/hm-module-conventions.md` (+ Copilot/Kiro twins) — produced by
+  the regenerate step, never hand-edited.
 
 - [ ] **Step 1: Re-confirm the live anchor set before editing**
 
@@ -129,9 +131,10 @@ RIPGREP_CONFIG_PATH=/dev/null rg --no-config -n "ai\.settings" \
   --glob '!**/.kiro/steering/**'
 ```
 
-Expected: hits in the 9 source docs below (plus `dev/notes/ai-transformer-design.md`,
-which we keep). The `.claude/rules` / `.github/instructions` / `.kiro/steering`
-hits are **generated** — excluded here, fixed by Step 10's regeneration.
+Expected: hits in the 9 source docs below (plus
+`dev/notes/ai-transformer-design.md`, which we keep). The `.claude/rules` /
+`.github/instructions` / `.kiro/steering` hits are **generated** — excluded
+here, fixed by Step 10's regeneration.
 
 - [ ] **Step 2: Drop the two phantom rows from the ai-mapping generator**
 
@@ -146,9 +149,9 @@ is the phantom `ai.settings.*` key). Remove these two lines:
 
 - [ ] **Step 3: Same two rows in the static ai-mapping page**
 
-In `devshell/docs-site/pages/ai-mapping.md`, delete the identical two rows
-(the phantom-keyed `settings.model` / `settings.telemetry` rows), and replace
-the phantom code-block example near the bottom. Replace:
+In `devshell/docs-site/pages/ai-mapping.md`, delete the identical two rows (the
+phantom-keyed `settings.model` / `settings.telemetry` rows), and replace the
+phantom code-block example near the bottom. Replace:
 
 ```nix
 ai.settings.model = "claude-sonnet-4";               # mkDefault (1000)
@@ -183,10 +186,11 @@ programs.claude-code.settings.model = "claude-sonnet-4";
 programs.copilot-cli.settings.model = "gpt-4o";
 ```
 
-and adjust the surrounding prose so it no longer claims `ai.settings.*` fans
-out at `mkDefault` (keep the git-preset `mkDefault` sentence, which is real).
+and adjust the surrounding prose so it no longer claims `ai.settings.*` fans out
+at `mkDefault` (keep the git-preset `mkDefault` sentence, which is real).
 
-- [ ] **Step 5: Delete the normalized-settings bullet from the ai-module fragment**
+- [ ] **Step 5: Delete the normalized-settings bullet from the ai-module
+      fragment**
 
 In `dev/fragments/ai-module/ai-module-fanout.md`, delete this bullet verbatim:
 
@@ -260,17 +264,18 @@ setting").
 
 In `dev/docs/getting-started/home-manager.md`:
 
-- Change the inline comment `settings.model = "gpt-4o";  # override ai.settings.model for Copilot`
-  to `settings.model = "gpt-4o";  # Copilot's model setting`.
-- Delete the `settings.model` and `settings.telemetry` rows from the
-  "What gets generated" table (left column was the phantom `ai.*` key).
+- Change the inline comment
+  `settings.model = "gpt-4o";  # override ai.settings.model for Copilot` to
+  `settings.model = "gpt-4o";  # Copilot's model setting`.
+- Delete the `settings.model` and `settings.telemetry` rows from the "What gets
+  generated" table (left column was the phantom `ai.*` key).
 
 - [ ] **Step 10: (optional) annotate the design archive — do not delete**
 
 `dev/notes/ai-transformer-design.md` is a design archive of the rejected
 normalized-settings idea. Leave the body. Optionally add one line near its first
-`ai.settings.model` mention: `**Rejected:** models are ecosystem-specific; no
-normalized ai.settings was implemented (see WS5).`
+`ai.settings.model` mention:
+`**Rejected:** models are ecosystem-specific; no normalized ai.settings was implemented (see WS5).`
 
 - [ ] **Step 11: Regenerate the per-ecosystem instruction files**
 
@@ -420,8 +425,8 @@ at lines ~315-338) with:
 
 - [ ] **Step 4: Route Kiro through the helper**
 
-In `packages/kiro-cli/lib/mkKiro.nix`, the HM config already imports
-`helpers` (line ~187). Replace the inline activation block (the
+In `packages/kiro-cli/lib/mkKiro.nix`, the HM config already imports `helpers`
+(line ~187). Replace the inline activation block (the
 `(lib.mkIf (filteredSettings != {}) (let settingsJsonText = …; in { home.activation.kiroSettingsMerge = … ''…''; }))`
 at lines ~370-393) with:
 
@@ -470,14 +475,15 @@ refactor(ai): route copilot+kiro settings merge through shared helper
 ## Task 3 — WS1: extract launch-effort pins + effort levels to a committed sidecar
 
 **Goal:** Produce `overlays/claude-code-extracted.json` from the packaged binary
-(`{launchEffortPins, effortLevels}`), regenerate it inside the update script, and
-gate it with a blocking drift check. Single grep source of truth; IFD-safe
+(`{launchEffortPins, effortLevels}`), regenerate it inside the update script,
+and gate it with a blocking drift check. Single grep source of truth; IFD-safe
 (eval reads only the committed JSON, never the grep output).
 
 **Files:**
 
 - Modify: `overlays/lib.nix` (add `mkClaudeExtract`; add `extraExtract` param)
-- Modify: `overlays/claude-code.nix` (finalAttrs conversion; `passthru.extracted`; wire `extraExtract`)
+- Modify: `overlays/claude-code.nix` (finalAttrs conversion;
+  `passthru.extracted`; wire `extraExtract`)
 - Create: `overlays/claude-code-extracted.json` (generated, then committed)
 - Create: `checks/claude-code-extracted.nix`
 - Modify: `flake.nix:202-212` (register the check)
@@ -485,8 +491,8 @@ gate it with a blocking drift check. Single grep source of truth; IFD-safe
 - [ ] **Step 1: Add the shared extraction snippet to `overlays/lib.nix`**
 
 Add `mkClaudeExtract` to the attrset returned by `overlays/lib.nix` (e.g. after
-`mkUpdateScript`). It greps the binary once and emits the combined JSON, with the
-two failure-hardening assertions baked in (§6 of the design doc):
+`mkUpdateScript`). It greps the binary once and emits the combined JSON, with
+the two failure-hardening assertions baked in (§6 of the design doc):
 
 ```nix
   # Grep claude's binary for its launch-effort pin keys and the effort
@@ -559,7 +565,8 @@ and append `${extraExtract}` immediately after the existing
 
 Kiro/copilot pass no `extraExtract`, so they are unaffected.
 
-- [ ] **Step 3: Convert `overlays/claude-code.nix` to `finalAttrs` + add `passthru.extracted`**
+- [ ] **Step 3: Convert `overlays/claude-code.nix` to `finalAttrs` + add
+      `passthru.extracted`**
 
 The derivation currently uses the attrset `mkDerivation` form, which cannot
 reference its own `$out`. Convert to the `finalAttrs` form (precedent: the
@@ -629,8 +636,9 @@ mcp/git overlays) and move `passthru` to an explicit attr. Replace the
 ```
 
 (The unfree guard in `overlays/default.nix` wraps claude-code in a `symlinkJoin`
-that **carries `passthru`** — so `self.packages.<sys>.claude-code.passthru.extracted`
-resolves through the wrapper.)
+that **carries `passthru`** — so
+`self.packages.<sys>.claude-code.passthru.extracted` resolves through the
+wrapper.)
 
 - [ ] **Step 4: Generate the committed sidecar (don't hand-write it)**
 
@@ -719,7 +727,8 @@ treefmt checks/claude-code-extracted.nix flake.nix
 nix build .#checks.x86_64-linux.claude-code-extracted && cat result
 ```
 
-Expected: `ok — overlays/claude-code-extracted.json matches the packaged binary`.
+Expected:
+`ok — overlays/claude-code-extracted.json matches the packaged binary`.
 
 Now prove it catches drift (TDD red): edit `overlays/claude-code-extracted.json`
 to drop `"unpinOpus48LaunchEffort"`, rebuild:
@@ -870,9 +879,10 @@ In the HM `config` block, `aiCommon` is already imported. Change the delegation
             settings = aiCommon.filterNulls cfg.settings;
 ```
 
-(The devenv side already does `aiCommon.filterNulls (removeAttrs cfg.settings …)`
-— no change needed there. The `ENABLE_LSP_TOOL` env block remains a separate
-module-merge contribution and composes with the filtered settings.)
+(The devenv side already does
+`aiCommon.filterNulls (removeAttrs cfg.settings …)` — no change needed there.
+The `ENABLE_LSP_TOOL` env block remains a separate module-merge contribution and
+composes with the filtered settings.)
 
 - [ ] **Step 6: Write the new eval tests (failing first)**
 
@@ -957,8 +967,8 @@ nix build .#checks.x86_64-linux.module-claude-devenv-settings-empty-no-gap-file
 nix build .#checks.x86_64-linux.module-claude-hm-sets-lsp-env-when-servers-present
 ```
 
-Expected: all PASS. (`effortLevel = "medium"` is a valid enum value; `model=null`
-is filtered; the devenv side already filtered nulls.)
+Expected: all PASS. (`effortLevel = "medium"` is a valid enum value;
+`model=null` is filtered; the devenv side already filtered nulls.)
 
 - [ ] **Step 8: Full check + commit**
 
@@ -1113,8 +1123,8 @@ feat(claude-code): reconcile unpinLaunchEffort into ~/.claude.json at activation
 ## Task 6 — WS2: soft-enum model hint for Kiro `defaultModel`
 
 **Goal:** Give Kiro's `chat.defaultModel` the same non-enforcing soft-enum shape
-as Claude's `model` (`either (enum known) str`), curated to the
-probe-confirmed dot-notation catalog.
+as Claude's `model` (`either (enum known) str`), curated to the probe-confirmed
+dot-notation catalog.
 
 **Files:**
 
@@ -1316,7 +1326,8 @@ nix build .#checks.x86_64-linux.model-staleness-claude && cat result
 
 Expected: builds (exit 0) and prints the advisory report. Because the curated
 list is a subset, the report will likely list extra binary ids — that is
-expected advisory output, **not** a failure (the check never `exit 1`s on drift).
+expected advisory output, **not** a failure (the check never `exit 1`s on
+drift).
 
 - [ ] **Step 4: Write the Kiro/Copilot devenv task**
 
@@ -1407,7 +1418,8 @@ devenv tasks run check:model-staleness
 ```
 
 Expected: the task is listed; running it prints the Kiro result (OK / DRIFT /
-SKIPPED depending on your AWS auth) and the Copilot manual-curation note, exiting 0. Offline/unauthed must print SKIPPED — **not** a drift/false-positive.
+SKIPPED depending on your AWS auth) and the Copilot manual-curation note,
+exiting 0. Offline/unauthed must print SKIPPED — **not** a drift/false-positive.
 
 - [ ] **Step 7: Full check + commit**
 
@@ -1463,11 +1475,12 @@ feat(checks): claude model staleness flake check + check:model-staleness devenv 
 - WS4 DRY restore → Task 2 (shared helper, all three call sites). ✓
 - WS5 docs scrub → Task 1. ✓
 - §6 failure checks: non-empty + count==1 baked into `mkClaudeExtract` (enforced
-  when the drift check builds `passthru.extracted`); committed-vs-binary blocking
-  drift (Task 3); advisory model drift (Task 7); null-filter + enum-rejection
-  eval tests (Task 4); applied-count activation log (Task 5). ✓
-- §7 parity: reconciliation HM-only documented in-code (Task 5 comment); soft-enum
-  is pure typing → parity free; staleness homes intentionally asymmetric. ✓
+  when the drift check builds `passthru.extracted`); committed-vs-binary
+  blocking drift (Task 3); advisory model drift (Task 7); null-filter +
+  enum-rejection eval tests (Task 4); applied-count activation log (Task 5). ✓
+- §7 parity: reconciliation HM-only documented in-code (Task 5 comment);
+  soft-enum is pure typing → parity free; staleness homes intentionally
+  asymmetric. ✓
 
 **Type/name consistency:**
 
@@ -1477,8 +1490,9 @@ feat(checks): claude model staleness flake check + check:model-staleness devenv 
   identical param set at all four call sites (helper def Task 2; Copilot/Kiro
   Task 2; Claude Task 5). ✓
 - `overlays/claude-code-extracted.json` shape `{launchEffortPins, effortLevels}`
-  is produced by `mkClaudeExtract`, read by `mkClaude.nix` (`extracted.effortLevels`,
-  `extracted.launchEffortPins`), diffed by the drift check — consistent. ✓
+  is produced by `mkClaudeExtract`, read by `mkClaude.nix`
+  (`extracted.effortLevels`, `extracted.launchEffortPins`), diffed by the drift
+  check — consistent. ✓
 - `models.json` is array-of-strings in both packages; read via
   `fromJSON (readFile ../models.json)` and `jq -r '.[]'`. ✓
 
@@ -1489,8 +1503,8 @@ include expected output; no "TBD"/"add error handling"/"similar to Task N". ✓
 the update-script integration (Task 3 Step 3 `extraExtract`) runs
 `nix build .#claude-code.passthru.extracted` against the dirty-tracked
 `sources.json` inside the CI worktree, and relies on the update pipeline staging
-`overlays/claude-code-extracted.json` into the per-dependency commit. This cannot
-be exercised by `nix flake check`; verify it on the first real
+`overlays/claude-code-extracted.json` into the per-dependency commit. This
+cannot be exercised by `nix flake check`; verify it on the first real
 `update/claude-code` PR (the drift check will catch any desync as a hard
 failure). If the pipeline does not auto-stage the regenerated file, add an
 explicit `git add overlays/claude-code-extracted.json` to the `extraExtract`
@@ -1500,10 +1514,9 @@ snippet.
 
 ## Execution Handoff
 
-Plan saved to
-`docs/plans/typed-model-and-thinking-config-implementation.md` (kept beside its
-design doc `…-convergence.md`, per project convention which overrides the
-skill's default `docs/superpowers/plans/`).
+Plan saved to `docs/plans/typed-model-and-thinking-config-implementation.md`
+(kept beside its design doc `…-convergence.md`, per project convention which
+overrides the skill's default `docs/superpowers/plans/`).
 
 Two execution options:
 
@@ -1513,23 +1526,23 @@ Two execution options:
 2. **Inline Execution** — execute tasks in this session with checkpoints.
    (REQUIRED SUB-SKILL: superpowers:executing-plans.)
 
-Note: default to supervisor-worker-verifier with per-task HITL approval;
-commits route through the `/stack-*` skills (AGENTS.md "Skill Routing").
+Note: default to supervisor-worker-verifier with per-task HITL approval; commits
+route through the `/stack-*` skills (AGENTS.md "Skill Routing").
 
 ---
 
 ## Execution status & open items
 
-**Executed 2026-06-18** as a supervisor-worker-verifier run (one worker
-subagent per task, supervisor-verified, committed via the `/stack-*` skills).
-All 7 tasks landed and the full `nix flake check` is green. The stack was then
-rebased onto the latest `origin/refactor/ai-factory-architecture` (which had
-merged `update claude-code` to 2.1.181); commits 3–4 were amended to adapt:
+**Executed 2026-06-18** as a supervisor-worker-verifier run (one worker subagent
+per task, supervisor-verified, committed via the `/stack-*` skills). All 7 tasks
+landed and the full `nix flake check` is green. The stack was then rebased onto
+the latest `origin/refactor/ai-factory-architecture` (which had merged
+`update claude-code` to 2.1.181); commits 3–4 were amended to adapt:
 
 - `mkClaudeExtract` is now minifier-variable-agnostic — 2.1.159 emitted the
-  effort validator as `effortLevel:y.enum(…)`, 2.1.181 as `effortLevel:H.enum(…)`.
-  The grep keys on the `effortLevel:` prefix + the level array, not a fixed
-  minifier token.
+  effort validator as `effortLevel:y.enum(…)`, 2.1.181 as
+  `effortLevel:H.enum(…)`. The grep keys on the `effortLevel:` prefix + the
+  level array, not a fixed minifier token.
 - The committed sidecar now carries three launch pins (2.1.181 added
   `unpinFable5LaunchEffort` alongside `unpinOpus47/48LaunchEffort`).
 - `unpinLaunchEffort.defaultText` is now the symbolic

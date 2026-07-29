@@ -1,16 +1,15 @@
 # CI-lean closure taxonomy
 
-> **Last verified:** 2026-07-22 (PR #439). If you change what
-> `devenv.nix` puts in the shell, which factories install CLI wrappers,
-> or the `devenv-test.yml` cache wiring, re-verify this and bump the
-> marker.
+> **Last verified:** 2026-07-22 (PR #439). If you change what `devenv.nix` puts
+> in the shell, which factories install CLI wrappers, or the `devenv-test.yml`
+> cache wiring, re-verify this and bump the marker.
 
 The `devenv-test` CI gate (`.github/workflows/devenv-test.yml`) runs
-`devenv test` on ephemeral runners, so **everything in the shell closure
-is download cost on every cold run** and feeds the
-`cache-nix-action` cache size. `devenv.nix` therefore evaluates an
-`isCI` branch (see the comment block at its `isCI` binding — EVAL-time,
-distinct from the RUNTIME `$CI` guard in `processes.docs.exec`).
+`devenv test` on ephemeral runners, so **everything in the shell closure is
+download cost on every cold run** and feeds the `cache-nix-action` cache size.
+`devenv.nix` therefore evaluates an `isCI` branch (see the comment block at its
+`isCI` binding — EVAL-time, distinct from the RUNTIME `$CI` guard in
+`processes.docs.exec`).
 
 ## The four buckets
 
@@ -23,12 +22,11 @@ distinct from the RUNTIME `$CI` guard in `processes.docs.exec`).
 
 ## The decision rule
 
-Adding a package to `devenv.nix`? Ask: **does the CI gate (materialize
-tasks + enterTest assertions) invoke it?** If not, it goes in the
-`!isCI` list. When in doubt, `CI=1 devenv test` locally is the oracle —
-green means the gate never needed it.
+Adding a package to `devenv.nix`? Ask: **does the CI gate (materialize tasks +
+enterTest assertions) invoke it?** If not, it goes in the `!isCI` list. When in
+doubt, `CI=1 devenv test` locally is the oracle — green means the gate never
+needed it.
 
-Two proofs to preserve when touching the gates: with `CI` unset the
-shell must rebuild to the **identical store path** (local behavior
-unchanged — compare `devenv shell` store paths pre/post), and
-`CI=1 devenv test` must stay green.
+Two proofs to preserve when touching the gates: with `CI` unset the shell must
+rebuild to the **identical store path** (local behavior unchanged — compare
+`devenv shell` store paths pre/post), and `CI=1 devenv test` must stay green.

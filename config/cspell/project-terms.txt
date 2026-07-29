@@ -175,6 +175,7 @@ mcpgitlab
 mcps
 mcpservers
 mdbook
+mdformat
 mergetool
 metacharacter
 misattributes
@@ -212,6 +213,7 @@ osmani
 oxalica
 oxlint
 pagefind
+pandoc
 partialclone
 passteque
 passthroughs
@@ -231,6 +233,7 @@ prek
 prestart
 psql
 purpleclay
+pycache
 pythonnousersite
 pythonpath
 qdm

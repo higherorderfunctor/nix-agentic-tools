@@ -1,19 +1,19 @@
 name: Warm IFD sources
 description: >-
-  Pre-realize IFD-backed flake sources before a later eval. Our overlays
-  read fetchFromGitHub outputs at eval time — to compute versions, and to
-  build vendor sets from a lockfile inside the fetched source (IFD); fresh
-  runners haven't realized those sources, so a transient fetch blip during
-  a build/check/pipeline eval fails the whole job. This warms them first,
-  retried with backoff per system. Best-effort by default (warn and
-  continue so it never adds a new hard failure); set best-effort to "false"
-  to make a warm failure fail the step.
+  Pre-realize IFD-backed flake sources before a later eval. Our overlays read
+  fetchFromGitHub outputs at eval time — to compute versions, and to build
+  vendor sets from a lockfile inside the fetched source (IFD); fresh runners
+  haven't realized those sources, so a transient fetch blip during a
+  build/check/pipeline eval fails the whole job. This warms them first, retried
+  with backoff per system. Best-effort by default (warn and continue so it never
+  adds a new hard failure); set best-effort to "false" to make a warm failure
+  fail the step.
 
 inputs:
   best-effort:
     description: >-
-      "true" → warn and continue if a system exhausts its retries (never
-      fails the step). "false" → exit nonzero so the step fails the job.
+      "true" → warn and continue if a system exhausts its retries (never fails
+      the step). "false" → exit nonzero so the step fails the job.
     required: false
     default: "true"
   retries:
@@ -22,9 +22,9 @@ inputs:
     default: "3"
   systems:
     description: >-
-      Space-separated nix systems to warm, e.g. "x86_64-linux" or
-      "x86_64-linux aarch64-darwin". IFD source fetches are
-      system-agnostic, so warming an off-runner system is fine.
+      Space-separated nix systems to warm, e.g. "x86_64-linux" or "x86_64-linux
+      aarch64-darwin". IFD source fetches are system-agnostic, so warming an
+      off-runner system is fine.
     required: true
 
 runs:

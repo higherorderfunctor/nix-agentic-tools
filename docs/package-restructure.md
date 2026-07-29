@@ -1,34 +1,33 @@
 # Package / module restructure — canonical plan
 
-> **Status:** canonical restructure plan, promoted to `docs/` on 2026-07-24;
-> the design decisions are **locked**. The restructure **execution itself has
-> not started** on the real tree (Track A/B — see §12).
-> This document replaces the 8-document restructure cluster, now archived
-> under `docs/archive/`.
+> **Status:** canonical restructure plan, promoted to `docs/` on 2026-07-24; the
+> design decisions are **locked**. The restructure **execution itself has not
+> started** on the real tree (Track A/B — see §12). This document replaces the
+> 8-document restructure cluster, now archived under `docs/archive/`.
 >
 > **Written:** 2026-07-23; consolidated + reconciled to the locked design
 > 2026-07-24. Supersedes every source listed below.
 >
-> **Two parts, deliberately separated:**
-> **Part I (§0–10 + Appendices A–C)** is a faithful synthesis of the 8 source
-> docs plus verified current state — _what the sources said_.
-> **Part II (§11–15)** is added judgment that was **in none of the sources** —
-> external ecosystem grounding, a prioritisation argument, cross-workstream
-> interfaces, and a risk register. Disagree with Part II freely; nothing in it
-> invalidates Part I.
+> **Two parts, deliberately separated:** **Part I (§0–10 + Appendices A–C)** is
+> a faithful synthesis of the 8 source docs plus verified current state — _what
+> the sources said_. **Part II (§11–15)** is added judgment that was **in none
+> of the sources** — external ecosystem grounding, a prioritisation argument,
+> cross-workstream interfaces, and a risk register. Disagree with Part II
+> freely; nothing in it invalidates Part I.
 >
 > **Reading this for a multi-plan convergence session?** Start at **§13**
-> (cross-workstream interfaces), then **§12** (the two-track split), then **§15**.
+> (cross-workstream interfaces), then **§12** (the two-track split), then
+> **§15**.
 
 ---
 
 ## 0. What this retires
 
-The restructure thinking was spread across 8 docs written 2026-04-21 → 2026-05-08,
-re-derived across sessions because the constraint stack has no upstream pattern to
-copy. Everything load-bearing from each is folded in below. The sources are
-archived under `docs/archive/` (retained for provenance; nothing load-bearing
-was dropped).
+The restructure thinking was spread across 8 docs written 2026-04-21 →
+2026-05-08, re-derived across sessions because the constraint stack has no
+upstream pattern to copy. Everything load-bearing from each is folded in below.
+The sources are archived under `docs/archive/` (retained for provenance; nothing
+load-bearing was dropped).
 
 | Source doc                              | Date       | What it contributed                                                                                           | Disposition                                            |
 | --------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
@@ -41,12 +40,12 @@ was dropped).
 | `monorepo-restructure-assessment.md`    | 2026-04-21 | **Origin.** §11 slice layout; merge-up mechanic; flake-parts post-mortem                                      | folded in → archive                                    |
 | `ai-factory-collision-refactor-plan.md` | 2026-04-27 | **COMPLETE / landed.** `lib/*`→`lib/ai/*`, collision-as-failure, Dir helpers                                  | historical foundation → archive                        |
 
-Also absorbed: `concepts.md`'s definition of **self-assembly** (§2), which is the
-real goal underneath "DRY".
+Also absorbed: `concepts.md`'s definition of **self-assembly** (§2), which is
+the real goal underneath "DRY".
 
-**One supersession worth knowing:** the pilot plan's parallel-sandbox approach was
-_abandoned_ in favour of direct migration after "grill 2" reframed the constraint.
-Don't resurrect it. Its value now is its **stop conditions** (§8.3).
+**One supersession worth knowing:** the pilot plan's parallel-sandbox approach
+was _abandoned_ in favour of direct migration after "grill 2" reframed the
+constraint. Don't resurrect it. Its value now is its **stop conditions** (§8.3).
 
 ---
 
@@ -61,8 +60,8 @@ Since the docs were written, a lot landed. The plan's premises shifted:
   `packages/<pkg>/modules/{homeManager,devenv}/`. (`AGENTS.md`/`CLAUDE.md` still
   list `modules/` as a key directory — they are stale on exactly this area.)
 - **`lib/*` moved under `lib/ai/*`**; fragments moved to `packages/<pkg>/docs/`.
-- **Per-package co-location is therefore already achieved.** A large slice of the
-  original vision is banked.
+- **Per-package co-location is therefore already achieved.** A large slice of
+  the original vision is banked.
 
 **What remains** is the part nobody has done:
 
@@ -70,15 +69,15 @@ Since the docs were written, a lot landed. The plan's premises shifted:
    `mcp-servers/` owning all ~14 MCP packages, etc.
 2. **Overlay split-prep (D-1)** — derivations live in `overlays/<name>.nix`,
    physically separated from every other facet of the same package. The locked
-   direction is **not** to dissolve them into packages but to keep `overlays/` as a
-   **split-ready subtree**, sever its 4 relative-path seams via the two [OVL]
-   refactors, and extract the tree later if desired (§12).
+   direction is **not** to dissolve them into packages but to keep `overlays/`
+   as a **split-ready subtree**, sever its 4 relative-path seams via the two
+   [OVL] refactors, and extract the tree later if desired (§12).
 3. **Merge-up to kill the central registries** — the actual DRY win (§4.4).
 4. **Barrel-shape cleanup** — the mixed-eval barrel (§3.2).
 
-**Timing:** `migrate-to-trunk-based` is **FOLDED** into this convergence lineage and
-its blocking prerequisites are **satisfied** — the primary checkout switched to
-`main`, the docs-subsystem removal landed, and the checkout is synced to
+**Timing:** `migrate-to-trunk-based` is **FOLDED** into this convergence lineage
+and its blocking prerequisites are **satisfied** — the primary checkout switched
+to `main`, the docs-subsystem removal landed, and the checkout is synced to
 `origin/main` (reaudit X8). The real `packages/` file-moves are Track B, now
 **deferred** (Fork 2, d4), so they still don't start yet — but by decision, not
 because the trunk migration is in flight. See §9.0.
@@ -94,8 +93,8 @@ because the trunk migration is in flight. See §9.0.
   implementations pass. Concretely: _dropping a file in place should be enough;
   no registry edit._
 - **Slice** — a self-contained domain directory. Coarser than a package; may own
-  several derived packages (`kiro/` = kiro-cli + kiro-gateway). A dev-**navigation**
-  unit: open it and see everything about that topic.
+  several derived packages (`kiro/` = kiro-cli + kiro-gateway). A
+  dev-**navigation** unit: open it and see everything about that topic.
 - **Facet** — one of the four things a slice can contribute: `pkg`, `lib`, `hm`,
   `devenv`. A slice may contribute _any subset_, including one.
 - **Concern** — a cross-cutting registry slices contribute rows to
@@ -103,9 +102,9 @@ because the trunk migration is in flight. See §9.0.
 - **Merge-up** — a slice sets `config.<concern>.<key>`; the root evaluates all
   slices together; the merged `config.<concern>` _is_ the registry. The central
   file dissolves.
-- **Barrel** — a `default.nix` in a package/slice dir that lists its facets as an
-  attrset. Whether barrels survive is **RESOLVED (d4): no barrels** — facet presence
-  is determined by the `<facet>.nix` filename (§8, Fork 1).
+- **Barrel** — a `default.nix` in a package/slice dir that lists its facets as
+  an attrset. Whether barrels survive is **RESOLVED (d4): no barrels** — facet
+  presence is determined by the `<facet>.nix` filename (§8, Fork 1).
 
 ---
 
@@ -114,31 +113,32 @@ because the trunk migration is in flight. See §9.0.
 ### 3.1 The re-derivation loop
 
 The architecture has been re-derived from first principles across many sessions
-because the constraint stack is genuinely unusual and has **no upstream pattern to
-copy wholesale**:
+because the constraint stack is genuinely unusual and has **no upstream pattern
+to copy wholesale**:
 
 1. **Multi-facet per unit** — each package ships a derivation, an HM module, a
    devenv module, lib helpers, and content. Nixpkgs convention is
    single-derivation packages, so its composition patterns don't fully apply.
-2. **HM / devenv parity** — every surface configurable in one must be configurable
-   in the other.
+2. **HM / devenv parity** — every surface configurable in one must be
+   configurable in the other.
 3. **devenv as external CLI** — devenv is consumed externally and reads
    `devenv.nix` directly; it does **not** compose with flake-parts' `perSystem`.
 
 Eight overlapping documents _is itself the mess_. This doc plus a locked fixture
 is the exit.
 
-**Why no upstream pattern was found — and the part that's genuinely nixpkgs' fault
-for not existing.** Nixpkgs _deliberately does not co-locate_ packages with
-modules: `pkgs/…/foo` and `nixos/modules/services/foo.nix` live in different trees,
-because a package and its service module have different consumers, different
-review paths, and different lifecycles. That is a considered choice, not an
-oversight — so looking to nixpkgs for a multi-facet layout was always going to come
-up empty. It doesn't bind here: this repo is a _tool distribution_ where a unit
-genuinely is "a CLI **plus** its config module," shipped and versioned together by
-one author. Co-location is right for this repo and wrong for nixpkgs, and that
-difference is the whole reason the constraint stack felt unusual. There _are_
-ecosystem answers for repos shaped like this one — see **§11**.
+**Why no upstream pattern was found — and the part that's genuinely nixpkgs'
+fault for not existing.** Nixpkgs _deliberately does not co-locate_ packages
+with modules: `pkgs/…/foo` and `nixos/modules/services/foo.nix` live in
+different trees, because a package and its service module have different
+consumers, different review paths, and different lifecycles. That is a
+considered choice, not an oversight — so looking to nixpkgs for a multi-facet
+layout was always going to come up empty. It doesn't bind here: this repo is a
+_tool distribution_ where a unit genuinely is "a CLI **plus** its config
+module," shipped and versioned together by one author. Co-location is right for
+this repo and wrong for nixpkgs, and that difference is the whole reason the
+constraint stack felt unusual. There _are_ ecosystem answers for repos shaped
+like this one — see **§11**.
 
 ### 3.2 The mixed-eval barrel
 
@@ -154,34 +154,38 @@ no signal distinguishing them:
 ```
 
 You cannot tell (1) from (3) without opening the referenced file. Consequences:
-consumers must know which keys need applying and with what args; `mkX = import …`
-deferred constructors proliferate; scope mechanics (`callPackage`, `makeScope`) get
-reconstructed inside slices instead of being available at the root. Worse,
-`mkClaude.nix` does eval-time `readFile`/`fromJSON` on
-`overlays/claude-code-extracted.json` two dirs up — invisible from the barrel key.
+consumers must know which keys need applying and with what args;
+`mkX = import …` deferred constructors proliferate; scope mechanics
+(`callPackage`, `makeScope`) get reconstructed inside slices instead of being
+available at the root. Worse, `mkClaude.nix` does eval-time
+`readFile`/`fromJSON` on `overlays/claude-code-extracted.json` two dirs up —
+invisible from the barrel key.
 
 ### 3.3 Facets of one package live in two trees
 
-The derivation is in `overlays/<name>.nix` (+ `-sources.json` / `-extracted.json`
-sidecars); everything else is in `packages/<name>/`. Every barrel carries a comment
-apologising for this ("binaries are the flat-overlay exception to Bazel-style").
+The derivation is in `overlays/<name>.nix` (+ `-sources.json` /
+`-extracted.json` sidecars); everything else is in `packages/<name>/`. Every
+barrel carries a comment apologising for this ("binaries are the flat-overlay
+exception to Bazel-style").
 
-> **Resolution (D-1):** the fix is **not** to dissolve these into `packages/` but to
-> keep `overlays/` as a split-ready subtree and sever its 4 relative-path seams (the
-> two [OVL] refactors), extracting the tree later if desired — see §12.
+> **Resolution (D-1):** the fix is **not** to dissolve these into `packages/`
+> but to keep `overlays/` as a split-ready subtree and sever its 4 relative-path
+> seams (the two [OVL] refactors), extracting the tree later if desired — see
+> §12.
 
 ### 3.4 The registries (the actual DRY violation)
 
 **The set of packages is re-typed in ~6 places with no single source of truth:**
-`packages/default.nix`, `overlays/default.nix` (flatDrvs/mcpServerDrvs/gitToolDrvs/
-devToolDrvs), `packages/mcp-services/…/serverNames` (+ a
-`modelContextProtocolServers` sublist), `config/update-matrix.nix`, `flake.nix`
-package flattening, and `dev/generate.nix` (`devFragmentNames` + `packagePaths`,
-since dissolved into `config.fragments.categories`).
-Adding or renaming one package touches all of them.
+`packages/default.nix`, `overlays/default.nix`
+(flatDrvs/mcpServerDrvs/gitToolDrvs/ devToolDrvs),
+`packages/mcp-services/…/serverNames` (+ a `modelContextProtocolServers`
+sublist), `config/update-matrix.nix`, `flake.nix` package flattening, and
+`dev/generate.nix` (`devFragmentNames` + `packagePaths`, since dissolved into
+`config.fragments.categories`). Adding or renaming one package touches all of
+them.
 
-The gap analysis catalogued **14 name-resolution smells → 4 patterns**
-(full table in Appendix A):
+The gap analysis catalogued **14 name-resolution smells → 4 patterns** (full
+table in Appendix A):
 
 | Pattern | Shape                                                    | Sites                                                                                                                                                                   | Cure                                                    |
 | ------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
@@ -190,19 +194,19 @@ The gap analysis catalogued **14 name-resolution smells → 4 patterns**
 | **C**   | within-file regex / comment parsing                      | #12 magic comments _(fails **silently**)_, #13 rev/hash sed                                                                                                             | sidecar-JSON or typed decls — **independent of slices** |
 | **D**   | explicit registries that are fine as-is                  | #4 overlays/default.nix, #9 flake flatten, #10 bare-commands scope                                                                                                      | leave alone                                             |
 
-Scored: **8 HIGH** merge-up suitability, 3 medium, 3 low. **9 of 14 are naturally
-subsumed by the slice move; 5 are independent.** Site #14 (`*-sources.json`
-sidecars) is explicitly **not** a smell — it is the _good_ pattern and the
-reference for what a Pattern-C fix should look like.
+Scored: **8 HIGH** merge-up suitability, 3 medium, 3 low. **9 of 14 are
+naturally subsumed by the slice move; 5 are independent.** Site #14
+(`*-sources.json` sidecars) is explicitly **not** a smell — it is the _good_
+pattern and the reference for what a Pattern-C fix should look like.
 
 ### 3.5 Transform duplication
 
 `lib/ai/app/hmTransform.nix` and `devenvTransform.nix` are **~135 near-identical
 lines each** — the same six `mergeWithCollisionCheck` calls, the same baseline
 `ai.<name>.{enable,package,mcpServers,instructions,rules,rulesDir,skills,skillsDir}`
-option block, the same L2b→L3 Dir expansion, duplicated verbatim. This is a direct
-violation of the repo's own CLAUDE.md DRY rule and is _independent_ of the slice
-move — it can be fixed any time.
+option block, the same L2b→L3 Dir expansion, duplicated verbatim. This is a
+direct violation of the repo's own CLAUDE.md DRY rule and is _independent_ of
+the slice move — it can be fixed any time.
 
 ---
 
@@ -210,8 +214,8 @@ move — it can be fixed any time.
 
 ### 4.1 Four facets, slice = unit
 
-A slice contributes **any subset** of `pkg`, `lib`, `hm`, `devenv` — including just
-one. Data lives inside whichever facet owns it. Everything speculative
+A slice contributes **any subset** of `pkg`, `lib`, `hm`, `devenv` — including
+just one. Data lives inside whichever facet owns it. Everything speculative
 (transformers, fragments, skills, tasks, checks, apps) was **eliminated as a
 facet**: orchestration is cross-slice and lives at the root; the rest are
 _concerns_ (§4.4) or implementation details inside a facet.
@@ -230,28 +234,29 @@ Each facet rolls up via the mechanism a Nix reader already knows:
 | `devenv` | the consumer's devenv module-system `imports`       |
 
 Rejected: a unified evalModules-everywhere combinator, which imposes option/
-`_module.args` ceremony on `lib` and `pkg` rollups that already merge idiomatically.
-Cost accepted: two mental models instead of one. Win: lightest custom plumbing.
+`_module.args` ceremony on `lib` and `pkg` rollups that already merge
+idiomatically. Cost accepted: two mental models instead of one. Win: lightest
+custom plumbing.
 
-**HM and devenv are two independent `evalModules` passes.** Option _declarations_
-are shared (`lib/ai/sharedOptions.nix`), but **values are per-eval** — a value set
-in the HM eval is invisible to the devenv eval. This is why plain modules
-(stacked-workflows, living-workflow) must contribute from _both_ backend modules;
-getting it wrong silently drops content in one backend. Preserve this honestly; do
-not paper over it.
+**HM and devenv are two independent `evalModules` passes.** Option
+_declarations_ are shared (`lib/ai/sharedOptions.nix`), but **values are
+per-eval** — a value set in the HM eval is invisible to the devenv eval. This is
+why plain modules (stacked-workflows, living-workflow) must contribute from
+_both_ backend modules; getting it wrong silently drops content in one backend.
+Preserve this honestly; do not paper over it.
 
 ### 4.3 Thin, structural walker
 
-The walker is the **only project-specific code in the composition path** — discover
-slices on the filesystem, route each facet's contribution to its native rollup.
-Tens of lines. Everything downstream is stock Nix. _Keeping it thin is the
-load-bearing property._ Acceptance test: **a reviewer reads the walker + one slice
-and can explain the whole composition in under five minutes.**
+The walker is the **only project-specific code in the composition path** —
+discover slices on the filesystem, route each facet's contribution to its native
+rollup. Tens of lines. Everything downstream is stock Nix. _Keeping it thin is
+the load-bearing property._ Acceptance test: **a reviewer reads the walker + one
+slice and can explain the whole composition in under five minutes.**
 
 ### 4.4 Merge-up dissolves the central registries
 
-This is the heart. A slice declares its own rows; shared code reads the merged set;
-nobody imports across slice boundaries and no central file lists packages.
+This is the heart. A slice declares its own rows; shared code reads the merged
+set; nobody imports across slice boundaries and no central file lists packages.
 
 ```nix
 # slices/kiro/transformer.nix — self-contained, no cross-slice import
@@ -267,10 +272,10 @@ let transformers = config.transformers;   # { claude, copilot, kiro, … }
 ```
 
 **Namespace shape is concern-first: `config.<concern>.<slice>`.** Slice is a
-directory convention; _concerns_ are the runtime contract, and shared code always
-consumes by concern. (Rejected: `config.slices.<name>.<concern>` — nothing ever
-wants to "iterate slices" at runtime. Rejected: a flat lib attrset with no module
-system — loses the collision detection the factory relies on.)
+directory convention; _concerns_ are the runtime contract, and shared code
+always consumes by concern. (Rejected: `config.slices.<name>.<concern>` —
+nothing ever wants to "iterate slices" at runtime. Rejected: a flat lib attrset
+with no module system — loses the collision detection the factory relies on.)
 
 Registries expected to dissolve — roughly 5–7 namespaces:
 
@@ -304,35 +309,40 @@ published surface** — the combined-merge `homeManagerModules.default` /
 
 ### 4.6 What stays OUT of slices
 
-**Do NOT invent an `_infrastructure/` or `_repo/` slice — root and `lib/` already
-serve that role; a wrapper is noise.**
+**Do NOT invent an `_infrastructure/` or `_repo/` slice — root and `lib/`
+already serve that role; a wrapper is noise.**
 
 - Root: `flake.nix`, `devenv.nix`, `devenv.yaml`, `treefmt.nix`
-- `lib/ai/app/*` (mkAiApp, hmTransform, devenvTransform) — used by every CLI slice
-- `lib/ai/{sharedOptions,ai-common,hm-helpers,dir-helpers}.nix`, `lib/ai/mcpServer/*`
-- `lib/{fragments,mcp,hm-dag,devshell,options-doc}.nix` — genuinely cross-cutting
-- `dev/generate.nix`, `dev/tasks/`, `dev/scripts/`, `dev/fragments/{monorepo,pipeline}/`
+- `lib/ai/app/*` (mkAiApp, hmTransform, devenvTransform) — used by every CLI
+  slice
+- `lib/ai/{sharedOptions,ai-common,hm-helpers,dir-helpers}.nix`,
+  `lib/ai/mcpServer/*`
+- `lib/{fragments,mcp,hm-dag,devshell,options-doc}.nix` — genuinely
+  cross-cutting
+- `dev/generate.nix`, `dev/tasks/`, `dev/scripts/`,
+  `dev/fragments/{monorepo,pipeline}/`
 - `config/`, and `checks/` entries testing cross-slice invariants
-- **Root owns tasks / checks / apps** (Cargo/npm/Bazel workspace-vs-package split)
+- **Root owns tasks / checks / apps** (Cargo/npm/Bazel workspace-vs-package
+  split)
 
 ### 4.7 Hard constraints
 
 These are not preferences. Violating any is a stop.
 
-1. **`devenv shell` standalone must keep working.** It's the daily driver and the
-   consumer contract. ⇒ **flake-parts is off the table** (§7).
+1. **`devenv shell` standalone must keep working.** It's the daily driver and
+   the consumer contract. ⇒ **flake-parts is off the table** (§7).
 2. **Consumer surface stays byte-identical.** `nix eval` of
    `homeManagerModules.default` and `pkgs.<name>` unchanged; nixos-config sees
    nothing until explicitly wanted. Flat `pkgs.<name>` outputs preserved via the
    existing flattening.
-3. **Cache-hit parity stays green** at every commit
-   (`checks.cache-hit-parity`). The `ourPkgs` pattern is load-bearing — never
-   introduce `final.X` build inputs in a migrated `package.nix`.
+3. **Cache-hit parity stays green** at every commit (`checks.cache-hit-parity`).
+   The `ourPkgs` pattern is load-bearing — never introduce `final.X` build
+   inputs in a migrated `package.nix`.
 4. **`ensureUnfreeCheck` stays at the `overlays/default.nix` boundary** — don't
    duplicate it inside slices.
 5. **`nix flake check` green after every commit.** No flag days.
-6. **`git add` new files before any `nix flake check` / `.#` eval** — flakes only
-   see tracked files.
+6. **`git add` new files before any `nix flake check` / `.#` eval** — flakes
+   only see tracked files.
 7. **Never touch nixos-config without explicit approval.**
 
 ---
@@ -367,8 +377,8 @@ These are not preferences. Violating any is a stop.
 ## 6. The kiro-vs-mcp-servers pilot question (resolved)
 
 The origin doc proposed **kiro** as the pilot (smallest cohesive multi-package
-slice, no shared-source complications). The gap analysis then showed **kiro alone
-never exercises update-target merge-up at all**, because kiro packages use
+slice, no shared-source complications). The gap analysis then showed **kiro
+alone never exercises update-target merge-up at all**, because kiro packages use
 `--use-update-script`, not the git-URL Phase-0 path.
 
 Resolution — a **two-step** validation:
@@ -378,13 +388,14 @@ Resolution — a **two-step** validation:
   `effect-mcp` was chosen because it's overlay-native (not a nixpkgs
   `overrideAttrs`), has no credentials, is a single package, and is mature — the
   cleanest case to debug if the namespace shape needs adjustment.
-- **Pilot:** the first real slice, exercising module-merge across **both** HM and
-  devenv eval boundaries with several concerns at once.
+- **Pilot:** the first real slice, exercising module-merge across **both** HM
+  and devenv eval boundaries with several concerns at once.
 
-The `mcp-servers` migration plan (2026-05-04, the newest of the two lineages) picks
-**`mcp-servers` as that first slice** rather than kiro, because it forces the hard
-cases immediately: multi-output-from-one-source, sub-namespace preservation, and
-cache-hit parity. That's the recommended pilot (§9.3) — but see Fork 2.
+The `mcp-servers` migration plan (2026-05-04, the newest of the two lineages)
+picks **`mcp-servers` as that first slice** rather than kiro, because it forces
+the hard cases immediately: multi-output-from-one-source, sub-namespace
+preservation, and cache-hit parity. That's the recommended pilot (§9.3) — but
+see Fork 2.
 
 ---
 
@@ -394,47 +405,54 @@ Consolidated from all 8 sources, with the reason each died.
 
 **Architecture**
 
-- **Full flake-parts migration** — breaks `devenv shell` standalone (two eval paths,
-  no bridge); benefit was only a slightly cleaner `flake.nix`.
-- **`flake.aiPackages` registry (`lazyAttrsOf types.raw`) + `materialize`** — not a
-  canonical flake-parts pattern; `types.raw` uses `mergeOneOption` and **throws on
-  duplicate definition**, breaking multi-contributor merge; `materialize`'s
-  `isFunction v → v final` is _not_ equivalent to `callPackage v {}` and breaks
-  auto-fill.
+- **Full flake-parts migration** — breaks `devenv shell` standalone (two eval
+  paths, no bridge); benefit was only a slightly cleaner `flake.nix`.
+- **`flake.aiPackages` registry (`lazyAttrsOf types.raw`) + `materialize`** —
+  not a canonical flake-parts pattern; `types.raw` uses `mergeOneOption` and
+  **throws on duplicate definition**, breaking multi-contributor merge;
+  `materialize`'s `isFunction v → v final` is _not_ equivalent to
+  `callPackage v {}` and breaks auto-fill.
 - **`self'.packages.foo` inside `checks`** — confirmed infinite-recursion trap
   (flake-parts #22). Use `config.packages.foo` in the same `perSystem`.
-- **`filterAttrs`-based aggregate `ai.all` module** — the claim that `filterAttrs`
-  "inspects names without forcing values" is **false**; forcing `attrNames` resolves
-  the same attrset including the `all` key. Use a static enumerated `imports` list.
-- **Haumea auto-discovery** — 25 explicit imports isn't a burden; adding an input to
-  solve nothing is net negative.
+- **`filterAttrs`-based aggregate `ai.all` module** — the claim that
+  `filterAttrs` "inspects names without forcing values" is **false**; forcing
+  `attrNames` resolves the same attrset including the `all` key. Use a static
+  enumerated `imports` list.
+- **Haumea auto-discovery** — 25 explicit imports isn't a burden; adding an
+  input to solve nothing is net negative.
 - **`_class = "devenv"` tags** — devenv doesn't enforce a class; no safety gain.
-  (`_class = homeManager/nixos` _is_ worth doing — real enforcement since 23.05.)
-- **Module-system-everywhere combinator** — ceremony on facets that merge natively.
+  (`_class = homeManager/nixos` _is_ worth doing — real enforcement since
+  23.05.)
+- **Module-system-everywhere combinator** — ceremony on facets that merge
+  natively.
 - **Per-slice `tasks`/`checks`/`apps` facets** — no load-bearing use case.
-- **Per-slice three-file modules (`home-manager.nix`+`nixos.nix`+`devenv.nix`)** —
-  duplicates the existing factory's delegation. The factory is simpler.
-- **`aiInternal.*` namespace with `types.raw`** — same multi-contributor footgun;
-  the convention can be a plain `let` if wanted.
+- **Per-slice three-file modules (`home-manager.nix`+`nixos.nix`+`devenv.nix`)**
+  — duplicates the existing factory's delegation. The factory is simpler.
+- **`aiInternal.*` namespace with `types.raw`** — same multi-contributor
+  footgun; the convention can be a plain `let` if wanted.
 
 **Naming / surface**
 
-- **Rename `devenvModules.nix-agentic-tools` → `.ai.<slice>`** — breaking consumer
-  change for cosmetic symmetry; `devenvModules` isn't even a standardised output.
-- **Slice-first namespace `config.slices.<name>.<concern>`** — no runtime use case.
+- **Rename `devenvModules.nix-agentic-tools` → `.ai.<slice>`** — breaking
+  consumer change for cosmetic symmetry; `devenvModules` isn't even a
+  standardised output.
+- **Slice-first namespace `config.slices.<name>.<concern>`** — no runtime use
+  case.
 - **Flat lib attrset without the module system** — loses collision detection.
 
 **Process**
 
-- **Parallel-sandbox pilot** _(the whole `mcp-servers-pilot-plan.md`)_ — abandoned
-  after grill 2 reframed the constraint; direct migration chosen instead.
+- **Parallel-sandbox pilot** _(the whole `mcp-servers-pilot-plan.md`)_ —
+  abandoned after grill 2 reframed the constraint; direct migration chosen
+  instead.
 - **Mass conversion of the update pipeline** up front or baked into slice-nav —
   risks rediscovering the bugs the homebrew script exists to work around.
 - **End-to-end consumer integration test in the fixture** — highest fidelity but
   time disappears there; the cheaper bar is enough.
-- **Treating `*-sources.json` sidecars as a smell** — they're the _good_ pattern.
-- **Standalone skills-without-Nix** — skills are a CI artifact at most; modules can
-  be the only path for content artifacts.
+- **Treating `*-sources.json` sidecars as a smell** — they're the _good_
+  pattern.
+- **Standalone skills-without-Nix** — skills are a CI artifact at most; modules
+  can be the only path for content artifacts.
 
 ---
 
@@ -458,13 +476,14 @@ Consolidated from all 8 sources, with the reason each died.
 ### Naming — keep slice/facet/concern _(RESOLVED, d4)_
 
 **Decision:** keep the existing vocabulary; do not rename to std's
-`cell`/`cellblock`. The value of §11 is the external anchor and the process rule,
-not the words — the vocab already maps 1:1 onto the walker; "cell" is more
+`cell`/`cellblock`. The value of §11 is the external anchor and the process
+rule, not the words — the vocab already maps 1:1 onto the walker; "cell" is more
 overloaded, "cellblock" drags in std's CLI/action semantics this design
 explicitly rejects, and "concern" has no std analogue, so a token rename would
 leave a _mixed_ vocabulary. What is adopted from std is its **file-level
 convention** (facet presence by filename) and the "check the ecosystem first"
-process rule (§11), with std + `pkgs/by-name/` cited as the anchor (already done).
+process rule (§11), with std + `pkgs/by-name/` cited as the anchor (already
+done).
 
 **Rejected alternative:** rename to std terms (`cell`/`cellblock`) — dropped
 because the load-bearing thing is the anchor validating this file-level shape,
@@ -481,45 +500,48 @@ not the terminology, and adopting the words without the framework buys nothing.
   `packages/mcp-servers/<name>/default.nix` = `{ package = ./package.nix; }`, a
   literal attrset of paths, walked by a slice `overlay.nix`.
 - `slice-architecture-assessment.md` (05-08) **drops** them: facet presence is
-  determined by `<facet>.nix` existing at the slice root. "Reintroduce barrels only
-  if _what does this slice contribute?_ becomes hard to answer at a glance."
+  determined by `<facet>.nix` existing at the slice root. "Reintroduce barrels
+  only if _what does this slice contribute?_ becomes hard to answer at a
+  glance."
 
-Trade-off: a barrel is greppable and statically introspectable without a `readDir`,
-at the cost of one more file per slice to keep in sync (and a file that can lie).
-Filesystem convention has zero boilerplate but you must `ls` to know.
+Trade-off: a barrel is greppable and statically introspectable without a
+`readDir`, at the cost of one more file per slice to keep in sync (and a file
+that can lie). Filesystem convention has zero boilerplate but you must `ls` to
+know.
 
-**The fixture implements no-barrel** and ships the barrel alternative side-by-side
-at `private/slice-fixture/slices/alpha-cli/default.nix.barrel-example` so you can
+**The fixture implements no-barrel** and ships the barrel alternative
+side-by-side at
+`private/slice-fixture/slices/alpha-cli/default.nix.barrel-example` so you can
 compare the two shapes directly.
 
-> **Recommendation (editorial):** take **no-barrel / filesystem convention**, and
-> stop deliberating — this fork is being over-thought. Both shapes work at 28
-> packages. Filesystem convention matches where the ecosystem is drifting
+> **Recommendation (editorial):** take **no-barrel / filesystem convention**,
+> and stop deliberating — this fork is being over-thought. Both shapes work at
+> 28 packages. Filesystem convention matches where the ecosystem is drifting
 > (nixpkgs `pkgs/by-name/` and std both discover this way, §11) and has zero
-> boilerplate; a hand-maintained barrel is one more file per slice that _can lie_.
-> If static introspection ("what does this slice ship?") ever becomes a real
-> tooling need, **generate** an index from the walker — don't hand-maintain one.
-> **Critically: Track A (§12) does not depend on this fork at all**, so it must not
-> block anything.
+> boilerplate; a hand-maintained barrel is one more file per slice that _can
+> lie_. If static introspection ("what does this slice ship?") ever becomes a
+> real tooling need, **generate** an index from the walker — don't hand-maintain
+> one. **Critically: Track A (§12) does not depend on this fork at all**, so it
+> must not block anything.
 
 ### Fork 2 — coarse slices, or leave packages flat?
 
 > **Decision (d4): defer coarse slices (Track B), probably indefinitely.** The
 > rationale below is retained.
 
-Per-package co-location already landed (§1). The remaining question is only whether
-to _regroup_ into coarse slices (`kiro/` = 2 packages, `mcp-servers/` = ~14) or stop
-here. The fixture supports both in one walker (`bravo-servers` is coarse,
-`alpha-cli` is effectively single).
+Per-package co-location already landed (§1). The remaining question is only
+whether to _regroup_ into coarse slices (`kiro/` = 2 packages, `mcp-servers/` =
+~14) or stop here. The fixture supports both in one walker (`bravo-servers` is
+coarse, `alpha-cli` is effectively single).
 
 > **Recommendation (editorial): defer it, probably indefinitely.** This is the
 > single most expensive item in the plan and the one with the least remaining
-> payoff, because the big win it was designed to deliver — co-location — _already
-> landed by another route_. What's left is navigation ergonomics, paid for with a
-> rename across ~12 propagation surfaces (§10) that collides with every in-flight
-> workstream (§13). Do Track A first (§12) and re-evaluate; my prediction is it
-> feels a lot less urgent once the central registries are gone. See §14 for what
-> would change my mind.
+> payoff, because the big win it was designed to deliver — co-location —
+> _already landed by another route_. What's left is navigation ergonomics, paid
+> for with a rename across ~12 propagation surfaces (§10) that collides with
+> every in-flight workstream (§13). Do Track A first (§12) and re-evaluate; my
+> prediction is it feels a lot less urgent once the central registries are gone.
+> See §14 for what would change my mind.
 
 ### Fork 3 — discovery mechanism
 
@@ -541,9 +563,9 @@ Three candidates, all live in the sources:
 
 ### Fork 4 — sidecar-JSON adoption for Pattern C
 
-Sites #12/#13 (magic comments, rev/hash sed) are _independent_ of slices. Extend the
-`*-sources.json` pattern to all main-tracking packages, or convert opportunistically
-per package? Default per D18 is opportunistic.
+Sites #12/#13 (magic comments, rev/hash sed) are _independent_ of slices. Extend
+the `*-sources.json` pattern to all main-tracking packages, or convert
+opportunistically per package? Default per D18 is opportunistic.
 
 ### Fork 5 — walker placement and public API
 
@@ -560,30 +582,32 @@ Stay combined-merge-only (D6), or eventually publish
 ## 9. Execution plan
 
 > ⚠️ **Read §12 before executing this section.** §9 is the plan _as the sources
-> framed it_ — one continuous rollout ending in a full slice regrouping. §12 argues
-> that plan bundles two independent refactors of very different value, and proposes
-> splitting it into Track A (do this) and Track B (defer). §9.2 and §9.3-Phase-1
-> survive that split intact; §9.3-Phase-3 and §9.4's regrouping are Track B.
+> framed it_ — one continuous rollout ending in a full slice regrouping. §12
+> argues that plan bundles two independent refactors of very different value,
+> and proposes splitting it into Track A (do this) and Track B (defer). §9.2 and
+> §9.3-Phase-1 survive that split intact; §9.3-Phase-3 and §9.4's regrouping are
+> Track B.
 
 ### 9.0 Prerequisites (blocking)
 
 Prerequisites 1–3 are **satisfied** (reaudit X8); `migrate-to-trunk-based` is
 **FOLDED** into this convergence lineage:
 
-1. ~~`migrate-to-trunk-based` completes~~ — **✓ done.** Primary checkout switched to
-   `main`; `refactor/ai-factory-architecture` retired. (PR #467 is now a separate
-   operator-owned paused plan — see §13 — not a blocker.)
+1. ~~`migrate-to-trunk-based` completes~~ — **✓ done.** Primary checkout
+   switched to `main`; `refactor/ai-factory-architecture` retired. (PR #467 is
+   now a separate operator-owned paused plan — see §13 — not a blocker.)
 2. ~~The docs-subsystem removal lands~~ — **✓ done.**
 3. ~~Local checkout synced to `origin/main`~~ — **✓ done.**
-4. **Forks 1–3 decided** (§8) — the fixture exists to settle them. **✓ met —
-   d4 (2026-07-24): no-barrel / defer-coarse-slices / `readDir`.**
+4. **Forks 1–3 decided** (§8) — the fixture exists to settle them. **✓ met — d4
+   (2026-07-24): no-barrel / defer-coarse-slices / `readDir`.**
 
 Independent of all the above and safe to do any time: **de-duplicate
 `hmTransform`/`devenvTransform`** (§3.5).
 
 ### 9.1 Stay-green discipline
 
-**Invariants at every commit:** builds clean; `nix flake check` green; published HM
+**Invariants at every commit:** builds clean; `nix flake check` green; published
+HM
 
 - devenv surface byte-identical; cache-hit parity green; **no flag days**.
 
@@ -591,41 +615,43 @@ Two mechanisms, by migration kind:
 
 - **Data-registry migrations (Pattern A/B — sites #2, #5, #6, #7, #8, #11)** →
   **coexistence**:
-  1. Introduce the option shape. Consuming code **falls back to the old path** when
-     a name isn't in the merged set. Both paths work; no functional change yet.
-  2. Migrate contributors **one at a time**, each a small commit: _"add slice X's
-     declaration, remove its old-path entry."_
+  1. Introduce the option shape. Consuming code **falls back to the old path**
+     when a name isn't in the merged set. Both paths work; no functional change
+     yet.
+  2. Migrate contributors **one at a time**, each a small commit: _"add slice
+     X's declaration, remove its old-path entry."_
   3. Delete the fallback only when no consumer remains — one cleanup commit per
      namespace.
 - **Directory-layout changes (file moves)** → **atomic per slice**. When
-  `overlays/kiro-gateway.nix` becomes `slices/kiro/kiro-gateway/overlay.nix`, the old
-  path either exists or doesn't — there's no useful fallback. One commit (or a tight
-  series) per slice.
+  `overlays/kiro-gateway.nix` becomes `slices/kiro/kiro-gateway/overlay.nix`,
+  the old path either exists or doesn't — there's no useful fallback. One commit
+  (or a tight series) per slice.
 
-Coexistence boilerplate is the cost; it's **bounded** — it exits when the last slice
-lands. The collision refactor already proved this pattern at this scale.
+Coexistence boilerplate is the cost; it's **bounded** — it exits when the last
+slice lands. The collision refactor already proved this pattern at this scale.
 
 ### 9.2 Pre-pilot — one concern, one package (~2 days)
 
 1. Introduce `config.update.targets` in a **new `lib/update.nix`** (RESOLVED —
-   d4, 2026-07-24: keep update concerns separable from `lib/ai/sharedOptions.nix`;
-   answers R-Q2 / open decision #2, formerly "decide during execution"). Type:
-   `attrsOf (submodule { file; flags; dependsOn; })`, default `{}`.
+   d4, 2026-07-24: keep update concerns separable from
+   `lib/ai/sharedOptions.nix`; answers R-Q2 / open decision #2, formerly "decide
+   during execution"). Type: `attrsOf (submodule { file; flags; dependsOn; })`,
+   default `{}`.
 2. Modify `dev/scripts/update-pkg.sh` to read the merged set via
-   `nix eval --json .#updateTargets.<name>` first, **falling back to the existing
-   grep path** when absent. No other changes — Phase-0 homebrew stays.
+   `nix eval --json .#updateTargets.<name>` first, **falling back to the
+   existing grep path** when absent. No other changes — Phase-0 homebrew stays.
 3. Migrate **`effect-mcp`** only.
 
 **Done when:** `nix flake check` passes; a local update run produces _identical_
 output for `effect-mcp` before and after; `nix eval .#updateTargets.effect-mcp`
-resolves; CI green on linux-x64 + darwin-arm64; **you review and approve before any
-slice work**.
+resolves; CI green on linux-x64 + darwin-arm64; **you review and approve before
+any slice work**.
 
-**Contingency:** if the namespace shape doesn't work, **stop and revise this doc**.
-No commitment to rollout until the foundation is settled.
+**Contingency:** if the namespace shape doesn't work, **stop and revise this
+doc**. No commitment to rollout until the foundation is settled.
 
-> Measure the eval cost: this adds a `nix eval` per update target
-> (~1–2s cold × ~17 packages ≈ 30s/run). Probably fine; worth confirming.
+> Measure the eval cost: this adds a `nix eval` per update target (~1–2s cold ×
+> ~17 packages ≈ 30s/run). Probably fine; worth confirming.
 
 ### 9.3 Pilot — first slice (`mcp-servers`)
 
@@ -635,45 +661,46 @@ Per the migration plan, phased with a **HITL STOP at every phase boundary**:
   `package.nix` (a **verbatim port** of `overlays/mcp-servers/effect-mcp.nix`,
   same `{inputs, final, ...}` signature, same `ourPkgs` pattern). Replace
   `overlays/default.nix`'s hand-rolled `mcpServerDrvs` with the slice walker.
-- **Phase 2** — the `modelContextProtocol` sub-slice: shared `source.nix` imported
-  directly by sub-packages (**not** walked), sub-namespace preserved at
+- **Phase 2** — the `modelContextProtocol` sub-slice: shared `source.nix`
+  imported directly by sub-packages (**not** walked), sub-namespace preserved at
   `pkgs.ai.mcpServers.modelContextProtocol.*`.
 - **Phase 3** — mechanical migration of the remaining MCPs, **one package per
   commit**.
 
-The slice walker takes `{inputs, final}` (no third arg — it builds an attrset, not
-an overlay layer); per-package files keep `{inputs, final, ...}`.
+The slice walker takes `{inputs, final}` (no third arg — it builds an attrset,
+not an overlay layer); per-package files keep `{inputs, final, ...}`.
 
 **What to learn before doing the other six slices:**
 
 - Does merge-up hold at **both** HM and devenv eval sides, or does one surprise?
 - Does the top-level walker accommodate nested slice dirs?
 - Do fragment scopes still work with the new paths?
-- Are there `lib/` files that looked shared but are actually slice-specific? (Move
-  them — shrinks `lib/` further.)
+- Are there `lib/` files that looked shared but are actually slice-specific?
+  (Move them — shrinks `lib/` further.)
 
 ### 9.4 Rollout + registry sweep
 
 Remaining slices one at a time (D15/D16), then dissolve the remaining Pattern-A
 registries, then **add a CI check that fails on any cross-slice import**
-(`import ../<other-slice>/`). Fix site #10's glob (one line) when the moves land.
+(`import ../<other-slice>/`). Fix site #10's glob (one line) when the moves
+land.
 
 ### 9.5 Stop conditions
 
-Inherited from the pilot plan — if any of these surface, **pause for review rather
-than powering through**:
+Inherited from the pilot plan — if any of these surface, **pause for review
+rather than powering through**:
 
 1. The directory walker needs a workaround that isn't a simple filter.
-2. `evalModules` rejects a contribution file for any reason beyond missing options
-   or syntax errors.
+2. `evalModules` rejects a contribution file for any reason beyond missing
+   options or syntax errors.
 3. The merge-up walker double-counts, picks up non-contribution files, or needs
    post-hoc filtering.
 4. Adding a new package requires **any** edit outside its own directory.
 5. A factory file needs modification to work in the new scope.
 
-**Acceptance test for self-assembly:** after the wiring is done, adding a brand-new
-package requires **zero** edits to any barrel, registry, scope, or walker — you just
-drop files in place.
+**Acceptance test for self-assembly:** after the wiring is done, adding a
+brand-new package requires **zero** edits to any barrel, registry, scope, or
+walker — you just drop files in place.
 
 ---
 
@@ -687,14 +714,19 @@ fails. The propagation surface is currently _partially broken already_ —
 - [ ] `packages/default.nix` barrel
 - [ ] `overlays/default.nix` group composition + export lists
 - [ ] `config/update-matrix.nix` (until dissolved)
-- [ ] `config/fragment-categories.nix` rows (was: `dev/generate.nix` `devFragmentNames` + `packagePaths` globs — dissolved into `config.fragments.categories`)
-- [ ] `config/cache-hit-parity-targets.nix` rows (was: `checks/cache-hit-parity.nix` package lists — dissolved into `config.checks.cacheHitParity`); `checks/bare-commands.nix` glob
+- [ ] `config/fragment-categories.nix` rows (was: `dev/generate.nix`
+      `devFragmentNames` + `packagePaths` globs — dissolved into
+      `config.fragments.categories`)
+- [ ] `config/cache-hit-parity-targets.nix` rows (was:
+      `checks/cache-hit-parity.nix` package lists — dissolved into
+      `config.checks.cacheHitParity`); `checks/bare-commands.nix` glob
 - [ ] `packages/mcp-services/.../serverNames` (until dissolved)
-- [ ] HM module registrations; devshell's hand-listed 5 modules (`lib/devshell.nix`)
+- [ ] HM module registrations; devshell's hand-listed 5 modules
+      (`lib/devshell.nix`)
 - [ ] README feature matrix + server reference
 - [ ] CI workflow matrices
-- [ ] **Co-located architecture fragments** — update the `Last verified:` marker;
-      the repo enforces this
+- [ ] **Co-located architecture fragments** — update the `Last verified:`
+      marker; the repo enforces this
 - [ ] `AGENTS.md` / `CLAUDE.md` key-directories section _(already stale — fix)_
 
 ---
@@ -732,17 +764,17 @@ Run: `nix eval -f private/slice-fixture checks.summary --raw`
 
 **Verified working (9/9 structural checks):**
 
-- a slice consumes **another slice's lib at eval time** with no cross-slice import
-  (`nix build … buildable.alpha-cli` → `greeting=charlie-lib::greeting`)
+- a slice consumes **another slice's lib at eval time** with no cross-slice
+  import (`nix build … buildable.alpha-cli` → `greeting=charlie-lib::greeting`)
 - the lib rollup merges with **collision detection**
-- all four merged registries assemble from slice contributions
-  (`update.targets` incl. `dependsOn ["rust-overlay"]`, `transformers`,
-  `mcp.serverModules`, `fragments.scopes`)
+- all four merged registries assemble from slice contributions (`update.targets`
+  incl. `dependsOn ["rust-overlay"]`, `transformers`, `mcp.serverModules`,
+  `fragments.scopes`)
 - HM and devenv produce **independent** option surfaces
 - a slice may contribute a **subset** of facets
 
-**Deliberately not answered:** real builds, real HM/devenv consumer wiring, domain
-content. Those come back after the shape is settled.
+**Deliberately not answered:** real builds, real HM/devenv consumer wiring,
+domain content. Those come back after the shape is settled.
 
 ---
 
@@ -753,27 +785,30 @@ Supersession chain, so nothing is silently lost:
 - `monorepo-restructure-assessment.md` (04-21) assessed an external architecture
   dump written without repo access. Verdict: **directionally right on filesystem
   co-location, mechanically bug-prone in specifics — keep concepts, don't
-  transliterate code.** Its §11 (added 04-22) supersedes its own §§8–10 and is the
-  origin of the slice design.
+  transliterate code.** Its §11 (added 04-22) supersedes its own §§8–10 and is
+  the origin of the slice design.
 - `name-resolution-gap-analysis.md` (04-28) extended §8 with **8 sites the
   assessment never enumerated** (#2,#3,#6,#7,#8,#9,#11,#12,#13).
 - `slice-nav-design.md` (04-28) locked the merge-up namespace + stay-green
   discipline and **overrode the assessment's kiro-only pilot** (§6).
-- `ai-factory-collision-refactor-plan.md` (04-27) **COMPLETE** — 9 commits landed:
-  `lib/*`→`lib/ai/*`, collision-as-failure, `rulesFromDir`/`skillsFromDir`/
-  `agentsFromDir`/`hooksFromDir`. It is the foundation this builds on and the
-  proof that the coexistence pattern works at this scale.
+- `ai-factory-collision-refactor-plan.md` (04-27) **COMPLETE** — 9 commits
+  landed: `lib/*`→`lib/ai/*`, collision-as-failure,
+  `rulesFromDir`/`skillsFromDir`/ `agentsFromDir`/`hooksFromDir`. It is the
+  foundation this builds on and the proof that the coexistence pattern works at
+  this scale.
 - `greenfield-package-shape.md` (05-04) diagnosed the mixed-eval barrel.
 - `mcp-servers-pilot-plan.md` (05-04) → **superseded** by
-  `mcp-servers-migration-plan.md` (05-04) — parallel sandbox abandoned for direct
-  migration after grill 2.
-- `slice-architecture-assessment.md` (05-08) widened greenfield from one package to
-  slice composition and **dropped the per-slice barrel** — the Fork 1 disagreement.
+  `mcp-servers-migration-plan.md` (05-04) — parallel sandbox abandoned for
+  direct migration after grill 2.
+- `slice-architecture-assessment.md` (05-08) widened greenfield from one package
+  to slice composition and **dropped the per-slice barrel** — the Fork 1
+  disagreement.
 
-Two prior corrections worth preserving: the `project_slice_nav_design` memory and an
-earlier audit both mis-identified `slice-nav-design.md` as canonical; by git author
-date and explicit supersession headers, `slice-architecture-assessment.md` was the
-newest live thinking. **This document now supersedes all of them.**
+Two prior corrections worth preserving: the `project_slice_nav_design` memory
+and an earlier audit both mis-identified `slice-nav-design.md` as canonical; by
+git author date and explicit supersession headers,
+`slice-architecture-assessment.md` was the newest live thinking. **This document
+now supersedes all of them.**
 
 ---
 
@@ -781,21 +816,23 @@ newest live thinking. **This document now supersedes all of them.**
 
 # Part II — External grounding and editorial
 
-> Everything above (§0–10, Appendices A–C) is a faithful synthesis of the 8 source
-> docs plus verified current state. **Everything below was in none of them** — it is
-> added judgment (Claude, 2026-07-23). It is marked separately so you can disagree
-> with the opinions without doubting the synthesis. Where it's a recommendation, it
-> says so; where it's a fact about the ecosystem, go verify it.
+> Everything above (§0–10, Appendices A–C) is a faithful synthesis of the 8
+> source docs plus verified current state. **Everything below was in none of
+> them** — it is added judgment (Claude, 2026-07-23). It is marked separately so
+> you can disagree with the opinions without doubting the synthesis. Where it's
+> a recommendation, it says so; where it's a fact about the ecosystem, go verify
+> it.
 
 ## 11. Where this sits in the Nix ecosystem
 
 **The headline: this design is not bespoke. It is a re-derivation of `std`.**
 
-None of the 8 source docs ever benchmarked the design against the ecosystem. Three
-months and eight documents went into re-deriving, from first principles, a pattern
-that has at least three named implementations. **That absence is the single biggest
-process failure in this whole lineage** — and it's most of why the architecture kept
-getting re-derived: with no external anchor, every session restarted the argument.
+None of the 8 source docs ever benchmarked the design against the ecosystem.
+Three months and eight documents went into re-deriving, from first principles, a
+pattern that has at least three named implementations. **That absence is the
+single biggest process failure in this whole lineage** — and it's most of why
+the architecture kept getting re-derived: with no external anchor, every session
+restarted the argument.
 
 ### The landscape
 
@@ -810,58 +847,59 @@ getting re-derived: with no external anchor, every session restarted the argumen
 
 ### What maps to what
 
-`std`'s **cell** is your **slice** (a topic directory). `std`'s **cell blocks** are
-your **facets** — typed contributions whose _type_ determines how the walker routes
-them to an output. Same idea, same mechanism, arrived at independently.
+`std`'s **cell** is your **slice** (a topic directory). `std`'s **cell blocks**
+are your **facets** — typed contributions whose _type_ determines how the walker
+routes them to an output. Same idea, same mechanism, arrived at independently.
 
 Two more independent validations worth knowing:
 
 - **`pkgs/by-name/` uses exactly the filename (`package.nix`) and exactly the
-  no-barrel filesystem discovery this design lands on.** Nixpkgs moved this way to
-  kill a hand-maintained registry — the _same_ motivation as §3.4. That's Fork 1
-  and Fork 3 answered by the largest Nix repo in existence.
-- **Merge-up is not exotic.** `config.<concern>.<slice>` merging across slices is
-  precisely what `services.<foo>` already does across NixOS modules. You are
-  applying the module system's existing merge semantics to repo metadata instead of
-  machine config. That's why it gets collision detection for free.
+  no-barrel filesystem discovery this design lands on.** Nixpkgs moved this way
+  to kill a hand-maintained registry — the _same_ motivation as §3.4. That's
+  Fork 1 and Fork 3 answered by the largest Nix repo in existence.
+- **Merge-up is not exotic.** `config.<concern>.<slice>` merging across slices
+  is precisely what `services.<foo>` already does across NixOS modules. You are
+  applying the module system's existing merge semantics to repo metadata instead
+  of machine config. That's why it gets collision detection for free.
 
 ### Recommendation: steal the vocabulary, don't take the dependency
 
-**Do not adopt `std`.** It is opinionated, brings its own CLI and mental model, would
-require migrating ~28 packages into someone else's abstraction, and — most
+**Do not adopt `std`.** It is opinionated, brings its own CLI and mental model,
+would require migrating ~28 packages into someone else's abstraction, and — most
 importantly — is very likely to collide with `devenv`-standalone the same way
-flake-parts does (D5/§4.7-1). That constraint killed flake-parts and would probably
-kill std too.
+flake-parts does (D5/§4.7-1). That constraint killed flake-parts and would
+probably kill std too.
 
 Hand-rolling is defensible **specifically because the walker stays small** — the
 fixture's is **136 lines total / 82 code** (verified `wc -l`), still under D10's
-~150-line ceiling, and that is what keeps "we hand-rolled instead of adopting std"
-true. But the headroom is **thin, not comfortable**: 136 total is already ~91% of
-the ceiling, and that is the _fixture_ walker — the real (non-fixture) one still
-has to grow the §12 coexistence/fallback paths (the per-registry old-path fallback
-the additive migration requires), so D10's budget is closer than a first read
-suggests. The conclusion survives — a sub-150 hand-rolled walker beats dragging in
-`std` here — but treat the remaining headroom as nearly spent, not generous: the
-moment the real walker crosses ~150 lines, "hand-rolled instead of std" stops being
-true and you're maintaining a framework badly. Re-open this section then.
+~150-line ceiling, and that is what keeps "we hand-rolled instead of adopting
+std" true. But the headroom is **thin, not comfortable**: 136 total is already
+~91% of the ceiling, and that is the _fixture_ walker — the real (non-fixture)
+one still has to grow the §12 coexistence/fallback paths (the per-registry
+old-path fallback the additive migration requires), so D10's budget is closer
+than a first read suggests. The conclusion survives — a sub-150 hand-rolled
+walker beats dragging in `std` here — but treat the remaining headroom as nearly
+spent, not generous: the moment the real walker crosses ~150 lines, "hand-rolled
+instead of std" stops being true and you're maintaining a framework badly.
+Re-open this section then.
 
 ### Process rule worth adopting
 
 > Before re-deriving an architecture, spend 30 minutes checking whether the
-> ecosystem already named it. Record the answer — including "nothing fits, because
-> X" — in the design doc. Had any of the 8 docs done this, most of them wouldn't
-> exist.
+> ecosystem already named it. Record the answer — including "nothing fits,
+> because X" — in the design doc. Had any of the 8 docs done this, most of them
+> wouldn't exist.
 
 ## 12. Editorial: unbundle the two refactors
 
-**The core claim: this plan bundles two independent refactors with very different
-value-to-cost ratios, and the low-value one is what makes the whole thing look
-expensive and risky.**
+**The core claim: this plan bundles two independent refactors with very
+different value-to-cost ratios, and the low-value one is what makes the whole
+thing look expensive and risky.**
 
 ### Track A — self-assembly / registry dissolution ✅ recommended
 
-Kill the hand-maintained registries. Each unit declares its own rows; shared code
-reads the merged set.
+Kill the hand-maintained registries. Each unit declares its own rows; shared
+code reads the merged set.
 
 - Dissolve `config/update-matrix.nix` → `config.update.targets` (+ the hardcoded
   Rust list, smell #3, via `dependsOn`)
@@ -885,71 +923,75 @@ reads the merged set.
   slices are coarse or flat and whether facets are discovered by barrel or by
   filesystem. This is the key unlock: _the undecided design questions are not
   blockers for the valuable work._
-- The coexistence pattern is already proven at this scale by the collision refactor.
+- The coexistence pattern is already proven at this scale by the collision
+  refactor.
 
 **Rough cost:** the pre-pilot is ~2 days (§9.2). Each subsequent registry is a
-bounded, independently-revertible series. No estimate exists in the sources for the
-full sweep; treat each namespace as its own small project.
+bounded, independently-revertible series. No estimate exists in the sources for
+the full sweep; treat each namespace as its own small project.
 
 ### Track B — topic regrouping into ~7 slices ⏸️ defer
 
-Move `kiro-cli` + `kiro-gateway` into `kiro/`, all MCP servers into `mcp-servers/`,
-etc. (The original framing also dissolved `overlays/` into the owning slices; that
-overlay-dissolution piece is now **REJECTED by gate D-1** — see "The overlay
-question" below — leaving Track B as the `packages/` topic regrouping only.)
+Move `kiro-cli` + `kiro-gateway` into `kiro/`, all MCP servers into
+`mcp-servers/`, etc. (The original framing also dissolved `overlays/` into the
+owning slices; that overlay-dissolution piece is now **REJECTED by gate D-1** —
+see "The overlay question" below — leaving Track B as the `packages/` topic
+regrouping only.)
 
 **Why this is the weak half — now:**
 
-- **The win it was designed to deliver already landed by another route.** When the
-  top-level `modules/` dissolved into `packages/<pkg>/modules/`, per-package
-  co-location — the thing §3.3 complains about — was largely achieved. What remains
-  is _coarser_ grouping, i.e. navigation ergonomics.
-- **The cost is a rename across ~12 propagation surfaces** (§10), in a repo whose
-  propagation surface is _already_ partially broken (`AGENTS.md`/`CLAUDE.md` still
-  document the retired `modules/`).
+- **The win it was designed to deliver already landed by another route.** When
+  the top-level `modules/` dissolved into `packages/<pkg>/modules/`, per-package
+  co-location — the thing §3.3 complains about — was largely achieved. What
+  remains is _coarser_ grouping, i.e. navigation ergonomics.
+- **The cost is a rename across ~12 propagation surfaces** (§10), in a repo
+  whose propagation surface is _already_ partially broken
+  (`AGENTS.md`/`CLAUDE.md` still document the retired `modules/`).
 - **It collides with essentially every in-flight workstream** (§13).
-- The original urgency argument — "restructure before promotion to avoid a second
-  churn" — is **void**: promotion already happened (§1).
+- The original urgency argument — "restructure before promotion to avoid a
+  second churn" — is **void**: promotion already happened (§1).
 
-**The overlay question — RESOLVED by gate D-1 (keep `overlays/` split-ready):** the
-seam §3.3 complains about ("facets live in two trees") is real, but the locked
-resolution is **not** to dissolve `overlays/` into the package dirs. Instead, keep
-`overlays/` as **one split-ready subtree** and sever its 4 relative-path seams via
-the two [OVL] refactors — TOP-9 relocates the 2 cross-boundary build sources _into_
-`overlays/`; TOP-10 exposes `*-extracted.json` via `passthru.extracted` — then, per
-**d4 decision 4**, **absorb nixos-config's 14 `sources.json` overlays** into that
-same subtree so the whole tree can be **extracted later as one unit** if desired.
-This fixes the two-trees seam with no package-dir churn and keeps the overlay's
-`ourPkgs` cache-hit-parity architecture (which already treats the overlay as a
-standalone unit) intact.
+**The overlay question — RESOLVED by gate D-1 (keep `overlays/` split-ready):**
+the seam §3.3 complains about ("facets live in two trees") is real, but the
+locked resolution is **not** to dissolve `overlays/` into the package dirs.
+Instead, keep `overlays/` as **one split-ready subtree** and sever its 4
+relative-path seams via the two [OVL] refactors — TOP-9 relocates the 2
+cross-boundary build sources _into_ `overlays/`; TOP-10 exposes
+`*-extracted.json` via `passthru.extracted` — then, per **d4 decision 4**,
+**absorb nixos-config's 14 `sources.json` overlays** into that same subtree so
+the whole tree can be **extracted later as one unit** if desired. This fixes the
+two-trees seam with no package-dir churn and keeps the overlay's `ourPkgs`
+cache-hit-parity architecture (which already treats the overlay as a standalone
+unit) intact.
 
-> **REJECTED — d4 (2026-07-24): overlay DISSOLUTION (Track A2) is rejected by gate
-> D-1.** The alternative was to dissolve `overlays/<name>.nix` into the owning
-> package dir — its appeal was fixing the "facets live in two trees" complaint
-> (§3.3) directly; it is mechanical, does **not** require coarse slices, and can be
-> done per-package inside today's layout (the greenfield doc sized the
-> barrel+overlay migration at **~12–20 packages, ~8–16h aggregate**). It was dropped
-> because dissolving INTO packages scatters today's single extraction-shaped tree
-> across N dirs and turns the 4 visible seams into intra-package edges — strictly
-> _harder_ to extract later, the opposite of the split-ready direction the operator
-> locked.
+> **REJECTED — d4 (2026-07-24): overlay DISSOLUTION (Track A2) is rejected by
+> gate D-1.** The alternative was to dissolve `overlays/<name>.nix` into the
+> owning package dir — its appeal was fixing the "facets live in two trees"
+> complaint (§3.3) directly; it is mechanical, does **not** require coarse
+> slices, and can be done per-package inside today's layout (the greenfield doc
+> sized the barrel+overlay migration at **~12–20 packages, ~8–16h aggregate**).
+> It was dropped because dissolving INTO packages scatters today's single
+> extraction-shaped tree across N dirs and turns the 4 visible seams into
+> intra-package edges — strictly _harder_ to extract later, the opposite of the
+> split-ready direction the operator locked.
 
 ### Recommended sequencing
 
-> **RESOLVED — d4 (2026-07-24): overlay DISSOLUTION (Track A2) is REJECTED by gate
-> D-1; keep `overlays/` as a split-ready subtree and extract later.** Step 2 below is
-> therefore the two [OVL] split-prep refactors plus the 14-overlay absorption, not a
-> dissolution into package dirs.
+> **RESOLVED — d4 (2026-07-24): overlay DISSOLUTION (Track A2) is REJECTED by
+> gate D-1; keep `overlays/` as a split-ready subtree and extract later.** Step
+> 2 below is therefore the two [OVL] split-prep refactors plus the 14-overlay
+> absorption, not a dissolution into package dirs.
 
 1. **Track A** (registries + the two live bugs + transform de-dup)
 2. **Overlay split-prep (D-1)** — the two [OVL] refactors (TOP-9 relocates the 2
-   cross-boundary build sources _into_ `overlays/`; TOP-10 exposes `*-extracted.json`
-   via `passthru.extracted`), then absorb nixos-config's 14 `sources.json` overlays
-   into the split-ready `overlays/` subtree (d4 decision 4).
-3. **Re-evaluate Track B.** Prediction: with the registries gone and `overlays/` a
-   clean split-ready subtree, coarse topic dirs will feel like a nice-to-have. If it
-   still itches then, it's cheap to do as a pure `git mv` series (the trunk
-   migration is already settled — `migrate-to-trunk-based` is folded).
+   cross-boundary build sources _into_ `overlays/`; TOP-10 exposes
+   `*-extracted.json` via `passthru.extracted`), then absorb nixos-config's 14
+   `sources.json` overlays into the split-ready `overlays/` subtree (d4 decision
+   4).
+3. **Re-evaluate Track B.** Prediction: with the registries gone and `overlays/`
+   a clean split-ready subtree, coarse topic dirs will feel like a nice-to-have.
+   If it still itches then, it's cheap to do as a pure `git mv` series (the
+   trunk migration is already settled — `migrate-to-trunk-based` is folded).
 
 ## 13. Cross-workstream interfaces (for the convergence session)
 
@@ -977,22 +1019,23 @@ state as of 2026-07-23; re-verify before acting — several are moving.)_
    that assumption; the **unconfirmed** part is whether the removal will later
    force them elsewhere.
 2. **Where does `config.update.targets` live** — **RESOLVED (d4, 2026-07-24,
-   operator-approved): a new `lib/update.nix`**, _not_ `lib/ai/sharedOptions.nix`,
-   to keep update-pipeline concerns separable from the shared AI option
-   declarations (answers R-Q2 and the §9.2 "decide during execution" note).
-   _Rejected alternative:_ co-locating in `lib/ai/sharedOptions.nix` — dropped
-   because it would couple update concerns to the typed-surface file converge P3
-   edits, re-creating the two-way conflict this separation avoids.
+   operator-approved): a new `lib/update.nix`**, _not_
+   `lib/ai/sharedOptions.nix`, to keep update-pipeline concerns separable from
+   the shared AI option declarations (answers R-Q2 and the §9.2 "decide during
+   execution" note). _Rejected alternative:_ co-locating in
+   `lib/ai/sharedOptions.nix` — dropped because it would couple update concerns
+   to the typed-surface file converge P3 edits, re-creating the two-way conflict
+   this separation avoids.
 3. **Who owns `dev/generate.nix`** when `packagePaths` dissolves — **RESOLVED
-   (2026-07-24): dissolved under the `converge-repo-foundations` plan**, not this
-   one. `packagePaths` and `devFragmentNames` merged into
+   (2026-07-24): dissolved under the `converge-repo-foundations` plan**, not
+   this one. `packagePaths` and `devFragmentNames` merged into
    `config.fragments.categories` (`config/fragment-categories.nix` +
    `lib/fragments-registry.nix`), following the same option-module shape as
    `config.update.targets` and `config.checks.cacheHitParity`.
-4. **Does Track A go before or after converge P3's typed-surface delivery?** They
-   touch adjacent files in `lib/ai/`.
-5. **Is the update-pipeline work (#144 + Track A's `update-matrix` dissolution) one
-   workstream or two?** Arguably one.
+4. **Does Track A go before or after converge P3's typed-surface delivery?**
+   They touch adjacent files in `lib/ai/`.
+5. **Is the update-pipeline work (#144 + Track A's `update-matrix` dissolution)
+   one workstream or two?** Arguably one.
 
 ## 14. Risk register + what would change my mind
 
@@ -1014,27 +1057,30 @@ state as of 2026-07-23; re-verify before acting — several are moving.)_
 - Navigation pain is costing **measurable** time — if you regularly hunt across
   `dev/`, `lib/`, `overlays/`, `checks/` for one topic, that's real and I'm
   underweighting it. _Test: notice how often it actually happens over a week._
-- A **per-slice published module surface** becomes a consumer requirement (Fork 6) —
-  slices would then be an API, not just navigation, which changes the calculus.
-- Coarse grouping turns out to be what makes merge-up tractable. _I don't believe
-  this_ — the fixture demonstrates merge-up working with both coarse and flat slices
-  in one walker — but if implementation shows otherwise, Track A and B re-couple and
-  B gets promoted.
+- A **per-slice published module surface** becomes a consumer requirement
+  (Fork 6) — slices would then be an API, not just navigation, which changes the
+  calculus.
+- Coarse grouping turns out to be what makes merge-up tractable. _I don't
+  believe this_ — the fixture demonstrates merge-up working with both coarse and
+  flat slices in one walker — but if implementation shows otherwise, Track A and
+  B re-couple and B gets promoted.
 
 **On no-barrel (Fork 1).** I'd reverse if `nix eval`-time introspection of "what
-does this slice contribute?" becomes a genuine tooling need that a _generated_ index
-can't serve.
+does this slice contribute?" becomes a genuine tooling need that a _generated_
+index can't serve.
 
 **On not adopting std (§11).** I'd reverse if the walker breaks its line budget
-_and_ std turns out to compose with `devenv`-standalone. Both would have to be true.
+_and_ std turns out to compose with `devenv`-standalone. Both would have to be
+true.
 
 ### What I am least confident about
 
 - **D13's two-layer `lib.ai`** — flagged in §5. Two addressing schemes in one
   attrset. I suspect this wants separating before anything depends on it.
-- **Whether `mcp-servers` or `kiro` is the better first slice** (§6) if Track B ever
-  runs. The sources disagree; `mcp-servers` forces the hard cases early, which is
-  either the right call or a way to fail on the most complex case first.
+- **Whether `mcp-servers` or `kiro` is the better first slice** (§6) if Track B
+  ever runs. The sources disagree; `mcp-servers` forces the hard cases early,
+  which is either the right call or a way to fail on the most complex case
+  first.
 - **The exact `docs/` survival question** (§13) — I have not verified it.
 
 ## 15. If you only do three things
@@ -1043,8 +1089,8 @@ _and_ std turns out to compose with `devenv`-standalone. Both would have to be t
    violates the repo's own DRY rule, **completely independent** of every fork,
    workstream, and blocker in this document. Free money, today.
 2. **Run the `effect-mcp` pre-pilot (§9.2), then dissolve `update-matrix.nix`.**
-   This is Track A's beachhead, proves the merge-up namespace on one package with a
-   fallback, and needs **no** fork decided.
+   This is Track A's beachhead, proves the merge-up namespace on one package
+   with a fallback, and needs **no** fork decided.
 3. **Fix smells #1 and #12.** These are _live defects_, not refactors — #1 lands
    wrong-file edits in main (PR #91), #12 fails **silently**, leaving a stale
    version with no error. They've been deferred as "will be fixed by the

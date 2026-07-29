@@ -22,8 +22,8 @@ attrset, not a hard-coded copy.
 
 ## 2. Where everything is
 
-Main checkout, branch `refactor/ai-factory-architecture`. Committed alongside the
-peer sessions' state docs (see §3):
+Main checkout, branch `refactor/ai-factory-architecture`. Committed alongside
+the peer sessions' state docs (see §3):
 
 | Path                                                      | What                                               |
 | --------------------------------------------------------- | -------------------------------------------------- |
@@ -44,8 +44,8 @@ Memory: `project_kiro_steering_symlinks_work.md` + its `MEMORY.md` index line.
 everything else is one docs commit on top of `89aee2b1`. Nothing to rebase and
 nothing that can conflict with either peer session.
 
-**Hash caution for the merge session:** this branch was rewritten mid-flight. The
-materialization commits are `f12aa5f1` / `a7b3e29d` / `88f1fc8b` **on this
+**Hash caution for the merge session:** this branch was rewritten mid-flight.
+The materialization commits are `f12aa5f1` / `a7b3e29d` / `88f1fc8b` **on this
 branch**; the pre-rebase aliases `3050f894` / `bd67936f` / `cf71e9cd` still
 resolve as loose objects but are **not ancestors of HEAD**. `labs-fixtures.md`
 already uses the on-branch hashes.
@@ -87,11 +87,11 @@ consumer-hostile) alternative to copying.
 
 ### 5.4 Upstream citations currently in the repo are the wrong product
 
-`kirodotdev/Kiro#2921` and `#8121` (cited at `mkKiro.nix:794`) are **Kiro IDE** —
-a different product with a different loader (Electron/VSCode `vscode.FileType`,
-not the CLI's bundled `fs.readdir`). Also `#8121` was **auto-closed by a
-duplicate-detection bot, not by a fix**, then reopened for maintainer review — do
-not read its closed state as resolved.
+`kirodotdev/Kiro#2921` and `#8121` (cited at `mkKiro.nix:794`) are **Kiro IDE**
+— a different product with a different loader (Electron/VSCode
+`vscode.FileType`, not the CLI's bundled `fs.readdir`). Also `#8121` was
+**auto-closed by a duplicate-detection bot, not by a fix**, then reopened for
+maintainer review — do not read its closed state as resolved.
 
 The correct citation is **`#9787`** — _"[kiro-cli][--v3] Global steering files
 that are symlinks are silently ignored"_, OPEN, maintainer-acked 2026-07-02,
@@ -109,21 +109,21 @@ case, which I also found works. Leaf files are the broken shape in both reports.
 
 **Lead for the skills question:** a comment on the skills issue claims kiro-cli
 **2.12.3 fixed symlinked _skills_** — unverified and absent from the changelog,
-and `#9787` notes the bundle ships an **unused symlink-aware variant**. Skills and
-steering are different code paths. This is a concrete hypothesis for whoever runs
-the skills probe: skills may already be fixed while steering is not.
+and `#9787` notes the bundle ships an **unused symlink-aware variant**. Skills
+and steering are different code paths. This is a concrete hypothesis for whoever
+runs the skills probe: skills may already be fixed while steering is not.
 
 ### 5.5 Probe methodology traps — these cost me a WRONG conclusion
 
 1. **`--no-interactive` without a pty silently runs v2** → false negative. I
    initially concluded "symlinks are fine" because of this. v3 needs
    `script -qec "kiro-cli chat --tui --v3 …"`.
-2. **Assert the engine, never assume it** — v3 logs `[KiroAgent]`. Make it a hard
-   precondition or a future launcher change silently reverts you to v2.
-3. **Swap the A/B.** Without the swap, a null is indistinguishable from the model
-   simply not mentioning that token.
-4. **Don't write "secret passphrase" in fixtures** — triggers a model refusal. Use
-   "build token".
+2. **Assert the engine, never assume it** — v3 logs `[KiroAgent]`. Make it a
+   hard precondition or a future launcher change silently reverts you to v2.
+3. **Swap the A/B.** Without the swap, a null is indistinguishable from the
+   model simply not mentioning that token.
+4. **Don't write "secret passphrase" in fixtures** — triggers a model refusal.
+   Use "build token".
 5. **Don't grep the binary.** The v3 loader is inside a 555 MB compressed Bun
    bundle (`.kiro-cli-chat-wrapped`); `strings`/`grep` return nothing usable.
 
@@ -132,8 +132,8 @@ the skills probe: skills may already be fixed while steering is not.
 ### 6.1 File overlap (mechanical)
 
 **Effectively none.** I have zero code changes. Only shared file is
-`docs/plans/agent-primitive-labs-impl-plan.md` (labs session's), where my edit is
-purely additive (P14 + a note under P13) — resolve by union.
+`docs/plans/agent-primitive-labs-impl-plan.md` (labs session's), where my edit
+is purely additive (P14 + a note under P13) — resolve by union.
 
 ### 6.2 Substantive overlap
 
@@ -156,21 +156,24 @@ A symlink→copy fix does not make global hooks fire (labs are right). And
 conversely: hook _wiring_ being done does not mean hooks _arrive_, for any
 consumer using the factory.
 
-**Also:** `88f1fc8b` "correct the steering loads fine as
-symlinks claim" is **wrong as written** — it is engine-unqualified and cites the
-IDE issues. The comment it replaced was true for v2. Neither names the engine,
-which is the entire story. This needs re-correcting whoever lands it.
+**Also:** `88f1fc8b` "correct the steering loads fine as symlinks claim" is
+**wrong as written** — it is engine-unqualified and cites the IDE issues. The
+comment it replaced was true for v2. Neither names the engine, which is the
+entire story. This needs re-correcting whoever lands it.
 
 ## 7. What I need / what I offer
 
-**Answering labs §7 "Need from (a): exactly which surfaces moved symlink→copy":**
+**Answering labs §7 "Need from (a): exactly which surfaces moved
+symlink→copy":**
 
-- **Moved (repo-local only, `f12aa5f1`):** this repo's own generated `CLAUDE.md`,
-  `.claude/rules/*`, `.kiro/steering/*` (gitignored) and the git-tracked
-  `AGENTS.md`, `.github/copilot-instructions.md`, `.github/instructions/*`. These
-  are now real files materialized on shell entry.
+- **Moved (repo-local only, `f12aa5f1`):** this repo's own generated
+  `CLAUDE.md`, `.claude/rules/*`, `.kiro/steering/*` (gitignored) and the
+  git-tracked `AGENTS.md`, `.github/copilot-instructions.md`,
+  `.github/instructions/*`. These are now real files materialized on shell
+  entry.
 - **NOT moved — still store symlinks for every consumer:** all factory emitters
-  in `mkKiro.nix` (steering ×4 devenv, ×2 HM; skills; agents) and `mkClaude.nix`.
+  in `mkKiro.nix` (steering ×4 devenv, ×2 HM; skills; agents) and
+  `mkClaude.nix`.
 - **Bearing on labs:** labs `cp -rL` anyway, so lab-materialized trees are
   unaffected — your guess was right.
 
@@ -186,7 +189,8 @@ heredoc-embedding is the reason HM's hooks conversion kept every content
 assertion — it is the pattern to generalize.
 
 **Offer to both:** §5 in full, and the self-tested reproducer at
-`docs/plans/steering-symlink-probe/run-probe.sh` (banked for the labs as **P14**).
+`docs/plans/steering-symlink-probe/run-probe.sh` (banked for the labs as
+**P14**).
 
 ## 8. Recommended merge order
 
@@ -199,46 +203,52 @@ assertion — it is the pattern to generalize.
 
 ## 9. Parked / not decided
 
-- **Which design to build — genuinely open.** Three candidates were generated and
-  adversarially reviewed; **all three were found fatally flawed**, and three
+- **Which design to build — genuinely open.** Three candidates were generated
+  and adversarially reviewed; **all three were found fatally flawed**, and three
   judges produced **three different rankings**. A synthesis pass is owed.
-- **HARD CONSTRAINTS** any design must satisfy (each came from a real flaw found):
-  1. **Never `force = true`** on a steering `home.file` — HM silently deletes the
-     target; `contextFilename` defaults to `AGENTS.md`, so a consumer's
+- **HARD CONSTRAINTS** any design must satisfy (each came from a real flaw
+  found):
+  1. **Never `force = true`** on a steering `home.file` — HM silently deletes
+     the target; `contextFilename` defaults to `AGENTS.md`, so a consumer's
      hand-written file vanishes with no backup.
   2. **Never fold emitter branches with `//`** — `.claude/rules/ai-module.md`
      records that collisions must be _errors_. Today's `mkMerge` branches fail
-     loudly; a `//` fold silently becomes last-wins. Two candidates regressed this.
-  3. **Never blind-prune `~/.kiro/steering/`** — user-owned. Manifest-prune only.
+     loudly; a `//` fold silently becomes last-wins. Two candidates regressed
+     this.
+  3. **Never blind-prune `~/.kiro/steering/`** — user-owned. Manifest-prune
+     only.
   4. **A user edit to a managed file must not be silently clobbered.**
   5. **HM activation must be `entryAfter ["linkGeneration"]`**, not
      `["writeBoundary"]` (siblings; `lib.toposort` order). **Every HM activation
      block in this repo is currently wrong**, including landed hooks work — and
      `module-eval`'s dag stub discards `after`/`before`, so it cannot catch it.
-- **Kiro skills / agents strategy** — gated on probes with working controls. My v3
-  skills run was **inconclusive: the real-file control also failed to load.**
-- Whether the devenv project-local scope should use the directory-symlink shortcut.
+- **Kiro skills / agents strategy** — gated on probes with working controls. My
+  v3 skills run was **inconclusive: the real-file control also failed to load.**
+- Whether the devenv project-local scope should use the directory-symlink
+  shortcut.
 
 ### Repo defects found in passing (not mine to fix)
 
 - HM-side Kiro hooks emitter **never converted** — still `home.file` at
   `mkKiro.nix:600-602`. HM consumers' hooks broken today. → **hooks session**
-- `enterShell` runs with the **caller's cwd**, not project root, and fires ≥2× per
-  `devenv shell`; `mkKiro.nix:812-819` appears not to anchor to `$DEVENV_ROOT`.
+- `enterShell` runs with the **caller's cwd**, not project root, and fires ≥2×
+  per `devenv shell`; `mkKiro.nix:812-819` appears not to anchor to
+  `$DEVENV_ROOT`.
 - **The only real-file-vs-symlink gate never runs in CI** — `devenv.nix:318-333`
   `enterTest` is invoked by no workflow. → **CI session**
-- `sync_file`'s `cmp` **follows symlinks**, so a destination symlink whose target
-  has identical content compares EQUAL and survives — i.e. it breaks exactly the
-  factory-migration case. Needs a `[ -L "$2" ]` force-write before any port.
-- `instruction-file-single-mechanism.md:169-171` is **factually wrong**: it rejects
-  `copyMode = "copy"` partly because "`files.<name>` has no `.source`". It does,
-  and `mkKiro.nix:783` already uses it.
+- `sync_file`'s `cmp` **follows symlinks**, so a destination symlink whose
+  target has identical content compares EQUAL and survives — i.e. it breaks
+  exactly the factory-migration case. Needs a `[ -L "$2" ]` force-write before
+  any port.
+- `instruction-file-single-mechanism.md:169-171` is **factually wrong**: it
+  rejects `copyMode = "copy"` partly because "`files.<name>` has no `.source`".
+  It does, and `mkKiro.nix:783` already uses it.
 
 ## 10. Outstanding HITL
 
 - **Design synthesis needs a decision**, not just a review — see §9. I recommend
   keeping the four `mkMerge` branches intact (constraint 2), adding a derived
   attrset for assertions, and putting `strategy` on it.
-- **Nothing of mine is committed.** If these docs should be committed rather than
-  left untracked, that is your call — the repo convention is that working docs
-  stay untracked.
+- **Nothing of mine is committed.** If these docs should be committed rather
+  than left untracked, that is your call — the repo convention is that working
+  docs stay untracked.

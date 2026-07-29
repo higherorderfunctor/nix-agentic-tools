@@ -1,15 +1,14 @@
 # Backlog Grooming Ledger
 
-> **Transient work-doc.** Created 2026-06-18 to groom `docs/`. Delete this
-> file once grooming is FULLY executed (after the restructure-synthesis pass).
-> This is the resume point — re-read this file to continue.
+> **Transient work-doc.** Created 2026-06-18 to groom `docs/`. Delete this file
+> once grooming is FULLY executed (after the restructure-synthesis pass). This
+> is the resume point — re-read this file to continue.
 
-**Status:** AUDIT COMPLETE. Decisions captured. **Execution deferred to a
-later session (user chose "resume later").** Nothing has been moved or
-deleted. Two initiatives queued: (1) the archive sweep, (2) a
-restructure-doc synthesis pass.
-**Method:** 4 parallel read-only audit agents + a direct mtime/git-date
-re-check of the restructure cluster.
+**Status:** AUDIT COMPLETE. Decisions captured. **Execution deferred to a later
+session (user chose "resume later").** Nothing has been moved or deleted. Two
+initiatives queued: (1) the archive sweep, (2) a restructure-doc synthesis pass.
+**Method:** 4 parallel read-only audit agents + a direct mtime/git-date re-check
+of the restructure cluster.
 
 ---
 
@@ -64,9 +63,9 @@ docs) as a removal candidate and confirm with the user before touching it.
 
 ## Initiative 1 — Archive sweep (mechanical, ready to execute)
 
-On resume: `mkdir -p docs/archive/`, then for each file below grep the repo
-for references first (AGENTS.md change-propagation), `git mv` into
-`docs/archive/`, fix any cross-refs, `treefmt`.
+On resume: `mkdir -p docs/archive/`, then for each file below grep the repo for
+references first (AGENTS.md change-propagation), `git mv` into `docs/archive/`,
+fix any cross-refs, `treefmt`.
 
 **ARCHIVE (10 done/superseded, all verified landed/superseded via git):**
 
@@ -85,7 +84,8 @@ for references first (AGENTS.md change-propagation), `git mv` into
 
 **HARD-DELETE (1):** `spiral-context.md` (personal quotes).
 
-**FLAG (not a doc):** `grill-me` skill — candidate for removal; handle separately.
+**FLAG (not a doc):** `grill-me` skill — candidate for removal; handle
+separately.
 
 ---
 
@@ -108,14 +108,14 @@ package/monorepo restructure + package-eval problem:
 **Corrected canonical determination (supersedes the first audit agent AND the
 stale `project_slice_nav_design` memory):** by mtime + git author date + the
 explicit supersession header, the newest live thinking is
-**`slice-architecture-assessment.md` (fixture-first)** — NOT `slice-nav-design.md`
-(older Lineage A) and NOT `greenfield-package-shape.md` (superseded by it 4
-days later). User's "greenfield was latest, test in a new repo without domain
-specifics" maps to slice-architecture's headline: build a `fixture/` of mock
-slices exercising only the architecture (no domain content), lock as reference,
-then refactor the real repo. The "package eval was bugging me" = greenfield's
-mixed-eval-barrel premise. **~0% implemented** for all restructure lineages;
-only the factory foundation is landed.
+**`slice-architecture-assessment.md` (fixture-first)** — NOT
+`slice-nav-design.md` (older Lineage A) and NOT `greenfield-package-shape.md`
+(superseded by it 4 days later). User's "greenfield was latest, test in a new
+repo without domain specifics" maps to slice-architecture's headline: build a
+`fixture/` of mock slices exercising only the architecture (no domain content),
+lock as reference, then refactor the real repo. The "package eval was bugging
+me" = greenfield's mixed-eval-barrel premise. **~0% implemented** for all
+restructure lineages; only the factory foundation is landed.
 
 **Synthesis-pass plan (next session):**
 
@@ -124,12 +124,12 @@ only the factory foundation is landed.
    reconciling the two lineages: fixture-first validation (B) + the merge-up
    namespace idea (A, if it survives the "mixed combinators" decision) +
    greenfield's all-paths package shape + the name-resolution checklist + the
-   mcp-servers migration as a concrete pilot target. Preserve every
-   load-bearing detail (decisions, dropped options + rationale, open Qs).
+   mcp-servers migration as a concrete pilot target. Preserve every load-bearing
+   detail (decisions, dropped options + rationale, open Qs).
 3. ONLY after the combined doc is reviewed: `git mv` the 8 sources into
    `docs/archive/`.
-4. Open question for that pass: fixture as a `fixture/` subdir (per the doc)
-   vs an actual separate greenfield repo (user's phrasing) — execution choice.
+4. Open question for that pass: fixture as a `fixture/` subdir (per the doc) vs
+   an actual separate greenfield repo (user's phrasing) — execution choice.
 
 ---
 
@@ -148,8 +148,8 @@ only the factory foundation is landed.
 ## Resume checklist
 
 1. Re-read this ledger.
-2. **Initiative 1 (archive sweep):** grep refs → `git mv` the 10 ARCHIVE
-   files into `docs/archive/`; hard-delete `spiral-context.md`; fix cross-refs;
+2. **Initiative 1 (archive sweep):** grep refs → `git mv` the 10 ARCHIVE files
+   into `docs/archive/`; hard-delete `spiral-context.md`; fix cross-refs;
    `treefmt`; update memory `project_claude_effort_pin_state` if the
    convergence-doc path changes. Flag `grill-me` skill separately.
 3. **Initiative 2 (synthesis):** run the 8-doc synthesis sub-agent → combined

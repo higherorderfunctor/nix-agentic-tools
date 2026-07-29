@@ -1,8 +1,8 @@
 # Config Parity Reference
 
 Architectural principle for the nix-agentic-tools monorepo. Used by
-repo-review's consistency-auditor to detect feature gaps across
-configuration methods.
+repo-review's consistency-auditor to detect feature gaps across configuration
+methods.
 
 ## Three Configuration Methods
 
@@ -14,8 +14,8 @@ configuration methods.
 
 ## Parity Matrix
 
-Each row is a configuration surface. All three methods should support
-it. Gaps are bugs unless marked N/A with rationale.
+Each row is a configuration surface. All three methods should support it. Gaps
+are bugs unless marked N/A with rationale.
 
 | Surface               | lib                           | HM                                                     | devenv                                                 |
 | --------------------- | ----------------------------- | ------------------------------------------------------ | ------------------------------------------------------ |
@@ -31,30 +31,29 @@ it. Gaps are bugs unless marked N/A with rationale.
 
 ### Per-Surface Notes
 
-**Agents** -- Not fanned out from `ai.*` because each ecosystem uses
-different agent formats (Copilot: markdown, Kiro: JSON, Claude:
-upstream YAML). Configure per-CLI directly.
+**Agents** -- Not fanned out from `ai.*` because each ecosystem uses different
+agent formats (Copilot: markdown, Kiro: JSON, Claude: upstream YAML). Configure
+per-CLI directly.
 
-**Environment vars** -- HM `ai.environmentVariables` fans to Copilot
-and Kiro (wrapper scripts). Claude Code's upstream HM module does not
-expose an `environmentVariables` option, so HM ai cannot fan to it.
-In devenv, `ai.environmentVariables` sets shared `env` (covers all
-processes including Claude) plus per-CLI options.
+**Environment vars** -- HM `ai.environmentVariables` fans to Copilot and Kiro
+(wrapper scripts). Claude Code's upstream HM module does not expose an
+`environmentVariables` option, so HM ai cannot fan to it. In devenv,
+`ai.environmentVariables` sets shared `env` (covers all processes including
+Claude) plus per-CLI options.
 
-**Hooks** -- Only Kiro has a hooks concept in our modules. Claude
-hooks are managed by the upstream `claude.code.hooks` option. Copilot
-CLI has no hooks support.
+**Hooks** -- Only Kiro has a hooks concept in our modules. Claude hooks are
+managed by the upstream `claude.code.hooks` option. Copilot CLI has no hooks
+support.
 
 **LSP servers** -- Claude Code does not have an LSP config option, so
 `ai.lspServers` fans to Copilot and Kiro only.
 
 **MCP servers** -- HM uses `enableMcpIntegration` to bridge
-`programs.mcp.servers` into each CLI. devenv uses typed submodules
-per CLI. The `ai.*` module does not have its own `mcpServers` to avoid
-double-injection.
+`programs.mcp.servers` into each CLI. devenv uses typed submodules per CLI. The
+`ai.*` module does not have its own `mcpServers` to avoid double-injection.
 
-**Permissions** -- Only Claude Code has a permissions concept. Managed
-by the upstream module in both HM and devenv contexts.
+**Permissions** -- Only Claude Code has a permissions concept. Managed by the
+upstream module in both HM and devenv contexts.
 
 ### Settings Type Coverage
 
@@ -70,12 +69,12 @@ Typed options with `freeformType` fallback for unknown keys:
 
 When auditing config parity:
 
-1. For each HM module option, check if an equivalent devenv module
-   option exists (and vice versa)
-2. For each `ai.*` option, verify it fans out to ALL enabled ecosystems
-   in BOTH HM and devenv contexts
+1. For each HM module option, check if an equivalent devenv module option exists
+   (and vice versa)
+2. For each `ai.*` option, verify it fans out to ALL enabled ecosystems in BOTH
+   HM and devenv contexts
 3. Check that option names and types are consistent across methods
-4. Verify that `mkDefault` is used for ai.\* fanout so per-ecosystem
-   overrides win in both HM and devenv
-5. Check that generated file paths match what each ecosystem actually
-   reads (e.g., `.claude/rules/`, `.kiro/steering/`, `.github/instructions/`)
+4. Verify that `mkDefault` is used for ai.\* fanout so per-ecosystem overrides
+   win in both HM and devenv
+5. Check that generated file paths match what each ecosystem actually reads
+   (e.g., `.claude/rules/`, `.kiro/steering/`, `.github/instructions/`)

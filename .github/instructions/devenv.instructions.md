@@ -7,17 +7,16 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 
 # CI-lean closure taxonomy
 
-> **Last verified:** 2026-07-22 (PR #439). If you change what
-> `devenv.nix` puts in the shell, which factories install CLI wrappers,
-> or the `devenv-test.yml` cache wiring, re-verify this and bump the
-> marker.
+> **Last verified:** 2026-07-22 (PR #439). If you change what `devenv.nix` puts
+> in the shell, which factories install CLI wrappers, or the `devenv-test.yml`
+> cache wiring, re-verify this and bump the marker.
 
 The `devenv-test` CI gate (`.github/workflows/devenv-test.yml`) runs
-`devenv test` on ephemeral runners, so **everything in the shell closure
-is download cost on every cold run** and feeds the
-`cache-nix-action` cache size. `devenv.nix` therefore evaluates an
-`isCI` branch (see the comment block at its `isCI` binding — EVAL-time,
-distinct from the RUNTIME `$CI` guard in `processes.docs.exec`).
+`devenv test` on ephemeral runners, so **everything in the shell closure is
+download cost on every cold run** and feeds the `cache-nix-action` cache size.
+`devenv.nix` therefore evaluates an `isCI` branch (see the comment block at its
+`isCI` binding — EVAL-time, distinct from the RUNTIME `$CI` guard in
+`processes.docs.exec`).
 
 ## The four buckets
 
@@ -30,41 +29,37 @@ distinct from the RUNTIME `$CI` guard in `processes.docs.exec`).
 
 ## The decision rule
 
-Adding a package to `devenv.nix`? Ask: **does the CI gate (materialize
-tasks + enterTest assertions) invoke it?** If not, it goes in the
-`!isCI` list. When in doubt, `CI=1 devenv test` locally is the oracle —
-green means the gate never needed it.
+Adding a package to `devenv.nix`? Ask: **does the CI gate (materialize tasks +
+enterTest assertions) invoke it?** If not, it goes in the `!isCI` list. When in
+doubt, `CI=1 devenv test` locally is the oracle — green means the gate never
+needed it.
 
-Two proofs to preserve when touching the gates: with `CI` unset the
-shell must rebuild to the **identical store path** (local behavior
-unchanged — compare `devenv shell` store paths pre/post), and
-`CI=1 devenv test` must stay green.
+Two proofs to preserve when touching the gates: with `CI` unset the shell must
+rebuild to the **identical store path** (local behavior unchanged — compare
+`devenv shell` store paths pre/post), and `CI=1 devenv test` must stay green.
 
 <!-- Fragment: dev/fragments/devenv/files-internals.md -->
 
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-07-21 (commit pending — corrects the
-> Kiro-symlink citation to kirodotdev/Kiro#9787 with the engine
-> qualifier, and the `files.<name>.source` claim; earlier revision
-> added auto-regeneration via `gen` import). devenv internals are pinned
-> to whatever version is in flake.lock; if you touch
-> `modules/devenv/**`, `lib/hm-helpers.nix:mkDevenvSkillEntries`,
-> `devenv.nix` `files` block, or anywhere that uses
-> `files.*.source` and this fragment isn't updated in the same
-> commit, stop and fix it.
+> **Last verified:** 2026-07-21 (commit pending — corrects the Kiro-symlink
+> citation to kirodotdev/Kiro#9787 with the engine qualifier, and the
+> `files.<name>.source` claim; earlier revision added auto-regeneration via
+> `gen` import). devenv internals are pinned to whatever version is in
+> flake.lock; if you touch `modules/devenv/**`,
+> `lib/hm-helpers.nix:mkDevenvSkillEntries`, `devenv.nix` `files` block, or
+> anywhere that uses `files.*.source` and this fragment isn't updated in the
+> same commit, stop and fix it.
 
-devenv's `files` option is structurally simpler than HM's
-`home.file`. Specifically, **it cannot walk a source directory
-recursively to produce per-file symlinks**, and it **silently
-no-ops on dir-vs-symlink conflicts**. Both behaviors matter when
-working on devenv module files in this repo.
+devenv's `files` option is structurally simpler than HM's `home.file`.
+Specifically, **it cannot walk a source directory recursively to produce
+per-file symlinks**, and it **silently no-ops on dir-vs-symlink conflicts**.
+Both behaviors matter when working on devenv module files in this repo.
 
 ### Where devenv `files` is defined
 
-Upstream: `<devenv-source>/src/modules/files.nix` in the
-`cachix/devenv` flake. On a system that has devenv installed,
-locate with:
+Upstream: `<devenv-source>/src/modules/files.nix` in the `cachix/devenv` flake.
+On a system that has devenv installed, locate with:
 
 ```bash
 find /nix/store -name 'files.nix' -path '*devenv*' 2>/dev/null
@@ -83,14 +78,13 @@ source = {
 };
 ```
 
-Whatever path you provide becomes the symlink target verbatim.
-No recursion, no enumeration, no per-file generation.
+Whatever path you provide becomes the symlink target verbatim. No recursion, no
+enumeration, no per-file generation.
 
 **The submodule has no recursive field:**
 
-`fileType` has `format`, `data`, `file`, `executable`, plus one
-option per format (`ini`, `json`, `yaml`, `toml`, `text`,
-`source`). Notably **missing**:
+`fileType` has `format`, `data`, `file`, `executable`, plus one option per
+format (`ini`, `json`, `yaml`, `toml`, `text`, `source`). Notably **missing**:
 
 - No `recursive` field
 - No `tree` / `walk` field
@@ -122,16 +116,16 @@ No recursion. One `ln -s` per entry.
 
 ### Silent-fail behavior (important)
 
-The create script has three branches for conflicts. Cases 2 and
-3 (existing file or non-file at the target path) **log to stderr
-but do NOT exit non-zero**. The `ai.skills` config evaluates
-fine, the build succeeds, but on disk there's no symlink.
+The create script has three branches for conflicts. Cases 2 and 3 (existing file
+or non-file at the target path) **log to stderr but do NOT exit non-zero**. The
+`ai.skills` config evaluates fine, the build succeeds, but on disk there's no
+symlink.
 
-**Consequence for Layout A → B transitions:** if a real directory
-exists at the target path (because an HM activation or a previous
-devenv run using a directory-walking helper laid it down), devenv
-will log a warning and silently skip creating the file entry. The
-user sees skills "missing" with no clear error.
+**Consequence for Layout A → B transitions:** if a real directory exists at the
+target path (because an HM activation or a previous devenv run using a
+directory-walking helper laid it down), devenv will log a warning and silently
+skip creating the file entry. The user sees skills "missing" with no clear
+error.
 
 **Detect silent failures in practice:**
 
@@ -141,76 +135,69 @@ devenv shell 2>&1 | grep -i conflict
 devenv test 2>&1 | grep -i conflict
 ```
 
-Look for `Conflicting file <path>` or `Conflicting non-file <path>`
-lines.
+Look for `Conflicting file <path>` or `Conflicting non-file <path>` lines.
 
 ### State tracking and orphan cleanup
 
-devenv tracks managed files in `${config.devenv.state}/files.json`.
-On every run, the cleanup task reads previous state, compares to
-current config, and removes orphaned symlinks pointing into
-`/nix/store/*`. It **only removes symlinks** — never real files
-or directories. This is another reason Layout A → B transitions
-get stuck: orphan cleanup can't clear a real dir that a previous
+devenv tracks managed files in `${config.devenv.state}/files.json`. On every
+run, the cleanup task reads previous state, compares to current config, and
+removes orphaned symlinks pointing into `/nix/store/*`. It **only removes
+symlinks** — never real files or directories. This is another reason Layout A →
+B transitions get stuck: orphan cleanup can't clear a real dir that a previous
 generation laid down.
 
 ### The user-space walker (`mkDevenvSkillEntries`)
 
-To produce Layout B (a directory containing per-file symlinks)
-via the `files` option, split one logical "skill directory" into
-N `files."<path>".source = <file>;` entries — one per leaf file.
-This must happen at Nix evaluation time because devenv's create
-script has no hook for runtime expansion.
+To produce Layout B (a directory containing per-file symlinks) via the `files`
+option, split one logical "skill directory" into N
+`files."<path>".source = <file>;` entries — one per leaf file. This must happen
+at Nix evaluation time because devenv's create script has no hook for runtime
+expansion.
 
-`builtins.readDir <path>` returns `{ name → type }` for a
-directory. Recursing through it produces the leaf-file list, and
-each leaf becomes a `files` entry whose `source` points at the
-full path within the original tree.
+`builtins.readDir <path>` returns `{ name → type }` for a directory. Recursing
+through it produces the leaf-file list, and each leaf becomes a `files` entry
+whose `source` points at the full path within the original tree.
 
 Key behaviors:
 
 - Works on any path Nix evaluation has read access to. For
-  `ai.skills = { foo = ./skills/foo; }`, the path is relative to
-  the flake root and Nix can read it.
+  `ai.skills = { foo = ./skills/foo; }`, the path is relative to the flake root
+  and Nix can read it.
 - Preserves the directory structure of the source.
-- Eval-time cost is proportional to file count. Negligible for
-  typical skill dirs.
-- Does NOT need IFD. It's pure `readDir` on paths the flake
-  already tracks.
+- Eval-time cost is proportional to file count. Negligible for typical skill
+  dirs.
+- Does NOT need IFD. It's pure `readDir` on paths the flake already tracks.
 
-The implementation lives in `lib/hm-helpers.nix:mkDevenvSkillEntries`
-(when Task 2b lands) and is the recommended fix for the HM/devenv
-skills layout parity gap.
+The implementation lives in `lib/hm-helpers.nix:mkDevenvSkillEntries` (when Task
+2b lands) and is the recommended fix for the HM/devenv skills layout parity gap.
 
 ### Why HM doesn't have this problem
 
 HM's `home.file.<name>` submodule has a `recursive` field
-(`home-manager/modules/files.nix`). When `source` is a directory
-and `recursive = true`, HM's activation script walks the directory
-and creates per-file symlinks inside a real subdirectory at
-`<name>`, with state tracking per file. Upstream
-`programs.claude-code.skills` uses this via `mkSkillEntry`. Our
-own `lib/hm-helpers.nix:mkSkillEntries` mirrors the pattern for
+(`home-manager/modules/files.nix`). When `source` is a directory and
+`recursive = true`, HM's activation script walks the directory and creates
+per-file symlinks inside a real subdirectory at `<name>`, with state tracking
+per file. Upstream `programs.claude-code.skills` uses this via `mkSkillEntry`.
+Our own `lib/hm-helpers.nix:mkSkillEntries` mirrors the pattern for
 `programs.copilot-cli.skills` and `programs.kiro-cli.skills`.
 
-devenv chose a simpler, flatter model without recursive support.
-Not a bug; a deliberate design difference. The user-space walker
-restores parity at the cost of eval-time directory walks.
+devenv chose a simpler, flatter model without recursive support. Not a bug; a
+deliberate design difference. The user-space walker restores parity at the cost
+of eval-time directory walks.
 
 ### Upstream PR opportunity
 
-Filing a PR to `cachix/devenv` adding a `recursive` field to
-`fileType` that triggers a `builtins.readDir`-based walk in the
-`createFileScript` generator would benefit every devenv user, not
-just us. Not blocking any current work — the user-space walker is
-a viable fix while waiting for upstream.
+Filing a PR to `cachix/devenv` adding a `recursive` field to `fileType` that
+triggers a `builtins.readDir`-based walk in the `createFileScript` generator
+would benefit every devenv user, not just us. Not blocking any current work —
+the user-space walker is a viable fix while waiting for upstream.
 
 ### Instruction files are copies, not `files.*` symlinks
 
-`devenv.nix` imports `dev/instructions.nix` as `instr` — the same
-import `flake.nix` uses, so both render identical bytes. It exposes
-the four `instructions-*` derivations; the working tree is
-materialized from them by a shell-entry task, **not** by `files.*`:
+`devenv.nix` imports `dev/instructions.nix` as `instr` — the same import
+`flake.nix` uses, so both render identical bytes. It exposes the four
+`instructions-*` derivations; the working tree is materialized from them by a
+shell-entry task, **not** by `files.*`:
 
 ```nix
 instr = import ./dev/instructions.nix {
@@ -219,50 +206,47 @@ instr = import ./dev/instructions.nix {
 };
 ```
 
-`dev/tasks/generate.nix` defines `generate:instructions:materialize`
-with `before = ["devenv:enterShell"]`, so every `devenv shell`,
-`direnv reload`, `devenv up`, `devenv reload` and `devenv test`
-copies `CLAUDE.md`, `.claude/rules/*.md`, `AGENTS.md`,
-`.github/copilot-instructions.md`, `.github/instructions/*.md` and
-`.kiro/steering/*.md` into place as **real files**.
+`dev/tasks/generate.nix` defines `generate:instructions:materialize` with
+`before = ["devenv:enterShell"]`, so every `devenv shell`, `direnv reload`,
+`devenv up`, `devenv reload` and `devenv test` copies `CLAUDE.md`,
+`.claude/rules/*.md`, `AGENTS.md`, `.github/copilot-instructions.md`,
+`.github/instructions/*.md` and `.kiro/steering/*.md` into place as **real
+files**.
 
 Why copies rather than `files.*`:
 
-- **Kiro v3 cannot read symlinked steering.** The v3 engine (the
-  shipped default via `--tui --v3`) discovers by scanning the
-  directory and keeps only `entry.isFile()` entries, silently
-  dropping symlinks (kirodotdev/Kiro#9787); the v2/classic engine
-  follows them fine. This is the same reason the inline hook JSON is
-  installed via `enterShell` rather than `files.*`, and why the
-  factory's steering emitters now deliver via the strategy-driven
-  materializer (`lib/ai/materialize.nix`) instead of symlinks.
-- **The tracked outputs cannot be symlinks at all.** A store symlink
-  commits as mode `120000` holding an absolute `/nix/store` path —
-  meaningless in any other clone.
+- **Kiro v3 cannot read symlinked steering.** The v3 engine (the shipped default
+  via `--tui --v3`) discovers by scanning the directory and keeps only
+  `entry.isFile()` entries, silently dropping symlinks (kirodotdev/Kiro#9787);
+  the v2/classic engine follows them fine. This is the same reason the inline
+  hook JSON is installed via `enterShell` rather than `files.*`, and why the
+  factory's steering emitters now deliver via the strategy-driven materializer
+  (`lib/ai/materialize.nix`) instead of symlinks.
+- **The tracked outputs cannot be symlinks at all.** A store symlink commits as
+  mode `120000` holding an absolute `/nix/store` path — meaningless in any other
+  clone.
 
-The materializer is idempotent (`cmp` before writing, so mtimes do
-not churn on reload), atomic (`mktemp` + `mv`, so a concurrent agent
-session never reads a partial file), and prunes generated files whose
-fragment was renamed or removed — which neither of the previous two
-mechanisms did.
+The materializer is idempotent (`cmp` before writing, so mtimes do not churn on
+reload), atomic (`mktemp` + `mv`, so a concurrent agent session never reads a
+partial file), and prunes generated files whose fragment was renamed or removed
+— which neither of the previous two mechanisms did.
 
-`devenv`'s own `files.<name>.copyMode = "copy"` was considered and
-rejected: it `rm -rf`s and re-`cp`s unconditionally on every entry
-(a read race plus mtime churn), it cannot prune, and feeding it
-_formatted_ content would require `builtins.readFile` on the built
-derivation — IFD on every eval. (`files.<name>.source` does exist in
-the pinned version — mkKiro uses it — but it only takes a path, not
-formatted content.)
+`devenv`'s own `files.<name>.copyMode = "copy"` was considered and rejected: it
+`rm -rf`s and re-`cp`s unconditionally on every entry (a read race plus mtime
+churn), it cannot prune, and feeding it _formatted_ content would require
+`builtins.readFile` on the built derivation — IFD on every eval.
+(`files.<name>.source` does exist in the pinned version — mkKiro uses it — but
+it only takes a path, not formatted content.)
 
-**Prerequisite:** the `coding-standards` overlay must be applied to
-devenv's pkgs, because the fragment composition reads
+**Prerequisite:** the `coding-standards` overlay must be applied to devenv's
+pkgs, because the fragment composition reads
 `pkgs.coding-standards.passthru.fragments`.
 
-Skills, `settings.json` and MCP JSON still use `files.*` symlinks —
-they are unaffected by the Kiro scan defect and are not tracked.
+Skills, `settings.json` and MCP JSON still use `files.*` symlinks — they are
+unaffected by the Kiro scan defect and are not tracked.
 
 ### Related
 
-- `dev/fragments/ai-skills/skills-fanout-pattern.md` — the
-  uniform `programs.<cli>.skills` delegation pattern that this
-  walker enables on devenv side
+- `dev/fragments/ai-skills/skills-fanout-pattern.md` — the uniform
+  `programs.<cli>.skills` delegation pattern that this walker enables on devenv
+  side

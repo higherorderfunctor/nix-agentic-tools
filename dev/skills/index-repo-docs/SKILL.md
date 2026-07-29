@@ -22,9 +22,9 @@ match a known name, treat it as a GitHub URL or `owner/repo`.
 | `git-absorb`     | `tummychow/git-absorb`   | README, man page, usage patterns      |
 | `git-revise`     | `mystor/git-revise`      | README, docs, interactive usage       |
 
-If `$ARGUMENTS` is `all` or empty (no arguments), iterate through every entry
-in the table above and run the full indexing process for each one, skipping
-repos that are up to date.
+If `$ARGUMENTS` is `all` or empty (no arguments), iterate through every entry in
+the table above and run the full indexing process for each one, skipping repos
+that are up to date.
 
 ## Output
 
@@ -35,8 +35,8 @@ Write to: `references/<name>.md` in the repo root.
 ## Incremental Updates
 
 The generated reference doc includes frontmatter with per-source indexing
-metadata. Each source tracks its own date so partial re-indexing is possible
-and so it's clear which sources have actually been fetched:
+metadata. Each source tracks its own date so partial re-indexing is possible and
+so it's clear which sources have actually been fetched:
 
 ```yaml
 ---
@@ -72,8 +72,8 @@ value-labels:
 ---
 ```
 
-A `null` date means that source has never been properly indexed — treat it
-as needing a full fetch regardless of other source states.
+A `null` date means that source has never been properly indexed — treat it as
+needing a full fetch regardless of other source states.
 
 On re-run:
 
@@ -86,12 +86,15 @@ On re-run:
 3. **Re-assess labels** (every run — see Label Discovery below). Compare the
    computed `label-head` against frontmatter to detect label changes.
 4. **Compare each source independently:**
-   - `repo-head` changed → re-fetch README/docs, re-discover doc tree, full regeneration
+   - `repo-head` changed → re-fetch README/docs, re-discover doc tree, full
+     regeneration
    - `wiki-head` changed → re-fetch wiki, full regeneration
    - `issues-indexed` is null or new issues exist since that date → fetch issues
-   - `discussions-indexed` is null or new discussions since that date → fetch discussions
+   - `discussions-indexed` is null or new discussions since that date → fetch
+     discussions
    - `label-head` changed → re-assess labels, may trigger issue re-fetch
-   - `doc-sources` entries with `reachable: false` → re-check, prune if stale 3+ runs
+   - `doc-sources` entries with `reachable: false` → re-check, prune if stale 3+
+     runs
    - `doc-sources` external URLs → spot-check reachability on full regeneration
 5. **Check for new issues** updated since `issues-indexed`:
    ```bash
@@ -103,12 +106,12 @@ On re-run:
 8. Otherwise, fetch only the stale sources and **merge** insights into the
    existing doc. Only do a **full regeneration** if `repo-head` or `wiki-head`
    changed (the prose/structure source material changed). When only
-   `issues-indexed` or `discussions-indexed` is stale, the existing doc text
-   is the baseline — add new gotchas, recipes, and anti-patterns from issues
+   `issues-indexed` or `discussions-indexed` is stale, the existing doc text is
+   the baseline — add new gotchas, recipes, and anti-patterns from issues
    without rewriting or condensing existing sections. Never drop existing
-   content to make room; the 500-line limit applies to the final result, so
-   if the doc is already near the limit, integrate only the highest-value
-   issue insights.
+   content to make room; the 500-line limit applies to the final result, so if
+   the doc is already near the limit, integrate only the highest-value issue
+   insights.
 
 ### Exclude Patterns
 
@@ -116,9 +119,9 @@ The `exclude-issue-patterns` list in frontmatter filters out noise from
 issues/discussions. On the first run, initialize it with common bot patterns:
 `renovate`, `dependabot`, `bump version`, `release v`.
 
-During indexing, if an issue title matches any pattern (case-insensitive),
-skip it. If you encounter a new category of noise issues during distillation,
-add the pattern to `exclude-issue-patterns` for future runs.
+During indexing, if an issue title matches any pattern (case-insensitive), skip
+it. If you encounter a new category of noise issues during distillation, add the
+pattern to `exclude-issue-patterns` for future runs.
 
 ### Label Discovery
 
@@ -147,23 +150,22 @@ label_head=$(gh api "repos/${owner}/${repo}/labels" --paginate \
 - **Medium value** — labels indicating feature discussions or design decisions
   that reveal capabilities (e.g., "enhancement", "feature request", "rfc",
   "design", "discussion")
-- **Noise** — labels for project management, CI, or bot-generated content
-  (e.g., "dependencies", "stale", "wontfix", "duplicate", "invalid")
+- **Noise** — labels for project management, CI, or bot-generated content (e.g.,
+  "dependencies", "stale", "wontfix", "duplicate", "invalid")
 
-Do NOT hardcode label names. Read the actual label names and descriptions,
-then use judgment to classify them. Every repo is different — `git-branchless`
-has "has workaround" and "answered", another repo might have "solved" or
-"recipe".
+Do NOT hardcode label names. Read the actual label names and descriptions, then
+use judgment to classify them. Every repo is different — `git-branchless` has
+"has workaround" and "answered", another repo might have "solved" or "recipe".
 
 **Cache the assessment** in the `value-labels` frontmatter field. Each entry
-records the label name and a short reason why it's valuable. On subsequent
-runs, if `label-head` hasn't changed, reuse the cached assessment. If labels
-changed, re-assess and update the cache.
+records the label name and a short reason why it's valuable. On subsequent runs,
+if `label-head` hasn't changed, reuse the cached assessment. If labels changed,
+re-assess and update the cache.
 
 ## Steps
 
-1. **Resolve the repo** from `$ARGUMENTS` using the lookup table above, or
-   parse as `owner/repo` or full URL.
+1. **Resolve the repo** from `$ARGUMENTS` using the lookup table above, or parse
+   as `owner/repo` or full URL.
 
 2. **Check for incremental update** as described above. If up to date, skip.
 
@@ -188,8 +190,7 @@ changed, re-assess and update the cache.
    #### 4b. Scan repo tree for doc-like files
 
    Fetch the repo tree and filter for documentation files. Don't hardcode
-   directory names — search broadly:
-   First, get the default branch:
+   directory names — search broadly: First, get the default branch:
 
    ```bash
    default_branch=$(gh api "repos/${owner}/${repo}" --jq '.default_branch')
@@ -233,33 +234,34 @@ changed, re-assess and update the cache.
      | sort -u > "$tmp_dir/external-links.txt"
    ```
 
-   For each external link, fetch the page content if it's reachable and
-   appears to be documentation (HTML or markdown). Use `WebFetch` for
-   HTML pages. Record each in `doc-sources` with `type: external`.
+   For each external link, fetch the page content if it's reachable and appears
+   to be documentation (HTML or markdown). Use `WebFetch` for HTML pages. Record
+   each in `doc-sources` with `type: external`.
 
    #### 4d. Reconcile with previous doc-sources
 
    If the existing frontmatter has `doc-sources`, compare:
    - **New paths not in previous run** → fetch and flag as new discovery
-   - **Previous paths missing from tree** → mark `reachable: false`, keep
-     the entry but note it's gone (the content may still be relevant if
-     the file was moved or renamed)
+   - **Previous paths missing from tree** → mark `reachable: false`, keep the
+     entry but note it's gone (the content may still be relevant if the file was
+     moved or renamed)
    - **Previous external URLs** → re-check reachability, update status
    - **Prune** entries marked `reachable: false` for 3+ consecutive runs
 
    The `doc-sources` list persists across runs as the "memory" of what
-   documentation exists for this repo. Each entry includes a `relevance`
-   note explaining why it matters — this helps future runs prioritize.
+   documentation exists for this repo. Each entry includes a `relevance` note
+   explaining why it matters — this helps future runs prioritize.
 
 5. **Discover and fetch issues/discussions** using multiple search signals.
 
-   The goal is a thorough sample of usage-relevant content — not just the top 10. Fetch greedily, deduplicate, and only prompt the user if volume is
+   The goal is a thorough sample of usage-relevant content — not just the
+   top 10. Fetch greedily, deduplicate, and only prompt the user if volume is
    unmanageable.
 
    #### 5a. Count total issues to determine strategy
 
-   Use the search API to get accurate issue counts (the REST issues endpoint
-   and `open_issues_count` both include pull requests):
+   Use the search API to get accurate issue counts (the REST issues endpoint and
+   `open_issues_count` both include pull requests):
 
    ```bash
    total_open=$(gh api "search/issues?q=repo:${owner}/${repo}+type:issue+state:open&per_page=1" \
@@ -296,8 +298,8 @@ changed, re-assess and update the cache.
    I...?" and "can I...?" questions that reveal practical workflows:
 
    **Important:** `gh search issues` returns a JSON array per call. Pipe each
-   call through `jq` individually to emit JSONL — do NOT append raw arrays
-   with `>>` (creates invalid JSON when concatenated).
+   call through `jq` individually to emit JSONL — do NOT append raw arrays with
+   `>>` (creates invalid JSON when concatenated).
 
    ```bash
    keywords=("how" "can I" "workflow" "workaround" "example" "recipe" "pattern")
@@ -347,15 +349,15 @@ changed, re-assess and update the cache.
    `exclude-issue-patterns` to titles (case-insensitive). The final set is what
    gets distilled into the reference doc.
 
-   For each issue/discussion, capture: number, title, body, labels, and
-   reaction count. Issues with answers (from Discussions) or resolution
-   comments from maintainers are especially valuable — note the resolution.
+   For each issue/discussion, capture: number, title, body, labels, and reaction
+   count. Issues with answers (from Discussions) or resolution comments from
+   maintainers are especially valuable — note the resolution.
 
-6. **Extract Local Notes** from the existing reference doc (if it exists).
-   Parse all lines from the one that starts with `<!-- BEGIN LOCAL NOTES` through
-   the one that starts with `<!-- END LOCAL NOTES` (inclusive of those full marker
-   lines, which may include trailing text and the closing `-->`). Store this block
-   verbatim — it must be spliced back into the regenerated doc unchanged.
+6. **Extract Local Notes** from the existing reference doc (if it exists). Parse
+   all lines from the one that starts with `<!-- BEGIN LOCAL NOTES` through the
+   one that starts with `<!-- END LOCAL NOTES` (inclusive of those full marker
+   lines, which may include trailing text and the closing `-->`). Store this
+   block verbatim — it must be spliced back into the regenerated doc unchanged.
 
 7. **Read all fetched content** and distill into a reference doc with this
    structure:
@@ -454,15 +456,14 @@ changed, re-assess and update the cache.
    until the user approves. Show, in this order:
    1. **Additions** — new sections, recipes, gotchas, anti-patterns
    2. **Changes** — modified sections (briefly describe what changed)
-   3. **Removals** — any sections, recipes, or gotchas from the old doc that
-      are absent in the draft (flag these prominently — removals need
-      justification)
+   3. **Removals** — any sections, recipes, or gotchas from the old doc that are
+      absent in the draft (flag these prominently — removals need justification)
    4. **Stats** — line count old vs new, recipe count old vs new, issue-ref
       (`#NNN`) count old vs new
 
-   If there are removals, explain why each one was dropped. The user may
-   reject the draft or ask for revisions. Only proceed to step 10 after
-   explicit approval.
+   If there are removals, explain why each one was dropped. The user may reject
+   the draft or ask for revisions. Only proceed to step 10 after explicit
+   approval.
 
 10. **Write the approved doc** to the reference file path.
 
@@ -481,26 +482,26 @@ changed, re-assess and update the cache.
 - Every recipe should be a numbered procedure someone can follow
 - Include the exact commands, not just descriptions
 - Call out gotchas and edge cases from issues/discussions
-- Aim for under 500 lines — this is a reference, not a textbook. But never
-  drop existing content to hit the target. If a doc grows past 500 due to
-  issue insights, that's acceptable. Condense prose, not information.
+- Aim for under 500 lines — this is a reference, not a textbook. But never drop
+  existing content to hit the target. If a doc grows past 500 due to issue
+  insights, that's acceptable. Condense prose, not information.
 - If the wiki has workflow guides, prioritize those over API docs
 - Preserve and extend `exclude-issue-patterns` across runs — never shrink it
-- Preserve and extend `value-labels` across runs — only remove a label if it
-  no longer exists in the repo
-- Always re-check labels every run (they're cheap API calls), even if
-  everything else is up to date
+- Preserve and extend `value-labels` across runs — only remove a label if it no
+  longer exists in the repo
+- Always re-check labels every run (they're cheap API calls), even if everything
+  else is up to date
 - When distilling issues, prioritize those with answers or maintainer responses
   — these are confirmed patterns, not just questions
 - The `issue-stats` in frontmatter help the user understand coverage on future
   runs — always keep them accurate
 - **Local Notes are sacred** — never modify, reorder, or omit content between
-  the marker lines that start with `<!-- BEGIN LOCAL NOTES` and `<!-- END LOCAL NOTES`
-  during regeneration. Extract before rewriting, then splice the original block back
-  verbatim.
+  the marker lines that start with `<!-- BEGIN LOCAL NOTES` and
+  `<!-- END LOCAL NOTES` during regeneration. Extract before rewriting, then
+  splice the original block back verbatim.
 - When you solve a pain point or discover undocumented behavior for a tool that
   has a reference doc, add it to that doc's Local Notes section. Format each
   entry as a `### <short title>` with the problem, solution, and context.
 - If a Local Notes entry is later confirmed by upstream docs (e.g., after a
-  re-index pulls it into a generated section), keep the local note too — it
-  may have context the upstream version lacks
+  re-index pulls it into a generated section), keep the local note too — it may
+  have context the upstream version lacks

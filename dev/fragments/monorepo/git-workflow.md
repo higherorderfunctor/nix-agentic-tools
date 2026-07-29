@@ -4,17 +4,16 @@
 > `required_review_thread_resolution: true`, so an unresolved review thread
 > blocks merge including on auto-merging `update/*` PRs, and the claim that
 > Copilot "never gates its merge" is retired; adds the rule that Copilot's
-> SUPPRESSED findings must be read on every review, since they create no
-> thread; gates re-review polling on `commit_id` rather than a timestamp, and
-> caps the fix-and-re-review loop at 5 rounds). Prior: 2026-07-24 — the bot's
-> `update/*` PRs now
-> arm GitHub-native auto-merge and land themselves, the manual
+> SUPPRESSED findings must be read on every review, since they create no thread;
+> gates re-review polling on `commit_id` rather than a timestamp, and caps the
+> fix-and-re-review loop at 5 rounds). Prior: 2026-07-24 — the bot's `update/*`
+> PRs now arm GitHub-native auto-merge and land themselves, the manual
 > `pr:merge-updates` task and `merge-update-prs` skill are deleted, the update
-> sweep runs 4x/day, and squash-only is re-attributed to the repository
-> settings rather than the ruleset. If you change the branch-protection
-> ruleset, the repository merge settings, the worktree convention, the
-> bootstrap step, the local commit guard, the auto-merge arming, or the PR flow
-> and this fragment isn't updated in the same commit, stop and fix it.
+> sweep runs 4x/day, and squash-only is re-attributed to the repository settings
+> rather than the ruleset. If you change the branch-protection ruleset, the
+> repository merge settings, the worktree convention, the bootstrap step, the
+> local commit guard, the auto-merge arming, or the PR flow and this fragment
+> isn't updated in the same commit, stop and fix it.
 
 `main` is the trunk. Its branch-protection ruleset requires a pull request, no
 force-push, no deletion, and four required status checks —
@@ -32,9 +31,9 @@ required approval and not a required status check.
 
 **But it can now block a merge indirectly**, and that is deliberate. Since
 threads must be resolved, an unaddressed Copilot comment holds the PR — a bot
-`update/*` PR included, which is the intended trade: nothing auto-merges while
-a reviewer has an open question on it. A stalled update PR is not lost; the
-next 4x/day sweep rebuilds and re-arms it.
+`update/*` PR included, which is the intended trade: nothing auto-merges while a
+reviewer has an open question on it. A stalled update PR is not lost; the next
+4x/day sweep rebuilds and re-arms it.
 
 ### Copilot review: ALWAYS read the suppressed-comments block
 
@@ -43,18 +42,18 @@ thread:
 
 1. **Inline review comments** — these become resolvable threads, appear in
    `pull_request_read` with `method: get_review_comments`, and now gate merge.
-2. **A `<details>Comments suppressed due to low confidence (N)</details>`
-   block inside the review BODY** — no thread, nothing to resolve, invisible to
-   any thread query.
+2. **A `<details>Comments suppressed due to low confidence (N)</details>` block
+   inside the review BODY** — no thread, nothing to resolve, invisible to any
+   thread query.
 
 **Reading only the threads is not reading the review.** Measured on PR #568
 across seven review rounds: the suppressed bucket produced **7 findings, all
-genuine**, including a functional bug (`api_protocol` hardcoded while the
-scheme was stripped), a regex that could not match bracketed IPv6 hosts, and a
-doc that would have had readers create a directory literally named `~`. The
-gating bucket over the same period produced two, one of which was a
-diagnostics improvement over already-correct behavior. On that sample the
-confidence signal was inverted.
+genuine**, including a functional bug (`api_protocol` hardcoded while the scheme
+was stripped), a regex that could not match bracketed IPv6 hosts, and a doc that
+would have had readers create a directory literally named `~`. The gating bucket
+over the same period produced two, one of which was a diagnostics improvement
+over already-correct behavior. On that sample the confidence signal was
+inverted.
 
 So whenever you check Copilot feedback — CLI, MCP, a monitor loop, anything —
 fetch the review BODY too, not just the threads:
@@ -65,8 +64,8 @@ gh api --paginate "repos/OWNER/REPO/pulls/N/reviews" \
         | last | .body' | sed -n '/low confidence/,$p'
 ```
 
-`--paginate` is load-bearing, not tidiness. The endpoint pages at 30, and a
-PR that has been through a review loop reaches that easily — #568 took twenty.
+`--paginate` is load-bearing, not tidiness. The endpoint pages at 30, and a PR
+that has been through a review loop reaches that easily — #568 took twenty.
 Without it `last` returns the last review on the FIRST page, which is an OLD
 one, and the answer looks exactly like a fresh clean review.
 
@@ -79,18 +78,18 @@ gh api --paginate "repos/OWNER/REPO/pulls/N/reviews" \
         | last | .commit_id'
 ```
 
-This was arrived at by getting it wrong three times in a row, each fix
-looking sufficient until it wasn't:
+This was arrived at by getting it wrong three times in a row, each fix looking
+sufficient until it wasn't:
 
 1. reading `.[-1]` → returns a stale review, reported as new;
-2. taking `submitted_at` as a baseline → better, but a review of an OLDER
-   commit still advances the timestamp, so it reads as fresh;
+2. taking `submitted_at` as a baseline → better, but a review of an OLDER commit
+   still advances the timestamp, so it reads as fresh;
 3. requiring `commit_id == head` → correct.
 
 A related tell, useful because it needs no baseline at all: **check whether a
 check run named `copilot-pull-request-reviewer` exists on the head commit.** A
-push does not always trigger a review, and this distinguishes "not run yet"
-from "ran and found nothing" — which otherwise look identical.
+push does not always trigger a review, and this distinguishes "not run yet" from
+"ran and found nothing" — which otherwise look identical.
 
 ```bash
 gh api --paginate "repos/OWNER/REPO/commits/<head-sha>/check-runs" \
@@ -116,10 +115,10 @@ decision rather than an emergent property.
 
 At the cap, summarize what was found, what was fixed, and what is outstanding.
 
-Suppressed findings have no thread to resolve, so reply on the PR itself
-saying what you did with each. Resolve each gating thread as you fix it —
-they gate the merge now, and a PAT-authenticated MCP client cannot resolve
-them, so use the GraphQL `resolveReviewThread` mutation through `gh api`.
+Suppressed findings have no thread to resolve, so reply on the PR itself saying
+what you did with each. Resolve each gating thread as you fix it — they gate the
+merge now, and a PAT-authenticated MCP client cannot resolve them, so use the
+GraphQL `resolveReviewThread` mutation through `gh api`.
 
 **Never commit directly to `main`.** Two backstops enforce this. A local
 `reject-default-branch-commit` pre-commit hook (installed through devenv's
@@ -133,13 +132,13 @@ safety net, not the workflow.
 
 ### Every change goes through an isolated worktree + PR
 
-Worktrees live in `<repo>-worktrees/`, a **sibling of the primary checkout** —
-a clone at `~/src/nix-agentic-tools` puts them in
+Worktrees live in `<repo>-worktrees/`, a **sibling of the primary checkout** — a
+clone at `~/src/nix-agentic-tools` puts them in
 `~/src/nix-agentic-tools-worktrees/<slug>`. Keeping them beside the clone means
 a direnv whitelist (or any editor/tooling trust root) covering the checkout
-covers new worktrees too, so `cd` alone enters the devenv shell and
-materializes the gitignored `files.*` artifacts with no manual step — and it
-keeps work out of `~/.cache`, which cache-cleaning tools treat as disposable.
+covers new worktrees too, so `cd` alone enters the devenv shell and materializes
+the gitignored `files.*` artifacts with no manual step — and it keeps work out
+of `~/.cache`, which cache-cleaning tools treat as disposable.
 
 Derive that directory once per shell. This form is correct from **any**
 worktree, not just the primary checkout:
@@ -175,15 +174,15 @@ silently resolves one level too deep, into
    rejected. With direnv allowed for the parent directory the `cd` is enough on
    its own; that is what the sibling location buys.
 
-3. **Push at the first commit** — not at the end — so the branch is a
-   continuous off-machine backup. Open the PR **ready (non-draft) as soon as
-   the work is dev-complete**: Copilot review does **not** run on draft PRs in
-   this repo, so a draft that is actually ready silently skips review. Reserve
-   **draft** for genuine WIP, or when you explicitly want to preview the branch
-   in GitHub without review. Draft and ready PRs both get full CI here.
+3. **Push at the first commit** — not at the end — so the branch is a continuous
+   off-machine backup. Open the PR **ready (non-draft) as soon as the work is
+   dev-complete**: Copilot review does **not** run on draft PRs in this repo, so
+   a draft that is actually ready silently skips review. Reserve **draft** for
+   genuine WIP, or when you explicitly want to preview the branch in GitHub
+   without review. Draft and ready PRs both get full CI here.
 
-4. Keep pushing as work lands. Flip draft → ready the moment it is
-   dev-complete so review can start.
+4. Keep pushing as work lands. Flip draft → ready the moment it is dev-complete
+   so review can start.
 
 5. Merges are squash merges. The operator performs them for **human** PRs; the
    bot's `update/*` PRs land themselves (next section).

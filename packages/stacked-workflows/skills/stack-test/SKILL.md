@@ -37,8 +37,8 @@ Run a test command or formatter across commits in the current stack.
    - `flake.nix` → `nix flake check`
    - Otherwise, ask the user.
 
-2. **Determine mode**. If `--fix` is in arguments, use fix mode. Otherwise
-   use run mode.
+2. **Determine mode**. If `--fix` is in arguments, use fix mode. Otherwise use
+   run mode.
 
 3. **Determine target revset**. If a revset argument is provided, use it.
    Otherwise default to `stack()`.
@@ -51,8 +51,8 @@ Run a test command or formatter across commits in the current stack.
    git test run -x '<command>' '<revset>'
    ```
 
-   Add `--jobs <N>` if specified (uses worktree strategy automatically).
-   Default to `--jobs 0` for parallel when the project supports it.
+   Add `--jobs <N>` if specified (uses worktree strategy automatically). Default
+   to `--jobs 0` for parallel when the project supports it.
 
 5. **Report results**:
    - If all pass: confirm with commit count

@@ -24,7 +24,26 @@
     # scoped via settings.formatter.prettier.excludes.
     prettier = {
       enable = true;
-      settings.proseWrap = "preserve";
+      # `always` (reflow prose to printWidth), NOT `preserve`, and the
+      # difference is load-bearing rather than cosmetic. Prettier treats an
+      # inline code span as an UNBREAKABLE token: reflowing moves an
+      # over-long span onto its own line and lets it overflow rather than
+      # splitting it, and it JOINS any span that already straddles a
+      # newline. So this setting makes `a `split\nspan`` structurally
+      # impossible, and checks/formatting.nix turns that into a CI gate for
+      # free. Under `preserve` the same defect merely persists — measured
+      # at 369 spans across 66 files when this was flipped.
+      #
+      # That matters because these files are read as RAW markdown by agents
+      # out of `.claude/rules/`, `.github/instructions/`, and
+      # `.kiro/steering/`, never as rendered HTML. CommonMark does render a
+      # split span correctly in the general case (the newline becomes a
+      # space) — except where the break lands mid-token, which silently
+      # corrupts the span. See checks/split-code-spans.py, the backstop for
+      # the pathological cases a reflow cannot reach.
+      #
+      # printWidth is deliberately left at prettier's default of 80.
+      settings.proseWrap = "always";
     };
     # Shell: *.sh, *.bash
     shfmt.enable = true;

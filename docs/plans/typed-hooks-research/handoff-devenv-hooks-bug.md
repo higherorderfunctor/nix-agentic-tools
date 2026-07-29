@@ -1,8 +1,9 @@
 # Handoff — fix the Claude devenv hook-emission latent bug
 
-Standalone steering prompt for a session to fix the latent type-mismatch bug found during the
-typed-hooks assessment. Preserved here so it isn't lost if the parallel factory session doesn't
-pick it up as related. Context: `docs/plans/typed-hooks-across-clis-assessment.md` §3.1, §5, §7, §8.
+Standalone steering prompt for a session to fix the latent type-mismatch bug
+found during the typed-hooks assessment. Preserved here so it isn't lost if the
+parallel factory session doesn't pick it up as related. Context:
+`docs/plans/typed-hooks-across-clis-assessment.md` §3.1, §5, §7, §8.
 
 ---
 

@@ -56,18 +56,18 @@ Distilled from https://github.com/arxanas/git-branchless, updated 2026-03-21.
 
 git-branchless is a suite of Git extensions that adds anonymous branching,
 in-memory rebases, commit graph visualization, and a general-purpose undo
-system. It enables patch-stack workflows (as used at Meta, Google, and the
-Linux project) where the unit of change is an individual commit rather than a
-branch. All rewrite operations (move, sync, restack) run in-memory by default,
-never touching the working copy unless merge conflicts require it.
+system. It enables patch-stack workflows (as used at Meta, Google, and the Linux
+project) where the unit of change is an individual commit rather than a branch.
+All rewrite operations (move, sync, restack) run in-memory by default, never
+touching the working copy unless merge conflicts require it.
 
 The tool is fully compatible with branches — "branchless" refers to the ability
 to work _without_ them when convenient, via anonymous branching where all draft
 commits stay visible in the smartlog.
 
 **Status:** Alpha. Latest release v0.10.0 (Oct 2024). The maintainer considers
-Jujutsu the long-term successor; git-branchless serves as a bridge and
-workflow test-bed.
+Jujutsu the long-term successor; git-branchless serves as a bridge and workflow
+test-bed.
 
 ## Installation & Setup
 
@@ -127,14 +127,15 @@ git config 'branchless.revsets.alias.d' 'draft()'
 
 ### Commit Stacks
 
-A series (or subtree) of draft commits. Unlike branches, stacks can diverge
-into multiple lines of work. Commands like `git move` operate on entire
-subtrees, not just linear sequences.
+A series (or subtree) of draft commits. Unlike branches, stacks can diverge into
+multiple lines of work. Commands like `git move` operate on entire subtrees, not
+just linear sequences.
 
 ### Public vs Draft Commits
 
 - **Public**: on the main branch (diamond `◆`/`◇` in smartlog). Immutable.
-- **Draft**: your local work, not yet on main (circle `◯`/`●`). Freely rewritable.
+- **Draft**: your local work, not yet on main (circle `◯`/`●`). Freely
+  rewritable.
 
 ### Anonymous Branching
 
@@ -143,9 +144,9 @@ without needing a branch name. Useful for speculative/experimental work.
 
 ### Speculative Merges
 
-Operations like `git move` and `git sync` speculatively apply rebases
-in-memory. If a merge conflict would occur, they abort cleanly without
-starting conflict resolution (unless `--merge` is passed).
+Operations like `git move` and `git sync` speculatively apply rebases in-memory.
+If a merge conflict would occur, they abort cleanly without starting conflict
+resolution (unless `--merge` is passed).
 
 ### Bitemporality
 
@@ -155,9 +156,9 @@ browsing previous states of the repository.
 
 ### Working Copy Snapshots
 
-Some commands create ephemeral snapshots of the working copy (including
-unstaged changes). These power `git undo` but never include untracked files.
-Auto garbage-collected. Disable via `branchless.undo.createSnapshots = false`.
+Some commands create ephemeral snapshots of the working copy (including unstaged
+changes). These power `git undo` but never include untracked files. Auto
+garbage-collected. Disable via `branchless.undo.createSnapshots = false`.
 
 ## Command Reference
 
@@ -173,11 +174,11 @@ git sl 'branches()'       # only commits with branches
 
 Icons: `◆`/`◇` = public, `◯`/`●` = draft (● = HEAD), `✕` = hidden/abandoned.
 
-Visibility rules: shows checked-out commit, commits with branches, your
-commits (not hidden), commits with visible descendants, and hidden public
-commits that were rewritten. Commits made before `git branchless init`
-won't appear. For color in pipes: `git branchless --color always smartlog`
-(flag goes before subcommand, arxanas/git-branchless#1308).
+Visibility rules: shows checked-out commit, commits with branches, your commits
+(not hidden), commits with visible descendants, and hidden public commits that
+were rewritten. Commits made before `git branchless init` won't appear. For
+color in pipes: `git branchless --color always smartlog` (flag goes before
+subcommand, arxanas/git-branchless#1308).
 
 ### Navigation
 
@@ -213,8 +214,8 @@ git record -c branch-name # create new branch and commit
 git record -d             # detach from current branch first
 ```
 
-Note: If changes are staged, `git record` uses only those. Otherwise it
-commits all unstaged tracked changes. Untracked files still need `git add`.
+Note: If changes are staged, `git record` uses only those. Otherwise it commits
+all unstaged tracked changes. Untracked files still need `git add`.
 
 **`git amend`** — Amend current commit + auto-restack descendants.
 
@@ -224,7 +225,8 @@ git add file && git amend # amend with only staged changes
 git amend --reparent      # amend without rebasing children (for formatters)
 ```
 
-**Gotcha:** `git amend` skips pre-commit hooks (arxanas/git-branchless#1275). Use `git commit --amend` + `git restack` if hooks are needed.
+**Gotcha:** `git amend` skips pre-commit hooks (arxanas/git-branchless#1275).
+Use `git commit --amend` + `git restack` if hooks are needed.
 
 ### Rewriting
 
@@ -237,7 +239,8 @@ git reword <hash> -m "new msg"     # replace message inline
 git reword 'stack()'               # batch reword entire stack
 ```
 
-**Gotcha:** `git reword` rewrites all stack commits even when only one message changed (arxanas/git-branchless#1385).
+**Gotcha:** `git reword` rewrites all stack commits even when only one message
+changed (arxanas/git-branchless#1385).
 
 **`git move`** — Move commits/subtrees in the graph (in-memory rebase).
 
@@ -251,8 +254,8 @@ git move -I                    # insert commit between others
 git move -F -x <src> -d <dest> # fixup: combine src into dest
 ```
 
-Defaults: no `-d` → `HEAD`; no `-s`/`-b` → `-b HEAD`.
-Conflicts: fails cleanly unless `--merge` is passed.
+Defaults: no `-d` → `HEAD`; no `-s`/`-b` → `-b HEAD`. Conflicts: fails cleanly
+unless `--merge` is passed.
 
 **`git split`** — Extract changes from a commit.
 
@@ -285,12 +288,15 @@ git sync 'stack()'        # rebase only current stack
 git sync --merge          # resolve conflicts for all stacks
 ```
 
-Conflict handling: skips conflicting stacks by default, prints summary.
-Fix individually: `git move -b <hash> -d main --merge`.
+Conflict handling: skips conflicting stacks by default, prints summary. Fix
+individually: `git move -b <hash> -d main --merge`.
 
-**Gotcha:** `git sync --pull` with a dirty working tree can strand you on an old commit (arxanas/git-branchless#1137). Commit or stash first.
-**Gotcha:** `git sync` in worktrees may corrupt the index in other worktrees (arxanas/git-branchless#1524). Check `git status` afterward.
-**Gotcha:** Squash-merged PRs are not detected by `git sync` — manually `git hide -r <hash>` (arxanas/git-branchless#965).
+**Gotcha:** `git sync --pull` with a dirty working tree can strand you on an old
+commit (arxanas/git-branchless#1137). Commit or stash first. **Gotcha:**
+`git sync` in worktrees may corrupt the index in other worktrees
+(arxanas/git-branchless#1524). Check `git status` afterward. **Gotcha:**
+Squash-merged PRs are not detected by `git sync` — manually `git hide -r <hash>`
+(arxanas/git-branchless#965).
 
 **`git submit`** — Push branches to remote.
 
@@ -305,11 +311,13 @@ git submit 'draft()'      # push all draft branches
 Note: force-pushes by design (updating review branches). Set
 `git config remote.pushDefault origin` for `--create`.
 
-**Gotcha:** `git submit` skips commits with 2+ branches attached (arxanas/git-branchless#1131). One branch per commit.
+**Gotcha:** `git submit` skips commits with 2+ branches attached
+(arxanas/git-branchless#1131). One branch per commit.
 
-**Known issue:** GitHub forge (`--forge github`) requires two executions —
-first creates PR with wrong base, second fixes it (arxanas/git-branchless#1550). Multiple bugs
-with stack reorder (arxanas/git-branchless#1259). Prefer manual `gh pr create` workflow.
+**Known issue:** GitHub forge (`--forge github`) requires two executions — first
+creates PR with wrong base, second fixes it (arxanas/git-branchless#1550).
+Multiple bugs with stack reorder (arxanas/git-branchless#1259). Prefer manual
+`gh pr create` workflow.
 
 ### Undo & Recovery
 
@@ -320,9 +328,9 @@ git undo                  # undo last operation
 git undo -i               # interactive: browse repo states, pick one
 ```
 
-Can undo: commits, amends, rebases, merges, checkouts, branch operations.
-Cannot undo: working copy changes (unless captured in a snapshot), untracked
-files. Requires Git v2.29+. Can undo a `git undo`.
+Can undo: commits, amends, rebases, merges, checkouts, branch operations. Cannot
+undo: working copy changes (unless captured in a snapshot), untracked files.
+Requires Git v2.29+. Can undo a `git undo`.
 
 **`git hide`** / **`git unhide`** — Remove commits from smartlog.
 
@@ -334,17 +342,17 @@ git unhide <hash>         # bring back a hidden commit
 
 **Gotcha:** `git hide` (without `-r`) still deletes branches on the hidden
 commit AND cascades branch deletion to children. If a branch like
-`todo/pre-publish` is on a child commit, it gets deleted even though the
-child commit itself isn't hidden. Use `git undo` to recover. Always check
-`git sl` for child branches before hiding a commit.
+`todo/pre-publish` is on a child commit, it gets deleted even though the child
+commit itself isn't hidden. Use `git undo` to recover. Always check `git sl` for
+child branches before hiding a commit.
 
-**Gotcha:** Directory symlinks in the working tree (e.g., `.claude/skills/foo`
-→ `../../dev/foo`) cause branchless to panic during `git amend`, `git prev`,
-`git next`, and other commands that create working copy snapshots. The error
-is `could not create blob from <path>: Is a directory (os error 21)`. Workaround:
+**Gotcha:** Directory symlinks in the working tree (e.g., `.claude/skills/foo` →
+`../../dev/foo`) cause branchless to panic during `git amend`, `git prev`,
+`git next`, and other commands that create working copy snapshots. The error is
+`could not create blob from <path>: Is a directory (os error 21)`. Workaround:
 remove the symlink before the operation, use `git commit --amend --no-edit` +
-`git restack` instead of `git amend`, then recreate the symlink afterward.
-File symlinks (pointing to a file, not a directory) work fine.
+`git restack` instead of `git amend`, then recreate the symlink afterward. File
+symlinks (pointing to a file, not a directory) work fine.
 
 ### Testing
 
@@ -370,8 +378,8 @@ git test fix -x 'cargo fmt --all'              # format each commit
 git test fix -x 'cmd' --jobs 0                 # parallel fixing
 ```
 
-`git test fix` never produces merge conflicts — it replaces each commit's
-tree directly, leaving descendants unchanged.
+`git test fix` never produces merge conflicts — it replaces each commit's tree
+directly, leaving descendants unchanged.
 
 **`git test show`** — Show previous test results.
 
@@ -642,19 +650,21 @@ git hide -r <hash>             # manually hide squash-merged stacks
 git hide "draft() & message('substr:WIP')"  # bulk hide by pattern
 ```
 
-`git sync` only detects linear merges, not squash merges (arxanas/git-branchless#965, arxanas/git-branchless#977, arxanas/git-branchless#1218).
+`git sync` only detects linear merges, not squash merges
+(arxanas/git-branchless#965, arxanas/git-branchless#977,
+arxanas/git-branchless#1218).
 
 ## Anti-Patterns
 
 ### Don't use `git stash`
 
-Commit instead. Anonymous commits are first-class in branchless — they appear
-in the smartlog and can't be forgotten. Use `git hide` to clean up later.
+Commit instead. Anonymous commits are first-class in branchless — they appear in
+the smartlog and can't be forgotten. Use `git hide` to clean up later.
 
 ### Don't run `git rebase` for moves
 
-Use `git move` instead — it's in-memory, handles subtrees, moves branches,
-and won't start conflict resolution unexpectedly.
+Use `git move` instead — it's in-memory, handles subtrees, moves branches, and
+won't start conflict resolution unexpectedly.
 
 ### Don't use `-s` with branch names
 
@@ -680,14 +690,15 @@ you're ready to resolve. This lets you safely try operations without risk.
 
 ### Don't use `feature.manyFiles = true` without workaround
 
-Git v2.40.0+ with `index.skipHash` (set by `feature.manyFiles`) causes
-libgit2 crashes. Same crash with `--index-version 4` (arxanas/git-branchless#1363). Workaround:
-`git config --local index.skipHash false`.
+Git v2.40.0+ with `index.skipHash` (set by `feature.manyFiles`) causes libgit2
+crashes. Same crash with `--index-version 4` (arxanas/git-branchless#1363).
+Workaround: `git config --local index.skipHash false`.
 
 ### Don't commit on `main`
 
-Commits on `main` are treated as public — they vanish from draft smartlog
-and can't be rewritten. Always detach first (`git checkout --detach`) (arxanas/git-branchless#860).
+Commits on `main` are treated as public — they vanish from draft smartlog and
+can't be rewritten. Always detach first (`git checkout --detach`)
+(arxanas/git-branchless#860).
 
 ### Don't init in a worktree
 
@@ -697,20 +708,22 @@ and can't be rewritten. Always detach first (`git checkout --detach`) (arxanas/g
 ### GPG/SSH signing not supported
 
 git-branchless cannot sign commits. All rewrite operations produce unsigned
-commits. This is a known limitation (arxanas/git-branchless#465, labeled "help wanted").
-Community arxanas/git-branchless#1538 pending.
+commits. This is a known limitation (arxanas/git-branchless#465, labeled "help
+wanted"). Community arxanas/git-branchless#1538 pending.
 
 ## Known Bugs
 
-- **"Could not parse reference-transaction-line"** — harmless ERROR log on
-  newer Git versions. Operations complete normally (arxanas/git-branchless#1388, arxanas/git-branchless#1321).
-- **Git v2.46+ test failures** — reference-transaction hook changes break
-  some tests; user impact unclear (arxanas/git-branchless#1416).
-- **`git sync` slow on `main`** — redundant checkout per stack. Detach
-  first to avoid (arxanas/git-branchless#1155).
+- **"Could not parse reference-transaction-line"** — harmless ERROR log on newer
+  Git versions. Operations complete normally (arxanas/git-branchless#1388,
+  arxanas/git-branchless#1321).
+- **Git v2.46+ test failures** — reference-transaction hook changes break some
+  tests; user impact unclear (arxanas/git-branchless#1416).
+- **`git sync` slow on `main`** — redundant checkout per stack. Detach first to
+  avoid (arxanas/git-branchless#1155).
 - **Anti-GC ref accumulation** — 100k+ refs under `refs/branchless/*` over
   months. `git branchless gc` partially helps (arxanas/git-branchless#1125).
-- **Rust 1.89+ build failure** — fails to compile with newer Rust (arxanas/git-branchless#1585).
+- **Rust 1.89+ build failure** — fails to compile with newer Rust
+  (arxanas/git-branchless#1585).
 
 ## Integration
 
@@ -735,9 +748,9 @@ git revise -c <hash>           # split a commit interactively
 git revise --autosquash        # process fixup! commits
 ```
 
-**Caveat:** git-revise does not call `post-rewrite` hooks, so branchless
-can't track the rewrite. Run `git restack` afterward. For operations where
-branchless has equivalents (`reword`, `split`, `move`), prefer those.
+**Caveat:** git-revise does not call `post-rewrite` hooks, so branchless can't
+track the rewrite. Run `git restack` afterward. For operations where branchless
+has equivalents (`reword`, `split`, `move`), prefer those.
 
 ### With GitHub (git submit workflow)
 
@@ -747,14 +760,14 @@ branchless has equivalents (`reword`, `split`, `move`), prefer those.
 4. After amend/restack: `git submit` to force-push updates
 5. After merge: `git sync --pull` auto-cleans merged commits
 
-Set PR base to the previous branch in the stack; GitHub auto-updates
-dependent PRs on merge (arxanas/git-branchless#716).
+Set PR base to the previous branch in the stack; GitHub auto-updates dependent
+PRs on merge (arxanas/git-branchless#716).
 
 ### Hooks Requirement
 
-Hooks installed by `git branchless init` are required for commit tracking,
-undo, and auto-restack. Without them, `git move` still works for basic
-rebasing but loses commit tracking (arxanas/git-branchless#1286).
+Hooks installed by `git branchless init` are required for commit tracking, undo,
+and auto-restack. Without them, `git move` still works for basic rebasing but
+loses commit tracking (arxanas/git-branchless#1286).
 
 ### Git Version Compatibility
 

@@ -7,26 +7,24 @@ applyTo: "lib/ai/sharedOptions.nix,packages/claude-code/modules/**,packages/copi
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-07-27 (commit pending — re-points the
-> claude-code wrapping cite from `packages/ai-clis/claude-code.nix`,
-> a path that no longer exists, to `overlays/claude-code.nix`;
-> prior 2026-04-08, A10 delete modules/ tree). If you change the gating, the
-> `programs.*.enable` flipping, or the cross-ecosystem data flow
-> in the per-package factories (`packages/*/lib/mk*.nix`) or
-> shared options (`lib/ai/sharedOptions.nix`) and this fragment
-> isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-07-27 (commit pending — re-points the claude-code
+> wrapping cite from `packages/ai-clis/claude-code.nix`, a path that no longer
+> exists, to `overlays/claude-code.nix`; prior 2026-04-08, A10 delete modules/
+> tree). If you change the gating, the `programs.*.enable` flipping, or the
+> cross-ecosystem data flow in the per-package factories
+> (`packages/*/lib/mk*.nix`) or shared options (`lib/ai/sharedOptions.nix`) and
+> this fragment isn't updated in the same commit, stop and fix it.
 
-The `ai.*` HM module provides a unified interface that fans out
-shared AI-CLI configuration to each enabled ecosystem (Claude,
-Copilot, Kiro, future Codex). It is NOT a thin wrapper — the
-gating semantics, default-setting behavior, and fanout patterns
-are load-bearing and got bitten into production by a silent
+The `ai.*` HM module provides a unified interface that fans out shared AI-CLI
+configuration to each enabled ecosystem (Claude, Copilot, Kiro, future Codex).
+It is NOT a thin wrapper — the gating semantics, default-setting behavior, and
+fanout patterns are load-bearing and got bitten into production by a silent
 no-op bug. Read this fragment before changing the gating.
 
 ### There is no `ai.enable`
 
-The `ai` module has **no master enable option**. Each per-CLI
-sub-enable is the sole gate for that ecosystem's fanout:
+The `ai` module has **no master enable option**. Each per-CLI sub-enable is the
+sole gate for that ecosystem's fanout:
 
 | Consumer sets              | What fires                                                            |
 | -------------------------- | --------------------------------------------------------------------- |
@@ -34,20 +32,19 @@ sub-enable is the sole gate for that ecosystem's fanout:
 | `ai.copilot.enable = true` | copilot fanout block + `programs.copilot-cli.enable = mkDefault true` |
 | `ai.kiro.enable = true`    | kiro fanout block + `programs.kiro-cli.enable = mkDefault true`       |
 
-Each per-CLI block implicitly flips the corresponding upstream
-module's enable via `mkDefault`, so consumers don't have to set
-enable twice. A consumer can still override by setting
-`programs.<cli>.enable = false` explicitly, but the default is on
-when the ai-level enable is on.
+Each per-CLI block implicitly flips the corresponding upstream module's enable
+via `mkDefault`, so consumers don't have to set enable twice. A consumer can
+still override by setting `programs.<cli>.enable = false` explicitly, but the
+default is on when the ai-level enable is on.
 
 ### Why there's no master switch
 
-The original design had `config = mkIf cfg.enable (mkMerge [...])`
-wrapping everything, requiring BOTH `ai.enable = true` AND
-`ai.claude.enable = true` to fan out. This caused a silent no-op:
-a consumer who set `ai.claude.enable = true` without `ai.enable = true`
-got no fanout at all — `programs.claude-code` options stayed at
-defaults, configuration was stored in the option but never fanned out.
+The original design had `config = mkIf cfg.enable (mkMerge [...])` wrapping
+everything, requiring BOTH `ai.enable = true` AND `ai.claude.enable = true` to
+fan out. This caused a silent no-op: a consumer who set
+`ai.claude.enable = true` without `ai.enable = true` got no fanout at all —
+`programs.claude-code` options stayed at defaults, configuration was stored in
+the option but never fanned out.
 
 Surfaced 2026-04-07 during HITL integration. Root cause: the outer
 `mkIf cfg.enable` gate was false.
@@ -59,10 +56,9 @@ Four fix options were considered; option (b) was chosen:
 3. Magic-default `ai.enable` from sub-options (opaque)
 4. Document the requirement loudly with an assertion
 
-Option (b) is the cleanest: redundant gates create silent failure
-modes. Each option that looks like it should "do something" must
-actually do something. The master switch added no information
-over the per-CLI enables.
+Option (b) is the cleanest: redundant gates create silent failure modes. Each
+option that looks like it should "do something" must actually do something. The
+master switch added no information over the per-CLI enables.
 
 Fix landed in commit f2e911c.
 
@@ -72,66 +68,58 @@ The ai module fans out TWO kinds of configuration:
 
 **Per-CLI options** (live inside `ai.{claude,copilot,kiro}.*`):
 
-- `ai.claude.package` / `ai.copilot.package` / `ai.kiro.package`
-  — package override, fans out to `programs.<cli>.package`
-  **Cross-ecosystem options** (live at `ai.*` top level, fan out
-  to every enabled ecosystem simultaneously):
+- `ai.claude.package` / `ai.copilot.package` / `ai.kiro.package` — package
+  override, fans out to `programs.<cli>.package` **Cross-ecosystem options**
+  (live at `ai.*` top level, fan out to every enabled ecosystem simultaneously):
 
-- `ai.skills` — attrset of name → directory path. Each enabled
-  ecosystem gets its native representation (Claude:
-  `.claude/skills/<name>` symlink; Copilot and Kiro: native
-  `skills` option on their module).
-- `ai.instructions` — attrset of name → `instructionModule`
-  (text + optional path scoping + description). Transformed per
-  ecosystem via `fragments-ai.passthru.transforms`: Claude gets
-  `.claude/rules/<name>.md` with YAML frontmatter; Copilot gets
-  `.github/instructions/<name>.instructions.md`; Kiro gets
-  `.kiro/steering/<name>.md` (via the CLI module).
-- `ai.lspServers` — typed LSP definitions, translated to each
-  ecosystem's native LSP config format (Claude via
-  `ENABLE_LSP_TOOL=1`; Copilot has `lspServers` option; Kiro too).
-- `ai.environmentVariables` — shared env vars; Copilot and Kiro
-  fan out directly, Claude has no native option so Claude itself
-  receives nothing from this (intentional — Claude env goes via
-  `programs.claude-code.settings.env` directly).
+- `ai.skills` — attrset of name → directory path. Each enabled ecosystem gets
+  its native representation (Claude: `.claude/skills/<name>` symlink; Copilot
+  and Kiro: native `skills` option on their module).
+- `ai.instructions` — attrset of name → `instructionModule` (text + optional
+  path scoping + description). Transformed per ecosystem via
+  `fragments-ai.passthru.transforms`: Claude gets `.claude/rules/<name>.md` with
+  YAML frontmatter; Copilot gets `.github/instructions/<name>.instructions.md`;
+  Kiro gets `.kiro/steering/<name>.md` (via the CLI module).
+- `ai.lspServers` — typed LSP definitions, translated to each ecosystem's native
+  LSP config format (Claude via `ENABLE_LSP_TOOL=1`; Copilot has `lspServers`
+  option; Kiro too).
+- `ai.environmentVariables` — shared env vars; Copilot and Kiro fan out
+  directly, Claude has no native option so Claude itself receives nothing from
+  this (intentional — Claude env goes via `programs.claude-code.settings.env`
+  directly).
 
-All cross-ecosystem fanouts use `mkDefault` so per-CLI overrides
-take precedence.
+All cross-ecosystem fanouts use `mkDefault` so per-CLI overrides take
+precedence.
 
 ### Assertion semantics
 
-Three assertions live in the config block, always evaluated (no
-mkIf gate to skip them):
+Three assertions live in the config block, always evaluated (no mkIf gate to
+skip them):
 
-1. `ai.copilot.enable` requires `programs.copilot-cli` module to
-   be imported
-2. `ai.kiro.enable` requires `programs.kiro-cli` module to be
-   imported
+1. `ai.copilot.enable` requires `programs.copilot-cli` module to be imported
+2. `ai.kiro.enable` requires `programs.kiro-cli` module to be imported
 3. If any cross-ecosystem option is set (skills, instructions,
-   environmentVariables), at least one ecosystem must be enabled
-   — otherwise the config does nothing and the user didn't notice
+   environmentVariables), at least one ecosystem must be enabled — otherwise the
+   config does nothing and the user didn't notice
 
 ### What's NOT in the ai module
 
-- The package wrapping (Bun runtime) for claude-code — handled
-  in `overlays/claude-code.nix` at overlay level.
-- MCP server config — ai has no `mcpServers` option. Consumers
-  configure `programs.mcp.servers` or per-CLI `mcpServers`
-  directly. This is intentional: the ai module stayed focused
-  on scope that's cleanly cross-ecosystem. MCP integration has
-  enough ecosystem-specific quirks that centralizing it would
+- The package wrapping (Bun runtime) for claude-code — handled in
+  `overlays/claude-code.nix` at overlay level.
+- MCP server config — ai has no `mcpServers` option. Consumers configure
+  `programs.mcp.servers` or per-CLI `mcpServers` directly. This is intentional:
+  the ai module stayed focused on scope that's cleanly cross-ecosystem. MCP
+  integration has enough ecosystem-specific quirks that centralizing it would
   have been more pain than value.
 
-See the backlog item "ai.claude.\* full passthrough" for the
-ongoing work to expose more `programs.claude-code.*` options via
-`ai.claude.*`.
+See the backlog item "ai.claude.\* full passthrough" for the ongoing work to
+expose more `programs.claude-code.*` options via `ai.claude.*`.
 
 ### Config parity
 
-Every option on the HM ai module must have a matching option on
-the devenv ai module with the same semantics. If you add
-an option to one, add it to the other in the same commit.
-This is enforced by convention, not by the module system.
+Every option on the HM ai module must have a matching option on the devenv ai
+module with the same semantics. If you add an option to one, add it to the other
+in the same commit. This is enforced by convention, not by the module system.
 
 ### Verifying fanout works
 
@@ -143,73 +131,64 @@ nix eval --impure --json \
 # Should be true if ai.claude.enable = true
 ```
 
-If the option stays false despite `ai.claude.enable = true`, the
-fanout is broken — fix the module, not the consumer.
+If the option stays false despite `ai.claude.enable = true`, the fanout is
+broken — fix the module, not the consumer.
 
 ### Shared-pool is per-evaluation, NOT cross-backend
 
 `lib/ai/sharedOptions.nix` declares cross-app pools (`ai.skills`,
 `ai.instructions`, `ai.rules`, `ai.mcpServers`, `ai.lspServers`,
-`ai.environmentVariables`, `ai.agents`, `ai.context`). It's
-imported by BOTH `hmTransform.nix` and `devenvTransform.nix`.
+`ai.environmentVariables`, `ai.agents`, `ai.context`). It's imported by BOTH
+`hmTransform.nix` and `devenvTransform.nix`.
 
 **The option declarations are shared. The values are NOT.**
 
-HM and devenv run separate `evalModules` invocations with
-independent config trees. A value set in the HM-imported copy
-of a module is visible only to HM's eval. Devenv's eval has a
-completely separate `config.ai.skills` (etc.) that doesn't see
-the HM contribution.
+HM and devenv run separate `evalModules` invocations with independent config
+trees. A value set in the HM-imported copy of a module is visible only to HM's
+eval. Devenv's eval has a completely separate `config.ai.skills` (etc.) that
+doesn't see the HM contribution.
 
-**Consequence for "plain modules"** (not `mkAiApp` participants,
-like `packages/stacked-workflows/modules/`): when a plain module
-contributes to `ai.skills` / `ai.instructions` / etc., the
-contribution MUST happen in the module's appropriate backend
-sibling. If the content is HM-scope (personal user config), put it
-in the HM module. If it's project-scope (devenv-only), put it in
-the devenv module. Contributing in one and expecting the other to
-pick it up will silently fail — the contribution just doesn't land
-in the other eval.
+**Consequence for "plain modules"** (not `mkAiApp` participants, like
+`packages/stacked-workflows/modules/`): when a plain module contributes to
+`ai.skills` / `ai.instructions` / etc., the contribution MUST happen in the
+module's appropriate backend sibling. If the content is HM-scope (personal user
+config), put it in the HM module. If it's project-scope (devenv-only), put it in
+the devenv module. Contributing in one and expecting the other to pick it up
+will silently fail — the contribution just doesn't land in the other eval.
 
-This is a different discipline from the AI CLI factories
-(`mkAiApp`), which have structural `hm = { config = …; }` /
-`devenv = { config = …; }` blocks that force per-backend
-separation by construction. Plain modules have no such guardrail —
+This is a different discipline from the AI CLI factories (`mkAiApp`), which have
+structural `hm = { config = …; }` / `devenv = { config = …; }` blocks that force
+per-backend separation by construction. Plain modules have no such guardrail —
 authors must decide scope consciously.
 
-**Worked example — stacked-workflows skills.** Because an
-`ai.skills` value set in one backend is invisible to the other,
-the stacked-workflows package contributes its `stack-*` skills from
-BOTH backend modules: the HM module installs them user-global
-(`~/.claude/skills/stack-*`, ...) and the devenv module installs
-them project-local — two separate, deliberate contributions, one
-per eval. A 2026-04 bug drove the lesson home: the skills were
-contributed from ONLY the HM module while a shared devenv pool was
-expected to "pick them up", so devenv consumers saw nothing while
-the HM contribution alone reached personal scope. It was first
-scoped to the devenv module (commit `940ec54c`); the current design
-re-adds the HM contribution as its own explicit, user-global
-emission, so both backends now contribute (each via
-`lib/ai/mkSkillPackageModule`).
+**Worked example — stacked-workflows skills.** Because an `ai.skills` value set
+in one backend is invisible to the other, the stacked-workflows package
+contributes its `stack-*` skills from BOTH backend modules: the HM module
+installs them user-global (`~/.claude/skills/stack-*`, ...) and the devenv
+module installs them project-local — two separate, deliberate contributions, one
+per eval. A 2026-04 bug drove the lesson home: the skills were contributed from
+ONLY the HM module while a shared devenv pool was expected to "pick them up", so
+devenv consumers saw nothing while the HM contribution alone reached personal
+scope. It was first scoped to the devenv module (commit `940ec54c`); the current
+design re-adds the HM contribution as its own explicit, user-global emission, so
+both backends now contribute (each via `lib/ai/mkSkillPackageModule`).
 
 <!-- Fragment: dev/fragments/ai-module/collision-semantics.md -->
 
 ## ai.\* Collision Semantics
 
 > **Last verified:** 2026-04-21 (commit pending — refactor of
-> ai-factory-collision plan §3.2). If you add a new shared pool
-> to `ai.*` or change how pools are merged across the L2↔L3
-> boundary and this fragment isn't updated in the same commit,
-> stop and fix it.
+> ai-factory-collision plan §3.2). If you add a new shared pool to `ai.*` or
+> change how pools are merged across the L2↔L3 boundary and this fragment isn't
+> updated in the same commit, stop and fix it.
 
 ### Rule
 
-Duplicate keys across any shared `ai.*` pool are a **failure
-condition**, not a silent override. The factory used to merge
-the top-level pool with the per-CLI pool via `config.ai.<pool>
-// cfg.<pool>`, letting a later per-CLI contribution silently
-overwrite a same-name top-level entry. User directive: "mixing
-and collision should be a failure. we don't merge over keys."
+Duplicate keys across any shared `ai.*` pool are a **failure condition**, not a
+silent override. The factory used to merge the top-level pool with the per-CLI
+pool via `config.ai.<pool> // cfg.<pool>`, letting a later per-CLI contribution
+silently overwrite a same-name top-level entry. User directive: "mixing and
+collision should be a failure. we don't merge over keys."
 
 ### Covered pools
 
@@ -222,13 +201,13 @@ Applies to every attrset-shaped shared pool in `ai.*`:
 - `ai.environmentVariables` / `ai.<cli>.environmentVariables`
 - `ai.agents` / `ai.<cli>.agents`
 
-`ai.instructions` is a list, not an attrset, so list concat
-stays as-is. `ai.context` is single-valued.
+`ai.instructions` is a list, not an attrset, so list concat stays as-is.
+`ai.context` is single-valued.
 
 ### Implementation
 
-`lib.ai.mergeWithCollisionCheck` in `lib/ai/ai-common.nix`. Call
-site in `lib/ai/app/hmTransform.nix` and `devenvTransform.nix`:
+`lib.ai.mergeWithCollisionCheck` in `lib/ai/ai-common.nix`. Call site in
+`lib/ai/app/hmTransform.nix` and `devenvTransform.nix`:
 
 ```nix
 mergeCheck = poolName: topPool: cliPool:
@@ -242,12 +221,11 @@ rulesMerge = mergeCheck "rules" config.ai.rules cfg.rules;
 collisionAssertions = rulesMerge.assertions ++ ... ;
 ```
 
-The helper returns `{ merged, assertions }`. The merged shape
-matches the old `//` behavior (per-CLI wins) so downstream
-code keeps resolving until the module system checks
-assertions. Assertions aggregate into `config.assertions`
-**outside any mkIf guard**, so misconfigurations surface even
-when the CLI is toggled off.
+The helper returns `{ merged, assertions }`. The merged shape matches the old
+`//` behavior (per-CLI wins) so downstream code keeps resolving until the module
+system checks assertions. Assertions aggregate into `config.assertions`
+**outside any mkIf guard**, so misconfigurations surface even when the CLI is
+toggled off.
 
 ### Error message
 
@@ -259,32 +237,28 @@ delete the duplicate.
 
 ### Adding a new shared pool
 
-1. Declare `ai.<pool>` in `lib/ai/sharedOptions.nix` (attrset
-   shape).
+1. Declare `ai.<pool>` in `lib/ai/sharedOptions.nix` (attrset shape).
 2. Declare `ai.<cli>.<pool>` in the mkAiApp baseline
-   (`lib/ai/app/hmTransform.nix` + `devenvTransform.nix`) OR in
-   the per-CLI factory (for CLI-specific shape, like kiro's
-   JSON `agents`).
-3. Add `<pool>Merge = mergeCheck "<pool>" config.ai.<pool>
-cfg.<pool>;` to the transform.
+   (`lib/ai/app/hmTransform.nix` + `devenvTransform.nix`) OR in the per-CLI
+   factory (for CLI-specific shape, like kiro's JSON `agents`).
+3. Add `<pool>Merge = mergeCheck "<pool>" config.ai.<pool> cfg.<pool>;` to the
+   transform.
 4. Append `<pool>Merge.assertions` to `collisionAssertions`.
 5. Set `merged<Pool> = <pool>Merge.merged;`.
 6. Add a collision test in `checks/module-eval.nix`.
 
 ### Pitfall
 
-**Do NOT merge with `//` anywhere in the factory.** That was
-the old shape — it silently overrode. If you see a new `//`
-on a pool merge during code review, route it through the
-helper instead. The existing tests cover the collision path
-per pool, but a brand-new pool added without the helper will
-evade detection until someone happens to configure a
-collision.
+**Do NOT merge with `//` anywhere in the factory.** That was the old shape — it
+silently overrode. If you see a new `//` on a pool merge during code review,
+route it through the helper instead. The existing tests cover the collision path
+per pool, but a brand-new pool added without the helper will evade detection
+until someone happens to configure a collision.
 
 ### Debugging
 
-If a collision assertion fires and the user disagrees, inspect
-which side of the merge owns the offending key:
+If a collision assertion fires and the user disagrees, inspect which side of the
+merge owns the offending key:
 
 ```bash
 nix eval --impure --expr 'builtins.attrNames \
@@ -299,25 +273,23 @@ Or look at `config.ai.<pool>` / `config.ai.<cli>.<pool>` via
 ## ai.\* Dir Helpers
 
 > **Last verified:** 2026-04-21 (commit pending — refactor of
-> ai-factory-collision plan §4 / commits 4–7). If you add a new
-> `*FromDir` helper or change the polymorphic input shape or
-> the filter signature and this fragment isn't updated in the
-> same commit, stop and fix it.
+> ai-factory-collision plan §4 / commits 4–7). If you add a new `*FromDir`
+> helper or change the polymorphic input shape or the filter signature and this
+> fragment isn't updated in the same commit, stop and fix it.
 
 ### The helpers
 
-All live in `lib/ai/dir-helpers.nix`, re-exported under
-`lib.ai.*`:
+All live in `lib/ai/dir-helpers.nix`, re-exported under `lib.ai.*`:
 
-- `rulesFromDir` — directory of `.md` files → `attrsOf
-{ text = <path> }`. Key is basename minus `.md`.
-- `skillsFromDir` — directory-of-directories → `attrsOf path`.
-  Key is the subdir name unchanged.
-- `agentsFromDir` — directory of `.md` files → `attrsOf
-path`. Key is basename minus `.md`. Claude + Copilot only.
-- `hooksFromDir` — directory of regular files → `attrsOf lines`
-  (via `readFile`). Key is the filename unchanged (hooks are
-  typically extensionless shell scripts). Claude-only.
+- `rulesFromDir` — directory of `.md` files → `attrsOf { text = <path> }`. Key
+  is basename minus `.md`.
+- `skillsFromDir` — directory-of-directories → `attrsOf path`. Key is the subdir
+  name unchanged.
+- `agentsFromDir` — directory of `.md` files → `attrsOf path`. Key is basename
+  minus `.md`. Claude + Copilot only.
+- `hooksFromDir` — directory of regular files → `attrsOf lines` (via
+  `readFile`). Key is the filename unchanged (hooks are typically extensionless
+  shell scripts). Claude-only.
 
 ### Polymorphic input
 
@@ -326,16 +298,14 @@ Per the refactor plan §3.5 — every Dir option is either:
 - A bare Nix path literal, or
 - A submodule `{ path, filter? }` where `filter : name → bool`.
 
-The option type lives in `lib/ai/ai-common.nix:dirOptionType`
-and is shared across sharedOptions and the per-CLI baselines.
+The option type lives in `lib/ai/ai-common.nix:dirOptionType` and is shared
+across sharedOptions and the per-CLI baselines.
 
 ### Filter signature
 
-`name → bool` — name only, NOT `(name, kind) → bool` or
-`(entry) → bool`. Covers the real use cases (e.g. "exclude
-.bk files", "only keep a specific entry") without
-over-engineering. User directive: "just name is fine on the
-filter".
+`name → bool` — name only, NOT `(name, kind) → bool` or `(entry) → bool`. Covers
+the real use cases (e.g. "exclude .bk files", "only keep a specific entry")
+without over-engineering. User directive: "just name is fine on the filter".
 
 Default filters per helper:
 
@@ -363,51 +333,45 @@ ai.kiro.rulesDir = {
 };
 ```
 
-Mix Dir-based and explicit entries freely — they merge through
-`mkDefault` (explicit entries win within the same layer;
-collisions between L2 and L3 fire the shared assertion per
-the collision-semantics fragment).
+Mix Dir-based and explicit entries freely — they merge through `mkDefault`
+(explicit entries win within the same layer; collisions between L2 and L3 fire
+the shared assertion per the collision-semantics fragment).
 
 ### Why pure-eval only
 
-Earlier iterations let a `sourcePath` field on `ruleModule`
-trigger out-of-store symlink emission for live-edit. Rolled
-back in the same refactor (plan §3.3). Rationale: devenv
-already covers the live-iteration use case, and pure-eval
-keeps the factory easier to reason about. All rule/agent/skill/
-hook content bakes into the store at eval time with
-transformer frontmatter injected.
+Earlier iterations let a `sourcePath` field on `ruleModule` trigger out-of-store
+symlink emission for live-edit. Rolled back in the same refactor (plan §3.3).
+Rationale: devenv already covers the live-iteration use case, and pure-eval
+keeps the factory easier to reason about. All rule/agent/skill/ hook content
+bakes into the store at eval time with transformer frontmatter injected.
 
 ### Why per-file (not wholesale symlink)
 
-A `home.file.<dir>.source = <path>` with `recursive = true`
-takes the destination dir over — no other derivation can
-contribute files alongside. Per-file expansion preserves that
-escape hatch. This matters in Claude's rules dir, which a
-consumer may also populate directly from `programs.claude-code.
-marketplaces` or via a separate module.
+A `home.file.<dir>.source = <path>` with `recursive = true` takes the
+destination dir over — no other derivation can contribute files alongside.
+Per-file expansion preserves that escape hatch. This matters in Claude's rules
+dir, which a consumer may also populate directly from
+`programs.claude-code. marketplaces` or via a separate module.
 
 ### Pitfall — path type strictness
 
-The helpers use `builtins.readDir cfg.path` and compute
-per-file paths as `cfg.path + "/${name}"`. Path addition
-preserves the `"path"` type when `cfg.path` is a literal, so
-downstream consumers that strict-check `lib.isPath` still see
-a path (not a store-path string). Do NOT replace the path
-literal in consumer code with `builtins.path { path = ...; }`
-or a `builtins.filterSource` result — those return strings and
-silently break upstream HM's `mkSkillEntry` and similar
-strict-check paths. See `hm-modules/module-conventions.md` on
-"Nix path types".
+The helpers use `builtins.readDir cfg.path` and compute per-file paths as
+`cfg.path + "/${name}"`. Path addition preserves the `"path"` type when
+`cfg.path` is a literal, so downstream consumers that strict-check `lib.isPath`
+still see a path (not a store-path string). Do NOT replace the path literal in
+consumer code with `builtins.path { path = ...; }` or a `builtins.filterSource`
+result — those return strings and silently break upstream HM's `mkSkillEntry`
+and similar strict-check paths. See `hm-modules/module-conventions.md` on "Nix
+path types".
 
 <!-- Fragment: dev/fragments/ai-module/layered-fanout.md -->
 
 ## ai.\* Layered Fanout Pattern
 
 > **Last verified:** 2026-04-21 (commit pending — refactor of
-> ai-factory-collision plan §4). If you add a new Dir option or
-> change how per-file Dir expansion fans through the layers,
-> update this fragment in the same commit.
+> ai-factory-collision plan §4). If you add a new Dir option or change how
+> per-file Dir expansion fans through the layers, update this fragment in the
+> same commit.
 
 ### Canonical 4-layer shape
 
@@ -449,68 +413,58 @@ strict-check paths. See `hm-modules/module-conventions.md` on
 
 ### Rules
 
-- **Emission logic lives ONLY at L4.** L1/L2/L2b are pure
-  fanout — they never touch `home.file.*` or `files.*`.
-- **Collision-as-failure at every layer boundary.** The
-  mergeWithCollisionCheck helper fires on the L2↔L3 boundary
-  inside each CLI's transform. L1→L2 and L2b→L3 use
-  `mkDefault` so explicit entries within the same layer still
-  win (that's a fanout, not a cross-layer collision).
-- **Dir helpers live in `lib.ai.*`**, not in the module layer.
-  They're pure (`path → attrset`) and usable outside HM/devenv.
-- **Per-file emission only.** A Dir option never takes a
-  destination dir over wholesale — other derivations (or
-  consumer's own direct `home.file.*` calls) can always
-  contribute alongside.
-- **Key identity is preserved.** If a file is named `foo.md`
-  in the source dir, the L2 key is `foo` (the helper strips
-  known suffixes before emitting the key, and the per-CLI L4
-  emission re-appends). This is why the `.md.md` doubled-
-  extension bug from 2026-04-21 is structurally impossible
-  now.
+- **Emission logic lives ONLY at L4.** L1/L2/L2b are pure fanout — they never
+  touch `home.file.*` or `files.*`.
+- **Collision-as-failure at every layer boundary.** The mergeWithCollisionCheck
+  helper fires on the L2↔L3 boundary inside each CLI's transform. L1→L2 and
+  L2b→L3 use `mkDefault` so explicit entries within the same layer still win
+  (that's a fanout, not a cross-layer collision).
+- **Dir helpers live in `lib.ai.*`**, not in the module layer. They're pure
+  (`path → attrset`) and usable outside HM/devenv.
+- **Per-file emission only.** A Dir option never takes a destination dir over
+  wholesale — other derivations (or consumer's own direct `home.file.*` calls)
+  can always contribute alongside.
+- **Key identity is preserved.** If a file is named `foo.md` in the source dir,
+  the L2 key is `foo` (the helper strips known suffixes before emitting the key,
+  and the per-CLI L4 emission re-appends). This is why the `.md.md` doubled-
+  extension bug from 2026-04-21 is structurally impossible now.
 
 ### Layer location map
 
 - L1 options and L1→L2 expansion → `lib/ai/sharedOptions.nix`
 - L2b options (CLI-generic) and L2b→L3 expansion →
   `lib/ai/app/{hmTransform,devenvTransform}.nix`
-- L2b options (CLI-specific, like Claude's `agentsDir` or
-  `hookScriptsDir`) → `packages/<pkg>/lib/mk<Cli>.nix`
+- L2b options (CLI-specific, like Claude's `agentsDir` or `hookScriptsDir`) →
+  `packages/<pkg>/lib/mk<Cli>.nix`
 - L2↔L3 collision check → transform (`collisionAssertions`)
 - L4 emission → `packages/<pkg>/lib/mk<Cli>.nix`
 
 ### Adding a new concern X
 
 1. Add L2 option `ai.<X>` in `lib/ai/sharedOptions.nix`.
-2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform
-   baseline (if every supported CLI handles it the same way)
-   or in each per-CLI factory (if the shape differs).
+2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform baseline (if every
+   supported CLI handles it the same way) or in each per-CLI factory (if the
+   shape differs).
 3. Add L4 emission in each per-CLI factory's customConfig.
-4. Wire the L2↔L3 merge through mergeWithCollisionCheck in
-   both transforms.
+4. Wire the L2↔L3 merge through mergeWithCollisionCheck in both transforms.
 5. (Optional) Add L1 option `ai.<X>Dir` + L1→L2 expansion.
-6. (Optional) Add per-CLI L2b option `ai.<cli>.<X>Dir` +
-   L2b→L3 expansion.
-7. Add tests in `checks/module-eval.nix` for every new
-   surface.
+6. (Optional) Add per-CLI L2b option `ai.<cli>.<X>Dir` + L2b→L3 expansion.
+7. Add tests in `checks/module-eval.nix` for every new surface.
 
 ### Pitfall
 
-**Never emit from L1/L2/L2b.** Those layers exist solely to
-reshape data; they read nothing from `config.home.file.*` /
-`config.files.*` and write nothing there either. If you find
-yourself reaching for `home.file.*` in `sharedOptions.nix` or
-in a transform's `config` block, something is off — drop the
-contribution into the per-CLI factory's L4 emission.
+**Never emit from L1/L2/L2b.** Those layers exist solely to reshape data; they
+read nothing from `config.home.file.*` / `config.files.*` and write nothing
+there either. If you find yourself reaching for `home.file.*` in
+`sharedOptions.nix` or in a transform's `config` block, something is off — drop
+the contribution into the per-CLI factory's L4 emission.
 
 ### Why 4 layers instead of inline
 
-Earlier iterations wrote emission logic inline in each branch
-of per-CLI config — directly setting `home.file.".claude/
-rules/${name}.md".text` from the `ai.rules` attrset. That
-coupled the source shape (list vs attrset, with or without
-Dir-backed ingestion) to each CLI's emission. When the rules
-attrs grew a `sourcePath` field and then dropped it, every
-CLI had to change in lockstep. With the 4-layer shape, new
-input modes (Dir helpers, filter signatures) only touch L1/L2b;
-emission stays stable.
+Earlier iterations wrote emission logic inline in each branch of per-CLI config
+— directly setting `home.file.".claude/ rules/${name}.md".text` from the
+`ai.rules` attrset. That coupled the source shape (list vs attrset, with or
+without Dir-backed ingestion) to each CLI's emission. When the rules attrs grew
+a `sourcePath` field and then dropped it, every CLI had to change in lockstep.
+With the 4-layer shape, new input modes (Dir helpers, filter signatures) only
+touch L1/L2b; emission stays stable.

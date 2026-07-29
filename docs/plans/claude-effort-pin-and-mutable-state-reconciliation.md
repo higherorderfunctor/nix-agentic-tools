@@ -7,10 +7,10 @@
 > `unpinLaunchEffort`, Track B collapse). Kept for history. Build from the
 > converged doc.
 
-> **Status:** Design validated, IFD-reviewed, **not yet implemented.** This
-> doc is self-contained: a fresh session should be able to (a) implement the
-> Claude effort-pin feature and (b) run a gap analysis across the other CLIs
-> (Kiro, Copilot) **without re-deriving anything below.**
+> **Status:** Design validated, IFD-reviewed, **not yet implemented.** This doc
+> is self-contained: a fresh session should be able to (a) implement the Claude
+> effort-pin feature and (b) run a gap analysis across the other CLIs (Kiro,
+> Copilot) **without re-deriving anything below.**
 >
 > **Origin session date:** 2026-06-01. Active Claude Code version while
 > diagnosing: **2.1.159**. Repo: `nix-agentic-tools` (factory architecture
@@ -27,11 +27,11 @@ Two tracks. They share Part 3's mechanism.
 
 - **Track A — implement** the Claude effort-pin reconciliation (Parts 2–3).
   Concrete, ready to build. Includes the typed dynamic-options design.
-- **Track B — gap analysis** (Part 4): inventory, for **each** AI CLI
-  (Claude, Copilot, Kiro), where the tool keeps **mutable runtime state** that
-  collides with home-manager's **immutable store-symlink config**, and decide
-  whether the Part 3 pattern generalizes (it largely already exists — see
-  §4.2). The effort pin is just the first concrete instance of a general class.
+- **Track B — gap analysis** (Part 4): inventory, for **each** AI CLI (Claude,
+  Copilot, Kiro), where the tool keeps **mutable runtime state** that collides
+  with home-manager's **immutable store-symlink config**, and decide whether the
+  Part 3 pattern generalizes (it largely already exists — see §4.2). The effort
+  pin is just the first concrete instance of a general class.
 
 Read Parts 1–3 once, then pick a track.
 
@@ -67,8 +67,8 @@ NOT the effort gate. Don't be misled by it.
 
 Binary: `/nix/store/<hash>-claude-code-2.1.159/bin/claude` (a Bun single-exec;
 the bundled JS is greppable with `grep -aoE` over byte windows — `ugrep`/the
-default alias chokes on `.{0,N}` windows on a 240 MB file, so use a small
-Python byte-search instead). Relevant functions, deminified:
+default alias chokes on `.{0,N}` windows on a 240 MB file, so use a small Python
+byte-search instead). Relevant functions, deminified:
 
 ```js
 function getEnvEffort() {
@@ -121,8 +121,8 @@ function resolveEffort(model, configured) {
    `unpinOpus<NN>LaunchEffort` is `true`. Only `opus-4-7`/`opus-4-8` are pinned
    today; the **full pin set is exactly the `unpin\w+LaunchEffort` keys in the
    binary** (verified: `unpinOpus47LaunchEffort`, `unpinOpus48LaunchEffort`).
-3. **Valid effort levels** (also greppable): `low medium high xhigh max`
-   (+ `ultracode`, a session-only Claude Code setting, not a model level).
+3. **Valid effort levels** (also greppable): `low medium high xhigh max` (+
+   `ultracode`, a session-only Claude Code setting, not a model level).
 
 ### 1.4 Why `effortLevel="xhigh"` silently loses — the structural conflict
 
@@ -136,8 +136,8 @@ mid-session, the first retry still hits the cached store path.
 
 **Root insight (this is the general gap — see Part 4):** Claude treats
 `settings.json` as a file it **owns and rewrites**; HM treats it as **immutable
-generated output**. Any tool setting whose _persistence path_ is the
-HM-managed file collides.
+generated output**. Any tool setting whose _persistence path_ is the HM-managed
+file collides.
 
 ### 1.5 Red herring: `CLAUDE_EFFORT`
 
@@ -179,16 +179,16 @@ setting is actually honored.
 
 ### 3.1 ⚠️ THE INVIOLABLE IFD RULE (read first)
 
-> **Eval reads ONLY the committed `overlays/launch-effort-pins.json`.**
-> Never let any eval-time expression (`builtins.readFile`/`fromJSON`/`import`)
-> touch the **output of the grep `runCommand`** (e.g.
+> **Eval reads ONLY the committed `overlays/launch-effort-pins.json`.** Never
+> let any eval-time expression (`builtins.readFile`/`fromJSON`/`import`) touch
+> the **output of the grep `runCommand`** (e.g.
 > `"${pkgs.claude-code.passthru.launchEffortPins}"`). Doing so forces Nix to
 > **build** the grep derivation (which realizes the claude-code binary) during
-> evaluation = **IFD** = the cold-CI `path '…-source.drv' is not valid`
-> failure class this repo eliminated in commit **`f277053`** ("eliminate IFD
-> from version computation"). The grep output is consumed **only by
-> `nix build`** — the generator (writes the committed JSON) and the drift check
-> (diffs against it). See `.claude/rules/overlays.md` § IFD Patterns and
+> evaluation = **IFD** = the cold-CI `path '…-source.drv' is not valid` failure
+> class this repo eliminated in commit **`f277053`** ("eliminate IFD from
+> version computation"). The grep output is consumed **only by `nix build`** —
+> the generator (writes the committed JSON) and the drift check (diffs against
+> it). See `.claude/rules/overlays.md` § IFD Patterns and
 > `dev/fragments/overlays/ifd-patterns.md`.
 
 Why this is safe: `fromJSON (readFile ./committed.json)` of a **source path** is
@@ -235,8 +235,8 @@ job on a cold runner.
      (`claude-code = { flags = "--use-update-script"; }`).
 
 3. **Committed SSOT** — `overlays/launch-effort-pins.json`, a JSON **array** of
-   key names, e.g. `["unpinOpus47LaunchEffort","unpinOpus48LaunchEffort"]`.
-   Read at eval **only** via `builtins.fromJSON (builtins.readFile ./...)`.
+   key names, e.g. `["unpinOpus47LaunchEffort","unpinOpus48LaunchEffort"]`. Read
+   at eval **only** via `builtins.fromJSON (builtins.readFile ./...)`.
    **`git add` it** (flake check can't see untracked files —
    `.claude/rules/nix-standards.md` § Flake Source Visibility).
 
@@ -256,8 +256,8 @@ job on a cold runner.
    does the `jq -s '.[0] * .[1]'` merge-into-mutable-JSON), used by
    **`packages/copilot-cli/lib/mkCopilot.nix:318` `copilotSettingsMerge`** and
    **`packages/kiro-cli/lib/mkKiro.nix:373` `kiroSettingsMerge`**. Set each
-   pinned key `= true` and jq-merge into `~/.claude.json`. Constraints:
-   absolute store paths (`${pkgs.jq}/bin/jq`, `${pkgs.coreutils}/bin/...` —
+   pinned key `= true` and jq-merge into `~/.claude.json`. Constraints: absolute
+   store paths (`${pkgs.jq}/bin/jq`, `${pkgs.coreutils}/bin/...` —
    `.claude/rules/nix-standards.md` § Shell Wrappers); **never `exit`** in an
    activation block (memory `feedback_hm_activation_exit`); write atomically
    (temp + `mv`); handle `~/.claude.json` absent (treat as `{}`); idempotent.
@@ -311,11 +311,11 @@ master toggle that applies all `launchPinKeys` when true.
   devenv; gaps are bugs"): a **devenv-only** user (via `mkAgenticShell`, no HM)
   would still be pinned, since nothing reconciles their `~/.claude.json`.
 - **Decision for the gap session:** (a) add a devenv `enterShell` reconciliation
-  (mutates global state from a project shell — invasive but closes the gap),
-  (b) document this as a deliberate parity exception (runtime-state
-  reconciliation of global state is inherently not a repo-scoped config
-  surface), or (c) reconsider env-var Option C for the devenv path only. Lean:
-  document the exception for HM-primary, but **decide explicitly**.
+  (mutates global state from a project shell — invasive but closes the gap), (b)
+  document this as a deliberate parity exception (runtime-state reconciliation
+  of global state is inherently not a repo-scoped config surface), or (c)
+  reconsider env-var Option C for the devenv path only. Lean: document the
+  exception for HM-primary, but **decide explicitly**.
 
 ### 3.5 Build sequence
 
@@ -324,13 +324,13 @@ master toggle that applies all `launchPinKeys` when true.
 3. Extend `mkUpdateScript` to regenerate the JSON (`overlays/lib.nix`).
 4. Add drift check `checks/launch-effort-pins.nix` + register (`flake.nix`) +
    `git add`.
-5. Add typed option `unpinLaunchEffort` + activation consumer
-   (`mkClaude.nix`); reuse `mkSettingsActivationScript`.
+5. Add typed option `unpinLaunchEffort` + activation consumer (`mkClaude.nix`);
+   reuse `mkSettingsActivationScript`.
 6. `treefmt` changed files; `nix flake check` (cold, to catch any IFD);
    `nix build .#checks.<system>.launch-effort-pins`.
-7. Manual verify: clear the two flags in `~/.claude.json`, `home-manager
-switch`, launch `claude` → header shows `xhigh`, and `/effort max` still
-   works for a session.
+7. Manual verify: clear the two flags in `~/.claude.json`,
+   `home-manager switch`, launch `claude` → header shows `xhigh`, and
+   `/effort max` still works for a session.
 
 ### 3.6 Verification checklist
 
@@ -338,7 +338,8 @@ switch`, launch `claude` → header shows `xhigh`, and `/effort max` still
 - [ ] Drift check fails loudly when `launch-effort-pins.json` omits a key the
       binary has (simulate by deleting a key).
 - [ ] After activation, `jq '.unpinOpus48LaunchEffort' ~/.claude.json` → `true`.
-- [ ] Fresh `claude` (flags cleared first) shows `xhigh`; `/effort` still usable.
+- [ ] Fresh `claude` (flags cleared first) shows `xhigh`; `/effort` still
+      usable.
 - [ ] An `update/claude-code` PR regenerates **both** sidecars together.
 
 ---
@@ -380,14 +381,14 @@ For **each** of Claude, Copilot, Kiro (and any future CLI):
 2. **Find shadowing flags.** Are there "first-run / migration / launch-default /
    onboarding" booleans in the mutable state that **override** declarative
    settings (like `unpinOpus<NN>LaunchEffort`)? Grep each tool's binary for
-   `unpin`, `Launch`, `Migration`, `migrationVersion`, `Onboarding`,
-   `firstRun`, `Default`, `effort`/`reasoning`/`thinking`.
-3. **Find EACCES-class writes.** Does the tool RMW an HM-managed file at
-   runtime (settings persistence, `/`-command state)? Those break under a
-   `0444` symlink. Reproduce by attempting the tool's "save setting" path.
+   `unpin`, `Launch`, `Migration`, `migrationVersion`, `Onboarding`, `firstRun`,
+   `Default`, `effort`/`reasoning`/`thinking`.
+3. **Find EACCES-class writes.** Does the tool RMW an HM-managed file at runtime
+   (settings persistence, `/`-command state)? Those break under a `0444`
+   symlink. Reproduce by attempting the tool's "save setting" path.
 4. **Effort/thinking analog.** Does Copilot or Kiro have a reasoning/effort/
-   thinking-depth setting, and does it have a launch-pin-style gate?
-   (Kiro context: see memory `project_mcp_proxy_kiro2_auth_gap`,
+   thinking-depth setting, and does it have a launch-pin-style gate? (Kiro
+   context: see memory `project_mcp_proxy_kiro2_auth_gap`,
    `project_ai_passthrough_gaps`. Kiro 2.0 is a moving target.)
 5. **Pick the fix per tool.** Three tools in the toolbox, choose per-tool:
    - **Env-var override** (Option C) — if the tool respects an env var that
@@ -406,8 +407,8 @@ A gap matrix: rows = {Claude, Copilot, Kiro}; columns = {mutable state file,
 HM-managed file, shadowing flags found, EACCES-class writes, effort/thinking
 analog, recommended fix, HM/devenv parity decision}. Then decide whether to
 build **one generalized abstraction** (package-extracted reconciliation data +
-shared activation merge + shared drift check, parameterized per CLI) vs.
-per-CLI one-offs. The shared `mkSettingsActivationScript` already argues for
+shared activation merge + shared drift check, parameterized per CLI) vs. per-CLI
+one-offs. The shared `mkSettingsActivationScript` already argues for
 generalization.
 
 ---
@@ -447,9 +448,9 @@ generalization.
 - `config/update-matrix.nix:78` — `claude-code` matrix entry.
 - `checks/cache-hit-parity.nix:172-195` — drift-check template.
 - `flake.nix:202-212` — checks registration.
-- `packages/claude-code/lib/mkClaude.nix` — options ~`22-166` (add typed
-  option near `settings` at `~44`); HM projection `~199-284` (activation
-  consumer); devenv projection `~287-395`.
+- `packages/claude-code/lib/mkClaude.nix` — options ~`22-166` (add typed option
+  near `settings` at `~44`); HM projection `~199-284` (activation consumer);
+  devenv projection `~287-395`.
 - `lib/ai/hm-helpers.nix:142-161` — `mkSettingsActivationScript` (reuse).
 - `packages/copilot-cli/lib/mkCopilot.nix:318`,
   `packages/kiro-cli/lib/mkKiro.nix:373` — existing activation merges.

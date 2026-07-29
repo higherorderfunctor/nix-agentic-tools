@@ -1,8 +1,8 @@
 # Review Policy
 
-This policy is loaded by all reviewer subagents and the orchestrator. It
-defines severity levels, output format, change thresholds, and the decision
-confidence model.
+This policy is loaded by all reviewer subagents and the orchestrator. It defines
+severity levels, output format, change thresholds, and the decision confidence
+model.
 
 ## Severity Levels
 
@@ -26,8 +26,8 @@ expected. This prevents churn.
 
 ## Decision Confidence Model
 
-Decisions in `docs/decisions/` carry a confidence score (0.0–1.0) that
-reflects how well-supported they are by current evidence.
+Decisions in `docs/decisions/` carry a confidence score (0.0–1.0) that reflects
+how well-supported they are by current evidence.
 
 ### Initial Confidence
 
@@ -54,15 +54,14 @@ decisions. When found:
 ### Decay
 
 Confidence decays when a review run finds NO new reinforcement AND discovers
-competing approaches gaining traction. Decay is attention-based, not
-time-based:
+competing approaches gaining traction. Decay is attention-based, not time-based:
 
 - **No reinforcement + competing approaches found**: confidence decreases by
   0.05 per run
-- **No reinforcement + no competing approaches**: confidence decreases by
-  0.01 per run (slow drift — the ecosystem is stable)
-- **Reinforcement found**: no decay (reinforcement and decay don't happen in
-  the same run)
+- **No reinforcement + no competing approaches**: confidence decreases by 0.01
+  per run (slow drift — the ecosystem is stable)
+- **Reinforcement found**: no decay (reinforcement and decay don't happen in the
+  same run)
 
 ### Challenge Threshold
 
@@ -94,21 +93,20 @@ To create a new decision:
 
 ### What Is NOT a Decision
 
-Decisions record **architectural choices that could be re-litigated** — not
-bug fixes, typos, or one-off corrections. The test: would a reasonable person
-argue for the opposite approach? If yes, record a decision. If no, just fix
-the bug.
+Decisions record **architectural choices that could be re-litigated** — not bug
+fixes, typos, or one-off corrections. The test: would a reasonable person argue
+for the opposite approach? If yes, record a decision. If no, just fix the bug.
 
-Examples of decisions: "keep disable-model-invocation true", "install is nix
-or manual only", "use MADR with confidence scoring".
+Examples of decisions: "keep disable-model-invocation true", "install is nix or
+manual only", "use MADR with confidence scoring".
 
 NOT decisions: "fix extraConfig → settings", "remove pull.ff", "add missing
 symlink", "fix invalid flag".
 
 ## Output Schema
 
-Each reviewer must return findings as a JSON array. The orchestrator parses
-and aggregates these.
+Each reviewer must return findings as a JSON array. The orchestrator parses and
+aggregates these.
 
 ```json
 [
@@ -126,18 +124,18 @@ and aggregates these.
 ]
 ```
 
-The `decision_refs` field lists any existing decisions this finding relates
-to (reinforcing or contradicting).
+The `decision_refs` field lists any existing decisions this finding relates to
+(reinforcing or contradicting).
 
 ## Reviewer Conduct
 
-- **Research before opining.** Do web searches for current best practices.
-  Don't rely on training data alone.
+- **Research before opining.** Do web searches for current best practices. Don't
+  rely on training data alone.
 - **Cite sources.** Every `high` or `medium` finding must include evidence.
-- **Respect accepted decisions.** If a finding contradicts an accepted
-  decision with confidence >= 0.5, note the contradiction but do not
-  recommend changes — flag it for the debate round instead.
-- **Don't change for change's sake.** A working pattern that isn't "optimal"
-  is not a finding unless it causes concrete problems.
+- **Respect accepted decisions.** If a finding contradicts an accepted decision
+  with confidence >= 0.5, note the contradiction but do not recommend changes —
+  flag it for the debate round instead.
+- **Don't change for change's sake.** A working pattern that isn't "optimal" is
+  not a finding unless it causes concrete problems.
 - **Be specific.** "This could be better" is not a finding. "Line 42 says
   `--flag` but upstream removed it in v0.11" is.

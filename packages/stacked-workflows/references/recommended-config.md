@@ -203,8 +203,8 @@ their home-manager git config:
 
 This applies the Required + Strongly Recommended settings.
 
-Override individual values with `lib.recursiveUpdate` (the `//` operator is
-a shallow merge and would drop other keys in the same attrset):
+Override individual values with `lib.recursiveUpdate` (the `//` operator is a
+shallow merge and would drop other keys in the same attrset):
 
 ```nix
 lib.recursiveUpdate
@@ -229,8 +229,8 @@ revise operations. Both old and new commits appear in `git sl`. Always run
 
 ### git-absorb internals
 
-git-absorb uses libgit2, so pre-commit hooks do NOT run during the fixup
-commit phase. `rebase.updateRefs = true` makes `--and-rebase -- --update-refs`
+git-absorb uses libgit2, so pre-commit hooks do NOT run during the fixup commit
+phase. `rebase.updateRefs = true` makes `--and-rebase -- --update-refs`
 redundant.
 
 ### git-branchless `git move -F`

@@ -19,9 +19,10 @@
 > **Sibling handoff (read it):**
 > `docs/plans/claude-effort-pin-and-mutable-state-reconciliation.md`. That doc
 > owns the **Claude** effort-pin reconciliation (Track A) + a cross-CLI
-> mutable-state gap analysis (Track B, §4). **This doc pre-fills the Kiro/Copilot
-> rows of that gap analysis's §4.4 matrix and answers its §4.3 step 4
-> ("effort/thinking analog") for Kiro and Copilot.** The two are meant to merge.
+> mutable-state gap analysis (Track B, §4). **This doc pre-fills the
+> Kiro/Copilot rows of that gap analysis's §4.4 matrix and answers its §4.3 step
+> 4 ("effort/thinking analog") for Kiro and Copilot.** The two are meant to
+> merge.
 
 ---
 
@@ -48,8 +49,8 @@ Read §1–§2 once, then pick the deliverable.
 ## 1. The research — per-CLI model + thinking config surface (so you never re-derive it)
 
 All three CLIs are built by the factory-of-factories. Each `mkXxx.nix` returns a
-backend-agnostic app record; `hmTransform`/`devenvTransform` project it to HM and
-devenv module functions. Per-CLI settings are a typed submodule with a
+backend-agnostic app record; `hmTransform`/`devenvTransform` project it to HM
+and devenv module functions. Per-CLI settings are a typed submodule with a
 `freeformType` escape hatch for unknown keys.
 
 ### 1.1 Kiro — `packages/kiro-cli/lib/mkKiro.nix` (personally verified line refs)
@@ -65,28 +66,28 @@ Settings submodule at **`mkKiro.nix:68–113`**. Two typed knobs under `chat`:
 
 - **Flattening:** `cli.json` uses flat dot-keys (`"chat.defaultModel"`), not
   nested JSON. `aiCommon.flattenDotKeys` (`lib/ai/ai-common.nix:228`) turns
-  `settings.chat.defaultModel = "x"` → `{"chat.defaultModel":"x"}`. So Nix authors
-  write clean nested attrs; the file gets flat keys.
+  `settings.chat.defaultModel = "x"` → `{"chat.defaultModel":"x"}`. So Nix
+  authors write clean nested attrs; the file gets flat keys.
 - **HM write:** activation-time `jq -s '.[0] * .[1]'` merge into
   `~/.kiro/settings/cli.json` — **`kiroSettingsMerge` at `mkKiro.nix:370–393`**.
   Nix values win on conflict; user runtime keys survive. Gated on
   `filteredSettings != {}` (won't clobber an externally-managed cli.json if you
   only enabled Kiro for MCP fanout).
 - **devenv write:** static write to `.kiro/settings/cli.json` —
-  **`mkKiro.nix:553–556`** (no activation scripts in devenv; project-local, so no
-  runtime-preservation concern).
+  **`mkKiro.nix:553–556`** (no activation scripts in devenv; project-local, so
+  no runtime-preservation concern).
 - **`enableThinking` description literally says "thinking/reasoning mode"** — a
-  binary. There is **no `thinkingLevel` / effort gradient** for Kiro, and (unlike
-  Claude) **no launch-pin gate** in the option surface. If Kiro ever adds a level
-  key to cli.json you can set it _today_ via freeform:
+  binary. There is **no `thinkingLevel` / effort gradient** for Kiro, and
+  (unlike Claude) **no launch-pin gate** in the option surface. If Kiro ever
+  adds a level key to cli.json you can set it _today_ via freeform:
   `ai.kiro.settings.chat.<key> = ...`.
 
 ### 1.2 Copilot — `packages/copilot-cli/lib/mkCopilot.nix`
 
 - Typed keys: **`model`, `theme`** (per `dev/references/config-parity.md`
   type-coverage table). **No reasoning/thinking/effort knob at all.**
-- Existing activation merge `copilotSettingsMerge` at `mkCopilot.nix:318`
-  (line cited by sibling doc §4.2; not re-verified this session).
+- Existing activation merge `copilotSettingsMerge` at `mkCopilot.nix:318` (line
+  cited by sibling doc §4.2; not re-verified this session).
 
 ### 1.3 Claude — `packages/claude-code/lib/mkClaude.nix`
 
@@ -110,8 +111,8 @@ exposes it" → **Kiro does not expose it.** Don't try to map it across.
 
 ## 2. The locked decision — do NOT normalize `ai.settings.model` / `.telemetry`
 
-**User's call, and it's correct.** A normalized `ai.settings.model` fanned out at
-`mkDefault` to all CLIs would write **one string into three disjoint
+**User's call, and it's correct.** A normalized `ai.settings.model` fanned out
+at `mkDefault` to all CLIs would write **one string into three disjoint
 namespaces**:
 
 - Claude → Anthropic model ids
@@ -121,8 +122,8 @@ namespaces**:
 Any single value is valid for **at most one** ecosystem and silently wrong or
 runtime-rejected for the rest. That's worse than no option — it _looks_ portable
 but isn't. `telemetry` is no better: per the parity doc, Claude and Copilot are
-"N/A (no upstream option)," so it maps to **only Kiro** — a "normalization" of one
-is just a mislabeled per-CLI knob.
+"N/A (no upstream option)," so it maps to **only Kiro** — a "normalization" of
+one is just a mislabeled per-CLI knob.
 
 **Therefore:**
 
@@ -131,21 +132,21 @@ is just a mislabeled per-CLI knob.
 - The genuinely-portable surfaces **stay normalized** in
   `lib/ai/sharedOptions.nix` (`context`, `mcpServers`, `instructions`, `rules`,
   `rulesDir`, `lspServers`, `agents`, `agentsDir`, `environmentVariables`,
-  `skills`, `skillsDir` — those _are_ the same content across ecosystems).
-  **Do not touch those.** Only `model`/`telemetry` were wrongly promised as
+  `skills`, `skillsDir` — those _are_ the same content across ecosystems). **Do
+  not touch those.** Only `model`/`telemetry` were wrongly promised as
   normalized.
 - **Constraint for the auto-detect session:** model/thinking detection and
-  options must be **per-ecosystem**, never a shared `model` key. This decision is
-  the boundary condition for that work.
+  options must be **per-ecosystem**, never a shared `model` key. This decision
+  is the boundary condition for that work.
 
 ---
 
 ## 3. The gap artifact — phantom `ai.settings` in docs only
 
 `ai.settings` is **declared in zero `.nix` files** and **tested nowhere**.
-`lib/ai/sharedOptions.nix` (the top-level `options.ai` aggregator) declares the 11
-normalized options listed in §2 but **no `settings`**. Confirmation greps (run
-them again if you doubt it — note the gotcha in §6):
+`lib/ai/sharedOptions.nix` (the top-level `options.ai` aggregator) declares the
+11 normalized options listed in §2 but **no `settings`**. Confirmation greps
+(run them again if you doubt it — note the gotcha in §6):
 
 ```
 rg -n --no-config "ai\.settings" -g '*.nix' .   # → only docs-site .nix table strings, never an option decl
@@ -154,7 +155,8 @@ rg -n --no-config "settings = lib\.mkOption" lib/ai/sharedOptions.nix   # → no
 
 ### 3.1 Every reference to scrub (9 files)
 
-Verified with `RIPGREP_CONFIG_PATH=/dev/null rg -n --no-config "ai\.settings" -g '!.git' -g '!**/memory/**' .`:
+Verified with
+`RIPGREP_CONFIG_PATH=/dev/null rg -n --no-config "ai\.settings" -g '!.git' -g '!**/memory/**' .`:
 
 | File:line                                           | What it claims                                                   | Priority                                                                                                                                        |
 | --------------------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -172,7 +174,8 @@ Verified with `RIPGREP_CONFIG_PATH=/dev/null rg -n --no-config "ai\.settings" -g
 
 - Remove the "Normalized Settings (ai.settings)" section + table row from both
   `config-parity.md` files; keep the **per-CLI `.settings` rows** (those are
-  real). In the type-coverage tables the per-CLI Kiro/Copilot/Claude columns stay.
+  real). In the type-coverage tables the per-CLI Kiro/Copilot/Claude columns
+  stay.
 - In `ai-mapping.md` / `home-manager-footer.md` replace the `ai.settings.model`
   example with a per-CLI example (e.g. `ai.kiro.settings.chat.defaultModel` /
   `ai.copilot.settings.model` / `programs.claude-code.settings.model`), or drop
@@ -186,11 +189,12 @@ Verified with `RIPGREP_CONFIG_PATH=/dev/null rg -n --no-config "ai\.settings" -g
 - Leave `dev/notes/ai-transformer-design.md` (design archive). Optionally add a
   one-line "rejected — models are ecosystem-specific (see
   `docs/plans/per-cli-model-and-thinking-config.md`)".
-- `treefmt` every changed file. `nix flake check` (the structural check validates
-  cross-references). Per AGENTS.md change-propagation: grep the repo for
-  `ai.settings` one more time before committing to confirm zero stragglers.
+- `treefmt` every changed file. `nix flake check` (the structural check
+  validates cross-references). Per AGENTS.md change-propagation: grep the repo
+  for `ai.settings` one more time before committing to confirm zero stragglers.
 
-Commit shape: `docs(ai): drop unimplemented normalized ai.settings; models are per-CLI`.
+Commit shape:
+`docs(ai): drop unimplemented normalized ai.settings; models are per-CLI`.
 
 ---
 
@@ -202,14 +206,15 @@ Target: `docs/plans/claude-effort-pin-and-mutable-state-reconciliation.md`.
 
 - **Kiro:** thinking analog = `chat.enableThinking` (**boolean, no level, no
   launch-pin gate** in the _option surface_). Model = `chat.defaultModel` (free
-  str). **Caveat:** I inspected the **Nix option layer only**, not the `kiro-cli`
-  **binary**. Steps 2–3 of §4.3 (grep the binary for
+  str). **Caveat:** I inspected the **Nix option layer only**, not the
+  `kiro-cli` **binary**. Steps 2–3 of §4.3 (grep the binary for
   `unpin/Migration/firstRun/reasoning/thinking/Default` shadowing flags + EACCES
   writes) are **still TODO**. Kiro 2.0 is a moving target (see memories
   `project_mcp_proxy_kiro2_auth_gap`, `project_ai_passthrough_gaps`).
 - **Copilot:** no thinking/effort analog exists (typed keys are `model`, `theme`
   only). Binary forensics still TODO.
-- **Claude:** owns the only real effort/thinking-level gate — the sibling's Track A.
+- **Claude:** owns the only real effort/thinking-level gate — the sibling's
+  Track A.
 
 ### 4.2 Pre-filled §4.4 gap-matrix rows (model/thinking columns)
 
@@ -256,12 +261,13 @@ record for that session:
   probe vs hand-curated string. Needs the §4.2 binary forensics first.
 - **Should `defaultModel` get value validation?** Currently free `str` (writes
   whatever you give it; Kiro rejects bad ids at runtime). A NixOS `enum` would
-  need an auto-derived model list → blocked on the auto-detect feasibility above.
-  Lean: leave it free `str` until/unless Kiro models become statically derivable.
-- **Confirm the user's actual goal:** they wanted **Opus 4.8 as Kiro's default**.
-  Unverified whether Kiro's `chat.defaultModel` accepts an Opus 4.8 id or what
-  the string is (repo examples use `"claude-sonnet-4"`). Confirm from Kiro's
-  `/model` picker before recommending a concrete value.
+  need an auto-derived model list → blocked on the auto-detect feasibility
+  above. Lean: leave it free `str` until/unless Kiro models become statically
+  derivable.
+- **Confirm the user's actual goal:** they wanted **Opus 4.8 as Kiro's
+  default**. Unverified whether Kiro's `chat.defaultModel` accepts an Opus 4.8
+  id or what the string is (repo examples use `"claude-sonnet-4"`). Confirm from
+  Kiro's `/model` picker before recommending a concrete value.
 
 ---
 
@@ -269,9 +275,9 @@ record for that session:
 
 **Personally verified this session:**
 
-- `packages/kiro-cli/lib/mkKiro.nix:68–113` settings submodule;
-  `:76–80` defaultModel; `:81–85` enableThinking; `:370–393` `kiroSettingsMerge`
-  (HM jq merge); `:553–556` devenv static cli.json write.
+- `packages/kiro-cli/lib/mkKiro.nix:68–113` settings submodule; `:76–80`
+  defaultModel; `:81–85` enableThinking; `:370–393` `kiroSettingsMerge` (HM jq
+  merge); `:553–556` devenv static cli.json write.
 - `lib/ai/ai-common.nix:228` `flattenDotKeys`.
 - `lib/ai/sharedOptions.nix:15` `options.ai = {` — declares 11 normalized
   options, **no `settings`**.
@@ -281,16 +287,16 @@ record for that session:
 - `dev/references/config-parity.md:55–80` the (wrong) "Normalized Settings"
   section + type-coverage table.
 
-**Inherited from sibling doc (not re-verified here):**
-`mkCopilot.nix:318`, `mkClaude.nix` options ~`44`/HM ~`199–284`/devenv ~`287–395`,
+**Inherited from sibling doc (not re-verified here):** `mkCopilot.nix:318`,
+`mkClaude.nix` options ~`44`/HM ~`199–284`/devenv ~`287–395`,
 `lib/ai/hm-helpers.nix:142–161` `mkSettingsActivationScript`,
 `overlays/launch-effort-pins.json` + `overlays/claude-code.nix:31`.
 
 **⚠ GOTCHA — ripgrep is mangled in this environment.** The user's
-`RIPGREP_CONFIG_PATH` applies a replacement that silently rewrites matched tokens
-(observed: `settings.model` and `defaultModel` rendered as `ln`/`n` in output).
-**Always grep with `RIPGREP_CONFIG_PATH=/dev/null rg --no-config …`** (or use
-`grep`) when searching for these identifiers, or you'll get garbage and
+`RIPGREP_CONFIG_PATH` applies a replacement that silently rewrites matched
+tokens (observed: `settings.model` and `defaultModel` rendered as `ln`/`n` in
+output). **Always grep with `RIPGREP_CONFIG_PATH=/dev/null rg --no-config …`**
+(or use `grep`) when searching for these identifiers, or you'll get garbage and
 misread the repo. Plain `grep -rIn` also works but watch zsh glob expansion of
 `--include=*.nix` (quote it).
 
@@ -304,6 +310,7 @@ rg -n --no-config "settings = lib\.mkOption" lib/ai/sharedOptions.nix # → no m
 ```
 
 **Related memories:** `project_claude_effort_pin_state.md` (xhigh won't stick —
-the Claude-side EACCES that motivated the sibling doc), `project_ai_passthrough_gaps.md`,
-`project_mcp_proxy_kiro2_auth_gap.md`, `feedback_use_devenv_tasks.md` (regenerate
-instructions via devenv tasks, not manual build+cp).
+the Claude-side EACCES that motivated the sibling doc),
+`project_ai_passthrough_gaps.md`, `project_mcp_proxy_kiro2_auth_gap.md`,
+`feedback_use_devenv_tasks.md` (regenerate instructions via devenv tasks, not
+manual build+cp).

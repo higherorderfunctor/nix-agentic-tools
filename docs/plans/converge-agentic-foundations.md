@@ -36,10 +36,12 @@ complete.
 - `docs/plans/build-typed-hook-surface.md` — session (b) plan snapshot
 - `docs/plans/factory-steering-materialization-decision.md` — decision +
   tradeoffs + 6 incidental defects
-- `docs/plans/agent-primitive-labs-design.md` + `agent-primitive-labs-impl-plan.md`
-  — labs spec/plan (impl plan's Parked items P1–P14 drained into this register;
-  section to be deleted per its own exit gate)
-- `docs/plans/steering-symlink-probe/run-probe.sh` — self-tested reproducer (P14)
+- `docs/plans/agent-primitive-labs-design.md` +
+  `agent-primitive-labs-impl-plan.md` — labs spec/plan (impl plan's Parked items
+  P1–P14 drained into this register; section to be deleted per its own exit
+  gate)
+- `docs/plans/steering-symlink-probe/run-probe.sh` — self-tested reproducer
+  (P14)
 
 ## Verified base state (intake 2026-07-21 — corrections to the handoffs)
 
@@ -64,8 +66,8 @@ here first.
   at `:492-494`. Masked in-repo by `devenv.nix:186` setting upstream directly.
 - **CONFIRMED: the only real-file-vs-symlink gate never runs in CI** —
   `devenv.nix:315-346` enterTest; no workflow invokes it.
-- **Location correction:** the wrong-product Kiro IDE citation (#2921/#8121)
-  is at `mkKiro.nix:863-865` (handoff said :794). Correct citation:
+- **Location correction:** the wrong-product Kiro IDE citation (#2921/#8121) is
+  at `mkKiro.nix:863-865` (handoff said :794). Correct citation:
   `kirodotdev/Kiro#9787` (kiro-cli, v3, OPEN, maintainer-acked). Comment must
   name the ENGINE (v2 follows leaf symlinks; v3 drops them).
 - **CONFIRMED: stale hashes** in `build-typed-hook-surface.md:46,75`
@@ -75,13 +77,13 @@ here first.
   merge-tree). Known follow-up: its module-eval golden asserts pre-#433
   `home.file` delivery and must re-point at `home.activation`;
   `kiro-auto-memory.md` fragment needs reconciling with #433's version.
-- **Labs branch:** `refactor/agent-primitive-labs` clean at `a4560b77`,
-  6 commits, fork point `010dbe15` = 19 commits behind HEAD. Zero deletions.
+- **Labs branch:** `refactor/agent-primitive-labs` clean at `a4560b77`, 6
+  commits, fork point `010dbe15` = 19 commits behind HEAD. Zero deletions.
 - **Worktrees:** `agent-primitive-labs`, `kiro-hook-colocation` (both live
   work); `typed-hooks-kiro` (454b091c), `typed-hooks-phase1a` (d964ae1c)
   presumed superseded — cleanup gated HITL.
-- **Three failure axes stand** (labs §6.2 as corrected by (a)): _scope_ (Kiro
-  v3 reads NO global hooks — real-file-proven, pre-#433, must re-run), _delivery_
+- **Three failure axes stand** (labs §6.2 as corrected by (a)): _scope_ (Kiro v3
+  reads NO global hooks — real-file-proven, pre-#433, must re-run), _delivery_
   (factory steering/skills/agents emitters still ship store symlinks to every
   consumer; only repo-local files + HM hooks are fixed), _wiring_ (typed surface
   landed). Fixing one axis never fixes another.
@@ -90,20 +92,19 @@ here first.
 
 1. Never `force = true` on a steering `home.file` (HM silently deletes the
    target; `contextFilename` defaults to `AGENTS.md`).
-2. Never fold emitter branches with `//` — collisions must BECOME hard
-   eval errors. (The original "must stay errors" premise was false:
-   today's `home.file` text merge silently CONCATENATES colliding
-   definitions — only the module-eval stub errored. The materializer's
-   `nullOr str` upgrade on `steeringFiles.<n>.text` makes the error
-   real; `//` would instead be silent last-wins.)
+2. Never fold emitter branches with `//` — collisions must BECOME hard eval
+   errors. (The original "must stay errors" premise was false: today's
+   `home.file` text merge silently CONCATENATES colliding definitions — only the
+   module-eval stub errored. The materializer's `nullOr str` upgrade on
+   `steeringFiles.<n>.text` makes the error real; `//` would instead be silent
+   last-wins.)
 3. Never blind-prune `~/.kiro/steering/` (user-owned) — manifest-prune only.
 4. A user edit to a managed file must never be silently clobbered.
 5. HM copy-activation ordering: `entryAfter ["linkGeneration"]`, never
    `["writeBoundary"]`.
-6. Materialization = `strategy = "copy"|"symlink"` data on a declarative
-   attrset consumed by ONE shared materializer (`lib/ai/materialize.nix`);
-   module-eval asserts on the attrset; git-tracked outputs are just
-   `strategy = "copy"`.
+6. Materialization = `strategy = "copy"|"symlink"` data on a declarative attrset
+   consumed by ONE shared materializer (`lib/ai/materialize.nix`); module-eval
+   asserts on the attrset; git-tracked outputs are just `strategy = "copy"`.
 7. Copy-mode implementations heredoc-embed content (HM #433 precedent), never
    interpolate store paths (devenv 38b7088f lost content assertions).
 8. Claude surfaces stay symlinks (verified working). Kiro skills/agents:
@@ -117,10 +118,10 @@ here first.
     `CLAUDE_CONFIG_DIR` + empty `CLAUDE_SECURESTORAGE_CONFIG_DIR` + `KIRO_HOME`;
     labs live outside `$HOME` (CLAUDE.md ancestor-walks to /home); `cp -rL` +
     `chmod -R u+w`, never `--no-preserve=mode`.
-12. Execution: single-job builds only (`nix build --max-jobs 1 --no-link
-.#checks.<sys>.<name>`); no parallel eval fan-out; subagents ≤10 bounded
-    queue; commit/push only on operator ask; nixos-config + live HM switches
-    HITL.
+12. Execution: single-job builds only
+    (`nix build --max-jobs 1 --no-link .#checks.<sys>.<name>`); no parallel eval
+    fan-out; subagents ≤10 bounded queue; commit/push only on operator ask;
+    nixos-config + live HM switches HITL.
 
 ## Phases
 
@@ -135,14 +136,14 @@ Everything rebases onto one tip; kills all cross-session staleness. Units:
 
 - u1-labs-rebase: rebase `refactor/agent-primitive-labs` onto `b3906bd9` in its
   worktree. Hand-resolve `flake.nix` only; regenerate `devenv.yaml`
-  (`nix eval --raw --impure --expr 'import ./config/generate-devenv-yaml.nix {}'
-  > devenv.yaml`), `flake.lock`/`devenv.lock`; union
-`config/cspell/project-terms.txt`. Then targeted single-job check builds.
+  (`nix eval --raw --impure --expr 'import ./config/generate-devenv-yaml.nix {}' > devenv.yaml`),
+  `flake.lock`/`devenv.lock`; union `config/cspell/project-terms.txt`. Then
+  targeted single-job check builds.
 - u2-land-u1: in `kiro-hook-colocation` worktree, rebase `0222a0eb` onto tip;
-  re-point golden `module-kiro-hooks-typed-colocation` at #433
-  `home.activation` delivery; reconcile `kiro-auto-memory.md` fragment;
-  `nix build --max-jobs 1 .#checks.<sys>.module-kiro-*`; squash-PR
-  (github-mcp; `gh pr create` is hook-blocked) — PR gated on operator OK.
+  re-point golden `module-kiro-hooks-typed-colocation` at #433 `home.activation`
+  delivery; reconcile `kiro-auto-memory.md` fragment;
+  `nix build --max-jobs 1 .#checks.<sys>.module-kiro-*`; squash-PR (github-mcp;
+  `gh pr create` is hook-blocked) — PR gated on operator OK.
 - u3-doc-hygiene: fix stale hashes (`build-typed-hook-surface.md:46,75`);
   annotate labs §6.2 correction pointer; drain P1–P14 from the impl plan's
   Parked items into this register + delete that section (its own exit gate).
@@ -150,8 +151,8 @@ Everything rebases onto one tip; kills all cross-session staleness. Units:
   naming (README.md:87, dev/generate.nix:511, etc.); phantom
   `generate:devenv-yaml` task (add the task — matches sibling generators);
   `flake.nix:219` false comment; dead `checks/devshell-eval.nix`.
-- u5-fold-typed-state: mark `typed-hook-surface/state.json` folded →
-  points here (its `next_action` already declares the park-for-unify).
+- u5-fold-typed-state: mark `typed-hook-surface/state.json` folded → points here
+  (its `next_action` already declares the park-for-unify).
 - u6-worktree-cleanup [HITL]: verify `typed-hooks-kiro` / `typed-hooks-phase1a`
   fully merged, then tear down.
 
@@ -161,10 +162,9 @@ Highest fan-out. Synthesize ONE design honoring constraints 1–9 from the three
 fatally-flawed candidates (author's sketch: keep the four mkMerge branches, add
 a derived attrset for assertions, put `strategy` on it) + adversarial coherence
 review (DESIGN-PHASE COHERENCE REVIEW per master) → **HITL design decision** →
-implement: shared materializer; convert Kiro steering (verified: 4 HM + 4
-devenv emitter sites);
-repo-wide `writeBoundary`→`linkGeneration`; `sync_file` guard; re-correct
-`mkKiro.nix:863-865` + engine qualifiers (same commit); fix
+implement: shared materializer; convert Kiro steering (verified: 4 HM + 4 devenv
+emitter sites); repo-wide `writeBoundary`→`linkGeneration`; `sync_file` guard;
+re-correct `mkKiro.nix:863-865` + engine qualifiers (same commit); fix
 `instruction-file-single-mechanism.md:169-171`; wire enterTest gate into CI;
 regen instruction files (oi-regen-instructions). devenv whole-dir-symlink
 shortcut for project scope: evaluate as part of the design, not a bolt-on.
@@ -174,20 +174,19 @@ shortcut for project scope: evaluate as part of the design, not a bolt-on.
 Scope questions decide what delivery is worth building. Re-run global-hooks
 probe post-#433 (rig `/var/tmp/nat-kiro-probe/`); P13 workspace-symlink control
 [HITL]; skills probe with working control (2.12.3-fixed hypothesis); agents
-probe; global steering under v3; investigate autoMemory-dead-under-v3
-hypothesis (NOT established). Then typed-surface completion: telemetry
-hook-fire JSONL test-wrapper (OFF by default, test-only); migrate autoMemory
-onto file-grouped typed records; retire hooksJson (nixos-config repin HITL).
-Ownership boundary (settled): labs owns testing; consumes the typed surface
-as-shipped.
+probe; global steering under v3; investigate autoMemory-dead-under-v3 hypothesis
+(NOT established). Then typed-surface completion: telemetry hook-fire JSONL
+test-wrapper (OFF by default, test-only); migrate autoMemory onto file-grouped
+typed records; retire hooksJson (nixos-config repin HITL). Ownership boundary
+(settled): labs owns testing; consumes the typed surface as-shipped.
 
 ### P4 — Labs payload (~1-2 sessions)
 
 Skill-trigger lab (Task 5 — the first real experiment, unblocked after
 u1-labs-rebase); port steering-symlink probes as permanent lab fixtures (P14);
-nmt adoption prep (P11: real-module eval + byte-level assertions; retire
-~3,723 stub lines in `checks/module-eval.nix`; upstream ships 60 claude-code
-test files as drift oracle) → adoption decision at phase close.
+nmt adoption prep (P11: real-module eval + byte-level assertions; retire ~3,723
+stub lines in `checks/module-eval.nix`; upstream ships 60 claude-code test files
+as drift oracle) → adoption decision at phase close.
 
 ### P5 — Harness prototyping enablement (goal; open-ended)
 
@@ -201,31 +200,28 @@ Dispositions per master schema; every entry carries its structural reason in
 state.json. High-level (grouped by phase; ★ = HITL):
 
 **P1:** labs-rebase · land-u1+golden-repoint+fragment-reconcile ·
-★u1-PR-creation · stale-hash fixes · staging-section drain ·
-inline-fixes batch · fold-typed-state · ★worktree-cleanup
-**P2:** ★materializer-design-decision · emitter-conversion ·
-writeBoundary-fix · sync_file-guard · citation-recorrect ·
+★u1-PR-creation · stale-hash fixes · staging-section drain · inline-fixes batch
+· fold-typed-state · ★worktree-cleanup **P2:** ★materializer-design-decision ·
+emitter-conversion · writeBoundary-fix · sync_file-guard · citation-recorrect ·
 instruction-doc-fix · enterTest-CI-wiring · enterShell-cwd-anchoring
-(mkKiro.nix:812-819, diagnose then fix) · ★mcpServers-devenv-fix
-(severe; render via lib.ai.renderServer — behavioral, needs approval) ·
-env-vars-devenv (needs diagnosis) · regen-instructions
-**P3:** ★global-hooks-probe-rerun · ★P13-workspace-symlink-control ·
-skills-probe · agents-probe · global-steering-probe ·
-autoMemory-v3-regression-check · telemetry-test-wrapper ·
-autoMemory-typed-migration · ★hooksJson-retirement (nixos-config repin)
-**P4:** skill-trigger-lab · probe-fixtures (P14) · ★nmt-adoption ·
-labs-x86-only [DEFAULT: x86_64-linux-only, revisable]
-**P5:** harness-prototype-fixtures
+(mkKiro.nix:812-819, diagnose then fix) · ★mcpServers-devenv-fix (severe; render
+via lib.ai.renderServer — behavioral, needs approval) · env-vars-devenv (needs
+diagnosis) · regen-instructions **P3:** ★global-hooks-probe-rerun ·
+★P13-workspace-symlink-control · skills-probe · agents-probe ·
+global-steering-probe · autoMemory-v3-regression-check · telemetry-test-wrapper
+· autoMemory-typed-migration · ★hooksJson-retirement (nixos-config repin)
+**P4:** skill-trigger-lab · probe-fixtures (P14) · ★nmt-adoption · labs-x86-only
+[DEFAULT: x86_64-linux-only, revisable] **P5:** harness-prototype-fixtures
 **Backlog (parked):** loop-engineering-style module-unit architecture
 (cobusgreyling/loop-engineering as reference — clean module units; nix fanout
 for cross-CLI harness support; hooks for workflow optimization/control flow) ·
 knowledge-base fold (hold impl against the researched KB — bridge-or-not
 evaluation; feeds telemetry/fixtures/memory-systems work) ·
-copilot-projectDir-hardcode (mkCopilot.nix:450,461) ·
-★promote-refactor-to-main (post-plan; interacts with re-chunk-for-main) ·
-worktree-output-relocation (research banked) ·
-namespace-unify-later [NEEDS-EVIDENCE, pinned, carried from typed plan] ·
-full-hookset [DEFAULT, carried] · devenv-dir-symlink-shortcut (project scope)
+copilot-projectDir-hardcode (mkCopilot.nix:450,461) · ★promote-refactor-to-main
+(post-plan; interacts with re-chunk-for-main) · worktree-output-relocation
+(research banked) · namespace-unify-later [NEEDS-EVIDENCE, pinned, carried from
+typed plan] · full-hookset [DEFAULT, carried] · devenv-dir-symlink-shortcut
+(project scope)
 
 ## Standing rules
 
@@ -234,17 +230,16 @@ mode, mechanism creep, provenance laundering, convergence declarations,
 degradation-by-shrug, source-masking, prove-against-reality).
 
 **CAUGHT-WHILE-WORKING REGISTRATION (operator rule, 2026-07-21):** anything
-out-of-place discovered while working this plan — defects, doc/code
-mismatches, design gaps, ideas — is REGISTERED in this plan's open_items as
-caught-while-working backlog, never silently fixed, defaulted, or dropped.
-The labs fix-little-stuff carve-out survives ONLY for mechanical
+out-of-place discovered while working this plan — defects, doc/code mismatches,
+design gaps, ideas — is REGISTERED in this plan's open_items as
+caught-while-working backlog, never silently fixed, defaulted, or dropped. The
+labs fix-little-stuff carve-out survives ONLY for mechanical
 zero-behavioral-risk corrections; anything carrying a DESIGN OR INTERFACE
 DECISION (even when one resolution looks obviously lower-risk) is registered
-with the alternatives stated and surfaced to the operator at the next gate —
-the operator makes interface calls, not the session. Precedent that minted
-the rule: the `ai.environmentVariables`/Claude contract mismatch was
-defaulted to a doc fix when the operator would have chosen interface
-harmonization. Plus, from the
+with the alternatives stated and surfaced to the operator at the next gate — the
+operator makes interface calls, not the session. Precedent that minted the rule:
+the `ai.environmentVariables`/Claude contract mismatch was defaulted to a doc
+fix when the operator would have chosen interface harmonization. Plus, from the
 sessions: treat unverified command syntax in inherited docs as suspect (four
 defects came from asserted-but-unrun commands); Nix 2.34.4 error phrasing is
 "does not provide attribute" (never broaden); devenv tasks have no positional

@@ -3,6 +3,10 @@ result
 result-*
 result-docs
 
+# Bytecode from running checks/split-code-spans.py by hand. The check runs
+# it through nix, but invoking it directly is the normal way to iterate.
+__pycache__/
+
 # Claude Code plugin state
 .remember/
 

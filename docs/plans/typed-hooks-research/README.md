@@ -1,15 +1,17 @@
 # Typed-hooks research artifacts
 
-Backing material for `docs/plans/typed-hooks-across-clis-assessment.md` (the assessment is
-the curated, verified deliverable — **read that first**). These are the raw inputs and a
-working prototype, kept so a future session doesn't have to re-discover (or re-spend tokens
-regenerating) them. Produced 2026-07-20 by a 7-lens research Workflow (`w0y9rf1sc`) + a
-dedicated drift-detection agent, with 56 load-bearing claims adversarially verified.
+Backing material for `docs/plans/typed-hooks-across-clis-assessment.md` (the
+assessment is the curated, verified deliverable — **read that first**). These
+are the raw inputs and a working prototype, kept so a future session doesn't
+have to re-discover (or re-spend tokens regenerating) them. Produced 2026-07-20
+by a 7-lens research Workflow (`w0y9rf1sc`) + a dedicated drift-detection agent,
+with 56 load-bearing claims adversarially verified.
 
-> **Provenance/status:** `research-raw/` is **unedited AI-agent output** — it contains known
-> errors that the assessment doc corrects (e.g. a lens grepped Kiro's telemetry enum and
-> mis-reported the trigger set; see the assessment §5.1 + §15). Trust the assessment over
-> these; they are retained for detail and traceability, not as ground truth.
+> **Provenance/status:** `research-raw/` is **unedited AI-agent output** — it
+> contains known errors that the assessment doc corrects (e.g. a lens grepped
+> Kiro's telemetry enum and mis-reported the trigger set; see the assessment
+> §5.1 + §15). Trust the assessment over these; they are retained for detail and
+> traceability, not as ground truth.
 
 ## Manifest
 
@@ -30,7 +32,7 @@ dedicated drift-detection agent, with 56 load-bearing claims adversarially verif
 bash docs/plans/typed-hooks-research/drift-extract.prototype.sh
 ```
 
-Rebuilds `claude-code`/`kiro-cli`, re-greps, and re-emits the draft sidecars to the session
-scratchpad. Hermetic (store-path greps, no network/auth). See assessment §10 for the
-advisory-vs-blocking split and the docs-diff half (which is impure → flake app / cron, not a
-`nix flake check`).
+Rebuilds `claude-code`/`kiro-cli`, re-greps, and re-emits the draft sidecars to
+the session scratchpad. Hermetic (store-path greps, no network/auth). See
+assessment §10 for the advisory-vs-blocking split and the docs-diff half (which
+is impure → flake app / cron, not a `nix flake check`).
