@@ -177,7 +177,7 @@ exception to Bazel-style").
 
 **The set of packages is re-typed in ~6 places with no single source of truth:**
 `packages/default.nix`, `overlays/default.nix`
-(flatDrvs/mcpServerDrvs/gitToolDrvs/ devToolDrvs),
+(flatDrvs/mcpServerDrvs/gitToolDrvs/devToolDrvs),
 `packages/mcp-services/…/serverNames` (+ a `modelContextProtocolServers`
 sublist), `config/update-matrix.nix`, `flake.nix` package flattening, and
 `dev/generate.nix` (`devFragmentNames` + `packagePaths`, since dissolved into

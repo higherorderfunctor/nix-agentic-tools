@@ -253,7 +253,7 @@ D33), `KIRO_MEMORY_RECALL_LIMIT` (3), `KIRO_MEMORY_RECALL_MAX_CHARS` (4000).
 **Distiller (`overlays/kiro-memory-distiller.nix`,
 `pkgs.ai.kiro-memory-distiller`).** A dependency-free (node: built-ins only — no
 `buildNpmPackage`/`npmDepsHash`) `stdenvNoCC.mkDerivation` over
-`packages/kiro-cli/memory/`. The repo's bun- wrapper idiom
+`packages/kiro-cli/memory/`. The repo's bun-wrapper idiom
 (`makeWrapper ${bun}/bin/bun --add-flags <entry>`, not `bun build --compile`)
 emits **three role bins** from one derivation, each adding a dispatch flag:
 `kiro-memory-distiller` (bare → `main`), `kiro-memory-flush` (`--flush` →

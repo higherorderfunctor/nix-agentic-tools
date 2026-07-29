@@ -312,7 +312,7 @@ Three primary sources give three different answers, at three different dates:
 **Reconciliation (my reading, [U] until a live TUI run settles it):** the **v3
 page (newer, Jun 17)** is authoritative for _intended_ v3 triggers, but the
 **2.13.0 binary lags the docs** — the 5 Task/File triggers have no string
-presence, so they are **documented-ahead- of-implemented (or IDE-only leakage)**
+presence, so they are **documented-ahead-of-implemented (or IDE-only leakage)**
 at the pinned version. The **actually-usable v3 triggers at 2.13.0** are
 `SessionStart, Stop, PreToolUse, PostToolUse, UserPromptSubmit, Manual` — of
 which `SessionStart` and `Manual` are **present-and-working (autoMemory proves
@@ -1117,8 +1117,8 @@ anchored to a line in the hashed raw-docs snapshot). Consolidated result:
   `reloadSkills`) are **doc-defined I/O names, not binary literals** — each has
   multiple hits in the docs (`permissionDecision` ×21, `hookSpecificOutput` ×49,
   `additionalContext` ×40, …). ⇒ the drift detector's `schemaFieldMarkers` guard
-  must stay scoped to the **event enum** (binary- embedded); **field schemas
-  come from the docs snapshot + Tier-2 captures**, never a binary grep.
+  must stay scoped to the **event enum** (binary-embedded); **field schemas come
+  from the docs snapshot + Tier-2 captures**, never a binary grep.
 
 **Upgrade ledger:**
 

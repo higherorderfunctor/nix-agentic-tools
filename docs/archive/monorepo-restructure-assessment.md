@@ -137,8 +137,8 @@ author didn't know this. What's already in place:
   backends. The dump has NO awareness of this and its proposed per-slice
   `modules/home-manager.nix` + `modules/nixos.nix` + `modules/devenv.nix` files
   would duplicate the factory's delegation. The existing factory is, in my read,
-  a simpler solution than the dump's three- file-per-slice approach — don't
-  trade it for triplication.
+  a simpler solution than the dump's three-file-per-slice approach — don't trade
+  it for triplication.
 - **Shared options declared once** (`lib/ai/sharedOptions.nix`), injected into
   both `homeManagerModules` and `devenvModules` via `flake.nix:121` and :127.
   Matches the dump's "one source of truth" intent.
@@ -472,7 +472,7 @@ In priority order, low risk first:
    package contributes to a shared option; `loadServer` consumes the merged
    attrset. Independent cleanup.
 5. **Move overlay files into their owning package dir** (~90% 1:1 mapping).
-   File-move refactor; no semantic change. Do package-by- package to keep PRs
+   File-move refactor; no semantic change. Do package-by-package to keep PRs
    reviewable.
 6. **Move `devshell/docs-site/` → `packages/fragments-docs/`** for location
    consistency.
@@ -480,7 +480,7 @@ In priority order, low risk first:
    (`overlays/*-sources.json` → `packages/<name>/sources.json`). Touches update
    pipeline; verify `mkUpdateScript` path resolution.
 8. **`aiInternal.*` option convention** (without flake-parts). Declare an
-   `aiInternal` option path in the existing flake; lift internal- only helpers
+   `aiInternal` option path in the existing flake; lift internal-only helpers
    under it; treat it as "never reaches outputs" by convention.
 
 ---
@@ -488,15 +488,15 @@ In priority order, low risk first:
 ## 9. What's worth NOT doing
 
 1. **Full flake-parts migration.** Cost: breaks `devenv shell` standalone flow;
-   forces switching daily dev to `nix develop`; two- eval-path drift risk.
+   forces switching daily dev to `nix develop`; two-eval-path drift risk.
    Benefit: a slightly cleaner `flake.nix` and access to treefmt/git-hooks flake
    modules that already have devenv equivalents. Not worth it for this repo at
    this stage.
 2. **`flake.aiPackages` registry + `materialize` dispatch.** Novel pattern, not
-   canonical; broken types (`types.raw`) for multi- contributor merge;
+   canonical; broken types (`types.raw`) for multi-contributor merge;
    `materialize` has a function-shape bug. Conventional per-system
    `packages.<name>` declarations work fine.
-3. **`self'.packages.*` inside `checks`.** Confirmed infinite- recursion. Use
+3. **`self'.packages.*` inside `checks`.** Confirmed infinite-recursion. Use
    `config.packages.*` within the same perSystem.
 4. **`filterAttrs`-based aggregate modules.** Use a static list.
 5. **Rename `flake.devenvModules.nix-agentic-tools` →
@@ -646,7 +646,7 @@ everything in one pass is analysis paralysis. The path forward:
 - `lib/ai/transformers/kiro.nix` → `slices/kiro/transformer.nix`
 - `lib/ai/transformers/claude.nix` → `slices/claude/transformer.nix`
 - `lib/ai/transformers/copilot.nix` → `slices/copilot/transformer.nix`
-- `lib/ai/transformers/agentsmd.nix` → `dev/` (AGENTS.md is a repo- wide
+- `lib/ai/transformers/agentsmd.nix` → `dev/` (AGENTS.md is a repo-wide
   convention, not a single ecosystem)
 - Per-package overlay files (`overlays/<pkg>.nix`) → the owning slice's
   directory
@@ -744,7 +744,7 @@ What to learn from the pilot before doing the other six slices:
 Research conducted by three parallel subagents on 2026-04-22:
 
 - **Repo state mapping** (Explore agent, Sonnet): verified 25 packages, 12
-  shared-dir mappings, 59 upward imports (all to `lib/`, zero cross- slice), 7
+  shared-dir mappings, 59 upward imports (all to `lib/`, zero cross-slice), 7
   ambiguity flags.
 - **Flake-parts validation** (general-purpose + WebFetch, Sonnet): 10 claims
   checked against flake-parts docs, nixpkgs source,

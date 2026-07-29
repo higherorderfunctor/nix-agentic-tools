@@ -777,7 +777,7 @@ layered behavior comes for free via the adapter.
 **Why this is important**: it's how downstream users do fine-grained
 customization without forking anything. The user's real example (AWS MCP only
 loaded in Kiro because work) is the canonical use case — there are always going
-to be ecosystem- specific tools, secrets, instructions that shouldn't be
+to be ecosystem-specific tools, secrets, instructions that shouldn't be
 broadcast to every CLI. The layered pool gives them a place to live without
 breaking the "shared" semantics for everything else.
 

@@ -1634,7 +1634,7 @@ hook format.
   `127.0.0.1:<PORT>` against the SHARED ai-pg Postgres; flip
   kiro/Claude/Copilot's openmemory entry stdio→`{type=http; url=…/mcp}`. Fixes
   the per-subagent stdio RAM bomb (one process for all fan-outs). The
-  ~100MB/instance is Node + pg/ioredis/ sqlite3 drivers + aws/google/openai
+  ~100MB/instance is Node + pg/ioredis/sqlite3 drivers + aws/google/openai
   SDKs + doc parsers (NOT an embedding engine — openmemory embeddings are
   ollama/remote), amortized once in the daemon. Store is Postgres → no SQLite
   file-contention. Add the daemon via a native-HTTP server module in the
