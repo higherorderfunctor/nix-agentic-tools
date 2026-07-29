@@ -957,4 +957,7 @@ the same commit are git-history-only and add no entry here.
   explicit operator grant, with `provenance` naming the authorization it rests on and `conditions`
   carrying what the grant obliges in exchange (canonically, that every decision taken past the
   boundary is documented). An unrecorded go-ahead is a defect: a grant with no provenance cannot be
-  told from one a session invented for itself.**
+  told from one a session invented for itself, and the harness now ENFORCES that rather than only
+  asking for it — setting `proceed_past_phase_boundaries` to true without `provenance` and
+  `conditions` is schema-invalid. Validation is lenient about ABSENCE and strict about ASSERTION, so
+  the conditional cannot invalidate a plan authored before the field: such a plan asserts nothing.**
