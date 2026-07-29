@@ -18,14 +18,16 @@
 # which crashes it with an unreadable `commitBuffer: invalid argument` instead of a
 # diagnostic.
 #
-# Always exits 0. A non-zero UserPromptSubmit hook surfaces as an error to the user,
-# and a mitigation that breaks the session is worse than one that quietly lapses.
+# Always exits 0, and that is a hard contract rather than a nicety: a non-zero
+# UserPromptSubmit hook surfaces as an error to the user on EVERY turn, so a mitigation
+# that breaks the session is worse than one that quietly lapses. Under `set -e` that
+# means every filesystem call below must be explicitly best-effort — an unguarded
+# `mkdir`/`touch`/`rm`/`cat` is a latent per-turn error dialog, not a nicety either.
 # cspell:ignore nosession  (the literal fallback marker key, not project vocabulary)
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 
 mode="${1:-}"
-: "${DELEGATION_CLAMP_PAYLOAD_FILE:?claude-delegation-clamp: payload path not baked in}"
 
 marker_dir="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/claude-delegation-clamp"
 
@@ -43,26 +45,41 @@ marker="$marker_dir/$session_id"
 
 case "$mode" in
 inject)
+  # A broken wrapper (payload path unset, or the store file unreadable) leaves nothing
+  # to inject. Lapse quietly with a stderr breadcrumb rather than aborting non-zero —
+  # same contract as every other failure path here.
+  payload_file="${DELEGATION_CLAMP_PAYLOAD_FILE:-}"
+  if [ -z "$payload_file" ] || [ ! -r "$payload_file" ]; then
+    echo "claude-delegation-clamp: payload file missing or unreadable; skipping" >&2
+    exit 0
+  fi
   # `if`, not `[ -e ] && exit 0` — the latter evaluates to exit status 1 when the
   # marker is ABSENT, which under `set -e` kills the script on exactly the path that
   # is supposed to inject.
   if [ -e "$marker" ]; then
     exit 0
   fi
+  # Marker bookkeeping is entirely best-effort, and the injection happens either way.
+  # The realistic failure is a shared /tmp whose claude-delegation-clamp/ directory is
+  # owned by another user — reachable whenever neither XDG_RUNTIME_DIR nor TMPDIR is
+  # set. Losing the once-per-session cadence costs ~75 tokens per turn; losing the
+  # injection costs the mitigation itself, which is the failure this feature exists to
+  # prevent. So a marker we cannot write degrades toward injecting, never toward
+  # silence.
+  #
   # chmod separately rather than `mkdir -m`: with -p the mode applies only to the
-  # deepest new directory (SC2174), and the directory usually already exists anyway —
-  # this enforces the mode on both paths. The /tmp fallback is world-writable, so
-  # 700 is what stops another local user from pre-creating markers and muting the hook.
-  mkdir -p "$marker_dir"
-  chmod 700 "$marker_dir" 2>/dev/null || :
-  # Best-effort prune. XDG_RUNTIME_DIR is tmpfs and clears on logout, but the /tmp
-  # fallback can accumulate one marker per session for months.
-  find "$marker_dir" -maxdepth 1 -type f -mtime +7 -delete 2>/dev/null || :
-  touch "$marker"
-  cat -- "$DELEGATION_CLAMP_PAYLOAD_FILE"
+  # deepest new directory (SC2174), and the directory usually already exists anyway.
+  if mkdir -p "$marker_dir" 2>/dev/null; then
+    chmod 700 "$marker_dir" 2>/dev/null || :
+    # Prune. XDG_RUNTIME_DIR is tmpfs and clears on logout, but the /tmp fallback can
+    # accumulate one marker per session for months.
+    find "$marker_dir" -maxdepth 1 -type f -mtime +7 -delete 2>/dev/null || :
+    touch "$marker" 2>/dev/null || :
+  fi
+  cat -- "$payload_file" 2>/dev/null || :
   ;;
 clear)
-  rm -f "$marker"
+  rm -f "$marker" 2>/dev/null || :
   ;;
 *)
   echo "claude-delegation-clamp: expected 'inject' or 'clear', got '${mode}'" >&2

@@ -60,6 +60,24 @@ Degraded inputs (malformed stdin, absent `session_id`) fall back to a
 every turn and quietly restore exactly the cost this design avoids —
 `checks/claude-delegation-clamp.nix` pins that down.
 
+### Exit 0 is a hard contract, so every filesystem call is best-effort
+
+A non-zero `UserPromptSubmit` hook surfaces as an error to the user on
+**every turn**, so the script never exits non-zero. Under `set -e` that is
+not a comment, it is a constraint on every line: an unguarded `mkdir`,
+`touch`, `rm`, `cat`, or `${VAR:?}` guard is a latent per-turn error
+dialog. All of them are explicitly guarded.
+
+Marker bookkeeping is best-effort and the injection happens regardless.
+The realistic failure is a shared `/tmp` whose `claude-delegation-clamp/`
+directory is owned by another user, reachable whenever neither
+`XDG_RUNTIME_DIR` nor `TMPDIR` is set. A marker that cannot be written
+degrades toward **injecting**, never toward silence: losing the cadence
+costs ~75 tokens per turn, while losing the injection costs the
+mitigation itself — the exact failure this feature exists to prevent. A
+missing payload file is the one case that lapses instead, because there
+is then nothing to inject.
+
 ### Why the model is not detected
 
 `UserPromptSubmit`'s stdin is `{session_id, prompt_id, cwd,

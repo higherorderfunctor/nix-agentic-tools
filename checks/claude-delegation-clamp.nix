@@ -97,12 +97,50 @@ pkgs.runCommandLocal "claude-delegation-clamp-check" {
   run bogus "$ENV1"; expect_exit0 "unknown mode"
   ok "unknown mode exits 0"
 
-  # 8. A session_id containing path separators cannot escape the marker directory.
+  # 8. A session_id containing path separators is sanitized into a FLAT marker name,
+  #    so it cannot escape the marker directory.
   run inject '{"session_id":"../../escape"}'; expect_exit0 "traversal session_id"
-  if [ -z "$(find "$XDG_RUNTIME_DIR/claude-delegation-clamp" -name '*escape*' -prune -o -type d -print 2>/dev/null | grep -v "^$XDG_RUNTIME_DIR/claude-delegation-clamp$" || :)" ]
+  if [ -e "$XDG_RUNTIME_DIR/claude-delegation-clamp/.._.._escape" ]
   then ok "path-separator session_id is sanitized into a flat marker name"
-  else bad "session_id escaped the marker directory"
+  else bad "session_id was not sanitized into the expected flat marker"
   fi
+
+  # 9. A missing or unreadable payload file lapses QUIETLY. The hook contract is that
+  #    it never surfaces an error to the user: a non-zero UserPromptSubmit hook would
+  #    show up on every turn, and a broken wrapper is broken on every turn.
+  set +e
+  got="$(printf '%s' "$ENV1" | env -u DELEGATION_CLAMP_PAYLOAD_FILE bash clamp.sh inject 2>/dev/null)"
+  rc=$?
+  set -e
+  if [ "$rc" -eq 0 ] && [ -z "$got" ]
+  then ok "missing payload path exits 0 and emits nothing"
+  else bad "missing payload path did not lapse quietly (rc=$rc)"
+  fi
+
+  # 10. A READ-ONLY marker directory must still inject and still exit 0. The
+  #     realistic case is a shared /tmp whose claude-delegation-clamp/ is owned by
+  #     another user, reachable when neither XDG_RUNTIME_DIR nor TMPDIR is set.
+  #     Degrading toward silence here would kill the mitigation exactly where nobody
+  #     would notice; degrading toward injecting only costs tokens.
+  ro_root="$PWD/ro"
+  mkdir -p "$ro_root/claude-delegation-clamp"
+  chmod 500 "$ro_root/claude-delegation-clamp"
+  if touch "$ro_root/claude-delegation-clamp/.probe" 2>/dev/null; then
+    # Writes are not actually restricted here (e.g. running as root) — the case this
+    # test exists for is unreachable, so assert nothing rather than assert falsely.
+    rm -f "$ro_root/claude-delegation-clamp/.probe"
+    echo "skip - read-only marker dir (writes not restricted in this sandbox)"
+  else
+    set +e
+    got="$(printf '%s' "$ENV1" | XDG_RUNTIME_DIR="$ro_root" bash clamp.sh inject 2>/dev/null)"
+    rc=$?
+    set -e
+    if [ "$rc" -eq 0 ] && [ -n "$got" ]
+    then ok "read-only marker dir still injects and exits 0"
+    else bad "read-only marker dir broke the hook (rc=$rc)"
+    fi
+  fi
+  chmod 700 "$ro_root/claude-delegation-clamp"
 
   echo "claude-delegation-clamp: $pass passed, $fail failed"
   [ "$fail" -eq 0 ] || exit 1
