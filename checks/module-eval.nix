@@ -274,6 +274,14 @@
       body = lib.removePrefix "${marker}'\n" afterCall;
     in
       builtins.head (lib.splitString "\n${marker}\n" body);
+
+  # ── heron_brook delegation-clamp helpers ─────────────────────────
+  # The mitigation's handler command is a /nix/store path, so match on
+  # the derivation name rather than on an exact string.
+  clampCommands = blocks:
+    lib.concatMap (b: map (h: h.command or "") (b.hooks or [])) blocks;
+  hasClampHook = blocks:
+    builtins.any (lib.hasInfix "claude-delegation-clamp") (clampCommands blocks);
 in {
   # ── Kiro launcher wrapper: idempotent --tui/--v3 injection ───────
   # The factory wrapper injects the v3 launch flags; injecting them
@@ -1559,10 +1567,20 @@ in {
 
   # Devenv: empty ai.claude.settings produces no gap file (lib.mkIf
   # gate on hasGapSettings).
+  #
+  # delegationClamp.mitigate = false is REQUIRED here, and is not a workaround.
+  # The heron_brook mitigation is default-on and writes hooks into the same
+  # settings.json through a DIFFERENT writer, so under stock config that file now
+  # always exists. This test is about the gap writer's own mkIf gate, so it turns
+  # the other writer off to isolate it. Coverage of the default is
+  # module-claude-devenv-delegation-clamp-default-on.
   module-claude-devenv-settings-empty-no-gap-file = mkTest "claude-devenv-settings-empty-no-gap-file" (
     let
       result = evalDevenv {
-        ai.claude.enable = true;
+        ai.claude = {
+          enable = true;
+          delegationClamp.mitigate = false;
+        };
       };
     in
       !(result.config.files ? ".claude/settings.json")
@@ -4061,6 +4079,67 @@ in {
       handler = builtins.head (block.hooks or []);
     in
       block.matcher == "Bash" && handler.command == "validate" && handler.type == "command"
+  );
+
+  # ── heron_brook delegation clamp (ai.claude.delegationClamp) ──────
+  # Default-ON is the whole requirement: a bare `enable = true` must already
+  # carry both hooks, because a consumer is meant to do nothing to get the
+  # mitigation. If this test ever needs a flag added to pass, the feature broke.
+  module-claude-hm-delegation-clamp-default-on = mkTest "claude-hm-delegation-clamp-default-on" (
+    let
+      result = evalHm {ai.claude.enable = true;};
+      settingsHooks = (result.config.programs.claude-code.settings or {}).hooks or {};
+    in
+      hasClampHook (settingsHooks.UserPromptSubmit or [])
+      && hasClampHook (settingsHooks.PreCompact or [])
+  );
+
+  # The escape hatch must remove BOTH hooks. Dropping only the injector would
+  # leave a PreCompact hook that clears a marker nothing ever writes — inert, but
+  # a confusing thing to find in a settings.json you asked to be stock.
+  module-claude-hm-delegation-clamp-opt-out = mkTest "claude-hm-delegation-clamp-opt-out" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          delegationClamp.mitigate = false;
+        };
+      };
+      settingsHooks = (result.config.programs.claude-code.settings or {}).hooks or {};
+    in
+      (settingsHooks.UserPromptSubmit or [])
+      == []
+      && (settingsHooks.PreCompact or []) == []
+  );
+
+  # Devenv parity — same two hooks, same default, per the repo's config-parity rule.
+  module-claude-devenv-delegation-clamp-default-on = mkTest "claude-devenv-delegation-clamp-default-on" (
+    let
+      result = evalDevenv {ai.claude.enable = true;};
+      settingsJson = (result.config.files.".claude/settings.json" or {}).json or {};
+    in
+      hasClampHook (settingsJson.hooks.UserPromptSubmit or [])
+      && hasClampHook (settingsJson.hooks.PreCompact or [])
+  );
+
+  # Compose-not-clobber. The mitigation is emitted as a DEFINITION of
+  # ai.claude.hooks, never as that option's `default` — a default is discarded
+  # wholesale the moment a consumer defines the option at all, which would have
+  # silently disabled the mitigation for exactly the consumers who use hooks most.
+  # This test is what pins that choice down.
+  module-claude-delegation-clamp-composes-with-consumer-hook = mkTest "claude-delegation-clamp-composes-with-consumer-hook" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          hooks.UserPromptSubmit = [{hooks = [{command = "consumer-hook";}];}];
+        };
+      };
+      blocks = ((result.config.programs.claude-code.settings or {}).hooks or {}).UserPromptSubmit or [];
+      cmds = clampCommands blocks;
+    in
+      builtins.elem "consumer-hook" cmds
+      && builtins.any (lib.hasInfix "claude-delegation-clamp") cmds
   );
 
   # Compose-not-clobber invariant (decision #3): settings.json's formats.json
