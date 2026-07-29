@@ -824,3 +824,140 @@ the same commit are git-history-only and add no entry here.
   `default_vehicle`, `push_point`, `draft_policy`, `phase_branch_review_binding`. Record it even
   where the answer is the old default (direct commits on a branch, phase = branch = review sitting),
   because the rules that read it cannot tell an unresolved posture from a resolved permissive one.**
+
+## Address discipline + a freshness arm, a reader-side raiser, split verdicts, a standing grant
+
+Migration entries folded in the pass that bumped the master to `v13-orpiment-esker-blackthorn`. This
+section's anchor is **derived from history** (the commit that assigned that version), not embedded
+here. All are behavior-changing master or shared-harness edits. Behavior-neutral repairs landed in
+the same commit are git-history-only and add no entry here.
+
+### Master protocol (`living-plan-bootstrap.md`)
+
+- **A TRACKED PATH IS AN UNDER-SPECIFIED ADDRESS — the write-side gitignored-but-tracked gotcha
+  generalizes into one address-discipline clause with four instances:** the old clause covered
+  writing only, and named committable status as the sole predicate a successful write fails to imply.
+  The property is wider — a path fixes a NAME, never WHICH CONTENT that name holds, and every path
+  resolves at once against a working copy, a staged copy, committed history and, under multiple
+  working trees, a TREE. Which one a tool reads is a property OF THE TOOL, chosen silently, so a
+  result drawn from the wrong store is well-formed and plausible: never empty, never an error,
+  nothing the emptiness and fidelity rules would catch. **Upgraders: before treating any write,
+  proof, search, read or commit as fact, establish WHICH store and WHICH tree it reached. Four
+  instances carry their own remedies and they resist collapsing because they push OPPOSITE ways on
+  the same object — one instance's remedy manufactures the next one's hazard — which is why they
+  stay concrete. (1) The write-side clause keeps its remedy and gains the two ways it fails,
+  which turn on the PATHSPEC'S BREADTH: reached by a BROAD pathspec an ignored path is skipped
+  silently at a ZERO exit, while named EXPLICITLY the add exits non-zero and reports the IGNORE
+  RULE'S MATCH — often the ignored DIRECTORY, which may be the parent of a path that staged fine —
+  and never the members that succeeded, which stage anyway. An add of an already-tracked path
+  under such a subtree exits non-zero even when it fully succeeds. So the exit status is not a
+  refusal signal there and the named path is not the failure: RE-READ THE INDEX to learn what
+  landed. (2) A tool resolving its INPUTS from version control cannot see an unstaged new file
+  and reports a MISSING path that reads as real breakage, while every filesystem-level proof
+  passes over that same file — stage before invoking; staging suffices, no commit needed. (3)
+  Staging SNAPSHOTS bytes, so anything staged before its last edit ships a revision no proof
+  reached, and a pathspec-less commit ships the whole staged set rather than the unit — so commit
+  by explicit pathspec, and prove the copy that commit form ACTUALLY reads: a pathspec-LESS commit
+  ships the index, while a pathspec-BEARING one ships the working tree for the named paths and
+  disregards what CONTENT was staged for them (a path git does not already know cannot be named at
+  all, so a brand-new file must still be staged once). Pick the form first, prove that store last,
+  and let nothing
+  — a formatting hook above all — write in between, or the one-unit-one-commit binding silently
+  stops holding. There is no ambient tell for either. (4) A repo-relative path, or a
+  host-advertised workspace root, resolves against the HOST's tree and not necessarily the one you
+  are changing — bind the tree at the POINT OF USE by addressing the active tree's absolute root.
+  Do NOT bank that as a resolved-once environmental property: the answer inverts the moment an
+  isolation vehicle is materialized. And do not derive it from the COMMON git directory, which
+  reaches the MAIN checkout by construction — that derivation is sanctioned as a namespace key and
+  as a vehicle location, and is now explicitly barred as a read or search root. Under
+  resident-commits the same discipline applies to the handover: derive the "please commit these
+  paths" note from THE PATHS YOUR SESSION ITSELF WROTE — every one of them, since that mode
+  commits nothing during the sitting — rather than from tree state, which may hold another
+  writer's work.**
+- **The no-ignore rule reaches any PROBE, not searches alone:** the ignore-honoring default was
+  stated for search, so the neighbouring diagnostic failed unremarked — an ignore-STATUS query that
+  consults the index answers EMPTY for an already-tracked path and reads as "not ignored" exactly
+  where the tracked-under-ignore case applies. **Upgraders: use the no-ignore form of any probe of
+  such a subtree, and treat an empty ignore-status answer on a tracked path as uninformative rather
+  than as a negative.**
+- **A LIVE CONSUMER OF THE TARGET now raises the isolation vehicle, as a third raiser:** the vehicle
+  was raised only by the posture or by a co-occupied tree, and both ask about a second WRITER. Every
+  condition resolved at cold start is a property of the ENVIRONMENT or of the plan; none is a
+  property of the ARTIFACT BEING MODIFIED. **Upgraders: before an edit lands on an artifact anything
+  outside the session can load, answer whether something is executing it right now. A consumer that
+  loads its artifact incrementally, or re-reads it as it runs, executes a half-applied or
+  version-split copy; the damage lands inside that consumer and is invisible to you, so this is
+  SILENT, not self-announcing. Where the consumer reads a path the vehicle relocates, in-use raises
+  the vehicle exactly as co-occupancy does. Where it does not — a consumer reading INSIDE the
+  vehicle, or a copy no vehicle covers, your out-of-repo working state and any installed or
+  activated copy among them — isolation is NOT the remedy and the edit WAITS. A validated atomic
+  replace removes only the TORN read, never the SPLIT one, so it is a floor rather than a substitute
+  for waiting. Do NOT record this in your resolved-property record: it is not standing truth (a
+  consumer may begin using the target after cold start) and it is answered at edit time. Where you
+  cannot observe the answer, ASK — an unverifiable property is worse than a question. Three sites
+  that enumerated the two old raisers now name the raiser SET instead; if you copied any of them,
+  re-point rather than extend.**
+- **A SPLIT VERDICT IS ADJUDICATED, NOT TALLIED, and the verifier brief now fixes each claim's
+  SCOPE:** delegated verification fixed what ARRIVES — claims under test, per-claim verdicts, no
+  rollup — and said nothing about what to do when two verdicts on ONE claim disagree, which is the
+  expected consequence of fanning review out by LENS rather than by finding. **Upgraders: stop
+  letting an aggregation step resolve a split. Filtering to survivors drops the claim because one
+  verifier refuted it; keeping anything confirmed keeps it because one did not; both are silent and
+  defensible, so which runs is an accident of how the aggregation was written. Decide the claim on
+  the evidence each verdict carries. Counting is the wrong instrument: independent skeptics are
+  countable only against ONE FIXED PROPOSITION, and split verdicts may have scoped the claim
+  differently — so establish first that they answered the same question, and where they did not,
+  split the claim into the parts each addressed. Treat a split as EVIDENCE: a claim competent
+  readers divide on is likelier substantive than one they agree on, so an unresolved split leaves
+  the claim OPEN rather than resolved by default. Add scope-fixing to every verifier brief; it is
+  the precondition that makes a genuine disagreement distinguishable from two answers to two
+  questions.**
+- **AN ESCALATION IS A DISPOSITION AND GOES STALE — the decision-scope filter gains a freshness
+  arm:** the filter ran when a call AROSE and nothing re-ran it over a call already recorded as
+  human-owned, so a held set was carried and re-presented indefinitely on dispositions nothing
+  re-tested. Neither existing arm reaches it: the forward arm fires before an item is BUILT and an
+  escalation is never built, and the backward arm turns on contact with the real system that a
+  question waiting in a register never makes. **Upgraders: re-run the filter over every unresolved
+  item held for the human, wherever recorded, at the moment it would be put in front of them again,
+  however carried — and assemble any opening agenda from those re-derived dispositions rather than
+  reading them off the register. An item the recorded decisions now answer, or that an authoritative
+  source the escalation never consulted has since settled, is no longer an unknown and is resolved
+  non-interactively before the gate opens; what is artifact-internal is agent-owned and is decided,
+  applied and logged. Re-derivation runs BOTH directions and never silently retires a question: a
+  disposition that moves is marked changed where it sits, and one that survives is asked with its
+  reason intact. This is a checkpoint, not a re-decision — the structural reason each disposition
+  already carries is what the re-run tests against current facts.**
+- **A STANDING OPERATOR AUTONOMY GRANT IS PLAN STATE, not kickoff prose:** whether a boundary WAIT
+  is what this operator wants is a durable property of the PLAN, but it rode in the kickoff, which
+  is convenience and explicitly non-authoritative — so a session starting from state alone could not
+  see it, defaulted back to WAIT, and contradicted the standing intent. **Upgraders: record such a
+  grant in the new `operator_autonomy` slot described under the shared harness below, with the
+  operator's authorization as provenance exactly as a sanctioned override carries its own. It FAILS
+  SAFE BY ABSENCE — no recorded grant means WAIT, and a grant is never inferred from a session's
+  tone, from work proceeding smoothly, or from a prior session having proceeded. It NARROWS rather
+  than lifts: it changes what a phase_boundary does and nothing else, so a hitl_opening still waits,
+  every human-gated item still gates, and the register presentation the opener already owes is still
+  made. Replace it IN PLACE when the standing intent changes; a withdrawn grant appended to rather
+  than replaced leaves a superseded clause still reading as live.**
+- **The durable-record rule is scoped by RECORD-PRESENCE, not by machinery tier:** it sat under the
+  full-tier additions, which tell a LITE plan to skip the section, while the rule binds every tier.
+  **Upgraders on LITE: you are in scope. Your session and decisions logs are the durable record, so
+  answer authorship, presence and ABSENCE claims about your own work from them and never from
+  recollection, and assert at close both that the record carries an entry from this session and that
+  the position marker was re-derived rather than inherited. Only the write side's diagnosis — the
+  per-unit WAL trigger — is full-specific; its remedy is not.**
+
+### Shared harness (`state.schema.json`)
+
+- **New additive `operator_autonomy` object:** a standing grant that changes what a position class
+  DOES is a durable property of the plan that a rule dereferences, so it needed an address rather
+  than a re-conveyed prose token. **Upgraders: nothing breaks — the object and every field are
+  optional and additive, so a plan authored before this stays schema-valid, and absence means the
+  position class behaves exactly as written. Record `proceed_past_phase_boundaries` only on an
+  explicit operator grant, with `provenance` naming the authorization it rests on and `conditions`
+  carrying what the grant obliges in exchange (canonically, that every decision taken past the
+  boundary is documented). An unrecorded go-ahead is a defect: a grant with no provenance cannot be
+  told from one a session invented for itself, and the harness now ENFORCES that rather than only
+  asking for it — setting `proceed_past_phase_boundaries` to true without `provenance` and
+  `conditions` is schema-invalid. Validation is lenient about ABSENCE and strict about ASSERTION, so
+  the conditional cannot invalidate a plan authored before the field: such a plan asserts nothing.**

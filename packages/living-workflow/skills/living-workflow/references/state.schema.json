@@ -24,6 +24,33 @@
         "note": { "type": "string" }
       }
     },
+    "operator_autonomy": {
+      "type": "object",
+      "description": "A STANDING operator grant that changes what a position class DOES, recorded here rather than re-conveyed in kickoff prose (state-over-tokens). The kickoff is convenience and explicitly non-authoritative, so a grant carried only there is invisible to a session that starts from state alone — which then defaults back to WAIT and contradicts the standing intent. Additive and fully optional, so plans authored before this stay valid. IT FAILS SAFE BY ABSENCE: an absent object, or an absent/false flag, means the position class behaves as written and WAITS; a grant is never inferred from a session's tone, from work proceeding smoothly, or from a prior session having proceeded. Rule-bearing, so it is REPLACED IN PLACE when the operator's standing intent changes, never appended to. Validation is lenient about ABSENCE and strict about ASSERTION: every field is optional, so a plan that never had a grant stays valid, but asserting the grant REQUIRES its warrant — proceed_past_phase_boundaries true without provenance and conditions is schema-INVALID. That conditional cannot invalidate a plan authored before this field, since such a plan asserts nothing, so the backward-compatibility reason that keeps the sibling posture record lenient does not reach here — and an unrecorded go-ahead is exactly the defect this slot exists to prevent.",
+      "properties": {
+        "proceed_past_phase_boundaries": {
+          "type": "boolean",
+          "description": "When true, a phase_boundary opener presents the register as it already owes and then proceeds autonomously with per-decision logging, instead of waiting. NARROW by construction: it reaches phase_boundary only — a hitl_opening still waits, and every human-gated item still gates — because the grant's whole warrant is that the operator reads the committed end-state."
+        },
+        "provenance": {
+          "type": "string",
+          "description": "The operator authorization this grant rests on, carried here exactly as a sanctioned OVERRIDE carries its own in the decisions register. An unrecorded go-ahead is a defect; a grant with no provenance cannot be told from one a session invented for itself."
+        },
+        "conditions": {
+          "type": "string",
+          "description": "What the grant obliges in exchange — canonically that every decision taken past the boundary is documented — plus any scope the operator attached to it."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["proceed_past_phase_boundaries"],
+            "properties": { "proceed_past_phase_boundaries": { "const": true } }
+          },
+          "then": { "required": ["provenance", "conditions"] }
+        }
+      ]
+    },
     "ecosystem": {
       "type": "object",
       "description": "Every environmental property resolved at COLD START and read thereafter — capabilities, host execution constraints, and the named per-repo properties (commit_ownership, integration_posture) — not capabilities alone. Never assume host/runtime/tools; encode divergences as 'if capability absent -> do Y'. Capability names are ecosystem-agnostic; values are the resolved primitive for this ecosystem.",
