@@ -163,6 +163,23 @@ _: {
         }
       ];
     };
+    # markdown-formatting: treefmt owns markdown wrapping, and the one
+    # markdown defect here that NO check can catch (a line broken
+    # mid-token). Scoped broadly to `**/*.md` on purpose — since the
+    # defect is not lintable, reaching the author before they write is
+    # the only real control, so this has to load on any markdown edit
+    # rather than only when the formatter config is touched. The config
+    # paths are listed too, for whoever reconsiders `proseWrap` or the
+    # formatter choice.
+    markdown-formatting = {
+      scopes = [
+        "**/*.md"
+        "checks/split-code-spans.nix"
+        "checks/split-code-spans.py"
+        "treefmt.nix"
+      ];
+      sources = ["markdown-formatting"];
+    };
     mcp-servers = {
       scopes = [
         "overlays/mcp-servers/**"

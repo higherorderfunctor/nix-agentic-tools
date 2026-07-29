@@ -160,6 +160,7 @@ libsecret
 libsets
 licence
 lifecycles
+lintable
 livelink
 livelock
 llms
@@ -263,6 +264,7 @@ rollup
 rsbuild
 rspack
 rulesdir
+rumdl
 rustc
 sadjow
 sarif
@@ -342,6 +344,7 @@ valkey
 vendorhash
 watchlist
 webp
+wikilink
 worktree
 worktrees
 wyhash

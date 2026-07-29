@@ -1,0 +1,80 @@
+### Markdown Formatting
+
+`treefmt` owns markdown wrapping. Prettier runs with
+`settings.proseWrap = "always"` (see `treefmt.nix`), so it reflows every
+paragraph to 80 columns on format. **Do not hand-wrap prose** — the line breaks
+you author are discarded, and hand-wrapping is what created the defect below.
+
+### Never break a line mid-token
+
+> **Last verified:** 2026-07-29 (commit pending — first version, written after
+> the `proseWrap` flip in #589 and the two clean-up passes it turned out to
+> need, #590 and #591). If you change `settings.proseWrap`, add or swap a
+> markdown formatter, or touch `checks/split-code-spans.*`, read this first.
+
+This is the one markdown defect in this repo that **no check can catch**, so it
+has to be prevented at authoring time.
+
+CommonMark replaces a newline inside an inline code span with a SPACE. Where the
+break falls at a natural space that is harmless. Where it falls MID-TOKEN the
+space lands inside an identifier and the rendered code is wrong:
+
+    authored:   `programs.claude-code.
+                marketplaces`
+    renders as: programs.claude-code. marketplaces
+
+Copy-pasting that yields a broken Nix attribute path. Prose outside code spans
+has the same failure — `bun-` and `wrapper` split across a break render as
+`bun- wrapper`.
+
+**So: never end an authored line mid-identifier (on `.`, `/`, `-`, or `_`), and
+never break inside a code span.** Put a long span on its own line and let it
+overflow 80 columns — prettier does precisely that and will not split it.
+
+#### Why there is no lint for it
+
+The correct and incorrect forms are lexically identical; only context separates
+them. `env // omEnv`, `nix-update --flake`, `<!-- header -->`,
+`low / medium / high`, `pre- or post-` and `4- vs 5-value` are all correct,
+while `repo- wide` and `cross- slice` are not. A "glue character followed by a
+space" heuristic was measured across the tree: 96 hits, roughly 90% of them
+legitimate. Shipping it would have been a check that cries wolf.
+
+`checks/split-code-spans.nix` covers the adjacent case that IS decidable — a
+span whose content still contains a newline. Its `.py` carries the CommonMark
+backtick rule and why the obvious one-line regex is wrong.
+
+#### The formatter launders new instances
+
+Know this before trusting the guardrail: `proseWrap = "always"` joins a split
+span by printing the span's CommonMark _value_, space included. It therefore
+converts a newline `checks/split-code-spans.nix` would catch into a space that
+nothing can. The window is narrow — nobody hand-wraps now that the formatter
+owns wrapping — but it is not closed.
+
+### Formatter selection is settled — do not re-survey
+
+Measured 2026-07-29. Only prettier and mdformat join a split code span at all.
+**No Rust-family markdown formatter does**, which is the intuition that usually
+sends people looking for one:
+
+| Tool                               | Joins a split code span?                      |
+| ---------------------------------- | --------------------------------------------- |
+| prettier `proseWrap: always`       | yes — treats a span as an unbreakable token   |
+| mdformat `--wrap keep`             | yes, but does NOT rewrap → 110-160 char lines |
+| dprint-markdown `textWrap: always` | NO — reflows around it, keeps the newline     |
+| deno fmt                           | no — same engine as dprint                    |
+| rumdl `fmt` / `check --fix`        | no — a markdownlint clone, no reflow          |
+
+mdformat was rejected on output quality as much as on rewrap: it also escapes
+`\<150` and wikilink brackets, and renumbers ordered lists.
+
+### Two traps when validating a reflow
+
+- **A pandoc before/after showing "renders identically" is NOT a safety
+  signal.** For a mid-token span it proves the bug SURVIVED. #589 shipped
+  claiming a fix it had not made because that output was read as reassurance.
+- **`proseWrap` also governs YAML** folded and plain scalars, so a change to it
+  reflows `.github/**` too. Verify by parsing both revisions and diffing the
+  loaded structures, never by eye — a silently altered cache key or `if:`
+  condition is invisible in review.

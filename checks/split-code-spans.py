@@ -18,6 +18,19 @@ two reasons:
              -> <code>home.file.".claude/ rules/${name}.md".text</code>
      Copy-pasting either yields a broken Nix attribute path.
 
+     TRAP, learned the hard way. This check does NOT catch case 2 once the
+     reflow has run, and a render comparison will not tell you so. Prettier
+     joins the span by printing its CommonMark VALUE — space included — so
+     the newline disappears while the defect stays. That means a pandoc
+     before/after showing "renders identically" is NOT a safety signal
+     here: for a mid-token span it is proof the bug SURVIVED. PR #589
+     shipped claiming a fix it had not made because that output was read
+     as reassurance. The class is not lintable (a glue-char-plus-space
+     heuristic measured 96 hits, ~90% of them legitimate: `env // omEnv`,
+     `nix-update --flake`, `<!-- header -->`, `low / medium / high`,
+     `pre- or post-`), so it is prevented at authoring time by the
+     markdown-formatting fragment instead.
+
 `treefmt`'s prettier runs with `proseWrap = "always"`, which treats a code
 span as an unbreakable token and therefore CANNOT emit one of these. That
 formatter is the primary guardrail; this check is the backstop for what it
