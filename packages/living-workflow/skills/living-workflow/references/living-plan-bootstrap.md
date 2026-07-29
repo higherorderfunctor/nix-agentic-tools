@@ -29,7 +29,7 @@ improvements land in this doc only by a deliberate grooming session, never self-
 > cross-session concerns become schema-backed state fields, not ad-hoc prose tokens). The backlog
 > sub-workflow this doc references lives at `living-workflow-backlog.md`.
 >
-> **Living-doc version: `v14-realgar-moraine-rowan`.** The assigned VERSION dependents pin to
+> **Living-doc version: `v15-cinnabar-drumlin-hornbeam`.** The assigned VERSION dependents pin to
 > —
 > a monotonic ORDINAL (for "am I behind?") paired with a DISTINCTIVE LABEL (so the exact version
 > stays searchable in history and in copied text). A modifying commit bumps it and authors a
@@ -808,6 +808,23 @@ is authoritative thereafter.
      the class before acting, so a behavior-changing edit is never mistaken for a behavior-neutral
      one; a behavior-neutral-vs-behavior-changing test applied elsewhere is an instance of this
      split.
+   - THE CHANGE CLASS GOVERNS AUTHORIZATION AND SETTLES NOTHING ABOUT LEGIBILITY, a SECOND property
+     of the same edit. A change is submitted so that someone can read it, and a diff dominated by
+     text the change never meant to alter defeats exactly that: it passes every correctness check
+     while converting the reader's task from READING the change to FINDING it. The asymmetry is what
+     makes it persistent — the churn is free to produce, since the author already knows which lines
+     matter, and the whole cost lands on a reviewer who cannot tell a re-emitted line from an edited
+     one without reading both versions, hardest exactly where the change is large enough to need
+     careful review. So a behavior-NEUTRAL re-emission is not thereby harmless: needing no
+     authorization at all, it can still make a behavior-CHANGING edit riding beside it effectively
+     invisible. The remedy is NOT refusing formatters or structured transforms, which are the
+     correct tools and are mandated elsewhere, but SEPARATING what the tool rewrote from what the
+     change meant — preserve the base's form wherever the content is unchanged, or land the
+     mechanical re-emission as its own unit. Judge it by whether a reader can LOCATE the change,
+     never by a line-count threshold. This duty and the OPERAND dimension below REINFORCE rather
+     than substitute for one another: re-emitting text is also the operation during which content
+     silently disappears, so the restraint that keeps a diff legible removes the very mechanism that
+     gives a preservation check something to miss.
    - REFERENTIAL INTEGRITY: loss-proof/coverage machinery over a set of mapped items must
      check that every reference target actually resolves to an existing primary — not only
      that each item is individually well-formed. Put the cross-item check in the verifier,
@@ -929,6 +946,21 @@ is authoritative thereafter.
      process residue. This blind spot is SELF-SEALING and defeats the standing remedy:
      re-enumerating from source reproduces the same number, because the source is filtered by the
      same proxy, so the lower-bound-pointer discipline actively CERTIFIES the omission.
+     THE OPERAND IS ALSO WHICH PROPERTY, NOT ONLY WHICH ITEMS — the same dimension reached over one
+     ARTIFACT rather than a set. A preservation or equivalence check compares ONE PROJECTION of its
+     subject: a token SET answers whether the vocabulary moved, a line-survival check whether each
+     base line's content still appears contiguously, a block-structure check whether the units that
+     begin a line still begin one. Those are DIFFERENT OPERANDS that do not substitute for one
+     another, so a green certifies its own projection and nothing else, and each instrument ADDED
+     narrows the blind spot rather than closing it. CHECK: name the projections nothing has ranged
+     over and treat each as unproven — the question is never "is the check green" but "which operands
+     has nothing measured". This under-covers most dangerously where it is most reassuring, because
+     it is green FOR EXACTLY THE RIGHT REASON, and a mechanical check is adopted precisely in order
+     to stop looking, so its operand silently becomes the session's and every unmeasured property
+     stops being examined at all. It binds hardest over a MECHANICAL WHOLE-ARTIFACT TRANSFORM, whose
+     edits are unreviewed by construction: enumerate there BEFORE the output is believed, and prefer
+     a transform that asserts its own postcondition over the content it moves, which fails safe
+     where one carrying no such assertion deletes silently.
    - SESSION-CLOSE VALIDATION (when this session made updates): the living workflow scopes a
      session's work, so if any living-plan doc was edited — or any OTHER authoritative artifact a
      plan's dispositions or standing rules are read from, a large accreting working index and the
