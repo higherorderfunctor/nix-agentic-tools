@@ -161,6 +161,38 @@ jobs:
       - name: Run flake checks
         run: nix flake check
 
+      # TRIPWIRE 1 for the heron_brook delegation-clamp mitigation
+      # (ai.claude.delegationClamp). Forces a human re-evaluation by the
+      # committed `reviewBy` date rather than letting a token-costing mitigation
+      # for undocumented vendor behavior calcify into permanent overhead after
+      # upstream fixes it.
+      #
+      # A STEP in this job, not a job of its own: `test` is already a required
+      # status check, so this needs no new required-context string that a job
+      # rename could silently break — the same reasoning
+      # checks/instructions-drift.nix records for living in `nix flake check`.
+      # It cannot live in a Nix check at all, because reading the current date
+      # inside a derivation is impure and would be cached.
+      #
+      # Deliberate consequence: once the date passes, this reddens a required
+      # check on EVERY PR, the bot's auto-merging `update/*` PRs included. That
+      # is the forcing function, and it is self-discharging — the PR that bumps
+      # `reviewBy` (or deletes the mitigation) goes green.
+      - name: Heron-brook mitigation review tripwire
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          tripwire=config/heron-brook-tripwire.json
+          review_by="$(jq -r .reviewBy "$tripwire")"
+          issue="$(jq -r .issue "$tripwire")"
+          today="$(date -u +%F)"
+          # Lexicographic compare is correct for ISO-8601 dates.
+          if [[ "$today" > "$review_by" ]]; then
+            echo "::error file=${tripwire}::heron_brook mitigation is past its ${review_by} review date (today ${today}). Re-verify whether Claude Code still ships the delegation clamp: see ${issue} and packages/claude-code/docs/heron-brook-clamp.md. Then EITHER bump reviewBy in ${tripwire}, OR delete ai.claude.delegationClamp and both tripwires if upstream fixed it. An expired justification is a finding, not a formality."
+            exit 1
+          fi
+          echo "heron_brook mitigation review due ${review_by} (today ${today}) — OK."
+
   # The `devenv test` runtime gate lives in its OWN workflow
   # (devenv-test.yml): paths-filtered so only PRs touching the surfaces
   # that can break instruction-file materialization pay its cold-closure

@@ -79,8 +79,9 @@ _: {
       ];
       sources = ["skills-fanout-pattern"];
     };
-    # claude-code: wrapper chain. Spans the claude-code overlay
-    # package and the factory-built module.
+    # claude-code: wrapper chain plus the heron_brook delegation-clamp
+    # mitigation. Spans the claude-code overlay package and the
+    # factory-built module.
     claude-code = {
       scopes = [
         "overlays/claude-code.nix"
@@ -90,6 +91,11 @@ _: {
         {
           location = "package";
           name = "claude-code-wrapper";
+          dir = "claude-code";
+        }
+        {
+          location = "package";
+          name = "heron-brook-clamp";
           dir = "claude-code";
         }
       ];
