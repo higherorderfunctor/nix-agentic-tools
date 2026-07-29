@@ -29,7 +29,7 @@ improvements land in this doc only by a deliberate grooming session, never self-
 > cross-session concerns become schema-backed state fields, not ad-hoc prose tokens). The backlog
 > sub-workflow this doc references lives at `living-workflow-backlog.md`.
 >
-> **Living-doc version: `v13-orpiment-esker-blackthorn`.** The assigned VERSION dependents pin to
+> **Living-doc version: `v14-realgar-moraine-rowan`.** The assigned VERSION dependents pin to
 > —
 > a monotonic ORDINAL (for "am I behind?") paired with a DISTINCTIVE LABEL (so the exact version
 > stays searchable in history and in copied text). A modifying commit bumps it and authors a
@@ -956,6 +956,21 @@ is authoritative thereafter.
      what counts as a convergence BLOCKER, never what counts as a defect. Non-blocking findings are
      recorded and serviced, NOT hunted to zero each pass — their supply is unbounded whenever the
      surface area is, so a "no findings" bar never converges — and they do not gate convergence.
+   - THE FIXES ARE THE LEAST-REVIEWED TEXT IN THE CHANGE, and a pass reviews them before it
+     converges. A round finds defects, the author fixes them, and the fixes are new text no round
+     has read — written last, under the most fatigue, and carrying the earned confidence of every
+     round that preceded them, so the text likeliest to be wrong is exactly the text that
+     confidence does not cover. No round eliminates the hazard, since its own fixes inherit it, so
+     the choice is not between terminating and not: it is between re-reading the WHOLE change again
+     and reading only what the fixes touch. Run ONE round SCOPED TO THE FIX TEXT AND ITS NEIGHBOURS
+     before the change is handed over — it is not polish — then LOG AN EXPLICIT ACCEPTANCE of the
+     residual it leaves rather than assuming it away. Fixing one half of a contradicting PAIR
+     reliably manufactures the mirror defect: the two statements conflicted only by being COUPLED —
+     describing one thing from different angles or at different levels — so the side edited to
+     agree with the other now disagrees with a THIRD the original wording satisfied, usually its
+     nearest neighbour, and commonly only one of the two levels was ever stated. So a fix to one
+     side of a contradiction re-checks the edited statement against its immediate NEIGHBOURS, not
+     only against the statement it was reconciled with.
    - DESIGN-PHASE COHERENCE REVIEW: run the adversarial coherence/contradiction check over a DESIGN
      artifact before that design is consumed downstream, not only over the built diff after. A design
      that conflicts with a neighbouring design decision, or with the plan that carries it, is cheaper
@@ -1358,7 +1373,18 @@ defined by the backlog sub-workflow beside this doc, not duplicated here.
    POINTERS, NOT PAYLOAD: each item is a self-contained brief plus what the worker must READ, never
    pasted content it would re-read anyway. A DROPPED ITEM IS A FAILURE, not a silent truncation: if
    the queue is bounded below the work-list or a worker dies, surface the uncovered items
-   explicitly (log them) rather than letting them pass as covered. SERIALIZATION is a real bound
+   explicitly (log them) rather than letting them pass as covered. WHERE THE WORK-LIST IS GRADED,
+   THE BOUND CONSULTS THE GRADE — the enforcement arm of A DROPPED ITEM IS A FAILURE, which fixes
+   WHETHER an omission is visible and settles nothing about WHICH items may be omitted. A set whose
+   items carry their own severity or priority is not homogeneous, so a bound blind to the grade
+   drops whatever the sort happened to place late and strands the head as readily as the tail: drop
+   from the LOW-GRADE end first, and REPORT COVERAGE BY GRADE rather than as one total, because a
+   stage reporting zero survivors over a set it never reached the top of has exactly the shape of a
+   clean pass — the qualifier lives in a count and a log line the headline does not carry, so the
+   more the stage produced the more confident and the more wrong its reader becomes. An item of the
+   BLOCKING class that went untested is not disposed of at all: CONVERGENCE turns on no blocking
+   finding REMAINING, and one never tested has not been shown not to, so it holds convergence open
+   exactly as a surviving one does. SERIALIZATION is a real bound
    too — a verification step the host admits one invocation of is a global mutex, and an
    integration vehicle admitting one reviewable unit at a time serializes work independent in
    principle; count those, not workers, when estimating achievable throughput.

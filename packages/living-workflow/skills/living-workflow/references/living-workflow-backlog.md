@@ -169,11 +169,12 @@ on first append, like the working dir.
 - **Opportunistic (broken-windows):** while disposing any entry, if the groomer already has a surface
   open and spots a drifted reference TO it, fixing inline is in scope — zero marginal context cost —
   subject to the same checking as any light fix (below), and journaled.
-- **Sweep:** loop step 7 — after every OTHER substantive entry is disposed and BEFORE the session's
-  own close/reflection, and BEFORE the gated commit-readiness review when that review is eligible this
-  pass (the review is the true LAST action and must see the swept body). It runs the collector down:
-  verify each nit against source, apply the behavior-neutral fix, re-grep **with a positive control**
-  to confirm the drift is gone and nothing was corrupted, journal, drain the fixed line.
+- **Sweep:** loop step 7 — after every OTHER substantive entry is disposed and BEFORE the
+  session's own close/reflection, and BEFORE the gated commit-readiness review when that review is
+  eligible this pass (the review is the LAST of the pass's grooming actions and must see the swept
+  body). It runs the collector down: verify each nit against source, apply the behavior-neutral
+  fix, re-grep **with a positive control** to confirm the drift is gone and nothing was corrupted,
+  journal, drain the fixed line.
 
 The sweep is a **grooming step, not reflection-at-close**, and **never fires in a non-grooming
 session** — a session at its end only CAPTURES (master REFLECTION MODE); one that spots a nit appends it
@@ -253,8 +254,9 @@ So drained means, by property: **no entry remains that active grooming can act o
 (`NEEDS-EVIDENCE`) entries wait on the world and the gated review waits on drainedness itself, but
 the gate is that property, not a fixed list of exceptions, so anything a groomer cannot act on now
 likewise does not count and an indefinite hold can never block convergence. That is the
-gate a review-and-commit entry waits for — it is the LAST thing to run, only once active grooming
-has stopped raising new work, because reviewing a body that is still moving wastes the review.
+gate a review-and-commit entry waits for — it is the last grooming action to run, only once active
+grooming has stopped raising new work, because reviewing a body that is still moving wastes the
+review.
 
 "Raising new work" is scoped to **blocking findings and substantive candidates**, per the master's
 CONVERGENCE criterion: a non-blocking consistency nit is serviced by the light-fix path above, and
