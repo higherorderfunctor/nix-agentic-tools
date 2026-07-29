@@ -29,8 +29,9 @@ improvements land in this doc only by a deliberate grooming session, never self-
 > cross-session concerns become schema-backed state fields, not ad-hoc prose tokens). The backlog
 > sub-workflow this doc references lives at `living-workflow-backlog.md`.
 >
-> **Living-doc version: `v12-cinnabar-drumlin-hornbeam`.** The assigned VERSION dependents pin to — a
-> monotonic ORDINAL (for "am I behind?") paired with a DISTINCTIVE LABEL (so the exact version
+> **Living-doc version: `v13-orpiment-esker-blackthorn`.** The assigned VERSION dependents pin to
+> —
+> a monotonic ORDINAL (for "am I behind?") paired with a DISTINCTIVE LABEL (so the exact version
 > stays searchable in history and in copied text). A modifying commit bumps it and authors a
 > migration entry if an upgrader needs one (see DRY-BY-REFERENCE → BASELINE PIN, MIGRATION GUIDE,
 > and the VERSION-BUMP STEP).
@@ -242,7 +243,7 @@ a per-repo, per-tool capability resolved for the TARGET repo — inspect its own
 before committing. NEVER carry a trailer or identity convention from one repo into
 another; "this is how the other repo does it" is a red flag, not a justification.
 
-── COMMIT-OWNERSHIP & INTEGRATION POSTURE: per-repo properties, resolved at cold start ──
+── COMMIT-OWNERSHIP & INTEGRATION POSTURE: per-repo properties, and what raises the vehicle ──
 Commit ownership is a per-repo property, resolved at cold start into
 state.json.ecosystem.commit_ownership:
 - we-commit: normal git workflow — this session commits its own work.
@@ -252,75 +253,102 @@ state.json.ecosystem.commit_ownership:
   every path touched; the resident session commits and stamps the dependent baseline pin(s) (see
   DRY-BY-REFERENCE).
 CO-OCCUPIED WORKING TREE (a third condition, resolved like a capability): commit_ownership names
-who commits, but BOTH modes assume a SINGLE writer in the working tree at a time — we-commit commits
-its own work there; resident-commits hands its dirty paths to one resident that commits — neither
-expects a SECOND session editing the same checkout SIMULTANEOUSLY. When the tree is instead
-CONCURRENTLY OCCUPIED by another writer — a second session editing the same checkout at the same
-time — neither mode ALONE fits: a direct we-commit risks interleaving uncommitted changes and one
-session capturing the other's work, and handing dirty paths to a resident of the SHARED tree is wrong
-because no resident owns THIS session's work there. Resolve co-occupancy — a host CONDITION detected
-like any capability (the tree's tip moves between commands, or it carries another session's
-uncommitted work) — to an ISOLATION-PLUS-INTEGRATION vehicle: branch an isolated worktree from the
-live tip, commit THERE (not in the shared tree), and integrate by an open PR/MR, so the shared
-tree is never written and the change lands as a reviewable unit. Use the plain we-commit
-path only when the tree is exclusively this session's; the host may offer isolation vehicles other
-than a worktree, so bind the concrete one at resolve time.
-THE VEHICLE'S LOCATION IS CONSTRAINED BY A PROPERTY, NOT LEFT FREE: it must sit INSIDE the host's
-dev-environment AUTO-ACTIVATION AND TRUST SCOPE. Where a project materializes gitignored, generated
-configuration on dev-shell entry (hook configs, tool settings, generated agent instructions), a
-vehicle created OUTSIDE that scope contains none of it — and fails in the worst way, by LOOKING
-fully set up: tooling is on PATH, inherited from the parent process, while the per-directory
-materialization never ran, so the first COMMIT is where it breaks. A vehicle inside the scope
-self-bootstraps on first entry and the whole failure class disappears. STATE THE PROPERTY ALONGSIDE
-ANY DEFAULT, which is the load-bearing half: a bare path reads as an arbitrary constraint a
-consumer routes around blindly, whereas a path plus its property lets anyone who genuinely cannot
-use the default know which property they must preserve. This was harmless while working state lived
-IN the repo, because the state file's location implicitly pinned where work happened; once state
-moved out, the vehicle's location became a free variable that nothing pinned, and independent plans
-in one clone diverged. Two cautions when binding the concrete vehicle. Derive its path from the
-clone's COMMON git directory, which resolves correctly from anywhere in the clone — a naive relative
-form is WRONG when run from an already-linked vehicle, resolving one level too deep and nesting
-inside it. And do not promise isolation the substrate does not deliver: isolating a working tree
-does NOT isolate a shared hook directory or event database, which stay common to the clone. This
-derivation READS the common git directory the way the state substrate below does, but for a different
-object: there it is the NAMESPACE KEY a working dir is filed under, here it is the anchor a vehicle's
-LOCATION is derived from. Same source, two objects — neither rule licenses the other's use of it.
-INTEGRATION POSTURE (a THIRD resolved property, resolved like the two above): commit_ownership says
-WHO commits and co-occupancy says whether the tree is exclusively ours; neither says what the host's
+who commits, but BOTH modes assume a SINGLE writer in the working tree at a time — we-commit
+commits its own work there; resident-commits hands its dirty paths to one resident that commits —
+neither expects a SECOND session editing the same checkout SIMULTANEOUSLY. When the tree is
+instead CONCURRENTLY OCCUPIED by another writer — a second session editing the same checkout at
+the same time — neither mode ALONE fits: a direct we-commit risks interleaving uncommitted changes
+and one session capturing the other's work, and handing dirty paths to a resident of the SHARED
+tree is wrong because no resident owns THIS session's work there. Resolve co-occupancy — a host
+CONDITION detected like any capability (the tree's tip moves between commands, or it carries
+another session's uncommitted work) — to an ISOLATION-PLUS-INTEGRATION vehicle: branch an isolated
+worktree from the live tip, commit THERE (not in the shared tree), and integrate by an open PR/MR,
+so the shared tree is never written and the change lands as a reviewable unit. Use the plain
+we-commit path only when the tree is exclusively this session's; the host may offer isolation
+vehicles other than a worktree, so bind the concrete one at resolve time. A LIVE CONSUMER OF THE
+TARGET RAISES THE SAME VEHICLE (a raiser, not a further resolved property). Co-occupancy asks
+whether a second WRITER holds the tree; nothing asks whether a live READER holds the TARGET. Every
+condition resolved above is a property of the ENVIRONMENT or of the plan; none is a property of
+the ARTIFACT BEING MODIFIED, and whether something is executing that artifact RIGHT NOW is exactly
+such a property — it changes what the session may safely do, the way commit ownership does. It
+binds over every artifact this session will modify that anything outside the session can load,
+wherever that artifact lives, never over a list of artifact kinds. A consumer that loads its
+artifact incrementally, or re-reads it as it runs, executes a half-applied or version-split copy;
+the damage lands INSIDE that consumer, is attributed to it, and is invisible to the editing
+session, so it is SILENT rather than self-announcing and it burns the consumer's work before
+anything connects it to the edit. Where the consumer reads a path the vehicle relocates, in-use
+RAISES the vehicle exactly as co-occupancy does — edit the isolated copy, never the path being
+read. Where it does NOT — a consumer reading INSIDE the vehicle, or a copy no vehicle covers, the
+out-of-repo working state and any installed or activated copy among them — isolation is not the
+remedy and the edit WAITS on the consumer. A validated atomic replace (the
+write-then-validate-then-replace idiom under STATE SUBSTRATE) removes only the TORN read, never
+the SPLIT one: a consumer that read the old version for one step and the new for the next ran
+neither. It is a floor, not a substitute for waiting. THIS DOES NOT FLATTEN INTO THE RESOLVED-ONCE
+PROPERTIES BESIDE IT. It is not STANDING environmental truth — a consumer may begin using the
+target after cold start — so it is never resolved once and read thereafter, and it earns no slot
+in the resolved record; it is answered at the point an edit is about to land. And the session is
+usually not its observer: the fact lives with the operator, who knows what they are running. So
+where the target is one anything outside the session can load and the session cannot observe
+whether anything is, ASK — the DECISION-SCOPE FILTER's hard-to-reverse arm already licenses it,
+since a corrupted live run cannot be un-run. A property the session cannot verify is worse than a
+question it must ask.
+THE VEHICLE'S LOCATION IS CONSTRAINED BY A PROPERTY, NOT LEFT FREE: it must
+sit INSIDE the host's dev-environment AUTO-ACTIVATION AND TRUST SCOPE. Where a project
+materializes gitignored, generated configuration on dev-shell entry (hook configs, tool settings,
+generated agent instructions), a vehicle created OUTSIDE that scope contains none of it — and
+fails in the worst way, by LOOKING fully set up: tooling is on PATH, inherited from the parent
+process, while the per-directory materialization never ran, so the first COMMIT is where it
+breaks. A vehicle inside the scope self-bootstraps on first entry and the whole failure class
+disappears. STATE THE PROPERTY ALONGSIDE ANY DEFAULT, which is the load-bearing half: a bare path
+reads as an arbitrary constraint a consumer routes around blindly, whereas a path plus its
+property lets anyone who genuinely cannot use the default know which property they must preserve.
+This was harmless while working state lived IN the repo, because the state file's location
+implicitly pinned where work happened; once state moved out, the vehicle's location became a free
+variable that nothing pinned, and independent plans in one clone diverged. Two cautions when
+binding the concrete vehicle. Derive its path from the clone's COMMON git directory, which
+resolves correctly from anywhere in the clone — a naive relative form is WRONG when run from an
+already-linked vehicle, resolving one level too deep and nesting inside it. And do not promise
+isolation the substrate does not deliver: isolating a working tree does NOT isolate a shared hook
+directory or event database, which stay common to the clone. This derivation READS the common git
+directory the way the state substrate below does, but for a different object: there it is the
+NAMESPACE KEY a working dir is filed under, here it is the anchor a vehicle's LOCATION is derived
+from. Same source, distinct objects — no rule licenses another's use of it, and none licenses it
+as a READ OR SEARCH ROOT (see the under-specified-address clause under GIT WORKFLOW). INTEGRATION
+POSTURE (a THIRD resolved property, resolved like the two above): commit_ownership says WHO
+commits and co-occupancy says whether the tree is exclusively ours; neither says what the host's
 standing ROUTE from a local change to a landed one is. Unresolved, that route is re-derived every
-session and guessed differently each time, so resolve it at COLD START from host properties under the
-ECOSYSTEM ADAPTER's rules, and record it — per state-over-tokens, in its own schema-backed slot
-state.json.ecosystem.integration_posture, NOT as prose — with one field per output below. Naming the
-slot AND the shape is the load-bearing half: a property that downstream rules dereference but that
-nothing addresses is the ad-hoc prose token state-over-tokens exists to bar, and with no fixed shape
-two sessions resolving the SAME host record answers that cannot be compared. A posture fixes four
-things.
-(i) THE DEFAULT VEHICLE: whether ordinary work commits directly on a branch in the shared checkout or
-always goes through the isolation-plus-integration vehicle above. Where the host protects its trunk
-and lands every change as a reviewed unit, isolation is the STANDING DEFAULT and co-occupancy
-detection stops carrying the decision — detection is unreliable and the failure is ASYMMETRIC, since
-a session that guesses "exclusive" and commits directly can interleave with, or cascade a failure
-into, another, while a session that isolates unnecessarily pays only the vehicle's bootstrap and the
-serialization its review unit imposes, both of which are bounded and visible. Co-occupancy still
-FORCES isolation wherever a posture would otherwise permit a direct commit; it never licenses the
-reverse. The location property stated above governs the vehicle in either case — posture-default or
-co-occupancy-forced — since it is a property of the vehicle, not of whatever raised it.
-(ii) THE PUSH POINT, whose WARRANT is the load-bearing half because the warrant fixes the default:
-pushing is warranted by DURABILITY and cross-session VISIBILITY, not by concurrency. History that
-lives on one machine announces nothing until it is gone, and work nobody can see cannot be steered.
-So where a posture pushes at all, push at the FIRST commit rather than at the end and keep pushing
-as work lands; deriving the push point from a concurrency condition is the narrow case mistaken for
-the general warrant.
-(iii) THE DRAFT-VERSUS-READY GATE, where the host's integration request has one. Draft-ness is not
-merely a visibility hint: on some hosts a draft SUPPRESSES automated review, so work handed over as a
-draft because it is dev-complete silently starts no review at all and the handover does nothing.
-Resolve whether draft suppresses review as a host property, then split by INTENT rather than by
-polish — a request opened as a progress surface for genuinely in-flight work stays draft, while one
-opened because the work is ready for review is opened READY wherever draft would gate it.
-(iv) HOW PHASE, BRANCH AND REVIEW BIND, because the git-workflow default below binds all three
-together and a host whose review unit spans several phases does not fit that shape. The binding is a
-posture OUTPUT, not a constant: record the resolved one, so downstream rules read one answer instead
-of re-deriving it against the operator's steer each time.
+session and guessed differently each time, so resolve it at COLD START from host properties under
+the ECOSYSTEM ADAPTER's rules, and record it — per state-over-tokens, in its own schema-backed
+slot state.json.ecosystem.integration_posture, NOT as prose — with one field per output below.
+Naming the slot AND the shape is the load-bearing half: a property that downstream rules
+dereference but that nothing addresses is the ad-hoc prose token state-over-tokens exists to bar,
+and with no fixed shape two sessions resolving the SAME host record answers that cannot be
+compared. A posture fixes four things. (i) THE DEFAULT VEHICLE: whether ordinary work commits
+directly on a branch in the shared checkout or always goes through the isolation-plus-integration
+vehicle above. Where the host protects its trunk and lands every change as a reviewed unit,
+isolation is the STANDING DEFAULT and co-occupancy detection stops carrying the decision —
+detection is unreliable and the failure is ASYMMETRIC, since a session that guesses "exclusive"
+and commits directly can interleave with, or cascade a failure into, another, while a session that
+isolates unnecessarily pays only the vehicle's bootstrap and the serialization its review unit
+imposes, both of which are bounded and visible. Co-occupancy still FORCES isolation wherever a
+posture would otherwise permit a direct commit; it never licenses the reverse. The location
+property stated above governs the vehicle however it was raised, since it is a property of the
+vehicle, not of whatever raised it. (ii) THE PUSH POINT, whose WARRANT is the load-bearing half
+because the warrant fixes the default: pushing is warranted by DURABILITY and cross-session
+VISIBILITY, not by concurrency. History that lives on one machine announces nothing until it is
+gone, and work nobody can see cannot be steered. So where a posture pushes at all, push at the
+FIRST commit rather than at the end and keep pushing as work lands; deriving the push point from a
+concurrency condition is the narrow case mistaken for the general warrant. (iii) THE
+DRAFT-VERSUS-READY GATE, where the host's integration request has one. Draft-ness is not merely a
+visibility hint: on some hosts a draft SUPPRESSES automated review, so work handed over as a draft
+because it is dev-complete silently starts no review at all and the handover does nothing. Resolve
+whether draft suppresses review as a host property, then split by INTENT rather than by polish — a
+request opened as a progress surface for genuinely in-flight work stays draft, while one opened
+because the work is ready for review is opened READY wherever draft would gate it. (iv) HOW PHASE,
+BRANCH AND REVIEW BIND, because the git-workflow default below binds all three together and a host
+whose review unit spans several phases does not fit that shape. The binding is a posture OUTPUT,
+not a constant: record the resolved one, so downstream rules read one answer instead of
+re-deriving it against the operator's steer each time.
 ONE BOUND ON A RESOLVED POSTURE: it never overrides commit_ownership. A resident-commits repo still
 leaves its tree dirty for its resident, whatever route the resident then takes to land it — and
 where a resident-commits repo is ALSO co-occupied, co-occupancy governs the vehicle while
@@ -339,7 +367,8 @@ per-file judgment is needed.
 - COMMITTED DURABLE KNOWLEDGE → the plan/rules doc, under the plan's committed directory. The
   shared harness (`state.schema.json`) and the migration-guide changelog are NOT
   per-plan: single copies live in the MASTER's own committed directory and are REFERENCED, never
-  copied down (see DRY-BY-REFERENCE).
+  copied down (see
+  DRY-BY-REFERENCE).
 - OUT-OF-REPO WORKING STATE (CLI mode) → state.json and the WAL journal live OUTSIDE any repo,
   under an XDG state base keyed by clone and workflow:
   <xdg-state-base>/<clone-name>/<workflow-name>/ — SINGLE-MACHINE, never committed, never travels.
@@ -414,45 +443,46 @@ per-file judgment is needed.
   schema-backed field in state.json (extend state.schema.json — additive/optional, so
   older plans stay valid) rather than an ad-hoc placeholder token scattered in prose.
   Ad-hoc prose tokens are a last resort. Precedents: reflection_mode, ecosystem,
-  execution_mode, living_doc_baseline, parent.
+  execution_mode, living_doc_baseline, parent, operator_autonomy.
 
 ── SCAFFOLD HARNESS — SHARED, REFERENCED NOT EMBEDDED ──
 The state harness (`state.schema.json`) is a SINGLE canonical file beside this doc, shared and
 reusable. When a repo is present, REFERENCE it — do NOT re-embed a copy into each plan
 (DRY-by-reference). There is no second, embedded copy of the harness anywhere in this prompt; the
-canonical file beside this doc is the only one, and it carries the full field set (reflection_mode,
-ecosystem, execution_mode, living_doc_baseline, parent, and the rest). In CLI mode the working
-state file (state.json) materializes to the out-of-repo XDG location
+canonical file beside this doc is the only one, and it carries the full field set
+(reflection_mode, ecosystem, execution_mode, living_doc_baseline, parent, and the rest). In CLI
+mode the working state file (state.json) materializes to the out-of-repo XDG location
 (<xdg-state-base>/<clone-name>/<workflow-name>/ — see STATE SUBSTRATE), NOT the plan's committed
-directory (which holds only the plan doc itself; the harness and changelog are referenced
-from the master, not copied here).
-WEB/NO-REPO MODE has no durable side-file substrate — do NOT materialize state files there, and
-there is no harness file to write. The machine-owned state lives IN THE SINGLE REGENERATED PLAN DOC
-(see IN-DOC STATE BLOCK below), and its field shape is sourced from what the STATE SUBSTRATE prose
-names, not from an embedded schema. Track everything IN THE DOC carried session-to-session (the doc
-is the only durable artifact): reflection/backlog capture accumulates as buckets inside the doc
-(framework-level and plan-level, kept separate — see BACKLOG TERMINOLOGY). Because nothing is
-committed in WEB mode, leak-safety RELAXES there — capture may be raw; the scrub is deferred to
-the transition boundary. WEB → CLI TRANSITION: on the first CLI session, cold start detects the
-mode switch, REDRAFTS the doc to CLI conventions (reference the canonical harness, materialize
-the out-of-repo XDG working dir (see STATE SUBSTRATE), split working state into state.json + the
-WAL journal, DRAIN the in-doc buckets to their homes — framework candidates to the
-living-workflow-backlog's entries (at the framework-channel location — see STATE SUBSTRATE), plan
-candidates to the plan's own
-open_items) and SCRUBS the doc clean of raw working detail. The scrub is a HARD GATE before the
-first commit — the one place leak-safety is enforced by a stop, not a default — after which the
-human commits that clean initial version. CLI mode always tracks in files thereafter.
-IN-DOC STATE BLOCK: where no durable state-file substrate exists (document-only mode), the
-machine-owned state fields normally carried in the state file — the baseline pin, the
-reflection toggle, the resolved ecosystem/capability record, any parent/nesting pointer —
-live in a SINGLE DESIGNATED in-doc block that carries the field shape the STATE SUBSTRATE prose
-enumerates (there is no embedded schema copy to mirror; the canonical harness beside the master
-defines that same shape for CLI mode), not ad-hoc prose tokens scattered through the doc. This
-honors state-over-tokens structurally where
-there is no state file, and makes the web→CLI redraft a MECHANICAL EXTRACTION of that block
-into the state file rather than a re-derivation. Scope this by substrate-presence (no durable
-state file), NOT by machinery tier — a repo-backed plan carries the state file regardless of
-tier. Edit the block by full-section replacement on its fences, never surgical token edits.
+directory (which holds only the plan doc itself; the harness and changelog are referenced from the
+master, not copied here). WEB/NO-REPO MODE has no durable side-file substrate — do NOT materialize
+state files there, and there is no harness file to write. The machine-owned state lives IN THE
+SINGLE REGENERATED PLAN DOC (see IN-DOC STATE BLOCK below), and its field shape is sourced from
+what the STATE SUBSTRATE prose names, not from an embedded schema. Track everything IN THE DOC
+carried session-to-session (the doc is the only durable artifact): reflection/backlog capture
+accumulates as buckets inside the doc (framework-level and plan-level, kept separate — see BACKLOG
+TERMINOLOGY). Because nothing is committed in WEB mode, leak-safety RELAXES there — capture may be
+raw; the scrub is deferred to the transition boundary. WEB → CLI TRANSITION: on the first CLI
+session, cold start detects the mode switch, REDRAFTS the doc to CLI conventions (reference the
+canonical harness, materialize the out-of-repo XDG working dir (see STATE SUBSTRATE), split
+working state into state.json + the WAL journal, DRAIN the in-doc buckets to their homes —
+framework candidates to the living-workflow-backlog's entries (at the framework-channel location —
+see STATE SUBSTRATE), plan candidates to the plan's own open_items) and SCRUBS the doc clean of
+raw working detail. The scrub is a HARD GATE before the first commit — the one place leak-safety
+is enforced by a stop, not a default — after which the human commits that clean initial version.
+CLI mode always tracks in files thereafter.
+IN-DOC STATE BLOCK: where no durable state-file
+substrate exists (document-only mode), the machine-owned state fields normally carried in the
+state file — every one the STATE SUBSTRATE prose names, the baseline pin and reflection toggle and
+resolved ecosystem/capability record and parent/nesting pointer and any standing operator grant
+among them, stated as that property rather than as a list that rots as fields are added — live in
+a SINGLE DESIGNATED in-doc block that carries the field shape the STATE SUBSTRATE prose enumerates
+(there is no embedded schema copy to mirror; the canonical harness beside the master defines that
+same shape for CLI mode), not ad-hoc prose tokens scattered through the doc. This honors
+state-over-tokens structurally where there is no state file, and makes the web→CLI redraft a
+MECHANICAL EXTRACTION of that block into the state file rather than a re-derivation. Scope this by
+substrate-presence (no durable state file), NOT by machinery tier — a repo-backed plan carries the
+state file regardless of tier. Edit the block by full-section replacement on its fences, never
+surgical token edits.
 SELF-IDENTIFYING GENERATION: because each session RE-EMITS the whole doc, the host workspace
 accumulates prior generations and "the doc is the state" fails silently the moment two
 copies both claim to be it. Make the live generation self-identifying from INSIDE the doc,
@@ -511,7 +541,9 @@ is authoritative thereafter.
      over an absorption or migration target, state the condition against what SURVIVES the work.
 4. OPEN-ITEMS REGISTER: every unknown classified [HITL@Pn] / [DEFAULT:x,revisable]
    / [AI-OWNED]. Batch the HITL items into that phase's SINGLE opening agenda —
-   never dribble questions. If you can't classify with high confidence, that is a
+   never dribble questions, and assemble that agenda from dispositions RE-DERIVED at that moment
+   rather than read off the register as recorded (see the freshness arm below). If you can't
+   classify with high confidence, that is a
    [HITL@P1] item.
    EVERY DISPOSITION CARRIES ITS STRUCTURAL REASON: a register entry records WHY it holds the
    disposition it does — the structural reason, not merely its timing or order — stated as a
@@ -532,11 +564,13 @@ is authoritative thereafter.
    mid-phase retro-invalidates work written before it existed. The protocol defines the operator's
    routes PAST a binding rule precisely so a session cannot invent one mid-flight; this is the
    mirror case and needs the same treatment, or the route back gets improvised differently every
-   time. Fork it by OWNERSHIP, using the DECISION-SCOPE FILTER: an agent-owned decision is re-decided
+   time. Fork it by OWNERSHIP, using the
+   DECISION-SCOPE FILTER: an agent-owned decision is re-decided
    and re-recorded on the spot; an operator-owned one is PAUSED and re-asked, never quietly
    reinterpreted. Either way the superseded decision is MARKED superseded where it sits, as an
    in-place replacement of that decision's rule-bearing text (MUTATION MODE FOLLOWS WHAT A FIELD
-   HOLDS) — that marking is the load-bearing half, because a superseded-but-unmarked decision reads exactly like a
+   HOLDS) — that marking is the load-bearing half, because a superseded-but-unmarked decision
+   reads exactly like a
    live one, and re-opening a settled decision presents as diligence from the inside.
    Reconciling a falsified decision may require WIDENING the item to keep it coherent, which is
    outwardly indistinguishable from scope-chaining: the fix must still land as ONE reviewable unit
@@ -568,6 +602,26 @@ is authoritative thereafter.
    deciding what GATES a phase — that is a separate concern and must not be conflated with this
    one — and it does not loosen GATE-BRIEF SCOPE below: where a brief has DECLARED its
    fix-versus-report handling, that declaration governs its own findings.
+   AN ESCALATION IS A DISPOSITION, NOT A STANDING FACT — THE FRESHNESS ARM OF THE SAME FILTER. The
+   filter runs when a call ARISES, and thereafter only its VERDICT survives, so an item recorded as
+   human-owned is carried, batched and re-presented indefinitely without the filter ever running
+   over it a second time. The record says the item WAS escalated, which stays true, and reads as
+   saying it still SHOULD be, which is a different claim nothing re-tests: the FORWARD arm checks an
+   inherited item before it is BUILT and an escalation is never built, while the BACKWARD arm turns
+   on contact with the real system that a question waiting in a register never makes. So RE-RUN THE
+   FILTER over every unresolved item held for the human, wherever recorded, at the moment it would
+   be put in front of them again, however carried. This is a CHECKPOINT, not a restatement — the
+   filter is sound, and the failure is that its output is READ where it should be RE-DERIVED — and
+   the structural reason each disposition already carries is what the re-run tests against current
+   facts, so the cost is a re-check and not a re-decision. An item the recorded decisions now
+   answer, or that an authoritative source the escalation never consulted has since settled, is no
+   longer an unknown and is resolved non-interactively like any other before the gate opens; what is
+   artifact-internal is AGENT-OWNED — decided, applied and logged, never asked. Re-derivation runs
+   BOTH directions, since a call once allocated to the agent can acquire a dependence on intent, and
+   it never silently retires a question: a disposition that MOVES is marked changed where it sits
+   together with what moved it, and one that SURVIVES is asked with its reason intact. Skipping this
+   is invisible from the inside — relaying an unexamined held set presents as diligence — and its
+   whole cost lands on the human it manufactures a decision batch for.
    GATE-BRIEF SCOPE, DECLARED UP FRONT: a validation or gated-review brief states, before it runs,
    whether the in-scope findings it may raise are handled FIX-IN-SESSION or REPORT-ONLY — the
    default is fix-in-session only where the fix is behavior-neutral AND agent-owned (per the filter
@@ -663,7 +717,7 @@ is authoritative thereafter.
      (see COMMIT-OWNERSHIP & INTEGRATION POSTURE) may bind otherwise; read the resolved binding
      rather than re-deriving one. At implementation start of a phase, create/checkout a branch for
      that work (conventional-commit naming, e.g. feat/<slug>), inside the isolation vehicle whenever
-     EITHER raiser calls for one — the posture by default, or a co-occupied tree forcing it. Never
+     ANY raiser under COMMIT-OWNERSHIP & INTEGRATION POSTURE calls for one. Never
      commit implementation to the default branch.
    - Commit OFTEN (we-commit only) — each completed unit is a commit. Conventional Commits: LEAD THE SUBJECT
      WITH A LOWERCASE VERB (conventional-commit-safe); keep any unit/work identifier in the
@@ -684,10 +738,52 @@ is authoritative thereafter.
      discards divergent remote commits; if divergence cannot be cleanly reconciled, STOP. WHEN the
      first push happens is the resolved posture's call, not this rule's; this rule keeps its own
      scope unchanged and governs how each push lands once the posture has called for one.
-   - WRITING INTO A GITIGNORED-BUT-TRACKED SUBTREE: verify tracked/committable status up
-     front (a normal add can silently fail; a force-add may be required) — a successful write
-     does not imply a committable path. (Searching the same subtree has a matching gotcha —
-     see the no-ignore-search rule under VALIDATION-ON-UPDATE.)
+   - A TRACKED PATH IS AN UNDER-SPECIFIED ADDRESS — it fixes a NAME, never WHICH CONTENT that
+     name holds. Every one resolves at once against a working copy, a STAGED copy and committed
+     history, and — where one repository is checked out into more than one working tree — against
+     a TREE as well; WHICH of them a tool reads is a property OF THE TOOL, chosen silently, so a
+     result drawn from the wrong one is well-formed and plausible: never empty, never an error,
+     nothing to distrust. For every write, proof, search, read and commit — every one, wherever
+     invoked, scoped by that property and never by a list of the tools or stores that exist today
+     — establish WHICH store and WHICH tree it reached before treating its result as fact. Four
+     instances, each with its OWN remedy, and they resist collapsing because they push OPPOSITE
+     ways on the same object: one instance's remedy manufactures the next one's hazard, and a
+     false GREEN and a false RED can arise on one path.
+     (1) WRITING INTO A GITIGNORED-BUT-TRACKED SUBTREE: verify tracked/committable status up
+     front (a normal add can silently fail; a force-add may be required) — a successful write does
+     not imply a COMMITTABLE path. WHICH WAY IT FAILS TURNS ON THE PATHSPEC'S BREADTH, and neither
+     way reports what landed. Reached by a BROAD pathspec, an ignored path is skipped with no
+     message and a ZERO exit. Named EXPLICITLY, the add exits non-zero and reports the IGNORE
+     RULE'S MATCH — often the ignored DIRECTORY, which may be the parent of a path that staged
+     perfectly well — never the members that succeeded; the other members stage anyway, and an add
+     of an already-tracked path under that subtree exits non-zero even when it fully SUCCEEDS and
+     nothing was refused at all. So here the exit status is not a refusal signal and the named
+     path is not the failure: RE-READ THE INDEX to learn what landed. (ANY ignore-honoring probe
+     of that subtree carries a matching gotcha, not searching alone — see TRUST NO CLEAN NEGATIVE
+     under VALIDATION-ON-UPDATE.)
+     (2) A tool resolving its INPUTS from version control rather than from the working tree
+     cannot see an unstaged new file: it reports a MISSING path, which reads as real breakage,
+     while every filesystem-level proof passes over that same file — so a green cheap proof and
+     a red real gate disagree over WHICH STORE, not because either is flaky. STAGE before
+     invoking; staging suffices, no commit needed.
+     (3) Staging SNAPSHOTS bytes, so anything staged before its last edit ships a revision no
+     proof reached, and a pathspec-less commit ships the WHOLE staged set rather than the unit —
+     so commit by explicit pathspec, and PROVE THE COPY THAT COMMIT FORM ACTUALLY READS. Those are
+     not the same store and the difference inverts: a pathspec-LESS commit ships the index, while
+     a pathspec-BEARING one ships the working tree for the named paths and disregards what
+     CONTENT was staged for them — though a path git does not already know cannot be named at
+     all, so a brand-new file must still be staged once. Pick the form first, prove that store
+     last, and let nothing — a formatting
+     hook above all — write between the proof and the commit. Then the Commit OFTEN bullet's
+     one-unit-one-commit binding survives a staging area shared across units. No ambient tell
+     exists: a corrected working copy dies with its isolation vehicle, and under resident-commits
+     a dirty tree is the MANDATED resting state.
+     (4) A repo-relative path, or a host-advertised workspace root, resolves against the HOST's
+     tree and not necessarily the one being changed — bind the tree AT THE POINT OF USE by
+     addressing the ACTIVE tree's absolute root; never bank it as a resolved-once environmental
+     property (the answer INVERTS the moment an isolation vehicle is materialized — see the
+     DURATION dimension), and never derive it from the COMMON git directory, which reaches the
+     MAIN checkout by construction.
    - Restore lost tracked content from git history, never memory.
 7. VALIDATION-ON-UPDATE (mostly jq now): before any state mutation, jq-assert the
    key exists and the new value is in-enum; assert id/anchor uniqueness; writes
@@ -728,8 +824,11 @@ is authoritative thereafter.
      cannot be caught by rereading, and any legend that expands such labels drifts and may not
      travel inside the artifact that cites it.
    - TRUST NO CLEAN NEGATIVE from a tool whose scope is implicit or that can over-match. In a
-     gitignored-but-tracked subtree use a NO-IGNORE scoped search (the default ignore-honoring
-     search silently skips it). When filtering by excluding a token, a plain substring-exclude
+     gitignored-but-tracked subtree use the NO-IGNORE form of ANY probe, not of a search alone:
+     the default ignore-honoring search silently skips the subtree, and an ignore-STATUS query
+     that consults the index answers EMPTY for an already-tracked path, reading as "not ignored"
+     exactly where the under-specified-address clause under GIT WORKFLOW applies. When filtering
+     by excluding a token, a plain substring-exclude
      drops true positives whenever the new token contains the old as a substring — use a
      word-boundary / negative-lookbehind match. Always cross-check a "no matches" result
      against content known to still be present before trusting it.
@@ -750,86 +849,86 @@ is authoritative thereafter.
      or partially-rewritten token was produced. Where such a check is mechanically decidable and
      recurs, prefer a tool over prose (a manifest-driven remapper).
    - ASSERT THE POSTCONDITION, NOT THE INVOCATION — A PROOF COVERS LESS THAN IT APPEARS TO. TRUST NO
-     CLEAN NEGATIVE and VERIFY AGAINST THE SOURCE govern a result's EMPTINESS and its FIDELITY TO THE
-     SOURCE; this one governs its REACH, and it is the instrument-side companion to PROVE AGAINST
-     REALITY under STANDING RULES, which bars green-against-a-proxy but names no way to tell that a
-     given green IS one.
-     The root failure is reading a verdict off the INVOCATION — it ran, it printed, it exited zero,
-     the standing gate is green — instead of off the POSTCONDITION: the target was actually
-     processed, a known-present control was actually found, the guarded branch actually executed.
-     BOTH POLARITIES FAIL SILENTLY. A false CLEAN comes from a swallowed error stream, an exit
-     status read through a pipe or filter (which reports the FILTER's success, not the command's),
-     a condition whose truth value is CONSTANT over the real corpus (always-false excludes nothing;
+     CLEAN NEGATIVE and VERIFY AGAINST THE SOURCE govern a result's EMPTINESS and its FIDELITY TO
+     THE SOURCE, and the under-specified-address clause under GIT WORKFLOW governs its ORIGIN
+     (WHICH store and WHICH tree it was drawn from); this one governs its REACH, and it is the
+     instrument-side companion to PROVE AGAINST REALITY under STANDING RULES, which bars
+     green-against-a-proxy but names no way to tell that a given green IS one. The root failure is
+     reading a verdict off the INVOCATION — it ran, it printed, it exited zero, the standing gate
+     is green — instead of off the POSTCONDITION: the target was actually processed, a
+     known-present control was actually found, the guarded branch actually executed. BOTH
+     POLARITIES FAIL SILENTLY. A false CLEAN comes from a swallowed error stream, an exit status
+     read through a pipe or filter (which reports the FILTER's success, not the command's), a
+     condition whose truth value is CONSTANT over the real corpus (always-false excludes nothing;
      always-true passes while covering nothing), a cache or content-addressed store satisfying the
-     request ABOVE the code under test, or a call site deliberately hardened not to abort a batch —
-     error tolerance and error visibility are one dial turned opposite ways, so such a site CANNOT
-     report that a change made to it was wrong, and hardening RAISES its verification bar rather
-     than lowering it. A false POSITIVE comes from a recall-oriented net, whose hits are CANDIDATES
-     and not findings, promoted to a finding with no precision probe for the actual failure
-     SIGNATURE — sharpest when a plausible hypothesis is already on the table and a broad match set
-     appears to confirm it. A wrong result reads exactly as fluently as a right one, so re-reading
-     can never separate them.
-     THE INSTRUMENT TEST — the check that discharges the property above, inherited by every
-     dimension below: before consuming an instrument's output as fact, EXERCISE IT WHERE THE ANSWER
-     IS ALREADY KNOWN, IN BOTH POLARITIES — it must FIND a known-present control and MISS a
-     known-absent one. Where the instrument does not exist yet, the equivalent is enumerating the
-     corpus BEFORE choosing the condition. This binds a long-lived committed filter, a standing gate
-     and a detector exactly as it binds a probe written moments ago; being purpose-built earns an
-     instrument no trust. It binds hardest when WIDENING an existing check's scope, which converts
-     an honest "we do not check there" — which readers treat with due suspicion — into a
-     load-bearing "we check there and it is clean" that nobody revisits; detection coverage and
-     scope coverage are independent, and only scope is visible in a diff.
-     FIVE DIMENSIONS along which a proof under-covers while still reading green. Each states a
-     CHECK, not a principle: run it, RECORD the uncovered delta where the work's own durable record
-     lives, and either close it cheaply or LOG AN EXPLICIT ACCEPTANCE — degradation-by-shrug already
-     bars the silent third option, and a delta named only in passing is the silent option wearing a
-     name.
-     (a) SCOPE — WHICH surfaces. CHECK: enumerate the surfaces the change actually ships on, plus
-     every authoritative artifact its dispositions and standing rules will be READ from, then
-     subtract what the gate you are leaning on actually exercises. The shipping path is PLURAL —
-     other consumers' artifacts, alternate variants, whole alternate configurations, and this unit's
-     own deliverable when it is CONSUMED rather than built — and everything outside a habitual
-     gate's closure rots invisibly behind that gate's green, each discovery costing a mid-work
-     detour plus archaeology through a newer failure masking an older one. AUTHOR COVERAGE
-     INTENSIONALLY governs how NEW rules are authored; apply it with equal force to the EXISTING
-     gates nobody has re-read, whose enumerated scopes have been rotting exactly as it predicts.
-     (b) DEPTH — HOW FAR on a surface that IS covered. CHECK: name the deepest operation the proof
-     performs and the deepest operation real use performs; where they differ the surface is covered
-     and NOT proven. A gate that EVALUATES every output for well-formedness while REALIZING only a
-     designated subset is green-against-a-proxy for precisely what a change introduced, since a
-     newly added output is where evaluate and build diverge.
-     (c) INSTANCE — WHICH members of a fanned-out set. CHECK: list what varies PER INSTANCE — a
-     template, a per-item argument, an escaping context, a payload carrying its own flags into a
-     replaced runtime — and treat every unsampled instance as unproven on those. Exercising a
-     representative subset proves the shared MECHANISM only, and the sampled instance genuinely IS
-     the real shipping path FOR ITSELF, so the runnable-increment constraint is fully SATISFIED by
-     an under-covering proof and cannot flag the miss.
-     (d) DURATION — for HOW LONG, and under WHAT SCOPE, a recorded result holds. CHECK: record with
-     any positive result the moment and the scope that produced it and what would RETIRE it, then
-     re-establish it at the point of use rather than reading it off the record. A check answers for
-     an INSTANT while the action it authorizes occupies a WINDOW, so one sample licenses an ABORT (a
-     hazard observed is a hazard) and never a PROCEED (a hazard unobserved at one instant is not a
-     hazard absent over an interval). A "validated" stamp on an inherited artifact records that it
-     worked ONCE, never the environment, tool version or wrapper layer that made it work — which is
-     the part that drifts, silently. Where a value MUST be prescribed because deriving it is
-     expensive, non-deterministic, or needs data unavailable at authoring, record the CONSTRAINT
-     that generates it alongside the value, so the record is self-clearing. Unlike a stale COUNT,
-     which under-reports and is therefore conservative, a stale ASSERTION can INVERT: an instruction
-     to correct something since corrected makes right content wrong. This does NOT reopen a
-     resolved-once capability record: the ECOSYSTEM ADAPTER already discharges this dimension for
-     those — a PRESENT binding is self-proving on use, an ABSENT one carries the probe that produced
-     it, and an unexercised edge carries its VERIFIED-versus-OBSERVED label — so re-probing every
-     capability every session remains barred.
-     (e) OPERAND — WHAT the check actually ranges over. CHECK: cross-check any set reached through a
-     PROXY once against a direct enumeration of the underlying thing. A selection or coverage scope
-     can be stated by PROPERTY, as required, and still be the WRONG property — most damagingly when
-     the property is a SIDE-EFFECT of the work already having been done (a tooling-generated
-     auxiliary artifact, a process record, prior handling), because it then correlates INVERSELY
-     with need and excludes with perfect reliability the items in the worst condition. So a
-     selection property describes the item's INTRINSIC shape, never tooling or process residue. This
-     blind spot is SELF-SEALING and defeats the standing remedy: re-enumerating from source
-     reproduces the same number, because the source is filtered by the same proxy, so the
-     lower-bound-pointer discipline actively CERTIFIES the omission.
+     request ABOVE the code under test, or a call site deliberately hardened not to abort a batch
+     — error tolerance and error visibility are one dial turned opposite ways, so such a site
+     CANNOT report that a change made to it was wrong, and hardening RAISES its verification bar
+     rather than lowering it. A false POSITIVE comes from a recall-oriented net, whose hits are
+     CANDIDATES and not findings, promoted to a finding with no precision probe for the actual
+     failure SIGNATURE — sharpest when a plausible hypothesis is already on the table and a broad
+     match set appears to confirm it. A wrong result reads exactly as fluently as a right one, so
+     re-reading can never separate them.
+     THE INSTRUMENT TEST — the check that discharges the
+     property above, inherited by every dimension below: before consuming an instrument's output
+     as fact, EXERCISE IT WHERE THE ANSWER IS ALREADY KNOWN, IN BOTH POLARITIES — it must FIND a
+     known-present control and MISS a known-absent one. Where the instrument does not exist yet,
+     the equivalent is enumerating the corpus BEFORE choosing the condition. This binds a
+     long-lived committed filter, a standing gate and a detector exactly as it binds a probe
+     written moments ago; being purpose-built earns an instrument no trust. It binds hardest when
+     WIDENING an existing check's scope, which converts an honest "we do not check there" — which
+     readers treat with due suspicion — into a load-bearing "we check there and it is clean" that
+     nobody revisits; detection coverage and scope coverage are independent, and only scope is
+     visible in a diff. FIVE DIMENSIONS along which a proof under-covers while still reading
+     green. Each states a CHECK, not a principle: run it, RECORD the uncovered delta where the
+     work's own durable record lives, and either close it cheaply or LOG AN EXPLICIT ACCEPTANCE —
+     degradation-by-shrug already bars the silent third option, and a delta named only in passing
+     is the silent option wearing a name. (a) SCOPE — WHICH surfaces. CHECK: enumerate the
+     surfaces the change actually ships on, plus every authoritative artifact its dispositions and
+     standing rules will be READ from, then subtract what the gate you are leaning on actually
+     exercises. The shipping path is PLURAL — other consumers' artifacts, alternate variants,
+     whole alternate configurations, and this unit's own deliverable when it is CONSUMED rather
+     than built — and everything outside a habitual gate's closure rots invisibly behind that
+     gate's green, each discovery costing a mid-work detour plus archaeology through a newer
+     failure masking an older one. AUTHOR COVERAGE INTENSIONALLY governs how NEW rules are
+     authored; apply it with equal force to the EXISTING gates nobody has re-read, whose
+     enumerated scopes have been rotting exactly as it predicts. (b) DEPTH — HOW FAR on a surface
+     that IS covered. CHECK: name the deepest operation the proof performs and the deepest
+     operation real use performs; where they differ the surface is covered and NOT proven. A gate
+     that EVALUATES every output for well-formedness while REALIZING only a designated subset is
+     green-against-a-proxy for precisely what a change introduced, since a newly added output is
+     where evaluate and build diverge. (c) INSTANCE — WHICH members of a fanned-out set. CHECK:
+     list what varies PER INSTANCE — a template, a per-item argument, an escaping context, a
+     payload carrying its own flags into a replaced runtime — and treat every unsampled instance
+     as unproven on those. Exercising a representative subset proves the shared MECHANISM only,
+     and the sampled instance genuinely IS the real shipping path FOR ITSELF, so the
+     runnable-increment constraint is fully SATISFIED by an under-covering proof and cannot flag
+     the miss. (d) DURATION — for HOW LONG, and under WHAT SCOPE, a recorded result holds. CHECK:
+     record with any positive result the moment and the scope that produced it and what would
+     RETIRE it, then re-establish it at the point of use rather than reading it off the record. A
+     check answers for an INSTANT while the action it authorizes occupies a WINDOW, so one sample
+     licenses an ABORT (a hazard observed is a hazard) and never a PROCEED (a hazard unobserved at
+     one instant is not a hazard absent over an interval). A "validated" stamp on an inherited
+     artifact records that it worked ONCE, never the environment, tool version or wrapper layer
+     that made it work — which is the part that drifts, silently. Where a value MUST be prescribed
+     because deriving it is expensive, non-deterministic, or needs data unavailable at authoring,
+     record the CONSTRAINT that generates it alongside the value, so the record is self-clearing.
+     Unlike a stale COUNT, which under-reports and is therefore conservative, a stale ASSERTION
+     can INVERT: an instruction to correct something since corrected makes right content wrong.
+     This does NOT reopen a resolved-once capability record: the ECOSYSTEM ADAPTER already
+     discharges this dimension for those — a PRESENT binding is self-proving on use, an ABSENT one
+     carries the probe that produced it, and an unexercised edge carries its
+     VERIFIED-versus-OBSERVED label — so re-probing every capability every session remains barred.
+     (e) OPERAND — WHAT the check actually ranges over. CHECK: cross-check any set reached through
+     a PROXY once against a direct enumeration of the underlying thing. A selection or coverage
+     scope can be stated by PROPERTY, as required, and still be the WRONG property — most
+     damagingly when the property is a SIDE-EFFECT of the work already having been done (a
+     tooling-generated auxiliary artifact, a process record, prior handling), because it then
+     correlates INVERSELY with need and excludes with perfect reliability the items in the worst
+     condition. So a selection property describes the item's INTRINSIC shape, never tooling or
+     process residue. This blind spot is SELF-SEALING and defeats the standing remedy:
+     re-enumerating from source reproduces the same number, because the source is filtered by the
+     same proxy, so the lower-bound-pointer discipline actively CERTIFIES the omission.
    - SESSION-CLOSE VALIDATION (when this session made updates): the living workflow scopes a
      session's work, so if any living-plan doc was edited — or any OTHER authoritative artifact a
      plan's dispositions or standing rules are read from, a large accreting working index and the
@@ -877,7 +976,10 @@ is authoritative thereafter.
 - Phase-close compaction: append a compact phase-summary; later phases read that,
   not raw earlier slices.
 - THE DURABLE RECORD IS THE AUTHORITY ON WHAT THIS SESSION DID — it must receive the writes, and it
-  must be what gets read. Both halves fail silently on their own.
+  must be what gets read. Both halves fail silently on their own. SCOPE THIS BY RECORD-PRESENCE, NOT
+  BY MACHINERY TIER — every tier keeps a durable record, LITE's session and decisions logs no less
+  than the unit-WAL, so it binds a LITE plan that skips the rest of this section; only the WRITE
+  side's diagnosis below is FULL-specific, and its remedy is not.
   WRITE side: the WAL duty above is stated per UNIT, so work that does not decompose into crisp
   units — investigation, measurement, review rounds, correcting an earlier record — fires no
   trigger at all, while structured state absorbs everything because every finding has an obvious
@@ -1132,15 +1234,36 @@ defined by the backlog sub-workflow beside this doc, not duplicated here.
    version's behavior, its tracker/docs) BEFORE spending debugging rounds on inference —
    the version you run often differs from the source you remember. Verify such external
    behavioral assumptions against the real component once, up front.
-4. Act by position class: phase_boundary or hitl_opening → state position and WAIT
-   for me. mid_batch → state position in one line and resume autonomously.
-   FULL-REGISTER VISIBILITY AT THE OPENER: when the position class opens a
-   phase_boundary/hitl_opening WAIT, also present the plan's WHOLE open_items register at a HIGH
-   level — every active and held/parked item as one-line headers, not line-by-line detail, and not
-   only this session's in-scope work — so an operator running consecutive sessions can see where
-   newly-captured and held items sit and reprioritize before work resumes. This is a read-only
-   VISIBILITY snapshot, never an added question batch: it neither dribbles questions nor appends a
-   bonus ask (see the OPEN-ITEMS REGISTER never-dribble rule and the DECISION-SCOPE FILTER).
+4. Act by position class: phase_boundary or hitl_opening → state position and WAIT for me.
+   mid_batch → state position in one line and resume autonomously.
+   A STANDING OPERATOR GRANT IS PLAN STATE, NOT KICKOFF PROSE. Whether a boundary WAIT is what
+   this operator wants is a durable property of the PLAN, not a fact re-decided each session: an
+   operator running several concurrent sittings, who reviews only committed end-state, issues it
+   once — present the register, then proceed autonomously and document every decision. Carried in
+   the kickoff, which is convenience and explicitly non-authoritative, the grant is invisible to
+   any session starting from state alone, which defaults back to WAIT and so contradicts the
+   standing intent; carried in state it survives a kickoff nobody re-authored. So RECORD IT — per
+   state-over-tokens, in its own schema-backed slot state.json.operator_autonomy, NOT as prose —
+   with the granted behavior, the authorization as provenance exactly as a sanctioned OVERRIDE
+   carries its own, and whatever the grant obliges in exchange. The properties that keep it honest
+   follow. It FAILS SAFE BY ABSENCE — no recorded grant means WAIT, so a plan that never had one
+   is unchanged, and a grant is never inferred from a session's tone, from work proceeding
+   smoothly, or from a prior session having proceeded. It NARROWS rather than lifts, like every
+   sanctioned override: it changes what a phase_boundary DOES and reaches nothing else, so a
+   hitl_opening still waits, every human-gated item still gates, and the register presentation
+   below is still made — the grant's whole warrant is that the operator reads it. And it is
+   rule-bearing, so MUTATION MODE FOLLOWS WHAT A FIELD HOLDS governs it: a changed standing intent
+   REPLACES the grant where it sits, and a withdrawn one appended to rather than replaced leaves a
+   superseded clause still reading as live.
+   FULL-REGISTER VISIBILITY AT THE OPENER: when the position class REACHES a
+   phase_boundary/hitl_opening — whether it WAITS there or proceeds under a recorded standing
+   grant — also present the plan's WHOLE open_items register at a HIGH level — every active and
+   held/parked item as one-line headers, not line-by-line detail, and not only this session's
+   in-scope work — so an operator running consecutive sessions can see where newly-captured and
+   held items sit and reprioritize before work resumes. This is a read-only VISIBILITY snapshot,
+   never an added question batch: it neither dribbles questions nor appends a bonus ask (see the
+   OPEN-ITEMS REGISTER never-dribble rule and the DECISION-SCOPE FILTER, whose freshness arm
+   re-runs over the held set BEFORE this WAIT opens).
    DISTINGUISH A SESSION-ENDING WAIT FROM A MID-WORK PAUSE: both share this WAIT, so they are not
    told apart by position class. A mid-work HITL pause is "answer me so I can keep working THIS
    session" — un-gated work remains behind the answer, and the behavior is exactly the above. A
@@ -1159,49 +1282,67 @@ defined by the backlog sub-workflow beside this doc, not duplicated here.
    prerequisite is actually PRESENT. A missing prerequisite is a cheap boundary STOP, never a
    failure surfaced only after the expensive pass has run. Keep it to a single precondition
    check — do not add ceremony to trivial passes.
-5. On implementation start: materialize the resolved posture's vehicle where it calls for one, or
-   where the tree is co-occupied, THEN create/checkout the work branch in it, at whatever granularity
-   the resolved binding gives (git workflow above).
+5. On implementation start: materialize the isolation vehicle where ANY raiser under
+   COMMIT-OWNERSHIP & INTEGRATION POSTURE calls for one, THEN create/checkout the work branch in
+   it, at whatever granularity the resolved binding gives (git workflow above). A raiser answered
+   at EDIT time rather than at cold start — a live consumer of the target — can call for one after
+   this step has already run; materialize it then.
 6. Subagents: root holds state + orchestrates, never implements the bulk; flat-by-default
    dispatch; parallelize independent fan-out. Four contracts govern a dispatch — what goes out,
-   what comes back, how wide it may run, and what the root does while it waits.
-   BRIEF CONTRACT (outbound). A brief carries two kinds of content with OPPOSITE epistemics and
-   must mark which is which. Its INSTRUCTION content is AUTHORITATIVE — it scopes the work, and a
-   worker second-guessing scope produces drift. Its DESCRIPTIVE content — facts, a named
-   mechanism's preconditions or values, environmental claims — is a SECONDHAND account assembled
-   by the party furthest from the artifacts, and is NOT authoritative over what the worker
-   observes. Unmarked, the instruction's authority silently extends over the description and the
-   worker faithfully implements a wrong fact. So: SPLIT instruction from fact; state the factual
-   half as CARRIED CONTEXT the worker must re-ground; and make DIVERGENCE REPORTING IN BOTH
-   DIRECTIONS a named slot in the deliverable (what the brief got wrong, and what it missed).
-   Supply a SHAPE, never finished ready-to-paste syntax, for a context the author has not
-   exercised. Carry the DECISION a measurement feeds alongside the question, or the worker answers
-   the question and truncates the work. State a rule by the PROPERTY that generates it, never by
-   the one INSTANCE the author noticed (AUTHOR COVERAGE INTENSIONALLY, applied to brief content).
-   Grant standing permission to WIDEN a scope drawn too narrowly. Briefs stay self-contained
-   (inline governing text, never "see §N") — but self-containment governs what a worker is TOLD,
-   never whether it is TRUE: these defects are caught by EXERCISING a brief, never by re-reading it.
-   RETURN CONTRACT (inbound). The DELIVERABLE must appear in the subagent's FINAL return message
-   (intermediate messages are not captured) — a subagent that reports a large artifact as delivered
-   but returns only a summary is a DELIVERY FAILURE; verify the artifact is in-hand before
-   consuming the return. Returns stay COMPACT — the brief names the return's SHAPE and bounds its
-   size — and a verified return BECOMES a journal/decision entry: an unrecorded return is a
-   dispatch whose substance dies with the session, which is why per-claim verdicts below are read
-   and recorded, not merely received. EVERYTHING a worker returns is a CLAIM until verified against source at
-   the surface it will be consumed from — one property over every return, whatever its shape or
-   framing, because enumerating claim types rots exactly as the intensional-coverage doctrine
-   predicts. This reaches what reads as ALREADY ASSESSED: a JUDGMENT (how much a disclosed
-   limitation matters — asserted by the party least able to see the corpus, and settled only by a
-   measurement over the corpus the root holds), a CORRECTION to the root's own stated facts, and a
-   COMPLIANCE claim about where an artifact was placed. A plausible paraphrase is not a citation,
-   and a voluntary disclosure is not an assessment. Verification MAY BE DELEGATED — it is the
-   root's throughput bottleneck and need not be the root's own reading — under two properties: the
-   verifier's brief frames the worker's output as CLAIMS UNDER TEST rather than as context (a
-   verifier reading conclusions as background inherits the error it exists to catch), and the root
-   reads PER-CLAIM VERDICTS, never a rollup (a summarizing verifier reintroduces exactly the trust
-   delegation was meant to remove). Carry the anti-reading: cheaper verification finds MORE, so
-   this makes a plan CORRECT, not convergent — it pulls AGAINST the phase exit criterion, and
-   neither substitutes for the other.
+   what comes back, how wide it may run, and what the root does while it waits. BRIEF CONTRACT
+   (outbound). A brief carries two kinds of content with OPPOSITE epistemics and must mark which
+   is which. Its INSTRUCTION content is AUTHORITATIVE — it scopes the work, and a worker
+   second-guessing scope produces drift. Its DESCRIPTIVE content — facts, a named mechanism's
+   preconditions or values, environmental claims — is a SECONDHAND account assembled by the party
+   furthest from the artifacts, and is NOT authoritative over what the worker observes. Unmarked,
+   the instruction's authority silently extends over the description and the worker faithfully
+   implements a wrong fact. So: SPLIT instruction from fact; state the factual half as CARRIED
+   CONTEXT the worker must re-ground; and make DIVERGENCE REPORTING IN BOTH DIRECTIONS a named
+   slot in the deliverable (what the brief got wrong, and what it missed). Supply a SHAPE, never
+   finished ready-to-paste syntax, for a context the author has not exercised. Carry the DECISION
+   a measurement feeds alongside the question, or the worker answers the question and truncates
+   the work. State a rule by the PROPERTY that generates it, never by the one INSTANCE the author
+   noticed (AUTHOR COVERAGE INTENSIONALLY, applied to brief content). Grant standing permission to
+   WIDEN a scope drawn too narrowly. Briefs stay self-contained (inline governing text, never "see
+   §N") — but self-containment governs what a worker is TOLD, never whether it is TRUE: these
+   defects are caught by EXERCISING a brief, never by re-reading it. RETURN CONTRACT (inbound).
+   The DELIVERABLE must appear in the subagent's FINAL return message (intermediate messages are
+   not captured) — a subagent that reports a large artifact as delivered but returns only a
+   summary is a DELIVERY FAILURE; verify the artifact is in-hand before consuming the return.
+   Returns stay COMPACT — the brief names the return's SHAPE and bounds its size — and a verified
+   return BECOMES a journal/decision entry: an unrecorded return is a dispatch whose substance
+   dies with the session, which is why per-claim verdicts below are read and recorded, not merely
+   received. EVERYTHING a worker returns is a CLAIM until verified against source at the surface
+   it will be consumed from — one property over every return, whatever its shape or framing,
+   because enumerating claim types rots exactly as the intensional-coverage doctrine predicts.
+   This reaches what reads as ALREADY ASSESSED: a JUDGMENT (how much a disclosed limitation
+   matters — asserted by the party least able to see the corpus, and settled only by a measurement
+   over the corpus the root holds), a CORRECTION to the root's own stated facts, and a COMPLIANCE
+   claim about where an artifact was placed. A plausible paraphrase is not a citation, and a
+   voluntary disclosure is not an assessment. Verification MAY BE DELEGATED — it is the root's
+   throughput bottleneck and need not be the root's own reading — under properties that keep the
+   delegation honest: the verifier's brief frames the worker's output as CLAIMS UNDER TEST rather
+   than as context (a verifier reading conclusions as background inherits the error it exists to
+   catch); that brief FIXES EACH CLAIM'S SCOPE, so any two readings of one claim are demonstrably
+   answering the same question; and the root reads PER-CLAIM VERDICTS, never a rollup (a
+   summarizing verifier reintroduces exactly the trust delegation was meant to remove). VERDICTS
+   ARE ADJUDICATED, NOT TALLIED — reading them at per-claim granularity fixes what ARRIVES, never
+   what to do when what arrives contradicts itself. Wherever ONE claim carries two or more
+   verdicts — however produced, and whether or not their authors knew of each other — the root
+   DECIDES that claim on the evidence each verdict carries. Disposing of it by COUNTING, by
+   SURVIVAL (any refutation drops it, or any confirmation keeps it), or by whichever fold the
+   surrounding machinery happens to implement is a disposition nobody made, and both polarities
+   fail silently exactly as a proof read off its invocation does. Counting is the wrong instrument
+   here: independent skeptics are countable only against ONE FIXED PROPOSITION, and verdicts that
+   split may have scoped the claim differently — each right about a different part, the count with
+   no denominator — so establish first that they answered the same question, and where they did
+   not, SPLIT the claim into the parts each addressed and dispose of those separately. A SPLIT IS
+   EVIDENCE, NOT NOISE: a claim competent readers divide on is likelier to be substantive than one
+   they agree on, so an unresolved split leaves the claim OPEN — neither confirmed nor dropped by
+   default — to be disposed of on its own merits under the CONVERGENCE criterion, and the
+   adjudication is RECORDED like any other verified return. Carry the anti-reading: cheaper
+   verification finds MORE, so this makes a plan CORRECT, not convergent — it pulls AGAINST the
+   phase exit criterion, and neither substitutes for the other.
    DISPATCH BOUNDS. Bound a wide dispatch by the RESOURCE THAT ACTUALLY BINDS — per-worker cost
    against the host budget, which concurrent NON-dispatch load also consumes — never by a bare
    count of in-flight workers: a count-legal dispatch can still exhaust the host and kill in-flight
@@ -1267,7 +1408,9 @@ defined by the backlog sub-workflow beside this doc, not duplicated here.
    - PRESENT, then ask. In the single-pass chat register, present (i) what this session
      accomplished (results; units flipped done; commits or dirty paths), (ii) the remaining
      agenda — the plan's whole open_items register at a HIGH level (every active/held/parked item,
-     not line-by-line) plus the next position — and, when the session is ending, a PROPOSED
+     not line-by-line, its held dispositions re-derived under the DECISION-SCOPE FILTER's
+     freshness arm rather than read off the register as recorded) plus the next position — and,
+     when the session is ending, a PROPOSED
      next-session plan: each candidate next-session focus carrying enough context for an informed
      pick, never a bare one-line label (an application of the STANCE / TWO REGISTERS
      pair-every-label-with-its-meaning rule); and (iii) an explicit ask that is actionable on that
@@ -1331,9 +1474,14 @@ defined by the backlog sub-workflow beside this doc, not duplicated here.
      scope (any living-plan doc, or any other authoritative artifact a plan's dispositions or
      standing rules are read from), run the SESSION-CLOSE VALIDATION (internal consistency +
      DRY-sync against the master — see VALIDATION-ON-UPDATE); then by commit-ownership: we-commit →
-     run the repo's format-hook + commit (Conventional Commit, lowercase-verb subject, final
+     run the repo's format-hook, THEN commit BY EXPLICIT PATHSPEC over this unit's paths, proving
+     the copy that form actually reads — the WORKING TREE for those paths, which is also what the
+     hook just rewrote — never the index (Conventional Commit, lowercase-verb subject, final
      status-flip atomic with the work); resident-commits → leave the tree dirty and emit a "please
-     commit these paths" note (never commit here). (b) THEN generate the kickoff prompt; in WEB
+     commit these paths" note DERIVED FROM THE PATHS THIS SESSION ITSELF WROTE — every one of
+     them, per COMMIT-OWNERSHIP, since this mode commits nothing during the sitting and every unit
+     is still owed — rather than from tree state, which may hold another writer's work (never
+     commit here). (b) THEN generate the kickoff prompt; in WEB
      mode, where the host renders a copy affordance on fenced code blocks, emit any prompt the
      operator copies verbatim into a fresh session — the kickoff, or a proposed next-session prompt
      — inside a FENCED CODE BLOCK rather than a blockquote, so the operator relaunches in one click
