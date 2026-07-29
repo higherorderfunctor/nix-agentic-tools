@@ -96,10 +96,10 @@ mitigation **satisfies** that clause rather than fighting it — it supplies the
 missing request. Nothing is patched and no flag is needed.
 
 That dictates the event. `UserPromptSubmit`'s `additionalContext` lands inside
-the **human turn**; `SessionStart`'s is prefixed `SessionStart hook additional
-context:` and reads as **system**-level. `SessionStart` is the obvious cheaper
-choice and it is wrong — the single most likely thing for a future session to
-"simplify" into a regression.
+the **human turn**; `SessionStart`'s carries a
+`SessionStart hook additional context:` prefix and reads as **system**-level.
+`SessionStart` is the obvious cheaper choice and it is wrong — the single most
+likely thing for a future session to "simplify" into a regression.
 
 **But not for the reason first written here**, and the difference matters if
 you reword the payload. The injection is not mistaken for typed input: a live
@@ -141,8 +141,9 @@ since there is then nothing to inject.
 
 ### Why the model is not detected
 
-`UserPromptSubmit` stdin is `{session_id, prompt_id, cwd, permission_mode,
-prompt}` — **no `model`**. Only `SessionStart` carries it, so gating on Opus 5
+`UserPromptSubmit` stdin is
+`{session_id, prompt_id, cwd, permission_mode, prompt}` — **no `model`**. Only
+`SessionStart` carries it, so gating on Opus 5
 would need a `SessionStart` companion writing session-keyed state. At
 once-per-session cadence the waste on other models is ~75 tokens once, cheaper
 than that state file and its staleness modes. So there is no gate, deliberately.
