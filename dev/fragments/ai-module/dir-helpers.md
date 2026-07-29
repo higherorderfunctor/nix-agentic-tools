@@ -79,7 +79,7 @@ A `home.file.<dir>.source = <path>` with `recursive = true` takes the
 destination dir over — no other derivation can contribute files alongside.
 Per-file expansion preserves that escape hatch. This matters in Claude's rules
 dir, which a consumer may also populate directly from
-`programs.claude-code. marketplaces` or via a separate module.
+`programs.claude-code.marketplaces` or via a separate module.
 
 ### Pitfall — path type strictness
 

@@ -272,7 +272,7 @@ config = lib.mkIf cfg.ultracodeOnLaunch {
 - **devenv parity = AUTOMATIC, zero new code (VERIFIED).** The shared settings
   submodule feeds the devenv gap-write:
   `gapSettings = filterNulls (removeAttrs cfg.settings ["hooks" "mcpServers"])`
-  (:392-396) → `files.".claude/ settings.json".json = gapSettings` (:423-425).
+  (:392-396) → `files.".claude/settings.json".json = gapSettings` (:423-425).
   The new keys aren't hooks/mcpServers, so they flow straight through — exactly
   where effortLevel/model already land (proof: checks/module-eval.nix:448-461).
 - **Tests** — `checks/module-eval.nix`, copy the effortLevel pattern per key:

@@ -94,7 +94,7 @@ the contribution into the per-CLI factory's L4 emission.
 ### Why 4 layers instead of inline
 
 Earlier iterations wrote emission logic inline in each branch of per-CLI config
-— directly setting `home.file.".claude/ rules/${name}.md".text` from the
+— directly setting `home.file.".claude/rules/${name}.md".text` from the
 `ai.rules` attrset. That coupled the source shape (list vs attrset, with or
 without Dir-backed ingestion) to each CLI's emission. When the rules attrs grew
 a `sourcePath` field and then dropped it, every CLI had to change in lockstep.

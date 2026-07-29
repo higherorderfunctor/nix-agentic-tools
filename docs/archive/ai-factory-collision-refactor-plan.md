@@ -644,7 +644,7 @@ update.
 
 ### 9.4 Pre/post activation audit (round 2)
 
-The first pre/post audit (memory: `preactivate_snapshot_2026- 04-21.md` + §2 of
+The first pre/post audit (memory: `preactivate_snapshot_2026-04-21.md` + §2 of
 this plan) is what surfaced the bugs. It is DONE. The plan now demands a second
 round once implementation lands:
 

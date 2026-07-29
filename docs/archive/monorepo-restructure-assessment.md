@@ -477,7 +477,7 @@ In priority order, low risk first:
 6. **Move `devshell/docs-site/` → `packages/fragments-docs/`** for location
    consistency.
 7. **Move `sources.json` sidecars to owning packages**
-   (`overlays/*- sources.json` → `packages/<name>/sources.json`). Touches update
+   (`overlays/*-sources.json` → `packages/<name>/sources.json`). Touches update
    pipeline; verify `mkUpdateScript` path resolution.
 8. **`aiInternal.*` option convention** (without flake-parts). Declare an
    `aiInternal` option path in the existing flake; lift internal- only helpers

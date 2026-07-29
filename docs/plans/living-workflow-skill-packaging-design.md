@@ -122,7 +122,7 @@ runtime-`$XDG_STATE_HOME` anti-pattern we are replacing.
 
 Each plan (framework backlog and any downstream plan) keeps its own
 `state.json` + WAL journal (+ `entries/` for the framework-channel host) under
-`<xdg-state>/living-workflows/<main-clone-dirname>/ <workflow-name>/`. Each plan
+`<xdg-state>/living-workflows/<main-clone-dirname>/<workflow-name>/`. Each plan
 doc is self-contained and references the one master by version pin (DRY); a plan
 is free to evolve its own generated copy. Web mode has no repo, so it keeps the
 in-doc state block — the XDG keying is CLI-only.

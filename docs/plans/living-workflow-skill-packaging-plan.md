@@ -285,7 +285,7 @@ since the inventory.
 
 - Produces: the router with three entry points (create / resume / groom), the
   runtime clone-name recipe, and progressive-disclosure pointers to
-  `references/{living-plan-bootstrap.md,state.schema.json, living-workflow-backlog.md,changelog.md}`.
+  `references/{living-plan-bootstrap.md,state.schema.json,living-workflow-backlog.md,changelog.md}`.
 
 - [ ] **Step 1:** Write YAML frontmatter (`name: living-workflow`,
       `description:` a cross-surface NL trigger — the invocation handle per item
