@@ -1,8 +1,8 @@
 {
-  "version": "3.41.1",
+  "version": "3.41.2",
   "src": {
-    "url": "https://github.com/passteque/gluetun/archive/v3.41.1.tar.gz",
-    "hash": "sha256-tLfX0bIj/6XC7sSdVqFcJMOv+EChYMqakFuQiZ4WXz8="
+    "url": "https://github.com/passteque/gluetun/archive/v3.41.2.tar.gz",
+    "hash": "sha256-/M3AsRM2DNXt3KkDbnlXTTp4Cs2ukTyMFz8lh0wTq2U="
   },
-  "vendorHash": "sha256-6iw3+krG2/OwuBUJKhiOJjNqkMbwHR+nFd0q7LiQbBA="
+  "vendorHash": "sha256-5A72iEcbEpui4u3vv2A6DlGnVsd5ko1ngjL5z0YccMI="
 }
