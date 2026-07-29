@@ -73,6 +73,34 @@ in {
         description = "The glab package to wrap.";
       };
 
+      configDir = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "/home/alice/.local/state/glab-cli";
+        description = ''
+          Directory glab keeps its own mutable state in — `config.yml`,
+          aliases, update bookkeeping. Exported as `GLAB_CONFIG_DIR`.
+          `null` leaves glab on its own default, `~/.config/glab-cli`.
+
+          A LITERAL path. It is shell-quoted into the wrapper, so nothing
+          in it expands: no `$VAR`, no `$(…)`, no `~`. Build the path in
+          Nix instead, where the values are available anyway —
+          `"''${config.home.homeDirectory}/…"` under home-manager, or
+          `"''${config.devenv.state}/…"` under devenv.
+
+          An earlier revision made this shell-expandable so the devenv
+          facet could say `$DEVENV_STATE/glab-cli`. That was unnecessary:
+          `devenv.state` is available at EVAL time, so the default is a
+          real path. It also meant a `$(…)` in this value would execute on
+          every glab invocation, which is a poor property for an option
+          that exists only to name a directory.
+
+          This directory is WRITTEN to. glab owns `config.yml`, and the
+          wrapper seeds a `hosts:` entry into it on first run so that
+          `glab auth status` can see the configured instance.
+        '';
+      };
+
       settings = mkOption {
         type = types.submodule {
           options = builtins.listToAttrs (map (n: {
