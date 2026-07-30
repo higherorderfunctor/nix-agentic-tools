@@ -1,0 +1,89 @@
+{
+  "name": "mode-f-contract-coverage",
+  "description": "VALIDATOR FIXTURE — DO NOT RUN. Exercises all five node types, both stop forms and every optional field, so that contract.jq is checked against a definition using its whole surface rather than only the shapes the drain happens to use. It holds a `watch` node that would poll an external system, and an `onMaxIterations: \"continue\"` deliberately chosen to keep the warning channel non-empty — see self-test-validate.sh, which asserts this file passes plain validation and FAILS --strict.",
+  "inputs": {
+    "goal": "prompt"
+  },
+  "modelId": "auto",
+  "effortLevel": "high",
+  "steps": [
+    {
+      "type": "sequence",
+      "id": "cov-seq",
+      "steps": [
+        {
+          "type": "step",
+          "id": "cov-step",
+          "agent": "wf-coder",
+          "prompt": "Coverage step. Goal: {{goal}}. Reply COV-DONE.",
+          "artifacts": {
+            "notes": "notes.md"
+          },
+          "captureOutput": true,
+          "completion": {
+            "containsText": "COV-DONE"
+          },
+          "modelId": "auto",
+          "effortLevel": "high"
+        },
+        {
+          "type": "watch",
+          "id": "cov-watch",
+          "handler": "github-pr",
+          "config": {},
+          "idleTimeoutSec": 30
+        },
+        {
+          "type": "repeat",
+          "id": "cov-repeat",
+          "steps": [
+            {
+              "type": "step",
+              "id": "cov-repeat-step",
+              "agent": "wf-coder",
+              "input": "Coverage step driven by `input` rather than `prompt`."
+            }
+          ],
+          "maxIterations": 3,
+          "onMaxIterations": "abort",
+          "stopWhen": "cov-watch.terminal"
+        },
+        {
+          "type": "parallel",
+          "id": "cov-par",
+          "joinPolicy": "allSettled",
+          "branches": [
+            {
+              "type": "step",
+              "id": "cov-par-a",
+              "agent": "wf-coder",
+              "prompt": "Coverage branch a.",
+              "captureOutput": false
+            },
+            {
+              "type": "repeat",
+              "id": "cov-par-b",
+              "steps": [
+                {
+                  "type": "step",
+                  "id": "cov-par-b-step",
+                  "agent": "wf-coder",
+                  "prompt": "Coverage branch b."
+                }
+              ],
+              "maxIterations": 2,
+              "onMaxIterations": "continue",
+              "stopCondition": {
+                "fileCheck": {
+                  "path": ".kiro-harness/cov/b.json",
+                  "jsonPath": "done",
+                  "value": true
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

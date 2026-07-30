@@ -1,0 +1,517 @@
+{
+  "README": [
+    "The negative corpus for contract.jq, consumed by self-test-validate.sh.",
+    "",
+    "Each case is ONE targeted mutation of a known-good generated definition, so",
+    "the diagnostic it provokes is attributable: the base file is asserted clean",
+    "in the same run, therefore any code the mutant reports was caused by the",
+    "mutation. That is why these are derived rather than authored as standalone",
+    "broken files \u2014 a hand-written broken file proves the validator rejected",
+    "something, not that it rejected the thing you meant.",
+    "",
+    "Fields: `code` is the diagnostic the case must provoke. `name` identifies it.",
+    "Either `base` + `mutate` (a jq expression applied to that generated",
+    "definition) or `raw` (literal file bytes, for cases that must not be valid",
+    "JSON). `severity` defaults to \"error\"; \"warn\" cases must NOT fail plain",
+    "validation and MUST fail --strict. `trap` tags the four authoring traps",
+    "called out in contract.jq, and self-test-validate.sh asserts all four are",
+    "represented.",
+    "",
+    "Sorted by (code, name). self-test-validate.sh enforces both that ordering and",
+    "that every code contract.jq and validate-workflow.sh can emit appears here."
+  ],
+  "cases": [
+    {
+      "base": "drain",
+      "code": "E-CONTAINER-EMPTY",
+      "mutate": ".steps[0].branches = []",
+      "name": "container-empty-parallel-branches"
+    },
+    {
+      "base": "drain",
+      "code": "E-CONTAINER-EMPTY",
+      "mutate": ".steps[0].branches[0].steps = []",
+      "name": "container-empty-repeat-steps"
+    },
+    {
+      "base": "drain",
+      "code": "E-CONTAINER-EMPTY",
+      "mutate": ".steps = []",
+      "name": "container-empty-workflow-steps"
+    },
+    {
+      "base": "drain",
+      "code": "E-EMPTY-STRING",
+      "mutate": ".steps[0].branches[0].id = \"\"",
+      "name": "empty-string-node-id"
+    },
+    {
+      "base": "drain",
+      "code": "E-EMPTY-STRING",
+      "mutate": ".name = \"\"",
+      "name": "empty-string-workflow-name"
+    },
+    {
+      "base": "coverage",
+      "code": "E-ENUM-COMPLETION-SIGNAL",
+      "mutate": ".steps[0].steps[0].completion = {\"completionSignal\": \"done\"}",
+      "name": "enum-completion-signal-unknown"
+    },
+    {
+      "base": "drain",
+      "code": "E-ENUM-JOIN-POLICY",
+      "mutate": ".steps[0].joinPolicy = \"first\"",
+      "name": "enum-join-policy-unknown"
+    },
+    {
+      "base": "drain",
+      "code": "E-ENUM-ON-MAX-ITERATIONS",
+      "mutate": ".steps[0].branches[0].onMaxIterations = \"stop\"",
+      "name": "enum-on-max-iterations-unknown"
+    },
+    {
+      "base": "drain",
+      "code": "E-FILE-CHECK-FIELD",
+      "mutate": "del(.steps[0].branches[0].stopCondition.fileCheck.value)",
+      "name": "file-check-field-missing-value"
+    },
+    {
+      "base": "drain",
+      "code": "E-FILE-CHECK-FIELD",
+      "mutate": ".steps[0].branches[0].stopCondition.fileCheck.jsonpath = \"drained\"",
+      "name": "file-check-field-unknown-snake-case"
+    },
+    {
+      "base": "drain",
+      "code": "E-FILE-CHECK-PATH-ABSOLUTE",
+      "mutate": ".steps[0].branches[0].stopCondition.fileCheck.path = \"/tmp/shard-01.json\"",
+      "name": "file-check-path-absolute",
+      "trap": 3
+    },
+    {
+      "base": "drain",
+      "code": "E-FILE-CHECK-PATH-EMPTY",
+      "mutate": ".steps[0].branches[0].stopCondition.fileCheck.path = \"\"",
+      "name": "file-check-path-empty"
+    },
+    {
+      "base": "drain",
+      "code": "E-FILE-CHECK-PATH-ESCAPE",
+      "mutate": ".steps[0].branches[0].stopCondition.fileCheck.path = \"../outside/shard-01.json\"",
+      "name": "file-check-path-escapes-workspace",
+      "trap": 3
+    },
+    {
+      "base": "drain",
+      "code": "E-FILE-CHECK-PATH-TEMPLATE",
+      "mutate": ".steps[0].branches[0].stopCondition.fileCheck.path = \"{{state_root}}/shard-01.json\"",
+      "name": "file-check-path-templated",
+      "trap": 3
+    },
+    {
+      "base": "drain",
+      "code": "E-FILE-CHECK-PATH-TILDE",
+      "mutate": ".steps[0].branches[0].stopCondition.fileCheck.path = \"~/shard-01.json\"",
+      "name": "file-check-path-tilde",
+      "trap": 3
+    },
+    {
+      "base": "drain",
+      "code": "E-FILE-CHECK-VALUE-ARRAY",
+      "mutate": ".steps[0].branches[0].stopCondition.fileCheck.value = [true]",
+      "name": "file-check-value-array",
+      "trap": 2
+    },
+    {
+      "absent": true,
+      "code": "E-FILE-MISSING",
+      "name": "file-missing-absent-path"
+    },
+    {
+      "base": "coverage",
+      "code": "E-IDLE-TIMEOUT-RANGE",
+      "mutate": ".steps[0].steps[1].idleTimeoutSec = 0",
+      "name": "idle-timeout-zero"
+    },
+    {
+      "base": "drain",
+      "code": "E-INPUTS-NOT-STRING",
+      "mutate": ".inputs.shard_count = 5",
+      "name": "inputs-numeric-value"
+    },
+    {
+      "code": "E-JSON-PARSE",
+      "name": "json-parse-trailing-comma",
+      "raw": "{ \"name\": \"mode-f-broken\", \"steps\": [], }\n"
+    },
+    {
+      "base": "drain",
+      "code": "E-JSONPATH-SYNTAX",
+      "mutate": ".steps[0].branches[0].stopCondition.fileCheck.jsonPath = \"items[0].done\"",
+      "name": "jsonpath-bracket-index",
+      "trap": 1
+    },
+    {
+      "base": "drain",
+      "code": "E-JSONPATH-SYNTAX",
+      "mutate": ".steps[0].branches[0].stopCondition.fileCheck.jsonPath = \"$.drained\"",
+      "name": "jsonpath-dollar-prefix",
+      "trap": 1
+    },
+    {
+      "base": "drain",
+      "code": "E-JSONPATH-SYNTAX",
+      "mutate": ".steps[0].branches[0].stopCondition.fileCheck.jsonPath = \"state..drained\"",
+      "name": "jsonpath-empty-segment",
+      "trap": 1
+    },
+    {
+      "base": "drain",
+      "code": "E-JSONPATH-SYNTAX",
+      "mutate": ".steps[0].branches[0].stopCondition.fileCheck.jsonPath = \"items.*.done\"",
+      "name": "jsonpath-wildcard",
+      "trap": 1
+    },
+    {
+      "base": "drain",
+      "code": "E-MAX-ITERATIONS-RANGE",
+      "mutate": ".steps[0].branches[0].maxIterations = 2.5",
+      "name": "max-iterations-fractional"
+    },
+    {
+      "base": "drain",
+      "code": "E-MAX-ITERATIONS-RANGE",
+      "mutate": ".steps[0].branches[0].maxIterations = 1001",
+      "name": "max-iterations-over-ceiling"
+    },
+    {
+      "base": "drain",
+      "code": "E-MAX-ITERATIONS-RANGE",
+      "mutate": ".steps[0].branches[0].maxIterations = 0",
+      "name": "max-iterations-zero"
+    },
+    {
+      "base": "drain",
+      "code": "E-NESTING-DEPTH",
+      "mutate": ".steps = [reduce range(0; 8) as $i ({\"type\": \"step\", \"id\": \"deep-leaf\", \"agent\": \"wf-coder\", \"prompt\": \"x\"}; {\"type\": \"sequence\", \"id\": (\"deep-\" + ($i | tostring)), \"steps\": [.]})]",
+      "name": "nesting-depth-nine"
+    },
+    {
+      "base": "drain",
+      "code": "E-NODE-DUPLICATE-ID",
+      "mutate": ".steps[0].branches[0].steps[0].id = .steps[0].branches[0].id",
+      "name": "node-duplicate-id"
+    },
+    {
+      "base": "drain",
+      "code": "E-NODE-FIELD-UNKNOWN",
+      "mutate": ".steps[0].branches[0].stop_condition = {}",
+      "name": "node-field-unknown-snake-case-stop-condition"
+    },
+    {
+      "base": "drain",
+      "code": "E-NODE-REQUIRED",
+      "mutate": "del(.steps[0].branches)",
+      "name": "node-required-parallel-branches"
+    },
+    {
+      "base": "drain",
+      "code": "E-NODE-REQUIRED",
+      "mutate": "del(.steps[0].id)",
+      "name": "node-required-parallel-id"
+    },
+    {
+      "base": "drain",
+      "code": "E-NODE-REQUIRED",
+      "mutate": "del(.steps[0].joinPolicy)",
+      "name": "node-required-parallel-join-policy"
+    },
+    {
+      "base": "drain",
+      "code": "E-NODE-REQUIRED",
+      "mutate": "del(.steps[0].branches[0].id)",
+      "name": "node-required-repeat-id"
+    },
+    {
+      "base": "drain",
+      "code": "E-NODE-REQUIRED",
+      "mutate": "del(.steps[0].branches[0].maxIterations)",
+      "name": "node-required-repeat-max-iterations"
+    },
+    {
+      "base": "drain",
+      "code": "E-NODE-REQUIRED",
+      "mutate": "del(.steps[0].branches[0].onMaxIterations)",
+      "name": "node-required-repeat-on-max-iterations"
+    },
+    {
+      "base": "drain",
+      "code": "E-NODE-REQUIRED",
+      "mutate": "del(.steps[0].branches[0].steps)",
+      "name": "node-required-repeat-steps"
+    },
+    {
+      "base": "coverage",
+      "code": "E-NODE-REQUIRED",
+      "mutate": "del(.steps[0].id)",
+      "name": "node-required-sequence-id"
+    },
+    {
+      "base": "coverage",
+      "code": "E-NODE-REQUIRED",
+      "mutate": "del(.steps[0].steps)",
+      "name": "node-required-sequence-steps"
+    },
+    {
+      "base": "drain",
+      "code": "E-NODE-REQUIRED",
+      "mutate": "del(.steps[0].branches[0].steps[0].agent)",
+      "name": "node-required-step-agent"
+    },
+    {
+      "base": "drain",
+      "code": "E-NODE-REQUIRED",
+      "mutate": "del(.steps[0].branches[0].steps[0].id)",
+      "name": "node-required-step-id"
+    },
+    {
+      "base": "coverage",
+      "code": "E-NODE-REQUIRED",
+      "mutate": "del(.steps[0].steps[1].handler)",
+      "name": "node-required-watch-handler"
+    },
+    {
+      "base": "coverage",
+      "code": "E-NODE-REQUIRED",
+      "mutate": "del(.steps[0].steps[1].id)",
+      "name": "node-required-watch-id"
+    },
+    {
+      "base": "drain",
+      "code": "E-NODE-TYPE",
+      "mutate": ".steps[0].branches[0].steps[0] = \"a step is not a string\"",
+      "name": "node-not-an-object"
+    },
+    {
+      "base": "drain",
+      "code": "E-NODE-TYPE",
+      "mutate": "del(.steps[0].type)",
+      "name": "node-type-missing-parallel"
+    },
+    {
+      "base": "drain",
+      "code": "E-NODE-TYPE",
+      "mutate": "del(.steps[0].branches[0].type)",
+      "name": "node-type-missing-repeat"
+    },
+    {
+      "base": "coverage",
+      "code": "E-NODE-TYPE",
+      "mutate": "del(.steps[0].type)",
+      "name": "node-type-missing-sequence"
+    },
+    {
+      "base": "drain",
+      "code": "E-NODE-TYPE",
+      "mutate": "del(.steps[0].branches[0].steps[0].type)",
+      "name": "node-type-missing-step"
+    },
+    {
+      "base": "coverage",
+      "code": "E-NODE-TYPE",
+      "mutate": "del(.steps[0].steps[1].type)",
+      "name": "node-type-missing-watch"
+    },
+    {
+      "base": "drain",
+      "code": "E-NODE-TYPE",
+      "mutate": ".steps[0].type = \"fanout\"",
+      "name": "node-type-unknown"
+    },
+    {
+      "base": "drain",
+      "code": "E-STEP-NO-PROMPT-OR-INPUT",
+      "mutate": "del(.steps[0].branches[0].steps[0].prompt)",
+      "name": "step-no-prompt-or-input"
+    },
+    {
+      "base": "drain",
+      "code": "E-STEP-NODES-MAX",
+      "mutate": ".steps[0].branches = [range(0; 21) | {\"type\": \"step\", \"id\": (\"overflow-\" + tostring), \"agent\": \"wf-coder\", \"prompt\": \"x\"}]",
+      "name": "step-nodes-twenty-one"
+    },
+    {
+      "base": "drain",
+      "code": "E-STOP-CONDITION-EMPTY",
+      "mutate": ".steps[0].branches[0].stopCondition = {}",
+      "name": "stop-condition-empty"
+    },
+    {
+      "base": "drain",
+      "code": "E-STOP-CONDITION-FIELD",
+      "mutate": ".steps[0].branches[0].stopCondition.file_check = {}",
+      "name": "stop-condition-field-unknown-snake-case"
+    },
+    {
+      "base": "coverage",
+      "code": "E-STOP-FORM-BOTH",
+      "mutate": ".steps[0].steps[2].stopCondition = {\"containsText\": \"DONE\"}",
+      "name": "stop-form-both"
+    },
+    {
+      "base": "drain",
+      "code": "E-STOP-FORM-NEITHER",
+      "mutate": "del(.steps[0].branches[0].stopCondition)",
+      "name": "stop-form-neither",
+      "trap": 4
+    },
+    {
+      "base": "coverage",
+      "code": "E-STOP-WHEN-SYNTAX",
+      "mutate": ".steps[0].steps[2].stopWhen = \"{{cov-step.output}} contains \"",
+      "name": "stop-when-contains-empty-literal"
+    },
+    {
+      "base": "coverage",
+      "code": "E-STOP-WHEN-SYNTAX",
+      "mutate": ".steps[0].steps[2].stopWhen = \"cov-step.output contains DONE\"",
+      "name": "stop-when-left-side-not-template"
+    },
+    {
+      "base": "coverage",
+      "code": "E-STOP-WHEN-SYNTAX",
+      "mutate": ".steps[0].steps[2].stopWhen = \"prefix {{cov-step.output}}.terminal\"",
+      "name": "stop-when-template-not-at-start"
+    },
+    {
+      "base": "coverage",
+      "code": "E-STOP-WHEN-SYNTAX",
+      "mutate": ".steps[0].steps[2].stopWhen = \"{{cov-step.output contains DONE\"",
+      "name": "stop-when-template-unclosed"
+    },
+    {
+      "base": "coverage",
+      "code": "E-STOP-WHEN-SYNTAX",
+      "mutate": ".steps[0].steps[2].stopWhen = \"cov.watch.terminal\"",
+      "name": "stop-when-watch-id-has-dot"
+    },
+    {
+      "base": "coverage",
+      "code": "E-STOP-WHEN-SYNTAX",
+      "mutate": ".steps[0].steps[2].stopWhen = \"cov-watch.done\"",
+      "name": "stop-when-watch-id-not-terminal"
+    },
+    {
+      "base": "coverage",
+      "code": "E-STOP-WHEN-WATCH-ID",
+      "mutate": ".steps[0].steps[2].stopWhen = \"nope.terminal\"",
+      "name": "stop-when-watch-id-unknown"
+    },
+    {
+      "base": "coverage",
+      "code": "E-TYPE",
+      "mutate": ".steps[0].steps[0].artifacts.notes = 1",
+      "name": "type-artifacts-not-string-value"
+    },
+    {
+      "base": "drain",
+      "code": "E-TYPE",
+      "mutate": ".steps[0].branches[0].steps[0].captureOutput = \"yes\"",
+      "name": "type-capture-output-string"
+    },
+    {
+      "base": "drain",
+      "code": "E-TYPE",
+      "mutate": ".inputs = []",
+      "name": "type-inputs-array"
+    },
+    {
+      "base": "drain",
+      "code": "E-TYPE",
+      "mutate": ".steps[0].branches[0].maxIterations = \"50\"",
+      "name": "type-max-iterations-string"
+    },
+    {
+      "base": "drain",
+      "code": "E-TYPE",
+      "mutate": ".name = 5",
+      "name": "type-name-number"
+    },
+    {
+      "base": "drain",
+      "code": "E-TYPE",
+      "mutate": ".steps[0].branches[0].id = 1",
+      "name": "type-node-id-number"
+    },
+    {
+      "base": "drain",
+      "code": "E-TYPE",
+      "mutate": ".steps = {}",
+      "name": "type-steps-object"
+    },
+    {
+      "base": "drain",
+      "code": "E-WORKFLOW-FIELD-UNKNOWN",
+      "mutate": ".version = 1",
+      "name": "workflow-field-unknown"
+    },
+    {
+      "base": "drain",
+      "code": "E-WORKFLOW-PLAN-REVISION",
+      "mutate": ".planRevision = 0",
+      "name": "workflow-plan-revision-authored"
+    },
+    {
+      "base": "drain",
+      "code": "E-WORKFLOW-REQUIRED",
+      "mutate": "del(.name)",
+      "name": "workflow-required-name"
+    },
+    {
+      "base": "drain",
+      "code": "E-WORKFLOW-REQUIRED",
+      "mutate": "del(.steps)",
+      "name": "workflow-required-steps"
+    },
+    {
+      "code": "E-WORKFLOW-TYPE",
+      "name": "workflow-not-an-object",
+      "raw": "[]\n"
+    },
+    {
+      "base": "drain",
+      "code": "W-JOIN-POLICY-ALL",
+      "mutate": ".steps[0].joinPolicy = \"all\"",
+      "name": "join-policy-all",
+      "severity": "warn"
+    },
+    {
+      "base": "drain",
+      "code": "W-JOIN-POLICY-ANY",
+      "mutate": ".steps[0].joinPolicy = \"any\"",
+      "name": "join-policy-any",
+      "severity": "warn"
+    },
+    {
+      "base": "drain",
+      "code": "W-ON-MAX-ITERATIONS-CONTINUE",
+      "mutate": ".steps[0].branches[0].onMaxIterations = \"continue\"",
+      "name": "on-max-iterations-continue",
+      "severity": "warn"
+    },
+    {
+      "base": "drain",
+      "code": "W-ON-MAX-ITERATIONS-PAUSE",
+      "mutate": ".steps[0].branches[0].onMaxIterations = \"pause\"",
+      "name": "on-max-iterations-pause",
+      "severity": "warn"
+    },
+    {
+      "base": "drain",
+      "code": "W-STOP-CONDITION-SIGNAL-FIRST",
+      "mutate": ".steps[0].branches[0].stopCondition.completionSignal = \"success\"",
+      "name": "stop-condition-signal-first",
+      "severity": "warn"
+    }
+  ]
+}
