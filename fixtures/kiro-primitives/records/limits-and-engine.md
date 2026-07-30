@@ -138,6 +138,8 @@ limit.
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 relocated
+
 **Command** (every iteration and transition limit in the bundle, with its
 defining expression — one command, so the denominator is visible):
 
@@ -405,6 +407,8 @@ an agent path.
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 relocated
+
 **Command** (all four graph entry points with their full option literals — the
 denominator is 4 of 4):
 
@@ -654,6 +658,8 @@ automatic path has no such guard.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 relocated
 
 **Command** (the thresholds and the decision function):
 
@@ -1012,6 +1018,8 @@ object. No serialization boundary appears anywhere on this path.
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 relocated
+
 **Command** (the construction sites, then the sub-agent module extracted to a
 small file so the reads below can be line-oriented without ever loading the 20.8
 MB bundle):
@@ -1200,6 +1208,8 @@ whatever the schema permits.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 relocated
 
 **Command** (the KAS key space, enumerated by bounding the schema object with
 its own opening and closing lines rather than with hardcoded offsets):
@@ -1455,6 +1465,8 @@ _execution_.
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), plus `.kiro-cli-wrapped` (53809000 bytes) and
 `.kiro-cli-chat-wrapped` (555372744 bytes) from kiro-cli 2.15.1, 2026-07-29.
+
+**Drift:** 2.15.2 relocated
 
 **Command:**
 

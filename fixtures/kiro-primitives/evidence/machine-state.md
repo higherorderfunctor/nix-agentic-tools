@@ -92,6 +92,8 @@ demonstrate anything.
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 reproduced
+
 **Command:**
 
 ```bash
@@ -207,6 +209,8 @@ directory. If it is not, the home root loaded into a project session.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 reproduced
 
 **Command** (output is classified before printing, so it names no workspace):
 
@@ -344,6 +348,8 @@ rather than a single sub-execution id.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 reproduced
 
 **Command:**
 
@@ -529,6 +535,8 @@ emitted.
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 changed — see `../drift-ledger.md`
+
 **Command:**
 
 ```bash
@@ -616,6 +624,8 @@ directory per root session.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 reproduced
 
 **Command:**
 
@@ -718,6 +728,8 @@ the eight rows above are already not what a previous reading recorded.
 **Verified against:** GitHub, queried 2026-07-29 via the GitHub MCP server
 (`issue_read` with `method: get`, plus `get_comments` for 10411 and
 `search_issues` to find 9566 rather than guess a number).
+
+**Drift:** 2.15.2 reproduced
 
 **Command:**
 
@@ -828,6 +840,8 @@ directory, inside the agent package's server output.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 changed — see `../drift-ledger.md`
 
 **Command:**
 

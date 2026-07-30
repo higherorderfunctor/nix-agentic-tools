@@ -97,6 +97,8 @@ validates the batch size of a single tool call.
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 relocated
+
 **Command:**
 
 ```bash
@@ -234,6 +236,8 @@ execution is a _different_ object with its own future map entry.
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 relocated
+
 **Command:**
 
 ```bash
@@ -368,6 +372,8 @@ message. The constant is declared adjacent to the concurrency constant
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 relocated
+
 **Command:**
 
 ```bash
@@ -450,6 +456,8 @@ constructor assigns `config.subExecutionDepth ?? 0`.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 relocated
 
 **Command:**
 
@@ -542,6 +550,8 @@ neighborhood, never by name.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 relocated
 
 **Command:**
 
