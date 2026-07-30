@@ -169,10 +169,11 @@ _: {
     # re-measure on a version bump. Kept OUT of the `kiro-cli` category (whose
     # fragment is the ~300-line auto-memory map) so an edit to the wrapper
     # loads the wrapper rule, not the memory pipeline. Scoped to the generic
-    # shell helper and the factory's lib/ directory that consumes it, since
-    # the two have to move together.
+    # shell helper, the factory's lib/ directory that consumes it, and the
+    # behavioral check, since all three have to move together.
     kiro-wrapper = {
       scopes = [
+        "checks/kiro-wrapper-argv.nix"
         "lib/idempotentFlags.nix"
         "packages/kiro-cli/lib/**"
       ];

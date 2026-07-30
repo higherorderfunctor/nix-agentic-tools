@@ -147,8 +147,20 @@ parse probe rather than trusting help text — use an argument that fails
 validation LATE, so "unexpected argument" versus "invalid value" distinguishes a
 parse rejection from an accepted flag.
 
+## Tests
+
+- `checks/kiro-wrapper-argv.nix` — the real wrapper against a stub package that
+  prints its argv. Covers which SIDE of the subcommand each flag lands on, the
+  `--tui` confinement, the value-flag skip, `--`, idempotence, and the
+  env-export path. String-matching the generated bash cannot catch a flag
+  emitted on the wrong side; running it can.
+- `checks/module-eval.nix` (`module-kiro-wrapper-*`) — pins the SHAPE of the
+  generated bash, including that reverse emission order is what makes prepends
+  compose to `--tui --v3`.
+
 ## Do not break the exec line
 
 The wrapper ends with `exec -a "$0" <realBin> "$@"`. Probe scripts under
 `docs/plans/` recover the real binary by reading that line back out of the
-generated wrapper, so keep its shape.
+generated wrapper, so keep its shape; `checks/kiro-wrapper-argv.nix` asserts on
+it.
