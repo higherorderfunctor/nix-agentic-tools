@@ -267,7 +267,10 @@ in {
       name = "treefmt-restage";
       # -z/-0: a path containing whitespace would otherwise be split into
       # several nonexistent paths and silently left unstaged.
-      entry = "${pkgs.bash}/bin/bash -c 'git diff --name-only -z | xargs -0 -r git add'";
+      # `--`: a path beginning with a dash is otherwise parsed as an option —
+      # measured, `git add` on a path like `-x.md` dies with an unknown-switch
+      # error and stages nothing.
+      entry = "${pkgs.bash}/bin/bash -c 'git diff --name-only -z | xargs -0 -r git add --'";
       pass_filenames = false;
       stages = ["pre-commit"];
     };
