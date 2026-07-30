@@ -148,6 +148,8 @@ kagiapi
 kagimcp
 kagisearch
 kanagawa
+kasdirs
+kasid
 keyspace
 kiro
 kirocli
@@ -197,6 +199,7 @@ nixpkgs
 nixvim
 nohup
 nomic
+nullglob
 numtide
 nuscht
 nuschtos
@@ -252,6 +255,7 @@ reimplementation
 relpath
 remapper
 reparent
+replayable
 repoint
 reprioritize
 rerere
@@ -323,11 +327,13 @@ undimensioned
 undmg
 unexecutable
 unflushed
+ungated
 ungroomed
 unheld
 unhide
 unparseable
 unrebased
+unresumable
 unreviewed
 unscanned
 unskipped
