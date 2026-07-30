@@ -242,6 +242,14 @@ in {
         ".*\\.lock$"
         "^config/cspell/"
         "^docs/"
+        # Verbatim engine-bundle quotes and real command output, including
+        # identifier fragments cut mid-token by windowed byte extraction.
+        # Excluded HERE as well as in cspell.json's ignorePaths: pre-commit
+        # must filter these itself, because a batch whose every file is
+        # ignored leaves `cspell lint` with no files to check and it exits
+        # non-zero on that. Authored prose in the same tree stays checked.
+        "^fixtures/kiro-primitives/evidence/"
+        "^fixtures/kiro-primitives/records/"
       ];
     };
     # Re-stage files modified by formatters (treefmt, shfmt, etc.)

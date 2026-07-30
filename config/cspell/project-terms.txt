@@ -148,6 +148,7 @@ kagiapi
 kagimcp
 kagisearch
 kanagawa
+kasid
 keyspace
 kiro
 kirocli
@@ -252,6 +253,7 @@ reimplementation
 relpath
 remapper
 reparent
+replayable
 repoint
 reprioritize
 rerere
@@ -323,11 +325,13 @@ undimensioned
 undmg
 unexecutable
 unflushed
+ungated
 ungroomed
 unheld
 unhide
 unparseable
 unrebased
+unresumable
 unreviewed
 unscanned
 unskipped
