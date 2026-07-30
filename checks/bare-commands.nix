@@ -100,23 +100,30 @@
 # none, for the same structural reason pattern 3 does not: an absolute
 # invocation puts `$` after the `$(`, never a command NAME.
 #
-# Pattern 2's filter was re-measured on 2026-07-25 by enumerating
+# Pattern 2's filter was re-measured on 2026-07-30 by enumerating
 # exactly what it subtracts — its own raw hits that contain `/bin/`,
-# with the sibling filters applied. Four lines, all four genuine false
+# with the sibling filters applied. Five lines, all five genuine false
 # positives:
 #
-#   overlays/lib.nix:309-310 — `wc="${pkgs.coreutils}/bin/wc"` and the
-#     same for `tr`. A variable ASSIGNMENT, not an invocation: `^\s+`
-#     then `wc` then `\b`, and `=` satisfies that word boundary. The
-#     value assigned is already absolute.
-#   packages/kiro-cli/lib/mkKiro.nix:359,366 — `rm -f "$out/bin/kiro-cli"`
-#     and its `-chat` twin. A genuinely bare `rm`, but inside a
-#     `symlinkJoin` `postBuild`: stdenv, full PATH, the build context
-#     this check deliberately does not police. The `/bin/` on those
-#     lines is a path ARGUMENT, not a command path.
+#   overlays/lib.nix — `wc="${pkgs.coreutils}/bin/wc"` and the same for
+#     `tr`. A variable ASSIGNMENT, not an invocation: `^\s+` then `wc`
+#     then `\b`, and `=` satisfies that word boundary. The value
+#     assigned is already absolute.
+#   packages/glab/lib/mkGlab.nix — `rm -f "$out/bin/glab"`.
+#   packages/kiro-cli/lib/wrapPackage.nix — `rm -f "$out/bin/kiro-cli"`
+#     and its `-chat` twin. Both these and glab's are a genuinely bare
+#     `rm`, but inside a `symlinkJoin` `postBuild`: stdenv, full PATH,
+#     the build context this check deliberately does not police. The
+#     `/bin/` on those lines is a path ARGUMENT, not a command path.
+#
+# The 2026-07-25 measurement found four; glab's symlinkJoin arrived
+# after it, and the kiro line moved out of mkKiro.nix when the wrapper
+# was extracted. Both are the SAME false-positive shape, which is the
+# point: this set grows with every symlinkJoin that replaces a bin, so
+# the count is a measurement and never a constant.
 #
 # So the filter subtracts zero true positives today. Removing it would
-# buy no coverage and cost two `# bare-commands: ok` markers — the
+# buy no coverage and cost three `# bare-commands: ok` markers — the
 # mirror image of pattern 3, where the same filter subtracted five true
 # positives and no false ones. That asymmetry is why the pattern-3
 # argument does NOT transfer: there the anchors excluded absolute
