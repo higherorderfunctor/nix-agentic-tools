@@ -255,6 +255,16 @@ broken, nothing happens.
 to a **consumer** before believing it, and treat "documented but unconsumed" as
 a distinct state from both "supported" and "absent".
 
+**Update, 2026-07-30 (kiro-cli 2.15.2):** the door opened. The flag now has two
+consumers and a row in the table that turns a feature into a wire setting, so
+the vendor's instruction works and the entry is no longer inert. The negative
+stands as **history, not as current behavior** — and it is more useful now than
+when it was written, because it dates the transition: "documented but
+unconsumed" was a real state that lasted at least four releases and then quietly
+ended, with no announcement and no change to the description that was already
+promising it. Re-check a decoy before building around its absence; see the
+2.15.2 section of `drift-ledger.md`.
+
 ---
 
 ## C-12 — A closed issue whose defect is still live
@@ -307,3 +317,65 @@ precisely the wrong conclusion, and it agreed with the mistaken belief in C-10.
 **Lesson:** verify structure from transcripts, never from the display. When an
 observation _agrees_ with a belief you already hold, that is when to check the
 instrument.
+
+---
+
+## C-15 — Two 64-hex hashes side by side, and the wrong one looks right
+
+_Recorded 2026-07-30, during the 2.15.2 re-verification._
+
+**Belief:** the hash that names an engine bundle's directory could be read off
+the shipped binary by finding a 64-hex string near the extraction machinery.
+
+**Reality:** the binary interns **four** such hashes — one per embedded asset —
+and the one sitting immediately beside the phrase about extracting the runtime
+belongs to the **runtime**, not the bundle. The bundle's own hash lives in a
+different string neighborhood entirely. Worse, the directory suffix is the hash
+of the **compressed** archive, not of its contents, so hashing the unpacked tree
+produces a plausible-looking value that matches nothing.
+
+**How it presented:** as a clean single hit in exactly the expected place, with
+the right shape and the right length. Nothing about it looked like a guess.
+
+**Why it fooled us:** the wrong hash is adjacent to text that names the
+extraction, so proximity — normally the cheapest attribution method in this
+bundle — pointed straight at it. It took a **cross-version** check to break the
+tie: the runtime hash is byte-identical in the previous release, and the bundle
+hash is not.
+
+**Lesson:** when several values of the same shape sit near the same machinery,
+proximity stops being evidence. Separate them by a dimension the artifact cannot
+fake — here, whether the value changes between two releases — and confirm the
+scheme by reproducing a value you **already know**, rather than by checking that
+the one you derived looks reasonable.
+
+---
+
+## C-16 — The recorded tooling was no longer the tooling
+
+_Recorded 2026-07-30, during the 2.15.2 re-verification._
+
+**Belief:** the search tools named in every record preamble are what a replay
+will actually run — in particular a search tool whose occurrence-counting flags
+behave one way, which the preambles document explicitly.
+
+**Reality:** those tools are on no search path on this machine any more — not
+the login shell, not the development shell, not the user profile. The
+replacements are the conventional implementations, in which the documented
+counting flag counts **lines** rather than occurrences: the exact inversion the
+preambles warn about, pointing the other way.
+
+**How it presented:** it did not present at all. Every recorded count still
+reproduced, because the corpus had already standardized on a counting form that
+is unambiguous under both implementations. The discrepancy was only visible by
+checking the tool versions on purpose.
+
+**Why it matters anyway:** the records reproduce, but the **advice** in their
+preambles is now backwards, and a reader who follows it will take the shortcut
+it appears to license and silently measure the wrong thing. A convention that
+survives a tooling change and a note that survives one are different questions.
+
+**Lesson:** a record's environment is part of its claim. Stamp what you actually
+ran with, re-check it on re-verification, and prefer the form that is correct
+under every implementation over the form that is correct under yours — then the
+tooling can move without taking the findings with it.

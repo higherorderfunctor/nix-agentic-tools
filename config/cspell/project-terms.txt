@@ -97,6 +97,7 @@ fileset
 findutils
 fixpoint
 foldl
+footgun
 formedness
 frepo
 frontloaded
@@ -127,6 +128,7 @@ heredocs
 higherorderfunctor
 hitl
 hnsw
+hookio
 hookscripts
 hookscriptsdir
 hooksdir

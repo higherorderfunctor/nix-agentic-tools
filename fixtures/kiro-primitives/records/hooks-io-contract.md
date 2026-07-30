@@ -145,6 +145,8 @@ mapping both PascalCase (identity) and legacy camelCase (`agentStop` → `Stop`,
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 relocated
+
 **Command:**
 
 ```bash
@@ -383,6 +385,8 @@ beside the hook types, not beside the runner.
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 relocated
+
 **Command:**
 
 ```bash
@@ -619,6 +623,8 @@ exists but is never called.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 relocated
 
 **Command** (the one-line proof — two implementations of one interface, side by
 side):
@@ -857,6 +863,8 @@ newline between them if needed; the result is then wrapped in
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 relocated
 
 **Command:**
 
@@ -1115,6 +1123,8 @@ the call is **denied** with an explanatory message rather than allowed.
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 relocated
+
 **Command:**
 
 ```bash
@@ -1289,6 +1299,8 @@ is the failure mode to design against.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 relocated
 
 **Command:**
 
@@ -1471,6 +1483,8 @@ concatenating. Its per-root loader joins the root with a module constant that is
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 relocated
+
 **Command:**
 
 ```bash
@@ -1598,6 +1612,8 @@ each. Between the filter and the load there is no logging of any kind.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 relocated
 
 **Command** (half one — the typing):
 
@@ -1771,6 +1787,8 @@ end, push the id if the hooks produced a message.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 relocated
 
 **Command** (the trust predicate, its call sites, and its log keys):
 

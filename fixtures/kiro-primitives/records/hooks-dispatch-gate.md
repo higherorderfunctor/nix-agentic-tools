@@ -100,6 +100,8 @@ discards the document when it comes back undefined.
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 relocated
+
 **Command:**
 
 ```bash
@@ -300,6 +302,8 @@ it lives in the embedded minified JS region, not in the Rust hook code.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 relocated
 
 **Command** (resolving the two Rust binaries; the resolver is Nix-store-shaped
 because the capture machine installs kiro-cli through Nix, and `readlink -f` is
@@ -534,6 +538,8 @@ graph, so the raw count of guarded bodies is three, not two.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 relocated
 
 **Command:**
 
@@ -796,6 +802,8 @@ if one asks to restart the graph.
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 relocated
+
 **Command:**
 
 ```bash
@@ -961,6 +969,8 @@ kinds leave the flag unset.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 relocated
 
 **Command** (the selector):
 
@@ -1204,6 +1214,8 @@ about the execution.
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 relocated
+
 **Command** (the split, then the three ungated call sites):
 
 ```bash
@@ -1400,6 +1412,8 @@ execution, or the depth.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 relocated
 
 **Command:**
 

@@ -116,6 +116,8 @@ network, the filesystem, or any account object.
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 reproduced
+
 **Command:**
 
 ```bash
@@ -241,6 +243,8 @@ it creates no session and does not call the workflow resolver at all.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 relocated
 
 **Command:**
 
@@ -464,6 +468,8 @@ payload under a `[kas-settings]` tag. The builder is the only producer of
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 changed — see `../drift-ledger.md`
+
 **Command** (resolving the client binary; the resolver is Nix-store-shaped
 because the capture machine installs kiro-cli through Nix, and the `case` arm
 exists because `bin/kiro-cli-chat` there is a 218-byte wrapper script, not the
@@ -611,6 +617,8 @@ predicate reads the same per-session flag.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 relocated
 
 **Command:**
 
@@ -796,6 +804,8 @@ description recites the first two to the model.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 relocated
 
 **Command:**
 
@@ -1054,6 +1064,8 @@ authoring steering. Both recite a two-field shape.
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 relocated
+
 **Command:**
 
 ```bash
@@ -1293,6 +1305,8 @@ own description.
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
 
+**Drift:** 2.15.2 relocated
+
 **Command:**
 
 ```bash
@@ -1476,6 +1490,8 @@ per-command `feature` field that exactly one command sets.
 **Verified against:** KAS
 `2.15.1-e20633b4f836d12b79adc6440da750d6afc3a0fdd25ec4c68056ab5b6fac12fc`
 (kiro-cli 2.15.1), 2026-07-29.
+
+**Drift:** 2.15.2 changed — see `../drift-ledger.md`
 
 **Command** (the engine half):
 

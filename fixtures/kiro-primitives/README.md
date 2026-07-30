@@ -26,11 +26,12 @@ identifier is renamed. **The command is disposable; the semantics are not.**
 
 ## Layout
 
-| Path                   | Mode  | Contents                                                    |
-| ---------------------- | ----- | ----------------------------------------------------------- |
-| `records/*.md`         | **R** | code-read records against the engine bundle                 |
-| `evidence/*.md`        | **R** | measurements over this machine's own Kiro state             |
-| `carried-negatives.md` | **C** | beliefs that were wrong, and **how each mistake presented** |
+| Path                   | Mode  | Contents                                                      |
+| ---------------------- | ----- | ------------------------------------------------------------- |
+| `records/*.md`         | **R** | code-read records against the engine bundle                   |
+| `evidence/*.md`        | **R** | measurements over this machine's own Kiro state               |
+| `carried-negatives.md` | **C** | beliefs that were wrong, and **how each mistake presented**   |
+| `drift-ledger.md`      | **D** | what changed between engine versions, when, and what it broke |
 
 Mode **F** — runnable fixtures needing a live interactive session — is planned
 and not present yet. The engine does not run under a non-interactive shell, so
@@ -115,6 +116,12 @@ easy to get backwards:
    even when the identifier has been renamed.
 4. Measurements over machine state (`evidence/`) drift by design — they are
    stamped snapshots of a live corpus, not constants.
+5. **Record an outcome per record in `drift-ledger.md`, and stamp the record
+   itself.** Read that file before starting: it fixes the outcome vocabulary
+   (reproduced, relocated, changed, removed, unverifiable), says what each word
+   means for a live measurement as opposed to a code read, and carries the check
+   that catches a record you skipped. A sweep that corrects records without
+   writing the ledger loses the only thing that makes the next sweep cheaper.
 
 ## Two rules that every record follows
 
