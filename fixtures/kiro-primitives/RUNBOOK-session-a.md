@@ -44,7 +44,54 @@ That is a failure, not a pass — a green result over an empty set means nothing
 
 ---
 
-## Step 1 — bring up the scratch environment and seed a session
+## Step 1 — pick an enable path (READ THIS FIRST — it changed at 2.15.2)
+
+There are now **two** ways in, and the one this runbook was written around is no
+longer the only one. Both are worth running: they exercise different layers, and
+the older one is the better control.
+
+### Path A — the feature flag (new at 2.15.2, try this first)
+
+At 2.15.1 the client's settings builder never sent the workflow key and the
+`KIRO_ENABLED_FEATURES` catalog entry had **no consumer**, so the vendor's own
+documented enable instruction was inert. Both halves reversed at 2.15.2: the
+feature predicate gained call sites, and the feature-to-setting table grew rows
+that emit the workflow setting. So the flag now works, on a **fresh session,
+with no seeding at all**.
+
+```bash
+export KIRO_ENABLED_FEATURES='["workflows"]'
+```
+
+**The value is JSON, and it must be an array.** The client parses it with
+`JSON.parse` inside a `try`/`catch` and falls back to an empty set — so
+`KIRO_ENABLED_FEATURES=workflows` or a comma-separated list does not error, it
+silently enables nothing. That is the same shape as every other trap in this
+corpus: the failure is indistinguishable from the feature not existing. If Path
+A appears not to work, **check the quoting before concluding anything**.
+
+Note the catalog entry describes the feature as dark-shipped at 0% until release
+certification, so treat availability as version-scoped and re-check it on every
+bump rather than assuming it stays on.
+
+**Enabling `workflows` also emits the `goal` setting.** That is one table, two
+rows, and it means `/goal` — which at 2.15.1 was gated separately and
+unreachable — may now be live in the same session. Worth checking while you are
+there; it is a Phase 2 question you get for free.
+
+### Path B — seed a persisted session (the 2.15.1 route, still valid)
+
+Steps 1b through 4 below. It still works, and it is now the **control**: it
+proves the persisted-metadata route independently of whatever the client sends.
+Run it second, in its own session, and compare.
+
+**Do not run both in one session.** The gate resolves once per session load and
+is then immutable, so a session that got its flag from the feature flag tells
+you nothing about the seed.
+
+---
+
+## Step 1b — bring up the scratch environment and seed a session
 
 ```bash
 cd fixtures/kiro-primitives/harness
@@ -106,13 +153,22 @@ Type exactly:
 /workflow-run
 ```
 
-**Expect exactly:** `/workflow-run is not yet supported in KAS mode`
+**Expect:** `/workflow-run is not yet supported in KAS mode`
 
-That message is **the confirmation that the seed worked.** The four
-`/workflow-*` commands are advertised by the engine only when the session's
-workflow flag resolved true, but the shipped client has no handler for them, so
-the text falls through and returns that string. It proves the gate opened
-without needing the model to cooperate.
+That message is **the confirmation that the gate opened.** The `/workflow-*`
+commands are advertised by the engine only when the session's workflow flag
+resolved true, but the shipped client has no handler for them, so the text falls
+through and returns that string. It proves the gate opened without needing the
+model to cooperate.
+
+**Re-confirm this one at 2.15.2 before leaning on it.** The literal string is
+still present in the client (2 occurrences, checked), so the fall-through path
+almost certainly survives — but 2.15.2 moved seven slash commands onto the
+workflow feature gate where previously only one command carried a gate at all,
+and this control's value depends on the command being _advertised but
+unhandled_. If it now does something, that is a finding, not a broken step:
+record what it did and use the tool-list check in step 5 as the gate
+confirmation instead.
 
 **If the command is not offered / not recognized at all:** the flag did not
 take. Go to step 4 for the diagnosis — do not retry the launch blindly.
@@ -234,9 +290,13 @@ under the scratch root.
 
 ## What this session settles
 
-1. Whether the seed-and-resume enable path works at all (steps 3–5).
-2. Whether a fresh session lacks the surface — run one **without** seeding as
-   the negative control, proving the seed is what did it.
+1. **Which enable paths work at 2.15.2** — the feature flag (Path A) and the
+   persisted seed (Path B). At 2.15.1 the seed was the only route that did not
+   require patching a binary; that stopped being true, and confirming both is
+   the point of this sitting.
+2. Whether a fresh session with **neither** lever lacks the surface — the
+   negative control that proves a lever is what did it, rather than something
+   ambient in 2.15.2.
 3. Whether the bundled recipe runs, and what the start actually looks like from
    the operator's side (step 6).
 
