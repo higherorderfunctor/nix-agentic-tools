@@ -31,14 +31,91 @@ _re-confirmed_ once, which entrenched it.
 **Why it fooled us:** the loader resolves its global root from the launcher's
 home-dir argument or the process home directory — **not** from `KIRO_HOME`.
 Redirecting `KIRO_HOME` therefore **hides** global hooks rather than relocating
-them. Whether a `KIRO_HOME` redirect can ever reach `hooks/` is a **launcher**
-question and _cannot be settled_ from the engine bundle in either direction (the
-variable has zero occurrences there). Treat it as an observed result, never an
-established mechanism.
+them.
+
+**Settled 2026-07-30, from the launcher side — which is where this entry already
+said the answer lived.** This entry used to stop by saying that whether a
+`KIRO_HOME` redirect can ever reach `hooks/` is a launcher question that _cannot
+be settled_ from the engine bundle in either direction, and that the result must
+be treated as observed rather than mechanistic. That caution was right about the
+engine bundle and wrong about the question: it is answerable by reading the
+**client**, and the answer is that there are **two independent roots**.
+
+- **The engine's root is `HOME` only.** It takes a home directory from
+  `--home-dir=<value>` and nothing else — its argument reader matches the
+  literal `--<name>=` prefix against `process.argv` — falling back to
+  `os.homedir()`, which Node documents as `$HOME` when that is defined. The flag
+  reaches the agent as a conditional spread that collapses to nothing when the
+  argument is absent, so the fallback is not merely likely, it is the only path
+  — and there are **two** such constructions, one per transport (stdio and
+  multiplexed), spreading it identically, so no transport is a way around it.
+- **The client never passes it.** The literal `--home-dir` occurs **zero** times
+  in the 555 MB client, against positive controls `--transport=stdio` (2 hits)
+  and `--auth=acp-callback` (3) found by the same method in the same file; the
+  only `home-dir` hits at all (2) sit inside an unrelated cryptography option
+  table. The denominator is the **15 argument names the engine accepts**, of
+  which the observed spawn passes exactly those two.
+
+  Two method notes, both of which produced a wrong number here before they were
+  understood:
+  - **A pattern beginning with `--` must be passed as `grep -e '--home-dir'`**
+    (or after `--`). Otherwise `grep` parses it as an option and exits **2**
+    with `unrecognized option`. That is not itself a false zero — it is louder
+    than one — but the usual shapes silently convert it into one: piping to
+    `wc -l` prints `0` from an empty stream, and a `|| true` guard swallows the
+    status. C-3's failure mode reached through an error rather than a match.
+  - **`grep -c` counts matching LINES, not occurrences**, and this file has
+    lines exceeding 180 KB. The counts above are occurrence counts
+    (`grep -abo … | wc -l`); the same strings by `grep -c` give 2 / 2, so
+    `--auth=acp-callback` reads as 2 rather than 3. Either count supports the
+    conclusion, but they are different measurements and must not be mixed inside
+    one claim.
+
+- **`HOME` reaches the engine unmodified.** The spawn hands it
+  `{...process.env}` with only two Node channel variables blanked and a
+  user-agent added.
+- **`KIRO_HOME` means something different in the client's own layer:** the path
+  **of the `.kiro` directory itself**, not a home directory. Its resolver
+  returns `$KIRO_HOME` verbatim when non-empty and otherwise composes
+  `join($HOME, ".kiro")`. The two layers build different paths out of the same
+  value, which is exactly why a redirect looks like it ought to work and does
+  not.
+
+So every engine-side surface moves together under `HOME` and none of them move
+under `KIRO_HOME`. Sessions, logs, MCP settings and knowledge bases are the
+**four** paths the engine composes from its home directory, and that is the
+whole set; `KIRO_HOME` still has zero occurrences in the engine bundle.
+
+**One part is still only observed.** Which composition the _native_ layer
+applies to `KIRO_HOME` is unresolved: the resolver above treats it as the
+`.kiro` directory, but a help string in the same binary describes a session root
+as defaulting to `KIRO_HOME/.kiro/sessions`, the opposite composition. A help
+string is documentation, not a code path, and a string table does not reveal how
+a value gets joined. It does not disturb the conclusion — either way `KIRO_HOME`
+never reaches the engine and `HOME` always does — but do not quote one
+composition for "the native layer" as though it were established.
+
+**And do not redirect `XDG_DATA_HOME` for isolation.** It is a different lever
+with a worse failure mode. The credential database is a single `data.sqlite3`
+under `$XDG_DATA_HOME/kiro-cli/`, so a redirect produces an **empty** one, and
+the response to no cached token is a **device-code browser login** — an
+interactive prompt, not an error — so an unattended run hangs where it should
+fail. The extracted engine bundles and the bundled Node, Bun and TUI artifacts
+live under that same directory, so a redirect also hides the engine from its own
+launcher. Leave it real. The price is a precondition, not a bug: isolation
+cannot run on a machine that has never logged in.
+
+**Where the evidence is:** every count above is re-asserted by
+`harness/self-test-corrections.sh`, which reads the engine bundle and the client
+binary only and refuses rather than passing when a positive control reads zero.
+`harness/lib.sh` carries the same conclusion as an operational note.
 
 **Lesson:** an isolation lever that silently removes a search path is
 indistinguishable from a missing feature. State what an isolation mechanism is
-expected to _cover_ before trusting a negative result obtained under it.
+expected to _cover_ before trusting a negative result obtained under it. And
+when a question is recorded as unanswerable, record **which artifact** it was
+unanswerable from — this one was unanswerable from the engine, was never put to
+the client, and stayed open for that reason alone.
 
 ---
 
@@ -150,7 +227,8 @@ meant to prevent.
 
 **Lesson:** for any join or race primitive, **the disposition of the losers is
 the detail that carries the weight**, and it is the detail most often omitted
-from documentation. Never infer it.
+from documentation. Never infer it. This lesson was then under-applied to the
+_other_ policies in the same enum — see C-15.
 
 ---
 
@@ -379,3 +457,52 @@ survives a tooling change and a note that survives one are different questions.
 ran with, re-check it on re-verification, and prefer the form that is correct
 under every implementation over the form that is correct under yours — then the
 tooling can move without taking the findings with it.
+||||||| parent of 062a0591 (docs(kiro-primitives): settle C-1's mechanism and carry the joinPolicy trap)
+## C-17 — "all" was picked as the safe join policy because C-6 had been learned, and it aborts siblings too
+
+**Belief:** having rejected the first-completion policy for cancelling its
+siblings (C-6), `all` is the safe choice — it is "just the final join", and it
+waits for every branch.
+
+**Reality:** `all` aborts every sibling the moment one branch settles **failed
+or aborted** — not merely on failure, and only the all-succeed path waits.
+`allSettled` is the one policy that structurally _cannot_ abort a sibling: it is
+the only join function the scheduler never hands the branch controllers to, so
+it has nothing to abort. It still reports the parallel node failed; it simply
+lets every branch finish first.
+
+**How it presented:** as the conservative option, and specifically as the option
+chosen _because_ the first-completion trap had already been learned. The design
+named `all` with the reasoning written out, so the reasoning read as diligence
+rather than as an untested assumption — the strongest disguise available, since
+a choice that cites a real prior finding does not look like a guess. Worse, the
+refuting sentence was **already quoted in this corpus's own captured output**: a
+bundled agent's steering says "`all`: all branches must succeed. First failure
+aborts siblings", and the record carrying that quote went on, a hundred lines
+later, to conclude that `all` was the only safe drain shape. Evidence and
+contradiction sat in one file.
+
+**Why it matters:** for a drain, one poisoned work item would cancel every other
+branch — items silently unfinished, which is the exact failure a work queue
+exists to prevent. It is C-6's hazard on a different trigger, and it caught a
+design that had already routed _around_ C-6.
+
+**Where the sentence lives:** each of the three sentences describing sibling
+fate occurs exactly **once** in the 20.8 MB engine bundle, all three inside one
+bundled agent's steering — none of them in the tool description a caller reads
+while designing against the contract, which lists the three values and says
+nothing about the losers. The field name itself occurs **14** times, which is
+the denominator: fourteen mentions, three explanations, zero of them where the
+contract is read.
+
+**Where the evidence is:** unusually for this file, the mechanism here is
+executed rather than only recorded — `records/workflow-surface.md`
+(R-workflow-5, second correction) carries the replayable windows and counts, and
+`harness/self-test-corrections.sh` re-asserts them and refuses on a zero
+control.
+
+**Lesson:** for a join primitive, enumerate the disposition of the losers on
+**every** exit path, not just the one the name describes. Learning that one
+policy cancels does not tell you which of the others also does — and a negative
+you have already recorded protects only the specific trigger you recorded it
+against.
