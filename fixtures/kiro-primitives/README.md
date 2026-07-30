@@ -40,21 +40,38 @@ those cannot be automated and must be operator-driven.
 an undocumented engine is rarely the discovery — it is the wrong turn taken
 first, and that file is the list of wrong turns already paid for.
 
+## These snippets require bash
+
+Every command block here is written for **bash**, and the strict-mode constructs
+are bash-only: `shopt` is not a zsh builtin, and bash's `nullglob` makes a
+non-matching glob expand to nothing where zsh instead treats it as a hard error.
+Run them under `bash` rather than an interactive zsh or fish — otherwise a
+resolver either reports the wrong thing or dies before reaching its own refusal
+path. This bit during review: the first attempt to verify a finding here ran
+under zsh and produced a misleading result.
+
 ## Before re-running anything: pin the bundle
 
 **This is the single most important operational detail.** Several engine
 versions accumulate side by side, and a naive glob silently selects the wrong
 one — lexical-first picks a bundle six releases behind, while lexical-last and
 newest-by-mtime happen to be correct _today_, which is what makes it dangerous.
-Resolve by the CLI's own version and assert exactly one match:
+Resolve by the CLI's own version and assert exactly one match.
+
+Note the `nullglob` + array form rather than `ls … | wc -l`: under `set -e` +
+`pipefail`, a non-matching glob makes `ls` fail and aborts the block **before**
+the refusal check can run, so you get `ls: cannot access …` instead of the
+intended message. Zero matches is a real case — a machine where the CLI has been
+updated but its engine bundle not yet extracted.
 
 ```bash
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 ver=$(kiro-cli --version | awk '{print $NF}')
-matches=$(ls -d "$HOME/.local/share/kiro-cli/kas/${ver}-"*/ | wc -l)
-[ "$matches" -eq 1 ] || { echo "ambiguous engine bundle - refuse"; exit 1; }
-kas=$(ls -d "$HOME/.local/share/kiro-cli/kas/${ver}-"*/)
+shopt -s nullglob
+kasdirs=( "$HOME/.local/share/kiro-cli/kas/${ver}-"*/ )
+[ "${#kasdirs[@]}" -eq 1 ] || { echo "ambiguous engine bundle - refuse (found ${#kasdirs[@]})"; exit 1; }
+kas="${kasdirs[0]}"
 bundle="${kas}node_modules/@kiro/agent/dist/server/acp-server.js"
 kasid=$(basename "${kas%/}")
 ```

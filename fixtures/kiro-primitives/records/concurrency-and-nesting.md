@@ -17,9 +17,10 @@ rather than guessing.
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 ver=$(kiro-cli --version | awk '{print $NF}')                 # 2.15.1
-matches=$(ls -d "$HOME/.local/share/kiro-cli/kas/${ver}-"*/ | wc -l)
-[ "$matches" -eq 1 ] || { echo "AMBIGUOUS KAS - refuse"; exit 1; }
-kas=$(ls -d "$HOME/.local/share/kiro-cli/kas/${ver}-"*/)
+shopt -s nullglob
+kasdirs=( "$HOME/.local/share/kiro-cli/kas/${ver}-"*/ )
+[ "${#kasdirs[@]}" -eq 1 ] || { echo "AMBIGUOUS KAS - refuse (found ${#kasdirs[@]})"; exit 1; }
+kas="${kasdirs[0]}"
 bundle="${kas}node_modules/@kiro/agent/dist/server/acp-server.js"
 kasid=$(basename "${kas%/}")
 ```

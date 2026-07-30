@@ -18,9 +18,10 @@ is entirely about why.
 set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 ver=$(kiro-cli --version | awk '{print $NF}')                 # 2.15.1
-matches=$(ls -d "$HOME/.local/share/kiro-cli/kas/${ver}-"*/ | wc -l)
-[ "$matches" -eq 1 ] || { echo "AMBIGUOUS KAS - refuse"; exit 1; }
-kas=$(ls -d "$HOME/.local/share/kiro-cli/kas/${ver}-"*/)
+shopt -s nullglob
+kasdirs=( "$HOME/.local/share/kiro-cli/kas/${ver}-"*/ )
+[ "${#kasdirs[@]}" -eq 1 ] || { echo "AMBIGUOUS KAS - refuse (found ${#kasdirs[@]})"; exit 1; }
+kas="${kasdirs[0]}"
 bundle="${kas}node_modules/@kiro/agent/dist/server/acp-server.js"
 kasid=$(basename "${kas%/}")
 ```
@@ -892,7 +893,8 @@ reorders it, and mtime never knew which version the binary is.
 **Command** (the stale executing bundle):
 
 ```bash
-ps -eo pid=,ppid=,etimes=,args= | grep -E 'kiro-cli|@kiro/agent' | grep -v ' grep ' \
+ps -eo pid=,ppid=,etimes=,args= | { grep -E 'kiro-cli|@kiro/agent' || true; } \
+  | { grep -v ' grep ' || true; } \
   | awk '{
       kind="other";
       if ($0 ~ /acp-server\.js/)        kind="kas acp-server (node)";

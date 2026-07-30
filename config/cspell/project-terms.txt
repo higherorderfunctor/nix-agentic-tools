@@ -148,6 +148,7 @@ kagiapi
 kagimcp
 kagisearch
 kanagawa
+kasdirs
 kasid
 keyspace
 kiro
@@ -198,6 +199,7 @@ nixpkgs
 nixvim
 nohup
 nomic
+nullglob
 numtide
 nuscht
 nuschtos
