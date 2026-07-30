@@ -47,6 +47,7 @@ clis
 codemod
 codepaths
 codesign
+codewhisperer
 commondir
 completionist
 configdir
