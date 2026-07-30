@@ -667,8 +667,9 @@
     shellcheck, cspell) run as prek pre-commit hooks, which are disabled in
     CI and can be skipped with `--no-verify`.
 
-    `nix flake check` is the CI gate (formatting, spelling, structural
-    checks, and module evaluation).
+    `nix flake check` is the CI gate (formatting, structural checks, and
+    module evaluation). Spelling is NOT part of it — cspell runs only as a
+    prek hook, so CI never checks it.
 
     ${commitConvention}
 

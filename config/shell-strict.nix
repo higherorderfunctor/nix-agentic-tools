@@ -1,6 +1,11 @@
 # Shared shell-hardening settings for `pkgs.writeShellApplication` call sites
-# and the prek `shellcheck` hook. Five consumers, so this is the single source
-# of truth rather than five copies (DRY).
+# and the prek `shellcheck` hook.
+#
+# Six consumers across five importing files: devenv.nix wires BOTH the
+# reject-default-branch-commit wrapper and the prek `shellcheck` hook, plus
+# flake.nix, lib/validate-at-stop.nix, packages/claude-code/lib/delegationClamp.nix
+# and packages/mcp-services/modules/homeManager/default.nix. Single source of
+# truth rather than six copies (DRY) — when adding a call site, add it here.
 {
   # Everything the repo's strict-mode header expresses that `set -o` can name.
   # writeShellApplication renders one `set -o <name>` line per entry, ABOVE its

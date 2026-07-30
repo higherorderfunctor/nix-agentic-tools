@@ -14,7 +14,9 @@ devenv shell          # enter dev shell with all tools
 
 ```bash
 nix flake show                # List all outputs
-nix flake check               # The CI gate: linters + evaluation (does NOT build packages)
+nix flake check               # The CI gate: formatting, structural checks, module eval
+                              # (does NOT build packages, and does NOT run the
+                              # prek linters — those are local-only)
 nix build .#<package>         # Build a specific package
 devenv shell                  # Enter devShell with all tools
 treefmt                       # Format all files (formats only — lints nothing)
@@ -115,8 +117,9 @@ Linting is separate from formatting: the linters (deadnix, statix, shellcheck,
 cspell) run as prek pre-commit hooks, which are disabled in CI and can be
 skipped with `--no-verify`.
 
-`nix flake check` is the CI gate (formatting, spelling, structural checks, and
-module evaluation).
+`nix flake check` is the CI gate (formatting, structural checks, and module
+evaluation). Spelling is NOT part of it — cspell runs only as a prek hook, so CI
+never checks it.
 
 ## Commit Convention
 

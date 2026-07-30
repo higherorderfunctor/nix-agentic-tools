@@ -2,7 +2,9 @@
 
 ```bash
 nix flake show                # List all outputs
-nix flake check               # The CI gate: linters + evaluation (does NOT build packages)
+nix flake check               # The CI gate: formatting, structural checks, module eval
+                              # (does NOT build packages, and does NOT run the
+                              # prek linters — those are local-only)
 nix build .#<package>         # Build a specific package
 devenv shell                  # Enter devShell with all tools
 treefmt                       # Format all files (formats only — lints nothing)

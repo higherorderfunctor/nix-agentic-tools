@@ -338,7 +338,7 @@
           inherit (shellStrict) bashOptions;
           text = ''
             ${shellStrict.shoptHeader}
-            cp "${ninjaFile}" .update.ninja
+            ${pkgs.coreutils}/bin/cp "${ninjaFile}" .update.ninja
             echo "Generated .update.ninja"
           '';
         }}/bin/generate-update-ninja";
