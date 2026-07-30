@@ -16,12 +16,12 @@
   };
   vu = import ../lib.nix;
 
-  rev = "38422b12c0cbc9fe4318655eb37a7491b176efca";
+  rev = "594a73133e14631af8c915a1b4f2c8039c964fe1";
   src = ourPkgs.fetchFromGitHub {
     owner = "upstash";
     repo = "context7";
     inherit rev;
-    hash = "sha256-nltS7ziDgJ/U+vstycNP2oZqUPa+GWCyeSSIjQngrP0=";
+    hash = "sha256-Msvr7srpy+2HzxYKsPzo0hhzW7E1/ktTwdBEtuFMgRE=";
   };
 in
   ourPkgs.context7-mcp.overrideAttrs (finalAttrs: _prev: let
