@@ -37,6 +37,35 @@
     ln -s ${echoArgv} "$out/bin/kiro-cli-chat"
   '';
 
+  # A launcher stub that DISPATCHES, so the two wrappers compose the way they do
+  # in a real profile. The real `kiro-cli` resolves `kiro-cli-chat` through PATH
+  # — verified by removing the wrapped bin dir from PATH, which makes it fail
+  # with "No such file or directory" rather than falling back to its own store
+  # dir. So `kiro-cli acp` runs the launcher wrapper AND the chat wrapper, and
+  # their injections land in ONE argv.
+  #
+  # Testing each binary alone cannot see that: it is what let a `--v3` prepend
+  # and a `--trust-tools` append meet on `acp` and abort the command.
+  dispatchLauncher = pkgs.writeShellScript "kiro-cli-stub-launcher" ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    for nat_a in "$@"; do
+      case "$nat_a" in
+        -*) ;;
+        *) exec kiro-cli-chat "$@" ;;
+      esac
+    done
+    printf 'ENV=%s\n' "''${KIRO_WRAPPER_TEST-unset}"
+    for nat_a in "$@"; do printf 'ARG=%s\n' "$nat_a"; done
+  '';
+  chainPackage = pkgs.runCommandLocal "kiro-cli-chain-stub" {} ''
+    set -euETo pipefail
+    shopt -s inherit_errexit 2>/dev/null || :
+    mkdir -p "$out/bin"
+    ln -s ${dispatchLauncher} "$out/bin/kiro-cli"
+    ln -s ${echoArgv} "$out/bin/kiro-cli-chat"
+  '';
+
   wrap = args:
     wrapKiroPackage ({
         package = stubPackage;
@@ -45,6 +74,22 @@
         trustedMcpTools = [];
       }
       // args);
+  wrapChain = args:
+    wrapKiroPackage ({
+        package = chainPackage;
+        tui = false;
+        v3 = false;
+        trustedMcpTools = [];
+      }
+      // args);
+
+  # The consumer shape that broke: v3 active AND trustedMcpTools non-empty.
+  chainTrustV3 = wrapChain {
+    tui = true;
+    trustedMcpTools = ["fs_read"];
+  };
+  # Same, without v3 — `--trust-tools` must still reach acp there.
+  chainTrustV2 = wrapChain {trustedMcpTools = ["fs_read"];};
 
   # tui ⇒ --tui (bare/chat only) + --v3 (everywhere) on the launcher.
   tuiWrapped = wrap {tui = true;};
@@ -163,6 +208,74 @@ in
         bad "env not exported by $bin"
       fi
     done
+
+    # ── the two wrappers COMPOSED, as they do in a real profile ─────────────
+    # The launcher finds kiro-cli-chat on PATH, so both wrappers run and their
+    # injections meet in one argv. Under v3 that pairing is fatal on `acp`:
+    # upstream declares --agent-engine=v3 mutually exclusive with --trust-tools,
+    # so `kiro-cli acp` died with "not supported with --agent-engine=v3".
+    # Nothing is lost by withholding it — under v3, trustedMcpTools is already
+    # expressed in settings/permissions.yaml.
+    chain() {
+      local wrapped="$1"
+      shift
+      PATH="$wrapped/bin:$PATH" "$wrapped/bin/kiro-cli" "$@" \
+        | sed -n 's/^ARG=//p' | paste -sd'|' -
+    }
+    chain_expect() {
+      local label="$1" want="$2" got
+      shift 2
+      got="$(chain "$@")"
+      if [ "$got" = "$want" ]; then
+        ok "$label"
+      else
+        bad "$label: want [$want] got [$got]"
+      fi
+    }
+
+    chain_expect "v3+trust: acp gets NO --trust-tools" \
+      '--v3|acp' ${chainTrustV3} acp
+    chain_expect "v3+trust: chat still gets --trust-tools" \
+      '--tui|--v3|chat|--trust-tools=fs_read' ${chainTrustV3} chat
+    chain_expect "no v3: acp still gets --trust-tools" \
+      'acp|--trust-tools=fs_read' ${chainTrustV2} acp
+    chain_expect "no v3: chat still gets --trust-tools" \
+      'chat|--trust-tools=fs_read' ${chainTrustV2} chat
+
+    # ── the EFFECTIVE engine decides, and only argv knows it ────────────────
+    # A caller's --agent-engine overrides the injected --v3, so neither
+    # direction can be settled at eval time. Both are measured against the real
+    # binary: `--v3 acp --agent-engine=v2 --trust-tools=x` RUNS, while
+    # `acp --agent-engine=v3 --trust-tools=x` CONFLICTS.
+    chain_expect "v3 config, caller opts out -> trust returns" \
+      '--v3|acp|--agent-engine=v2|--trust-tools=fs_read' \
+      ${chainTrustV3} acp --agent-engine=v2
+    chain_expect "v3 config, caller opts out (two-token form)" \
+      '--v3|acp|--agent-engine|v2|--trust-tools=fs_read' \
+      ${chainTrustV3} acp --agent-engine v2
+    chain_expect "v3 config, caller re-asks for v3 -> still withheld" \
+      '--v3|acp|--agent-engine=v3' \
+      ${chainTrustV3} acp --agent-engine=v3
+    chain_expect "no-v3 config, caller opts IN -> withheld" \
+      'acp|--agent-engine=v3' \
+      ${chainTrustV2} acp --agent-engine=v3
+    chain_expect "no-v3 config, caller picks v1 -> trust kept" \
+      'acp|--agent-engine=v1|--trust-tools=fs_read' \
+      ${chainTrustV2} acp --agent-engine=v1
+    # chat is unconditional: v3 + chat + --trust-tools parses fine.
+    chain_expect "chat is unaffected by the engine" \
+      '--tui|--v3|chat|--agent-engine=v3|--trust-tools=fs_read' \
+      ${chainTrustV3} chat --agent-engine=v3
+
+    # A `--` ends the engine scan. Past it a flag-looking token is a positional
+    # the CLI will not honour, so neither do we. Measured on the direct
+    # kiro-cli-chat path: `acp -- --agent-engine=v3` is "unexpected argument",
+    # i.e. NOT an engine selection. (Through the launcher the point is moot —
+    # it strips `--` before forwarding — so this only ever relaxes, never
+    # tightens, what the launcher path sees.)
+    expect "-- ends the engine scan" \
+      'acp|--|--agent-engine=v3|--trust-tools=fs_read,@srv' \
+      ${trustWrapped}/bin/kiro-cli-chat acp -- --agent-engine=v3
 
     # ── the exec line's shape is depended on outside this repo's Nix ─────────
     # Probe scripts recover the real binary by reading it back out of the
