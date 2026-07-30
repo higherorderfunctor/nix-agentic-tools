@@ -80,7 +80,9 @@ drainedness
 drvs
 dsolve
 dunder
+EEXIST
 endgroup
+endswith
 envrc
 epistemics
 extensionless
@@ -103,6 +105,7 @@ frepo
 frontloaded
 frontmatter
 getkimchi
+getpid
 gitbook
 gitfile
 gitref
@@ -227,6 +230,7 @@ passthroughs
 passthru
 pasteable
 Patchelf
+pathlib
 pathspec
 pdsolve
 peaceiris
@@ -239,12 +243,14 @@ posttooluse
 prek
 prestart
 psql
+pthread
 purpleclay
 pycache
 pythonnousersite
 pythonpath
 qdm
 qfdx
+queuelib
 quickstarts
 qwen
 rcodesign
@@ -284,6 +290,7 @@ serialising
 sess
 shellharden
 shortrev
+sigmask
 sigpipe
 sigtool
 sixel
@@ -309,6 +316,7 @@ sweepable
 sympy
 taplo
 testapp
+timespec
 tinyduck
 tmpfs
 toctou
@@ -317,6 +325,7 @@ tonumber
 toolsets
 tophat
 toplevel
+tostring
 treefmt
 tryeval
 tsgo
