@@ -20,7 +20,7 @@ Drift is recorded in two places, and neither repeats the other's content.
 
 ```text
 **Drift:** 2.15.2 reproduced
-**Drift:** 2.15.2 reproduced · 2.16.0 relocated · 2.16.1 changed — see `drift-ledger.md`
+**Drift:** 2.15.2 reproduced · 2.16.0 relocated · 2.16.1 changed — see `../drift-ledger.md`
 ```
 
 It answers "I am reading this record right now; is it still true?" without
@@ -218,12 +218,18 @@ the 2.15.2 binaries, and 7 machine-state records against this machine.
 Not checked: the mode-F fixtures, which need an operator-driven sitting and were
 out of scope. Nothing was marked `unverifiable` — every record was reachable.
 
-Each outcome that came back `changed` was then handed to an independent reviewer
-whose instructions were to **refute** it, with a standing instruction to prefer
-`relocated` when only offsets and generated identifiers had moved. **Two of the
-four survived; two were overturned** and appear below as `relocated` with the
-sub-claim damage recorded as a note. That pass is the reason this section says
-two records changed rather than four, and it is worth keeping.
+Each **code-read** outcome that came back `changed` was then handed to an
+independent reviewer whose instructions were to **refute** it, with a standing
+instruction to prefer `relocated` when only offsets and generated identifiers
+had moved. Four came back `changed` from that sweep; **two survived and two were
+overturned**, and the overturned pair appears below as `relocated` with the
+sub-claim damage recorded as a note.
+
+So the four `changed` rows in the table are **two code-read records that
+survived refutation, plus two machine-state records**, which measure this
+machine rather than a shipped artifact and were verified directly rather than
+through that pass. Without the refutation pass the code-read count would have
+been four rather than two, which is what makes it worth keeping.
 
 ## Outcomes
 
