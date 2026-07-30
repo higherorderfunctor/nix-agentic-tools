@@ -28,6 +28,7 @@
     bareInvocation
     gateOnSubcommand
     idempotentFlagBlock
+    optionValueBlock
     ;
 
   # kiro-cli's only value-taking top-level options — their values must not be
@@ -89,13 +90,63 @@ in
       lib.concatStringsSep "\n"
       (builtins.filter (s: s != "") [v3Block tuiBlock]);
 
-    # `--trust-tools` on the chat binary: appended, and gated to the two
-    # subcommands that declare it. Not idempotence-guarded — unlike `--tui`,
-    # repeating it is accepted rather than fatal.
-    trustInjection = lib.optionalString hasTrust (gateOnSubcommand {
-      subcommands = ["acp" "chat"];
-      valueFlags = chatValueFlags;
-    } "set -- \"$@\" ${lib.escapeShellArg "--trust-tools=${trustToolsCsv}"}");
+    # `--trust-tools` on the chat binary: appended, and gated to the subcommands
+    # that declare it. Not idempotence-guarded — unlike `--tui`, repeating it is
+    # accepted rather than fatal.
+    #
+    # `acp` is conditional, because THE TWO WRAPPERS COMPOSE. The launcher
+    # resolves `kiro-cli-chat` through PATH, so in a real profile `kiro-cli acp`
+    # runs the launcher wrapper AND then this one:
+    #
+    #   kiro-cli acp
+    #     -> launcher wrapper prepends --v3
+    #     -> launcher translates --v3 into --agent-engine=v3, resolves
+    #        kiro-cli-chat on PATH -> lands here
+    #     -> this wrapper appends --trust-tools
+    #     => error: the following arguments are not supported with
+    #        --agent-engine=v3: --trust-tools
+    #
+    # The deciding fact is the EFFECTIVE engine, which only argv knows: a
+    # caller's `--agent-engine` overrides the injected `--v3`, so neither
+    # direction can be settled at eval time. Both are real and measured:
+    #
+    #   kiro-cli --v3 acp --agent-engine=v2 --trust-tools=x   -> runs (v2)
+    #   kiro-cli      acp --agent-engine=v3 --trust-tools=x   -> CONFLICT
+    #
+    # So the engine is resolved at runtime: the caller's value if they gave one,
+    # otherwise what this wrapper bakes in.
+    #
+    # Why upstream forbids it there — NOT because v3 dropped the flag; under v3
+    # `chat` still honours it. `--trust-tools` is a CLIENT-SIDE auto-answer
+    # knob (kiro's TUI auto-selects `allow_always` on an approval request, with
+    # an explicit branch for the v3 "kas" engine). On the `acp` arm kiro-cli IS
+    # the agent and the external ACP client owns that answer, so the flag has
+    # nothing agent-side to bind to. Withholding therefore costs nothing:
+    # `trustedMcpTools` is also translated into `settings/permissions.yaml`
+    # (mkPermissionRules), which the v3 agent does read, and the interactive
+    # half is an ACP `session/request_permission` round-trip the CLI flag could
+    # never have participated in. `chat` stays unconditional.
+    bakedEngine =
+      if hasV3
+      then "v3"
+      else "v2";
+    trustAppend = "set -- \"$@\" ${lib.escapeShellArg "--trust-tools=${trustToolsCsv}"}";
+    trustInjection = lib.optionalString hasTrust (
+      lib.concatStringsSep "\n" [
+        (optionValueBlock {
+          flag = "--agent-engine";
+          var = "nat_engine";
+        })
+        (gateOnSubcommand {
+            subcommands = ["acp" "chat"];
+            valueFlags = chatValueFlags;
+          } (lib.concatStringsSep "\n" [
+            "if [ \"$nat_sub\" != acp ] || [ \"\${nat_engine:-${bakedEngine}}\" != v3 ]; then"
+            "  ${trustAppend}"
+            "fi"
+          ]))
+      ]
+    );
 
     # A strict-mode wrapper: bake env, run `injection`, exec the real bin
     # preserving argv0. The `exec` line's shape is load-bearing beyond this
