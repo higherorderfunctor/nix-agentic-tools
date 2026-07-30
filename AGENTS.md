@@ -384,7 +384,11 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-07-29 (commit pending — the ruleset now sets
+> **Last verified:** 2026-07-30 (commit pending — records that the reviews and
+> comments endpoints attribute Copilot's output to DIFFERENT logins, so the
+> documented `copilot-pull-request-reviewer[bot]` filter returns zero on
+> `/pulls/N/comments` and reads as a clean review while gating threads are open;
+> measured on PR #614). Prior: 2026-07-29 — the ruleset now sets
 > `required_review_thread_resolution: true`, so an unresolved review thread
 > blocks merge including on auto-merging `update/*` PRs, and the claim that
 > Copilot "never gates its merge" is retired; adds the rule that Copilot's
@@ -429,6 +433,33 @@ thread:
 2. **A `<details>Comments suppressed due to low confidence (N)</details>` block
    inside the review BODY** — no thread, nothing to resolve, invisible to any
    thread query.
+
+**The two endpoints attribute Copilot to DIFFERENT logins, and mixing them up
+reads as a clean review.** `/pulls/N/reviews` credits the review to
+`copilot-pull-request-reviewer[bot]`; `/pulls/N/comments` credits the inline
+comments to plain `Copilot`. Filtering the comments endpoint by the `[bot]`
+login returns ZERO while gating threads are open — measured on PR #614, where
+four unresolved threads were invisible and the body's "generated 4 comments"
+line was the only tell. Since threads now block merge, that failure mode
+presents as a PR that mysteriously will not land.
+
+Prefer the GraphQL `reviewThreads` query over the REST comments endpoint: it
+sidesteps the login discrepancy entirely and returns `isResolved` plus the
+thread id you need for `resolveReviewThread` anyway.
+
+```bash
+gh api graphql -f query='
+query {
+  repository(owner:"OWNER", name:"REPO") {
+    pullRequest(number:N) {
+      reviewThreads(first:50) {
+        nodes { id isResolved path comments(first:1){nodes{author{login} body}} }
+      }
+    }
+  }
+}' --jq '.data.repository.pullRequest.reviewThreads.nodes[]
+         | select(.isResolved==false)'
+```
 
 **Reading only the threads is not reading the review.** Measured on PR #568
 across seven review rounds: the suppressed bucket produced **7 findings, all
