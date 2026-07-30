@@ -13,6 +13,8 @@
   pkgs,
   ...
 }: let
+  # Shared shell-hardening settings — see config/shell-strict.nix.
+  shellStrict = import ../../../../config/shell-strict.nix;
   inherit
     (lib)
     concatLists
@@ -144,11 +146,13 @@
 
     wrapper = pkgs.writeShellApplication {
       name = "mcp-" + name + "-start";
-      bashOptions = ["errexit" "nounset" "pipefail" "errtrace" "functrace"];
+      extraShellCheckFlags = shellStrict.shellcheckFlags;
+      inherit (shellStrict) bashOptions;
       runtimeInputs =
         [srv.package]
         ++ optionals (httpCmd == "bridge") [pkgs.ai.mcpServers.mcp-proxy];
       text = ''
+        ${shellStrict.shoptHeader}
         ${credSnippet}
         exec ${rawCmd}${optionalString (argsStr != "") " ${argsStr}"}
       '';

@@ -17,8 +17,74 @@ set -euETo pipefail
 shopt -s inherit_errexit 2>/dev/null || :
 ```
 
-This applies everywhere: standalone scripts, generated wrappers,
-`writeShellApplication`, heredocs in Nix.
+`-E` (errtrace), `-T` (functrace) and `inherit_errexit` are the point: they
+propagate failures out of the subshells, functions and command substitutions
+that the abbreviated `set -euo pipefail` silently swallows. Never use the
+abbreviated form.
+
+**No linter checks this for you.** shellcheck has no strict-mode diagnostic — a
+script carrying `set -euo pipefail`, or no `set` line at all, passes it clean.
+The header is a review obligation, not a gate.
+
+Where it applies depends on whether the shell owns its own process or is spliced
+into someone else's:
+
+| Site                                       | Rule                                                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `home.activation` bodies                   | SCOPE IT — wrap the body in a subshell; entries concatenate, so a bare header persists into home-manager's own code |
+| `shellHook` / devenv `enterShell`          | DO NOT ADD — `eval`'d into the calling shell; `set -e` arms the user's interactive session                          |
+| stdenv phases, `runCommand` bodies         | DO NOT ADD — `setup.sh` already sets all four, and phases share one shell                                           |
+| devenv `tasks.<name>.exec`                 | REQUIRED — rendered as a standalone script                                                                          |
+| shell EMITTED by a heredoc                 | REQUIRED inside the emitted script                                                                                  |
+| standalone `*.sh`, CI `run:` blocks        | REQUIRED                                                                                                            |
+| `writeShellApplication`                    | SPLIT — see below; `bashOptions` alone never suffices                                                               |
+| `writeShellScript` / `writeShellScriptBin` | REQUIRED — nixpkgs never lints these                                                                                |
+| heredocs carrying JSON, config or prose    | does not apply — not shell                                                                                          |
+| pre-commit / git-hook `entry` strings      | cannot be expressed — an argv, not a script; move the logic into a `writeShellApplication`                          |
+
+`writeShellApplication` needs the header **split across two places**, because
+`bashOptions` renders `set -o <name>` lines only and `inherit_errexit` is a
+`shopt`:
+
+```nix
+pkgs.writeShellApplication {
+  bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
+  text = ''
+    shopt -s inherit_errexit 2>/dev/null || :
+    …
+  '';
+}
+```
+
+Put the `set -o` flags in `bashOptions` rather than all five in `text`:
+writeShellApplication emits them ABOVE its own generated
+`export PATH="…:$PATH"`, so `nounset` covers that line. Without it, a PATH-less
+invocation yields a trailing-colon PATH — which bash reads as the current
+directory — instead of failing loudly.
+
+`home.activation` needs the header **scoped**, because home-manager concatenates
+every DAG entry into one script it opens with `set -eu` + `set -o pipefail`.
+Flags an entry sets stay set for every later entry, home-manager's own included:
+
+```nix
+home.activation.thing = lib.hm.dag.entryAfter ["linkGeneration"] ''
+  (
+  set -euETo pipefail
+  shopt -s inherit_errexit 2>/dev/null || :
+  …
+  )
+'';
+```
+
+Only wrap bodies with no parent-shell effects (no `export`, no `cd`, no `trap`).
+Failure still propagates — the subshell exits non-zero and the caller's `set -e`
+sees it. End a failing body with `false`, never `exit`, which would truncate the
+whole concatenated script.
+
+Two blind spots to catch by eye in review: shellcheck does not lint heredoc
+BODIES under either `<<EOF` or `<<'EOF'`, and nixpkgs runs shellcheck on
+`writeShellApplication` only — `writeShellScript` gets a syntax parse and no
+lint at all.
 
 ### Ordering
 
@@ -270,11 +336,17 @@ files for all ecosystems.
 
 ```bash
 nix flake show                # List all outputs
-nix flake check               # Linters + evaluation (does NOT build packages)
+nix flake check               # The CI gate: formatting, structural checks, module eval
+                              # (does NOT build packages, and does NOT run the
+                              # prek linters — those are local-only)
 nix build .#<package>         # Build a specific package
 devenv shell                  # Enter devShell with all tools
-nix run .#generate            # Regenerate instruction files from fragments
-treefmt                       # Format all files (Nix, markdown, JSON, TOML, shell)
+treefmt                       # Format all files (formats only — lints nothing)
+
+# Regenerate instruction files from fragments. `--mode before` is load-bearing:
+# without it devenv runs the aggregate and skips the leaves. Use generate:all,
+# not generate:instructions — the latter does not cover CONTRIBUTING.md.
+devenv tasks run --mode before generate:all
 ```
 
 <!-- Fragment: dev/fragments/monorepo/change-propagation.md -->
@@ -303,7 +375,11 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-07-29 (commit pending — the ruleset now sets
+> **Last verified:** 2026-07-30 (commit pending — records that the reviews and
+> comments endpoints attribute Copilot's output to DIFFERENT logins, so the
+> documented `copilot-pull-request-reviewer[bot]` filter returns zero on
+> `/pulls/N/comments` and reads as a clean review while gating threads are open;
+> measured on PR #614). Prior: 2026-07-29 — the ruleset now sets
 > `required_review_thread_resolution: true`, so an unresolved review thread
 > blocks merge including on auto-merging `update/*` PRs, and the claim that
 > Copilot "never gates its merge" is retired; adds the rule that Copilot's
@@ -348,6 +424,33 @@ thread:
 2. **A `<details>Comments suppressed due to low confidence (N)</details>` block
    inside the review BODY** — no thread, nothing to resolve, invisible to any
    thread query.
+
+**The two endpoints attribute Copilot to DIFFERENT logins, and mixing them up
+reads as a clean review.** `/pulls/N/reviews` credits the review to
+`copilot-pull-request-reviewer[bot]`; `/pulls/N/comments` credits the inline
+comments to plain `Copilot`. Filtering the comments endpoint by the `[bot]`
+login returns ZERO while gating threads are open — measured on PR #614, where
+four unresolved threads were invisible and the body's "generated 4 comments"
+line was the only tell. Since threads now block merge, that failure mode
+presents as a PR that mysteriously will not land.
+
+Prefer the GraphQL `reviewThreads` query over the REST comments endpoint: it
+sidesteps the login discrepancy entirely and returns `isResolved` plus the
+thread id you need for `resolveReviewThread` anyway.
+
+```bash
+gh api graphql -f query='
+query {
+  repository(owner:"OWNER", name:"REPO") {
+    pullRequest(number:N) {
+      reviewThreads(first:50) {
+        nodes { id isResolved path comments(first:1){nodes{author{login} body}} }
+      }
+    }
+  }
+}' --jq '.data.repository.pullRequest.reviewThreads.nodes[]
+         | select(.isResolved==false)'
+```
 
 **Reading only the threads is not reading the review.** Measured on PR #568
 across seven review rounds: the suppressed bucket produced **7 findings, all
@@ -559,16 +662,44 @@ the merged `flake.nix` / `devenv.yaml`.
 
 ## Linting
 
-All code must pass linters before committing:
+`nix flake check` is the CI gate. The prek pre-commit hooks are a fast local
+subset: they are `lib.optionalAttrs (!isCI)` in `devenv.nix`, so they do NOT run
+in CI and are not part of `nix flake check`. They can also be skipped with
+`--no-verify`.
 
-- **Meta-formatter:** treefmt (orchestrates all formatters below)
-- **Nix:** alejandra (format), deadnix (dead code), statix (anti-patterns)
-- **Shell:** shellcheck, shellharden, shfmt
-- **Markdown:** prettier (via treefmt)
-- **JSON:** biome (via treefmt)
-- **TOML:** taplo (via treefmt)
+Formatters and linters are separate here — treefmt runs formatters only and
+lints nothing.
+
+**Formatters — treefmt, all write in place:**
+
+- **JS/TS/JSX/JSON/CSS:** biome
+- **Markdown/YAML and friends:** prettier (`proseWrap = "always"`)
+- **Nix:** alejandra
+- **Shell:** shfmt (`*.sh`, `*.bash` — extension globs only, so it never sees an
+  extensionless script, shell embedded in a `.nix` string, or a heredoc body)
+- **TOML:** taplo
+
+**Linters — prek hooks, not treefmt, not `nix flake check`:**
+
+- **Nix:** deadnix (dead code), statix (anti-patterns)
+- **Shell:** `shellcheck -x`, on files prek tags `shell` — which needs a `.sh` /
+  `.bash` extension OR the executable bit. Shell embedded in `.nix` strings is
+  linted by nothing except `writeShellApplication`'s own build-time checkPhase.
 - **Spelling:** cspell
-- **Agent configs:** agnix
+
+**Commit gates — prek hooks that block the commit:**
+
+- convco (commit message shape)
+- gitleaks (staged secrets)
+- reject-default-branch-commit
+- treefmt `--fail-on-change`, plus treefmt-restage to re-add reformatted files
+
+**Available in the devShell, wired to no gate:** agnix (agent config linting) —
+run it by hand or via the agnix MCP server.
+
+There is no shellharden in this repo, and no linter reads shell embedded in
+`.nix` strings beyond `writeShellApplication`'s own checkPhase. See the Bash
+coding standard for which sites that leaves unchecked.
 
 <!-- Fragment: dev/fragments/monorepo/project-overview.md -->
 

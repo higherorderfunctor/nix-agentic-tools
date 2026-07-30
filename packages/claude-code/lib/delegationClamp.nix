@@ -26,6 +26,7 @@
   # see packages/claude-code/docs/heron-brook-clamp.md before changing it.
   text,
 }: let
+  shellStrict = import ../../../config/shell-strict.nix;
   payloadFile = pkgs.writeText "claude-delegation-clamp-payload.json" (
     builtins.toJSON {
       hookSpecificOutput = {
@@ -42,7 +43,13 @@ in
       pkgs.findutils
       pkgs.jq
     ];
+    extraShellCheckFlags = shellStrict.shellcheckFlags;
+    inherit (shellStrict) bashOptions;
+    # shoptHeader must lead `text`: delegation-clamp.sh re-asserts the full
+    # header, but only from its own line 27, which would leave the two
+    # injected lines below running without inherit_errexit.
     text = ''
+      ${shellStrict.shoptHeader}
       DELEGATION_CLAMP_PAYLOAD_FILE=${lib.escapeShellArg "${payloadFile}"}
       export DELEGATION_CLAMP_PAYLOAD_FILE
       ${builtins.readFile ./delegation-clamp.sh}

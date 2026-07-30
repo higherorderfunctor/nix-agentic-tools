@@ -8,6 +8,10 @@
   mcpLib = import ./lib/mcp.nix {inherit lib;};
   inherit (mcpLib) mkPackageEntry;
 
+  # Shared shell-hardening settings (bashOptions / shoptHeader /
+  # shellcheckFlags) — see config/shell-strict.nix.
+  shellStrict = import ./config/shell-strict.nix;
+
   # The four generated instruction-file derivations — same import as
   # flake.nix, single source of truth. Returns { agents, claude, copilot,
   # kiro } (plus gen / fmtDrv / runFmt). Both consumers must render
@@ -36,9 +40,10 @@
   rejectDefaultBranchCommit = pkgs.writeShellApplication {
     name = "reject-default-branch-commit";
     runtimeInputs = [pkgs.git];
+    extraShellCheckFlags = shellStrict.shellcheckFlags;
+    inherit (shellStrict) bashOptions;
     text = ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
+      ${shellStrict.shoptHeader}
       # The protected trunk. Hardcoded on purpose: resolving origin/HEAD
       # needs a network round-trip and a configured remote HEAD, neither
       # guaranteed at commit time. If the trunk is ever renamed, edit this
@@ -260,14 +265,19 @@ in {
     treefmt-restage = {
       enable = true;
       name = "treefmt-restage";
-      entry = "${pkgs.bash}/bin/bash -c 'git diff --name-only | xargs -r git add'";
+      # -z/-0: a path containing whitespace would otherwise be split into
+      # several nonexistent paths and silently left unstaged.
+      # `--`: a path beginning with a dash is otherwise parsed as an option —
+      # measured, `git add` on a path like `-x.md` dies with an unknown-switch
+      # error and stages nothing.
+      entry = "${pkgs.bash}/bin/bash -c 'git diff --name-only -z | xargs -0 -r git add --'";
       pass_filenames = false;
       stages = ["pre-commit"];
     };
     convco.enable = true;
     shellcheck = {
       enable = true;
-      args = ["-x"];
+      args = ["-x"] ++ shellStrict.shellcheckFlags;
     };
     gitleaks = {
       enable = true;

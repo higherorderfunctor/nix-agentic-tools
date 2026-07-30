@@ -659,12 +659,17 @@
     Run the meta-formatter before committing:
 
     ```bash
-    treefmt              # format and lint everything
+    treefmt              # format everything (formats only — lints nothing)
     treefmt <file>       # format a single file after editing
     ```
 
-    All commits must pass `nix flake check` (includes formatting, linting,
-    spelling, structural checks, and module evaluation).
+    Linting is separate from formatting: the linters (deadnix, statix,
+    shellcheck, cspell) run as prek pre-commit hooks, which are disabled in
+    CI and can be skipped with `--no-verify`.
+
+    `nix flake check` is the CI gate (formatting, structural checks, and
+    module evaluation). Spelling is NOT part of it — cspell runs only as a
+    prek hook, so CI never checks it.
 
     ${commitConvention}
 
