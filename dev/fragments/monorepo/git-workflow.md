@@ -1,10 +1,13 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-07-30 (commit pending — records that the reviews and
-> comments endpoints attribute Copilot's output to DIFFERENT logins, so the
-> documented `copilot-pull-request-reviewer[bot]` filter returns zero on
+> **Last verified:** 2026-07-30 (commit pending — records that a re-request
+> issued while a review is still in flight is silently dropped, so the check
+> run, not the API response, is the confirmation). Prior: 2026-07-30 (commit
+> d42d805a) — records that the reviews and comments endpoints attribute
+> Copilot's output to DIFFERENT logins, so the documented
+> `copilot-pull-request-reviewer[bot]` filter returns zero on
 > `/pulls/N/comments` and reads as a clean review while gating threads are open;
-> measured on PR #614). Prior: 2026-07-29 — the ruleset now sets
+> measured on PR #614. Prior: 2026-07-29 — the ruleset now sets
 > `required_review_thread_resolution: true`, so an unresolved review thread
 > blocks merge including on auto-merging `update/*` PRs, and the claim that
 > Copilot "never gates its merge" is retired; adds the rule that Copilot's
@@ -131,6 +134,19 @@ Absent means it never started, so re-request it; `in_progress` means wait;
 `completed` means the review is there to read. Ask for the run BY NAME rather
 than counting the checks: a total count is only correct until the CI matrix
 changes.
+
+**A re-request issued while a review is still in flight is silently dropped.**
+The API returns success, no new check run appears, and the call is
+indistinguishable from one that worked. Measured on #614: a push followed
+immediately by a re-request left the head commit with NO reviewer check run at
+all, while the previous commit's review completed normally and then read as the
+"latest" one.
+
+So the request is not the confirmation — the check run is. After requesting,
+verify the run exists on the head SHA before trusting it, and if a review is
+already running for an older commit, let it land first. This composes with the
+`commit_id` gate above: that gate tells you a review is stale, this tells you
+why no fresh one is coming.
 
 ### Cap the fix-and-re-review loop at 5 rounds
 
