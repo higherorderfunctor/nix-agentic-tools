@@ -30,7 +30,9 @@
 # `/` and unsafe chars to `-`, so exotic sibling dirs that sanitize
 # identically (".kiro/steering" vs ".kiro.steering") would collide and
 # must pass an explicit `stateSlug` instead.
-{lib}: rec {
+{lib}: let
+  inherit (import ./ai-common.nix {inherit lib;}) scopedActivation;
+in rec {
   # ── Name safety ─────────────────────────────────────────────────────
   # Same charset as mkKiro's hook-name assertion: names are interpolated
   # into shell words, target paths, grep patterns, and the temp-sweep
@@ -357,21 +359,25 @@
       };
     in {
       "materialize-${stateSlug}-prune" = lib.hm.dag.entryBefore ["checkLinkTargets"] (
-        mkPrologue common
-        + mkSweep coreutils
-        + mkPruneCore {
-          inherit stateSlug coreutils;
-          currentNames = builtins.attrNames copies;
-        }
-        + mkEpilogue stateSlug
+        scopedActivation (
+          mkPrologue common
+          + mkSweep coreutils
+          + mkPruneCore {
+            inherit stateSlug coreutils;
+            currentNames = builtins.attrNames copies;
+          }
+          + mkEpilogue stateSlug
+        )
       );
       "materialize-${stateSlug}-write" = lib.hm.dag.entryAfter ["linkGeneration"] (
-        mkPrologue common
-        + mkWriteCore {
-          inherit stateSlug coreutils diffutils gnugrep;
-          files = copies;
-        }
-        + mkEpilogue stateSlug
+        scopedActivation (
+          mkPrologue common
+          + mkWriteCore {
+            inherit stateSlug coreutils diffutils gnugrep;
+            files = copies;
+          }
+          + mkEpilogue stateSlug
+        )
       );
     };
 

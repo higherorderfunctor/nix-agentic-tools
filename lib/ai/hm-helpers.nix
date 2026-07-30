@@ -153,25 +153,29 @@ in rec {
     coreutils,
   }: let
     parentDir = builtins.dirOf configFile;
-  in ''
-    set -eu
-    TARGET_DIR="$HOME/${parentDir}"
-    CONFIG_FILE="$HOME/${configFile}"
-    ${coreutils}/bin/mkdir -p "$TARGET_DIR"
-    NIX_SETTINGS=$(${coreutils}/bin/mktemp)
-    ${coreutils}/bin/cat > "$NIX_SETTINGS" <<'NAT_SETTINGS_EOF'
-    ${settingsJson}
-    NAT_SETTINGS_EOF
-    if [ ! -f "$CONFIG_FILE" ]; then
-      ${coreutils}/bin/cp "$NIX_SETTINGS" "$CONFIG_FILE"
-    else
-      TMP=$(${coreutils}/bin/mktemp)
-      ${jq} -s '.[0] * .[1]' "$CONFIG_FILE" "$NIX_SETTINGS" > "$TMP"
-      ${coreutils}/bin/mv "$TMP" "$CONFIG_FILE"
-    fi
-    ${coreutils}/bin/rm -f "$NIX_SETTINGS"
-    ${coreutils}/bin/chmod 644 "$CONFIG_FILE"
-  '';
+  in
+    # scopedActivation: `set -eu` here happens to match what home-manager
+    # already sets, so today the leak is benign — but it is a leak, and the
+    # rule is structural, not a bet on the current flag set staying identical.
+    aiCommon.scopedActivation ''
+      set -eu
+      TARGET_DIR="$HOME/${parentDir}"
+      CONFIG_FILE="$HOME/${configFile}"
+      ${coreutils}/bin/mkdir -p "$TARGET_DIR"
+      NIX_SETTINGS=$(${coreutils}/bin/mktemp)
+      ${coreutils}/bin/cat > "$NIX_SETTINGS" <<'NAT_SETTINGS_EOF'
+      ${settingsJson}
+      NAT_SETTINGS_EOF
+      if [ ! -f "$CONFIG_FILE" ]; then
+        ${coreutils}/bin/cp "$NIX_SETTINGS" "$CONFIG_FILE"
+      else
+        TMP=$(${coreutils}/bin/mktemp)
+        ${jq} -s '.[0] * .[1]' "$CONFIG_FILE" "$NIX_SETTINGS" > "$TMP"
+        ${coreutils}/bin/mv "$TMP" "$CONFIG_FILE"
+      fi
+      ${coreutils}/bin/rm -f "$NIX_SETTINGS"
+      ${coreutils}/bin/chmod 644 "$CONFIG_FILE"
+    '';
 
   # Write Kiro hook envelope files as REAL files under $HOME/<hooksDir>/ during
   # activation. Kiro v3 scans that dir but does NOT follow store symlinks
@@ -180,29 +184,35 @@ in rec {
   # real-file install. `hooks` = { <name> = <json string>; }; `hooksDir` is
   # relative to $HOME (e.g. ".kiro/hooks"). The content rides an inline heredoc
   # (delimiter at col 0 via explicit newlines) so module-eval can read it.
+  # scopedActivation: the strict-mode flags below would otherwise stay set for
+  # every LATER home-manager DAG entry. Wrapping keeps them for this body only.
+  # Safe here — no export/cd/trap. The heredoc delimiter is emitted at column 0
+  # via explicit \n concatenation, which subshell wrapping does not disturb.
   mkHooksActivationScript = {
     hooks,
     hooksDir,
     coreutils,
   }:
-    ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      HOOKS_DIR="$HOME/${hooksDir}"
-      ${coreutils}/bin/mkdir -p "$HOOKS_DIR"
-      # The hooks dir's *.json is Nix-owned (mirrors home.file recursive
-      # ownership): prune stale entries first so a hook removed or renamed in
-      # config actually stops firing — Kiro loads every *.json in the dir.
-      for f in "$HOOKS_DIR"/*.json; do
-        if [ -e "$f" ]; then ${coreutils}/bin/rm -f "$f"; fi
-      done
-    ''
-    + lib.concatStrings (lib.mapAttrsToList (
-        name: content:
-          "${coreutils}/bin/cat > \"$HOOKS_DIR/${name}.json\" <<'NAT_KIRO_HOOK_EOF'\n"
-          + content
-          + "\nNAT_KIRO_HOOK_EOF\n"
-          + "${coreutils}/bin/chmod 644 \"$HOOKS_DIR/${name}.json\"\n"
-      )
-      hooks);
+    aiCommon.scopedActivation (
+      ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        HOOKS_DIR="$HOME/${hooksDir}"
+        ${coreutils}/bin/mkdir -p "$HOOKS_DIR"
+        # The hooks dir's *.json is Nix-owned (mirrors home.file recursive
+        # ownership): prune stale entries first so a hook removed or renamed in
+        # config actually stops firing — Kiro loads every *.json in the dir.
+        for f in "$HOOKS_DIR"/*.json; do
+          if [ -e "$f" ]; then ${coreutils}/bin/rm -f "$f"; fi
+        done
+      ''
+      + lib.concatStrings (lib.mapAttrsToList (
+          name: content:
+            "${coreutils}/bin/cat > \"$HOOKS_DIR/${name}.json\" <<'NAT_KIRO_HOOK_EOF'\n"
+            + content
+            + "\nNAT_KIRO_HOOK_EOF\n"
+            + "${coreutils}/bin/chmod 644 \"$HOOKS_DIR/${name}.json\"\n"
+        )
+        hooks)
+    );
 }
