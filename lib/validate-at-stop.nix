@@ -5,14 +5,21 @@
   pkgs,
   config,
   ...
-}:
-pkgs.writeShellApplication {
-  name = "validate-at-stop";
-  runtimeInputs = [
-    config.git-hooks.package
-    pkgs.coreutils
-    pkgs.git
-    pkgs.python3
-  ];
-  text = builtins.readFile ./validate-at-stop.sh;
-}
+}: let
+  shellStrict = import ../config/shell-strict.nix;
+in
+  pkgs.writeShellApplication {
+    name = "validate-at-stop";
+    runtimeInputs = [
+      config.git-hooks.package
+      pkgs.coreutils
+      pkgs.git
+      pkgs.python3
+    ];
+    extraShellCheckFlags = shellStrict.shellcheckFlags;
+    inherit (shellStrict) bashOptions;
+    # No shoptHeader here: validate-at-stop.sh carries the full strict-mode
+    # header itself, because it must also be valid standalone (prek lints it
+    # as a tracked *.sh).
+    text = builtins.readFile ./validate-at-stop.sh;
+  }

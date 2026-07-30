@@ -79,6 +79,9 @@
     ...
   } @ inputs: let
     inherit (nixpkgs) lib;
+    # Shared shell-hardening settings (bashOptions / shoptHeader /
+    # shellcheckFlags) — see config/shell-strict.nix.
+    shellStrict = import ./config/shell-strict.nix;
     supportedSystems = [
       "aarch64-darwin"
       "x86_64-linux"
@@ -331,7 +334,10 @@
         type = "app";
         program = "${pkgs.writeShellApplication {
           name = "generate-update-ninja";
+          extraShellCheckFlags = shellStrict.shellcheckFlags;
+          inherit (shellStrict) bashOptions;
           text = ''
+            ${shellStrict.shoptHeader}
             cp "${ninjaFile}" .update.ninja
             echo "Generated .update.ninja"
           '';

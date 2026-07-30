@@ -8,6 +8,10 @@
   mcpLib = import ./lib/mcp.nix {inherit lib;};
   inherit (mcpLib) mkPackageEntry;
 
+  # Shared shell-hardening settings (bashOptions / shoptHeader /
+  # shellcheckFlags) — see config/shell-strict.nix.
+  shellStrict = import ./config/shell-strict.nix;
+
   # The four generated instruction-file derivations — same import as
   # flake.nix, single source of truth. Returns { agents, claude, copilot,
   # kiro } (plus gen / fmtDrv / runFmt). Both consumers must render
@@ -36,9 +40,10 @@
   rejectDefaultBranchCommit = pkgs.writeShellApplication {
     name = "reject-default-branch-commit";
     runtimeInputs = [pkgs.git];
+    extraShellCheckFlags = shellStrict.shellcheckFlags;
+    inherit (shellStrict) bashOptions;
     text = ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
+      ${shellStrict.shoptHeader}
       # The protected trunk. Hardcoded on purpose: resolving origin/HEAD
       # needs a network round-trip and a configured remote HEAD, neither
       # guaranteed at commit time. If the trunk is ever renamed, edit this
@@ -269,7 +274,7 @@ in {
     convco.enable = true;
     shellcheck = {
       enable = true;
-      args = ["-x"];
+      args = ["-x"] ++ shellStrict.shellcheckFlags;
     };
     gitleaks = {
       enable = true;
