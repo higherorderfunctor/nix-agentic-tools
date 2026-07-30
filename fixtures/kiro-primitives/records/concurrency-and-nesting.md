@@ -8,9 +8,10 @@ child, and what the depth field is _not_ used for. All captured against KAS
 
 ## How to replay these
 
-Resolve the bundle first. Eight KAS versions were installed on the capture
-machine; a glob that takes the first match silently picks a stale one, so the
-resolver refuses on ambiguity rather than guessing.
+Resolve the bundle first. Seven KAS versions were installed on the capture
+machine (see the count record in `evidence/machine-state.md`); a glob that takes
+the first match silently picks a stale one, so the resolver refuses on ambiguity
+rather than guessing.
 
 ```bash
 set -euETo pipefail
@@ -39,7 +40,18 @@ Four conventions that matter for replay:
   `head -c $((OFFSET+N)) "$bundle" | tail -c M`. That form is preferred over
   `tail -c +OFFSET | head -c N`, because the latter gives `head` a reason to
   close the pipe early and, under `pipefail`, the resulting SIGPIPE on `tail`
-  fails the whole command.
+  can fail the whole command.
+
+  **Correction, 2026-07-30:** the SIGPIPE failure **did not reproduce** when
+  re-tested. `tail -c +1000 "$bundle" | head -c 50` exited **0** inside a
+  `set -euETo pipefail` shell on GNU coreutils 9.11, with `head` demonstrably
+  exiting early (elapsed 0.00s, so it did not drain 20 MB). The preference above
+  therefore stands as a **portability hedge, not an observed failure here** —
+  keep using `head … | tail …`, but do not cite it as a reproduced defect. The
+  underlying hazard is real in general; its trip appears to depend on the
+  coreutils build, buffer sizes, or how much the reader consumes, none of which
+  this record pins down.
+
 - **Count occurrences as `{ grep -boF X f || true; } | wc -l`, never
   `grep -c`.** `grep -c` counts matching _lines_, and the capture machine's
   `grep` is **ugrep 7.5.0**, where `-c -o` counts occurrences instead — so the

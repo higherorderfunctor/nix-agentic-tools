@@ -16,13 +16,13 @@ output**. A record built from memory is prose wearing a command's clothes, so
 the discipline is: if you cannot run it, it is not a record.
 
 Deliberately, there is **no extractor and no automated drift check**. The
-anchors are minified identifiers that churn on every release, nothing consumes
-the output at build time, and the access pattern is "months later, someone asks
-whether this still holds". A recorded command answers that question exactly as
-well as a check would, without a lint that cries wolf on cosmetic renames. What
-survives instead is the **semantic anchor**: each record describes what the code
-_does_, in words, so it can be relocated even after every identifier is renamed.
-**The command is disposable; the semantics are not.**
+anchors are generated identifiers that renumber on every release, nothing
+consumes the output at build time, and the access pattern is "months later,
+someone asks whether this still holds". A recorded command answers that question
+exactly as well as a check would, without a lint that cries wolf on cosmetic
+renames. What survives instead is the **semantic anchor**: each record describes
+what the code _does_, in words, so it can be relocated even after every
+identifier is renamed. **The command is disposable; the semantics are not.**
 
 ## Layout
 
@@ -59,14 +59,33 @@ bundle="${kas}node_modules/@kiro/agent/dist/server/acp-server.js"
 kasid=$(basename "${kas%/}")
 ```
 
-The bundle is ~20 MB and effectively single-line. **Never `cat` it, never read
-it into a variable, and never pipe it whole through a language runtime** — that
-is an out-of-memory risk. Use bounded windows only:
+The bundle is ~20 MB. **Never `cat` it, never read it into a variable, and never
+pipe it whole through a language runtime** — that is an out-of-memory risk. Use
+bounded windows only:
 
 ```bash
 grep -boF 'needle' "$bundle" | head
-tail -c +$((OFFSET-300)) "$bundle" | head -c 1200
+head -c $((OFFSET + 1200)) "$bundle" | tail -c 1500
 ```
+
+Two properties of the bundle worth knowing before you start, because both are
+easy to get backwards:
+
+- **It is not identifier-minified.** It is esbuild-bundled but
+  **pretty-printed** (~495k lines), keeps `// src/<path>.ts` section markers,
+  and keeps original names and comments — so line-oriented tooling and editor
+  navigation do work. Note one line exceeds 180 KB, which is what makes a naive
+  whole-file read expensive despite the pretty-printing. What _does_ churn
+  between releases is esbuild's **collision suffixes** (`state2`, `graph2`,
+  `resolve24`), which is why those handles are untrustworthy as anchors even
+  though they are not minifier output.
+- **Prefer `head … | tail …` over `tail -c +N … | head -c M`.** The records use
+  the former. The stated reason is that giving `head` cause to close the pipe
+  early can surface as a SIGPIPE on `tail` and fail the pipeline under
+  `pipefail` — though see the correction note in
+  `records/concurrency-and-nesting.md`: that failure did **not** reproduce on
+  GNU coreutils 9.11, so treat the preference as a portability hedge rather than
+  an observed failure on this machine.
 
 ## Re-verifying the corpus
 
@@ -92,7 +111,7 @@ tail -c +$((OFFSET-300)) "$bundle" | head -c 1200
 ## Notes for maintainers
 
 - `records/` and `evidence/` are excluded from spell-checking: they quote
-  verbatim minified identifiers and real command output, including fragments cut
+  verbatim bundle identifiers and real command output, including fragments cut
   mid-token by windowed extraction. Authored prose (this file,
   `carried-negatives.md`) **is** checked.
 - Findings are version-scoped. A CLI update ships a new engine bundle and can

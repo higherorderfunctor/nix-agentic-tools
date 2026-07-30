@@ -11,7 +11,7 @@ parent. All captured against KAS
 
 ## How to replay these
 
-Resolve the bundle first. Eight KAS versions were installed on the capture
+Resolve the bundle first. Seven KAS versions were installed on the capture
 machine; a glob that takes the first match silently picks a stale one, so the
 resolver refuses on ambiguity rather than guessing.
 
