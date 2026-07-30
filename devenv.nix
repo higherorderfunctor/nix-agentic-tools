@@ -260,7 +260,9 @@ in {
     treefmt-restage = {
       enable = true;
       name = "treefmt-restage";
-      entry = "${pkgs.bash}/bin/bash -c 'git diff --name-only | xargs -r git add'";
+      # -z/-0: a path containing whitespace would otherwise be split into
+      # several nonexistent paths and silently left unstaged.
+      entry = "${pkgs.bash}/bin/bash -c 'git diff --name-only -z | xargs -0 -r git add'";
       pass_filenames = false;
       stages = ["pre-commit"];
     };
