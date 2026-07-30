@@ -15,12 +15,12 @@
   vu = import ../lib.nix;
   tsgolint = import ./tsgolint.nix {inherit inputs final;};
 
-  rev = "468b970613440d3e8092fb0db4878e06e56306d4";
+  rev = "f766c2187de792eef3c560c20ad8bc85e88ea6c6";
   src = ourPkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "oxc";
     inherit rev;
-    hash = "sha256-kEGtumzIYSPcUg3Jq1MC+k8hQS0+wsG/VKbEm1yv0ko=";
+    hash = "sha256-lb4q1r0C88KeWsxltP+EH529vTjcHNQWwnEdUg/J784=";
   };
   version = vu.mkVersion {
     # upstream: readCargoVersion @ apps/oxlint/Cargo.toml
@@ -32,7 +32,7 @@ in
     inherit version src;
     cargoDeps = ourPkgs.rustPlatform.fetchCargoVendor {
       inherit (finalAttrs) pname version src;
-      hash = "sha256-wm+hQkHOj7ydcU+I04jQC253PjHh1dg+YpPvD8u1IxU=";
+      hash = "sha256-y227/ETdAN0kBNe/2PuYQig2HKjZncy2M88c7D4rqDM=";
     };
     pnpmDeps = ourPkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
