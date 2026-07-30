@@ -67,7 +67,13 @@ wrong silently changes the answer:
   `head -c $((OFFSET+N)) "$bundle" | tail -c M`. That form is preferred over
   `tail -c +OFFSET | head -c N`, because the latter gives `head` a reason to
   close the pipe early and, under `pipefail`, the resulting SIGPIPE on `tail`
-  fails the whole command.
+  **can** fail the whole command.
+
+  **Correction, 2026-07-30:** that SIGPIPE failure did **not** reproduce when
+  re-tested — see the full note in `concurrency-and-nesting.md`, which is the
+  authoritative record for it. Keep using `head … | tail …`, but treat the
+  preference as a portability hedge rather than an observed failure here.
+
 - **Count occurrences as `{ grep -boF X f || true; } | wc -l`, never
   `grep -c`.** `grep -c` counts matching _lines_, and the capture machine's
   `grep` is **ugrep 7.5.0**, where `-c -o` counts occurrences instead. Add `-a`
