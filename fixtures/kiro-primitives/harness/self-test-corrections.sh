@@ -4,7 +4,7 @@
 #
 #   C-1  (carried-negatives.md) — the two-root model. The engine's home root is
 #        HOME only; KIRO_HOME never reaches it; XDG_DATA_HOME must stay real.
-#   C-15 (carried-negatives.md, and R-workflow-5 in records/workflow-surface.md)
+#   C-17 (carried-negatives.md, and R-workflow-5 in records/workflow-surface.md)
 #        — joinPolicy "all" aborts siblings on failure OR abort; only allSettled
 #        structurally cannot, because it is never handed the controllers.
 #
@@ -258,11 +258,11 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# C-15 — join policy: who aborts the losers
+# C-17 — join policy: who aborts the losers
 # ---------------------------------------------------------------------------
 
 echo
-echo 'C-15 join policy: which policies abort their siblings'
+echo 'C-17 join policy: which policies abort their siblings'
 
 # Arity IS the mechanism: a join that is not given the controllers cannot abort.
 check 'joinAll declared with controllers' 1 \
@@ -307,7 +307,7 @@ control 'outer abort handler aborts all branch controllers' \
   "$(occ "$bundle" 'const onOuterAbort = ()')"
 
 echo
-echo 'C-15 documentation locality: where the sentence lives'
+echo 'C-17 documentation locality: where the sentence lives'
 
 # Each sentence describing sibling fate occurs once, in a bundled agent's
 # steering. `joinPolicy` is the denominator: mentions of the field vs.

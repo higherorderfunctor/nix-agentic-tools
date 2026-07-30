@@ -228,7 +228,7 @@ meant to prevent.
 **Lesson:** for any join or race primitive, **the disposition of the losers is
 the detail that carries the weight**, and it is the detail most often omitted
 from documentation. Never infer it. This lesson was then under-applied to the
-_other_ policies in the same enum — see C-15.
+_other_ policies in the same enum — see C-17.
 
 ---
 
@@ -456,8 +456,9 @@ survives a tooling change and a note that survives one are different questions.
 **Lesson:** a record's environment is part of its claim. Stamp what you actually
 ran with, re-check it on re-verification, and prefer the form that is correct
 under every implementation over the form that is correct under yours — then the
-tooling can move without taking the findings with it.
-||||||| parent of 062a0591 (docs(kiro-primitives): settle C-1's mechanism and carry the joinPolicy trap)
+tooling can move without taking the findings with it. ||||||| parent of 062a0591
+(docs(kiro-primitives): settle C-1's mechanism and carry the joinPolicy trap)
+
 ## C-17 — "all" was picked as the safe join policy because C-6 had been learned, and it aborts siblings too
 
 **Belief:** having rejected the first-completion policy for cancelling its

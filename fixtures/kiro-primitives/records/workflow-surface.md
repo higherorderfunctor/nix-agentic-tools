@@ -1094,7 +1094,7 @@ So for a drain over `parallel`, **`allSettled` is the only policy that cannot
 lose unrelated work to one poisoned item.** Under `all`, a single failing branch
 cancels every other branch, and the symptom is items silently unfinished — the
 exact failure a work queue exists to prevent. Recorded as a carried negative in
-`../carried-negatives.md` (C-15), because the wrong choice was made _after_ C-6
+`../carried-negatives.md` (C-17), because the wrong choice was made _after_ C-6
 had already taught that a join policy can cancel.
 
 **Command** (arity is the mechanism, so it is also the control; `occ` is the
