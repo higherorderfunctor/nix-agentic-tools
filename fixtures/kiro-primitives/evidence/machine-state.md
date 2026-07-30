@@ -460,7 +460,7 @@ The kind counts sum to exactly **56195** and **29829**, matching the two
 discriminator totals above — so no row was dropped or double-counted, and the
 two commands saw the same corpus.
 
-**Positive controls:** the "0 of 56105 root rows carry the field" half is an
+**Positive controls:** the "0 of 56195 root rows carry the field" half is an
 absence, and its control is the adjacent row of the same partition: the same
 expression found the field on 29791 sub-execution rows. If both buckets read
 `absent`, the field was renamed.

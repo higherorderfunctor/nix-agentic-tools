@@ -47,7 +47,7 @@ are bash-only: `shopt` is not a zsh builtin, and bash's `nullglob` makes a
 non-matching glob expand to nothing where zsh instead treats it as a hard error.
 Run them under `bash` rather than an interactive zsh or fish — otherwise a
 resolver either reports the wrong thing or dies before reaching its own refusal
-path. This bit during review: the first attempt to verify a finding here ran
+path. This bit me during review: my first attempt to verify a finding here ran
 under zsh and produced a misleading result.
 
 ## Before re-running anything: pin the bundle
