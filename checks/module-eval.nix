@@ -283,35 +283,118 @@
   hasClampHook = blocks:
     builtins.any (lib.hasInfix "claude-delegation-clamp") (clampCommands blocks);
 in {
-  # ── Kiro launcher wrapper: idempotent --tui/--v3 injection ───────
-  # The factory wrapper injects the v3 launch flags; injecting them
-  # unconditionally doubles --tui when a caller already passes it (clap
-  # aborts). idempotentFlags.nix guards each flag with a per-arg case +
-  # conditional `set --`. Cases: both flags (tui⇒v3), v3 alone, neither.
-  module-kiro-wrapper-idempotent-both = mkTest "kiro-wrapper-idempotent-both" (
+  # ── Kiro launcher wrapper: flag injection ────────────────────────
+  # `--tui`/`--v3` are launcher-GLOBAL options, so they are PREPENDED —
+  # appended after a subcommand, clap parses them against that
+  # subcommand and rejects them ("unexpected argument '--tui'").
+  # Injection stays idempotent because both abort on repetition.
+  # Prepending walks the list in reverse, since each `set --` pushes
+  # onto the front, so [tui v3] must emit the v3 line first to land as
+  # `--tui --v3 "$@"`.
+  #
+  # These pin the SHAPE of the generated bash. What that bash does to a
+  # real argv — including which SIDE of the subcommand a flag lands on
+  # — is checks/kiro-wrapper-argv.nix, which runs the wrapper.
+  module-kiro-wrapper-prepend-both = mkTest "kiro-wrapper-prepend-both" (
     let
-      b = idempotentFlags.idempotentFlagBlock ["--tui" "--v3"];
+      b = idempotentFlags.idempotentFlagBlock {
+        flags = ["--tui" "--v3"];
+        position = "prepend";
+      };
+      tuiLine = ''if [ "$nat_seen_tui" = 0 ]; then set -- --tui "$@"; fi'';
+      v3Line = ''if [ "$nat_seen_v3" = 0 ]; then set -- --v3 "$@"; fi'';
     in
       lib.hasInfix "nat_seen_tui=0" b
       && lib.hasInfix "nat_seen_v3=0" b
       && lib.hasInfix "--tui) nat_seen_tui=1 ;;" b
       && lib.hasInfix "--v3) nat_seen_v3=1 ;;" b
-      && lib.hasInfix ''if [ "$nat_seen_tui" = 0 ]; then set -- "$@" --tui; fi'' b
-      && lib.hasInfix ''if [ "$nat_seen_v3" = 0 ]; then set -- "$@" --v3; fi'' b
+      && lib.hasInfix tuiLine b
+      && lib.hasInfix v3Line b
+      # reverse emission order is what makes the result `--tui --v3 …`
+      && (lib.length (lib.splitString v3Line (lib.head (lib.splitString tuiLine b))) == 2)
   );
 
-  module-kiro-wrapper-idempotent-single = mkTest "kiro-wrapper-idempotent-single" (
+  # The append form is still available for a genuinely per-subcommand
+  # option, and must NOT be reachable by accident: `position` has no
+  # default, since picking the wrong one is the exact bug this guards.
+  module-kiro-wrapper-append-form = mkTest "kiro-wrapper-append-form" (
     let
-      b = idempotentFlags.idempotentFlagBlock ["--v3"];
+      b = idempotentFlags.idempotentFlagBlock {
+        flags = ["--v3"];
+        position = "append";
+      };
     in
-      lib.hasInfix "nat_seen_v3=0" b
-      && lib.hasInfix ''if [ "$nat_seen_v3" = 0 ]; then set -- "$@" --v3; fi'' b
+      lib.hasInfix ''if [ "$nat_seen_v3" = 0 ]; then set -- "$@" --v3; fi'' b
       && !(lib.hasInfix "tui" b)
   );
 
+  module-kiro-wrapper-rejects-bad-position =
+    mkTest "kiro-wrapper-rejects-bad-position" (!(builtins.tryEval (idempotentFlags.idempotentFlagBlock {
+      flags = ["--v3"];
+      position = "middle";
+    }))
+    .success);
+
   module-kiro-wrapper-idempotent-none = mkTest "kiro-wrapper-idempotent-none" (
-    idempotentFlags.idempotentFlagBlock [] == ""
+    idempotentFlags.idempotentFlagBlock {
+      flags = [];
+      position = "prepend";
+    }
+    == ""
   );
+
+  # ── Kiro launcher wrapper: subcommand gating ─────────────────────
+  # Used for the options that genuinely ARE per-subcommand: `--tui`
+  # (meaningless outside a bare launch and `chat`) and the chat
+  # binary's `--trust-tools`. The scan resolves the subcommand into
+  # nat_sub; the value-flag arm keeps `--agent acp` from reading as the
+  # acp subcommand; `--` parks on a sentinel no gate matches.
+  module-kiro-wrapper-subcommand-scan = mkTest "kiro-wrapper-subcommand-scan" (
+    let
+      b = idempotentFlags.subcommandBlock ["--agent" "--resume-id"];
+    in
+      lib.hasInfix ''nat_sub=""'' b
+      && lib.hasInfix "--agent|--resume-id) nat_skip=1 ;;" b
+      && lib.hasInfix ''--) nat_sub="--"; break ;;'' b
+      && lib.hasInfix "-*) ;;" b
+      && lib.hasInfix ''*) nat_sub="$nat_arg"; break ;;'' b
+  );
+
+  # No value-taking options ⇒ no skip arm, but the scan still resolves
+  # a subcommand (a wrapper with only boolean options still needs it).
+  module-kiro-wrapper-subcommand-scan-boolean-only = mkTest "kiro-wrapper-subcommand-scan-boolean-only" (
+    let
+      b = idempotentFlags.subcommandBlock [];
+    in
+      !(lib.hasInfix "nat_skip=1 ;;" b)
+      && lib.hasInfix ''*) nat_sub="$nat_arg"; break ;;'' b
+  );
+
+  # The gate wraps the injection in a `case` over the accepted set.
+  # `bareInvocation` is the empty string, so a gate covering the bare
+  # launch emits a `''`-quoted alternative ahead of the named ones.
+  module-kiro-wrapper-gate-wraps-injection = mkTest "kiro-wrapper-gate-wraps-injection" (
+    let
+      b = idempotentFlags.gateOnSubcommand {
+        subcommands = [idempotentFlags.bareInvocation "chat"];
+        valueFlags = ["--agent"];
+      } "INJECTED";
+    in
+      lib.hasInfix ''case "$nat_sub" in'' b
+      && lib.hasInfix "  ''|chat)" b
+      && lib.hasInfix "    INJECTED" b
+      && lib.hasSuffix "esac" b
+  );
+
+  # Nothing to inject ⇒ no gate at all (an env-only wrapper must stay a
+  # transparent exec, not grow a dead `case`).
+  module-kiro-wrapper-gate-empty-injection = mkTest "kiro-wrapper-gate-empty-injection" (
+    idempotentFlags.gateOnSubcommand {subcommands = ["chat"];} "" == ""
+  );
+
+  # An empty accepted set can never fire, which would silently drop the
+  # injection rather than fail — so it throws instead.
+  module-kiro-wrapper-gate-rejects-empty-set = mkTest "kiro-wrapper-gate-rejects-empty-set" (!(builtins.tryEval (idempotentFlags.gateOnSubcommand {subcommands = [];} "INJECTED")).success);
 
   module-claude-default-disabled = mkTest "claude-default-disabled" (!(evalHm {}).config.ai.claude.enable);
 

@@ -163,6 +163,28 @@ _: {
         }
       ];
     };
+    # kiro-wrapper: the argv contract of the generated kiro-cli launcher /
+    # chat wrappers — which subcommands accept `--tui`/`--v3`/`--trust-tools`,
+    # why the appends are gated rather than unconditional, and how to
+    # re-measure on a version bump. Kept OUT of the `kiro-cli` category (whose
+    # fragment is the ~300-line auto-memory map) so an edit to the wrapper
+    # loads the wrapper rule, not the memory pipeline. Scoped to the generic
+    # shell helper, the factory's lib/ directory that consumes it, and the
+    # behavioral check, since all three have to move together.
+    kiro-wrapper = {
+      scopes = [
+        "checks/kiro-wrapper-argv.nix"
+        "lib/idempotentFlags.nix"
+        "packages/kiro-cli/lib/**"
+      ];
+      sources = [
+        {
+          location = "package";
+          name = "launcher-argv";
+          dir = "kiro-cli";
+        }
+      ];
+    };
     # markdown-formatting: treefmt owns markdown wrapping, and the one
     # markdown defect here that NO check can catch (a line broken
     # mid-token). Scoped broadly to `**/*.md` on purpose — since the

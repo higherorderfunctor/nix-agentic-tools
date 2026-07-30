@@ -141,9 +141,11 @@ in {
     copilot.enable = true;
     kiro = {
       enable = true;
-      # Launch the v3 engine + new TUI from `devenv shell` (the wrapper appends
-      # `--tui --v3` to the kiro-cli launcher). Without this, devenv's kiro-cli
-      # ran the legacy engine, so hooks/slash-commands never loaded.
+      # Launch the v3 engine + new TUI from `devenv shell`. The wrapper
+      # PREPENDS `--v3` (a launcher-global option, so it reaches every
+      # subcommand including `acp`) and `--tui` for a bare launch or `chat`.
+      # Without this, devenv's kiro-cli ran the legacy engine, so
+      # hooks/slash-commands never loaded.
       tui = true;
     };
 
