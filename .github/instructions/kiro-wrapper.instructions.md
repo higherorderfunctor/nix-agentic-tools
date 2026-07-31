@@ -17,9 +17,18 @@ applyTo: "checks/kiro-wrapper-argv.nix,lib/idempotentFlags.nix,packages/kiro-cli
 > COMPOSE, and that `--trust-tools` therefore has to be withheld from `acp`
 > under v3. Prior: first revision). If you touch `lib/idempotentFlags.nix`,
 > `packages/kiro-cli/lib/wrapPackage.nix`, or bump the kiro-cli version and this
-> fragment isn't updated in the same commit, stop and fix it. Every claim below
-> is a MEASURED parse result, not a reading of the docs — re-measure, don't
-> reason.
+> fragment isn't updated in the same commit, stop and fix it.
+>
+> **How much to trust a line here.** The argv/parse claims are measured against
+> 2.15.2 and re-measurable with the recipe at the end. Claims about the v3
+> bundle and about this repo's Nix are sourced to the file they came from. An
+> earlier revision opened with a blanket "every claim below is a MEASURED parse
+> result", and that sentence is exactly what let four wrong claims ship
+> unqualified — an audit refuted the `--tui` inertness mechanism, the "on
+> `chat`, v3 accepts all five" claim, the `tui.js` `--trust-tools` auto-answer,
+> and a probe-script reference to files that do not exist. Re-measure, don't
+> reason, and prefer a probe that reaches the check you care about (see the
+> input-must-be-supplied trap below).
 
 ## The one thing to know
 
@@ -45,14 +54,24 @@ So the wrapper **prepends** them. Prepended, every subcommand accepts them.
 
 ## `--v3` reaches `acp` for free
 
-The launcher translates its own global `--v3` into an `--agent-engine` option on
-the dispatched subcommand. Measured directly, by putting a `kiro-cli-chat` that
-prints its argv first on `PATH`:
+The launcher translates its own global `--v3` into an `--agent-engine` option —
+**for `acp` only.** Measured directly, by putting a `kiro-cli-chat` that prints
+its argv first on `PATH`:
 
 ```console
 $ kiro-cli --v3 acp        # kiro-cli-chat actually received:
 acp --agent-engine v3
+
+$ kiro-cli --v3 chat       # NOT translated — forwarded verbatim:
+chat --v3
+
+$ kiro-cli --v3 mcp list   # dropped entirely:
+mcp list
 ```
+
+`chat` needs no translation because the chat binary declares its own `--v3`;
+`mcp`/`agent` do not take an engine at all. Do not generalize the `acp` row to
+the others.
 
 Note the **two-token** form. The error text below renders it
 `--agent-engine=v3`, but that is how clap prints an option in a diagnostic, not
@@ -89,12 +108,19 @@ consistent":
 
 - **`--v3` is global and wanted everywhere**, since it selects the engine for
   `chat` and `acp` alike.
-- **`--tui` is global but only meaningful for chat.** It is _inert_ elsewhere on
-  2.15.2 — `kiro-cli --v3 acp` and `kiro-cli --tui --v3 acp` emit byte-identical
-  stdout (0 bytes), and all `[INFO]` chatter goes to **stderr**, so it cannot
-  corrupt `acp`'s JSON-RPC framing. But it means "launch chat in TUI mode",
-  which is meaningless for a stdio protocol or for `mcp`/`settings`, and
-  inert-today is not a guarantee.
+- **`--tui` is global but only meaningful for chat.** Its inertness elsewhere on
+  2.15.2 is STRUCTURAL: the launcher forwards `--tui` **only on a bare launch**
+  and drops it the moment the invocation carries an explicit subcommand —
+  `kiro-cli --tui` reaches the chat binary as `chat --tui`, but
+  `kiro-cli --tui chat` reaches it as plain `chat`, and `--tui acp` as plain
+  `acp`. So injecting `--tui` on an explicit `chat` is a no-op upstream, and on
+  `acp` it could never have arrived at all. (An earlier revision justified the
+  inertness with `kiro-cli --v3 acp` and `kiro-cli --tui --v3 acp` emitting
+  byte-identical stdout. That proves nothing: the forwarded argv is identical
+  either way, so the comparison could not have come out otherwise.) It still
+  means "launch chat in TUI mode", which is meaningless for a stdio protocol or
+  for `mcp`/`settings`, and dropped-today is not a guarantee — so the wrapper
+  still withholds it rather than relying on upstream to.
 - **`--trust-tools` is genuinely per-subcommand.** The chat binary declares it
   on `chat` and `acp` and **not** at top level, so a bare
   `kiro-cli-chat --trust-tools=…` is an "unexpected argument". It is appended
@@ -122,43 +148,63 @@ engine is v3.
 prints its argv first on `PATH`. It does not merely relay argv — it injects,
 rewrites and strips:
 
-| Invocation              | `kiro-cli-chat` receives |
-| ----------------------- | ------------------------ |
-| `kiro-cli`              | `chat`                   |
-| `kiro-cli --agent acp`  | `chat --agent acp`       |
-| `kiro-cli --tui`        | `chat --tui`             |
-| `kiro-cli --`           | `chat`                   |
-| `kiro-cli acp`          | `acp`                    |
-| `kiro-cli --v3 acp`     | `acp --agent-engine v3`  |
-| `kiro-cli settings all` | `settings list`          |
-| `kiro-cli whoami`       | _(kept in-process)_      |
+| Invocation                            | `kiro-cli-chat` receives |
+| ------------------------------------- | ------------------------ |
+| `kiro-cli`                            | `chat`                   |
+| `kiro-cli --`                         | `chat`                   |
+| `kiro-cli --agent acp`                | `chat --agent acp`       |
+| `kiro-cli --tui`                      | `chat --tui`             |
+| `kiro-cli --tui --v3`                 | `chat --tui --v3`        |
+| `kiro-cli --tui chat`                 | `chat`                   |
+| `kiro-cli --tui --v3 chat`            | `chat --v3`              |
+| `kiro-cli acp`                        | `acp`                    |
+| `kiro-cli --tui acp`                  | `acp`                    |
+| `kiro-cli --v3 acp`                   | `acp --agent-engine v3`  |
+| `kiro-cli --v3 acp --agent-engine=v2` | `acp --agent-engine=v2`  |
+| `kiro-cli --v3 mcp list`              | `mcp list`               |
+| `kiro-cli settings all`               | `settings list`          |
+| `kiro-cli whoami`                     | _(kept in-process)_      |
 
-Three consequences worth holding on to. A **bare launch is dispatched too**,
-with `chat` injected — so the chat wrapper's `chat` gate fires on it.
-**`--agent`'s value is not a subcommand**: `--agent acp` forwards as a bare
-launch, which is why both `subcommandBlock` and the check's launcher stub skip a
-value-taking option's value. And **`--` is stripped**, so past the launcher it
-can never reach the chat binary's own scan.
+Five consequences worth holding on to. A **bare launch is dispatched too**, with
+`chat` injected — so the chat wrapper's `chat` gate fires on it. The
+**subcommand leads**: the launcher re-emits it first and the surviving globals
+after, so `--v3 chat` arrives as `chat --v3`. **`--agent`'s value is not a
+subcommand**: `--agent acp` forwards as a bare launch, which is why both
+`subcommandBlock` and the check's launcher stub skip a value-taking option's
+value. **`--` is stripped**, so past the launcher it can never reach the chat
+binary's own scan. And **`--v3` is translated only for `acp`** — forwarded
+verbatim to `chat`/bare, dropped entirely for `mcp`/`agent`, and suppressed
+outright when the caller supplied their own `--agent-engine`.
 
 **Upstream's reason is NOT that v3 replaced the flag.** Under v3, `chat` still
-honours it. `--trust-tools` is a **client-side auto-answer knob**: kiro's own
-TUI (`~/.local/share/kiro-cli/tui.js`) maps it to store keys and auto-selects
-`allow_always` on an `approval_request`, with an explicit branch for the v3
-(`kas`) engine. On the `acp` arm kiro-cli **is** the agent and the external ACP
-client owns that answer, so there is nothing agent-side for the flag to bind to
-— `acp-server.js` contains no `trustedTools`/`trustAllTools` at all. The guard
-is deliberate, not an unfinished port: the message is a hand-rolled literal in
-`crates/chat-cli/src/cli/mod.rs` carrying its own flag list, and clap's own
-wording for a conflict is the different `cannot be used with`.
+honours it. `--trust-tools` is a **client-side** knob: kiro's own TUI
+(`~/.local/share/kiro-cli/tui.js`) re-emits it onto the downstream ACP argv.
 
-Nothing is lost for a **declarative** grant. `trustedMcpTools` is also
-translated into `settings/permissions.yaml` (`mkPermissionRules`), and the v3
-agent does read that: `acp-server.js` declares
+Do not over-read that. The TUI's auto-answer — selecting `allow_always` on an
+`approval_request`, with an explicit branch for the v3 (`kas`) engine — is real
+but is gated on **`--trust-all-tools`**, a different flag: `trustTools` occurs
+exactly ONCE in `tui.js`, in the flag-spec table, and is never written to the
+store or read by the approval handler. The auto-answer reads
+`trustAllToolsConfirmed`.
+
+On the `acp` arm kiro-cli **is** the agent and the external ACP client owns that
+answer, so there is nothing agent-side for the flag to bind to — `acp-server.js`
+contains no `trustedTools`/`trustAllTools` at all. The guard is deliberate, not
+an unfinished port: the message is a hand-rolled literal in
+`crates/chat-cli/src/cli/mod.rs` carrying its own flag list.
+
+Little is lost for a **declarative** grant, with one caveat that matters by
+backend. `trustedMcpTools` is also translated into `settings/permissions.yaml`
+(`mkPermissionRules`), and the v3 agent does read that: `acp-server.js` declares
 `POLICY_FILENAMES = ["permissions.yaml", "permissions.json"]` and layers
 built-in → admin → `~/.kiro/settings/` → `~/.kiro/workspace-roots/<hash>/`,
 compiling rules to Cedar. What the CLI flag cannot participate in is the
 interactive half — under v3 an `ask` rule is resolved with the client over ACP
 (`session/request_permission`).
+
+**That recovery is home-manager-only.** `mkPermissionRules` has no devenv
+equivalent, so on the devenv backend a withheld `--trust-tools` is not recovered
+declaratively — the grant is simply absent for that session.
 
 > **Probing v3 at all: grep the JS, not the ELF.** The v3 engine is NOT in the
 > Nix-store binary. It is a separately downloaded Node bundle under
@@ -179,8 +225,17 @@ $ kiro-cli      acp --agent-engine=v3 --trust-tools=x     # CONFLICT — v3, eve
 
 Gating on `hasV3` alone would silently drop trust in the first case and break
 the command in the second. So the wrapper resolves the engine from argv — the
-caller's `--agent-engine` if present (either spelling), otherwise the value this
-wrapper bakes in — and withholds only when that resolves to `v3`.
+caller's `--agent-engine` if present (either spelling), otherwise **the chat
+binary's own clap default, `v2`** — and withholds only when that resolves to
+`v3`.
+
+The fallback is deliberately NOT what this Nix config bakes in. The chat wrapper
+cannot know whether the launcher wrapper is in the chain, and
+`kiro-cli-chat acp` invoked directly runs the **v2** engine however `v3 = true`
+is set — so a v3 fallback silently stripped `--trust-tools` from a session that
+would have accepted it. Nothing is lost on the normal path, because the launcher
+rewrites argv: `kiro-cli --v3 acp` arrives here as an explicit
+`acp --agent-engine v3`, so the withhold fires on the token, never on a guess.
 
 **The lesson generalizes past this flag.** Each wrapper was individually correct
 and the pair was not, so any new injection has to be reasoned about against what
@@ -195,9 +250,25 @@ release.
 functional option `acp` has** — `--agent`, `--model`, `--effort`,
 `--trust-tools`, `-a/--trust-all-tools`. Only `-v` survives.
 
-It is value-specific (`=v1`/`=v2` accept all five) and `acp`-specific (on
-`chat`, engine v3 accepts all five). So it is a property of the v3 ACP arm, not
-of v3.
+It is value-specific — `=v1`/`=v2` accept all five — but only PARTLY
+`acp`-specific. Measured per option on 2.15.2, with input supplied so the
+conflict check is actually reached:
+
+| Option under `--agent-engine=v3` | on `acp` | on `chat`    |
+| -------------------------------- | -------- | ------------ |
+| `--agent`, `--model`, `--effort` | conflict | accepted     |
+| `--trust-tools`                  | conflict | accepted     |
+| `-a` / `--trust-all-tools`       | conflict | **conflict** |
+
+So four of the five are a property of the v3 ACP arm, but `--trust-all-tools`
+conflicts under v3 on **either** subcommand. This wrapper is unaffected — it
+injects `--trust-tools`, never `--trust-all-tools` — but do not generalize the
+`acp`-only shape to the whole conflict set.
+
+Probe it with input supplied. `chat --agent-engine=v3 -a` on its own reports
+"Input must be supplied when running in non-interactive"; that error fires
+BEFORE the conflict check and hides it, which is an easy way to measure this
+wrong.
 
 **Consequence for a consumer:** with `ai.kiro.v3 = true`, an invocation like
 `kiro-cli acp --model auto` fails with upstream's conflict error. That is
@@ -241,8 +312,15 @@ absent as an **exact argv token** — not a substring scan of `"$*"`, so
 
 ## Re-measuring on a version bump
 
-Run against the **unwrapped** binary out of `nix build` — a `PATH` lookup finds
-the wrapper, which is the thing under test.
+Run against the **unwrapped** binary out of `nix build` — a bare `PATH` lookup
+finds the wrapper, which is the thing under test.
+
+Pinning `$KB` is necessary but **not sufficient for the launcher**: it
+re-resolves `kiro-cli-chat` through `PATH` at runtime, so a wrapped
+`kiro-cli-chat` earlier on `PATH` still lands in the chain. For anything about
+`acp`/`chat` parsing, invoke `$K/bin/kiro-cli-chat` directly; to measure what
+the launcher FORWARDS, put a `kiro-cli-chat` that prints its argv first on
+`PATH` on purpose.
 
 ```bash
 K=$(nix build --no-link --print-out-paths .#kiro-cli); KB="$K/bin/kiro-cli"
@@ -278,7 +356,11 @@ parse rejection from an accepted flag.
 
 ## Do not break the exec line
 
-The wrapper ends with `exec -a "$0" <realBin> "$@"`. Probe scripts under
-`docs/plans/` recover the real binary by reading that line back out of the
-generated wrapper, so keep its shape; `checks/kiro-wrapper-argv.nix` asserts on
-it.
+The wrapper ends with `exec -a "$0" <realBin> "$@"`. Keep that shape: recovering
+the real binary by reading the line back out of the generated wrapper is how you
+probe the unwrapped CLI at all (see the re-measure recipe above), and
+`checks/kiro-wrapper-argv.nix` asserts on it.
+
+An earlier revision credited "probe scripts under `docs/plans/`" with depending
+on this. Nothing there does — `grep -rl 'exec -a' docs/plans` is empty — so the
+check is the only thing pinning it.

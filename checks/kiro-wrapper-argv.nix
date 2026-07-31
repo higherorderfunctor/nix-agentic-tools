@@ -47,44 +47,102 @@
   # Testing each binary alone cannot see that: it is what let a `--v3` prepend
   # and a `--trust-tools` append meet on `acp` and abort the command.
   #
-  # What the REAL 2.15.2 launcher forwards, measured by putting a printing
-  # `kiro-cli-chat` first on PATH and reading the argv it received:
+  # The launcher does NOT relay argv — it injects, translates and drops. Every
+  # row below was measured by putting a printing `kiro-cli-chat` first on PATH
+  # and reading the argv it received from the real 2.15.2 launcher:
   #
-  #   kiro-cli               ->  chat
-  #   kiro-cli --agent acp   ->  chat --agent acp
-  #   kiro-cli --tui         ->  chat --tui
-  #   kiro-cli --            ->  chat
-  #   kiro-cli acp           ->  acp
-  #   kiro-cli --v3 acp      ->  acp --agent-engine v3
-  #   kiro-cli settings all  ->  settings list
-  #   kiro-cli whoami        ->  (kept in-process, never dispatched)
+  #   kiro-cli                      ->  chat
+  #   kiro-cli --                   ->  chat
+  #   kiro-cli --agent acp          ->  chat --agent acp
+  #   kiro-cli --tui                ->  chat --tui
+  #   kiro-cli --tui --v3           ->  chat --tui --v3
+  #   kiro-cli --v3                 ->  chat --v3
+  #   kiro-cli --tui chat           ->  chat
+  #   kiro-cli --tui --v3 chat      ->  chat --v3
+  #   kiro-cli acp                  ->  acp
+  #   kiro-cli --tui acp            ->  acp
+  #   kiro-cli --v3 acp             ->  acp --agent-engine v3
+  #   kiro-cli --tui --v3 acp       ->  acp --agent-engine v3
+  #   kiro-cli --v3 acp --agent-engine=v2  ->  acp --agent-engine=v2
+  #   kiro-cli --v3 mcp list        ->  mcp list
+  #   kiro-cli settings all         ->  settings list
+  #   kiro-cli whoami               ->  (kept in-process, never dispatched)
   #
-  # So the stub ALWAYS dispatches, injecting `chat` when the invocation carries
-  # no subcommand, and it skips a value-taking top-level option's VALUE exactly
-  # as `subcommandBlock` does — `--agent acp` is a bare launch, not the `acp`
-  # subcommand. A stub that parsed argv LESS faithfully than the code it
-  # exercises would reintroduce the very isolation gap this check exists to
-  # close.
+  # Four rules fall out, and the stub implements all four:
   #
-  # Three divergences are deliberate and untested here, since no assertion turns
-  # on them: the launcher also rewrites `--v3` into `--agent-engine v3` (so in
-  # production the chat wrapper resolves the engine from an explicit argv token,
-  # where against this stub it falls back to the baked default — same verdict,
-  # different path), rewrites `settings all` into `settings list`, and keeps
-  # `whoami` in-process.
+  #  1. ALWAYS dispatch, injecting `chat` when no subcommand is present. A
+  #     value-taking option's VALUE is not a subcommand, exactly as in
+  #     `subcommandBlock` — `--agent acp` is a bare launch.
+  #  2. `--tui` survives ONLY on a bare launch. Give the invocation an explicit
+  #     subcommand — `chat` included — and the launcher drops it. So injecting
+  #     `--tui` on an explicit `chat` is a no-op upstream, and its inertness on
+  #     `acp` is structural rather than an observed no-op.
+  #  3. `--v3` is TRANSLATED to `--agent-engine v3` for `acp`, forwarded
+  #     verbatim for `chat`/bare, and DROPPED for everything else.
+  #  4. A caller's own `--agent-engine` suppresses the translation.
+  #
+  # Rule 3 is why the chat wrapper's engine fallback must be the chat binary's
+  # own default rather than this config's: on the real chain the engine arrives
+  # as an EXPLICIT token, so the wrapper never needs to guess, and a stub that
+  # skipped the translation would have let a wrong guess look correct.
+  #
+  # `settings all -> settings list` and the in-process `whoami` are the two
+  # rows left unimplemented; no assertion turns on either.
   dispatchLauncher = pkgs.writeShellScript "kiro-cli-stub-launcher" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
+
+    # Pass 1 — classify, skipping the value of a value-taking global.
+    nat_sub=""
     nat_skip=0
+    nat_v3=0
+    nat_engine=0
     for nat_a in "$@"; do
       if [ "$nat_skip" = 1 ]; then nat_skip=0; continue; fi
       case "$nat_a" in
+        --v3) nat_v3=1 ;;
+        --agent-engine|--agent-engine=*) nat_engine=1 ;;
         --agent|--resume-id) nat_skip=1 ;;
+        --) ;;
         -*) ;;
-        *) exec kiro-cli-chat "$@" ;;
+        *) if [ -z "$nat_sub" ]; then nat_sub="$nat_a"; fi ;;
       esac
     done
-    exec kiro-cli-chat chat "$@"
+
+    # Pass 2 — rebuild "$@" by rotating: shift each original off the front and
+    # push the survivors onto the back, so relative order is preserved. The
+    # subcommand token is pulled OUT here and re-emitted at the front below,
+    # because the launcher leads with it: `--v3 chat` arrives as `chat --v3`.
+    nat_n=$#
+    nat_i=0
+    nat_took_sub=0
+    while [ "$nat_i" -lt "$nat_n" ]; do
+      nat_a="$1"
+      shift
+      case "$nat_a" in
+        --) ;;
+        --tui)
+          if [ -z "$nat_sub" ]; then set -- "$@" --tui; fi
+          ;;
+        --v3)
+          if [ -z "$nat_sub" ] || [ "$nat_sub" = chat ]; then set -- "$@" --v3; fi
+          ;;
+        *)
+          if [ "$nat_took_sub" = 0 ] && [ -n "$nat_sub" ] && [ "$nat_a" = "$nat_sub" ]; then
+            nat_took_sub=1
+          else
+            set -- "$@" "$nat_a"
+          fi
+          ;;
+      esac
+      nat_i=$((nat_i + 1))
+    done
+
+    if [ "$nat_sub" = acp ] && [ "$nat_v3" = 1 ] && [ "$nat_engine" = 0 ]; then
+      set -- "$@" --agent-engine v3
+    fi
+    if [ -n "$nat_sub" ]; then set -- "$nat_sub" "$@"; else set -- chat "$@"; fi
+    exec kiro-cli-chat "$@"
   '';
   chainPackage = pkgs.runCommandLocal "kiro-cli-chain-stub" {} ''
     set -euETo pipefail
@@ -242,8 +300,9 @@ in
     # injections meet in one argv. Under v3 that pairing is fatal on `acp`:
     # upstream declares --agent-engine=v3 mutually exclusive with --trust-tools,
     # so `kiro-cli acp` died with "not supported with --agent-engine=v3".
-    # Nothing is lost by withholding it — under v3, trustedMcpTools is already
-    # expressed in settings/permissions.yaml.
+    # Under home-manager little is lost by withholding it — trustedMcpTools is
+    # also expressed in settings/permissions.yaml — though that translation is
+    # HM-only, so the devenv backend does not recover the grant declaratively.
     chain() {
       local wrapped="$1"
       shift
@@ -261,10 +320,14 @@ in
       fi
     }
 
+    # The withhold fires through the TRANSLATED token: the launcher hands the
+    # chat wrapper `acp --agent-engine v3`, not the `--v3` the caller typed.
     chain_expect "v3+trust: acp gets NO --trust-tools" \
-      '--v3|acp' ${chainTrustV3} acp
+      'acp|--agent-engine|v3' ${chainTrustV3} acp
+    # An EXPLICIT subcommand makes the launcher drop `--tui`, so the wrapper's
+    # injection of it on `chat` is a no-op upstream (it survives only bare).
     chain_expect "v3+trust: chat still gets --trust-tools" \
-      '--tui|--v3|chat|--trust-tools=fs_read' ${chainTrustV3} chat
+      'chat|--v3|--trust-tools=fs_read' ${chainTrustV3} chat
     chain_expect "no v3: acp still gets --trust-tools" \
       'acp|--trust-tools=fs_read' ${chainTrustV2} acp
     chain_expect "no v3: chat still gets --trust-tools" \
@@ -279,24 +342,26 @@ in
       'chat|--tui|--v3|--agent|acp|--trust-tools=fs_read' \
       ${chainTrustV3} --agent acp
     # A bare launch is dispatched too, with `chat` injected as the subcommand,
-    # so the chat-side gate fires on it.
-    chain_expect "bare launch dispatches as chat" \
+    # so the chat-side gate fires on it — and it is the ONE shape where `--tui`
+    # survives the launcher.
+    chain_expect "bare launch dispatches as chat, keeping --tui" \
       'chat|--tui|--v3|--trust-tools=fs_read' \
       ${chainTrustV3}
 
     # ── the EFFECTIVE engine decides, and only argv knows it ────────────────
-    # A caller's --agent-engine overrides the injected --v3, so neither
-    # direction can be settled at eval time. Both are measured against the real
+    # A caller's --agent-engine overrides the injected --v3 — upstream drops the
+    # injected flag outright, measured: `kiro-cli --v3 acp --agent-engine=v2`
+    # forwards `acp --agent-engine=v2`. Both directions are real against the
     # binary: `--v3 acp --agent-engine=v2 --trust-tools=x` RUNS, while
     # `acp --agent-engine=v3 --trust-tools=x` CONFLICTS.
     chain_expect "v3 config, caller opts out -> trust returns" \
-      '--v3|acp|--agent-engine=v2|--trust-tools=fs_read' \
+      'acp|--agent-engine=v2|--trust-tools=fs_read' \
       ${chainTrustV3} acp --agent-engine=v2
     chain_expect "v3 config, caller opts out (two-token form)" \
-      '--v3|acp|--agent-engine|v2|--trust-tools=fs_read' \
+      'acp|--agent-engine|v2|--trust-tools=fs_read' \
       ${chainTrustV3} acp --agent-engine v2
     chain_expect "v3 config, caller re-asks for v3 -> still withheld" \
-      '--v3|acp|--agent-engine=v3' \
+      'acp|--agent-engine=v3' \
       ${chainTrustV3} acp --agent-engine=v3
     chain_expect "no-v3 config, caller opts IN -> withheld" \
       'acp|--agent-engine=v3' \
@@ -306,8 +371,17 @@ in
       ${chainTrustV2} acp --agent-engine=v1
     # chat is unconditional: v3 + chat + --trust-tools parses fine.
     chain_expect "chat is unaffected by the engine" \
-      '--tui|--v3|chat|--agent-engine=v3|--trust-tools=fs_read' \
+      'chat|--v3|--agent-engine=v3|--trust-tools=fs_read' \
       ${chainTrustV3} chat --agent-engine=v3
+
+    # ── the chat binary reached DIRECTLY, with the launcher out of the chain ─
+    # This is what forces the fallback to be the chat binary's own default and
+    # not the Nix config's. `kiro-cli-chat acp` runs the v2 engine no matter
+    # what `v3 = true` says — there is no launcher to translate anything — so
+    # withholding --trust-tools here would strip a grant the session accepts.
+    expect "direct chat binary under a v3 config keeps --trust-tools" \
+      'acp|--trust-tools=fs_read' \
+      ${chainTrustV3}/bin/kiro-cli-chat acp
 
     # A `--` ends the engine scan. Past it a flag-looking token is a positional
     # the CLI will not honour, so neither do we. Measured on the direct

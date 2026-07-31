@@ -115,23 +115,35 @@ in
     #   kiro-cli --v3 acp --agent-engine=v2 --trust-tools=x   -> runs (v2)
     #   kiro-cli      acp --agent-engine=v3 --trust-tools=x   -> CONFLICT
     #
-    # So the engine is resolved at runtime: the caller's value if they gave one,
-    # otherwise what this wrapper bakes in.
+    # So the engine is resolved at runtime, from argv, with `v2` as the
+    # fallback — the chat binary's OWN clap default
+    # (`--agent-engine <ENGINE> … [default: v2]`), NOT what this Nix config
+    # bakes in. That distinction is the whole point: this wrapper cannot assume
+    # the launcher wrapper is in the chain. `kiro-cli-chat acp` invoked directly
+    # runs the v2 engine however `v3 = true` is set, so defaulting to v3 there
+    # withheld `--trust-tools` from a session that would have accepted it.
+    #
+    # Nothing is lost on the normal path, because the launcher does not merely
+    # set a mood — it REWRITES argv. `kiro-cli --v3 acp` arrives here as an
+    # explicit `acp --agent-engine v3` (measured), which `nat_engine` reads
+    # directly, so the withhold still fires through the token rather than
+    # through a guess.
     #
     # Why upstream forbids it there — NOT because v3 dropped the flag; under v3
-    # `chat` still honours it. `--trust-tools` is a CLIENT-SIDE auto-answer
-    # knob (kiro's TUI auto-selects `allow_always` on an approval request, with
-    # an explicit branch for the v3 "kas" engine). On the `acp` arm kiro-cli IS
-    # the agent and the external ACP client owns that answer, so the flag has
-    # nothing agent-side to bind to. Withholding therefore costs nothing:
-    # `trustedMcpTools` is also translated into `settings/permissions.yaml`
-    # (mkPermissionRules), which the v3 agent does read, and the interactive
+    # `chat` still honours it. `--trust-tools` is a CLIENT-SIDE knob: kiro's TUI
+    # re-emits it onto the downstream ACP argv. Its auto-answer of
+    # `allow_always` — including the explicit branch for the v3 "kas" engine —
+    # is gated on `--trust-all-tools`, a DIFFERENT flag; `trustTools` occurs
+    # exactly once in `tui.js`, in the flag-spec table, and is never read by the
+    # approval handler. On the `acp` arm kiro-cli IS the agent and the external
+    # ACP client owns that answer, so the flag has nothing agent-side to bind
+    # to. Withholding costs little, with one caveat worth stating: under
+    # home-manager `trustedMcpTools` is ALSO translated into
+    # `settings/permissions.yaml` (`mkPermissionRules`), which the v3 agent
+    # reads — but that translation is home-manager-only, so on the devenv
+    # backend the withheld grant is not recovered declaratively. The interactive
     # half is an ACP `session/request_permission` round-trip the CLI flag could
-    # never have participated in. `chat` stays unconditional.
-    bakedEngine =
-      if hasV3
-      then "v3"
-      else "v2";
+    # never have participated in either way. `chat` stays unconditional.
     trustAppend = "set -- \"$@\" ${lib.escapeShellArg "--trust-tools=${trustToolsCsv}"}";
     trustInjection = lib.optionalString hasTrust (
       lib.concatStringsSep "\n" [
@@ -143,7 +155,7 @@ in
             subcommands = ["acp" "chat"];
             valueFlags = chatValueFlags;
           } (lib.concatStringsSep "\n" [
-            "if [ \"$nat_sub\" != acp ] || [ \"\${nat_engine:-${bakedEngine}}\" != v3 ]; then"
+            "if [ \"$nat_sub\" != acp ] || [ \"\${nat_engine:-v2}\" != v3 ]; then"
             "  ${trustAppend}"
             "fi"
           ]))
