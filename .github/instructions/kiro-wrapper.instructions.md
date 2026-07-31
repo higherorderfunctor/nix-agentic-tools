@@ -8,13 +8,18 @@ applyTo: "checks/kiro-wrapper-argv.nix,lib/idempotentFlags.nix,packages/kiro-cli
 # kiro-cli wrapper: the argv contract
 
 > **Last verified:** 2026-07-30 against kiro-cli **2.15.2** (commit pending —
-> records that the launcher resolves `kiro-cli-chat` through PATH, so the two
-> wrappers COMPOSE, and that `--trust-tools` therefore has to be withheld from
-> `acp` under v3. Prior: first revision). If you touch
-> `lib/idempotentFlags.nix`, `packages/kiro-cli/lib/wrapPackage.nix`, or bump
-> the kiro-cli version and this fragment isn't updated in the same commit, stop
-> and fix it. Every claim below is a MEASURED parse result, not a reading of the
-> docs — re-measure, don't reason.
+> adds the measured launcher FORWARDING TABLE: it injects `chat` on a bare
+> launch, skips `--agent`'s value, strips `--`, rewrites `settings all` to
+> `settings list`, and keeps `whoami` in-process. Corrects the `--v3` rewrite to
+> its real TWO-TOKEN form `--agent-engine v3`; the `--agent-engine=v3` in the
+> error text is clap's diagnostic formatting, not the argv. Prior: records that
+> the launcher resolves `kiro-cli-chat` through PATH, so the two wrappers
+> COMPOSE, and that `--trust-tools` therefore has to be withheld from `acp`
+> under v3. Prior: first revision). If you touch `lib/idempotentFlags.nix`,
+> `packages/kiro-cli/lib/wrapPackage.nix`, or bump the kiro-cli version and this
+> fragment isn't updated in the same commit, stop and fix it. Every claim below
+> is a MEASURED parse result, not a reading of the docs — re-measure, don't
+> reason.
 
 ## The one thing to know
 
@@ -40,9 +45,20 @@ So the wrapper **prepends** them. Prepended, every subcommand accepts them.
 
 ## `--v3` reaches `acp` for free
 
-The launcher translates its own global `--v3` into `--agent-engine=v3` on the
-dispatched subcommand. Undocumented, but provable from the launcher's own error
-text, which names a flag the caller never typed:
+The launcher translates its own global `--v3` into an `--agent-engine` option on
+the dispatched subcommand. Measured directly, by putting a `kiro-cli-chat` that
+prints its argv first on `PATH`:
+
+```console
+$ kiro-cli --v3 acp        # kiro-cli-chat actually received:
+acp --agent-engine v3
+```
+
+Note the **two-token** form. The error text below renders it
+`--agent-engine=v3`, but that is how clap prints an option in a diagnostic, not
+the argv that was passed — so a probe grepping forwarded argv for the `=`
+spelling finds nothing and wrongly concludes the translation is gone.
+`optionValueBlock` accepts both spellings for exactly this reason.
 
 ```console
 $ kiro-cli --v3 acp --trust-tools=fs_read
@@ -94,13 +110,35 @@ any real profile, `kiro-cli acp` runs **both** wrappers:
 ```
 kiro-cli acp
   -> launcher wrapper  prepends --v3
-  -> launcher translates --v3 into --agent-engine=v3, finds kiro-cli-chat on PATH
+  -> launcher rewrites --v3 to `--agent-engine v3`, finds kiro-cli-chat on PATH
   -> chat wrapper      appends --trust-tools
   => error: the following arguments are not supported with --agent-engine=v3: --trust-tools
 ```
 
 That shipped, and it is why `--trust-tools` is withheld from `acp` when the
 engine is v3.
+
+**What the launcher forwards**, measured by putting a `kiro-cli-chat` that
+prints its argv first on `PATH`. It does not merely relay argv — it injects,
+rewrites and strips:
+
+| Invocation              | `kiro-cli-chat` receives |
+| ----------------------- | ------------------------ |
+| `kiro-cli`              | `chat`                   |
+| `kiro-cli --agent acp`  | `chat --agent acp`       |
+| `kiro-cli --tui`        | `chat --tui`             |
+| `kiro-cli --`           | `chat`                   |
+| `kiro-cli acp`          | `acp`                    |
+| `kiro-cli --v3 acp`     | `acp --agent-engine v3`  |
+| `kiro-cli settings all` | `settings list`          |
+| `kiro-cli whoami`       | _(kept in-process)_      |
+
+Three consequences worth holding on to. A **bare launch is dispatched too**,
+with `chat` injected — so the chat wrapper's `chat` gate fires on it.
+**`--agent`'s value is not a subcommand**: `--agent acp` forwards as a bare
+launch, which is why both `subcommandBlock` and the check's launcher stub skip a
+value-taking option's value. And **`--` is stripped**, so past the launcher it
+can never reach the chat binary's own scan.
 
 **Upstream's reason is NOT that v3 replaced the flag.** Under v3, `chat` still
 honours it. `--trust-tools` is a **client-side auto-answer knob**: kiro's own

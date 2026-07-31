@@ -62,8 +62,10 @@ in
         environmentVariables);
 
     # `--v3` is injected for EVERY subcommand, because it is global and because
-    # that is what makes it reach `acp`: the launcher translates its own `--v3`
-    # into `--agent-engine=v3` on the dispatched subcommand. A caller's explicit
+    # that is what makes it reach `acp`: the launcher rewrites its own `--v3`
+    # into `--agent-engine v3` — TWO tokens; the error text's `--agent-engine=v3`
+    # is clap's diagnostic formatting, not the argv — on the dispatched
+    # subcommand. A caller's explicit
     # `--agent-engine=vN` still wins — upstream resolves that, so this wrapper
     # deliberately implements no precedence of its own.
     v3Block = lib.optionalString hasV3 (idempotentFlagBlock {
@@ -100,7 +102,7 @@ in
     #
     #   kiro-cli acp
     #     -> launcher wrapper prepends --v3
-    #     -> launcher translates --v3 into --agent-engine=v3, resolves
+    #     -> launcher rewrites --v3 to `--agent-engine v3`, resolves
     #        kiro-cli-chat on PATH -> lands here
     #     -> this wrapper appends --trust-tools
     #     => error: the following arguments are not supported with

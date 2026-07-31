@@ -46,17 +46,45 @@
   #
   # Testing each binary alone cannot see that: it is what let a `--v3` prepend
   # and a `--trust-tools` append meet on `acp` and abort the command.
+  #
+  # What the REAL 2.15.2 launcher forwards, measured by putting a printing
+  # `kiro-cli-chat` first on PATH and reading the argv it received:
+  #
+  #   kiro-cli               ->  chat
+  #   kiro-cli --agent acp   ->  chat --agent acp
+  #   kiro-cli --tui         ->  chat --tui
+  #   kiro-cli --            ->  chat
+  #   kiro-cli acp           ->  acp
+  #   kiro-cli --v3 acp      ->  acp --agent-engine v3
+  #   kiro-cli settings all  ->  settings list
+  #   kiro-cli whoami        ->  (kept in-process, never dispatched)
+  #
+  # So the stub ALWAYS dispatches, injecting `chat` when the invocation carries
+  # no subcommand, and it skips a value-taking top-level option's VALUE exactly
+  # as `subcommandBlock` does — `--agent acp` is a bare launch, not the `acp`
+  # subcommand. A stub that parsed argv LESS faithfully than the code it
+  # exercises would reintroduce the very isolation gap this check exists to
+  # close.
+  #
+  # Three divergences are deliberate and untested here, since no assertion turns
+  # on them: the launcher also rewrites `--v3` into `--agent-engine v3` (so in
+  # production the chat wrapper resolves the engine from an explicit argv token,
+  # where against this stub it falls back to the baked default — same verdict,
+  # different path), rewrites `settings all` into `settings list`, and keeps
+  # `whoami` in-process.
   dispatchLauncher = pkgs.writeShellScript "kiro-cli-stub-launcher" ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
+    nat_skip=0
     for nat_a in "$@"; do
+      if [ "$nat_skip" = 1 ]; then nat_skip=0; continue; fi
       case "$nat_a" in
+        --agent|--resume-id) nat_skip=1 ;;
         -*) ;;
         *) exec kiro-cli-chat "$@" ;;
       esac
     done
-    printf 'ENV=%s\n' "''${KIRO_WRAPPER_TEST-unset}"
-    for nat_a in "$@"; do printf 'ARG=%s\n' "$nat_a"; done
+    exec kiro-cli-chat chat "$@"
   '';
   chainPackage = pkgs.runCommandLocal "kiro-cli-chain-stub" {} ''
     set -euETo pipefail
@@ -241,6 +269,20 @@ in
       'acp|--trust-tools=fs_read' ${chainTrustV2} acp
     chain_expect "no v3: chat still gets --trust-tools" \
       'chat|--trust-tools=fs_read' ${chainTrustV2} chat
+
+    # ── the launcher's own scan: a VALUE is not a subcommand ────────────────
+    # The real launcher forwards `kiro-cli --agent acp` as `chat --agent acp` —
+    # a bare launch. If the stub dispatched on `acp` instead, the chat wrapper
+    # would read it as the acp subcommand, the v3 gate would fire, and
+    # --trust-tools would be withheld from what is really a chat launch.
+    chain_expect "value skip: --agent VALUE is a bare launch" \
+      'chat|--tui|--v3|--agent|acp|--trust-tools=fs_read' \
+      ${chainTrustV3} --agent acp
+    # A bare launch is dispatched too, with `chat` injected as the subcommand,
+    # so the chat-side gate fires on it.
+    chain_expect "bare launch dispatches as chat" \
+      'chat|--tui|--v3|--trust-tools=fs_read' \
+      ${chainTrustV3}
 
     # ── the EFFECTIVE engine decides, and only argv knows it ────────────────
     # A caller's --agent-engine overrides the injected --v3, so neither
