@@ -3,7 +3,8 @@ name: stack-plan
 description: >-
   Use when you need to plan commits, restructure a stack, or commit uncommitted
   work as organized atomic commits. Builds a stack from a description,
-  uncommitted work, or existing commits INSTEAD of manual git rebase -i, git
+  uncommitted work, or existing commits INSTEAD of dumping everything into one
+  monolithic commit with git add -A && git commit, or manual git rebase -i, git
   reset --soft, or ad-hoc git move sequences. Prevents: wrong commit ordering,
   forward references, git move -F panics, untested intermediates.
 argument-hint: "<plan | range | (none for working tree)>"
