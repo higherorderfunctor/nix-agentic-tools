@@ -175,6 +175,7 @@ class AcpHost:
         self.workspace = workspace
         self.auth_calls = 0
         self.log = []
+        self._t0 = time.monotonic()
 
         env = dict(os.environ)
         env["HOME"] = scratch_home
@@ -235,9 +236,19 @@ class AcpHost:
             if "method" in msg and "id" in msg:
                 self._handle_request(msg)
                 continue
-            # A notification: record its method for progress, drop the payload.
+            # A notification. Record the PAYLOAD too, not just the method: the
+            # workflow lifecycle notifications (`_kiro/workflow/node_start`,
+            # `node_complete`, `loop_iteration`) are the only place a branch's
+            # per-iteration progress is observable, and which branch is on which
+            # iteration at a given moment is the whole concurrency measurement.
+            # The receipt time is the host's, so it lags the engine's own
+            # timestamps by one poll interval — read ORDER from it, not duration.
             if "method" in msg:
-                self.log.append(msg["method"])
+                self.log.append({
+                    "t": time.monotonic() - self._t0,
+                    "method": msg["method"],
+                    "params": msg.get("params"),
+                })
                 continue
             if msg.get("id") == target_id:
                 return msg
