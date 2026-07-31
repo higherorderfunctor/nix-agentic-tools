@@ -137,6 +137,68 @@ where the correct method reaches depth 2; if those two ever agree on a corpus
 containing nested dispatch, either the field changed meaning or the
 reconstruction regressed, and `C5` fails rather than quietly passing.
 
+### A workflow run has no dispatch rows at all — `X1` needs a different second view
+
+Measured 2026-07-30 against KAS `2.15.2-7755e465…`, on the first two live
+workflow runs ever made on this machine.
+
+A workflow **step is a top-level session**, not a sub-execution. The engine
+creates each step's session beside the parent chat session in the same bucket
+and records it in the workflow's own tracker; it does **not** emit a
+`sub_agent_start` row anywhere. Reconstructing the two smoke runs found 3
+sessions, 68 transcript rows, and **0 dispatch rows** — so every downstream
+figure was vacuous and `reconstruct` correctly returned `INCONCLUSIVE` on `C0`.
+
+That is not a reconstruction bug and it is not fixable by reading more files.
+`verify.py reconstruct` rebuilds the forest from subagent **dispatch** rows,
+which is the right and only edge source for `invoke_sub_agent` fan-out. A
+workflow drain does not fan out that way, so **`X1` as written can never be
+anything but `INCONCLUSIVE` for the workflow arm** — and, worse, it would be
+INCONCLUSIVE for a _correct_ run and an _incorrect_ one identically.
+
+The workflow arm's second view is on disk in a different place:
+
+```
+<home>/.kiro/sessions/<bucket>/workflows/<workflowId>/
+  workflow-definition.json   the definition as the engine parsed it
+  sessions.json              {nodeId, nodePath, sessionId} per step session
+  workflow-state.json        the node tree with per-node status and sessionId
+```
+
+`sessions.json` is the tracker the engine appends to as each step session
+starts. Measured over the K=5 drain run — 19 step sessions — each entry carries
+exactly `{iteration, nodeId, nodePath, sessionId}`:
+
+```json
+{
+  "iteration": 0,
+  "nodeId": "shard-01-item",
+  "nodePath": [
+    "wf_87d18b666ac1857b",
+    "drain",
+    "shard-01",
+    "iter-0",
+    "shard-01-item"
+  ],
+  "sessionId": "sess_ff7f0a7a-c099-437e-8dde-f0a1ee28f3dd"
+}
+```
+
+**Branch identity is in `nodePath`, not in a `branchId` field.** The emitter
+does spread a `branchId` when one is defined, so the field is real — but for the
+drain's shape (a `repeat` per branch under one `parallel`) it was absent from
+all 19 entries, and the branch is instead the `nodePath` segment before the
+`iter-N` one. Read the path; do not look for the field and conclude the run was
+not branched. That `nodePath` + `iteration` + `sessionId` triple is the edge set
+to diff the queue's beliefs against, and the engine writes it rather than the
+scheduler under test, which is the property `X1` actually needs. The step
+sessions' own transcripts are then reachable by `sessionId` in the ordinary way.
+
+**Do not substitute the notification stream for this.** `node_start` carries the
+same triple and arrives live, which makes it the right source for _timing_ — but
+it is a stream this driver could drop, and a view that shares a failure mode
+with the thing it is checking is not an independent view.
+
 ## Reconstruction rules
 
 Two enumeration rules, both load-bearing:
