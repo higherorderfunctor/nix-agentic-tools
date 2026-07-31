@@ -127,6 +127,24 @@ emit() {
 }
 
 # --- smoke -----------------------------------------------------------------
+#
+# NO `completion` FIELD, and that is a correction rather than an omission (C-18).
+#
+# `completion` reads like an assertion on what the step produced. It is not: it
+# is the entry condition for `runCompletionLoop`, which holds the step session
+# open ACROSS TURNS, re-evaluates the condition against `capturedOutput` after
+# each one, and while unsatisfied parks the node `paused` — "waiting for the
+# next user message" — blocking in `awaitNextTurn`. A step with no `completion`
+# returns from that loop immediately and finishes after one turn.
+#
+# So `completion` turns a one-shot step into a conversation, and an unattended
+# driver has nobody to send the next message. The first live run of this fixture
+# wrote the correct file, said the correct thing, and reported `paused` with an
+# EMPTY captured output — the work done, every visible signal saying it was not.
+#
+# The assertion it looked like it was making belongs on the driver's side: check
+# the workspace file and the agent's message stream after the run. Those are
+# observations; this was a control-flow directive wearing an assertion's name.
 
 emit smoke -n \
   --arg agent "$WORKFLOW_AGENT" \
@@ -139,7 +157,9 @@ emit smoke -n \
       + "drain.workflow.json — it separates \"the workflowsEnabled seed did not "
       + "take\" from \"my definition is wrong\", which are otherwise the same "
       + "symptom. `inputs` is deliberately absent here to exercise the schema "
-      + "default (record(string) with .default({}))."
+      + "default (record(string) with .default({})), and `completion` is "
+      + "deliberately absent because it would hold the step session open across "
+      + "turns and park an unattended run `paused` forever (C-18)."
     ),
     steps: [
       {
@@ -150,8 +170,7 @@ emit smoke -n \
           "Create the directory \($state_root) if it does not exist, write the "
           + "single line SMOKE-OK into \($state_root)/smoke.txt, then reply with "
           + "exactly SMOKE-OK and nothing else."
-        ),
-        completion: {containsText: "SMOKE-OK"}
+        )
       }
     ]
   }'

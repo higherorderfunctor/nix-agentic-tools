@@ -507,3 +507,61 @@ control.
 policy cancels does not tell you which of the others also does — and a negative
 you have already recorded protects only the specific trigger you recorded it
 against.
+
+---
+
+## C-18 — A step's `completion` field was read as an assertion; it is an interactive loop that hangs a headless run
+
+> **Established by a live run**, not by a code read — the first entry in this
+> file that is. KAS `2.15.2-7755e465…` (kiro-cli 2.15.2).
+
+**Belief:** `completion: {containsText: "…"}` on a `step` node asserts what the
+step must have produced, the way a test asserts on output. A step that produced
+the text passes; one that did not fails.
+
+**Reality:** `completion` is the entry condition for `runCompletionLoop`, which
+keeps the step's session **open across turns**. After each turn it re-evaluates
+the condition against the node's `capturedOutput`; while unsatisfied it parks
+the node `paused` with
+`pauseReason: "Step '<id>' is waiting for the next user message."` and blocks in
+`awaitNextTurn`. A step with **no** `completion` returns from that function
+immediately and completes after one turn. So `completion` does not assert — it
+**converts a one-shot step into a conversation**, and a driver with no human to
+send the next message waits forever.
+
+**How it presented:** as a failed run whose work had already succeeded.
+`smoke.workflow.json` asked the agent to write `SMOKE-OK` into a file and reply
+`SMOKE-OK`. On disk the file was correct and complete; the transcript shows the
+agent emitting exactly `SMOKE-OK` as its message. The run reported `paused`,
+`capturedOutputs: {"smoke-marker": ""}`, and no error anywhere. Every visible
+signal pointed at the step having produced nothing.
+
+**The decoy that cost the most time:** the same run also showed a **genuinely
+failed tool call** — `Send Message` returning
+`Cannot resolve parent session: caller is not part of a workflow or workflow has no parent`,
+because the workflow had been created from `workspacePaths` with no
+`parentSessionId`. That is a real defect, it sits three seconds before the
+pause, and it explains an empty captured output perfectly. It is not the cause.
+Re-running with a parent session made `send_message` succeed and set
+`completionSignal: "success"` on the node — **and the run paused identically**.
+Only the control run separated them.
+
+**Why it fooled us:** the field is named for the thing it tests, not for the
+loop it starts, and the loop is invisible in the definition. Nothing in the
+schema, the node type, or the tool description marks a `completion` step as
+interactive. The failure is also the corpus's standard shape — silent, and
+indistinguishable from "the definition is wrong" or "the enable path did not
+take", which is precisely what the smoke fixture existed to tell apart.
+
+**Blast radius:** the drain is **unaffected** — `drain.workflow.json` carries
+zero `completion` fields, so each iteration's step completes after one turn,
+which is what makes the `repeat` advance at all. Only `smoke` and `coverage`
+used it, and `coverage` is a validator fixture that must never run.
+
+**Lesson:** for any node field that names a condition, establish **who evaluates
+it and how many times** before treating it as an assertion. A condition
+evaluated once is a test; a condition evaluated after every turn is a loop, and
+the difference is invisible at the call site. And when a run has two candidate
+causes and one of them is a real error, the real error is the decoy worth
+controlling for first — fixing it and re-running is cheaper than reasoning about
+which one mattered.
