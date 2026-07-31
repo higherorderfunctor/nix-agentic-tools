@@ -15,15 +15,15 @@ tools might fail to use these skills and fix the root causes.
   SKILL.md `name` fields. The `dev-` prefix keeps the in-repo working copies
   from being shadowed by the user-global installs of the same skills (personal >
   project precedence in Claude Code). Do not flag this as a spec violation.
-- Is the routing table effective? Would the AI actually choose the skill over
-  running raw commands?
+- Is the skill-routing rule effective? Would the AI actually choose the skill
+  over running raw commands?
 - Test: given a user prompt like "fix a typo in an earlier commit", would the
-  routing table redirect to `/stack-fix`?
+  skill-routing rule redirect to `/stack-fix`?
 
 ### CLAUDE.md / Instruction File Analysis
 
 - Is the CLAUDE.md too large? Does critical information get buried?
-- Is the routing table prominent enough vs other content?
+- Is the skill-routing rule prominent enough vs other content?
 - Does the instruction hierarchy (global CLAUDE.md → project CLAUDE.md → skill)
   create conflicts or confusion?
 - Are there competing instructions that could cause the model to ignore skills?

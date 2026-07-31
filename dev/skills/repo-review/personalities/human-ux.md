@@ -23,7 +23,7 @@ Your job is to evaluate whether a human can go from "never heard of this" to
 
 ### Routing Table Clarity
 
-- Does a human reading the routing table understand when to use each skill?
+- Does a human reading the skill-routing rule understand when to use each skill?
 - Is there overlap or ambiguity between skills? (e.g., when to use `/stack-fix`
   vs `/stack-plan` for restructuring)
 - Are the "Use INSTEAD of" examples helpful or confusing?

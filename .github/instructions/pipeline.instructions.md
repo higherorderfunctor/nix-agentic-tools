@@ -652,7 +652,7 @@ tree. Nix store caching means unchanged inputs skip rebuild.
 - `dev/generate.nix` — shared fragment composition logic consumed by both devenv
   tasks and flake derivations.
 - `packages/coding-standards/fragments/` — published coding standards.
-- `packages/stacked-workflows/fragments/` — published routing table.
+- `packages/stacked-workflows/fragments/` — published skill-routing rule.
 - `packages/fragments-ai/` — AI ecosystem transforms (passthru).
 
 ### What Stays in Module System

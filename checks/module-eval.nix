@@ -3139,7 +3139,7 @@ in {
 
   # ── Stacked-workflows: skills + router, user-global (HM) + project (devenv) ──
   # Scope-revert (docs/plans/stacked-workflows-scope-revert-plan.md): the HM
-  # module now installs the (unprefixed) stack-* skills + routing table
+  # module now installs the (unprefixed) stack-* skills + skill-routing rule
   # user-global; the devenv module mirrors them project-local. References are
   # bundled as REAL files inside each skill dir (deref'd at build).
 
@@ -3192,7 +3192,7 @@ in {
       && skills ? stack-test
   );
 
-  # HM (user-global) scope: enable -> the routing-table instruction lands in
+  # HM (user-global) scope: enable -> the skill-routing instruction lands in
   # ai.instructions (-> ~/.claude/CLAUDE.md, ~/.kiro/steering/, ...).
   module-sws-hm-enable-sets-ai-instructions = mkTest "sws-hm-enable-sets-ai-instructions" (
     let

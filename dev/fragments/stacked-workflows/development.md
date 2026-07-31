@@ -10,12 +10,12 @@ content package with per-backend modules:
 - `packages/stacked-workflows/references/*.md` — tool reference docs shared by
   all skills (bundled as REAL files inside each skill dir at build time; see
   `overlay.nix`)
-- `packages/stacked-workflows/router.nix` — the routing-table instruction,
+- `packages/stacked-workflows/router.nix` — the skill-routing instruction,
   shared by both backend modules
 - `packages/stacked-workflows/modules/homeManager/` — user-global module
-  (skills + routing table + git-config presets)
+  (skills + skill-routing rule + git-config presets)
 - `packages/stacked-workflows/modules/devenv/` — project-local module (skills +
-  routing table)
+  skill-routing rule)
 - `dev/fragments/stacked-workflows/` — dev-only development guide
 - `packages/git-tools/` — overlay for git-absorb, git-branchless, git-revise
 
@@ -29,7 +29,7 @@ Two preset levels are exported via `lib.gitConfig` (essential aliases) and
 ### Skills + Routing Table
 
 `stacked-workflows.enable = true` fans the (unprefixed) `stack-*` skills and the
-routing-table instruction into the cross-ecosystem `ai.skills` /
+skill-routing instruction into the cross-ecosystem `ai.skills` /
 `ai.instructions` pools, so each enabled AI CLI (Claude, Copilot, Kiro) installs
 them at its native path. Both backend modules delegate to the shared
 `lib/ai/mkSkillPackageModule` factory; the `ai.skills` pool is
