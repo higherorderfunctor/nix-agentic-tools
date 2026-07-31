@@ -32,10 +32,22 @@ identifier is renamed. **The command is disposable; the semantics are not.**
 | `evidence/*.md`        | **R** | measurements over this machine's own Kiro state               |
 | `carried-negatives.md` | **C** | beliefs that were wrong, and **how each mistake presented**   |
 | `drift-ledger.md`      | **D** | what changed between engine versions, when, and what it broke |
+| `harness/`             | **F** | the ACP driver, the scratch environment, the run-state bridge |
+| `workflows/`           | **F** | generated workflow definitions and a standalone validator     |
+| `queue/`, `scripts/`   | **F** | the synthetic work queue and its claim/verify tooling         |
 
-Mode **F** — runnable fixtures needing a live interactive session — is planned
-and not present yet. The engine does not run under a non-interactive shell, so
-those cannot be automated and must be operator-driven.
+Mode **F** — runnable fixtures — **exists as of 2026-07-31**, and the premise
+this section used to state is retired. It said the fixtures "cannot be automated
+and must be operator-driven", because the engine does not run under a
+non-interactive shell. The first half does not follow from the second: the
+engine delegates authentication to the ACP **client**, so a host that answers
+`_kiro/auth/getAccessToken` runs it headless — no TUI, no terminal, no operator.
+`harness/acp-drain.py` drives a workflow to completion that way, and
+`evidence/drain-live-runs.md` is the first live evidence in this corpus.
+
+What remains genuinely operator-driven is narrower than "mode F": the sittings
+in `RUNBOOK-session-b.md` and `RUNBOOK-session-c.md`, which probe hook firing,
+nesting and MCP wiring through the interactive client.
 
 **Start with `carried-negatives.md` if you are new here.** The expensive part of
 an undocumented engine is rarely the discovery — it is the wrong turn taken

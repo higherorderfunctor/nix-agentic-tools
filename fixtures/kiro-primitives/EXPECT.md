@@ -1,10 +1,17 @@
 # EXPECT.md — what a mode-F run must prove
 
-> **Last verified:** 2026-07-30 against KAS 2.15.1 (kiro-cli 2.15.1). The
-> reconstruction half of this file was developed and measured against this
-> machine's real transcript corpus; the predicate half was exercised against
-> synthetic runs whose answers are known. No live Kiro session was started to
-> produce any of it.
+> **Last verified:** 2026-07-31 against KAS 2.15.2 (kiro-cli 2.15.2). The
+> reconstruction half was developed and measured against this machine's real
+> transcript corpus; the predicate half was exercised first against synthetic
+> runs whose answers are known, and **then against four live workflow runs** —
+> see "What a live run has now verified" below and
+> `evidence/drain-live-runs.md`.
+>
+> The previous marker said "no live Kiro session was started to produce any of
+> it", which was true when written and is now the opposite of true. It is called
+> out rather than quietly replaced because the claim it made — that the engine
+> could not be driven without an operator — is the assumption this file was
+> built under, and two of its predicates (`F2`, `X1`) still carry that shape.
 
 Every predicate here is executable. `verify.py` is the implementation, this file
 is the contract, and neither is allowed to drift from the other — a predicate
@@ -342,6 +349,30 @@ line rather than inferring it. A schema-invalid seed fails loud instead
 
 `INCONCLUSIVE` is deliberately not success. A predicate that could not have
 failed did not pass.
+
+## What a live run has now verified
+
+Measured 2026-07-31 against KAS `2.15.2-7755e465…`; figures and method in
+`evidence/drain-live-runs.md`.
+
+- **P1–P4 all PASS on both duration profiles**, over a real K=5 drain against
+  the shared synthetic queue — 16 items on `moderate` (6 of them late-proposed,
+  none starved) and 13 on `severe`, every one terminal exactly once, both
+  terminating unattended on `queue-drained` with nothing carried forward.
+- **P4 FAILS on a deliberately misconfigured run**, and names the two step
+  sessions that held one item concurrently. That is the predicate biting on real
+  data rather than on a synthetic mutant, and it is the same run in which `P1`
+  passes — the item reached exactly one terminal state, `dead`. An item can be
+  fully accounted-for and worked twice at once, which is the argument for
+  keeping the predicates separate. Cause and fix: C-19.
+- **F2 and X1 remain `INCONCLUSIVE` by construction**, not by accident. The
+  synthetic queue has no verifier role, so nothing is ever both implemented and
+  verified; and a workflow run emits no dispatch rows, so X1 has no disk-side
+  edge set. Both are reported, neither is claimed as PASS.
+- **The attribution join is the cross-check that does apply**, and it found **0
+  misses over 142 queue actions across three runs**. See the `X1` subsection
+  above for why it, rather than the transcript forest, is the right second view
+  on this arm.
 
 ## What has been verified without a live run
 
