@@ -109,7 +109,7 @@ That the root never sees the token is the point: a match cannot be explained by
 root having synthesized the child's reply. Then read the real shape:
 
 ```bash
-python3 verify.py reconstruct --home "$KIRO_FIXTURE_HOME"
+python3 verify.py reconstruct --sessions-root "$KIRO_FIXTURE_HOME/.kiro/sessions"
 ```
 
 **Expect** a tree reaching **depth 2**, and `C5` passing — which is the
@@ -223,7 +223,7 @@ behavior, which is easy to misread.
 ## Step 7 — capture and tear down
 
 ```bash
-python3 verify.py reconstruct --home "$KIRO_FIXTURE_HOME" > /tmp/session-b-tree.txt
+python3 verify.py reconstruct --sessions-root "$KIRO_FIXTURE_HOME/.kiro/sessions" > /tmp/session-b-tree.txt
 ./harness/scratch-down.sh --keep-logs
 ```
 
