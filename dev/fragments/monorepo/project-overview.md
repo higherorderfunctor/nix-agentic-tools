@@ -21,7 +21,7 @@ devshell integration.
 packages/
   <pkg>/              Per-package facet barrel: modules/{homeManager,devenv},
                       lib, docs, and fragments for that package
-  stacked-workflows/  Content package: skills, references, routing-table fragment
+  stacked-workflows/  Content package: skills, references, skill-routing fragment
   coding-standards/   Content package: reusable coding standard fragments
 overlays/     Binary package overlays (pkgs.ai.*, pkgs.devTools.*,
               pkgs.generic.*, pkgs.gitTools.*) plus per-package

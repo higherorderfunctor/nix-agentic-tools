@@ -68,10 +68,10 @@ in {
     // {
       passthru = {
         fragments = {
-          routing-table = fragmentsLib.mkFragment {
-            text = builtins.readFile ./fragments/routing-table.md;
-            description = "Stacked workflow skill routing table";
-            source = "packages/stacked-workflows/fragments/routing-table.md";
+          skill-routing = fragmentsLib.mkFragment {
+            text = builtins.readFile ./fragments/skill-routing.md;
+            description = "Stacked workflow skill-routing rule";
+            source = "packages/stacked-workflows/fragments/skill-routing.md";
             priority = 10;
           };
         };

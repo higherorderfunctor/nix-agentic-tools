@@ -10,8 +10,11 @@
 # The skill is Nix-GENERATED: `lib/mkSkill.nix` bakes the XDG state base
 # (`config.xdg.stateHome`) into SKILL.md's @XDG_STATE_BASE@ token and returns the
 # generated skill's store-path STRING (see mkSkill.nix for why a string, not the
-# derivation). Single skill, no sibling disambiguation → no router (unlike
-# stacked-workflows, which ships several sibling skills + a routing table).
+# derivation). No router: nothing this skill does is reachable by a stray
+# hand-run command, so there is no rule that has to hold before the model
+# considers the skill — and its description covers the rest. (Contrast
+# stacked-workflows, whose skills wrap git commands a model can equally well run
+# directly, so it pays for an always-loaded "check for a skill first" rule.)
 #
 # Picked up by `collectFacet ["modules" "homeManager"]` in flake.nix.
 import ../../../../lib/ai/mkSkillPackageModule.nix {

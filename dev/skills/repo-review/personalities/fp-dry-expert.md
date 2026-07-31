@@ -10,7 +10,7 @@ repetition.
 
 ### Single Source of Truth
 
-- Is `fragments/routing-table.md` truly the single source for routing? Or has
+- Is `fragments/skill-routing.md` truly the single source for routing? Or has
   content drifted into CLAUDE.md, INSTALL.md, or README.md that isn't generated
   from it?
 - Are git config presets (`lib/git-config.nix`, `lib/git-config-full.nix`) the

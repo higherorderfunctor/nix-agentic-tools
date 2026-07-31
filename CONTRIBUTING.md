@@ -58,7 +58,7 @@ tree. Nix store caching means unchanged inputs skip rebuild.
 - `dev/generate.nix` — shared fragment composition logic consumed by both devenv
   tasks and flake derivations.
 - `packages/coding-standards/fragments/` — published coding standards.
-- `packages/stacked-workflows/fragments/` — published routing table.
+- `packages/stacked-workflows/fragments/` — published skill-routing rule.
 - `packages/fragments-ai/` — AI ecosystem transforms (passthru).
 
 ### What Stays in Module System
@@ -170,11 +170,11 @@ Fragments are composable instruction blocks used to build AI instruction files
 
 <!-- TODO: refine with maintainer input -->
 
-| Fragment type               | Location                                         | Exported? |
-| --------------------------- | ------------------------------------------------ | --------- |
-| Dev-only (monorepo/tooling) | `dev/fragments/<pkg>/<name>.md`                  | No        |
-| Published coding standards  | `packages/coding-standards/fragments/<name>.md`  | Yes       |
-| Published SWS routing table | `packages/stacked-workflows/fragments/<name>.md` | Yes       |
+| Fragment type                    | Location                                         | Exported? |
+| -------------------------------- | ------------------------------------------------ | --------- |
+| Dev-only (monorepo/tooling)      | `dev/fragments/<pkg>/<name>.md`                  | No        |
+| Published coding standards       | `packages/coding-standards/fragments/<name>.md`  | Yes       |
+| Published SWS skill-routing rule | `packages/stacked-workflows/fragments/<name>.md` | Yes       |
 
 To add a dev-only fragment:
 

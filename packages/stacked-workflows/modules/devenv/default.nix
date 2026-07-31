@@ -2,7 +2,7 @@
 #
 # Delegates to the shared skill-packaging factory (lib/ai/mkSkillPackageModule):
 # `stacked-workflows.enable = true` fans the unprefixed stack-* skills and the
-# routing-table instruction into the cross-ecosystem `ai.*` pools at
+# skill-routing instruction into the cross-ecosystem `ai.*` pools at
 # project-local (devenv) scope. The `ai.skills` pool is per-`evalModules`, so
 # this contribution is independent of the HM module's.
 #
@@ -14,7 +14,7 @@
 # Picked up by `collectFacet ["modules" "devenv"]` in flake.nix.
 import ../../../../lib/ai/mkSkillPackageModule.nix {
   name = "stacked-workflows";
-  enableDescription = "stacked workflow skills + routing table (project-local devenv scope)";
+  enableDescription = "stacked workflow skills + skill-routing rule (project-local devenv scope)";
   skills = {pkgs, ...}: pkgs.stacked-workflows-content.passthru.skills;
   instructions = {
     lib,

@@ -472,7 +472,7 @@
     | Package | Description |
     |---------|-------------|
     | `coding-standards` | Reusable coding standard fragments (DRY, conventional commits, etc.) |
-    | `stacked-workflows-content` | Skills, references, and routing-table fragment |
+    | `stacked-workflows-content` | Skills, references, and skill-routing fragment |
 
     Content packages are derivations with `passthru.fragments` for
     composable instruction building.
@@ -704,7 +704,7 @@
     |---------------|----------|-----------|
     | Dev-only (monorepo/tooling) | `dev/fragments/<pkg>/<name>.md` | No |
     | Published coding standards | `packages/coding-standards/fragments/<name>.md` | Yes |
-    | Published SWS routing table | `packages/stacked-workflows/fragments/<name>.md` | Yes |
+    | Published SWS skill-routing rule | `packages/stacked-workflows/fragments/<name>.md` | Yes |
 
     To add a dev-only fragment:
 

@@ -1,8 +1,8 @@
 # Stacked-workflows home-manager module — user-global install.
 #
-# The skills + routing-table fanout is delegated to the shared skill-packaging
+# The skills + skill-routing fanout is delegated to the shared skill-packaging
 # factory (lib/ai/mkSkillPackageModule), imported below: `stacked-workflows.enable
-# = true` fans the unprefixed stack-* skills and the routing-table instruction
+# = true` fans the unprefixed stack-* skills and the skill-routing instruction
 # into the cross-ecosystem `ai.*` pools, so each enabled ecosystem installs them
 # user-global (~/.claude/skills, ~/.kiro/skills, ~/.claude/CLAUDE.md,
 # ~/.kiro/steering/, ...). The `ai.skills` pool is per-`evalModules`, so this
@@ -37,7 +37,7 @@ in {
   imports = [
     (import ../../../../lib/ai/mkSkillPackageModule.nix {
       name = "stacked-workflows";
-      enableDescription = "stacked workflow skills, routing table, and git-config presets (user-global)";
+      enableDescription = "stacked workflow skills, skill-routing rule, and git-config presets (user-global)";
       skills = {pkgs, ...}: pkgs.stacked-workflows-content.passthru.skills;
       instructions = {
         lib,

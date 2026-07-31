@@ -26,10 +26,18 @@
 #                       `mkSkillEntries` / `mkDevenvSkillEntries`) materialize
 #                       both as recursive directories.
 #   instructions      : moduleArgs -> listOf attrs. OPTIONAL router entries for
-#                       ai.instructions. Omit for single-skill packages that
-#                       need no routing table (living-workflow); provide for
-#                       packages shipping several sibling skills that need
-#                       disambiguation (stacked-workflows).
+#                       ai.instructions. These are ALWAYS-LOADED in every
+#                       ecosystem, so they are a per-turn tax on every session
+#                       and the bar is high: provide one only for a rule that
+#                       must hold BEFORE the model considers a skill at all,
+#                       since that is the one thing skill-description matching
+#                       cannot express. Sibling disambiguation is NOT such a
+#                       reason — the descriptions already do that.
+#                       living-workflow omits it (one skill, nothing a stray
+#                       command reaches). stacked-workflows provides one because
+#                       its skills wrap git commands a model can equally well
+#                       run by hand, so "check for a skill first" has to be
+#                       unconditional.
 #
 # Each skill value is wrapped in `lib.mkDefault` so a consumer can override an
 # individual key at normal priority.

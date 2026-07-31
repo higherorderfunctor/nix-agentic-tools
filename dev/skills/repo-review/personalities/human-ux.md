@@ -21,12 +21,15 @@ Your job is to evaluate whether a human can go from "never heard of this" to
 - Do the quick start examples actually work as written?
 - Are error paths documented? What happens if a prerequisite is missing?
 
-### Routing Table Clarity
+### Skill-Routing Clarity
 
-- Does a human reading the routing table understand when to use each skill?
+- Does a human reading each skill's own description understand when to use it?
+  The always-loaded rule no longer enumerates operations, so the descriptions
+  are the routing surface.
 - Is there overlap or ambiguity between skills? (e.g., when to use `/stack-fix`
   vs `/stack-plan` for restructuring)
-- Are the "Use INSTEAD of" examples helpful or confusing?
+- Has the always-loaded rule started re-accumulating content that belongs in a
+  skill description?
 
 ### Documentation Flow
 
