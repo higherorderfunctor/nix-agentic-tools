@@ -46,6 +46,57 @@ def load_profile(profiles_dir, name):
     return profile
 
 
+# A lease must outlive the work it protects, with room to spare. Below this
+# ratio the seed is refused rather than materialized.
+#
+# WHY THIS GUARD EXISTS -- it was earned, on a live run. `severe`'s worst item is
+# 10 duration units. At the profile default of 200 ms/unit that is 2 s against a
+# 30 s lease and nothing can go wrong. Raise `--unit-ms` to 3000 so the duration
+# profile is actually visible against ~13 s of per-step model latency -- which is
+# REQUIRED for a drain-versus-wave comparison to measure anything -- and the
+# worst item takes exactly 30.0 s: its own lease TTL.
+#
+# What that produced was not a crash. The holder finished the work correctly and
+# wrote its result 25 ms AFTER its own lease expired; a second claimant stole the
+# lease 6 ms later, a third stole it after that, both were refused at the
+# exclusively-created result file (`item.double_completion`), and the item was
+# finally dead-lettered `max_attempts_exhausted` -- with the correct answer
+# sitting on disk the whole time. So a fully successful item is reported dead,
+# and the run's own defenses are what make it survivable rather than corrupt.
+#
+# The failure is entirely a function of two config numbers that nothing related
+# to each other, and it is invisible at the default unit. Relating them here is
+# the fix; raising the TTL at the call site would only move the trap.
+MIN_LEASE_HEADROOM = 2.0
+
+
+def refuse_unworkable_lease(config, items):
+    """Refuse a seed whose worst item cannot finish inside a lease.
+
+    An item that runs longer than `lease_ttl_sec` is not merely at risk -- it is
+    GUARANTEED to be stolen mid-flight, worked twice, and dead-lettered on
+    attempt exhaustion, because every attempt takes the same too-long time. The
+    queue contains the damage (a result is exclusively created, so no wrong
+    answer is ever written) but it cannot prevent it, and the run reports a
+    failure for work that succeeded.
+    """
+    unit_ms = float(config["unit_ms"])
+    ttl_sec = float(config["lease_ttl_sec"])
+    worst_units = max((int(i.get("duration_units", 0)) for i in items), default=0)
+    worst_sec = worst_units * unit_ms / 1000.0
+    if worst_sec <= 0:
+        return
+    if ttl_sec < worst_sec * MIN_LEASE_HEADROOM:
+        raise q.QueueError(
+            f"refusing to seed: the worst item runs {worst_sec:g}s "
+            f"({worst_units} units x {unit_ms:g}ms) but lease_ttl_sec is {ttl_sec:g}s. "
+            f"A lease must be at least {MIN_LEASE_HEADROOM:g}x the longest item or that "
+            f"item is guaranteed to be stolen mid-flight and dead-lettered while its "
+            f"correct answer sits on disk. Raise --lease-ttl-sec to at least "
+            f"{worst_sec * MIN_LEASE_HEADROOM:g}, or lower --unit-ms."
+        )
+
+
 def expand_seed(profile):
     """Build the seeded item records. Seeded items are at lineage_depth 0."""
     durations = profile["durations"]
@@ -149,6 +200,10 @@ def main(argv=None):
     config["profile"] = profile["name"]
     config["profile_path"] = str(Path(args.profiles_dir) / f"{profile['name']}.json")
     config["seeded_at_iso"] = q.iso()
+
+    # Before anything is materialized: a root that cannot possibly drain
+    # cleanly must not exist on disk at all.
+    refuse_unworkable_lease(config, items)
 
     for name in RUN_DIRS:
         (root / name).mkdir(parents=True, exist_ok=True)

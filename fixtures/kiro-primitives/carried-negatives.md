@@ -565,3 +565,61 @@ the difference is invisible at the call site. And when a run has two candidate
 causes and one of them is a real error, the real error is the decoy worth
 controlling for first — fixing it and re-running is cheaper than reasoning about
 which one mattered.
+
+---
+
+## C-19 — A lease TTL and an item duration were configured independently, so the queue dead-lettered work it had already done correctly
+
+> **Established by a live run** on KAS `2.15.2-7755e465…`, and it is the
+> harness's own defect rather than the engine's.
+
+**Belief:** `lease_ttl_sec` and `unit_ms` are independent knobs. The lease is a
+liveness backstop for a worker that dies; the unit scales how long simulated
+work takes. Nothing connects them, so either can be set on its own.
+
+**Reality:** they are the same quantity measured twice. A lease is a promise
+that the holder will finish inside it, so an item whose duration approaches the
+TTL is not merely at risk — it is **guaranteed** to be stolen mid-flight, and
+guaranteed to be stolen again on every retry, because each attempt takes the
+same too-long time. The item then dies of `max_attempts_exhausted`.
+
+**How it presented:** as a drain that took 2.25x as long and reported one item
+dead. Reading the item was worse than the wall-clock: it had the **correct
+answer on disk** (1378, matching `expected`) written by the first holder, which
+finished the work and recorded it **25 ms after its own lease expired**. A
+second claimant stole the lease 6 ms later, a third stole it after that, and
+both were refused at the exclusively-created result file. So a fully successful
+item is reported as a failure, and every individual mechanism behaved exactly as
+designed while doing it.
+
+**Why it stayed hidden:** at the profile default of 200 ms/unit the worst
+`severe` item is 2 s against a 30 s lease — 15x headroom, unreachable. The trap
+only opens when the unit is raised so the duration profile is visible against
+per-step model latency (~13 s), which is **required** for a drain-versus-wave
+comparison to measure anything at all. The configuration that makes the
+measurement meaningful is the configuration that breaks it, so the bug is
+reachable only by doing the thing correctly.
+
+**What the design got right, and it is worth naming:** nothing was corrupted. A
+result is created with `O_EXCL`, so the duplicate completions were _refused and
+recorded_ (`item.double_completion`) rather than overwriting a correct answer
+with a second one. Containment worked; prevention was never possible from inside
+the queue, because the queue cannot know that a lease is shorter than the work.
+
+**The fix, and why it belongs at seed time:** `queue_init.py` now refuses a seed
+whose worst item exceeds `lease_ttl_sec / 2`, naming both numbers and the
+minimum TTL that would work. Raising the TTL at the call site would have fixed
+the one run and left the trap armed for the next unit change. A root that cannot
+drain cleanly should not be materialized at all.
+
+**How it reads in the verifier:** `P1` **passes** on this run — the item did
+reach exactly one terminal state, `dead`. Only `P4` fails, naming the two step
+sessions that held the item at once. That split is the argument for having four
+predicates instead of one summary: an item can be simultaneously accounted-for
+and worked twice.
+
+**Lesson:** any two config values where one is a time budget and the other is a
+time cost must be validated **against each other**, at the point the pair is
+fixed. Neither is wrong alone, which is why neither has an obvious owner, and a
+default that leaves generous headroom hides the coupling until someone scales
+the other number for an unrelated and entirely correct reason.
