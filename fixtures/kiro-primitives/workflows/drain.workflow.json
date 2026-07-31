@@ -18,6 +18,8 @@
               "type": "step",
               "id": "shard-01-item",
               "agent": "wf-coder",
+              "modelId": "auto",
+              "effortLevel": "low",
               "prompt": "Goal: {{goal}}\n\nYou are draining shard 01 of 5. Your shard state file is .kiro-harness/drain/shard-01.json, a JSON object of the form {\"items\": [{\"id\": \"...\", \"done\": false}], \"drained\": false}.\n\nIf it does not exist, create it: decompose your share of the goal into items, each with \"done\": false, and set top-level \"drained\": false.\n\nIf it does exist, take the FIRST item whose \"done\" is false, complete just that one item, then write the file back with that item marked \"done\": true. Set top-level \"drained\": true only when no item with \"done\": false remains.\n\nWrite NOTHING outside .kiro-harness/drain/shard-01.json. The other 4 branches are draining their own shard files concurrently and a write into another shard corrupts a sibling mid-run."
             }
           ],
@@ -39,6 +41,8 @@
               "type": "step",
               "id": "shard-02-item",
               "agent": "wf-coder",
+              "modelId": "auto",
+              "effortLevel": "low",
               "prompt": "Goal: {{goal}}\n\nYou are draining shard 02 of 5. Your shard state file is .kiro-harness/drain/shard-02.json, a JSON object of the form {\"items\": [{\"id\": \"...\", \"done\": false}], \"drained\": false}.\n\nIf it does not exist, create it: decompose your share of the goal into items, each with \"done\": false, and set top-level \"drained\": false.\n\nIf it does exist, take the FIRST item whose \"done\" is false, complete just that one item, then write the file back with that item marked \"done\": true. Set top-level \"drained\": true only when no item with \"done\": false remains.\n\nWrite NOTHING outside .kiro-harness/drain/shard-02.json. The other 4 branches are draining their own shard files concurrently and a write into another shard corrupts a sibling mid-run."
             }
           ],
@@ -60,6 +64,8 @@
               "type": "step",
               "id": "shard-03-item",
               "agent": "wf-coder",
+              "modelId": "auto",
+              "effortLevel": "low",
               "prompt": "Goal: {{goal}}\n\nYou are draining shard 03 of 5. Your shard state file is .kiro-harness/drain/shard-03.json, a JSON object of the form {\"items\": [{\"id\": \"...\", \"done\": false}], \"drained\": false}.\n\nIf it does not exist, create it: decompose your share of the goal into items, each with \"done\": false, and set top-level \"drained\": false.\n\nIf it does exist, take the FIRST item whose \"done\" is false, complete just that one item, then write the file back with that item marked \"done\": true. Set top-level \"drained\": true only when no item with \"done\": false remains.\n\nWrite NOTHING outside .kiro-harness/drain/shard-03.json. The other 4 branches are draining their own shard files concurrently and a write into another shard corrupts a sibling mid-run."
             }
           ],
@@ -81,6 +87,8 @@
               "type": "step",
               "id": "shard-04-item",
               "agent": "wf-coder",
+              "modelId": "auto",
+              "effortLevel": "low",
               "prompt": "Goal: {{goal}}\n\nYou are draining shard 04 of 5. Your shard state file is .kiro-harness/drain/shard-04.json, a JSON object of the form {\"items\": [{\"id\": \"...\", \"done\": false}], \"drained\": false}.\n\nIf it does not exist, create it: decompose your share of the goal into items, each with \"done\": false, and set top-level \"drained\": false.\n\nIf it does exist, take the FIRST item whose \"done\" is false, complete just that one item, then write the file back with that item marked \"done\": true. Set top-level \"drained\": true only when no item with \"done\": false remains.\n\nWrite NOTHING outside .kiro-harness/drain/shard-04.json. The other 4 branches are draining their own shard files concurrently and a write into another shard corrupts a sibling mid-run."
             }
           ],
@@ -102,6 +110,8 @@
               "type": "step",
               "id": "shard-05-item",
               "agent": "wf-coder",
+              "modelId": "auto",
+              "effortLevel": "low",
               "prompt": "Goal: {{goal}}\n\nYou are draining shard 05 of 5. Your shard state file is .kiro-harness/drain/shard-05.json, a JSON object of the form {\"items\": [{\"id\": \"...\", \"done\": false}], \"drained\": false}.\n\nIf it does not exist, create it: decompose your share of the goal into items, each with \"done\": false, and set top-level \"drained\": false.\n\nIf it does exist, take the FIRST item whose \"done\" is false, complete just that one item, then write the file back with that item marked \"done\": true. Set top-level \"drained\": true only when no item with \"done\": false remains.\n\nWrite NOTHING outside .kiro-harness/drain/shard-05.json. The other 4 branches are draining their own shard files concurrently and a write into another shard corrupts a sibling mid-run."
             }
           ],

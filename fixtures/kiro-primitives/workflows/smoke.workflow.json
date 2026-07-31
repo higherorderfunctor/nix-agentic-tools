@@ -6,6 +6,8 @@
       "type": "step",
       "id": "smoke-marker",
       "agent": "wf-coder",
+      "modelId": "auto",
+      "effortLevel": "low",
       "prompt": "Create the directory .kiro-harness/drain if it does not exist, write the single line SMOKE-OK into .kiro-harness/drain/smoke.txt, then reply with exactly SMOKE-OK and nothing else."
     }
   ]

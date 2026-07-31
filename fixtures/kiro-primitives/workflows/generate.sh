@@ -87,6 +87,31 @@ readonly STATE_ROOT=".kiro-harness/drain"
 readonly WORKFLOW_AGENT="wf-coder"
 
 # ---------------------------------------------------------------------------
+# THE ONE PLACE THE STEP'S MODEL AND EFFORT LIVE
+#
+# Both are pinned deliberately, and `auto` is pinned EXPLICITLY rather than
+# omitted -- those are different things. Omitting the field lets the engine
+# cascade a value in from the parent session (`_kiro/workflow/new` reads
+# `parentModelId` / `parentEffortLevel` off `parentSessionId`), so an identical
+# definition would run differently depending on whose session started it. A
+# harness that exists to compare two orchestration shapes over the same workload
+# cannot have the model as a floating variable: `auto` is a ROUTER, and two runs
+# it routes differently are not comparable, which is the one property the
+# measurement depends on. Writing the field down also makes it a one-line
+# change to re-run the whole battery against a specific model.
+#
+# `low` because the work each step does is mechanical -- take the first item
+# whose flag is false, do it, write the file back. Effort buys reasoning depth
+# that this workload has no use for, and it is charged per step per iteration,
+# which a K-branch drain multiplies.
+#
+# These are node-level fields on `step` (the vendor's own bundled recipes set
+# both, e.g. `modelId: "claude-fable-5"` with `effortLevel: "xhigh"`), and
+# contract.jq already lists them among the step's optional keys.
+readonly STEP_MODEL_ID="auto"
+readonly STEP_EFFORT_LEVEL="low"
+
+# ---------------------------------------------------------------------------
 # Guards on K
 # ---------------------------------------------------------------------------
 
@@ -131,7 +156,7 @@ emit() {
 # NO `completion` FIELD, and that is a correction rather than an omission (C-18).
 #
 # `completion` reads like an assertion on what the step produced. It is not: it
-# is the entry condition for `runCompletionLoop`, which holds the step session
+# is the entry condition for `runCompletionLoop`, which holds the step's session
 # open ACROSS TURNS, re-evaluates the condition against `capturedOutput` after
 # each one, and while unsatisfied parks the node `paused` — "waiting for the
 # next user message" — blocking in `awaitNextTurn`. A step with no `completion`
@@ -145,9 +170,10 @@ emit() {
 # The assertion it looked like it was making belongs on the driver's side: check
 # the workspace file and the agent's message stream after the run. Those are
 # observations; this was a control-flow directive wearing an assertion's name.
-
 emit smoke -n \
   --arg agent "$WORKFLOW_AGENT" \
+  --arg model "$STEP_MODEL_ID" \
+  --arg effort "$STEP_EFFORT_LEVEL" \
   --arg state_root "$STATE_ROOT" '
   {
     name: "mode-f-smoke",
@@ -166,6 +192,8 @@ emit smoke -n \
         type: "step",
         id: "smoke-marker",
         agent: $agent,
+        modelId: $model,
+        effortLevel: $effort,
         prompt: (
           "Create the directory \($state_root) if it does not exist, write the "
           + "single line SMOKE-OK into \($state_root)/smoke.txt, then reply with "
@@ -213,6 +241,8 @@ emit drain -n \
   --argjson k "$K" \
   --argjson iters "$MAX_ITERATIONS_PER_BRANCH" \
   --arg agent "$WORKFLOW_AGENT" \
+  --arg model "$STEP_MODEL_ID" \
+  --arg effort "$STEP_EFFORT_LEVEL" \
   --arg state_root "$STATE_ROOT" '
   # Two digits is always enough: K <= 20 is asserted by the generator. Fixed
   # width keeps shard ids sorting lexically the way they sort numerically.
@@ -247,6 +277,8 @@ emit drain -n \
                   type: "step",
                   id: "shard-\($label)-item",
                   agent: $agent,
+                  modelId: $model,
+                  effortLevel: $effort,
                   prompt: (
                     "Goal: {{goal}}\n\n"
                     + "You are draining shard \($label) of \($k). Your shard state file is "
