@@ -74,6 +74,14 @@ Six conventions that matter for replay:
   remaining one, R-workflow-2's session-file count, reads live machine state and
   is expected to drift — that record says what it drifted to.
 
+  **Added 2026-07-30:** R-workflow-5's second correction adds **two** further
+  command blocks (three output blocks between them), bringing the total to 29.
+  Both were executed against the same pinned bundle — identical `kasid`,
+  identical 20752757-byte size — at the time they were written, their output is
+  pasted unedited, and each was re-extracted from this file and re-diffed
+  against a fresh run afterwards. Their two byte windows are sized to end on a
+  newline, so neither carries a `<<<` marker.
+
 The bundle is not identifier-minified: it is esbuild-bundled but pretty-printed,
 keeps `// src/<path>.ts` and `// ../acp-type-covenant/dist/<path>.js` section
 markers, and keeps original names and comments. That makes the module marker
@@ -786,7 +794,8 @@ scheduling vocabulary available, and the **20-step-node ceiling** is the one
 most likely to bite a design: a drain built as K parallel self-draining `repeat`
 branches spends one step node per branch and cannot exceed 20 in total. The
 join-policy values matter because they determine what happens to siblings, and
-that is where this record makes a correction (below).
+that is where this record makes two corrections (below) — the second of them
+against its own earlier conclusion.
 
 **Semantic anchor:** the shared covenant package has a workflow-capability types
 module whose initializer declares, in one run, six string enums — run status,
@@ -994,17 +1003,167 @@ async function joinAny(promises6, controllers, results) {
 
 So **`any` cancels; it does not orphan.** First-completion resume destroys
 in-flight sibling work, which means a drain must not use `any` as a
-first-completion trigger — the only safe drain shape over `parallel` is
-independent self-draining branches under `all`. That was the right instinct for
-the wrong reason: not because the semantics were unknown, but because they are
-known and hostile. A live probe of `any` is still worth running to confirm the
-abort actually stops the model turn (this record covers only what the scheduler
-_requests_ — an `AbortController.abort()` is not by itself proof that an
-in-flight agent turn halts), but it is a confirmation, not a discovery.
+first-completion trigger. That was the right instinct for the wrong reason: not
+because the semantics were unknown, but because they are known and hostile. A
+live probe of `any` is still worth running to confirm the abort actually stops
+the model turn (this record covers only what the scheduler _requests_ — an
+`AbortController.abort()` is not by itself proof that an in-flight agent turn
+halts), but it is a confirmation, not a discovery.
 
-**Positive controls:** not required — this record asserts presences. Its one
-absence-shaped element (no fourth join policy, no sixth node type) is bounded by
-the enum literals themselves, which are the denominator.
+**A second correction, 2026-07-30 — and this one is against this record's own
+earlier conclusion.** The paragraph above used to end "— the only safe drain
+shape over `parallel` is independent self-draining branches under `all`". That
+is wrong, and the sentence refuting it was already quoted in this record's own
+captured output above — the workflow-creator steering window: "`all`: all
+branches must succeed. **First failure aborts siblings.**" The evidence and the
+wrong conclusion were in the same record, a hundred lines apart, which is the
+part worth remembering. `joinAll` receives the branch controllers for the same
+reason `joinAny` does, and aborts every sibling the moment one branch settles
+`failed` **or** `aborted` — not merely on failure. `joinAllSettled` is the only
+policy that structurally cannot abort a sibling, because it is the one join
+function the scheduler never passes `controllers` to:
+
+**Command:**
+
+```bash
+head -c $((17351914)) "$bundle" | tail -c 1114
+head -c $((17350569+231)) "$bundle" | tail -c 231
+```
+
+**Output at capture:**
+
+```
+async function joinAll(promises6, controllers, results) {
+  return await new Promise((resolve24) => {
+    let pending = promises6.length;
+    if (pending === 0) {
+      resolve24("completed");
+      return;
+    }
+    let resolved = false;
+    promises6.forEach((p2, idx) => {
+      void p2.finally(() => {
+        if (resolved) return;
+        const settled = results[idx].outcome;
+        if (settled === "failed" || settled === "aborted") {
+          resolved = true;
+          for (let i5 = 0; i5 < controllers.length; i5 += 1) {
+            if (i5 !== idx && !controllers[i5].signal.aborted) {
+              controllers[i5].abort();
+            }
+          }
+          void (async () => {
+            await Promise.allSettled(promises6);
+            resolve24("failed");
+          })();
+          return;
+        }
+        pending -= 1;
+        if (pending === 0) {
+          resolved = true;
+          resolve24(overallFromResults(results));
+        }
+      });
+    });
+  });
+}
+async function joinAllSettled(promises6, results) {
+  await Promise.allSettled(promises6);
+  return overallFromResults(results);
+}
+```
+
+```
+function overallFromResults(results) {
+  if (results.some((r5) => r5.outcome === "failed" || r5.outcome === "aborted")) return "failed";
+  if (results.some((r5) => r5.outcome === "paused")) return "paused";
+  return "completed";
+}
+```
+
+`allSettled` therefore **reports** a poisoned branch without **acting** on it:
+`overallFromResults` returns `"failed"` if any branch failed or aborted, so the
+parallel node still fails — it just lets every branch finish first. Two limits
+on that, both visible in the scheduler quoted above: it is immune to
+_sibling_-driven abort only, since `onOuterAbort` aborts every branch controller
+under every policy when the node's own signal aborts; and each branch's own
+result is still whatever it settled to, so `allSettled` buys completion of the
+_other_ branches, not success.
+
+So for a drain over `parallel`, **`allSettled` is the only policy that cannot
+lose unrelated work to one poisoned item.** Under `all`, a single failing branch
+cancels every other branch, and the symptom is items silently unfinished — the
+exact failure a work queue exists to prevent. Recorded as a carried negative in
+`../carried-negatives.md` (C-17), because the wrong choice was made _after_ C-6
+had already taught that a join policy can cancel.
+
+**Command** (arity is the mechanism, so it is also the control; `occ` is the
+preamble's helper — note that a pattern beginning with `--` must be passed as
+`grep -e`, or ugrep parses it as an option and returns a **false zero**):
+
+```bash
+for s in 'joinAll(promises6, controllers, results)' \
+         'joinAllSettled(promises6, controllers' \
+         'joinAllSettled(promises6, results)' \
+         'joinAny(promises6, controllers, results)' \
+         'controllers[i5].abort()' \
+         'First failure aborts siblings' \
+         'abort the rest' \
+         'regardless of individual failures' \
+         'joinPolicy'; do
+  printf '%-41s %s\n' "$s" "$(occ "$s")"
+done
+```
+
+**Output at capture:**
+
+```
+joinAll(promises6, controllers, results)  1
+joinAllSettled(promises6, controllers     0
+joinAllSettled(promises6, results)        2
+joinAny(promises6, controllers, results)  1
+controllers[i5].abort()                   2
+First failure aborts siblings             1
+abort the rest                            1
+regardless of individual failures         1
+joinPolicy                                14
+```
+
+Reading the rows: the two controller-taking joins are declared with a
+`controllers` parameter **once each**, `joinAllSettled` never is (`0` against
+`2` for its real two-parameter spelling, definition plus its single call site),
+and `controllers[i5].abort()` occurs exactly **twice** in the whole bundle —
+once in `joinAll`, once in `joinAny`, and nowhere else. Those two counts are
+what make "`allSettled` cannot abort a sibling" a structural claim rather than
+an observation.
+
+The last four rows are about **where the documentation is**, and they are the
+reason this was missed rather than read. Each of the three sentences describing
+sibling fate occurs exactly **once** in the 20.8 MB bundle, all three inside the
+workflow-creator agent's steering — none of them in the `run_workflow`
+description a caller reads while designing against the contract, which lists the
+three values and stops (quoted above). `joinPolicy` occurs **14** times, which
+is the denominator: fourteen mentions of the field, three sentences about what
+it does to the losers, zero of them where the contract is read.
+
+**Positive controls:** the enum part of this record asserts presences, and its
+one absence-shaped element there (no fourth join policy, no sixth node type) is
+bounded by the enum literals themselves, which are the denominator. The **second
+correction does** assert absences, so it carries its own: the zero for
+`joinAllSettled(promises6, controllers` sits in the same table as non-zero
+counts for the two spellings that _do_ take controllers and for
+`joinAllSettled`'s real two-parameter form, all found by one method in one file.
+
+A runnable version of the whole correction lives in
+`../harness/self-test-corrections.sh`. It re-asserts every count above with
+**suffix-agnostic** regexes —
+`async function joinAll\([A-Za-z0-9_]+, controllers, results\)` rather than the
+literal `promises6` — so a release that renumbers the bundler's collision
+suffixes does not fail it while a release that renames `controllers` does. It
+refuses (exit 2) rather than passing whenever a positive control reads zero, and
+it was confirmed to discriminate: blanking the `|| settled === "aborted"` clause
+in a scratch copy of the bundle turns the run red on exactly the assertion that
+clause supports.
 
 **Notes:** `NodeStatusSchema` carries `skipped`, which the run-status enum does
 not, so a node can be skipped while no run ever is. `onMaxIterations: "pause"`
@@ -1013,9 +1172,11 @@ more iterations, so the loop re-pauses immediately, and a paused run cannot be
 retried (retry applies only to `completed`/`failed`/`aborted`). The bundled
 `ralph` and `goal` recipes both ship with `"pause"` (R-workflow-7). Use
 `"abort"`, or size `maxIterations` correctly up front. This record goes stale if
-any enum gains or loses a member, if either validator ceiling changes, or if
-`joinAny` stops aborting siblings — the last of which would _open_ a root-driven
-drain shape that is currently closed.
+any enum gains or loses a member, if either validator ceiling changes, if
+`joinAny` stops aborting siblings — which would _open_ a root-driven drain shape
+that is currently closed — or if `joinAll` stops aborting them, or
+`joinAllSettled` starts, either of which changes which policy a drain may safely
+use.
 
 ---
 

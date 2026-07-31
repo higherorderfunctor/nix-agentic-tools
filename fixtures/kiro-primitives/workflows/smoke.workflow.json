@@ -1,0 +1,14 @@
+{
+  "name": "mode-f-smoke",
+  "description": "Smallest definition that proves an authored workflow actually ran: one step, no loop, no concurrency, no file check. Run this BEFORE drain.workflow.json — it separates \"the workflowsEnabled seed did not take\" from \"my definition is wrong\", which are otherwise the same symptom. `inputs` is deliberately absent here to exercise the schema default (record(string) with .default({})), and `completion` is deliberately absent because it would hold the step session open across turns and park an unattended run `paused` forever (C-18).",
+  "steps": [
+    {
+      "type": "step",
+      "id": "smoke-marker",
+      "agent": "wf-coder",
+      "modelId": "auto",
+      "effortLevel": "low",
+      "prompt": "Create the directory .kiro-harness/drain if it does not exist, write the single line SMOKE-OK into .kiro-harness/drain/smoke.txt, then reply with exactly SMOKE-OK and nothing else."
+    }
+  ]
+}

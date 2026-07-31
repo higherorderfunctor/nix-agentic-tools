@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "action": {
+        "command": "\"${KIRO_PROBE_BIN:?}/probe-inject.sh\" observed-prompt-submit",
+        "type": "command"
+      },
+      "description": "Injects on any exit code, plus a literal Exit Code line.",
+      "enabled": true,
+      "name": "probe-observed-prompt-submit",
+      "timeout": 10,
+      "trigger": "UserPromptSubmit"
+    }
+  ],
+  "version": "v1"
+}

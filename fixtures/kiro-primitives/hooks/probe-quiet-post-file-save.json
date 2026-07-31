@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "action": {
+        "command": "\"${KIRO_PROBE_BIN:?}/probe-quiet.sh\" quiet-post-file-save",
+        "type": "command"
+      },
+      "description": "Never injects and never blocks; carries file_path only.",
+      "enabled": true,
+      "name": "probe-quiet-post-file-save",
+      "timeout": 10,
+      "trigger": "PostFileSave"
+    }
+  ],
+  "version": "v1"
+}

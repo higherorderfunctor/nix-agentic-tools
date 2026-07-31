@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "action": {
+        "command": "\"${KIRO_PROBE_BIN:?}/probe-inject.sh\" observed-session-start",
+        "type": "command"
+      },
+      "description": "Injects on any exit code; stdout is the observation.",
+      "enabled": true,
+      "name": "probe-observed-session-start",
+      "timeout": 10,
+      "trigger": "SessionStart"
+    }
+  ],
+  "version": "v1"
+}

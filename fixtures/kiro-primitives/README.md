@@ -32,10 +32,22 @@ identifier is renamed. **The command is disposable; the semantics are not.**
 | `evidence/*.md`        | **R** | measurements over this machine's own Kiro state               |
 | `carried-negatives.md` | **C** | beliefs that were wrong, and **how each mistake presented**   |
 | `drift-ledger.md`      | **D** | what changed between engine versions, when, and what it broke |
+| `harness/`             | **F** | the ACP driver, the scratch environment, the run-state bridge |
+| `workflows/`           | **F** | generated workflow definitions and a standalone validator     |
+| `queue/`, `scripts/`   | **F** | the synthetic work queue and its claim/verify tooling         |
 
-Mode **F** — runnable fixtures needing a live interactive session — is planned
-and not present yet. The engine does not run under a non-interactive shell, so
-those cannot be automated and must be operator-driven.
+Mode **F** — runnable fixtures — **exists as of 2026-07-31**, and the premise
+this section used to state is retired. It said the fixtures "cannot be automated
+and must be operator-driven", because the engine does not run under a
+non-interactive shell. The first half does not follow from the second: the
+engine delegates authentication to the ACP **client**, so a host that answers
+`_kiro/auth/getAccessToken` runs it headless — no TUI, no terminal, no operator.
+`harness/acp-drain.py` drives a workflow to completion that way, and
+`evidence/drain-live-runs.md` is the first live evidence in this corpus.
+
+What remains genuinely operator-driven is narrower than "mode F": the sittings
+in `RUNBOOK-session-b.md` and `RUNBOOK-session-c.md`, which probe hook firing,
+nesting and MCP wiring through the interactive client.
 
 **Start with `carried-negatives.md` if you are new here.** The expensive part of
 an undocumented engine is rarely the discovery — it is the wrong turn taken
@@ -50,6 +62,39 @@ Run them under `bash` rather than an interactive zsh or fish — otherwise a
 resolver either reports the wrong thing or dies before reaching its own refusal
 path. This bit me during review: my first attempt to verify a finding here ran
 under zsh and produced a misleading result.
+
+**Bash, but not GNU.** This repo builds on `aarch64-darwin` as well as Linux, so
+a coreutils extension is a portability bug in the **harness code** even though
+every fixture here has only ever been run on Linux. Three have been found, all
+the same shape — a construct that works so reliably on the author's machine that
+nothing prompts a second look:
+
+- `find -printf` is GNU-only and absent on darwin (`kiro_newest_log` sorts log
+  paths lexically instead).
+- `mktemp` and `mktemp -d` **require an explicit template on BSD/macOS**. GNU
+  supplies a default and succeeds; BSD errors out. Harness call sites pass
+  `mktemp -d "${TMPDIR:-/tmp}/<name>.XXXXXX"`.
+- `kiro_bucket` was GNU-only in **three places at once** — `sort -z`,
+  `head -c -1` and `sha256sum` — any one of which would stop a darwin operator
+  computing a bucket name at all. It is now one `python3` call, which the
+  fixtures already require, and `self-test-bucket.sh` proves the hash is
+  unchanged by re-deriving every real bucket on the machine.
+
+**The distinction that matters: executable harness code versus recorded
+snippets.** The rule above binds `harness/`, `scripts/` and `workflows/`, which
+have to RUN. It deliberately does **not** bind the command blocks inside
+`records/` and `evidence/` — several of those use a bare `mktemp` and would fail
+on darwin as written.
+
+Those are not call sites, they are **transcripts**: this corpus's whole premise
+is that a record carries a command that was actually executed together with its
+real output, so editing them into portable form would make them commands nobody
+ran. The record would look better and be worth less. They are left exactly as
+executed, and a darwin reader should expect to adapt them rather than paste
+them.
+
+None of this is caught by anything: shellcheck has no diagnostic for any of it,
+and the Linux CI leg passes regardless. They are review obligations.
 
 ## Before re-running anything: pin the bundle
 

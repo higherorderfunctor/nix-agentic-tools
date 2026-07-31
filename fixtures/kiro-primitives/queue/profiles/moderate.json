@@ -1,0 +1,18 @@
+{
+  "config": {
+    "dry_threshold": 2,
+    "lease_ttl_sec": 30,
+    "max_attempts": 3,
+    "max_lineage_depth": 3,
+    "unit_ms": 200
+  },
+  "description": "The honest headline. Waves cost max per wave; a drain approaches sum / K. If the mechanic cannot beat waves here it is not worth adopting however good the tail looks.",
+  "durations": [1, 1, 1, 2, 2, 2, 2, 3, 3, 3],
+  "id_prefix": "m",
+  "name": "moderate",
+  "proposers": [
+    { "chain": 2, "duration_units": 2, "seed_index": 2 },
+    { "chain": 4, "duration_units": 1, "seed_index": 8 },
+    { "chain": 1, "duration_units": 1, "seed_index": 10 }
+  ]
+}

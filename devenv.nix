@@ -127,6 +127,17 @@ in {
       prefetch-npm-deps
       statix
     ]
+    # Fixture interpreters — `fixtures/kiro-primitives` is operator-run and
+    # nothing in CI reaches it: no workflow and no flake check references those
+    # suites, and devenv.nix itself never invokes either interpreter (the
+    # generate/materialize tasks and the enterTest assertions use interpolated
+    # store paths, per the isCI note above). Same reasoning and same gate as the
+    # LSP servers below, kept as its own list so the rationale stays attached to
+    # the packages it explains rather than being read as an LSP concern.
+    ++ lib.optionals (!isCI) [
+      jq
+      python3
+    ]
     # LSP servers (in PATH for ENABLE_LSP_TOOL and MCP bridging) —
     # interactive-only, dropped from the CI closure (~1GB: nixd pulls
     # llvm, marksman pulls dotnet). See the isCI note above.

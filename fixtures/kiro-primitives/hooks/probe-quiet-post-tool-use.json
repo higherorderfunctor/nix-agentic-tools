@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "action": {
+        "command": "\"${KIRO_PROBE_BIN:?}/probe-quiet.sh\" quiet-post-tool-use",
+        "type": "command"
+      },
+      "description": "Never injects and never blocks; the log is the observation.",
+      "enabled": true,
+      "name": "probe-quiet-post-tool-use",
+      "timeout": 10,
+      "trigger": "PostToolUse"
+    }
+  ],
+  "version": "v1"
+}

@@ -31,14 +31,91 @@ _re-confirmed_ once, which entrenched it.
 **Why it fooled us:** the loader resolves its global root from the launcher's
 home-dir argument or the process home directory — **not** from `KIRO_HOME`.
 Redirecting `KIRO_HOME` therefore **hides** global hooks rather than relocating
-them. Whether a `KIRO_HOME` redirect can ever reach `hooks/` is a **launcher**
-question and _cannot be settled_ from the engine bundle in either direction (the
-variable has zero occurrences there). Treat it as an observed result, never an
-established mechanism.
+them.
+
+**Settled 2026-07-30, from the launcher side — which is where this entry already
+said the answer lived.** This entry used to stop by saying that whether a
+`KIRO_HOME` redirect can ever reach `hooks/` is a launcher question that _cannot
+be settled_ from the engine bundle in either direction, and that the result must
+be treated as observed rather than mechanistic. That caution was right about the
+engine bundle and wrong about the question: it is answerable by reading the
+**client**, and the answer is that there are **two independent roots**.
+
+- **The engine's root is `HOME` only.** It takes a home directory from
+  `--home-dir=<value>` and nothing else — its argument reader matches the
+  literal `--<name>=` prefix against `process.argv` — falling back to
+  `os.homedir()`, which Node documents as `$HOME` when that is defined. The flag
+  reaches the agent as a conditional spread that collapses to nothing when the
+  argument is absent, so the fallback is not merely likely, it is the only path
+  — and there are **two** such constructions, one per transport (stdio and
+  multiplexed), spreading it identically, so no transport is a way around it.
+- **The client never passes it.** The literal `--home-dir` occurs **zero** times
+  in the 555 MB client, against positive controls `--transport=stdio` (2 hits)
+  and `--auth=acp-callback` (3) found by the same method in the same file; the
+  only `home-dir` hits at all (2) sit inside an unrelated cryptography option
+  table. The denominator is the **15 argument names the engine accepts**, of
+  which the observed spawn passes exactly those two.
+
+  Two method notes, both of which produced a wrong number here before they were
+  understood:
+  - **A pattern beginning with `--` must be passed as `grep -e '--home-dir'`**
+    (or after `--`). Otherwise `grep` parses it as an option and exits **2**
+    with `unrecognized option`. That is not itself a false zero — it is louder
+    than one — but the usual shapes silently convert it into one: piping to
+    `wc -l` prints `0` from an empty stream, and a `|| true` guard swallows the
+    status. C-3's failure mode reached through an error rather than a match.
+  - **`grep -c` counts matching LINES, not occurrences**, and this file has
+    lines exceeding 180 KB. The counts above are occurrence counts
+    (`grep -abo … | wc -l`); the same strings by `grep -c` give 2 / 2, so
+    `--auth=acp-callback` reads as 2 rather than 3. Either count supports the
+    conclusion, but they are different measurements and must not be mixed inside
+    one claim.
+
+- **`HOME` reaches the engine unmodified.** The spawn hands it
+  `{...process.env}` with only two Node channel variables blanked and a
+  user-agent added.
+- **`KIRO_HOME` means something different in the client's own layer:** the path
+  **of the `.kiro` directory itself**, not a home directory. Its resolver
+  returns `$KIRO_HOME` verbatim when non-empty and otherwise composes
+  `join($HOME, ".kiro")`. The two layers build different paths out of the same
+  value, which is exactly why a redirect looks like it ought to work and does
+  not.
+
+So every engine-side surface moves together under `HOME` and none of them move
+under `KIRO_HOME`. Sessions, logs, MCP settings and knowledge bases are the
+**four** paths the engine composes from its home directory, and that is the
+whole set; `KIRO_HOME` still has zero occurrences in the engine bundle.
+
+**One part is still only observed.** Which composition the _native_ layer
+applies to `KIRO_HOME` is unresolved: the resolver above treats it as the
+`.kiro` directory, but a help string in the same binary describes a session root
+as defaulting to `KIRO_HOME/.kiro/sessions`, the opposite composition. A help
+string is documentation, not a code path, and a string table does not reveal how
+a value gets joined. It does not disturb the conclusion — either way `KIRO_HOME`
+never reaches the engine and `HOME` always does — but do not quote one
+composition for "the native layer" as though it were established.
+
+**And do not redirect `XDG_DATA_HOME` for isolation.** It is a different lever
+with a worse failure mode. The credential database is a single `data.sqlite3`
+under `$XDG_DATA_HOME/kiro-cli/`, so a redirect produces an **empty** one, and
+the response to no cached token is a **device-code browser login** — an
+interactive prompt, not an error — so an unattended run hangs where it should
+fail. The extracted engine bundles and the bundled Node, Bun and TUI artifacts
+live under that same directory, so a redirect also hides the engine from its own
+launcher. Leave it real. The price is a precondition, not a bug: isolation
+cannot run on a machine that has never logged in.
+
+**Where the evidence is:** every count above is re-asserted by
+`harness/self-test-corrections.sh`, which reads the engine bundle and the client
+binary only and refuses rather than passing when a positive control reads zero.
+`harness/lib.sh` carries the same conclusion as an operational note.
 
 **Lesson:** an isolation lever that silently removes a search path is
 indistinguishable from a missing feature. State what an isolation mechanism is
-expected to _cover_ before trusting a negative result obtained under it.
+expected to _cover_ before trusting a negative result obtained under it. And
+when a question is recorded as unanswerable, record **which artifact** it was
+unanswerable from — this one was unanswerable from the engine, was never put to
+the client, and stayed open for that reason alone.
 
 ---
 
@@ -150,7 +227,8 @@ meant to prevent.
 
 **Lesson:** for any join or race primitive, **the disposition of the losers is
 the detail that carries the weight**, and it is the detail most often omitted
-from documentation. Never infer it.
+from documentation. Never infer it. This lesson was then under-applied to the
+_other_ policies in the same enum — see C-17.
 
 ---
 
@@ -378,4 +456,170 @@ survives a tooling change and a note that survives one are different questions.
 **Lesson:** a record's environment is part of its claim. Stamp what you actually
 ran with, re-check it on re-verification, and prefer the form that is correct
 under every implementation over the form that is correct under yours — then the
-tooling can move without taking the findings with it.
+tooling can move without taking the findings with it. ||||||| parent of 062a0591
+(docs(kiro-primitives): settle C-1's mechanism and carry the joinPolicy trap)
+
+## C-17 — "all" was picked as the safe join policy because C-6 had been learned, and it aborts siblings too
+
+**Belief:** having rejected the first-completion policy for cancelling its
+siblings (C-6), `all` is the safe choice — it is "just the final join", and it
+waits for every branch.
+
+**Reality:** `all` aborts every sibling the moment one branch settles **failed
+or aborted** — not merely on failure, and only the all-succeed path waits.
+`allSettled` is the one policy that structurally _cannot_ abort a sibling: it is
+the only join function the scheduler never hands the branch controllers to, so
+it has nothing to abort. It still reports the parallel node failed; it simply
+lets every branch finish first.
+
+**How it presented:** as the conservative option, and specifically as the option
+chosen _because_ the first-completion trap had already been learned. The design
+named `all` with the reasoning written out, so the reasoning read as diligence
+rather than as an untested assumption — the strongest disguise available, since
+a choice that cites a real prior finding does not look like a guess. Worse, the
+refuting sentence was **already quoted in this corpus's own captured output**: a
+bundled agent's steering says "`all`: all branches must succeed. First failure
+aborts siblings", and the record carrying that quote went on, a hundred lines
+later, to conclude that `all` was the only safe drain shape. Evidence and
+contradiction sat in one file.
+
+**Why it matters:** for a drain, one poisoned work item would cancel every other
+branch — items silently unfinished, which is the exact failure a work queue
+exists to prevent. It is C-6's hazard on a different trigger, and it caught a
+design that had already routed _around_ C-6.
+
+**Where the sentence lives:** each of the three sentences describing sibling
+fate occurs exactly **once** in the 20.8 MB engine bundle, all three inside one
+bundled agent's steering — none of them in the tool description a caller reads
+while designing against the contract, which lists the three values and says
+nothing about the losers. The field name itself occurs **14** times, which is
+the denominator: fourteen mentions, three explanations, zero of them where the
+contract is read.
+
+**Where the evidence is:** unusually for this file, the mechanism here is
+executed rather than only recorded — `records/workflow-surface.md`
+(R-workflow-5, second correction) carries the replayable windows and counts, and
+`harness/self-test-corrections.sh` re-asserts them and refuses on a zero
+control.
+
+**Lesson:** for a join primitive, enumerate the disposition of the losers on
+**every** exit path, not just the one the name describes. Learning that one
+policy cancels does not tell you which of the others also does — and a negative
+you have already recorded protects only the specific trigger you recorded it
+against.
+
+---
+
+## C-18 — A step's `completion` field was read as an assertion; it is an interactive loop that hangs a headless run
+
+> **Established by a live run**, not by a code read — the first entry in this
+> file that is. KAS `2.15.2-7755e465…` (kiro-cli 2.15.2).
+
+**Belief:** `completion: {containsText: "…"}` on a `step` node asserts what the
+step must have produced, the way a test asserts on output. A step that produced
+the text passes; one that did not fails.
+
+**Reality:** `completion` is the entry condition for `runCompletionLoop`, which
+keeps the step's session **open across turns**. After each turn it re-evaluates
+the condition against the node's `capturedOutput`; while unsatisfied it parks
+the node `paused` with
+`pauseReason: "Step '<id>' is waiting for the next user message."` and blocks in
+`awaitNextTurn`. A step with **no** `completion` returns from that function
+immediately and completes after one turn. So `completion` does not assert — it
+**converts a one-shot step into a conversation**, and a driver with no human to
+send the next message waits forever.
+
+**How it presented:** as a failed run whose work had already succeeded.
+`smoke.workflow.json` asked the agent to write `SMOKE-OK` into a file and reply
+`SMOKE-OK`. On disk the file was correct and complete; the transcript shows the
+agent emitting exactly `SMOKE-OK` as its message. The run reported `paused`,
+`capturedOutputs: {"smoke-marker": ""}`, and no error anywhere. Every visible
+signal pointed at the step having produced nothing.
+
+**The decoy that cost the most time:** the same run also showed a **genuinely
+failed tool call** — `Send Message` returning
+`Cannot resolve parent session: caller is not part of a workflow or workflow has no parent`,
+because the workflow had been created from `workspacePaths` with no
+`parentSessionId`. That is a real defect, it sits three seconds before the
+pause, and it explains an empty captured output perfectly. It is not the cause.
+Re-running with a parent session made `send_message` succeed and set
+`completionSignal: "success"` on the node — **and the run paused identically**.
+Only the control run separated them.
+
+**Why it fooled us:** the field is named for the thing it tests, not for the
+loop it starts, and the loop is invisible in the definition. Nothing in the
+schema, the node type, or the tool description marks a `completion` step as
+interactive. The failure is also the corpus's standard shape — silent, and
+indistinguishable from "the definition is wrong" or "the enable path did not
+take", which is precisely what the smoke fixture existed to tell apart.
+
+**Blast radius:** the drain is **unaffected** — `drain.workflow.json` carries
+zero `completion` fields, so each iteration's step completes after one turn,
+which is what makes the `repeat` advance at all. Only `smoke` and `coverage`
+used it, and `coverage` is a validator fixture that must never run.
+
+**Lesson:** for any node field that names a condition, establish **who evaluates
+it and how many times** before treating it as an assertion. A condition
+evaluated once is a test; a condition evaluated after every turn is a loop, and
+the difference is invisible at the call site. And when a run has two candidate
+causes and one of them is a real error, the real error is the decoy worth
+controlling for first — fixing it and re-running is cheaper than reasoning about
+which one mattered.
+
+---
+
+## C-19 — A lease TTL and an item duration were configured independently, so the queue dead-lettered work it had already done correctly
+
+> **Established by a live run** on KAS `2.15.2-7755e465…`, and it is the
+> harness's own defect rather than the engine's.
+
+**Belief:** `lease_ttl_sec` and `unit_ms` are independent knobs. The lease is a
+liveness backstop for a worker that dies; the unit scales how long simulated
+work takes. Nothing connects them, so either can be set on its own.
+
+**Reality:** they are the same quantity measured twice. A lease is a promise
+that the holder will finish inside it, so an item whose duration approaches the
+TTL is not merely at risk — it is **guaranteed** to be stolen mid-flight, and
+guaranteed to be stolen again on every retry, because each attempt takes the
+same too-long time. The item then dies of `max_attempts_exhausted`.
+
+**How it presented:** as a drain that took 2.25x as long and reported one item
+dead. Reading the item was worse than the wall-clock: it had the **correct
+answer on disk** (1378, matching `expected`) written by the first holder, which
+finished the work and recorded it **25 ms after its own lease expired**. A
+second claimant stole the lease 6 ms later, a third stole it after that, and
+both were refused at the exclusively-created result file. So a fully successful
+item is reported as a failure, and every individual mechanism behaved exactly as
+designed while doing it.
+
+**Why it stayed hidden:** at the profile default of 200 ms/unit the worst
+`severe` item is 2 s against a 30 s lease — 15x headroom, unreachable. The trap
+only opens when the unit is raised so the duration profile is visible against
+per-step model latency (~13 s), which is **required** for a drain-versus-wave
+comparison to measure anything at all. The configuration that makes the
+measurement meaningful is the configuration that breaks it, so the bug is
+reachable only by doing the thing correctly.
+
+**What the design got right, and it is worth naming:** nothing was corrupted. A
+result is created with `O_EXCL`, so the duplicate completions were _refused and
+recorded_ (`item.double_completion`) rather than overwriting a correct answer
+with a second one. Containment worked; prevention was never possible from inside
+the queue, because the queue cannot know that a lease is shorter than the work.
+
+**The fix, and why it belongs at seed time:** `queue_init.py` now refuses a seed
+whose worst item exceeds `lease_ttl_sec / 2`, naming both numbers and the
+minimum TTL that would work. Raising the TTL at the call site would have fixed
+the one run and left the trap armed for the next unit change. A root that cannot
+drain cleanly should not be materialized at all.
+
+**How it reads in the verifier:** `P1` **passes** on this run — the item did
+reach exactly one terminal state, `dead`. Only `P4` fails, naming the two step
+sessions that held the item at once. That split is the argument for having four
+predicates instead of one summary: an item can be simultaneously accounted-for
+and worked twice.
+
+**Lesson:** any two config values where one is a time budget and the other is a
+time cost must be validated **against each other**, at the point the pair is
+fixed. Neither is wrong alone, which is why neither has an obvious owner, and a
+default that leaves generous headroom hides the coupling until someone scales
+the other number for an unrelated and entirely correct reason.

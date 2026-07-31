@@ -1,0 +1,17 @@
+{
+  "config": {
+    "dry_threshold": 2,
+    "lease_ttl_sec": 30,
+    "max_attempts": 3,
+    "max_lineage_depth": 3,
+    "unit_ms": 200
+  },
+  "description": "Where drain should look dramatic: eight one-unit items behind a 6 and a 10, so one wave barrier costs the whole tail.",
+  "durations": [1, 1, 1, 1, 1, 1, 1, 1, 6, 10],
+  "id_prefix": "s",
+  "name": "severe",
+  "proposers": [
+    { "chain": 1, "duration_units": 1, "seed_index": 8 },
+    { "chain": 2, "duration_units": 1, "seed_index": 9 }
+  ]
+}

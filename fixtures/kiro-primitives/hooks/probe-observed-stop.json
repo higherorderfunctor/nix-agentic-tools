@@ -1,0 +1,16 @@
+{
+  "hooks": [
+    {
+      "action": {
+        "command": "\"${KIRO_PROBE_BIN:?}/probe-stop-loop.sh\" observed-stop",
+        "type": "command"
+      },
+      "description": "One-shot loop primitive; exits 1 once and restarts the graph.",
+      "enabled": true,
+      "name": "probe-observed-stop",
+      "timeout": 10,
+      "trigger": "Stop"
+    }
+  ],
+  "version": "v1"
+}
