@@ -7,15 +7,21 @@ applyTo: "checks/kiro-wrapper-argv.nix,lib/idempotentFlags.nix,packages/kiro-cli
 
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-07-30 against kiro-cli **2.15.2** (commit pending —
-> adds the measured launcher FORWARDING TABLE: it injects `chat` on a bare
-> launch, skips `--agent`'s value, strips `--`, rewrites `settings all` to
-> `settings list`, and keeps `whoami` in-process. Corrects the `--v3` rewrite to
-> its real TWO-TOKEN form `--agent-engine v3`; the `--agent-engine=v3` in the
-> error text is clap's diagnostic formatting, not the argv. Prior: records that
-> the launcher resolves `kiro-cli-chat` through PATH, so the two wrappers
-> COMPOSE, and that `--trust-tools` therefore has to be withheld from `acp`
-> under v3. Prior: first revision). If you touch `lib/idempotentFlags.nix`,
+> **Last verified:** 2026-07-31 against kiro-cli **2.16.0** (commit pending —
+> qualifies the "grep the JS, not the ELF" rule, which was true for POLICY but
+> false for feature GATING and nearly shipped a wrong answer: the rollout
+> manifest lives in the ELF, the rust binary OVERWRITES `KIRO_ENABLED_FEATURES`
+> before spawning bun, and the manifest's own "enable locally through
+> KIRO_ENABLED_FEATURES" line is stale. Adds `ai.kiro.unlockedRolloutFeatures`.
+> Prior: 2026-07-30 against **2.15.2** — adds the measured launcher FORWARDING
+> TABLE: it injects `chat` on a bare launch, skips `--agent`'s value, strips
+> `--`, rewrites `settings all` to `settings list`, and keeps `whoami`
+> in-process. Corrects the `--v3` rewrite to its real TWO-TOKEN form
+> `--agent-engine v3`; the `--agent-engine=v3` in the error text is clap's
+> diagnostic formatting, not the argv. Prior: records that the launcher resolves
+> `kiro-cli-chat` through PATH, so the two wrappers COMPOSE, and that
+> `--trust-tools` therefore has to be withheld from `acp` under v3. Prior: first
+> revision). If you touch `lib/idempotentFlags.nix`,
 > `packages/kiro-cli/lib/wrapPackage.nix`, or bump the kiro-cli version and this
 > fragment isn't updated in the same commit, stop and fix it.
 >
@@ -206,13 +212,35 @@ interactive half — under v3 an `ask` rule is resolved with the client over ACP
 equivalent, so on the devenv backend a withheld `--trust-tools` is not recovered
 declaratively — the grant is simply absent for that session.
 
-> **Probing v3 at all: grep the JS, not the ELF.** The v3 engine is NOT in the
-> Nix-store binary. It is a separately downloaded Node bundle under
+> **Probing v3 at all: for POLICY, grep the JS, not the ELF.** The v3 engine is
+> NOT in the Nix-store binary. It is a separately downloaded Node bundle under
 > `~/.local/share/kiro-cli/kas/<version>/node_modules/@kiro/agent/`, and the
 > Rust binary only spawns it. A `strings` sweep over the 555 MB ELF finds
 > nothing about policy and produces a confident WRONG answer — that is measured,
 > not hypothetical. Read `acp-server.js` and `tui.js` first; where the ELF and
-> the JS disagree, the JS wins.
+> the JS disagree on policy, the JS wins.
+>
+> **Do NOT generalize that to feature GATING — there the ELF wins, and reading
+> only the JS produces exactly the confident wrong answer this note warns
+> about.** Measured 2026-07-31 on 2.16.0. `tui.js` gates hidden features on
+> `process.env.KIRO_ENABLED_FEATURES` (a JSON array of strings, parsed once into
+> a Set), which reads like an env var you can simply set. It is not: the **rust
+> chat binary recomputes and OVERWRITES that variable before spawning bun.** The
+> parent process held `["workflows"]` and its bun child received `["tangent"]`.
+> `KIRO_ROLLOUT_FORCE_INTERNAL=1`, `KIRO_ROLLOUT_FORCE_NIGHTLY=1` and
+> `KIRO_INTERNAL=1` do not move it either — `segment: "internal"` resolves off
+> the authenticated identity (`lite` is documented "Amazon employees only"), not
+> off the environment.
+>
+> The real gate is a **JSON rollout manifest carried in the ELF's rodata**, in
+> TWO identical copies, parsed at runtime — see `vu.mkKiroRolloutPatch` and
+> `ai.kiro.unlockedRolloutFeatures`. Its feature names are extracted into
+> `overlays/kiro-cli-extracted.json` under `rolloutFeatures`, so read that file
+> rather than re-deriving the list by hand (the extractor found two entries a
+> careful manual read had missed). Note the manifest's own `workflows`
+> description says "enable locally through KIRO_ENABLED_FEATURES" — that line is
+> STALE and does not describe shipped behavior. Believing it costs a measurement
+> session.
 
 **"Is the engine v3" is a RUNTIME question.** A caller's `--agent-engine`
 overrides the injected `--v3`, so an eval-time `hasV3` gets it wrong in both

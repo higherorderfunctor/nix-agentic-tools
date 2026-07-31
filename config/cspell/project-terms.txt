@@ -274,6 +274,7 @@ revset
 revsets
 revwalk
 rnix
+rodata
 rollup
 rsbuild
 rspack
@@ -344,6 +345,7 @@ ungated
 ungroomed
 unheld
 unhide
+unparameterized
 unparseable
 unrebased
 unresumable

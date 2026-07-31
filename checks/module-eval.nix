@@ -2350,6 +2350,62 @@ in {
   # the v3 engine like HM does (was HM-only before the shared wrapper). devenv
   # exports env natively, so the wrapper carries flags only — but the symlinkJoin
   # ("kiro-cli-wrapped") still fires on v3/tui alone.
+  # The unlock must FORK the derivation — if the drvPath were unchanged, the
+  # patch step silently did nothing and the consumer would get stock kiro while
+  # believing workflows were on. Comparing drvPaths is the only assertion that
+  # actually distinguishes those two worlds; a name check cannot, because both
+  # sides are named `kiro-cli-wrapped`.
+  module-kiro-hm-rollout-unlock-forks-package = mkTest "kiro-hm-rollout-unlock-forks-package" (
+    let
+      drvOf = cfg: let
+        packages = (evalHm {ai.kiro = {enable = true;} // cfg;}).config.home.packages or [];
+      in
+        lib.head (map (p: p.drvPath) (lib.filter (p: (p.name or "") == "kiro-cli-wrapped") packages));
+    in
+      drvOf {v3 = true;}
+      != drvOf {
+        v3 = true;
+        unlockedRolloutFeatures = ["workflows"];
+      }
+  );
+
+  # devenv parity: same fork, same option, same backend-independent result.
+  module-kiro-devenv-rollout-unlock-forks-package = mkTest "kiro-devenv-rollout-unlock-forks-package" (
+    let
+      drvOf = cfg: let
+        packages = (evalDevenv {ai.kiro = {enable = true;} // cfg;}).config.packages or [];
+      in
+        lib.head (map (p: p.drvPath) (lib.filter (p: (p.name or "") == "kiro-cli-wrapped") packages));
+    in
+      drvOf {v3 = true;}
+      != drvOf {
+        v3 = true;
+        unlockedRolloutFeatures = ["workflows"];
+      }
+  );
+
+  # The default MUST leave the package untouched. This is what protects every
+  # cachix hit: an unconditional patch step would fork the drvPath for every
+  # consumer, including those who never asked for a dark-shipped feature.
+  module-kiro-rollout-default-is-stock = mkTest "kiro-rollout-default-is-stock" (
+    let
+      packages = (evalHm {ai.kiro.enable = true;}).config.home.packages or [];
+    in
+      lib.any (p: (p.drvPath or null) == pkgs.ai.kiro-cli.drvPath) packages
+  );
+
+  # Guards the sidecar wiring end to end: the option's enum is read from the
+  # committed extraction, so an empty or malformed `rolloutFeatures` key would
+  # otherwise surface only as a confusing type error at the consumer.
+  module-kiro-rollout-enum-from-sidecar = mkTest "kiro-rollout-enum-from-sidecar" (
+    let
+      extracted = builtins.fromJSON (builtins.readFile ../overlays/kiro-cli-extracted.json);
+    in
+      lib.elem "workflows" extracted.rolloutFeatures
+      && lib.elem "tangent" extracted.rolloutFeatures
+      && builtins.length extracted.rolloutFeatures >= 6
+  );
+
   module-kiro-devenv-v3-wraps-package = mkTest "kiro-devenv-v3-wraps-package" (
     let
       result = evalDevenv {

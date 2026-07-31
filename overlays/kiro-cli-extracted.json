@@ -14,5 +14,21 @@
     "PostFileSave",
     "PostTaskExec",
     "PreTaskExec"
+  ],
+  "rolloutFeatures": [
+    "c2s",
+    "infra_safety",
+    "kas",
+    "lite",
+    "memory",
+    "remote_sandbox",
+    "tangent",
+    "test",
+    "test_internal_only",
+    "test_nightly_only",
+    "tui",
+    "v2_non_interactive",
+    "voice",
+    "workflows"
   ]
 }
