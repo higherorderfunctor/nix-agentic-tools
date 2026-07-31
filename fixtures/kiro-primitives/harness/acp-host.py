@@ -250,7 +250,14 @@ class AcpHost:
             # NO REFRESH, by design. A second call means the engine is nearing
             # expiry; if the cached token can no longer satisfy the engine's own
             # buffer, say so loudly instead of quietly handing back a stale one.
-            _, _, remaining = read_token()
+            #
+            # RE-READ rather than reuse the startup copy. The operator's own Kiro
+            # is the single refresh authority, and it may have rotated the token
+            # since this host started. Answering from the startup cache after a
+            # rotation hands back a token that is expired while `remaining` — read
+            # from the row that replaced it — looks healthy. The engine then fails
+            # at the service, which reads as an auth bug and is not one.
+            self._token, self._expires_at, remaining = read_token()
             if remaining <= REFRESH_BUFFER_SEC:
                 self._send({"jsonrpc": "2.0", "id": msg["id"], "error": {
                     "code": -32000,
