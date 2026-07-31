@@ -1,11 +1,13 @@
 ---
 name: stack-fix
 description: >-
-  Use when you need to fix, correct, or update content in an earlier commit.
-  Absorbs staged changes into correct stack commits INSTEAD of running git
-  absorb or git commit --fixup via Bash. Prevents: missed dry-run preview,
-  leftover staged changes going unnoticed, forgetting to restack. Falls back to
-  guided manual amend when absorb cannot route hunks.
+  Use when you need to fix, correct, or update content in an earlier commit —
+  line-level edits, content moves, or structural changes. Absorbs staged changes
+  into correct stack commits INSTEAD of running git absorb or git commit --fixup
+  via Bash, or hand-running git prev + edit + git amend + git restack --merge.
+  Prevents: missed dry-run preview, leftover staged changes going unnoticed,
+  forgetting to restack. Falls back to guided manual amend when absorb cannot
+  route hunks.
 argument-hint: "[--dry-run]"
 disable-model-invocation: false
 compatibility: "Requires git-branchless and git-absorb"
