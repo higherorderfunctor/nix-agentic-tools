@@ -26,7 +26,7 @@ Two preset levels are exported via `lib.gitConfig` (essential aliases) and
 `programs.git.settings` via the `gitPreset` option (`"minimal"` / `"full"` /
 `"none"`).
 
-### Skills + Routing Table
+### Skills + Skill-Routing Rule
 
 `stacked-workflows.enable = true` fans the (unprefixed) `stack-*` skills and the
 skill-routing instruction into the cross-ecosystem `ai.skills` /

@@ -40,7 +40,13 @@
   # used to describe is gone (see the header comment).
   description = "Requires checking stack-* skill coverage before hand-running git-branchless, git-absorb, or git-revise";
   composed = fragments.compose {
-    fragments = builtins.attrValues swsContent.passthru.fragments;
+    # Named EXPLICITLY, not `attrValues passthru.fragments`. This composes an
+    # ALWAYS-LOADED instruction, so a blanket attrValues would silently enrol
+    # any fragment later added to stacked-workflows-content into every session's
+    # per-turn cost — re-inflating exactly what the header comment explains was
+    # cut. Opting a new fragment in has to be a deliberate edit here, and the
+    # bar for it is the one stated in lib/ai/mkSkillPackageModule.nix.
+    fragments = [swsContent.passthru.fragments.skill-routing];
     inherit description;
   };
 in [
