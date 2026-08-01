@@ -7,13 +7,16 @@ applyTo: "lib/ai/sharedOptions.nix,packages/chatgpt-codex/modules/**,packages/cl
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-01 (commit pending — Codex joins the factory with
-> an enable/package-only vertical in both backends; later slices add its native
-> fanout surfaces). Prior: 2026-07-27 (commit pending — re-points the
-> claude-code wrapping cite from `packages/ai-clis/claude-code.nix`, a path that
-> no longer exists, to `overlays/claude-code.nix`; prior 2026-04-08, A10 delete
-> modules/ tree). If you change the gating, the `programs.*.enable` flipping, or
-> the cross-ecosystem data flow in the per-package factories
+> **Last verified:** 2026-08-01 (commit pending — Codex now lowers shared and
+> per-app context, instructions, and unscoped Markdown rules into global HM and
+> project-local devenv AGENTS.md files; scoped content fails explicitly pending
+> its degradation policy). Prior: 2026-08-01 (commit 914096a8 — Codex joins the
+> factory with an enable/package-only vertical in both backends). Prior:
+> 2026-07-27 (commit pending — re-points the claude-code wrapping cite from
+> `packages/ai-clis/claude-code.nix`, a path that no longer exists, to
+> `overlays/claude-code.nix`; prior 2026-04-08, A10 delete modules/ tree). If
+> you change the gating, the `programs.*.enable` flipping, or the
+> cross-ecosystem data flow in the per-package factories
 > (`packages/*/lib/mk*.nix`) or shared options (`lib/ai/sharedOptions.nix`) and
 > this fragment isn't updated in the same commit, stop and fix it.
 
@@ -31,7 +34,7 @@ sole gate for that ecosystem's fanout:
 | Consumer sets              | What fires                                                            |
 | -------------------------- | --------------------------------------------------------------------- |
 | `ai.claude.enable = true`  | claude fanout block + `programs.claude-code.enable = mkDefault true`  |
-| `ai.codex.enable = true`   | Codex package installation (native fanout lands in later slices)      |
+| `ai.codex.enable = true`   | Codex package installation + native AGENTS.md fanout                  |
 | `ai.copilot.enable = true` | copilot fanout block + `programs.copilot-cli.enable = mkDefault true` |
 | `ai.kiro.enable = true`    | kiro fanout block + `programs.kiro-cli.enable = mkDefault true`       |
 
@@ -82,11 +85,19 @@ ecosystem simultaneously):
 - `ai.skills` — attrset of name → directory path. Each enabled ecosystem gets
   its native representation (Claude: `.claude/skills/<name>` symlink; Copilot
   and Kiro: native `skills` option on their module).
-- `ai.instructions` — attrset of name → `instructionModule` (text + optional
-  path scoping + description). Transformed per ecosystem via
+- `ai.instructions` — list of instruction records (text plus optional name, path
+  scoping, and description). Transformed per ecosystem via
   `fragments-ai.passthru.transforms`: Claude gets `.claude/rules/<name>.md` with
   YAML frontmatter; Copilot gets `.github/instructions/<name>.instructions.md`;
-  Kiro gets `.kiro/steering/<name>.md` (via the CLI module).
+  Kiro gets `.kiro/steering/<name>.md` (via the CLI module); Codex concatenates
+  entries into its single AGENTS.md without frontmatter.
+- `ai.context` — a single global baseline. Codex lowers it to
+  `~/.codex/AGENTS.md` in Home Manager and project-root `AGENTS.md` in devenv;
+  `ai.codex.context` takes precedence when set.
+- `ai.rules` — named Markdown rules. Codex appends these alphabetically to its
+  AGENTS.md with trace comments. Scoped Codex rules currently fail explicitly
+  rather than silently losing their scope; the follow-up degradation surface
+  will preserve scope as prose.
 - `ai.lspServers` — typed LSP definitions, translated to each ecosystem's native
   LSP config format (Claude via `ENABLE_LSP_TOOL=1`; Copilot has `lspServers`
   option; Kiro too).

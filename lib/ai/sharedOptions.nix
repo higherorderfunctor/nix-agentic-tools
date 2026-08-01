@@ -20,7 +20,9 @@ in {
         Cross-app global context (single always-on file) fanned out to every
         enabled AI app. Each ecosystem emits it at its native location:
         Claude → ~/.claude/CLAUDE.md, Kiro → ~/.kiro/steering/<contextFilename>
-        (default AGENTS.md). Per-app overrides (ai.<name>.context) win when set.
+        (default AGENTS.md), Codex → ~/.codex/AGENTS.md (Home Manager) or
+        project-root AGENTS.md (devenv). Per-app overrides
+        (ai.<name>.context) win when set.
       '';
       example = lib.literalExpression "./ai-context.md";
     };
@@ -39,7 +41,10 @@ in {
     instructions = lib.mkOption {
       type = lib.types.listOf lib.types.attrs;
       default = [];
-      description = "Cross-app instructions fanned out to every enabled AI app.";
+      description = ''
+        Cross-app instructions fanned out to every enabled AI app. Codex
+        concatenates them into its single AGENTS.md without frontmatter.
+      '';
     };
 
     rules = lib.mkOption {
@@ -50,8 +55,9 @@ in {
         Each attribute becomes one file in the ecosystem's native rules
         directory (Claude: `.claude/rules/<name>.md`, Kiro:
         `.kiro/steering/<name>.md`, Copilot:
-        `.github/instructions/<name>.instructions.md`). Per-app overrides
-        (ai.<name>.rules) merge on top; collisions are a failure.
+        `.github/instructions/<name>.instructions.md`). Codex instead appends
+        unscoped rules alphabetically to its single AGENTS.md. Per-app
+        overrides (ai.<name>.rules) merge on top; collisions are a failure.
       '';
       example = lib.literalExpression ''
         {

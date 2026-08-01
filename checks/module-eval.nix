@@ -445,6 +445,148 @@ in {
       && devenv.config.packages == [expected]
   );
 
+  module-codex-agentsmd-fanout = mkTest "codex-agentsmd-fanout" (
+    let
+      config = {
+        ai = {
+          codex = {
+            context = "Codex context";
+            enable = true;
+            instructions = [
+              {
+                name = "local";
+                text = "Local instruction";
+              }
+            ];
+            rules.zeta.text = "Zeta rule";
+          };
+          context = "Shared context";
+          instructions = [{text = "Shared instruction";}];
+          rules.alpha.text = "Alpha rule";
+        };
+      };
+      hm = evalHm config;
+      devenv = evalDevenv config;
+      expected = builtins.concatStringsSep "\n\n" [
+        "Codex context"
+        "Shared instruction"
+        "<!-- instruction: local -->\nLocal instruction"
+        "<!-- rule: alpha -->\nAlpha rule"
+        "<!-- rule: zeta -->\nZeta rule"
+      ];
+    in
+      hm.config.home.file.".codex/AGENTS.md".text
+      == expected
+      && devenv.config.files."AGENTS.md".text == expected
+      && !(lib.hasInfix "---" expected)
+  );
+
+  module-codex-context-fallback-and-empty-gate = mkTest "codex-context-fallback-and-empty-gate" (
+    let
+      hm = evalHm {
+        ai = {
+          codex.enable = true;
+          context = "Shared context";
+        };
+      };
+      empty = evalHm {ai.codex.enable = true;};
+    in
+      hm.config.home.file.".codex/AGENTS.md".text
+      == "Shared context"
+      && !(empty.config.home.file ? ".codex/AGENTS.md")
+  );
+
+  module-codex-empty-path-context-does-not-prefix-separator = mkTest "codex-empty-path-context-does-not-prefix-separator" (
+    let
+      evaluated = evalHm {
+        ai = {
+          codex.enable = true;
+          context = ./fixtures/empty;
+          instructions = [{text = "Instruction";}];
+        };
+      };
+    in
+      evaluated.config.home.file.".codex/AGENTS.md".text == "Instruction"
+  );
+
+  module-codex-configdir-rejects-unsafe-paths = mkTest "codex-configdir-rejects-unsafe-paths" (
+    let
+      accepts = configDir:
+        (builtins.tryEval
+          (evalHm {
+            ai.codex = {
+              inherit configDir;
+              enable = true;
+            };
+          }).config.ai.codex.configDir)
+        .success;
+    in
+      accepts ".codex"
+      && !(accepts "")
+      && !(accepts "/tmp/codex")
+      && !(accepts "../codex")
+      && !(accepts "config/../codex")
+  );
+
+  module-codex-path-instruction-resolves = mkTest "codex-path-instruction-resolves" (
+    let
+      evaluated = evalHm {
+        ai = {
+          codex.enable = true;
+          instructions = [{text = ./fixtures/kiro-steering/alpha.md;}];
+        };
+      };
+    in
+      evaluated.config.home.file.".codex/AGENTS.md".text == "Alpha steering body.\n"
+  );
+
+  module-codex-scoped-rule-fails-loudly = mkTest "codex-scoped-rule-fails-loudly" (
+    let
+      evaluated = evalHm {
+        ai = {
+          codex.enable = true;
+          rules.scoped = {
+            paths = ["**/*.nix"];
+            text = "Scoped";
+          };
+        };
+      };
+    in
+      builtins.any (assertion: !assertion.assertion && lib.hasInfix "ai.codex.rules.scoped" assertion.message) evaluated.config.assertions
+  );
+
+  module-codex-scoped-instruction-fails-loudly = mkTest "codex-scoped-instruction-fails-loudly" (
+    let
+      evaluated = evalHm {
+        ai = {
+          codex.enable = true;
+          instructions = [
+            {
+              paths = ["**/*.nix"];
+              text = "Scoped";
+            }
+          ];
+        };
+      };
+    in
+      builtins.any (assertion: !assertion.assertion && lib.hasInfix "ai.codex.instructions" assertion.message) evaluated.config.assertions
+  );
+
+  module-codex-rule-collision-fails = mkTest "codex-rule-collision-fails" (
+    let
+      evaluated = evalHm {
+        ai = {
+          codex = {
+            enable = true;
+            rules.duplicate.text = "Codex";
+          };
+          rules.duplicate.text = "Shared";
+        };
+      };
+    in
+      builtins.any (assertion: !assertion.assertion && lib.hasInfix "rules 'duplicate'" assertion.message) evaluated.config.assertions
+  );
+
   # ── glab ───────────────────────────────────────────────────────────
   module-glab-default-disabled = mkTest "glab-default-disabled" (
     !(evalHm {}).config.glab.enable && (evalHm {}).config.home.packages == []

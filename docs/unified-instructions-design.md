@@ -342,9 +342,12 @@ silently.
      (copilot-instructions.md default); rules →
      `.github/instructions/<name>.instructions.md` via `copilotTransformer`.
      Shipped 7dad0b8, 419010a.
-   - **Codex:** `mkCodex` factory not yet landed (deferred with Codex ecosystem
-     work — see plan.md "Add OpenAI Codex").
-4. **Codex size guard** — eval-time assertion. **Deferred** with (3) Codex.
+   - **Codex:** shared/per-app context, instructions, and unscoped rules lower
+     into `~/.codex/AGENTS.md` for Home Manager and project-root `AGENTS.md` for
+     devenv. Scoped content currently fails explicitly instead of losing scope.
+     Scope degradation and the size guard remain follow-up work.
+4. **Codex size guard** — eval-time assertion. **Deferred** to the Codex scope
+   degradation/limit slice.
 5. **Consumer migration (`nixos-config`)** — out of scope for this repo.
    Consumer can now use
    `ai.kiro.rules = builtins.mapAttrs (…) (builtins.readDir …)` on their own
