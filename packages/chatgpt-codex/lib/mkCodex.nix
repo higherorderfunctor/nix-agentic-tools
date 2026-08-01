@@ -16,7 +16,7 @@
       + "_\n\n"
     );
 
-  shouldRender = fragment:
+  shouldRender = _name: fragment:
     (fragment.paths or null) == null || !(fragment.skipIfUnsupported or false);
 
   renderFragment = fragment:
@@ -48,10 +48,10 @@
       else resolveText effectiveContext;
     instructionChunks =
       map mkInstructionChunk
-      (builtins.filter shouldRender mergedInstructions);
+      (builtins.filter (shouldRender null) mergedInstructions);
     ruleChunks =
       lib.mapAttrsToList mkRuleChunk
-      (lib.filterAttrs (_: shouldRender) mergedRules);
+      (lib.filterAttrs shouldRender mergedRules);
     chunks =
       lib.optional (contextText != "") contextText
       ++ instructionChunks
@@ -76,10 +76,10 @@
       "context=${toString (size effectiveContext)} bytes";
     instructionContributions =
       lib.imap0 (index: instruction: "instruction:${instruction.name or (toString index)}=${toString (builtins.stringLength (mkInstructionChunk instruction))} bytes")
-      (builtins.filter shouldRender mergedInstructions);
+      (builtins.filter (shouldRender null) mergedInstructions);
     ruleContributions =
       lib.mapAttrsToList (name: rule: "rule:${name}=${toString (builtins.stringLength (mkRuleChunk name rule))} bytes")
-      (lib.filterAttrs (_: shouldRender) mergedRules);
+      (lib.filterAttrs shouldRender mergedRules);
     renderedBytes = builtins.stringLength agentsMd;
   in {
     assertion = renderedBytes <= cfg.projectDocMaxBytes;
