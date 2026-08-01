@@ -861,16 +861,14 @@ four spare iterations to absorb a no-op and needed none: `loop#0` through
 
 **So the wording is the cause, at n=11 iterations across two runs on the model
 that previously failed.** Still a modest sample, and it does not settle the
-_mechanism_ (§12), but the prompt-vs-model confound is gone. The caveat below is
-unaffected and still matters more than the fix.
+_mechanism_ (§12), but the prompt-vs-model confound is gone.
 
-Two caveats on that result. The model changed at the same time as the prompt
-(`claude-opus-5` → `claude-haiku-4.5`), so the fix is **consistent with** zero
-no-ops rather than proven to cause it, and it is untested at like-for-like
-model. And this wording is only safe for **idempotent** work: it instructs an
-agent never to skip, so applied to a non-idempotent task it invites
-double-execution. Make the task itself idempotent or claim-guarded (§9.2) rather
-than relying on prompt wording for correctness.
+**One caveat survives, and it matters more than the fix.** This wording is only
+safe for **idempotent** work: it instructs an agent never to skip, so applied to
+a non-idempotent task it invites double-execution — and §7.5 shows a
+`completion` block will re-invoke a step without any iteration cap at all. Make
+the task itself idempotent or claim-guarded (§9.2) rather than relying on prompt
+wording for correctness.
 
 ### 7.3 Captured outputs can be empty, and are never raw (Measured)
 
