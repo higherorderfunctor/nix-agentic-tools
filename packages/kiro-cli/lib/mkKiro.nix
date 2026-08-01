@@ -200,6 +200,21 @@
         message = "ai.kiro: cannot set both inline hooks (`hooks`/`hooksJson`) and `hooksDir` — choose one.";
       }
       (hookNameAssertion cfg)
+      {
+        # An overridden `package` need not carry the overlay's passthru, and
+        # without this the failure is a bare "attribute 'withRolloutFeatures'
+        # missing" pointing at factory internals rather than at the two
+        # options the consumer actually set.
+        assertion =
+          cfg.unlockedRolloutFeatures == [] || cfg.package ? withRolloutFeatures;
+        message = ''
+          ai.kiro: `unlockedRolloutFeatures` needs a `package` exposing
+          `passthru.withRolloutFeatures`, which `pkgs.ai.kiro-cli` from this
+          flake's overlay provides. The configured `package` does not, so it
+          cannot be patched. Either drop `unlockedRolloutFeatures` or set
+          `package` back to an overlay-provided kiro-cli.
+        '';
+      }
     ]
     ++ materializeLib.mkEntryAssertions {
       app = "kiro";
@@ -340,6 +355,23 @@
       "ai.kiro: trustedMcpTools entries not representable as v3 permissions, dropped: ${lib.concatStringsSep ", " dropped}"
       rules
     else rules;
+
+  # Both backends must apply the unlock identically (config parity is a repo
+  # invariant, not a nicety), so the resolution lives here rather than being
+  # open-coded at each `wrapKiroPackage` call site.
+  #
+  # `cfg.package` is evaluated either way, which is what keeps the unfree guard
+  # honest: `pkgs.ai.kiro-cli` is an `ensureUnfreeCheck` symlinkJoin, so
+  # check-meta fires on it before `withRolloutFeatures` is ever reached.
+  # No canonicalization here on purpose. `withRolloutFeatures` sorts and
+  # de-duplicates its own argument (see `canonFeatures` in
+  # overlays/kiro-cli.nix), because that is where derivation identity is
+  # decided and doing it there covers direct callers too. Repeating it here
+  # would be a second source of truth that can silently drift out of step.
+  resolvePackage = cfg:
+    if cfg.unlockedRolloutFeatures == []
+    then cfg.package
+    else cfg.package.withRolloutFeatures cfg.unlockedRolloutFeatures;
 in
   lib.ai.app.mkAiApp {
     name = "kiro";
@@ -348,6 +380,36 @@ in
       package = pkgs.ai.kiro-cli;
     };
     options = {
+      # Dark-shipped upstream features, unlocked by patching the rollout
+      # manifest the chat binary carries in rodata (see
+      # `vu.mkKiroRolloutPatch`). The enum is EXTRACTED from that manifest
+      # into the committed sidecar, never curated, so it tracks upstream.
+      #
+      # Why a package patch and not an env var: `tui.js` does read
+      # `KIRO_ENABLED_FEATURES`, but the rust chat binary RECOMPUTES and
+      # overwrites that variable before spawning bun — measured, the parent
+      # held `["workflows"]` and the child received `["tangent"]`. The
+      # `KIRO_ROLLOUT_FORCE_INTERNAL` / `_NIGHTLY` escape hatches do not help
+      # either; `segment: "internal"` resolves off the authenticated identity.
+      # So the manifest is the only client-side seam.
+      #
+      # Default `[]` leaves the package byte-identical to stock.
+      unlockedRolloutFeatures = lib.mkOption {
+        type = lib.types.listOf (lib.types.enum kiroExtracted.rolloutFeatures);
+        default = [];
+        example = ["workflows"];
+        description = ''
+          Upstream rollout features to force on by patching the kiro binary's
+          embedded rollout manifest.
+
+          These are DARK-SHIPPED and uncertified — `workflows` is documented
+          upstream as "Dark-shipped at 0% until release certification is
+          complete". Enabling one ships pre-release code; expect rough edges.
+
+          Unlocking `workflows` also enables `/goal`, since the client maps the
+          one flag onto both the `workflows` and `goal` session settings.
+        '';
+      };
       # Config directory (HOME-relative for HM, project-relative for
       # devenv). All file writes use this as root prefix. Exposed as an
       # option so consumers can override without forking the factory.
@@ -701,7 +763,8 @@ in
         # ride along with the --tui/--v3/--trust-tools flag appends. Shared
         # wrapper helper (also used by the devenv backend).
         kiroPackage = wrapKiroPackage {
-          inherit (cfg) package tui v3 trustedMcpTools;
+          inherit (cfg) tui v3 trustedMcpTools;
+          package = resolvePackage cfg;
           environmentVariables = mergedEnvironmentVariables;
         };
 
@@ -890,7 +953,8 @@ in
             {
               packages = [
                 (wrapKiroPackage {
-                  inherit (cfg) package tui v3 trustedMcpTools;
+                  inherit (cfg) tui v3 trustedMcpTools;
+                  package = resolvePackage cfg;
                   environmentVariables = {};
                 })
               ];

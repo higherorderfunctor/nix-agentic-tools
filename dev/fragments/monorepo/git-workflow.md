@@ -1,18 +1,24 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-07-31 (commit pending — the Copilot review loop is the
-> agent's to START, unprompted, the moment the PR is open and non-draft; only
-> continuing past the 5-round cap needs the operator's say-so). Prior:
-> 2026-07-30 (commit pending — records that a re-request issued while a review
-> is still in flight is silently dropped, so the check run, not the API
-> response, is the confirmation). Prior: 2026-07-30 (commit d42d805a) — records
-> that the reviews and comments endpoints attribute Copilot's output to
-> DIFFERENT logins, so the documented `copilot-pull-request-reviewer[bot]`
-> filter returns zero on `/pulls/N/comments` and reads as a clean review while
-> gating threads are open; measured on PR #614. Prior: 2026-07-29 — the ruleset
-> now sets `required_review_thread_resolution: true`, so an unresolved review
-> thread blocks merge including on auto-merging `update/*` PRs, and the claim
-> that Copilot "never gates its merge" is retired; adds the rule that Copilot's
+> **Last verified:** 2026-07-31 (commit pending — the bootstrap step's "or any
+> devenv task" was WRONG and is removed: `devenv tasks run` does not materialize
+> `.pre-commit-config.yaml`, measured in two fresh worktrees where the task
+> succeeded and the next commit was still rejected. Also records that a push did
+> not auto-trigger a Copilot review 4 times out of 4 on PR #640, so
+> re-requesting is a mandatory step rather than a fallback). Prior: 2026-07-31
+> (commit e06e7601 — the Copilot review loop is the agent's to START,
+> unprompted, the moment the PR is open and non-draft; only continuing past the
+> 5-round cap needs the operator's say-so). Prior: 2026-07-30 (commit pending —
+> records that a re-request issued while a review is still in flight is silently
+> dropped, so the check run, not the API response, is the confirmation). Prior:
+> 2026-07-30 (commit d42d805a) — records that the reviews and comments endpoints
+> attribute Copilot's output to DIFFERENT logins, so the documented
+> `copilot-pull-request-reviewer[bot]` filter returns zero on
+> `/pulls/N/comments` and reads as a clean review while gating threads are open;
+> measured on PR #614. Prior: 2026-07-29 — the ruleset now sets
+> `required_review_thread_resolution: true`, so an unresolved review thread
+> blocks merge including on auto-merging `update/*` PRs, and the claim that
+> Copilot "never gates its merge" is retired; adds the rule that Copilot's
 > SUPPRESSED findings must be read on every review, since they create no thread;
 > gates re-review polling on `commit_id` rather than a timestamp, and caps the
 > fix-and-re-review loop at 5 rounds). Prior: 2026-07-24 — the bot's `update/*`
@@ -142,6 +148,13 @@ Absent means it never started, so re-request it; `in_progress` means wait;
 than counting the checks: a total count is only correct until the CI matrix
 changes.
 
+**Expect absent. A push auto-triggered a review ZERO times out of 4 pushes on PR
+#640** (2026-07-31) — every one left no reviewer check run on the new head while
+the previous commit's review sat there looking current. So treat re-requesting
+as a MANDATORY step after every push, not a fallback for the occasional miss,
+and pair it with the `commit_id` gate below: the stale review is what you will
+otherwise read, and it looks exactly like a fresh clean one.
+
 **A re-request issued while a review is still in flight is silently dropped.**
 The API returns success, no new check run appears, and the call is
 indistinguishable from one that worked. Measured on #614: a push followed
@@ -221,14 +234,31 @@ silently resolves one level too deep, into
 2. Bootstrap the new worktree **once**, before its first commit:
 
    ```bash
-   cd "$worktrees/<slug>" && devenv shell   # or any devenv task
+   cd "$worktrees/<slug>" && devenv shell true
    ```
 
    `.pre-commit-config.yaml` is a devenv `files.*` artifact materialized on
-   shell entry, and `git worktree add` runs no devenv — until you do this the
+   SHELL ENTRY, and `git worktree add` runs no devenv — until you do this the
    shared prek hooks have no config to validate against and the commit is
    rejected. With direnv allowed for the parent directory the `cd` is enough on
    its own; that is what the sibling location buys.
+
+   **It has to be a shell entry — `devenv tasks run` does NOT materialize it.**
+   Measured 2026-07-31 in two fresh worktrees: a full
+   `devenv tasks run --mode before generate:all` completed successfully in each,
+   and the very next commit was still rejected for a missing config. Running a
+   task is not the shell-entry path, whatever else it does.
+
+   That combination is worth naming because it is the natural way to get this
+   wrong. Bootstrapping via a task is exactly what you reach for when the
+   worktree needs generated output anyway, the task succeeds, and the failure
+   surfaces later attributed to the commit rather than to the bootstrap. This
+   step previously read `devenv shell   # or any devenv task`; the comment was
+   wrong and is now removed.
+
+   `devenv shell true` is the cheapest spelling — it enters, runs `true`, and
+   exits, instead of dropping you into an interactive shell you then have to
+   leave.
 
 3. **Push at the first commit** — not at the end — so the branch is a continuous
    off-machine backup. Open the PR **ready (non-draft) as soon as the work is

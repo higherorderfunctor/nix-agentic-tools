@@ -202,6 +202,23 @@
       ];
     };
 
+  # Helpers for the rollout-unlock tests. They exist to keep `lib.head` off an
+  # unguarded filtered list: if the wrapper were renamed or dropped, `head`
+  # throws an eval error, which surfaces as an infrastructure failure with a
+  # stack trace rather than as this test failing. Worse, a comparison between
+  # two silently-wrong singletons can pass VACUOUSLY. Asserting the match count
+  # as part of the returned boolean fixes both.
+  kiroWrappedDrvs = packages:
+    map (p: p.drvPath) (lib.filter (p: (p.name or "") == "kiro-cli-wrapped") packages);
+
+  # Exactly one wrapper on each side, and they must DIFFER (the unlock forked).
+  soleFork = a: b:
+    builtins.length a == 1 && builtins.length b == 1 && builtins.head a != builtins.head b;
+
+  # Exactly one wrapper on each side, and they must MATCH (dedupe collapsed).
+  soleSame = a: b:
+    builtins.length a == 1 && builtins.length b == 1 && builtins.head a == builtins.head b;
+
   # STAGE 3 auto-memory generator (packages/kiro-cli/lib/autoMemory.nix). A tiny
   # two-bin stub stands in for the distiller so these emission/parity tests don't
   # depend on building the real overlay package (its bins + behavior are covered
@@ -2350,6 +2367,159 @@ in {
   # the v3 engine like HM does (was HM-only before the shared wrapper). devenv
   # exports env natively, so the wrapper carries flags only — but the symlinkJoin
   # ("kiro-cli-wrapped") still fires on v3/tui alone.
+  # The unlock must FORK the derivation — if the drvPath were unchanged, the
+  # patch step silently did nothing and the consumer would get stock kiro while
+  # believing workflows were on. Comparing drvPaths is the only assertion that
+  # actually distinguishes those two worlds; a name check cannot, because both
+  # sides are named `kiro-cli-wrapped`.
+  module-kiro-hm-rollout-unlock-forks-package = mkTest "kiro-hm-rollout-unlock-forks-package" (
+    let
+      a =
+        kiroWrappedDrvs
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+          };
+        })
+      .config
+      .home
+      .packages or [
+        ];
+      b =
+        kiroWrappedDrvs
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+            unlockedRolloutFeatures = ["workflows"];
+          };
+        })
+      .config
+      .home
+      .packages or [
+        ];
+    in
+      soleFork a b
+  );
+
+  # devenv parity: same fork, same option, same backend-independent result.
+  module-kiro-devenv-rollout-unlock-forks-package = mkTest "kiro-devenv-rollout-unlock-forks-package" (
+    let
+      a =
+        kiroWrappedDrvs
+        (evalDevenv {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+          };
+        })
+      .config
+      .packages or [
+        ];
+      b =
+        kiroWrappedDrvs
+        (evalDevenv {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+            unlockedRolloutFeatures = ["workflows"];
+          };
+        })
+      .config
+      .packages or [
+        ];
+    in
+      soleFork a b
+  );
+
+  # The default MUST leave the package untouched. This is what protects every
+  # cachix hit: an unconditional patch step would fork the drvPath for every
+  # consumer, including those who never asked for a dark-shipped feature.
+  module-kiro-rollout-default-is-stock = mkTest "kiro-rollout-default-is-stock" (
+    let
+      packages = (evalHm {ai.kiro.enable = true;}).config.home.packages or [];
+    in
+      lib.any (p: (p.drvPath or null) == pkgs.ai.kiro-cli.drvPath) packages
+  );
+
+  # A duplicated entry must NOT fork the derivation — otherwise two configs
+  # that mean the same thing produce two store paths and two 556 MB builds.
+  module-kiro-rollout-dedupes-features = mkTest "kiro-rollout-dedupes-features" (
+    let
+      drvOf = features:
+        kiroWrappedDrvs
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+            unlockedRolloutFeatures = features;
+          };
+        })
+        .config
+        .home
+        .packages or [
+        ];
+    in
+      soleSame (drvOf ["workflows"]) (drvOf ["workflows" "workflows"])
+      # Order must not fork it either. The list is comma-joined into
+      # `postFixup`, so without a sort these two semantically identical sets
+      # would produce different drvPaths and two redundant ~556 MB builds.
+      && soleSame (drvOf ["tangent" "workflows"]) (drvOf ["workflows" "tangent"])
+      # Control: a genuinely DIFFERENT set must still fork. Without this, the
+      # two assertions above would also pass if canonicalization had collapsed
+      # every input to a single derivation.
+      && soleFork (drvOf ["workflows"]) (drvOf ["tangent" "workflows"])
+  );
+
+  # A `package` without the overlay's passthru cannot be patched. Assert the
+  # failure is the NAMED one rather than a bare "attribute missing" pointing
+  # into factory internals.
+  module-kiro-rollout-rejects-package-without-passthru = mkTest "kiro-rollout-rejects-package-without-passthru" (
+    let
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          package = pkgs.hello;
+          unlockedRolloutFeatures = ["workflows"];
+        };
+      };
+      asserts =
+        builtins.filter (a: lib.hasInfix "withRolloutFeatures" a.message)
+        (ev.config.assertions or []);
+    in
+      asserts != [] && (builtins.head asserts).assertion == false
+  );
+
+  # Positive control for the above — the same assertion must PASS on the
+  # overlay-provided package, or the negative proves only that it always fires.
+  module-kiro-rollout-accepts-overlay-package = mkTest "kiro-rollout-accepts-overlay-package" (
+    let
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          unlockedRolloutFeatures = ["workflows"];
+        };
+      };
+      asserts =
+        builtins.filter (a: lib.hasInfix "withRolloutFeatures" a.message)
+        (ev.config.assertions or []);
+    in
+      asserts != [] && (builtins.head asserts).assertion == true
+  );
+
+  # Guards the sidecar wiring end to end: the option's enum is read from the
+  # committed extraction, so an empty or malformed `rolloutFeatures` key would
+  # otherwise surface only as a confusing type error at the consumer.
+  module-kiro-rollout-enum-from-sidecar = mkTest "kiro-rollout-enum-from-sidecar" (
+    let
+      extracted = builtins.fromJSON (builtins.readFile ../overlays/kiro-cli-extracted.json);
+    in
+      lib.elem "workflows" extracted.rolloutFeatures
+      && lib.elem "tangent" extracted.rolloutFeatures
+      && builtins.length extracted.rolloutFeatures >= 6
+  );
+
   module-kiro-devenv-v3-wraps-package = mkTest "kiro-devenv-v3-wraps-package" (
     let
       result = evalDevenv {

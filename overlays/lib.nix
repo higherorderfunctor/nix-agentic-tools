@@ -319,8 +319,49 @@ rec {
   # trigger absent from the candidate universe is invisible here — the impure
   # docs-diff (deferred) covers that; grow `candidates` from the docs on a new one.
   #   bin:  absolute path to the kiro chat binary (`.kiro-cli-chat-wrapped`).
-  #   pkgs: nixpkgs set (gnugrep, coreutils, jq).
+  #   pkgs: nixpkgs set (gnugrep, coreutils, jq, python3 — python3 drives the
+  #         rollout-manifest extraction, which is not expressible as a
+  #         line-oriented grep because the entries span newlines).
   #   dest: output path (default "/dev/stdout"; pass "$out" in runCommand).
+  # Reads the rollout manifest the kiro chat binary carries in rodata and emits
+  # its feature NAMES as a JSON array. Genuinely extracted, never curated: the
+  # names ARE the enum a consumer may unlock, so a hand-copied list would drift
+  # silently the first time upstream adds a flag.
+  #
+  # The shape assertion is the load-bearing half. A dead anchor still matches
+  # SOMETHING — that is exactly how the claude model-catalog grep rotted (see
+  # overlays.md § IFD Patterns) — so this demands the two entries stable across
+  # the 2.x line AND a floor on the entry count, rather than merely checking
+  # that the result is non-empty.
+  kiroRolloutExtractScript = pkgs:
+    pkgs.writeText "kiro-rollout-extract.py" ''
+      import json, mmap, re, sys
+
+      # mmap for the same reason the patcher uses it: the input is a ~556 MB
+      # ELF and read() would peak that much RSS on a builder to scan for a few
+      # hundred bytes of manifest. `re` scans the mapping through the buffer
+      # protocol, so nothing is materialized.
+      ent = re.compile(
+          rb'\n  "([a-z0-9_]+)": \{\n    "description": "[^"]*",\n'
+          rb'    "treatment_percent": \d+'
+      )
+      with open(sys.argv[1], "rb") as fh:
+          with mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+              names = sorted({m.decode() for m in ent.findall(mm)})
+
+      required = {"tangent", "workflows"}
+      missing = sorted(required - set(names))
+      if missing or len(names) < 6:
+          sys.stderr.write(
+              "kiro-extract: rollout manifest shape changed - found %d entries, "
+              "missing %s. Re-derive the regex against the binary before "
+              "trusting any unlock.\n" % (len(names), missing)
+          )
+          sys.exit(1)
+
+      json.dump(names, sys.stdout)
+    '';
+
   mkKiroExtract = {
     bin,
     pkgs,
@@ -333,6 +374,7 @@ rec {
     sort="${pkgs.coreutils}/bin/sort"
     wc="${pkgs.coreutils}/bin/wc"
     tr="${pkgs.coreutils}/bin/tr"
+    python3="${pkgs.python3}/bin/python3"
 
     # Documented v2+v3 trigger universe: Jun-5 docs (5) + v3 docs (11) + the v2
     # `AgentSpawn` name (v3 maps it -> SessionStart). Alphabetical; grow from docs.
@@ -355,8 +397,144 @@ rec {
     else
       documentedAbsentJson='[]'
     fi
+    rolloutFeaturesJson=$("$python3" ${kiroRolloutExtractScript pkgs} "${bin}")
+
     "$jq" -n --argjson hookTriggers "$hookTriggersJson" --argjson documentedAbsent "$documentedAbsentJson" \
-      '{hookTriggers: $hookTriggers, documentedAbsent: $documentedAbsent}' > "${dest}"
+      --argjson rolloutFeatures "$rolloutFeaturesJson" \
+      '{hookTriggers: $hookTriggers, documentedAbsent: $documentedAbsent, rolloutFeatures: $rolloutFeatures}' > "${dest}"
+  '';
+
+  # Same-LENGTH in-place rewrite of a rollout-manifest entry, flipping it to
+  # `treatment_percent: 100` / `segment: "all"` with no `channel` gate.
+  #
+  # Length preservation is the whole trick, and it is not fussiness: the
+  # manifest sits in rodata inside a ~556 MB ELF, so growing it by even one
+  # byte would move section offsets and require a relink we cannot do. The
+  # `description` field is unused by the gating logic, so it serves as the
+  # padding reservoir — shrink or grow it to absorb the delta exactly.
+  #
+  # Locating the target by CONTENT rather than by filename is deliberate:
+  # `wrapProgram` renames the real ELF (`kiro-cli-chat` ->
+  # `.kiro-cli-chat-wrapped` -> ...`_`) and this repo wraps it a second time,
+  # so any hard-coded name is one nixpkgs change away from silently patching
+  # nothing.
+  #
+  # Fails LOUD on any drift: a feature whose entry is absent, or whose entry
+  # count does not equal the number of sites patched, aborts the build. A
+  # half-patched binary is worse than an unpatched one, because which of the
+  # duplicate manifest copies is consulted is not observable from here.
+  mkKiroRolloutPatch = {
+    features,
+    pkgs,
+  }: let
+    script = pkgs.writeText "kiro-rollout-patch.py" ''
+      import mmap, os, re, sys
+
+      # De-duplicated, order preserved. The module already calls lib.unique,
+      # but this helper is callable on its own, and a repeated feature would
+      # otherwise re-patch an already-patched entry (harmless, since the
+      # rewrite is idempotent) and double its reported site count (not
+      # harmless — that count is the drift signal).
+      features = list(dict.fromkeys(f for f in sys.argv[1].split(",") if f))
+      root = sys.argv[2]
+      MARKER = b'"treatment_percent"'
+
+      def entry_re(name):
+          n = re.escape(name.encode())
+          return re.compile(
+              rb'"' + n + rb'": \{\n'
+              rb'    "description": "[^"]*",\n'
+              rb'    "treatment_percent": \d+'
+              rb'(?:,\n    "(?:segment|channel)": "[^"]*")*\n'
+              rb'  \}'
+          )
+
+      def replacement(name, width):
+          core = (
+              b'"' + name.encode() + b'": {\n'
+              b'    "description": "%s",\n'
+              b'    "treatment_percent": 100,\n'
+              b'    "segment": "all"\n'
+              b'  }'
+          )
+          pad = width - len(core % b"")
+          if pad < 0:
+              sys.stderr.write(
+                  "kiro-rollout: entry for %r is too short (%d bytes) to hold the "
+                  "unlocked form; upstream shortened the description.\n"
+                  % (name, width)
+              )
+              sys.exit(1)
+          return core % (b"P" * pad)
+
+      # mmap, not read()+bytearray. The target is a ~556 MB ELF, and the
+      # read-then-copy shape peaked over 1 GB per file, which is enough to
+      # make a small CI builder fail on a patch that changes ~200 bytes. The
+      # rewrite is length-preserving, so an in-place mapped edit is exactly
+      # the right tool: the kernel pages in only what the regex touches and
+      # writes back only the dirtied pages. `re` operates on the mmap
+      # directly via the buffer protocol, so nothing is materialized.
+      totals = dict((f, 0) for f in features)
+      found_manifest = False
+
+      for dirpath, _dirs, filenames in os.walk(root):
+          for fn in sorted(filenames):
+              path = os.path.join(dirpath, fn)
+              if os.path.islink(path) or not os.path.isfile(path):
+                  continue
+              mode = os.stat(path).st_mode
+              if os.path.getsize(path) == 0:
+                  continue
+              # ACCESS_WRITE needs the descriptor opened r+b, so the mode is
+              # widened first and restored below whether or not we wrote.
+              os.chmod(path, mode | 0o200)
+              try:
+                  with open(path, "r+b") as fh:
+                      with mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_WRITE) as mm:
+                          if mm.find(MARKER) == -1:
+                              continue
+                          found_manifest = True
+                          for name in features:
+                              key = rb'"' + re.escape(name.encode()) + rb'": \{'
+                              sites = len(re.findall(key, mm))
+                              hits = list(entry_re(name).finditer(mm))
+                              if len(hits) != sites:
+                                  sys.stderr.write(
+                                      "kiro-rollout: %r appears %d time(s) in %s but "
+                                      "only %d matched the expected entry shape. "
+                                      "Refusing to half-patch.\n"
+                                      % (name, sites, path, len(hits))
+                                  )
+                                  sys.exit(1)
+                              for m in hits:
+                                  mm[m.start():m.end()] = replacement(
+                                      name, m.end() - m.start()
+                                  )
+                                  totals[name] += 1
+                          mm.flush()
+              finally:
+                  os.chmod(path, mode)
+
+      if not found_manifest:
+          sys.stderr.write(
+              "kiro-rollout: no file under %s carries a rollout manifest. The "
+              "binary layout changed; re-locate it before shipping an unlock.\n"
+              % root
+          )
+          sys.exit(1)
+
+      for name in features:
+          if totals[name] == 0:
+              sys.stderr.write(
+                  "kiro-rollout: feature %r has no manifest entry. It was removed "
+                  "or renamed upstream.\n" % name
+              )
+              sys.exit(1)
+          sys.stderr.write("kiro-rollout: unlocked %r at %d site(s)\n" % (name, totals[name]))
+    '';
+  in ''
+    ${pkgs.python3}/bin/python3 ${script} \
+      ${pkgs.lib.escapeShellArg (pkgs.lib.concatStringsSep "," features)} "$out/bin"
   '';
 
   # Shared body for the sidecar hash fixers below (`mkGoVendorFix`,
