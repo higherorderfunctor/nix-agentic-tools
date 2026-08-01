@@ -285,6 +285,7 @@ in {
         # non-zero on that. Authored prose in the same tree stays checked.
         "^fixtures/kiro-primitives/evidence/"
         "^fixtures/kiro-primitives/records/"
+        "^overlays/chatgpt-codex-extracted\.json$"
       ];
     };
     # Re-stage files modified by formatters (treefmt, shfmt, etc.)

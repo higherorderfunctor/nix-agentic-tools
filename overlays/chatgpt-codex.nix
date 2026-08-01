@@ -31,7 +31,7 @@
   sources = builtins.fromJSON (builtins.readFile ./chatgpt-codex-sources.json);
   platformSrc = sources.${system} or (throw "chatgpt-codex: unsupported system ${system}");
 in
-  ourPkgs.stdenv.mkDerivation {
+  ourPkgs.stdenv.mkDerivation (finalAttrs: {
     pname = "chatgpt-codex";
     inherit (sources) version;
     src = fetchurl {inherit (platformSrc) url hash;};
@@ -70,8 +70,25 @@ in
           "x86_64-linux" = ver: "https://github.com/openai/codex/releases/download/rust-v${ver}/codex-x86_64-unknown-linux-musl.tar.gz";
           "aarch64-darwin" = ver: "https://github.com/openai/codex/releases/download/rust-v${ver}/codex-aarch64-apple-darwin.tar.gz";
         };
+        extraExtract = ''
+          echo "chatgpt-codex: regenerating overlays/chatgpt-codex-extracted.json"
+          extracted=$(${ourPkgs.nix}/bin/nix build --no-link --print-out-paths \
+            ".#chatgpt-codex.passthru.extracted")
+          ${ourPkgs.coreutils}/bin/cp "$extracted" overlays/chatgpt-codex-extracted.json
+          ${ourPkgs.coreutils}/bin/chmod 644 overlays/chatgpt-codex-extracted.json
+          ${ourPkgs.nix}/bin/nix fmt -- overlays/chatgpt-codex-extracted.json
+          echo "chatgpt-codex: wrote overlays/chatgpt-codex-extracted.json"
+        '';
         pkgs = ourPkgs;
       };
+      extracted = ourPkgs.runCommandLocal "chatgpt-codex-extracted.json" {} (
+        vu.mkCodexExtract {
+          bin = "${finalAttrs.finalPackage}/bin/codex";
+          pkgs = ourPkgs;
+          inherit (sources) version;
+          dest = "$out";
+        }
+      );
     };
 
     meta = {
@@ -81,4 +98,4 @@ in
       platforms = builtins.attrNames (builtins.removeAttrs sources ["version"]);
       mainProgram = "codex";
     };
-  }
+  })

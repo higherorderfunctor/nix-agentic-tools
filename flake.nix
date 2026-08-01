@@ -234,6 +234,7 @@
       pkgs = pkgsFor system;
       bareCommandsCheck = {bare-commands = import ./checks/bare-commands.nix {inherit pkgs;};};
       cacheHitParityCheck = import ./checks/cache-hit-parity.nix {inherit inputs lib pkgs self;};
+      codexExtractedCheck = import ./checks/chatgpt-codex-extracted.nix {inherit pkgs self;};
       claudeDelegationClampCheck = {claude-delegation-clamp = import ./checks/claude-delegation-clamp.nix {inherit pkgs;};};
       claudeDevenvHooksRealTypeCheck = import ./checks/claude-devenv-hooks-real-type.nix {inherit pkgs inputs;};
       claudeExtractedCheck = import ./checks/claude-code-extracted.nix {inherit pkgs self;};
@@ -252,7 +253,7 @@
       updateTargetsParityCheck = {update-targets-parity = import ./checks/update-targets-parity.nix {inherit lib pkgs self;};};
       validateAtStopCheck = {validate-at-stop = import ./checks/validate-at-stop.nix {inherit pkgs;};};
     in
-      bareCommandsCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goToolchainFloorChecks // instructionsDriftCheck // kiroExtractedCheck // kiroWrapperArgvCheck // moduleChecks // pnpmFetcherParityCheck // splitCodeSpansCheck // updateTargetsParityCheck // validateAtStopCheck);
+      bareCommandsCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // codexExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goToolchainFloorChecks // instructionsDriftCheck // kiroExtractedCheck // kiroWrapperArgvCheck // moduleChecks // pnpmFetcherParityCheck // splitCodeSpansCheck // updateTargetsParityCheck // validateAtStopCheck);
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # from devenv.nix; nothing in this flake constructs it.
