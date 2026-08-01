@@ -38,77 +38,93 @@
   mkKiroCli = rawFeatures: let
     rolloutFeatures = canonFeatures rawFeatures;
   in
-    ourPkgs.kiro-cli.overrideAttrs (finalAttrs: attrs: {
-      inherit (sources) version;
-      src = fetchurl {inherit (platformSrc) url hash;};
+    ourPkgs.kiro-cli.overrideAttrs (finalAttrs: attrs:
+      {
+        inherit (sources) version;
+        src = fetchurl {inherit (platformSrc) url hash;};
 
-      nativeBuildInputs = (attrs.nativeBuildInputs or []) ++ [makeWrapper];
+        nativeBuildInputs = (attrs.nativeBuildInputs or []) ++ [makeWrapper];
 
-      postFixup =
-        (attrs.postFixup or "")
-        + ''
-          wrapProgram $out/bin/kiro-cli --set-default TERM xterm-256color
-          wrapProgram $out/bin/kiro-cli-chat --set-default TERM xterm-256color
-        ''
-        # Deliberately AFTER the wrapProgram calls: the patcher finds the ELF by
-        # content, so it is indifferent to how many times wrappers have renamed
-        # it, and running last means it sees the final layout instead of
-        # guessing at it.
-        + ourPkgs.lib.optionalString (rolloutFeatures != [])
-        (vu.mkKiroRolloutPatch {
-          features = rolloutFeatures;
-          pkgs = ourPkgs;
-        });
-
-      # Preserve nixpkgs' upstream passthru (repo convention — nix-standards.md) and
-      # add ours.
-      passthru =
-        (attrs.passthru or {})
-        // {
-          updateScript = vu.mkUpdateScript {
-            pname = "kiro-cli";
-            versionCheck.cmd = "${ourPkgs.curl}/bin/curl -s https://desktop-release.q.us-east-1.amazonaws.com/latest/manifest.json | ${ourPkgs.jq}/bin/jq -r '.version'";
-            platforms = {
-              "x86_64-linux" = ver: "https://desktop-release.q.us-east-1.amazonaws.com/${ver}/kirocli-x86_64-linux.tar.gz";
-              "aarch64-darwin" = ver: "https://desktop-release.q.us-east-1.amazonaws.com/${ver}/Kiro%20CLI.dmg";
-            };
-            # Regenerate the committed hook-trigger sidecar from the freshly-bumped
-            # binary in the SAME update/kiro-cli PR (no intra-PR drift), mirroring
-            # claude-code. Builds the pure passthru.extracted against the just-written
-            # sources.json and copies it over the committed path, then formats it
-            # through the flake formatter so it matches what checks.formatting checks.
-            extraExtract = ''
-              echo "kiro-cli: regenerating overlays/kiro-cli-extracted.json"
-              extracted=$(${ourPkgs.nix}/bin/nix build --no-link --print-out-paths \
-                ".#kiro-cli.passthru.extracted")
-              ${ourPkgs.coreutils}/bin/cp "$extracted" overlays/kiro-cli-extracted.json
-              ${ourPkgs.coreutils}/bin/chmod 644 overlays/kiro-cli-extracted.json
-              ${ourPkgs.nix}/bin/nix fmt -- overlays/kiro-cli-extracted.json
-              echo "kiro-cli: wrote overlays/kiro-cli-extracted.json"
-            '';
+        postFixup =
+          (attrs.postFixup or "")
+          + ''
+            wrapProgram $out/bin/kiro-cli --set-default TERM xterm-256color
+            wrapProgram $out/bin/kiro-cli-chat --set-default TERM xterm-256color
+          ''
+          # Deliberately AFTER the wrapProgram calls: the patcher finds the ELF by
+          # content, so it is indifferent to how many times wrappers have renamed
+          # it, and running last means it sees the final layout instead of
+          # guessing at it.
+          + ourPkgs.lib.optionalString (rolloutFeatures != [])
+          (vu.mkKiroRolloutPatch {
+            features = rolloutFeatures;
             pkgs = ourPkgs;
-          };
+          });
 
-          # Pure probe of THIS package's own kiro chat binary -> committed-sidecar
-          # shape ({hookTriggers, documentedAbsent, rolloutFeatures}). IFD-safe:
-          # consumed ONLY by `nix build` (drift check + update script), never
-          # readFile'd at eval.
-          extracted = ourPkgs.runCommandLocal "kiro-cli-extracted.json" {} (
-            vu.mkKiroExtract {
-              bin = "${finalAttrs.finalPackage}/bin/.kiro-cli-chat-wrapped";
+        # Preserve nixpkgs' upstream passthru (repo convention — nix-standards.md) and
+        # add ours.
+        passthru =
+          (attrs.passthru or {})
+          // {
+            updateScript = vu.mkUpdateScript {
+              pname = "kiro-cli";
+              versionCheck.cmd = "${ourPkgs.curl}/bin/curl -s https://desktop-release.q.us-east-1.amazonaws.com/latest/manifest.json | ${ourPkgs.jq}/bin/jq -r '.version'";
+              platforms = {
+                "x86_64-linux" = ver: "https://desktop-release.q.us-east-1.amazonaws.com/${ver}/kirocli-x86_64-linux.tar.gz";
+                "aarch64-darwin" = ver: "https://desktop-release.q.us-east-1.amazonaws.com/${ver}/Kiro%20CLI.dmg";
+              };
+              # Regenerate the committed hook-trigger sidecar from the freshly-bumped
+              # binary in the SAME update/kiro-cli PR (no intra-PR drift), mirroring
+              # claude-code. Builds the pure passthru.extracted against the just-written
+              # sources.json and copies it over the committed path, then formats it
+              # through the flake formatter so it matches what checks.formatting checks.
+              extraExtract = ''
+                echo "kiro-cli: regenerating overlays/kiro-cli-extracted.json"
+                extracted=$(${ourPkgs.nix}/bin/nix build --no-link --print-out-paths \
+                  ".#kiro-cli.passthru.extracted")
+                ${ourPkgs.coreutils}/bin/cp "$extracted" overlays/kiro-cli-extracted.json
+                ${ourPkgs.coreutils}/bin/chmod 644 overlays/kiro-cli-extracted.json
+                ${ourPkgs.nix}/bin/nix fmt -- overlays/kiro-cli-extracted.json
+                echo "kiro-cli: wrote overlays/kiro-cli-extracted.json"
+              '';
               pkgs = ourPkgs;
-              dest = "$out";
-            }
-          );
+            };
 
-          # Opt-in variant carrying dark-shipped rollout features. Returns an
-          # UNGUARDED derivation (no `ensureUnfreeCheck` symlinkJoin), which is
-          # sound only because reaching this attribute requires evaluating the
-          # guarded `pkgs.ai.kiro-cli` first — check-meta has already fired by
-          # then. If this is ever exposed somewhere that does NOT go through the
-          # guarded attribute, re-wrap it.
-          withRolloutFeatures = mkKiroCli;
-        };
-    });
+            # Pure probe of THIS package's own kiro chat binary -> committed-sidecar
+            # shape ({hookTriggers, documentedAbsent, rolloutFeatures}). IFD-safe:
+            # consumed ONLY by `nix build` (drift check + update script), never
+            # readFile'd at eval.
+            extracted = ourPkgs.runCommandLocal "kiro-cli-extracted.json" {} (
+              vu.mkKiroExtract {
+                bin = "${finalAttrs.finalPackage}/bin/.kiro-cli-chat-wrapped";
+                pkgs = ourPkgs;
+                dest = "$out";
+              }
+            );
+
+            # Opt-in variant carrying dark-shipped rollout features. Returns an
+            # UNGUARDED derivation (no `ensureUnfreeCheck` symlinkJoin), which is
+            # sound only because reaching this attribute requires evaluating the
+            # guarded `pkgs.ai.kiro-cli` first — check-meta has already fired by
+            # then. If this is ever exposed somewhere that does NOT go through the
+            # guarded attribute, re-wrap it.
+            withRolloutFeatures = mkKiroCli;
+          };
+      }
+      # `optionalAttrs`, NOT an `optionalString` inside an always-present attr.
+      # Upstream sets no `postInstallCheck`, so writing `"" + ""` for the default
+      # would ADD an attribute it never had. That lands in the build env, forks
+      # the drvPath for EVERY consumer including those who never enable a
+      # feature, and silently costs the cache hit this option exists to preserve.
+      # Measured — it did move the default drvPath before this was corrected.
+      #
+      # Worth knowing: neither `checks.cache-hit-parity` nor
+      # `module-kiro-rollout-default-is-stock` catches that class of regression,
+      # because both compare two evaluations that each already contain the
+      # change. Diffing `.#kiro-cli.drvPath` against origin/main is what caught
+      # it, and is the check to re-run when touching this attrset.
+      // ourPkgs.lib.optionalAttrs (rolloutFeatures != []) {
+        postInstallCheck = (attrs.postInstallCheck or "") + vu.kiroRolloutVerify;
+      });
 in
   mkKiroCli []
