@@ -38,8 +38,8 @@ sole gate for that ecosystem's fanout:
 Where an upstream module exists, each per-CLI block implicitly flips its enable
 via `mkDefault`, so consumers don't have to set enable twice. Codex has no
 upstream module: its factory installs `ai.codex.package` directly in each
-backend. A consumer can still override an available `programs.<cli>.enable`
-explicitly.
+backend. For CLIs that do have an upstream module, a consumer can still override
+the corresponding `programs.<cli>.enable` explicitly.
 
 ### Why there's no master switch
 
