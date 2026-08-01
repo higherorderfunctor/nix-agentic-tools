@@ -233,6 +233,20 @@ declaratively — the grant is simply absent for that session.
 > description says "enable locally through KIRO_ENABLED_FEATURES" — that line is
 > STALE and does not describe shipped behavior. Believing it costs a measurement
 > session.
+>
+> **Patching the binary is necessary but NOT sufficient: the resolved engine
+> must be `kas` (v3).** In `tui.js` the feature-gated slash-commands reach the
+> palette only via `kasCommands`, populated as `n === "kas" ? [...TQ()] : []`
+> where `n` is the resolved agent engine. `TQ()` is itself the manifest-filtered
+> list (`ltn(e) = e.filter(n => !n.feature || Lr.isEnabled(n.feature))`), so
+> BOTH conditions gate it — the flag must be unlocked AND the engine must be v3.
+> On the legacy engine the commands are filtered out wholesale.
+>
+> That is why `ai.kiro.unlockedRolloutFeatures` asserts `v3 = true`. Without the
+> assertion the misconfiguration is silent in the worst way: the binary is
+> genuinely patched, the option is genuinely set, and `/workflow` is simply
+> never there. It cost a consumer repo a debugging session before the assertion
+> existed.
 
 **"Is the engine v3" is a RUNTIME question.** A caller's `--agent-engine`
 overrides the injected `--v3`, so an eval-time `hasV3` gets it wrong in both
