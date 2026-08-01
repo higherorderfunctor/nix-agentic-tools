@@ -467,18 +467,16 @@ in {
       };
       hm = evalHm config;
       devenv = evalDevenv config;
-      expected = ''        Codex context
-
-        Shared instruction
-
-        <!-- instruction: local -->
-        Local instruction
-
-        <!-- rule: alpha -->
-        Alpha rule
-
-        <!-- rule: zeta -->
-        Zeta rule'';
+      expected = builtins.concatStringsSep "\n\n" [
+        "Codex context"
+        "Shared instruction"
+        ''          <!-- instruction: local -->
+          Local instruction''
+        ''          <!-- rule: alpha -->
+          Alpha rule''
+        ''          <!-- rule: zeta -->
+          Zeta rule''
+      ];
     in
       hm.config.home.file.".codex/AGENTS.md".text
       == expected
@@ -501,6 +499,18 @@ in {
       && !(empty.config.home.file ? ".codex/AGENTS.md")
   );
 
+  module-codex-path-instruction-resolves = mkTest "codex-path-instruction-resolves" (
+    let
+      evaluated = evalHm {
+        ai = {
+          codex.enable = true;
+          instructions = [{text = ./fixtures/kiro-steering/alpha.md;}];
+        };
+      };
+    in
+      evaluated.config.home.file.".codex/AGENTS.md".text == "Alpha steering body.\n"
+  );
+
   module-codex-scoped-rule-fails-loudly = mkTest "codex-scoped-rule-fails-loudly" (
     let
       evaluated = evalHm {
@@ -514,6 +524,23 @@ in {
       };
     in
       builtins.any (assertion: !assertion.assertion && lib.hasInfix "ai.codex.rules.scoped" assertion.message) evaluated.config.assertions
+  );
+
+  module-codex-scoped-instruction-fails-loudly = mkTest "codex-scoped-instruction-fails-loudly" (
+    let
+      evaluated = evalHm {
+        ai = {
+          codex.enable = true;
+          instructions = [
+            {
+              paths = ["**/*.nix"];
+              text = "Scoped";
+            }
+          ];
+        };
+      };
+    in
+      builtins.any (assertion: !assertion.assertion && lib.hasInfix "ai.codex.instructions" assertion.message) evaluated.config.assertions
   );
 
   module-codex-rule-collision-fails = mkTest "codex-rule-collision-fails" (

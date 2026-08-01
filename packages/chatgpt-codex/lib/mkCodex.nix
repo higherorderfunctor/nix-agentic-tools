@@ -22,7 +22,9 @@
     instructionChunks = map (instruction: let
       marker = lib.optionalString (instruction ? name) "<!-- instruction: ${instruction.name} -->\n";
     in
-      marker + lib.ai.transformers.agentsmd.render instruction)
+      marker
+      + lib.ai.transformers.agentsmd.render (instruction
+        // {text = resolveText instruction.text;}))
     mergedInstructions;
     ruleChunks = lib.mapAttrsToList (name: rule:
       "<!-- rule: ${name} -->\n"
@@ -41,7 +43,7 @@
     mergedRules,
   }:
     map (instruction: {
-      assertion = instruction.paths or null == null;
+      assertion = (instruction.paths or null) == null;
       message = "ai.codex.instructions: scoped instructions are not supported yet; CX-005 will add explicit scope degradation semantics";
     })
     mergedInstructions
