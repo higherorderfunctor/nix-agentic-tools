@@ -3,7 +3,11 @@
 Reference for adopting the workflow engine in another repository. Written for a
 reader who was not present for the experiments.
 
-**Provenance labels.** Every heading that makes a behavioral claim carries one:
+**Provenance labels.** Every heading that makes a behavioral claim carries one
+as its primary label. Some add a qualifier naming which part of the section it
+applies to — `(Contract, table Measured)`, `(Measured, this environment)`,
+`(Measured once)` — so read the qualifier where one is present rather than
+assuming the whole section shares the primary label's strength:
 
 - **(Contract)** — transcribed from the `run_workflow` / `validate_workflow` /
   `update_workflow` tool schemas, or from the workflow authoring specification
@@ -891,6 +895,10 @@ disk:
 </prior_step_output_47478d893f70338d>
 ```
 
+The envelope was present in every case observed — three of them, spanning two
+models and both a `step` and a `watch` output — so treat wrapping as the rule,
+but note the sample is small and the tag itself is not stable between runs.
+
 Under the haiku run the envelope was still present with an **empty payload
 inside it**, which is why "empty" is a thing you must test for rather than
 something you will notice: the interpolated text is 89 characters of delimiter
@@ -1417,8 +1425,10 @@ confounds timing comparisons (§6.1).
    ```
 
    In the TUI, also teach `/workflow run <recipe>` and `/goal` (§1) — those are
-   real user-facing entry points, and `/workflow-resume` is the only way to
-   rescue a run paused by a `warning`-severity step (§7.4).
+   real user-facing entry points, and `/workflow-resume` is the only resume path
+   observed here for a run paused by a `warning`-severity step (§7.4). Nothing
+   in the agent-facing tool surface resumes one, and this is a pre-release
+   feature, so treat that as measured rather than guaranteed.
 
 3. **Decide where recipes live.** Reusable shapes belong in
    `.kiro/workflows/<name>.workflow.json` and are referenced by absolute path
