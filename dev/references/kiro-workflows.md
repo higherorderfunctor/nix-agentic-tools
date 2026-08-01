@@ -324,8 +324,7 @@ and cleaner than "session-creation time" suggests. `run_workflow` rejects an
 unregistered agent **before any step runs**, returning:
 
 ```
-Workflow execution failed: Workflow references custom agent 'wf-imaginary' which is not
-registered.
+Workflow execution failed: Workflow references custom agent 'wf-imaginary' which is not registered.
 ```
 
 An unknown `modelId` is the genuinely late failure: it passes validation with
@@ -348,9 +347,7 @@ where it is hardest to spot. The rejection message is worth reading in full,
 because it names the only escape hatch mentioned anywhere in the surface:
 
 ```
-... resolves outside the allowed workspace roots (/home/caubut/.../nix-agentic-tools).
-The stop condition would never match; move the file inside the workspace or add
-its directory to additionalDirectories.
+... resolves outside the allowed workspace roots (/home/caubut/.../nix-agentic-tools). The stop condition would never match; move the file inside the workspace or add its directory to additionalDirectories.
 ```
 
 `additionalDirectories` is a property of the **run**, not of the workflow JSON —
@@ -994,7 +991,7 @@ supported.
 ### 7.7 `joinPolicy` differs in cancellation, not only in waiting (Measured)
 
 All three policies were run against an **identical** branch set — one branch
-that marked itself and then signalled `error`, plus two that slept 40 s —
+that marked itself and then signaled `error`, plus two that slept 40 s —
 changing only `joinPolicy`. Every branch wrote a start marker and an end marker,
 so a killed branch is visible as a start with no end.
 
