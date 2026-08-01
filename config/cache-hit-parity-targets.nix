@@ -27,10 +27,10 @@ _: {
     copilot-cli = {consumerPath = ["ai" "copilot-cli"];};
     kimchi = {consumerPath = ["ai" "kimchi"];};
     kiro-cli = {consumerPath = ["ai" "kiro-cli"];};
-    # The patched `workflows` variant needs parity for the same reason the base
-    # does, and slightly more urgently: consumers reach it through
-    # `ai.kiro.unlockedRolloutFeatures`, so a pin-bound build input here means
-    # they rebuild ~556 MB instead of substituting what CI pushed.
+    # The patched `workflows` variant is intentionally not distributed through
+    # Cachix, but parity still matters: consumers reach it through
+    # `ai.kiro.unlockedRolloutFeatures`, and a consumer-pin-bound build would
+    # realize a different derivation from the one the local-only CI job tests.
     kiro-cli-workflows = {consumerPath = ["ai" "kiro-cli-workflows"];};
     kiro-gateway = {consumerPath = ["ai" "kiro-gateway"];};
     kiro-memory-distiller = {consumerPath = ["ai" "kiro-memory-distiller"];};

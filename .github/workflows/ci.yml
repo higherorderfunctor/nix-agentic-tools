@@ -103,9 +103,48 @@ jobs:
         run: |
           nix run --inputs-from . nix-fast-build -- \
             --flake ".#packages.${{ matrix.system }}" \
+            --select 'packages: builtins.removeAttrs packages ["kiro-cli-workflows"]' \
             --skip-cached \
             --cachix-cache nix-agentic-tools \
             --no-link
+
+  # The workflows unlock patches Kiro's proprietary binary. Validate that
+  # patch on both supported systems without distributing the result through
+  # our public Cachix cache. This job intentionally does not install
+  # cachix-action, and the command overrides the flake's substituters so a
+  # previously uploaded patched output cannot turn this into a cache-hit-only
+  # test. Consumers who opt into the unlock apply the patch locally too.
+  kiro-workflows-local:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: x86_64-linux
+            runner: ubuntu-latest
+          - system: aarch64-darwin
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - if: runner.os == 'macOS'
+        uses: nixbuild/nix-quick-install-action@v35
+        with:
+          nix_version: "2.34.7"
+          nix_conf: |
+            accept-flake-config = true
+
+      - if: runner.os != 'macOS'
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            accept-flake-config = true
+
+      - name: Build patched Kiro locally
+        run: |
+          nix build ".#packages.${{ matrix.system }}.kiro-cli-workflows" \
+            --no-link \
+            --option substituters "https://cache.nixos.org https://devenv.cachix.org"
 
   # Validation entrypoint: `nix flake check` is the single source of
   # truth for repo health (structural eval checks + formatting hard
