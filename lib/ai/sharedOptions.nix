@@ -43,7 +43,10 @@ in {
       default = [];
       description = ''
         Cross-app instructions fanned out to every enabled AI app. Codex
-        concatenates them into its single AGENTS.md without frontmatter.
+        concatenates them into its single AGENTS.md without frontmatter,
+        degrading path scopes to explicit prose unless `skipIfUnsupported`
+        requests omission. Codex rejects empty path lists as ambiguous; use
+        null for always-on content or a non-empty list for scoped content.
       '';
     };
 
@@ -56,8 +59,10 @@ in {
         directory (Claude: `.claude/rules/<name>.md`, Kiro:
         `.kiro/steering/<name>.md`, Copilot:
         `.github/instructions/<name>.instructions.md`). Codex instead appends
-        unscoped rules alphabetically to its single AGENTS.md. Per-app
+        rules alphabetically to its single AGENTS.md, degrading path scopes to
+        explicit prose unless `skipIfUnsupported` requests omission. Per-app
         overrides (ai.<name>.rules) merge on top; collisions are a failure.
+        Codex rejects empty path lists as ambiguous.
       '';
       example = lib.literalExpression ''
         {

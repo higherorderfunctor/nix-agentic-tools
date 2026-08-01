@@ -1,14 +1,16 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-01 (commit pending — Codex now lowers shared and
-> per-app context, instructions, and unscoped Markdown rules into global HM and
-> project-local devenv AGENTS.md files; scoped content fails explicitly pending
-> its degradation policy). Prior: 2026-08-01 (commit 914096a8 — Codex joins the
-> factory with an enable/package-only vertical in both backends). Prior:
-> 2026-07-27 (commit pending — re-points the claude-code wrapping cite from
-> `packages/ai-clis/claude-code.nix`, a path that no longer exists, to
-> `overlays/claude-code.nix`; prior 2026-04-08, A10 delete modules/ tree). If
-> you change the gating, the `programs.*.enable` flipping, or the
+> **Last verified:** 2026-08-01 (commit pending — Codex degrades scoped
+> instructions and rules to explicit prose, supports opt-out through
+> `skipIfUnsupported`, and rejects generated AGENTS.md content over its
+> configurable byte limit). Prior: 2026-08-01 (commit c6b1b31e — Codex lowers
+> shared and per-app context, instructions, and unscoped Markdown rules into
+> global HM and project-local devenv AGENTS.md files). Prior: 2026-08-01 (commit
+> 914096a8 — Codex joins the factory with an enable/package-only vertical in
+> both backends). Prior: 2026-07-27 (commit pending — re-points the claude-code
+> wrapping cite from `packages/ai-clis/claude-code.nix`, a path that no longer
+> exists, to `overlays/claude-code.nix`; prior 2026-04-08, A10 delete modules/
+> tree). If you change the gating, the `programs.*.enable` flipping, or the
 > cross-ecosystem data flow in the per-package factories
 > (`packages/*/lib/mk*.nix`) or shared options (`lib/ai/sharedOptions.nix`) and
 > this fragment isn't updated in the same commit, stop and fix it.
@@ -83,14 +85,18 @@ ecosystem simultaneously):
   `fragments-ai.passthru.transforms`: Claude gets `.claude/rules/<name>.md` with
   YAML frontmatter; Copilot gets `.github/instructions/<name>.instructions.md`;
   Kiro gets `.kiro/steering/<name>.md` (via the CLI module); Codex concatenates
-  entries into its single AGENTS.md without frontmatter.
+  entries into its single AGENTS.md without frontmatter. Scoped entries become
+  explicit prose unless `skipIfUnsupported = true` omits them.
 - `ai.context` — a single global baseline. Codex lowers it to
   `~/.codex/AGENTS.md` in Home Manager and project-root `AGENTS.md` in devenv;
   `ai.codex.context` takes precedence when set.
 - `ai.rules` — named Markdown rules. Codex appends these alphabetically to its
-  AGENTS.md with trace comments. Scoped Codex rules currently fail explicitly
-  rather than silently losing their scope; the follow-up degradation surface
-  will preserve scope as prose.
+  AGENTS.md with trace comments. Scoped Codex rules preserve their intent as an
+  explicit prose prefix unless `skipIfUnsupported = true` omits them. The
+  complete rendered file must fit `ai.codex.projectDocMaxBytes` (32 KiB by
+  default), or evaluation fails with per-contribution byte diagnostics. Codex
+  also rejects `paths = []` as ambiguous; use `null` for always-on content or a
+  non-empty list for scoped content.
 - `ai.lspServers` — typed LSP definitions, translated to each ecosystem's native
   LSP config format (Claude via `ENABLE_LSP_TOOL=1`; Copilot has `lspServers`
   option; Kiro too).
