@@ -86,6 +86,7 @@ endgroup
 endswith
 envrc
 epistemics
+execve
 extensionless
 extname
 fanout

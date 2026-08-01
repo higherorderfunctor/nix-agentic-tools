@@ -476,6 +476,7 @@ rec {
       # directly via the buffer protocol, so nothing is materialized.
       totals = dict((f, 0) for f in features)
       found_manifest = False
+      patched_paths = []
 
       for dirpath, _dirs, filenames in os.walk(root):
           for fn in sorted(filenames):
@@ -494,6 +495,7 @@ rec {
                           if mm.find(MARKER) == -1:
                               continue
                           found_manifest = True
+                          patched_paths.append(path)
                           for name in features:
                               key = rb'"' + re.escape(name.encode()) + rb'": \{'
                               sites = len(re.findall(key, mm))
@@ -531,10 +533,63 @@ rec {
               )
               sys.exit(1)
           sys.stderr.write("kiro-rollout: unlocked %r at %d site(s)\n" % (name, totals[name]))
+
+      # STDOUT is the machine-readable half: one patched path per line, for the
+      # caller to re-sign. Diagnostics all go to stderr so they cannot pollute
+      # it.
+      for p in patched_paths:
+          print(p)
     '';
   in ''
-    ${pkgs.python3}/bin/python3 ${script} \
-      ${pkgs.lib.escapeShellArg (pkgs.lib.concatStringsSep "," features)} "$out/bin"
+    # Walks all of "$out", not "$out/bin". On Darwin nixpkgs installs the real
+    # Mach-O into "$out/Applications/Kiro CLI.app/Contents/MacOS/" and leaves
+    # "$out/bin/*" as SYMLINKS into it — and the patcher skips symlinks, so a
+    # bin-only walk finds nothing there and fails the build. Linux is
+    # unaffected: its binaries are real files under bin/.
+    kiroRolloutPatched=$(${pkgs.python3}/bin/python3 ${script} \
+      ${pkgs.lib.escapeShellArg (pkgs.lib.concatStringsSep "," features)} "$out")
+    ${pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
+      # Patching a Mach-O invalidates its code signature, and arm64 macOS
+      # REFUSES TO EXEC an invalidly-signed binary — SIGKILL at exec, not a
+      # warning. So re-sign ad-hoc.
+      #
+      # This cannot be delegated to `autoSignDarwinBinariesHook`: that registers
+      # a fixupOutputHook, which runs during fixupPhase — BEFORE postFixup —
+      # so it would sign first and the patch would invalidate it again.
+      while IFS= read -r kiroRolloutFile; do
+        [ -n "$kiroRolloutFile" ] || continue
+        echo "kiro-rollout: re-signing $kiroRolloutFile"
+        ${pkgs.coreutils}/bin/chmod +w "$kiroRolloutFile"
+        ${pkgs.darwin.sigtool}/bin/codesign --force --sign - "$kiroRolloutFile"
+        ${pkgs.coreutils}/bin/chmod -w "$kiroRolloutFile"
+      done <<< "$kiroRolloutPatched"
+    ''}
+  '';
+
+  # The exec check is deliberately NOT part of the patch above, and the reason
+  # is a real trap: `runHook postFixup` evaluates the postFixup ATTRIBUTE first
+  # and the registered `postFixupHooks` second — and autoPatchelfHook is one of
+  # those hooks. So inside postFixup the ELF still carries its FHS interpreter,
+  # `execve` returns ENOENT, and bash reports the thoroughly misleading
+  # "cannot execute: required file not found". Measured; it fails every Linux
+  # build if you put it there.
+  #
+  # `postInstallCheck` runs well after all of fixupPhase, so the binary is
+  # fully patchelf'd (Linux) and re-signed (Darwin) by the time it runs.
+  #
+  # What it buys: on Darwin it catches a botched signature, since arm64 macOS
+  # SIGKILLs an invalidly-signed binary at exec; on Linux it catches a
+  # corrupted ELF. `--version` suffices for both, because a signature failure
+  # kills the process before any argument is parsed — and it needs NO
+  # credentials, so it runs in the sandbox on any builder.
+  #
+  # It must target the CHAT binary specifically. nixpkgs' `versionCheckHook`
+  # runs `meta.mainProgram`, which is the LAUNCHER, while the manifest lives in
+  # the chat binary — so a dead chat binary would otherwise sail through a
+  # green build.
+  kiroRolloutVerify = ''
+    echo "kiro-rollout: verifying the patched chat binary still runs"
+    "$out/bin/kiro-cli-chat" --version > /dev/null
   '';
 
   # Shared body for the sidecar hash fixers below (`mkGoVendorFix`,
