@@ -3,7 +3,7 @@
 Reference for adopting the workflow engine in another repository. Written for a
 reader who was not present for the experiments.
 
-**Provenance labels.** Every section and subsection heading carries one:
+**Provenance labels.** Every heading that makes a behavioral claim carries one:
 
 - **(Contract)** — transcribed from the `run_workflow` / `validate_workflow` /
   `update_workflow` tool schemas. Not tested unless stated. §12 lists exactly
@@ -12,6 +12,11 @@ reader who was not present for the experiments.
   `kiro-cli 2.16.0`. The evidence is given inline.
 - **(Inferred)** — a conclusion drawn from contract text, not observed. Treated
   as the weakest class.
+
+Four container sections (§3, §4, §7, §8) carry no label of their own, because
+they deliberately mix classes — read the label on each subsection instead.
+Vocabulary (§2), adoption guidance (§11), the untested-claims list (§12) and
+methodology (§13) make no behavioral claims and so carry none.
 
 ## 1. What this is, and what it is not (Measured)
 
@@ -568,7 +573,7 @@ The pattern that makes this static-DAG engine behave like a scheduler. **Do not
 express tasks as DAG nodes. Express workers as nodes, and put tasks in a queue
 directory.**
 
-### 9.1 Shape
+### 9.1 Shape (Measured)
 
 ```
 sequence
@@ -599,7 +604,7 @@ Properties measured across all runs:
 - **Self-healing.** A no-op or dead worker simply fails to claim; the others
   absorb the queue. Attrition costs throughput, not correctness.
 
-### 9.2 The worker
+### 9.2 The worker (Measured)
 
 One invocation equals one loop iteration: claim at most one task, do it, exit.
 State lives in four sibling directories plus one drain marker per worker.
@@ -675,7 +680,7 @@ One agent session per task is desirable — it gives each task a fresh,
 uncontaminated context, which is why the per-iteration session overhead in §6.1
 is a price worth paying rather than pure waste.
 
-### 9.3 Atomic claim, and the premature-drain guard
+### 9.3 Atomic claim, and the premature-drain guard (Measured)
 
 `mv queue/<task> claimed/<task>` — `rename(2)` is atomic within one filesystem,
 so a losing worker's `mv` simply fails and it tries the next file. **Zero
