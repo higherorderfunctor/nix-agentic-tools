@@ -1045,6 +1045,45 @@ rec {
     };
   };
 
+  # `extraExtract` body regenerating a committed `*-extracted.json`
+  # sidecar from the freshly-bumped package, inside the SAME version-bump
+  # PR. Every package carrying a `passthru.extracted` needs one: without
+  # it the sidecar keeps describing the OLD artifact and
+  # `checks/<pkg>-extracted.nix` goes red on the bump. That is not
+  # hypothetical — it is how glab's first-ever bump failed (PR #621),
+  # glab having been the one extracted package that never wired it.
+  #
+  # Builds the pure `passthru.extracted` against the just-written
+  # sources.json (dirty-tracked, so flake eval sees the new version) and
+  # copies it over the committed path. ONE extraction source: the drift
+  # check consumes the same `passthru.extracted`, so the two cannot
+  # disagree about what "extracted" means.
+  #
+  # `nix fmt` is load-bearing, not tidiness. The extractors emit jq /
+  # Go-encoder JSON, which pretty-prints EVERY array multi-line, while
+  # biome — the repo's JSON formatter via treefmt — collapses short
+  # arrays onto one line. Skip it and the sidecar lands not
+  # treefmt-clean, trading the drift failure for a `checks.formatting`
+  # one. It formats the WORKING-TREE copy after the `cp`, never the store
+  # original — see .claude/rules/nix-standards.md.
+  #
+  # Absolute store paths throughout: this is spliced into a
+  # `writeShellScript` the update pipeline invokes directly, which is
+  # PATH-less.
+  mkExtractRegen = {
+    attr,
+    dest,
+    pkgs,
+  }: ''
+    echo "${attr}: regenerating ${dest}"
+    extracted=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths \
+      ".#${attr}.passthru.extracted")
+    ${pkgs.coreutils}/bin/cp "$extracted" "${dest}"
+    ${pkgs.coreutils}/bin/chmod 644 "${dest}"
+    ${pkgs.nix}/bin/nix fmt -- "${dest}"
+    echo "${attr}: wrote ${dest}"
+  '';
+
   # Hash fixer for a buildGoModule package whose src ALSO comes from the
   # sidecar rather than from a prefetch — the Go counterpart of
   # `mkNpmDepsFix`. Restores `srcHash` then `vendorHash`.
