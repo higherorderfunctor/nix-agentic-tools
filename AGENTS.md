@@ -373,16 +373,17 @@ the repo before committing.
 > **Last verified:** 2026-07-31 (commit pending — the bootstrap step's "or any
 > devenv task" was WRONG and is removed: `devenv tasks run` does not materialize
 > `.pre-commit-config.yaml`, measured in two fresh worktrees where the task
-> succeeded and the next commit was still rejected. Also records that a push did
-> not auto-trigger a Copilot review 4 times out of 4 on PR #640, so
-> re-requesting is a mandatory step rather than a fallback). Prior: 2026-07-31
-> (commit e06e7601 — the Copilot review loop is the agent's to START,
-> unprompted, the moment the PR is open and non-draft; only continuing past the
-> 5-round cap needs the operator's say-so). Prior: 2026-07-30 (commit pending —
-> records that a re-request issued while a review is still in flight is silently
-> dropped, so the check run, not the API response, is the confirmation). Prior:
-> 2026-07-30 (commit d42d805a) — records that the reviews and comments endpoints
-> attribute Copilot's output to DIFFERENT logins, so the documented
+> succeeded and the next commit was still rejected. Also records that a push
+> auto-triggered a Copilot review only ONCE in 5 pushes — 0/4 on PR #640, 1/1 on
+> the first push of #644 — so checking the run is mandatory and re-requesting is
+> the expected next step rather than a rare fallback). Prior: 2026-07-31 (commit
+> e06e7601 — the Copilot review loop is the agent's to START, unprompted, the
+> moment the PR is open and non-draft; only continuing past the 5-round cap
+> needs the operator's say-so). Prior: 2026-07-30 (commit pending — records that
+> a re-request issued while a review is still in flight is silently dropped, so
+> the check run, not the API response, is the confirmation). Prior: 2026-07-30
+> (commit d42d805a) — records that the reviews and comments endpoints attribute
+> Copilot's output to DIFFERENT logins, so the documented
 > `copilot-pull-request-reviewer[bot]` filter returns zero on
 > `/pulls/N/comments` and reads as a clean review while gating threads are open;
 > measured on PR #614. Prior: 2026-07-29 — the ruleset now sets
@@ -518,12 +519,17 @@ Absent means it never started, so re-request it; `in_progress` means wait;
 than counting the checks: a total count is only correct until the CI matrix
 changes.
 
-**Expect absent. A push auto-triggered a review ZERO times out of 4 pushes on PR
-#640** (2026-07-31) — every one left no reviewer check run on the new head while
-the previous commit's review sat there looking current. So treat re-requesting
-as a MANDATORY step after every push, not a fallback for the occasional miss,
-and pair it with the `commit_id` gate below: the stale review is what you will
-otherwise read, and it looks exactly like a fresh clean one.
+**Expect absent — a push auto-triggered a review only ONCE in 5 pushes**,
+measured 2026-07-31: 0 for 4 on PR #640, then 1 for 1 on the first push of PR
+#644. The four misses each left no reviewer check run on the new head while the
+previous commit's review sat there looking current. So ALWAYS read the run
+before concluding anything, and treat re-requesting as the expected next step
+rather than a rare fallback — while still checking first, because a re-request
+issued while a review IS in flight is silently dropped (next section).
+
+Pair this with the `commit_id` gate below, because the two failure modes
+compound: a miss is not merely "no review yet" — the stale review stays readable
+and is indistinguishable from a fresh clean one.
 
 **A re-request issued while a review is still in flight is silently dropped.**
 The API returns success, no new check run appears, and the call is

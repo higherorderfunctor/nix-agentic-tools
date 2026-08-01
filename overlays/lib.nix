@@ -556,12 +556,25 @@ rec {
       # This cannot be delegated to `autoSignDarwinBinariesHook`: that registers
       # a fixupOutputHook, which runs during fixupPhase — BEFORE postFixup —
       # so it would sign first and the patch would invalidate it again.
+      # Grant write only if it is not already writable, and revoke only what we
+      # granted. `chmod +w` / `-w` would have been wrong twice over: the class
+      # is umask-dependent when omitted, and the revoke is UNCONDITIONAL, so an
+      # already-writable 755 input would come back 555 — a mode change this
+      # step has no business making. Restoring an exact saved mode is not an
+      # option here: it needs `stat`, whose flags differ between GNU and BSD,
+      # and this is the one code path that only ever runs on BSD userland.
       while IFS= read -r kiroRolloutFile; do
         [ -n "$kiroRolloutFile" ] || continue
         echo "kiro-rollout: re-signing $kiroRolloutFile"
-        ${pkgs.coreutils}/bin/chmod +w "$kiroRolloutFile"
+        kiroRolloutGranted=0
+        if [ ! -w "$kiroRolloutFile" ]; then
+          ${pkgs.coreutils}/bin/chmod u+w "$kiroRolloutFile"
+          kiroRolloutGranted=1
+        fi
         ${pkgs.darwin.sigtool}/bin/codesign --force --sign - "$kiroRolloutFile"
-        ${pkgs.coreutils}/bin/chmod -w "$kiroRolloutFile"
+        if [ "$kiroRolloutGranted" = 1 ]; then
+          ${pkgs.coreutils}/bin/chmod u-w "$kiroRolloutFile"
+        fi
       done <<< "$kiroRolloutPatched"
     ''}
   '';
