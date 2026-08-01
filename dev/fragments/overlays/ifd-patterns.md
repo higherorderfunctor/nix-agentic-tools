@@ -1,14 +1,16 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-07-25 (commit pending — the warm composite now forces
-> `drvPath` instead of `version`, so sidecar-versioned packages are covered;
-> also corrects the claim that the check job's `nix flake check` evaluates ALL
-> systems, which it does not, and the devenv-test job moved to its own
-> workflow). If you touch `overlays/lib.nix`, any overlay `.nix` file that calls
-> `vu.mkVersion`, the shared `.github/actions/warm-ifd/action.yml` composite, or
-> the warm steps that consume it in `.github/workflows/ci.yml` /
-> `.github/workflows/update.yml`, and this fragment isn't updated in the same
-> commit, stop and fix it.
+> **Last verified:** 2026-08-01 (commit pending — Codex joins the extracted
+> sidecar pipeline with recursive Clap help, feature-list, and bundled-model
+> probes plus category-specific shape assertions). Prior: 2026-07-25 (the warm
+> composite now forces `drvPath` instead of `version`, so sidecar-versioned
+> packages are covered; also corrects the claim that the check job's
+> `nix flake check` evaluates ALL systems, which it does not, and the
+> devenv-test job moved to its own workflow). If you touch `overlays/lib.nix`,
+> any overlay `.nix` file that calls `vu.mkVersion`, the shared
+> `.github/actions/warm-ifd/action.yml` composite, or the warm steps that
+> consume it in `.github/workflows/ci.yml` / `.github/workflows/update.yml`, and
+> this fragment isn't updated in the same commit, stop and fix it.
 
 ### What is IFD in this repo
 
@@ -145,12 +147,12 @@ minutes later inside `nix-update`.
 
 ### Extracted sidecars are the IFD-free path — and their drift check is not a correctness gate
 
-`mkClaudeExtract` / `mkKiroProbe` in `overlays/lib.nix` grep a packaged binary
-at BUILD time (`passthru.extracted`) and emit a JSON sidecar that is COMMITTED
-(`overlays/<pkg>-extracted.json`). Modules `builtins.readFile` the committed
-file, never the derivation, so option surfaces derived from a binary cost no
-IFD. `checks/<pkg>-extracted.nix` then compares committed against freshly-built
-to catch a stale sidecar.
+`mkClaudeExtract`, `mkCodexExtract`, and `mkKiroExtract` in `overlays/lib.nix`
+probe a packaged binary at BUILD time (`passthru.extracted`) and emit a JSON
+sidecar that is COMMITTED (`overlays/<pkg>-extracted.json`). Modules
+`builtins.readFile` the committed file, never the derivation, so option surfaces
+derived from a binary cost no IFD. `checks/<pkg>-extracted.nix` then compares
+committed against freshly-built to catch a stale sidecar.
 
 **That drift check does not tell you the extraction is CORRECT.** The update
 pipeline's `extraExtract` hook regenerates the sidecar inside the same bump PR,
@@ -170,8 +172,10 @@ So every extractor asserts the SHAPE of what it captured, not merely that it
 captured something — a non-empty guard is worthless here, because a dead anchor
 still matched one token. Concretely: the effort enum requires exactly one
 distinct match; the model catalog requires an id from each of the opus / sonnet
-/ haiku families. When you add a key, add its shape assertion in the same
-commit.
+/ haiku families. Codex requires its recursive tree to retain the root and at
+least 20 commands, asserts the exact sandbox and non-deprecated approval enums,
+and rejects empty feature/model results. When you add a key or category, add its
+shape assertion in the same commit.
 
 ### Gotchas when adding new packages
 

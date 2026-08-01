@@ -34,7 +34,7 @@
 #   - mkUpdateScript, mkGitRevUpdateScript emit `writeShellScript`
 #     wrappers — invoked directly, possibly with a replaced (PATH-less)
 #     environment. Absolute store paths REQUIRED.
-#   - mkMcpSmokeTest, mkClaudeExtract, mkKiroExtract emit build-context
+#   - mkMcpSmokeTest, mkClaudeExtract, mkCodexExtract, mkKiroExtract emit build-context
 #     script bodies (installCheckPhase, runCommandLocal) that run inside
 #     stdenv with a full PATH from build inputs. Bare commands are
 #     CORRECT there.
