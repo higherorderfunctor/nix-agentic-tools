@@ -29,7 +29,7 @@ env HOME="$probe_root/home" CODEX_HOME="$probe_root/codex-home" \
   "$codex_out/bin/codex" mcp add --help
 env HOME="$probe_root/home" CODEX_HOME="$probe_root/codex-home" \
   "$codex_out/bin/codex" app-server --help
-find "$probe_root" -maxdepth 4 -printf '%P %y %s\n' | sort
+find "$probe_root" -maxdepth 4 -print | sort
 ```
 
 The temporary `CODEX_HOME` must exist before launch. Codex warns and refuses to
