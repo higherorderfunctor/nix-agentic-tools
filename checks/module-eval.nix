@@ -598,6 +598,34 @@ in {
       evaluated.config.home.file.".codex/AGENTS.md".text == "Kept context"
   );
 
+  module-codex-empty-scope-fails-loudly = mkTest "codex-empty-scope-fails-loudly" (
+    let
+      evaluated = evalHm {
+        ai = {
+          codex = {
+            enable = true;
+            instructions = [
+              {
+                paths = [];
+                text = "Ambiguous";
+              }
+            ];
+          };
+          rules.empty = {
+            paths = [];
+            text = "Ambiguous";
+          };
+        };
+      };
+      failedMessages = map (assertion: assertion.message) (
+        builtins.filter (assertion: !assertion.assertion) evaluated.config.assertions
+      );
+    in
+      builtins.any (lib.hasInfix "ai.codex.instructions[0].paths") failedMessages
+      && builtins.any (lib.hasInfix "ai.codex.rules.empty.paths") failedMessages
+      && builtins.all (lib.hasInfix "must be null or a non-empty list") failedMessages
+  );
+
   module-codex-size-guard-byte-boundaries = mkTest "codex-size-guard-byte-boundaries" (
     let
       evaluate = context: projectDocMaxBytes:

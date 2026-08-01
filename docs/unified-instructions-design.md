@@ -227,7 +227,10 @@ rules.<name> = lib.types.submodule {
     paths = lib.mkOption {
       type = lib.types.nullOr (lib.types.listOf lib.types.str);
       default = null;
-      description = "Globs this rule applies to. null = always-on.";
+      description = ''
+        Globs this rule applies to. null = always-on; a scoped list must be
+        non-empty.
+      '';
     };
     description = lib.mkOption {
       type = lib.types.str;

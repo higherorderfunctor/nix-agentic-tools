@@ -101,7 +101,9 @@ ecosystem simultaneously):
   AGENTS.md with trace comments. Scoped Codex rules preserve their intent as an
   explicit prose prefix unless `skipIfUnsupported = true` omits them. The
   complete rendered file must fit `ai.codex.projectDocMaxBytes` (32 KiB by
-  default), or evaluation fails with per-contribution byte diagnostics.
+  default), or evaluation fails with per-contribution byte diagnostics. Codex
+  also rejects `paths = []` as ambiguous; use `null` for always-on content or a
+  non-empty list for scoped content.
 - `ai.lspServers` — typed LSP definitions, translated to each ecosystem's native
   LSP config format (Claude via `ENABLE_LSP_TOOL=1`; Copilot has `lspServers`
   option; Kiro too).

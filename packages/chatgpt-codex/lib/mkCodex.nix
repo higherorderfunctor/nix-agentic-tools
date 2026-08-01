@@ -10,7 +10,7 @@
     else value;
 
   renderScope = paths:
-    lib.optionalString (paths != null) (
+    lib.optionalString (paths != null && paths != []) (
       "_Apply this guidance only when working with files matching: "
       + lib.concatMapStringsSep ", " (path: "`${path}`") paths
       + "_\n\n"
@@ -90,6 +90,21 @@
       Trim the contributing content or raise ai.codex.projectDocMaxBytes.
     '';
   };
+
+  mkPathAssertions = {
+    mergedInstructions,
+    mergedRules,
+  }:
+    lib.imap0 (index: instruction: {
+      assertion = (instruction.paths or null) != [];
+      message = "ai.codex.instructions[${toString index}].paths must be null or a non-empty list";
+    })
+    mergedInstructions
+    ++ lib.mapAttrsToList (name: rule: {
+      assertion = rule.paths != [];
+      message = "ai.codex.rules.${name}.paths must be null or a non-empty list";
+    })
+    mergedRules;
 in
   lib.ai.app.mkAiApp {
     name = "codex";
@@ -137,9 +152,11 @@ in
     }: let
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
     in {
-      assertions = [
-        (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
-      ];
+      assertions =
+        mkPathAssertions {inherit mergedInstructions mergedRules;}
+        ++ [
+          (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
+        ];
       home.file = lib.mkIf (agentsMd != "") {
         "${cfg.configDir}/AGENTS.md".text = agentsMd;
       };
@@ -155,9 +172,11 @@ in
     }: let
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
     in {
-      assertions = [
-        (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
-      ];
+      assertions =
+        mkPathAssertions {inherit mergedInstructions mergedRules;}
+        ++ [
+          (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
+        ];
       files = lib.mkIf (agentsMd != "") {
         "AGENTS.md".text = agentsMd;
       };
