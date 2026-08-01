@@ -8,16 +8,36 @@
 # TUI exactly like HM does.
 #
 # ── The argv contract ──────────────────────────────────────────────────────
-# `--tui` and `--v3` are LAUNCHER-GLOBAL options, so they are injected BEFORE
-# any subcommand. Appending them instead is what made `kiro-cli acp` die with
-# "error: unexpected argument '--tui' found" — the flag was in the wrong argv
-# POSITION, not unsupported by `acp`. Prepended, every subcommand accepts them.
+# `--v3` is a LAUNCHER-GLOBAL option, so it is injected BEFORE any subcommand.
+# Appending it instead is what made `kiro-cli acp` die with "error: unexpected
+# argument found" — the flag was in the wrong argv POSITION, not unsupported by
+# `acp`. Prepended, every subcommand accepts it.
 #
 # `--trust-tools` is different in kind: the chat binary declares it on the
 # `chat` and `acp` SUBCOMMANDS and not at top level, so it is appended and
 # gated. Do not "make these consistent" — they are opposite cases.
 #
-# Measured against kiro-cli 2.15.2; see packages/kiro-cli/docs/launcher-argv.md
+# ── Why there is no `--tui` here ────────────────────────────────────────────
+# There used to be an `ai.kiro.tui` option that injected `--tui` and implied
+# `--v3`. It was removed. `--tui` selects the new TUI harness for the OLD
+# engine, and v3 already uses that harness — so under v3 the flag is redundant,
+# and it is going away with v3 anyway. Anyone who still wants it on an older
+# engine can pass it on the command line.
+#
+# The implication was NOT decoration, which is why it cannot simply be dropped
+# from a config without also switching to `v3`. Measured on 2.16.0:
+#
+#   kiro-cli --tui       -> error: Conflicting options: --tui cannot be used
+#                           with --agent-engine=v1
+#   kiro-cli --tui --v3  -> works
+#   kiro-cli-chat chat --tui --agent-engine=v2 -> parses (reaches input check)
+#
+# The chat binary defaults to **v1** and `--tui` conflicts with it, while the
+# launcher injects no engine of its own. So bare `--tui` was always broken and
+# `tui = true` only worked because it silently dragged `--v3` along. Note that
+# default is v1, not the v2 this file once claimed.
+#
+# Measured against kiro-cli 2.16.0; see packages/kiro-cli/docs/launcher-argv.md
 # for the probe transcript and how to re-measure on a version bump.
 {
   lib,
@@ -25,31 +45,28 @@
 }: let
   inherit
     (import ../../../lib/idempotentFlags.nix {inherit lib;})
-    bareInvocation
     gateOnSubcommand
     idempotentFlagBlock
     optionValueBlock
     ;
 
-  # kiro-cli's only value-taking top-level options — their values must not be
-  # mistaken for a subcommand (`kiro-cli --agent acp` is a bare launch, not the
-  # `acp` subcommand). The chat binary has no top-level `--agent`, only
-  # `--resume-id`.
-  launcherValueFlags = ["--agent" "--resume-id"];
+  # Value-taking options whose values must not be mistaken for a subcommand.
+  # Only the chat binary's list survives: the launcher-side list existed for the
+  # removed `--tui` gate, which was the sole caller that had to distinguish a
+  # bare launch (`kiro-cli --agent acp` is a bare launch, not the `acp`
+  # subcommand). `--v3` is injected unconditionally and needs no such gate.
   chatValueFlags = ["--resume-id"];
 in
   {
     package,
-    tui,
     v3,
     trustedMcpTools,
     environmentVariables ? {},
   }: let
     hasEnv = environmentVariables != {};
-    hasTui = tui;
-    hasV3 = v3 || tui;
+    hasV3 = v3;
     hasTrust = trustedMcpTools != [];
-    needsWrapper = hasEnv || hasTui || hasTrust || hasV3;
+    needsWrapper = hasEnv || hasTrust || hasV3;
     trustToolsCsv = lib.concatStringsSep "," trustedMcpTools;
     # env baked as `export`s (was makeWrapper `--set`), so the hand-written
     # wrapper can ALSO position the flags. makeWrapper only appends
@@ -73,24 +90,10 @@ in
       position = "prepend";
     });
 
-    # `--tui` is confined to a bare launch and `chat`. It is inert elsewhere on
-    # 2.15.2 (stdout is byte-identical with and without it, and the engine's
-    # chatter goes to stderr, so it cannot corrupt `acp`'s JSON-RPC framing) —
-    # but it means "launch chat in TUI mode", which is meaningless for a stdio
-    # protocol or for `mcp`/`settings`, and inert-today is not a guarantee.
-    tuiBlock = lib.optionalString hasTui (gateOnSubcommand {
-        subcommands = [bareInvocation "chat"];
-        valueFlags = launcherValueFlags;
-      } (idempotentFlagBlock {
-        flags = ["--tui"];
-        position = "prepend";
-      }));
-
-    # Emitted v3-then-tui so the prepends compose to `--tui --v3 …`, the pair
-    # upstream documents together.
-    launcherInjection =
-      lib.concatStringsSep "\n"
-      (builtins.filter (s: s != "") [v3Block tuiBlock]);
+    # There is deliberately no `--tui` injection. The option that produced it
+    # was REMOVED, not merely defaulted off — see the note at the top of this
+    # file for the measurements behind that.
+    launcherInjection = v3Block;
 
     # `--trust-tools` on the chat binary: appended, and gated to the subcommands
     # that declare it. Not idempotence-guarded — unlike `--tui`, repeating it is
@@ -186,7 +189,7 @@ in
         name = "kiro-cli-wrapped";
         paths = [package];
         postBuild = ''
-          ${lib.optionalString (hasEnv || hasTui || hasV3) ''
+          ${lib.optionalString (hasEnv || hasV3) ''
             rm -f "$out/bin/kiro-cli"
             ln -s ${mkWrapper "kiro-cli-launcher" {
               realBin = "${package}/bin/kiro-cli";

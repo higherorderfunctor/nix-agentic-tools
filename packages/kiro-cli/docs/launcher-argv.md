@@ -1,20 +1,27 @@
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-07-31 against kiro-cli **2.16.0** (commit pending —
-> qualifies the "grep the JS, not the ELF" rule, which was true for POLICY but
-> false for feature GATING and nearly shipped a wrong answer: the rollout
-> manifest lives in the ELF, the rust binary OVERWRITES `KIRO_ENABLED_FEATURES`
-> before spawning bun, and the manifest's own "enable locally through
-> KIRO_ENABLED_FEATURES" line is stale. Adds `ai.kiro.unlockedRolloutFeatures`.
-> Prior: 2026-07-30 against **2.15.2** — adds the measured launcher FORWARDING
-> TABLE: it injects `chat` on a bare launch, skips `--agent`'s value, strips
-> `--`, rewrites `settings all` to `settings list`, and keeps `whoami`
-> in-process. Corrects the `--v3` rewrite to its real TWO-TOKEN form
-> `--agent-engine v3`; the `--agent-engine=v3` in the error text is clap's
-> diagnostic formatting, not the argv. Prior: records that the launcher resolves
-> `kiro-cli-chat` through PATH, so the two wrappers COMPOSE, and that
-> `--trust-tools` therefore has to be withheld from `acp` under v3. Prior: first
-> revision). If you touch `lib/idempotentFlags.nix`,
+> **Last verified:** 2026-08-01 (commit pending — the `ai.kiro.tui` option is
+> REMOVED, so nothing here injects `--tui` any more; `--tui` selects the new TUI
+> harness for the OLD engine and v3 already uses it. Also corrects the chat
+> binary's clap default, which is **v1** on 2.16.0 and not the `v2` this page
+> asserted: measured via `kiro-cli-chat chat --tui` failing with
+> `--tui cannot be used with --agent-engine=v1`. That also shows the old
+> `tui`-implies-`v3` behavior was load-bearing rather than decorative — bare
+> `--tui` never worked). Prior: 2026-07-31 against kiro-cli **2.16.0** (commit
+> pending — qualifies the "grep the JS, not the ELF" rule, which was true for
+> POLICY but false for feature GATING and nearly shipped a wrong answer: the
+> rollout manifest lives in the ELF, the rust binary OVERWRITES
+> `KIRO_ENABLED_FEATURES` before spawning bun, and the manifest's own "enable
+> locally through KIRO_ENABLED_FEATURES" line is stale. Adds
+> `ai.kiro.unlockedRolloutFeatures`. Prior: 2026-07-30 against **2.15.2** — adds
+> the measured launcher FORWARDING TABLE: it injects `chat` on a bare launch,
+> skips `--agent`'s value, strips `--`, rewrites `settings all` to
+> `settings list`, and keeps `whoami` in-process. Corrects the `--v3` rewrite to
+> its real TWO-TOKEN form `--agent-engine v3`; the `--agent-engine=v3` in the
+> error text is clap's diagnostic formatting, not the argv. Prior: records that
+> the launcher resolves `kiro-cli-chat` through PATH, so the two wrappers
+> COMPOSE, and that `--trust-tools` therefore has to be withheld from `acp`
+> under v3. Prior: first revision). If you touch `lib/idempotentFlags.nix`,
 > `packages/kiro-cli/lib/wrapPackage.nix`, or bump the kiro-cli version and this
 > fragment isn't updated in the same commit, stop and fix it.
 >
@@ -95,31 +102,16 @@ multiple times". The wrapper therefore implements no precedence of its own.
 | Binary          | Flag             | Position    | Applies to                                   |
 | --------------- | ---------------- | ----------- | -------------------------------------------- |
 | `kiro-cli`      | `--v3`           | **prepend** | every subcommand + bare                      |
-| `kiro-cli`      | `--tui`          | **prepend** | bare launch and `chat` only                  |
 | `kiro-cli-chat` | `--trust-tools=` | **append**  | `chat` always; `acp` unless the engine is v3 |
 
 The `acp` condition is resolved from **argv at runtime**, not from the Nix
 config — see
 [the composition section](#the-two-wrappers-compose--reason-about-the-chain-not-the-binaries).
 
-Three different rules, for three different reasons — do not "make them
-consistent":
+Two different rules, for two different reasons — do not "make them consistent":
 
 - **`--v3` is global and wanted everywhere**, since it selects the engine for
   `chat` and `acp` alike.
-- **`--tui` is global but only meaningful for chat.** Its inertness elsewhere on
-  2.15.2 is STRUCTURAL: the launcher forwards `--tui` **only on a bare launch**
-  and drops it the moment the invocation carries an explicit subcommand —
-  `kiro-cli --tui` reaches the chat binary as `chat --tui`, but
-  `kiro-cli --tui chat` reaches it as plain `chat`, and `--tui acp` as plain
-  `acp`. So injecting `--tui` on an explicit `chat` is a no-op upstream, and on
-  `acp` it could never have arrived at all. (An earlier revision justified the
-  inertness with `kiro-cli --v3 acp` and `kiro-cli --tui --v3 acp` emitting
-  byte-identical stdout. That proves nothing: the forwarded argv is identical
-  either way, so the comparison could not have come out otherwise.) It still
-  means "launch chat in TUI mode", which is meaningless for a stdio protocol or
-  for `mcp`/`settings`, and dropped-today is not a guarantee — so the wrapper
-  still withholds it rather than relying on upstream to.
 - **`--trust-tools` is genuinely per-subcommand.** The chat binary declares it
   on `chat` and `acp` and **not** at top level, so a bare
   `kiro-cli-chat --trust-tools=…` is an "unexpected argument". It is appended
@@ -247,8 +239,13 @@ $ kiro-cli      acp --agent-engine=v3 --trust-tools=x     # CONFLICT — v3, eve
 Gating on `hasV3` alone would silently drop trust in the first case and break
 the command in the second. So the wrapper resolves the engine from argv — the
 caller's `--agent-engine` if present (either spelling), otherwise **the chat
-binary's own clap default, `v2`** — and withholds only when that resolves to
-`v3`.
+binary's own clap default** — and withholds only when that resolves to `v3`.
+
+That default is **`v1`** on 2.16.0, not the `v2` this fragment claimed for a
+long time. Measured: `kiro-cli-chat chat --tui` fails with
+`--tui cannot be used with --agent-engine=v1`. Nothing turns on the difference
+here — the withhold fires only on `v3`, and neither v1 nor v2 is v3 — but a
+reader reasoning about engine defaults from this page would have been wrong.
 
 The fallback is deliberately NOT what this Nix config bakes in. The chat wrapper
 cannot know whether the launcher wrapper is in the chain, and
@@ -317,16 +314,18 @@ neither an option nor an option's **value**:
   `--resume-id <SESSION_ID>` are the launcher's only ones (`kiro-cli-chat` has
   just `--resume-id` — no top-level `--agent`). Without the skip,
   `kiro-cli --agent acp` reads as the `acp` subcommand and a bare launch
-  silently loses `--tui`. The `--opt=value` form needs no entry: one token,
-  handled by the `-*` arm.
+  silently loses the injection. (With `--tui` gone the LAUNCHER no longer gates
+  on the subcommand at all — `--v3` is unconditional — so this now matters only
+  for the chat binary's `--trust-tools` gate.) The `--opt=value` form needs no
+  entry: one token, handled by the `-*` arm.
 - **`--` parks on a sentinel** no gate matches, so gated injection declines
   rather than guessing.
 
 `idempotentFlagBlock` takes an explicit `position` with **no default** — picking
-the wrong one is precisely the bug above. Both `--tui` and `--v3` abort on
-repetition ("cannot be used multiple times"), so each is injected only when
-absent as an **exact argv token** — not a substring scan of `"$*"`, so
-`kiro-cli chat 'explain --tui'` still gets the real flag.
+the wrong one is precisely the bug above. `--v3` aborts on repetition ("cannot
+be used multiple times"), so it is injected only when absent as an **exact argv
+token** — not a substring scan of `"$*"`, so `kiro-cli chat 'explain --v3'`
+still gets the real flag.
 
 `--trust-tools` is not idempotence-guarded: repeating it is _accepted_ by both
 `chat` and `acp` (measured), unlike the boolean flags.
@@ -368,7 +367,7 @@ parse rejection from an accepted flag.
 
 - `checks/kiro-wrapper-argv.nix` — the real wrapper against a stub package that
   prints its argv. Covers which SIDE of the subcommand each flag lands on, the
-  `--tui` confinement, the value-flag skip, `--`, idempotence, and the
+  that nothing emits `--tui`, the value-flag skip, `--`, idempotence, and the
   env-export path. String-matching the generated bash cannot catch a flag
   emitted on the wrong side; running it can.
 - `checks/module-eval.nix` (`module-kiro-wrapper-*`) — pins the SHAPE of the

@@ -162,11 +162,12 @@ in {
       # `acp`. Without it devenv's kiro-cli ran the legacy engine and
       # hooks/slash-commands never loaded.
       #
-      # This was `tui = true`, which worked only by accident: the factory
-      # treats `tui` as implying `v3`. That implication is a stale 2.8.1-era
-      # workaround for a bare `--tui` being rejected without an engine.
-      # `--tui` selects the new TUI harness for the V2 engine — v3 already
-      # uses it — so on v3 it buys nothing and only adds a flag. Ask for the
+      # This was `tui = true`. That option is now REMOVED: `--tui` selects the
+      # new TUI harness for the OLD engine, v3 already uses it, and it is going
+      # away with v3. It used to imply `--v3`, and that implication was
+      # load-bearing rather than decorative — bare `--tui` conflicts with the
+      # chat binary's default engine (v1) and the launcher supplies none — so
+      # `tui = true` only ever worked by dragging `--v3` along. Ask for the
       # engine directly.
       v3 = true;
       # Dogfood the rollout unlock: surfaces `/workflow` and `/goal` plus the
