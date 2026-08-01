@@ -27,7 +27,17 @@
   # unchanged, the drvPath is unchanged, and `checks.cache-hit-parity` plus
   # every cachix hit keep working. Do NOT "simplify" this by always appending
   # the patch step.
-  mkKiroCli = rolloutFeatures:
+  # Canonicalized HERE rather than at the call site, because this is where
+  # derivation identity is decided: the feature list is comma-joined into
+  # `postFixup`, so an unsorted or duplicated list yields a different drvPath
+  # for a semantically identical set — two redundant ~556 MB builds. Doing it
+  # here covers every caller of `withRolloutFeatures`, not just the module.
+  # `[]` sorts to `[]`, so the default derivation is untouched.
+  canonFeatures = fs: ourPkgs.lib.sort (a: b: a < b) (ourPkgs.lib.unique fs);
+
+  mkKiroCli = rawFeatures: let
+    rolloutFeatures = canonFeatures rawFeatures;
+  in
     ourPkgs.kiro-cli.overrideAttrs (finalAttrs: attrs: {
       inherit (sources) version;
       src = fetchurl {inherit (platformSrc) url hash;};

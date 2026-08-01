@@ -2462,6 +2462,14 @@ in {
         ];
     in
       soleSame (drvOf ["workflows"]) (drvOf ["workflows" "workflows"])
+      # Order must not fork it either. The list is comma-joined into
+      # `postFixup`, so without a sort these two semantically identical sets
+      # would produce different drvPaths and two redundant ~556 MB builds.
+      && soleSame (drvOf ["tangent" "workflows"]) (drvOf ["workflows" "tangent"])
+      # Control: a genuinely DIFFERENT set must still fork. Without this, the
+      # two assertions above would also pass if canonicalization had collapsed
+      # every input to a single derivation.
+      && soleFork (drvOf ["workflows"]) (drvOf ["tangent" "workflows"])
   );
 
   # A `package` without the overlay's passthru cannot be patched. Assert the

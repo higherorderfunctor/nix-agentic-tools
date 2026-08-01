@@ -363,13 +363,15 @@
   # `cfg.package` is evaluated either way, which is what keeps the unfree guard
   # honest: `pkgs.ai.kiro-cli` is an `ensureUnfreeCheck` symlinkJoin, so
   # check-meta fires on it before `withRolloutFeatures` is ever reached.
-  # `lib.unique` so a duplicated entry cannot fork the derivation against an
-  # otherwise-identical config — ["workflows"] and ["workflows" "workflows"]
-  # must reach the same store path, not two.
+  # No canonicalization here on purpose. `withRolloutFeatures` sorts and
+  # de-duplicates its own argument (see `canonFeatures` in
+  # overlays/kiro-cli.nix), because that is where derivation identity is
+  # decided and doing it there covers direct callers too. Repeating it here
+  # would be a second source of truth that can silently drift out of step.
   resolvePackage = cfg:
     if cfg.unlockedRolloutFeatures == []
     then cfg.package
-    else cfg.package.withRolloutFeatures (lib.unique cfg.unlockedRolloutFeatures);
+    else cfg.package.withRolloutFeatures cfg.unlockedRolloutFeatures;
 in
   lib.ai.app.mkAiApp {
     name = "kiro";
