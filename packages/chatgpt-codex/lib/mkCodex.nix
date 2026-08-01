@@ -9,6 +9,29 @@
     then builtins.readFile value
     else value;
 
+  renderScope = paths:
+    lib.optionalString (paths != null) (
+      "_Apply this guidance only when working with files matching: "
+      + lib.concatMapStringsSep ", " (path: "`${path}`") paths
+      + "_\n\n"
+    );
+
+  shouldRender = fragment:
+    (fragment.paths or null) == null || !(fragment.skipIfUnsupported or false);
+
+  renderFragment = fragment:
+    renderScope (fragment.paths or null)
+    + lib.ai.transformers.agentsmd.render (fragment
+      // {text = resolveText fragment.text;});
+
+  mkInstructionChunk = instruction:
+    lib.optionalString (instruction ? name) "<!-- instruction: ${instruction.name} -->\n"
+    + renderFragment instruction;
+
+  mkRuleChunk = name: rule:
+    "<!-- rule: ${name} -->\n"
+    + renderFragment rule;
+
   mkAgentsMd = {
     cfg,
     mergedInstructions,
@@ -23,18 +46,12 @@
       if effectiveContext == null
       then ""
       else resolveText effectiveContext;
-    instructionChunks = map (instruction: let
-      marker = lib.optionalString (instruction ? name) "<!-- instruction: ${instruction.name} -->\n";
-    in
-      marker
-      + lib.ai.transformers.agentsmd.render (instruction
-        // {text = resolveText instruction.text;}))
-    mergedInstructions;
-    ruleChunks = lib.mapAttrsToList (name: rule:
-      "<!-- rule: ${name} -->\n"
-      + lib.ai.transformers.agentsmd.render (rule
-        // {text = resolveText rule.text;}))
-    mergedRules;
+    instructionChunks =
+      map mkInstructionChunk
+      (builtins.filter shouldRender mergedInstructions);
+    ruleChunks =
+      lib.mapAttrsToList mkRuleChunk
+      (lib.filterAttrs (_: shouldRender) mergedRules);
     chunks =
       lib.optional (contextText != "") contextText
       ++ instructionChunks
@@ -42,20 +59,37 @@
   in
     builtins.concatStringsSep "\n\n" chunks;
 
-  mkScopeAssertions = {
+  mkSizeAssertion = {
+    agentsMd,
+    cfg,
     mergedInstructions,
     mergedRules,
-  }:
-    map (instruction: {
-      assertion = (instruction.paths or null) == null;
-      message = "ai.codex.instructions: scoped instructions are not supported yet; CX-005 will add explicit scope degradation semantics";
-    })
-    mergedInstructions
-    ++ lib.mapAttrsToList (name: rule: {
-      assertion = rule.paths == null;
-      message = "ai.codex.rules.${name}: scoped rules are not supported yet; CX-005 will add explicit scope degradation semantics";
-    })
-    mergedRules;
+    topContext,
+  }: let
+    effectiveContext =
+      if cfg.context != null
+      then cfg.context
+      else topContext;
+    size = text: builtins.stringLength (resolveText text);
+    contextContribution =
+      lib.optional (effectiveContext != null && resolveText effectiveContext != "")
+      "context=${toString (size effectiveContext)} bytes";
+    instructionContributions =
+      lib.imap0 (index: instruction: "instruction:${instruction.name or (toString index)}=${toString (builtins.stringLength (mkInstructionChunk instruction))} bytes")
+      (builtins.filter shouldRender mergedInstructions);
+    ruleContributions =
+      lib.mapAttrsToList (name: rule: "rule:${name}=${toString (builtins.stringLength (mkRuleChunk name rule))} bytes")
+      (lib.filterAttrs (_: shouldRender) mergedRules);
+    renderedBytes = builtins.stringLength agentsMd;
+  in {
+    assertion = renderedBytes <= cfg.projectDocMaxBytes;
+    message = ''
+      Codex AGENTS.md renders to ${toString renderedBytes} bytes, exceeding
+      ai.codex.projectDocMaxBytes (${toString cfg.projectDocMaxBytes} bytes).
+      Contributions: ${lib.concatStringsSep ", " (contextContribution ++ instructionContributions ++ ruleContributions)}.
+      Trim the contributing content or raise ai.codex.projectDocMaxBytes.
+    '';
+  };
 in
   lib.ai.app.mkAiApp {
     name = "codex";
@@ -84,6 +118,14 @@ in
         '';
         example = lib.literalExpression "./codex-context.md";
       };
+      projectDocMaxBytes = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 32768;
+        description = ''
+          Maximum byte size of the generated Codex AGENTS.md. Evaluation fails
+          before Codex can silently truncate content beyond this limit.
+        '';
+      };
     };
 
     hm.config = {
@@ -95,7 +137,9 @@ in
     }: let
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
     in {
-      assertions = mkScopeAssertions {inherit mergedInstructions mergedRules;};
+      assertions = [
+        (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
+      ];
       home.file = lib.mkIf (agentsMd != "") {
         "${cfg.configDir}/AGENTS.md".text = agentsMd;
       };
@@ -111,7 +155,9 @@ in
     }: let
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
     in {
-      assertions = mkScopeAssertions {inherit mergedInstructions mergedRules;};
+      assertions = [
+        (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
+      ];
       files = lib.mkIf (agentsMd != "") {
         "AGENTS.md".text = agentsMd;
       };

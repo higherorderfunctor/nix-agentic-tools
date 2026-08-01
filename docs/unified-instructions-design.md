@@ -238,8 +238,9 @@ rules.<name> = lib.types.submodule {
       type = lib.types.bool;
       default = false;
       description = ''
-        If true, silently drop this rule when fanning to ecosystems that
-        don't support path scoping natively. Default false = eval error.
+        If true, silently drop this entry when fanning to ecosystems that
+        don't support path scoping natively. Default false degrades the scope
+        to explicit prose when the target supports that lowering.
       '';
     };
   };
@@ -323,6 +324,13 @@ silently.
 - Rationale: Codex silently truncates overflow. An eval error is the only way to
   surface the problem before a surprise in production.
 
+The generated base filename remains `AGENTS.md`. Codex's native
+`AGENTS.override.md` precedence can suppress that file, while configured
+fallback filenames are consulted only when neither native filename exists. Those
+are separate override/tree-placement and TOML discovery surfaces; this flat
+writer does not duplicate fallback content or claim ownership of an existing
+override file.
+
 ## Implementation status
 
 1. **Transformers** — claude, copilot, kiro, agentsmd already shipped in
@@ -342,12 +350,13 @@ silently.
      (copilot-instructions.md default); rules →
      `.github/instructions/<name>.instructions.md` via `copilotTransformer`.
      Shipped 7dad0b8, 419010a.
-   - **Codex:** shared/per-app context, instructions, and unscoped rules lower
-     into `~/.codex/AGENTS.md` for Home Manager and project-root `AGENTS.md` for
-     devenv. Scoped content currently fails explicitly instead of losing scope.
-     Scope degradation and the size guard remain follow-up work.
-4. **Codex size guard** — eval-time assertion. **Deferred** to the Codex scope
-   degradation/limit slice.
+   - **Codex:** shared/per-app context, instructions, and rules lower into
+     `~/.codex/AGENTS.md` for Home Manager and project-root `AGENTS.md` for
+     devenv. Scoped content degrades to explicit prose unless
+     `skipIfUnsupported = true` omits it.
+4. **Codex size guard** — shipped as an eval-time byte assertion against
+   `ai.codex.projectDocMaxBytes` (32 KiB by default), with rendered and
+   per-contribution size diagnostics.
 5. **Consumer migration (`nixos-config`)** — out of scope for this repo.
    Consumer can now use
    `ai.kiro.rules = builtins.mapAttrs (…) (builtins.readDir …)` on their own
@@ -355,15 +364,9 @@ silently.
 
 ### Not yet shipped
 
-- **Path-scope prose degradation for Codex / Copilot-global concat** — the
-  design specifies a prose prefix when a scoped rule fans to an ecosystem
-  without native frontmatter. Not wired; today `ai.copilot.rules` emits to
-  `.github/instructions/` (project-scope with native `applyTo:`), not a
-  Copilot-global concat. Codex has no factory yet.
-- **`skipIfUnsupported` rule option** — design called for eval-time error when a
-  path-scoped rule targets an ecosystem without native path scoping, with
-  opt-out. Not implemented; no target ecosystem currently requires it (Claude /
-  Kiro / Copilot-project all support native path scoping).
+- **Copilot-global concat** — Copilot rules currently emit to
+  `.github/instructions/` at project scope with native `applyTo:`. There is no
+  global concat target requiring Codex-style prose degradation.
 - **Deprecation of legacy `ai.instructions` list-shape** — `instructions` and
   `rules` coexist today. Deprecation warning and migration guide not yet added.
 
@@ -389,6 +392,9 @@ this pass, to be revisited:
   map to something like `ai.claude.localContext` but niche.
 - **Codex `AGENTS.override.md`** — wins over AGENTS.md. Same story as local —
   could expose via `ai.codex.overrideContext` if ever needed.
+- **Codex fallback filenames** — configure discovery through
+  `project_doc_fallback_filenames` when the Codex TOML surface lands; do not
+  copy fallback content into generated AGENTS.md.
 - **Codex hierarchical project AGENTS.md** (walk-down from root to cwd, one per
   directory) — distinct from the dir-of-files model and needs its own treatment
   if we want to surface it.

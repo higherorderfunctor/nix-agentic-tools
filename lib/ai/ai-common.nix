@@ -173,6 +173,14 @@
           - Copilot: applyTo: glob
         '';
       };
+      skipIfUnsupported = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Omit this instruction instead of degrading its path scope to prose
+          when an ecosystem cannot preserve the scope natively.
+        '';
+      };
       text = lib.mkOption {
         type = lib.types.lines;
         description = "Instruction body (markdown).";
@@ -207,6 +215,14 @@
           - Claude: paths: frontmatter
           - Kiro: inclusion: fileMatch + fileMatchPattern:
           - Copilot: applyTo: glob
+        '';
+      };
+      skipIfUnsupported = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Omit this rule instead of degrading its path scope to prose when an
+          ecosystem cannot preserve the scope natively.
         '';
       };
       text = lib.mkOption {

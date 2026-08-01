@@ -540,36 +540,111 @@ in {
       evaluated.config.home.file.".codex/AGENTS.md".text == "Alpha steering body.\n"
   );
 
-  module-codex-scoped-rule-fails-loudly = mkTest "codex-scoped-rule-fails-loudly" (
+  module-codex-scoped-content-degrades-to-prose = mkTest "codex-scoped-content-degrades-to-prose" (
+    let
+      config = {
+        ai = {
+          codex = {
+            enable = true;
+            instructions = [
+              {
+                name = "nix";
+                paths = ["**/*.nix" "flake.lock"];
+                text = "Scoped instruction";
+              }
+            ];
+          };
+          rules.scoped = {
+            paths = ["src/**"];
+            text = "Scoped rule";
+          };
+        };
+      };
+      hm = evalHm config;
+      devenv = evalDevenv config;
+      expected = builtins.concatStringsSep "\n\n" [
+        "<!-- instruction: nix -->\n_Apply this guidance only when working with files matching: `**/*.nix`, `flake.lock`_\n\nScoped instruction"
+        "<!-- rule: scoped -->\n_Apply this guidance only when working with files matching: `src/**`_\n\nScoped rule"
+      ];
+    in
+      hm.config.home.file.".codex/AGENTS.md".text
+      == expected
+      && devenv.config.files."AGENTS.md".text == expected
+  );
+
+  module-codex-scoped-content-can-skip = mkTest "codex-scoped-content-can-skip" (
     let
       evaluated = evalHm {
         ai = {
-          codex.enable = true;
-          rules.scoped = {
-            paths = ["**/*.nix"];
-            text = "Scoped";
+          codex = {
+            enable = true;
+            instructions = [
+              {
+                paths = ["**/*.nix"];
+                skipIfUnsupported = true;
+                text = "Skipped instruction";
+              }
+            ];
+          };
+          context = "Kept context";
+          rules.skipped = {
+            paths = ["src/**"];
+            skipIfUnsupported = true;
+            text = "Skipped rule";
           };
         };
       };
     in
-      builtins.any (assertion: !assertion.assertion && lib.hasInfix "ai.codex.rules.scoped" assertion.message) evaluated.config.assertions
+      evaluated.config.home.file.".codex/AGENTS.md".text == "Kept context"
   );
 
-  module-codex-scoped-instruction-fails-loudly = mkTest "codex-scoped-instruction-fails-loudly" (
+  module-codex-size-guard-byte-boundaries = mkTest "codex-size-guard-byte-boundaries" (
     let
-      evaluated = evalHm {
+      evaluate = context: projectDocMaxBytes:
+        evalHm {
+          ai.codex = {
+            inherit context;
+            enable = true;
+            inherit projectDocMaxBytes;
+          };
+        };
+      sized = size: lib.concatStrings (lib.replicate size "x");
+      below = evaluate (sized 32767) 32768;
+      exact = evaluate (sized 32768) 32768;
+      above = evaluate (sized 32769) 32768;
+      diagnostic = evalHm {
         ai = {
-          codex.enable = true;
-          instructions = [
-            {
-              paths = ["**/*.nix"];
-              text = "Scoped";
-            }
-          ];
+          codex = {
+            enable = true;
+            instructions = [
+              {
+                name = "named";
+                text = "i";
+              }
+            ];
+            projectDocMaxBytes = 1;
+          };
+          rules.oversize.text = "r";
         };
       };
+      unicodeOver = evaluate "é" 1;
+      aboveAssertion = lib.findFirst (assertion: !assertion.assertion) null above.config.assertions;
+      diagnosticAssertion = lib.findFirst (assertion: !assertion.assertion) null diagnostic.config.assertions;
+      unicodeAssertion = lib.findFirst (assertion: !assertion.assertion) null unicodeOver.config.assertions;
     in
-      builtins.any (assertion: !assertion.assertion && lib.hasInfix "ai.codex.instructions" assertion.message) evaluated.config.assertions
+      builtins.all (assertion: assertion.assertion) below.config.assertions
+      && builtins.all (assertion: assertion.assertion) exact.config.assertions
+      && aboveAssertion != null
+      && lib.hasInfix "renders to 32769 bytes" aboveAssertion.message
+      && lib.hasInfix "projectDocMaxBytes (32768 bytes)" aboveAssertion.message
+      && diagnosticAssertion != null
+      && lib.hasInfix "instruction:named=" diagnosticAssertion.message
+      && lib.hasInfix "rule:oversize=" diagnosticAssertion.message
+      && unicodeAssertion != null
+      && lib.hasInfix "renders to 2 bytes" unicodeAssertion.message
+      && lib.hasInfix "projectDocMaxBytes (1 bytes)" unicodeAssertion.message
+      && lib.hasInfix "context=2 bytes" unicodeAssertion.message
+      && lib.hasInfix "Trim the contributing content or raise" unicodeAssertion.message
   );
 
   module-codex-rule-collision-fails = mkTest "codex-rule-collision-fails" (
