@@ -99,13 +99,25 @@ rec {
       def invoke(arguments, root):
           environment = os.environ.copy()
           environment.update({"CODEX_HOME": root + "/codex-home", "HOME": root + "/home"})
-          completed = subprocess.run(
-              [binary, *arguments],
-              check=True,
-              env=environment,
-              stdout=subprocess.PIPE,
-              text=True,
-          )
+          command = [binary, *arguments]
+          try:
+              completed = subprocess.run(
+                  command,
+                  check=True,
+                  env=environment,
+                  stderr=subprocess.PIPE,
+                  stdout=subprocess.PIPE,
+                  text=True,
+                  timeout=30,
+              )
+          except subprocess.TimeoutExpired as error:
+              raise SystemExit(
+                  f"codex-extract: command timed out after 30 seconds: {command!r}"
+              ) from error
+          except subprocess.CalledProcessError as error:
+              raise SystemExit(
+                  f"codex-extract: command failed ({error.returncode}): {command!r}\n{error.stderr}"
+              ) from error
           return completed.stdout
 
 
