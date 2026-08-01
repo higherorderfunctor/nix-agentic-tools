@@ -445,6 +445,70 @@ in {
       && devenv.config.packages == [expected]
   );
 
+  module-codex-skills-disabled-emits-nothing = mkTest "codex-skills-disabled-emits-nothing" (
+    let
+      config.ai.codex.skills.example = ./fixtures/claude-skills/skill-a;
+      hm = evalHm config;
+      devenv = evalDevenv config;
+    in
+      !(hm.config.home.file ? ".agents/skills/example")
+      && !(devenv.config.files ? ".agents/skills/example/SKILL.md")
+  );
+
+  module-codex-skills-fanout = mkTest "codex-skills-fanout" (
+    let
+      config.ai = {
+        codex = {
+          enable = true;
+          skills.local = ./fixtures/claude-skills/skill-b;
+        };
+        skills.shared = ./fixtures/claude-skills/skill-a;
+      };
+      hm = evalHm config;
+      devenv = evalDevenv config;
+    in
+      hm.config.home.file.".agents/skills/local".source
+      == ./fixtures/claude-skills/skill-b
+      && hm.config.home.file.".agents/skills/local".recursive
+      && hm.config.home.file.".agents/skills/shared".source
+      == ./fixtures/claude-skills/skill-a
+      && hm.config.home.file.".agents/skills/shared".recursive
+      && devenv.config.files.".agents/skills/local/SKILL.md".source
+      == ./fixtures/claude-skills/skill-b/SKILL.md
+      && devenv.config.files.".agents/skills/shared/SKILL.md".source
+      == ./fixtures/claude-skills/skill-a/SKILL.md
+  );
+
+  module-codex-skillsdir-fanout = mkTest "codex-skillsdir-fanout" (
+    let
+      config.ai.codex = {
+        enable = true;
+        skillsDir = ./fixtures/claude-skills;
+      };
+      hm = evalHm config;
+      devenv = evalDevenv config;
+    in
+      hm.config.home.file ? ".agents/skills/skill-a"
+      && hm.config.home.file ? ".agents/skills/skill-b"
+      && devenv.config.files ? ".agents/skills/skill-a/SKILL.md"
+      && devenv.config.files ? ".agents/skills/skill-b/SKILL.md"
+  );
+
+  module-codex-skill-collision-fails = mkTest "codex-skill-collision-fails" (
+    let
+      evaluated = evalHm {
+        ai = {
+          codex = {
+            enable = true;
+            skills.duplicate = ./fixtures/claude-skills/skill-b;
+          };
+          skills.duplicate = ./fixtures/claude-skills/skill-a;
+        };
+      };
+    in
+      builtins.any (assertion: !assertion.assertion && lib.hasInfix "skills 'duplicate'" assertion.message) evaluated.config.assertions
+  );
+
   module-codex-agentsmd-fanout = mkTest "codex-agentsmd-fanout" (
     let
       config = {
