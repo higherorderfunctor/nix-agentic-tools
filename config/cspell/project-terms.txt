@@ -76,6 +76,8 @@ direnv
 direnvrc
 docnix
 docsite
+dogfood
+dogfooding
 doubao
 drainedness
 drvs
