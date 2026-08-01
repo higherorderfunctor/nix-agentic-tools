@@ -1,25 +1,31 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-08-01 (commit pending — documents the SECOND
-> `extraExtract` self-heal, `vu.mkExtractRegen`, alongside the hash one: which
-> failure it answers, that a red drift check reports a broken MECHANISM rather
-> than a stale file, why extracts get no `fix_sidecar_hashes`-style standalone
-> hatch, and how to tell "never wired" from "ran and failed". glab had no hook
-> at all, which stayed invisible from #560 until PR #621). Prior: 2026-07-27 —
-> adds the three-valued `git diff --quiet` rule and the `git_diff_quiet` helper
-> every dirtiness gate in the update scripts now goes through; the bare form had
-> routed a git ERROR into "there are changes" in `update-input.sh` and into "the
-> tree is dirty" at both of `update-pkg.sh`'s gates. Earlier: the
-> `Detect a newer @aihubmix/mcp on npm` annotation step and the
-> excluded-because-a-local-patch-cannot-be-swept rule behind it, which is about
-> SWEEPABILITY and not about lagging: aihubmix-mcp tracks `dist-tags.latest` and
-> is still excluded. Earlier: the `NAT_UPDATE_JOBS` evaluator budget that killed
-> run 30181958460, the `verify_all_packages` single-definition build gate and
-> the `fix_sidecar_hashes` repair-on-failure retry, and the non-blocking
-> annotation-step family plus the new-pnpm-major raise). If you touch
-> `.github/workflows/update.yml`, `dev/scripts/update-common.sh`,
-> `dev/scripts/update-input.sh`, `dev/scripts/update-pkg.sh`, or the PR creation
-> logic, and this fragment isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-08-01 (commit pending — Phase 2 now runs on
+> `if: always()` so a timed-out sweep SHIPS what it finished instead of
+> discarding it, and the `ninja-completed.flag` sentinel is re-gated on
+> `steps.ninja.outcome` so a partial sweep can never let the close step delete
+> the PRs it did not reach. Measured on run 30713330569: 47 of 52 edges done,
+> step `skipped`, everything thrown away). Prior: 2026-08-01 — documents the
+> SECOND `extraExtract` self-heal, `vu.mkExtractRegen`, alongside the hash one:
+> which failure it answers, that a red drift check reports a broken MECHANISM
+> rather than a stale file, why extracts get no `fix_sidecar_hashes`-style
+> standalone hatch, and how to tell "never wired" from "ran and failed". glab
+> had no hook at all, which stayed invisible from #560 until PR #621). Prior:
+> 2026-07-27 — adds the three-valued `git diff --quiet` rule and the
+> `git_diff_quiet` helper every dirtiness gate in the update scripts now goes
+> through; the bare form had routed a git ERROR into "there are changes" in
+> `update-input.sh` and into "the tree is dirty" at both of `update-pkg.sh`'s
+> gates. Earlier: the `Detect a newer @aihubmix/mcp on npm` annotation step and
+> the excluded-because-a-local-patch-cannot-be-swept rule behind it, which is
+> about SWEEPABILITY and not about lagging: aihubmix-mcp tracks
+> `dist-tags.latest` and is still excluded. Earlier: the `NAT_UPDATE_JOBS`
+> evaluator budget that killed run 30181958460, the `verify_all_packages`
+> single-definition build gate and the `fix_sidecar_hashes` repair-on-failure
+> retry, and the non-blocking annotation-step family plus the new-pnpm-major
+> raise). If you touch `.github/workflows/update.yml`,
+> `dev/scripts/update-common.sh`, `dev/scripts/update-input.sh`,
+> `dev/scripts/update-pkg.sh`, or the PR creation logic, and this fragment isn't
+> updated in the same commit, stop and fix it.
 
 ### Design: Renovate-style per-dependency PRs
 
@@ -57,6 +63,42 @@ branch with commits ahead of the base SHA:
 
 On re-run, branches are force-updated and PRs are reused. Same behavior as
 Renovate's rebasing strategy, with the same `rebaseWhen: conflicted` exception.
+
+#### Phase 2 runs on `always()` — a timeout must not discard finished work
+
+This step carries `if: always()`, and that is load-bearing rather than
+defensive. Without it a sweep that runs out of wall clock throws away every
+dependency it had already finished.
+
+Measured on run `30713330569`: ninja was `cancelled` at the 60-minute
+`timeout-minutes` with **47 of 52 edges already done**, this step was `skipped`,
+and all of it was discarded — including a `glab` branch that had correctly
+regenerated its extracted sidecar. The `if: always()` steps AFTER it every one
+reported `success` in that same run, which is the evidence the condition is
+honoured on a timeout and not only on a plain failure.
+
+Publishing a partial sweep is safe because of where each target commits: a
+target commits into its own worktree branch only AFTER its build verification
+passes. A killed ninja therefore leaves every branch either at the base commit
+(skipped by the base-SHA guard) or carrying a complete, verified commit. There
+is no half-written state to publish.
+
+**The sentinel is what makes this safe, and it moved.** `ninja-completed.flag`
+now requires BOTH that ninja itself succeeded (`steps.ninja.outcome`, read
+through `env:`) and that the push loop exited cleanly — reaching the end of the
+loop no longer implies the sweep was complete. Getting that wrong is
+destructive, not untidy: the close step DELETES any `update/*` PR missing from
+`touched-branches`, so a sentinel written after a partial sweep would close
+exactly the PRs whose targets never got to run.
+
+**Do not substitute raising `timeout-minutes` for this.** It cannot help the
+resource-exhaustion death described under the evaluator budget below — that one
+reports `failure`, not `cancelled` — and even for a genuine time bound it only
+moves the cliff. This removes it.
+
+One honest limitation: a cancelled job gets a finite grace period, so a sweep
+with very many branches to push could still be cut off mid-loop. That degrades
+to "some dependencies landed" instead of "none", which is the point.
 
 **Phase 3 — Validation** (triggered automatically):
 
