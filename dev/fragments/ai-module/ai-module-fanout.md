@@ -1,18 +1,19 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-01 (commit pending — Codex lowers shared and
-> per-app skills to `.agents/skills` in both backends). Prior: 2026-08-01
-> (commit 444a6f97 — Codex degrades scoped instructions and rules to explicit
-> prose, supports opt-out through `skipIfUnsupported`, and rejects generated
-> AGENTS.md content over its configurable byte limit). Prior: 2026-08-01 (commit
-> c6b1b31e — Codex lowers shared and per-app context, instructions, and unscoped
-> Markdown rules into global HM and project-local devenv AGENTS.md files).
-> Prior: 2026-08-01 (commit 914096a8 — Codex joins the factory with an
-> enable/package-only vertical in both backends). Prior: 2026-07-27 (commit
-> pending — re-points the claude-code wrapping cite from
-> `packages/ai-clis/claude-code.nix`, a path that no longer exists, to
-> `overlays/claude-code.nix`; prior 2026-04-08, A10 delete modules/ tree). If
-> you change the gating, the `programs.*.enable` flipping, or the
+> **Last verified:** 2026-08-01 (commit pending — Codex statically lowers a
+> typed/freeform settings surface to user and trusted-project config.toml).
+> Prior: 2026-08-01 (commit 4562252c — Codex lowers shared and per-app skills to
+> `.agents/skills` in both backends). Prior: 2026-08-01 (commit 444a6f97 — Codex
+> degrades scoped instructions and rules to explicit prose, supports opt-out
+> through `skipIfUnsupported`, and rejects generated AGENTS.md content over its
+> configurable byte limit). Prior: 2026-08-01 (commit c6b1b31e — Codex lowers
+> shared and per-app context, instructions, and unscoped Markdown rules into
+> global HM and project-local devenv AGENTS.md files). Prior: 2026-08-01 (commit
+> 914096a8 — Codex joins the factory with an enable/package-only vertical in
+> both backends). Prior: 2026-07-27 (commit pending — re-points the claude-code
+> wrapping cite from `packages/ai-clis/claude-code.nix`, a path that no longer
+> exists, to `overlays/claude-code.nix`; prior 2026-04-08, A10 delete modules/
+> tree). If you change the gating, the `programs.*.enable` flipping, or the
 > cross-ecosystem data flow in the per-package factories
 > (`packages/*/lib/mk*.nix`) or shared options (`lib/ai/sharedOptions.nix`) and
 > this fragment isn't updated in the same commit, stop and fix it.
@@ -31,7 +32,7 @@ sole gate for that ecosystem's fanout:
 | Consumer sets              | What fires                                                            |
 | -------------------------- | --------------------------------------------------------------------- |
 | `ai.claude.enable = true`  | claude fanout block + `programs.claude-code.enable = mkDefault true`  |
-| `ai.codex.enable = true`   | Codex package + native AGENTS.md and `.agents/skills` fanout          |
+| `ai.codex.enable = true`   | Codex package + AGENTS.md, skills, and config.toml fanout             |
 | `ai.copilot.enable = true` | copilot fanout block + `programs.copilot-cli.enable = mkDefault true` |
 | `ai.kiro.enable = true`    | kiro fanout block + `programs.kiro-cli.enable = mkDefault true`       |
 
@@ -75,6 +76,13 @@ The ai module fans out TWO kinds of configuration:
 - `ai.claude.package` / `ai.codex.package` / `ai.copilot.package` /
   `ai.kiro.package` — package override; Codex installs it directly while the
   established runtimes route it through their native factory wiring.
+- `ai.codex.settings` — typed stable keys plus a TOML-compatible native freeform
+  tail. Home Manager writes `${configDir}/config.toml`; devenv writes
+  trusted-project `.codex/config.toml`. Null/empty typed defaults emit no file.
+  Devenv rejects provider, profile, notification, and telemetry keys that Codex
+  documents as ignored at project scope. Static ownership is deliberate: native
+  MCP/feature editors cannot coexist with the managed file; mixed-file
+  reconciliation remains a separate concern.
 
 **Cross-ecosystem options** (live at `ai.*` top level, fan out to every enabled
 ecosystem simultaneously):
