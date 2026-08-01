@@ -622,7 +622,20 @@ finished="$root/done"                     # *.task files completed
 events="$root/events"                     # per-worker append-only audit log
 mkdir -p "$queue" "$claimed" "$finished" "$events"
 
-ev() { printf '%s w%s %s\n' "$(date +%s.%N)" "$n" "$*" >>"$events/w$n.log"; }
+# Portable epoch timestamp. `date +%N` is GNU-only — BSD/macOS date emits a
+# literal "N", which would silently break the `sort -n` analysis in §13.
+now() {
+  local t
+  if [ -n "${EPOCHREALTIME:-}" ]; then    # bash >= 5; locale may use a comma
+    printf '%s\n' "${EPOCHREALTIME/,/.}"
+    return 0
+  fi
+  t="$(date +%s.%N)"
+  case "$t" in *.N) t="${t%.N}" ;; esac   # no sub-second resolution available
+  printf '%s\n' "$t"
+}
+
+ev() { printf '%s w%s %s\n' "$(now)" "$n" "$*" >>"$events/w$n.log"; }
 
 ev iter-start   # durable trace: without this, no-ops are undetectable (§4.4)
 
@@ -640,7 +653,7 @@ done
 if [ -z "$mine" ]; then
   # Nothing claimable. Only drain if nothing is in flight, otherwise a running
   # task could still inject new work after we quit. See §9.3.
-  inflight="$(find "$claimed" -name '*.task' -type f | wc -l)"
+  inflight="$(find "$claimed" -name '*.task' -type f | wc -l | tr -d ' ')"
   if [ "$inflight" -eq 0 ]; then
     ev drain
     printf '{"drained": true}\n' >"$root/w$n-done.json"   # the stop condition
@@ -942,6 +955,12 @@ than anything labelled Measured, and verify before depending on it:
 The probes coordinated through a queue directory and per-worker append-only
 event logs of the form `<timestamp> w<N> <event> <task>` (§9.2), which is what
 made after-the-fact analysis possible.
+
+Sub-second resolution needs either bash 5 (`EPOCHREALTIME`) or GNU `date`. On a
+system with neither, §9.2's `now()` degrades to whole seconds — the logs still
+sort numerically and the sweep below still works, but the overhead figures in
+§6.1 would be too coarse to reproduce, since the gaps being measured are
+single-digit seconds.
 
 **Peak concurrency**, by sweep over claim/done intervals — the source of every
 "peak" figure in §6:
