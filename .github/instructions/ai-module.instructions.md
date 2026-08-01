@@ -85,8 +85,8 @@ ecosystem simultaneously):
 - `ai.skills` — attrset of name → directory path. Each enabled ecosystem gets
   its native representation (Claude: `.claude/skills/<name>` symlink; Copilot
   and Kiro: native `skills` option on their module).
-- `ai.instructions` — attrset of name → `instructionModule` (text + optional
-  path scoping + description). Transformed per ecosystem via
+- `ai.instructions` — list of instruction records (text plus optional name, path
+  scoping, and description). Transformed per ecosystem via
   `fragments-ai.passthru.transforms`: Claude gets `.claude/rules/<name>.md` with
   YAML frontmatter; Copilot gets `.github/instructions/<name>.instructions.md`;
   Kiro gets `.kiro/steering/<name>.md` (via the CLI module); Codex concatenates

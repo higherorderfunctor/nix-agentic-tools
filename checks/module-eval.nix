@@ -499,6 +499,38 @@ in {
       && !(empty.config.home.file ? ".codex/AGENTS.md")
   );
 
+  module-codex-empty-path-context-does-not-prefix-separator = mkTest "codex-empty-path-context-does-not-prefix-separator" (
+    let
+      evaluated = evalHm {
+        ai = {
+          codex.enable = true;
+          context = ./fixtures/empty;
+          instructions = [{text = "Instruction";}];
+        };
+      };
+    in
+      evaluated.config.home.file.".codex/AGENTS.md".text == "Instruction"
+  );
+
+  module-codex-configdir-rejects-unsafe-paths = mkTest "codex-configdir-rejects-unsafe-paths" (
+    let
+      accepts = configDir:
+        (builtins.tryEval
+          (evalHm {
+            ai.codex = {
+              inherit configDir;
+              enable = true;
+            };
+          }).config.ai.codex.configDir)
+        .success;
+    in
+      accepts ".codex"
+      && !(accepts "")
+      && !(accepts "/tmp/codex")
+      && !(accepts "../codex")
+      && !(accepts "config/../codex")
+  );
+
   module-codex-path-instruction-resolves = mkTest "codex-path-instruction-resolves" (
     let
       evaluated = evalHm {

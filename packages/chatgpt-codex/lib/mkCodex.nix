@@ -19,6 +19,10 @@
       if cfg.context != null
       then cfg.context
       else topContext;
+    contextText =
+      if effectiveContext == null
+      then ""
+      else resolveText effectiveContext;
     instructionChunks = map (instruction: let
       marker = lib.optionalString (instruction ? name) "<!-- instruction: ${instruction.name} -->\n";
     in
@@ -32,7 +36,7 @@
         // {text = resolveText rule.text;}))
     mergedRules;
     chunks =
-      lib.optional (effectiveContext != null && effectiveContext != "") (resolveText effectiveContext)
+      lib.optional (contextText != "") contextText
       ++ instructionChunks
       ++ ruleChunks;
   in
@@ -60,7 +64,11 @@ in
 
     options = {
       configDir = lib.mkOption {
-        type = lib.types.str;
+        type = lib.types.addCheck lib.types.str (value:
+          value
+          != ""
+          && !(lib.hasPrefix "/" value)
+          && !(builtins.elem ".." (lib.splitString "/" value)));
         default = ".codex";
         description = ''
           Codex configuration directory relative to HOME. Home Manager writes
