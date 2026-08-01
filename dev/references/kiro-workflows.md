@@ -38,9 +38,10 @@ until you have.
 It is reachable two ways, and an earlier version of this section wrongly claimed
 only the second existed:
 
-- **A `/workflow` slash-command family in the TUI**, all seven entries gated on
-  the same `workflows` rollout feature (§1.1). Two are visible in the palette
-  and five are `hidden`:
+- **Seven feature-gated slash commands in the TUI**, all keyed on the same
+  `workflows` rollout feature (§1.1) — six `/workflow*` commands plus `/goal`,
+  which shares the flag without sharing the prefix. Two are visible in the
+  palette and five are `hidden`:
 
   | command            | description                                 | visible |
   | ------------------ | ------------------------------------------- | ------- |
@@ -1580,9 +1581,9 @@ Still untested, and to be treated as weaker than anything labelled Measured:
 - **Six of the seven bundled recipes.** Only `investigate` was run, and only far
   enough to establish input handling (§4.1). `autoresearch` and `ralph` are
   autonomous loops that commit and should not be probed casually.
-- **The `/workflow` command family** (§1) — read out of the TUI registry, not
-  driven. Every measurement here came through the agent-facing tools under ACP,
-  where those commands do not exist.
+- **The seven feature-gated slash commands** (§1) — read out of the TUI
+  registry, not driven. Every measurement here came through the agent-facing
+  tools under ACP, where those commands do not exist.
 
 ## 13. Reproducing the measurements
 
