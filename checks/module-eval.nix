@@ -509,6 +509,131 @@ in {
       builtins.any (assertion: !assertion.assertion && lib.hasInfix "skills 'duplicate'" assertion.message) evaluated.config.assertions
   );
 
+  module-codex-empty-settings-emits-no-toml = mkTest "codex-empty-settings-emits-no-toml" (
+    let
+      hm = evalHm {ai.codex.enable = true;};
+      devenv = evalDevenv {ai.codex.enable = true;};
+    in
+      !(hm.config.home.file ? ".codex/config.toml")
+      && !(devenv.config.files ? ".codex/config.toml")
+  );
+
+  module-codex-settings-rendering-parity = mkTest "codex-settings-rendering-parity" (
+    let
+      config.ai.codex = {
+        enable = true;
+        settings = {
+          features = {
+            memories = true;
+            speculative_future_flag = false;
+          };
+          model = "custom-provider/model";
+          model_reasoning_effort = "ultra";
+          model_verbosity = "low";
+          personality = "pragmatic";
+          web_search = "indexed";
+        };
+      };
+      hm = evalHm config;
+      devenv = evalDevenv config;
+      expected = {
+        features = {
+          memories = true;
+          speculative_future_flag = false;
+        };
+        model = "custom-provider/model";
+        model_reasoning_effort = "ultra";
+        model_verbosity = "low";
+        personality = "pragmatic";
+        web_search = "indexed";
+      };
+      hmSource = hm.config.home.file.".codex/config.toml".source;
+      devenvSource = devenv.config.files.".codex/config.toml".source;
+    in
+      hmSource.value
+      == expected
+      && devenvSource.value == expected
+  );
+
+  module-codex-settings-toml-syntax = let
+    evaluated = evalHm {
+      ai.codex = {
+        enable = true;
+        settings = {
+          features.memories = true;
+          model = "custom-provider/model";
+          model_reasoning_effort = "high";
+        };
+      };
+    };
+    source = evaluated.config.home.file.".codex/config.toml".source;
+  in
+    pkgs.runCommand "module-test-codex-settings-toml-syntax" {} ''
+      ${pkgs.gnugrep}/bin/grep -Fqx 'model = "custom-provider/model"' ${source}
+      ${pkgs.gnugrep}/bin/grep -Fqx 'model_reasoning_effort = "high"' ${source}
+      ${pkgs.gnugrep}/bin/grep -Fqx '[features]' ${source}
+      ${pkgs.gnugrep}/bin/grep -Fqx 'memories = true' ${source}
+      touch "$out"
+    '';
+
+  module-codex-settings-enums-reject-invalid = mkTest "codex-settings-enums-reject-invalid" (
+    let
+      accepts = name: value:
+        (builtins.tryEval
+          (evalHm {
+            ai.codex = {
+              enable = true;
+              settings.${name} = value;
+            };
+          }).config.home.file.".codex/config.toml".source.value)
+        .success;
+      acceptsFeature = name: value:
+        (builtins.tryEval
+          (evalHm {
+            ai.codex = {
+              enable = true;
+              settings.features.${name} = value;
+            };
+          }).config.home.file.".codex/config.toml".source.value)
+        .success;
+    in
+      accepts "model_reasoning_effort" "max"
+      && accepts "personality" "friendly"
+      && accepts "web_search" "live"
+      && acceptsFeature "memories" true
+      && acceptsFeature "speculative_future_flag" false
+      && !(accepts "model_reasoning_effort" "extreme")
+      && !(accepts "personality" "verbose")
+      && !(accepts "web_search" "enabled")
+      && !(acceptsFeature "memories" "yes")
+      && !(acceptsFeature "speculative_future_flag" "no")
+  );
+
+  module-codex-project-settings-reject-ignored-keys = mkTest "codex-project-settings-reject-ignored-keys" (
+    let
+      devenv = evalDevenv {
+        ai.codex = {
+          enable = true;
+          settings = {
+            model_provider = "custom";
+            notify = ["notify-send"];
+          };
+        };
+      };
+      hm = evalHm {
+        ai.codex = {
+          enable = true;
+          settings.model_provider = "custom";
+        };
+      };
+      failed = lib.findFirst (assertion: !assertion.assertion) null devenv.config.assertions;
+    in
+      failed
+      != null
+      && lib.hasInfix "model_provider, notify" failed.message
+      && hm.config.home.file.".codex/config.toml".source.value.model_provider == "custom"
+  );
+
   module-codex-agentsmd-fanout = mkTest "codex-agentsmd-fanout" (
     let
       config = {

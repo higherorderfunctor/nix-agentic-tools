@@ -4,7 +4,38 @@
   pkgs,
   ...
 }: let
+  codexExtracted = builtins.fromJSON (builtins.readFile ../../../overlays/chatgpt-codex-extracted.json);
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+  tomlFormat = pkgs.formats.toml {};
+
+  stableFeatureNames = map (feature: feature.name) (
+    builtins.filter (feature: feature.maturity == "stable") codexExtracted.features
+  );
+  reasoningEffortLevels = lib.unique (
+    lib.concatMap (model: model.reasoningLevels) codexExtracted.models
+  );
+
+  cleanToml = value:
+    if builtins.isAttrs value
+    then
+      lib.filterAttrs (_: nested: nested != null && nested != {})
+      (lib.mapAttrs (_: cleanToml) value)
+    else if builtins.isList value
+    then map cleanToml value
+    else value;
+
+  projectIgnoredKeys = [
+    "apps_mcp_product_sku"
+    "chatgpt_base_url"
+    "experimental_realtime_ws_base_url"
+    "model_provider"
+    "model_providers"
+    "notify"
+    "openai_base_url"
+    "otel"
+    "profile"
+    "profiles"
+  ];
 
   resolveText = value:
     if builtins.isPath value
@@ -143,6 +174,63 @@ in
           before Codex can silently truncate content beyond this limit.
         '';
       };
+      settings = lib.mkOption {
+        type = lib.types.submodule {
+          freeformType = tomlFormat.type;
+          options = {
+            features = lib.mkOption {
+              type = lib.types.submodule {
+                freeformType = lib.types.attrsOf lib.types.bool;
+                options = lib.genAttrs stableFeatureNames (_:
+                  lib.mkOption {
+                    type = lib.types.nullOr lib.types.bool;
+                    default = null;
+                  });
+              };
+              default = {};
+              description = ''
+                Codex feature toggles. Stable flags extracted from the pinned
+                binary are typed; additional boolean flags remain available
+                for experimental and forward-compatible use.
+              '';
+            };
+            model = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              description = ''
+                Default Codex model. The pinned binary's model catalog is a
+                non-enforcing hint because account and provider availability
+                can add valid model identifiers dynamically.
+              '';
+            };
+            model_reasoning_effort = lib.mkOption {
+              type = lib.types.nullOr (lib.types.enum reasoningEffortLevels);
+              default = null;
+              description = ''
+                Default reasoning effort for supported models. Values come
+                from the model metadata extracted from the pinned binary.
+              '';
+            };
+            personality = lib.mkOption {
+              type = lib.types.nullOr (lib.types.enum ["friendly" "none" "pragmatic"]);
+              default = null;
+              description = "Default communication style for supported models.";
+            };
+            web_search = lib.mkOption {
+              type = lib.types.nullOr (lib.types.enum ["cached" "disabled" "indexed" "live"]);
+              default = null;
+              description = "Codex web-search mode.";
+            };
+          };
+        };
+        default = {};
+        description = ''
+          Codex config.toml settings. Common stable keys are typed; unknown
+          TOML-compatible keys are accepted as a native escape hatch. Home
+          Manager writes user config, while devenv writes trusted-project
+          config and rejects keys Codex ignores at project scope.
+        '';
+      };
     };
 
     hm.config = {
@@ -154,6 +242,7 @@ in
       ...
     }: let
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
+      settings = cleanToml cfg.settings;
     in {
       assertions =
         mkPathAssertions {inherit mergedInstructions mergedRules;}
@@ -165,6 +254,9 @@ in
           "${cfg.configDir}/AGENTS.md".text = agentsMd;
         })
         (helpers.mkSkillEntries ".agents" mergedSkills)
+        (lib.mkIf (settings != {}) {
+          "${cfg.configDir}/config.toml".source = tomlFormat.generate "codex-config.toml" settings;
+        })
       ];
       home.packages = [cfg.package];
     };
@@ -178,17 +270,30 @@ in
       ...
     }: let
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
+      settings = cleanToml cfg.settings;
+      ignoredSettings = lib.intersectLists projectIgnoredKeys (builtins.attrNames settings);
     in {
       assertions =
         mkPathAssertions {inherit mergedInstructions mergedRules;}
         ++ [
           (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
+          {
+            assertion = ignoredSettings == [];
+            message = ''
+              ai.codex.settings contains keys Codex ignores in project config:
+              ${lib.concatStringsSep ", " ignoredSettings}. Move them to the
+              Home Manager user-level configuration.
+            '';
+          }
         ];
       files = lib.mkMerge [
         (lib.mkIf (agentsMd != "") {
           "AGENTS.md".text = agentsMd;
         })
         (helpers.mkDevenvSkillEntries ".agents" mergedSkills)
+        (lib.mkIf (settings != {}) {
+          ".codex/config.toml".source = tomlFormat.generate "codex-project-config.toml" settings;
+        })
       ];
       packages = [cfg.package];
     };
