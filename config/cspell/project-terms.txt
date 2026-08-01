@@ -21,6 +21,7 @@ attrsets
 aubut
 autologin
 automemory
+autoresearch
 autosquash
 autostash
 autoupdater
