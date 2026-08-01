@@ -335,14 +335,19 @@ rec {
   # that the result is non-empty.
   kiroRolloutExtractScript = pkgs:
     pkgs.writeText "kiro-rollout-extract.py" ''
-      import json, re, sys
+      import json, mmap, re, sys
 
-      data = open(sys.argv[1], "rb").read()
+      # mmap for the same reason the patcher uses it: the input is a ~556 MB
+      # ELF and read() would peak that much RSS on a builder to scan for a few
+      # hundred bytes of manifest. `re` scans the mapping through the buffer
+      # protocol, so nothing is materialized.
       ent = re.compile(
           rb'\n  "([a-z0-9_]+)": \{\n    "description": "[^"]*",\n'
           rb'    "treatment_percent": \d+'
       )
-      names = sorted({m.decode() for m in ent.findall(data)})
+      with open(sys.argv[1], "rb") as fh:
+          with mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+              names = sorted({m.decode() for m in ent.findall(mm)})
 
       required = {"tangent", "workflows"}
       missing = sorted(required - set(names))
