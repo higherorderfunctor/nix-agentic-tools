@@ -470,12 +470,9 @@ in {
       expected = builtins.concatStringsSep "\n\n" [
         "Codex context"
         "Shared instruction"
-        ''          <!-- instruction: local -->
-          Local instruction''
-        ''          <!-- rule: alpha -->
-          Alpha rule''
-        ''          <!-- rule: zeta -->
-          Zeta rule''
+        "<!-- instruction: local -->\nLocal instruction"
+        "<!-- rule: alpha -->\nAlpha rule"
+        "<!-- rule: zeta -->\nZeta rule"
       ];
     in
       hm.config.home.file.".codex/AGENTS.md".text
