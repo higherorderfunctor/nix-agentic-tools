@@ -319,7 +319,9 @@ rec {
   # trigger absent from the candidate universe is invisible here — the impure
   # docs-diff (deferred) covers that; grow `candidates` from the docs on a new one.
   #   bin:  absolute path to the kiro chat binary (`.kiro-cli-chat-wrapped`).
-  #   pkgs: nixpkgs set (gnugrep, coreutils, jq).
+  #   pkgs: nixpkgs set (gnugrep, coreutils, jq, python3 — python3 drives the
+  #         rollout-manifest extraction, which is not expressible as a
+  #         line-oriented grep because the entries span newlines).
   #   dest: output path (default "/dev/stdout"; pass "$out" in runCommand).
   # Reads the rollout manifest the kiro chat binary carries in rodata and emits
   # its feature NAMES as a JSON array. Genuinely extracted, never curated: the
@@ -423,7 +425,12 @@ rec {
     script = pkgs.writeText "kiro-rollout-patch.py" ''
       import os, re, sys
 
-      features = [f for f in sys.argv[1].split(",") if f]
+      # De-duplicated, order preserved. The module already calls lib.unique,
+      # but this helper is callable on its own, and a repeated feature would
+      # otherwise re-patch an already-patched entry (harmless, since the
+      # rewrite is idempotent) and double its reported site count (not
+      # harmless — that count is the drift signal).
+      features = list(dict.fromkeys(f for f in sys.argv[1].split(",") if f))
       root = sys.argv[2]
       MARKER = b'"treatment_percent"'
 

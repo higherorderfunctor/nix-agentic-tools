@@ -200,6 +200,21 @@
         message = "ai.kiro: cannot set both inline hooks (`hooks`/`hooksJson`) and `hooksDir` — choose one.";
       }
       (hookNameAssertion cfg)
+      {
+        # An overridden `package` need not carry the overlay's passthru, and
+        # without this the failure is a bare "attribute 'withRolloutFeatures'
+        # missing" pointing at factory internals rather than at the two
+        # options the consumer actually set.
+        assertion =
+          cfg.unlockedRolloutFeatures == [] || cfg.package ? withRolloutFeatures;
+        message = ''
+          ai.kiro: `unlockedRolloutFeatures` needs a `package` exposing
+          `passthru.withRolloutFeatures`, which `pkgs.ai.kiro-cli` from this
+          flake's overlay provides. The configured `package` does not, so it
+          cannot be patched. Either drop `unlockedRolloutFeatures` or set
+          `package` back to an overlay-provided kiro-cli.
+        '';
+      }
     ]
     ++ materializeLib.mkEntryAssertions {
       app = "kiro";
@@ -348,10 +363,13 @@
   # `cfg.package` is evaluated either way, which is what keeps the unfree guard
   # honest: `pkgs.ai.kiro-cli` is an `ensureUnfreeCheck` symlinkJoin, so
   # check-meta fires on it before `withRolloutFeatures` is ever reached.
+  # `lib.unique` so a duplicated entry cannot fork the derivation against an
+  # otherwise-identical config — ["workflows"] and ["workflows" "workflows"]
+  # must reach the same store path, not two.
   resolvePackage = cfg:
     if cfg.unlockedRolloutFeatures == []
     then cfg.package
-    else cfg.package.withRolloutFeatures cfg.unlockedRolloutFeatures;
+    else cfg.package.withRolloutFeatures (lib.unique cfg.unlockedRolloutFeatures);
 in
   lib.ai.app.mkAiApp {
     name = "kiro";

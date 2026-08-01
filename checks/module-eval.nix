@@ -2394,6 +2394,65 @@ in {
       lib.any (p: (p.drvPath or null) == pkgs.ai.kiro-cli.drvPath) packages
   );
 
+  # A duplicated entry must NOT fork the derivation — otherwise two configs
+  # that mean the same thing produce two store paths and two 556 MB builds.
+  module-kiro-rollout-dedupes-features = mkTest "kiro-rollout-dedupes-features" (
+    let
+      drvOf = features: let
+        packages =
+          (evalHm {
+            ai.kiro = {
+              enable = true;
+              v3 = true;
+              unlockedRolloutFeatures = features;
+            };
+          })
+          .config
+          .home
+          .packages or [
+          ];
+      in
+        lib.head (map (p: p.drvPath) (lib.filter (p: (p.name or "") == "kiro-cli-wrapped") packages));
+    in
+      drvOf ["workflows"] == drvOf ["workflows" "workflows"]
+  );
+
+  # A `package` without the overlay's passthru cannot be patched. Assert the
+  # failure is the NAMED one rather than a bare "attribute missing" pointing
+  # into factory internals.
+  module-kiro-rollout-rejects-package-without-passthru = mkTest "kiro-rollout-rejects-package-without-passthru" (
+    let
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          package = pkgs.hello;
+          unlockedRolloutFeatures = ["workflows"];
+        };
+      };
+      asserts =
+        builtins.filter (a: lib.hasInfix "withRolloutFeatures" a.message)
+        (ev.config.assertions or []);
+    in
+      asserts != [] && (builtins.head asserts).assertion == false
+  );
+
+  # Positive control for the above — the same assertion must PASS on the
+  # overlay-provided package, or the negative proves only that it always fires.
+  module-kiro-rollout-accepts-overlay-package = mkTest "kiro-rollout-accepts-overlay-package" (
+    let
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          unlockedRolloutFeatures = ["workflows"];
+        };
+      };
+      asserts =
+        builtins.filter (a: lib.hasInfix "withRolloutFeatures" a.message)
+        (ev.config.assertions or []);
+    in
+      asserts != [] && (builtins.head asserts).assertion == true
+  );
+
   # Guards the sidecar wiring end to end: the option's enum is read from the
   # committed extraction, so an empty or malformed `rolloutFeatures` key would
   # otherwise surface only as a confusing type error at the consumer.
