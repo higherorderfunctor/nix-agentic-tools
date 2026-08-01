@@ -75,29 +75,31 @@
       inherit inputs final;
     };
     kiro-cli = kiroCliDrv;
-    # The canonical `workflows` unlock, exposed as a package for two reasons
-    # that turn out to be the same mechanism.
+    # The canonical `workflows` unlock, exposed as a package so CI can build
+    # exactly what the module resolves to.
     #
-    # CI COVERAGE. The build job runs `nix build .#packages.<system>` on BOTH
-    # matrix legs, so this is what puts the Darwin-only walk + codesign + exec
-    # assertion behind a REQUIRED check. Reachable only through
-    # `passthru.withRolloutFeatures`, the patched variant was invisible to CI
-    # and the Darwin path could regress unnoticed — which is precisely how it
-    # shipped broken in #640.
+    # CI COVERAGE. The dedicated `kiro-workflows-local` job builds this package
+    # on BOTH matrix legs, putting the Darwin-only walk + codesign + exec
+    # assertion in CI without Cachix credentials. Reachable only through
+    # `passthru.withRolloutFeatures`, the patched variant was previously
+    # invisible to CI and the Darwin path could regress unnoticed — which is
+    # precisely how it shipped broken in #640.
     #
-    # CONSUMER CACHE HITS. This wraps the very derivation
-    # `ai.kiro.unlockedRolloutFeatures = ["workflows"]` resolves to, so CI
-    # pushing it to cachix means a consumer enabling that option substitutes
-    # rather than building ~556 MB locally.
+    # LOCAL-ONLY DISTRIBUTION. This is deliberately excluded from the normal
+    # cache-writing package build. A separate CI job builds it on both systems
+    # without Cachix and with this repo's substituter removed, so the patched
+    # proprietary binary is tested but never distributed by this project.
+    # Consumers enabling `ai.kiro.unlockedRolloutFeatures = ["workflows"]`
+    # fetch the upstream release and realize this derivation locally.
     #
     # It rides `flatDrvs` so `guard` applies and the unfree check still fires.
     # Do NOT hoist it out of this attrset to dodge that — the raw
     # `withRolloutFeatures` result is deliberately UNGUARDED (see
     # overlays/kiro-cli.nix).
     #
-    # Steady state is a substitution, not a build. CI only builds this for real
-    # on a kiro-cli version bump — exactly when the upstream .app layout may
-    # have moved and the assertion is worth running.
+    # CI realizes it on every run (subject only to the runner's local store),
+    # including version bumps where the upstream .app layout may have moved and
+    # the assertion is most valuable.
     kiro-cli-workflows = kiroCliDrv.withRolloutFeatures ["workflows"];
     kiro-gateway = import ./kiro-gateway.nix {
       inherit inputs final;

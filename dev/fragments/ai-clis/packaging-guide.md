@@ -71,6 +71,16 @@ rather than the GitHub API, so it needs no token and cannot be rate-limited;
 prefer it over a hand-rolled `curl … api.github.com | jq -r .tag_name` version
 check.
 
+### Patched Kiro variants stay local
+
+`pkgs.ai.kiro-cli-workflows` exposes the same derivation selected by
+`ai.kiro.unlockedRolloutFeatures = ["workflows"]`, but CI deliberately excludes
+it from the cache-writing all-packages build. A separate Linux/Darwin job builds
+it with no Cachix credentials and with the project Cachix substituter removed.
+This preserves platform coverage for the rollout-manifest patch without
+distributing the resulting proprietary binary; opt-in consumers realize the
+patched derivation locally from Kiro's upstream release.
+
 ### The overrideAttrs Pattern
 
 kiro-cli overrides an existing nixpkgs package rather than defining a new

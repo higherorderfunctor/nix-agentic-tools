@@ -1,13 +1,17 @@
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-07-24 (commit pending — the `packagePaths` +
-> `devFragmentNames` registries dissolved into `config.fragments.categories`).
-> If you touch `lib/fragments.nix`, `config/fragment-categories.nix`,
-> `lib/fragments-registry.nix`, `dev/generate.nix`, `packages/fragments-ai/`, or
-> any content-package `passthru.fragments` surface and this fragment isn't
-> updated in the same commit, stop and fix it. This is a cross-cutting pipeline
-> — changes that look small in one file frequently ripple into generator outputs
-> for four ecosystems.
+> **Last verified:** 2026-08-01 (commit pending — generated instruction and
+> repo-document derivations remain flake packages but are excluded from the
+> authenticated all-packages build, preventing revision-by-revision Cachix churn
+> while `nix flake check` retains drift coverage). Prior: 2026-07-24 (the
+> `packagePaths` + `devFragmentNames` registries dissolved into
+> `config.fragments.categories`). If you touch `lib/fragments.nix`,
+> `config/fragment-categories.nix`, `lib/fragments-registry.nix`,
+> `dev/generate.nix`, `packages/fragments-ai/`, or any content-package
+> `passthru.fragments` surface and this fragment isn't updated in the same
+> commit, stop and fix it. This is a cross-cutting pipeline — changes that look
+> small in one file frequently ripple into generator outputs for four
+> ecosystems.
 
 ### The four layers
 
@@ -63,6 +67,18 @@ Concrete example: generating `.claude/rules/claude-code.md` from the
 
 The same composed fragment runs through `copilot`, `kiro`, and `agentsmd`
 transforms for the other outputs. Single source, four ecosystem shapes.
+
+### Generated outputs are not binary-cache artifacts
+
+The four `instructions-*` derivations and the `repo-contributing` /
+`repo-readme` derivations are buildable flake packages because generation tasks
+copy their formatted output into the working tree. They are repository-local
+render products, not consumer packages. The authenticated all-packages CI job
+therefore filters them out before invoking `nix-fast-build`; otherwise every
+source revision and platform uploads another nearly identical output to Cachix.
+`nix flake check` still builds the instruction drift check in a read-only-cache
+job, so excluding these outputs from the publishing job does not remove
+validation.
 
 ### The transforms in detail
 
