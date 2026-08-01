@@ -103,7 +103,15 @@ jobs:
         run: |
           nix run --inputs-from . nix-fast-build -- \
             --flake ".#packages.${{ matrix.system }}" \
-            --select 'packages: builtins.removeAttrs packages ["kiro-cli-workflows"]' \
+            --select 'packages: builtins.removeAttrs packages [
+              "instructions-agents"
+              "instructions-claude"
+              "instructions-copilot"
+              "instructions-kiro"
+              "kiro-cli-workflows"
+              "repo-contributing"
+              "repo-readme"
+            ]' \
             --skip-cached \
             --cachix-cache nix-agentic-tools \
             --no-link
