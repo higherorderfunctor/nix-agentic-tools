@@ -61,29 +61,13 @@ in
           "aarch64-darwin" = ver: "${manifestBase}/${ver}/darwin-arm64/claude";
         };
         # Regenerate the committed sidecar from the freshly-bumped binary
-        # in the SAME update/claude-code PR (no intra-PR drift). Builds the
-        # pure passthru.extracted against the just-written sources.json
-        # (dirty-tracked -> flake eval sees the new version) and copies it
-        # over the committed path. Single grep source (mkClaudeExtract via
-        # passthru) — DRY with the drift check.
-        extraExtract = ''
-          echo "claude-code: regenerating overlays/claude-code-extracted.json"
-          extracted=$(${ourPkgs.nix}/bin/nix build --no-link --print-out-paths \
-            ".#claude-code.passthru.extracted")
-          ${ourPkgs.coreutils}/bin/cp "$extracted" overlays/claude-code-extracted.json
-          ${ourPkgs.coreutils}/bin/chmod 644 overlays/claude-code-extracted.json
-          # jq (in mkClaudeExtract) pretty-prints every array multi-line;
-          # biome — the repo's JSON formatter via treefmt — collapses short
-          # arrays (e.g. effortLevels) onto one line. Without this pass the
-          # committed sidecar drifts from treefmt-clean and PR CI's
-          # checks.formatting fails. Format the working-tree copy through the
-          # flake formatter so it matches exactly what CI checks against. See
-          # .claude/rules/nix-standards.md § "format the working tree copy
-          # after cp". Build-gated by update-pkg.sh's safety net too, but the
-          # hook owns its output's shape even when run outside the pipeline.
-          ${ourPkgs.nix}/bin/nix fmt -- overlays/claude-code-extracted.json
-          echo "claude-code: wrote overlays/claude-code-extracted.json"
-        '';
+        # in the SAME update/claude-code PR (no intra-PR drift). See
+        # `vu.mkExtractRegen` for why the `nix fmt` pass is load-bearing.
+        extraExtract = vu.mkExtractRegen {
+          attr = "claude-code";
+          dest = "overlays/claude-code-extracted.json";
+          pkgs = ourPkgs;
+        };
         pkgs = ourPkgs;
       };
       # Pure grep of THIS package's own binary -> committed-sidecar shape.

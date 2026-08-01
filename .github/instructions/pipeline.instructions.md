@@ -7,11 +7,16 @@ applyTo: ".github/workflows/update.yml,config/fragment-categories.nix,config/gen
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-07-27 (commit pending — adds the three-valued
-> `git diff --quiet` rule and the `git_diff_quiet` helper every dirtiness gate
-> in the update scripts now goes through; the bare form had routed a git ERROR
-> into "there are changes" in `update-input.sh` and into "the tree is dirty" at
-> both of `update-pkg.sh`'s gates. Earlier: the
+> **Last verified:** 2026-08-01 (commit pending — documents the SECOND
+> `extraExtract` self-heal, `vu.mkExtractRegen`, alongside the hash one: which
+> failure it answers, that a red drift check reports a broken MECHANISM rather
+> than a stale file, why extracts get no `fix_sidecar_hashes`-style standalone
+> hatch, and how to tell "never wired" from "ran and failed". glab had no hook
+> at all, which stayed invisible from #560 until PR #621). Prior: 2026-07-27 —
+> adds the three-valued `git diff --quiet` rule and the `git_diff_quiet` helper
+> every dirtiness gate in the update scripts now goes through; the bare form had
+> routed a git ERROR into "there are changes" in `update-input.sh` and into "the
+> tree is dirty" at both of `update-pkg.sh`'s gates. Earlier: the
 > `Detect a newer @aihubmix/mcp on npm` annotation step and the
 > excluded-because-a-local-patch-cannot-be-swept rule behind it, which is about
 > SWEEPABILITY and not about lagging: aihubmix-mcp tracks `dist-tags.latest` and
@@ -451,6 +456,47 @@ Three properties are load-bearing:
 
 Exposure grew from zero to four Go packages in a single slice (`#513`), so this
 widens with every Go absorption.
+
+### Stale option-surface sidecars self-heal (`vu.mkExtractRegen`)
+
+The SECOND self-heal running through `extraExtract`, and the one to reach for
+when a bump PR fails `checks.<system>.<pkg>-extracted` rather than a build. Do
+not conflate the two: the section above repairs a HASH the sweep invalidated;
+this one keeps a committed `overlays/**/<pkg>-extracted.json` describing the
+artifact actually pinned.
+
+Four packages have a `passthru.extracted` — `chatgpt-codex`, `claude-code`,
+`glab`, `kiro-cli` — and each wires `vu.mkExtractRegen {attr, dest, pkgs}` into
+its `extraExtract`. It rebuilds `.#<attr>.passthru.extracted` against the
+just-written sidecar and copies it over `dest`, so the bump PR carries its own
+regenerated option surface and the drift check never sees a stale one.
+
+**Read a red drift check as "the self-heal did not run", not "this JSON is
+stale."** Hand-regenerating the file turns the check green and leaves the
+mechanism broken, so it goes red again on the next bump. That is exactly what
+happened to `glab`: it was the one extracted package that never wired the hook
+at all, invisible from #560 until its first version bump reddened PR #621.
+
+Diagnosing it from the pipeline side:
+
+- **`nix build .#<pkg>.updateScript --no-link --print-out-paths` and read the
+  tail.** The regeneration is the last thing in the emitted script. Absent means
+  the package never wired `extraExtract` — the glab failure mode. Present means
+  it ran and something inside it failed, which the target's
+  `.update-logs/<target>.log` will show.
+- **It fires on the VERSION-BUMP path only**, being spliced in after the sidecar
+  `mv` — the same limitation the hash self-heal has, and the reason that one
+  needs `fix_sidecar_hashes` as a standalone escape hatch. Extracts get no such
+  hatch on purpose: an extract that moves at an unchanged version means someone
+  edited the extractor, and the right response is to read that diff, not to
+  re-run a fixer.
+- **Ordering matters for an extract built FROM SOURCE.** `glab` is the only one:
+  its extract realizes `src` and `goModules`, which hold `lib.fakeHash` until
+  `fixHashes` has run, so `mkExtractRegen` is chained AFTER it. The other three
+  probe a prebuilt binary and have no hash to restore.
+- **A green drift check with a red `checks.formatting`** points at the `nix fmt`
+  step inside the hook, not at the extraction — see the sidecar-formatting note
+  earlier in this fragment.
 
 ### Sidecar logging and forensic preservation
 

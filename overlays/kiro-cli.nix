@@ -75,18 +75,12 @@
               };
               # Regenerate the committed hook-trigger sidecar from the freshly-bumped
               # binary in the SAME update/kiro-cli PR (no intra-PR drift), mirroring
-              # claude-code. Builds the pure passthru.extracted against the just-written
-              # sources.json and copies it over the committed path, then formats it
-              # through the flake formatter so it matches what checks.formatting checks.
-              extraExtract = ''
-                echo "kiro-cli: regenerating overlays/kiro-cli-extracted.json"
-                extracted=$(${ourPkgs.nix}/bin/nix build --no-link --print-out-paths \
-                  ".#kiro-cli.passthru.extracted")
-                ${ourPkgs.coreutils}/bin/cp "$extracted" overlays/kiro-cli-extracted.json
-                ${ourPkgs.coreutils}/bin/chmod 644 overlays/kiro-cli-extracted.json
-                ${ourPkgs.nix}/bin/nix fmt -- overlays/kiro-cli-extracted.json
-                echo "kiro-cli: wrote overlays/kiro-cli-extracted.json"
-              '';
+              # claude-code.
+              extraExtract = vu.mkExtractRegen {
+                attr = "kiro-cli";
+                dest = "overlays/kiro-cli-extracted.json";
+                pkgs = ourPkgs;
+              };
               pkgs = ourPkgs;
             };
 
