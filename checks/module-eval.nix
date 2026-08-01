@@ -301,13 +301,17 @@
     builtins.any (lib.hasInfix "claude-delegation-clamp") (clampCommands blocks);
 in {
   # ── Kiro launcher wrapper: flag injection ────────────────────────
-  # `--tui`/`--v3` are launcher-GLOBAL options, so they are PREPENDED —
-  # appended after a subcommand, clap parses them against that
-  # subcommand and rejects them ("unexpected argument '--tui'").
-  # Injection stays idempotent because both abort on repetition.
-  # Prepending walks the list in reverse, since each `set --` pushes
-  # onto the front, so [tui v3] must emit the v3 line first to land as
-  # `--tui --v3 "$@"`.
+  # Launcher-GLOBAL options are PREPENDED — appended after a subcommand,
+  # clap parses them against that subcommand and rejects them
+  # ("unexpected argument"). Injection stays idempotent because they
+  # abort on repetition. Prepending walks the list in reverse, since
+  # each `set --` pushes onto the front, so a two-flag list must emit
+  # the LAST one first to land in the written order.
+  #
+  # These exercise `lib/idempotentFlags.nix` generically, with `--tui`
+  # and `--v3` as sample flags — the two-flag ordering property is the
+  # point. The kiro wrapper itself injects only `--v3`; `ai.kiro.tui`
+  # was removed.
   #
   # These pin the SHAPE of the generated bash. What that bash does to a
   # real argv — including which SIDE of the subcommand a flag lands on
@@ -2583,7 +2587,7 @@ in {
       .packages)
     .success);
 
-  # devenv: with no tui/v3/trust and no env, the package is installed RAW (the
+  # devenv: with no v3/trust and no env, the package is installed RAW (the
   # shared wrapper returns the unwrapped derivation — no needless symlinkJoin).
   module-kiro-devenv-no-flags-no-wrap = mkTest "kiro-devenv-no-flags-no-wrap" (
     let

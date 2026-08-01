@@ -493,7 +493,7 @@ in
           How steering files are delivered. `copy` (default)
           materializes REAL files via generated writers — required
           because the Kiro v3 engine (the shipped default via
-          `--tui --v3`) silently drops symlinked steering files
+          `--v3`) silently drops symlinked steering files
           (kirodotdev/Kiro#9787), while the v2/classic engine follows
           them fine. `symlink` restores the legacy store-symlink
           delivery.
@@ -614,7 +614,7 @@ in
       };
       # V3 capability-based permissions -> `<configDir>/settings/permissions.yaml`.
       # Mirrors Kiro's `rules:` schema 1:1 (capability / effect / match /
-      # exclude). Under v3 (tui or v3) the v2 `trustedMcpTools` list is also
+      # exclude). Under v3 the v2 `trustedMcpTools` list is also
       # translated and merged in (see mkPermissionRules). HM-only: Kiro reads
       # permissions only from `~/.kiro/settings/` (global) or
       # `~/.kiro/workspace-roots/<hash>/`, never project `.kiro/`.
@@ -787,7 +787,7 @@ in
         flatSettings = aiCommon.flattenDotKeys filteredSettings;
 
         # HM's only export mechanism is the symlinkJoin wrapper, so env vars
-        # ride along with the --tui/--v3/--trust-tools flag appends. Shared
+        # ride along with the --v3/--trust-tools flag injections. Shared
         # wrapper helper (also used by the devenv backend).
         kiroPackage = wrapKiroPackage {
           inherit (cfg) v3 trustedMcpTools;
@@ -974,7 +974,7 @@ in
         lib.mkMerge ([
             # Package installation — devenv projects are shell-scoped, so
             # env exports go in the devenv `env` attrset directly (below), not
-            # through the wrapper. But `--tui`/`--v3`/`--trust-tools` still need
+            # through the wrapper. But `--v3`/`--trust-tools` still need
             # appending so `devenv shell` launches the v3 TUI like HM does, so we
             # reuse the shared wrapper with an empty env set.
             {
@@ -1036,7 +1036,7 @@ in
             # `entry.isFile()` entries) silently DROPS symlinked leaf files —
             # hooks and steering alike — while the v2/classic engine (Rust)
             # follows leaf symlinks fine. The shipped default IS v3 (this
-            # factory's wrapper appends `--tui --v3`), so symlinked delivery is
+            # factory's wrapper injects `--v3`), so symlinked delivery is
             # dead on arrival for v3 users. Upstream: kirodotdev/Kiro#9787
             # (confirmed live on 2.13.0). See the kiro-v3-hooks-workspace-local
             # finding + docs/plans/kiro-cli-auto-memory.md.
