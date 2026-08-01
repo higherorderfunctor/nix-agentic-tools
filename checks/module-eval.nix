@@ -445,6 +445,92 @@ in {
       && devenv.config.packages == [expected]
   );
 
+  module-codex-agentsmd-fanout = mkTest "codex-agentsmd-fanout" (
+    let
+      config = {
+        ai = {
+          codex = {
+            context = "Codex context";
+            enable = true;
+            instructions = [
+              {
+                name = "local";
+                text = "Local instruction";
+              }
+            ];
+            rules.zeta.text = "Zeta rule";
+          };
+          context = "Shared context";
+          instructions = [{text = "Shared instruction";}];
+          rules.alpha.text = "Alpha rule";
+        };
+      };
+      hm = evalHm config;
+      devenv = evalDevenv config;
+      expected = ''        Codex context
+
+        Shared instruction
+
+        <!-- instruction: local -->
+        Local instruction
+
+        <!-- rule: alpha -->
+        Alpha rule
+
+        <!-- rule: zeta -->
+        Zeta rule'';
+    in
+      hm.config.home.file.".codex/AGENTS.md".text
+      == expected
+      && devenv.config.files."AGENTS.md".text == expected
+      && !(lib.hasInfix "---" expected)
+  );
+
+  module-codex-context-fallback-and-empty-gate = mkTest "codex-context-fallback-and-empty-gate" (
+    let
+      hm = evalHm {
+        ai = {
+          codex.enable = true;
+          context = "Shared context";
+        };
+      };
+      empty = evalHm {ai.codex.enable = true;};
+    in
+      hm.config.home.file.".codex/AGENTS.md".text
+      == "Shared context"
+      && !(empty.config.home.file ? ".codex/AGENTS.md")
+  );
+
+  module-codex-scoped-rule-fails-loudly = mkTest "codex-scoped-rule-fails-loudly" (
+    let
+      evaluated = evalHm {
+        ai = {
+          codex.enable = true;
+          rules.scoped = {
+            paths = ["**/*.nix"];
+            text = "Scoped";
+          };
+        };
+      };
+    in
+      builtins.any (assertion: !assertion.assertion && lib.hasInfix "ai.codex.rules.scoped" assertion.message) evaluated.config.assertions
+  );
+
+  module-codex-rule-collision-fails = mkTest "codex-rule-collision-fails" (
+    let
+      evaluated = evalHm {
+        ai = {
+          codex = {
+            enable = true;
+            rules.duplicate.text = "Codex";
+          };
+          rules.duplicate.text = "Shared";
+        };
+      };
+    in
+      builtins.any (assertion: !assertion.assertion && lib.hasInfix "rules 'duplicate'" assertion.message) evaluated.config.assertions
+  );
+
   # ── glab ───────────────────────────────────────────────────────────
   module-glab-default-disabled = mkTest "glab-default-disabled" (
     !(evalHm {}).config.glab.enable && (evalHm {}).config.home.packages == []
