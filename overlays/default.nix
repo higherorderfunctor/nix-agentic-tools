@@ -78,12 +78,12 @@
     # The canonical `workflows` unlock, exposed as a package so CI can build
     # exactly what the module resolves to.
     #
-    # CI COVERAGE. The build job runs `nix build .#packages.<system>` on BOTH
-    # matrix legs, so this is what puts the Darwin-only walk + codesign + exec
-    # assertion behind a REQUIRED check. Reachable only through
-    # `passthru.withRolloutFeatures`, the patched variant was invisible to CI
-    # and the Darwin path could regress unnoticed — which is precisely how it
-    # shipped broken in #640.
+    # CI COVERAGE. The dedicated `kiro-workflows-local` job builds this package
+    # on BOTH matrix legs, putting the Darwin-only walk + codesign + exec
+    # assertion in CI without Cachix credentials. Reachable only through
+    # `passthru.withRolloutFeatures`, the patched variant was previously
+    # invisible to CI and the Darwin path could regress unnoticed — which is
+    # precisely how it shipped broken in #640.
     #
     # LOCAL-ONLY DISTRIBUTION. This is deliberately excluded from the normal
     # cache-writing package build. A separate CI job builds it on both systems
