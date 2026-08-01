@@ -932,8 +932,10 @@ agent turn**." Measured, with a `completion` whose file the step was forbidden
 to create:
 
 - the step ran its command, finished its turn, and was **nudged again**;
-- it re-ran the same command on every nudge — **8 invocations over ~70 s**, at
-  roughly 7–8 s intervals, each one a fresh timestamped line in its own log;
+- it re-ran the same command on every nudge — **at least 7 invocations**, at
+  roughly 8 s intervals, each one a fresh timestamped line in its own log. Seven
+  is the count read off the log at the moment of intervention, and further
+  invocations arrived after that, so treat it as a floor rather than a total;
 - between nudges the run reported `paused`,
   `Step '<id>' is waiting for the next user message.`;
 - writing the expected `{"done": true}` ended it immediately: the step completed
