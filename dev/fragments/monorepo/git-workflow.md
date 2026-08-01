@@ -1,16 +1,18 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-07-30 (commit pending — records that a re-request
-> issued while a review is still in flight is silently dropped, so the check
-> run, not the API response, is the confirmation). Prior: 2026-07-30 (commit
-> d42d805a) — records that the reviews and comments endpoints attribute
-> Copilot's output to DIFFERENT logins, so the documented
-> `copilot-pull-request-reviewer[bot]` filter returns zero on
-> `/pulls/N/comments` and reads as a clean review while gating threads are open;
-> measured on PR #614. Prior: 2026-07-29 — the ruleset now sets
-> `required_review_thread_resolution: true`, so an unresolved review thread
-> blocks merge including on auto-merging `update/*` PRs, and the claim that
-> Copilot "never gates its merge" is retired; adds the rule that Copilot's
+> **Last verified:** 2026-07-31 (commit pending — the Copilot review loop is the
+> agent's to START, unprompted, the moment the PR is open and non-draft; only
+> continuing past the 5-round cap needs the operator's say-so). Prior:
+> 2026-07-30 (commit pending — records that a re-request issued while a review
+> is still in flight is silently dropped, so the check run, not the API
+> response, is the confirmation). Prior: 2026-07-30 (commit d42d805a) — records
+> that the reviews and comments endpoints attribute Copilot's output to
+> DIFFERENT logins, so the documented `copilot-pull-request-reviewer[bot]`
+> filter returns zero on `/pulls/N/comments` and reads as a clean review while
+> gating threads are open; measured on PR #614. Prior: 2026-07-29 — the ruleset
+> now sets `required_review_thread_resolution: true`, so an unresolved review
+> thread blocks merge including on auto-merging `update/*` PRs, and the claim
+> that Copilot "never gates its merge" is retired; adds the rule that Copilot's
 > SUPPRESSED findings must be read on every review, since they create no thread;
 > gates re-review polling on `commit_id` rather than a timestamp, and caps the
 > fix-and-re-review loop at 5 rounds). Prior: 2026-07-24 — the bot's `update/*`
@@ -43,6 +45,11 @@ reviewer has an open question on it. A stalled update PR is not lost; the next
 4x/day sweep rebuilds and re-arms it.
 
 ### Copilot review: ALWAYS read the suppressed-comments block
+
+**This loop is yours to start, unprompted, as soon as the PR is non-draft — it
+is part of landing the change, not a follow-up the operator has to request.** A
+PR handed back with its review unread is unfinished work. Only continuing past
+the 5-round cap below needs explicit approval.
 
 Copilot records its findings in two places, and only one of them creates a
 thread:
@@ -152,7 +159,9 @@ why no fresh one is coming.
 
 Run at most **five** fix → push → re-trigger → verify rounds, then STOP and get
 explicit approval before continuing. Exit earlier if a round returns clean in
-BOTH buckets — that is the real terminus.
+BOTH buckets — that is the real terminus. The cap is the only place in this loop
+where approval is required: you enter round one without asking, and you leave
+round five without proceeding.
 
 The failure mode this prevents is not a bad round, it is a good one repeating.
 On PR #568 every round produced a genuine finding, so each was individually
@@ -231,10 +240,20 @@ silently resolves one level too deep, into
 4. Keep pushing as work lands. Flip draft → ready the moment it is dev-complete
    so review can start.
 
-5. Merges are squash merges. The operator performs them for **human** PRs; the
+5. **The moment the PR is open and non-draft, run the Copilot review loop on
+   your own initiative.** Nobody has to ask. Poll for the review on the head
+   commit, read BOTH buckets, fix what is real, reply, resolve each gating
+   thread, re-trigger, verify — the sections above say how. Handing back a
+   freshly-opened PR with an unread review is an incomplete task, not a
+   checkpoint: it makes the operator notice the review, chase it, and hand it
+   back to you, when you are the one still holding the context to act on it.
+   STARTING the loop needs no permission; only CONTINUING past the 5-round cap
+   does.
+
+6. Merges are squash merges. The operator performs them for **human** PRs; the
    bot's `update/*` PRs land themselves (next section).
 
-6. Tear the worktree down once merged:
+7. Tear the worktree down once merged:
 
    ```bash
    git worktree remove "$worktrees/<slug>"   # re-derive $worktrees if needed
