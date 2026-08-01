@@ -301,13 +301,17 @@
     builtins.any (lib.hasInfix "claude-delegation-clamp") (clampCommands blocks);
 in {
   # ── Kiro launcher wrapper: flag injection ────────────────────────
-  # `--tui`/`--v3` are launcher-GLOBAL options, so they are PREPENDED —
-  # appended after a subcommand, clap parses them against that
-  # subcommand and rejects them ("unexpected argument '--tui'").
-  # Injection stays idempotent because both abort on repetition.
-  # Prepending walks the list in reverse, since each `set --` pushes
-  # onto the front, so [tui v3] must emit the v3 line first to land as
-  # `--tui --v3 "$@"`.
+  # Launcher-GLOBAL options are PREPENDED — appended after a subcommand,
+  # clap parses them against that subcommand and rejects them
+  # ("unexpected argument"). Injection stays idempotent because they
+  # abort on repetition. Prepending walks the list in reverse, since
+  # each `set --` pushes onto the front, so a two-flag list must emit
+  # the LAST one first to land in the written order.
+  #
+  # These exercise `lib/idempotentFlags.nix` generically, with `--tui`
+  # and `--v3` as sample flags — the two-flag ordering property is the
+  # point. The kiro wrapper itself injects only `--v3`; `ai.kiro.tui`
+  # was removed.
   #
   # These pin the SHAPE of the generated bash. What that bash does to a
   # real argv — including which SIDE of the subcommand a flag lands on
@@ -2348,20 +2352,21 @@ in {
       lib.any (p: (p.name or "") == "kiro-cli-wrapped") packages
   );
 
-  # tui = true implies --v3 at the launcher (bare --tui is rejected on
-  # 2.8.1), so it must wrap. hasV3 = v3 || tui.
-  module-kiro-hm-tui-implies-v3-wraps = mkTest "kiro-hm-tui-implies-v3-wraps" (
-    let
-      result = evalHm {
-        ai.kiro = {
-          enable = true;
-          tui = true;
-        };
+  # The `tui` option is GONE. It injected `--tui` and implied `--v3`; `--tui`
+  # is redundant under v3 and is going away with it. Setting it must now be a
+  # hard eval error, not a silently-ignored key — otherwise a stale consumer
+  # config looks accepted while quietly losing the engine flag it depended on.
+  module-kiro-hm-tui-option-removed = mkTest "kiro-hm-tui-option-removed" (!(builtins.tryEval
+    (evalHm {
+      ai.kiro = {
+        enable = true;
+        tui = true;
       };
-      packages = result.config.home.packages or [];
-    in
-      lib.any (p: (p.name or "") == "kiro-cli-wrapped") packages
-  );
+    })
+      .config
+      .home
+      .packages)
+    .success);
 
   # devenv parity: v3 = true must wrap on devenv too, so `devenv shell` launches
   # the v3 engine like HM does (was HM-only before the shared wrapper). devenv
@@ -2508,6 +2513,43 @@ in {
       asserts != [] && (builtins.head asserts).assertion == true
   );
 
+  # `unlockedRolloutFeatures` without `v3` is INERT, and silently so — the
+  # binary really is patched, the option really is set, and the feature never
+  # appears. The assertion is all that stands between a consumer and a
+  # debugging session, so pin that it actually fires.
+  module-kiro-rollout-requires-v3 = mkTest "kiro-rollout-requires-v3" (
+    let
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          unlockedRolloutFeatures = ["workflows"];
+        };
+      };
+      asserts =
+        builtins.filter (a: lib.hasInfix "requires `v3 = true`" a.message)
+        (ev.config.assertions or []);
+    in
+      asserts != [] && (builtins.head asserts).assertion == false
+  );
+
+  # Positive control: the SAME assertion must pass once v3 is set, or the
+  # negative above would hold equally for an assertion that always fires.
+  module-kiro-rollout-v3-satisfies-assertion = mkTest "kiro-rollout-v3-satisfies-assertion" (
+    let
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          v3 = true;
+          unlockedRolloutFeatures = ["workflows"];
+        };
+      };
+      asserts =
+        builtins.filter (a: lib.hasInfix "requires `v3 = true`" a.message)
+        (ev.config.assertions or []);
+    in
+      asserts != [] && (builtins.head asserts).assertion == true
+  );
+
   # Guards the sidecar wiring end to end: the option's enum is read from the
   # committed extraction, so an empty or malformed `rolloutFeatures` key would
   # otherwise surface only as a confusing type error at the consumer.
@@ -2533,21 +2575,19 @@ in {
       lib.any (p: (p.name or "") == "kiro-cli-wrapped") packages
   );
 
-  # devenv parity: tui implies --v3, so it must wrap on devenv too.
-  module-kiro-devenv-tui-implies-v3-wraps = mkTest "kiro-devenv-tui-implies-v3-wraps" (
-    let
-      result = evalDevenv {
-        ai.kiro = {
-          enable = true;
-          tui = true;
-        };
+  # devenv parity for the removal: the option must be absent on both backends.
+  module-kiro-devenv-tui-option-removed = mkTest "kiro-devenv-tui-option-removed" (!(builtins.tryEval
+    (evalDevenv {
+      ai.kiro = {
+        enable = true;
+        tui = true;
       };
-      packages = result.config.packages or [];
-    in
-      lib.any (p: (p.name or "") == "kiro-cli-wrapped") packages
-  );
+    })
+      .config
+      .packages)
+    .success);
 
-  # devenv: with no tui/v3/trust and no env, the package is installed RAW (the
+  # devenv: with no v3/trust and no env, the package is installed RAW (the
   # shared wrapper returns the unwrapped derivation — no needless symlinkJoin).
   module-kiro-devenv-no-flags-no-wrap = mkTest "kiro-devenv-no-flags-no-wrap" (
     let
@@ -2623,7 +2663,7 @@ in {
       result = evalHm {
         ai.kiro = {
           enable = true;
-          tui = true;
+          v3 = true;
           trustedMcpTools = ["@openmemory" "@git-mcp/git_diff" "subagent" "use_aws"];
         };
       };

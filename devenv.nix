@@ -157,12 +157,29 @@ in {
     copilot.enable = true;
     kiro = {
       enable = true;
-      # Launch the v3 engine + new TUI from `devenv shell`. The wrapper
-      # PREPENDS `--v3` (a launcher-global option, so it reaches every
-      # subcommand including `acp`) and `--tui` for a bare launch or `chat`.
-      # Without this, devenv's kiro-cli ran the legacy engine, so
+      # Launch the v3 engine from `devenv shell`. The wrapper PREPENDS `--v3`,
+      # a launcher-global option, so it reaches every subcommand including
+      # `acp`. Without it devenv's kiro-cli ran the legacy engine and
       # hooks/slash-commands never loaded.
-      tui = true;
+      #
+      # This was `tui = true`. That option is now REMOVED: `--tui` selects the
+      # new TUI harness for the OLD engine, v3 already uses it, and it is going
+      # away with v3. It used to imply `--v3`, and that implication was
+      # load-bearing rather than decorative — bare `--tui` conflicts with the
+      # chat binary's default engine (v1) and the launcher supplies none — so
+      # `tui = true` only ever worked by dragging `--v3` along. Ask for the
+      # engine directly.
+      v3 = true;
+      # Dogfood the rollout unlock: surfaces `/workflow` and `/goal` plus the
+      # five bundled recipes. Inert without `v3` above, because workflow
+      # commands are only populated when the resolved engine is `kas` —
+      # patching the binary alone is not enough, and the failure is silent.
+      #
+      # Names come from `overlays/kiro-cli-extracted.json` (`rolloutFeatures`),
+      # extracted from the binary rather than curated. UNCERTIFIED upstream:
+      # `workflows` is documented as "Dark-shipped at 0% until release
+      # certification is complete".
+      unlockedRolloutFeatures = ["workflows"];
     };
 
     skills = let

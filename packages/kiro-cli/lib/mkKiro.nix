@@ -215,6 +215,29 @@
           `package` back to an overlay-provided kiro-cli.
         '';
       }
+      {
+        # Without this the misconfiguration is SILENT and costs a debugging
+        # session: the package really is patched, the option really is set, and
+        # the feature is simply never visible. Measured on a consumer repo that
+        # set `enable` + `unlockedRolloutFeatures` and nothing else.
+        #
+        # Two independent reasons it does nothing, neither of which errors:
+        #   1. `needsWrapper` keys off v3 / trustedMcpTools /
+        #      environmentVariables — NOT this option — so the package ships
+        #      unwrapped and nothing injects `--v3`.
+        #   2. Workflow slash-commands are populated only when the resolved
+        #      engine is `kas`; on the legacy engine they are filtered out.
+        assertion = cfg.unlockedRolloutFeatures == [] || cfg.v3;
+        message = ''
+          ai.kiro: `unlockedRolloutFeatures` requires `v3 = true`.
+
+          The features are surfaced only by the v3 (`kas`) engine, and nothing
+          else in this module injects `--v3`, so as configured the binary would
+          be patched and the features would stay invisible with no error.
+
+          Set `ai.kiro.v3 = true`, or drop `unlockedRolloutFeatures`.
+        '';
+      }
     ]
     ++ materializeLib.mkEntryAssertions {
       app = "kiro";
@@ -320,7 +343,7 @@
   #   "subagent"  -> { capability = subagent; }
   #   "use_aws" / other bare tokens -> dropped (aws_tool removed in v3)
   mkPermissionRules = cfg: let
-    hasV3 = cfg.v3 || cfg.tui;
+    hasV3 = cfg.v3;
     trusted = cfg.trustedMcpTools;
     mcpMatches = map (t: let
       body = lib.removePrefix "@" t;
@@ -469,8 +492,8 @@ in
         description = ''
           How steering files are delivered. `copy` (default)
           materializes REAL files via generated writers — required
-          because the Kiro v3 engine (the shipped default via
-          `--tui --v3`) silently drops symlinked steering files
+          because the Kiro v3 engine (selected by `--v3`, i.e.
+          `ai.kiro.v3`) silently drops symlinked steering files
           (kirodotdev/Kiro#9787), while the v2/classic engine follows
           them fine. `symlink` restores the legacy store-symlink
           delivery.
@@ -555,25 +578,29 @@ in
         default = {};
         description = "Environment variables exported when launching kiro (HM: via wrapper; devenv: via native env).";
       };
-      # Enable TUI mode — appends `--tui` to `kiro-cli`.
-      tui = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-        description = "Append --tui flag to the kiro-cli launcher (both backends wrap the binary; implies --v3).";
-      };
       # V3 next-gen agent — appends `--v3` to the top-level `kiro-cli`
-      # launcher. The granular `--agent-engine`/`--mode` flags live ONLY
-      # on the `chat` subcommand and are rejected by the launcher, so the
-      # launcher's sole engine selector is the `--v3` boolean. The new TUI
-      # requires v3 at the launcher (bare `--tui` is rejected on 2.8.1;
-      # `--tui --v3` is the working pair), so `tui = true` implies `--v3`.
+      # launcher. The granular `--agent-engine`/`--mode` flags live ONLY on the
+      # `chat` subcommand and are rejected by the launcher, so the launcher's
+      # sole engine selector is this boolean.
+      #
+      # There is deliberately NO `tui` option. One existed: it injected `--tui`
+      # and implied `--v3`, and that implication was load-bearing rather than
+      # decorative — bare `--tui` conflicts with the chat binary's default
+      # engine (v1 on 2.16.0) and the launcher supplies none of its own.
+      # `--tui` selects the new TUI harness for the OLD engine; v3 already uses
+      # that harness, so under v3 it is redundant, and it is going away with v3
+      # regardless. Anyone who wants it on an older engine passes it on the
+      # command line.
       v3 = lib.mkOption {
         type = lib.types.bool;
         default = false;
         description = ''
           Append `--v3` (next-generation Kiro agent) to the kiro-cli
-          launcher wrapper. Implied by `tui = true` (the new TUI is
-          rejected on the legacy engine). Applied by both backends.
+          launcher wrapper. Applied by both backends.
+
+          Required by `unlockedRolloutFeatures`: those features are surfaced
+          only by the v3 (`kas`) engine, so unlocking them without this patches
+          the binary and changes nothing observable.
         '';
       };
       # MCP tools to auto-approve — appends `--trust-tools=<csv>`
@@ -587,7 +614,7 @@ in
       };
       # V3 capability-based permissions -> `<configDir>/settings/permissions.yaml`.
       # Mirrors Kiro's `rules:` schema 1:1 (capability / effect / match /
-      # exclude). Under v3 (tui or v3) the v2 `trustedMcpTools` list is also
+      # exclude). Under v3 the v2 `trustedMcpTools` list is also
       # translated and merged in (see mkPermissionRules). HM-only: Kiro reads
       # permissions only from `~/.kiro/settings/` (global) or
       # `~/.kiro/workspace-roots/<hash>/`, never project `.kiro/`.
@@ -760,10 +787,10 @@ in
         flatSettings = aiCommon.flattenDotKeys filteredSettings;
 
         # HM's only export mechanism is the symlinkJoin wrapper, so env vars
-        # ride along with the --tui/--v3/--trust-tools flag appends. Shared
+        # ride along with the --v3/--trust-tools flag injections. Shared
         # wrapper helper (also used by the devenv backend).
         kiroPackage = wrapKiroPackage {
-          inherit (cfg) tui v3 trustedMcpTools;
+          inherit (cfg) v3 trustedMcpTools;
           package = resolvePackage cfg;
           environmentVariables = mergedEnvironmentVariables;
         };
@@ -947,13 +974,13 @@ in
         lib.mkMerge ([
             # Package installation — devenv projects are shell-scoped, so
             # env exports go in the devenv `env` attrset directly (below), not
-            # through the wrapper. But `--tui`/`--v3`/`--trust-tools` still need
+            # through the wrapper. But `--v3`/`--trust-tools` still need
             # appending so `devenv shell` launches the v3 TUI like HM does, so we
             # reuse the shared wrapper with an empty env set.
             {
               packages = [
                 (wrapKiroPackage {
-                  inherit (cfg) tui v3 trustedMcpTools;
+                  inherit (cfg) v3 trustedMcpTools;
                   package = resolvePackage cfg;
                   environmentVariables = {};
                 })
@@ -1009,7 +1036,7 @@ in
             # `entry.isFile()` entries) silently DROPS symlinked leaf files —
             # hooks and steering alike — while the v2/classic engine (Rust)
             # follows leaf symlinks fine. The shipped default IS v3 (this
-            # factory's wrapper appends `--tui --v3`), so symlinked delivery is
+            # factory's wrapper injects `--v3`), so symlinked delivery is
             # dead on arrival for v3 users. Upstream: kirodotdev/Kiro#9787
             # (confirmed live on 2.13.0). See the kiro-v3-hooks-workspace-local
             # finding + docs/plans/kiro-cli-auto-memory.md.

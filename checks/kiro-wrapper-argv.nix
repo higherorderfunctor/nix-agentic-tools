@@ -155,7 +155,6 @@
   wrap = args:
     wrapKiroPackage ({
         package = stubPackage;
-        tui = false;
         v3 = false;
         trustedMcpTools = [];
       }
@@ -163,7 +162,6 @@
   wrapChain = args:
     wrapKiroPackage ({
         package = chainPackage;
-        tui = false;
         v3 = false;
         trustedMcpTools = [];
       }
@@ -171,15 +169,14 @@
 
   # The consumer shape that broke: v3 active AND trustedMcpTools non-empty.
   chainTrustV3 = wrapChain {
-    tui = true;
+    v3 = true;
     trustedMcpTools = ["fs_read"];
   };
   # Same, without v3 — `--trust-tools` must still reach acp there.
   chainTrustV2 = wrapChain {trustedMcpTools = ["fs_read"];};
 
-  # tui ⇒ --tui (bare/chat only) + --v3 (everywhere) on the launcher.
-  tuiWrapped = wrap {tui = true;};
-  # v3 alone ⇒ --v3 everywhere, never --tui.
+  # v3 ⇒ --v3 everywhere. There is no `tui` option any more: it injected
+  # `--tui` and implied `--v3`, and `--tui` is redundant under v3.
   v3Wrapped = wrap {v3 = true;};
   # trustedMcpTools ⇒ --trust-tools=… appended on the chat binary.
   trustWrapped = wrap {trustedMcpTools = ["fs_read" "@srv"];};
@@ -216,63 +213,67 @@ in
       fi
     }
 
-    L=${tuiWrapped}/bin/kiro-cli
     V=${v3Wrapped}/bin/kiro-cli
     T=${trustWrapped}/bin/kiro-cli-chat
     E=${envWrapped}/bin/kiro-cli
     EC=${envWrapped}/bin/kiro-cli-chat
 
-    # ── the globals land BEFORE the subcommand, never after ─────────────────
-    # This is the regression that mattered: `kiro-cli acp --tui --v3` is
-    # "error: unexpected argument '--tui' found", while `--tui --v3 acp` runs.
-    expect "bare launch"                  '--tui|--v3'                "$L"
-    expect "chat keeps both, in front"    '--tui|--v3|chat'           "$L" chat
-    expect "chat INPUT stays last"        '--tui|--v3|chat|hello'     "$L" chat hello
-    expect "acp gets --v3, before it"     '--v3|acp'                  "$L" acp
-    expect "mcp gets --v3, before it"     '--v3|mcp|list'             "$L" mcp list
-    expect "agent gets --v3, before it"   '--v3|agent|list'           "$L" agent list
-    expect "settings gets --v3"           '--v3|settings|all'         "$L" settings all
-    expect "whoami gets --v3"             '--v3|whoami'               "$L" whoami
+    # ── the global lands BEFORE the subcommand, never after ─────────────────
+    # This is the regression that mattered: `kiro-cli acp --v3` is "error:
+    # unexpected argument found", while `--v3 acp` runs. A string match on the
+    # generated bash cannot catch a flag emitted on the wrong SIDE; running it
+    # can.
+    expect "bare launch"                  '--v3'                      "$V"
+    expect "chat keeps it in front"       '--v3|chat'                 "$V" chat
+    expect "chat INPUT stays last"        '--v3|chat|hello'           "$V" chat hello
+    expect "acp gets --v3, before it"     '--v3|acp'                  "$V" acp
+    expect "mcp gets --v3, before it"     '--v3|mcp|list'             "$V" mcp list
+    expect "agent gets --v3, before it"   '--v3|agent|list'           "$V" agent list
+    expect "settings gets --v3"           '--v3|settings|all'         "$V" settings all
+    expect "whoami gets --v3"             '--v3|whoami'               "$V" whoami
 
-    # ── --tui is confined to bare + chat; --v3 is not ───────────────────────
-    # --tui means "launch chat in TUI mode"; it is meaningless for a stdio
-    # protocol (acp) or for mcp/settings, so it is withheld there.
-    for sub in acp mcp agent settings whoami translate; do
-      if [ -z "$(argv "$L" "$sub" | tr '|' '\n' | grep -Fx -- --tui || true)" ]; then
-        ok "--tui withheld from $sub"
+    # ── the removed `tui` option must not resurrect itself ──────────────────
+    # `--tui` is redundant under v3 (which already uses the new TUI harness)
+    # and it is going away with v3. Nothing this module generates may emit it.
+    for sub in "" chat acp mcp agent settings whoami translate; do
+      if [ -z "$(argv "$V" $sub | tr '|' '\n' | grep -Fx -- --tui || true)" ]; then
+        ok "--tui absent from ''${sub:-bare launch}"
       else
-        bad "--tui leaked into $sub"
+        bad "--tui emitted for ''${sub:-bare launch}"
       fi
     done
 
-    # ── v3 without tui never emits --tui, anywhere ──────────────────────────
+    # ── v3 never emits --tui, anywhere ──────────────────────────────────────
     expect "v3-only bare"                 '--v3'                      "$V"
     expect "v3-only chat"                 '--v3|chat'                 "$V" chat
     expect "v3-only acp"                  '--v3|acp'                  "$V" acp
 
     # ── an option VALUE is never read as the subcommand ─────────────────────
-    # Without the value skip, `--agent acp` looks like the acp subcommand and
-    # the bare launch silently loses --tui.
-    expect "--agent VALUE is a bare launch"    '--tui|--v3|--agent|acp'   "$L" --agent acp
-    expect "--agent=VALUE is a bare launch"    '--tui|--v3|--agent=acp'   "$L" --agent=acp
-    expect "value skip finds a later chat"     '--tui|--v3|--agent|a|chat' "$L" --agent a chat
-    expect "--resume-id VALUE is a bare launch" '--tui|--v3|--resume-id|s1' "$L" --resume-id s1
-    expect "-r is a bare launch"               '--tui|--v3|-r'            "$L" -r
+    # The LAUNCHER no longer needs the value skip — `--v3` is injected
+    # unconditionally, with no subcommand gate to confuse. These pin that the
+    # injection survives argv shapes that used to matter, so a future gated
+    # launcher flag cannot quietly reintroduce the bug. The skip itself is
+    # still exercised below, by the chat binary's `--trust-tools` gate.
+    expect "--agent VALUE is a bare launch"     '--v3|--agent|acp'      "$V" --agent acp
+    expect "--agent=VALUE is a bare launch"     '--v3|--agent=acp'      "$V" --agent=acp
+    expect "a later chat still parses"          '--v3|--agent|a|chat'   "$V" --agent a chat
+    expect "--resume-id VALUE is a bare launch" '--v3|--resume-id|s1'   "$V" --resume-id s1
+    expect "-r is a bare launch"                '--v3|-r'               "$V" -r
 
     # ── idempotence: a caller's own flag is never doubled ───────────────────
-    # Both --tui and --v3 abort with "cannot be used multiple times".
-    expect "caller's --tui not doubled"   '--v3|chat|--tui'           "$L" chat --tui
-    # acp: --v3 already present so nothing is prepended, and --tui stays
-    # withheld by the gate — so the argv passes through untouched.
-    expect "caller's --v3 not doubled"    'acp|--v3'                  "$L" acp --v3
-    expect "caller passing both"          'chat|--tui|--v3'           "$L" chat --tui --v3
+    # `--v3` aborts with "cannot be used multiple times".
+    expect "caller's --v3 not doubled"    'chat|--v3'                 "$V" chat --v3
+    expect "caller's --v3 on acp"         'acp|--v3'                  "$V" acp --v3
+    # A caller may still pass --tui by hand; the wrapper must leave it alone
+    # rather than treat it as its own.
+    expect "caller's own --tui passes through" '--v3|chat|--tui'      "$V" chat --tui
     # Exact-token match, not a substring scan of "$*": a prompt that merely
     # mentions the flag must not suppress the real one.
-    expect "a prompt naming --tui still gets it" \
-      '--tui|--v3|chat|explain --tui' "$L" chat 'explain --tui'
+    expect "a prompt naming --v3 still gets it" \
+      '--v3|chat|explain --v3' "$V" chat 'explain --v3'
 
-    # ── `--` parks the scan; --tui is withheld, --v3 is global so still leads ─
-    expect "-- withholds --tui"           '--v3|--'                   "$L" --
+    # ── `--` parks the scan; --v3 is global so it still leads ───────────────
+    expect "-- still gets --v3"           '--v3|--'                   "$V" --
 
     # ── chat binary: --trust-tools is APPENDED, chat/acp only ───────────────
     # Opposite case to the globals: the chat binary declares --trust-tools on
@@ -339,13 +340,12 @@ in
     # would read it as the acp subcommand, the v3 gate would fire, and
     # --trust-tools would be withheld from what is really a chat launch.
     chain_expect "value skip: --agent VALUE is a bare launch" \
-      'chat|--tui|--v3|--agent|acp|--trust-tools=fs_read' \
+      'chat|--v3|--agent|acp|--trust-tools=fs_read' \
       ${chainTrustV3} --agent acp
     # A bare launch is dispatched too, with `chat` injected as the subcommand,
-    # so the chat-side gate fires on it — and it is the ONE shape where `--tui`
-    # survives the launcher.
-    chain_expect "bare launch dispatches as chat, keeping --tui" \
-      'chat|--tui|--v3|--trust-tools=fs_read' \
+    # so the chat-side gate fires on it.
+    chain_expect "bare launch dispatches as chat" \
+      'chat|--v3|--trust-tools=fs_read' \
       ${chainTrustV3}
 
     # ── the EFFECTIVE engine decides, and only argv knows it ────────────────
@@ -396,7 +396,7 @@ in
     # ── the exec line's shape is depended on outside this repo's Nix ─────────
     # Probe scripts recover the real binary by reading it back out of the
     # wrapper, so keep `exec -a "$0" <realBin> "$@"` intact.
-    if grep -qF 'exec -a "$0" ' "$(readlink -f "$L")"; then
+    if grep -qF 'exec -a "$0" ' "$(readlink -f "$V")"; then
       ok "wrapper keeps the exec -a \"\$0\" shape"
     else
       bad "wrapper no longer execs via 'exec -a \"\$0\" <realBin>'"
