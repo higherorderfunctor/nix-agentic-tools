@@ -14,7 +14,7 @@
 #     `finalAttrs.version`.
 #   - the `postInstall`. It was a byte-for-byte copy of nixpkgs'.
 #
-# `postPatch` IS overridden, and it did not used to be. Inheriting
+# `postPatch` IS overridden, and it previously was not. Inheriting
 # nixpkgs' was justified as "costs nothing and leaves nothing to keep in
 # sync"; the 29.37.0 -> 30.1.1 bump falsified the second half. nixpkgs
 # pins 29.1.0 and its list still names `cli/image/image_test.go`, which
