@@ -150,6 +150,7 @@
   aiStubs =
     (pkgs.ai or {})
     // {
+      chatgpt-codex = pkgs.ai.chatgpt-codex or pkgs.hello;
       claude-code = pkgs.ai.claude-code or pkgs.hello;
       copilot-cli = pkgs.ai.copilot-cli or pkgs.hello;
       # Force a tiny `bin/kimchi` stub so the HM wrapper build test is cheap
@@ -169,6 +170,7 @@
       };
       modules = [
         ./../lib/ai/sharedOptions.nix
+        ./../packages/chatgpt-codex/modules/homeManager
         ./../packages/claude-code/modules/homeManager
         ./../packages/copilot-cli/modules/homeManager
         ./../packages/glab/modules/homeManager
@@ -190,6 +192,7 @@
       };
       modules = [
         ./../lib/ai/sharedOptions.nix
+        ./../packages/chatgpt-codex/modules/devenv
         ./../packages/claude-code/modules/devenv
         ./../packages/copilot-cli/modules/devenv
         ./../packages/glab/modules/devenv
@@ -418,6 +421,29 @@ in {
   module-kiro-wrapper-gate-rejects-empty-set = mkTest "kiro-wrapper-gate-rejects-empty-set" (!(builtins.tryEval (idempotentFlags.gateOnSubcommand {subcommands = [];} "INJECTED")).success);
 
   module-claude-default-disabled = mkTest "claude-default-disabled" (!(evalHm {}).config.ai.claude.enable);
+
+  # ── Codex package/factory enable vertical ───────────────────────
+  module-codex-default-disabled = mkTest "codex-default-disabled" (
+    let
+      hm = evalHm {};
+      devenv = evalDevenv {};
+    in
+      !hm.config.ai.codex.enable
+      && !devenv.config.ai.codex.enable
+      && hm.config.home.packages == []
+      && devenv.config.packages == []
+  );
+
+  module-codex-enabled-installs-package = mkTest "codex-enabled-installs-package" (
+    let
+      hm = evalHm {ai.codex.enable = true;};
+      devenv = evalDevenv {ai.codex.enable = true;};
+      expected = aiStubs.chatgpt-codex;
+    in
+      hm.config.home.packages
+      == [expected]
+      && devenv.config.packages == [expected]
+  );
 
   # ── glab ───────────────────────────────────────────────────────────
   module-glab-default-disabled = mkTest "glab-default-disabled" (

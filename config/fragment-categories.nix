@@ -44,6 +44,7 @@ _: {
         "overlays/kimchi.nix"
         "overlays/kiro-cli.nix"
         "overlays/kiro-gateway.nix"
+        "packages/chatgpt-codex/**"
         "packages/copilot-cli/**"
         "packages/kiro-cli/**"
       ];
@@ -56,6 +57,7 @@ _: {
     ai-module = {
       scopes = [
         "lib/ai/sharedOptions.nix"
+        "packages/chatgpt-codex/modules/**"
         "packages/claude-code/modules/**"
         "packages/copilot-cli/modules/**"
         "packages/kiro-cli/modules/**"
@@ -73,6 +75,7 @@ _: {
     ai-skills = {
       scopes = [
         "lib/ai/hm-helpers.nix"
+        "packages/chatgpt-codex/modules/**"
         "packages/claude-code/modules/**"
         "packages/copilot-cli/modules/**"
         "packages/kiro-cli/modules/**"
