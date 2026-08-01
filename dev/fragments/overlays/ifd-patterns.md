@@ -1,11 +1,18 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-08-01 (commit pending — Codex joins the extracted
-> sidecar pipeline with recursive Clap help, feature-list, and bundled-model
-> probes plus category-specific shape assertions). Prior: 2026-07-25 (the warm
-> composite now forces `drvPath` instead of `version`, so sidecar-versioned
-> packages are covered; also corrects the claim that the check job's
-> `nix flake check` evaluates ALL systems, which it does not, and the
+> **Last verified:** 2026-08-01 (commit pending — documents the sidecar
+> SELF-HEAL loop as a loop: which half is the self-heal and which the backstop,
+> that a red drift check reports a MECHANISM failure rather than a stale file,
+> that it fires on the version-bump path ONLY so an edited extractor does not
+> self-heal, how it differs from the `fix_sidecar_hashes` self-heal, and four
+> debugging entry points. Names `glab` as the fourth extracted package and
+> records that all four now share `vu.mkExtractRegen`; glab had no regeneration
+> at all and proved the latency on PR #621). Prior: 2026-08-01 (Codex joins the
+> extracted sidecar pipeline with recursive Clap help, feature-list, and
+> bundled-model probes plus category-specific shape assertions). Prior:
+> 2026-07-25 (the warm composite now forces `drvPath` instead of `version`, so
+> sidecar-versioned packages are covered; also corrects the claim that the check
+> job's `nix flake check` evaluates ALL systems, which it does not, and the
 > devenv-test job moved to its own workflow). If you touch `overlays/lib.nix`,
 > any overlay `.nix` file that calls `vu.mkVersion`, the shared
 > `.github/actions/warm-ifd/action.yml` composite, or the warm steps that
@@ -149,10 +156,75 @@ minutes later inside `nix-update`.
 
 `mkClaudeExtract`, `mkCodexExtract`, and `mkKiroExtract` in `overlays/lib.nix`
 probe a packaged binary at BUILD time (`passthru.extracted`) and emit a JSON
-sidecar that is COMMITTED (`overlays/<pkg>-extracted.json`). Modules
-`builtins.readFile` the committed file, never the derivation, so option surfaces
-derived from a binary cost no IFD. `checks/<pkg>-extracted.nix` then compares
-committed against freshly-built to catch a stale sidecar.
+sidecar that is COMMITTED (`overlays/<pkg>-extracted.json`). `glab` is the
+fourth such package and the odd one out: its extract is a Go program compiled
+against upstream's own `internal/config.KeySchema` rather than a binary grep,
+and it lives inline in `overlays/generic/glab.nix`. Modules `builtins.readFile`
+the committed file, never the derivation, so option surfaces derived from a
+binary cost no IFD. `checks/<pkg>-extracted.nix` then compares committed against
+freshly-built to catch a stale sidecar.
+
+#### The sidecar SELF-HEAL loop, and how to debug it when it does not fire
+
+The invariant is that a committed `*-extracted.json` always describes the
+CURRENTLY pinned artifact. Nothing enforces that continuously. Two halves
+cooperate, and it is worth knowing which is which before reaching for a fix:
+
+1. **The self-heal** — `mkUpdateScript`'s `extraExtract`, which every extracted
+   package supplies via the shared `vu.mkExtractRegen`. It rebuilds
+   `passthru.extracted` and copies it over the committed path, so a version bump
+   carries its own new sidecar and the drift check never sees a stale one.
+2. **The backstop** — `checks/<pkg>-extracted.nix`, which compares committed
+   against freshly-built.
+
+So **a red drift check is not primarily "this file is stale" — it is a report
+that the self-heal did not run.** Regenerating the JSON by hand turns the check
+green while leaving the mechanism broken, and it will be red again on the next
+bump. Fix the wiring; the file is a symptom.
+
+**A `passthru.extracted` with no matching `extraExtract` is therefore a LATENT
+bump failure**, not a cosmetic gap: it is guaranteed red the first time the
+version moves, and completely silent before that. glab shipped that way and the
+gap sat invisible from #560 until its first-ever bump (#621). If you add a fifth
+extracted package, wire the regeneration in the same commit.
+
+Where it runs, which is what determines when it CANNOT run: `extraExtract` is
+spliced into `mkUpdateScript`'s `commitCandidate`, immediately after the sidecar
+`mv`. That is on the VERSION-BUMP path only. Consequences:
+
+- **An extract that changes with no version bump does NOT self-heal.** Editing
+  the grep anchors in `mkClaudeExtract`, or glab's Go dump, moves the extracted
+  output while the version stands still, so nothing regenerates and the drift
+  check is the only signal. That case IS the hand-regeneration case — the
+  command is in each check's failure message.
+- Do not confuse this with the OTHER self-heal in this repo.
+  `fix_sidecar_hashes` (`dev/scripts/update-common.sh`) re-derives a
+  `vendorHash` / `npmDepsHash` invalidated by a nixpkgs or toolchain bump at an
+  unchanged version, through `passthru.fixVendorHash` and friends. Hashes have
+  that standalone escape hatch; extracts deliberately do not, because a changed
+  extract means someone edited the extractor and should look at the diff.
+
+Debugging entry points when a bump PR still goes red:
+
+- **Read the emitted script**:
+  `nix build .#<pkg>.updateScript --no-link --print-out-paths`, then read its
+  tail. The regeneration lines are the last thing in it. Absent means the
+  package never wired `extraExtract`; present means it ran and something inside
+  it failed.
+- **Check ordering** for a package whose extract builds from source rather than
+  probing a prebuilt binary. glab is the only one today: its extract realizes
+  `src` and `goModules`, which hold `lib.fakeHash` until `fixHashes` has run, so
+  `mkExtractRegen` must come AFTER it. Reversed, it fails on the hash mismatch
+  instead of producing a schema.
+- **Check visibility of the new sources.json.** The regeneration `nix build`s
+  against the dirty worktree, so flake eval only sees the just-written sidecar
+  because it is a TRACKED file that has been modified. An untracked one is
+  invisible to eval, and the extract would silently describe the OLD version —
+  the same class of trap as "Flake Source Visibility" in the nix-standards
+  fragment.
+- **A green drift check but a red `checks.formatting`** means the `nix fmt` step
+  is what is missing, not the extraction. See `mkExtractRegen`'s comment for why
+  that pass is load-bearing rather than tidiness.
 
 **That drift check does not tell you the extraction is CORRECT.** The update
 pipeline's `extraExtract` hook regenerates the sidecar inside the same bump PR,

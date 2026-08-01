@@ -97,7 +97,22 @@
       // {
         inherit fixHashes;
         updateScript = vu.mkUpdateScript {
-          extraExtract = "${fixHashes}";
+          # ORDER IS FORCED, and this is the only extracted package where
+          # that is true. `fixHashes` must land FIRST: until it has
+          # written the real `srcHash` and `vendorHash`, the sidecar still
+          # holds `lib.fakeHash`, and the extract below builds
+          # `glabBase.src` and `glabBase.goModules` — so it would fail on
+          # the hash mismatch rather than produce a schema. The other
+          # three extracted packages fetch a prebuilt binary and have no
+          # hash to restore, so they pass `mkExtractRegen` alone.
+          extraExtract = ''
+            ${fixHashes}
+            ${vu.mkExtractRegen {
+              attr = "glab";
+              dest = "overlays/generic/glab-extracted.json";
+              pkgs = ourPkgs;
+            }}
+          '';
           pkgs = ourPkgs;
           platforms = {};
           pname = "glab";
@@ -233,11 +248,12 @@
       go run ./cmd/glab-schema-dump > schema.json
 
       # ── Shape guards ──────────────────────────────────────────────
-      # NOT a non-empty guard. The drift check regenerates this sidecar
-      # inside the same version-bump PR, so an extract that has gone
-      # wrong is simply committed as the new truth and the drift check
-      # goes green over it. These assert the SHAPE of what was captured;
-      # when a key or a field is added, its assertion is added with it.
+      # NOT a non-empty guard. The UPDATE PIPELINE regenerates this
+      # sidecar inside the same version-bump PR (`extraExtract` above,
+      # via `vu.mkExtractRegen`), so an extract that has gone wrong is
+      # simply committed as the new truth and the drift check goes green
+      # over it. These assert the SHAPE of what was captured; when a key
+      # or a field is added, its assertion is added with it.
       fail() {
         echo "glab-extract: $1" >&2
         exit 1

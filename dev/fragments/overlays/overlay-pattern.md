@@ -1,8 +1,13 @@
 ## Overlay Grouping and the `generic` Subtree
 
-> **Last verified:** 2026-07-28 — the commit adding THIS line lands `glab`: the
-> first Go package whose SRC hash also lives in the sidecar
-> (`vu.mkGoSrcVendorFix`), the first GitLab-hosted version check
+> **Last verified:** 2026-08-01 (commit pending — records that `glab`'s
+> `extraExtract` also regenerates its `passthru.extracted` sidecar, via the new
+> shared `vu.mkExtractRegen`, and that glab is the one extracted package where
+> the fixer-then-extract ORDER is forced. It had NO regeneration at all until
+> now, which nothing caught until its first version bump reddened
+> `checks.<system>.glab-extracted` on PR #621). Prior: 2026-07-28 — the commit
+> adding THAT line lands `glab`: the first Go package whose SRC hash also lives
+> in the sidecar (`vu.mkGoSrcVendorFix`), the first GitLab-hosted version check
 > (`vu.glLatestVersionCmd`), and the collapse of the three sidecar hash fixers
 > onto one `vu.mkHashFix` body driven by `hashFixTargets`. It also corrects the
 > thin-override list, which now has to distinguish the SIDECAR contract (where a
@@ -299,6 +304,18 @@ pairs `platforms = {}` with an `extraExtract` that restores `srcHash` then
 `vendorHash` — **that order is forced**, because `goModules` derives FROM `src`,
 so a stale `srcHash` fails the vendor build on the src mismatch and never
 reaches the vendor one.
+
+`glab` also carries a `passthru.extracted` sidecar, so the SAME `extraExtract`
+runs `vu.mkExtractRegen` after the hash fixer — and it is the only extracted
+package whose ordering matters. The other three (`chatgpt-codex`, `claude-code`,
+`kiro-cli`) fetch a prebuilt binary and have no hash to restore, so they pass
+`mkExtractRegen` alone; glab's extract BUILDS `src` and `goModules`, so running
+it before the fixer would hit `lib.fakeHash` instead of producing a schema.
+
+Wiring that regeneration is not optional for an extracted package, and glab
+demonstrates the cost of missing it: it was the one such package that never had
+it, which nothing caught until its first-ever version bump (PR #621) turned
+`checks.<system>.glab-extracted` red on a sidecar that still described 1.110.0.
 
 The three fixers (`mkGoVendorFix`, `mkGoSrcVendorFix`, `mkNpmDepsFix`) are now
 one body — `vu.mkHashFix` — parameterized by an ordered list of `hashFixTargets`
