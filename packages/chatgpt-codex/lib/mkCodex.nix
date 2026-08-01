@@ -15,15 +15,6 @@
     lib.concatMap (model: model.reasoningLevels) codexExtracted.models
   );
 
-  cleanToml = value:
-    if builtins.isAttrs value
-    then
-      lib.filterAttrs (_: nested: nested != null && nested != {})
-      (lib.mapAttrs (_: cleanToml) value)
-    else if builtins.isList value
-    then map cleanToml value
-    else value;
-
   projectIgnoredKeys = [
     "apps_mcp_product_sku"
     "chatgpt_base_url"
@@ -242,7 +233,7 @@ in
       ...
     }: let
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
-      settings = cleanToml cfg.settings;
+      settings = helpers.filterNulls cfg.settings;
     in {
       assertions =
         mkPathAssertions {inherit mergedInstructions mergedRules;}
@@ -270,7 +261,7 @@ in
       ...
     }: let
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
-      settings = cleanToml cfg.settings;
+      settings = helpers.filterNulls cfg.settings;
       ignoredSettings = lib.intersectLists projectIgnoredKeys (builtins.attrNames settings);
     in {
       assertions =
