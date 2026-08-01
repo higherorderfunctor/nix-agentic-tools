@@ -140,6 +140,14 @@ jobs:
           extra_nix_config: |
             accept-flake-config = true
 
+      # This only realizes the IFD sources used during evaluation. It has no
+      # Cachix credentials and does not build the patched Kiro output; the
+      # build below still removes the project cache from its substituters.
+      - name: Warm IFD sources (retry, best-effort)
+        uses: ./.github/actions/warm-ifd
+        with:
+          systems: ${{ matrix.system }}
+
       - name: Build patched Kiro locally
         run: |
           nix build ".#packages.${{ matrix.system }}.kiro-cli-workflows" \
