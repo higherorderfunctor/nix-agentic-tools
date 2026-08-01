@@ -423,7 +423,7 @@ rec {
     pkgs,
   }: let
     script = pkgs.writeText "kiro-rollout-patch.py" ''
-      import os, re, sys
+      import mmap, os, re, sys
 
       # De-duplicated, order preserved. The module already calls lib.unique,
       # but this helper is callable on its own, and a repeated feature would
@@ -462,49 +462,61 @@ rec {
               sys.exit(1)
           return core % (b"P" * pad)
 
-      targets = []
-      for dirpath, _dirs, filenames in os.walk(root):
-          for fn in filenames:
-              p = os.path.join(dirpath, fn)
-              if os.path.islink(p) or not os.path.isfile(p):
-                  continue
-              with open(p, "rb") as fh:
-                  blob = fh.read()
-              if MARKER in blob:
-                  targets.append((p, bytearray(blob)))
+      # mmap, not read()+bytearray. The target is a ~556 MB ELF, and the
+      # read-then-copy shape peaked over 1 GB per file, which is enough to
+      # make a small CI builder fail on a patch that changes ~200 bytes. The
+      # rewrite is length-preserving, so an in-place mapped edit is exactly
+      # the right tool: the kernel pages in only what the regex touches and
+      # writes back only the dirtied pages. `re` operates on the mmap
+      # directly via the buffer protocol, so nothing is materialized.
+      totals = dict((f, 0) for f in features)
+      found_manifest = False
 
-      if not targets:
+      for dirpath, _dirs, filenames in os.walk(root):
+          for fn in sorted(filenames):
+              path = os.path.join(dirpath, fn)
+              if os.path.islink(path) or not os.path.isfile(path):
+                  continue
+              mode = os.stat(path).st_mode
+              if os.path.getsize(path) == 0:
+                  continue
+              # ACCESS_WRITE needs the descriptor opened r+b, so the mode is
+              # widened first and restored below whether or not we wrote.
+              os.chmod(path, mode | 0o200)
+              try:
+                  with open(path, "r+b") as fh:
+                      with mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_WRITE) as mm:
+                          if mm.find(MARKER) == -1:
+                              continue
+                          found_manifest = True
+                          for name in features:
+                              key = rb'"' + re.escape(name.encode()) + rb'": \{'
+                              sites = len(re.findall(key, mm))
+                              hits = list(entry_re(name).finditer(mm))
+                              if len(hits) != sites:
+                                  sys.stderr.write(
+                                      "kiro-rollout: %r appears %d time(s) in %s but "
+                                      "only %d matched the expected entry shape. "
+                                      "Refusing to half-patch.\n"
+                                      % (name, sites, path, len(hits))
+                                  )
+                                  sys.exit(1)
+                              for m in hits:
+                                  mm[m.start():m.end()] = replacement(
+                                      name, m.end() - m.start()
+                                  )
+                                  totals[name] += 1
+                          mm.flush()
+              finally:
+                  os.chmod(path, mode)
+
+      if not found_manifest:
           sys.stderr.write(
               "kiro-rollout: no file under %s carries a rollout manifest. The "
               "binary layout changed; re-locate it before shipping an unlock.\n"
               % root
           )
           sys.exit(1)
-
-      totals = dict((f, 0) for f in features)
-      for path, data in targets:
-          dirty = False
-          for name in features:
-              rx = entry_re(name)
-              sites = len(re.findall(rb'"' + re.escape(name.encode()) + rb'": \{', data))
-              hits = list(rx.finditer(data))
-              if len(hits) != sites:
-                  sys.stderr.write(
-                      "kiro-rollout: %r appears %d time(s) in %s but only %d "
-                      "matched the expected entry shape. Refusing to half-patch.\n"
-                      % (name, sites, path, len(hits))
-                  )
-                  sys.exit(1)
-              for m in reversed(hits):
-                  data[m.start():m.end()] = replacement(name, m.end() - m.start())
-                  dirty = True
-                  totals[name] += 1
-          if dirty:
-              mode = os.stat(path).st_mode
-              os.chmod(path, mode | 0o200)
-              with open(path, "wb") as fh:
-                  fh.write(data)
-              os.chmod(path, mode)
 
       for name in features:
           if totals[name] == 0:

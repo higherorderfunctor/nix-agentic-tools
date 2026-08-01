@@ -202,6 +202,23 @@
       ];
     };
 
+  # Helpers for the rollout-unlock tests. They exist to keep `lib.head` off an
+  # unguarded filtered list: if the wrapper were renamed or dropped, `head`
+  # throws an eval error, which surfaces as an infrastructure failure with a
+  # stack trace rather than as this test failing. Worse, a comparison between
+  # two silently-wrong singletons can pass VACUOUSLY. Asserting the match count
+  # as part of the returned boolean fixes both.
+  kiroWrappedDrvs = packages:
+    map (p: p.drvPath) (lib.filter (p: (p.name or "") == "kiro-cli-wrapped") packages);
+
+  # Exactly one wrapper on each side, and they must DIFFER (the unlock forked).
+  soleFork = a: b:
+    builtins.length a == 1 && builtins.length b == 1 && builtins.head a != builtins.head b;
+
+  # Exactly one wrapper on each side, and they must MATCH (dedupe collapsed).
+  soleSame = a: b:
+    builtins.length a == 1 && builtins.length b == 1 && builtins.head a == builtins.head b;
+
   # STAGE 3 auto-memory generator (packages/kiro-cli/lib/autoMemory.nix). A tiny
   # two-bin stub stands in for the distiller so these emission/parity tests don't
   # depend on building the real overlay package (its bins + behavior are covered
@@ -2357,31 +2374,63 @@ in {
   # sides are named `kiro-cli-wrapped`.
   module-kiro-hm-rollout-unlock-forks-package = mkTest "kiro-hm-rollout-unlock-forks-package" (
     let
-      drvOf = cfg: let
-        packages = (evalHm {ai.kiro = {enable = true;} // cfg;}).config.home.packages or [];
-      in
-        lib.head (map (p: p.drvPath) (lib.filter (p: (p.name or "") == "kiro-cli-wrapped") packages));
+      a =
+        kiroWrappedDrvs
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+          };
+        })
+      .config
+      .home
+      .packages or [
+        ];
+      b =
+        kiroWrappedDrvs
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+            unlockedRolloutFeatures = ["workflows"];
+          };
+        })
+      .config
+      .home
+      .packages or [
+        ];
     in
-      drvOf {v3 = true;}
-      != drvOf {
-        v3 = true;
-        unlockedRolloutFeatures = ["workflows"];
-      }
+      soleFork a b
   );
 
   # devenv parity: same fork, same option, same backend-independent result.
   module-kiro-devenv-rollout-unlock-forks-package = mkTest "kiro-devenv-rollout-unlock-forks-package" (
     let
-      drvOf = cfg: let
-        packages = (evalDevenv {ai.kiro = {enable = true;} // cfg;}).config.packages or [];
-      in
-        lib.head (map (p: p.drvPath) (lib.filter (p: (p.name or "") == "kiro-cli-wrapped") packages));
+      a =
+        kiroWrappedDrvs
+        (evalDevenv {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+          };
+        })
+      .config
+      .packages or [
+        ];
+      b =
+        kiroWrappedDrvs
+        (evalDevenv {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+            unlockedRolloutFeatures = ["workflows"];
+          };
+        })
+      .config
+      .packages or [
+        ];
     in
-      drvOf {v3 = true;}
-      != drvOf {
-        v3 = true;
-        unlockedRolloutFeatures = ["workflows"];
-      }
+      soleFork a b
   );
 
   # The default MUST leave the package untouched. This is what protects every
@@ -2398,23 +2447,21 @@ in {
   # that mean the same thing produce two store paths and two 556 MB builds.
   module-kiro-rollout-dedupes-features = mkTest "kiro-rollout-dedupes-features" (
     let
-      drvOf = features: let
-        packages =
-          (evalHm {
-            ai.kiro = {
-              enable = true;
-              v3 = true;
-              unlockedRolloutFeatures = features;
-            };
-          })
-          .config
-          .home
-          .packages or [
-          ];
-      in
-        lib.head (map (p: p.drvPath) (lib.filter (p: (p.name or "") == "kiro-cli-wrapped") packages));
+      drvOf = features:
+        kiroWrappedDrvs
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+            unlockedRolloutFeatures = features;
+          };
+        })
+        .config
+        .home
+        .packages or [
+        ];
     in
-      drvOf ["workflows"] == drvOf ["workflows" "workflows"]
+      soleSame (drvOf ["workflows"]) (drvOf ["workflows" "workflows"])
   );
 
   # A `package` without the overlay's passthru cannot be patched. Assert the
