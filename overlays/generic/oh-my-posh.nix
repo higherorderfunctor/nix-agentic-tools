@@ -14,10 +14,25 @@
 #     `finalAttrs.version`.
 #   - the `postInstall`. It was a byte-for-byte copy of nixpkgs'.
 #
-# `postPatch` is NOT overridden either, and that IS a departure from the
-# sibling, which removed `segments/nba_test.go` while keeping
-# `cli/image/image_test.go`. Measured at 29.36.0 with the check phase
-# enabled, not reasoned about — three builds:
+# `postPatch` IS overridden, and it did not used to be. Inheriting
+# nixpkgs' was justified as "costs nothing and leaves nothing to keep in
+# sync"; the 29.37.0 -> 30.1.1 bump falsified the second half. nixpkgs
+# pins 29.1.0 and its list still names `cli/image/image_test.go`, which
+# upstream DELETED in v30 (no replacement anywhere in the tree), so its
+# bare `rm` failed the patchPhase and the whole vendor build with it:
+#
+#   > Running phase: patchPhase
+#   > rm: cannot remove 'cli/image/image_test.go': No such file or directory
+#
+# That surfaced as `HELD BACK: oh-my-posh (nix-update or build failed)`
+# in the sweep, and NOT as a hash problem — `fix_sidecar_hashes`
+# correctly reported "goModules build failed without a '-go-modules' hash
+# mismatch" and declined to invent a hash. The self-heal was working; the
+# inherited patch was not.
+#
+# The removals split by how much each is load-bearing, measured at
+# 29.36.0 with the check phase enabled — three builds, not reasoned
+# about:
 #
 #   - nixpkgs' list (image, migrate_glyphs, notice, upgrade): GREEN.
 #   - the sibling's list (migrate_glyphs, nba, notice, upgrade): also
@@ -28,13 +43,29 @@
 #     `ok`. Without this run, "nixpkgs' list passes" would be equally
 #     consistent with the tests not running at all.
 #
-# So `segments/upgrade_test.go` is the only removal still doing work;
-# upstream has since made `image_test.go` network-free (bundled Go Mono
-# TTF) and `nba_test.go` fixture-driven through a mocked runtime. Both
-# candidate lists are supersets of the one required removal, and
-# inheriting nixpkgs' costs nothing and leaves nothing to keep in sync.
+# So `segments/upgrade_test.go` is the ONE removal doing work, and it
+# keeps a strict `rm`: if upstream moves it, the build must fail loudly
+# rather than silently re-enable a network-dependent test. The other
+# three keep nixpkgs' names — so no test disabled today quietly starts
+# running — but take `rm -f`, because they are exactly the ones upstream
+# churns and nixpkgs' list lags its own pin.
+#
+# `-f` cannot mask a regression here. A file that upstream RENAMED rather
+# than deleted stops being removed, and the check phase then fails on the
+# network test — loudly, just at a different phase. The only thing `-f`
+# suppresses is "the file we wanted gone is already gone", which is the
+# outcome we wanted.
+#
+# The tree this produces at 29.37.0 is byte-identical to what nixpkgs'
+# `postPatch` produced (all four files still exist there), so `vendorHash`
+# is unchanged by this commit — verified by building `.goModules` against
+# the untouched sidecar hash. `postPatch` feeds the `goModules`
+# derivation, but `vendorHash` is a fixed-output hash over the vendor
+# tree CONTENT, so an identical tree keeps an identical hash even though
+# the `.drv` moves.
+#
 # Note that `overrideAttrs` REPLACES `postPatch` rather than appending, so
-# a future re-introduction must restate the whole list.
+# this restates the whole list rather than adding to nixpkgs'.
 #
 # THE GO TOOLCHAIN IS DERIVED, NOT PINNED, and the seemingly-redundant
 # `goFloor` below is deliberate — do not "clean it up". The sibling pinned
@@ -132,6 +163,20 @@ in
     # subdirectory this project builds from still resolves.
     src = fetchzip {inherit (sources.src) url hash;};
     vendorHash = sources.vendorHash or lib.fakeHash;
+
+    # See the header for why this is overridden rather than inherited,
+    # and why exactly one of the four removals is strict.
+    postPatch = ''
+      # Load-bearing (measured): without it `TestUpgrade` fails. Strict
+      # `rm`, so an upstream move fails the build instead of silently
+      # re-enabling a network-dependent test.
+      rm segments/upgrade_test.go
+      # nixpkgs' remaining names, kept so nothing disabled today starts
+      # running — but tolerant, because upstream deletes these and
+      # nixpkgs' list lags its own pin. v30 dropped image_test.go.
+      rm -f cli/image/image_test.go config/migrate_glyphs_test.go \
+            cli/upgrade/notice_test.go
+    '';
 
     # Merge, never replace: buildGoModule hangs `goModules` and
     # `overrideModAttrs` here, module.nix warns loudly when an overlay
