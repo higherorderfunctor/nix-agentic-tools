@@ -492,8 +492,8 @@ in
         description = ''
           How steering files are delivered. `copy` (default)
           materializes REAL files via generated writers — required
-          because the Kiro v3 engine (the shipped default via
-          `--v3`) silently drops symlinked steering files
+          because the Kiro v3 engine (selected by `--v3`, i.e.
+          `ai.kiro.v3`) silently drops symlinked steering files
           (kirodotdev/Kiro#9787), while the v2/classic engine follows
           them fine. `symlink` restores the legacy store-symlink
           delivery.

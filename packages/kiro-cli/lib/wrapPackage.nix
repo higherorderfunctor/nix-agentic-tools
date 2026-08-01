@@ -34,8 +34,12 @@
 #
 # The chat binary defaults to **v1** and `--tui` conflicts with it, while the
 # launcher injects no engine of its own. So bare `--tui` was always broken and
-# `tui = true` only worked because it silently dragged `--v3` along. Note that
-# default is v1, not the v2 this file once claimed.
+# `tui = true` only worked because it silently dragged `--v3` along.
+#
+# That default is v1, not the v2 this file long claimed on the strength of a
+# help string. Nothing here depends on the specific value — the trust gate asks
+# only "is it v3" — which is why its fallback below is a sentinel rather than a
+# version number.
 #
 # Measured against kiro-cli 2.16.0; see packages/kiro-cli/docs/launcher-argv.md
 # for the probe transcript and how to re-measure on a version bump.
@@ -118,13 +122,20 @@ in
     #   kiro-cli --v3 acp --agent-engine=v2 --trust-tools=x   -> runs (v2)
     #   kiro-cli      acp --agent-engine=v3 --trust-tools=x   -> CONFLICT
     #
-    # So the engine is resolved at runtime, from argv, with `v2` as the
-    # fallback — the chat binary's OWN clap default
-    # (`--agent-engine <ENGINE> … [default: v2]`), NOT what this Nix config
-    # bakes in. That distinction is the whole point: this wrapper cannot assume
-    # the launcher wrapper is in the chain. `kiro-cli-chat acp` invoked directly
-    # runs the v2 engine however `v3 = true` is set, so defaulting to v3 there
-    # withheld `--trust-tools` from a session that would have accepted it.
+    # So the engine is resolved at runtime, from argv, falling back to THE CHAT
+    # BINARY'S OWN default rather than to what this Nix config bakes in. That
+    # distinction is the whole point: this wrapper cannot assume the launcher
+    # wrapper is in the chain. `kiro-cli-chat acp` invoked directly runs the
+    # binary's default engine however `v3 = true` is set, so defaulting to v3
+    # here withheld `--trust-tools` from a session that would have accepted it.
+    #
+    # The fallback token is deliberately a SENTINEL, not a version. All the gate
+    # asks is "is the effective engine v3", so any non-v3 value is equivalent —
+    # and naming a specific one invites exactly the drift this comment used to
+    # carry: it claimed `v2` on the strength of a `[default: v2]` help string,
+    # while 2.16.0 actually defaults to v1 (measured: `kiro-cli-chat chat --tui`
+    # fails with `--tui cannot be used with --agent-engine=v1`). A sentinel
+    # cannot go stale when upstream moves the default again.
     #
     # Nothing is lost on the normal path, because the launcher does not merely
     # set a mood — it REWRITES argv. `kiro-cli --v3 acp` arrives here as an
@@ -158,7 +169,7 @@ in
             subcommands = ["acp" "chat"];
             valueFlags = chatValueFlags;
           } (lib.concatStringsSep "\n" [
-            "if [ \"$nat_sub\" != acp ] || [ \"\${nat_engine:-v2}\" != v3 ]; then"
+            "if [ \"$nat_sub\" != acp ] || [ \"\${nat_engine:-unspecified}\" != v3 ]; then"
             "  ${trustAppend}"
             "fi"
           ]))
