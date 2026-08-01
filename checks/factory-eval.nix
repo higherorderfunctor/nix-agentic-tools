@@ -258,7 +258,28 @@ in {
       evaluated.config.ai.mcpServers
       == {}
       && evaluated.config.ai.instructions == []
+      && evaluated.config.ai.settings.reasoningEffort == null
       && evaluated.config.ai.skills == {}
+  );
+
+  factory-sharedOptions-reasoning-effort-is-portable-intersection = mkTest "sharedOptions-reasoning-effort-is-portable-intersection" (
+    let
+      accepts = value:
+        (builtins.tryEval
+          (lib.evalModules {
+            modules = [
+              ai.sharedOptions
+              {config.ai.settings.reasoningEffort = value;}
+            ];
+          }).config.ai.settings.reasoningEffort)
+        .success;
+    in
+      accepts "low"
+      && accepts "medium"
+      && accepts "high"
+      && accepts "xhigh"
+      && !(accepts "max")
+      && !(accepts "ultra")
   );
 
   factory-sharedOptions-accepts-mcpServer-entry = mkTest "sharedOptions-accepts-mcpServer-entry" (

@@ -230,11 +230,15 @@ in
       mergedRules,
       mergedSkills,
       topContext,
+      topSettings,
       ...
     }: let
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
       settings = helpers.filterNulls cfg.settings;
     in {
+      ai.codex.settings.model_reasoning_effort = lib.mkIf (topSettings.reasoningEffort != null) (
+        lib.mkDefault topSettings.reasoningEffort
+      );
       assertions =
         mkPathAssertions {inherit mergedInstructions mergedRules;}
         ++ [
@@ -258,12 +262,16 @@ in
       mergedRules,
       mergedSkills,
       topContext,
+      topSettings,
       ...
     }: let
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
       settings = helpers.filterNulls cfg.settings;
       ignoredSettings = lib.intersectLists projectIgnoredKeys (builtins.attrNames settings);
     in {
+      ai.codex.settings.model_reasoning_effort = lib.mkIf (topSettings.reasoningEffort != null) (
+        lib.mkDefault topSettings.reasoningEffort
+      );
       assertions =
         mkPathAssertions {inherit mergedInstructions mergedRules;}
         ++ [

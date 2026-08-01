@@ -518,6 +518,46 @@ in {
       && !(devenv.config.files ? ".codex/config.toml")
   );
 
+  module-aggregate-reasoning-effort-hm-devenv-parity = mkTest "aggregate-reasoning-effort-hm-devenv-parity" (
+    let
+      config.ai = {
+        claude.enable = true;
+        codex.enable = true;
+        settings.reasoningEffort = "xhigh";
+      };
+      hm = evalHm config;
+      devenv = evalDevenv config;
+    in
+      (hm.config.programs.claude-code.settings.effortLevel or null)
+      == "xhigh"
+      && (hm.config.home.file.".codex/config.toml".source.value.model_reasoning_effort or null) == "xhigh"
+      && (devenv.config.files.".claude/settings.json".json.effortLevel or null) == "xhigh"
+      && (devenv.config.files.".codex/config.toml".source.value.model_reasoning_effort or null) == "xhigh"
+  );
+
+  module-aggregate-reasoning-effort-native-overrides-win = mkTest "aggregate-reasoning-effort-native-overrides-win" (
+    let
+      config.ai = {
+        claude = {
+          enable = true;
+          settings.effortLevel = "medium";
+        };
+        codex = {
+          enable = true;
+          settings.model_reasoning_effort = null;
+        };
+        settings.reasoningEffort = "high";
+      };
+      hm = evalHm config;
+      devenv = evalDevenv config;
+    in
+      (hm.config.programs.claude-code.settings.effortLevel or null)
+      == "medium"
+      && !(hm.config.home.file ? ".codex/config.toml")
+      && (devenv.config.files.".claude/settings.json".json.effortLevel or null) == "medium"
+      && !(devenv.config.files ? ".codex/config.toml")
+  );
+
   module-codex-settings-rendering-parity = mkTest "codex-settings-rendering-parity" (
     let
       config.ai.codex = {

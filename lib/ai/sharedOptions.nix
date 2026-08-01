@@ -1,5 +1,5 @@
 # Declares cross-app options (ai.context, ai.mcpServers, ai.instructions,
-# ai.rules, ai.skills).
+# ai.rules, ai.settings, ai.skills).
 #
 # Imported by every mkAiApp module so per-app overrides
 # (ai.<name>.mcpServers, etc.) can merge on top of these top-level
@@ -97,6 +97,27 @@ in {
           path = ./rules;
           filter = name: !(lib.hasSuffix ".bk" name);
         }
+      '';
+    };
+
+    settings = lib.mkOption {
+      type = lib.types.submodule {
+        options.reasoningEffort = lib.mkOption {
+          type = lib.types.nullOr (lib.types.enum ["high" "low" "medium" "xhigh"]);
+          default = null;
+          description = ''
+            Portable default reasoning effort fanned out to Claude
+            (`effortLevel`) and Codex (`model_reasoning_effort`). The enum is
+            their exact persisted semantic intersection. A per-app native
+            setting, including an explicit null, overrides this default.
+          '';
+        };
+      };
+      default = {};
+      description = ''
+        Typed settings whose values preserve the same meaning across multiple
+        AI runtimes. This deliberately excludes similarly named settings with
+        runtime-specific identifiers or lossy translations.
       '';
     };
 
