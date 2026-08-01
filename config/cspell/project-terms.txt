@@ -262,6 +262,7 @@ rcodesign
 readabilipy
 reauthor
 rebuildable
+recharacterize
 reflog
 reftable
 regen
