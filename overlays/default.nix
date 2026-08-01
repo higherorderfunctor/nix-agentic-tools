@@ -50,6 +50,13 @@
       }
     else drv;
 
+  # Bound once and shared, so `kiro-cli` and `kiro-cli-workflows` below are
+  # provably the same instantiation rather than two that merely ought to agree.
+  # A second `import` of this file does in fact produce an identical derivation
+  # — `import` is memoized and the arguments are the same — so this is clarity
+  # and cheap insurance, NOT a fix for a measured divergence.
+  kiroCliDrv = import ./kiro-cli.nix {inherit inputs final;};
+
   # ── Flat AI CLIs and unique tools ──────────────────────────────────
   flatDrvs = {
     agnix = import ./agnix.nix {
@@ -67,9 +74,31 @@
     kimchi = import ./kimchi.nix {
       inherit inputs final;
     };
-    kiro-cli = import ./kiro-cli.nix {
-      inherit inputs final;
-    };
+    kiro-cli = kiroCliDrv;
+    # The canonical `workflows` unlock, exposed as a package for two reasons
+    # that turn out to be the same mechanism.
+    #
+    # CI COVERAGE. The build job runs `nix build .#packages.<system>` on BOTH
+    # matrix legs, so this is what puts the Darwin-only walk + codesign + exec
+    # assertion behind a REQUIRED check. Reachable only through
+    # `passthru.withRolloutFeatures`, the patched variant was invisible to CI
+    # and the Darwin path could regress unnoticed — which is precisely how it
+    # shipped broken in #640.
+    #
+    # CONSUMER CACHE HITS. This wraps the very derivation
+    # `ai.kiro.unlockedRolloutFeatures = ["workflows"]` resolves to, so CI
+    # pushing it to cachix means a consumer enabling that option substitutes
+    # rather than building ~556 MB locally.
+    #
+    # It rides `flatDrvs` so `guard` applies and the unfree check still fires.
+    # Do NOT hoist it out of this attrset to dodge that — the raw
+    # `withRolloutFeatures` result is deliberately UNGUARDED (see
+    # overlays/kiro-cli.nix).
+    #
+    # Steady state is a substitution, not a build. CI only builds this for real
+    # on a kiro-cli version bump — exactly when the upstream .app layout may
+    # have moved and the assertion is worth running.
+    kiro-cli-workflows = kiroCliDrv.withRolloutFeatures ["workflows"];
     kiro-gateway = import ./kiro-gateway.nix {
       inherit inputs final;
     };
