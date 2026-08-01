@@ -111,7 +111,12 @@ jobs:
       # Run ninja pipeline:
       # - Each target creates a worktree branch (update/<name>)
       # - Branches are pushed and PRs created after ninja completes
+      #
+      # `id` is load-bearing: the PR step below runs on `always()` and reads
+      # `steps.ninja.outcome` to decide whether the sweep was COMPLETE, which
+      # is what gates the stale-PR sentinel.
       - name: Run ninja update pipeline
+        id: ninja
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
@@ -152,9 +157,28 @@ jobs:
       # Each update/<name> branch with commits gets a PR.
       # Records every touched branch in $RUNNER_TEMP/touched-branches
       # so the next step can identify untouched (stale) PRs. Writes a
-      # ninja-completed.flag sentinel only if the loop completes
-      # cleanly — the close step refuses to act without it.
+      # ninja-completed.flag sentinel only if ninja itself finished AND
+      # the loop completes cleanly — the close step refuses to act
+      # without it.
+      #
+      # `always()` so a sweep that ran out of wall clock still SHIPS what it
+      # finished. Every target commits into its own worktree branch only
+      # after its build verification passes, so a killed ninja leaves each
+      # branch either at the base commit (skipped by the base-SHA guard) or
+      # carrying a complete, verified commit. Discarding those was pure
+      # waste: measured on run 30713330569, ninja was `cancelled` at the
+      # 60-minute timeout with 47 of 52 edges DONE, this step was `skipped`,
+      # and every finished dependency — glab's regenerated sidecar included —
+      # was thrown away. The `if: always()` steps after it all reported
+      # `success` in that same run, which is the evidence this condition is
+      # honoured on a timeout rather than only on a plain failure.
+      #
+      # Raising `timeout-minutes` is NOT the fix and must not be substituted
+      # for this one. It cannot help the resource-exhaustion death documented
+      # under the evaluator budget below, and even for a genuine time bound it
+      # only moves the cliff — this removes it.
       - name: Create per-dependency PRs
+        if: always()
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
@@ -365,12 +389,30 @@ jobs:
             echo "$branch" >>"$RUNNER_TEMP/touched-branches"
           done
 
-          # Sentinel — only written on clean loop exit. The close step
-          # below refuses to act without this file (defense in depth on
-          # top of `if: success()`).
-          touch "$RUNNER_TEMP/ninja-completed.flag"
+          # Sentinel — written only when ninja itself SUCCEEDED and this
+          # loop then exited cleanly. Both halves are required, and the
+          # ninja half is what this step's `always()` makes necessary:
+          # reaching this line no longer implies the sweep was complete.
+          #
+          # Getting this wrong is destructive rather than merely untidy.
+          # The close step DELETES any `update/*` PR missing from
+          # touched-branches, so a sentinel written after a partial sweep
+          # would close every PR whose target never got to run — the exact
+          # dependencies the timeout already delayed.
+          #
+          # Read through `env:` rather than interpolating a workflow
+          # expression into the shell, per this workflow's standing rule.
+          # (Do not write a literal expression delimiter in these comments
+          # either — actionlint parses `run:` bodies and an empty one is a
+          # hard lint error.)
+          if [ "$NINJA_OUTCOME" = "success" ]; then
+            touch "$RUNNER_TEMP/ninja-completed.flag"
+          else
+            echo "::warning::ninja outcome was '$NINJA_OUTCOME' — pushed what completed, but skipping the stale-PR sentinel so no PR is closed on a partial sweep."
+          fi
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          NINJA_OUTCOME: ${{ steps.ninja.outcome }}
 
       # Close stale dependency PRs that were not touched this run.
       # Renovate-style policy: only auto-close PRs with NO human activity
