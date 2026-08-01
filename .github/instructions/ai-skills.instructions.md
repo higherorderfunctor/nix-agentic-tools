@@ -11,7 +11,7 @@ applyTo: "lib/ai/hm-helpers.nix,packages/chatgpt-codex/modules/**,packages/claud
 > the native user-global and repository-local `.agents/skills` locations).
 > Prior: 2026-04-08 (commit 97ac174 — refactor(devenv): ai.skills branches
 > delegate through ecosystem options). If you touch the Claude/Codex/Copilot/
-> Kiro skills fanout, `lib/hm-helpers.nix:mkSkillEntries`, or upstream
+> Kiro skills fanout, `lib/ai/hm-helpers.nix:mkSkillEntries`, or upstream
 > `programs.<cli>.skills` references, and this fragment isn't updated in the
 > same commit, stop and fix it.
 
