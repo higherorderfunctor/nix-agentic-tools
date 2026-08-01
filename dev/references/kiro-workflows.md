@@ -1037,7 +1037,11 @@ Verified end to end by pointing a watch at an already-merged PR: the first poll
 returned `state: "MERGED"`, `stopWhen: "wait.terminal"` fired, and the `repeat`
 stopped after a single iteration against a `maxIterations` of 3.
 
-The handler config, transcribed from `src/workflow/handlers/github-pr.ts`:
+The handler config, transcribed from the handler's own source. That source is
+**not in this repository** — it is inside the kas bundle's `acp-server.js`,
+which retains its build-time module banners, so
+`src/workflow/handlers/github-pr.ts` below is a path within the upstream tree
+and not a file you can open in the checkout (§13 shows how to read it):
 
 | field                | meaning                                                        |
 | -------------------- | -------------------------------------------------------------- |
@@ -1071,9 +1075,10 @@ the login you would guess: the Actions bot is `github-actions` with no `[bot]`
 suffix, and in the verification payload Copilot's reviews were attributed to
 `copilot-pull-request-reviewer`, also without that suffix.
 
-A second handler, **`crux-cr`**, exists (`src/workflow/handlers/crux-cr.ts`),
-taking `crRef` (a JSON file whose `crId` field is the CR id) or `crId` directly.
-Untested here.
+A second handler, **`crux-cr`**, exists (banner
+`// src/workflow/handlers/crux-cr.ts` in the same bundle, again not a file in
+this repo), taking `crRef` (a JSON file whose `crId` field is the CR id) or
+`crId` directly. Untested here.
 
 Note that `validate_workflow` does not check handler configs at all — a `watch`
 with an empty `config` validates clean despite the schema requiring `prRef` or
@@ -1663,7 +1668,19 @@ grep -o -E 'StopConditionSchema[^;]{0,400}' "$A"
 
 That is how `stopCondition.completionSignal` (§7.6) and the watch outcome enum
 (§7.7) were found, and how the `github-pr` config was transcribed rather than
-guessed — search for `// src/workflow/handlers/`.
+guessed. The bundle keeps esbuild's per-module banners, so grepping for
+`// src/workflow/` locates each original TypeScript module inside it — those are
+paths in the upstream tree, not files in this checkout:
+
+```bash
+grep -o -E '// src/workflow/[a-z/-]+\.ts' "$A" | sort -u
+```
+
+That yields 28 modules. The ones matching the behaviors measured in this
+document are `stop-condition.ts`, `template.ts`, `validate.ts`,
+`parallel-scheduler.ts`, `watch-handler-registry.ts` and
+`workflow-step-update.ts` — useful starting points for anything here labelled
+Inferred or listed in §12.
 
 Treat spec text as **Contract, not Measured**: it is documentation of intent and
 it is wrong in at least one place (agent-name validation, §3.4). Where the spec
