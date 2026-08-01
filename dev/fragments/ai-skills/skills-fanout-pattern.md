@@ -1,28 +1,30 @@
 ## ai.skills Fanout Delegation Pattern
 
-> **Last verified:** 2026-04-08 (commit 97ac174 — refactor(devenv): ai.skills
-> branches delegate through ecosystem options). If you touch the
-> Claude/Copilot/Kiro skills fanout in `modules/ai/default.nix` (or the devenv
-> equivalent), `lib/hm-helpers.nix:mkSkillEntries`, or upstream
+> **Last verified:** 2026-08-01 (commit pending — Codex joins skills fanout at
+> the native user-global and repository-local `.agents/skills` locations).
+> Prior: 2026-04-08 (commit 97ac174 — refactor(devenv): ai.skills branches
+> delegate through ecosystem options). If you touch any of the four CLI skills
+> fanouts, `lib/ai/hm-helpers.nix:mkSkillEntries`, or upstream
 > `programs.<cli>.skills` references, and this fragment isn't updated in the
 > same commit, stop and fix it.
 
-The `ai.skills` fanout MUST go through each ecosystem's respective
-`programs.<cli>.skills` option. **No branch writes `home.file` directly.** Doing
-so produces a different on-disk layout from the upstream module and creates
-collision bugs when per-CLI `ai.<cli>.skills` lands.
+When an ecosystem has a `programs.<cli>.skills` option, `ai.skills` fanout MUST
+delegate through it. Codex has no upstream Home Manager module, so its factory
+uses the shared recursive helper directly. Both routes must preserve Layout B: a
+real skill directory containing per-file store symlinks.
 
 ### Uniform pattern
 
-| Branch  | Delegates to                  | Helper                     |
-| ------- | ----------------------------- | -------------------------- |
-| Claude  | `programs.claude-code.skills` | upstream HM `mkSkillEntry` |
-| Copilot | `programs.copilot-cli.skills` | our `lib/hm-helpers.nix`   |
-| Kiro    | `programs.kiro-cli.skills`    | our `lib/hm-helpers.nix`   |
+| Branch  | HM route                      | Native directory  |
+| ------- | ----------------------------- | ----------------- |
+| Claude  | `programs.claude-code.skills` | `.claude/skills`  |
+| Codex   | `mkSkillEntries` directly     | `.agents/skills`  |
+| Copilot | `programs.copilot-cli.skills` | `.copilot/skills` |
+| Kiro    | `programs.kiro-cli.skills`    | `.kiro/skills`    |
 
-On-disk result is identical across all three: a real `.claude/skills/<name>/`
-(or equivalent) directory with per-file store symlinks inside, via
-`recursive = true` in each helper.
+On-disk layout is identical across all four: a real native `skills/<name>/`
+directory with per-file store symlinks inside, via `recursive = true` in each
+helper.
 
 ### Why this matters
 
@@ -63,14 +65,21 @@ When working on the Claude skills fanout fix:
   `aiSkillsFanout.config.programs.claude-code.skills ? <name>` when
   `ai.skills.<name>` is set.
 
+### Codex destinations
+
+Current official Codex documentation defines `$HOME/.agents/skills` as the user
+scope and `<repo>/.agents/skills` as repository scope. Codex scans repo
+locations from the current working directory up to the repository root and
+supports symlinked skill folders. Therefore HM emits `.agents/skills`, while
+devenv emits project-root `.agents/skills`; neither destination is derived from
+`ai.codex.configDir`.
+
 ### Devenv counterpart
 
-devenv currently produces Layout A (single dir symlink) for all three ecosystems
-because `devenv.files.*.source` is structurally incapable of recursive walks.
-See the related `devenv-files-internals` fragment under `dev/fragments/devenv/`
-for the full constraints, and the `mkDevenvSkillEntries` user-space walker that
-brings devenv to Layout B parity. Both the HM Claude branch fix and the devenv
-parity fix are prerequisites for full `ai.claude.*` passthrough.
+`devenv.files.*.source` is structurally incapable of recursive walks. Every
+factory without a native recursive option uses `mkDevenvSkillEntries`, which
+enumerates each leaf at evaluation time and preserves nested relative paths.
+Codex calls it with `.agents`, producing project-root `.agents/skills` entries.
 
 ### Related
 

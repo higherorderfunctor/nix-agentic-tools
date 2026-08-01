@@ -4,6 +4,8 @@
   pkgs,
   ...
 }: let
+  helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+
   resolveText = value:
     if builtins.isPath value
     then builtins.readFile value
@@ -147,6 +149,7 @@ in
       cfg,
       mergedInstructions,
       mergedRules,
+      mergedSkills,
       topContext,
       ...
     }: let
@@ -157,9 +160,12 @@ in
         ++ [
           (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
         ];
-      home.file = lib.mkIf (agentsMd != "") {
-        "${cfg.configDir}/AGENTS.md".text = agentsMd;
-      };
+      home.file = lib.mkMerge [
+        (lib.mkIf (agentsMd != "") {
+          "${cfg.configDir}/AGENTS.md".text = agentsMd;
+        })
+        (helpers.mkSkillEntries ".agents" mergedSkills)
+      ];
       home.packages = [cfg.package];
     };
 
@@ -167,6 +173,7 @@ in
       cfg,
       mergedInstructions,
       mergedRules,
+      mergedSkills,
       topContext,
       ...
     }: let
@@ -177,9 +184,12 @@ in
         ++ [
           (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
         ];
-      files = lib.mkIf (agentsMd != "") {
-        "AGENTS.md".text = agentsMd;
-      };
+      files = lib.mkMerge [
+        (lib.mkIf (agentsMd != "") {
+          "AGENTS.md".text = agentsMd;
+        })
+        (helpers.mkDevenvSkillEntries ".agents" mergedSkills)
+      ];
       packages = [cfg.package];
     };
   }
