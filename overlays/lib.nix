@@ -127,16 +127,22 @@ rec {
           flags = []
           lines = section(text, "Options").splitlines()
           for index, line in enumerate(lines):
-              match = re.match(r"^  (.+(?:-[A-Za-z][A-Za-z0-9-]*)(?: <[^>]+>)?(?:\.\.\.)?)$", line)
+              match = re.match(
+                  r"^  (?:(-[A-Za-z]), |    )(--[A-Za-z][A-Za-z0-9-]*)"
+                  r"(?: <([^>]+)>)?(?:\.\.\.)?(?:\s{2,}(.*))?$",
+                  line,
+              )
               if not match:
                   continue
-              spelling = match.group(1).strip()
-              names = re.findall(r"(?<![A-Za-z0-9])(--?[A-Za-z][A-Za-z0-9-]*)", spelling)
-              value = re.search(r"<([^>]+)>", spelling)
-              body = []
+              names = sorted(set(filter(None, [match.group(1), match.group(2)])))
+              body = [match.group(4)] if match.group(4) else []
               for following in lines[index + 1:]:
-                  if re.match(r"^  .+(?:-[A-Za-z][A-Za-z0-9-]*)(?: <[^>]+>)?(?:\.\.\.)?$", following):
-                    break
+                  if re.match(
+                      r"^  (?:(-[A-Za-z]), |    )(--[A-Za-z][A-Za-z0-9-]*)"
+                      r"(?: <([^>]+)>)?(?:\.\.\.)?(?:\s{2,}(.*))?$",
+                      following,
+                  ):
+                      break
                   body.append(following.strip())
               prose = " ".join(part for part in body if part)
               possible = re.search(r"\[possible values: ([^]]+)\]", prose)
@@ -152,7 +158,7 @@ rec {
                   "default": default.group(1) if default else None,
                   "help": re.sub(r"\s*\[(?:possible values|default|conflicts with): [^]]+\]", "", prose).strip(),
                   "names": names,
-                  "valueName": value.group(1) if value else None,
+                  "valueName": match.group(3),
               })
           return flags
 

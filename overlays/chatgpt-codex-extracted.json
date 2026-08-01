@@ -8,17 +8,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -65,7 +57,7 @@
             "conflicts": [],
             "default": null,
             "help": "Optional image(s) to attach to the initial prompt",
-            "names": ["-i", "--image"],
+            "names": ["--image", "-i"],
             "valueName": "FILE"
           },
           {
@@ -73,7 +65,7 @@
             "conflicts": [],
             "default": null,
             "help": "Model the agent should use",
-            "names": ["-m", "--model"],
+            "names": ["--model", "-m"],
             "valueName": "MODEL"
           },
           {
@@ -97,7 +89,7 @@
             "conflicts": [],
             "default": null,
             "help": "Layer $CODEX_HOME/<name>.config.toml on top of the base user config",
-            "names": ["-p", "--profile"],
+            "names": ["--profile", "-p"],
             "valueName": "CONFIG_PROFILE_V2"
           },
           {
@@ -109,7 +101,7 @@
             "conflicts": [],
             "default": null,
             "help": "Select the sandbox policy to use when executing model-generated shell commands",
-            "names": ["-s", "--sandbox"],
+            "names": ["--sandbox", "-s"],
             "valueName": "SANDBOX_MODE"
           },
           {
@@ -133,7 +125,7 @@
             "conflicts": [],
             "default": null,
             "help": "Tell the agent to use the specified directory as its working root",
-            "names": ["-C", "--cd"],
+            "names": ["--cd", "-C"],
             "valueName": "DIR"
           },
           {
@@ -149,7 +141,7 @@
             "conflicts": [],
             "default": null,
             "help": "Configure when the model requires human approval before executing a command Possible values: - untrusted:  Only run \"trusted\" commands (e.g. ls, cat, sed) without asking for user approval. Will escalate to the user if the model proposes a command that is not in the \"trusted\" set - on-request: The model decides when to ask the user for approval - never:      Never ask for user approval Execution failures are immediately returned to the model",
-            "names": ["-a", "--ask-for-approval"],
+            "names": ["--ask-for-approval", "-a"],
             "valueName": "APPROVAL_POLICY"
           },
           {
@@ -173,7 +165,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           },
           {
@@ -181,7 +173,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print version",
-            "names": ["-V", "--version"],
+            "names": ["--version", "-V"],
             "valueName": null
           }
         ],
@@ -195,17 +187,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -324,7 +308,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -338,17 +322,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -371,7 +347,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -385,17 +361,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -426,7 +394,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -440,17 +408,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -473,7 +433,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -487,17 +447,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -520,7 +472,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -534,17 +486,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -567,7 +511,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -581,17 +525,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -614,7 +550,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -628,17 +564,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -661,7 +589,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -675,17 +603,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -708,7 +628,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -722,24 +642,16 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
             "help": "Output directory where the schema bundle will be written",
-            "names": ["-o", "--out"],
+            "names": ["--out", "-o"],
             "valueName": "DIR"
           },
           {
@@ -771,7 +683,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -785,24 +697,16 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
             "help": "Output directory where .ts files will be written",
-            "names": ["-o", "--out"],
+            "names": ["--out", "-o"],
             "valueName": "DIR"
           },
           {
@@ -818,7 +722,7 @@
             "conflicts": [],
             "default": null,
             "help": "Optional path to the Prettier executable to format generated files",
-            "names": ["-p", "--prettier"],
+            "names": ["--prettier", "-p"],
             "valueName": "PRETTIER_BIN"
           },
           {
@@ -842,7 +746,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -856,17 +760,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -897,7 +793,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -911,17 +807,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -944,7 +832,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -991,7 +879,7 @@
             "conflicts": [],
             "default": null,
             "help": "Optional image(s) to attach to the initial prompt",
-            "names": ["-i", "--image"],
+            "names": ["--image", "-i"],
             "valueName": "FILE"
           },
           {
@@ -999,7 +887,7 @@
             "conflicts": [],
             "default": null,
             "help": "Model the agent should use",
-            "names": ["-m", "--model"],
+            "names": ["--model", "-m"],
             "valueName": "MODEL"
           },
           {
@@ -1023,7 +911,7 @@
             "conflicts": [],
             "default": null,
             "help": "Layer $CODEX_HOME/<name>.config.toml on top of the base user config",
-            "names": ["-p", "--profile"],
+            "names": ["--profile", "-p"],
             "valueName": "CONFIG_PROFILE_V2"
           },
           {
@@ -1035,7 +923,7 @@
             "conflicts": [],
             "default": null,
             "help": "Select the sandbox policy to use when executing model-generated shell commands",
-            "names": ["-s", "--sandbox"],
+            "names": ["--sandbox", "-s"],
             "valueName": "SANDBOX_MODE"
           },
           {
@@ -1059,7 +947,7 @@
             "conflicts": [],
             "default": null,
             "help": "Tell the agent to use the specified directory as its working root",
-            "names": ["-C", "--cd"],
+            "names": ["--cd", "-C"],
             "valueName": "DIR"
           },
           {
@@ -1082,24 +970,16 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -1113,17 +993,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -1146,7 +1018,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           },
           {
@@ -1154,7 +1026,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print version",
-            "names": ["-V", "--version"],
+            "names": ["--version", "-V"],
             "valueName": null
           }
         ],
@@ -1176,17 +1048,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -1209,7 +1073,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -1231,17 +1095,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -1264,7 +1120,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -1278,17 +1134,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -1335,7 +1183,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -1349,17 +1197,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -1414,7 +1254,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -1428,17 +1268,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -1461,7 +1293,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -1475,17 +1307,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -1508,7 +1332,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -1522,17 +1346,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -1555,7 +1371,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -1569,17 +1385,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -1602,7 +1410,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -1616,17 +1424,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -1649,7 +1449,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -1671,17 +1471,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -1704,7 +1496,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -1718,24 +1510,16 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
             "help": "Optional image(s) to attach to the user prompt",
-            "names": ["-i", "--image"],
+            "names": ["--image", "-i"],
             "valueName": "FILE"
           },
           {
@@ -1759,7 +1543,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -1806,7 +1590,7 @@
             "conflicts": [],
             "default": null,
             "help": "Optional image(s) to attach to the initial prompt",
-            "names": ["-i", "--image"],
+            "names": ["--image", "-i"],
             "valueName": "FILE"
           },
           {
@@ -1814,7 +1598,7 @@
             "conflicts": [],
             "default": null,
             "help": "Model the agent should use",
-            "names": ["-m", "--model"],
+            "names": ["--model", "-m"],
             "valueName": "MODEL"
           },
           {
@@ -1838,7 +1622,7 @@
             "conflicts": [],
             "default": null,
             "help": "Layer $CODEX_HOME/<name>.config.toml on top of the base user config",
-            "names": ["-p", "--profile"],
+            "names": ["--profile", "-p"],
             "valueName": "CONFIG_PROFILE_V2"
           },
           {
@@ -1850,7 +1634,7 @@
             "conflicts": [],
             "default": null,
             "help": "Select the sandbox policy to use when executing model-generated shell commands",
-            "names": ["-s", "--sandbox"],
+            "names": ["--sandbox", "-s"],
             "valueName": "SANDBOX_MODE"
           },
           {
@@ -1874,7 +1658,7 @@
             "conflicts": [],
             "default": null,
             "help": "Tell the agent to use the specified directory as its working root",
-            "names": ["-C", "--cd"],
+            "names": ["--cd", "-C"],
             "valueName": "DIR"
           },
           {
@@ -1897,17 +1681,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -1922,7 +1698,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -1936,17 +1712,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -2009,7 +1777,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -2023,17 +1791,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -2064,7 +1824,7 @@
             "conflicts": [],
             "default": null,
             "help": "Optional image(s) to attach to the initial prompt",
-            "names": ["-i", "--image"],
+            "names": ["--image", "-i"],
             "valueName": "FILE"
           },
           {
@@ -2072,7 +1832,7 @@
             "conflicts": [],
             "default": null,
             "help": "Model the agent should use",
-            "names": ["-m", "--model"],
+            "names": ["--model", "-m"],
             "valueName": "MODEL"
           },
           {
@@ -2096,7 +1856,7 @@
             "conflicts": [],
             "default": null,
             "help": "Layer $CODEX_HOME/<name>.config.toml on top of the base user config",
-            "names": ["-p", "--profile"],
+            "names": ["--profile", "-p"],
             "valueName": "CONFIG_PROFILE_V2"
           },
           {
@@ -2108,7 +1868,7 @@
             "conflicts": [],
             "default": null,
             "help": "Select the sandbox policy to use when executing model-generated shell commands",
-            "names": ["-s", "--sandbox"],
+            "names": ["--sandbox", "-s"],
             "valueName": "SANDBOX_MODE"
           },
           {
@@ -2132,7 +1892,7 @@
             "conflicts": [],
             "default": null,
             "help": "Tell the agent to use the specified directory as its working root",
-            "names": ["-C", "--cd"],
+            "names": ["--cd", "-C"],
             "valueName": "DIR"
           },
           {
@@ -2204,7 +1964,7 @@
             "conflicts": [],
             "default": null,
             "help": "Specifies file where the last message from the agent should be written",
-            "names": ["-o", "--output-last-message"],
+            "names": ["--output-last-message", "-o"],
             "valueName": "FILE"
           },
           {
@@ -2212,7 +1972,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           },
           {
@@ -2220,7 +1980,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print version",
-            "names": ["-V", "--version"],
+            "names": ["--version", "-V"],
             "valueName": null
           }
         ],
@@ -2234,17 +1994,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -2283,7 +2035,7 @@
             "conflicts": [],
             "default": null,
             "help": "Optional image(s) to attach to the prompt sent after resuming",
-            "names": ["-i", "--image"],
+            "names": ["--image", "-i"],
             "valueName": "FILE"
           },
           {
@@ -2299,7 +2051,7 @@
             "conflicts": [],
             "default": null,
             "help": "Model the agent should use",
-            "names": ["-m", "--model"],
+            "names": ["--model", "-m"],
             "valueName": "MODEL"
           },
           {
@@ -2371,7 +2123,7 @@
             "conflicts": [],
             "default": null,
             "help": "Specifies file where the last message from the agent should be written",
-            "names": ["-o", "--output-last-message"],
+            "names": ["--output-last-message", "-o"],
             "valueName": "FILE"
           },
           {
@@ -2379,7 +2131,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -2393,17 +2145,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -2466,7 +2210,7 @@
             "conflicts": [],
             "default": null,
             "help": "Model the agent should use",
-            "names": ["-m", "--model"],
+            "names": ["--model", "-m"],
             "valueName": "MODEL"
           },
           {
@@ -2538,7 +2282,7 @@
             "conflicts": [],
             "default": null,
             "help": "Specifies file where the last message from the agent should be written",
-            "names": ["-o", "--output-last-message"],
+            "names": ["--output-last-message", "-o"],
             "valueName": "FILE"
           },
           {
@@ -2546,7 +2290,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -2560,17 +2304,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -2641,7 +2377,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -2655,17 +2391,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -2688,7 +2416,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -2702,17 +2430,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -2735,7 +2455,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -2749,17 +2469,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -2782,7 +2494,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -2796,17 +2508,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -2829,7 +2533,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -2843,17 +2547,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -2916,7 +2612,7 @@
             "conflicts": [],
             "default": null,
             "help": "Optional image(s) to attach to the initial prompt",
-            "names": ["-i", "--image"],
+            "names": ["--image", "-i"],
             "valueName": "FILE"
           },
           {
@@ -2924,7 +2620,7 @@
             "conflicts": [],
             "default": null,
             "help": "Model the agent should use",
-            "names": ["-m", "--model"],
+            "names": ["--model", "-m"],
             "valueName": "MODEL"
           },
           {
@@ -2948,7 +2644,7 @@
             "conflicts": [],
             "default": null,
             "help": "Layer $CODEX_HOME/<name>.config.toml on top of the base user config",
-            "names": ["-p", "--profile"],
+            "names": ["--profile", "-p"],
             "valueName": "CONFIG_PROFILE_V2"
           },
           {
@@ -2960,7 +2656,7 @@
             "conflicts": [],
             "default": null,
             "help": "Select the sandbox policy to use when executing model-generated shell commands",
-            "names": ["-s", "--sandbox"],
+            "names": ["--sandbox", "-s"],
             "valueName": "SANDBOX_MODE"
           },
           {
@@ -2984,7 +2680,7 @@
             "conflicts": [],
             "default": null,
             "help": "Tell the agent to use the specified directory as its working root",
-            "names": ["-C", "--cd"],
+            "names": ["--cd", "-C"],
             "valueName": "DIR"
           },
           {
@@ -3000,7 +2696,7 @@
             "conflicts": [],
             "default": null,
             "help": "Configure when the model requires human approval before executing a command Possible values: - untrusted:  Only run \"trusted\" commands (e.g. ls, cat, sed) without asking for user approval. Will escalate to the user if the model proposes a command that is not in the \"trusted\" set - on-request: The model decides when to ask the user for approval - never:      Never ask for user approval Execution failures are immediately returned to the model",
-            "names": ["-a", "--ask-for-approval"],
+            "names": ["--ask-for-approval", "-a"],
             "valueName": "APPROVAL_POLICY"
           },
           {
@@ -3024,7 +2720,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           },
           {
@@ -3032,7 +2728,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print version",
-            "names": ["-V", "--version"],
+            "names": ["--version", "-V"],
             "valueName": null
           }
         ],
@@ -3046,17 +2742,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3103,7 +2791,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -3117,17 +2805,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3150,7 +2830,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -3164,17 +2844,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3197,7 +2869,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -3211,17 +2883,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3244,7 +2908,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -3258,17 +2922,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3331,7 +2987,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -3345,17 +3001,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3386,7 +3034,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -3400,17 +3048,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3441,7 +3081,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -3455,17 +3095,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3496,7 +3128,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -3510,17 +3142,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3543,7 +3167,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -3557,17 +3181,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3590,7 +3206,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -3604,17 +3220,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3645,7 +3253,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -3659,17 +3267,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3692,7 +3292,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -3706,24 +3306,16 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
             "help": "Configured marketplace name to use when PLUGIN does not include @MARKETPLACE",
-            "names": ["-m", "--marketplace"],
+            "names": ["--marketplace", "-m"],
             "valueName": "MARKETPLACE"
           },
           {
@@ -3755,7 +3347,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -3769,24 +3361,16 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
             "help": "Only list plugins from this configured marketplace name",
-            "names": ["-m", "--marketplace"],
+            "names": ["--marketplace", "-m"],
             "valueName": "MARKETPLACE"
           },
           {
@@ -3826,7 +3410,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -3840,17 +3424,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3873,7 +3449,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -3887,17 +3463,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3944,7 +3512,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -3958,17 +3526,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -3999,7 +3559,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -4013,17 +3573,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -4054,7 +3606,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -4068,17 +3620,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -4109,7 +3653,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -4123,24 +3667,16 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
             "help": "Marketplace name to use when PLUGIN does not include @MARKETPLACE",
-            "names": ["-m", "--marketplace"],
+            "names": ["--marketplace", "-m"],
             "valueName": "MARKETPLACE"
           },
           {
@@ -4172,7 +3708,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -4186,17 +3722,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -4227,7 +3755,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -4241,17 +3769,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -4282,7 +3802,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -4296,17 +3816,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -4337,7 +3849,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -4351,17 +3863,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -4392,7 +3896,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -4406,17 +3910,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -4487,7 +3983,7 @@
             "conflicts": [],
             "default": null,
             "help": "Optional image(s) to attach to the initial prompt",
-            "names": ["-i", "--image"],
+            "names": ["--image", "-i"],
             "valueName": "FILE"
           },
           {
@@ -4495,7 +3991,7 @@
             "conflicts": [],
             "default": null,
             "help": "Model the agent should use",
-            "names": ["-m", "--model"],
+            "names": ["--model", "-m"],
             "valueName": "MODEL"
           },
           {
@@ -4519,7 +4015,7 @@
             "conflicts": [],
             "default": null,
             "help": "Layer $CODEX_HOME/<name>.config.toml on top of the base user config",
-            "names": ["-p", "--profile"],
+            "names": ["--profile", "-p"],
             "valueName": "CONFIG_PROFILE_V2"
           },
           {
@@ -4531,7 +4027,7 @@
             "conflicts": [],
             "default": null,
             "help": "Select the sandbox policy to use when executing model-generated shell commands",
-            "names": ["-s", "--sandbox"],
+            "names": ["--sandbox", "-s"],
             "valueName": "SANDBOX_MODE"
           },
           {
@@ -4555,7 +4051,7 @@
             "conflicts": [],
             "default": null,
             "help": "Tell the agent to use the specified directory as its working root",
-            "names": ["-C", "--cd"],
+            "names": ["--cd", "-C"],
             "valueName": "DIR"
           },
           {
@@ -4571,7 +4067,7 @@
             "conflicts": [],
             "default": null,
             "help": "Configure when the model requires human approval before executing a command Possible values: - untrusted:  Only run \"trusted\" commands (e.g. ls, cat, sed) without asking for user approval. Will escalate to the user if the model proposes a command that is not in the \"trusted\" set - on-request: The model decides when to ask the user for approval - never:      Never ask for user approval Execution failures are immediately returned to the model",
-            "names": ["-a", "--ask-for-approval"],
+            "names": ["--ask-for-approval", "-a"],
             "valueName": "APPROVAL_POLICY"
           },
           {
@@ -4595,7 +4091,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           },
           {
@@ -4603,7 +4099,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print version",
-            "names": ["-V", "--version"],
+            "names": ["--version", "-V"],
             "valueName": null
           }
         ],
@@ -4617,17 +4113,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -4690,7 +4178,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -4704,17 +4192,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -4761,7 +4241,7 @@
             "conflicts": [],
             "default": null,
             "help": "Named permissions profile to apply from the active configuration stack",
-            "names": ["-P", "--permission-profile"],
+            "names": ["--permission-profile", "-P"],
             "valueName": "NAME"
           },
           {
@@ -4769,7 +4249,7 @@
             "conflicts": [],
             "default": null,
             "help": "Layer $CODEX_HOME/<name>.config.toml on top of the base user config",
-            "names": ["-p", "--profile"],
+            "names": ["--profile", "-p"],
             "valueName": "CONFIG_PROFILE"
           },
           {
@@ -4777,7 +4257,7 @@
             "conflicts": [],
             "default": null,
             "help": "Working directory used for profile resolution and command execution",
-            "names": ["-C", "--cd"],
+            "names": ["--cd", "-C"],
             "valueName": "DIR"
           },
           {
@@ -4793,7 +4273,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -4840,7 +4320,7 @@
             "conflicts": [],
             "default": null,
             "help": "Optional image(s) to attach to the initial prompt",
-            "names": ["-i", "--image"],
+            "names": ["--image", "-i"],
             "valueName": "FILE"
           },
           {
@@ -4848,7 +4328,7 @@
             "conflicts": [],
             "default": null,
             "help": "Model the agent should use",
-            "names": ["-m", "--model"],
+            "names": ["--model", "-m"],
             "valueName": "MODEL"
           },
           {
@@ -4872,7 +4352,7 @@
             "conflicts": [],
             "default": null,
             "help": "Layer $CODEX_HOME/<name>.config.toml on top of the base user config",
-            "names": ["-p", "--profile"],
+            "names": ["--profile", "-p"],
             "valueName": "CONFIG_PROFILE_V2"
           },
           {
@@ -4884,7 +4364,7 @@
             "conflicts": [],
             "default": null,
             "help": "Select the sandbox policy to use when executing model-generated shell commands",
-            "names": ["-s", "--sandbox"],
+            "names": ["--sandbox", "-s"],
             "valueName": "SANDBOX_MODE"
           },
           {
@@ -4908,7 +4388,7 @@
             "conflicts": [],
             "default": null,
             "help": "Tell the agent to use the specified directory as its working root",
-            "names": ["-C", "--cd"],
+            "names": ["--cd", "-C"],
             "valueName": "DIR"
           },
           {
@@ -4931,24 +4411,16 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
           },
           {
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -4962,17 +4434,9 @@
             "acceptedValues": [],
             "conflicts": [],
             "default": null,
-            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-            "names": ["-c", "--config"],
+            "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+            "names": ["--config", "-c"],
             "valueName": "key=value"
-          },
-          {
-            "acceptedValues": [],
-            "conflicts": [],
-            "default": null,
-            "help": "shell_environment_policy.inherit=all`",
-            "names": ["-c", "-c", "-c"],
-            "valueName": null
           },
           {
             "acceptedValues": [],
@@ -4995,7 +4459,7 @@
             "conflicts": [],
             "default": null,
             "help": "Print help (see a summary with '-h')",
-            "names": ["-h", "--help"],
+            "names": ["--help", "-h"],
             "valueName": null
           }
         ],
@@ -5008,17 +4472,9 @@
         "acceptedValues": [],
         "conflicts": [],
         "default": null,
-        "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal.",
-        "names": ["-c", "--config"],
+        "help": "Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`. Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed as TOML. If it fails to parse as TOML, the raw string is used as a literal. Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c shell_environment_policy.inherit=all`",
+        "names": ["--config", "-c"],
         "valueName": "key=value"
-      },
-      {
-        "acceptedValues": [],
-        "conflicts": [],
-        "default": null,
-        "help": "shell_environment_policy.inherit=all`",
-        "names": ["-c", "-c", "-c"],
-        "valueName": null
       },
       {
         "acceptedValues": [],
@@ -5065,7 +4521,7 @@
         "conflicts": [],
         "default": null,
         "help": "Optional image(s) to attach to the initial prompt",
-        "names": ["-i", "--image"],
+        "names": ["--image", "-i"],
         "valueName": "FILE"
       },
       {
@@ -5073,7 +4529,7 @@
         "conflicts": [],
         "default": null,
         "help": "Model the agent should use",
-        "names": ["-m", "--model"],
+        "names": ["--model", "-m"],
         "valueName": "MODEL"
       },
       {
@@ -5097,7 +4553,7 @@
         "conflicts": [],
         "default": null,
         "help": "Layer $CODEX_HOME/<name>.config.toml on top of the base user config",
-        "names": ["-p", "--profile"],
+        "names": ["--profile", "-p"],
         "valueName": "CONFIG_PROFILE_V2"
       },
       {
@@ -5109,7 +4565,7 @@
         "conflicts": [],
         "default": null,
         "help": "Select the sandbox policy to use when executing model-generated shell commands",
-        "names": ["-s", "--sandbox"],
+        "names": ["--sandbox", "-s"],
         "valueName": "SANDBOX_MODE"
       },
       {
@@ -5133,7 +4589,7 @@
         "conflicts": [],
         "default": null,
         "help": "Tell the agent to use the specified directory as its working root",
-        "names": ["-C", "--cd"],
+        "names": ["--cd", "-C"],
         "valueName": "DIR"
       },
       {
@@ -5149,7 +4605,7 @@
         "conflicts": [],
         "default": null,
         "help": "Configure when the model requires human approval before executing a command Possible values: - untrusted:  Only run \"trusted\" commands (e.g. ls, cat, sed) without asking for user approval. Will escalate to the user if the model proposes a command that is not in the \"trusted\" set - on-request: The model decides when to ask the user for approval - never:      Never ask for user approval Execution failures are immediately returned to the model",
-        "names": ["-a", "--ask-for-approval"],
+        "names": ["--ask-for-approval", "-a"],
         "valueName": "APPROVAL_POLICY"
       },
       {
@@ -5173,7 +4629,7 @@
         "conflicts": [],
         "default": null,
         "help": "Print help (see a summary with '-h')",
-        "names": ["-h", "--help"],
+        "names": ["--help", "-h"],
         "valueName": null
       },
       {
@@ -5181,7 +4637,7 @@
         "conflicts": [],
         "default": null,
         "help": "Print version",
-        "names": ["-V", "--version"],
+        "names": ["--version", "-V"],
         "valueName": null
       }
     ]
