@@ -123,13 +123,16 @@ reference its own output and artifacts.
 
 `artifacts` map **values** are re-interpolated on every path, fresh runs and
 continuations alike, which makes them the correct way to pass an absolute path
-between steps:
+between steps. Interpolate a workflow input so the value stays absolute — here
+`workdir`, the same input the §11 example declares:
 
 ```json
-"artifacts": { "plan": "{{worktree_path}}/.agents/tasks/plan.md" }
+"artifacts": { "plan": "{{workdir}}/.agents/tasks/plan.md" }
 ```
 
-A downstream step reads `{{artifacts.plan}}` and receives the resolved path.
+A downstream step reads `{{artifacts.plan}}` and receives the resolved path. Any
+declared input works; if the workflow targets a worktree, pass that worktree's
+absolute path as the input and interpolate it here (§8.5).
 
 ### 3.4 What validation does and does not check (Contract)
 
