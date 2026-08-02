@@ -2,8 +2,8 @@
 
 > Last verified: 2026-08-02 against `pkgs.ai.chatgpt-codex` 0.146.0, the current
 > official OpenAI Codex manual, and a live TUI trust failure against the
-> statically managed Home Manager file (commit pending — CX-008 reopened after
-> project trust proved to be required mutable state in `config.toml`).
+> statically managed Home Manager file (commit `3546267a` — CX-008 reconciled
+> the required mutable project-trust state in `config.toml`).
 
 ## Purpose
 

@@ -1,7 +1,11 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-02 (commit pending — the native-surface audit adds
-> static Home Manager profile files and records why Codex has no LSP or shared
+> **Last verified:** 2026-08-02 (commit pending — the reverse extracted-surface
+> audit derives Codex's closed sandbox/approval enums from the pinned sidecar
+> and adds an exact human-reviewed disposition gate for every extracted command,
+> flag, field, feature maturity, model field, and config seam). Prior:
+> 2026-08-02 (commit 2eb54cef — the native-surface audit adds static Home
+> Manager profile files and records why Codex has no LSP or shared
 > wrapper-environment fanout). Prior: 2026-08-02 (commit 3546267a — Codex Home
 > Manager settings reconcile exact Nix-owned TOML leaves into a writable user
 > file because the native trust prompt persists ad-hoc project decisions through
@@ -47,6 +51,22 @@ configuration to each enabled ecosystem (Claude, Codex, Copilot, Kiro). It is
 NOT a thin wrapper — the gating semantics, default-setting behavior, and fanout
 patterns are load-bearing and got bitten into production by a silent no-op bug.
 Read this fragment before changing the gating.
+
+### Codex extracted facts need reverse coverage
+
+`overlays/chatgpt-codex-extracted.json` is generated fact from the pinned
+binary. `packages/chatgpt-codex/lib/extractedCoverage.nix` is the separate,
+human-reviewed ownership decision. Never generate the second from the first:
+`checks/chatgpt-codex-coverage.nix` intentionally fails when a bump introduces a
+command, canonical flag, record field, feature maturity, or config-key seam
+without an explicit Nix disposition.
+
+Dynamic policy is still coverage. Stable feature names become typed directly
+from the sidecar, non-stable names remain available through the boolean freeform
+table, model slugs stay strings because availability is account- and
+provider-dependent, and extracted reasoning levels feed typed enums. The closed
+`--sandbox` and `--ask-for-approval` value sets also feed their typed options
+directly; do not restore parallel handwritten lists.
 
 ### There is no `ai.enable`
 

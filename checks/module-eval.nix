@@ -16,6 +16,7 @@
   # under `lib.ai.*`. No top-level `lib.<helper>` exports exist.
   mcpLib = import ./../lib/mcp.nix {inherit lib;};
   aiBase = import ./../lib/ai {inherit lib;};
+  codexExtracted = builtins.fromJSON (builtins.readFile ../overlays/chatgpt-codex-extracted.json);
   tomlFormat = pkgs.formats.toml {};
   # Generic idempotent-flag helper shared with mkKiro's wrapper (lib/idempotentFlags.nix).
   idempotentFlags = import ./../lib/idempotentFlags.nix {inherit lib;};
@@ -1368,12 +1369,17 @@ in {
             };
           })))
         .success;
+      # These two vocabularies come from recursive Clap help. Test the entire
+      # extracted sets rather than one representative, so replacing the
+      # factory's sidecar lookup with a stale handwritten subset goes red.
+      extractedFlagValues = name:
+        (builtins.head (builtins.filter (flag: builtins.elem name flag.names) codexExtracted.cli.globalFlags)).acceptedValues;
     in
       accepts "model_reasoning_effort" "max"
-      && accepts "approval_policy" "on-request"
+      && lib.all (accepts "approval_policy") (extractedFlagValues "--ask-for-approval")
       && accepts "approvals_reviewer" "auto_review"
       && accepts "personality" "friendly"
-      && accepts "sandbox_mode" "read-only"
+      && lib.all (accepts "sandbox_mode") (extractedFlagValues "--sandbox")
       && accepts "web_search" "live"
       && acceptsFeature "memories" true
       && acceptsFeature "speculative_future_flag" false

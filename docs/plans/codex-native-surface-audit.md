@@ -1,14 +1,14 @@
 # Codex 0.146.0 native-surface audit
 
 > Last verified: 2026-08-02 against `pkgs.ai.chatgpt-codex` 0.146.0 and the
-> current official OpenAI Codex manual (commit pending — CX-012).
+> current official OpenAI Codex manual (commit `2eb54cef` — CX-012).
 
 ## Scope and decision rule
 
 This is the CX-012 expose/defer ledger for Codex surfaces that do not have an
 obvious cross-runtime mapping. It complements the artifact and mutation probes
-in `codex-configuration-probes.md`; it does not duplicate the reverse
-CLI-command coverage audit reserved for CX-013.
+in `codex-configuration-probes.md`; the completed reverse CLI-command coverage
+audit is recorded separately in `codex-reverse-coverage-audit.md`.
 
 A surface gets a dedicated Nix option or materializer when its structure is
 stable, mistakes need early diagnostics, or it lives outside the existing
