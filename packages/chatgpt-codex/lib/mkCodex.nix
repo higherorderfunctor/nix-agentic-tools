@@ -222,9 +222,20 @@
       && builtins.pathExists content
     );
 
-  isExecpolicySource = content:
+  isExecpolicySource = content: let
+    pathType = builtins.readFileType content;
+  in
     isExecpolicyPathLike content
-    && builtins.readFileType content == "regular";
+    && (
+      pathType
+      == "regular"
+      || (
+        pathType
+        == "symlink"
+        && builtins.pathExists content
+        && !builtins.pathExists "${toString content}/."
+      )
+    );
 
   mkExecpolicyEntries = prefix:
     lib.mapAttrs' (name: content:
@@ -246,7 +257,7 @@
     rules
     ++ lib.mapAttrsToList (name: content: {
       assertion = !isExecpolicyPathLike content || isExecpolicySource content;
-      message = "ai.codex.execpolicyRules.${name} path sources must be regular files, not directories or symlinks";
+      message = "ai.codex.execpolicyRules.${name} path sources must be regular files or symlinks to files, not directories";
     })
     rules;
 

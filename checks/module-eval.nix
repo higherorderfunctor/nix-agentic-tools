@@ -1003,6 +1003,24 @@ in {
       && devenvSource == "${rule}"
   );
 
+  module-codex-execpolicy-symlinked-file-is-source = mkTest "codex-execpolicy-symlinked-file-is-source" (
+    let
+      rule = pkgs.writeText "symlink-target.rules" ''prefix_rule(pattern = ["git", "status"])'';
+      symlink = pkgs.runCommand "symlink-source.rules" {} ''
+        ln -s ${rule} "$out"
+      '';
+      config.ai.codex = {
+        enable = true;
+        execpolicyRules.symlink-source = "${symlink}";
+      };
+      hmSource = (evalHm config).config.home.file.".codex/rules/symlink-source.rules".source;
+      devenvSource = (evalDevenv config).config.files.".codex/rules/symlink-source.rules".source;
+    in
+      hmSource
+      == "${symlink}"
+      && devenvSource == "${symlink}"
+  );
+
   module-codex-execpolicy-user-default-is-reserved = mkTest "codex-execpolicy-user-default-is-reserved" (
     let
       config.ai.codex = {
