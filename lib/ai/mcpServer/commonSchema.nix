@@ -58,6 +58,7 @@
           auth = lib.mkOption {
             type = lib.types.nullOr (lib.types.enum ["chatgpt" "oauth"]);
             default = null;
+            description = "Codex authentication mode for this MCP server.";
           };
           bearerTokenEnvVar = lib.mkOption {
             type = lib.types.nullOr lib.types.str;
@@ -67,22 +68,27 @@
           cwd = lib.mkOption {
             type = lib.types.nullOr lib.types.str;
             default = null;
+            description = "Working directory used when Codex starts a stdio MCP server.";
           };
           defaultToolsApprovalMode = lib.mkOption {
             type = lib.types.nullOr (lib.types.enum ["approve" "auto" "prompt" "writes"]);
             default = null;
+            description = "Default Codex approval policy for tools not listed under `tools`.";
           };
           disabledTools = lib.mkOption {
             type = lib.types.listOf lib.types.str;
             default = [];
+            description = "MCP tool names Codex must not expose from this server.";
           };
           enabled = lib.mkOption {
             type = lib.types.nullOr lib.types.bool;
             default = null;
+            description = "Whether Codex enables this MCP server.";
           };
           enabledTools = lib.mkOption {
             type = lib.types.listOf lib.types.str;
             default = [];
+            description = "Allowlist of MCP tool names Codex exposes from this server.";
           };
           envHttpHeaders = lib.mkOption {
             type = lib.types.attrsOf lib.types.str;
@@ -97,6 +103,7 @@
           experimentalEnvironment = lib.mkOption {
             type = lib.types.nullOr (lib.types.enum ["local" "remote"]);
             default = null;
+            description = "Experimental Codex execution environment for this MCP server.";
           };
           httpHeaders = lib.mkOption {
             type = lib.types.attrsOf lib.types.str;
@@ -106,30 +113,37 @@
           oauthResource = lib.mkOption {
             type = lib.types.nullOr lib.types.str;
             default = null;
+            description = "OAuth resource identifier Codex sends during MCP authorization.";
           };
           required = lib.mkOption {
             type = lib.types.nullOr lib.types.bool;
             default = null;
+            description = "Whether Codex treats failure to initialize this MCP server as fatal.";
           };
           scopes = lib.mkOption {
             type = lib.types.listOf lib.types.str;
             default = [];
+            description = "OAuth scopes Codex requests for this MCP server.";
           };
           startupTimeoutSec = lib.mkOption {
             type = lib.types.nullOr lib.types.number;
             default = null;
+            description = "Maximum seconds Codex waits for this MCP server to initialize.";
           };
           toolTimeoutSec = lib.mkOption {
             type = lib.types.nullOr lib.types.number;
             default = null;
+            description = "Default maximum seconds Codex allows each tool call to run.";
           };
           tools = lib.mkOption {
             type = lib.types.attrsOf (lib.types.submodule {
               options.approvalMode = lib.mkOption {
                 type = lib.types.enum ["approve" "auto" "prompt" "writes"];
+                description = "Codex approval policy override for this MCP tool.";
               };
             });
             default = {};
+            description = "Per-tool Codex approval policy overrides keyed by MCP tool name.";
           };
         };
       };

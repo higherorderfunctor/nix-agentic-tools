@@ -3,7 +3,7 @@
 [zereight/gitlab-mcp](https://github.com/zereight/gitlab-mcp) packaged as a Nix
 derivation with a typed home-manager surface. Exposes 182 GitLab REST/GraphQL
 tools (merge requests, issues, pipelines, wikis, work items, etc.) to MCP-aware
-clients (Claude Code, Copilot, Kiro). Connects to gitlab.com by default;
+clients (Claude Code, Codex, Copilot, Kiro). Connects to gitlab.com by default;
 self-hosted instances are configured per the "Instance URL" section below.
 
 ## Quick start (HM)

@@ -1,5 +1,9 @@
 ## Stacked Workflows Development
 
+> **Last verified:** 2026-08-02 (commit pending — Codex now receives the shared
+> stacked-workflow skills and routing instruction through the same explicit HM
+> and devenv pool contributions as the other enabled AI CLIs).
+
 ### Package Structure
 
 Stacked workflow content lives in `packages/stacked-workflows/` as a published
@@ -30,8 +34,8 @@ Two preset levels are exported via `lib.gitConfig` (essential aliases) and
 
 `stacked-workflows.enable = true` fans the (unprefixed) `stack-*` skills and the
 skill-routing instruction into the cross-ecosystem `ai.skills` /
-`ai.instructions` pools, so each enabled AI CLI (Claude, Copilot, Kiro) installs
-them at its native path. Both backend modules delegate to the shared
+`ai.instructions` pools, so each enabled AI CLI (Claude, Codex, Copilot, Kiro)
+installs them at its native path. Both backend modules delegate to the shared
 `lib/ai/mkSkillPackageModule` factory; the `ai.skills` pool is
 per-`evalModules`, so the HM (user-global) and devenv (project-local)
 contributions are independent.

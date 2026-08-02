@@ -1,8 +1,11 @@
-# Unified Instructions Surface — Research & Design
+# Unified Instructions Surface — Research, Design & Status
 
-> **Status:** context + rules shipped across Claude / Kiro / Copilot (HM +
-> devenv). Codex factory + size guard deferred. Research captured 2026-04-17;
-> implementation commits 8f0c16b, 7dad0b8, 419010a (2026-04-21).
+> **Status:** context + rules ship across Claude / Codex / Copilot / Kiro with
+> Home Manager and devenv backends. Codex lowers flat AGENTS.md content with
+> explicit scope degradation and a byte-size guard. Research captured
+> 2026-04-17; original implementation commits 8f0c16b, 7dad0b8, 419010a
+> (2026-04-21); Codex implementation landed in PRs #657, #658, and #668
+> (2026-08-01).
 >
 > **Goal:** add a unified `ai.<cli>.{context,rules}` surface to the factory that
 > fans out personal/global instruction content to every enabled ecosystem,
@@ -29,7 +32,8 @@ same shape to:
 - **MCP servers** (`ai.mcpServers` + `ai.<cli>.mcpServers`) — typed schema at
   `lib/ai/mcpServer/commonSchema.nix`; per-ecosystem `renderServer` translates
   typed shape → native on-disk form (Claude's `programs.claude-code.mcpServers`,
-  Kiro's `mcp.json`, Copilot's `--additional-mcp-config` target, Codex TBD).
+  Kiro's `mcp.json`, Copilot's `--additional-mcp-config` target, Codex's native
+  `[mcp_servers.<name>]` TOML tables).
 - **Skills** (`ai.skills` + `ai.<cli>.skills`) — SKILL.md progressive
   disclosure, mostly convergent across ecosystems; transformer still handles
   per-ecosystem disk paths.
@@ -320,8 +324,7 @@ silently.
 
 - At eval time, compute `sizeOf(context) + sizeOf(concat(rules))` for Codex's
   effective output.
-- Compare against `ai.codex.settings."project_doc_max_bytes"` (or the 32 KiB
-  default if unset).
+- Compare against `ai.codex.projectDocMaxBytes` (32 KiB by default).
 - If over cap: **hard eval error** listing the rules that pushed it over and
   suggesting either trimming or raising the cap.
 - Rationale: Codex silently truncates overflow. An eval error is the only way to
@@ -338,7 +341,7 @@ override file.
 
 1. **Transformers** — claude, copilot, kiro, agentsmd already shipped in
    `lib/ai/transformers/` before this work; reused as-is. Codex maps to
-   `agentsmd` (flat body, no frontmatter) when `mkCodex` lands.
+   `agentsmd` (flat body, no frontmatter).
 2. **Factory HM + devenv transform** — `context` + `rules` top-level and per-CLI
    options added; merge + pass-through landed. **Shipped:** commits 8f0c16b,
    7dad0b8.
@@ -373,31 +376,30 @@ override file.
 - **Deprecation of legacy `ai.instructions` list-shape** — `instructions` and
   `rules` coexist today. Deprecation warning and migration guide not yet added.
 
-## Scope & non-goals (intentionally deferred)
+## Original scope and adjacent-surface status
 
-This design covers **personal/global instruction files only**. Out of scope for
-this pass, to be revisited:
+This design originally covered **personal/global instruction files only**.
+Adjacent surfaces were kept separate so incompatible native formats were not
+forced through Markdown. Their current disposition is:
 
-- **Skills** — separate surface with distinct load semantics (progressive
-  disclosure, agent-initiated). Convergent across ecosystems
+- **Skills — shipped separately.** They retain distinct load semantics
+  (progressive disclosure, agent-initiated) and converge across ecosystems
   (`~/.claude/skills/`, `~/.agents/skills/`, `~/.kiro/skills/`,
-  `~/.copilot/skills/`) but deserves its own design pass. Keep `ai.<cli>.skills`
-  separate from instructions.
-- **Custom agents** — Claude subagents (`~/.claude/agents/`), Kiro custom agents
-  (JSON configs + resources), Copilot custom agents (`.agent.md`). Different
-  shapes per ecosystem; may not be unifiable. Future design pass.
-- **Project-scope instructions** — this design targets HM/global. Project scope
-  (`./CLAUDE.md`, `.kiro/steering/`, `.github/instructions/`, etc.) would use
-  the same option names but route through the devenv module writing to the
-  workspace instead of `~/`. Same shape, different output target — should be
-  straightforward once the HM path lands.
+  `~/.copilot/skills/`). `ai.<cli>.skills` remains separate from instructions.
+- **Custom agents — partially unified.** Portable semantic records fan out to
+  Claude, Codex, and Copilot; Codex renders standalone TOML. Legacy Markdown
+  remains Claude/Copilot-only, and Kiro's incompatible JSON agent model remains
+  native-only.
+- **Project-scope instructions — shipped through devenv.** The same option names
+  route to project-native paths such as root `AGENTS.md`, `.kiro/steering/`, and
+  `.github/instructions/` rather than Home Manager's user-global paths.
 - **Claude `CLAUDE.local.md`** — gitignored append-after-CLAUDE.md file. Could
   map to something like `ai.claude.localContext` but niche.
 - **Codex `AGENTS.override.md`** — wins over AGENTS.md. Same story as local —
   could expose via `ai.codex.overrideContext` if ever needed.
-- **Codex fallback filenames** — configure discovery through
-  `project_doc_fallback_filenames` when the Codex TOML surface lands; do not
-  copy fallback content into generated AGENTS.md.
+- **Codex fallback filenames** — configure discovery through the native
+  `ai.codex.settings.project_doc_fallback_filenames` escape hatch; do not copy
+  fallback content into generated AGENTS.md.
 - **Codex hierarchical project AGENTS.md** (walk-down from root to cwd, one per
   directory) — distinct from the dir-of-files model and needs its own treatment
   if we want to surface it.
@@ -405,8 +407,9 @@ this pass, to be revisited:
   Kiro reads AGENTS.md. The factory could exploit this (e.g. emit AGENTS.md once
   and skip per-ecosystem duplication) but that's a later optimization — explicit
   per-ecosystem emit is more predictable.
-- **Hooks** — not an instruction surface; tracked separately (already partially
-  exposed via `programs.claude-code.hooks`).
+- **Hooks — shipped separately where semantics intersect.** Portable command
+  groups span the exact Claude/Codex lifecycle intersection; runtime-native
+  events and handler fields remain under `ai.<cli>.hooks`.
 - **MCP resources and prompts** — orthogonal to instruction files, tracked
   separately.
 

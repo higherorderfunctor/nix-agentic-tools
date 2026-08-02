@@ -35,8 +35,9 @@ in {
       });
       default = {};
       description = ''
-        MCP servers fanned out to every enabled AI app. Per-app overrides
-        (ai.<name>.mcpServers) merge on top and win on conflict.
+        MCP servers fanned out to every enabled AI app: Claude, Codex,
+        Copilot, and Kiro. Per-app overrides (ai.<name>.mcpServers) merge on
+        top and win on conflict.
       '';
     };
 
@@ -82,10 +83,10 @@ in {
       type = lib.types.nullOr aiCommon.dirOptionType;
       default = null;
       description = ''
-        Directory of `.md` rule files fanned out to every enabled AI app.
-        Each file becomes one entry in `ai.rules` keyed by the basename
-        minus `.md`. Collisions with explicit `ai.rules.<name>` entries
-        (or with `ai.<cli>.rules`) fail via the shared collision check.
+        Directory of `.md` rule files fanned out to Claude, Codex, Copilot,
+        and Kiro. Each file becomes one entry in `ai.rules` keyed by the
+        basename minus `.md`. Collisions with explicit `ai.rules.<name>`
+        entries (or with `ai.<cli>.rules`) fail via the shared collision check.
         Accepts either a Nix path literal or `{ path, filter? }` where
         `filter : name → bool` (default: keep `.md` files). The source
         directory is NOT taken over wholesale — other derivations can
@@ -160,11 +161,12 @@ in {
       type = lib.types.nullOr aiCommon.dirOptionType;
       default = null;
       description = ''
-        Directory of `.md` agent files fanned out to Claude and
-        Copilot. Each file becomes one entry in `ai.agents` keyed
-        by the basename minus `.md`. Kiro intentionally excluded
-        (different JSON shape — use `ai.kiro.agentsDir` which
-        exists for the kiro-specific agents dir).
+        Directory of legacy `.md` agent files fanned out to Claude and
+        Copilot. Each file becomes one entry in `ai.agents` keyed by the
+        basename minus `.md`. Codex is excluded because it requires semantic
+        records rendered as standalone TOML; use explicit `ai.agents` records
+        for three-runtime fanout. Kiro is excluded because its agent format is
+        JSON; use `ai.kiro.agentsDir` for that ecosystem.
       '';
       example = lib.literalExpression ''./agents'';
     };
@@ -201,18 +203,19 @@ in {
     skills = lib.mkOption {
       type = lib.types.attrsOf lib.types.path;
       default = {};
-      description = "Cross-app skills fanned out to every enabled AI app.";
+      description = "Cross-app skills fanned out to every enabled AI app: Claude, Codex, Copilot, and Kiro.";
     };
 
     skillsDir = lib.mkOption {
       type = lib.types.nullOr aiCommon.dirOptionType;
       default = null;
       description = ''
-        Directory-of-directories; each immediate subdirectory becomes
-        one entry in `ai.skills` keyed by the subdir name. Collisions
-        with explicit `ai.skills.<name>` entries (or with
-        `ai.<cli>.skills`) fail via the shared collision check. The
-        default filter accepts every subdirectory; supply a
+        Directory-of-directories fanned out to Claude, Codex, Copilot, and
+        Kiro; each immediate subdirectory becomes one entry in `ai.skills`
+        keyed by the subdir name. Collisions with explicit
+        `ai.skills.<name>` entries (or with `ai.<cli>.skills`) fail via the
+        shared collision check. The default filter accepts every subdirectory;
+        supply a
         `{ path, filter? }` submodule with `filter : name → bool` to
         exclude specific subdirs.
       '';

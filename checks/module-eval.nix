@@ -2429,17 +2429,19 @@ in {
 
   module-kiro-default-disabled = mkTest "kiro-default-disabled" (!(evalHm {}).config.ai.kiro.enable);
 
-  module-all-three-enabled = mkTest "all-three-enabled" (
+  module-all-four-enabled = mkTest "all-four-enabled" (
     let
       evaluated = evalHm {
         ai = {
           claude.enable = true;
+          codex.enable = true;
           copilot.enable = true;
           kiro.enable = true;
         };
       };
     in
       evaluated.config.ai.claude.enable
+      && evaluated.config.ai.codex.enable
       && evaluated.config.ai.copilot.enable
       && evaluated.config.ai.kiro.enable
   );
@@ -6405,9 +6407,10 @@ in {
   );
 
   # ── ai.*.agentsDir Dir helper ──────────────────────────────
-  # Claude + Copilot only; Kiro is excluded because its agent
-  # shape is JSON (separate `ai.kiro.agents` / `ai.kiro.agentsDir`
-  # surfaces handle that).
+  # Legacy Markdown directories are Claude + Copilot only. Codex is excluded
+  # because its agents are semantic records rendered to standalone TOML; Kiro
+  # is excluded because its shape is JSON (separate `ai.kiro.agents` /
+  # `ai.kiro.agentsDir` surfaces handle that).
 
   # Path-only form: `ai.claude.agentsDir = ./fixtures/claude-agents;`
   # expands to two entries (agent-one, agent-two). Emission lands

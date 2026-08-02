@@ -32,12 +32,13 @@ tools might fail to use these skills and fix the root causes.
 
 - Does progressive loading work correctly? (name + description first, full
   content on demand)
-- Are skill frontmatter fields compatible across Claude Code, Kiro, and Copilot?
+- Are skill frontmatter fields compatible across Claude Code, Codex, Copilot,
+  and Kiro?
 - Does the `compatibility:` field in skill frontmatter affect loading?
 
 ### Cross-Platform Parity
 
-- Do skills work identically across Claude Code, Kiro, and Copilot?
+- Do skills work identically across Claude Code, Codex, Copilot, and Kiro?
 - Are there platform-specific features that break portability?
 - Is the skill directory structure
   (`packages/stacked-workflows/skills/<name>/SKILL.md`) the standard expected by
