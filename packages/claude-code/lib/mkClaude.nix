@@ -575,6 +575,7 @@ in
         mergedLspServers,
         mergedClaudeCopilotAgents,
         topContext,
+        topSettings,
         ...
       }: let
         aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
@@ -608,6 +609,9 @@ in
         helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
       in
         lib.mkMerge [
+          (lib.mkIf (topSettings.reasoningEffort != null) {
+            ai.claude.settings.effortLevel = lib.mkDefault topSettings.reasoningEffort;
+          })
           # L2b → L3: expand `ai.claude.agentsDir` into per-CLI
           # `ai.claude.agents`. mkDefault lets explicit
           # `ai.claude.agents.<name>` entries win within this layer;
@@ -770,6 +774,7 @@ in
         mergedSkills,
         mergedRules,
         topContext,
+        topSettings,
         ...
       }: let
         aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
@@ -820,6 +825,9 @@ in
         hasGapSettings = gapSettings != {};
       in
         lib.mkMerge [
+          (lib.mkIf (topSettings.reasoningEffort != null) {
+            ai.claude.settings.effortLevel = lib.mkDefault topSettings.reasoningEffort;
+          })
           # L2b → L3: expand `ai.claude.hookScriptsDir` into
           # `ai.claude.hookScripts` (parity with HM side). The devenv
           # factory merges `cfg.hookScripts` into `claude.code.hooks`

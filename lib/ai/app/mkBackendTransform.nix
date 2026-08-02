@@ -24,7 +24,8 @@
 #       options ? {};          # backend-only option additions
 #       defaults ? {};         # backend-only default overrides
 #       config ? _: {};        # consumer callback:
-#                              #   {cfg, config, merged*, topContext} → module attrs
+#                              #   {cfg, config, merged*, topContext, topSettings}
+#                              #   → module attrs
 #     };
 #     <other-backend> ? { ... };   # ignored here
 #   }
@@ -69,6 +70,7 @@
   mergedEnvironmentVariables = envMerge.merged;
   mergedClaudeCopilotAgents = agentsMerge.merged;
   topContext = config.ai.context;
+  topSettings = config.ai.settings;
 
   backendSpec = appRecord.${backend} or {};
   backendOptions = backendSpec.options or {};
@@ -82,7 +84,7 @@
   # options — e.g. the devenv materializer's conditional `devenv:files`
   # task edge needs `config.files != {}`.
   customConfig = backendConfigFn {
-    inherit cfg config mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables mergedClaudeCopilotAgents topContext;
+    inherit cfg config mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables mergedClaudeCopilotAgents topContext topSettings;
   };
 in {
   options.ai.${appRecord.name} =
