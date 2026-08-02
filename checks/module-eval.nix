@@ -537,6 +537,45 @@ in {
       && !(devenv.config.files ? ".codex/hooks.json")
   );
 
+  module-codex-profiles-hm-only = mkTest "codex-profiles-hm-only" (
+    let
+      config.ai.codex = {
+        enable = true;
+        profiles.deep-review = {
+          model = "gpt-5.6-sol";
+          model_reasoning_effort = "high";
+        };
+      };
+      hm = evalHm config;
+      devenv = evalDevenv config;
+      profile = hm.config.home.file.".codex/deep-review.config.toml".source.value;
+    in
+      profile
+      == {
+        model = "gpt-5.6-sol";
+        model_reasoning_effort = "high";
+      }
+      && builtins.any (assertion:
+        !assertion.assertion
+        && lib.hasInfix "ai.codex.profiles is user-global" assertion.message)
+      devenv.config.assertions
+  );
+
+  module-codex-profile-name-rejects-unsafe-stems = mkTest "codex-profile-name-rejects-unsafe-stems" (
+    let
+      evaluated = evalHm {
+        ai.codex = {
+          enable = true;
+          profiles."../escape".model = "gpt-5.6-sol";
+        };
+      };
+    in
+      builtins.any (assertion:
+        !assertion.assertion
+        && lib.hasInfix "must contain only letters, numbers, hyphens, and underscores" assertion.message)
+      evaluated.config.assertions
+  );
+
   module-codex-mcp-lowering-parity = mkTest "codex-mcp-lowering-parity" (
     let
       config.ai = {
