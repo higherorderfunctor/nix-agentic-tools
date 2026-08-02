@@ -214,6 +214,25 @@
     "<!-- rule: ${name} -->\n"
     + renderFragment rule;
 
+  mkExecpolicyEntries = prefix:
+    lib.mapAttrs' (name: content:
+      lib.nameValuePair "${prefix}/rules/${name}.rules" (
+        if builtins.isPath content
+        then {source = content;}
+        else {text = content;}
+      ));
+
+  mkExecpolicyNameAssertions = rules:
+    lib.mapAttrsToList (name: _: {
+      assertion =
+        name
+        != ""
+        && builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" name != null
+        && !lib.hasSuffix ".rules" name;
+      message = "ai.codex.execpolicyRules.${name} must be a safe filename stem without a .rules suffix";
+    })
+    rules;
+
   mkAgentsMd = {
     cfg,
     mergedInstructions,
@@ -314,6 +333,20 @@ in
           `ai.context`.
         '';
         example = lib.literalExpression "./codex-context.md";
+      };
+      execpolicyRules = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.either lib.types.lines lib.types.path);
+        default = {};
+        description = ''
+          Codex command-execution policy written as Starlark `.rules` files.
+          This is separate from Markdown `ai.rules`, which contributes durable
+          instructions to AGENTS.md.
+        '';
+        example = lib.literalExpression ''
+          {
+            git-read = ./git-read.rules;
+          }
+        '';
       };
       projectDocMaxBytes = lib.mkOption {
         type = lib.types.ints.positive;
@@ -473,6 +506,7 @@ in
       };
       assertions =
         mkPathAssertions {inherit mergedInstructions mergedRules;}
+        ++ mkExecpolicyNameAssertions cfg.execpolicyRules
         ++ [
           (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
           {
@@ -483,12 +517,17 @@ in
             assertion = !hasLegacySandbox || !usesPermissionProfiles;
             message = "ai.codex.settings must use either sandbox_mode/sandbox_workspace_write or default_permissions/permissions, never both";
           }
+          {
+            assertion = !(cfg.execpolicyRules ? default);
+            message = "ai.codex.execpolicyRules.default is reserved in Home Manager because Codex writes user allow-list decisions to rules/default.rules; choose another rule filename";
+          }
         ];
       home.file = lib.mkMerge [
         (lib.mkIf (agentsMd != "") {
           "${cfg.configDir}/AGENTS.md".text = agentsMd;
         })
         (helpers.mkSkillEntries ".agents" mergedSkills)
+        (mkExecpolicyEntries cfg.configDir cfg.execpolicyRules)
         (lib.mkIf (settings != {}) {
           "${cfg.configDir}/config.toml".source = tomlFormat.generate "codex-config.toml" settings;
         })
@@ -524,6 +563,7 @@ in
       };
       assertions =
         mkPathAssertions {inherit mergedInstructions mergedRules;}
+        ++ mkExecpolicyNameAssertions cfg.execpolicyRules
         ++ [
           (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
           {
@@ -548,6 +588,7 @@ in
           "AGENTS.md".text = agentsMd;
         })
         (helpers.mkDevenvSkillEntries ".agents" mergedSkills)
+        (mkExecpolicyEntries ".codex" cfg.execpolicyRules)
         (lib.mkIf (settings != {}) {
           ".codex/config.toml".source = tomlFormat.generate "codex-project-config.toml" settings;
         })

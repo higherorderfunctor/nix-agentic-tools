@@ -1,30 +1,32 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-01 (commit pending — Codex types beta named
-> permission profiles, including filesystem, network, inheritance, and workspace
-> root policy). Prior: 2026-08-01 (commit pending — Codex types stable sandbox,
-> approval, and user-global project-trust settings, rejects trust declarations
-> at project scope, and prevents legacy sandbox settings from composing with
-> beta permission profiles). Prior: 2026-08-01 (commit pending — Codex lowers
-> shared and per-app typed MCP servers to native `mcp_servers` tables in both
-> backends, including credential wrappers and Codex-specific policy extensions).
-> Prior: 2026-08-01 (commit pending — `ai.settings.reasoningEffort` lowers
-> through the exact Claude/Codex persisted semantic intersection, with native
-> settings overriding or excluding the shared default). Prior: 2026-08-01
-> (commit d7755c2f — Codex statically lowers a typed/freeform settings surface
-> to user and trusted-project config.toml). Prior: 2026-08-01 (commit 4562252c —
-> Codex lowers shared and per-app skills to `.agents/skills` in both backends).
-> Prior: 2026-08-01 (commit 444a6f97 — Codex degrades scoped instructions and
-> rules to explicit prose, supports opt-out through `skipIfUnsupported`, and
-> rejects generated AGENTS.md content over its configurable byte limit). Prior:
-> 2026-08-01 (commit c6b1b31e — Codex lowers shared and per-app context,
-> instructions, and unscoped Markdown rules into global HM and project-local
-> devenv AGENTS.md files). Prior: 2026-08-01 (commit 914096a8 — Codex joins the
-> factory with an enable/package-only vertical in both backends). Prior:
-> 2026-07-27 (commit pending — re-points the claude-code wrapping cite from
-> `packages/ai-clis/claude-code.nix`, a path that no longer exists, to
-> `overlays/claude-code.nix`; prior 2026-04-08, A10 delete modules/ tree). If
-> you change the gating, the `programs.*.enable` flipping, or the
+> **Last verified:** 2026-08-01 (commit pending — Codex materializes native
+> Starlark execpolicy files independently from Markdown instruction rules and
+> reserves the user-mutated `default.rules`). Prior: 2026-08-01 (commit pending
+> — Codex types beta named permission profiles, including filesystem, network,
+> inheritance, and workspace root policy). Prior: 2026-08-01 (commit pending —
+> Codex types stable sandbox, approval, and user-global project-trust settings,
+> rejects trust declarations at project scope, and prevents legacy sandbox
+> settings from composing with beta permission profiles). Prior: 2026-08-01
+> (commit pending — Codex lowers shared and per-app typed MCP servers to native
+> `mcp_servers` tables in both backends, including credential wrappers and
+> Codex-specific policy extensions). Prior: 2026-08-01 (commit pending —
+> `ai.settings.reasoningEffort` lowers through the exact Claude/Codex persisted
+> semantic intersection, with native settings overriding or excluding the shared
+> default). Prior: 2026-08-01 (commit d7755c2f — Codex statically lowers a
+> typed/freeform settings surface to user and trusted-project config.toml).
+> Prior: 2026-08-01 (commit 4562252c — Codex lowers shared and per-app skills to
+> `.agents/skills` in both backends). Prior: 2026-08-01 (commit 444a6f97 — Codex
+> degrades scoped instructions and rules to explicit prose, supports opt-out
+> through `skipIfUnsupported`, and rejects generated AGENTS.md content over its
+> configurable byte limit). Prior: 2026-08-01 (commit c6b1b31e — Codex lowers
+> shared and per-app context, instructions, and unscoped Markdown rules into
+> global HM and project-local devenv AGENTS.md files). Prior: 2026-08-01 (commit
+> 914096a8 — Codex joins the factory with an enable/package-only vertical in
+> both backends). Prior: 2026-07-27 (commit pending — re-points the claude-code
+> wrapping cite from `packages/ai-clis/claude-code.nix`, a path that no longer
+> exists, to `overlays/claude-code.nix`; prior 2026-04-08, A10 delete modules/
+> tree). If you change the gating, the `programs.*.enable` flipping, or the
 > cross-ecosystem data flow in the per-package factories
 > (`packages/*/lib/mk*.nix`) or shared options (`lib/ai/sharedOptions.nix`) and
 > this fragment isn't updated in the same commit, stop and fix it.
@@ -104,9 +106,15 @@ The ai module fans out TWO kinds of configuration:
   inheritance graphs remain runtime-validated by Codex because config layers may
   contribute parents dynamically. `projects.<path>.trust_level` is accepted only
   by Home Manager's user-global file: devenv rejects it because a project cannot
-  bootstrap the trust required to load its own `.codex/config.toml`. Codex
-  execpolicy is a separate Starlark `.rules` surface and is not lowered from
-  Markdown `ai.rules`.
+  bootstrap the trust required to load its own `.codex/config.toml`.
+  `ai.codex.execpolicyRules.<name>` writes native Starlark to
+  `<config-layer>/rules/<name>.rules` in both backends. It is intentionally
+  separate from Markdown `ai.rules`, which remains durable AGENTS.md guidance.
+  Home Manager reserves `execpolicyRules.default` because Codex appends accepted
+  user allow-list decisions to `$CODEX_HOME/rules/default.rules`; other
+  per-entry files remain declarative while that native mutation can coexist.
+  Trusted project rules are declarative and may use `default` because Codex's
+  native writer targets only the user layer.
 
 **Cross-ecosystem options** (live at `ai.*` top level and fan out to each
 enabled ecosystem whose native model preserves the option's semantics):

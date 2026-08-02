@@ -912,6 +912,83 @@ in {
       touch "$out"
     '';
 
+  module-codex-execpolicy-parity = mkTest "codex-execpolicy-parity" (
+    let
+      config.ai.codex = {
+        enable = true;
+        execpolicyRules.git-read = ''
+          prefix_rule(
+              pattern = ["git", ["diff", "log", "show"]],
+              decision = "allow",
+          )
+        '';
+      };
+      hmRule = (evalHm config).config.home.file.".codex/rules/git-read.rules".text;
+      devenvRule = (evalDevenv config).config.files.".codex/rules/git-read.rules".text;
+    in
+      hmRule
+      == devenvRule
+      && lib.hasInfix ''decision = "allow"'' hmRule
+  );
+
+  module-codex-execpolicy-runs-native-checker = let
+    evaluated = evalHm {
+      ai.codex = {
+        enable = true;
+        execpolicyRules.git-read = ''
+          prefix_rule(
+              pattern = ["git", ["diff", "log", "show"]],
+              decision = "allow",
+              match = ["git show HEAD"],
+              not_match = ["git status"],
+          )
+        '';
+      };
+    };
+    rule = pkgs.writeText "git-read.rules" evaluated.config.home.file.".codex/rules/git-read.rules".text;
+  in
+    pkgs.runCommand "module-test-codex-execpolicy-runs-native-checker" {} ''
+      ${pkgs.ai.chatgpt-codex}/bin/codex execpolicy check --pretty \
+        --rules ${rule} \
+        -- git show HEAD > result.json
+      ${pkgs.gnugrep}/bin/grep -Fq '"decision": "allow"' result.json
+      touch "$out"
+    '';
+
+  module-codex-execpolicy-separate-from-markdown-rules = mkTest "codex-execpolicy-separate-from-markdown-rules" (
+    let
+      evaluated = evalHm {
+        ai.codex = {
+          enable = true;
+          execpolicyRules.command-policy = ''prefix_rule(pattern = ["git", "status"])'';
+          rules.command-guidance.text = "Explain every command before running it.";
+        };
+      };
+      agentsMd = evaluated.config.home.file.".codex/AGENTS.md".text;
+      execpolicy = evaluated.config.home.file.".codex/rules/command-policy.rules".text;
+    in
+      lib.hasInfix "Explain every command" agentsMd
+      && !lib.hasInfix "prefix_rule" agentsMd
+      && lib.hasInfix "prefix_rule" execpolicy
+  );
+
+  module-codex-execpolicy-user-default-is-reserved = mkTest "codex-execpolicy-user-default-is-reserved" (
+    let
+      config.ai.codex = {
+        enable = true;
+        execpolicyRules.default = ''prefix_rule(pattern = ["git", "status"])'';
+      };
+      hm = evalHm config;
+      devenv = evalDevenv config;
+      hmFailure = lib.findFirst (assertion: !assertion.assertion) null hm.config.assertions;
+    in
+      hmFailure
+      != null
+      && lib.hasInfix "rules/default.rules" hmFailure.message
+      && builtins.all (assertion: assertion.assertion) devenv.config.assertions
+      && devenv.config.files.".codex/rules/default.rules".text != ""
+  );
+
   module-codex-trust-is-user-global = mkTest "codex-trust-is-user-global" (
     let
       config.ai.codex = {
