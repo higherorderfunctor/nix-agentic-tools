@@ -852,8 +852,8 @@ in {
             filesystem = {
               ":minimal" = "read";
               ":workspace_roots" = {
-                "." = "write";
                 "**/*.env" = "deny";
+                "." = "write";
               };
               glob_scan_max_depth = 8;
             };
@@ -890,8 +890,8 @@ in {
           permissions.project-edit = {
             extends = ":workspace";
             filesystem.":workspace_roots" = {
-              "." = "write";
               "**/*.env" = "deny";
+              "." = "write";
             };
             network = {
               domains."api.openai.com" = "allow";
