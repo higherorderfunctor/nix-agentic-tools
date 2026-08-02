@@ -214,14 +214,17 @@
     "<!-- rule: ${name} -->\n"
     + renderFragment rule;
 
-  isExecpolicySource = content:
+  isExecpolicyPathLike = content:
     builtins.isPath content
     || (
       builtins.isString content
       && lib.hasPrefix "/" content
       && builtins.pathExists content
-      && builtins.elem (builtins.readFileType content) ["regular" "symlink"]
     );
+
+  isExecpolicySource = content:
+    isExecpolicyPathLike content
+    && builtins.readFileType content == "regular";
 
   mkExecpolicyEntries = prefix:
     lib.mapAttrs' (name: content:
@@ -231,7 +234,7 @@
         else {text = content;}
       ));
 
-  mkExecpolicyNameAssertions = rules:
+  mkExecpolicyAssertions = rules:
     lib.mapAttrsToList (name: _: {
       assertion =
         name
@@ -239,6 +242,11 @@
         && builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" name != null
         && !lib.hasSuffix ".rules" name;
       message = "ai.codex.execpolicyRules.${name} must be a safe filename stem without a .rules suffix";
+    })
+    rules
+    ++ lib.mapAttrsToList (name: content: {
+      assertion = !isExecpolicyPathLike content || isExecpolicySource content;
+      message = "ai.codex.execpolicyRules.${name} path sources must be regular files, not directories or symlinks";
     })
     rules;
 
@@ -515,7 +523,7 @@ in
       };
       assertions =
         mkPathAssertions {inherit mergedInstructions mergedRules;}
-        ++ mkExecpolicyNameAssertions cfg.execpolicyRules
+        ++ mkExecpolicyAssertions cfg.execpolicyRules
         ++ [
           (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
           {
@@ -572,7 +580,7 @@ in
       };
       assertions =
         mkPathAssertions {inherit mergedInstructions mergedRules;}
-        ++ mkExecpolicyNameAssertions cfg.execpolicyRules
+        ++ mkExecpolicyAssertions cfg.execpolicyRules
         ++ [
           (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
           {

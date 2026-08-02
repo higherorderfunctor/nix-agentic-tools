@@ -912,6 +912,22 @@ in {
       touch "$out"
     '';
 
+  module-codex-execpolicy-directory-source-is-rejected = mkTest "codex-execpolicy-directory-source-is-rejected" (
+    let
+      config.ai.codex = {
+        enable = true;
+        execpolicyRules.directory = ./fixtures;
+      };
+      rejects = evaluated:
+        builtins.any (assertion:
+          !assertion.assertion
+          && lib.hasInfix "not directories" assertion.message)
+        evaluated.config.assertions;
+    in
+      rejects (evalHm config)
+      && rejects (evalDevenv config)
+  );
+
   module-codex-execpolicy-parity = mkTest "codex-execpolicy-parity" (
     let
       config.ai.codex = {
