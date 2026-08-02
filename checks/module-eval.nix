@@ -912,6 +912,148 @@ in {
       touch "$out"
     '';
 
+  module-codex-execpolicy-directory-source-is-rejected = mkTest "codex-execpolicy-directory-source-is-rejected" (
+    let
+      config.ai.codex = {
+        enable = true;
+        execpolicyRules.directory = ./fixtures;
+      };
+      rejects = evaluated:
+        builtins.any (assertion:
+          !assertion.assertion
+          && lib.hasInfix "path sources" assertion.message)
+        evaluated.config.assertions;
+    in
+      rejects (evalHm config)
+      && rejects (evalDevenv config)
+  );
+
+  module-codex-execpolicy-missing-source-is-rejected = mkTest "codex-execpolicy-missing-source-is-rejected" (
+    let
+      config.ai.codex = {
+        enable = true;
+        execpolicyRules.missing = "/definitely/missing/codex.rules";
+      };
+      rejects = evaluated:
+        builtins.any (assertion:
+          !assertion.assertion
+          && lib.hasInfix "path sources" assertion.message)
+        evaluated.config.assertions;
+    in
+      rejects (evalHm config)
+      && rejects (evalDevenv config)
+  );
+
+  module-codex-execpolicy-parity = mkTest "codex-execpolicy-parity" (
+    let
+      config.ai.codex = {
+        enable = true;
+        execpolicyRules.git-read = ''
+          prefix_rule(
+              pattern = ["git", ["diff", "log", "show"]],
+              decision = "allow",
+          )
+        '';
+      };
+      hmRule = (evalHm config).config.home.file.".codex/rules/git-read.rules".text;
+      devenvRule = (evalDevenv config).config.files.".codex/rules/git-read.rules".text;
+    in
+      hmRule
+      == devenvRule
+      && lib.hasInfix ''decision = "allow"'' hmRule
+  );
+
+  module-codex-execpolicy-runs-native-checker = let
+    evaluated = evalHm {
+      ai.codex = {
+        enable = true;
+        execpolicyRules.git-read = ''
+          prefix_rule(
+              pattern = ["git", ["diff", "log", "show"]],
+              decision = "allow",
+              match = ["git show HEAD"],
+              not_match = ["git status"],
+          )
+        '';
+      };
+    };
+    rule = pkgs.writeText "git-read.rules" evaluated.config.home.file.".codex/rules/git-read.rules".text;
+  in
+    pkgs.runCommand "module-test-codex-execpolicy-runs-native-checker" {} ''
+      ${pkgs.ai.chatgpt-codex}/bin/codex execpolicy check --pretty \
+        --rules ${rule} \
+        -- git show HEAD > result.json
+      ${pkgs.gnugrep}/bin/grep -Fq '"decision": "allow"' result.json
+      touch "$out"
+    '';
+
+  module-codex-execpolicy-separate-from-markdown-rules = mkTest "codex-execpolicy-separate-from-markdown-rules" (
+    let
+      evaluated = evalHm {
+        ai.codex = {
+          enable = true;
+          execpolicyRules.command-policy = ''prefix_rule(pattern = ["git", "status"])'';
+          rules.command-guidance.text = "Explain every command before running it.";
+        };
+      };
+      agentsMd = evaluated.config.home.file.".codex/AGENTS.md".text;
+      execpolicy = evaluated.config.home.file.".codex/rules/command-policy.rules".text;
+    in
+      lib.hasInfix "Explain every command" agentsMd
+      && !lib.hasInfix "prefix_rule" agentsMd
+      && lib.hasInfix "prefix_rule" execpolicy
+  );
+
+  module-codex-execpolicy-string-store-path-is-source = mkTest "codex-execpolicy-string-store-path-is-source" (
+    let
+      rule = pkgs.writeText "string-source.rules" ''prefix_rule(pattern = ["git", "status"])'';
+      config.ai.codex = {
+        enable = true;
+        execpolicyRules.string-source = "${rule}";
+      };
+      hmSource = (evalHm config).config.home.file.".codex/rules/string-source.rules".source;
+      devenvSource = (evalDevenv config).config.files.".codex/rules/string-source.rules".source;
+    in
+      hmSource
+      == "${rule}"
+      && devenvSource == "${rule}"
+  );
+
+  module-codex-execpolicy-symlinked-file-is-source = mkTest "codex-execpolicy-symlinked-file-is-source" (
+    let
+      rule = pkgs.writeText "symlink-target.rules" ''prefix_rule(pattern = ["git", "status"])'';
+      symlink = pkgs.runCommand "symlink-source.rules" {} ''
+        ln -s ${rule} "$out"
+      '';
+      config.ai.codex = {
+        enable = true;
+        execpolicyRules.symlink-source = "${symlink}";
+      };
+      hmSource = (evalHm config).config.home.file.".codex/rules/symlink-source.rules".source;
+      devenvSource = (evalDevenv config).config.files.".codex/rules/symlink-source.rules".source;
+    in
+      hmSource
+      == "${symlink}"
+      && devenvSource == "${symlink}"
+  );
+
+  module-codex-execpolicy-user-default-is-reserved = mkTest "codex-execpolicy-user-default-is-reserved" (
+    let
+      config.ai.codex = {
+        enable = true;
+        execpolicyRules.default = ''prefix_rule(pattern = ["git", "status"])'';
+      };
+      hm = evalHm config;
+      devenv = evalDevenv config;
+      hmFailure = lib.findFirst (assertion: !assertion.assertion) null hm.config.assertions;
+    in
+      hmFailure
+      != null
+      && lib.hasInfix "rules/default.rules" hmFailure.message
+      && builtins.all (assertion: assertion.assertion) devenv.config.assertions
+      && devenv.config.files.".codex/rules/default.rules".text != ""
+  );
+
   module-codex-trust-is-user-global = mkTest "codex-trust-is-user-global" (
     let
       config.ai.codex = {
