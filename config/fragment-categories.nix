@@ -56,7 +56,12 @@ _: {
     # options barrel (lib/ai/sharedOptions.nix).
     ai-module = {
       scopes = [
+        "lib/ai/agent.nix"
+        "lib/ai/app/**"
+        "lib/ai/default.nix"
+        "lib/ai/hooks.nix"
         "lib/ai/sharedOptions.nix"
+        "packages/*/lib/mk*.nix"
         "packages/chatgpt-codex/modules/**"
         "packages/claude-code/modules/**"
         "packages/copilot-cli/modules/**"

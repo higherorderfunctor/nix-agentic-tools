@@ -1,6 +1,9 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-01 (commit pending — Codex materializes native
+> **Last verified:** 2026-08-01 (commit pending — portable semantic agents fan
+> out to Claude, Copilot, and Codex while portable lifecycle command hooks fan
+> out to Claude and Codex; Codex emits native standalone agent TOML and
+> `hooks.json`). Prior: 2026-08-01 (commit pending — Codex materializes native
 > Starlark execpolicy files independently from Markdown instruction rules and
 > reserves the user-mutated `default.rules`). Prior: 2026-08-01 (commit pending
 > — Codex types beta named permission profiles, including filesystem, network,
@@ -45,7 +48,7 @@ sole gate for that ecosystem's fanout:
 | Consumer sets              | What fires                                                            |
 | -------------------------- | --------------------------------------------------------------------- |
 | `ai.claude.enable = true`  | claude fanout block + `programs.claude-code.enable = mkDefault true`  |
-| `ai.codex.enable = true`   | Codex package + AGENTS.md, skills, and config.toml fanout             |
+| `ai.codex.enable = true`   | Codex package + instructions, skills, settings, agents, hooks fanout  |
 | `ai.copilot.enable = true` | copilot fanout block + `programs.copilot-cli.enable = mkDefault true` |
 | `ai.kiro.enable = true`    | kiro fanout block + `programs.kiro-cli.enable = mkDefault true`       |
 
@@ -115,6 +118,22 @@ The ai module fans out TWO kinds of configuration:
   per-entry files remain declarative while that native mutation can coexist.
   Trusted project rules are declarative and may use `default` because Codex's
   native writer targets only the user layer.
+- `ai.codex.agents.<name>` — the semantic agent record plus a freeform `codex`
+  TOML extension. Home Manager emits `${configDir}/agents/<name>.toml`; devenv
+  emits trusted-project `.codex/agents/<name>.toml`. The filename stem supplies
+  native `name`, while `description` and `instructions` lower to the two other
+  required native fields. Reserved core fields cannot be redefined in `codex`.
+  Global concurrency, model/effort defaults, and interruption behavior live in
+  the typed `ai.codex.settings.agents` table.
+- `ai.codex.hooks.<Event>` — Codex-native matcher groups and command handlers,
+  appended after portable `ai.hooks` groups and emitted in adjacent
+  `hooks.json`. Typed native additions include `commandWindows`,
+  `statusMessage`, and `additionalContextLimit`; a JSON-compatible tail remains
+  for forward compatibility. Typed hooks cannot coexist with inline
+  `ai.codex.settings.hooks` at one layer because Codex loads both additively and
+  warns rather than applying normal config precedence. Nix ownership does not
+  make these native-policy hooks: Codex still requires `/hooks` review and
+  hash-based trust before user/project handlers run.
 
 **Cross-ecosystem options** (live at `ai.*` top level and fan out to each
 enabled ecosystem whose native model preserves the option's semantics):
@@ -129,6 +148,18 @@ enabled ecosystem whose native model preserves the option's semantics):
   its native representation. Codex uses user-global `$HOME/.agents/skills` in HM
   and repository-local `.agents/skills` in devenv; Claude, Copilot, and Kiro use
   their established native directories.
+- `ai.agents` — either legacy Markdown/path entries for Claude and Copilot or a
+  portable `{ description, instructions, codex? }` record. Semantic records
+  render Claude/Copilot frontmatter plus body and Codex standalone TOML. Codex
+  fails loudly on a legacy raw entry instead of pretending Markdown is a valid
+  agent config. Kiro remains excluded because its JSON agent model has no
+  lossless mapping to this intersection.
+- `ai.hooks` — command-only matcher groups across the exact shared Claude/Codex
+  lifecycle event set. Shared groups run before per-runtime groups for the same
+  event. Matcher strings pass through, so consumers must stay within the regex
+  subset understood by both runtimes. Non-portable events fail with a diagnostic
+  and belong under `ai.claude.hooks` or `ai.codex.hooks`. Kiro's v3 trigger
+  records remain native-only.
 - `ai.instructions` — list of instruction records (text plus optional name, path
   scoping, and description). Transformed per ecosystem via
   `fragments-ai.passthru.transforms`: Claude gets `.claude/rules/<name>.md` with
@@ -172,14 +203,12 @@ concatenation semantics instead.
 
 ### Assertion semantics
 
-Three assertions live in the config block, always evaluated (no mkIf gate to
-skip them):
-
-1. `ai.copilot.enable` requires `programs.copilot-cli` module to be imported
-2. `ai.kiro.enable` requires `programs.kiro-cli` module to be imported
-3. If any cross-ecosystem option is set (skills, instructions,
-   environmentVariables), at least one ecosystem must be enabled — otherwise the
-   config does nothing and the user didn't notice
+Fanout assertions live outside per-runtime enable gates so invalid shared data
+cannot hide behind a disabled CLI. This includes collision checks and the
+portable hook-event vocabulary check. Runtime-specific materialization
+assertions remain inside the enabled runtime's factory—for example, Codex's
+semantic-agent requirement and its `hooks.json` versus inline-hook ownership
+check.
 
 ### Other boundaries
 
@@ -212,8 +241,8 @@ broken — fix the module, not the consumer.
 
 `lib/ai/sharedOptions.nix` declares cross-app pools (`ai.skills`,
 `ai.instructions`, `ai.rules`, `ai.mcpServers`, `ai.lspServers`,
-`ai.environmentVariables`, `ai.agents`, `ai.context`). It's imported by BOTH
-`hmTransform.nix` and `devenvTransform.nix`.
+`ai.environmentVariables`, `ai.agents`, `ai.hooks`, `ai.context`). It's imported
+by BOTH `hmTransform.nix` and `devenvTransform.nix`.
 
 **The option declarations are shared. The values are NOT.**
 

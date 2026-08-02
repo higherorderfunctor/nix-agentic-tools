@@ -2,8 +2,10 @@
 {lib}: let
   dirHelpers = import ./dir-helpers.nix {inherit lib;};
 in {
+  agent = import ./agent.nix {inherit lib;};
   app = import ./app {inherit lib;};
   apps = import ./apps {inherit lib;};
+  hooks = import ./hooks.nix {inherit lib;};
   # Compose an app's single always-on instructions file = context baseline +
   # unnamed instructions (named live in their own per-name files). Consumed by
   # the Claude + Copilot per-app factories; see composeInstructionsFile.nix.

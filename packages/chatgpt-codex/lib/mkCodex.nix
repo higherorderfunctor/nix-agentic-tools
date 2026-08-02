@@ -4,8 +4,11 @@
   pkgs,
   ...
 }: let
+  agent = import ../../../lib/ai/agent.nix {inherit lib;};
+  sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
   codexExtracted = builtins.fromJSON (builtins.readFile ../../../overlays/chatgpt-codex-extracted.json);
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+  jsonFormat = pkgs.formats.json {};
   tomlFormat = pkgs.formats.toml {};
 
   stableFeatureNames = map (feature: feature.name) (
@@ -14,6 +17,53 @@
   reasoningEffortLevels = lib.unique (
     lib.concatMap (model: model.reasoningLevels) codexExtracted.models
   );
+  codexAgentType = agent.mkSemanticAgentType tomlFormat.type;
+  codexHookHandlerType = lib.types.submodule {
+    freeformType = jsonFormat.type;
+    options = {
+      additionalContextLimit = lib.mkOption {
+        type = lib.types.nullOr lib.types.ints.unsigned;
+        default = null;
+        description = "Approximate token threshold for large additionalContext output; zero disables truncation.";
+      };
+      command = lib.mkOption {
+        type = sharedHooks.commandType;
+        description = "Command executed for this hook; packages resolve to their executable store path.";
+      };
+      commandWindows = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Optional Windows-only command override.";
+      };
+      statusMessage = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Optional status text displayed while the hook runs.";
+      };
+      timeout = lib.mkOption {
+        type = lib.types.nullOr lib.types.ints.positive;
+        default = null;
+        description = "Per-handler timeout in seconds.";
+      };
+      type = lib.mkOption {
+        type = lib.types.enum ["command"];
+        default = "command";
+        description = "Codex currently executes command handlers only.";
+      };
+    };
+  };
+  codexHookMatcherBlockType = lib.types.submodule {
+    options = {
+      hooks = lib.mkOption {
+        type = lib.types.listOf codexHookHandlerType;
+        default = [];
+      };
+      matcher = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+      };
+    };
+  };
   approvalPolicyType =
     lib.types.either
     (lib.types.enum ["never" "on-request" "untrusted"])
@@ -261,6 +311,42 @@
     })
     rules;
 
+  reservedAgentKeys = ["description" "developer_instructions" "name"];
+
+  mkAgentAssertions = agents:
+    lib.mapAttrsToList (name: value: {
+      assertion =
+        agent.isSemantic value
+        && name != ""
+        && builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" name != null
+        && !lib.hasSuffix ".toml" name
+        && lib.intersectLists reservedAgentKeys (builtins.attrNames (value.codex or {})) == [];
+      message = ''
+        Codex agent '${name}' must use the portable { description,
+        instructions, codex? } form, have a safe filename stem without a
+        .toml suffix, and keep name/description/developer_instructions out of
+        the codex extension.
+      '';
+    })
+    agents;
+
+  mkAgentEntries = prefix: agents:
+    lib.mapAttrs' (name: value:
+      lib.nameValuePair "${prefix}/agents/${name}.toml" {
+        source = tomlFormat.generate "codex-agent-${name}.toml" (agent.renderCodex name value);
+      })
+    (lib.filterAttrs (_: agent.isSemantic) agents);
+
+  renderHooks = hooks:
+    lib.mapAttrs (_event: blocks:
+      map (block:
+        lib.optionalAttrs (block.matcher != null) {inherit (block) matcher;}
+        // {
+          hooks = map (handler: lib.filterAttrs (_: value: value != null) handler) block.hooks;
+        })
+      blocks)
+    hooks;
+
   mkAgentsMd = {
     cfg,
     mergedInstructions,
@@ -362,6 +448,17 @@ in
         '';
         example = lib.literalExpression "./codex-context.md";
       };
+      agents = lib.mkOption {
+        type = lib.types.attrsOf codexAgentType;
+        default = {};
+        description = ''
+          Codex-specific semantic agents merged with portable `ai.agents`;
+          collisions fail. Each record becomes one standalone TOML layer under
+          the active config directory's `agents/` child. Put normal Codex
+          config keys such as model, model_reasoning_effort, sandbox_mode,
+          mcp_servers, and skills.config under the record's `codex` extension.
+        '';
+      };
       execpolicyRules = lib.mkOption {
         type = lib.types.attrsOf (lib.types.either lib.types.lines lib.types.path);
         default = {};
@@ -376,6 +473,20 @@ in
           }
         '';
       };
+      hooks = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.listOf codexHookMatcherBlockType);
+        default = {};
+        description = ''
+          Codex-native lifecycle hook map appended after portable `ai.hooks`
+          matcher groups and emitted as `hooks.json`. Event keys are soft for
+          forward compatibility. Command handlers additionally type Codex's
+          commandWindows, statusMessage, and additionalContextLimit fields;
+          other JSON-compatible fields remain available as a native escape
+          hatch. Codex treats user/project hooks as non-managed: review and
+          trust each generated definition's current hash with `/hooks` before
+          it will run.
+        '';
+      };
       projectDocMaxBytes = lib.mkOption {
         type = lib.types.ints.positive;
         default = 32768;
@@ -388,6 +499,35 @@ in
         type = lib.types.submodule {
           freeformType = tomlFormat.type;
           options = {
+            agents = lib.mkOption {
+              type = lib.types.nullOr (lib.types.submodule {
+                freeformType = tomlFormat.type;
+                options = {
+                  default_subagent_model = lib.mkOption {
+                    type = lib.types.nullOr lib.types.str;
+                    default = null;
+                  };
+                  default_subagent_reasoning_effort = lib.mkOption {
+                    type = lib.types.nullOr (lib.types.enum reasoningEffortLevels);
+                    default = null;
+                  };
+                  enabled = lib.mkOption {
+                    type = lib.types.nullOr lib.types.bool;
+                    default = null;
+                  };
+                  interrupt_message = lib.mkOption {
+                    type = lib.types.nullOr lib.types.bool;
+                    default = null;
+                  };
+                  max_concurrent_threads_per_session = lib.mkOption {
+                    type = lib.types.nullOr lib.types.ints.positive;
+                    default = null;
+                  };
+                };
+              });
+              default = null;
+              description = "Global Codex multi-agent defaults and optional native role declarations.";
+            };
             allow_login_shell = lib.mkOption {
               type = lib.types.nullOr lib.types.bool;
               default = null;
@@ -513,7 +653,9 @@ in
       mergedRules,
       mergedServers,
       mergedSkills,
+      mergedAgents,
       topContext,
+      topHooks,
       topSettings,
       ...
     }: let
@@ -524,6 +666,7 @@ in
         != null
         || cfg.settings.sandbox_workspace_write != null;
       usesPermissionProfiles = hasPermissionProfiles cfg.settings;
+      effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       settings = helpers.filterNulls (cfg.settings
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
@@ -534,6 +677,7 @@ in
       };
       assertions =
         mkPathAssertions {inherit mergedInstructions mergedRules;}
+        ++ mkAgentAssertions mergedAgents
         ++ mkExecpolicyAssertions cfg.execpolicyRules
         ++ [
           (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
@@ -549,13 +693,21 @@ in
             assertion = !(cfg.execpolicyRules ? default);
             message = "ai.codex.execpolicyRules.default is reserved in Home Manager because Codex writes user allow-list decisions to rules/default.rules; choose another rule filename";
           }
+          {
+            assertion = effectiveHooks == {} || !(cfg.settings ? hooks);
+            message = "ai.hooks/ai.codex.hooks cannot be combined with ai.codex.settings.hooks; choose hooks.json fanout or inline config.toml hooks for this layer";
+          }
         ];
       home.file = lib.mkMerge [
         (lib.mkIf (agentsMd != "") {
           "${cfg.configDir}/AGENTS.md".text = agentsMd;
         })
         (helpers.mkSkillEntries ".agents" mergedSkills)
+        (mkAgentEntries cfg.configDir mergedAgents)
         (mkExecpolicyEntries cfg.configDir cfg.execpolicyRules)
+        (lib.mkIf (effectiveHooks != {}) {
+          "${cfg.configDir}/hooks.json".source = jsonFormat.generate "codex-hooks.json" {hooks = renderHooks effectiveHooks;};
+        })
         (lib.mkIf (settings != {}) {
           "${cfg.configDir}/config.toml".source = tomlFormat.generate "codex-config.toml" settings;
         })
@@ -569,7 +721,9 @@ in
       mergedRules,
       mergedServers,
       mergedSkills,
+      mergedAgents,
       topContext,
+      topHooks,
       topSettings,
       ...
     }: let
@@ -580,6 +734,7 @@ in
         != null
         || cfg.settings.sandbox_workspace_write != null;
       usesPermissionProfiles = hasPermissionProfiles cfg.settings;
+      effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       settings = helpers.filterNulls (cfg.settings
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
@@ -591,6 +746,7 @@ in
       };
       assertions =
         mkPathAssertions {inherit mergedInstructions mergedRules;}
+        ++ mkAgentAssertions mergedAgents
         ++ mkExecpolicyAssertions cfg.execpolicyRules
         ++ [
           (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
@@ -610,13 +766,21 @@ in
               Home Manager user-level configuration.
             '';
           }
+          {
+            assertion = effectiveHooks == {} || !(cfg.settings ? hooks);
+            message = "ai.hooks/ai.codex.hooks cannot be combined with ai.codex.settings.hooks; choose hooks.json fanout or inline config.toml hooks for this layer";
+          }
         ];
       files = lib.mkMerge [
         (lib.mkIf (agentsMd != "") {
           "AGENTS.md".text = agentsMd;
         })
         (helpers.mkDevenvSkillEntries ".agents" mergedSkills)
+        (mkAgentEntries ".codex" mergedAgents)
         (mkExecpolicyEntries ".codex" cfg.execpolicyRules)
+        (lib.mkIf (effectiveHooks != {}) {
+          ".codex/hooks.json".source = jsonFormat.generate "codex-project-hooks.json" {hooks = renderHooks effectiveHooks;};
+        })
         (lib.mkIf (settings != {}) {
           ".codex/config.toml".source = tomlFormat.generate "codex-project-config.toml" settings;
         })
