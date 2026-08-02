@@ -1,14 +1,17 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-01 (commit pending — `ai.settings.reasoningEffort`
-> lowers through the exact Claude/Codex persisted semantic intersection, with
-> native settings overriding or excluding the shared default). Prior: 2026-08-01
-> (commit d7755c2f — Codex statically lowers a typed/freeform settings surface
-> to user and trusted-project config.toml). Prior: 2026-08-01 (commit 4562252c —
-> Codex lowers shared and per-app skills to `.agents/skills` in both backends).
-> Prior: 2026-08-01 (commit 444a6f97 — Codex degrades scoped instructions and
-> rules to explicit prose, supports opt-out through `skipIfUnsupported`, and
-> rejects generated AGENTS.md content over its configurable byte limit). Prior:
+> **Last verified:** 2026-08-01 (commit pending — Codex lowers shared and
+> per-app typed MCP servers to native `mcp_servers` tables in both backends,
+> including credential wrappers and Codex-specific policy extensions). Prior:
+> 2026-08-01 (commit pending — `ai.settings.reasoningEffort` lowers through the
+> exact Claude/Codex persisted semantic intersection, with native settings
+> overriding or excluding the shared default). Prior: 2026-08-01 (commit
+> d7755c2f — Codex statically lowers a typed/freeform settings surface to user
+> and trusted-project config.toml). Prior: 2026-08-01 (commit 4562252c — Codex
+> lowers shared and per-app skills to `.agents/skills` in both backends). Prior:
+> 2026-08-01 (commit 444a6f97 — Codex degrades scoped instructions and rules to
+> explicit prose, supports opt-out through `skipIfUnsupported`, and rejects
+> generated AGENTS.md content over its configurable byte limit). Prior:
 > 2026-08-01 (commit c6b1b31e — Codex lowers shared and per-app context,
 > instructions, and unscoped Markdown rules into global HM and project-local
 > devenv AGENTS.md files). Prior: 2026-08-01 (commit 914096a8 — Codex joins the
@@ -84,8 +87,8 @@ The ai module fans out TWO kinds of configuration:
   trusted-project `.codex/config.toml`. Null/empty typed defaults emit no file.
   Devenv rejects provider, profile, notification, and telemetry keys that Codex
   documents as ignored at project scope. Static ownership is deliberate: native
-  MCP/feature editors cannot coexist with the managed file; mixed-file
-  reconciliation remains a separate concern.
+  feature editors cannot coexist with the managed file. MCP configuration is
+  composed into that same statically owned file through the typed server pool.
 
 **Cross-ecosystem options** (live at `ai.*` top level and fan out to each
 enabled ecosystem whose native model preserves the option's semantics):
@@ -117,6 +120,18 @@ enabled ecosystem whose native model preserves the option's semantics):
   default), or evaluation fails with per-contribution byte diagnostics. Codex
   also rejects `paths = []` as ambiguous; use `null` for always-on content or a
   non-empty list for scoped content.
+- `ai.mcpServers` — typed MCP definitions merged with
+  `ai.<ecosystem>.mcpServers`. Codex lowers the merged pool to native
+  `[mcp_servers.<name>]` TOML tables in both backends. It reuses the common MCP
+  renderer for package mode arguments, settings-derived environment, and runtime
+  credential wrappers, then removes the JSON-only `type` discriminator.
+  Codex-only authentication, readiness, timeout, environment-name, and tool
+  approval fields live under each server's `codex` block and lower from camel
+  case to native snake case. Literal `httpHeaders` are store-visible;
+  `envHttpHeaders` and `bearerTokenEnvVar` name environment variables so secret
+  values never enter generated TOML. Direct `ai.codex.settings.mcp_servers`
+  cannot be combined with either typed pool because their table ownership would
+  be ambiguous.
 - `ai.lspServers` — typed LSP definitions, translated to each ecosystem's native
   LSP config format (Claude via `ENABLE_LSP_TOOL=1`; Copilot has `lspServers`
   option; Kiro too).
@@ -140,15 +155,10 @@ skip them):
    environmentVariables), at least one ecosystem must be enabled — otherwise the
    config does nothing and the user didn't notice
 
-### What's NOT in the ai module
+### Other boundaries
 
 - The package wrapping (Bun runtime) for claude-code — handled in
   `overlays/claude-code.nix` at overlay level.
-- MCP server config — ai has no `mcpServers` option. Consumers configure
-  `programs.mcp.servers` or per-CLI `mcpServers` directly. This is intentional:
-  the ai module stayed focused on scope that's cleanly cross-ecosystem. MCP
-  integration has enough ecosystem-specific quirks that centralizing it would
-  have been more pain than value.
 
 See the backlog item "ai.claude.\* full passthrough" for the ongoing work to
 expose more `programs.claude-code.*` options via `ai.claude.*`.

@@ -15,6 +15,52 @@
     lib.concatMap (model: model.reasoningLevels) codexExtracted.models
   );
 
+  renderCodexServer = name: server: let
+    rendered = removeAttrs (lib.ai.renderServer pkgs name server) ["type"];
+    native = helpers.filterNulls (server.codex or {});
+    translated =
+      lib.optionalAttrs ((native.auth or null) != null) {inherit (native) auth;}
+      // lib.optionalAttrs ((native.bearerTokenEnvVar or null) != null) {bearer_token_env_var = native.bearerTokenEnvVar;}
+      // lib.optionalAttrs ((native.cwd or null) != null) {inherit (native) cwd;}
+      // lib.optionalAttrs ((native.defaultToolsApprovalMode or null) != null) {default_tools_approval_mode = native.defaultToolsApprovalMode;}
+      // lib.optionalAttrs ((native.disabledTools or []) != []) {disabled_tools = native.disabledTools;}
+      // lib.optionalAttrs ((native.enabled or null) != null) {inherit (native) enabled;}
+      // lib.optionalAttrs ((native.enabledTools or []) != []) {enabled_tools = native.enabledTools;}
+      // lib.optionalAttrs ((native.envHttpHeaders or {}) != {}) {env_http_headers = native.envHttpHeaders;}
+      // lib.optionalAttrs ((native.envVars or []) != []) {env_vars = native.envVars;}
+      // lib.optionalAttrs ((native.experimentalEnvironment or null) != null) {experimental_environment = native.experimentalEnvironment;}
+      // lib.optionalAttrs ((native.httpHeaders or {}) != {}) {http_headers = native.httpHeaders;}
+      // lib.optionalAttrs ((native.oauthResource or null) != null) {oauth_resource = native.oauthResource;}
+      // lib.optionalAttrs ((native.required or null) != null) {inherit (native) required;}
+      // lib.optionalAttrs ((native.scopes or []) != []) {inherit (native) scopes;}
+      // lib.optionalAttrs ((native.startupTimeoutSec or null) != null) {startup_timeout_sec = native.startupTimeoutSec;}
+      // lib.optionalAttrs ((native.toolTimeoutSec or null) != null) {tool_timeout_sec = native.toolTimeoutSec;}
+      // lib.optionalAttrs ((native.tools or {}) != {}) {
+        tools = lib.mapAttrs (_: tool: {approval_mode = tool.approvalMode;}) native.tools;
+      };
+  in
+    rendered
+    // translated
+    // removeAttrs native [
+      "auth"
+      "bearerTokenEnvVar"
+      "cwd"
+      "defaultToolsApprovalMode"
+      "disabledTools"
+      "enabled"
+      "enabledTools"
+      "envHttpHeaders"
+      "envVars"
+      "experimentalEnvironment"
+      "httpHeaders"
+      "oauthResource"
+      "required"
+      "scopes"
+      "startupTimeoutSec"
+      "toolTimeoutSec"
+      "tools"
+    ];
+
   projectIgnoredKeys = [
     "apps_mcp_product_sku"
     "chatgpt_base_url"
@@ -228,13 +274,18 @@ in
       cfg,
       mergedInstructions,
       mergedRules,
+      mergedServers,
       mergedSkills,
       topContext,
       topSettings,
       ...
     }: let
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
-      settings = helpers.filterNulls cfg.settings;
+      hasNativeMcpServers = cfg.settings ? mcp_servers;
+      settings = helpers.filterNulls (cfg.settings
+        // lib.optionalAttrs (mergedServers != {}) {
+          mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
+        });
     in {
       ai.codex.settings = lib.mkIf (topSettings.reasoningEffort != null) {
         model_reasoning_effort = lib.mkDefault topSettings.reasoningEffort;
@@ -243,6 +294,10 @@ in
         mkPathAssertions {inherit mergedInstructions mergedRules;}
         ++ [
           (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
+          {
+            assertion = mergedServers == {} || !hasNativeMcpServers;
+            message = "ai.codex.settings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
+          }
         ];
       home.file = lib.mkMerge [
         (lib.mkIf (agentsMd != "") {
@@ -260,13 +315,18 @@ in
       cfg,
       mergedInstructions,
       mergedRules,
+      mergedServers,
       mergedSkills,
       topContext,
       topSettings,
       ...
     }: let
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
-      settings = helpers.filterNulls cfg.settings;
+      hasNativeMcpServers = cfg.settings ? mcp_servers;
+      settings = helpers.filterNulls (cfg.settings
+        // lib.optionalAttrs (mergedServers != {}) {
+          mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
+        });
       ignoredSettings = lib.intersectLists projectIgnoredKeys (builtins.attrNames settings);
     in {
       ai.codex.settings = lib.mkIf (topSettings.reasoningEffort != null) {
@@ -276,6 +336,10 @@ in
         mkPathAssertions {inherit mergedInstructions mergedRules;}
         ++ [
           (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
+          {
+            assertion = mergedServers == {} || !hasNativeMcpServers;
+            message = "ai.codex.settings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
+          }
           {
             assertion = ignoredSettings == [];
             message = ''

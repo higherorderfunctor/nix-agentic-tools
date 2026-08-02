@@ -518,6 +518,140 @@ in {
       && !(devenv.config.files ? ".codex/config.toml")
   );
 
+  module-codex-mcp-lowering-parity = mkTest "codex-mcp-lowering-parity" (
+    let
+      config.ai = {
+        codex.enable = true;
+        mcpServers = {
+          docs = {
+            command = "/bin/docs";
+            args = ["serve"];
+            codex = {
+              defaultToolsApprovalMode = "prompt";
+              disabledTools = ["delete"];
+              enabled = true;
+              required = true;
+              startupTimeoutSec = 15;
+              tools.search.approvalMode = "auto";
+            };
+          };
+          remote = {
+            url = "https://example.test/mcp";
+            codex = {
+              bearerTokenEnvVar = "MCP_TOKEN";
+              envHttpHeaders.X-Tenant = "MCP_TENANT";
+              toolTimeoutSec = 90;
+            };
+          };
+        };
+      };
+      hm = evalHm config;
+      devenv = evalDevenv config;
+      expected = {
+        docs = {
+          args = ["serve"];
+          command = "/bin/docs";
+          default_tools_approval_mode = "prompt";
+          disabled_tools = ["delete"];
+          enabled = true;
+          required = true;
+          startup_timeout_sec = 15;
+          tools.search.approval_mode = "auto";
+        };
+        remote = {
+          bearer_token_env_var = "MCP_TOKEN";
+          env_http_headers.X-Tenant = "MCP_TENANT";
+          tool_timeout_sec = 90;
+          url = "https://example.test/mcp";
+        };
+      };
+    in
+      hm.config.home.file.".codex/config.toml".source.value.mcp_servers
+      == expected
+      && devenv.config.files.".codex/config.toml".source.value.mcp_servers == expected
+  );
+
+  module-codex-mcp-credential-wrapper-parity = mkTest "codex-mcp-credential-wrapper-parity" (
+    let
+      config.ai = {
+        codex.enable = true;
+        mcpServers.context7-mcp = {
+          package = pkgs.hello;
+          settings.credentials.file = "/run/secrets/context7-api-key";
+        };
+      };
+      hmServer = (evalHm config).config.home.file.".codex/config.toml".source.value.mcp_servers.context7-mcp;
+      devenvServer = (evalDevenv config).config.files.".codex/config.toml".source.value.mcp_servers.context7-mcp;
+      rendered = builtins.toJSON hmServer;
+    in
+      hmServer
+      == devenvServer
+      && lib.hasInfix "context7-mcp-env" hmServer.command
+      && lib.take 2 hmServer.args == ["--transport" "stdio"]
+      && !(lib.hasInfix "/run/secrets/context7-api-key" rendered)
+      && !(hmServer ? type)
+  );
+
+  # Mirrors the consumer pool recorded in private/codex-configuration-gap-handoff.md:
+  # two HTTP services, three typed package servers (including two credential
+  # wrappers), and one raw stdio server must coexist in Codex's native table.
+  module-codex-mcp-downstream-pool-compatible = mkTest "codex-mcp-downstream-pool-compatible" (
+    let
+      config.ai = {
+        codex.enable = true;
+        mcpServers = {
+          context7-mcp = {
+            package = pkgs.hello;
+            settings.credentials.file = "/run/secrets/context7-api-key";
+          };
+          effect-mcp.url = "http://127.0.0.1:19760/mcp";
+          git-mcp.package = pkgs.hello;
+          github-mcp = {
+            package = pkgs.hello;
+            settings.credentials.file = "/run/secrets/github-token";
+          };
+          nixos-mcp.url = "http://127.0.0.1:19761/mcp";
+          openmemory = {
+            command = "/bin/openmemory";
+            args = ["mcp"];
+          };
+        };
+      };
+      hmServers = (evalHm config).config.home.file.".codex/config.toml".source.value.mcp_servers;
+      devenvServers = (evalDevenv config).config.files.".codex/config.toml".source.value.mcp_servers;
+    in
+      hmServers
+      == devenvServers
+      && builtins.attrNames hmServers
+      == [
+        "context7-mcp"
+        "effect-mcp"
+        "git-mcp"
+        "github-mcp"
+        "nixos-mcp"
+        "openmemory"
+      ]
+      && lib.hasInfix "context7-mcp-env" hmServers.context7-mcp.command
+      && lib.hasInfix "github-mcp-env" hmServers.github-mcp.command
+      && hmServers.effect-mcp.url == "http://127.0.0.1:19760/mcp"
+      && hmServers.openmemory.command == "/bin/openmemory"
+  );
+
+  module-codex-mcp-native-table-collision-fails = mkTest "codex-mcp-native-table-collision-fails" (
+    let
+      evaluated = evalHm {
+        ai = {
+          codex = {
+            enable = true;
+            settings.mcp_servers.native.command = "native";
+          };
+          mcpServers.shared.command = "shared";
+        };
+      };
+    in
+      builtins.any (assertion: !assertion.assertion && lib.hasInfix "settings.mcp_servers" assertion.message) evaluated.config.assertions
+  );
+
   module-aggregate-reasoning-effort-hm-devenv-parity = mkTest "aggregate-reasoning-effort-hm-devenv-parity" (
     let
       config.ai = {
