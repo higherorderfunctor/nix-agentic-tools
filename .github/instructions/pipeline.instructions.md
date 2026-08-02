@@ -568,9 +568,11 @@ The directory is gitignored.
 
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-08-02 (commit pending — AGENTS.md now derives a
-> compact source-fragment routing index from the category registry for flat
-> consumers, without flattening scoped fragment bodies). Prior: 2026-08-01
+> **Last verified:** 2026-08-02 (commit pending — Kiro's transformer now accepts
+> an explicit typed `always | auto | fileMatch | manual` inclusion mode while
+> preserving the legacy paths-derived default). Prior 2026-08-02: AGENTS.md now
+> derives a compact source-fragment routing index from the category registry for
+> flat consumers, without flattening scoped fragment bodies. Prior: 2026-08-01
 > (generated instruction and repo-document derivations remain flake packages but
 > are excluded from the authenticated all-packages build, preventing
 > revision-by-revision Cachix churn while `nix flake check` retains drift
@@ -589,7 +591,7 @@ The fragment pipeline is deliberately layered so the same markdown source can
 fan out to many different consumers without duplication:
 
 1. **Primitives (`lib/fragments.nix`)** — pure, target-agnostic. Defines
-   `mkFragment { text, description, paths, priority }`,
+   `mkFragment { text, description, inclusion, paths, priority }`,
    `compose { fragments, ... }` (priority sort + SHA256 dedup + concat),
    `mkFrontmatter` (flat attrset → YAML header), and `render` (applies a
    transform to a composed fragment). No file I/O, no ecosystem knowledge, no
@@ -666,12 +668,16 @@ validation.
 - `copilot` — emits `applyTo:` as a quoted string. List input is joined with
   commas (Copilot's native multi-glob syntax). Null input defaults to
   `applyTo: "**"` (global fallback).
-- `kiro { name }` — emits `inclusion: always | fileMatch`, `name: ${name}`, and
-  optionally `description:` + `fileMatchPattern:`. The pattern uses a quoted
-  string for single-element lists and inline YAML array syntax for multi-element
-  lists. Kiro docs explicitly require array form for multi-pattern — a previous
-  comma-joined string form was silently interpreted as one literal pattern and
-  matched nothing. Fix landed in commit 5a97f09.
+- `kiro { name }` — emits `inclusion: always | auto | fileMatch | manual`,
+  `name: ${name}`, and optionally `description:` + `fileMatchPattern:`. A null
+  inclusion preserves the legacy derivation (`paths = null` → `always`, paths
+  set → `fileMatch`); an explicit mode overrides that derivation only for Kiro.
+  `auto` requires non-empty name + description, and explicit `fileMatch`
+  requires paths. The pattern uses a quoted string for single-element lists and
+  inline YAML array syntax for multi-element lists. Kiro docs explicitly require
+  array form for multi-pattern — a previous comma-joined string form was
+  silently interpreted as one literal pattern and matched nothing. Fix landed in
+  commit 5a97f09.
 - `agentsmd` — identity function. Returns `fragment.text` raw, no frontmatter.
   AGENTS.md is a flat, always-loaded file, so it cannot enforce glob scopes.
   Repo generation keeps scoped bodies out of that file and emits a compact

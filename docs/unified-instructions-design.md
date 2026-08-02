@@ -121,8 +121,9 @@ Sources: <https://kiro.dev/docs/steering/>,
 - **Also reads:** `~/.kiro/steering/AGENTS.md` natively (per blog post).
 - **Project:** `.kiro/steering/**/*.md`. CLI's default agent loads the glob;
   custom agents must opt in via `resources`.
-- **Frontmatter:** `inclusion: always | fileMatch | manual`; `fileMatchPattern:`
-  (string or list of globs); `name:`/`description:` optional.
+- **Frontmatter:** `inclusion: always | auto | fileMatch | manual`;
+  `fileMatchPattern:` (string or list of globs). `auto` requires `name:` and
+  `description:`; those fields are optional for the other modes.
 - **Manual mode:** `inclusion: manual` — loaded only on `#name` reference in
   chat or via slash-command selection.
 - **AGENTS.md:** natively supported at workspace root AND `~/.kiro/steering/`.
@@ -185,7 +186,7 @@ Sources: <https://developers.openai.com/codex/guides/agents-md>,
 | Project always-on           | `./CLAUDE.md`          | `./AGENTS.md`                               | `.github/copilot-instructions.md` + `AGENTS.md` + `CLAUDE.md` + `GEMINI.md` | `./AGENTS.md` (walk-down) |
 | Project multi-file dir      | `.claude/rules/*.md`   | `.kiro/steering/**/*.md`                    | `.github/instructions/**/*.instructions.md`                                 | —                         |
 | Path-scope frontmatter      | `paths:`               | `inclusion:fileMatch` + `fileMatchPattern:` | `applyTo:`                                                                  | — (dir placement only)    |
-| Inclusion modes             | always / path-scoped   | always / fileMatch / manual                 | always / applyTo                                                            | always only               |
+| Inclusion modes             | always / path-scoped   | always / auto / fileMatch / manual          | always / applyTo                                                            | always only               |
 | On-demand refs              | Skills                 | `#name` + Skills                            | Skills + `/skillname`                                                       | Skills                    |
 | `@file` imports             | native, recursive      | —                                           | —                                                                           | —                         |
 | Reads AGENTS.md natively    | **no**                 | yes                                         | yes (primary)                                                               | yes (primary)             |
@@ -200,9 +201,10 @@ Sources: <https://developers.openai.com/codex/guides/agents-md>,
 2. **Path-scoping dialect.** Three native frontmatter formats, equivalent
    semantics, different field names and list-vs-string encoding — plus Codex,
    which has no frontmatter at all.
-3. **Manual/on-demand.** Only Kiro has it on instructions (`inclusion: manual`).
-   Others push this to the **Skills** surface (a separate, convergent standard —
-   SKILL.md progressive disclosure).
+3. **Semantic/manual loading.** Only Kiro has description-triggered
+   `inclusion: auto` and on-demand `inclusion: manual` on instructions. Others
+   push on-demand loading to the **Skills** surface (a separate, convergent
+   standard — SKILL.md progressive disclosure).
 4. **Imports.** Only Claude has a composable include syntax.
 5. **AGENTS.md convergence is real.** Kiro, Copilot, Codex read it natively.
    Claude is the outlier.
@@ -214,7 +216,7 @@ Symmetric top-level and per-ecosystem shape:
 ```nix
 # Top-level (fans to every enabled ecosystem)
 ai.context     = str | path;                         # optional
-ai.rules.<name> = { text; paths?; description?; };   # optional
+ai.rules.<name> = { text; paths?; description?; inclusion?; }; # optional
 
 # Per-ecosystem (additive; wins on name collision)
 ai.<cli>.context     = str | path;                   # optional

@@ -44,14 +44,16 @@ in {
     };
 
     instructions = lib.mkOption {
-      type = lib.types.listOf lib.types.attrs;
+      type = lib.types.listOf aiCommon.instructionModule;
       default = [];
       description = ''
         Cross-app instructions fanned out to every enabled AI app. Codex
         concatenates them into its single AGENTS.md without frontmatter,
         degrading path scopes to explicit prose unless `skipIfUnsupported`
-        requests omission. Codex rejects empty path lists as ambiguous; use
-        null for always-on content or a non-empty list for scoped content.
+        requests omission. `inclusion` overrides Kiro's steering load strategy
+        without changing how other ecosystems translate `paths`. Codex rejects
+        empty path lists as ambiguous; use null for always-on content or a
+        non-empty list for scoped content.
       '';
     };
 
@@ -67,7 +69,9 @@ in {
         rules alphabetically to its single AGENTS.md, degrading path scopes to
         explicit prose unless `skipIfUnsupported` requests omission. Per-app
         overrides (ai.<name>.rules) merge on top; collisions are a failure.
-        Codex rejects empty path lists as ambiguous.
+        `inclusion` overrides only Kiro's steering load strategy; the other
+        ecosystems continue translating `paths`. Codex rejects empty path lists
+        as ambiguous.
       '';
       example = lib.literalExpression ''
         {

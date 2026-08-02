@@ -78,6 +78,33 @@ in {
       lib.hasInfix ''applyTo: "**/*.nix,**/*.toml"'' out
   );
 
+  factory-transformer-kiro-always = mkTest "transformer-kiro-always" (
+    let
+      out = ai.transformers.kiro.render {
+        inclusion = "always";
+        paths = ["**/*.nix"];
+        text = "body";
+      };
+    in
+      lib.hasInfix "inclusion: always" out && !(lib.hasInfix "fileMatchPattern:" out)
+  );
+
+  factory-transformer-kiro-auto = mkTest "transformer-kiro-auto" (
+    let
+      out = ai.transformers.kiro.render {
+        description = "Semantic Kiro guidance";
+        inclusion = "auto";
+        name = "semantic-guidance";
+        paths = ["**/*.nix"];
+        text = "body";
+      };
+    in
+      lib.hasInfix "description: Semantic Kiro guidance" out
+      && lib.hasInfix "inclusion: auto" out
+      && lib.hasInfix "name: semantic-guidance" out
+      && !(lib.hasInfix "fileMatchPattern:" out)
+  );
+
   factory-transformer-kiro-fileMatch = mkTest "transformer-kiro-fileMatch" (
     let
       out = ai.transformers.kiro.render {
@@ -87,6 +114,40 @@ in {
       };
     in
       lib.hasInfix "inclusion: fileMatch" out && lib.hasInfix "fileMatchPattern:" out
+  );
+
+  factory-transformer-kiro-manual = mkTest "transformer-kiro-manual" (
+    let
+      out = ai.transformers.kiro.render {
+        inclusion = "manual";
+        name = "on-demand";
+        text = "body";
+      };
+    in
+      lib.hasInfix "inclusion: manual" out
+      && lib.hasInfix "name: on-demand" out
+      && !(lib.hasInfix "fileMatchPattern:" out)
+  );
+
+  factory-transformer-kiro-validates-required-fields = mkTest "transformer-kiro-validates-required-fields" (
+    let
+      succeeds = fragment:
+        (builtins.tryEval (builtins.deepSeq (ai.transformers.kiro.render fragment) true)).success;
+    in
+      !(succeeds {
+        inclusion = "auto";
+        name = "missing-description";
+        text = "body";
+      })
+      && !(succeeds {
+        description = "Missing name";
+        inclusion = "auto";
+        text = "body";
+      })
+      && !(succeeds {
+        inclusion = "fileMatch";
+        text = "body";
+      })
   );
 
   factory-transformer-agentsmd-no-frontmatter = mkTest "transformer-agentsmd-no-frontmatter" (
