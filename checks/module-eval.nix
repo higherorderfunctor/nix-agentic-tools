@@ -1205,6 +1205,7 @@ in {
       hmAgent
       == expected
       && devenvAgent == expected
+      && lib.hasPrefix "---\n" claudeAgent
       && lib.hasInfix ''name: "reviewer"'' claudeAgent
       && lib.hasInfix ''description: "Review changes for correctness."'' claudeAgent
       && lib.hasInfix "Read first, then report concrete findings." copilotAgent
@@ -5748,6 +5749,23 @@ in {
         name = "demo-hook";
         text = "exit 0";
       };
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          hooks.PostToolUse = [{hooks = [{command = pkg;}];}];
+        };
+      };
+      handler = builtins.head (builtins.head result.config.ai.claude.hooks.PostToolUse).hooks;
+    in
+      builtins.isString handler.command && lib.hasSuffix "/bin/demo-hook" handler.command
+  );
+
+  module-claude-hooks-command-resolves-package-pname = mkTest "claude-hooks-command-resolves-package-pname" (
+    let
+      pkg = pkgs.runCommand "demo-hook-no-main-program" {pname = "demo-hook";} ''
+        mkdir -p "$out/bin"
+        touch "$out/bin/demo-hook"
+      '';
       result = evalHm {
         ai.claude = {
           enable = true;

@@ -2,6 +2,8 @@
   packageToCommand = package:
     if lib.isDerivation package && (package.meta.mainProgram or null) != null
     then lib.getExe package
+    else if lib.isDerivation package && package ? pname
+    then lib.getExe' package package.pname
     else "${package}";
 
   commandType = lib.types.coercedTo lib.types.package packageToCommand lib.types.str;
