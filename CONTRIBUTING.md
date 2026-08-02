@@ -59,13 +59,18 @@ tree. Nix store caching means unchanged inputs skip rebuild.
   tasks and flake derivations.
 - `packages/coding-standards/fragments/` — published coding standards.
 - `packages/stacked-workflows/fragments/` — published skill-routing rule.
-- `packages/fragments-ai/` — AI ecosystem transforms (passthru).
+- `lib/ai/transformers/` — AI ecosystem renderers, exported through the `lib/ai`
+  barrel.
 
 ### What Stays in Module System
 
-Skills, settings.json, MCP config, and CLI settings use `files.*` (devenv) or
-`home.file` (HM). These are symlinks to immutable store paths — no generation
-step.
+Skills and immutable CLI configuration generally use `files.*` (devenv) or
+`home.file` (HM), producing symlinks to store paths with no repository
+generation step. Runtime-writable files are an intentional exception: for
+example, Codex's user `config.toml` is reconciled by Home Manager activation and
+project config is copied by a devenv task so native trust and preference writes
+do not target the Nix store. These app-level materialization tasks are separate
+from the repository instruction generator described here.
 
 Instruction files are the exception: they are **copies**, not symlinks,
 materialized on every shell entry by `generate:instructions:materialize`
@@ -77,11 +82,14 @@ an absolute `/nix/store` path. See the devenv files-internals fragment.
 ### Running Generation
 
 ```bash
-devenv tasks run generate:instructions    # all instruction files
-devenv tasks run generate:instructions:claude  # just CLAUDE.md + rules
-devenv tasks run generate:repo            # README.md + CONTRIBUTING.md
-devenv tasks run generate:all             # everything
+devenv tasks run --mode before generate:all  # instructions + repo documents
+
+# A leaf can be run directly when only one projection is intentionally wanted:
+devenv tasks run generate:instructions:claude # just CLAUDE.md + rules
 ```
+
+The aggregate form requires `--mode before`; without it devenv runs the named
+aggregate but skips its dependency leaves.
 
 ## Updating Dependencies
 
@@ -182,13 +190,13 @@ To add a dev-only fragment:
 2. Add the name to `config.fragments.categories.<pkg>.sources` in
    `config/fragment-categories.nix` (scope globs for the category live alongside
    it as `.scopes`)
-3. Run `devenv tasks run generate:instructions` to regenerate
+3. Run `devenv tasks run --mode before generate:all` to regenerate
 
 To add a published fragment (consumed by external users):
 
 1. Create `packages/<pkg>/fragments/<name>.md`
 2. Register it in `packages/<pkg>/default.nix` under `passthru.fragments`
-3. Run `devenv tasks run generate:all` to regenerate everything
+3. Run `devenv tasks run --mode before generate:all` to regenerate everything
 
 ## Pull Requests
 
@@ -198,6 +206,6 @@ To add a published fragment (consumed by external users):
 - CI must pass (formatting, linting, spelling, module evaluation)
 - Generated files (CLAUDE.md, AGENTS.md, README.md, CONTRIBUTING.md, Copilot and
   Kiro instruction files) must be regenerated if their source fragments changed:
-  run `devenv tasks run generate:all`
+  run `devenv tasks run --mode before generate:all`
 - Keep commits atomic using the stacked workflow skills (`/stack-plan`,
   `/stack-fix`, `/stack-submit`)

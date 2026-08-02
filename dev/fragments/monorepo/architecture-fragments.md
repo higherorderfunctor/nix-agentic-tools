@@ -1,11 +1,14 @@
 ## Architecture Fragments
 
-> **Last verified:** 2026-07-27 (commit pending — the worked registration
-> example is now explicitly fictional, so it can no longer drift out of sync
-> with a real category's `scopes`; it previously named `ai-clis` and
-> `claude-code` and had gone stale against both. Prior 2026-07-27, that example
-> stopped teaching `packages/ai-clis/**`, a directory that does not exist; prior
-> 2026-07-24, the `packagePaths` + `devFragmentNames` registries dissolved into
+> **Last verified:** 2026-08-02 (commit pending — AGENTS.md now carries a
+> compact registry-generated routing index so Codex and other flat consumers can
+> find applicable source fragments without flattening every fragment body).
+> Prior: 2026-07-27 (the worked registration example is now explicitly
+> fictional, so it can no longer drift out of sync with a real category's
+> `scopes`; it previously named `ai-clis` and `claude-code` and had gone stale
+> against both. Prior 2026-07-27, that example stopped teaching
+> `packages/ai-clis/**`, a directory that does not exist; prior 2026-07-24, the
+> `packagePaths` + `devFragmentNames` registries dissolved into
 > `config.fragments.categories`).
 
 This repo ships path-scoped architecture fragments as dev-only context for
@@ -27,18 +30,25 @@ Scope globs (which files the fragment loads for) live separately in
 source lives on disk.
 
 Each scoped fragment emits per-ecosystem frontmatter via the
-`fragments-ai.passthru.transforms` pipeline:
+`lib/ai/transformers/` pipeline:
 
 - Claude: `.claude/rules/<name>.md` with `paths:` YAML list
 - Copilot: `.github/instructions/<name>.instructions.md` with `applyTo:`
   comma-joined globs
 - Kiro: `.kiro/steering/<name>.md` with `inclusion: fileMatch` and an array
   `fileMatchPattern:`
-- Codex / AGENTS.md: orientation only (no scoped fragments). Deep-dive
-  architecture content lives in the per-ecosystem scoped files above. AGENTS.md
-  used to concatenate every scoped fragment flat, but that bloated it to ~2k
-  lines; Phase 2.4 trimmed it to just the monorepo orientation content (commit
-  c4f4aff).
+- Codex / AGENTS.md: always-loaded orientation plus a compact routing index.
+  Codex has no glob-scoped instruction primitive, so matching remains a manual
+  progressive-disclosure step: the index maps the same registry scopes to the
+  authoritative source documents. AGENTS.md used to concatenate every scoped
+  fragment body, but that bloated it to ~2k lines; Phase 2.4 removed the bodies
+  (commit c4f4aff), and the generated index restores discoverability without
+  restoring that context cost.
+
+The source fragments are authoritative. The Claude, Copilot, and Kiro files are
+generated projections; some are gitignored and only materialized by devenv shell
+entry. Never edit a runtime projection directly. A `devenv shell` or direnv
+reload regenerates the analysis files after source or registry changes.
 
 ### Maintenance is mandatory
 
@@ -133,5 +143,6 @@ let `config/fragment-categories.nix` be the source of real rows.
 emission — do not hand-format frontmatter.
 
 After adding or editing fragments, run
-`devenv tasks run --mode before generate:instructions` to regenerate steering
-files for all ecosystems.
+`devenv tasks run --mode before generate:all` to regenerate instruction and
+repo-document projections. `--mode before` is load-bearing: without it devenv
+runs an aggregate without its dependency leaves.

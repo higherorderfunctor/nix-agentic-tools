@@ -568,18 +568,20 @@ The directory is gitignored.
 
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-08-01 (commit pending — generated instruction and
-> repo-document derivations remain flake packages but are excluded from the
-> authenticated all-packages build, preventing revision-by-revision Cachix churn
-> while `nix flake check` retains drift coverage). Prior: 2026-07-24 (the
-> `packagePaths` + `devFragmentNames` registries dissolved into
-> `config.fragments.categories`). If you touch `lib/fragments.nix`,
-> `config/fragment-categories.nix`, `lib/fragments-registry.nix`,
-> `dev/generate.nix`, `packages/fragments-ai/`, or any content-package
-> `passthru.fragments` surface and this fragment isn't updated in the same
-> commit, stop and fix it. This is a cross-cutting pipeline — changes that look
-> small in one file frequently ripple into generator outputs for four
-> ecosystems.
+> **Last verified:** 2026-08-02 (commit pending — AGENTS.md now derives a
+> compact source-fragment routing index from the category registry for flat
+> consumers, without flattening scoped fragment bodies). Prior: 2026-08-01
+> (generated instruction and repo-document derivations remain flake packages but
+> are excluded from the authenticated all-packages build, preventing
+> revision-by-revision Cachix churn while `nix flake check` retains drift
+> coverage). Prior: 2026-07-24 (the `packagePaths` + `devFragmentNames`
+> registries dissolved into `config.fragments.categories`). If you touch
+> `lib/fragments.nix`, `config/fragment-categories.nix`,
+> `lib/fragments-registry.nix`, `dev/generate.nix`, `lib/ai/transformers/`, or
+> any content-package `passthru.fragments` surface and this fragment isn't
+> updated in the same commit, stop and fix it. This is a cross-cutting pipeline
+> — changes that look small in one file frequently ripple into generator outputs
+> for four ecosystems.
 
 ### The four layers
 
@@ -593,10 +595,11 @@ fan out to many different consumers without duplication:
    transform to a composed fragment). No file I/O, no ecosystem knowledge, no
    hardcoded paths.
 
-2. **Topic packages (`packages/fragments-ai/`)** — derivations that bundle
-   content templates together with per-ecosystem transforms. Transforms are
-   exposed via `passthru.transforms` (fragments-ai). These are the eval-time API
-   — callers pull them via `pkgs.fragments-ai.passthru.transforms.claude` etc.
+2. **Transforms (`lib/ai/transformers/`)** — pure per-ecosystem renderers over
+   the shared fragment AST. `lib/ai/default.nix` exposes them as
+   `ai.transforms`; callers import that barrel rather than reaching through a
+   package passthru. The former `packages/fragments-ai/` package no longer
+   exists.
 
 3. **Content packages (`packages/coding-standards/`,
    `packages/stacked-workflows/`, etc.)** — derivations that ship markdown files
@@ -633,8 +636,10 @@ Concrete example: generating `.claude/rules/claude-code.md` from the
    `nix build .#instructions-claude`, then copies `$out/rules/claude-code.md` to
    the working tree.
 
-The same composed fragment runs through `copilot`, `kiro`, and `agentsmd`
-transforms for the other outputs. Single source, four ecosystem shapes.
+The same scoped composition runs through the Copilot and Kiro renderers as well.
+The root composition supplies AGENTS.md's always-loaded body, while a separate
+registry-derived index routes flat consumers to scoped source documents. Single
+source and registry, four ecosystem shapes.
 
 ### Generated outputs are not binary-cache artifacts
 
@@ -650,8 +655,8 @@ validation.
 
 ### The transforms in detail
 
-`packages/fragments-ai/default.nix` defines exactly four transforms, all curried
-as `(transform-args)` then `(fragment)`:
+`lib/ai/transformers/` defines exactly four renderer modules, exported through
+`lib/ai/transformers/default.nix`:
 
 - `claude { package }` — emits a YAML header with `description:` and `paths:`.
   Handles three `paths` shapes: null (no paths key), list (YAML list with quoted
@@ -668,7 +673,9 @@ as `(transform-args)` then `(fragment)`:
   comma-joined string form was silently interpreted as one literal pattern and
   matched nothing. Fix landed in commit 5a97f09.
 - `agentsmd` — identity function. Returns `fragment.text` raw, no frontmatter.
-  AGENTS.md is a flat, always-loaded file; there's nothing to scope.
+  AGENTS.md is a flat, always-loaded file, so it cannot enforce glob scopes.
+  Repo generation keeps scoped bodies out of that file and emits a compact
+  source-routing index instead; Codex applies that index manually.
 
 ### Orchestration details worth knowing
 
@@ -700,26 +707,32 @@ as `(transform-args)` then `(fragment)`:
 - **New dev fragment**: create markdown file at the right location, add to
   `config.fragments.categories.<category>.sources` in
   `config/fragment-categories.nix`, run
-  `devenv tasks run --mode before generate:instructions`.
+  `devenv tasks run --mode before generate:all`.
 - **New content package published fragment**: create markdown at
   `packages/<pkg>/fragments/<name>.md`, declare in the package's
   `passthru.fragments.<name>` using
   `fragmentsLib.mkFragment { text = builtins.readFile ...; }`. If dev
   instruction files should include it, add to
   `extraPublishedFragments.<category>` in `dev/generate.nix`.
-- **New ecosystem transform** (e.g., Codex): add function to
-  `packages/fragments-ai/default.nix` `passthru.transforms.<name>`, wire into
-  `mkEcosystemFile` in `dev/generate.nix`, add a new `instructions-<ecosystem>`
-  derivation in `flake.nix`, add the corresponding
-  `generate:instructions:<ecosystem>` task in `dev/tasks/generate.nix`.
+- **New ecosystem transform**: add a function to
+  `lib/ai/transformers/<name>.nix` and its `default.nix` barrel, wire it into
+  `mkEcosystemFile` in `dev/generate.nix`, add its formatted derivation to
+  `dev/instructions.nix` and flake export, then add the corresponding generation
+  task in `dev/tasks/generate.nix`.
+
+- **Flat-consumer routing is derived, not curated.** `dev/generate.nix` resolves
+  each source entry once for both fragment composition and AGENTS.md links, then
+  derives the routing index from `config.fragments.categories`. Do not add a
+  parallel Codex-only path/source table: it would be a fifth registry and could
+  silently diverge from the scoped runtime projections.
 
 ### Gotchas
 
-- **DevEnv task DAG requires `--mode before` for DAG resolution.** Running
-  `devenv tasks run generate:instructions` alone only runs the top-level task,
-  not its dependencies. Use
-  `devenv tasks run --mode before generate:instructions` or run the sub-tasks
-  directly.
+- **DevEnv task DAG requires `--mode before` for DAG resolution.** Running an
+  aggregate alone only runs that top-level task, not its dependency leaves. Use
+  `devenv tasks run --mode before generate:all`; this also covers generated repo
+  documents such as CONTRIBUTING.md, which an orientation-fragment change can
+  affect.
 - **New untracked files must be `git add`-ed before `nix build`** can see them
   in the flake context. This trips new fragment creation every time — add the
   file, THEN run the generate task, or the nix build won't find it.
@@ -757,13 +770,18 @@ tree. Nix store caching means unchanged inputs skip rebuild.
   tasks and flake derivations.
 - `packages/coding-standards/fragments/` — published coding standards.
 - `packages/stacked-workflows/fragments/` — published skill-routing rule.
-- `packages/fragments-ai/` — AI ecosystem transforms (passthru).
+- `lib/ai/transformers/` — AI ecosystem renderers, exported through the `lib/ai`
+  barrel.
 
 ### What Stays in Module System
 
-Skills, settings.json, MCP config, and CLI settings use `files.*` (devenv) or
-`home.file` (HM). These are symlinks to immutable store paths — no generation
-step.
+Skills and immutable CLI configuration generally use `files.*` (devenv) or
+`home.file` (HM), producing symlinks to store paths with no repository
+generation step. Runtime-writable files are an intentional exception: for
+example, Codex's user `config.toml` is reconciled by Home Manager activation and
+project config is copied by a devenv task so native trust and preference writes
+do not target the Nix store. These app-level materialization tasks are separate
+from the repository instruction generator described here.
 
 Instruction files are the exception: they are **copies**, not symlinks,
 materialized on every shell entry by `generate:instructions:materialize`
@@ -775,11 +793,14 @@ an absolute `/nix/store` path. See the devenv files-internals fragment.
 ### Running Generation
 
 ```bash
-devenv tasks run generate:instructions    # all instruction files
-devenv tasks run generate:instructions:claude  # just CLAUDE.md + rules
-devenv tasks run generate:repo            # README.md + CONTRIBUTING.md
-devenv tasks run generate:all             # everything
+devenv tasks run --mode before generate:all  # instructions + repo documents
+
+# A leaf can be run directly when only one projection is intentionally wanted:
+devenv tasks run generate:instructions:claude # just CLAUDE.md + rules
 ```
+
+The aggregate form requires `--mode before`; without it devenv runs the named
+aggregate but skips its dependency leaves.
 
 <!-- Fragment: dev/fragments/pipeline/update-pipeline.md -->
 

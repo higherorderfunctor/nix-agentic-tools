@@ -60,7 +60,7 @@
   #     Post-factory rollout, "package" location now reads from
   #     packages/<name>/docs/ (the Bazel-style per-package docs dir)
   #     instead of the legacy packages/<name>/fragments/dev/ path.
-  mkDevFragment = pkg: entry: let
+  normalizeDevFragmentSource = pkg: entry: let
     normalized =
       if builtins.isString entry
       then {
@@ -101,10 +101,18 @@
       then "devshell/${dir}/docs/${name}.md"
       else "${location}/${dir}/${name}.md";
   in
+    normalized
+    // {
+      inherit fragmentPath repoRelative;
+    };
+
+  mkDevFragment = pkg: entry: let
+    sourceInfo = normalizeDevFragmentSource pkg entry;
+  in
     fragments.mkFragment {
-      text = builtins.readFile fragmentPath;
-      description = "${location}:${dir}/${name}";
-      source = repoRelative;
+      text = builtins.readFile sourceInfo.fragmentPath;
+      description = "${sourceInfo.location}:${sourceInfo.dir}/${sourceInfo.name}";
+      source = sourceInfo.repoRelative;
       priority = 5;
     };
 
@@ -162,15 +170,33 @@
   monorepoEco = mkEcosystemFile "monorepo";
 
   # ── AGENTS.md content ────────────────────────────────────────────────
-  # AGENTS.md is orientation only. Previously concatenated
-  # every scoped architecture fragment into one flat file
-  # because the agents.md standard has no scoping primitive —
-  # but that bloated the file to ~19k tokens of content mostly
-  # irrelevant to any given edit. Flat consumers (Codex,
-  # generic agents.md-compatible tooling) get orientation;
-  # deep-dive architecture fragments are documented in
-  # per-ecosystem scoped files for Claude/Copilot/Kiro.
+  # AGENTS.md keeps scoped fragment BODIES out of its always-loaded context.
+  # It previously concatenated every body because the agents.md standard has
+  # no glob-scoping primitive, bloating the file to ~19k mostly irrelevant
+  # tokens. Dropping them entirely created the opposite failure for Codex:
+  # unlike Claude/Copilot/Kiro, it does not load the generated scoped files and
+  # had no way to discover which authoritative source fragment applied.
+  #
+  # The compact index below is the progressive-disclosure bridge. Deriving its
+  # match globs and source links from the SAME registry prevents a fifth,
+  # hand-maintained routing surface from drifting. Link the source fragments,
+  # not runtime projections: source paths exist in every checkout, while the
+  # Claude/Kiro projections are gitignored shell-entry artifacts and editing
+  # any generated projection would be overwritten on the next reload.
   agentsContent = rootComposed.text;
+
+  mkInlineCodeList = values:
+    lib.concatMapStringsSep ", " (value: "`${value}`") values;
+  mkSourceLinks = package:
+    lib.concatMapStringsSep ", " (entry: let
+      path = (normalizeDevFragmentSource package entry).repoRelative;
+    in "[`${path}`](${path})")
+    (fragmentCategories.${package}.sources or []);
+  scopedArchitectureRouting = lib.concatMapStringsSep "\n" (package: ''
+    - **`${package}`**
+      - Match: ${mkInlineCodeList fragmentCategories.${package}.scopes}
+      - Read: ${mkSourceLinks package}
+  '') (lib.sort lib.lessThan (builtins.attrNames nonRootPackages));
 
   # ── Claude rule files ────────────────────────────────────────────────
   # Scoped rule files only. No common.md — the body content is
@@ -222,11 +248,23 @@
     support the [AGENTS.md standard](https://agents.md).
 
     Deep-dive architecture documentation (fanout semantics, wrapper chains,
-    fragment pipeline, overlay cache-hit parity, HM module conventions,
-    etc.) lives in path-scoped per-ecosystem files (`.claude/rules/<name>.md`,
-    `.github/instructions/<name>.instructions.md`,
-    `.kiro/steering/<name>.md`). Those files load on demand when editing
-    matching paths; they are not duplicated here to keep this file small.
+    fragment pipeline, overlay cache-hit parity, HM module conventions, etc.)
+    comes from the source fragments routed below. Claude, Copilot, and Kiro
+    receive generated path-scoped projections of those sources. Codex and other
+    AGENTS-only consumers do not load those projections, so they must use the
+    routing index before editing a matching path. Fragment bodies are not
+    duplicated here, keeping always-loaded context focused.
+
+    ## Scoped architecture routing
+
+    Before editing a path that matches one or more entries, read every listed
+    source document for those entries. When multiple entries match, their
+    guidance composes. The registry-generated index is authoritative for
+    routing; source documents are authoritative for content. Do not edit
+    generated `.claude/rules/`, `.github/instructions/`, or `.kiro/steering/`
+    projections directly.
+
+    ${scopedArchitectureRouting}
 
     ${agentsContent}
   '';
@@ -758,13 +796,13 @@
     2. Add the name to `config.fragments.categories.<pkg>.sources` in
        `config/fragment-categories.nix` (scope globs for the category live
        alongside it as `.scopes`)
-    3. Run `devenv tasks run generate:instructions` to regenerate
+    3. Run `devenv tasks run --mode before generate:all` to regenerate
 
     To add a published fragment (consumed by external users):
 
     1. Create `packages/<pkg>/fragments/<name>.md`
     2. Register it in `packages/<pkg>/default.nix` under `passthru.fragments`
-    3. Run `devenv tasks run generate:all` to regenerate everything
+    3. Run `devenv tasks run --mode before generate:all` to regenerate everything
 
     ## Pull Requests
 
@@ -774,7 +812,8 @@
     - CI must pass (formatting, linting, spelling, module evaluation)
     - Generated files (CLAUDE.md, AGENTS.md, README.md, CONTRIBUTING.md,
       Copilot and Kiro instruction files) must be regenerated if their
-      source fragments changed: run `devenv tasks run generate:all`
+      source fragments changed: run
+      `devenv tasks run --mode before generate:all`
     - Keep commits atomic using the stacked workflow skills
       (`/stack-plan`, `/stack-fix`, `/stack-submit`)
   '';

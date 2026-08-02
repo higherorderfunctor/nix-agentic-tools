@@ -671,9 +671,11 @@ in {
       && !(hmServer ? type)
   );
 
-  # Mirrors the consumer pool recorded in private/codex-configuration-gap-handoff.md:
-  # two HTTP services, three typed package servers (including two credential
-  # wrappers), and one raw stdio server must coexist in Codex's native table.
+  # Exercise every supported MCP lowering shape together: two HTTP services,
+  # three typed package servers (including two credential wrappers), and one
+  # raw stdio server must coexist in Codex's native table. Keep this rationale
+  # self-contained; private implementation handoffs are intentionally
+  # disposable and must never become the only explanation for a durable gate.
   module-codex-mcp-downstream-pool-compatible = mkTest "codex-mcp-downstream-pool-compatible" (
     let
       config.ai = {
