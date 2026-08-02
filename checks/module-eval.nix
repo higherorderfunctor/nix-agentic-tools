@@ -921,7 +921,7 @@ in {
       rejects = evaluated:
         builtins.any (assertion:
           !assertion.assertion
-          && lib.hasInfix "not directories" assertion.message)
+          && lib.hasInfix "path sources" assertion.message)
         evaluated.config.assertions;
     in
       rejects (evalHm config)

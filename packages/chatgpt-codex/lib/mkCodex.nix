@@ -257,7 +257,7 @@
     rules
     ++ lib.mapAttrsToList (name: content: {
       assertion = !isExecpolicyPathLike content || isExecpolicySource content;
-      message = "ai.codex.execpolicyRules.${name} path sources must be regular files or symlinks to files, not directories";
+      message = "ai.codex.execpolicyRules.${name} path sources must be existing regular files or symlinks to existing files, not missing paths or directories";
     })
     rules;
 
