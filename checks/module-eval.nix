@@ -572,7 +572,7 @@ in {
     in
       builtins.any (assertion:
         !assertion.assertion
-        && lib.hasInfix "must contain only letters, numbers, hyphens, and underscores" assertion.message)
+        && lib.hasInfix "must start with a letter or number" assertion.message)
       evaluated.config.assertions
   );
 

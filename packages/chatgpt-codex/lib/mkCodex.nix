@@ -320,7 +320,7 @@
   mkProfileAssertions = profiles:
     lib.mapAttrsToList (name: _: {
       assertion = builtins.match "[A-Za-z0-9][A-Za-z0-9_-]*" name != null;
-      message = "ai.codex.profiles.${name} must contain only letters, numbers, hyphens, and underscores";
+      message = "ai.codex.profiles.${name} must start with a letter or number and contain only letters, numbers, hyphens, and underscores";
     })
     profiles;
 
