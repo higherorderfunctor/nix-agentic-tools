@@ -152,8 +152,9 @@ enabled ecosystem whose native model preserves the option's semantics):
   portable `{ description, instructions, codex? }` record. Semantic records
   render Claude/Copilot frontmatter plus body and Codex standalone TOML. Codex
   fails loudly on a legacy raw entry instead of pretending Markdown is a valid
-  agent config. Kiro remains excluded because its JSON agent model has no
-  lossless mapping to this intersection.
+  agent config. Legacy Nix paths stay path-valued for Claude's native option but
+  are read into text for Copilot's file writer. Kiro remains excluded because
+  its JSON agent model has no lossless mapping to this intersection.
 - `ai.hooks` — command-only matcher groups across the exact shared Claude/Codex
   lifecycle event set. Shared groups run before per-runtime groups for the same
   event. Matcher strings pass through, so consumers must stay within the regex

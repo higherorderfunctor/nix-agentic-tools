@@ -61,8 +61,11 @@ in {
     };
 
   renderCopilot = name: value:
-    renderMarkdown {
-      includeName = false;
-      inherit name value;
-    };
+    if !isSemantic value && builtins.isPath value
+    then resolveText value
+    else
+      renderMarkdown {
+        includeName = false;
+        inherit name value;
+      };
 }

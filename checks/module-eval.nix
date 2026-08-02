@@ -5502,6 +5502,19 @@ in {
       && lib.hasInfix "Reviewer" (agentFile.text or "")
   );
 
+  module-copilot-hm-path-agent-resolves-to-text = mkTest "copilot-hm-path-agent-resolves-to-text" (
+    let
+      result = evalHm {
+        ai.copilot.enable = true;
+        ai.agents.reviewer = ./fixtures/claude-agents/agent-one.md;
+      };
+      agentFile = result.config.home.file.".copilot/agents/reviewer.md" or null;
+    in
+      agentFile
+      != null
+      && (agentFile.text or null) == builtins.readFile ./fixtures/claude-agents/agent-one.md
+  );
+
   # Devenv: top-level ai.agents fans out to Copilot's .github/agents.
   module-copilot-devenv-top-level-agents-fanout = mkTest "copilot-devenv-top-level-agents-fanout" (
     let

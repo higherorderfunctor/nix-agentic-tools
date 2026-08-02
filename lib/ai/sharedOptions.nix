@@ -145,7 +145,7 @@ in {
         a clear assertion when Codex is enabled. Each entry becomes a file:
         - Claude  → ~/.claude/agents/<name>.md
         - Copilot → .github/agents/<name>.agent.md (devenv) or
-                    ~/.copilot/agents/<name>.agent.md (HM)
+                    ~/.copilot/agents/<name>.md (HM)
         - Codex   → ~/.codex/agents/<name>.toml (HM) or
                     .codex/agents/<name>.toml (devenv)
         Kiro intentionally excluded — Kiro's agent format is JSON
