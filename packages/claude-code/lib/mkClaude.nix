@@ -11,6 +11,8 @@
   pkgs,
   ...
 }: let
+  agent = import ../../../lib/ai/agent.nix {inherit lib;};
+  sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
   # Eval-pure reads of COMMITTED source JSON (no IFD). See overlays.md
   # § IFD Patterns and memory project_claude_effort_pin_state.
   extracted =
@@ -23,10 +25,7 @@
   # relative companion paths are unsafe). A package with meta.mainProgram →
   # getExe; a bare-file derivation (writeShellScript/writeText) → its outPath; a
   # string passes through unchanged.
-  pkgToCommand = p:
-    if lib.isDerivation p && (p.meta.mainProgram or null) != null
-    then lib.getExe p
-    else "${p}";
+  pkgToCommand = sharedHooks.packageToCommand;
   # A single handler. `command` is modelled fully; the exotic handler types
   # (http/prompt/agent/mcp_tool) round-trip via the freeform JSON tail (and, on
   # devenv, force the gap-write path — see plan §9b).
@@ -390,11 +389,11 @@ in
         '';
       };
       agents = lib.mkOption {
-        type = with lib.types; attrsOf (either lines path);
+        type = lib.types.attrsOf agent.agentType;
         default = {};
         description = ''
-          Claude-specific agent markdown (merged with top-level
-          `ai.agents`; collisions fail). Routed to
+          Claude-specific agent Markdown or portable semantic records (merged
+          with top-level `ai.agents`; collisions fail). Routed to
           `programs.claude-code.agents`; upstream writes them under
           `~/.claude/agents/<name>.md`. HM only — upstream devenv
           `claude.code` has no agents surface.
@@ -522,7 +521,9 @@ in
           package (e.g. writeShellApplication) — the script and its data files
           ride the /nix/store closure at absolute paths. Use
           `ai.claude.hookScripts` only for trivial inline single-file hooks.
-          Claude-only — Kiro's `ai.kiro.hooks` takes JSON-shaped definitions.
+          Claude-specific — portable command hooks for the shared
+          Claude/Codex lifecycle intersection belong under `ai.hooks`. Kiro's
+          `ai.kiro.hooks` takes JSON-shaped definitions.
         '';
         example = lib.literalExpression ''
           {
@@ -573,8 +574,9 @@ in
         mergedSkills,
         mergedRules,
         mergedLspServers,
-        mergedClaudeCopilotAgents,
+        mergedAgents,
         topContext,
+        topHooks,
         topSettings,
         ...
       }: let
@@ -607,6 +609,7 @@ in
           else rule.text;
         dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
         helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+        effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       in
         lib.mkMerge [
           (lib.mkIf (topSettings.reasoningEffort != null) {
@@ -657,8 +660,8 @@ in
           # `settings = filterNulls cfg.settings` write below — same-event lists
           # merge, so the legacy settings.hooks escape hatch and the typed map
           # coexist rather than clobber.
-          (lib.mkIf (cfg.hooks != {}) {
-            programs.claude-code.settings.hooks = hooksToSettings cfg.hooks;
+          (lib.mkIf (effectiveHooks != {}) {
+            programs.claude-code.settings.hooks = hooksToSettings effectiveHooks;
           })
           # Delegate to upstream programs.claude-code.* where upstream
           # provides the capability. mkDefault lets consumers override.
@@ -681,7 +684,7 @@ in
               # (the mkMerge entry above), NOT here.
               hooks = cfg.hookScripts;
               lspServers = lib.mapAttrs aiCommon.mkClaudeLspConfig mergedLspServers;
-              agents = mergedClaudeCopilotAgents;
+              agents = lib.mapAttrs agent.renderClaude mergedAgents;
               # Typed settings (effortLevel, model) plus freeform
               # passthrough. Null-filter the typed keys so upstream never
               # receives `effortLevel = null` / `model = null`; arbitrary
@@ -774,6 +777,7 @@ in
         mergedSkills,
         mergedRules,
         topContext,
+        topHooks,
         topSettings,
         ...
       }: let
@@ -823,6 +827,7 @@ in
           aiCommon.filterNulls
           (removeAttrs cfg.settings separatelyHandledSettingsKeys);
         hasGapSettings = gapSettings != {};
+        effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       in
         lib.mkMerge [
           (lib.mkIf (topSettings.reasoningEffort != null) {
@@ -878,8 +883,8 @@ in
           # Typed event map → settings.json hooks (shared helper). devenv's
           # git-hooks-run and the legacy escape hatch concat into the same
           # per-event lists — no clobber, no per-event partition needed.
-          (lib.mkIf (cfg.hooks != {}) {
-            files.".claude/settings.json".json.hooks = hooksToSettings cfg.hooks;
+          (lib.mkIf (effectiveHooks != {}) {
+            files.".claude/settings.json".json.hooks = hooksToSettings effectiveHooks;
           })
           # Legacy `settings.hooks` escape hatch → same settings.json.hooks,
           # verbatim (composes via the list merge, never clobbers).

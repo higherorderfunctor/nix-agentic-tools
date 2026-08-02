@@ -1,5 +1,5 @@
 # Declares cross-app options (ai.context, ai.mcpServers, ai.instructions,
-# ai.rules, ai.settings, ai.skills).
+# ai.rules, ai.settings, ai.skills, ai.agents, ai.hooks).
 #
 # Imported by every mkAiApp module so per-app overrides
 # (ai.<name>.mcpServers, etc.) can merge on top of these top-level
@@ -10,7 +10,9 @@
   ...
 }: let
   aiCommon = import ./ai-common.nix {inherit lib;};
+  agent = import ./agent.nix {inherit lib;};
   dirHelpers = import ./dir-helpers.nix {inherit lib;};
+  hooks = import ./hooks.nix {inherit lib;};
 in {
   options.ai = {
     context = lib.mkOption {
@@ -134,14 +136,18 @@ in {
     };
 
     agents = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.either lib.types.lines lib.types.path);
+      type = lib.types.attrsOf agent.agentType;
       default = {};
       description = ''
-        Markdown+frontmatter agent definitions fanned out to Claude
-        and Copilot. Each entry becomes a file:
+        Agent definitions fanned out to Claude and Copilot. Portable semantic
+        records (`{ description, instructions, codex? }`) also fan out to
+        Codex; legacy Markdown/path values remain Claude/Copilot-only and cause
+        a clear assertion when Codex is enabled. Each entry becomes a file:
         - Claude  → ~/.claude/agents/<name>.md
         - Copilot → .github/agents/<name>.agent.md (devenv) or
-                    ~/.copilot/agents/<name>.agent.md (HM)
+                    ~/.copilot/agents/<name>.md (HM)
+        - Codex   → ~/.codex/agents/<name>.toml (HM) or
+                    .codex/agents/<name>.toml (devenv)
         Kiro intentionally excluded — Kiro's agent format is JSON
         with different semantic fields; use `ai.kiro.agents`
         directly for that ecosystem. Per-app overrides
@@ -160,6 +166,20 @@ in {
         exists for the kiro-specific agents dir).
       '';
       example = lib.literalExpression ''./agents'';
+    };
+
+    hooks = lib.mkOption {
+      type = hooks.hooksType;
+      default = {};
+      apply = lib.filterAttrs (_event: blocks: blocks != []);
+      description = ''
+        Portable command hooks fanned out to Claude and Codex. The event set is
+        their exact lifecycle intersection: ${lib.concatStringsSep ", " hooks.portableEvents}.
+        Matcher strings pass through unchanged, so use regex syntax supported
+        by both runtimes. Per-runtime hook maps append after these shared
+        matcher groups. Kiro is excluded because its v3 trigger schema is not
+        semantically interchangeable.
+      '';
     };
 
     environmentVariables = lib.mkOption {

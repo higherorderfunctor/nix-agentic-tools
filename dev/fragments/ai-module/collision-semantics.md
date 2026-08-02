@@ -1,9 +1,11 @@
 ## ai.\* Collision Semantics
 
-> **Last verified:** 2026-04-21 (commit pending — refactor of
-> ai-factory-collision plan §3.2). If you add a new shared pool to `ai.*` or
-> change how pools are merged across the L2↔L3 boundary and this fragment isn't
-> updated in the same commit, stop and fix it.
+> **Last verified:** 2026-08-01 (commit pending — distinguishes portable hooks,
+> whose per-event matcher-group lists intentionally append, from key-identity
+> pools). Prior: 2026-04-21 (commit pending — refactor of ai-factory-collision
+> plan §3.2). If you add a new shared pool to `ai.*` or change how pools are
+> merged across the L2↔L3 boundary and this fragment isn't updated in the same
+> commit, stop and fix it.
 
 ### Rule
 
@@ -26,6 +28,12 @@ Applies to every attrset-shaped shared pool in `ai.*`:
 
 `ai.instructions` is a list, not an attrset, so list concat stays as-is.
 `ai.context` is single-valued.
+
+`ai.hooks` is the deliberate attrset exception: event keys identify additive
+lifecycle streams, not replaceable entries. For a shared and runtime-specific
+definition of the same event, matcher-group lists concatenate in shared-first
+order. The top-level event vocabulary is restricted to the portable Claude/Codex
+intersection; runtime-only events stay under `ai.<cli>.hooks`.
 
 ### Implementation
 

@@ -515,7 +515,9 @@ in {
       devenv = evalDevenv {ai.codex.enable = true;};
     in
       !(hm.config.home.file ? ".codex/config.toml")
+      && !(hm.config.home.file ? ".codex/hooks.json")
       && !(devenv.config.files ? ".codex/config.toml")
+      && !(devenv.config.files ? ".codex/hooks.json")
   );
 
   module-codex-mcp-lowering-parity = mkTest "codex-mcp-lowering-parity" (
@@ -1170,6 +1172,232 @@ in {
       && lib.hasInfix "model_provider, notify" failed.message
       && hm.config.home.file.".codex/config.toml".source.value.model_provider == "custom"
   );
+
+  module-codex-semantic-agents-fanout = mkTest "codex-semantic-agents-fanout" (
+    let
+      config.ai = {
+        agents.reviewer = {
+          codex = {
+            model = "review-model";
+            sandbox_mode = "read-only";
+          };
+          description = "Review changes for correctness.";
+          instructions = "Read first, then report concrete findings.";
+        };
+        claude.enable = true;
+        codex.enable = true;
+        copilot.enable = true;
+      };
+      hm = evalHm config;
+      devenv = evalDevenv config;
+      expected = {
+        description = "Review changes for correctness.";
+        developer_instructions = "Read first, then report concrete findings.";
+        model = "review-model";
+        name = "reviewer";
+        sandbox_mode = "read-only";
+      };
+      hmAgent = hm.config.home.file.".codex/agents/reviewer.toml".source.value;
+      devenvAgent = devenv.config.files.".codex/agents/reviewer.toml".source.value;
+      claudeAgent = hm.config.programs.claude-code.agents.reviewer;
+      copilotAgent = devenv.config.files.".github/agents/reviewer.agent.md".text;
+    in
+      hmAgent
+      == expected
+      && devenvAgent == expected
+      && lib.hasPrefix "---\n" claudeAgent
+      && lib.hasInfix ''name: "reviewer"'' claudeAgent
+      && lib.hasInfix ''description: "Review changes for correctness."'' claudeAgent
+      && lib.hasInfix "Read first, then report concrete findings." copilotAgent
+      && !(lib.hasInfix "name:" copilotAgent)
+  );
+
+  module-codex-agent-toml-syntax = let
+    evaluated = evalHm {
+      ai.codex = {
+        enable = true;
+        agents.reviewer = {
+          codex = {
+            model = "review-model";
+            sandbox_mode = "read-only";
+          };
+          description = "Review changes.";
+          instructions = "Report concrete findings.";
+        };
+      };
+    };
+    source = evaluated.config.home.file.".codex/agents/reviewer.toml".source;
+  in
+    pkgs.runCommand "module-test-codex-agent-toml-syntax" {} ''
+      ${pkgs.gnugrep}/bin/grep -Fqx 'name = "reviewer"' ${source}
+      ${pkgs.gnugrep}/bin/grep -Fqx 'model = "review-model"' ${source}
+      ${pkgs.gnugrep}/bin/grep -Fqx 'sandbox_mode = "read-only"' ${source}
+      touch "$out"
+    '';
+
+  module-codex-agent-collision-fails = mkTest "codex-agent-collision-fails" (
+    let
+      semantic = {
+        description = "Review.";
+        instructions = "Review carefully.";
+      };
+      result = evalHm {
+        ai = {
+          agents.reviewer = semantic;
+          codex = {
+            enable = true;
+            agents.reviewer = semantic;
+          };
+        };
+      };
+    in
+      builtins.any (assertion:
+        !assertion.assertion
+        && lib.hasInfix "agents 'reviewer' declared in both" assertion.message)
+      result.config.assertions
+  );
+
+  module-codex-legacy-markdown-agent-fails-loudly = mkTest "codex-legacy-markdown-agent-fails-loudly" (
+    let
+      result = evalHm {
+        ai.codex.enable = true;
+        ai.agents.legacy = "# Legacy Markdown agent";
+      };
+    in
+      builtins.any (assertion:
+        !assertion.assertion
+        && lib.hasInfix "must use the portable" assertion.message)
+      result.config.assertions
+  );
+
+  module-codex-agent-native-reserved-keys-fail = mkTest "codex-agent-native-reserved-keys-fail" (
+    let
+      result = evalDevenv {
+        ai.codex = {
+          enable = true;
+          agents.reviewer = {
+            description = "Review.";
+            instructions = "Review carefully.";
+            codex.name = "different-name";
+          };
+        };
+      };
+    in
+      builtins.any (assertion:
+        !assertion.assertion
+        && lib.hasInfix "keep name/description/developer_instructions out" assertion.message)
+      result.config.assertions
+  );
+
+  module-codex-agent-defaults-parity = mkTest "codex-agent-defaults-parity" (
+    let
+      config.ai.codex = {
+        enable = true;
+        settings.agents = {
+          default_subagent_model = "worker-model";
+          default_subagent_reasoning_effort = "high";
+          enabled = true;
+          interrupt_message = false;
+          max_concurrent_threads_per_session = 7;
+        };
+      };
+      hmAgents = (evalHm config).config.home.file.".codex/config.toml".source.value.agents;
+      devenvAgents = (evalDevenv config).config.files.".codex/config.toml".source.value.agents;
+    in
+      hmAgents
+      == devenvAgents
+      && hmAgents.default_subagent_model == "worker-model"
+      && hmAgents.default_subagent_reasoning_effort == "high"
+      && hmAgents.max_concurrent_threads_per_session == 7
+      && !hmAgents.interrupt_message
+  );
+
+  module-codex-hooks-fanout-parity = mkTest "codex-hooks-fanout-parity" (
+    let
+      config.ai = {
+        claude.enable = true;
+        codex = {
+          enable = true;
+          hooks.PreToolUse = [
+            {
+              matcher = "apply_patch";
+              hooks = [
+                {
+                  additionalContextLimit = 0;
+                  command = "review-patch";
+                  commandWindows = "review-patch.exe";
+                  statusMessage = "Reviewing patch";
+                  timeout = 30;
+                }
+              ];
+            }
+          ];
+        };
+        hooks.PreToolUse = [
+          {
+            matcher = "Bash";
+            hooks = [{command = pkgs.hello;}];
+          }
+        ];
+      };
+      hm = evalHm config;
+      devenv = evalDevenv config;
+      hmHooks = hm.config.home.file.".codex/hooks.json".source.value;
+      devenvHooks = devenv.config.files.".codex/hooks.json".source.value;
+      blocks = hmHooks.hooks.PreToolUse;
+      sharedHandler = builtins.head (builtins.head blocks).hooks;
+      nativeHandler = builtins.head (builtins.elemAt blocks 1).hooks;
+      claudeBlocks = hm.config.programs.claude-code.settings.hooks.PreToolUse;
+    in
+      hmHooks
+      == devenvHooks
+      && builtins.length blocks == 2
+      && lib.hasSuffix "/bin/hello" sharedHandler.command
+      && nativeHandler.additionalContextLimit == 0
+      && nativeHandler.commandWindows == "review-patch.exe"
+      && nativeHandler.statusMessage == "Reviewing patch"
+      && builtins.length claudeBlocks == 1
+      && (builtins.head claudeBlocks).matcher == "Bash"
+  );
+
+  module-codex-hooks-inline-source-collision-fails = mkTest "codex-hooks-inline-source-collision-fails" (
+    let
+      result = evalHm {
+        ai.codex = {
+          enable = true;
+          hooks.Stop = [{hooks = [{command = "validate";}];}];
+          settings.hooks.Stop = [{hooks = [{command = "legacy";}];}];
+        };
+      };
+    in
+      builtins.any (assertion:
+        !assertion.assertion
+        && lib.hasInfix "cannot be combined with ai.codex.settings.hooks" assertion.message)
+      result.config.assertions
+  );
+
+  module-codex-hooks-json-syntax = let
+    evaluated = evalDevenv {
+      ai.codex = {
+        enable = true;
+        hooks.Stop = [{hooks = [{command = "validate";}];}];
+      };
+    };
+    source = evaluated.config.files.".codex/hooks.json".source;
+  in
+    pkgs.runCommand "module-test-codex-hooks-json-syntax" {} ''
+      ${pkgs.jq}/bin/jq -e '.hooks.Stop[0].hooks[0]
+        | .type == "command" and .command == "validate"' ${source} >/dev/null
+      touch "$out"
+    '';
+
+  module-shared-hooks-reject-non-portable-event = mkTest "shared-hooks-reject-non-portable-event" (!(builtins.tryEval (
+    builtins.deepSeq
+    (evalHm {
+      ai.hooks.ConfigChange = [{hooks = [{command = "true";}];}];
+    }).config.ai.hooks
+    true
+  )).success);
 
   module-codex-agentsmd-fanout = mkTest "codex-agentsmd-fanout" (
     let
@@ -5275,6 +5503,19 @@ in {
       && lib.hasInfix "Reviewer" (agentFile.text or "")
   );
 
+  module-copilot-hm-path-agent-resolves-to-text = mkTest "copilot-hm-path-agent-resolves-to-text" (
+    let
+      result = evalHm {
+        ai.copilot.enable = true;
+        ai.agents.reviewer = ./fixtures/claude-agents/agent-one.md;
+      };
+      agentFile = result.config.home.file.".copilot/agents/reviewer.md" or null;
+    in
+      agentFile
+      != null
+      && (agentFile.text or null) == builtins.readFile ./fixtures/claude-agents/agent-one.md
+  );
+
   # Devenv: top-level ai.agents fans out to Copilot's .github/agents.
   module-copilot-devenv-top-level-agents-fanout = mkTest "copilot-devenv-top-level-agents-fanout" (
     let
@@ -5508,6 +5749,23 @@ in {
         name = "demo-hook";
         text = "exit 0";
       };
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          hooks.PostToolUse = [{hooks = [{command = pkg;}];}];
+        };
+      };
+      handler = builtins.head (builtins.head result.config.ai.claude.hooks.PostToolUse).hooks;
+    in
+      builtins.isString handler.command && lib.hasSuffix "/bin/demo-hook" handler.command
+  );
+
+  module-claude-hooks-command-resolves-package-pname = mkTest "claude-hooks-command-resolves-package-pname" (
+    let
+      pkg = pkgs.runCommand "demo-hook-no-main-program" {pname = "demo-hook";} ''
+        mkdir -p "$out/bin"
+        touch "$out/bin/demo-hook"
+      '';
       result = evalHm {
         ai.claude = {
           enable = true;

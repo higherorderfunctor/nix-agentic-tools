@@ -82,14 +82,15 @@ lib.ai.app.mkAiApp {
       description = "Environment variables exported when launching copilot (HM: via wrapper; devenv: via native env).";
     };
     # Inline agent markdown content. Written under
-    # `<configDir>/agents/<name>.md` in both backends. Merged with
+    # `<configDir>/agents/<name>.md` in HM and
+    # `<projectDir>/agents/<name>.agent.md` in devenv. Merged with
     # top-level `ai.agents`; collisions fail. Can also be populated
     # from a directory via `agentsDir` below (same L2b→L3 pattern as
     # `rulesDir` / `skillsDir`).
     agents = lib.mkOption {
-      type = lib.types.attrsOf lib.types.lines;
+      type = lib.types.attrsOf lib.ai.agent.agentType;
       default = {};
-      description = "Inline agent markdown (written to <configDir>/agents/<name>.md).";
+      description = "Agent Markdown or portable semantic records (HM: <configDir>/agents/<name>.md; devenv: <projectDir>/agents/<name>.agent.md).";
     };
     # Directory of `.md` agent files. Each file becomes one entry
     # in `ai.copilot.agents`, keyed by basename minus `.md`. Parity
@@ -122,7 +123,7 @@ lib.ai.app.mkAiApp {
       mergedRules,
       mergedLspServers,
       mergedEnvironmentVariables,
-      mergedClaudeCopilotAgents,
+      mergedAgents,
       topContext,
       ...
     }: let
@@ -223,12 +224,12 @@ lib.ai.app.mkAiApp {
         # Inline agent .md files. Mirrors the legacy
         # `mkMarkdownEntries` shape — one entry per agent, written
         # under `${configDir}/agents/<name>.md`.
-        (lib.mkIf (mergedClaudeCopilotAgents != {}) {
+        (lib.mkIf (mergedAgents != {}) {
           home.file = lib.mapAttrs' (name: content:
             lib.nameValuePair "${cfg.configDir}/agents/${name}.md" {
-              text = content;
+              text = lib.ai.agent.renderCopilot name content;
             })
-          mergedClaudeCopilotAgents;
+          mergedAgents;
         })
         # External agents directory handled at L2b→L3 above —
         # expansion runs through the existing per-file agents emission
@@ -361,7 +362,7 @@ lib.ai.app.mkAiApp {
       mergedRules,
       mergedLspServers,
       mergedEnvironmentVariables,
-      mergedClaudeCopilotAgents,
+      mergedAgents,
       topContext,
       ...
     }: let
@@ -412,12 +413,12 @@ lib.ai.app.mkAiApp {
         # Inline agent files — one devenv `files.*` entry per agent
         # under `${projectDir}/agents/<name>.agent.md`. Copilot's
         # native agent filename convention is `.agent.md` suffix.
-        (lib.mkIf (mergedClaudeCopilotAgents != {}) {
+        (lib.mkIf (mergedAgents != {}) {
           files = lib.mapAttrs' (name: content:
             lib.nameValuePair "${cfg.projectDir}/agents/${name}.agent.md" {
-              text = content;
+              text = lib.ai.agent.renderCopilot name content;
             })
-          mergedClaudeCopilotAgents;
+          mergedAgents;
         })
         # agentsDir handled at L2b→L3 above — expansion runs
         # through the existing per-file agents emission.

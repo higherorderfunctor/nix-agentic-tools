@@ -1,9 +1,11 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-04-21 (commit pending — refactor of
-> ai-factory-collision plan §4). If you add a new Dir option or change how
-> per-file Dir expansion fans through the layers, update this fragment in the
-> same commit.
+> **Last verified:** 2026-08-01 (commit pending — records the portable hooks
+> exception: per-event matcher-group lists append instead of key-colliding, and
+> agents may carry a typed semantic record). Prior: 2026-04-21 (commit pending —
+> refactor of ai-factory-collision plan §4). If you add a new Dir option or
+> change how per-file Dir expansion fans through the layers, update this
+> fragment in the same commit.
 
 ### Canonical 4-layer shape
 
@@ -51,6 +53,10 @@
   helper fires on the L2↔L3 boundary inside each CLI's transform. L1→L2 and
   L2b→L3 use `mkDefault` so explicit entries within the same layer still win
   (that's a fanout, not a cross-layer collision).
+- **List-valued lifecycle hooks append.** `ai.hooks.<Event>` matcher groups run
+  before `ai.<cli>.hooks.<Event>` groups. This is intentional composition, not
+  an attrset-entry collision; only the exact portable Claude/Codex event
+  vocabulary is accepted at L2.
 - **Dir helpers live in `lib.ai.*`**, not in the module layer. They're pure
   (`path → attrset`) and usable outside HM/devenv.
 - **Per-file emission only.** A Dir option never takes a destination dir over
@@ -78,7 +84,9 @@
    supported CLI handles it the same way) or in each per-CLI factory (if the
    shape differs).
 3. Add L4 emission in each per-CLI factory's customConfig.
-4. Wire the L2↔L3 merge through mergeWithCollisionCheck in both transforms.
+4. Wire the L2↔L3 merge through mergeWithCollisionCheck in both transforms, or
+   document and test the concern's intentional composition rule (hooks append
+   per-event lists).
 5. (Optional) Add L1 option `ai.<X>Dir` + L1→L2 expansion.
 6. (Optional) Add per-CLI L2b option `ai.<cli>.<X>Dir` + L2b→L3 expansion.
 7. Add tests in `checks/module-eval.nix` for every new surface.
