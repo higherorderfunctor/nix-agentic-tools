@@ -23,13 +23,18 @@ tree. Nix store caching means unchanged inputs skip rebuild.
   tasks and flake derivations.
 - `packages/coding-standards/fragments/` — published coding standards.
 - `packages/stacked-workflows/fragments/` — published skill-routing rule.
-- `packages/fragments-ai/` — AI ecosystem transforms (passthru).
+- `lib/ai/transformers/` — AI ecosystem renderers, exported through the `lib/ai`
+  barrel.
 
 ### What Stays in Module System
 
-Skills, settings.json, MCP config, and CLI settings use `files.*` (devenv) or
-`home.file` (HM). These are symlinks to immutable store paths — no generation
-step.
+Skills and immutable CLI configuration generally use `files.*` (devenv) or
+`home.file` (HM), producing symlinks to store paths with no repository
+generation step. Runtime-writable files are an intentional exception: for
+example, Codex's user `config.toml` is reconciled by Home Manager activation and
+project config is copied by a devenv task so native trust and preference writes
+do not target the Nix store. These app-level materialization tasks are separate
+from the repository instruction generator described here.
 
 Instruction files are the exception: they are **copies**, not symlinks,
 materialized on every shell entry by `generate:instructions:materialize`
@@ -41,8 +46,11 @@ an absolute `/nix/store` path. See the devenv files-internals fragment.
 ### Running Generation
 
 ```bash
-devenv tasks run generate:instructions    # all instruction files
-devenv tasks run generate:instructions:claude  # just CLAUDE.md + rules
-devenv tasks run generate:repo            # README.md + CONTRIBUTING.md
-devenv tasks run generate:all             # everything
+devenv tasks run --mode before generate:all  # instructions + repo documents
+
+# A leaf can be run directly when only one projection is intentionally wanted:
+devenv tasks run generate:instructions:claude # just CLAUDE.md + rules
 ```
+
+The aggregate form requires `--mode before`; without it devenv runs the named
+aggregate but skips its dependency leaves.

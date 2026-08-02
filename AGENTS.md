@@ -5,11 +5,134 @@ by Claude Code, Kiro, GitHub Copilot, Codex, and other tools that support the
 [AGENTS.md standard](https://agents.md).
 
 Deep-dive architecture documentation (fanout semantics, wrapper chains, fragment
-pipeline, overlay cache-hit parity, HM module conventions, etc.) lives in
-path-scoped per-ecosystem files (`.claude/rules/<name>.md`,
-`.github/instructions/<name>.instructions.md`, `.kiro/steering/<name>.md`).
-Those files load on demand when editing matching paths; they are not duplicated
-here to keep this file small.
+pipeline, overlay cache-hit parity, HM module conventions, etc.) comes from the
+source fragments routed below. Claude, Copilot, and Kiro receive generated
+path-scoped projections of those sources. Codex and other AGENTS-only consumers
+do not load those projections, so they must use the routing index before editing
+a matching path. Fragment bodies are not duplicated here, keeping always-loaded
+context focused.
+
+## Scoped architecture routing
+
+Before editing a path that matches one or more entries, read every listed source
+document for those entries. When multiple entries match, their guidance
+composes. The registry-generated index is authoritative for routing; source
+documents are authoritative for content. Do not edit generated `.claude/rules/`,
+`.github/instructions/`, or `.kiro/steering/` projections directly.
+
+- **`ai-clis`**
+  - Match: `overlays/chatgpt-codex.nix`, `overlays/claude-code.nix`,
+    `overlays/copilot-cli.nix`, `overlays/kimchi.nix`, `overlays/kiro-cli.nix`,
+    `overlays/kiro-gateway.nix`, `packages/chatgpt-codex/**`,
+    `packages/copilot-cli/**`, `packages/kiro-cli/**`
+  - Read:
+    [`dev/fragments/ai-clis/packaging-guide.md`](dev/fragments/ai-clis/packaging-guide.md)
+
+- **`ai-module`**
+  - Match: `lib/ai/agent.nix`, `lib/ai/app/**`, `lib/ai/default.nix`,
+    `lib/ai/hooks.nix`, `lib/ai/sharedOptions.nix`, `packages/*/lib/mk*.nix`,
+    `packages/chatgpt-codex/modules/**`, `packages/claude-code/modules/**`,
+    `packages/copilot-cli/modules/**`, `packages/kiro-cli/modules/**`
+  - Read:
+    [`dev/fragments/ai-module/ai-module-fanout.md`](dev/fragments/ai-module/ai-module-fanout.md),
+    [`dev/fragments/ai-module/collision-semantics.md`](dev/fragments/ai-module/collision-semantics.md),
+    [`dev/fragments/ai-module/dir-helpers.md`](dev/fragments/ai-module/dir-helpers.md),
+    [`dev/fragments/ai-module/layered-fanout.md`](dev/fragments/ai-module/layered-fanout.md)
+
+- **`ai-skills`**
+  - Match: `lib/ai/hm-helpers.nix`, `packages/chatgpt-codex/modules/**`,
+    `packages/claude-code/modules/**`, `packages/copilot-cli/modules/**`,
+    `packages/kiro-cli/modules/**`
+  - Read:
+    [`dev/fragments/ai-skills/skills-fanout-pattern.md`](dev/fragments/ai-skills/skills-fanout-pattern.md)
+
+- **`claude-code`**
+  - Match: `overlays/claude-code.nix`, `packages/claude-code/**`
+  - Read:
+    [`packages/claude-code/docs/claude-code-wrapper.md`](packages/claude-code/docs/claude-code-wrapper.md),
+    [`packages/claude-code/docs/heron-brook-clamp.md`](packages/claude-code/docs/heron-brook-clamp.md)
+
+- **`devenv`**
+  - Match: `.github/workflows/devenv-test.yml`, `devenv.nix`,
+    `lib/ai/hm-helpers.nix`, `packages/*/modules/devenv/**`
+  - Read:
+    [`dev/fragments/devenv/ci-lean-closure.md`](dev/fragments/devenv/ci-lean-closure.md),
+    [`dev/fragments/devenv/files-internals.md`](dev/fragments/devenv/files-internals.md)
+
+- **`flake`**
+  - Match: `flake.nix`, `devenv.nix`
+  - Read:
+    [`dev/fragments/flake/binary-cache.md`](dev/fragments/flake/binary-cache.md)
+
+- **`hm-modules`**
+  - Match: `packages/*/modules/homeManager/**`
+  - Read:
+    [`dev/fragments/hm-modules/module-conventions.md`](dev/fragments/hm-modules/module-conventions.md)
+
+- **`kimchi`**
+  - Match: `packages/kimchi/**`
+  - Read:
+    [`packages/kimchi/docs/kimchi-factory.md`](packages/kimchi/docs/kimchi-factory.md)
+
+- **`kiro-cli`**
+  - Match: `overlays/kiro-memory-distiller.nix`, `packages/kiro-cli/**`,
+    `packages/openmemory-mcp/mem/**`
+  - Read:
+    [`packages/kiro-cli/docs/kiro-auto-memory.md`](packages/kiro-cli/docs/kiro-auto-memory.md)
+
+- **`kiro-wrapper`**
+  - Match: `checks/kiro-wrapper-argv.nix`, `lib/idempotentFlags.nix`,
+    `packages/kiro-cli/lib/**`
+  - Read:
+    [`packages/kiro-cli/docs/launcher-argv.md`](packages/kiro-cli/docs/launcher-argv.md)
+
+- **`markdown-formatting`**
+  - Match: `**/*.md`, `checks/split-code-spans.nix`,
+    `checks/split-code-spans.py`, `treefmt.nix`
+  - Read:
+    [`dev/fragments/markdown-formatting/markdown-formatting.md`](dev/fragments/markdown-formatting/markdown-formatting.md)
+
+- **`mcp-servers`**
+  - Match: `overlays/mcp-servers/**`
+  - Read:
+    [`dev/fragments/mcp-servers/js-server-packaging.md`](dev/fragments/mcp-servers/js-server-packaging.md),
+    [`dev/fragments/mcp-servers/overlay-guide.md`](dev/fragments/mcp-servers/overlay-guide.md)
+
+- **`nix-standards`**
+  - Match: `**/*.nix`
+  - Read:
+    [`dev/fragments/nix-standards/nix-standards.md`](dev/fragments/nix-standards/nix-standards.md)
+
+- **`overlays`**
+  - Match: `overlays/*.nix`, `overlays/**/*.nix`
+  - Read:
+    [`dev/fragments/overlays/cache-hit-parity.md`](dev/fragments/overlays/cache-hit-parity.md),
+    [`dev/fragments/overlays/ifd-patterns.md`](dev/fragments/overlays/ifd-patterns.md),
+    [`dev/fragments/overlays/overlay-pattern.md`](dev/fragments/overlays/overlay-pattern.md),
+    [`dev/fragments/overlays/unfree-guard.md`](dev/fragments/overlays/unfree-guard.md)
+
+- **`packaging`**
+  - Match: `config/update-targets.nix`, `packages/**/*.nix`
+  - Read:
+    [`dev/fragments/packaging/naming-conventions.md`](dev/fragments/packaging/naming-conventions.md),
+    [`dev/fragments/packaging/platforms.md`](dev/fragments/packaging/platforms.md)
+
+- **`pipeline`**
+  - Match: `.github/workflows/update.yml`, `config/fragment-categories.nix`,
+    `config/generate-update-ninja.nix`, `config/update-targets.nix`,
+    `dev/generate.nix`, `dev/scripts/update-*.sh`, `dev/tasks/generate.nix`,
+    `lib/ai/transformers/**`, `lib/fragments-registry.nix`, `lib/fragments.nix`,
+    `lib/update.nix`, `overlays/**/*.update.nix`
+  - Read:
+    [`dev/fragments/pipeline/ci-update-workflow.md`](dev/fragments/pipeline/ci-update-workflow.md),
+    [`dev/fragments/pipeline/fragment-pipeline.md`](dev/fragments/pipeline/fragment-pipeline.md),
+    [`dev/fragments/pipeline/generation-architecture.md`](dev/fragments/pipeline/generation-architecture.md),
+    [`dev/fragments/pipeline/update-pipeline.md`](dev/fragments/pipeline/update-pipeline.md)
+
+- **`stacked-workflows`**
+  - Match: `packages/stacked-workflows/**`
+  - Read:
+    [`dev/fragments/stacked-workflows/development.md`](dev/fragments/stacked-workflows/development.md)
 
 <!-- Generated by dev/generate.nix -->
 <!-- Fragment: packages/coding-standards/fragments/coding-standards.md -->
@@ -190,12 +313,15 @@ Each skill's own description states which operations it covers.
 
 ## Architecture Fragments
 
-> **Last verified:** 2026-07-27 (commit pending — the worked registration
-> example is now explicitly fictional, so it can no longer drift out of sync
-> with a real category's `scopes`; it previously named `ai-clis` and
-> `claude-code` and had gone stale against both. Prior 2026-07-27, that example
-> stopped teaching `packages/ai-clis/**`, a directory that does not exist; prior
-> 2026-07-24, the `packagePaths` + `devFragmentNames` registries dissolved into
+> **Last verified:** 2026-08-02 (commit pending — AGENTS.md now carries a
+> compact registry-generated routing index so Codex and other flat consumers can
+> find applicable source fragments without flattening every fragment body).
+> Prior: 2026-07-27 (the worked registration example is now explicitly
+> fictional, so it can no longer drift out of sync with a real category's
+> `scopes`; it previously named `ai-clis` and `claude-code` and had gone stale
+> against both. Prior 2026-07-27, that example stopped teaching
+> `packages/ai-clis/**`, a directory that does not exist; prior 2026-07-24, the
+> `packagePaths` + `devFragmentNames` registries dissolved into
 > `config.fragments.categories`).
 
 This repo ships path-scoped architecture fragments as dev-only context for
@@ -217,18 +343,25 @@ Scope globs (which files the fragment loads for) live separately in
 source lives on disk.
 
 Each scoped fragment emits per-ecosystem frontmatter via the
-`fragments-ai.passthru.transforms` pipeline:
+`lib/ai/transformers/` pipeline:
 
 - Claude: `.claude/rules/<name>.md` with `paths:` YAML list
 - Copilot: `.github/instructions/<name>.instructions.md` with `applyTo:`
   comma-joined globs
 - Kiro: `.kiro/steering/<name>.md` with `inclusion: fileMatch` and an array
   `fileMatchPattern:`
-- Codex / AGENTS.md: orientation only (no scoped fragments). Deep-dive
-  architecture content lives in the per-ecosystem scoped files above. AGENTS.md
-  used to concatenate every scoped fragment flat, but that bloated it to ~2k
-  lines; Phase 2.4 trimmed it to just the monorepo orientation content (commit
-  c4f4aff).
+- Codex / AGENTS.md: always-loaded orientation plus a compact routing index.
+  Codex has no glob-scoped instruction primitive, so matching remains a manual
+  progressive-disclosure step: the index maps the same registry scopes to the
+  authoritative source documents. AGENTS.md used to concatenate every scoped
+  fragment body, but that bloated it to ~2k lines; Phase 2.4 removed the bodies
+  (commit c4f4aff), and the generated index restores discoverability without
+  restoring that context cost.
+
+The source fragments are authoritative. The Claude, Copilot, and Kiro files are
+generated projections; some are gitignored and only materialized by devenv shell
+entry. Never edit a runtime projection directly. A `devenv shell` or direnv
+reload regenerates the analysis files after source or registry changes.
 
 ### Maintenance is mandatory
 
@@ -323,8 +456,9 @@ let `config/fragment-categories.nix` be the source of real rows.
 emission — do not hand-format frontmatter.
 
 After adding or editing fragments, run
-`devenv tasks run --mode before generate:instructions` to regenerate steering
-files for all ecosystems.
+`devenv tasks run --mode before generate:all` to regenerate instruction and
+repo-document projections. `--mode before` is load-bearing: without it devenv
+runs an aggregate without its dependency leaves.
 
 <!-- Fragment: dev/fragments/monorepo/build-commands.md -->
 
