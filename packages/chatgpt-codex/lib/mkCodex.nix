@@ -219,13 +219,13 @@
     || (
       builtins.isString content
       && lib.hasPrefix "/" content
-      && builtins.pathExists content
     );
 
   isExecpolicySource = content: let
     pathType = builtins.readFileType content;
   in
     isExecpolicyPathLike content
+    && builtins.pathExists content
     && (
       pathType
       == "regular"

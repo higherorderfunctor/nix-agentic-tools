@@ -928,6 +928,22 @@ in {
       && rejects (evalDevenv config)
   );
 
+  module-codex-execpolicy-missing-source-is-rejected = mkTest "codex-execpolicy-missing-source-is-rejected" (
+    let
+      config.ai.codex = {
+        enable = true;
+        execpolicyRules.missing = "/definitely/missing/codex.rules";
+      };
+      rejects = evaluated:
+        builtins.any (assertion:
+          !assertion.assertion
+          && lib.hasInfix "path sources" assertion.message)
+        evaluated.config.assertions;
+    in
+      rejects (evalHm config)
+      && rejects (evalDevenv config)
+  );
+
   module-codex-execpolicy-parity = mkTest "codex-execpolicy-parity" (
     let
       config.ai.codex = {
