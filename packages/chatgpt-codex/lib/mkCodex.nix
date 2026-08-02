@@ -572,11 +572,15 @@
         declare -A should_manage=()
         ${desiredAssignments}
 
+        ${pkgs.coreutils}/bin/mkdir -p "$state_dir"
+        exec {profile_lock_fd}> "$state_dir/lock"
+        ${lib.getExe pkgs.flock} "$profile_lock_fd"
+
         if [ "''${#desired_targets[@]}" -eq 0 ] && [ ! -f "$manifest" ]; then
           exit 0
         fi
 
-        ${pkgs.coreutils}/bin/mkdir -p "$profile_dir" "$state_dir"
+        ${pkgs.coreutils}/bin/mkdir -p "$profile_dir"
 
         if [ -f "$manifest" ]; then
           while IFS=$'\t' read -r name target; do

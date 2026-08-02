@@ -93,9 +93,10 @@
   # checkout's working files.
   devenvRoot = toString config.devenv.root;
   devenvRootParent = builtins.dirOf devenvRoot;
+  devenvRootParentName = builtins.baseNameOf devenvRootParent;
   repositoryRoot =
-    if builtins.baseNameOf devenvRootParent == "nix-agentic-tools-worktrees"
-    then "${builtins.dirOf devenvRootParent}/nix-agentic-tools"
+    if lib.hasSuffix "-worktrees" devenvRootParentName
+    then "${builtins.dirOf devenvRootParent}/${lib.removeSuffix "-worktrees" devenvRootParentName}"
     else devenvRoot;
   worktreesRoot = "${repositoryRoot}-worktrees";
 in {

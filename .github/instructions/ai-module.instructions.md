@@ -172,20 +172,22 @@ The ai module fans out TWO kinds of configuration:
   resolves named profiles only from user CODEX_HOME, so devenv cannot place an
   inert copy beside project config; instead a pre-shell task materializes the
   repository-declared store file into CODEX_HOME. The task tracks ownership by
-  Git common directory, updates and prunes only its own symlinks, accepts an
-  identical externally managed file, and rejects conflicting content. This keeps
-  the declaration repository-scoped without changing CODEX_HOME and forking
-  authentication/session state. `projects.<path>.trust_level` is accepted only
-  by Home Manager's user-global file: devenv rejects it because a project cannot
-  bootstrap the trust required to load its own `.codex/config.toml`.
-  `ai.codex.execpolicyRules.<name>` writes native Starlark to
-  `<config-layer>/rules/<name>.rules` in both backends. It is intentionally
-  separate from Markdown `ai.rules`, which remains durable AGENTS.md guidance.
-  Home Manager reserves `execpolicyRules.default` because Codex appends accepted
-  user allow-list decisions to `$CODEX_HOME/rules/default.rules`; other
-  per-entry files remain declarative while that native mutation can coexist.
-  Trusted project rules are declarative and may use `default` because Codex's
-  native writer targets only the user layer.
+  Git common directory, serializes concurrent shell entries with a repository
+  lock, updates and prunes only its own symlinks, accepts an identical
+  externally managed file, and rejects conflicting content before changing any
+  artifact. This keeps the declaration repository-scoped without changing
+  CODEX_HOME and forking authentication/session state.
+  `projects.<path>.trust_level` is accepted only by Home Manager's user-global
+  file: devenv rejects it because a project cannot bootstrap the trust required
+  to load its own `.codex/config.toml`. `ai.codex.execpolicyRules.<name>` writes
+  native Starlark to `<config-layer>/rules/<name>.rules` in both backends. It is
+  intentionally separate from Markdown `ai.rules`, which remains durable
+  AGENTS.md guidance. Home Manager reserves `execpolicyRules.default` because
+  Codex appends accepted user allow-list decisions to
+  `$CODEX_HOME/rules/default.rules`; other per-entry files remain declarative
+  while that native mutation can coexist. Trusted project rules are declarative
+  and may use `default` because Codex's native writer targets only the user
+  layer.
 - `ai.codex.agents.<name>` — the semantic agent record plus a freeform `codex`
   TOML extension. Home Manager emits `${configDir}/agents/<name>.toml`; devenv
   emits trusted-project `.codex/agents/<name>.toml`. The filename stem supplies

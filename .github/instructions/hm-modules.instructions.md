@@ -226,10 +226,10 @@ user artifacts even when their declaration is repository-local: upstream only
 loads `$CODEX_HOME/<name>.config.toml`. `ai.codex.profiles` therefore has one
 typed option schema in HM and devenv, but HM links the file directly while
 devenv materializes its store file before shell entry. The devenv ownership
-ledger permits updates and pruning only for its own symlinks and refuses
-conflicting external content. Do not change `CODEX_HOME` merely to force a
-project-local path; that would also fork authentication, sessions, logs, and
-caches.
+ledger and repository lock serialize concurrent shell entries, permit updates
+and pruning only for owned symlinks, and refuse all conflicts before changing an
+artifact. Do not change `CODEX_HOME` merely to force a project-local path; that
+would also fork authentication, sessions, logs, and caches.
 
 **HM settings writes are conditional; devenv writes are not.** The HM activation
 merge (copilot `copilotSettingsMerge`, kiro `kiroSettingsMerge`) is gated on

@@ -570,6 +570,23 @@ in {
       test -L "$HOME/.codex/review.config.toml"
       grep -Fqx 'model_reasoning_effort = "low"' "$HOME/.codex/review.config.toml"
 
+      lock_files=("$XDG_STATE_HOME"/nix-agentic-tools/codex-profiles/*/lock)
+      test "''${#lock_files[@]}" -eq 1
+      lock_file="''${lock_files[0]}"
+      test -f "$lock_file"
+      exec 9> "$lock_file"
+      ${lib.getExe pkgs.flock} 9
+      if ${pkgs.coreutils}/bin/timeout 1 ${pkgs.bash}/bin/bash -c ${lib.escapeShellArg updatedTask}; then
+        echo "profile materializer unexpectedly ignored its repository lock" >&2
+        exit 1
+      else
+        timeout_code=$?
+      fi
+      test "$timeout_code" -eq 124
+      grep -Fqx 'model_reasoning_effort = "low"' "$HOME/.codex/review.config.toml"
+      ${lib.getExe pkgs.flock} -u 9
+      exec 9>&-
+
       (
         ${updatedTask}
       )

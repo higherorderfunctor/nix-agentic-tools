@@ -55,8 +55,9 @@ Placing the same file beside project `.codex/config.toml` would be inert, while
 changing CODEX_HOME would fork auth, sessions, logs, and caches. Devenv instead
 materializes each repository-declared store file into the existing user
 CODEX_HOME before shell entry. Its ownership ledger is keyed by Git common
-directory, so linked worktrees share lifecycle state; it updates and prunes only
-its own symlinks and rejects conflicting external content.
+directory, so linked worktrees share lifecycle state; a repository lock
+serializes concurrent entries, and collision preflight completes before it
+updates or prunes any owned symlink.
 
 There is deliberately no `defaultProfile` option because upstream no longer
 supports a persistent selector; use `codex --profile <name>`.
