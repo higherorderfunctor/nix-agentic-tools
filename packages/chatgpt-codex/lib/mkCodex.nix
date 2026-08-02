@@ -29,8 +29,11 @@
   # keep evaluating after a Codex update changed the accepted values.
   rootFlagValues = name: let
     matches = builtins.filter (flag: builtins.elem name flag.names) codexExtracted.cli.globalFlags;
+    matchCount = builtins.length matches;
   in
-    (builtins.head matches).acceptedValues;
+    if matchCount == 1
+    then (builtins.head matches).acceptedValues
+    else throw "ai.codex expected exactly one extracted global flag record for ${name}, found ${toString matchCount}";
   approvalPolicyNames = rootFlagValues "--ask-for-approval";
   sandboxModeNames = rootFlagValues "--sandbox";
   codexAgentType = agent.mkSemanticAgentType tomlFormat.type;

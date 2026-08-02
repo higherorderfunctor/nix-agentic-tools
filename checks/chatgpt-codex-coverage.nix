@@ -41,6 +41,10 @@ in
   assert assertExact "CLI commands" commandNames coveredCommands;
   assert assertUnique "CLI commands" coveredCommands;
   assert assertRecordFields "CLI command fields" (builtins.attrNames coverage.cli.commandFields) commands;
+  assert lib.all (command:
+    assertUnique "CLI flags for ${builtins.concatStringsSep " " command.path}"
+    (map (flag: builtins.head flag.names) command.flags))
+  commands;
   assert assertExact "CLI flags" canonicalFlags coveredFlags;
   assert assertUnique "CLI flags" coveredFlags;
   assert assertRecordFields "CLI flag fields" (builtins.attrNames coverage.cli.flagFields) (lib.concatMap (command: command.flags) commands);

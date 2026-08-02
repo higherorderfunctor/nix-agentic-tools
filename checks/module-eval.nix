@@ -1372,8 +1372,13 @@ in {
       # These two vocabularies come from recursive Clap help. Test the entire
       # extracted sets rather than one representative, so replacing the
       # factory's sidecar lookup with a stale handwritten subset goes red.
-      extractedFlagValues = name:
-        (builtins.head (builtins.filter (flag: builtins.elem name flag.names) codexExtracted.cli.globalFlags)).acceptedValues;
+      extractedFlagValues = name: let
+        matches = builtins.filter (flag: builtins.elem name flag.names) codexExtracted.cli.globalFlags;
+        matchCount = builtins.length matches;
+      in
+        if matchCount == 1
+        then (builtins.head matches).acceptedValues
+        else throw "module-eval expected exactly one extracted Codex global flag record for ${name}, found ${toString matchCount}";
     in
       accepts "model_reasoning_effort" "max"
       && lib.all (accepts "approval_policy") (extractedFlagValues "--ask-for-approval")
