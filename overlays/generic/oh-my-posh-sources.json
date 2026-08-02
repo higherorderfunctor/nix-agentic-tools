@@ -1,8 +1,8 @@
 {
-  "version": "30.1.1",
+  "version": "30.2.0",
   "src": {
-    "url": "https://github.com/JanDeDobbeleer/oh-my-posh/archive/v30.1.1.tar.gz",
-    "hash": "sha256-fx8Cyex2T86MNaa6euVZGH1jmYOzN/RuEh8/FCiFQmY="
+    "url": "https://github.com/JanDeDobbeleer/oh-my-posh/archive/v30.2.0.tar.gz",
+    "hash": "sha256-BEmwcBTtI9x0zVRbAalZ9la75x9PutGLP1xukY69YJU="
   },
   "vendorHash": "sha256-zUhxYfDb9LbvBj3W98pM4uSG9jtq+uVJW64p8eOiPsM="
 }
