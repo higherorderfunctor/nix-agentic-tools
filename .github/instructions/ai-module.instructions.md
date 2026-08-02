@@ -99,9 +99,9 @@ The ai module fans out TWO kinds of configuration:
   documents as ignored at project scope. Static ownership is deliberate: native
   feature editors cannot coexist with the managed file. MCP configuration is
   composed into that same statically owned file through the typed server pool.
-  Stable security settings type `approval_policy` (including granular prompt
-  categories), `approvals_reviewer`, `sandbox_mode`, and
-  `sandbox_workspace_write`. The older sandbox model and beta
+  Stable security settings type `allow_login_shell`, `approval_policy`
+  (including granular prompt categories), `approvals_reviewer`, `sandbox_mode`,
+  and `sandbox_workspace_write`. The older sandbox model and beta
   `default_permissions`/`permissions` profiles are mutually exclusive, so the
   module fails when both are present. `projects.<path>.trust_level` is accepted
   only by Home Manager's user-global file: devenv rejects it because a project

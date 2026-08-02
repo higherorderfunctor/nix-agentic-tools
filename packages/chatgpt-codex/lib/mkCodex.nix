@@ -31,6 +31,11 @@
             default = null;
           });
     });
+  hasPermissionProfiles = settings:
+    helpers.filterNulls (lib.filterAttrs
+      (name: _: builtins.elem name ["default_permissions" "permissions"])
+      settings)
+    != {};
 
   renderCodexServer = name: server: let
     rendered = removeAttrs (lib.ai.renderServer pkgs name server) ["type"];
@@ -358,7 +363,7 @@ in
         cfg.settings.sandbox_mode
         != null
         || cfg.settings.sandbox_workspace_write != null;
-      hasPermissionProfiles = cfg.settings ? default_permissions || cfg.settings ? permissions;
+      usesPermissionProfiles = hasPermissionProfiles cfg.settings;
       settings = helpers.filterNulls (cfg.settings
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
@@ -376,7 +381,7 @@ in
             message = "ai.codex.settings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
           }
           {
-            assertion = !hasLegacySandbox || !hasPermissionProfiles;
+            assertion = !hasLegacySandbox || !usesPermissionProfiles;
             message = "ai.codex.settings must use either sandbox_mode/sandbox_workspace_write or default_permissions/permissions, never both";
           }
         ];
@@ -408,7 +413,7 @@ in
         cfg.settings.sandbox_mode
         != null
         || cfg.settings.sandbox_workspace_write != null;
-      hasPermissionProfiles = cfg.settings ? default_permissions || cfg.settings ? permissions;
+      usesPermissionProfiles = hasPermissionProfiles cfg.settings;
       settings = helpers.filterNulls (cfg.settings
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
@@ -427,7 +432,7 @@ in
             message = "ai.codex.settings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
           }
           {
-            assertion = !hasLegacySandbox || !hasPermissionProfiles;
+            assertion = !hasLegacySandbox || !usesPermissionProfiles;
             message = "ai.codex.settings must use either sandbox_mode/sandbox_workspace_write or default_permissions/permissions, never both";
           }
           {

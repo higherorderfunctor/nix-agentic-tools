@@ -825,6 +825,21 @@ in {
       && check (evalDevenv config)
   );
 
+  module-codex-security-empty-profile-model-does-not-conflict = mkTest "codex-security-empty-profile-model-does-not-conflict" (
+    let
+      config.ai.codex = {
+        enable = true;
+        settings = {
+          permissions = {};
+          sandbox_mode = "read-only";
+        };
+      };
+      assertionsPass = evaluated: builtins.all (assertion: assertion.assertion) evaluated.config.assertions;
+    in
+      assertionsPass (evalHm config)
+      && assertionsPass (evalDevenv config)
+  );
+
   module-codex-trust-is-user-global = mkTest "codex-trust-is-user-global" (
     let
       config.ai.codex = {
