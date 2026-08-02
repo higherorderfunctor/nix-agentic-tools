@@ -7,15 +7,17 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-07-28 (commit pending — records the
-> ONE-SHARED-DECLARATION form of the config-parity rule, landed by
-> `packages/glab` and asserted by `module-glab-hm-devenv-option-parity`; prior
-> 2026-07-21 was the repo-wide activation reordering
-> `entryAfter ["writeBoundary"]` → `["linkGeneration"]`; earlier revisions added
-> the activation script `exit` warning + Nix path type strictness section). If
-> you touch any `modules/<subdir>/default.nix` file, add a new option, or change
-> an assertion/activation pattern and this fragment isn't updated in the same
-> commit, stop and fix it.
+> **Last verified:** 2026-08-02 (commit pending — distinguishes ordinary JSON
+> merge activation from Codex's leaf-owned TOML reconciliation, whose manifest
+> supplies removal semantics while preserving native project-trust state).
+> Prior: 2026-07-28 (commit pending — records the ONE-SHARED-DECLARATION form of
+> the config-parity rule, landed by `packages/glab` and asserted by
+> `module-glab-hm-devenv-option-parity`; prior 2026-07-21 was the repo-wide
+> activation reordering `entryAfter ["writeBoundary"]` → `["linkGeneration"]`;
+> earlier revisions added the activation script `exit` warning + Nix path type
+> strictness section). If you touch any `modules/<subdir>/default.nix` file, add
+> a new option, or change an assertion/activation pattern and this fragment
+> isn't updated in the same commit, stop and fix it.
 
 These conventions are enforced by code review and the `checks/module-eval.nix`
 evaluation tests, not by the module system itself. Follow them when adding or
@@ -196,6 +198,21 @@ are merged with Nix-declared values using `jq -s '.[0] * .[1]'` so user runtime
 edits (e.g., `trusted_folders`) are preserved across rebuilds. The Nix settings
 override on conflict, user-added keys pass through.
 
+**Mixed TOML ownership requires a leaf manifest, not a blind merge.** Codex's
+user `config.toml` contains Nix-declared settings and required native state: the
+TUI trust prompt writes ad-hoc `projects.<path>.trust_level` entries through
+`config/batchWrite`. `mkTomlSettingsActivationScript` delegates to
+`lib/ai/reconcile-toml.py`, which records exact managed leaf paths under XDG
+state, removes only retired managed leaves, overlays current leaves, preserves
+native siblings within the same table, and atomically leaves mode-0600 regular
+files. The manifest is necessary because `existing * desired` cannot tell a
+native key from a Nix key deleted in the next generation.
+
+Do not generalize this to every TOML file or every runtime. Static ownership is
+still preferred when no required native writer shares the artifact. That is why
+Codex's devenv project `.codex/config.toml` remains a store-backed file: project
+config is trust-gated and no project-local writer has been demonstrated.
+
 **HM settings writes are conditional; devenv writes are not.** The HM activation
 merge (copilot `copilotSettingsMerge`, kiro `kiroSettingsMerge`) is gated on
 non-empty settings — if the consumer enables the ecosystem just for MCP/skills
@@ -203,6 +220,12 @@ fanout and doesn't set any `ai.<cli>.settings`, the activation script doesn't
 fire and an externally-managed settings file is left untouched. Matches upstream
 Claude HM behavior where `settings.json` is only written when
 `cfg.settings != {}`.
+
+Codex user settings are the deliberate exception: its activation entry is always
+present while enabled. Empty desired settings plus no prior manifest is a strict
+no-op, but empty desired settings plus a prior manifest must run so a later
+generation can retract formerly declared leaves without erasing native trust
+state.
 
 Devenv-side writes are unconditional (always write the file when
 `enable = true`). This is intentional: devenv files are project-local symlinks,

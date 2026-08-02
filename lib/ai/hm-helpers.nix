@@ -177,6 +177,46 @@ in rec {
       ${coreutils}/bin/chmod 644 "$CONFIG_FILE"
     '';
 
+  # Reconcile Nix-declared TOML leaves into a runtime-writable file without
+  # claiming the whole file. This is intentionally stronger than the JSON
+  # merge helper above: a plain recursive merge cannot remove a setting after
+  # the consumer deletes it from Nix, so stale Nix policy would survive
+  # forever. The reconciler records the exact leaves from the prior generation,
+  # removes only retired leaves, reasserts current leaves, and preserves every
+  # unowned sibling (including siblings in the same TOML table).
+  #
+  # This helper exists for mixed-authority files only. Do not use it merely to
+  # make a declarative file writable: static home.file ownership remains the
+  # simpler and more honest default when the native application does not write
+  # required state into the same artifact.
+  mkTomlSettingsActivationScript = {
+    configFile,
+    python,
+    reconciler,
+    settingsJson,
+    stateName,
+  }:
+    assert lib.assertMsg (builtins.match "[A-Za-z0-9][A-Za-z0-9._-]*" stateName != null)
+    "mkTomlSettingsActivationScript: stateName must contain only alphanumeric, dot, underscore, or hyphen characters: '${stateName}'";
+      aiCommon.scopedActivation ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+
+        # The manifest lives outside the application config tree. Codex may
+        # freely inspect or rewrite config.toml, while this private ledger lets
+        # a later HM generation distinguish retired Nix leaves from native
+        # state that must survive activation.
+        NAT_TOML_CONFIG="$HOME"/${lib.escapeShellArg configFile}
+        NAT_TOML_STATE_DIR="''${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/toml-settings"
+        NAT_TOML_MANIFEST="$NAT_TOML_STATE_DIR/${stateName}.json"
+
+        ${python}/bin/python ${lib.escapeShellArg "${reconciler}"} \
+          --config "$NAT_TOML_CONFIG" \
+          --manifest "$NAT_TOML_MANIFEST" <<'NAT_TOML_SETTINGS_EOF'
+        ${settingsJson}
+        NAT_TOML_SETTINGS_EOF
+      '';
+
   # Write Kiro hook envelope files as REAL files under $HOME/<hooksDir>/ during
   # activation. Kiro v3 scans that dir but does NOT follow store symlinks
   # (verified live on 2.13.0 — global scan fires real files, skips symlinks), so

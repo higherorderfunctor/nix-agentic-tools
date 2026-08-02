@@ -16,6 +16,7 @@
   # under `lib.ai.*`. No top-level `lib.<helper>` exports exist.
   mcpLib = import ./../lib/mcp.nix {inherit lib;};
   aiBase = import ./../lib/ai {inherit lib;};
+  tomlFormat = pkgs.formats.toml {};
   # Generic idempotent-flag helper shared with mkKiro's wrapper (lib/idempotentFlags.nix).
   idempotentFlags = import ./../lib/idempotentFlags.nix {inherit lib;};
   hmLib =
@@ -204,6 +205,21 @@
         {inherit config;}
       ];
     };
+
+  # Codex HM settings are embedded as one-line JSON in the reconciliation
+  # activation script rather than exposed as a home.file source. Keeping this
+  # extractor in the eval harness lets the semantic parity tests continue to
+  # compare the exact desired value without weakening production ownership back
+  # to an immutable store symlink.
+  hmCodexSettings = evaluated: let
+    script = evaluated.config.home.activation.codexSettingsReconcile.text;
+    beforeClosingMarker = lib.head (lib.splitString "\nNAT_TOML_SETTINGS_EOF\n" script);
+    settingsJson = lib.last (lib.splitString "\n" beforeClosingMarker);
+  in
+    builtins.fromJSON (builtins.unsafeDiscardStringContext settingsJson);
+
+  codexSettingsActivation = config:
+    (evalHm config).config.home.activation.codexSettingsReconcile.text;
 
   # Helpers for the rollout-unlock tests. They exist to keep `lib.head` off an
   # unguarded filtered list: if the wrapper were renamed or dropped, `head`
@@ -515,6 +531,7 @@ in {
       devenv = evalDevenv {ai.codex.enable = true;};
     in
       !(hm.config.home.file ? ".codex/config.toml")
+      && hmCodexSettings hm == {}
       && !(hm.config.home.file ? ".codex/hooks.json")
       && !(devenv.config.files ? ".codex/config.toml")
       && !(devenv.config.files ? ".codex/hooks.json")
@@ -569,7 +586,7 @@ in {
         };
       };
     in
-      hm.config.home.file.".codex/config.toml".source.value.mcp_servers
+      (hmCodexSettings hm).mcp_servers
       == expected
       && devenv.config.files.".codex/config.toml".source.value.mcp_servers == expected
   );
@@ -585,7 +602,7 @@ in {
           };
         };
       };
-      evaluated = builtins.tryEval hm.config.home.file.".codex/config.toml".source.value;
+      evaluated = builtins.tryEval (hmCodexSettings hm);
     in
       !evaluated.success
   );
@@ -599,7 +616,7 @@ in {
           settings.credentials.file = "/run/secrets/context7-api-key";
         };
       };
-      hmServer = (evalHm config).config.home.file.".codex/config.toml".source.value.mcp_servers.context7-mcp;
+      hmServer = (hmCodexSettings (evalHm config)).mcp_servers.context7-mcp;
       devenvServer = (evalDevenv config).config.files.".codex/config.toml".source.value.mcp_servers.context7-mcp;
       rendered = builtins.toJSON hmServer;
     in
@@ -636,7 +653,7 @@ in {
           };
         };
       };
-      hmServers = (evalHm config).config.home.file.".codex/config.toml".source.value.mcp_servers;
+      hmServers = (hmCodexSettings (evalHm config)).mcp_servers;
       devenvServers = (evalDevenv config).config.files.".codex/config.toml".source.value.mcp_servers;
     in
       hmServers
@@ -683,7 +700,7 @@ in {
     in
       (hm.config.programs.claude-code.settings.effortLevel or null)
       == "xhigh"
-      && (hm.config.home.file.".codex/config.toml".source.value.model_reasoning_effort or null) == "xhigh"
+      && ((hmCodexSettings hm).model_reasoning_effort or null) == "xhigh"
       && (devenv.config.files.".claude/settings.json".json.effortLevel or null) == "xhigh"
       && (devenv.config.files.".codex/config.toml".source.value.model_reasoning_effort or null) == "xhigh"
   );
@@ -740,13 +757,203 @@ in {
         personality = "pragmatic";
         web_search = "indexed";
       };
-      hmSource = hm.config.home.file.".codex/config.toml".source;
       devenvSource = devenv.config.files.".codex/config.toml".source;
     in
-      hmSource.value
+      hmCodexSettings hm
       == expected
       && devenvSource.value == expected
   );
+
+  # This is a real activation lifecycle test, not merely an eval-shape check.
+  # Codex persists ad-hoc trust and native feature/MCP edits in user
+  # config.toml, so regressions here otherwise surface only when the TUI tries
+  # config/batchWrite against an immutable Nix store symlink.
+  module-codex-settings-reconciliation = let
+    activationV1 = codexSettingsActivation {
+      ai.codex = {
+        enable = true;
+        settings = {
+          features.memories = true;
+          future_array = [
+            {
+              enabled = true;
+              name = "one";
+            }
+          ];
+          mcp_servers.managed.command = "/bin/managed-v1";
+          model = "nix-model-v1";
+          shape = "scalar-v1";
+        };
+      };
+    };
+    activationV2 = codexSettingsActivation {
+      ai.codex = {
+        enable = true;
+        settings = {
+          model = "nix-model-v2";
+          sandbox_mode = "read-only";
+          shape.child = "table-v2";
+        };
+      };
+    };
+    activationEmpty = codexSettingsActivation {ai.codex.enable = true;};
+    activationMalformed = codexSettingsActivation {
+      ai.codex = {
+        configDir = ".codex-malformed";
+        enable = true;
+        settings.model = "must-not-land";
+      };
+    };
+    activationBadManifest = codexSettingsActivation {
+      ai.codex = {
+        configDir = ".codex-bad-manifest";
+        enable = true;
+        settings.model = "manifest-guard";
+      };
+    };
+  in
+    pkgs.runCommand "module-test-codex-settings-reconciliation" {} ''
+      export HOME="$PWD/home"
+      export XDG_STATE_HOME="$PWD/state"
+      ${pkgs.coreutils}/bin/mkdir -p "$HOME/.codex"
+
+      # Model the old HM delivery exactly: config.toml is a read-only symlink
+      # into immutable content. The first reconciliation must replace the link
+      # itself, never follow it and attempt to mutate its target.
+      ${pkgs.coreutils}/bin/cat > static-config.toml <<'EOF'
+      # native comment survives
+      model = "runtime-model"
+
+      [features]
+      native_runtime = true
+
+      [projects."/home/test/ad-hoc"]
+      trust_level = "trusted"
+      EOF
+      ${pkgs.coreutils}/bin/chmod 444 static-config.toml
+      ${pkgs.coreutils}/bin/ln -s "$PWD/static-config.toml" "$HOME/.codex/config.toml"
+
+      ${activationV1}
+
+      test -f "$HOME/.codex/config.toml"
+      test ! -L "$HOME/.codex/config.toml"
+      test "$(${pkgs.coreutils}/bin/stat -c %a "$HOME/.codex/config.toml")" = 600
+      ${pkgs.gnugrep}/bin/grep -Fq '# native comment survives' "$HOME/.codex/config.toml"
+      ${pkgs.python3}/bin/python - "$HOME/.codex/config.toml" <<'PY'
+      import sys
+      import tomllib
+
+      with open(sys.argv[1], "rb") as handle:
+          config = tomllib.load(handle)
+
+      assert config["future_array"] == [{"enabled": True, "name": "one"}]
+      assert config["shape"] == "scalar-v1"
+      PY
+
+      # Simulate native writers after activation. These siblings share tables
+      # with Nix-owned leaves and therefore catch a too-coarse table manifest.
+      ${pkgs.coreutils}/bin/cat >> "$HOME/.codex/config.toml" <<'EOF'
+
+      [mcp_servers.native]
+      command = "/bin/native"
+      EOF
+
+      ${activationV2}
+
+      ${pkgs.python3}/bin/python - "$HOME/.codex/config.toml" <<'PY'
+      import sys
+      import tomllib
+
+      with open(sys.argv[1], "rb") as handle:
+          config = tomllib.load(handle)
+
+      assert config["model"] == "nix-model-v2"
+      assert config["sandbox_mode"] == "read-only"
+      assert config["projects"]["/home/test/ad-hoc"]["trust_level"] == "trusted"
+      assert config["features"] == {"native_runtime": True}
+      assert "future_array" not in config
+      assert config["mcp_servers"] == {"native": {"command": "/bin/native"}}
+      assert config["shape"] == {"child": "table-v2"}
+      PY
+
+      manifest="$(${pkgs.findutils}/bin/find "$XDG_STATE_HOME" -name '*.json' -type f -print)"
+      test -n "$manifest"
+      test "$(${pkgs.coreutils}/bin/stat -c %a "$manifest")" = 600
+      test "$(${pkgs.coreutils}/bin/stat -c %a "$(${pkgs.coreutils}/bin/dirname "$manifest")")" = 700
+
+      # Identical activation is byte- and metadata-idempotent. Pinning mtimes
+      # before the second run detects an implementation that rewrites equal
+      # content through a fresh temp file on every Home Manager activation.
+      ${pkgs.coreutils}/bin/touch -d @1000000000 "$HOME/.codex/config.toml" "$manifest"
+      config_mtime="$(${pkgs.coreutils}/bin/stat -c %Y "$HOME/.codex/config.toml")"
+      manifest_mtime="$(${pkgs.coreutils}/bin/stat -c %Y "$manifest")"
+      ${activationV2}
+      test "$(${pkgs.coreutils}/bin/stat -c %Y "$HOME/.codex/config.toml")" = "$config_mtime"
+      test "$(${pkgs.coreutils}/bin/stat -c %Y "$manifest")" = "$manifest_mtime"
+
+      # Empty settings still run once to retire prior Nix leaves. Native state
+      # remains and the now-empty ownership manifest disappears.
+      ${activationEmpty}
+      ${pkgs.python3}/bin/python - "$HOME/.codex/config.toml" <<'PY'
+      import sys
+      import tomllib
+
+      with open(sys.argv[1], "rb") as handle:
+          config = tomllib.load(handle)
+
+      assert "model" not in config
+      assert "sandbox_mode" not in config
+      assert "shape" not in config
+      assert config["projects"]["/home/test/ad-hoc"]["trust_level"] == "trusted"
+      assert config["features"] == {"native_runtime": True}
+      assert config["mcp_servers"] == {"native": {"command": "/bin/native"}}
+      PY
+      test ! -e "$manifest"
+
+      # With no prior ownership ledger, empty desired settings are a true no-op
+      # and must not create or parse an externally managed config.
+      export HOME="$PWD/empty-home"
+      export XDG_STATE_HOME="$PWD/empty-state"
+      ${activationEmpty}
+      test ! -e "$HOME/.codex/config.toml"
+      test ! -e "$XDG_STATE_HOME"
+
+      # Malformed native TOML aborts before either config or ownership state is
+      # changed. Silent replacement would destroy exactly the state this path
+      # exists to preserve.
+      export HOME="$PWD/malformed-home"
+      export XDG_STATE_HOME="$PWD/malformed-state"
+      ${pkgs.coreutils}/bin/mkdir -p "$HOME/.codex-malformed"
+      printf '%s\n' '[broken' > "$HOME/.codex-malformed/config.toml"
+      before="$(${pkgs.coreutils}/bin/sha256sum "$HOME/.codex-malformed/config.toml")"
+      if ${activationMalformed}
+      then
+        echo "malformed TOML reconciliation unexpectedly succeeded" >&2
+        false
+      fi
+      after="$(${pkgs.coreutils}/bin/sha256sum "$HOME/.codex-malformed/config.toml")"
+      test "$before" = "$after"
+      test ! -e "$XDG_STATE_HOME"
+
+      # The ownership ledger is authority for deletion, so corruption there is
+      # also fail-closed. Guessing or discarding it could preserve stale Nix
+      # policy or misclassify a native key as safe to remove.
+      export HOME="$PWD/bad-manifest-home"
+      export XDG_STATE_HOME="$PWD/bad-manifest-state"
+      ${activationBadManifest}
+      bad_manifest="$(${pkgs.findutils}/bin/find "$XDG_STATE_HOME" -name '*.json' -type f -print)"
+      printf '%s\n' '{' > "$bad_manifest"
+      before="$(${pkgs.coreutils}/bin/sha256sum "$HOME/.codex-bad-manifest/config.toml")"
+      if ${activationBadManifest}
+      then
+        echo "malformed ownership manifest unexpectedly succeeded" >&2
+        false
+      fi
+      after="$(${pkgs.coreutils}/bin/sha256sum "$HOME/.codex-bad-manifest/config.toml")"
+      test "$before" = "$after"
+
+      touch "$out"
+    '';
 
   module-codex-security-settings-parity = mkTest "codex-security-settings-parity" (
     let
@@ -771,7 +978,7 @@ in {
           };
         };
       };
-      hmSettings = (evalHm config).config.home.file.".codex/config.toml".source.value;
+      hmSettings = hmCodexSettings (evalHm config);
       devenvSettings = (evalDevenv config).config.files.".codex/config.toml".source.value;
     in
       hmSettings
@@ -797,7 +1004,7 @@ in {
         };
       };
     };
-    source = evaluated.config.home.file.".codex/config.toml".source;
+    source = tomlFormat.generate "codex-security-settings.toml" (hmCodexSettings evaluated);
   in
     pkgs.runCommand "module-test-codex-security-toml-syntax" {} ''
       ${pkgs.gnugrep}/bin/grep -Fqx '[approval_policy.granular]' ${source}
@@ -872,7 +1079,7 @@ in {
           };
         };
       };
-      hmSettings = (evalHm config).config.home.file.".codex/config.toml".source.value;
+      hmSettings = hmCodexSettings (evalHm config);
       devenvSettings = (evalDevenv config).config.files.".codex/config.toml".source.value;
     in
       hmSettings
@@ -903,7 +1110,7 @@ in {
         };
       };
     };
-    source = evaluated.config.home.file.".codex/config.toml".source;
+    source = tomlFormat.generate "codex-permission-profiles.toml" (hmCodexSettings evaluated);
   in
     pkgs.runCommand "module-test-codex-permission-profiles-toml-syntax" {} ''
       ${pkgs.gnugrep}/bin/grep -Fqx 'default_permissions = "project-edit"' ${source}
@@ -1066,7 +1273,7 @@ in {
       devenv = evalDevenv config;
       failed = lib.findFirst (assertion: !assertion.assertion) null devenv.config.assertions;
     in
-      hm.config.home.file.".codex/config.toml".source.value.projects."/home/test/project".trust_level
+      (hmCodexSettings hm).projects."/home/test/project".trust_level
       == "trusted"
       && failed != null
       && lib.hasInfix "projects" failed.message
@@ -1083,7 +1290,7 @@ in {
         };
       };
     };
-    source = evaluated.config.home.file.".codex/config.toml".source;
+    source = tomlFormat.generate "codex-settings.toml" (hmCodexSettings evaluated);
   in
     pkgs.runCommand "module-test-codex-settings-toml-syntax" {} ''
       ${pkgs.gnugrep}/bin/grep -Fqx 'model = "custom-provider/model"' ${source}
@@ -1097,30 +1304,30 @@ in {
     let
       accepts = name: value:
         (builtins.tryEval
-          (evalHm {
+          (hmCodexSettings (evalHm {
             ai.codex = {
               enable = true;
               settings.${name} = value;
             };
-          }).config.home.file.".codex/config.toml".source.value)
+          })))
         .success;
       acceptsFeature = name: value:
         (builtins.tryEval
-          (evalHm {
+          (hmCodexSettings (evalHm {
             ai.codex = {
               enable = true;
               settings.features.${name} = value;
             };
-          }).config.home.file.".codex/config.toml".source.value)
+          })))
         .success;
       acceptsPermission = path: value:
         (builtins.tryEval
-          (evalHm {
+          (hmCodexSettings (evalHm {
             ai.codex = {
               enable = true;
               settings.permissions.test = lib.setAttrByPath path value;
             };
-          }).config.home.file.".codex/config.toml".source.value)
+          })))
         .success;
     in
       accepts "model_reasoning_effort" "max"
@@ -1170,7 +1377,7 @@ in {
       failed
       != null
       && lib.hasInfix "model_provider, notify" failed.message
-      && hm.config.home.file.".codex/config.toml".source.value.model_provider == "custom"
+      && (hmCodexSettings hm).model_provider == "custom"
   );
 
   module-codex-semantic-agents-fanout = mkTest "codex-semantic-agents-fanout" (
@@ -1301,7 +1508,7 @@ in {
           max_concurrent_threads_per_session = 7;
         };
       };
-      hmAgents = (evalHm config).config.home.file.".codex/config.toml".source.value.agents;
+      hmAgents = (hmCodexSettings (evalHm config)).agents;
       devenvAgents = (evalDevenv config).config.files.".codex/config.toml".source.value.agents;
     in
       hmAgents
