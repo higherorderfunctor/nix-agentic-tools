@@ -14,6 +14,28 @@
   reasoningEffortLevels = lib.unique (
     lib.concatMap (model: model.reasoningLevels) codexExtracted.models
   );
+  approvalPolicyType =
+    lib.types.either
+    (lib.types.enum ["never" "on-request" "untrusted"])
+    (lib.types.submodule {
+      options.granular =
+        lib.genAttrs [
+          "mcp_elicitations"
+          "request_permissions"
+          "rules"
+          "sandbox_approval"
+          "skill_approval"
+        ] (_:
+          lib.mkOption {
+            type = lib.types.nullOr lib.types.bool;
+            default = null;
+          });
+    });
+  hasPermissionProfiles = settings:
+    helpers.filterNulls (lib.filterAttrs
+      (name: _: builtins.elem name ["default_permissions" "permissions"])
+      settings)
+    != {};
 
   renderCodexServer = name: server: let
     rendered = removeAttrs (lib.ai.renderServer pkgs name server) ["type"];
@@ -72,6 +94,7 @@
     "otel"
     "profile"
     "profiles"
+    "projects"
   ];
 
   resolveText = value:
@@ -215,16 +238,31 @@ in
         type = lib.types.submodule {
           freeformType = tomlFormat.type;
           options = {
+            allow_login_shell = lib.mkOption {
+              type = lib.types.nullOr lib.types.bool;
+              default = null;
+              description = "Whether shell tools may invoke login shells.";
+            };
+            approval_policy = lib.mkOption {
+              type = lib.types.nullOr approvalPolicyType;
+              default = null;
+              description = "When Codex pauses for approval, either as a preset or granular prompt-category policy.";
+            };
+            approvals_reviewer = lib.mkOption {
+              type = lib.types.nullOr (lib.types.enum ["auto_review" "user"]);
+              default = null;
+              description = "Who reviews eligible interactive approval requests; this does not change the sandbox boundary.";
+            };
             features = lib.mkOption {
-              type = lib.types.submodule {
+              type = lib.types.nullOr (lib.types.submodule {
                 freeformType = lib.types.attrsOf lib.types.bool;
                 options = lib.genAttrs stableFeatureNames (_:
                   lib.mkOption {
                     type = lib.types.nullOr lib.types.bool;
                     default = null;
                   });
-              };
-              default = {};
+              });
+              default = null;
               description = ''
                 Codex feature toggles. Stable flags extracted from the pinned
                 binary are typed; additional boolean flags remain available
@@ -252,6 +290,45 @@ in
               type = lib.types.nullOr (lib.types.enum ["friendly" "none" "pragmatic"]);
               default = null;
               description = "Default communication style for supported models.";
+            };
+            projects = lib.mkOption {
+              type = lib.types.attrsOf (lib.types.submodule {
+                options.trust_level = lib.mkOption {
+                  type = lib.types.enum ["trusted" "untrusted"];
+                  description = "Whether Codex loads project-scoped .codex configuration, hooks, and rules for this path.";
+                };
+              });
+              default = {};
+              description = "User-level project trust declarations. Devenv rejects this bootstrap-global setting.";
+            };
+            sandbox_mode = lib.mkOption {
+              type = lib.types.nullOr (lib.types.enum ["danger-full-access" "read-only" "workspace-write"]);
+              default = null;
+              description = "OS-enforced filesystem and network sandbox policy for model-generated commands.";
+            };
+            sandbox_workspace_write = lib.mkOption {
+              type = lib.types.nullOr (lib.types.submodule {
+                options = {
+                  exclude_slash_tmp = lib.mkOption {
+                    type = lib.types.nullOr lib.types.bool;
+                    default = null;
+                  };
+                  exclude_tmpdir_env_var = lib.mkOption {
+                    type = lib.types.nullOr lib.types.bool;
+                    default = null;
+                  };
+                  network_access = lib.mkOption {
+                    type = lib.types.nullOr lib.types.bool;
+                    default = null;
+                  };
+                  writable_roots = lib.mkOption {
+                    type = lib.types.listOf lib.types.str;
+                    default = [];
+                  };
+                };
+              });
+              default = null;
+              description = "Workspace-write sandbox refinements; effective only with sandbox_mode = \"workspace-write\".";
             };
             web_search = lib.mkOption {
               type = lib.types.nullOr (lib.types.enum ["cached" "disabled" "indexed" "live"]);
@@ -282,6 +359,11 @@ in
     }: let
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
       hasNativeMcpServers = cfg.settings ? mcp_servers;
+      hasLegacySandbox =
+        cfg.settings.sandbox_mode
+        != null
+        || cfg.settings.sandbox_workspace_write != null;
+      usesPermissionProfiles = hasPermissionProfiles cfg.settings;
       settings = helpers.filterNulls (cfg.settings
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
@@ -297,6 +379,10 @@ in
           {
             assertion = mergedServers == {} || !hasNativeMcpServers;
             message = "ai.codex.settings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
+          }
+          {
+            assertion = !hasLegacySandbox || !usesPermissionProfiles;
+            message = "ai.codex.settings must use either sandbox_mode/sandbox_workspace_write or default_permissions/permissions, never both";
           }
         ];
       home.file = lib.mkMerge [
@@ -323,6 +409,11 @@ in
     }: let
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
       hasNativeMcpServers = cfg.settings ? mcp_servers;
+      hasLegacySandbox =
+        cfg.settings.sandbox_mode
+        != null
+        || cfg.settings.sandbox_workspace_write != null;
+      usesPermissionProfiles = hasPermissionProfiles cfg.settings;
       settings = helpers.filterNulls (cfg.settings
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
@@ -339,6 +430,10 @@ in
           {
             assertion = mergedServers == {} || !hasNativeMcpServers;
             message = "ai.codex.settings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
+          }
+          {
+            assertion = !hasLegacySandbox || !usesPermissionProfiles;
+            message = "ai.codex.settings must use either sandbox_mode/sandbox_workspace_write or default_permissions/permissions, never both";
           }
           {
             assertion = ignoredSettings == [];

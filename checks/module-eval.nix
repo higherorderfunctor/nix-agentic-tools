@@ -746,6 +746,116 @@ in {
       && devenvSource.value == expected
   );
 
+  module-codex-security-settings-parity = mkTest "codex-security-settings-parity" (
+    let
+      config.ai.codex = {
+        enable = true;
+        settings = {
+          allow_login_shell = false;
+          approval_policy.granular = {
+            mcp_elicitations = true;
+            request_permissions = false;
+            rules = true;
+            sandbox_approval = true;
+            skill_approval = false;
+          };
+          approvals_reviewer = "user";
+          sandbox_mode = "workspace-write";
+          sandbox_workspace_write = {
+            exclude_slash_tmp = true;
+            exclude_tmpdir_env_var = true;
+            network_access = false;
+            writable_roots = ["/var/lib/project-cache"];
+          };
+        };
+      };
+      hmSettings = (evalHm config).config.home.file.".codex/config.toml".source.value;
+      devenvSettings = (evalDevenv config).config.files.".codex/config.toml".source.value;
+    in
+      hmSettings
+      == devenvSettings
+      && hmSettings.approval_policy.granular.rules
+      && !hmSettings.approval_policy.granular.request_permissions
+      && hmSettings.sandbox_mode == "workspace-write"
+      && hmSettings.sandbox_workspace_write.writable_roots == ["/var/lib/project-cache"]
+  );
+
+  module-codex-security-toml-syntax = let
+    evaluated = evalHm {
+      ai.codex = {
+        enable = true;
+        settings = {
+          approval_policy.granular = {
+            request_permissions = false;
+            sandbox_approval = true;
+          };
+          projects."/home/test/project".trust_level = "trusted";
+          sandbox_mode = "workspace-write";
+          sandbox_workspace_write.network_access = false;
+        };
+      };
+    };
+    source = evaluated.config.home.file.".codex/config.toml".source;
+  in
+    pkgs.runCommand "module-test-codex-security-toml-syntax" {} ''
+      ${pkgs.gnugrep}/bin/grep -Fqx '[approval_policy.granular]' ${source}
+      ${pkgs.gnugrep}/bin/grep -Fqx 'request_permissions = false' ${source}
+      ${pkgs.gnugrep}/bin/grep -Fqx '[projects."/home/test/project"]' ${source}
+      ${pkgs.gnugrep}/bin/grep -Fqx 'trust_level = "trusted"' ${source}
+      ${pkgs.gnugrep}/bin/grep -Fqx '[sandbox_workspace_write]' ${source}
+      touch "$out"
+    '';
+
+  module-codex-security-models-do-not-compose = mkTest "codex-security-models-do-not-compose" (
+    let
+      check = evaluated:
+        builtins.any (assertion:
+          !assertion.assertion
+          && lib.hasInfix "default_permissions/permissions" assertion.message)
+        evaluated.config.assertions;
+      config.ai.codex = {
+        enable = true;
+        settings = {
+          default_permissions = ":workspace";
+          sandbox_mode = "workspace-write";
+        };
+      };
+    in
+      check (evalHm config)
+      && check (evalDevenv config)
+  );
+
+  module-codex-security-empty-profile-model-does-not-conflict = mkTest "codex-security-empty-profile-model-does-not-conflict" (
+    let
+      config.ai.codex = {
+        enable = true;
+        settings = {
+          permissions = {};
+          sandbox_mode = "read-only";
+        };
+      };
+      assertionsPass = evaluated: builtins.all (assertion: assertion.assertion) evaluated.config.assertions;
+    in
+      assertionsPass (evalHm config)
+      && assertionsPass (evalDevenv config)
+  );
+
+  module-codex-trust-is-user-global = mkTest "codex-trust-is-user-global" (
+    let
+      config.ai.codex = {
+        enable = true;
+        settings.projects."/home/test/project".trust_level = "trusted";
+      };
+      hm = evalHm config;
+      devenv = evalDevenv config;
+      failed = lib.findFirst (assertion: !assertion.assertion) null devenv.config.assertions;
+    in
+      hm.config.home.file.".codex/config.toml".source.value.projects."/home/test/project".trust_level
+      == "trusted"
+      && failed != null
+      && lib.hasInfix "projects" failed.message
+  );
+
   module-codex-settings-toml-syntax = let
     evaluated = evalHm {
       ai.codex = {
@@ -789,12 +899,18 @@ in {
         .success;
     in
       accepts "model_reasoning_effort" "max"
+      && accepts "approval_policy" "on-request"
+      && accepts "approvals_reviewer" "auto_review"
       && accepts "personality" "friendly"
+      && accepts "sandbox_mode" "read-only"
       && accepts "web_search" "live"
       && acceptsFeature "memories" true
       && acceptsFeature "speculative_future_flag" false
       && !(accepts "model_reasoning_effort" "extreme")
+      && !(accepts "approval_policy" "sometimes")
+      && !(accepts "approvals_reviewer" "agent")
       && !(accepts "personality" "verbose")
+      && !(accepts "sandbox_mode" "full")
       && !(accepts "web_search" "enabled")
       && !(acceptsFeature "memories" "yes")
       && !(acceptsFeature "speculative_future_flag" "no")

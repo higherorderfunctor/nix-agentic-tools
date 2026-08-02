@@ -7,18 +7,21 @@ applyTo: "lib/ai/sharedOptions.nix,packages/chatgpt-codex/modules/**,packages/cl
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-01 (commit pending — Codex lowers shared and
-> per-app typed MCP servers to native `mcp_servers` tables in both backends,
-> including credential wrappers and Codex-specific policy extensions). Prior:
-> 2026-08-01 (commit pending — `ai.settings.reasoningEffort` lowers through the
-> exact Claude/Codex persisted semantic intersection, with native settings
-> overriding or excluding the shared default). Prior: 2026-08-01 (commit
-> d7755c2f — Codex statically lowers a typed/freeform settings surface to user
-> and trusted-project config.toml). Prior: 2026-08-01 (commit 4562252c — Codex
-> lowers shared and per-app skills to `.agents/skills` in both backends). Prior:
-> 2026-08-01 (commit 444a6f97 — Codex degrades scoped instructions and rules to
-> explicit prose, supports opt-out through `skipIfUnsupported`, and rejects
-> generated AGENTS.md content over its configurable byte limit). Prior:
+> **Last verified:** 2026-08-01 (commit pending — Codex types stable sandbox,
+> approval, and user-global project-trust settings, rejects trust declarations
+> at project scope, and prevents legacy sandbox settings from composing with
+> beta permission profiles). Prior: 2026-08-01 (commit pending — Codex lowers
+> shared and per-app typed MCP servers to native `mcp_servers` tables in both
+> backends, including credential wrappers and Codex-specific policy extensions).
+> Prior: 2026-08-01 (commit pending — `ai.settings.reasoningEffort` lowers
+> through the exact Claude/Codex persisted semantic intersection, with native
+> settings overriding or excluding the shared default). Prior: 2026-08-01
+> (commit d7755c2f — Codex statically lowers a typed/freeform settings surface
+> to user and trusted-project config.toml). Prior: 2026-08-01 (commit 4562252c —
+> Codex lowers shared and per-app skills to `.agents/skills` in both backends).
+> Prior: 2026-08-01 (commit 444a6f97 — Codex degrades scoped instructions and
+> rules to explicit prose, supports opt-out through `skipIfUnsupported`, and
+> rejects generated AGENTS.md content over its configurable byte limit). Prior:
 > 2026-08-01 (commit c6b1b31e — Codex lowers shared and per-app context,
 > instructions, and unscoped Markdown rules into global HM and project-local
 > devenv AGENTS.md files). Prior: 2026-08-01 (commit 914096a8 — Codex joins the
@@ -96,6 +99,15 @@ The ai module fans out TWO kinds of configuration:
   documents as ignored at project scope. Static ownership is deliberate: native
   feature editors cannot coexist with the managed file. MCP configuration is
   composed into that same statically owned file through the typed server pool.
+  Stable security settings type `allow_login_shell`, `approval_policy`
+  (including granular prompt categories), `approvals_reviewer`, `sandbox_mode`,
+  and `sandbox_workspace_write`. The older sandbox model and beta
+  `default_permissions`/`permissions` profiles are mutually exclusive, so the
+  module fails when both are present. `projects.<path>.trust_level` is accepted
+  only by Home Manager's user-global file: devenv rejects it because a project
+  cannot bootstrap the trust required to load its own `.codex/config.toml`.
+  Codex execpolicy is a separate Starlark `.rules` surface and is not lowered
+  from Markdown `ai.rules`.
 
 **Cross-ecosystem options** (live at `ai.*` top level and fan out to each
 enabled ecosystem whose native model preserves the option's semantics):
