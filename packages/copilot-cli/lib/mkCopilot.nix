@@ -5,8 +5,8 @@
 # `hmTransform` (HM) or `devenvTransform` (devenv) to this record.
 #
 # Fanout absorbed in Task 4 (A3): settings.json activation merge,
-# mcp-config.json static write, per-instruction rule files under
-# `.github/instructions/`, skills routing to `.config/github-copilot/skills/`.
+# mcp-config.json static write, per-instruction rule files under the native
+# project directory, and skills routing to that same project directory.
 #
 # Fanout absorbed in Task 4b (A3 gap-fill): lspServers typed LSP
 # config write, environmentVariables fed into the HM symlinkJoin
@@ -47,6 +47,22 @@ lib.ai.app.mkAiApp {
       type = lib.types.str;
       default = "copilot-instructions.md";
       description = "Filename for the context file inside `<configDir>/`.";
+    };
+    # Keep the option visible in both backends even though only a project-local
+    # devenv has a meaningful project root. Home Manager rejects non-default
+    # overrides below instead of omitting the option: omission made the two
+    # generated `ai.*` contracts drift and hid the scope distinction from HM
+    # users. The shared default is also the native project layout consumed by
+    # Copilot CLI and GitHub's cloud-side agents.
+    projectDir = lib.mkOption {
+      type = lib.types.str;
+      default = ".github";
+      description = ''
+        Project-scope directory Copilot reads for context, rules, agents, and
+        skills. Relative to the devenv root. Home Manager has no project root
+        and rejects overrides; use a devenv declaration for project-local
+        placement.
+      '';
     };
     # Copilot-specific freeform settings. Consumed by the settings.json
     # activation merge in `hm.config` (runtime-merge via `jq -s '.[0] * .[1]'`
@@ -197,6 +213,22 @@ lib.ai.app.mkAiApp {
       dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
     in
       lib.mkMerge [
+        # `projectDir` is shared for option-tree parity and discoverability, but
+        # HM cannot give a project-relative path honest semantics. Keep the
+        # native default inert and reject customization rather than silently
+        # writing a HOME-relative directory that Copilot would interpret as a
+        # different scope.
+        {
+          assertions = [
+            {
+              assertion = cfg.projectDir == ".github";
+              message = ''
+                ai.copilot.projectDir is project-local and cannot be changed
+                through Home Manager. Configure it through the devenv module.
+              '';
+            }
+          ];
+        }
         # L2b → L3: expand `ai.copilot.agentsDir` into
         # `ai.copilot.agents`. mkDefault priority; collisions with
         # `ai.agents` go through the shared collision check.
@@ -342,17 +374,6 @@ lib.ai.app.mkAiApp {
         default = ".config/github-copilot";
         description = "Wrapper-aimed config dir (mcp-config, lsp-config, settings). Relative to devenv root.";
       };
-      # Project-scope dir Copilot actually reads at project level:
-      # `.github/copilot-instructions.md`, `.github/instructions/`,
-      # `.github/agents/`, `.github/skills/`. Moving these out of
-      # `configDir` matches Copilot's documented conventions — both
-      # cloud Copilot (coding agent, Copilot Workspace) and local
-      # Copilot CLI read from this layout.
-      projectDir = lib.mkOption {
-        type = lib.types.str;
-        default = ".github";
-        description = "Project-scope dir Copilot reads (context, rules, agents, skills). Relative to devenv root.";
-      };
     };
     config = {
       cfg,
@@ -439,17 +460,19 @@ lib.ai.app.mkAiApp {
             mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
           };
         })
-        # Per-instruction files under `.github/instructions/`. Same
-        # transformer as HM, same filter-by-name pattern — nameless
-        # entries are composed into the native context file
-        # (`<projectDir>/<contextFilename>`) below.
+        # Per-instruction files under `<projectDir>/instructions/`. Same
+        # transformer as HM, same filter-by-name pattern — nameless entries are
+        # composed into the native context file below. `projectDir` must prefix
+        # this path too: context/agents/skills already honored an override, but
+        # hardcoding `.github` here previously split one declaration across two
+        # project roots.
         (let
           fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
           inherit (import ../../../lib/ai/transformers/copilot.nix {inherit lib;}) copilotTransformer;
           named = builtins.filter (i: i ? name) mergedInstructions;
         in {
           files = lib.listToAttrs (map (instr: {
-              name = ".github/instructions/${instr.name}.instructions.md";
+              name = "${cfg.projectDir}/instructions/${instr.name}.instructions.md";
               value.text = fragmentsLib.mkRenderer copilotTransformer {} instr;
             })
             named);
@@ -460,7 +483,7 @@ lib.ai.app.mkAiApp {
           inherit (import ../../../lib/ai/transformers/copilot.nix {inherit lib;}) copilotTransformer;
         in {
           files = lib.mapAttrs' (name: rule:
-            lib.nameValuePair ".github/instructions/${name}.instructions.md" {
+            lib.nameValuePair "${cfg.projectDir}/instructions/${name}.instructions.md" {
               text = fragmentsLib.mkRenderer copilotTransformer {} (rule
                 // {
                   text = resolveRuleText rule;

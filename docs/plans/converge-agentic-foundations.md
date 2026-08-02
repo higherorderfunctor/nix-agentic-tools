@@ -217,7 +217,7 @@ global-steering-probe · autoMemory-v3-regression-check · telemetry-test-wrappe
 for cross-CLI harness support; hooks for workflow optimization/control flow) ·
 knowledge-base fold (hold impl against the researched KB — bridge-or-not
 evaluation; feeds telemetry/fixtures/memory-systems work) ·
-copilot-projectDir-hardcode (mkCopilot.nix:450,461) · ★promote-refactor-to-main
+copilot-projectDir-hardcode [RESOLVED CX-015] · ★promote-refactor-to-main
 (post-plan; interacts with re-chunk-for-main) · worktree-output-relocation
 (research banked) · namespace-unify-later [NEEDS-EVIDENCE, pinned, carried from
 typed plan] · full-hookset [DEFAULT, carried] · devenv-dir-symlink-shortcut
