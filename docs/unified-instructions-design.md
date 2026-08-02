@@ -51,9 +51,11 @@ For every cross-ecosystem concern, the factory uses the same shape:
 
 1. **Typed option surface.** A single canonical schema, consumable at two tiers:
    - `ai.<concern>` — cross-ecosystem (fans to every enabled CLI).
-   - `ai.<cli>.<concern>` — per-ecosystem additive. Per-CLI wins on collision.
-     Use this for ecosystem-exclusive content or to override a cross-ecosystem
-     default.
+   - `ai.<cli>.<concern>` — per-ecosystem layer. Use this for
+     ecosystem-exclusive content or to override a scalar cross-ecosystem
+     default. Named attrset pools are additive only for distinct names;
+     shared/per-CLI duplicates fail the collision check instead of choosing a
+     winner. Lists concatenate in their documented order.
 2. **Per-ecosystem transformer.** Lives in `lib/ai/transformers/<cli>.nix`.
    Consumes the typed shape and emits ecosystem-native output (file contents,
    frontmatter dialect, disk paths).
@@ -254,8 +256,9 @@ rules.<name> = lib.types.submodule {
 };
 ```
 
-**Effective value per ecosystem** = top-level `context`/`rules` merged with
-`ai.<cli>.context`/`ai.<cli>.rules`. Name collisions: per-CLI wins.
+**Effective value per ecosystem:** per-CLI `context` overrides top-level
+`context` when set. Top-level and per-CLI `rules` are additive only for distinct
+names; duplicate names fail the shared collision check.
 
 ### Kiro context filename override
 

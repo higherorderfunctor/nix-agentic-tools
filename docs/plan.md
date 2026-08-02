@@ -179,11 +179,14 @@ specific to how Claude Code spawns them.
 > concern (mcpServers, instructions, skills, agents, lspServers,
 > environmentVariables, permissions) uses the same architecture:
 > typed option surface at `ai.<concern>` (top-level) + `ai.<cli>.<concern>`
-> (per-ecosystem additive, wins on collision), translated at eval time by
+> (per-ecosystem layer), translated at eval time by
 > per-ecosystem transformers in `lib/ai/transformers/`. **No ecosystem-specific
 > option shapes, no throwaway passthrough wiring** — write typed once, fan
 > out everywhere. See `docs/unified-instructions-design.md` for the full
-> design (covers instructions; same pattern applies to all concerns).
+> design (covers instructions; same pattern applies to all concerns). Merge
+> semantics follow the value shape: scalar defaults permit per-runtime
+> overrides, lists concatenate, and duplicate names across shared/per-runtime
+> attrset pools fail rather than silently choosing a winner.
 
 - [x] **Unified `ai.context` + `ai.rules` instruction surface** — SHIPPED across commits 8f0c16b, 7dad0b8, 419010a (2026-04-21), then extended to Codex in PRs #657, #658, and #668 (2026-08-01). `ai.context` + `ai.<cli>.context` now cover Claude / Codex / Kiro / Copilot with HM + devenv parity; `ai.rules` attrs-shape + `ai.<cli>.rules` translate through the per-ecosystem transformers (Claude rules, Kiro steering, Copilot instructions, flat Codex AGENTS.md with explicit scope degradation and a 32 KiB default guard). The `sourcePath` live-edit experiment shipped in fab4e5c and was later rolled back; pure rules plus `rulesDir` are the current surface. Consumer configuration migrations remain different-repo concerns. Full status in `docs/unified-instructions-design.md`; rollback details in `docs/ai-rules-livelink-plan.md`.
 - [ ] **Typed `ai.claude.settings` schema** — LOW priority. Currently `attrsOf anything`; could be an opinionated submodule with known keys (`effortLevel`, `enableAllProjectMcpServers`, `permissions`, `env`, `hooks`, `outputStyle`) + freeformType escape hatch, matching the Kiro pattern. Note: today's HM `inherit (cfg) settings;` is an IDENTITY translation (our schema matches upstream's freeform shape by coincidence). If we move to a typed schema, HM must be refactored to the same hook-routing + gap-write pattern devenv now uses, because our schema would no longer identity-map to upstream's. Separate design pass.

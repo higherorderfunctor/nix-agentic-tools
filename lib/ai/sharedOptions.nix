@@ -1,9 +1,10 @@
 # Declares cross-app options (ai.context, ai.mcpServers, ai.instructions,
 # ai.rules, ai.settings, ai.skills, ai.agents, ai.hooks).
 #
-# Imported by every mkAiApp module so per-app overrides
-# (ai.<name>.mcpServers, etc.) can merge on top of these top-level
-# pools. Per-app values win on key conflicts; lists are concatenated.
+# Imported by every mkAiApp module so per-app layers
+# (ai.<name>.mcpServers, etc.) compose with these top-level pools. Scalar
+# defaults allow per-app overrides, lists concatenate, and named attrset pools
+# reject shared/per-app duplicate keys through mergeWithCollisionCheck.
 {
   config,
   lib,
@@ -133,8 +134,9 @@ in {
         and Kiro. Each per-ecosystem translator renders the native JSON shape
         on emission (Kiro: command/args; Copilot: + fileExtensions; Claude: +
         extensionToLanguage). Codex is intentionally excluded because its
-        public configuration has no native LSP-server surface. Per-app
-        overrides (ai.<name>.lspServers) merge on top and win on conflict.
+        public configuration has no native LSP-server surface. Per-app entries
+        (ai.<name>.lspServers) add runtime-specific servers; duplicate names
+        across the shared and per-app pools fail the collision check.
       '';
     };
 
@@ -191,8 +193,10 @@ in {
       default = {};
       description = ''
         Environment variables fanned out to every enabled AI app that
-        supports a wrapper/env surface (Kiro, Copilot). Per-app overrides
-        (ai.<name>.environmentVariables) merge on top and win on conflict.
+        supports a wrapper/env surface (Kiro, Copilot). Per-app entries
+        (ai.<name>.environmentVariables) add runtime-specific variables;
+        duplicate names across the shared and per-app pools fail the collision
+        check.
         Claude does NOT currently consume this pool — Claude env vars
         should be set via `ai.claude.settings.env` instead (upstream
         writes them into `~/.claude/settings.json`). Codex also does not
