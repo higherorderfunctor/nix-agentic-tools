@@ -76,10 +76,12 @@
       hooks = lib.mkOption {
         type = lib.types.listOf codexHookHandlerType;
         default = [];
+        description = "Command handlers Codex runs for this matcher group.";
       };
       matcher = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = null;
+        description = "Optional regular-expression matcher restricting this hook group.";
       };
     };
   };
@@ -94,10 +96,11 @@
           "rules"
           "sandbox_approval"
           "skill_approval"
-        ] (_:
+        ] (category:
           lib.mkOption {
             type = lib.types.nullOr lib.types.bool;
             default = null;
+            description = "Whether the `${category}` prompt category requires user approval.";
           });
     });
   filesystemAccessType = lib.types.enum ["deny" "read" "write"];
@@ -117,50 +120,62 @@
       allow_local_binding = lib.mkOption {
         type = lib.types.nullOr lib.types.bool;
         default = null;
+        description = "Whether sandboxed commands may bind loopback network listeners.";
       };
       allow_upstream_proxy = lib.mkOption {
         type = lib.types.nullOr lib.types.bool;
         default = null;
+        description = "Whether sandboxed commands may use an upstream network proxy.";
       };
       dangerously_allow_all_unix_sockets = lib.mkOption {
         type = lib.types.nullOr lib.types.bool;
         default = null;
+        description = "Whether to bypass Unix-socket restrictions for this permission profile.";
       };
       dangerously_allow_non_loopback_proxy = lib.mkOption {
         type = lib.types.nullOr lib.types.bool;
         default = null;
+        description = "Whether the sandbox proxy may listen on non-loopback interfaces.";
       };
       domains = lib.mkOption {
         type = lib.types.attrsOf networkAccessType;
         default = {};
+        description = "Per-domain allow or deny decisions for sandboxed network access.";
       };
       enable_socks5 = lib.mkOption {
         type = lib.types.nullOr lib.types.bool;
         default = null;
+        description = "Whether the sandbox exposes its SOCKS5 proxy.";
       };
       enable_socks5_udp = lib.mkOption {
         type = lib.types.nullOr lib.types.bool;
         default = null;
+        description = "Whether the sandbox's SOCKS5 proxy permits UDP associations.";
       };
       enabled = lib.mkOption {
         type = lib.types.nullOr lib.types.bool;
         default = null;
+        description = "Whether network access is enabled for this permission profile.";
       };
       mode = lib.mkOption {
         type = lib.types.nullOr (lib.types.enum ["full" "limited"]);
         default = null;
+        description = "Network-isolation mode for this permission profile.";
       };
       proxy_url = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = null;
+        description = "Explicit HTTP proxy URL used by sandboxed commands.";
       };
       socks_url = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = null;
+        description = "Explicit SOCKS proxy URL used by sandboxed commands.";
       };
       unix_sockets = lib.mkOption {
         type = lib.types.attrsOf networkAccessType;
         default = {};
+        description = "Per-path allow or deny decisions for Unix socket access.";
       };
     };
   };
@@ -169,6 +184,7 @@
       description = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = null;
+        description = "Human-readable purpose of this named permission profile.";
       };
       extends = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
@@ -178,14 +194,17 @@
       filesystem = lib.mkOption {
         type = lib.types.nullOr permissionFilesystemType;
         default = null;
+        description = "Filesystem policy, including path-specific read and write access.";
       };
       network = lib.mkOption {
         type = lib.types.nullOr permissionNetworkType;
         default = null;
+        description = "Network, proxy, domain, and socket policy.";
       };
       workspace_roots = lib.mkOption {
         type = lib.types.attrsOf lib.types.bool;
         default = {};
+        description = "Additional workspace roots and whether each is writable.";
       };
     };
   };
@@ -551,22 +570,27 @@ in
                   default_subagent_model = lib.mkOption {
                     type = lib.types.nullOr lib.types.str;
                     default = null;
+                    description = "Default model identifier used for spawned Codex subagents.";
                   };
                   default_subagent_reasoning_effort = lib.mkOption {
                     type = lib.types.nullOr (lib.types.enum reasoningEffortLevels);
                     default = null;
+                    description = "Default reasoning effort used for spawned Codex subagents.";
                   };
                   enabled = lib.mkOption {
                     type = lib.types.nullOr lib.types.bool;
                     default = null;
+                    description = "Whether Codex multi-agent functionality is enabled.";
                   };
                   interrupt_message = lib.mkOption {
                     type = lib.types.nullOr lib.types.bool;
                     default = null;
+                    description = "Whether Codex sends an interruption message when stopping a subagent.";
                   };
                   max_concurrent_threads_per_session = lib.mkOption {
                     type = lib.types.nullOr lib.types.ints.positive;
                     default = null;
+                    description = "Maximum concurrent agent threads allowed in one Codex session.";
                   };
                 };
               });
@@ -596,10 +620,11 @@ in
             features = lib.mkOption {
               type = lib.types.nullOr (lib.types.submodule {
                 freeformType = lib.types.attrsOf lib.types.bool;
-                options = lib.genAttrs stableFeatureNames (_:
+                options = lib.genAttrs stableFeatureNames (name:
                   lib.mkOption {
                     type = lib.types.nullOr lib.types.bool;
                     default = null;
+                    description = "Whether Codex enables the extracted stable `${name}` feature.";
                   });
               });
               default = null;
@@ -657,18 +682,22 @@ in
                   exclude_slash_tmp = lib.mkOption {
                     type = lib.types.nullOr lib.types.bool;
                     default = null;
+                    description = "Whether `/tmp` is excluded from workspace-write sandbox access.";
                   };
                   exclude_tmpdir_env_var = lib.mkOption {
                     type = lib.types.nullOr lib.types.bool;
                     default = null;
+                    description = "Whether the directory named by TMPDIR is excluded from workspace-write access.";
                   };
                   network_access = lib.mkOption {
                     type = lib.types.nullOr lib.types.bool;
                     default = null;
+                    description = "Whether workspace-write sandboxed commands may access the network.";
                   };
                   writable_roots = lib.mkOption {
                     type = lib.types.listOf lib.types.str;
                     default = [];
+                    description = "Additional writable roots granted to workspace-write sandboxed commands.";
                   };
                 };
               });

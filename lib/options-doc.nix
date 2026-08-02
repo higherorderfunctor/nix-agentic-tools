@@ -1,17 +1,18 @@
 # Generate options documentation from module definitions.
 #
-# Uses nixosOptionsDoc to produce markdown from actual NixOS-style module
-# option definitions. Two entry points: mkHmOptionsDocs (home-manager
-# modules) and mkDevenvOptionsDocs (devenv modules).
+# Uses nixosOptionsDoc to produce CommonMark and JSON from actual NixOS-style
+# module option definitions. Exposes one evaluated reference for Home Manager
+# (`hmOptionsDoc`) and one for devenv (`devenvOptionsDoc`).
 #
-# Consumed by flake.nix to produce docs-options-hm and docs-options-devenv
-# derivations, which are then wired into the doc site.
+# The former mdbook/NuschtOS site was removed, so these renderings are no longer
+# published as flake packages. checks/options-doc.nix still builds both outputs
+# as the consumer-facing option contract and verifies backend parity.
 {
   lib,
   pkgs,
   self,
 }: let
-  repoUrl = "https://github.com/nix-community/nix-agentic-tools/blob/main";
+  repoUrl = "https://github.com/higherorderfunctor/nix-agentic-tools/blob/main";
 
   # Extended lib for module evaluation — the factory-built HM and
   # devenv modules reference `lib.ai.*` (factory primitives from
@@ -215,8 +216,10 @@
   };
 
   # ── HM options doc ──────────────────────────────────────────────────
-  # Post-factory-rollout, the factory-built merged module is exposed
-  # at homeManagerModules.default.
+  # Post-factory-rollout, the factory-built merged module is exposed at
+  # homeManagerModules.default. Keep this full merged evaluation rather than a
+  # Codex-only shortcut: the generated reference must prove that shared pools
+  # and every per-runtime namespace can coexist in the consumer option tree.
   hmEval = lib.evalModules {
     specialArgs = {
       lib = libWithAi;

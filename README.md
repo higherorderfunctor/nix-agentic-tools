@@ -1,7 +1,7 @@
 # nix-agentic-tools
 
 Stacked commit workflows, MCP servers, and declarative configuration for AI
-coding CLIs (Claude Code, Copilot, Kiro). Works without Nix; Nix unlocks
+coding CLIs (Claude Code, Codex, Copilot, Kiro). Works without Nix; Nix unlocks
 overlays, home-manager modules, and devshell integration.
 
 ## Quick Start
@@ -17,11 +17,14 @@ Prerequisites: [git-branchless](https://github.com/arxanas/git-branchless),
 # Claude Code
 cp -r packages/stacked-workflows/skills/stack-* .claude/skills/
 
-# Kiro
-cp -r packages/stacked-workflows/skills/stack-* .kiro/skills/
+# OpenAI Codex
+cp -r packages/stacked-workflows/skills/stack-* .agents/skills/
 
 # GitHub Copilot
 cp -r packages/stacked-workflows/skills/stack-* .github/skills/
+
+# Kiro
+cp -r packages/stacked-workflows/skills/stack-* .kiro/skills/
 ```
 
 Each skill is self-contained with a `SKILL.md` and bundled reference docs.
@@ -46,8 +49,13 @@ imports = [inputs.nix-agentic-tools.homeManagerModules.default];
 
 ai = {
   claude.enable = true;
+  codex = {
+    enable = true;
+    settings.model = "gpt-5.6-sol";
+  };
   copilot.enable = true;
   kiro.enable = true;
+  settings.reasoningEffort = "high";
 };
 
 stacked-workflows = {
@@ -89,7 +97,10 @@ inputs:
 {inputs, ...}: {
   imports = [inputs.nix-agentic-tools.devenvModules.nix-agentic-tools];
 
-  ai.claude.enable = true;
+  ai = {
+    claude.enable = true;
+    codex.enable = true;
+  };
 
   claude.code = {
     mcpServers.github-mcp = {
@@ -246,14 +257,19 @@ instruction building.
 |---------|-------------|--------------|--------|
 | Stacked workflow skills | Copy skills/ | `stacked-workflows.enable` | `ai.skills.*` |
 | MCP server packages | Install manually | `nix build .#<server>` | `nix build .#<server>` |
-| MCP server config | Manual JSON | `services.mcp-servers.*` | `claude.code.mcpServers.*` |
-| Typed MCP settings | N/A | Per-server typed options | N/A (raw JSON) |
-| MCP credentials | Manual env vars | `file` or `helper` | Manual env vars |
+| Unified MCP config | Manual native config | `ai.mcpServers.*` (all four CLIs) | `ai.mcpServers.*` (all four CLIs) |
+| Typed MCP settings | N/A | Shared schema + native extensions | Shared schema + native extensions |
+| MCP credentials | Manual env vars | `plain`, `file`, or `helper` | `plain`, `file`, or `helper` |
 | Git tool packages | Install manually | Overlay + `nix build` | Overlay + `nix build` |
 | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
 | GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
-| Unified AI config | N/A | `ai.*` fans out to all CLIs | `ai.*` fans out to all CLIs |
-| LSP server config | N/A | `ai.lspServers.*` | `ai.lspServers.*` |
+| Context, instructions, rules | Copy native files | `ai.{context,instructions,rules}` (all four CLIs) | Same; project-native paths |
+| Skills | Copy native directories | `ai.skills.*` (all four CLIs) | Same; project-native paths |
+| Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex) | Same |
+| Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot) | Same; project-native paths |
+| Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same |
+| LSP server config | Per-CLI config | `ai.lspServers.*` (Claude + Copilot + Kiro) | Same; Codex has no native LSP registry |
+| CLI process environment | Shell config | `ai.environmentVariables` (Copilot + Kiro) | Same; Claude/Codex use other mechanisms |
 | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
 
 ## Configuration
@@ -261,13 +277,17 @@ instruction building.
 <details>
 <summary><strong>Unified ai.* Module</strong></summary>
 
-Single source of truth for shared config across Claude, Copilot, and Kiro.
-Settings fan out at `mkDefault` priority — per-CLI overrides always win.
+Single source of truth for shared config across Claude, Codex, Copilot, and
+Kiro. Only semantics a runtime can preserve fan out; the feature matrix above
+names deliberate exclusions. Scalar defaults use `mkDefault` priority, so
+per-CLI overrides always win.
 
 ```nix
 ai = {
   claude.enable = true;
+  codex.enable = true;
   copilot.enable = true;
+  kiro.enable = true;
 
   skills.my-skill = ./skills/my-skill;
 
@@ -282,12 +302,33 @@ ai = {
     extensions = ["nix"];
   };
 
-  settings = {
-    model = "claude-sonnet-4";
-    telemetry = false;
-  };
+  settings.reasoningEffort = "high";
+
+  # Runtime-native escape hatch: model identifiers are not portable.
+  codex.settings.model = "gpt-5.6-sol";
 };
 ```
+
+</details>
+
+<details>
+<summary><strong>Codex config ownership</strong></summary>
+
+Codex writes ad-hoc project trust into its user `config.toml`. Home Manager
+therefore keeps that file writable and reconciles only the exact TOML leaves
+declared by Nix, preserving native state and removing formerly managed leaves on
+later activations. It does **not** use a read-only store symlink.
+
+Devenv owns `.codex/config.toml` statically because no project-local Codex
+writer has been observed. User-global trust remains outside the project: trust
+the repository once when Codex prompts, or declare
+`ai.codex.settings.projects."<absolute-path>".trust_level` through Home Manager.
+Devenv rejects that bootstrap-global setting because project config cannot grant
+the trust required to load itself.
+
+Native-only settings remain under `ai.codex.settings`; Home Manager-only named
+profile files use `ai.codex.profiles`, and native Starlark command policy uses
+`ai.codex.execpolicyRules` rather than Markdown `ai.rules`.
 
 </details>
 
