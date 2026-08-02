@@ -7,7 +7,9 @@ applyTo: "lib/ai/sharedOptions.nix,packages/chatgpt-codex/modules/**,packages/cl
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-01 (commit pending — Codex types stable sandbox,
+> **Last verified:** 2026-08-01 (commit pending — Codex types beta named
+> permission profiles, including filesystem, network, inheritance, and workspace
+> root policy). Prior: 2026-08-01 (commit pending — Codex types stable sandbox,
 > approval, and user-global project-trust settings, rejects trust declarations
 > at project scope, and prevents legacy sandbox settings from composing with
 > beta permission profiles). Prior: 2026-08-01 (commit pending — Codex lowers
@@ -101,13 +103,17 @@ The ai module fans out TWO kinds of configuration:
   composed into that same statically owned file through the typed server pool.
   Stable security settings type `allow_login_shell`, `approval_policy`
   (including granular prompt categories), `approvals_reviewer`, `sandbox_mode`,
-  and `sandbox_workspace_write`. The older sandbox model and beta
-  `default_permissions`/`permissions` profiles are mutually exclusive, so the
-  module fails when both are present. `projects.<path>.trust_level` is accepted
-  only by Home Manager's user-global file: devenv rejects it because a project
-  cannot bootstrap the trust required to load its own `.codex/config.toml`.
-  Codex execpolicy is a separate Starlark `.rules` surface and is not lowered
-  from Markdown `ai.rules`.
+  and `sandbox_workspace_write`. Beta `default_permissions` and named
+  `permissions` profiles type inheritance, workspace roots, filesystem access
+  and scoped paths, deny-glob scan depth, and network proxy/domain/socket
+  policy. The older sandbox model and permission profiles are mutually
+  exclusive, so the module fails when both are present. Profile names and
+  inheritance graphs remain runtime-validated by Codex because config layers may
+  contribute parents dynamically. `projects.<path>.trust_level` is accepted only
+  by Home Manager's user-global file: devenv rejects it because a project cannot
+  bootstrap the trust required to load its own `.codex/config.toml`. Codex
+  execpolicy is a separate Starlark `.rules` surface and is not lowered from
+  Markdown `ai.rules`.
 
 **Cross-ecosystem options** (live at `ai.*` top level and fan out to each
 enabled ecosystem whose native model preserves the option's semantics):

@@ -840,6 +840,78 @@ in {
       && assertionsPass (evalDevenv config)
   );
 
+  module-codex-permission-profiles-parity = mkTest "codex-permission-profiles-parity" (
+    let
+      config.ai.codex = {
+        enable = true;
+        settings = {
+          default_permissions = "project-edit";
+          permissions.project-edit = {
+            description = "Project editing with API access.";
+            extends = ":workspace";
+            filesystem = {
+              ":minimal" = "read";
+              ":workspace_roots" = {
+                "**/*.env" = "deny";
+                "." = "write";
+              };
+              glob_scan_max_depth = 8;
+            };
+            network = {
+              domains = {
+                "*.github.com" = "allow";
+                "tracking.example.com" = "deny";
+              };
+              enabled = true;
+              mode = "limited";
+              unix_sockets."/var/run/docker.sock" = "allow";
+            };
+            workspace_roots."/home/test/project" = true;
+          };
+        };
+      };
+      hmSettings = (evalHm config).config.home.file.".codex/config.toml".source.value;
+      devenvSettings = (evalDevenv config).config.files.".codex/config.toml".source.value;
+    in
+      hmSettings
+      == devenvSettings
+      && hmSettings.default_permissions == "project-edit"
+      && hmSettings.permissions.project-edit.filesystem.":minimal" == "read"
+      && hmSettings.permissions.project-edit.filesystem.":workspace_roots"."**/*.env" == "deny"
+      && hmSettings.permissions.project-edit.network.domains."*.github.com" == "allow"
+  );
+
+  module-codex-permission-profiles-toml-syntax = let
+    evaluated = evalHm {
+      ai.codex = {
+        enable = true;
+        settings = {
+          default_permissions = "project-edit";
+          permissions.project-edit = {
+            extends = ":workspace";
+            filesystem.":workspace_roots" = {
+              "**/*.env" = "deny";
+              "." = "write";
+            };
+            network = {
+              domains."api.openai.com" = "allow";
+              enabled = true;
+            };
+          };
+        };
+      };
+    };
+    source = evaluated.config.home.file.".codex/config.toml".source;
+  in
+    pkgs.runCommand "module-test-codex-permission-profiles-toml-syntax" {} ''
+      ${pkgs.gnugrep}/bin/grep -Fqx 'default_permissions = "project-edit"' ${source}
+      ${pkgs.gnugrep}/bin/grep -Fqx '[permissions.project-edit.filesystem.":workspace_roots"]' ${source}
+      ${pkgs.gnugrep}/bin/grep -Fqx '"**/*.env" = "deny"' ${source}
+      ${pkgs.gnugrep}/bin/grep -Fqx '[permissions.project-edit.network.domains]' ${source}
+      ${pkgs.gnugrep}/bin/grep -Fqx '"api.openai.com" = "allow"' ${source}
+      touch "$out"
+    '';
+
   module-codex-trust-is-user-global = mkTest "codex-trust-is-user-global" (
     let
       config.ai.codex = {
@@ -897,6 +969,15 @@ in {
             };
           }).config.home.file.".codex/config.toml".source.value)
         .success;
+      acceptsPermission = path: value:
+        (builtins.tryEval
+          (evalHm {
+            ai.codex = {
+              enable = true;
+              settings.permissions.test = lib.setAttrByPath path value;
+            };
+          }).config.home.file.".codex/config.toml".source.value)
+        .success;
     in
       accepts "model_reasoning_effort" "max"
       && accepts "approval_policy" "on-request"
@@ -906,6 +987,9 @@ in {
       && accepts "web_search" "live"
       && acceptsFeature "memories" true
       && acceptsFeature "speculative_future_flag" false
+      && acceptsPermission ["filesystem" ":minimal"] "read"
+      && acceptsPermission ["network" "domains" "api.openai.com"] "allow"
+      && acceptsPermission ["network" "mode"] "limited"
       && !(accepts "model_reasoning_effort" "extreme")
       && !(accepts "approval_policy" "sometimes")
       && !(accepts "approvals_reviewer" "agent")
@@ -914,6 +998,10 @@ in {
       && !(accepts "web_search" "enabled")
       && !(acceptsFeature "memories" "yes")
       && !(acceptsFeature "speculative_future_flag" "no")
+      && !(acceptsPermission ["filesystem" ":minimal"] "execute")
+      && !(acceptsPermission ["filesystem" "glob_scan_max_depth"] 0)
+      && !(acceptsPermission ["network" "domains" "api.openai.com"] "prompt")
+      && !(acceptsPermission ["network" "mode"] "disabled")
   );
 
   module-codex-project-settings-reject-ignored-keys = mkTest "codex-project-settings-reject-ignored-keys" (

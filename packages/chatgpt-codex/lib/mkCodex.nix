@@ -31,6 +31,95 @@
             default = null;
           });
     });
+  filesystemAccessType = lib.types.enum ["deny" "read" "write"];
+  networkAccessType = lib.types.enum ["allow" "deny"];
+  permissionFilesystemType = lib.types.submodule {
+    freeformType = lib.types.attrsOf (
+      lib.types.either filesystemAccessType (lib.types.attrsOf filesystemAccessType)
+    );
+    options.glob_scan_max_depth = lib.mkOption {
+      type = lib.types.nullOr lib.types.ints.positive;
+      default = null;
+      description = "Maximum depth for expanding deny-read glob patterns before sandbox startup.";
+    };
+  };
+  permissionNetworkType = lib.types.submodule {
+    options = {
+      allow_local_binding = lib.mkOption {
+        type = lib.types.nullOr lib.types.bool;
+        default = null;
+      };
+      allow_upstream_proxy = lib.mkOption {
+        type = lib.types.nullOr lib.types.bool;
+        default = null;
+      };
+      dangerously_allow_all_unix_sockets = lib.mkOption {
+        type = lib.types.nullOr lib.types.bool;
+        default = null;
+      };
+      dangerously_allow_non_loopback_proxy = lib.mkOption {
+        type = lib.types.nullOr lib.types.bool;
+        default = null;
+      };
+      domains = lib.mkOption {
+        type = lib.types.attrsOf networkAccessType;
+        default = {};
+      };
+      enable_socks5 = lib.mkOption {
+        type = lib.types.nullOr lib.types.bool;
+        default = null;
+      };
+      enable_socks5_udp = lib.mkOption {
+        type = lib.types.nullOr lib.types.bool;
+        default = null;
+      };
+      enabled = lib.mkOption {
+        type = lib.types.nullOr lib.types.bool;
+        default = null;
+      };
+      mode = lib.mkOption {
+        type = lib.types.nullOr (lib.types.enum ["full" "limited"]);
+        default = null;
+      };
+      proxy_url = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+      };
+      socks_url = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+      };
+      unix_sockets = lib.mkOption {
+        type = lib.types.attrsOf networkAccessType;
+        default = {};
+      };
+    };
+  };
+  permissionProfileType = lib.types.submodule {
+    options = {
+      description = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+      };
+      extends = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Parent named profile or the :read-only or :workspace built-in.";
+      };
+      filesystem = lib.mkOption {
+        type = lib.types.nullOr permissionFilesystemType;
+        default = null;
+      };
+      network = lib.mkOption {
+        type = lib.types.nullOr permissionNetworkType;
+        default = null;
+      };
+      workspace_roots = lib.mkOption {
+        type = lib.types.attrsOf lib.types.bool;
+        default = {};
+      };
+    };
+  };
   hasPermissionProfiles = settings:
     helpers.filterNulls (lib.filterAttrs
       (name: _: builtins.elem name ["default_permissions" "permissions"])
@@ -253,6 +342,11 @@ in
               default = null;
               description = "Who reviews eligible interactive approval requests; this does not change the sandbox boundary.";
             };
+            default_permissions = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              description = "Named or built-in beta permission profile Codex applies by default.";
+            };
             features = lib.mkOption {
               type = lib.types.nullOr (lib.types.submodule {
                 freeformType = lib.types.attrsOf lib.types.bool;
@@ -290,6 +384,11 @@ in
               type = lib.types.nullOr (lib.types.enum ["friendly" "none" "pragmatic"]);
               default = null;
               description = "Default communication style for supported models.";
+            };
+            permissions = lib.mkOption {
+              type = lib.types.attrsOf permissionProfileType;
+              default = {};
+              description = "Beta named least-privilege filesystem and network permission profiles.";
             };
             projects = lib.mkOption {
               type = lib.types.attrsOf (lib.types.submodule {
