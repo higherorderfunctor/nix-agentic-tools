@@ -610,9 +610,13 @@
     Devenv rejects that bootstrap-global setting because project config cannot
     grant the trust required to load itself.
 
-    Native-only settings remain under `ai.codex.settings`; Home Manager-only
-    named profile files use `ai.codex.profiles`, and native Starlark command
-    policy uses `ai.codex.execpolicyRules` rather than Markdown `ai.rules`.
+    Native-only settings remain under `ai.codex.settings`. Named whole-file
+    layers use the shared typed `ai.codex.profiles` option: Home Manager links
+    them user-globally, while devenv materializes repository-declared profiles
+    into `$CODEX_HOME` before shell entry because Codex only discovers profile
+    files there. Select one explicitly with `codex --profile <name>`. Native
+    Starlark command policy uses `ai.codex.execpolicyRules` rather than Markdown
+    `ai.rules`.
 
     </details>
 

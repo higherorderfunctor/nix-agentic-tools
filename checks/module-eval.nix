@@ -541,7 +541,158 @@ in {
       && !(devenv.config.files ? ".codex/hooks.json")
   );
 
-  module-codex-profiles-hm-only = mkTest "codex-profiles-hm-only" (
+  module-codex-profile-materializer-lifecycle = let
+    taskFor = profiles:
+      (evalDevenv {
+        ai.codex = {
+          enable = true;
+          inherit profiles;
+        };
+      }).config.tasks."ai:codex:materialize-profiles".exec;
+    initialTask = taskFor {
+      review.model_reasoning_effort = "low";
+    };
+    updatedTask = taskFor {
+      review.model_reasoning_effort = "high";
+    };
+    removedTask = taskFor {};
+  in
+    pkgs.runCommand "module-test-codex-profile-materializer-lifecycle" {} ''
+      export HOME="$PWD/home"
+      export XDG_STATE_HOME="$PWD/state"
+      export DEVENV_ROOT="$PWD/repo"
+      export DEVENV_STATE="$PWD/devenv-state"
+      mkdir -p "$DEVENV_ROOT"
+
+      (
+        ${initialTask}
+      )
+      test -L "$HOME/.codex/review.config.toml"
+      grep -Fqx 'model_reasoning_effort = "low"' "$HOME/.codex/review.config.toml"
+
+      lock_files=("$XDG_STATE_HOME"/nix-agentic-tools/codex-profiles/*/lock)
+      test "''${#lock_files[@]}" -eq 1
+      lock_file="''${lock_files[0]}"
+      test -f "$lock_file"
+      exec 9> "$lock_file"
+      ${lib.getExe pkgs.flock} 9
+      if ${pkgs.coreutils}/bin/timeout 1 ${pkgs.bash}/bin/bash -c ${lib.escapeShellArg updatedTask}; then
+        echo "profile materializer unexpectedly ignored its repository lock" >&2
+        exit 1
+      else
+        timeout_code=$?
+      fi
+      test "$timeout_code" -eq 124
+      grep -Fqx 'model_reasoning_effort = "low"' "$HOME/.codex/review.config.toml"
+      ${lib.getExe pkgs.flock} -u 9
+      exec 9>&-
+
+      (
+        ${updatedTask}
+      )
+      test -L "$HOME/.codex/review.config.toml"
+      grep -Fqx 'model_reasoning_effort = "high"' "$HOME/.codex/review.config.toml"
+
+      (
+        ${removedTask}
+      )
+      test ! -e "$HOME/.codex/review.config.toml"
+      touch "$out"
+    '';
+
+  module-codex-profile-materializer-refuses-collision = let
+    initialTask =
+      (evalDevenv {
+        ai.codex = {
+          enable = true;
+          profiles.owned.model_reasoning_effort = "low";
+        };
+      }).config.tasks."ai:codex:materialize-profiles".exec;
+    collidingTask =
+      (evalDevenv {
+        ai.codex = {
+          enable = true;
+          profiles.review.model_reasoning_effort = "high";
+        };
+      }).config.tasks."ai:codex:materialize-profiles".exec;
+  in
+    pkgs.runCommand "module-test-codex-profile-materializer-refuses-collision" {} ''
+      export HOME="$PWD/home"
+      export XDG_STATE_HOME="$PWD/state"
+      export DEVENV_ROOT="$PWD/repo"
+      export DEVENV_STATE="$PWD/devenv-state"
+      mkdir -p "$DEVENV_ROOT"
+
+      (
+        ${initialTask}
+      )
+      test -L "$HOME/.codex/owned.config.toml"
+      printf '%s\n' 'externally managed' > "$HOME/.codex/review.config.toml"
+
+      if (
+        ${collidingTask}
+      ); then
+        echo "profile materializer unexpectedly replaced an external file" >&2
+        exit 1
+      fi
+      test -L "$HOME/.codex/owned.config.toml"
+      grep -Fqx 'externally managed' "$HOME/.codex/review.config.toml"
+      touch "$out"
+    '';
+
+  module-codex-profile-name-rejects-unsafe-stems = mkTest "codex-profile-name-rejects-unsafe-stems" (
+    let
+      evaluated = evalHm {
+        ai.codex = {
+          enable = true;
+          profiles."../escape".model = "gpt-5.6-sol";
+        };
+      };
+    in
+      builtins.any (assertion:
+        !assertion.assertion
+        && lib.hasInfix "must start with a letter or number" assertion.message)
+      evaluated.config.assertions
+  );
+
+  module-codex-profile-sandbox-model-conflict = mkTest "codex-profile-sandbox-model-conflict" (
+    let
+      config.ai.codex = {
+        enable = true;
+        profiles.mixed = {
+          default_permissions = "project-edit";
+          permissions.project-edit.extends = ":workspace";
+          sandbox_mode = "read-only";
+        };
+      };
+      rejects = evaluated:
+        builtins.any (assertion:
+          !assertion.assertion
+          && lib.hasInfix "ai.codex.profiles.mixed must use either" assertion.message)
+        evaluated.config.assertions;
+    in
+      rejects (evalHm config) && rejects (evalDevenv config)
+  );
+
+  module-codex-profile-settings-type-enforced = mkTest "codex-profile-settings-type-enforced" (
+    let
+      rejects = evaluator: let
+        attempt = builtins.tryEval (let
+          result = evaluator {
+            ai.codex = {
+              enable = true;
+              profiles.review.model_reasoning_effort = "impossible";
+            };
+          };
+        in
+          builtins.deepSeq result.config.ai.codex.profiles true);
+      in
+        !attempt.success;
+    in
+      rejects evalHm && rejects evalDevenv
+  );
+
+  module-codex-profiles-hm-devenv-parity = mkTest "codex-profiles-hm-devenv-parity" (
     let
       config.ai.codex = {
         enable = true;
@@ -559,25 +710,8 @@ in {
         model = "gpt-5.6-sol";
         model_reasoning_effort = "high";
       }
-      && builtins.any (assertion:
-        !assertion.assertion
-        && lib.hasInfix "ai.codex.profiles is user-global" assertion.message)
-      devenv.config.assertions
-  );
-
-  module-codex-profile-name-rejects-unsafe-stems = mkTest "codex-profile-name-rejects-unsafe-stems" (
-    let
-      evaluated = evalHm {
-        ai.codex = {
-          enable = true;
-          profiles."../escape".model = "gpt-5.6-sol";
-        };
-      };
-    in
-      builtins.any (assertion:
-        !assertion.assertion
-        && lib.hasInfix "must start with a letter or number" assertion.message)
-      evaluated.config.assertions
+      && devenv.config.tasks ? "ai:codex:materialize-profiles"
+      && builtins.all (assertion: assertion.assertion) devenv.config.assertions
   );
 
   module-codex-mcp-lowering-parity = mkTest "codex-mcp-lowering-parity" (

@@ -568,23 +568,26 @@ The directory is gitignored.
 
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-08-02 (commit pending — Kiro's transformer now accepts
-> an explicit typed `always | auto | fileMatch | manual` inclusion mode while
-> preserving the legacy paths-derived default, and the shared renderer resolves
-> typed path-valued instruction bodies before node normalization). Prior
-> 2026-08-02: AGENTS.md now derives a compact source-fragment routing index from
-> the category registry for flat consumers, without flattening scoped fragment
-> bodies. Prior: 2026-08-01 (generated instruction and repo-document derivations
-> remain flake packages but are excluded from the authenticated all-packages
-> build, preventing revision-by-revision Cachix churn while `nix flake check`
-> retains drift coverage). Prior: 2026-07-24 (the `packagePaths` +
-> `devFragmentNames` registries dissolved into `config.fragments.categories`).
-> If you touch `lib/fragments.nix`, `config/fragment-categories.nix`,
-> `lib/fragments-registry.nix`, `dev/generate.nix`, `lib/ai/transformers/`, or
-> any content-package `passthru.fragments` surface and this fragment isn't
-> updated in the same commit, stop and fix it. This is a cross-cutting pipeline
-> — changes that look small in one file frequently ripple into generator outputs
-> for four ecosystems.
+> **Last verified:** 2026-08-02 (commit pending — the generated README now
+> documents shared typed Codex profile ownership and devenv's native user-layer
+> materialization). Prior: 2026-08-02 (commit pending — Kiro's transformer now
+> accepts an explicit typed `always | auto | fileMatch | manual` inclusion mode
+> while preserving the legacy paths-derived default, and the shared renderer
+> resolves typed path-valued instruction bodies before node normalization).
+> Prior 2026-08-02: AGENTS.md now derives a compact source-fragment routing
+> index from the category registry for flat consumers, without flattening scoped
+> fragment bodies. Prior: 2026-08-01 (generated instruction and repo-document
+> derivations remain flake packages but are excluded from the authenticated
+> all-packages build, preventing revision-by-revision Cachix churn while
+> `nix flake check` retains drift coverage). Prior: 2026-07-24 (the
+> `packagePaths` + `devFragmentNames` registries dissolved into
+> `config.fragments.categories`). If you touch `lib/fragments.nix`,
+> `config/fragment-categories.nix`, `lib/fragments-registry.nix`,
+> `dev/generate.nix`, `lib/ai/transformers/`, or any content-package
+> `passthru.fragments` surface and this fragment isn't updated in the same
+> commit, stop and fix it. This is a cross-cutting pipeline — changes that look
+> small in one file frequently ripple into generator outputs for four
+> ecosystems.
 
 ### The four layers
 
@@ -786,10 +789,13 @@ tree. Nix store caching means unchanged inputs skip rebuild.
 Skills and immutable CLI configuration generally use `files.*` (devenv) or
 `home.file` (HM), producing symlinks to store paths with no repository
 generation step. Runtime-writable files are an intentional exception: for
-example, Codex's user `config.toml` is reconciled by Home Manager activation and
-project config is copied by a devenv task so native trust and preference writes
-do not target the Nix store. These app-level materialization tasks are separate
-from the repository instruction generator described here.
+example, Codex's user `config.toml` is reconciled by Home Manager activation,
+while project config remains statically owned by devenv. Codex named profile
+files are immutable whole-file layers: Home Manager links them directly, while a
+devenv pre-shell task safely materializes repository declarations into the user
+CODEX_HOME where native `--profile` lookup requires them. These app-level
+materialization tasks are separate from the repository instruction generator
+described here.
 
 Instruction files are the exception: they are **copies**, not symlinks,
 materialized on every shell entry by `generate:instructions:materialize`

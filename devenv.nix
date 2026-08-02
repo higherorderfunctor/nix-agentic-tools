@@ -85,6 +85,20 @@
   # byte-identical to the pre-gate one; a dev who exports CI=1 in their
   # environment gets the lean shell — accepted.
   isCI = builtins.getEnv "CI" != "";
+
+  # Normalize the repository's canonical checkout and worktree collection from
+  # either the main checkout or one of the conventional sibling worktrees. The
+  # Codex permission profile needs the shared Git directory writable for
+  # git-branchless bookkeeping without granting write access to the main
+  # checkout's working files.
+  devenvRoot = toString config.devenv.root;
+  devenvRootParent = builtins.dirOf devenvRoot;
+  devenvRootParentName = builtins.baseNameOf devenvRootParent;
+  repositoryRoot =
+    if lib.hasSuffix "-worktrees" devenvRootParentName
+    then "${builtins.dirOf devenvRootParent}/${lib.removeSuffix "-worktrees" devenvRootParentName}"
+    else devenvRoot;
+  worktreesRoot = "${repositoryRoot}-worktrees";
 in {
   imports = [
     ./lib/ai/sharedOptions.nix
@@ -157,6 +171,23 @@ in {
     claude.enable = true;
     codex = {
       enable = true;
+      profiles.nix-agentic-tools = {
+        approval_policy = "never";
+        default_permissions = "nix-agentic-tools";
+        permissions.nix-agentic-tools = {
+          description = "Repository and sibling-worktree development with Git metadata access.";
+          extends = ":workspace";
+          filesystem = {
+            "${repositoryRoot}/.git" = "write";
+            ":workspace_roots" = {
+              "." = "write";
+              ".git" = "write";
+            };
+          };
+          network.enabled = true;
+          workspace_roots."${worktreesRoot}" = true;
+        };
+      };
       settings = {
         model = "gpt-5.6-sol";
         model_reasoning_effort = "high";

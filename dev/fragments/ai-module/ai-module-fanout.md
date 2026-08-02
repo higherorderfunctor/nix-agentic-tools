@@ -1,52 +1,55 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-02 (commit pending — instruction and rule records
-> carry a typed Kiro-only inclusion override with identical HM/devenv fanout;
-> null preserves paths-derived `always`/`fileMatch`, while explicit `auto` and
-> `manual` make all four native modes reachable). Prior 2026-08-02: the
-> generated reference gate now proves exact option-name/type parity for the
-> complete `ai.*` surface; the audit closed its sole gap by sharing
-> `ai.copilot.projectDir` while explicitly rejecting project-only customization
-> in Home Manager, and the instruction fanout points at the current
-> `lib/ai/transformers/` implementation rather than the removed fragments
-> package. Prior: 2026-08-02 (commit 589fa37c — consumer documentation exposes
-> Codex and its intentional fanout exclusions, while generated HM and devenv
-> option references are built and checked for exact Codex option-tree parity
-> plus truthful shared-pool descriptions). Prior: 2026-08-02 (commit d510586b —
-> the reverse extracted-surface audit derives Codex's closed sandbox/approval
-> enums from the pinned sidecar and adds an exact human-reviewed disposition
-> gate for every extracted command, flag, field, feature maturity, model field,
-> and config seam). Prior: 2026-08-02 (commit 2eb54cef — the native-surface
-> audit adds static Home Manager profile files and records why Codex has no LSP
-> or shared wrapper-environment fanout). Prior: 2026-08-02 (commit 3546267a —
-> Codex Home Manager settings reconcile exact Nix-owned TOML leaves into a
-> writable user file because the native trust prompt persists ad-hoc project
-> decisions through `config/batchWrite`; devenv retains whole-file static
-> project ownership until a project-local writer is demonstrated). Prior:
-> 2026-08-01 (commit pending — portable semantic agents fan out to Claude,
-> Copilot, and Codex while portable lifecycle command hooks fan out to Claude
-> and Codex; Codex emits native standalone agent TOML and `hooks.json`;
-> conventional packages lower to their executable while bare-file derivations
-> remain direct command paths). Prior: 2026-08-01 (commit pending — Codex
-> materializes native Starlark execpolicy files independently from Markdown
-> instruction rules and reserves the user-mutated `default.rules`). Prior:
-> 2026-08-01 (commit pending — Codex types beta named permission profiles,
-> including filesystem, network, inheritance, and workspace root policy). Prior:
-> 2026-08-01 (commit pending — Codex types stable sandbox, approval, and
-> user-global project-trust settings, rejects trust declarations at project
-> scope, and prevents legacy sandbox settings from composing with beta
-> permission profiles). Prior: 2026-08-01 (commit pending — Codex lowers shared
-> and per-app typed MCP servers to native `mcp_servers` tables in both backends,
-> including credential wrappers and Codex-specific policy extensions). Prior:
-> 2026-08-01 (commit pending — `ai.settings.reasoningEffort` lowers through the
-> exact Claude/Codex persisted semantic intersection, with native settings
-> overriding or excluding the shared default). Prior: 2026-08-01 (commit
-> d7755c2f — Codex statically lowers a typed/freeform settings surface to user
-> and trusted-project config.toml). Prior: 2026-08-01 (commit 4562252c — Codex
-> lowers shared and per-app skills to `.agents/skills` in both backends). Prior:
-> 2026-08-01 (commit 444a6f97 — Codex degrades scoped instructions and rules to
-> explicit prose, supports opt-out through `skipIfUnsupported`, and rejects
-> generated AGENTS.md content over its configurable byte limit). Prior:
+> **Last verified:** 2026-08-02 (commit pending — Codex named profile files now
+> use one typed settings schema across HM and devenv: HM links user-global
+> files, while devenv safely materializes repository-declared whole-file layers
+> into CODEX_HOME before shell entry). Prior: 2026-08-02 (commit pending —
+> instruction and rule records carry a typed Kiro-only inclusion override with
+> identical HM/devenv fanout; null preserves paths-derived `always`/`fileMatch`,
+> while explicit `auto` and `manual` make all four native modes reachable).
+> Prior 2026-08-02: the generated reference gate now proves exact
+> option-name/type parity for the complete `ai.*` surface; the audit closed its
+> sole gap by sharing `ai.copilot.projectDir` while explicitly rejecting
+> project-only customization in Home Manager, and the instruction fanout points
+> at the current `lib/ai/transformers/` implementation rather than the removed
+> fragments package. Prior: 2026-08-02 (commit 589fa37c — consumer documentation
+> exposes Codex and its intentional fanout exclusions, while generated HM and
+> devenv option references are built and checked for exact Codex option-tree
+> parity plus truthful shared-pool descriptions). Prior: 2026-08-02 (commit
+> d510586b — the reverse extracted-surface audit derives Codex's closed
+> sandbox/approval enums from the pinned sidecar and adds an exact
+> human-reviewed disposition gate for every extracted command, flag, field,
+> feature maturity, model field, and config seam). Prior: 2026-08-02 (commit
+> 2eb54cef — the native-surface audit adds static Home Manager profile files and
+> records why Codex has no LSP or shared wrapper-environment fanout). Prior:
+> 2026-08-02 (commit 3546267a — Codex Home Manager settings reconcile exact
+> Nix-owned TOML leaves into a writable user file because the native trust
+> prompt persists ad-hoc project decisions through `config/batchWrite`; devenv
+> retains whole-file static project ownership until a project-local writer is
+> demonstrated). Prior: 2026-08-01 (commit pending — portable semantic agents
+> fan out to Claude, Copilot, and Codex while portable lifecycle command hooks
+> fan out to Claude and Codex; Codex emits native standalone agent TOML and
+> `hooks.json`; conventional packages lower to their executable while bare-file
+> derivations remain direct command paths). Prior: 2026-08-01 (commit pending —
+> Codex materializes native Starlark execpolicy files independently from
+> Markdown instruction rules and reserves the user-mutated `default.rules`).
+> Prior: 2026-08-01 (commit pending — Codex types beta named permission
+> profiles, including filesystem, network, inheritance, and workspace root
+> policy). Prior: 2026-08-01 (commit pending — Codex types stable sandbox,
+> approval, and user-global project-trust settings, rejects trust declarations
+> at project scope, and prevents legacy sandbox settings from composing with
+> beta permission profiles). Prior: 2026-08-01 (commit pending — Codex lowers
+> shared and per-app typed MCP servers to native `mcp_servers` tables in both
+> backends, including credential wrappers and Codex-specific policy extensions).
+> Prior: 2026-08-01 (commit pending — `ai.settings.reasoningEffort` lowers
+> through the exact Claude/Codex persisted semantic intersection, with native
+> settings overriding or excluding the shared default). Prior: 2026-08-01
+> (commit d7755c2f — Codex statically lowers a typed/freeform settings surface
+> to user and trusted-project config.toml). Prior: 2026-08-01 (commit 4562252c —
+> Codex lowers shared and per-app skills to `.agents/skills` in both backends).
+> Prior: 2026-08-01 (commit 444a6f97 — Codex degrades scoped instructions and
+> rules to explicit prose, supports opt-out through `skipIfUnsupported`, and
+> rejects generated AGENTS.md content over its configurable byte limit). Prior:
 > 2026-08-01 (commit c6b1b31e — Codex lowers shared and per-app context,
 > instructions, and unscoped Markdown rules into global HM and project-local
 > devenv AGENTS.md files). Prior: 2026-08-01 (commit 914096a8 — Codex joins the
@@ -156,22 +159,28 @@ The ai module fans out TWO kinds of configuration:
   profiles are mutually exclusive, so the module fails when both are present.
   Profile names and inheritance graphs remain runtime-validated by Codex because
   config layers may contribute parents dynamically. `ai.codex.profiles.<name>`
-  emits a separate static `${configDir}/<name>.config.toml` user layer selected
-  with `codex --profile <name>`. Profiles are intentionally Home Manager-only:
-  current Codex no longer accepts an in-file default selector, resolves profile
-  files only from user CODEX_HOME, and ignores profile keys in project config.
-  Devenv rejects non-empty profile declarations instead of writing an inert
-  project artifact. `projects.<path>.trust_level` is accepted only by Home
-  Manager's user-global file: devenv rejects it because a project cannot
-  bootstrap the trust required to load its own `.codex/config.toml`.
-  `ai.codex.execpolicyRules.<name>` writes native Starlark to
-  `<config-layer>/rules/<name>.rules` in both backends. It is intentionally
-  separate from Markdown `ai.rules`, which remains durable AGENTS.md guidance.
-  Home Manager reserves `execpolicyRules.default` because Codex appends accepted
-  user allow-list decisions to `$CODEX_HOME/rules/default.rules`; other
-  per-entry files remain declarative while that native mutation can coexist.
-  Trusted project rules are declarative and may use `default` because Codex's
-  native writer targets only the user layer.
+  uses the same typed/freeform settings schema and emits a separate static
+  `${configDir}/<name>.config.toml` user layer selected with
+  `codex --profile <name>`. Home Manager links that whole file directly. Codex
+  resolves named profiles only from user CODEX_HOME, so devenv cannot place an
+  inert copy beside project config; instead a pre-shell task materializes the
+  repository-declared store file into CODEX_HOME. The task tracks ownership by
+  Git common directory, serializes concurrent shell entries with a repository
+  lock, updates and prunes only its own symlinks, accepts an identical
+  externally managed file, and rejects conflicting content before changing any
+  artifact. This keeps the declaration repository-scoped without changing
+  CODEX_HOME and forking authentication/session state.
+  `projects.<path>.trust_level` is accepted only by Home Manager's user-global
+  file: devenv rejects it because a project cannot bootstrap the trust required
+  to load its own `.codex/config.toml`. `ai.codex.execpolicyRules.<name>` writes
+  native Starlark to `<config-layer>/rules/<name>.rules` in both backends. It is
+  intentionally separate from Markdown `ai.rules`, which remains durable
+  AGENTS.md guidance. Home Manager reserves `execpolicyRules.default` because
+  Codex appends accepted user allow-list decisions to
+  `$CODEX_HOME/rules/default.rules`; other per-entry files remain declarative
+  while that native mutation can coexist. Trusted project rules are declarative
+  and may use `default` because Codex's native writer targets only the user
+  layer.
 - `ai.codex.agents.<name>` — the semantic agent record plus a freeform `codex`
   TOML extension. Home Manager emits `${configDir}/agents/<name>.toml`; devenv
   emits trusted-project `.codex/agents/<name>.toml`. The filename stem supplies
@@ -295,10 +304,11 @@ expose more `programs.claude-code.*` options via `ai.claude.*`.
 Every option on the HM ai module must have a matching option on the devenv ai
 module with the same semantics. If you add an option to one, add it to the other
 in the same commit. Codex's exact generated option-name set is compared across
-both backends by `checks/options-doc.nix`. Runtime scope differences remain
-explicit assertions or defaults on a shared declaration: for example,
-`ai.codex.profiles` exists in both references, but devenv rejects a non-empty
-value because Codex resolves named profiles only from user CODEX_HOME.
+both backends by `checks/options-doc.nix`. Runtime scope differences belong in
+backend lowering, not divergent declarations: `ai.codex.profiles` is one typed
+surface, with HM linking its user-global files and devenv materializing the same
+whole-file layers from repository declarations into the native user lookup
+location.
 
 ### Documentation parity is capability parity
 

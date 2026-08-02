@@ -208,6 +208,157 @@
       };
     };
   };
+  codexSettingsType = lib.types.submodule {
+    freeformType = tomlFormat.type;
+    options = {
+      agents = lib.mkOption {
+        type = lib.types.nullOr (lib.types.submodule {
+          freeformType = tomlFormat.type;
+          options = {
+            default_subagent_model = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              description = "Default model identifier used for spawned Codex subagents.";
+            };
+            default_subagent_reasoning_effort = lib.mkOption {
+              type = lib.types.nullOr (lib.types.enum reasoningEffortLevels);
+              default = null;
+              description = "Default reasoning effort used for spawned Codex subagents.";
+            };
+            enabled = lib.mkOption {
+              type = lib.types.nullOr lib.types.bool;
+              default = null;
+              description = "Whether Codex multi-agent functionality is enabled.";
+            };
+            interrupt_message = lib.mkOption {
+              type = lib.types.nullOr lib.types.bool;
+              default = null;
+              description = "Whether Codex sends an interruption message when stopping a subagent.";
+            };
+            max_concurrent_threads_per_session = lib.mkOption {
+              type = lib.types.nullOr lib.types.ints.positive;
+              default = null;
+              description = "Maximum concurrent agent threads allowed in one Codex session.";
+            };
+          };
+        });
+        default = null;
+        description = "Global Codex multi-agent defaults and optional native role declarations.";
+      };
+      allow_login_shell = lib.mkOption {
+        type = lib.types.nullOr lib.types.bool;
+        default = null;
+        description = "Whether shell tools may invoke login shells.";
+      };
+      approval_policy = lib.mkOption {
+        type = lib.types.nullOr approvalPolicyType;
+        default = null;
+        description = "When Codex pauses for approval, either as a preset or granular prompt-category policy.";
+      };
+      approvals_reviewer = lib.mkOption {
+        type = lib.types.nullOr (lib.types.enum ["auto_review" "user"]);
+        default = null;
+        description = "Who reviews eligible interactive approval requests; this does not change the sandbox boundary.";
+      };
+      default_permissions = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Named or built-in beta permission profile Codex applies by default.";
+      };
+      features = lib.mkOption {
+        type = lib.types.nullOr (lib.types.submodule {
+          freeformType = lib.types.attrsOf lib.types.bool;
+          options = lib.genAttrs stableFeatureNames (name:
+            lib.mkOption {
+              type = lib.types.nullOr lib.types.bool;
+              default = null;
+              description = "Whether Codex enables the extracted stable `${name}` feature.";
+            });
+        });
+        default = null;
+        description = ''
+          Codex feature toggles. Stable flags extracted from the pinned
+          binary are typed; additional boolean flags remain available
+          for experimental and forward-compatible use.
+        '';
+      };
+      model = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          Default Codex model. The pinned binary's model catalog is a
+          non-enforcing hint because account and provider availability
+          can add valid model identifiers dynamically.
+        '';
+      };
+      model_reasoning_effort = lib.mkOption {
+        type = lib.types.nullOr (lib.types.enum reasoningEffortLevels);
+        default = null;
+        description = ''
+          Default reasoning effort for supported models. Values come
+          from the model metadata extracted from the pinned binary.
+        '';
+      };
+      personality = lib.mkOption {
+        type = lib.types.nullOr (lib.types.enum ["friendly" "none" "pragmatic"]);
+        default = null;
+        description = "Default communication style for supported models.";
+      };
+      permissions = lib.mkOption {
+        type = lib.types.attrsOf permissionProfileType;
+        default = {};
+        description = "Beta named least-privilege filesystem and network permission profiles.";
+      };
+      projects = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.submodule {
+          options.trust_level = lib.mkOption {
+            type = lib.types.enum ["trusted" "untrusted"];
+            description = "Whether Codex loads project-scoped .codex configuration, hooks, and rules for this path.";
+          };
+        });
+        default = {};
+        description = "User-level project trust declarations. Devenv rejects this bootstrap-global setting only in project config.toml, not in named user profiles.";
+      };
+      sandbox_mode = lib.mkOption {
+        type = lib.types.nullOr (lib.types.enum sandboxModeNames);
+        default = null;
+        description = "OS-enforced filesystem and network sandbox policy for model-generated commands.";
+      };
+      sandbox_workspace_write = lib.mkOption {
+        type = lib.types.nullOr (lib.types.submodule {
+          options = {
+            exclude_slash_tmp = lib.mkOption {
+              type = lib.types.nullOr lib.types.bool;
+              default = null;
+              description = "Whether `/tmp` is excluded from workspace-write sandbox access.";
+            };
+            exclude_tmpdir_env_var = lib.mkOption {
+              type = lib.types.nullOr lib.types.bool;
+              default = null;
+              description = "Whether the directory named by TMPDIR is excluded from workspace-write access.";
+            };
+            network_access = lib.mkOption {
+              type = lib.types.nullOr lib.types.bool;
+              default = null;
+              description = "Whether workspace-write sandboxed commands may access the network.";
+            };
+            writable_roots = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [];
+              description = "Additional writable roots granted to workspace-write sandboxed commands.";
+            };
+          };
+        });
+        default = null;
+        description = "Workspace-write sandbox refinements; effective only with sandbox_mode = \"workspace-write\".";
+      };
+      web_search = lib.mkOption {
+        type = lib.types.nullOr (lib.types.enum ["cached" "disabled" "indexed" "live"]);
+        default = null;
+        description = "Codex web-search mode.";
+      };
+    };
+  };
   hasPermissionProfiles = settings:
     helpers.filterNulls (lib.filterAttrs
       (name: _: builtins.elem name ["default_permissions" "permissions"])
@@ -349,18 +500,147 @@
     })
     rules;
 
+  mkSandboxModelAssertion = optionPath: settings: {
+    assertion =
+      !(
+        settings.sandbox_mode
+        != null
+        || settings.sandbox_workspace_write != null
+      )
+      || !hasPermissionProfiles settings;
+    message = "${optionPath} must use either sandbox_mode/sandbox_workspace_write or default_permissions/permissions, never both";
+  };
+
   mkProfileAssertions = profiles:
-    lib.mapAttrsToList (name: _: {
-      assertion = builtins.match "[A-Za-z0-9][A-Za-z0-9_-]*" name != null;
-      message = "ai.codex.profiles.${name} must start with a letter or number and contain only letters, numbers, hyphens, and underscores";
-    })
+    lib.concatLists (lib.mapAttrsToList (name: settings: [
+        {
+          assertion = builtins.match "[A-Za-z0-9][A-Za-z0-9_-]*" name != null;
+          message = "ai.codex.profiles.${name} must start with a letter or number and contain only letters, numbers, hyphens, and underscores";
+        }
+        (mkSandboxModelAssertion "ai.codex.profiles.${name}" settings)
+      ])
+      profiles);
+
+  mkProfileSources = profiles:
+    lib.mapAttrs (name: settings:
+      tomlFormat.generate "codex-profile-${name}.toml" (helpers.filterNulls settings))
     profiles;
 
-  mkProfileEntries = prefix:
-    lib.mapAttrs' (name: settings:
+  mkProfileEntries = prefix: profiles:
+    lib.mapAttrs' (name: source:
       lib.nameValuePair "${prefix}/${name}.config.toml" {
-        source = tomlFormat.generate "codex-profile-${name}.toml" (helpers.filterNulls settings);
-      });
+        inherit source;
+      })
+    (mkProfileSources profiles);
+
+  mkDevenvProfileMaterializer = {
+    configDir,
+    profiles,
+  }: let
+    sources = mkProfileSources profiles;
+    desiredAssignments = lib.concatStrings (lib.mapAttrsToList (name: source: ''
+        desired_targets[${lib.escapeShellArg name}]=${lib.escapeShellArg source}
+      '')
+      sources);
+  in
+    pkgs.writeShellApplication {
+      name = "codex-devenv-profile-materializer";
+      bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
+      text = ''
+        shopt -s inherit_errexit 2>/dev/null || :
+
+        if [ -n "''${CODEX_HOME:-}" ]; then
+          profile_dir="$CODEX_HOME"
+        else
+          profile_dir="$HOME"/${lib.escapeShellArg configDir}
+        fi
+
+        state_base="''${XDG_STATE_HOME:-$HOME/.local/state}"
+        if common_dir="$(${pkgs.git}/bin/git -C "$DEVENV_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
+          owner_key="$common_dir"
+        else
+          owner_key="$DEVENV_ROOT"
+        fi
+        owner_hash="$(${pkgs.coreutils}/bin/sha256sum <<<"$owner_key")"
+        owner_id="''${owner_hash%% *}"
+        state_dir="$state_base/nix-agentic-tools/codex-profiles/$owner_id"
+        manifest="$state_dir/manifest"
+        next_manifest="$state_dir/manifest.next.$$"
+
+        declare -A desired_targets=()
+        declare -A previous_targets=()
+        declare -A should_manage=()
+        ${desiredAssignments}
+
+        ${pkgs.coreutils}/bin/mkdir -p "$state_dir"
+        exec {profile_lock_fd}> "$state_dir/lock"
+        ${lib.getExe pkgs.flock} "$profile_lock_fd"
+
+        if [ "''${#desired_targets[@]}" -eq 0 ] && [ ! -f "$manifest" ]; then
+          exit 0
+        fi
+
+        ${pkgs.coreutils}/bin/mkdir -p "$profile_dir"
+
+        if [ -f "$manifest" ]; then
+          while IFS=$'\t' read -r name target; do
+            if [ -n "$name" ]; then
+              previous_targets["$name"]="$target"
+            fi
+          done < "$manifest"
+        fi
+
+        # Reject every collision before pruning or replacing anything. A
+        # failed shell entry must leave the previous owned generation intact.
+        for name in "''${!desired_targets[@]}"; do
+          source_path="''${desired_targets[$name]}"
+          destination="$profile_dir/$name.config.toml"
+
+          if [[ -n ''${previous_targets[$name]+present} ]] \
+            && [ -L "$destination" ] \
+            && [ "$(${pkgs.coreutils}/bin/readlink "$destination")" = "''${previous_targets[$name]}" ]; then
+            should_manage["$name"]=true
+          elif [ ! -e "$destination" ] && [ ! -L "$destination" ]; then
+            should_manage["$name"]=true
+          elif ${pkgs.diffutils}/bin/cmp -s "$source_path" "$destination"; then
+            should_manage["$name"]=false
+          else
+            printf '%s\n' \
+              "error: refusing to replace externally managed Codex profile $destination" \
+              "Choose a unique ai.codex.profiles name or remove the conflicting file." >&2
+            exit 1
+          fi
+        done
+
+        for name in "''${!previous_targets[@]}"; do
+          if [[ -z ''${desired_targets[$name]+present} ]]; then
+            destination="$profile_dir/$name.config.toml"
+            if [ -L "$destination" ] && [ "$(${pkgs.coreutils}/bin/readlink "$destination")" = "''${previous_targets[$name]}" ]; then
+              ${pkgs.coreutils}/bin/rm -f "$destination"
+            fi
+          fi
+        done
+
+        : > "$next_manifest"
+        cleanup() {
+          ${pkgs.coreutils}/bin/rm -f "$next_manifest"
+        }
+        trap cleanup EXIT
+
+        for name in "''${!desired_targets[@]}"; do
+          source_path="''${desired_targets[$name]}"
+          destination="$profile_dir/$name.config.toml"
+
+          if [ "''${should_manage[$name]}" = true ]; then
+            ${pkgs.coreutils}/bin/ln -sfn "$source_path" "$destination"
+            printf '%s\t%s\n' "$name" "$source_path" >> "$next_manifest"
+          fi
+        done
+
+        ${pkgs.coreutils}/bin/mv -f "$next_manifest" "$manifest"
+        trap - EXIT
+      '';
+    };
 
   reservedAgentKeys = ["description" "developer_instructions" "name"];
 
@@ -539,16 +819,18 @@ in
         '';
       };
       profiles = lib.mkOption {
-        type = lib.types.attrsOf tomlFormat.type;
+        type = lib.types.attrsOf codexSettingsType;
         default = {};
         description = ''
           Named user configuration layers written as
           `''${configDir}/<name>.config.toml` and selected explicitly with
           `codex --profile <name>`. Codex 0.134.0 and later no longer support
           nested `[profiles]` tables or a persistent default selector.
-          Profiles are Home Manager-only because Codex resolves them from the
-          user CODEX_HOME rather than trusted project configuration; devenv
-          rejects non-empty declarations.
+          Home Manager links these whole-file user layers directly. Devenv
+          materializes the same whole-file artifacts into the user CODEX_HOME
+          before shell entry because Codex does not discover named profiles in
+          trusted project configuration. Known settings are typed identically
+          to `ai.codex.settings`; unknown TOML-compatible keys remain available.
         '';
       };
       projectDocMaxBytes = lib.mkOption {
@@ -560,157 +842,7 @@ in
         '';
       };
       settings = lib.mkOption {
-        type = lib.types.submodule {
-          freeformType = tomlFormat.type;
-          options = {
-            agents = lib.mkOption {
-              type = lib.types.nullOr (lib.types.submodule {
-                freeformType = tomlFormat.type;
-                options = {
-                  default_subagent_model = lib.mkOption {
-                    type = lib.types.nullOr lib.types.str;
-                    default = null;
-                    description = "Default model identifier used for spawned Codex subagents.";
-                  };
-                  default_subagent_reasoning_effort = lib.mkOption {
-                    type = lib.types.nullOr (lib.types.enum reasoningEffortLevels);
-                    default = null;
-                    description = "Default reasoning effort used for spawned Codex subagents.";
-                  };
-                  enabled = lib.mkOption {
-                    type = lib.types.nullOr lib.types.bool;
-                    default = null;
-                    description = "Whether Codex multi-agent functionality is enabled.";
-                  };
-                  interrupt_message = lib.mkOption {
-                    type = lib.types.nullOr lib.types.bool;
-                    default = null;
-                    description = "Whether Codex sends an interruption message when stopping a subagent.";
-                  };
-                  max_concurrent_threads_per_session = lib.mkOption {
-                    type = lib.types.nullOr lib.types.ints.positive;
-                    default = null;
-                    description = "Maximum concurrent agent threads allowed in one Codex session.";
-                  };
-                };
-              });
-              default = null;
-              description = "Global Codex multi-agent defaults and optional native role declarations.";
-            };
-            allow_login_shell = lib.mkOption {
-              type = lib.types.nullOr lib.types.bool;
-              default = null;
-              description = "Whether shell tools may invoke login shells.";
-            };
-            approval_policy = lib.mkOption {
-              type = lib.types.nullOr approvalPolicyType;
-              default = null;
-              description = "When Codex pauses for approval, either as a preset or granular prompt-category policy.";
-            };
-            approvals_reviewer = lib.mkOption {
-              type = lib.types.nullOr (lib.types.enum ["auto_review" "user"]);
-              default = null;
-              description = "Who reviews eligible interactive approval requests; this does not change the sandbox boundary.";
-            };
-            default_permissions = lib.mkOption {
-              type = lib.types.nullOr lib.types.str;
-              default = null;
-              description = "Named or built-in beta permission profile Codex applies by default.";
-            };
-            features = lib.mkOption {
-              type = lib.types.nullOr (lib.types.submodule {
-                freeformType = lib.types.attrsOf lib.types.bool;
-                options = lib.genAttrs stableFeatureNames (name:
-                  lib.mkOption {
-                    type = lib.types.nullOr lib.types.bool;
-                    default = null;
-                    description = "Whether Codex enables the extracted stable `${name}` feature.";
-                  });
-              });
-              default = null;
-              description = ''
-                Codex feature toggles. Stable flags extracted from the pinned
-                binary are typed; additional boolean flags remain available
-                for experimental and forward-compatible use.
-              '';
-            };
-            model = lib.mkOption {
-              type = lib.types.nullOr lib.types.str;
-              default = null;
-              description = ''
-                Default Codex model. The pinned binary's model catalog is a
-                non-enforcing hint because account and provider availability
-                can add valid model identifiers dynamically.
-              '';
-            };
-            model_reasoning_effort = lib.mkOption {
-              type = lib.types.nullOr (lib.types.enum reasoningEffortLevels);
-              default = null;
-              description = ''
-                Default reasoning effort for supported models. Values come
-                from the model metadata extracted from the pinned binary.
-              '';
-            };
-            personality = lib.mkOption {
-              type = lib.types.nullOr (lib.types.enum ["friendly" "none" "pragmatic"]);
-              default = null;
-              description = "Default communication style for supported models.";
-            };
-            permissions = lib.mkOption {
-              type = lib.types.attrsOf permissionProfileType;
-              default = {};
-              description = "Beta named least-privilege filesystem and network permission profiles.";
-            };
-            projects = lib.mkOption {
-              type = lib.types.attrsOf (lib.types.submodule {
-                options.trust_level = lib.mkOption {
-                  type = lib.types.enum ["trusted" "untrusted"];
-                  description = "Whether Codex loads project-scoped .codex configuration, hooks, and rules for this path.";
-                };
-              });
-              default = {};
-              description = "User-level project trust declarations. Devenv rejects this bootstrap-global setting.";
-            };
-            sandbox_mode = lib.mkOption {
-              type = lib.types.nullOr (lib.types.enum sandboxModeNames);
-              default = null;
-              description = "OS-enforced filesystem and network sandbox policy for model-generated commands.";
-            };
-            sandbox_workspace_write = lib.mkOption {
-              type = lib.types.nullOr (lib.types.submodule {
-                options = {
-                  exclude_slash_tmp = lib.mkOption {
-                    type = lib.types.nullOr lib.types.bool;
-                    default = null;
-                    description = "Whether `/tmp` is excluded from workspace-write sandbox access.";
-                  };
-                  exclude_tmpdir_env_var = lib.mkOption {
-                    type = lib.types.nullOr lib.types.bool;
-                    default = null;
-                    description = "Whether the directory named by TMPDIR is excluded from workspace-write access.";
-                  };
-                  network_access = lib.mkOption {
-                    type = lib.types.nullOr lib.types.bool;
-                    default = null;
-                    description = "Whether workspace-write sandboxed commands may access the network.";
-                  };
-                  writable_roots = lib.mkOption {
-                    type = lib.types.listOf lib.types.str;
-                    default = [];
-                    description = "Additional writable roots granted to workspace-write sandboxed commands.";
-                  };
-                };
-              });
-              default = null;
-              description = "Workspace-write sandbox refinements; effective only with sandbox_mode = \"workspace-write\".";
-            };
-            web_search = lib.mkOption {
-              type = lib.types.nullOr (lib.types.enum ["cached" "disabled" "indexed" "live"]);
-              default = null;
-              description = "Codex web-search mode.";
-            };
-          };
-        };
+        type = codexSettingsType;
         default = {};
         description = ''
           Codex config.toml settings. Common stable keys are typed; unknown
@@ -737,11 +869,6 @@ in
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
       configFile = "${cfg.configDir}/config.toml";
       hasNativeMcpServers = cfg.settings ? mcp_servers;
-      hasLegacySandbox =
-        cfg.settings.sandbox_mode
-        != null
-        || cfg.settings.sandbox_workspace_write != null;
-      usesPermissionProfiles = hasPermissionProfiles cfg.settings;
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       settings = helpers.filterNulls (cfg.settings
         // lib.optionalAttrs (mergedServers != {}) {
@@ -764,8 +891,7 @@ in
             message = "ai.codex.settings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
           }
           {
-            assertion = !hasLegacySandbox || !usesPermissionProfiles;
-            message = "ai.codex.settings must use either sandbox_mode/sandbox_workspace_write or default_permissions/permissions, never both";
+            inherit (mkSandboxModelAssertion "ai.codex.settings" cfg.settings) assertion message;
           }
           {
             assertion = !(cfg.execpolicyRules ? default);
@@ -830,17 +956,15 @@ in
     }: let
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
       hasNativeMcpServers = cfg.settings ? mcp_servers;
-      hasLegacySandbox =
-        cfg.settings.sandbox_mode
-        != null
-        || cfg.settings.sandbox_workspace_write != null;
-      usesPermissionProfiles = hasPermissionProfiles cfg.settings;
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       settings = helpers.filterNulls (cfg.settings
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
         });
       ignoredSettings = lib.intersectLists projectIgnoredKeys (builtins.attrNames settings);
+      profileMaterializer = mkDevenvProfileMaterializer {
+        inherit (cfg) configDir profiles;
+      };
     in {
       ai.codex.settings = lib.mkIf (topSettings.reasoningEffort != null) {
         model_reasoning_effort = lib.mkDefault topSettings.reasoningEffort;
@@ -857,8 +981,7 @@ in
             message = "ai.codex.settings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
           }
           {
-            assertion = !hasLegacySandbox || !usesPermissionProfiles;
-            message = "ai.codex.settings must use either sandbox_mode/sandbox_workspace_write or default_permissions/permissions, never both";
+            inherit (mkSandboxModelAssertion "ai.codex.settings" cfg.settings) assertion message;
           }
           {
             assertion = ignoredSettings == [];
@@ -867,10 +990,6 @@ in
               ${lib.concatStringsSep ", " ignoredSettings}. Move them to the
               Home Manager user-level configuration.
             '';
-          }
-          {
-            assertion = cfg.profiles == {};
-            message = "ai.codex.profiles is user-global and cannot be emitted by devenv; declare profiles through Home Manager and select one with codex --profile";
           }
           {
             assertion = effectiveHooks == {} || !(cfg.settings ? hooks);
@@ -895,5 +1014,13 @@ in
         })
       ];
       packages = [cfg.package];
+      tasks."ai:codex:materialize-profiles" = {
+        exec = ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          exec ${lib.getExe profileMaterializer}
+        '';
+        before = ["devenv:enterShell"];
+      };
     };
   }

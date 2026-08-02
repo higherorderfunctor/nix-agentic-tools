@@ -67,10 +67,13 @@ tree. Nix store caching means unchanged inputs skip rebuild.
 Skills and immutable CLI configuration generally use `files.*` (devenv) or
 `home.file` (HM), producing symlinks to store paths with no repository
 generation step. Runtime-writable files are an intentional exception: for
-example, Codex's user `config.toml` is reconciled by Home Manager activation and
-project config is copied by a devenv task so native trust and preference writes
-do not target the Nix store. These app-level materialization tasks are separate
-from the repository instruction generator described here.
+example, Codex's user `config.toml` is reconciled by Home Manager activation,
+while project config remains statically owned by devenv. Codex named profile
+files are immutable whole-file layers: Home Manager links them directly, while a
+devenv pre-shell task safely materializes repository declarations into the user
+CODEX_HOME where native `--profile` lookup requires them. These app-level
+materialization tasks are separate from the repository instruction generator
+described here.
 
 Instruction files are the exception: they are **copies**, not symlinks,
 materialized on every shell entry by `generate:instructions:materialize`
