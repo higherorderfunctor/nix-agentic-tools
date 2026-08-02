@@ -85,10 +85,12 @@ drvs
 dsolve
 dunder
 EEXIST
+elicitations
 endgroup
 endswith
 envrc
 epistemics
+execpolicy
 execve
 extensionless
 extname
@@ -309,6 +311,7 @@ sourcepath
 sparfenyuk
 srcs
 sshsign
+starlark
 startswith
 statix
 stdenv
