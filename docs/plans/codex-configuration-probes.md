@@ -1,8 +1,8 @@
 # Codex 0.146.0 configuration probes
 
 > Last verified: 2026-08-01 against `pkgs.ai.chatgpt-codex` 0.146.0 and the
-> current official OpenAI Codex manual (commit pending — CX-008 revalidated
-> mixed-file ownership and found no required mutable state in config.toml).
+> current official OpenAI Codex manual (PR #672 — CX-008 revalidated mixed-file
+> ownership and found no required mutable state in `config.toml`).
 
 ## Purpose
 
