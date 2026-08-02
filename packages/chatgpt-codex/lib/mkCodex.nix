@@ -23,6 +23,19 @@
   reasoningEffortLevels = lib.unique (
     lib.concatMap (model: model.reasoningLevels) codexExtracted.models
   );
+  # These are closed CLI vocabularies, not manual guesses. The extractor
+  # already fails if either sentinel disappears or changes shape; consuming the
+  # same records here removes a second hard-coded list that could otherwise
+  # keep evaluating after a Codex update changed the accepted values.
+  rootFlagValues = name: let
+    matches = builtins.filter (flag: builtins.elem name flag.names) codexExtracted.cli.globalFlags;
+    matchCount = builtins.length matches;
+  in
+    if matchCount == 1
+    then (builtins.head matches).acceptedValues
+    else throw "ai.codex expected exactly one extracted global flag record for ${name}, found ${toString matchCount}";
+  approvalPolicyNames = rootFlagValues "--ask-for-approval";
+  sandboxModeNames = rootFlagValues "--sandbox";
   codexAgentType = agent.mkSemanticAgentType tomlFormat.type;
   codexHookHandlerType = lib.types.submodule {
     freeformType = jsonFormat.type;
@@ -72,7 +85,7 @@
   };
   approvalPolicyType =
     lib.types.either
-    (lib.types.enum ["never" "on-request" "untrusted"])
+    (lib.types.enum approvalPolicyNames)
     (lib.types.submodule {
       options.granular =
         lib.genAttrs [
@@ -634,7 +647,7 @@ in
               description = "User-level project trust declarations. Devenv rejects this bootstrap-global setting.";
             };
             sandbox_mode = lib.mkOption {
-              type = lib.types.nullOr (lib.types.enum ["danger-full-access" "read-only" "workspace-write"]);
+              type = lib.types.nullOr (lib.types.enum sandboxModeNames);
               default = null;
               description = "OS-enforced filesystem and network sandbox policy for model-generated commands.";
             };

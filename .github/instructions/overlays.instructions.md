@@ -255,24 +255,28 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-08-01 (commit pending — documents the sidecar
-> SELF-HEAL loop as a loop: which half is the self-heal and which the backstop,
-> that a red drift check reports a MECHANISM failure rather than a stale file,
-> that it fires on the version-bump path ONLY so an edited extractor does not
-> self-heal, how it differs from the `fix_sidecar_hashes` self-heal, and four
-> debugging entry points. Names `glab` as the fourth extracted package and
-> records that all four now share `vu.mkExtractRegen`; glab had no regeneration
-> at all and proved the latency on PR #621). Prior: 2026-08-01 (Codex joins the
-> extracted sidecar pipeline with recursive Clap help, feature-list, and
-> bundled-model probes plus category-specific shape assertions). Prior:
-> 2026-07-25 (the warm composite now forces `drvPath` instead of `version`, so
-> sidecar-versioned packages are covered; also corrects the claim that the check
-> job's `nix flake check` evaluates ALL systems, which it does not, and the
-> devenv-test job moved to its own workflow). If you touch `overlays/lib.nix`,
-> any overlay `.nix` file that calls `vu.mkVersion`, the shared
-> `.github/actions/warm-ifd/action.yml` composite, or the warm steps that
-> consume it in `.github/workflows/ci.yml` / `.github/workflows/update.yml`, and
-> this fragment isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-08-02 (commit pending — distinguishes Codex's new
+> human-reviewed reverse-coverage gate from generated-sidecar drift and shape
+> checks: update automation may refresh extracted facts but cannot classify a
+> new command, flag, field, maturity, or config seam). Prior: 2026-08-01 (commit
+> pending — documents the sidecar SELF-HEAL loop as a loop: which half is the
+> self-heal and which the backstop, that a red drift check reports a MECHANISM
+> failure rather than a stale file, that it fires on the version-bump path ONLY
+> so an edited extractor does not self-heal, how it differs from the
+> `fix_sidecar_hashes` self-heal, and four debugging entry points. Names `glab`
+> as the fourth extracted package and records that all four now share
+> `vu.mkExtractRegen`; glab had no regeneration at all and proved the latency on
+> PR #621). Prior: 2026-08-01 (Codex joins the extracted sidecar pipeline with
+> recursive Clap help, feature-list, and bundled-model probes plus
+> category-specific shape assertions). Prior: 2026-07-25 (the warm composite now
+> forces `drvPath` instead of `version`, so sidecar-versioned packages are
+> covered; also corrects the claim that the check job's `nix flake check`
+> evaluates ALL systems, which it does not, and the devenv-test job moved to its
+> own workflow). If you touch `overlays/lib.nix`, any overlay `.nix` file that
+> calls `vu.mkVersion`, the shared `.github/actions/warm-ifd/action.yml`
+> composite, or the warm steps that consume it in `.github/workflows/ci.yml` /
+> `.github/workflows/update.yml`, and this fragment isn't updated in the same
+> commit, stop and fix it.
 
 ### What is IFD in this repo
 
@@ -503,6 +507,17 @@ distinct match; the model catalog requires an id from each of the opus / sonnet
 least 20 commands, asserts the exact sandbox and non-deprecated approval enums,
 and rejects empty feature/model results. When you add a key or category, add its
 shape assertion in the same commit.
+
+Codex additionally carries a different kind of gate:
+`checks/chatgpt-codex-coverage.nix` compares the generated vocabulary with the
+human-authored categorical partition in
+`packages/chatgpt-codex/lib/extractedCoverage.nix`. Shape checks prove the
+extractor still recognizes upstream; this reverse check proves every recognized
+surface has an explicit Nix disposition. Keep those sources separate. If the
+update hook generated the classification too, the exact change needing review
+would bless itself. Model IDs and feature names may be policy-covered rather
+than copied item-for-item, but new command/flag identities, record fields,
+feature maturities, and config-key extraction fail closed.
 
 ### Gotchas when adding new packages
 
