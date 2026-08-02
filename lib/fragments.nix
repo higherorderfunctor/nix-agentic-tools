@@ -165,7 +165,11 @@
       // {
         inherit (transformer) handlers;
         render = fragment: let
-          rawText = fragment.text or "";
+          fragmentText = fragment.text or "";
+          rawText =
+            if builtins.isPath fragmentText
+            then builtins.readFile fragmentText
+            else fragmentText;
           nodes =
             if builtins.isString rawText
             then [(mkRaw rawText)]

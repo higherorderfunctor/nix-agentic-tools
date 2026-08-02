@@ -2,15 +2,16 @@
 
 > **Last verified:** 2026-08-02 (commit pending — Kiro's transformer now accepts
 > an explicit typed `always | auto | fileMatch | manual` inclusion mode while
-> preserving the legacy paths-derived default). Prior 2026-08-02: AGENTS.md now
-> derives a compact source-fragment routing index from the category registry for
-> flat consumers, without flattening scoped fragment bodies. Prior: 2026-08-01
-> (generated instruction and repo-document derivations remain flake packages but
-> are excluded from the authenticated all-packages build, preventing
-> revision-by-revision Cachix churn while `nix flake check` retains drift
-> coverage). Prior: 2026-07-24 (the `packagePaths` + `devFragmentNames`
-> registries dissolved into `config.fragments.categories`). If you touch
-> `lib/fragments.nix`, `config/fragment-categories.nix`,
+> preserving the legacy paths-derived default, and the shared renderer resolves
+> typed path-valued instruction bodies before node normalization). Prior
+> 2026-08-02: AGENTS.md now derives a compact source-fragment routing index from
+> the category registry for flat consumers, without flattening scoped fragment
+> bodies. Prior: 2026-08-01 (generated instruction and repo-document derivations
+> remain flake packages but are excluded from the authenticated all-packages
+> build, preventing revision-by-revision Cachix churn while `nix flake check`
+> retains drift coverage). Prior: 2026-07-24 (the `packagePaths` +
+> `devFragmentNames` registries dissolved into `config.fragments.categories`).
+> If you touch `lib/fragments.nix`, `config/fragment-categories.nix`,
 > `lib/fragments-registry.nix`, `dev/generate.nix`, `lib/ai/transformers/`, or
 > any content-package `passthru.fragments` surface and this fragment isn't
 > updated in the same commit, stop and fix it. This is a cross-cutting pipeline
@@ -32,8 +33,9 @@ fan out to many different consumers without duplication:
 2. **Transforms (`lib/ai/transformers/`)** — pure per-ecosystem renderers over
    the shared fragment AST. `lib/ai/default.nix` exposes them as
    `ai.transforms`; callers import that barrel rather than reaching through a
-   package passthru. The former `packages/fragments-ai/` package no longer
-   exists.
+   package passthru. The shared renderer reads path-valued bodies at evaluation
+   time before normalizing strings into raw nodes. The former
+   `packages/fragments-ai/` package no longer exists.
 
 3. **Content packages (`packages/coding-standards/`,
    `packages/stacked-workflows/`, etc.)** — derivations that ship markdown files

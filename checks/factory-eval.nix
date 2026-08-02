@@ -129,6 +129,18 @@ in {
       && !(lib.hasInfix "fileMatchPattern:" out)
   );
 
+  factory-transformer-kiro-path-text = mkTest "transformer-kiro-path-text" (
+    let
+      out = ai.transformers.kiro.render {
+        inclusion = "manual";
+        name = "path-backed";
+        text = ./fixtures/kiro-steering/alpha.md;
+      };
+    in
+      lib.hasInfix "inclusion: manual" out
+      && lib.hasInfix "Alpha steering body." out
+  );
+
   factory-transformer-kiro-validates-required-fields = mkTest "transformer-kiro-validates-required-fields" (
     let
       succeeds = fragment:
