@@ -972,6 +972,21 @@ in {
       && lib.hasInfix "prefix_rule" execpolicy
   );
 
+  module-codex-execpolicy-string-store-path-is-source = mkTest "codex-execpolicy-string-store-path-is-source" (
+    let
+      rule = pkgs.writeText "string-source.rules" ''prefix_rule(pattern = ["git", "status"])'';
+      config.ai.codex = {
+        enable = true;
+        execpolicyRules.string-source = "${rule}";
+      };
+      hmSource = (evalHm config).config.home.file.".codex/rules/string-source.rules".source;
+      devenvSource = (evalDevenv config).config.files.".codex/rules/string-source.rules".source;
+    in
+      hmSource
+      == "${rule}"
+      && devenvSource == "${rule}"
+  );
+
   module-codex-execpolicy-user-default-is-reserved = mkTest "codex-execpolicy-user-default-is-reserved" (
     let
       config.ai.codex = {

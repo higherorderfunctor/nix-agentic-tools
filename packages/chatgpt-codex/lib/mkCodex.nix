@@ -214,10 +214,19 @@
     "<!-- rule: ${name} -->\n"
     + renderFragment rule;
 
+  isExecpolicySource = content:
+    builtins.isPath content
+    || (
+      builtins.isString content
+      && lib.hasPrefix "/" content
+      && builtins.pathExists content
+      && builtins.elem (builtins.readFileType content) ["regular" "symlink"]
+    );
+
   mkExecpolicyEntries = prefix:
     lib.mapAttrs' (name: content:
       lib.nameValuePair "${prefix}/rules/${name}.rules" (
-        if builtins.isPath content
+        if isExecpolicySource content
         then {source = content;}
         else {text = content;}
       ));
