@@ -99,6 +99,39 @@
     then "${builtins.dirOf devenvRootParent}/${lib.removeSuffix "-worktrees" devenvRootParentName}"
     else devenvRoot;
   worktreesRoot = "${repositoryRoot}-worktrees";
+
+  # The selected named profile is a launch-time Codex layer, and Codex treats
+  # the process cwd as the project unless --cd is explicit. Keep both defaults
+  # inside this repo's devenv PATH while preserving caller overrides. The
+  # evaluated devenv root is already the current Git worktree root, so no
+  # runtime Git lookup is needed and each sibling worktree gets its own cwd.
+  codexForRepository = pkgs.writeShellApplication {
+    name = "codex";
+    bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
+    text = ''
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      nat_seen_cd=0
+      nat_seen_profile=0
+      for nat_arg in "$@"; do
+        case "$nat_arg" in
+          --) break ;;
+          --cd|-C|--cd=*|-C?*) nat_seen_cd=1 ;;
+          --profile|-p|--profile=*|-p?*) nat_seen_profile=1 ;;
+        esac
+      done
+
+      nat_codex_args=()
+      if [ "$nat_seen_cd" = 0 ]; then
+        nat_codex_args+=(--cd ${lib.escapeShellArg devenvRoot})
+      fi
+      if [ "$nat_seen_profile" = 0 ]; then
+        nat_codex_args+=(--profile nix-agentic-tools)
+      fi
+
+      exec ${lib.getExe pkgs.ai.chatgpt-codex} "''${nat_codex_args[@]}" "$@"
+    '';
+  };
 in {
   imports = [
     ./lib/ai/sharedOptions.nix
@@ -171,6 +204,7 @@ in {
     claude.enable = true;
     codex = {
       enable = true;
+      package = codexForRepository;
       profiles.nix-agentic-tools = {
         approval_policy = "never";
         default_permissions = "nix-agentic-tools";
@@ -472,6 +506,8 @@ in {
   # ── Validation ─────────────────────────────────────────────────────────
   enterTest = ''
     echo "Validating devenv configuration..."
+    test "$(command -v codex)" = "${lib.getExe codexForRepository}" || { echo "FAIL: repo-aware Codex wrapper is not first on PATH"; exit 1; }
+    ${lib.getExe codexForRepository} --cd "$PWD" --profile nix-agentic-tools --help >/dev/null 2>&1 || { echo "FAIL: Codex wrapper duplicated explicit launch flags"; exit 1; }
     test -f .claude/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .claude/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
     # Deref'd references must resolve on disk (guards the dangling-symlink
     # regression end-to-end, not just at the store-path level).
