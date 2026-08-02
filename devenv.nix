@@ -88,6 +88,7 @@
 in {
   imports = [
     ./lib/ai/sharedOptions.nix
+    ./packages/chatgpt-codex/modules/devenv
     ./packages/claude-code/modules/devenv
     ./packages/copilot-cli/modules/devenv
     ./packages/kiro-cli/modules/devenv
@@ -154,6 +155,13 @@ in {
   # ── Unified AI Config ─────────────────────────────────────────────────
   ai = {
     claude.enable = true;
+    codex = {
+      enable = true;
+      settings = {
+        model = "gpt-5.6-sol";
+        model_reasoning_effort = "high";
+      };
+    };
     copilot.enable = true;
     kiro = {
       enable = true;
