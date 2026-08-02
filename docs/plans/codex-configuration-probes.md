@@ -1,14 +1,15 @@
 # Codex 0.146.0 configuration probes
 
 > Last verified: 2026-08-01 against `pkgs.ai.chatgpt-codex` 0.146.0 and the
-> current official OpenAI Codex manual.
+> current official OpenAI Codex manual (commit pending — CX-008 revalidated
+> mixed-file ownership and found no required mutable state in config.toml).
 
 ## Purpose
 
 This is the evidence boundary for CX-001 and the extraction-feasibility part of
-CX-002. It records which Codex artifacts Nix may own, which ones Codex mutates,
-and which pinned-binary seams can support a drift-checked sidecar. It does not
-define the eventual module API.
+CX-002, plus the ownership decision for CX-008. It records which Codex artifacts
+Nix may own, which ones Codex mutates, and which pinned-binary seams can support
+a drift-checked sidecar. It does not define the eventual module API.
 
 All binary probes used a fresh `HOME` and an existing, empty `CODEX_HOME` under
 `/tmp`. They did not reuse credentials or contact a model provider.
@@ -57,6 +58,43 @@ skills, and standalone package metadata. A project-specific wrapper that changes
 `CODEX_HOME` therefore also changes credentials and state; devenv must prefer
 trusted project `.codex/config.toml` over a private home unless that tradeoff is
 explicitly designed.
+
+## CX-008 mixed-file revalidation
+
+CX-008 rechecked the current manual after the typed/freeform settings surface
+landed. Codex now documents more interactive writers than the original probe:
+
+- `codex features enable/disable` and `/experimental` update feature flags;
+- `codex mcp add/remove` updates MCP tables;
+- `/keymap`, `/statusline`, and `/theme` persist TUI preferences;
+- the desktop app and IDE settings surfaces can update supported config keys.
+
+These are alternative authoring interfaces for ordinary declarative settings,
+not required mutable runtime state. Codex can operate with a statically managed
+`config.toml`; users who choose Nix ownership configure the same values through
+`ai.codex.settings` and intentionally give up native edits to that file.
+Required mutable or secret data remains elsewhere: authentication storage,
+session and history artifacts, goals and memories databases, logs, caches, and
+exec-policy allow-list state.
+
+Therefore CX-008 adds no merge engine. A merge path would introduce
+preservation, authority, deletion, atomicity, and idempotence policy without a
+required mixed-state consumer, while making a declarative file appear safely
+editable by two owners. Static ownership remains the honest contract for both HM
+user config and devenv project config.
+
+Reopen reconciliation only when at least one of these is demonstrated against
+the pinned package:
+
+1. Codex stores required opaque or runtime-generated state in the same file as
+   Nix-declared settings.
+2. The module explicitly promises coexistence with a named native editor.
+3. A consumer requirement cannot be represented declaratively and cannot be
+   isolated in a separate Codex-owned artifact.
+
+Any reopened implementation must then test preservation of unknown native keys,
+Nix authority over declared keys, removal of formerly declared keys, atomic
+replacement and permissions, and repeated-run idempotence.
 
 ## Precedence contract
 
@@ -137,10 +175,10 @@ documented-key coverage ledger.
 
 ## Decisions and remaining probes
 
-- Static `config.toml` is the MVP. Native `mcp add/remove` and feature toggles
-  are known writers, but consumers choosing declarative ownership can use Nix
-  instead. A merge engine is deferred until a required mutable value is proven
-  to share this file.
+- Static `config.toml` is the ownership contract. Native config editors are
+  known alternative writers, but consumers choosing declarative ownership use
+  Nix instead. CX-008 revalidated that no required mutable value shares this
+  file, so no merge engine is implemented; the reopening criteria above apply.
 - `codex mcp add --env KEY=VALUE` writes the literal value into `config.toml`;
   the module must prefer native environment-name indirection where available and
   must not render secrets into a Nix store-backed file.
