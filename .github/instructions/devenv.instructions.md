@@ -7,9 +7,13 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 
 # CI-lean closure taxonomy
 
-> **Last verified:** 2026-07-22 (PR #439). If you change what `devenv.nix` puts
-> in the shell, which factories install CLI wrappers, or the `devenv-test.yml`
-> cache wiring, re-verify this and bump the marker.
+> **Last verified:** 2026-08-02 (commit pending — the repository now overrides
+> `ai.codex.package` with a tiny repo-aware wrapper that supplies the evaluated
+> worktree root and named profile; it retains the same base Codex closure, and
+> enterTest verifies both PATH precedence and explicit-flag idempotence). Prior:
+> 2026-07-22 (PR #439). If you change what `devenv.nix` puts in the shell, which
+> factories install CLI wrappers, or the `devenv-test.yml` cache wiring,
+> re-verify this and bump the marker.
 
 The `devenv-test` CI gate (`.github/workflows/devenv-test.yml`) runs
 `devenv test` on ephemeral runners, so **everything in the shell closure is
@@ -33,6 +37,13 @@ Adding a package to `devenv.nix`? Ask: **does the CI gate (materialize tasks +
 enterTest assertions) invoke it?** If not, it goes in the `!isCI` list. When in
 doubt, `CI=1 devenv test` locally is the oracle — green means the gate never
 needed it.
+
+This repository additionally supplies `codexForRepository` through the shared
+`ai.codex.package` override. It is a small shell wrapper around the same base
+Codex package, not a second CLI closure. The wrapper injects the evaluated
+`config.devenv.root` and `nix-agentic-tools` profile only when the caller did
+not provide `--cd`/`-C` or `--profile`/`-p`; enterTest invokes it with explicit
+flags to catch duplicate-argument regressions.
 
 Two proofs to preserve when touching the gates: with `CI` unset the shell must
 rebuild to the **identical store path** (local behavior unchanged — compare
