@@ -437,7 +437,10 @@ in {
   # injection rather than fail — so it throws instead.
   module-kiro-wrapper-gate-rejects-empty-set = mkTest "kiro-wrapper-gate-rejects-empty-set" (!(builtins.tryEval (idempotentFlags.gateOnSubcommand {subcommands = [];} "INJECTED")).success);
 
-  module-claude-default-disabled = mkTest "claude-default-disabled" (!(evalHm {}).config.ai.claude.enable);
+  module-claude-default-disabled = mkTest "claude-default-disabled" (
+    !(evalHm {}).config.ai.claude.enable
+    && !(evalDevenv {}).config.ai.claude.enable
+  );
 
   # ── Codex package/factory enable vertical ───────────────────────
   module-codex-default-disabled = mkTest "codex-default-disabled" (
@@ -2425,13 +2428,60 @@ in {
       result.type == "stdio"
   );
 
-  module-copilot-default-disabled = mkTest "copilot-default-disabled" (!(evalHm {}).config.ai.copilot.enable);
+  module-copilot-default-disabled = mkTest "copilot-default-disabled" (
+    !(evalHm {}).config.ai.copilot.enable
+    && !(evalDevenv {}).config.ai.copilot.enable
+  );
 
-  module-kiro-default-disabled = mkTest "kiro-default-disabled" (!(evalHm {}).config.ai.kiro.enable);
+  # `projectDir` remains discoverable with the same type/default in both module
+  # trees, but only devenv has a project root. HM must diagnose an override
+  # instead of silently interpreting it relative to HOME; devenv must consume
+  # the same option for every project-native writer.
+  module-copilot-project-dir-is-project-local = mkTest "copilot-project-dir-is-project-local" (
+    let
+      config.ai.copilot = {
+        agents.reviewer = "Review the change.";
+        context = "PROJECT-CONTEXT";
+        enable = true;
+        instructions = [
+          {
+            name = "named";
+            text = "NAMED-INSTRUCTION";
+          }
+        ];
+        projectDir = ".custom-github";
+        rules.security.text = "SECURITY-RULE";
+        skills.example = ./fixtures/claude-skills/skill-a;
+      };
+      hm = evalHm config;
+      devenv = evalDevenv config;
+    in
+      builtins.any (assertion:
+        !assertion.assertion
+        && lib.hasInfix "project-local" assertion.message)
+      hm.config.assertions
+      && (devenv.config.files.".custom-github/copilot-instructions.md".text or "")
+      == "PROJECT-CONTEXT"
+      && lib.hasInfix "NAMED-INSTRUCTION"
+      (devenv.config.files.".custom-github/instructions/named.instructions.md".text or "")
+      && lib.hasInfix "SECURITY-RULE"
+      (devenv.config.files.".custom-github/instructions/security.instructions.md".text or "")
+      && lib.hasInfix "Review the change."
+      (devenv.config.files.".custom-github/agents/reviewer.agent.md".text or "")
+      && devenv.config.files.".custom-github/skills/example/SKILL.md".source
+      == ./fixtures/claude-skills/skill-a/SKILL.md
+      && !(devenv.config.files ? ".github/instructions/named.instructions.md")
+      && !(devenv.config.files ? ".github/instructions/security.instructions.md")
+  );
+
+  module-kiro-default-disabled = mkTest "kiro-default-disabled" (
+    !(evalHm {}).config.ai.kiro.enable
+    && !(evalDevenv {}).config.ai.kiro.enable
+  );
 
   module-all-four-enabled = mkTest "all-four-enabled" (
     let
-      evaluated = evalHm {
+      config = {
         ai = {
           claude.enable = true;
           codex.enable = true;
@@ -2439,11 +2489,17 @@ in {
           kiro.enable = true;
         };
       };
+      hm = evalHm config;
+      devenv = evalDevenv config;
     in
-      evaluated.config.ai.claude.enable
-      && evaluated.config.ai.codex.enable
-      && evaluated.config.ai.copilot.enable
-      && evaluated.config.ai.kiro.enable
+      hm.config.ai.claude.enable
+      && hm.config.ai.codex.enable
+      && hm.config.ai.copilot.enable
+      && hm.config.ai.kiro.enable
+      && devenv.config.ai.claude.enable
+      && devenv.config.ai.codex.enable
+      && devenv.config.ai.copilot.enable
+      && devenv.config.ai.kiro.enable
   );
 
   # ── Unnamed-instruction composition ─────────────────────────────

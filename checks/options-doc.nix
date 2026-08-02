@@ -3,10 +3,13 @@
 # The old mdbook/NuschtOS site was deliberately removed, but
 # lib/options-doc.nix remains the canonical evaluator for consumer-facing HM
 # and devenv option references. Building both renderings here gives that code a
-# live owner and catches two easy-to-miss regressions:
+# live owner and catches three easy-to-miss regressions:
 #
-#   1. a backend declares a Codex option that the other backend omits; and
-#   2. a shared-pool description says "every app" while silently forgetting
+#   1. either backend adds, removes, or retypes any `ai.*` option without the
+#      matching change in the other backend;
+#   2. Codex loses one of the reviewed top-level surfaces completed by the
+#      configuration-parity roadmap; and
+#   3. a shared-pool description says "every app" while silently forgetting
 #      either Codex support or an intentional Codex exclusion.
 #
 # Exact option-tree parity is appropriate here even where runtime behavior
@@ -57,21 +60,36 @@
     "ai.skillsDir"
   ];
 in {
-  options-doc-codex-parity = pkgs.runCommand "options-doc-codex-parity" {} ''
+  options-doc-ai-parity = pkgs.runCommand "options-doc-ai-parity" {} ''
     diff="${lib.getExe' pkgs.diffutils "diff"}"
     grep="${lib.getExe pkgs.gnugrep}"
     jq="${lib.getExe pkgs.jq}"
     sort="${lib.getExe' pkgs.coreutils "sort"}"
 
+    # Flattened names catch missing leaves (not only missing top-level roots),
+    # while the normalized type map catches a declaration that still exists
+    # but accepts a different value shape in one backend. Defaults and
+    # descriptions may intentionally differ with lifecycle/scope, so they are
+    # documented and behavior-tested rather than mechanically equated here.
     "$jq" -r '
       keys[]
-      | select(startswith("ai.codex."))
-    ' "${hmJson}" | "$sort" -u > hm-codex-options
+      | select(startswith("ai."))
+    ' "${hmJson}" | "$sort" -u > hm-ai-options
     "$jq" -r '
       keys[]
-      | select(startswith("ai.codex."))
-    ' "${devenvJson}" | "$sort" -u > devenv-codex-options
-    "$diff" -u hm-codex-options devenv-codex-options
+      | select(startswith("ai."))
+    ' "${devenvJson}" | "$sort" -u > devenv-ai-options
+    "$diff" -u hm-ai-options devenv-ai-options
+
+    "$jq" -S '
+      with_entries(select(.key | startswith("ai.")))
+      | map_values({ type: .type })
+    ' "${hmJson}" > hm-ai-types.json
+    "$jq" -S '
+      with_entries(select(.key | startswith("ai.")))
+      | map_values({ type: .type })
+    ' "${devenvJson}" > devenv-ai-types.json
+    "$diff" -u hm-ai-types.json devenv-ai-types.json
 
     "$jq" -r '
       keys[]
@@ -81,11 +99,13 @@ in {
     ' "${hmJson}" | "$sort" -u > actual-codex-option-roots
     "$diff" -u "${expectedCodexRoots}" actual-codex-option-roots
 
-    # Exercise the CommonMark renderings too; JSON parity alone would let a
-    # broken markdown generator remain dormant after the doc-site removal.
-    # nixos-render-docs escapes dots in option headings for mdbook anchors.
-    "$grep" -Fq 'ai\.codex\.enable' "${docs.hmOptionsDoc.optionsCommonMark}"
-    "$grep" -Fq 'ai\.codex\.enable' "${docs.devenvOptionsDoc.optionsCommonMark}"
+    # Exercise every runtime namespace in the CommonMark renderings too; JSON
+    # parity alone would let a broken markdown generator remain dormant after
+    # the doc-site removal. nixos-render-docs escapes dots in option headings.
+    ${lib.concatMapStringsSep "\n" (app: ''
+      "$grep" -Fq 'ai\.${app}\.enable' "${docs.hmOptionsDoc.optionsCommonMark}"
+      "$grep" -Fq 'ai\.${app}\.enable' "${docs.devenvOptionsDoc.optionsCommonMark}"
+    '') ["claude" "codex" "copilot" "kiro"]}
 
     ${lib.concatMapStringsSep "\n" (name: ''
         "$jq" --exit-status --arg name "${name}" \
@@ -95,6 +115,8 @@ in {
       '')
       sharedDescriptionsThatMustDiscussCodex}
 
-    cp hm-codex-options "$out"
+    # The successful check output is also the requested machine-readable parity
+    # report: one complete, sorted contract shared by both backends.
+    cp hm-ai-options "$out"
   '';
 }

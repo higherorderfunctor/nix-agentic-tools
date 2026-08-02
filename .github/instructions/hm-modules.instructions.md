@@ -7,11 +7,15 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-08-02 (commit pending — distinguishes ordinary JSON
-> merge activation from Codex's leaf-owned TOML reconciliation, whose manifest
-> supplies removal semantics while preserving native project-trust state).
-> Prior: 2026-07-28 (commit pending — records the ONE-SHARED-DECLARATION form of
-> the config-parity rule, landed by `packages/glab` and asserted by
+> **Last verified:** 2026-08-02 (commit pending — generated option references
+> now enforce exact flattened `ai.*` name/type parity across HM and devenv;
+> backend-only behavior stays discoverable and fails explicitly, as with Home
+> Manager rejecting project-only `ai.copilot.projectDir` overrides). Prior:
+> 2026-08-02 (commit 589fa37c — distinguishes ordinary JSON merge activation
+> from Codex's leaf-owned TOML reconciliation, whose manifest supplies removal
+> semantics while preserving native project-trust state). Prior: 2026-07-28
+> (commit pending — records the ONE-SHARED-DECLARATION form of the config-parity
+> rule, landed by `packages/glab` and asserted by
 > `module-glab-hm-devenv-option-parity`; prior 2026-07-21 was the repo-wide
 > activation reordering `entryAfter ["writeBoundary"]` → `["linkGeneration"]`;
 > earlier revisions added the activation script `exit` warning + Nix path type
@@ -260,8 +264,9 @@ about runtime state dirs for Claude's `~/.claude/projects`, which would need it.
 **Every option on an HM module under `modules/<subdir>/` MUST have a matching
 option on the corresponding devenv module under `modules/devenv/<subdir>.nix`**
 — same types, same semantics, same fanout behavior. If you add an option to one,
-add it to the other in the same commit. Enforced by convention, checked at code
-review.
+add it to the other in the same commit. `checks/options-doc.nix` enforces exact
+flattened option-name and type parity across the full generated `ai.*` trees;
+module-eval tests cover backend-specific lowering and diagnostics.
 
 **Shared types live in `lib/`.** Both HM and devenv modules import types from
 `lib/ai-common.nix` (`instructionModule`, `lspServerModule`,
@@ -286,6 +291,10 @@ facet-specific defaults or `defaultText`. Modules whose options reference
 - Activation scripts are HM-only (devenv lifecycle is different)
 - HM uses `home.file` / `home.activation`; devenv uses `files.*` (per-project
   writable tree, not home dir)
+- Scope-only behavior remains declared in both trees and fails explicitly where
+  unsupported. For example, `ai.copilot.projectDir` has one shared declaration;
+  devenv consumes it, while Home Manager rejects non-default overrides because
+  it has no project root. Do not encode that boundary by deleting the HM option.
 
 If you touch one and the other is "intentionally different," say so in the
 commit message. If the mismatch is accidental, it's a bug.
