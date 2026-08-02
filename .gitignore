@@ -30,10 +30,18 @@ packages/stacked-workflows/skills/*/[0-9a-z]*-*
 #
 # NOT listed here, deliberately: AGENTS.md and .github/instructions/ are
 # generated but COMMITTED, because Copilot reads them from the repo.
+# `.agents/` is shared project-local agent space: devenv materializes Codex
+# skills there, while Kiro workflows write worker tasks there. Neither is
+# source-of-truth content in this repository.
+.agents/
 .claude/rules/
 .claude/settings.json
 .claude/settings.local.json
 .claude/skills/
+# Codex project config is a devenv `files.*` store symlink. Keep the Nix
+# declaration in devenv.nix as the source of truth rather than committing the
+# shell-entry artifact.
+.codex/
 .config/github-copilot/
 .copilot/
 .github/skills/

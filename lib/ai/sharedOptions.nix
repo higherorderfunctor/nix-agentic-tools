@@ -127,11 +127,12 @@ in {
       type = lib.types.attrsOf aiCommon.lspServerModule;
       default = {};
       description = ''
-        Typed LSP server declarations fanned out to every enabled AI app.
-        Each per-ecosystem translator renders the native JSON shape on
-        emission (Kiro: command/args; Copilot: + fileExtensions;
-        Claude: + extensionToLanguage). Per-app overrides
-        (ai.<name>.lspServers) merge on top and win on conflict.
+        Typed LSP server declarations fanned out to enabled Claude, Copilot,
+        and Kiro. Each per-ecosystem translator renders the native JSON shape
+        on emission (Kiro: command/args; Copilot: + fileExtensions; Claude: +
+        extensionToLanguage). Codex is intentionally excluded because its
+        public configuration has no native LSP-server surface. Per-app
+        overrides (ai.<name>.lspServers) merge on top and win on conflict.
       '';
     };
 
@@ -191,7 +192,9 @@ in {
         (ai.<name>.environmentVariables) merge on top and win on conflict.
         Claude does NOT currently consume this pool — Claude env vars
         should be set via `ai.claude.settings.env` instead (upstream
-        writes them into `~/.claude/settings.json`).
+        writes them into `~/.claude/settings.json`). Codex also does not
+        consume it: `shell_environment_policy` controls spawned-command
+        inheritance, not the Codex process environment represented here.
       '';
     };
 

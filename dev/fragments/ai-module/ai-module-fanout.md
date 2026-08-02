@@ -1,8 +1,10 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-02 (commit pending — Codex Home Manager settings
-> reconcile exact Nix-owned TOML leaves into a writable user file because the
-> native trust prompt persists ad-hoc project decisions through
+> **Last verified:** 2026-08-02 (commit pending — the native-surface audit adds
+> static Home Manager profile files and records why Codex has no LSP or shared
+> wrapper-environment fanout). Prior: 2026-08-02 (commit 3546267a — Codex Home
+> Manager settings reconcile exact Nix-owned TOML leaves into a writable user
+> file because the native trust prompt persists ad-hoc project decisions through
 > `config/batchWrite`; devenv retains whole-file static project ownership until
 > a project-local writer is demonstrated). Prior: 2026-08-01 (commit pending —
 > portable semantic agents fan out to Claude, Copilot, and Codex while portable
@@ -120,18 +122,23 @@ The ai module fans out TWO kinds of configuration:
   network proxy/domain/socket policy. The older sandbox model and permission
   profiles are mutually exclusive, so the module fails when both are present.
   Profile names and inheritance graphs remain runtime-validated by Codex because
-  config layers may contribute parents dynamically.
-  `projects.<path>.trust_level` is accepted only by Home Manager's user-global
-  file: devenv rejects it because a project cannot bootstrap the trust required
-  to load its own `.codex/config.toml`. `ai.codex.execpolicyRules.<name>` writes
-  native Starlark to `<config-layer>/rules/<name>.rules` in both backends. It is
-  intentionally separate from Markdown `ai.rules`, which remains durable
-  AGENTS.md guidance. Home Manager reserves `execpolicyRules.default` because
-  Codex appends accepted user allow-list decisions to
-  `$CODEX_HOME/rules/default.rules`; other per-entry files remain declarative
-  while that native mutation can coexist. Trusted project rules are declarative
-  and may use `default` because Codex's native writer targets only the user
-  layer.
+  config layers may contribute parents dynamically. `ai.codex.profiles.<name>`
+  emits a separate static `${configDir}/<name>.config.toml` user layer selected
+  with `codex --profile <name>`. Profiles are intentionally Home Manager-only:
+  current Codex no longer accepts an in-file default selector, resolves profile
+  files only from user CODEX_HOME, and ignores profile keys in project config.
+  Devenv rejects non-empty profile declarations instead of writing an inert
+  project artifact. `projects.<path>.trust_level` is accepted only by Home
+  Manager's user-global file: devenv rejects it because a project cannot
+  bootstrap the trust required to load its own `.codex/config.toml`.
+  `ai.codex.execpolicyRules.<name>` writes native Starlark to
+  `<config-layer>/rules/<name>.rules` in both backends. It is intentionally
+  separate from Markdown `ai.rules`, which remains durable AGENTS.md guidance.
+  Home Manager reserves `execpolicyRules.default` because Codex appends accepted
+  user allow-list decisions to `$CODEX_HOME/rules/default.rules`; other
+  per-entry files remain declarative while that native mutation can coexist.
+  Trusted project rules are declarative and may use `default` because Codex's
+  native writer targets only the user layer.
 - `ai.codex.agents.<name>` — the semantic agent record plus a freeform `codex`
   TOML extension. Home Manager emits `${configDir}/agents/<name>.toml`; devenv
   emits trusted-project `.codex/agents/<name>.toml`. The filename stem supplies
@@ -206,13 +213,18 @@ enabled ecosystem whose native model preserves the option's semantics):
   values never enter generated TOML. Direct `ai.codex.settings.mcp_servers`
   cannot be combined with either typed pool because their table ownership would
   be ambiguous.
-- `ai.lspServers` — typed LSP definitions, translated to each ecosystem's native
-  LSP config format (Claude via `ENABLE_LSP_TOOL=1`; Copilot has `lspServers`
-  option; Kiro too).
+- `ai.lspServers` — typed LSP definitions, translated to Claude, Copilot, and
+  Kiro native config. Codex is deliberately excluded: its current public config
+  reference and pinned CLI expose no LSP-server registration surface, so
+  pretending to fan out this pool would silently discard the declaration.
 - `ai.environmentVariables` — shared env vars; Copilot and Kiro fan out
   directly, Claude has no native option so Claude itself receives nothing from
   this (intentional — Claude env goes via `programs.claude-code.settings.env`
-  directly).
+  directly). Codex is also excluded: its `shell_environment_policy` configures
+  the environment inherited by spawned commands, while this pool configures the
+  AI CLI process itself. Consumers should use normal Home Manager/devenv
+  environment facilities for Codex runtime variables and the native freeform
+  setting for child-command filtering.
 
 Cross-ecosystem scalar defaults and per-entry fanouts use `mkDefault` so per-CLI
 overrides take precedence. Collection pools use their documented collision or

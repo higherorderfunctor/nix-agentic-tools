@@ -317,6 +317,19 @@
     })
     rules;
 
+  mkProfileAssertions = profiles:
+    lib.mapAttrsToList (name: _: {
+      assertion = builtins.match "[A-Za-z0-9][A-Za-z0-9_-]*" name != null;
+      message = "ai.codex.profiles.${name} must start with a letter or number and contain only letters, numbers, hyphens, and underscores";
+    })
+    profiles;
+
+  mkProfileEntries = prefix:
+    lib.mapAttrs' (name: settings:
+      lib.nameValuePair "${prefix}/${name}.config.toml" {
+        source = tomlFormat.generate "codex-profile-${name}.toml" (helpers.filterNulls settings);
+      });
+
   reservedAgentKeys = ["description" "developer_instructions" "name"];
 
   mkAgentAssertions = agents:
@@ -491,6 +504,19 @@ in
           hatch. Codex treats user/project hooks as non-managed: review and
           trust each generated definition's current hash with `/hooks` before
           it will run.
+        '';
+      };
+      profiles = lib.mkOption {
+        type = lib.types.attrsOf tomlFormat.type;
+        default = {};
+        description = ''
+          Named user configuration layers written as
+          `''${configDir}/<name>.config.toml` and selected explicitly with
+          `codex --profile <name>`. Codex 0.134.0 and later no longer support
+          nested `[profiles]` tables or a persistent default selector.
+          Profiles are Home Manager-only because Codex resolves them from the
+          user CODEX_HOME rather than trusted project configuration; devenv
+          rejects non-empty declarations.
         '';
       };
       projectDocMaxBytes = lib.mkOption {
@@ -688,6 +714,7 @@ in
         mkPathAssertions {inherit mergedInstructions mergedRules;}
         ++ mkAgentAssertions mergedAgents
         ++ mkExecpolicyAssertions cfg.execpolicyRules
+        ++ mkProfileAssertions cfg.profiles
         ++ [
           (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
           {
@@ -733,6 +760,12 @@ in
           (helpers.mkSkillEntries ".agents" mergedSkills)
           (mkAgentEntries cfg.configDir mergedAgents)
           (mkExecpolicyEntries cfg.configDir cfg.execpolicyRules)
+          # Profile files are declarative layers selected by an explicit CLI
+          # flag; unlike the base user config, no native writer or required
+          # runtime state shares them. Static per-file ownership therefore
+          # remains the honest lifecycle and keeps removal semantics native to
+          # Home Manager.
+          (mkProfileEntries cfg.configDir cfg.profiles)
           (lib.mkIf (effectiveHooks != {}) {
             "${cfg.configDir}/hooks.json".source = jsonFormat.generate "codex-hooks.json" {hooks = renderHooks effectiveHooks;};
           })
@@ -774,6 +807,7 @@ in
         mkPathAssertions {inherit mergedInstructions mergedRules;}
         ++ mkAgentAssertions mergedAgents
         ++ mkExecpolicyAssertions cfg.execpolicyRules
+        ++ mkProfileAssertions cfg.profiles
         ++ [
           (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
           {
@@ -791,6 +825,10 @@ in
               ${lib.concatStringsSep ", " ignoredSettings}. Move them to the
               Home Manager user-level configuration.
             '';
+          }
+          {
+            assertion = cfg.profiles == {};
+            message = "ai.codex.profiles is user-global and cannot be emitted by devenv; declare profiles through Home Manager and select one with codex --profile";
           }
           {
             assertion = effectiveHooks == {} || !(cfg.settings ? hooks);
