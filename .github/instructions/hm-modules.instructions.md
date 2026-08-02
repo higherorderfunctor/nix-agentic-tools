@@ -7,7 +7,11 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-08-02 (commit pending — generated option references
+> **Last verified:** 2026-08-02 (commit pending — Codex named profiles now use
+> one typed declaration across HM and devenv while each backend delivers the
+> artifact at its native scope: HM links user files and devenv materializes repo
+> declarations into the user-only profile lookup location with explicit
+> ownership). Prior: 2026-08-02 (commit pending — generated option references
 > now enforce exact flattened `ai.*` name/type parity across HM and devenv;
 > backend-only behavior stays discoverable and fails explicitly, as with Home
 > Manager rejecting project-only `ai.copilot.projectDir` overrides). Prior:
@@ -216,6 +220,16 @@ Do not generalize this to every TOML file or every runtime. Static ownership is
 still preferred when no required native writer shares the artifact. That is why
 Codex's devenv project `.codex/config.toml` remains a store-backed file: project
 config is trust-gated and no project-local writer has been demonstrated.
+
+**Parity does not require identical delivery paths.** Codex named profiles are
+user artifacts even when their declaration is repository-local: upstream only
+loads `$CODEX_HOME/<name>.config.toml`. `ai.codex.profiles` therefore has one
+typed option schema in HM and devenv, but HM links the file directly while
+devenv materializes its store file before shell entry. The devenv ownership
+ledger permits updates and pruning only for its own symlinks and refuses
+conflicting external content. Do not change `CODEX_HOME` merely to force a
+project-local path; that would also fork authentication, sessions, logs, and
+caches.
 
 **HM settings writes are conditional; devenv writes are not.** The HM activation
 merge (copilot `copilotSettingsMerge`, kiro `kiroSettingsMerge`) is gated on
