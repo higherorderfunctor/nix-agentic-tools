@@ -14,12 +14,15 @@
   flattenCategories = categories: lib.concatLists (builtins.attrValues categories);
   duplicateValues = values:
     lib.filter (value: builtins.length (lib.filter (candidate: candidate == value) values) > 1) (lib.unique values);
-  exactMessage = label: expected: actual: let
-    missing = lib.subtractLists actual expected;
-    unexpected = lib.subtractLists expected actual;
+  exactMessage = label: extractedValues: coveredValues: let
+    # lib.subtractLists takes removals first and candidates second. Missing
+    # dispositions are therefore extracted - covered; stale dispositions are
+    # covered - extracted. Naming both sets prevents the tempting reversal.
+    missing = lib.subtractLists coveredValues extractedValues;
+    unexpected = lib.subtractLists extractedValues coveredValues;
   in "chatgpt-codex coverage drift in ${label}; missing dispositions: ${builtins.toJSON missing}; stale dispositions: ${builtins.toJSON unexpected}";
-  assertExact = label: expected: actual:
-    lib.assertMsg (sorted expected == sorted actual) (exactMessage label expected actual);
+  assertExact = label: extractedValues: coveredValues:
+    lib.assertMsg (sorted extractedValues == sorted coveredValues) (exactMessage label extractedValues coveredValues);
   assertUnique = label: values:
     lib.assertMsg (builtins.length values == builtins.length (lib.unique values))
     "chatgpt-codex coverage duplicates in ${label}: ${builtins.toJSON (duplicateValues values)}";
