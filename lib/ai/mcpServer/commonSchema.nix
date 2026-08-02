@@ -51,6 +51,91 @@
         renderer derives the command from the package.
       '';
     };
+    codex = lib.mkOption {
+      type = lib.types.submodule {
+        freeformType = lib.types.attrsOf lib.types.toml;
+        options = {
+          auth = lib.mkOption {
+            type = lib.types.nullOr (lib.types.enum ["chatgpt" "oauth"]);
+            default = null;
+          };
+          bearerTokenEnvVar = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            description = "Environment variable containing an HTTP bearer token; the token itself is never rendered.";
+          };
+          cwd = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+          };
+          defaultToolsApprovalMode = lib.mkOption {
+            type = lib.types.nullOr (lib.types.enum ["approve" "auto" "prompt" "writes"]);
+            default = null;
+          };
+          disabledTools = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [];
+          };
+          enabled = lib.mkOption {
+            type = lib.types.nullOr lib.types.bool;
+            default = null;
+          };
+          enabledTools = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [];
+          };
+          envHttpHeaders = lib.mkOption {
+            type = lib.types.attrsOf lib.types.str;
+            default = {};
+            description = "HTTP header names mapped to environment-variable names; secret values stay out of the Nix store.";
+          };
+          envVars = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [];
+            description = "Environment-variable names made available to the MCP server; values are never rendered.";
+          };
+          experimentalEnvironment = lib.mkOption {
+            type = lib.types.nullOr (lib.types.enum ["local" "remote"]);
+            default = null;
+          };
+          httpHeaders = lib.mkOption {
+            type = lib.types.attrsOf lib.types.str;
+            default = {};
+            description = "Non-secret literal HTTP headers. These values are written to the Nix store; use envHttpHeaders for secrets.";
+          };
+          oauthResource = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+          };
+          required = lib.mkOption {
+            type = lib.types.nullOr lib.types.bool;
+            default = null;
+          };
+          scopes = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [];
+          };
+          startupTimeoutSec = lib.mkOption {
+            type = lib.types.nullOr lib.types.number;
+            default = null;
+          };
+          toolTimeoutSec = lib.mkOption {
+            type = lib.types.nullOr lib.types.number;
+            default = null;
+          };
+          tools = lib.mkOption {
+            type = lib.types.attrsOf (lib.types.submodule {
+              options.approvalMode = lib.mkOption {
+                type = lib.types.enum ["approve" "auto" "prompt" "writes"];
+              };
+            });
+            default = {};
+          };
+        };
+      };
+      default = {};
+      description = "Codex-native MCP authentication, readiness, timeout, and tool-policy extensions. Unknown TOML-compatible keys are accepted.";
+    };
     args = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [];
