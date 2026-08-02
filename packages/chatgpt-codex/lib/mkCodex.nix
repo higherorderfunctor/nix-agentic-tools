@@ -9,7 +9,13 @@
   codexExtracted = builtins.fromJSON (builtins.readFile ../../../overlays/chatgpt-codex-extracted.json);
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
   jsonFormat = pkgs.formats.json {};
+  tomlReconciler = ../../../lib/ai/reconcile-toml.py;
   tomlFormat = pkgs.formats.toml {};
+  # tomlkit is intentional rather than stdlib tomllib: tomllib cannot write,
+  # while round-tripping through a plain dict would discard native comments and
+  # ordering in the shared user config. Project config below still uses the
+  # normal pure Nix TOML generator because that file has one owner.
+  tomlPython = pkgs.python3.withPackages (pythonPackages: [pythonPackages.tomlkit]);
 
   stableFeatureNames = map (feature: feature.name) (
     builtins.filter (feature: feature.maturity == "stable") codexExtracted.features
@@ -641,8 +647,9 @@ in
         description = ''
           Codex config.toml settings. Common stable keys are typed; unknown
           TOML-compatible keys are accepted as a native escape hatch. Home
-          Manager writes user config, while devenv writes trusted-project
-          config and rejects keys Codex ignores at project scope.
+          Manager reconciles declared leaves into writable user config, while
+          devenv statically writes trusted-project config and rejects keys
+          Codex ignores at project scope.
         '';
       };
     };
@@ -660,6 +667,7 @@ in
       ...
     }: let
       agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
+      configFile = "${cfg.configDir}/config.toml";
       hasNativeMcpServers = cfg.settings ? mcp_servers;
       hasLegacySandbox =
         cfg.settings.sandbox_mode
@@ -671,6 +679,7 @@ in
         // lib.optionalAttrs (mergedServers != {}) {
           mcp_servers = lib.mapAttrs renderCodexServer mergedServers;
         });
+      settingsStateName = "codex-config-${builtins.hashString "sha256" configFile}";
     in {
       ai.codex.settings = lib.mkIf (topSettings.reasoningEffort != null) {
         model_reasoning_effort = lib.mkDefault topSettings.reasoningEffort;
@@ -698,21 +707,38 @@ in
             message = "ai.hooks/ai.codex.hooks cannot be combined with ai.codex.settings.hooks; choose hooks.json fanout or inline config.toml hooks for this layer";
           }
         ];
-      home.file = lib.mkMerge [
-        (lib.mkIf (agentsMd != "") {
-          "${cfg.configDir}/AGENTS.md".text = agentsMd;
-        })
-        (helpers.mkSkillEntries ".agents" mergedSkills)
-        (mkAgentEntries cfg.configDir mergedAgents)
-        (mkExecpolicyEntries cfg.configDir cfg.execpolicyRules)
-        (lib.mkIf (effectiveHooks != {}) {
-          "${cfg.configDir}/hooks.json".source = jsonFormat.generate "codex-hooks.json" {hooks = renderHooks effectiveHooks;};
-        })
-        (lib.mkIf (settings != {}) {
-          "${cfg.configDir}/config.toml".source = tomlFormat.generate "codex-config.toml" settings;
-        })
-      ];
-      home.packages = [cfg.package];
+      home = {
+        # Unlike the trusted-project file below, the user config is not wholly
+        # declarative: Codex's trust prompt persists ad-hoc project decisions
+        # via config/batchWrite into this exact config.toml. A home.file symlink
+        # makes that required native write target a read-only Nix store path.
+        # Reconcile only Nix-owned leaves instead, preserving Codex-owned
+        # trust/MCP/feature siblings and leaving a writable 0600 regular file.
+        #
+        # This activation is deliberately present even for `settings = {}`.
+        # Its prior-generation leaf manifest is what lets an empty/new
+        # generation retract settings Nix used to own without deleting native
+        # state. On a first empty generation the reconciler is a strict no-op.
+        activation.codexSettingsReconcile = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkTomlSettingsActivationScript {
+          inherit configFile;
+          python = tomlPython;
+          reconciler = tomlReconciler;
+          settingsJson = builtins.toJSON settings;
+          stateName = settingsStateName;
+        });
+        file = lib.mkMerge [
+          (lib.mkIf (agentsMd != "") {
+            "${cfg.configDir}/AGENTS.md".text = agentsMd;
+          })
+          (helpers.mkSkillEntries ".agents" mergedSkills)
+          (mkAgentEntries cfg.configDir mergedAgents)
+          (mkExecpolicyEntries cfg.configDir cfg.execpolicyRules)
+          (lib.mkIf (effectiveHooks != {}) {
+            "${cfg.configDir}/hooks.json".source = jsonFormat.generate "codex-hooks.json" {hooks = renderHooks effectiveHooks;};
+          })
+        ];
+        packages = [cfg.package];
+      };
     };
 
     devenv.config = {
@@ -782,6 +808,9 @@ in
           ".codex/hooks.json".source = jsonFormat.generate "codex-project-hooks.json" {hooks = renderHooks effectiveHooks;};
         })
         (lib.mkIf (settings != {}) {
+          # Project config stays wholly Nix-owned: it is already trust-gated,
+          # and no project-local Codex writer has been observed. Keep this
+          # static until evidence shows required runtime state shares the file.
           ".codex/config.toml".source = tomlFormat.generate "codex-project-config.toml" settings;
         })
       ];
