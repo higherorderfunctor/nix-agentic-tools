@@ -1,9 +1,13 @@
 # Kiro transformer — YAML frontmatter with inclusion/fileMatchPattern.
 #
-# Behavior preserved from packages/fragments-ai/default.nix transforms.kiro:
-# - paths: null → inclusion = "always", omit fileMatchPattern
-# - paths: list of 1 → inclusion = "fileMatch", fileMatchPattern = "<one>"
-# - paths: list of >1 → inclusion = "fileMatch", fileMatchPattern = [...]
+# Default behavior preserved from packages/fragments-ai/default.nix
+# transforms.kiro; an explicit `inclusion` overrides only this derivation:
+# - inclusion: null + paths: null → inclusion = "always"
+# - inclusion: null + paths set → inclusion = "fileMatch"
+# - inclusion: "always" | "auto" | "manual" → omit fileMatchPattern
+# - inclusion: "fileMatch" → require paths and emit fileMatchPattern
+# - paths: list of 1 → fileMatchPattern = "<one>"
+# - paths: list of >1 → fileMatchPattern = [...]
 #     (inline YAML array — comma-joined strings are wrong per kiro.dev/docs)
 # - paths: string → inclusion = "fileMatch", fileMatchPattern = raw string
 # - description: non-empty → always include
@@ -25,16 +29,29 @@ in rec {
       };
     frontmatter = {
       description ? null,
-      paths ? null,
+      inclusion ? null,
       name ? null,
+      paths ? null,
       ...
     }: let
-      inclusion =
-        if paths != null
+      requestedInclusion =
+        if inclusion != null
+        then inclusion
+        else if paths != null
         then "fileMatch"
         else "always";
+      effectiveInclusion =
+        if !(builtins.elem requestedInclusion ["always" "auto" "fileMatch" "manual"])
+        then throw "Kiro transformer: invalid inclusion mode '${requestedInclusion}'"
+        else if requestedInclusion == "auto" && (name == null || name == "")
+        then throw ''Kiro transformer: inclusion = "auto" requires a non-empty name''
+        else if requestedInclusion == "auto" && (description == null || description == "")
+        then throw ''Kiro transformer: inclusion = "auto" requires a non-empty description''
+        else if requestedInclusion == "fileMatch" && paths == null
+        then throw ''Kiro transformer: inclusion = "fileMatch" requires paths''
+        else requestedInclusion;
       patternStr =
-        if paths == null
+        if effectiveInclusion != "fileMatch"
         then null
         else if builtins.isList paths
         then
@@ -45,11 +62,11 @@ in rec {
       descStr =
         if description != null && description != ""
         then description
-        else if description == null && paths != null && name != null
+        else if description == null && effectiveInclusion == "fileMatch" && name != null
         then "Instructions for the ${name} package"
         else null;
       fm =
-        {inherit inclusion;}
+        {inclusion = effectiveInclusion;}
         // lib.optionalAttrs (name != null) {inherit name;}
         // lib.optionalAttrs (descStr != null) {description = descStr;}
         // lib.optionalAttrs (patternStr != null) {fileMatchPattern = patternStr;};

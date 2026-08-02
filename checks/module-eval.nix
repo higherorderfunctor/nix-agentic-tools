@@ -4255,6 +4255,102 @@ in {
       && lib.hasInfix "fileMatchPattern: [" (steeringFile.text or "")
   );
 
+  # Explicit Kiro inclusion modes are carried by the shared instruction/rule
+  # records, so the same config must render byte-identically in HM and devenv.
+  # Paths remain available to other ecosystems but do not leak a
+  # fileMatchPattern into Kiro when an explicit non-fileMatch mode wins.
+  module-kiro-inclusion-modes-hm-devenv-parity = mkTest "kiro-inclusion-modes-hm-devenv-parity" (
+    let
+      config = {
+        ai = {
+          instructions = [
+            {
+              inclusion = "manual";
+              name = "on-demand";
+              paths = ["docs/**"];
+              text = "Load only when requested.";
+            }
+          ];
+          kiro.enable = true;
+          rules.semantic = {
+            description = "Semantic project guidance";
+            inclusion = "auto";
+            paths = ["src/**"];
+            text = "Load when the description matches.";
+          };
+        };
+      };
+      hmSteering = (evalHm config).config.ai.kiro.steeringFiles;
+      devenvSteering = (evalDevenv config).config.ai.kiro.steeringFiles;
+      manual = (hmSteering."on-demand.md" or {}).text or "";
+      auto = (hmSteering."semantic.md" or {}).text or "";
+    in
+      hmSteering."on-demand.md".text
+      == devenvSteering."on-demand.md".text
+      && hmSteering."semantic.md".text == devenvSteering."semantic.md".text
+      && lib.hasInfix "inclusion: manual" manual
+      && lib.hasInfix "inclusion: auto" auto
+      && lib.hasInfix "description: Semantic project guidance" auto
+      && !(lib.hasInfix "fileMatchPattern:" manual)
+      && !(lib.hasInfix "fileMatchPattern:" auto)
+  );
+
+  module-kiro-inclusion-preserves-other-path-scopes = mkTest "kiro-inclusion-preserves-other-path-scopes" (
+    let
+      result = evalHm {
+        ai = {
+          claude.enable = true;
+          codex.enable = true;
+          copilot.enable = true;
+          kiro.enable = true;
+          rules.semantic = {
+            description = "Semantic project guidance";
+            inclusion = "auto";
+            paths = ["src/**"];
+            text = "Scoped guidance.";
+          };
+        };
+      };
+      claude = (result.config.home.file.".claude/rules/semantic.md" or {}).text or "";
+      codex = (result.config.home.file.".codex/AGENTS.md" or {}).text or "";
+      copilot = (result.config.home.file.".github/instructions/semantic.instructions.md" or {}).text or "";
+      kiro = (result.config.ai.kiro.steeringFiles."semantic.md" or {}).text or "";
+    in
+      lib.hasInfix "paths:" claude
+      && lib.hasInfix "src/**" claude
+      && lib.hasInfix "Apply this guidance only" codex
+      && lib.hasInfix "`src/**`" codex
+      && lib.hasInfix ''applyTo: "src/**"'' copilot
+      && lib.hasInfix "inclusion: auto" kiro
+      && !(lib.hasInfix "fileMatchPattern:" kiro)
+  );
+
+  module-kiro-inclusion-invalid-enum-rejected = mkTest "kiro-inclusion-invalid-enum-rejected" (
+    let
+      instructionAttempt = builtins.tryEval (let
+        result = evalHm {
+          ai.instructions = [
+            {
+              inclusion = "sometimes";
+              text = "Invalid";
+            }
+          ];
+        };
+      in
+        builtins.deepSeq result.config.ai.instructions true);
+      ruleAttempt = builtins.tryEval (let
+        result = evalDevenv {
+          ai.rules.invalid = {
+            inclusion = "sometimes";
+            text = "Invalid";
+          };
+        };
+      in
+        builtins.deepSeq result.config.ai.rules.invalid true);
+    in
+      !instructionAttempt.success && !ruleAttempt.success
+  );
+
   # HM: per-CLI context → the `<contextFilename>` steering entry
   # (default AGENTS.md), delivered by the copy writer — the legacy
   # home.file symlink must be GONE under the default copy strategy.

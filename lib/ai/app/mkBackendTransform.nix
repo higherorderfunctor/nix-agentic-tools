@@ -105,9 +105,9 @@ in {
         description = "${appRecord.name}-specific MCP servers (merged with top-level ai.mcpServers; collisions fail).";
       };
       instructions = lib.mkOption {
-        type = lib.types.listOf lib.types.attrs;
+        type = lib.types.listOf aiCommon.instructionModule;
         default = [];
-        description = "${appRecord.name}-specific instructions (appended to top-level ai.instructions).";
+        description = "${appRecord.name}-specific instructions (appended to top-level ai.instructions; Kiro supports an explicit inclusion mode).";
       };
       rules = lib.mkOption {
         type = lib.types.attrsOf aiCommon.ruleModule;

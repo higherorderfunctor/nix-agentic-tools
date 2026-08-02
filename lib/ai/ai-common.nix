@@ -3,7 +3,21 @@
 # Consumed by:
 # - packages/*/lib/mk*.nix (factory-built HM + devenv modules)
 # - lib/hm-helpers.nix (filterNulls re-export)
-{lib}: {
+{lib}: let
+  kiroInclusionOption = lib.mkOption {
+    type = lib.types.nullOr (lib.types.enum ["always" "auto" "fileMatch" "manual"]);
+    default = null;
+    example = "auto";
+    description = ''
+      Kiro steering inclusion mode. null preserves the portable default:
+      `paths = null` becomes `always`, while non-null paths become `fileMatch`.
+      `fileMatch` consumes `paths`; `auto` requires a non-empty name and
+      description. Other ecosystems continue translating `paths` through
+      their native scoping mechanism and intentionally ignore this Kiro-only
+      override.
+    '';
+  };
+in {
   # ── Activation flag scoping ────────────────────────────────────────
   # Wrap a home.activation body in a subshell so its `set`/`shopt` flags
   # cannot outlive it.
@@ -156,12 +170,17 @@
   # ── Instruction submodule type ──────────────────────────────────────
   # Shared semantic fields, translated per ecosystem by frontmatter generators.
   instructionModule = lib.types.submodule {
+    # Instructions predate the typed record and may carry a `name` used to
+    # split them into per-file entries. Preserve that open tail while typing
+    # every shared semantic field below.
+    freeformType = lib.types.attrs;
     options = {
       description = lib.mkOption {
-        type = lib.types.str;
-        default = "";
+        type = lib.types.nullOr lib.types.str;
+        default = null;
         description = "Short description (used by Claude and Kiro frontmatter).";
       };
+      inclusion = kiroInclusionOption;
       paths = lib.mkOption {
         type = lib.types.nullOr (lib.types.listOf lib.types.str);
         default = null;
@@ -182,8 +201,8 @@
         '';
       };
       text = lib.mkOption {
-        type = lib.types.lines;
-        description = "Instruction body (markdown).";
+        type = lib.types.either lib.types.lines lib.types.path;
+        description = "Instruction body (inline markdown or a Nix path to a markdown file).";
       };
     };
   };
@@ -206,6 +225,7 @@
         default = "";
         description = "Short description (used by Claude and Kiro frontmatter).";
       };
+      inclusion = kiroInclusionOption;
       paths = lib.mkOption {
         type = lib.types.nullOr (lib.types.listOf lib.types.str);
         default = null;

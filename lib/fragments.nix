@@ -20,25 +20,28 @@
 
   # Canonical fragment constructor.
   # Returns a normalized attrset with all fields defaulted:
-  #   { text, description, paths, priority }
+  #   { text, description, inclusion, paths, priority }
   mkFragment = {
     text,
     description ? null,
+    inclusion ? null,
     paths ? null,
     priority ? 0,
     source ? null,
   }: {
-    inherit description paths priority source text;
+    inherit description inclusion paths priority source text;
   };
 
   # Compose a list of fragments into a single fragment.
   # Sorts by priority descending (higher = earlier), deduplicates by text
   # content hash, then concatenates into a single mkFragment.
-  # Optional overrides (description, paths, priority) name the output fragment.
+  # Optional overrides (description, inclusion, paths, priority) name the output
+  # fragment.
   compose = {
     fragments,
     description ? null,
     generator ? null,
+    inclusion ? null,
     paths ? null,
     priority ? 0,
   }: let
@@ -81,7 +84,7 @@
     combined = header + builtins.concatStringsSep "\n" (map annotate deduped.result);
   in
     mkFragment {
-      inherit description paths priority;
+      inherit description inclusion paths priority;
       text = combined;
     };
 
@@ -162,7 +165,11 @@
       // {
         inherit (transformer) handlers;
         render = fragment: let
-          rawText = fragment.text or "";
+          fragmentText = fragment.text or "";
+          rawText =
+            if builtins.isPath fragmentText
+            then builtins.readFile fragmentText
+            else fragmentText;
           nodes =
             if builtins.isString rawText
             then [(mkRaw rawText)]
@@ -179,6 +186,8 @@
           frontmatterArgs =
             {
               description = fragment.description or null;
+              inclusion = fragment.inclusion or null;
+              name = fragment.name or null;
               paths = fragment.paths or null;
             }
             // ctxExtras;
