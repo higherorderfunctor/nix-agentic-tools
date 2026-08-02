@@ -36,8 +36,9 @@ in {
       default = {};
       description = ''
         MCP servers fanned out to every enabled AI app: Claude, Codex,
-        Copilot, and Kiro. Per-app overrides (ai.<name>.mcpServers) merge on
-        top and win on conflict.
+        Copilot, and Kiro. Per-app entries (ai.<name>.mcpServers) add
+        runtime-specific servers; duplicate names across the shared and
+        per-app pools fail the factory's collision check.
       '';
     };
 
