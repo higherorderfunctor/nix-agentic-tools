@@ -39,9 +39,7 @@
         tools = lib.mapAttrs (_: tool: {approval_mode = tool.approvalMode;}) native.tools;
       };
   in
-    rendered
-    // translated
-    // removeAttrs native [
+    removeAttrs native [
       "auth"
       "bearerTokenEnvVar"
       "cwd"
@@ -59,7 +57,9 @@
       "startupTimeoutSec"
       "toolTimeoutSec"
       "tools"
-    ];
+    ]
+    // translated
+    // rendered;
 
   projectIgnoredKeys = [
     "apps_mcp_product_sku"

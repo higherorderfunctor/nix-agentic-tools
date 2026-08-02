@@ -527,6 +527,7 @@ in {
             command = "/bin/docs";
             args = ["serve"];
             codex = {
+              command = "must-not-clobber-base";
               defaultToolsApprovalMode = "prompt";
               disabledTools = ["delete"];
               enabled = true;
@@ -569,6 +570,22 @@ in {
       hm.config.home.file.".codex/config.toml".source.value.mcp_servers
       == expected
       && devenv.config.files.".codex/config.toml".source.value.mcp_servers == expected
+  );
+
+  module-codex-mcp-freeform-rejects-non-toml = mkTest "codex-mcp-freeform-rejects-non-toml" (
+    let
+      hm = evalHm {
+        ai.codex = {
+          enable = true;
+          mcpServers.docs = {
+            command = "/bin/docs";
+            codex.future = value: value;
+          };
+        };
+      };
+      evaluated = builtins.tryEval hm.config.home.file.".codex/config.toml".source.value;
+    in
+      !evaluated.success
   );
 
   module-codex-mcp-credential-wrapper-parity = mkTest "codex-mcp-credential-wrapper-parity" (

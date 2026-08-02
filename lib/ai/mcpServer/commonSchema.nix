@@ -53,7 +53,7 @@
     };
     codex = lib.mkOption {
       type = lib.types.submodule {
-        freeformType = lib.types.attrsOf lib.types.anything;
+        freeformType = lib.types.attrsOf lib.types.toml;
         options = {
           auth = lib.mkOption {
             type = lib.types.nullOr (lib.types.enum ["chatgpt" "oauth"]);
