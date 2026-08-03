@@ -2,12 +2,13 @@
 
 > **Last verified:** 2026-08-02 (commit pending — the repo-aware Codex wrapper
 > now distinguishes runtime commands from administrative commands before
-> injecting the worktree root and named profile; enterTest covers both resume
-> parsing and doctor pass-through). Prior: 2026-08-02 (PR #698 — introduced the
-> wrapper and verified PATH precedence plus explicit-flag idempotence). Prior:
-> 2026-07-22 (PR #439). If you change what `devenv.nix` puts in the shell, which
-> factories install CLI wrappers, or the `devenv-test.yml` cache wiring,
-> re-verify this and bump the marker.
+> injecting the worktree root and named profile; an argv-probe build lets
+> enterTest verify both resume injection and doctor pass-through exactly).
+> Prior: 2026-08-02 (PR #698 — introduced the wrapper and verified PATH
+> precedence plus explicit-flag idempotence). Prior: 2026-07-22 (PR #439). If
+> you change what `devenv.nix` puts in the shell, which factories install CLI
+> wrappers, or the `devenv-test.yml` cache wiring, re-verify this and bump the
+> marker.
 
 The `devenv-test` CI gate (`.github/workflows/devenv-test.yml`) runs
 `devenv test` on ephemeral runners, so **everything in the shell closure is
@@ -39,8 +40,8 @@ Codex package, not a second CLI closure. The wrapper injects the evaluated
 not provide `--cd`/`-C` or `--profile`/`-p`, and only for Codex runtime command
 families that accept those flags. Administrative commands such as `doctor`,
 `login`, and `features` pass through unchanged. enterTest covers explicit-flag
-idempotence, `resume` parsing with repository defaults, and `doctor`
-pass-through.
+idempotence, exact `resume` default injection, exact `doctor` pass-through, and
+the real `doctor --json` rejection that originally exposed the bug.
 
 Two proofs to preserve when touching the gates: with `CI` unset the shell must
 rebuild to the **identical store path** (local behavior unchanged — compare

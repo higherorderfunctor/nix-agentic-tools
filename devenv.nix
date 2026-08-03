@@ -107,86 +107,111 @@
   # so only inject them for the runtime command families that accept them. The
   # evaluated devenv root is already the current Git worktree root, so no
   # runtime Git lookup is needed and each sibling worktree gets its own cwd.
-  codexForRepository = pkgs.writeShellApplication {
-    name = "codex";
-    bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
-    text = ''
-      shopt -s inherit_errexit 2>/dev/null || :
+  mkCodexForRepository = {
+    codexExe,
+    name,
+  }:
+    pkgs.writeShellApplication {
+      inherit name;
+      extraShellCheckFlags = shellStrict.shellcheckFlags;
+      inherit (shellStrict) bashOptions;
+      text = ''
+        ${shellStrict.shoptHeader}
 
-      nat_command=""
-      nat_debug_command=""
-      nat_expect_value=0
-      nat_parse_scope=root
-      for nat_arg in "$@"; do
-        if [ "$nat_expect_value" = 1 ]; then
-          nat_expect_value=0
-          continue
-        fi
-        if [ "$nat_parse_scope" = root ]; then
-          case "$nat_arg" in
-            --) break ;;
-            --add-dir|--ask-for-approval|--cd|--config|--disable|--enable|--image|--local-provider|--model|--profile|--remote|--remote-auth-token-env|--sandbox|-C|-a|-c|-i|-m|-p|-s)
-              nat_expect_value=1
-              ;;
-            -*) ;;
-            *)
-              nat_command="$nat_arg"
-              if [ "$nat_command" = debug ]; then
-                nat_parse_scope=debug
-              else
+        nat_command=""
+        nat_debug_command=""
+        nat_expect_value=0
+        nat_parse_scope=root
+        for nat_arg in "$@"; do
+          if [ "$nat_expect_value" = 1 ]; then
+            nat_expect_value=0
+            continue
+          fi
+          if [ "$nat_parse_scope" = root ]; then
+            case "$nat_arg" in
+              --) break ;;
+              --add-dir|--ask-for-approval|--cd|--config|--disable|--enable|--image|--local-provider|--model|--profile|--remote|--remote-auth-token-env|--sandbox|-C|-a|-c|-i|-m|-p|-s)
+                nat_expect_value=1
+                ;;
+              -*) ;;
+              *)
+                nat_command="$nat_arg"
+                if [ "$nat_command" = debug ]; then
+                  nat_parse_scope=debug
+                else
+                  break
+                fi
+                ;;
+            esac
+          else
+            case "$nat_arg" in
+              --) break ;;
+              --config|--disable|--enable|-c)
+                nat_expect_value=1
+                ;;
+              -*) ;;
+              *)
+                nat_debug_command="$nat_arg"
                 break
-              fi
-              ;;
-          esac
-        else
-          case "$nat_arg" in
-            --) break ;;
-            --config|--disable|--enable|-c)
-              nat_expect_value=1
-              ;;
-            -*) ;;
-            *)
-              nat_debug_command="$nat_arg"
-              break
-              ;;
-          esac
-        fi
-      done
+                ;;
+            esac
+          fi
+        done
 
-      nat_apply_repo_defaults=0
-      case "$nat_command" in
-        ""|archive|delete|exec|fork|mcp|resume|review|sandbox|unarchive)
-          nat_apply_repo_defaults=1
-          ;;
-        debug)
+        nat_apply_repo_defaults=0
+        case "$nat_command" in
+          ""|archive|delete|exec|fork|mcp|resume|review|sandbox|unarchive)
+            nat_apply_repo_defaults=1
+            ;;
+          debug)
           if [ "$nat_debug_command" = prompt-input ]; then
             nat_apply_repo_defaults=1
           fi
           ;;
-      esac
-
-      nat_seen_cd=0
-      nat_seen_profile=0
-      for nat_arg in "$@"; do
-        case "$nat_arg" in
-          --) break ;;
-          --cd|-C|--cd=*|-C?*) nat_seen_cd=1 ;;
-          --profile|-p|--profile=*|-p?*) nat_seen_profile=1 ;;
+          *) ;;
         esac
-      done
 
-      nat_codex_args=()
-      if [ "$nat_apply_repo_defaults" = 1 ]; then
-        if [ "$nat_seen_cd" = 0 ]; then
-          nat_codex_args+=(--cd ${lib.escapeShellArg devenvRoot})
-        fi
-        if [ "$nat_seen_profile" = 0 ]; then
-          nat_codex_args+=(--profile nix-agentic-tools)
-        fi
-      fi
+        nat_seen_cd=0
+        nat_seen_profile=0
+        for nat_arg in "$@"; do
+          case "$nat_arg" in
+            --) break ;;
+            --cd|-C|--cd=*|-C?*) nat_seen_cd=1 ;;
+            --profile|-p|--profile=*|-p?*) nat_seen_profile=1 ;;
+            *) ;;
+          esac
+        done
 
-      exec ${lib.getExe pkgs.ai.chatgpt-codex} "''${nat_codex_args[@]}" "$@"
+        nat_codex_args=()
+        if [ "$nat_apply_repo_defaults" = 1 ]; then
+          if [ "$nat_seen_cd" = 0 ]; then
+            nat_codex_args+=(--cd ${lib.escapeShellArg devenvRoot})
+          fi
+          if [ "$nat_seen_profile" = 0 ]; then
+            nat_codex_args+=(--profile nix-agentic-tools)
+          fi
+        fi
+
+        exec ${codexExe} "''${nat_codex_args[@]}" "$@"
+      '';
+    };
+
+  codexArgvProbe = pkgs.writeShellApplication {
+    name = "codex-argv-probe";
+    extraShellCheckFlags = shellStrict.shellcheckFlags;
+    inherit (shellStrict) bashOptions;
+    text = ''
+      ${shellStrict.shoptHeader}
+      printf '%s\n' "$@"
     '';
+  };
+  codexForRepository = mkCodexForRepository {
+    codexExe = lib.getExe pkgs.ai.chatgpt-codex;
+    name = "codex";
+  };
+  codexForRepositoryArgvProbe = mkCodexForRepository {
+    codexExe = lib.getExe codexArgvProbe;
+    name = "codex-wrapper-argv-probe";
   };
 in {
   imports = [
@@ -564,7 +589,10 @@ in {
     echo "Validating devenv configuration..."
     test "$(command -v codex)" = "${lib.getExe codexForRepository}" || { echo "FAIL: repo-aware Codex wrapper is not first on PATH"; exit 1; }
     ${lib.getExe codexForRepository} --cd "$PWD" --profile nix-agentic-tools --help >/dev/null 2>&1 || { echo "FAIL: Codex wrapper duplicated explicit launch flags"; exit 1; }
-    ${lib.getExe codexForRepository} resume --help >/dev/null 2>&1 || { echo "FAIL: Codex wrapper did not apply repo defaults to resume"; exit 1; }
+    nat_expected_resume_argv="$(printf '%s\n' --cd ${lib.escapeShellArg devenvRoot} --profile nix-agentic-tools resume session-id)"
+    test "$(${lib.getExe codexForRepositoryArgvProbe} resume session-id)" = "$nat_expected_resume_argv" || { echo "FAIL: Codex wrapper did not apply repo defaults to resume"; exit 1; }
+    nat_expected_doctor_argv="$(printf '%s\n' doctor --json)"
+    test "$(${lib.getExe codexForRepositoryArgvProbe} doctor --json)" = "$nat_expected_doctor_argv" || { echo "FAIL: Codex wrapper did not pass doctor through unchanged"; exit 1; }
     nat_doctor_output="$(${lib.getExe codexForRepository} doctor --json 2>&1 || :)"
     case "$nat_doctor_output" in
       *"--profile only applies"*) echo "FAIL: Codex wrapper applied runtime flags to doctor"; exit 1 ;;
