@@ -13,71 +13,68 @@
   snapshot = builtins.fromJSON (builtins.readFile committed);
   templateNames = ["claude.md" "codex.toml" "copilot.md" "kiro.md"];
 
-  extracted =
-    pkgs.runCommand "semble-upstream-templates.json" {
-      nativeBuildInputs = [pkgs.jq pkgs.python3];
-    } ''
-          agent_dir=""
-          for candidate in ${semble}/lib/python*/site-packages/semble/agents; do
-            [ -d "$candidate" ] || continue
-            if [ -n "$agent_dir" ]; then
-              echo "FAIL: found multiple Semble agent template directories" >&2
-              exit 1
-            fi
-            agent_dir="$candidate"
-          done
-
-          if [ -z "$agent_dir" ]; then
-            echo "FAIL: could not find Semble's version-independent agents directory" >&2
+  extracted = pkgs.runCommand "semble-upstream-templates.json" {} ''
+        agent_dir=""
+        for candidate in ${semble}/lib/python*/site-packages/semble/agents; do
+          [ -d "$candidate" ] || continue
+          if [ -n "$agent_dir" ]; then
+            echo "FAIL: found multiple Semble agent template directories" >&2
             exit 1
           fi
+          agent_dir="$candidate"
+        done
 
-          for template in ${lib.escapeShellArgs templateNames}; do
-            if [ ! -f "$agent_dir/$template" ]; then
-              echo "FAIL: missing Semble agent template: $template" >&2
-              exit 1
-            fi
-          done
+        if [ -z "$agent_dir" ]; then
+          echo "FAIL: could not find Semble's version-independent agents directory" >&2
+          exit 1
+        fi
 
-          installer_file="$agent_dir/../installer/agents.py"
-          instructions_file="$TMPDIR/instructions.md"
-          if [ ! -f "$installer_file" ]; then
-            echo "FAIL: missing Semble installer instructions source" >&2
+        for template in ${lib.escapeShellArgs templateNames}; do
+          if [ ! -f "$agent_dir/$template" ]; then
+            echo "FAIL: missing Semble agent template: $template" >&2
             exit 1
           fi
+        done
 
-          python - "$installer_file" "$instructions_file" <<'PY'
-      import runpy
-      import sys
-      from pathlib import Path
+        installer_file="$agent_dir/../installer/agents.py"
+        instructions_file="$TMPDIR/instructions.md"
+        if [ ! -f "$installer_file" ]; then
+          echo "FAIL: missing Semble installer instructions source" >&2
+          exit 1
+        fi
 
-      namespace = runpy.run_path(sys.argv[1])
-      instructions = namespace.get("INSTRUCTIONS")
-      if not isinstance(instructions, str) or not instructions:
-          raise SystemExit("Semble installer INSTRUCTIONS is missing or empty")
-      Path(sys.argv[2]).write_text(instructions, encoding="utf-8")
-      PY
+        ${pkgs.python3}/bin/python3 - "$installer_file" "$instructions_file" <<'PY'
+    import runpy
+    import sys
+    from pathlib import Path
 
-          jq -n \
-            --arg pname "${semble.pname}" \
-            --arg version "${semble.version}" \
-            --rawfile instructions "$instructions_file" \
-            --rawfile claude "$agent_dir/claude.md" \
-            --rawfile codex "$agent_dir/codex.toml" \
-            --rawfile copilot "$agent_dir/copilot.md" \
-            --rawfile kiro "$agent_dir/kiro.md" \
-            '{
-              instructions: $instructions,
-              package: { pname: $pname, version: $version },
-              schemaVersion: 1,
-              templates: {
-                "claude.md": $claude,
-                "codex.toml": $codex,
-                "copilot.md": $copilot,
-                "kiro.md": $kiro
-              }
-            }' > "$out"
-    '';
+    namespace = runpy.run_path(sys.argv[1])
+    instructions = namespace.get("INSTRUCTIONS")
+    if not isinstance(instructions, str) or not instructions:
+        raise SystemExit("Semble installer INSTRUCTIONS is missing or empty")
+    Path(sys.argv[2]).write_text(instructions, encoding="utf-8")
+    PY
+
+        ${pkgs.jq}/bin/jq -n \
+          --arg pname "${semble.pname}" \
+          --arg version "${semble.version}" \
+          --rawfile instructions "$instructions_file" \
+          --rawfile claude "$agent_dir/claude.md" \
+          --rawfile codex "$agent_dir/codex.toml" \
+          --rawfile copilot "$agent_dir/copilot.md" \
+          --rawfile kiro "$agent_dir/kiro.md" \
+          '{
+            instructions: $instructions,
+            package: { pname: $pname, version: $version },
+            schemaVersion: 1,
+            templates: {
+              "claude.md": $claude,
+              "codex.toml": $codex,
+              "copilot.md": $copilot,
+              "kiro.md": $kiro
+            }
+          }' > "$out"
+  '';
 
   hash = builtins.hashString "sha256";
   reviewedTemplateNames = builtins.attrNames reviewed.templates;
