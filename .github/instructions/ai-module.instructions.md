@@ -7,13 +7,16 @@ applyTo: "lib/ai/agent.nix,lib/ai/app/**,lib/ai/default.nix,lib/ai/hooks.nix,lib
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-02 (commit pending — portable agent tool lists
-> render native allowlist frontmatter only when non-empty, so both `null` and
-> `[]` preserve unrestricted Claude/Copilot behavior). Prior: 2026-08-02 (commit
-> pending — Semble automatically grants its cache when a selected Codex
-> integration uses the workspace-write sandbox, with user-global XDG cache
-> ownership in HM and project-local state plus an environment override in
-> devenv). Prior: 2026-08-02 (commit pending — portable semantic agents may
+> **Last verified:** 2026-08-02 (commit pending — Codex beta permission profiles
+> remain explicit security boundaries: they do not compose with legacy
+> `sandbox_workspace_write` integration roots, so a selected profile must grant
+> the Semble cache itself). Prior: 2026-08-02 (commit pending — portable agent
+> tool lists render native allowlist frontmatter only when non-empty, so both
+> `null` and `[]` preserve unrestricted Claude/Copilot behavior). Prior:
+> 2026-08-02 (commit pending — Semble automatically grants its cache when a
+> selected Codex integration uses the workspace-write sandbox, with user-global
+> XDG cache ownership in HM and project-local state plus an environment override
+> in devenv). Prior: 2026-08-02 (commit pending — portable semantic agents may
 > restrict Claude and Copilot with their shared `tools` vocabulary while Codex
 > deliberately omits that field and Kiro retains its native JSON model). Prior:
 > 2026-08-02 (commit pending — Semble keeps Claude and Codex instructions
@@ -411,7 +414,11 @@ uses `${config.xdg.cacheHome}/semble`. Any Codex-targeted devenv integration
 defaults `SEMBLE_CACHE_LOCATION` to `${config.devenv.state}/semble-cache`;
 workspace-write mode grants the final environment value so consumer overrides
 stay coherent. The convenience module does not select a sandbox mode, and
-read-only or unrestricted modes get no writable-root contribution.
+read-only or unrestricted modes get no writable-root contribution. Codex's beta
+`default_permissions`/`permissions` model does not compose with those legacy
+sandbox settings. A named permission profile is an explicit security boundary
+and must grant the cache path in its own `filesystem` table; user-global
+integrations must not silently widen every higher-precedence profile.
 
 **Worked example — stacked-workflows skills.** Because an `ai.skills` value set
 in one backend is invisible to the other, the stacked-workflows package

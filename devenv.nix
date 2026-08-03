@@ -99,6 +99,16 @@
     then "${builtins.dirOf devenvRootParent}/${lib.removeSuffix "-worktrees" devenvRootParentName}"
     else devenvRoot;
   worktreesRoot = "${repositoryRoot}-worktrees";
+  userCacheHome = let
+    homeDir = builtins.getEnv "HOME";
+    xdgCacheHome = builtins.getEnv "XDG_CACHE_HOME";
+  in
+    if xdgCacheHome != ""
+    then xdgCacheHome
+    else if homeDir != ""
+    then "${homeDir}/.cache"
+    else throw "devenv requires XDG_CACHE_HOME or HOME to locate the user-global Semble cache";
+  sembleCache = "${userCacheHome}/semble";
 
   # The selected named profile is a launch-time Codex layer, and Codex treats
   # the process cwd as the project unless --cd is explicit. Keep both defaults
@@ -294,6 +304,7 @@ in {
           extends = ":workspace";
           filesystem = {
             "${repositoryRoot}/.git" = "write";
+            "${sembleCache}" = "write";
             ":workspace_roots" = {
               "." = "write";
               ".git" = "write";
@@ -589,6 +600,9 @@ in {
     echo "Validating devenv configuration..."
     test "$(command -v codex)" = "${lib.getExe codexForRepository}" || { echo "FAIL: repo-aware Codex wrapper is not first on PATH"; exit 1; }
     ${lib.getExe codexForRepository} --cd "$PWD" --profile nix-agentic-tools --help >/dev/null 2>&1 || { echo "FAIL: Codex wrapper duplicated explicit launch flags"; exit 1; }
+    nat_profile_path="''${CODEX_HOME:-$HOME/.codex}/nix-agentic-tools.config.toml"
+    test -f "$nat_profile_path" || { echo "FAIL: Codex permission profile was not materialized at $nat_profile_path"; exit 1; }
+    ${pkgs.gnugrep}/bin/grep -Fq ${lib.escapeShellArg "\"${sembleCache}\" = \"write\""} "$nat_profile_path" || { echo "FAIL: Codex permission profile does not grant the user-global Semble cache"; exit 1; }
     nat_expected_resume_argv="$(printf '%s\n' --cd ${lib.escapeShellArg devenvRoot} --profile nix-agentic-tools resume session-id)"
     test "$(${lib.getExe codexForRepositoryArgvProbe} resume session-id)" = "$nat_expected_resume_argv" || { echo "FAIL: Codex wrapper did not apply repo defaults to resume"; exit 1; }
     nat_expected_apply_argv="$(printf '%s\n' --cd ${lib.escapeShellArg devenvRoot} --profile nix-agentic-tools apply task-id)"
