@@ -91,11 +91,13 @@ _: let
 
   # ── Dev tool descriptions ────────────────────────────────────────────
   devToolDescriptions = {
+    gh = "GitHub CLI";
+    glab = "GitLab CLI";
     oxlint = "Fast JS/TS linter with type-aware (tsgo) linting and JS plugins";
     tsgolint = "Type-aware linting backend for oxlint (typescript-go)";
   };
 
-  # ── Generic (non-agentic) package descriptions ───────────────────────
+  # ── Generic supporting package descriptions ─────────────────────────
   genericDescriptions = {
     arkenfox = "Hardened Firefox user.js preference set";
     bruno = "Open-source IDE for exploring and testing APIs";
@@ -104,8 +106,6 @@ _: let
     catppuccin-btop = "Catppuccin theme files for btop";
     dns-root-hints = "IANA DNS root name server hints (named.root)";
     fblog = "Command-line JSON log viewer";
-    gh = "GitHub CLI";
-    glab = "GitLab CLI";
     gluetun = "VPN client for multiple providers (Linux only)";
     oh-my-posh = "Prompt theme engine for any shell";
     otel-tui = "Terminal OpenTelemetry viewer";

@@ -6,16 +6,16 @@
 #
 # Aggregates derivations into grouped namespaces:
 #   pkgs.ai.*                — flat AI CLIs and unique tools
-#   pkgs.ai.mcpServers.*     — MCP server packages + proxies
+#   pkgs.ai.devTools.*       — developer tools used by agents
+#   pkgs.ai.generic.*        — temporarily unclassified supporting packages
+#   pkgs.ai.gitTools.*       — git workflow tools
 #   pkgs.ai.lspServers.*     — LSP server proxies
-#   pkgs.devTools.*          — dev tools (linters)
-#   pkgs.generic.*           — packages with nothing agentic about them
-#   pkgs.gitTools.*          — git workflow tools
+#   pkgs.ai.mcpServers.*     — MCP server packages + proxies
 #
-# `generic` is a split-ready subtree (overlays/generic/) for packages
-# that are not agentic-tools-specific and are earmarked for a possible
-# future repo split. Keeping them in one directory + one namespace makes
-# that split a directory move rather than an archaeology exercise.
+# `generic` is a temporary split-ready subtree (overlays/generic/) for
+# supporting packages that have not yet earned a more specific category.
+# Keeping it under `pkgs.ai` preserves one non-shadowing consumer namespace
+# until a later taxonomy and nixpkgs-namespace decision.
 #
 # Each per-package file takes {inputs, final, ...} and manages its
 # own source — fetchFromGitHub with inline hashes for upstream
@@ -172,9 +172,9 @@
   agnixMcp = import ./mcp-servers/agnix-mcp.nix {inherit (flatDrvs) agnix;};
   agnixLsp = import ./lsp-servers/agnix-lsp.nix {inherit (flatDrvs) agnix;};
 
-  # ── Generic (non-agentic) packages ─────────────────────────────────
-  # Split-ready subtree — see the header. Nothing here depends on the
-  # rest of the repo beyond overlays/lib.nix.
+  # ── Generic supporting packages ────────────────────────────────────
+  # Temporary split-ready subtree — see the header. Nothing here depends on
+  # the rest of the repo beyond overlays/lib.nix.
   genericDrvs =
     {
       arkenfox = import ./generic/arkenfox.nix {
@@ -199,15 +199,6 @@
         inherit inputs final;
       };
       fblog = import ./generic/fblog.nix {
-        inherit inputs final;
-      };
-      gh = import ./generic/gh.nix {
-        inherit inputs final;
-      };
-      # Sidecar-pinned like gh, but on the bruno CONTRACT, not gh's:
-      # nixpkgs' fetcher carries a `postFetch`, so neither hash can come
-      # from a prefetch. See the header of ./generic/glab.nix.
-      glab = import ./generic/glab.nix {
         inherit inputs final;
       };
       oh-my-posh = import ./generic/oh-my-posh.nix {
@@ -255,8 +246,17 @@
       inherit inputs final;
     };
   };
-  # ── Dev tools (linters/formatters) ─────────────────────────────────
+  # ── Dev tools ──────────────────────────────────────────────────────
   devToolDrvs = {
+    gh = import ./dev-tools/gh.nix {
+      inherit inputs final;
+    };
+    # Sidecar-pinned like gh, but on the bruno CONTRACT, not gh's:
+    # nixpkgs' fetcher carries a `postFetch`, so neither hash can come
+    # from a prefetch. See the header of ./dev-tools/glab.nix.
+    glab = import ./dev-tools/glab.nix {
+      inherit inputs final;
+    };
     oxlint = import ./dev-tools/oxlint.nix {
       inherit inputs final;
     };
@@ -272,10 +272,10 @@ in {
   ai =
     guard flatDrvs
     // {
-      mcpServers = guard (mcpServerDrvs // {agnix-mcp = agnixMcp;});
+      devTools = guard devToolDrvs;
+      generic = guard genericDrvs;
+      gitTools = guard gitToolDrvs;
       lspServers = guard {agnix-lsp = agnixLsp;};
+      mcpServers = guard (mcpServerDrvs // {agnix-mcp = agnixMcp;});
     };
-  devTools = guard devToolDrvs;
-  generic = guard genericDrvs;
-  gitTools = guard gitToolDrvs;
 }

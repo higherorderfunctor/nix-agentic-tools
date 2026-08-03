@@ -14,7 +14,7 @@
 #      see flake.nix) with `self.overlays.default` applied.
 #      This simulates what a consumer with a different
 #      nixpkgs gets.
-#   C) `followedPkgs.generic.fblog` — built with the overlay's
+#   C) `followedPkgs.ai.generic.fblog` — built with the overlay's
 #      `inputs.nixpkgs` substituted by `inputs.nixpkgs-test`.
 #      This simulates a consumer setting `inputs.nixpkgs.follows`
 #      and must differ from A, proving that configuration defeats
@@ -26,7 +26,7 @@
 # for any package, that package will cache-miss for consumers.
 #
 # Mapping: flake.nix flattens the grouped overlay namespaces
-# (pkgs.ai, pkgs.ai.mcpServers, pkgs.ai.lspServers, pkgs.gitTools)
+# (all rooted under pkgs.ai)
 # into top-level `self.packages.${system}.*` for CLI ergonomics.
 # The consumer side keeps the grouped shape, so each package has
 # a known source namespace we compare against.
@@ -89,7 +89,7 @@
   followsControl = {
     name = "fblog";
     standalone = realOutPath self.packages.${system}.fblog;
-    followed = realOutPath followedPkgs.generic.fblog;
+    followed = realOutPath followedPkgs.ai.generic.fblog;
   };
   followsDrifts = followsControl.standalone != followsControl.followed;
 

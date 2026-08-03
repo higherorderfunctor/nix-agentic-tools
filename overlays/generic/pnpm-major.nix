@@ -1,4 +1,4 @@
-# pnpm — shared builder for the majored `pkgs.generic.pnpm_<N>`
+# pnpm — shared builder for the majored `pkgs.ai.generic.pnpm_<N>`
 # attributes. Called once per major from the thin `pnpm_10.nix` /
 # `pnpm_11.nix` files, which exist so each major keeps its own path for
 # `--override-filename` in config/update-targets.nix and its own sidecar
@@ -9,8 +9,8 @@
 # `version`, `src` and `passthru.updateScript` move, so every build
 # input, phase and hook stays whatever nixpkgs ships.
 #
-# NAMESPACED ONLY. This writes `pkgs.generic.pnpm_10` /
-# `pkgs.generic.pnpm_11` and never a top-level `pkgs.pnpm_10`. The bare
+# NAMESPACED ONLY. This writes `pkgs.ai.generic.pnpm_10` /
+# `pkgs.ai.generic.pnpm_11` and never a top-level `pkgs.pnpm_10`. The bare
 # nixpkgs attributes stay untouched — overlays/dev-tools/oxlint.nix
 # reads `ourPkgs.pnpm_10` out of a fresh `import inputs.nixpkgs` that
 # does not have this overlay applied, and every consumer of the overlay

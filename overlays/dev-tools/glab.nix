@@ -2,7 +2,7 @@
 # Our pin sits at 1.110.0; the nixpkgs pin ships 1.86.0.
 #
 # NOT THE `gh` SHAPE, despite being the sibling tool and also a Go
-# package. `overlays/generic/gh.nix` lets `mkUpdateScript` prefetch its
+# package. `overlays/dev-tools/gh.nix` lets `mkUpdateScript` prefetch its
 # src hash, which is only correct when `src` is a plain fetch of a URL.
 # nixpkgs' glab fetches with `leaveDotGit = true` and a `postFetch` that
 # records the short commit into `COMMIT` and then strips `.git`, so the
@@ -29,7 +29,7 @@
 # consumes `npmDepsHash` from the INCOMING args, which makes an
 # `overrideAttrs`-injected hash inert. `buildGoModule` reads `vendorHash`
 # and `src` off `finalAttrs`, so composing on the output is correct here.
-# `overlays/generic/gh.nix` is the standing proof for a Go package.
+# `overlays/dev-tools/gh.nix` is the standing proof for a Go package.
 #
 # No Go toolchain override. nixpkgs owns this derivation's builder and
 # ships a `go` that satisfies gitlab-org/cli's go.mod. If a future
@@ -64,7 +64,7 @@
   # Bound once: passed to BOTH the hash fixer and the update script, and
   # the default (`overlays/<pname>-sources.json`) is wrong for a grouped
   # subtree.
-  sourcesFile = "overlays/generic/glab-sources.json";
+  sourcesFile = "overlays/dev-tools/glab-sources.json";
 
   fixHashes = vu.mkGoSrcVendorFix {
     attr = "glab";
@@ -109,7 +109,7 @@
             ${fixHashes}
             ${vu.mkExtractRegen {
               attr = "glab";
-              dest = "overlays/generic/glab-extracted.json";
+              dest = "overlays/dev-tools/glab-extracted.json";
               pkgs = ourPkgs;
             }}
           '';

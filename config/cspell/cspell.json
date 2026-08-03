@@ -18,7 +18,7 @@
     "fixtures/kiro-primitives/evidence/**",
     "fixtures/kiro-primitives/records/**",
     "overlays/chatgpt-codex-extracted.json",
-    "overlays/generic/glab-extracted.json",
+    "overlays/dev-tools/glab-extracted.json",
     "overlays/sources",
     "result"
   ],

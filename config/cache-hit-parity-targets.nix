@@ -36,42 +36,42 @@ _: {
     kiro-memory-distiller = {consumerPath = ["ai" "kiro-memory-distiller"];};
     semble = {consumerPath = ["ai" "semble"];};
 
-    # ── Git tools — live at `consumerPkgs.gitTools.<name>` ──
-    git-absorb = {consumerPath = ["gitTools" "git-absorb"];};
-    git-branchless = {consumerPath = ["gitTools" "git-branchless"];};
-    git-revise = {consumerPath = ["gitTools" "git-revise"];};
+    # ── Git tools — live at `consumerPkgs.ai.gitTools.<name>` ──
+    git-absorb = {consumerPath = ["ai" "gitTools" "git-absorb"];};
+    git-branchless = {consumerPath = ["ai" "gitTools" "git-branchless"];};
+    git-revise = {consumerPath = ["ai" "gitTools" "git-revise"];};
 
-    # ── Dev tools (linters) — live at `consumerPkgs.devTools.<name>` ──
-    oxlint = {consumerPath = ["devTools" "oxlint"];};
-    tsgolint = {consumerPath = ["devTools" "tsgolint"];};
+    # ── Dev tools — live at `consumerPkgs.ai.devTools.<name>` ──
+    gh = {consumerPath = ["ai" "devTools" "gh"];};
+    glab = {consumerPath = ["ai" "devTools" "glab"];};
+    oxlint = {consumerPath = ["ai" "devTools" "oxlint"];};
+    tsgolint = {consumerPath = ["ai" "devTools" "tsgolint"];};
 
-    # ── Generic (non-agentic) — live at `consumerPkgs.generic.<name>` ──
+    # ── Generic supporting packages — live at `consumerPkgs.ai.generic.<name>` ──
     # Some of these ship files rather than binaries, but none are the
     # content-only class excluded in the header: each one runs a fetcher
     # and an stdenv derivation, so both are build inputs and both can
     # drift onto the consumer's pin. They belong here.
-    arkenfox = {consumerPath = ["generic" "arkenfox"];};
-    bruno = {consumerPath = ["generic" "bruno"];};
-    btop = {consumerPath = ["generic" "btop"];};
-    bun = {consumerPath = ["generic" "bun"];};
-    catppuccin-btop = {consumerPath = ["generic" "catppuccin-btop"];};
-    dns-root-hints = {consumerPath = ["generic" "dns-root-hints"];};
-    fblog = {consumerPath = ["generic" "fblog"];};
-    gh = {consumerPath = ["generic" "gh"];};
-    glab = {consumerPath = ["generic" "glab"];};
+    arkenfox = {consumerPath = ["ai" "generic" "arkenfox"];};
+    bruno = {consumerPath = ["ai" "generic" "bruno"];};
+    btop = {consumerPath = ["ai" "generic" "btop"];};
+    bun = {consumerPath = ["ai" "generic" "bun"];};
+    catppuccin-btop = {consumerPath = ["ai" "generic" "catppuccin-btop"];};
+    dns-root-hints = {consumerPath = ["ai" "generic" "dns-root-hints"];};
+    fblog = {consumerPath = ["ai" "generic" "fblog"];};
     # The one platform-gated row. gluetun's `internal/routing` uses
     # Linux-only x/sys/unix constants, so overlays/default.nix omits the
     # ATTRIBUTE on non-Linux rather than only restricting meta.platforms —
     # and this row has to say the same thing, or the check aborts on
     # aarch64-darwin looking up a package that is not there.
     gluetun = {
-      consumerPath = ["generic" "gluetun"];
+      consumerPath = ["ai" "generic" "gluetun"];
       platforms = ["x86_64-linux"];
     };
-    oh-my-posh = {consumerPath = ["generic" "oh-my-posh"];};
-    otel-tui = {consumerPath = ["generic" "otel-tui"];};
-    pnpm_10 = {consumerPath = ["generic" "pnpm_10"];};
-    pnpm_11 = {consumerPath = ["generic" "pnpm_11"];};
+    oh-my-posh = {consumerPath = ["ai" "generic" "oh-my-posh"];};
+    otel-tui = {consumerPath = ["ai" "generic" "otel-tui"];};
+    pnpm_10 = {consumerPath = ["ai" "generic" "pnpm_10"];};
+    pnpm_11 = {consumerPath = ["ai" "generic" "pnpm_11"];};
 
     # ── agnix + its mainProgram-override siblings ──
     # agnix itself is a flatDrvs entry at `consumerPkgs.ai.agnix`; the

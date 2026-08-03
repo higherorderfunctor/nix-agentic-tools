@@ -1,9 +1,10 @@
 ## Unfree Package Guard (`ensureUnfreeCheck`)
 
-> **Last verified:** 2026-04-13 (commit pending). If you touch
-> `overlays/default.nix`, add a new unfree package to any overlay, or change how
-> `guard` is applied to output attrsets and this fragment isn't updated in the
-> same commit, stop and fix it.
+> **Last verified:** 2026-08-03 (commit pending — nests every guarded binary
+> group under `pkgs.ai` while preserving one universal output-boundary guard).
+> Prior: 2026-04-13 (commit pending). If you touch `overlays/default.nix`, add a
+> new unfree package to any overlay, or change how `guard` is applied to output
+> attrsets and this fragment isn't updated in the same commit, stop and fix it.
 
 ### The problem
 
@@ -44,10 +45,12 @@ Applied universally at the output level:
 
 ```nix
 { ai = guard flatDrvs // {
-    mcpServers = guard (mcpServerDrvs // {agnix-mcp = agnixMcp;});
+    devTools = guard devToolDrvs;
+    generic = guard genericDrvs;
+    gitTools = guard gitToolDrvs;
     lspServers = guard {agnix-lsp = agnixLsp;};
+    mcpServers = guard (mcpServerDrvs // {agnix-mcp = agnixMcp;});
   };
-  gitTools = guard gitToolDrvs;
 }
 ```
 

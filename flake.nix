@@ -277,8 +277,7 @@
         inherit (inputs) treefmt-nix;
       };
     in
-      # Grouped namespaces (pkgs.ai.mcpServers.*, pkgs.ai.lspServers.*,
-      # pkgs.gitTools.*) are flattened here for CLI ergonomics so
+      # Grouped namespaces under pkgs.ai are flattened here for CLI ergonomics so
       # `nix build .#context7-mcp` works without knowing the group.
       # Adding a new package to the overlay automatically adds it
       # here; no flake.nix edit needed for new binaries.
@@ -289,12 +288,12 @@
       # - github-copilot-cli renamed to copilot-cli in Milestone 4
       # - pkgs.ai.* grouped into mcpServers/lspServers/gitTools (factory arch)
       # Flat AI CLIs (strip nested groups which aren't derivations)
-      builtins.removeAttrs pkgs.ai ["mcpServers" "lspServers"]
+      builtins.removeAttrs pkgs.ai ["devTools" "generic" "gitTools" "lspServers" "mcpServers"]
+      // pkgs.ai.devTools
+      // pkgs.ai.generic
+      // pkgs.ai.gitTools
       // builtins.removeAttrs pkgs.ai.mcpServers ["modelContextProtocol"]
       // pkgs.ai.lspServers
-      // pkgs.devTools
-      // pkgs.generic
-      // pkgs.gitTools
       // {
         # mono-repo combined package (nix-update target)
         modelcontextprotocol-all-mcps = pkgs.ai.mcpServers.modelContextProtocol.all-mcps;

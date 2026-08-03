@@ -1,6 +1,8 @@
 # CI-lean closure taxonomy
 
-> **Last verified:** 2026-08-02 (commit pending — the repo's beta Codex
+> **Last verified:** 2026-08-03 (commit pending — updates the consumer-export
+> taxonomy after dev tools move beneath `pkgs.ai.devTools`; shell membership is
+> unchanged). Prior: 2026-08-02 (commit pending — the repo's beta Codex
 > permission profile explicitly grants the user-global Semble cache because beta
 > profiles do not compose with the legacy user sandbox table). Prior: 2026-08-02
 > (commit pending — the repo-aware Codex wrapper now distinguishes runtime
@@ -26,7 +28,7 @@ download cost on every cold run** and feeds the `cache-nix-action` cache size.
 | Gate dependencies        | generation pipeline, coreutils-class tools, `check-jsonschema`, `cspell`… | YES — unconditional `packages`                                                                                                                         | the gate runs materialize tasks + enterTest; these feed them                                                          |
 | Interactive-only dev UX  | LSPs (`nixd`→llvm, `marksman`→dotnet, `taplo`), git-hooks suite           | NO — `lib.optionals (!isCI)` / `lib.optionalAttrs (!isCI)`                                                                                             | humans use them; CI never invokes them                                                                                |
 | Factory CLI wrappers     | kiro-cli-wrapped (~693 MB), copilot-cli (~219 MB)                         | YES (currently) — ride in via `mkKiro`/`mkCopilot` whenever `ai.*` modules are enabled, and enterTest needs the modules enabled for their files fanout | gating the PACKAGE needs a factory-level option (HM-parity implications) — open decision, deliberately not improvised |
-| Consumer overlay exports | `pkgs.devTools.*` (oxlint, tsgolint), MCP server packages                 | NEVER in the shell                                                                                                                                     | they are shipped artifacts: built by the CI `build` matrix (`.#packages`) and `cache-hit-parity`, not shell members   |
+| Consumer overlay exports | `pkgs.ai.devTools.*`, MCP server packages                                 | NEVER in the shell                                                                                                                                     | they are shipped artifacts: built by the CI `build` matrix (`.#packages`) and `cache-hit-parity`, not shell members   |
 
 ## The decision rule
 

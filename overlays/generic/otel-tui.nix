@@ -1,5 +1,5 @@
 # otel-tui — the terminal OpenTelemetry viewer, re-pinned onto this
-# repo's update cadence. Same shape as generic/gh.nix: a thin
+# repo's update cadence. Same shape as dev-tools/gh.nix: a thin
 # `overrideAttrs` over nixpkgs' own `buildGoModule` derivation moving only
 # `version`, `src`, `vendorHash` and `passthru`.
 #
@@ -15,7 +15,7 @@
 # around. Do not "restore" the prebuilt-binary shape.
 #
 # vendorHash lives in the SIDECAR for the reason spelled out in
-# generic/gh.nix: `mkUpdateScript` rebuilds the sidecar from scratch on
+# dev-tools/gh.nix: `mkUpdateScript` rebuilds the sidecar from scratch on
 # every write, so `vu.mkGoVendorFix` runs as `extraExtract` right after
 # and the read is `sources.vendorHash or fakeHash` to cover the window
 # between the two.

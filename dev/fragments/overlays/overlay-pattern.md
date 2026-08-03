@@ -1,14 +1,17 @@
-## Overlay Grouping and the `generic` Subtree
+## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-08-03 (commit pending — makes overlay-owned local
-> implementation sources a boundary invariant and relocates the auto-memory
-> helper and distiller sources accordingly). Prior: 2026-08-02 (commit pending —
-> adds Semble's direct external-flake derivation pattern and identity-preserving
-> MCP role). Prior: 2026-08-01 (commit pending — records that `glab`'s
-> `extraExtract` also regenerates its `passthru.extracted` sidecar, via the new
-> shared `vu.mkExtractRegen`, and that glab is the one extracted package where
-> the fixer-then-extract ORDER is forced. It had NO regeneration at all until
-> now, which nothing caught until its first version bump reddened
+> **Last verified:** 2026-08-03 (commit pending — makes `pkgs.ai` the single
+> binary-package namespace, retains `generic` as a temporary nested bucket, and
+> moves the two forge CLIs into `ai.devTools`). Prior: 2026-08-03 (commit
+> pending — makes overlay-owned local implementation sources a boundary
+> invariant and relocates the auto-memory helper and distiller sources
+> accordingly). Prior: 2026-08-02 (commit pending — adds Semble's direct
+> external-flake derivation pattern and identity-preserving MCP role). Prior:
+> 2026-08-01 (commit pending — records that `glab`'s `extraExtract` also
+> regenerates its `passthru.extracted` sidecar, via the new shared
+> `vu.mkExtractRegen`, and that glab is the one extracted package where the
+> fixer-then-extract ORDER is forced. It had NO regeneration at all until now,
+> which nothing caught until its first version bump reddened
 > `checks.<system>.glab-extracted` on PR #621). Prior: 2026-07-28 — the commit
 > adding THAT line lands `glab`: the first Go package whose SRC hash also lives
 > in the sidecar (`vu.mkGoSrcVendorFix`), the first GitLab-hosted version check
@@ -37,23 +40,28 @@
 > between namespaces, or change how a `generic` package relates to its nixpkgs
 > original, and this section isn't updated in the same commit, stop and fix it.
 
-`overlays/default.nix` aggregates per-package files into grouped namespaces:
-`pkgs.ai.*` (plus its `mcpServers` / `lspServers` sub-groups),
-`pkgs.devTools.*`, `pkgs.generic.*`, and `pkgs.gitTools.*`. Every group is built
-the same way — an attrset of `import ./<dir>/<name>.nix {inherit inputs final;}`
-entries, passed through `guard` (the unfree wrapper) in the output set, and
-flattened into `packages.<system>` in `flake.nix` for CLI ergonomics — so a new
-group is one attrset, one output line, and one flatten line.
+`overlays/default.nix` aggregates every binary package under the single
+`pkgs.ai` namespace. Flat AI CLIs live directly below it; supporting categories
+are `devTools`, `generic`, `gitTools`, `lspServers`, and `mcpServers`. Every
+group is built the same way — an attrset of
+`import ./<dir>/<name>.nix {inherit inputs final;}` entries, passed through
+`guard` (the unfree wrapper) in the output set, and flattened into
+`packages.<system>` in `flake.nix` for CLI ergonomics. The overlay never writes
+a bare `pkgs.<name>` attribute.
 
-`generic` is the group defined by what it is NOT: packages with nothing agentic
-about them, living in `overlays/generic/` and earmarked for a possible future
-repo split. The grouping exists so that split is a directory move rather than an
-archaeology exercise, which means the subtree must not acquire dependencies on
-the rest of the repo beyond `overlays/lib.nix`. Judge membership by whether the
-package would make sense in a repo called "agentic tools" — a hardened Firefox
-preference set, a btop theme, the DNS root hints, a resource monitor, a JS
-runtime, a JS package manager, a JSON log viewer, the GitHub CLI, a VPN client,
-a shell prompt engine and an OpenTelemetry viewer do not.
+Keeping every group below `pkgs.ai` is deliberate while this repository is the
+only consumer. Whether selected packages should eventually merge into the plain
+nixpkgs namespace is a later policy decision, not something individual package
+moves decide implicitly.
+
+`generic` is a temporary category for supporting packages that have not yet
+earned a clearer role. It is not a claim that they belong in a permanent
+"non-agentic" product namespace. The physical `overlays/generic/` subtree stays
+split-ready: it must not acquire dependencies on the rest of the repo beyond
+`overlays/lib.nix`, so it can be regrouped or extracted without archaeology.
+Obvious classifications should move out incrementally; `gh` and `glab` are the
+worked example, living together under `overlays/dev-tools/` and
+`pkgs.ai.devTools`.
 
 Repo-local implementation sources consumed by an overlay derivation belong
 beside that derivation under `overlays/`, even when a package module is their
@@ -92,7 +100,7 @@ shipping data files is NOT the same as being content-only), each package gets a
 
 ### Thin overrides of a nixpkgs package
 
-Most `generic` entries (`btop`, `bun`, `fblog`, `gh`, `glab`, `oh-my-posh`,
+Most supporting entries (`btop`, `bun`, `fblog`, `gh`, `glab`, `oh-my-posh`,
 `otel-tui`, `pnpm_10`, `pnpm_11`) are not fresh derivations but
 `ourPkgs.<name>.overrideAttrs` over the nixpkgs one, moving only `version`,
 `src`, `passthru.updateScript` and — for the Go ones — `vendorHash`. `gluetun`
@@ -105,7 +113,7 @@ contract, because that contract is about where the hash comes from, not about
 which override seam is correct. Two rules that are not obvious from reading such
 a file:
 
-- **Namespaced-only.** The overlay writes `pkgs.generic.<name>` and NEVER a
+- **Namespaced-only.** The overlay writes `pkgs.ai.<group>.<name>` and NEVER a
   top-level `pkgs.<name>`. Shadowing a nixpkgs attribute would turn this from an
   additive overlay into one that silently re-points every unrelated consumer of
   that package; the additive contract is what lets consumers apply the overlay
@@ -119,7 +127,7 @@ a file:
   diverge the moment upstream moves. Do not "clean up" such a package on parity
   grounds.
 
-Measured for `pnpm_10` at landing: `pkgs.generic.pnpm_10` and plain
+Measured for `pnpm_10` at landing: `pkgs.ai.generic.pnpm_10` and plain
 `pkgs.pnpm_10` share both `drvPath` and `outPath` (`…-pnpm-10.34.5.drv` /
 `…-pnpm-10.34.5`), and `nix build .#pnpm_10` substitutes straight from
 `cache.nixos.org`. That is the parity rule above working exactly as designed,
@@ -262,8 +270,9 @@ build.
 
 ### Carrying several majors of one package
 
-`pnpm` is carried at two majors (`pkgs.generic.pnpm_10`, `pkgs.generic.pnpm_11`)
-and the shape generalizes to any versioned attribute family:
+`pnpm` is carried at two majors (`pkgs.ai.generic.pnpm_10`,
+`pkgs.ai.generic.pnpm_11`) and the shape generalizes to any versioned attribute
+family:
 
 - One shared builder (`overlays/generic/pnpm-major.nix`) takes the major as an
   argument; the per-major files are two-line delegations. They exist because
@@ -467,8 +476,7 @@ codingStandardsOverlay = import ./packages/coding-standards {};
 stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
 
 overlays.default = lib.composeManyExtensions [
-  aiOverlay                 # 27+ packages: pkgs.ai.*, pkgs.devTools.*,
-                            # pkgs.generic.*, pkgs.gitTools.*
+  aiOverlay                 # every binary-package group under pkgs.ai.*
   codingStandardsOverlay    # content package
   stackedWorkflowsOverlay   # content package
 ];

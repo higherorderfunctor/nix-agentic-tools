@@ -146,8 +146,8 @@ _: {
     copilot-cli = {flags = ["--use-update-script" "--override-filename" "overlays/copilot-cli.nix"];};
     dns-root-hints = {flags = ["--use-update-script" "--override-filename" "overlays/generic/dns-root-hints.nix"];};
     fblog = {flags = ["--use-update-script" "--override-filename" "overlays/generic/fblog.nix"];};
-    gh = {flags = ["--use-update-script" "--override-filename" "overlays/generic/gh.nix"];};
-    glab = {flags = ["--use-update-script" "--override-filename" "overlays/generic/glab.nix"];};
+    gh = {flags = ["--use-update-script" "--override-filename" "overlays/dev-tools/gh.nix"];};
+    glab = {flags = ["--use-update-script" "--override-filename" "overlays/dev-tools/glab.nix"];};
     gluetun = {flags = ["--use-update-script" "--override-filename" "overlays/generic/gluetun.nix"];};
     kimchi = {flags = ["--use-update-script" "--override-filename" "overlays/kimchi.nix"];};
     kiro-cli = {flags = ["--use-update-script" "--override-filename" "overlays/kiro-cli.nix"];};

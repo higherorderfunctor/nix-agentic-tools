@@ -28,7 +28,7 @@
 # generic/gluetun.nix and generic/oh-my-posh.nix already carry.
 #
 # EXPECTED: while our pin and nixpkgs' pin name the same version,
-# `pkgs.generic.gh` resolves to the SAME store path as plain `pkgs.gh`. A
+# `pkgs.ai.devTools.gh` resolves to the SAME store path as plain `pkgs.gh`. A
 # fixed-output derivation's path follows its hash, not its fetcher, and
 # our `fetchzip` of the repo-archive tarball hashes the same unpacked NAR
 # `fetchFromGitHub` does. That is not a bug and not a reason to delete the
@@ -61,7 +61,7 @@
   # Bound once: passed to BOTH the vendor fixer and the update script, and
   # the default (`overlays/<pname>-sources.json`) is wrong for a grouped
   # subtree.
-  sourcesFile = "overlays/generic/gh-sources.json";
+  sourcesFile = "overlays/dev-tools/gh-sources.json";
 
   fixVendorHash = vu.mkGoVendorFix {
     attr = "gh";

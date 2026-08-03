@@ -180,9 +180,13 @@ nix build .#git-absorb
 <details>
 <summary><strong>Dev Tools</strong></summary>
 
+Agent-adjacent development utilities exposed as `pkgs.ai.devTools.*`.
+
 <!-- prettier-ignore -->
 | Package | Description |
 |---------|-------------|
+| `gh` | GitHub CLI |
+| `glab` | GitLab CLI |
 | `oxlint` | Fast JS/TS linter with type-aware (tsgo) linting and JS plugins |
 | `tsgolint` | Type-aware linting backend for oxlint (typescript-go) |
 
@@ -195,8 +199,8 @@ nix build .#oxlint
 <details>
 <summary><strong>Generic Packages</strong></summary>
 
-Nothing agentic about these — they live in a split-ready `overlays/generic/`
-subtree and are exposed as `pkgs.generic.*`.
+Temporarily unclassified supporting packages live in the split-ready
+`overlays/generic/` subtree and are exposed as `pkgs.ai.generic.*`.
 
 <!-- prettier-ignore -->
 | Package | Description |
@@ -208,8 +212,6 @@ subtree and are exposed as `pkgs.generic.*`.
 | `catppuccin-btop` | Catppuccin theme files for btop |
 | `dns-root-hints` | IANA DNS root name server hints (named.root) |
 | `fblog` | Command-line JSON log viewer |
-| `gh` | GitHub CLI |
-| `glab` | GitLab CLI |
 | `gluetun` | VPN client for multiple providers (Linux only) |
 | `oh-my-posh` | Prompt theme engine for any shell |
 | `otel-tui` | Terminal OpenTelemetry viewer |

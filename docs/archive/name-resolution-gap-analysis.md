@@ -125,7 +125,7 @@ gitToolDrvs = { … };
 ```
 
 **What it does:** the unified overlay that composes 25+ package files into
-grouped namespaces (`pkgs.ai.*`, `pkgs.ai.mcpServers.*`, `pkgs.gitTools.*`).
+grouped namespaces (now all nested below `pkgs.ai.*`).
 
 **Bug surface:** none active. Adding a package means adding a line here.
 Hand-maintained list is symmetric with the file system.
@@ -266,7 +266,7 @@ but the LIST itself is a drift source.
 ```nix
 // builtins.removeAttrs pkgs.ai.mcpServers ["modelContextProtocol"]
 // pkgs.ai.lspServers
-// pkgs.gitTools
+// pkgs.ai.gitTools
 // {
   modelcontextprotocol-all-mcps = pkgs.ai.mcpServers.modelContextProtocol.all-mcps;
   …

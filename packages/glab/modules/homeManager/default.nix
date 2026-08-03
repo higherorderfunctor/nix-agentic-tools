@@ -17,7 +17,7 @@ in {
   imports = [(import ../options.nix {inherit lib;})];
 
   config = lib.mkIf cfg.enable {
-    glab.package = lib.mkDefault pkgs.generic.glab;
+    glab.package = lib.mkDefault pkgs.ai.devTools.glab;
 
     home.packages = [
       (import ../../lib/mkGlab.nix {inherit lib pkgs cfg;})

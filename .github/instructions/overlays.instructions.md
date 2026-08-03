@@ -7,21 +7,24 @@ applyTo: "overlays/*.nix,overlays/**/*.nix"
 
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-08-03 (commit pending — relocates the two repo-local
-> auto-memory source trees beside their overlay derivations without changing
-> package inputs or cache-hit semantics). Prior: 2026-08-03 (commit pending —
-> adds a positive control that substitutes the overlay's own `inputs.nixpkgs`
-> the way a consumer's `follows` directive does, proving that unsupported
-> configuration drifts from the cache-published `fblog` path). Prior: 2026-08-02
-> (commit pending — adds the pinned external Semble exception: direct upstream
-> selection preserves Numtide's derivation, while a plain meta overlay exposes
-> the MCP role without forking the build). Prior: 2026-07-25 (commit pending —
-> the worked example moved off `git-branchless`, which had not carried this
-> shape for a long time, onto `git-absorb`, which does; also corrects the
-> new-package signature, the namespacing in the manual verification snippet, and
-> the pure-binary-fetch package list). If you touch any `overlays/<name>.nix`
-> overlay file or the overlay composition machinery and this fragment isn't
-> updated in the same commit, stop and fix it. Regressions are gated by the
+> **Last verified:** 2026-08-03 (commit pending — nests every binary-package
+> group under `pkgs.ai`, moves `gh` and `glab` into `ai.devTools`, and updates
+> the consumer-path registry without changing any derivation). Prior: 2026-08-03
+> (commit pending — relocates the two repo-local auto-memory source trees beside
+> their overlay derivations without changing package inputs or cache-hit
+> semantics). Prior: 2026-08-03 (commit pending — adds a positive control that
+> substitutes the overlay's own `inputs.nixpkgs` the way a consumer's `follows`
+> directive does, proving that unsupported configuration drifts from the
+> cache-published `fblog` path). Prior: 2026-08-02 (commit pending — adds the
+> pinned external Semble exception: direct upstream selection preserves
+> Numtide's derivation, while a plain meta overlay exposes the MCP role without
+> forking the build). Prior: 2026-07-25 (commit pending — the worked example
+> moved off `git-branchless`, which had not carried this shape for a long time,
+> onto `git-absorb`, which does; also corrects the new-package signature, the
+> namespacing in the manual verification snippet, and the pure-binary-fetch
+> package list). If you touch any `overlays/<name>.nix` overlay file or the
+> overlay composition machinery and this fragment isn't updated in the same
+> commit, stop and fix it. Regressions are gated by the
 > `checks.cache-hit-parity` flake check (see "Verification" below).
 
 ### The rule
@@ -194,8 +197,8 @@ Manual (legacy, for ad-hoc debugging):
 
 The two sides are spelled differently on purpose. `flake.nix` flattens every
 package into `packages.<system>` for CLI ergonomics, so the standalone side is
-`.#git-absorb`. The overlay itself is namespaced-only (`pkgs.gitTools.*`,
-`pkgs.generic.*`, …) and never writes a top-level attribute, so the consumer
+`.#git-absorb`. The overlay itself is namespaced-only (`pkgs.ai.gitTools.*`,
+`pkgs.ai.generic.*`, …) and never writes a top-level attribute, so the consumer
 side MUST use the namespaced path — a bare `pkgs.git-absorb` there silently
 resolves to plain nixpkgs' package and reports drift that is not real.
 
@@ -214,7 +217,7 @@ CONSUMER=$(nix eval --raw --impure --expr '
       overlays = [ flake.inputs.nix-agentic-tools.overlays.default ];
       config.allowUnfree = true;
     };
-  in pkgs.gitTools.git-absorb.outPath')
+  in pkgs.ai.gitTools.git-absorb.outPath')
 
 # 3. MUST be identical
 [ "$STANDALONE" = "$CONSUMER" ] && echo "OK" || echo "DRIFT"
@@ -248,7 +251,7 @@ which nixpkgs evaluates them. Skip the ourPkgs pattern for these.
 
 "Content-only" means **no build inputs at all**. It does NOT mean "ships data
 files rather than binaries" — a distinction worth being precise about, because
-the `pkgs.generic.*` packages (arkenfox, catppuccin-btop, dns-root-hints)
+the `pkgs.ai.generic.*` packages (arkenfox, catppuccin-btop, dns-root-hints)
 install nothing but data files and still need the full pattern: each runs a
 fetcher (`fetchzip` / `fetchurl`) inside an stdenv derivation, and both of those
 bind to whichever pkgs set supplies them. They are registered in
@@ -283,28 +286,30 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-08-02 (commit pending — distinguishes Codex's new
-> human-reviewed reverse-coverage gate from generated-sidecar drift and shape
-> checks: update automation may refresh extracted facts but cannot classify a
-> new command, flag, field, maturity, or config seam). Prior: 2026-08-01 (commit
-> pending — documents the sidecar SELF-HEAL loop as a loop: which half is the
-> self-heal and which the backstop, that a red drift check reports a MECHANISM
-> failure rather than a stale file, that it fires on the version-bump path ONLY
-> so an edited extractor does not self-heal, how it differs from the
-> `fix_sidecar_hashes` self-heal, and four debugging entry points. Names `glab`
-> as the fourth extracted package and records that all four now share
-> `vu.mkExtractRegen`; glab had no regeneration at all and proved the latency on
-> PR #621). Prior: 2026-08-01 (Codex joins the extracted sidecar pipeline with
-> recursive Clap help, feature-list, and bundled-model probes plus
-> category-specific shape assertions). Prior: 2026-07-25 (the warm composite now
-> forces `drvPath` instead of `version`, so sidecar-versioned packages are
-> covered; also corrects the claim that the check job's `nix flake check`
-> evaluates ALL systems, which it does not, and the devenv-test job moved to its
-> own workflow). If you touch `overlays/lib.nix`, any overlay `.nix` file that
-> calls `vu.mkVersion`, the shared `.github/actions/warm-ifd/action.yml`
-> composite, or the warm steps that consume it in `.github/workflows/ci.yml` /
-> `.github/workflows/update.yml`, and this fragment isn't updated in the same
-> commit, stop and fix it.
+> **Last verified:** 2026-08-03 (commit pending — moves glab and its committed
+> extracted sidecar together from `overlays/generic/` to `overlays/dev-tools/`,
+> preserving the eval-pure read and regeneration loop). Prior: 2026-08-02
+> (commit pending — distinguishes Codex's new human-reviewed reverse-coverage
+> gate from generated-sidecar drift and shape checks: update automation may
+> refresh extracted facts but cannot classify a new command, flag, field,
+> maturity, or config seam). Prior: 2026-08-01 (commit pending — documents the
+> sidecar SELF-HEAL loop as a loop: which half is the self-heal and which the
+> backstop, that a red drift check reports a MECHANISM failure rather than a
+> stale file, that it fires on the version-bump path ONLY so an edited extractor
+> does not self-heal, how it differs from the `fix_sidecar_hashes` self-heal,
+> and four debugging entry points. Names `glab` as the fourth extracted package
+> and records that all four now share `vu.mkExtractRegen`; glab had no
+> regeneration at all and proved the latency on PR #621). Prior: 2026-08-01
+> (Codex joins the extracted sidecar pipeline with recursive Clap help,
+> feature-list, and bundled-model probes plus category-specific shape
+> assertions). Prior: 2026-07-25 (the warm composite now forces `drvPath`
+> instead of `version`, so sidecar-versioned packages are covered; also corrects
+> the claim that the check job's `nix flake check` evaluates ALL systems, which
+> it does not, and the devenv-test job moved to its own workflow). If you touch
+> `overlays/lib.nix`, any overlay `.nix` file that calls `vu.mkVersion`, the
+> shared `.github/actions/warm-ifd/action.yml` composite, or the warm steps that
+> consume it in `.github/workflows/ci.yml` / `.github/workflows/update.yml`, and
+> this fragment isn't updated in the same commit, stop and fix it.
 
 ### What is IFD in this repo
 
@@ -446,10 +451,10 @@ probe a packaged binary at BUILD time (`passthru.extracted`) and emit a JSON
 sidecar that is COMMITTED (`overlays/<pkg>-extracted.json`). `glab` is the
 fourth such package and the odd one out: its extract is a Go program compiled
 against upstream's own `internal/config.KeySchema` rather than a binary grep,
-and it lives inline in `overlays/generic/glab.nix`. Modules `builtins.readFile`
-the committed file, never the derivation, so option surfaces derived from a
-binary cost no IFD. `checks/<pkg>-extracted.nix` then compares committed against
-freshly-built to catch a stale sidecar.
+and it lives inline in `overlays/dev-tools/glab.nix`. Modules
+`builtins.readFile` the committed file, never the derivation, so option surfaces
+derived from a binary cost no IFD. `checks/<pkg>-extracted.nix` then compares
+committed against freshly-built to catch a stale sidecar.
 
 #### The sidecar SELF-HEAL loop, and how to debug it when it does not fire
 
@@ -571,17 +576,20 @@ feature maturities, and config-key extraction fail closed.
 
 <!-- Fragment: dev/fragments/overlays/overlay-pattern.md -->
 
-## Overlay Grouping and the `generic` Subtree
+## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-08-03 (commit pending — makes overlay-owned local
-> implementation sources a boundary invariant and relocates the auto-memory
-> helper and distiller sources accordingly). Prior: 2026-08-02 (commit pending —
-> adds Semble's direct external-flake derivation pattern and identity-preserving
-> MCP role). Prior: 2026-08-01 (commit pending — records that `glab`'s
-> `extraExtract` also regenerates its `passthru.extracted` sidecar, via the new
-> shared `vu.mkExtractRegen`, and that glab is the one extracted package where
-> the fixer-then-extract ORDER is forced. It had NO regeneration at all until
-> now, which nothing caught until its first version bump reddened
+> **Last verified:** 2026-08-03 (commit pending — makes `pkgs.ai` the single
+> binary-package namespace, retains `generic` as a temporary nested bucket, and
+> moves the two forge CLIs into `ai.devTools`). Prior: 2026-08-03 (commit
+> pending — makes overlay-owned local implementation sources a boundary
+> invariant and relocates the auto-memory helper and distiller sources
+> accordingly). Prior: 2026-08-02 (commit pending — adds Semble's direct
+> external-flake derivation pattern and identity-preserving MCP role). Prior:
+> 2026-08-01 (commit pending — records that `glab`'s `extraExtract` also
+> regenerates its `passthru.extracted` sidecar, via the new shared
+> `vu.mkExtractRegen`, and that glab is the one extracted package where the
+> fixer-then-extract ORDER is forced. It had NO regeneration at all until now,
+> which nothing caught until its first version bump reddened
 > `checks.<system>.glab-extracted` on PR #621). Prior: 2026-07-28 — the commit
 > adding THAT line lands `glab`: the first Go package whose SRC hash also lives
 > in the sidecar (`vu.mkGoSrcVendorFix`), the first GitLab-hosted version check
@@ -610,23 +618,28 @@ feature maturities, and config-key extraction fail closed.
 > between namespaces, or change how a `generic` package relates to its nixpkgs
 > original, and this section isn't updated in the same commit, stop and fix it.
 
-`overlays/default.nix` aggregates per-package files into grouped namespaces:
-`pkgs.ai.*` (plus its `mcpServers` / `lspServers` sub-groups),
-`pkgs.devTools.*`, `pkgs.generic.*`, and `pkgs.gitTools.*`. Every group is built
-the same way — an attrset of `import ./<dir>/<name>.nix {inherit inputs final;}`
-entries, passed through `guard` (the unfree wrapper) in the output set, and
-flattened into `packages.<system>` in `flake.nix` for CLI ergonomics — so a new
-group is one attrset, one output line, and one flatten line.
+`overlays/default.nix` aggregates every binary package under the single
+`pkgs.ai` namespace. Flat AI CLIs live directly below it; supporting categories
+are `devTools`, `generic`, `gitTools`, `lspServers`, and `mcpServers`. Every
+group is built the same way — an attrset of
+`import ./<dir>/<name>.nix {inherit inputs final;}` entries, passed through
+`guard` (the unfree wrapper) in the output set, and flattened into
+`packages.<system>` in `flake.nix` for CLI ergonomics. The overlay never writes
+a bare `pkgs.<name>` attribute.
 
-`generic` is the group defined by what it is NOT: packages with nothing agentic
-about them, living in `overlays/generic/` and earmarked for a possible future
-repo split. The grouping exists so that split is a directory move rather than an
-archaeology exercise, which means the subtree must not acquire dependencies on
-the rest of the repo beyond `overlays/lib.nix`. Judge membership by whether the
-package would make sense in a repo called "agentic tools" — a hardened Firefox
-preference set, a btop theme, the DNS root hints, a resource monitor, a JS
-runtime, a JS package manager, a JSON log viewer, the GitHub CLI, a VPN client,
-a shell prompt engine and an OpenTelemetry viewer do not.
+Keeping every group below `pkgs.ai` is deliberate while this repository is the
+only consumer. Whether selected packages should eventually merge into the plain
+nixpkgs namespace is a later policy decision, not something individual package
+moves decide implicitly.
+
+`generic` is a temporary category for supporting packages that have not yet
+earned a clearer role. It is not a claim that they belong in a permanent
+"non-agentic" product namespace. The physical `overlays/generic/` subtree stays
+split-ready: it must not acquire dependencies on the rest of the repo beyond
+`overlays/lib.nix`, so it can be regrouped or extracted without archaeology.
+Obvious classifications should move out incrementally; `gh` and `glab` are the
+worked example, living together under `overlays/dev-tools/` and
+`pkgs.ai.devTools`.
 
 Repo-local implementation sources consumed by an overlay derivation belong
 beside that derivation under `overlays/`, even when a package module is their
@@ -665,7 +678,7 @@ shipping data files is NOT the same as being content-only), each package gets a
 
 ### Thin overrides of a nixpkgs package
 
-Most `generic` entries (`btop`, `bun`, `fblog`, `gh`, `glab`, `oh-my-posh`,
+Most supporting entries (`btop`, `bun`, `fblog`, `gh`, `glab`, `oh-my-posh`,
 `otel-tui`, `pnpm_10`, `pnpm_11`) are not fresh derivations but
 `ourPkgs.<name>.overrideAttrs` over the nixpkgs one, moving only `version`,
 `src`, `passthru.updateScript` and — for the Go ones — `vendorHash`. `gluetun`
@@ -678,7 +691,7 @@ contract, because that contract is about where the hash comes from, not about
 which override seam is correct. Two rules that are not obvious from reading such
 a file:
 
-- **Namespaced-only.** The overlay writes `pkgs.generic.<name>` and NEVER a
+- **Namespaced-only.** The overlay writes `pkgs.ai.<group>.<name>` and NEVER a
   top-level `pkgs.<name>`. Shadowing a nixpkgs attribute would turn this from an
   additive overlay into one that silently re-points every unrelated consumer of
   that package; the additive contract is what lets consumers apply the overlay
@@ -692,7 +705,7 @@ a file:
   diverge the moment upstream moves. Do not "clean up" such a package on parity
   grounds.
 
-Measured for `pnpm_10` at landing: `pkgs.generic.pnpm_10` and plain
+Measured for `pnpm_10` at landing: `pkgs.ai.generic.pnpm_10` and plain
 `pkgs.pnpm_10` share both `drvPath` and `outPath` (`…-pnpm-10.34.5.drv` /
 `…-pnpm-10.34.5`), and `nix build .#pnpm_10` substitutes straight from
 `cache.nixos.org`. That is the parity rule above working exactly as designed,
@@ -835,8 +848,9 @@ build.
 
 ### Carrying several majors of one package
 
-`pnpm` is carried at two majors (`pkgs.generic.pnpm_10`, `pkgs.generic.pnpm_11`)
-and the shape generalizes to any versioned attribute family:
+`pnpm` is carried at two majors (`pkgs.ai.generic.pnpm_10`,
+`pkgs.ai.generic.pnpm_11`) and the shape generalizes to any versioned attribute
+family:
 
 - One shared builder (`overlays/generic/pnpm-major.nix`) takes the major as an
   argument; the per-major files are two-line delegations. They exist because
@@ -1040,8 +1054,7 @@ codingStandardsOverlay = import ./packages/coding-standards {};
 stackedWorkflowsOverlay = import ./packages/stacked-workflows {};
 
 overlays.default = lib.composeManyExtensions [
-  aiOverlay                 # 27+ packages: pkgs.ai.*, pkgs.devTools.*,
-                            # pkgs.generic.*, pkgs.gitTools.*
+  aiOverlay                 # every binary-package group under pkgs.ai.*
   codingStandardsOverlay    # content package
   stackedWorkflowsOverlay   # content package
 ];
@@ -1077,10 +1090,11 @@ convention and is required for the bind-once overlay composition pattern in
 
 ## Unfree Package Guard (`ensureUnfreeCheck`)
 
-> **Last verified:** 2026-04-13 (commit pending). If you touch
-> `overlays/default.nix`, add a new unfree package to any overlay, or change how
-> `guard` is applied to output attrsets and this fragment isn't updated in the
-> same commit, stop and fix it.
+> **Last verified:** 2026-08-03 (commit pending — nests every guarded binary
+> group under `pkgs.ai` while preserving one universal output-boundary guard).
+> Prior: 2026-04-13 (commit pending). If you touch `overlays/default.nix`, add a
+> new unfree package to any overlay, or change how `guard` is applied to output
+> attrsets and this fragment isn't updated in the same commit, stop and fix it.
 
 ### The problem
 
@@ -1121,10 +1135,12 @@ Applied universally at the output level:
 
 ```nix
 { ai = guard flatDrvs // {
-    mcpServers = guard (mcpServerDrvs // {agnix-mcp = agnixMcp;});
+    devTools = guard devToolDrvs;
+    generic = guard genericDrvs;
+    gitTools = guard gitToolDrvs;
     lspServers = guard {agnix-lsp = agnixLsp;};
+    mcpServers = guard (mcpServerDrvs // {agnix-mcp = agnixMcp;});
   };
-  gitTools = guard gitToolDrvs;
 }
 ```
 
