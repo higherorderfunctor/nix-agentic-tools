@@ -42,7 +42,7 @@
     else ''
       ---
       ${lib.optionalString includeName "name: ${builtins.toJSON name}\n"}description: ${builtins.toJSON value.description}
-      ${lib.optionalString ((value.tools or null) != null) "tools: ${lib.concatStringsSep ", " value.tools}\n"}---
+      ${lib.optionalString ((value.tools or null) != null && value.tools != []) "tools: ${lib.concatStringsSep ", " value.tools}\n"}---
 
       ${resolveText value.instructions}
     '';
