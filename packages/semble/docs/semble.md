@@ -48,7 +48,10 @@ top-level list. The MCP content values are `code`, `docs`, `config`, and `all`.
 `code` uses Semble's default and emits no command-line argument.
 
 Any active integration installs `semble.package`. Named MCP and subagent entries
-use `mkDefault`, so consumers can refine their generated values.
+use `mkDefault`, so consumers can refine their generated values. Claude and
+Codex compose the guidance into their single always-loaded `CLAUDE.md` and
+`AGENTS.md` files. Kiro receives a named instruction and writes it to
+`.kiro/steering/semble.md`.
 
 ## Direct configuration
 
@@ -67,7 +70,10 @@ in {
     instructions = [nat.lib.ai.semble.instruction];
   };
 
-  ai.kiro.agents.semble-search = nat.lib.ai.semble.kiroAgent;
+  ai.kiro = {
+    agents.semble-search = nat.lib.ai.semble.kiroAgent;
+    instructions = [nat.lib.ai.semble.kiroInstruction];
+  };
 }
 ```
 

@@ -7,11 +7,14 @@ applyTo: "lib/ai/agent.nix,lib/ai/app/**,lib/ai/default.nix,lib/ai/hooks.nix,lib
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-02 (commit pending — records plain convenience
-> modules such as Semble contributing selected per-runtime defaults without
-> enabling those runtimes). Prior: 2026-08-02 (commit pending — Codex named
-> profile files now use one typed settings schema across HM and devenv: HM links
-> user-global files, while devenv safely materializes repository-declared
+> **Last verified:** 2026-08-02 (commit pending — Semble keeps Claude and Codex
+> instructions unnamed for their single-file composers but names its Kiro
+> instruction so directory-native steering emits `semble.md` instead of the
+> generic `instructions.md`). Prior: 2026-08-02 (commit pending — records plain
+> convenience modules such as Semble contributing selected per-runtime defaults
+> without enabling those runtimes). Prior: 2026-08-02 (commit pending — Codex
+> named profile files now use one typed settings schema across HM and devenv: HM
+> links user-global files, while devenv safely materializes repository-declared
 > whole-file layers into CODEX_HOME before shell entry). Prior: 2026-08-02
 > (commit pending — instruction and rule records carry a typed Kiro-only
 > inclusion override with identical HM/devenv fanout; null preserves
@@ -380,10 +383,13 @@ authors must decide scope consciously.
 
 Plain convenience modules may contribute directly to selected
 `ai.<runtime>.<pool>` entries at `mkDefault` priority. Semble uses this for its
-named MCP and agent defaults plus unnamed instruction records in both backend
-evaluations. Selecting a runtime configures that runtime's integration only; the
-convenience module must not set `ai.<runtime>.enable`, because package/CLI
-activation remains an explicit consumer choice.
+named MCP and agent defaults in both backend evaluations. Its Claude and Codex
+instruction records stay unnamed so they compose into each runtime's single
+always-loaded file, while its Kiro record is named `semble` so the
+directory-native renderer writes `semble.md` rather than collecting unrelated
+content in `instructions.md`. Selecting a runtime configures that runtime's
+integration only; the convenience module must not set `ai.<runtime>.enable`,
+because package/CLI activation remains an explicit consumer choice.
 
 **Worked example — stacked-workflows skills.** Because an `ai.skills` value set
 in one backend is invisible to the other, the stacked-workflows package

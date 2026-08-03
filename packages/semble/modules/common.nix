@@ -28,10 +28,15 @@
     type = "stdio";
   };
 
-  runtimeConfig = runtime:
+  runtimeConfig = runtime: let
+    instruction =
+      if runtime == "kiro"
+      then records.kiroInstruction
+      else records.instruction;
+  in
     lib.mkMerge [
       (lib.mkIf (selected runtime cfg.instructions) {
-        ai.${runtime}.instructions = [records.instruction];
+        ai.${runtime}.instructions = [instruction];
       })
       (lib.mkIf (selected runtime cfg.mcp) {
         ai.${runtime}.mcpServers.semble = mkDefaultRecursive mcpEntry;

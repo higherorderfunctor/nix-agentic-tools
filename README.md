@@ -346,6 +346,10 @@ semble = {
 };
 ```
 
+Claude and Codex compose the guidance into their single always-loaded
+`CLAUDE.md` and `AGENTS.md` files. Kiro writes its named instruction to
+`.kiro/steering/semble.md`.
+
 Direct configuration remains available when the convenience feature is disabled:
 
 ```nix
@@ -361,8 +365,13 @@ ai.codex = {
   instructions = [inputs.nix-agentic-tools.lib.ai.semble.instruction];
 };
 
-ai.kiro.agents.semble-search =
-  inputs.nix-agentic-tools.lib.ai.semble.kiroAgent;
+ai.kiro = {
+  agents.semble-search =
+    inputs.nix-agentic-tools.lib.ai.semble.kiroAgent;
+  instructions = [
+    inputs.nix-agentic-tools.lib.ai.semble.kiroInstruction
+  ];
+};
 ```
 
 Copilot is intentionally outside `semble.*`; configure it directly through

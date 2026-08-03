@@ -2065,7 +2065,10 @@ in {
     let
       evaluated = evalHm {semble.enable = true;};
       cfg = evaluated.config;
+      claudeInstruction = builtins.head cfg.ai.claude.instructions;
+      codexInstruction = builtins.head cfg.ai.codex.instructions;
       kiroAgent = builtins.fromJSON cfg.ai.kiro.agents.semble-search;
+      kiroInstruction = builtins.head cfg.ai.kiro.instructions;
     in
       builtins.length cfg.home.packages
       == 1
@@ -2074,7 +2077,10 @@ in {
       && cfg.ai.claude.agents ? semble-search
       && cfg.ai.codex.agents ? semble-search
       && cfg.ai.kiro.agents ? semble-search
+      && !(claudeInstruction ? name)
+      && !(codexInstruction ? name)
       && kiroAgent.tools == ["shell" "read"]
+      && kiroInstruction.name == "semble"
       && !(cfg.ai.copilot.mcpServers ? semble)
       && !(cfg.ai.copilot.agents ? semble-search)
       && cfg.ai.copilot.instructions == []
@@ -2162,7 +2168,7 @@ in {
       && lib.hasSuffix "/bin/semble-mcp" refined.command
   );
 
-  module-semble-package-override-and-unnamed-instruction = mkTest "semble-package-override-and-unnamed-instruction" (
+  module-semble-package-override-and-named-kiro-instruction = mkTest "semble-package-override-and-named-kiro-instruction" (
     let
       evaluated = evalDevenv {
         semble = {
@@ -2176,8 +2182,36 @@ in {
       evaluated.config.packages
       == [pkgs.hello]
       && evaluated.config.ai.kiro.mcpServers == {}
-      && !(instruction ? name)
+      && instruction.name == "semble"
       && instruction.text == ../packages/semble/agent-instructions.md
+  );
+
+  module-semble-instructions-use-native-files = mkTest "semble-instructions-use-native-files" (
+    let
+      nativeConfig = {
+        ai = {
+          claude.enable = true;
+          codex.enable = true;
+          kiro.enable = true;
+        };
+        semble.instructions.enable = true;
+      };
+      hm = (evalHm nativeConfig).config;
+      devenv = (evalDevenv nativeConfig).config;
+      hmKiroSteering = hm.ai.kiro.steeringFiles;
+      devenvKiroSteering = devenv.ai.kiro.steeringFiles;
+      hmKiroInstruction = (hmKiroSteering."semble.md" or {}).text or "";
+      devenvKiroInstruction = (devenvKiroSteering."semble.md" or {}).text or "";
+    in
+      lib.hasInfix "Use `semble search`" (hm.programs.claude-code.context or "")
+      && lib.hasInfix "Use `semble search`" (hm.home.file.".codex/AGENTS.md".text or "")
+      && hmKiroSteering ? "semble.md"
+      && !(hmKiroSteering ? "instructions.md")
+      && lib.hasInfix "name: semble" hmKiroInstruction
+      && lib.hasInfix "inclusion: always" hmKiroInstruction
+      && devenvKiroSteering ? "semble.md"
+      && !(devenvKiroSteering ? "instructions.md")
+      && hmKiroInstruction == devenvKiroInstruction
   );
 
   module-semble-hm-devenv-option-parity = mkTest "semble-hm-devenv-option-parity" (
@@ -2216,6 +2250,8 @@ in {
       && lib.hasSuffix "/bin/semble-mcp" code.command
       && all.args == ["--content" "all"]
       && records.instruction.text == ../packages/semble/agent-instructions.md
+      && records.kiroInstruction.name == "semble"
+      && records.kiroInstruction.text == records.instruction.text
       && records.semanticAgent.instructions == ../packages/semble/agent-instructions.md
       && kiroAgent.tools == ["shell" "read"]
   );
