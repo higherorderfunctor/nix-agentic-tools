@@ -1579,18 +1579,25 @@ in {
   module-codex-semantic-agents-fanout = mkTest "codex-semantic-agents-fanout" (
     let
       config.ai = {
-        agents.reviewer = {
-          codex = {
-            model = "review-model";
-            sandbox_mode = "read-only";
+        agents = {
+          emptyTools = {
+            description = "Review with an explicitly empty tool restriction.";
+            instructions = "Report concrete findings.";
+            tools = [];
           };
-          description = "Review changes for correctness.";
-          instructions = "Read first, then report concrete findings.";
-          tools = ["Bash" "Read"];
-        };
-        agents.unrestricted = {
-          description = "Review without a portable tool restriction.";
-          instructions = "Report concrete findings.";
+          reviewer = {
+            codex = {
+              model = "review-model";
+              sandbox_mode = "read-only";
+            };
+            description = "Review changes for correctness.";
+            instructions = "Read first, then report concrete findings.";
+            tools = ["Bash" "Read"];
+          };
+          unrestricted = {
+            description = "Review without a portable tool restriction.";
+            instructions = "Report concrete findings.";
+          };
         };
         claude.enable = true;
         codex.enable = true;
@@ -1608,6 +1615,8 @@ in {
       hmAgent = hm.config.home.file.".codex/agents/reviewer.toml".source.value;
       devenvAgent = devenv.config.files.".codex/agents/reviewer.toml".source.value;
       claudeAgent = hm.config.programs.claude-code.agents.reviewer;
+      emptyClaudeAgent = hm.config.programs.claude-code.agents.emptyTools;
+      emptyCopilotAgent = devenv.config.files.".github/agents/emptyTools.agent.md".text;
       unrestrictedClaudeAgent = hm.config.programs.claude-code.agents.unrestricted;
       copilotAgent = devenv.config.files.".github/agents/reviewer.agent.md".text;
     in
@@ -1618,6 +1627,8 @@ in {
       && lib.hasInfix ''name: "reviewer"'' claudeAgent
       && lib.hasInfix ''description: "Review changes for correctness."'' claudeAgent
       && lib.hasInfix "tools: Bash, Read" claudeAgent
+      && !(lib.hasInfix "tools:" emptyClaudeAgent)
+      && !(lib.hasInfix "tools:" emptyCopilotAgent)
       && lib.hasPrefix "---\n" unrestrictedClaudeAgent
       && lib.hasInfix ''description: "Review without a portable tool restriction."'' unrestrictedClaudeAgent
       && !(lib.hasInfix "tools:" unrestrictedClaudeAgent)
