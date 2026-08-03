@@ -601,6 +601,7 @@ in {
     test "$(command -v codex)" = "${lib.getExe codexForRepository}" || { echo "FAIL: repo-aware Codex wrapper is not first on PATH"; exit 1; }
     ${lib.getExe codexForRepository} --cd "$PWD" --profile nix-agentic-tools --help >/dev/null 2>&1 || { echo "FAIL: Codex wrapper duplicated explicit launch flags"; exit 1; }
     nat_profile_path="''${CODEX_HOME:-$HOME/.codex}/nix-agentic-tools.config.toml"
+    test -f "$nat_profile_path" || { echo "FAIL: Codex permission profile was not materialized at $nat_profile_path"; exit 1; }
     ${pkgs.gnugrep}/bin/grep -Fq ${lib.escapeShellArg "\"${sembleCache}\" = \"write\""} "$nat_profile_path" || { echo "FAIL: Codex permission profile does not grant the user-global Semble cache"; exit 1; }
     nat_expected_resume_argv="$(printf '%s\n' --cd ${lib.escapeShellArg devenvRoot} --profile nix-agentic-tools resume session-id)"
     test "$(${lib.getExe codexForRepositoryArgvProbe} resume session-id)" = "$nat_expected_resume_argv" || { echo "FAIL: Codex wrapper did not apply repo defaults to resume"; exit 1; }
