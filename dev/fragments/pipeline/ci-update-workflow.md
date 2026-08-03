@@ -1,9 +1,11 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-08-03 (commit pending — updates the pnpm detector's
-> documented lookup after all package groups move under `pkgs.ai`). Prior:
-> 2026-08-01 (commit pending — Phase 2 now runs on `if: always()` so a timed-out
-> sweep SHIPS what it finished instead of discarding it, and the
+> **Last verified:** 2026-08-03 (commit pending — records `devenv-test` as an
+> always-reporting fifth merge gate and corrects the auto-merge thread rule).
+> Prior: 2026-08-03 (commit pending — updates the pnpm detector's documented
+> lookup after all package groups move under `pkgs.ai`). Prior: 2026-08-01
+> (commit pending — Phase 2 now runs on `if: always()` so a timed-out sweep
+> SHIPS what it finished instead of discarding it, and the
 > `ninja-completed.flag` sentinel is re-gated on `steps.ninja.outcome` so a
 > partial sweep can never let the close step delete the PRs it did not reach.
 > Measured on run 30713330569: 47 of 52 edges done, step `skipped`, everything
@@ -104,7 +106,10 @@ to "some dependencies landed" instead of "none", which is the point.
 **Phase 3 — Validation** (triggered automatically):
 
 PRs trigger ci.yml's `pull_request` event, which runs builds on both linux and
-darwin runners. PRs that pass both can be merged.
+darwin runners, plus the always-reporting `devenv-test` workflow. That runtime
+gate performs its expensive work only when the pull request touches a relevant
+path; otherwise it succeeds after a changed-files API query. PRs can merge only
+after all five required status contexts pass.
 
 ### Non-blocking annotation steps
 

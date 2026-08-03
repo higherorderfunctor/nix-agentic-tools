@@ -7,19 +7,22 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 
 # CI-lean closure taxonomy
 
-> **Last verified:** 2026-08-03 (commit pending — updates the consumer-export
-> taxonomy after dev tools move beneath `pkgs.ai.devTools`; shell membership is
-> unchanged). Prior: 2026-08-02 (commit pending — the repo's beta Codex
-> permission profile explicitly grants the user-global Semble cache because beta
-> profiles do not compose with the legacy user sandbox table). Prior: 2026-08-02
-> (commit pending — the repo-aware Codex wrapper now distinguishes runtime
-> commands from administrative commands before injecting the worktree root and
-> named profile; an argv-probe build lets enterTest verify runtime injection
-> (including `apply` and `exec-server`) and doctor pass-through exactly). Prior:
-> 2026-08-02 (PR #698 — introduced the wrapper and verified PATH precedence plus
-> explicit-flag idempotence). Prior: 2026-07-22 (PR #439). If you change what
-> `devenv.nix` puts in the shell, which factories install CLI wrappers, or the
-> `devenv-test.yml` cache wiring, re-verify this and bump the marker.
+> **Last verified:** 2026-08-03 (commit pending — makes `devenv-test` an
+> always-reporting required context while preserving the cold closure only for
+> relevant paths). Prior: 2026-08-03 (commit pending — updates the
+> consumer-export taxonomy after dev tools move beneath `pkgs.ai.devTools`;
+> shell membership is unchanged). Prior: 2026-08-02 (commit pending — the repo's
+> beta Codex permission profile explicitly grants the user-global Semble cache
+> because beta profiles do not compose with the legacy user sandbox table).
+> Prior: 2026-08-02 (commit pending — the repo-aware Codex wrapper now
+> distinguishes runtime commands from administrative commands before injecting
+> the worktree root and named profile; an argv-probe build lets enterTest verify
+> runtime injection (including `apply` and `exec-server`) and doctor
+> pass-through exactly). Prior: 2026-08-02 (PR #698 — introduced the wrapper and
+> verified PATH precedence plus explicit-flag idempotence). Prior: 2026-07-22
+> (PR #439). If you change what `devenv.nix` puts in the shell, which factories
+> install CLI wrappers, or the `devenv-test.yml` cache wiring, re-verify this
+> and bump the marker.
 
 The `devenv-test` CI gate (`.github/workflows/devenv-test.yml`) runs
 `devenv test` on ephemeral runners, so **everything in the shell closure is
@@ -27,6 +30,14 @@ download cost on every cold run** and feeds the `cache-nix-action` cache size.
 `devenv.nix` therefore evaluates an `isCI` branch (see the comment block at its
 `isCI` binding — EVAL-time, distinct from the RUNTIME `$CI` guard in
 `processes.docs.exec`).
+
+Branch protection requires the job's `devenv-test` context. The workflow cannot
+retain a `pull_request.paths` filter because GitHub leaves a required context
+pending when its workflow never starts. Instead, its first step queries the pull
+request's changed files and every closure-producing step is conditional on the
+same path set. An irrelevant pull request therefore reports success after one
+API call; a relevant one still pays for and waits on the runtime gate. Pushes to
+`main` retain the workflow-level path filter because they are not merge gates.
 
 ## The four buckets
 

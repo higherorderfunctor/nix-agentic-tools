@@ -1,27 +1,28 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-08-03 (commit pending — makes post-merge removal of
-> the feature worktree and local branch an explicit agent-owned completion
-> condition). Prior: 2026-07-31 (commit pending — the bootstrap step's "or any
-> devenv task" was WRONG and is removed: `devenv tasks run` does not materialize
-> `.pre-commit-config.yaml`, measured in two fresh worktrees where the task
-> succeeded and the next commit was still rejected. Also records that a push
-> auto-triggered a Copilot review only ONCE in 5 pushes — 0/4 on PR #640, 1/1 on
-> the first push of #644 — so checking the run is mandatory and re-requesting is
-> the expected next step rather than a rare fallback). Prior: 2026-07-31 (commit
-> e06e7601 — the Copilot review loop is the agent's to START, unprompted, the
-> moment the PR is open and non-draft; only continuing past the 5-round cap
-> needs the operator's say-so). Prior: 2026-07-30 (commit pending — records that
-> a re-request issued while a review is still in flight is silently dropped, so
-> the check run, not the API response, is the confirmation). Prior: 2026-07-30
-> (commit d42d805a) — records that the reviews and comments endpoints attribute
-> Copilot's output to DIFFERENT logins, so the documented
-> `copilot-pull-request-reviewer[bot]` filter returns zero on
-> `/pulls/N/comments` and reads as a clean review while gating threads are open;
-> measured on PR #614. Prior: 2026-07-29 — the ruleset now sets
-> `required_review_thread_resolution: true`, so an unresolved review thread
-> blocks merge including on auto-merging `update/*` PRs, and the claim that
-> Copilot "never gates its merge" is retired; adds the rule that Copilot's
+> **Last verified:** 2026-08-03 (commit pending — adds the always-reporting
+> `devenv-test` context to the required checks). Prior: 2026-08-03 (commit
+> pending — makes post-merge removal of the feature worktree and local branch an
+> explicit agent-owned completion condition). Prior: 2026-07-31 (commit pending
+> — the bootstrap step's "or any devenv task" was WRONG and is removed:
+> `devenv tasks run` does not materialize `.pre-commit-config.yaml`, measured in
+> two fresh worktrees where the task succeeded and the next commit was still
+> rejected. Also records that a push auto-triggered a Copilot review only ONCE
+> in 5 pushes — 0/4 on PR #640, 1/1 on the first push of #644 — so checking the
+> run is mandatory and re-requesting is the expected next step rather than a
+> rare fallback). Prior: 2026-07-31 (commit e06e7601 — the Copilot review loop
+> is the agent's to START, unprompted, the moment the PR is open and non-draft;
+> only continuing past the 5-round cap needs the operator's say-so). Prior:
+> 2026-07-30 (commit pending — records that a re-request issued while a review
+> is still in flight is silently dropped, so the check run, not the API
+> response, is the confirmation). Prior: 2026-07-30 (commit d42d805a) — records
+> that the reviews and comments endpoints attribute Copilot's output to
+> DIFFERENT logins, so the documented `copilot-pull-request-reviewer[bot]`
+> filter returns zero on `/pulls/N/comments` and reads as a clean review while
+> gating threads are open; measured on PR #614. Prior: 2026-07-29 — the ruleset
+> now sets `required_review_thread_resolution: true`, so an unresolved review
+> thread blocks merge including on auto-merging `update/*` PRs, and the claim
+> that Copilot "never gates its merge" is retired; adds the rule that Copilot's
 > SUPPRESSED findings must be read on every review, since they create no thread;
 > gates re-review polling on `commit_id` rather than a timestamp, and caps the
 > fix-and-re-review loop at 5 rounds). Prior: 2026-07-24 — the bot's `update/*`
@@ -34,10 +35,10 @@
 > isn't updated in the same commit, stop and fix it.
 
 `main` is the trunk. Its branch-protection ruleset requires a pull request, no
-force-push, no deletion, and four required status checks —
+force-push, no deletion, and five required status checks —
 `build (x86_64-linux, ubuntu-latest)`, `build (aarch64-darwin, macos-latest)`,
-`test`, and `gitleaks`. It requires **zero approving reviews** but it DOES
-require **every review thread to be resolved**
+`devenv-test`, `gitleaks`, and `test`. It requires **zero approving reviews**
+but it DOES require **every review thread to be resolved**
 (`required_review_thread_resolution`, enabled 2026-07-29).
 
 **Squash-merge only** — but that is the REPOSITORY settings, not the ruleset:
@@ -307,10 +308,10 @@ silently resolves one level too deep, into
 `.github/workflows/update.yml` sweeps dependencies 4x/day (00:00, 06:00, 12:00,
 18:00 UTC) and opens one PR per dependency that actually moved. Each is armed
 with GitHub-native **auto-merge (squash)** as it is created, and re-armed on
-every later sweep, so it merges itself once the four required checks go green.
-Safe precisely because the ruleset requires no approving review and the Copilot
-review is advisory: those checks are the only gate, and they are exactly what
-auto-merge waits on.
+every later sweep, so it merges itself once the five required checks go green.
+Safe precisely because the ruleset requires no approving review, all five status
+checks must pass, and an unresolved Copilot thread still holds the merge through
+the separate review-thread rule.
 
 A merge conflict **disables** auto-merge, so a conflicted update PR drops out of
 the queue until the next sweep rebuilds its branch on the current base and

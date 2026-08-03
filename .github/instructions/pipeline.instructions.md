@@ -7,10 +7,12 @@ applyTo: ".github/workflows/update.yml,config/fragment-categories.nix,config/gen
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-08-03 (commit pending — updates the pnpm detector's
-> documented lookup after all package groups move under `pkgs.ai`). Prior:
-> 2026-08-01 (commit pending — Phase 2 now runs on `if: always()` so a timed-out
-> sweep SHIPS what it finished instead of discarding it, and the
+> **Last verified:** 2026-08-03 (commit pending — records `devenv-test` as an
+> always-reporting fifth merge gate and corrects the auto-merge thread rule).
+> Prior: 2026-08-03 (commit pending — updates the pnpm detector's documented
+> lookup after all package groups move under `pkgs.ai`). Prior: 2026-08-01
+> (commit pending — Phase 2 now runs on `if: always()` so a timed-out sweep
+> SHIPS what it finished instead of discarding it, and the
 > `ninja-completed.flag` sentinel is re-gated on `steps.ninja.outcome` so a
 > partial sweep can never let the close step delete the PRs it did not reach.
 > Measured on run 30713330569: 47 of 52 edges done, step `skipped`, everything
@@ -111,7 +113,10 @@ to "some dependencies landed" instead of "none", which is the point.
 **Phase 3 — Validation** (triggered automatically):
 
 PRs trigger ci.yml's `pull_request` event, which runs builds on both linux and
-darwin runners. PRs that pass both can be merged.
+darwin runners, plus the always-reporting `devenv-test` workflow. That runtime
+gate performs its expensive work only when the pull request touches a relevant
+path; otherwise it succeeds after a changed-files API query. PRs can merge only
+after all five required status contexts pass.
 
 ### Non-blocking annotation steps
 
@@ -831,13 +836,15 @@ aggregate but skips its dependency leaves.
 
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-08-03 (commit pending — moves the `gh` and `glab`
-> update targets with their overlay files from `generic/` to `dev-tools/`).
-> Prior: 2026-08-02 (commit pending — the `llm-agents` input update regenerates
-> Semble's upstream-template snapshot through its separate extraction
-> derivation, while human-reviewed content hashes intentionally remain manual
-> and make CI stop on unreviewed drift). Prior: 2026-07-27 (commit pending —
-> re-points the reference-submodule-shape pointer from the gitignored
+> **Last verified:** 2026-08-03 (commit pending — records the fifth required
+> `devenv-test` context in the update workflow's auto-merge contract). Prior:
+> 2026-08-03 (commit pending — moves the `gh` and `glab` update targets with
+> their overlay files from `generic/` to `dev-tools/`). Prior: 2026-08-02
+> (commit pending — the `llm-agents` input update regenerates Semble's
+> upstream-template snapshot through its separate extraction derivation, while
+> human-reviewed content hashes intentionally remain manual and make CI stop on
+> unreviewed drift). Prior: 2026-07-27 (commit pending — re-points the
+> reference-submodule-shape pointer from the gitignored
 > `private/slice-fixture/lib/concerns.nix` at the tracked in-tree registries
 > `lib/fragments-registry.nix` and `lib/checks.nix`; also deletes the hardcoded
 > "29 packages — 16 main-tracking + 13 binary" target count, which had gone
