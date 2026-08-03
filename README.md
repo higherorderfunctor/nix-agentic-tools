@@ -38,7 +38,8 @@ Each skill is self-contained with a `SKILL.md` and bundled reference docs.
 # flake.nix
 inputs.nix-agentic-tools = {
   url = "github:higherorderfunctor/nix-agentic-tools";
-  inputs.nixpkgs.follows = "nixpkgs";
+  # Do not follow nixpkgs: the additional pin preserves the store paths
+  # served by nix-agentic-tools.cachix.org.
 };
 
 # Apply overlay
@@ -87,9 +88,8 @@ services.mcp-servers.servers.github-mcp = {
 inputs:
   nix-agentic-tools:
     url: github:higherorderfunctor/nix-agentic-tools
-    inputs:
-      nixpkgs:
-        follows: nixpkgs
+    # Do not follow nixpkgs: the additional pin preserves the store paths
+    # served by nix-agentic-tools.cachix.org.
 ```
 
 ```nix
