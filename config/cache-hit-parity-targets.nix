@@ -34,6 +34,7 @@ _: {
     kiro-cli-workflows = {consumerPath = ["ai" "kiro-cli-workflows"];};
     kiro-gateway = {consumerPath = ["ai" "kiro-gateway"];};
     kiro-memory-distiller = {consumerPath = ["ai" "kiro-memory-distiller"];};
+    semble = {consumerPath = ["ai" "semble"];};
 
     # ── Git tools — live at `consumerPkgs.gitTools.<name>` ──
     git-absorb = {consumerPath = ["gitTools" "git-absorb"];};
@@ -96,6 +97,7 @@ _: {
     nixos-mcp = {consumerPath = ["ai" "mcpServers" "nixos-mcp"];};
     openmemory-mcp = {consumerPath = ["ai" "mcpServers" "openmemory-mcp"];};
     serena-mcp = {consumerPath = ["ai" "mcpServers" "serena-mcp"];};
+    semble-mcp = {consumerPath = ["ai" "mcpServers" "semble-mcp"];};
     sympy-mcp = {consumerPath = ["ai" "mcpServers" "sympy-mcp"];};
 
     # ── Special — top-level names that don't match a grouped attr path ──

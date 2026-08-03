@@ -159,6 +159,7 @@
       # and the wrapProgram target exists (hello has no bin/kimchi).
       kimchi = pkgs.writeShellScriptBin "kimchi" "exec true";
       kiro-cli = pkgs.ai.kiro-cli or pkgs.hello;
+      semble = pkgs.ai.semble or pkgs.hello;
       mcpServers = pkgs.ai.mcpServers or {};
       lspServers = pkgs.ai.lspServers or {};
     };
@@ -180,6 +181,7 @@
         ./../packages/kiro-cli/modules/homeManager
         ./../packages/living-workflow/modules/homeManager
         ./../packages/mcp-services/modules/homeManager
+        ./../packages/semble/modules/homeManager
         ./../packages/stacked-workflows/modules/homeManager
         hmStubs
         {inherit config;}
@@ -201,6 +203,7 @@
         ./../packages/kimchi/modules/devenv
         ./../packages/kiro-cli/modules/devenv
         ./../packages/living-workflow/modules/devenv
+        ./../packages/semble/modules/devenv
         ./../packages/stacked-workflows/modules/devenv
         devenvStubs
         {inherit config;}
@@ -2038,6 +2041,183 @@ in {
       };
     in
       builtins.any (assertion: !assertion.assertion && lib.hasInfix "rules 'duplicate'" assertion.message) evaluated.config.assertions
+  );
+
+  # ── Semble convenience integration ───────────────────────────────
+  module-semble-default-disabled = mkTest "semble-default-disabled" (
+    let
+      hm = evalHm {};
+      devenv = evalDevenv {};
+      clean = evaluated:
+        !evaluated.config.semble.enable
+        && evaluated.config.semble.mcp.enable == null
+        && !(evaluated.config.ai.claude.mcpServers ? semble)
+        && !(evaluated.config.ai.codex.agents ? semble-search)
+        && !(evaluated.config.ai.kiro.agents ? semble-search);
+    in
+      clean hm
+      && clean devenv
+      && hm.config.home.packages == []
+      && devenv.config.packages == []
+  );
+
+  module-semble-umbrella-fanout = mkTest "semble-umbrella-fanout" (
+    let
+      evaluated = evalHm {semble.enable = true;};
+      cfg = evaluated.config;
+      kiroAgent = builtins.fromJSON cfg.ai.kiro.agents.semble-search;
+    in
+      builtins.length cfg.home.packages
+      == 1
+      && lib.all (runtime: cfg.ai.${runtime}.mcpServers ? semble) ["claude" "codex" "kiro"]
+      && lib.all (runtime: builtins.length cfg.ai.${runtime}.instructions == 1) ["claude" "codex" "kiro"]
+      && cfg.ai.claude.agents ? semble-search
+      && cfg.ai.codex.agents ? semble-search
+      && cfg.ai.kiro.agents ? semble-search
+      && kiroAgent.tools == ["shell" "read"]
+      && !(cfg.ai.copilot.mcpServers ? semble)
+      && !(cfg.ai.copilot.agents ? semble-search)
+      && cfg.ai.copilot.instructions == []
+  );
+
+  module-semble-feature-enable-overrides = mkTest "semble-feature-enable-overrides" (
+    let
+      onlyMcp = (evalDevenv {semble.mcp.enable = true;}).config;
+      noMcp =
+        (evalDevenv {
+          semble = {
+            enable = true;
+            mcp.enable = false;
+          };
+        }).config;
+    in
+      builtins.length onlyMcp.packages
+      == 1
+      && onlyMcp.ai.claude.mcpServers ? semble
+      && onlyMcp.ai.claude.instructions == []
+      && !(onlyMcp.ai.claude.agents ? semble-search)
+      && !(noMcp.ai.claude.mcpServers ? semble)
+      && builtins.length noMcp.ai.claude.instructions == 1
+      && noMcp.ai.claude.agents ? semble-search
+  );
+
+  module-semble-runtime-selection = mkTest "semble-runtime-selection" (
+    let
+      top =
+        (evalHm {
+          semble = {
+            enable = true;
+            runtimes = ["codex"];
+          };
+        }).config;
+      perFeature =
+        (evalDevenv {
+          semble = {
+            enable = true;
+            instructions.runtimes = ["claude"];
+            mcp.runtimes = ["kiro"];
+            subagent.runtimes = ["codex"];
+          };
+        }).config;
+    in
+      top.ai.codex.mcpServers ? semble
+      && top.ai.codex.agents ? semble-search
+      && builtins.length top.ai.codex.instructions == 1
+      && !(top.ai.claude.mcpServers ? semble)
+      && !(top.ai.kiro.agents ? semble-search)
+      && perFeature.ai.kiro.mcpServers ? semble
+      && !(perFeature.ai.claude.mcpServers ? semble)
+      && builtins.length perFeature.ai.claude.instructions == 1
+      && perFeature.ai.codex.instructions == []
+      && perFeature.ai.codex.agents ? semble-search
+      && !(perFeature.ai.kiro.agents ? semble-search)
+  );
+
+  module-semble-mcp-content-and-default-refinement = mkTest "semble-mcp-content-and-default-refinement" (
+    let
+      code = (evalHm {semble.mcp.enable = true;}).config.ai.claude.mcpServers.semble;
+      docs =
+        (evalHm {
+          semble = {
+            mcp = {
+              content = "docs";
+              enable = true;
+            };
+          };
+        }).config.ai.claude.mcpServers.semble;
+      refined =
+        (evalHm {
+          ai.codex.mcpServers.semble.args = ["--log-level" "debug"];
+          semble = {
+            enable = true;
+            runtimes = ["codex"];
+          };
+        }).config.ai.codex.mcpServers.semble;
+    in
+      code.args
+      == []
+      && lib.hasSuffix "/bin/semble-mcp" code.command
+      && docs.args == ["--content" "docs"]
+      && refined.args == ["--log-level" "debug"]
+      && lib.hasSuffix "/bin/semble-mcp" refined.command
+  );
+
+  module-semble-package-override-and-unnamed-instruction = mkTest "semble-package-override-and-unnamed-instruction" (
+    let
+      evaluated = evalDevenv {
+        semble = {
+          instructions.enable = true;
+          package = pkgs.hello;
+          runtimes = ["kiro"];
+        };
+      };
+      instruction = builtins.head evaluated.config.ai.kiro.instructions;
+    in
+      evaluated.config.packages
+      == [pkgs.hello]
+      && evaluated.config.ai.kiro.mcpServers == {}
+      && !(instruction ? name)
+      && instruction.text == ../packages/semble/agent-instructions.md
+  );
+
+  module-semble-hm-devenv-option-parity = mkTest "semble-hm-devenv-option-parity" (
+    let
+      optionType = option: option.type.description;
+      optionShape = evaluated: {
+        enable = optionType evaluated.options.semble.enable;
+        package = optionType evaluated.options.semble.package;
+        runtimes = optionType evaluated.options.semble.runtimes;
+        instructions = lib.mapAttrs (_: optionType) evaluated.options.semble.instructions;
+        mcp = lib.mapAttrs (_: optionType) evaluated.options.semble.mcp;
+        subagent = lib.mapAttrs (_: optionType) evaluated.options.semble.subagent;
+      };
+    in
+      optionShape (evalHm {}) == optionShape (evalDevenv {})
+  );
+
+  module-semble-direct-helpers = mkTest "semble-direct-helpers" (
+    let
+      mkSemble = import ../packages/semble/lib/mkSemble.nix;
+      helperPkgs = pkgs // {ai = aiStubs;};
+      code = mkSemble {
+        lib = hmLib;
+        pkgs = helperPkgs;
+      } {};
+      all = mkSemble {
+        lib = hmLib;
+        pkgs = helperPkgs;
+      } {content = "all";};
+      records = import ../packages/semble/lib/integrations.nix;
+      kiroAgent = builtins.fromJSON records.kiroAgent;
+    in
+      code.type
+      == "stdio"
+      && code.args == []
+      && lib.hasSuffix "/bin/semble-mcp" code.command
+      && all.args == ["--content" "all"]
+      && records.instruction.text == ../packages/semble/agent-instructions.md
+      && records.semanticAgent.instructions == ../packages/semble/agent-instructions.md
+      && kiroAgent.tools == ["shell" "read"]
   );
 
   # ── glab ───────────────────────────────────────────────────────────

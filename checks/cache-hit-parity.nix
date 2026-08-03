@@ -119,11 +119,24 @@
   agnixDrvPaths = map (n: self.packages.${system}.${n}.drvPath) agnixVariants;
   agnixSiblingOk =
     builtins.all (d: d == builtins.head agnixDrvPaths) agnixDrvPaths;
+
+  # Semble is an external pinned-package exception: both roles must retain the
+  # exact llm-agents.nix derivation, including through a divergent consumer.
+  # The MCP role changes only eval-time meta.mainProgram.
+  sembleVariants = ["semble" "semble-mcp"];
+  sembleDrvPaths = map (n: self.packages.${system}.${n}.drvPath) sembleVariants;
+  sembleSiblingOk =
+    builtins.all (d: d == builtins.head sembleDrvPaths) sembleDrvPaths;
+  sembleUpstream = inputs.llm-agents.packages.${system}.semble;
+  sembleUpstreamOk =
+    self.packages.${system}.semble.drvPath
+    == sembleUpstream.drvPath
+    && self.packages.${system}.semble.outPath == sembleUpstream.outPath;
 in {
   cache-hit-parity = pkgs.runCommand "cache-hit-parity" {} ''
     ${
-      if allDrifts == [] && agnixSiblingOk
-      then "echo 'ok — no drift detected (every overlay package produces byte-identical store paths against both nixpkgs pins; agnix variants share one build)${skippedNote}' > $out"
+      if allDrifts == [] && agnixSiblingOk && sembleSiblingOk && sembleUpstreamOk
+      then "echo 'ok — no drift detected (every overlay package produces byte-identical store paths against both nixpkgs pins; agnix and Semble variants share one build; Semble matches upstream)${skippedNote}' > $out"
       else
         lib.optionalString (allDrifts != []) (let
           drifts = builtins.concatStringsSep "\n" (map (d: ''
@@ -152,6 +165,18 @@ in {
           + "echo 'Set mainProgram with `agnix // {meta = agnix.meta // {mainProgram = ...;};}`,' >&2\n"
           + "echo 'NOT overrideAttrs: nixpkgs injects NIX_MAIN_PROGRAM=meta.mainProgram into the' >&2\n"
           + "echo 'build env, so overrideAttrs forks the hash into 3 redundant Rust compiles.' >&2\n"
+        )
+        + lib.optionalString (!sembleSiblingOk) (
+          "echo 'FAIL: semble and semble-mcp do NOT share one derivation:' >&2\n"
+          + lib.concatStrings (lib.imap0 (
+              i: n: "echo '  ${n}: ${builtins.elemAt sembleDrvPaths i}' >&2\n"
+            )
+            sembleVariants)
+          + "echo 'The MCP role must be a plain attr/meta overlay, never overrideAttrs.' >&2\n"
+        )
+        + lib.optionalString (!sembleUpstreamOk) (
+          "echo 'FAIL: pkgs.ai.semble does not match the pinned llm-agents.nix output.' >&2\n"
+          + "echo 'Re-export the upstream derivation directly; do not rebuild or override it.' >&2\n"
         )
         + "exit 1\n"
     }

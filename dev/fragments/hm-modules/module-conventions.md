@@ -1,13 +1,15 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-08-02 (commit pending — Codex named profiles now use
-> one typed declaration across HM and devenv while each backend delivers the
-> artifact at its native scope: HM links user files and devenv materializes repo
-> declarations into the user-only profile lookup location with explicit
-> ownership). Prior: 2026-08-02 (commit pending — generated option references
-> now enforce exact flattened `ai.*` name/type parity across HM and devenv;
-> backend-only behavior stays discoverable and fails explicitly, as with Home
-> Manager rejecting project-only `ai.copilot.projectDir` overrides). Prior:
+> **Last verified:** 2026-08-02 (commit pending — Semble adds one shared HM and
+> devenv option declaration plus shared runtime-fanout logic; only the package
+> installation sink differs). Prior: 2026-08-02 (commit pending — Codex named
+> profiles now use one typed declaration across HM and devenv while each backend
+> delivers the artifact at its native scope: HM links user files and devenv
+> materializes repo declarations into the user-only profile lookup location with
+> explicit ownership). Prior: 2026-08-02 (commit pending — generated option
+> references now enforce exact flattened `ai.*` name/type parity across HM and
+> devenv; backend-only behavior stays discoverable and fails explicitly, as with
+> Home Manager rejecting project-only `ai.copilot.projectDir` overrides). Prior:
 > 2026-08-02 (commit 589fa37c — distinguishes ordinary JSON merge activation
 > from Codex's leaf-owned TOML reconciliation, whose manifest supplies removal
 > semantics while preserving native project-trust state). Prior: 2026-07-28
@@ -292,6 +294,14 @@ test rather than a code-review convention.
 Note this is NOT free for every module: it only works when the options carry no
 facet-specific defaults or `defaultText`. Modules whose options reference
 `home.` or `files.` paths still need the per-facet declaration.
+
+`packages/semble` takes the pattern one step further: one shared option
+declaration and one shared runtime-fanout module are parameterized only by the
+package installation sink (`home.packages` versus devenv `packages`). Feature
+and runtime selection therefore cannot drift between backends. Runtime selection
+contributes defaults to `ai.<runtime>.*` but deliberately does not set
+`ai.<runtime>.enable`; choosing an integration is not authority to enable the
+corresponding CLI.
 
 **Intentional differences** exist and are NOT parity gaps:
 

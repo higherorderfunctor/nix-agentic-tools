@@ -35,6 +35,7 @@
         nixpkgs.follows = "nixpkgs";
       };
     };
+    llm-agents.url = "github:numtide/llm-agents.nix";
     mcp-nixos = {
       url = "github:utensils/mcp-nixos";
       inputs.nixpkgs.follows = "nixpkgs";

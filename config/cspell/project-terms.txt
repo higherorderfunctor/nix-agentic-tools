@@ -203,6 +203,7 @@ neighbour
 neighbouring
 neighbours
 netlink
+niks
 nixbuild
 nixd
 nixdoc
@@ -249,6 +250,7 @@ posh
 posttooluse
 prek
 prestart
+pretrained
 psql
 pthread
 purpleclay
@@ -292,6 +294,7 @@ sadjow
 sarif
 scriptable
 sdiehl
+semble
 sequentialthinking
 serena
 serialised
