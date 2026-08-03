@@ -160,7 +160,7 @@
 
         nat_apply_repo_defaults=0
         case "$nat_command" in
-          ""|archive|delete|exec|exec-server|fork|mcp|resume|review|sandbox|unarchive)
+          ""|apply|archive|delete|exec|exec-server|fork|mcp|resume|review|sandbox|unarchive)
             nat_apply_repo_defaults=1
             ;;
           debug)
@@ -591,6 +591,8 @@ in {
     ${lib.getExe codexForRepository} --cd "$PWD" --profile nix-agentic-tools --help >/dev/null 2>&1 || { echo "FAIL: Codex wrapper duplicated explicit launch flags"; exit 1; }
     nat_expected_resume_argv="$(printf '%s\n' --cd ${lib.escapeShellArg devenvRoot} --profile nix-agentic-tools resume session-id)"
     test "$(${lib.getExe codexForRepositoryArgvProbe} resume session-id)" = "$nat_expected_resume_argv" || { echo "FAIL: Codex wrapper did not apply repo defaults to resume"; exit 1; }
+    nat_expected_apply_argv="$(printf '%s\n' --cd ${lib.escapeShellArg devenvRoot} --profile nix-agentic-tools apply task-id)"
+    test "$(${lib.getExe codexForRepositoryArgvProbe} apply task-id)" = "$nat_expected_apply_argv" || { echo "FAIL: Codex wrapper did not apply repo defaults to apply"; exit 1; }
     nat_expected_exec_server_argv="$(printf '%s\n' --cd ${lib.escapeShellArg devenvRoot} --profile nix-agentic-tools exec-server)"
     test "$(${lib.getExe codexForRepositoryArgvProbe} exec-server)" = "$nat_expected_exec_server_argv" || { echo "FAIL: Codex wrapper did not apply repo defaults to exec-server"; exit 1; }
     nat_expected_doctor_argv="$(printf '%s\n' doctor --json)"
