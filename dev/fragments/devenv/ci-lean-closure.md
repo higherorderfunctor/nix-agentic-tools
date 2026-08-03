@@ -1,9 +1,10 @@
 # CI-lean closure taxonomy
 
-> **Last verified:** 2026-08-02 (commit pending — the repository now overrides
-> `ai.codex.package` with a tiny repo-aware wrapper that supplies the evaluated
-> worktree root and named profile; it retains the same base Codex closure, and
-> enterTest verifies both PATH precedence and explicit-flag idempotence). Prior:
+> **Last verified:** 2026-08-02 (commit pending — the repo-aware Codex wrapper
+> now distinguishes runtime commands from administrative commands before
+> injecting the worktree root and named profile; enterTest covers both resume
+> parsing and doctor pass-through). Prior: 2026-08-02 (PR #698 — introduced the
+> wrapper and verified PATH precedence plus explicit-flag idempotence). Prior:
 > 2026-07-22 (PR #439). If you change what `devenv.nix` puts in the shell, which
 > factories install CLI wrappers, or the `devenv-test.yml` cache wiring,
 > re-verify this and bump the marker.
@@ -35,8 +36,11 @@ This repository additionally supplies `codexForRepository` through the shared
 `ai.codex.package` override. It is a small shell wrapper around the same base
 Codex package, not a second CLI closure. The wrapper injects the evaluated
 `config.devenv.root` and `nix-agentic-tools` profile only when the caller did
-not provide `--cd`/`-C` or `--profile`/`-p`; enterTest invokes it with explicit
-flags to catch duplicate-argument regressions.
+not provide `--cd`/`-C` or `--profile`/`-p`, and only for Codex runtime command
+families that accept those flags. Administrative commands such as `doctor`,
+`login`, and `features` pass through unchanged. enterTest covers explicit-flag
+idempotence, `resume` parsing with repository defaults, and `doctor`
+pass-through.
 
 Two proofs to preserve when touching the gates: with `CI` unset the shell must
 rebuild to the **identical store path** (local behavior unchanged — compare

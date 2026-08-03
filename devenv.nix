@@ -102,7 +102,9 @@
 
   # The selected named profile is a launch-time Codex layer, and Codex treats
   # the process cwd as the project unless --cd is explicit. Keep both defaults
-  # inside this repo's devenv PATH while preserving caller overrides. The
+  # inside this repo's devenv PATH while preserving caller overrides. Codex
+  # rejects runtime flags on administrative commands such as doctor and login,
+  # so only inject them for the runtime command families that accept them. The
   # evaluated devenv root is already the current Git worktree root, so no
   # runtime Git lookup is needed and each sibling worktree gets its own cwd.
   codexForRepository = pkgs.writeShellApplication {
@@ -110,6 +112,58 @@
     bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
     text = ''
       shopt -s inherit_errexit 2>/dev/null || :
+
+      nat_command=""
+      nat_debug_command=""
+      nat_expect_value=0
+      nat_parse_scope=root
+      for nat_arg in "$@"; do
+        if [ "$nat_expect_value" = 1 ]; then
+          nat_expect_value=0
+          continue
+        fi
+        if [ "$nat_parse_scope" = root ]; then
+          case "$nat_arg" in
+            --) break ;;
+            --add-dir|--ask-for-approval|--cd|--config|--disable|--enable|--image|--local-provider|--model|--profile|--remote|--remote-auth-token-env|--sandbox|-C|-a|-c|-i|-m|-p|-s)
+              nat_expect_value=1
+              ;;
+            -*) ;;
+            *)
+              nat_command="$nat_arg"
+              if [ "$nat_command" = debug ]; then
+                nat_parse_scope=debug
+              else
+                break
+              fi
+              ;;
+          esac
+        else
+          case "$nat_arg" in
+            --) break ;;
+            --config|--disable|--enable|-c)
+              nat_expect_value=1
+              ;;
+            -*) ;;
+            *)
+              nat_debug_command="$nat_arg"
+              break
+              ;;
+          esac
+        fi
+      done
+
+      nat_apply_repo_defaults=0
+      case "$nat_command" in
+        ""|archive|delete|exec|fork|mcp|resume|review|sandbox|unarchive)
+          nat_apply_repo_defaults=1
+          ;;
+        debug)
+          if [ "$nat_debug_command" = prompt-input ]; then
+            nat_apply_repo_defaults=1
+          fi
+          ;;
+      esac
 
       nat_seen_cd=0
       nat_seen_profile=0
@@ -122,11 +176,13 @@
       done
 
       nat_codex_args=()
-      if [ "$nat_seen_cd" = 0 ]; then
-        nat_codex_args+=(--cd ${lib.escapeShellArg devenvRoot})
-      fi
-      if [ "$nat_seen_profile" = 0 ]; then
-        nat_codex_args+=(--profile nix-agentic-tools)
+      if [ "$nat_apply_repo_defaults" = 1 ]; then
+        if [ "$nat_seen_cd" = 0 ]; then
+          nat_codex_args+=(--cd ${lib.escapeShellArg devenvRoot})
+        fi
+        if [ "$nat_seen_profile" = 0 ]; then
+          nat_codex_args+=(--profile nix-agentic-tools)
+        fi
       fi
 
       exec ${lib.getExe pkgs.ai.chatgpt-codex} "''${nat_codex_args[@]}" "$@"
@@ -508,6 +564,13 @@ in {
     echo "Validating devenv configuration..."
     test "$(command -v codex)" = "${lib.getExe codexForRepository}" || { echo "FAIL: repo-aware Codex wrapper is not first on PATH"; exit 1; }
     ${lib.getExe codexForRepository} --cd "$PWD" --profile nix-agentic-tools --help >/dev/null 2>&1 || { echo "FAIL: Codex wrapper duplicated explicit launch flags"; exit 1; }
+    ${lib.getExe codexForRepository} resume --help >/dev/null 2>&1 || { echo "FAIL: Codex wrapper did not apply repo defaults to resume"; exit 1; }
+    nat_doctor_output="$(${lib.getExe codexForRepository} doctor --json 2>&1 || :)"
+    case "$nat_doctor_output" in
+      *"--profile only applies"*) echo "FAIL: Codex wrapper applied runtime flags to doctor"; exit 1 ;;
+      *'"schemaVersion"'*) ;;
+      *) echo "FAIL: Codex doctor did not emit its JSON report"; exit 1 ;;
+    esac
     test -f .claude/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .claude/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
     # Deref'd references must resolve on disk (guards the dangling-symlink
     # regression end-to-end, not just at the store-path level).
