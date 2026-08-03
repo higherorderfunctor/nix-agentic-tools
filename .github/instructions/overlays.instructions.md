@@ -7,28 +7,28 @@ applyTo: "overlays/*.nix,overlays/**/*.nix"
 
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-08-03 (commit pending — admits `/bin/ps` to Oxlint's
-> Darwin sandbox for the Node binding CLI's process-incarnation probe without
-> changing the pinned-`ourPkgs` cache identity contract). Prior: 2026-08-03
-> (commit pending — nests every binary-package group under `pkgs.ai`, moves `gh`
-> and `glab` into `ai.devTools`, and updates the consumer-path registry without
-> changing any derivation). Prior: 2026-08-03 (commit pending — relocates the
-> two repo-local auto-memory source trees beside their overlay derivations
-> without changing package inputs or cache-hit semantics). Prior: 2026-08-03
-> (commit pending — adds a positive control that substitutes the overlay's own
-> `inputs.nixpkgs` the way a consumer's `follows` directive does, proving that
-> unsupported configuration drifts from the cache-published `fblog` path).
-> Prior: 2026-08-02 (commit pending — adds the pinned external Semble exception:
-> direct upstream selection preserves Numtide's derivation, while a plain meta
-> overlay exposes the MCP role without forking the build). Prior: 2026-07-25
-> (commit pending — the worked example moved off `git-branchless`, which had not
-> carried this shape for a long time, onto `git-absorb`, which does; also
-> corrects the new-package signature, the namespacing in the manual verification
-> snippet, and the pure-binary-fetch package list). If you touch any
-> `overlays/<name>.nix` overlay file or the overlay composition machinery and
-> this fragment isn't updated in the same commit, stop and fix it. Regressions
-> are gated by the `checks.cache-hit-parity` flake check (see "Verification"
-> below).
+> **Last verified:** 2026-08-03 (commit pending — pairs Oxlint's Darwin-only
+> `/bin/ps` derivation request with CI's exact-path daemon allowlist for the
+> Node binding CLI's process-incarnation probe, without changing the
+> pinned-`ourPkgs` cache identity contract). Prior: 2026-08-03 (commit pending —
+> nests every binary-package group under `pkgs.ai`, moves `gh` and `glab` into
+> `ai.devTools`, and updates the consumer-path registry without changing any
+> derivation). Prior: 2026-08-03 (commit pending — relocates the two repo-local
+> auto-memory source trees beside their overlay derivations without changing
+> package inputs or cache-hit semantics). Prior: 2026-08-03 (commit pending —
+> adds a positive control that substitutes the overlay's own `inputs.nixpkgs`
+> the way a consumer's `follows` directive does, proving that unsupported
+> configuration drifts from the cache-published `fblog` path). Prior: 2026-08-02
+> (commit pending — adds the pinned external Semble exception: direct upstream
+> selection preserves Numtide's derivation, while a plain meta overlay exposes
+> the MCP role without forking the build). Prior: 2026-07-25 (commit pending —
+> the worked example moved off `git-branchless`, which had not carried this
+> shape for a long time, onto `git-absorb`, which does; also corrects the
+> new-package signature, the namespacing in the manual verification snippet, and
+> the pure-binary-fetch package list). If you touch any `overlays/<name>.nix`
+> overlay file or the overlay composition machinery and this fragment isn't
+> updated in the same commit, stop and fix it. Regressions are gated by the
+> `checks.cache-hit-parity` flake check (see "Verification" below).
 
 ### The rule
 
@@ -289,32 +289,33 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-08-03 (commit pending — adds Oxlint's Darwin-only
-> `/bin/ps` host dependency without changing its `mkVersion` or IFD flow).
-> Prior: 2026-08-03 (commit pending — moves glab and its committed extracted
-> sidecar together from `overlays/generic/` to `overlays/dev-tools/`, preserving
-> the eval-pure read and regeneration loop). Prior: 2026-08-02 (commit pending —
-> distinguishes Codex's new human-reviewed reverse-coverage gate from
-> generated-sidecar drift and shape checks: update automation may refresh
-> extracted facts but cannot classify a new command, flag, field, maturity, or
-> config seam). Prior: 2026-08-01 (commit pending — documents the sidecar
-> SELF-HEAL loop as a loop: which half is the self-heal and which the backstop,
-> that a red drift check reports a MECHANISM failure rather than a stale file,
-> that it fires on the version-bump path ONLY so an edited extractor does not
-> self-heal, how it differs from the `fix_sidecar_hashes` self-heal, and four
-> debugging entry points. Names `glab` as the fourth extracted package and
-> records that all four now share `vu.mkExtractRegen`; glab had no regeneration
-> at all and proved the latency on PR #621). Prior: 2026-08-01 (Codex joins the
-> extracted sidecar pipeline with recursive Clap help, feature-list, and
-> bundled-model probes plus category-specific shape assertions). Prior:
-> 2026-07-25 (the warm composite now forces `drvPath` instead of `version`, so
-> sidecar-versioned packages are covered; also corrects the claim that the check
-> job's `nix flake check` evaluates ALL systems, which it does not, and the
-> devenv-test job moved to its own workflow). If you touch `overlays/lib.nix`,
-> any overlay `.nix` file that calls `vu.mkVersion`, the shared
-> `.github/actions/warm-ifd/action.yml` composite, or the warm steps that
-> consume it in `.github/workflows/ci.yml` / `.github/workflows/update.yml`, and
-> this fragment isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-08-03 (commit pending — pairs Oxlint's Darwin-only
+> `/bin/ps` host dependency with CI's exact-path daemon allowlist, without
+> changing its `mkVersion` or IFD flow). Prior: 2026-08-03 (commit pending —
+> moves glab and its committed extracted sidecar together from
+> `overlays/generic/` to `overlays/dev-tools/`, preserving the eval-pure read
+> and regeneration loop). Prior: 2026-08-02 (commit pending — distinguishes
+> Codex's new human-reviewed reverse-coverage gate from generated-sidecar drift
+> and shape checks: update automation may refresh extracted facts but cannot
+> classify a new command, flag, field, maturity, or config seam). Prior:
+> 2026-08-01 (commit pending — documents the sidecar SELF-HEAL loop as a loop:
+> which half is the self-heal and which the backstop, that a red drift check
+> reports a MECHANISM failure rather than a stale file, that it fires on the
+> version-bump path ONLY so an edited extractor does not self-heal, how it
+> differs from the `fix_sidecar_hashes` self-heal, and four debugging entry
+> points. Names `glab` as the fourth extracted package and records that all four
+> now share `vu.mkExtractRegen`; glab had no regeneration at all and proved the
+> latency on PR #621). Prior: 2026-08-01 (Codex joins the extracted sidecar
+> pipeline with recursive Clap help, feature-list, and bundled-model probes plus
+> category-specific shape assertions). Prior: 2026-07-25 (the warm composite now
+> forces `drvPath` instead of `version`, so sidecar-versioned packages are
+> covered; also corrects the claim that the check job's `nix flake check`
+> evaluates ALL systems, which it does not, and the devenv-test job moved to its
+> own workflow). If you touch `overlays/lib.nix`, any overlay `.nix` file that
+> calls `vu.mkVersion`, the shared `.github/actions/warm-ifd/action.yml`
+> composite, or the warm steps that consume it in `.github/workflows/ci.yml` /
+> `.github/workflows/update.yml`, and this fragment isn't updated in the same
+> commit, stop and fix it.
 
 ### What is IFD in this repo
 

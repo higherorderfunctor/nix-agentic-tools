@@ -61,6 +61,10 @@ jobs:
           nix_version: "2.34.7"
           nix_conf: |
             accept-flake-config = true
+            # Oxlint's Node binding CLI probes its own process with /bin/ps.
+            # The derivation requests only that Darwin host executable; this
+            # daemon-side allowlist permits Nix to honor the request.
+            allowed-impure-host-deps = /bin/ps
             extra-substituters = https://cache.numtide.com
             extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
 

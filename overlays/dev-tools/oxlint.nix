@@ -32,7 +32,8 @@ in
     inherit version src;
     # The Node binding CLI 3.8.2 probes its own process with /bin/ps.
     # Darwin's Nix sandbox rejects that spawn before the CLI's fallback can
-    # handle it unless the host executable is admitted explicitly.
+    # handle it unless the derivation requests the host executable explicitly;
+    # CI's daemon allowlist separately permits Nix to honor this request.
     __impureHostDeps =
       (prev.__impureHostDeps or [])
       ++ ourPkgs.lib.optionals ourPkgs.stdenv.hostPlatform.isDarwin ["/bin/ps"];
