@@ -8,8 +8,8 @@ applyTo: "overlays/*.nix,overlays/**/*.nix"
 ## Overlay Cache-Hit Parity
 
 > **Last verified:** 2026-08-03 (commit pending — pairs Oxlint's Darwin-only
-> `/bin/ps` derivation request with CI's exact-path daemon allowlist for the
-> Node binding CLI's process-incarnation probe, without changing the
+> `/bin/ps` derivation request with CI's exact-path Darwin host allowlist for
+> the Node binding CLI's process-incarnation probe, without changing the
 > pinned-`ourPkgs` cache identity contract). Prior: 2026-08-03 (commit pending —
 > nests every binary-package group under `pkgs.ai`, moves `gh` and `glab` into
 > `ai.devTools`, and updates the consumer-path registry without changing any
@@ -290,7 +290,7 @@ changes mechanism away from the universal-node layout we forked against.
 ## IFD Patterns and Gotchas
 
 > **Last verified:** 2026-08-03 (commit pending — pairs Oxlint's Darwin-only
-> `/bin/ps` host dependency with CI's exact-path daemon allowlist, without
+> `/bin/ps` host dependency with CI's exact-path Darwin host allowlist, without
 > changing its `mkVersion` or IFD flow). Prior: 2026-08-03 (commit pending —
 > moves glab and its committed extracted sidecar together from
 > `overlays/generic/` to `overlays/dev-tools/`, preserving the eval-pure read

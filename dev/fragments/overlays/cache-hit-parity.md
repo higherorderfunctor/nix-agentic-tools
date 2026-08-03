@@ -1,8 +1,8 @@
 ## Overlay Cache-Hit Parity
 
 > **Last verified:** 2026-08-03 (commit pending — pairs Oxlint's Darwin-only
-> `/bin/ps` derivation request with CI's exact-path daemon allowlist for the
-> Node binding CLI's process-incarnation probe, without changing the
+> `/bin/ps` derivation request with CI's exact-path Darwin host allowlist for
+> the Node binding CLI's process-incarnation probe, without changing the
 > pinned-`ourPkgs` cache identity contract). Prior: 2026-08-03 (commit pending —
 > nests every binary-package group under `pkgs.ai`, moves `gh` and `glab` into
 > `ai.devTools`, and updates the consumer-path registry without changing any
