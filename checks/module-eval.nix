@@ -78,9 +78,13 @@
         type = lib.types.attrsOf lib.types.anything;
         default = {};
       };
-      # xdg.stateHome: the living-workflow HM module bakes
-      # `config.xdg.stateHome` into its generated skill. Home-manager provides
-      # this option in a real eval; stub it here for the module-eval harness.
+      # Home-manager provides these XDG paths in a real eval. Semble uses
+      # cacheHome for its Codex sandbox grant; living-workflow uses stateHome
+      # for its generated skill.
+      xdg.cacheHome = lib.mkOption {
+        type = lib.types.str;
+        default = "/home/test/.cache";
+      };
       xdg.stateHome = lib.mkOption {
         type = lib.types.str;
         default = "/home/test/.local/state";
@@ -1582,6 +1586,11 @@ in {
           };
           description = "Review changes for correctness.";
           instructions = "Read first, then report concrete findings.";
+          tools = ["Bash" "Read"];
+        };
+        agents.unrestricted = {
+          description = "Review without a portable tool restriction.";
+          instructions = "Report concrete findings.";
         };
         claude.enable = true;
         codex.enable = true;
@@ -1599,6 +1608,7 @@ in {
       hmAgent = hm.config.home.file.".codex/agents/reviewer.toml".source.value;
       devenvAgent = devenv.config.files.".codex/agents/reviewer.toml".source.value;
       claudeAgent = hm.config.programs.claude-code.agents.reviewer;
+      unrestrictedClaudeAgent = hm.config.programs.claude-code.agents.unrestricted;
       copilotAgent = devenv.config.files.".github/agents/reviewer.agent.md".text;
     in
       hmAgent
@@ -1607,7 +1617,12 @@ in {
       && lib.hasPrefix "---\n" claudeAgent
       && lib.hasInfix ''name: "reviewer"'' claudeAgent
       && lib.hasInfix ''description: "Review changes for correctness."'' claudeAgent
+      && lib.hasInfix "tools: Bash, Read" claudeAgent
+      && lib.hasPrefix "---\n" unrestrictedClaudeAgent
+      && lib.hasInfix ''description: "Review without a portable tool restriction."'' unrestrictedClaudeAgent
+      && !(lib.hasInfix "tools:" unrestrictedClaudeAgent)
       && lib.hasInfix "Read first, then report concrete findings." copilotAgent
+      && lib.hasInfix "tools: Bash, Read" copilotAgent
       && !(lib.hasInfix "name:" copilotAgent)
   );
 
@@ -2059,13 +2074,79 @@ in {
       && clean devenv
       && hm.config.home.packages == []
       && devenv.config.packages == []
+      && !(devenv.config.env ? SEMBLE_CACHE_LOCATION)
+  );
+
+  module-semble-codex-sandbox-cache-parity = mkTest "semble-codex-sandbox-cache-parity" (
+    let
+      config = {
+        ai.codex.settings = {
+          sandbox_mode = "workspace-write";
+          sandbox_workspace_write.writable_roots = ["/consumer-cache"];
+        };
+        semble = {
+          enable = true;
+          runtimes = ["codex"];
+        };
+      };
+      hm = (evalHm config).config;
+      devenv = (evalDevenv config).config;
+      customDevenv =
+        (evalDevenv (lib.recursiveUpdate config {
+          env.SEMBLE_CACHE_LOCATION = "/custom/semble-cache";
+        })).config;
+      readOnly =
+        (evalDevenv {
+          ai.codex.settings.sandbox_mode = "read-only";
+          semble = {
+            enable = true;
+            runtimes = ["codex"];
+          };
+        }).config;
+      noCodex =
+        (evalDevenv {
+          ai.codex.settings.sandbox_mode = "workspace-write";
+          semble = {
+            enable = true;
+            runtimes = ["claude"];
+          };
+        }).config;
+      profileOnly =
+        (evalDevenv {
+          ai.codex.settings = {
+            default_permissions = "project-edit";
+            permissions.project-edit.description = "Project edit profile.";
+          };
+          semble = {
+            enable = true;
+            runtimes = ["codex"];
+          };
+        }).config;
+    in
+      hm.ai.codex.settings.sandbox_workspace_write.writable_roots
+      == ["/consumer-cache" "/home/test/.cache/semble"]
+      && devenv.ai.codex.settings.sandbox_workspace_write.writable_roots
+      == ["/consumer-cache" "/tmp/devenv-state/semble-cache"]
+      && devenv.env.SEMBLE_CACHE_LOCATION == "/tmp/devenv-state/semble-cache"
+      && customDevenv.ai.codex.settings.sandbox_workspace_write.writable_roots
+      == ["/consumer-cache" "/custom/semble-cache"]
+      && customDevenv.env.SEMBLE_CACHE_LOCATION == "/custom/semble-cache"
+      && readOnly.ai.codex.settings.sandbox_workspace_write == null
+      && readOnly.env.SEMBLE_CACHE_LOCATION == "/tmp/devenv-state/semble-cache"
+      && noCodex.ai.codex.settings.sandbox_workspace_write == null
+      && !(noCodex.env ? SEMBLE_CACHE_LOCATION)
+      && profileOnly.ai.codex.settings.sandbox_workspace_write == null
+      && builtins.all (assertion: assertion.assertion) profileOnly.assertions
   );
 
   module-semble-umbrella-fanout = mkTest "semble-umbrella-fanout" (
     let
       evaluated = evalHm {semble.enable = true;};
       cfg = evaluated.config;
+      claudeInstruction = builtins.head cfg.ai.claude.instructions;
+      codexInstruction = builtins.head cfg.ai.codex.instructions;
       kiroAgent = builtins.fromJSON cfg.ai.kiro.agents.semble-search;
+      kiroInstruction = builtins.head cfg.ai.kiro.instructions;
     in
       builtins.length cfg.home.packages
       == 1
@@ -2074,7 +2155,11 @@ in {
       && cfg.ai.claude.agents ? semble-search
       && cfg.ai.codex.agents ? semble-search
       && cfg.ai.kiro.agents ? semble-search
+      && cfg.ai.claude.agents.semble-search.tools == ["Bash" "Read"]
+      && !(claudeInstruction ? name)
+      && !(codexInstruction ? name)
       && kiroAgent.tools == ["shell" "read"]
+      && kiroInstruction.name == "semble"
       && !(cfg.ai.copilot.mcpServers ? semble)
       && !(cfg.ai.copilot.agents ? semble-search)
       && cfg.ai.copilot.instructions == []
@@ -2162,7 +2247,7 @@ in {
       && lib.hasSuffix "/bin/semble-mcp" refined.command
   );
 
-  module-semble-package-override-and-unnamed-instruction = mkTest "semble-package-override-and-unnamed-instruction" (
+  module-semble-package-override-and-named-kiro-instruction = mkTest "semble-package-override-and-named-kiro-instruction" (
     let
       evaluated = evalDevenv {
         semble = {
@@ -2176,8 +2261,36 @@ in {
       evaluated.config.packages
       == [pkgs.hello]
       && evaluated.config.ai.kiro.mcpServers == {}
-      && !(instruction ? name)
+      && instruction.name == "semble"
       && instruction.text == ../packages/semble/agent-instructions.md
+  );
+
+  module-semble-instructions-use-native-files = mkTest "semble-instructions-use-native-files" (
+    let
+      nativeConfig = {
+        ai = {
+          claude.enable = true;
+          codex.enable = true;
+          kiro.enable = true;
+        };
+        semble.instructions.enable = true;
+      };
+      hm = (evalHm nativeConfig).config;
+      devenv = (evalDevenv nativeConfig).config;
+      hmKiroSteering = hm.ai.kiro.steeringFiles;
+      devenvKiroSteering = devenv.ai.kiro.steeringFiles;
+      hmKiroInstruction = (hmKiroSteering."semble.md" or {}).text or "";
+      devenvKiroInstruction = (devenvKiroSteering."semble.md" or {}).text or "";
+    in
+      lib.hasInfix "Use `semble search`" (hm.programs.claude-code.context or "")
+      && lib.hasInfix "Use `semble search`" (hm.home.file.".codex/AGENTS.md".text or "")
+      && hmKiroSteering ? "semble.md"
+      && !(hmKiroSteering ? "instructions.md")
+      && lib.hasInfix "name: semble" hmKiroInstruction
+      && lib.hasInfix "inclusion: always" hmKiroInstruction
+      && devenvKiroSteering ? "semble.md"
+      && !(devenvKiroSteering ? "instructions.md")
+      && hmKiroInstruction == devenvKiroInstruction
   );
 
   module-semble-hm-devenv-option-parity = mkTest "semble-hm-devenv-option-parity" (
@@ -2216,7 +2329,10 @@ in {
       && lib.hasSuffix "/bin/semble-mcp" code.command
       && all.args == ["--content" "all"]
       && records.instruction.text == ../packages/semble/agent-instructions.md
+      && records.kiroInstruction.name == "semble"
+      && records.kiroInstruction.text == records.instruction.text
       && records.semanticAgent.instructions == ../packages/semble/agent-instructions.md
+      && records.semanticAgent.tools == ["Bash" "Read"]
       && kiroAgent.tools == ["shell" "read"]
   );
 

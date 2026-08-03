@@ -1,10 +1,19 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-02 (commit pending — records plain convenience
-> modules such as Semble contributing selected per-runtime defaults without
-> enabling those runtimes). Prior: 2026-08-02 (commit pending — Codex named
-> profile files now use one typed settings schema across HM and devenv: HM links
-> user-global files, while devenv safely materializes repository-declared
+> **Last verified:** 2026-08-02 (commit pending — Semble automatically grants
+> its cache when a selected Codex integration uses the workspace-write sandbox,
+> with user-global XDG cache ownership in HM and project-local state plus an
+> environment override in devenv). Prior: 2026-08-02 (commit pending — portable
+> semantic agents may restrict Claude and Copilot with their shared `tools`
+> vocabulary while Codex deliberately omits that field and Kiro retains its
+> native JSON model). Prior: 2026-08-02 (commit pending — Semble keeps Claude
+> and Codex instructions unnamed for their single-file composers but names its
+> Kiro instruction so directory-native steering emits `semble.md` instead of the
+> generic `instructions.md`). Prior: 2026-08-02 (commit pending — records plain
+> convenience modules such as Semble contributing selected per-runtime defaults
+> without enabling those runtimes). Prior: 2026-08-02 (commit pending — Codex
+> named profile files now use one typed settings schema across HM and devenv: HM
+> links user-global files, while devenv safely materializes repository-declared
 > whole-file layers into CODEX_HOME before shell entry). Prior: 2026-08-02
 > (commit pending — instruction and rule records carry a typed Kiro-only
 > inclusion override with identical HM/devenv fanout; null preserves
@@ -220,8 +229,11 @@ enabled ecosystem whose native model preserves the option's semantics):
   and repository-local `.agents/skills` in devenv; Claude, Copilot, and Kiro use
   their established native directories.
 - `ai.agents` — either legacy Markdown/path entries for Claude and Copilot or a
-  portable `{ description, instructions, codex? }` record. Semantic records
-  render Claude/Copilot frontmatter plus body and Codex standalone TOML. Codex
+  portable `{ description, instructions, tools?, codex? }` record. Semantic
+  records render Claude/Copilot frontmatter plus body and Codex standalone TOML.
+  The optional `tools` list uses Claude and Copilot's shared tool names and
+  renders as their comma-separated frontmatter allowlist; Codex deliberately
+  omits it because its standalone agent format has no equivalent field. Codex
   fails loudly on a legacy raw entry instead of pretending Markdown is a valid
   agent config. Legacy Nix paths stay path-valued for Claude's native option but
   are read into text for Copilot's file writer. Kiro remains excluded because
@@ -373,10 +385,22 @@ authors must decide scope consciously.
 
 Plain convenience modules may contribute directly to selected
 `ai.<runtime>.<pool>` entries at `mkDefault` priority. Semble uses this for its
-named MCP and agent defaults plus unnamed instruction records in both backend
-evaluations. Selecting a runtime configures that runtime's integration only; the
-convenience module must not set `ai.<runtime>.enable`, because package/CLI
-activation remains an explicit consumer choice.
+named MCP and agent defaults in both backend evaluations. Its Claude and Codex
+instruction records stay unnamed so they compose into each runtime's single
+always-loaded file, while its Kiro record is named `semble` so the
+directory-native renderer writes `semble.md` rather than collecting unrelated
+content in `instructions.md`. Selecting a runtime configures that runtime's
+integration only; the convenience module must not set `ai.<runtime>.enable`,
+because package/CLI activation remains an explicit consumer choice.
+
+Semble also treats Codex's selected sandbox mode as an integration boundary. A
+selected Codex feature plus `sandbox_mode = "workspace-write"` appends the
+effective Semble cache to `sandbox_workspace_write.writable_roots`. Home Manager
+uses `${config.xdg.cacheHome}/semble`. Any Codex-targeted devenv integration
+defaults `SEMBLE_CACHE_LOCATION` to `${config.devenv.state}/semble-cache`;
+workspace-write mode grants the final environment value so consumer overrides
+stay coherent. The convenience module does not select a sandbox mode, and
+read-only or unrestricted modes get no writable-root contribution.
 
 **Worked example — stacked-workflows skills.** Because an `ai.skills` value set
 in one backend is invisible to the other, the stacked-workflows package

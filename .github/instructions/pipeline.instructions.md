@@ -568,8 +568,11 @@ The directory is gitignored.
 
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-08-02 (commit pending — the generated README now
-> documents shared typed Codex profile ownership and devenv's native user-layer
+> **Last verified:** 2026-08-02 (commit pending — generated Semble guidance now
+> exposes its runtime-specific direct instruction records: unnamed for the
+> Claude/Codex single-file composers and named for Kiro's `semble.md` steering
+> file). Prior: 2026-08-02 (commit pending — the generated README now documents
+> shared typed Codex profile ownership and devenv's native user-layer
 > materialization). Prior: 2026-08-02 (commit pending — Kiro's transformer now
 > accepts an explicit typed `always | auto | fileMatch | manual` inclusion mode
 > while preserving the legacy paths-derived default, and the shared renderer

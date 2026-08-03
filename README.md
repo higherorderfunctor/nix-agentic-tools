@@ -346,6 +346,17 @@ semble = {
 };
 ```
 
+Claude and Codex compose the guidance into their single always-loaded
+`CLAUDE.md` and `AGENTS.md` files. Kiro writes its named instruction to
+`.kiro/steering/semble.md`.
+
+When a selected Semble feature targets Codex in `workspace-write` mode, the
+module automatically grants its cache as a writable root. Home Manager uses the
+user XDG cache. A Codex-targeted devenv integration always uses a project-local
+state cache and exports it as `SEMBLE_CACHE_LOCATION`; the writable-root grant
+remains conditional on `workspace-write`. The module does not select the sandbox
+mode itself.
+
 Direct configuration remains available when the convenience feature is disabled:
 
 ```nix
@@ -361,8 +372,13 @@ ai.codex = {
   instructions = [inputs.nix-agentic-tools.lib.ai.semble.instruction];
 };
 
-ai.kiro.agents.semble-search =
-  inputs.nix-agentic-tools.lib.ai.semble.kiroAgent;
+ai.kiro = {
+  agents.semble-search =
+    inputs.nix-agentic-tools.lib.ai.semble.kiroAgent;
+  instructions = [
+    inputs.nix-agentic-tools.lib.ai.semble.kiroInstruction
+  ];
+};
 ```
 
 Copilot is intentionally outside `semble.*`; configure it directly through

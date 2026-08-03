@@ -1,4 +1,7 @@
-{installPackage}: {
+{
+  configureCodexCache,
+  installPackage,
+}: {
   config,
   lib,
   pkgs,
@@ -20,6 +23,11 @@
     featureEnabled feature && lib.elem runtime (featureRuntimes feature);
   featureActive = feature:
     featureEnabled feature && featureRuntimes feature != [];
+  codexSelected = lib.any (feature: selected "codex" feature) [
+    cfg.instructions
+    cfg.mcp
+    cfg.subagent
+  ];
   mkDefaultRecursive = lib.mapAttrsRecursive (_path: lib.mkDefault);
 
   mcpEntry = {
@@ -28,10 +36,15 @@
     type = "stdio";
   };
 
-  runtimeConfig = runtime:
+  runtimeConfig = runtime: let
+    instruction =
+      if runtime == "kiro"
+      then records.kiroInstruction
+      else records.instruction;
+  in
     lib.mkMerge [
       (lib.mkIf (selected runtime cfg.instructions) {
-        ai.${runtime}.instructions = [records.instruction];
+        ai.${runtime}.instructions = [instruction];
       })
       (lib.mkIf (selected runtime cfg.mcp) {
         ai.${runtime}.mcpServers.semble = mkDefaultRecursive mcpEntry;
@@ -54,6 +67,8 @@ in {
           || featureActive cfg.subagent
         )
         (installPackage cfg.package))
+      (lib.mkIf codexSelected
+        (configureCodexCache {inherit config lib;}))
     ]
     ++ map runtimeConfig runtimes
   );

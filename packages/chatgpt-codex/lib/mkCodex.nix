@@ -211,6 +211,12 @@
   codexSettingsType = lib.types.submodule {
     freeformType = tomlFormat.type;
     options = {
+      _integration_writable_roots = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        internal = true;
+        description = "Writable roots contributed by integrations and applied only in workspace-write mode.";
+      };
       agents = lib.mkOption {
         type = lib.types.nullOr (lib.types.submodule {
           freeformType = tomlFormat.type;
@@ -359,6 +365,7 @@
       };
     };
   };
+  stripIntegrationRoots = settings: removeAttrs settings ["_integration_writable_roots"];
   hasPermissionProfiles = settings:
     helpers.filterNulls (lib.filterAttrs
       (name: _: builtins.elem name ["default_permissions" "permissions"])
@@ -654,9 +661,10 @@
         && lib.intersectLists reservedAgentKeys (builtins.attrNames (value.codex or {})) == [];
       message = ''
         Codex agent '${name}' must use the portable { description,
-        instructions, codex? } form, have a safe filename stem without a
-        .toml suffix, and keep name/description/developer_instructions out of
-        the codex extension.
+        instructions, tools?, codex? } form, have a safe filename stem without
+        a .toml suffix, and keep name/description/developer_instructions out of
+        the codex extension. Codex ignores the portable tools allowlist because
+        its agent format has no equivalent field.
       '';
     })
     agents;
@@ -821,6 +829,7 @@ in
       profiles = lib.mkOption {
         type = lib.types.attrsOf codexSettingsType;
         default = {};
+        apply = lib.mapAttrs (_name: stripIntegrationRoots);
         description = ''
           Named user configuration layers written as
           `''${configDir}/<name>.config.toml` and selected explicitly with
@@ -844,6 +853,24 @@ in
       settings = lib.mkOption {
         type = codexSettingsType;
         default = {};
+        apply = settings: let
+          integrationRoots = settings._integration_writable_roots;
+          cleanSettings = stripIntegrationRoots settings;
+          workspaceSettings = cleanSettings.sandbox_workspace_write;
+          existingRoots =
+            if workspaceSettings == null
+            then []
+            else workspaceSettings.writable_roots;
+        in
+          if cleanSettings.sandbox_mode == "workspace-write" && integrationRoots != []
+          then
+            cleanSettings
+            // {
+              sandbox_workspace_write =
+                (lib.optionalAttrs (workspaceSettings != null) workspaceSettings)
+                // {writable_roots = lib.unique (existingRoots ++ integrationRoots);};
+            }
+          else cleanSettings;
         description = ''
           Codex config.toml settings. Common stable keys are typed; unknown
           TOML-compatible keys are accepted as a native escape hatch. Home
