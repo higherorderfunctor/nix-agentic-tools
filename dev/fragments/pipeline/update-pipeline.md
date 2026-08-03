@@ -1,7 +1,10 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-07-27 (commit pending — re-points the
-> reference-submodule-shape pointer from the gitignored
+> **Last verified:** 2026-08-02 (commit pending — the `llm-agents` input update
+> regenerates Semble's upstream-template snapshot through its separate
+> extraction derivation, while human-reviewed content hashes intentionally
+> remain manual and make CI stop on unreviewed drift). Prior: 2026-07-27 (commit
+> pending — re-points the reference-submodule-shape pointer from the gitignored
 > `private/slice-fixture/lib/concerns.nix` at the tracked in-tree registries
 > `lib/fragments-registry.nix` and `lib/checks.nix`; also deletes the hardcoded
 > "29 packages — 16 main-tracking + 13 binary" target count, which had gone
@@ -26,7 +29,11 @@ git ops, delete old `update/*` branches, clear the report file).
 Targets fall into three categories:
 
 - **Inputs** (`update-input.sh <name>`) — `nix flake update <name>` in a
-  worktree, then `devenv update` to sync `devenv.lock`.
+  worktree, then `devenv update` to sync `devenv.lock`. The `llm-agents` input
+  additionally regenerates Semble's committed upstream-template snapshot from a
+  separate derivation. It does not rewrite the human-reviewed content hashes, so
+  a changed template reaches the update PR but fails its coverage check until
+  the local derivative is reviewed.
 - **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs `nix-update` in
   a worktree, optionally preceded by a rev bump for main-tracking packages. The
   final target `update-report` runs `update-report.sh` to print a summary

@@ -262,6 +262,7 @@ qfdx
 queuelib
 quickstarts
 qwen
+rawfile
 rcodesign
 readabilipy
 reauthor
