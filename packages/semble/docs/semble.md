@@ -53,6 +53,14 @@ Codex compose the guidance into their single always-loaded `CLAUDE.md` and
 `AGENTS.md` files. Kiro receives a named instruction and writes it to
 `.kiro/steering/semble.md`.
 
+When a selected Semble feature targets Codex and `sandbox_mode` is
+`workspace-write`, the module automatically grants Semble a writable cache. Home
+Manager appends `${config.xdg.cacheHome}/semble`. A Codex-targeted devenv
+integration uses `${config.devenv.state}/semble-cache`, exports that path as
+`SEMBLE_CACHE_LOCATION`, and follows a consumer override of the variable. The
+module does not choose a sandbox mode; it only adds the matching writable root
+when the consumer selects `workspace-write`.
+
 ## Instruction content
 
 Upstream's instructions integration primarily explains the MCP tool names and

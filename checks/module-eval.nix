@@ -78,9 +78,13 @@
         type = lib.types.attrsOf lib.types.anything;
         default = {};
       };
-      # xdg.stateHome: the living-workflow HM module bakes
-      # `config.xdg.stateHome` into its generated skill. Home-manager provides
-      # this option in a real eval; stub it here for the module-eval harness.
+      # Home-manager provides these XDG paths in a real eval. Semble uses
+      # cacheHome for its Codex sandbox grant; living-workflow uses stateHome
+      # for its generated skill.
+      xdg.cacheHome = lib.mkOption {
+        type = lib.types.str;
+        default = "/home/test/.cache";
+      };
       xdg.stateHome = lib.mkOption {
         type = lib.types.str;
         default = "/home/test/.local/state";
@@ -2070,6 +2074,69 @@ in {
       && clean devenv
       && hm.config.home.packages == []
       && devenv.config.packages == []
+      && !(devenv.config.env ? SEMBLE_CACHE_LOCATION)
+  );
+
+  module-semble-codex-sandbox-cache-parity = mkTest "semble-codex-sandbox-cache-parity" (
+    let
+      config = {
+        ai.codex.settings = {
+          sandbox_mode = "workspace-write";
+          sandbox_workspace_write.writable_roots = ["/consumer-cache"];
+        };
+        semble = {
+          enable = true;
+          runtimes = ["codex"];
+        };
+      };
+      hm = (evalHm config).config;
+      devenv = (evalDevenv config).config;
+      customDevenv =
+        (evalDevenv (lib.recursiveUpdate config {
+          env.SEMBLE_CACHE_LOCATION = "/custom/semble-cache";
+        })).config;
+      readOnly =
+        (evalDevenv {
+          ai.codex.settings.sandbox_mode = "read-only";
+          semble = {
+            enable = true;
+            runtimes = ["codex"];
+          };
+        }).config;
+      noCodex =
+        (evalDevenv {
+          ai.codex.settings.sandbox_mode = "workspace-write";
+          semble = {
+            enable = true;
+            runtimes = ["claude"];
+          };
+        }).config;
+      profileOnly =
+        (evalDevenv {
+          ai.codex.settings = {
+            default_permissions = "project-edit";
+            permissions.project-edit.description = "Project edit profile.";
+          };
+          semble = {
+            enable = true;
+            runtimes = ["codex"];
+          };
+        }).config;
+    in
+      hm.ai.codex.settings.sandbox_workspace_write.writable_roots
+      == ["/consumer-cache" "/home/test/.cache/semble"]
+      && devenv.ai.codex.settings.sandbox_workspace_write.writable_roots
+      == ["/consumer-cache" "/tmp/devenv-state/semble-cache"]
+      && devenv.env.SEMBLE_CACHE_LOCATION == "/tmp/devenv-state/semble-cache"
+      && customDevenv.ai.codex.settings.sandbox_workspace_write.writable_roots
+      == ["/consumer-cache" "/custom/semble-cache"]
+      && customDevenv.env.SEMBLE_CACHE_LOCATION == "/custom/semble-cache"
+      && readOnly.ai.codex.settings.sandbox_workspace_write == null
+      && readOnly.env.SEMBLE_CACHE_LOCATION == "/tmp/devenv-state/semble-cache"
+      && noCodex.ai.codex.settings.sandbox_workspace_write == null
+      && !(noCodex.env ? SEMBLE_CACHE_LOCATION)
+      && profileOnly.ai.codex.settings.sandbox_workspace_write == null
+      && builtins.all (assertion: assertion.assertion) profileOnly.assertions
   );
 
   module-semble-umbrella-fanout = mkTest "semble-umbrella-fanout" (

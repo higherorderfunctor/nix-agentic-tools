@@ -632,6 +632,13 @@
     `CLAUDE.md` and `AGENTS.md` files. Kiro writes its named instruction to
     `.kiro/steering/semble.md`.
 
+    When a selected Semble feature targets Codex in `workspace-write` mode, the
+    module automatically grants its cache as a writable root. Home Manager uses
+    the user XDG cache. A Codex-targeted devenv integration always uses a
+    project-local state cache and exports it as `SEMBLE_CACHE_LOCATION`; the
+    writable-root grant remains conditional on `workspace-write`. The module
+    does not select the sandbox mode itself.
+
     Direct configuration remains available when the convenience feature is
     disabled:
 

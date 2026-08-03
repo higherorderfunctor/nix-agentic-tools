@@ -1,4 +1,7 @@
-{installPackage}: {
+{
+  configureCodexCache,
+  installPackage,
+}: {
   config,
   lib,
   pkgs,
@@ -20,6 +23,11 @@
     featureEnabled feature && lib.elem runtime (featureRuntimes feature);
   featureActive = feature:
     featureEnabled feature && featureRuntimes feature != [];
+  codexSelected = lib.any (feature: selected "codex" feature) [
+    cfg.instructions
+    cfg.mcp
+    cfg.subagent
+  ];
   mkDefaultRecursive = lib.mapAttrsRecursive (_path: lib.mkDefault);
 
   mcpEntry = {
@@ -59,6 +67,8 @@ in {
           || featureActive cfg.subagent
         )
         (installPackage cfg.package))
+      (lib.mkIf codexSelected
+        (configureCodexCache {inherit config lib;}))
     ]
     ++ map runtimeConfig runtimes
   );
