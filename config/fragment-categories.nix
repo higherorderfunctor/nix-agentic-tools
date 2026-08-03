@@ -160,8 +160,9 @@ _: {
     kiro-cli = {
       scopes = [
         "overlays/kiro-memory-distiller.nix"
+        "overlays/kiro-memory-distiller/**"
+        "overlays/mcp-servers/openmemory-mem/**"
         "packages/kiro-cli/**"
-        "packages/openmemory-mcp/mem/**"
       ];
       sources = [
         {

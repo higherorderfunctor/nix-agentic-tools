@@ -24,8 +24,8 @@
   # SDK/Postgres-schema lockstep. Source is repo-local (consumer-stable → cache-hit
   # parity holds). Referenced as individual file paths so only the helper (not its
   # test) enters $out. See docs/plans/kiro-cli-auto-memory.md.
-  memHelper = ../../packages/openmemory-mcp/mem/openmemory-mem.ts;
-  memTest = ../../packages/openmemory-mcp/mem/openmemory-mem.test.ts;
+  memHelper = ./openmemory-mem/openmemory-mem.ts;
+  memTest = ./openmemory-mem/openmemory-mem.test.ts;
 in
   buildNpmPackage {
     pname = "openmemory-mcp";

@@ -194,7 +194,7 @@ of the workstream; ALL CODE (stages 1–5b) AND the doc are now done. Self-serve
   + a mandatory-maintenance trigger per the repo's fragment doctrine.
 - **Registered** in `dev/generate.nix`: a new `kiro-cli` category in `devFragmentNames` (location=package)
   + `packagePaths` (scoped to `overlays/kiro-memory-distiller.nix` + `packages/kiro-cli/**` +
-  `packages/openmemory-mcp/mem/**`). Fans out to `.claude/rules/kiro-cli.md`, the TRACKED
+  `overlays/mcp-servers/openmemory-mem/**`). Fans out to `.claude/rules/kiro-cli.md`, the TRACKED
   `.github/instructions/kiro-cli.instructions.md`, and `.kiro/steering/kiro-cli.md` — all 3 ecosystem
   transforms verified (Copilot comma-`applyTo`, Claude `paths:` list, Kiro `fileMatchPattern:` array).
   Cross-linked from `overlays/README.md` (+ a stale `bun test (58)`→`(80)` fix) and this plan.
@@ -244,7 +244,7 @@ all green; NOT yet pushed (origin was at 7df7f194 = the S13 tip).
   route; log tuning paths"); C is the best because it is the deliverable this stage is NAMED for
   (archive-RAG) and is what 5a's `query` subcommand was built for.
 - **Landed (code):**
-  - `packages/kiro-cli/memory/distiller.ts` — a `--read` mode (`mainRead`) as a 3rd role bin
+  - `overlays/kiro-memory-distiller/distiller.ts` — a `--read` mode (`mainRead`) as a 3rd role bin
     `kiro-memory-recall`, mirroring `--flush`/`kiro-memory-flush`. New exports: `BackendQuery` (the read
     seam, symmetric with `BackendWrite`), `RecallConfig`, `formatRecall` (pure composer: fenced
     `## Recent working context` + `## Related from project memory`, both bounded), `recall` (orchestrator:
@@ -377,7 +377,7 @@ checkPhase runs all 30 tests in the nix sandbox), 4-lens adversarial review + pe
   defaults to "anonymous"; search applies NO user filter when unset → the helper's own write→read loop
   is self-consistent; `OM_USER_ID` aligns the write user_id to the daemon tenant (`dev-no-auth`) at
   the consumer flip.
-- **Landed:** `packages/openmemory-mcp/mem/openmemory-mem.{ts,test.ts}` — a PURE CLI core
+- **Landed:** `overlays/mcp-servers/openmemory-mem/openmemory-mem.{ts,test.ts}` — a PURE CLI core
   (parseArgs / formatHits / normalizeRows / runMem) with the Memory SDK as an INJECTED seam
   (`MemoryBackend`); the real backend is built LAZILY (dynamic import of the co-packaged
   `./dist/index.js`, which connects to Postgres on load) only in the `import.meta.main` entry, so the
@@ -422,7 +422,7 @@ one-file-3-hooks wiring the 5b read side rides on, so it precedes 5b. Harness:
 
 ── STATE (end of session 11) ──
 Session 11 (2026-07-13) landed STAGE 4 — the D23b per-project buffer lockfile (D28). Self-serve;
-isolated to packages/kiro-cli/memory/ (distiller.ts + tests) + a cspell bump. The distiller loop is
+isolated to overlays/kiro-memory-distiller/ (distiller.ts + tests) + a cspell bump. The distiller loop is
 now concurrency-safe across sibling worktrees. All green: 67 bun tests (TDD), treefmt + cspell clean,
 built OOM-safely (67 tests in the nix checkPhase sandbox), 4-lens adversarial review + per-finding
 refute (2 CONFIRMED fixed, 4 PARTIAL adjudicated, 0 survived un-actioned).
@@ -524,7 +524,7 @@ sandbox via checkPhase, the targeted build is clean, treefmt + cspell clean, adv
 reviewed (4-lens workflow + per-finding refute — 0 confirmed defects).
 - **Landed:** `overlays/kiro-memory-distiller.nix` — a dependency-free (node: built-ins only,
   so NO buildNpmPackage/npmDepsHash) `ourPkgs.stdenvNoCC.mkDerivation` over
-  `packages/kiro-cli/memory/distiller.ts`. Mirrors the openmemory-mcp bun-wrapper idiom
+  `overlays/kiro-memory-distiller/distiller.ts`. Mirrors the openmemory-mcp bun-wrapper idiom
   (`makeWrapper ${bun}/bin/bun --add-flags <entry>`), NOT `bun build --compile` (no in-repo
   precedent; bun is already in the closure; a wrapper is smaller + transparent). TWO role bins
   from one drv (like openmemory-mcp/-serve): `kiro-memory-distiller` (Stop/Manual → main()) +
@@ -588,7 +588,7 @@ HITL stays on the nixos-config side).
 ── STATE (end of session 8) ──
 Session 8 (2026-07-12) landed D24 — the deferred tail-loss fix (D23a). Self-serve;
 the distiller is still UNWIRED (no nix/module consumer yet), so the change is
-isolated to packages/kiro-cli/memory/. All green (58 bun tests, TDD), treefmt +
+isolated to overlays/kiro-memory-distiller/. All green (58 bun tests, TDD), treefmt +
 cspell clean, adversarially reviewed (4-lens workflow + per-finding verify — the
 watermark defect below was CAUGHT and fixed BEFORE landing).
 - **Landed:** shouldDistill debounce gate AND→OR (batch-when-busy / flush-when-quiet
@@ -625,7 +625,7 @@ consumer flip; HITL stays on the nixos-config side).
 Session 7 (2026-07-11) built CHECKPOINT 2, PART 1: the deterministic Stop-hook
 DISTILLER CORE, and CORRECTED the messages.jsonl schema the plan had wrong. All
 self-serve; committed to nix-agentic-tools (d50fae0), nixos-config untouched.
-- **Landed:** `packages/kiro-cli/memory/{distiller.ts,distiller.test.ts}` (bun/TS,
+- **Landed:** `overlays/kiro-memory-distiller/{distiller.ts,distiller.test.ts}` (bun/TS,
   47 TDD tests, treefmt+cspell clean, real-transcript validated). Pure functions:
   parseTranscript, selectUndistilledTurns (execId dedup), deriveProjectId (D19
   worktree-shared slug), shouldDistill (debounce), formatTurnBlock, rollTiers; plus
@@ -1713,10 +1713,10 @@ hook format.
   still gated on Q11 (DB schema migration) + Q10 (tenant/user_id).
 
 - **D23 (S7):** **Checkpoint 2, part 1 — the distiller core landed (d50fae0), +
-  a schema correction.** Built `packages/kiro-cli/memory/distiller.ts` (bun/TS,
-  47 TDD tests, real-transcript validated). It is the deterministic Stop-hook
-  write path: parse → select undistilled complete turns (execId dedup) → roll
-  the tiered file buffer (`~/.kiro-memory/<slug>/` now/recent/archive) →
+  a schema correction.** Built `overlays/kiro-memory-distiller/distiller.ts`
+  (bun/TS, 47 TDD tests, real-transcript validated). It is the deterministic
+  Stop-hook write path: parse → select undistilled complete turns (execId dedup)
+  → roll the tiered file buffer (`~/.kiro-memory/<slug>/` now/recent/archive) →
   best-effort backend seam → persist per-session state. Debounce = line-delta +
   cooldown; Manual = `force`. project_id/slug = D19 (dirname of git-common-dir +
   path hash; worktrees share).
@@ -1806,7 +1806,7 @@ hook format.
 
 - **D25 (S9):** **STAGE 2 landed — the distiller is nix-packaged.**
   `overlays/kiro-memory-distiller.nix` packages
-  `packages/kiro-cli/memory/distiller.ts` as an
+  `overlays/kiro-memory-distiller/distiller.ts` as an
   `ourPkgs.stdenvNoCC.mkDerivation`. The script is dependency-free (node:
   built-ins only) → NO `buildNpmPackage`/`npmDepsHash` (simpler than every MCP
   server). Build pattern = the repo's established bun-wrapper idiom
@@ -2194,8 +2194,9 @@ hook format.
   fragment (location=package) registered in `dev/generate.nix`
   (`devFragmentNames.kiro-cli` + `packagePaths.kiro-cli`, scoped to
   `overlays/kiro-memory-distiller.nix` + `packages/kiro-cli/**` +
-  `packages/openmemory-mcp/mem/**`). Fans out to `.claude/rules/kiro-cli.md`,
-  the TRACKED `.github/instructions/kiro-cli.instructions.md`, and
+  `overlays/mcp-servers/openmemory-mem/**`). Fans out to
+  `.claude/rules/kiro-cli.md`, the TRACKED
+  `.github/instructions/kiro-cli.instructions.md`, and
   `.kiro/steering/kiro-cli.md`. Cross-linked from `overlays/README.md` (+ a
   stale 58→80 test-count fix) and this plan (the top-of-file implementation-map
   pointer). Covers everything D26 named (READ/WRITE frame; distiller pipeline +
@@ -2484,8 +2485,8 @@ hook format.
     on Q11 + Q10.
 
 - **Session 7 — 2026-07-11.** Built **Checkpoint 2, part 1 — the distiller
-  core** (`packages/kiro-cli/memory/distiller.ts` + tests, bun/TS, 47 TDD tests,
-  treefmt + cspell clean, committed d50fae0). FIRST introspected the REAL
+  core** (`overlays/kiro-memory-distiller/distiller.ts` + tests, bun/TS, 47 TDD
+  tests, treefmt + cspell clean, committed d50fae0). FIRST introspected the REAL
   `messages.jsonl` (3 live sessions) and CORRECTED the plan's schema:
   discriminator is `payload.type`, and `promptTurnSummaries` is billing data
   (not a summary) → the B3/D12 reuse shortcut is dead; distillation now derives
@@ -2502,7 +2503,7 @@ hook format.
 
 - **Session 8 — 2026-07-12.** Landed D24 (the deferred D23a tail-loss fix)
   self-serve on refactor/ai-factory-architecture; the distiller is still
-  unwired, so the change is isolated to packages/kiro-cli/memory/. TDD
+  unwired, so the change is isolated to overlays/kiro-memory-distiller/. TDD
   throughout (watched each test fail first): shouldDistill gate AND→OR +
   flushSessionTails SessionStart scan + `--flush` CLI + lastTranscriptSize state
   field + DRY helpers (58 bun tests, treefmt + cspell clean). Ran a 4-lens
@@ -2567,7 +2568,7 @@ hook format.
 
 - **Session 11 — 2026-07-13.** Landed **STAGE 4 — the D23b per-project buffer
   lockfile** (D28), self-serve on refactor/ai-factory-architecture; isolated to
-  packages/kiro-cli/memory/ (distiller.ts
+  overlays/kiro-memory-distiller/ (distiller.ts
   - tests) + a cspell bump. TDD throughout (watched RED first): `withBufferLock`
     (linkSync O_EXCL mutex + ttl stale-break + `Atomics.wait` backoff,
     injectable clock/sleep) around the shared-buffer RMW; `distill()` returns

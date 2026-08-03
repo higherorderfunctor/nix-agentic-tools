@@ -1,30 +1,32 @@
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-08-03 (commit pending — the generated README now keeps
-> `nix-agentic-tools` on its own nixpkgs pin so consumer store paths match the
-> published binary cache). Prior: 2026-08-02 (commit pending — generated Semble
-> guidance now exposes its runtime-specific direct instruction records: unnamed
-> for the Claude/Codex single-file composers and named for Kiro's `semble.md`
-> steering file). Prior: 2026-08-02 (commit pending — the generated README now
-> documents shared typed Codex profile ownership and devenv's native user-layer
-> materialization). Prior: 2026-08-02 (commit pending — Kiro's transformer now
-> accepts an explicit typed `always | auto | fileMatch | manual` inclusion mode
-> while preserving the legacy paths-derived default, and the shared renderer
-> resolves typed path-valued instruction bodies before node normalization).
-> Prior 2026-08-02: AGENTS.md now derives a compact source-fragment routing
-> index from the category registry for flat consumers, without flattening scoped
-> fragment bodies. Prior: 2026-08-01 (generated instruction and repo-document
-> derivations remain flake packages but are excluded from the authenticated
-> all-packages build, preventing revision-by-revision Cachix churn while
-> `nix flake check` retains drift coverage). Prior: 2026-07-24 (the
-> `packagePaths` + `devFragmentNames` registries dissolved into
-> `config.fragments.categories`). If you touch `lib/fragments.nix`,
-> `config/fragment-categories.nix`, `lib/fragments-registry.nix`,
-> `dev/generate.nix`, `lib/ai/transformers/`, or any content-package
-> `passthru.fragments` surface and this fragment isn't updated in the same
-> commit, stop and fix it. This is a cross-cutting pipeline — changes that look
-> small in one file frequently ripple into generator outputs for four
-> ecosystems.
+> **Last verified:** 2026-08-03 (commit pending — the kiro auto-memory category
+> now scopes its moved implementation sources under `overlays/`, keeping the
+> fragment routed to both sides of that abstraction). Prior: 2026-08-03 (commit
+> pending — the generated README now keeps `nix-agentic-tools` on its own
+> nixpkgs pin so consumer store paths match the published binary cache). Prior:
+> 2026-08-02 (commit pending — generated Semble guidance now exposes its
+> runtime-specific direct instruction records: unnamed for the Claude/Codex
+> single-file composers and named for Kiro's `semble.md` steering file). Prior:
+> 2026-08-02 (commit pending — the generated README now documents shared typed
+> Codex profile ownership and devenv's native user-layer materialization).
+> Prior: 2026-08-02 (commit pending — Kiro's transformer now accepts an explicit
+> typed `always | auto | fileMatch | manual` inclusion mode while preserving the
+> legacy paths-derived default, and the shared renderer resolves typed
+> path-valued instruction bodies before node normalization). Prior 2026-08-02:
+> AGENTS.md now derives a compact source-fragment routing index from the
+> category registry for flat consumers, without flattening scoped fragment
+> bodies. Prior: 2026-08-01 (generated instruction and repo-document derivations
+> remain flake packages but are excluded from the authenticated all-packages
+> build, preventing revision-by-revision Cachix churn while `nix flake check`
+> retains drift coverage). Prior: 2026-07-24 (the `packagePaths` +
+> `devFragmentNames` registries dissolved into `config.fragments.categories`).
+> If you touch `lib/fragments.nix`, `config/fragment-categories.nix`,
+> `lib/fragments-registry.nix`, `dev/generate.nix`, `lib/ai/transformers/`, or
+> any content-package `passthru.fragments` surface and this fragment isn't
+> updated in the same commit, stop and fix it. This is a cross-cutting pipeline
+> — changes that look small in one file frequently ripple into generator outputs
+> for four ecosystems.
 
 ### The four layers
 

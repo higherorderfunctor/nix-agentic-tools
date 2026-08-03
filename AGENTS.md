@@ -75,8 +75,9 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
     [`packages/kimchi/docs/kimchi-factory.md`](packages/kimchi/docs/kimchi-factory.md)
 
 - **`kiro-cli`**
-  - Match: `overlays/kiro-memory-distiller.nix`, `packages/kiro-cli/**`,
-    `packages/openmemory-mcp/mem/**`
+  - Match: `overlays/kiro-memory-distiller.nix`,
+    `overlays/kiro-memory-distiller/**`,
+    `overlays/mcp-servers/openmemory-mem/**`, `packages/kiro-cli/**`
   - Read:
     [`packages/kiro-cli/docs/kiro-auto-memory.md`](packages/kiro-cli/docs/kiro-auto-memory.md)
 
@@ -505,7 +506,9 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-07-31 (commit pending — the bootstrap step's "or any
+> **Last verified:** 2026-08-03 (commit pending — makes post-merge removal of
+> the feature worktree and local branch an explicit agent-owned completion
+> condition). Prior: 2026-07-31 (commit pending — the bootstrap step's "or any
 > devenv task" was WRONG and is removed: `devenv tasks run` does not materialize
 > `.pre-commit-config.yaml`, measured in two fresh worktrees where the task
 > succeeded and the next commit was still rejected. Also records that a push
@@ -794,7 +797,9 @@ silently resolves one level too deep, into
 6. Merges are squash merges. The operator performs them for **human** PRs; the
    bot's `update/*` PRs land themselves (next section).
 
-7. Tear the worktree down once merged:
+7. **Always tear the worktree and local branch down once the PR is merged.**
+   This cleanup belongs to the agent that implemented the change; do not hand it
+   back to the operator or declare the task complete while either remains:
 
    ```bash
    git worktree remove "$worktrees/<slug>"   # re-derive $worktrees if needed
