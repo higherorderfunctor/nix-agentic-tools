@@ -43,8 +43,8 @@
       --type instructions \
       --yes
 
-    if [ ! -f "$instructions_file" ]; then
-      echo "FAIL: Semble installer did not write Claude instructions" >&2
+    if [ ! -s "$instructions_file" ]; then
+      echo "FAIL: Semble installer wrote no Claude instructions" >&2
       exit 1
     fi
 
