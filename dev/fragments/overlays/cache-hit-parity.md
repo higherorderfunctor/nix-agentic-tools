@@ -1,11 +1,14 @@
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-08-02 (commit pending — adds the pinned external
-> Semble exception: direct upstream selection preserves Numtide's derivation,
-> while a plain meta overlay exposes the MCP role without forking the build).
-> Prior: 2026-07-25 (commit pending — the worked example moved off
-> `git-branchless`, which had not carried this shape for a long time, onto
-> `git-absorb`, which does; also corrects the new-package signature, the
+> **Last verified:** 2026-08-03 (commit pending — adds a positive control that
+> substitutes the overlay's own `inputs.nixpkgs` the way a consumer's `follows`
+> directive does, proving that unsupported configuration drifts from the
+> cache-published `fblog` path). Prior: 2026-08-02 (commit pending — adds the
+> pinned external Semble exception: direct upstream selection preserves
+> Numtide's derivation, while a plain meta overlay exposes the MCP role without
+> forking the build). Prior: 2026-07-25 (commit pending — the worked example
+> moved off `git-branchless`, which had not carried this shape for a long time,
+> onto `git-absorb`, which does; also corrects the new-package signature, the
 > namespacing in the manual verification snippet, and the pure-binary-fetch
 > package list). If you touch any `overlays/<name>.nix` overlay file or the
 > overlay composition machinery and this fragment isn't updated in the same
@@ -160,17 +163,23 @@ Automated (preferred): the `checks.cache-hit-parity` flake check evaluates every
 compiled overlay package twice — once against `inputs.nixpkgs` (the "standalone"
 / CI path) and once against a deliberately divergent `inputs.nixpkgs-test` pin
 playing the role of a consumer pkgs set. If any package's store path differs
-between the two, the check fails with a drift report naming the offender. Run it
+between the two, the check fails with a drift report naming the offender.
+
+A separate positive control re-imports the overlay with its own `inputs.nixpkgs`
+substituted by `inputs.nixpkgs-test`, which models a consumer setting
+`inputs.nixpkgs.follows`. The representative `fblog` output must drift from the
+standalone path. This inversion proves the ordinary consumer simulation is not
+silently blessing the configuration that defeats cache hits. Run the check
 locally with:
 
 ```bash
 nix build .#checks.x86_64-linux.cache-hit-parity
-cat result   # "ok — no drift detected" on success
+cat result   # "ok — no unintended drift detected" on success
 ```
 
 Any regression — a new overlay package that uses `final.X` or `prev.X` for a
-build input, or an existing one that was refactored — will turn the check red
-before it ships.
+build input, an existing one that was refactored, or the `follows` control no
+longer drifting — will turn the check red before it ships.
 
 Manual (legacy, for ad-hoc debugging):
 

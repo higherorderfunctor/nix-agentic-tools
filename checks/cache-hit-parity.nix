@@ -14,6 +14,11 @@
 #      see flake.nix) with `self.overlays.default` applied.
 #      This simulates what a consumer with a different
 #      nixpkgs gets.
+#   C) `followedPkgs.generic.fblog` — built with the overlay's
+#      `inputs.nixpkgs` substituted by `inputs.nixpkgs-test`.
+#      This simulates a consumer setting `inputs.nixpkgs.follows`
+#      and must differ from A, proving that configuration defeats
+#      cache-hit parity.
 #
 # If A == B for every package, the overlay successfully
 # instantiates its own pkgs from `inputs.nixpkgs` instead of
@@ -44,6 +49,18 @@
     overlays = [self.overlays.default];
   };
 
+  # Simulate a consumer rewriting this flake's nixpkgs input with `follows`.
+  # Unlike consumerPkgs above, the overlay itself sees nixpkgs-test as its own
+  # pin, so its deliberately isolated `ourPkgs` builds move with the consumer.
+  followedOverlay = import ../overlays {
+    inputs = inputs // {nixpkgs = inputs.nixpkgs-test;};
+  };
+  followedPkgs = import inputs.nixpkgs-test {
+    inherit system;
+    config.allowUnfree = true;
+    overlays = [followedOverlay];
+  };
+
   # The set of packages to compare, and the `consumerPath` attr-path under
   # `consumerPkgs` for each, comes from the merged `config.checks.cacheHitParity`
   # registry — exposed as `self.cacheHitParityTargets` and declared across
@@ -64,6 +81,17 @@
     if drv ? paths && builtins.isList drv.paths && builtins.length drv.paths == 1
     then toString (builtins.head drv.paths)
     else drv.outPath;
+
+  # fblog is a real Rust build whose output is known to move across these pins.
+  # It is the positive control that keeps the unsupported `follows` consumer
+  # configuration visible instead of letting the ordinary A/B parity check
+  # silently bless it.
+  followsControl = {
+    name = "fblog";
+    standalone = realOutPath self.packages.${system}.fblog;
+    followed = realOutPath followedPkgs.generic.fblog;
+  };
+  followsDrifts = followsControl.standalone != followsControl.followed;
 
   mkCheck = {
     name,
@@ -135,8 +163,8 @@
 in {
   cache-hit-parity = pkgs.runCommand "cache-hit-parity" {} ''
     ${
-      if allDrifts == [] && agnixSiblingOk && sembleSiblingOk && sembleUpstreamOk
-      then "echo 'ok — no drift detected (every overlay package produces byte-identical store paths against both nixpkgs pins; agnix and Semble variants share one build; Semble matches upstream)${skippedNote}' > $out"
+      if allDrifts == [] && followsDrifts && agnixSiblingOk && sembleSiblingOk && sembleUpstreamOk
+      then "echo 'ok — no unintended drift detected (every overlay package produces byte-identical store paths against both nixpkgs pins; the follows positive control drifts as expected; agnix and Semble variants share one build; Semble matches upstream)${skippedNote}' > $out"
       else
         lib.optionalString (allDrifts != []) (let
           drifts = builtins.concatStringsSep "\n" (map (d: ''
@@ -155,6 +183,12 @@ in {
           echo "instead of routing build inputs through the consumer-provided 'final'/'prev'." >&2
           echo "See .claude/rules/overlays.md 'Overlay Cache-Hit Parity' section for the full pattern." >&2
         '')
+        + lib.optionalString (!followsDrifts) ''
+          echo 'FAIL: the follows positive control did not drift from the cache-published path:' >&2
+          echo '  standalone (${followsControl.name}): ${builtins.unsafeDiscardStringContext followsControl.standalone}' >&2
+          echo '  followed   (${followsControl.name}): ${builtins.unsafeDiscardStringContext followsControl.followed}' >&2
+          echo 'A consumer rewriting this flake input must not appear cache-compatible.' >&2
+        ''
         + lib.optionalString (!agnixSiblingOk) (
           "echo 'FAIL: agnix cli/lsp/mcp variants do NOT share one derivation:' >&2\n"
           + lib.concatStrings (lib.imap0 (
