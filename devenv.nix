@@ -100,11 +100,14 @@
     else devenvRoot;
   worktreesRoot = "${repositoryRoot}-worktrees";
   userCacheHome = let
+    homeDir = builtins.getEnv "HOME";
     xdgCacheHome = builtins.getEnv "XDG_CACHE_HOME";
   in
     if xdgCacheHome != ""
     then xdgCacheHome
-    else "${builtins.getEnv "HOME"}/.cache";
+    else if homeDir != ""
+    then "${homeDir}/.cache"
+    else throw "devenv requires XDG_CACHE_HOME or HOME to locate the user-global Semble cache";
   sembleCache = "${userCacheHome}/semble";
 
   # The selected named profile is a launch-time Codex layer, and Codex treats
