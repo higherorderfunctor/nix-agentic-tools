@@ -1,14 +1,16 @@
 # CI-lean closure taxonomy
 
-> **Last verified:** 2026-08-02 (commit pending — the repo-aware Codex wrapper
-> now distinguishes runtime commands from administrative commands before
-> injecting the worktree root and named profile; an argv-probe build lets
-> enterTest verify runtime injection (including `apply` and `exec-server`) and
-> doctor pass-through exactly). Prior: 2026-08-02 (PR #698 — introduced the
-> wrapper and verified PATH precedence plus explicit-flag idempotence). Prior:
-> 2026-07-22 (PR #439). If you change what `devenv.nix` puts in the shell, which
-> factories install CLI wrappers, or the `devenv-test.yml` cache wiring,
-> re-verify this and bump the marker.
+> **Last verified:** 2026-08-02 (commit pending — the repo's beta Codex
+> permission profile explicitly grants the user-global Semble cache because beta
+> profiles do not compose with the legacy user sandbox table). Prior: 2026-08-02
+> (commit pending — the repo-aware Codex wrapper now distinguishes runtime
+> commands from administrative commands before injecting the worktree root and
+> named profile; an argv-probe build lets enterTest verify runtime injection
+> (including `apply` and `exec-server`) and doctor pass-through exactly). Prior:
+> 2026-08-02 (PR #698 — introduced the wrapper and verified PATH precedence plus
+> explicit-flag idempotence). Prior: 2026-07-22 (PR #439). If you change what
+> `devenv.nix` puts in the shell, which factories install CLI wrappers, or the
+> `devenv-test.yml` cache wiring, re-verify this and bump the marker.
 
 The `devenv-test` CI gate (`.github/workflows/devenv-test.yml`) runs
 `devenv test` on ephemeral runners, so **everything in the shell closure is
@@ -43,6 +45,14 @@ families that accept those flags. Administrative commands such as `doctor`,
 idempotence, exact `apply`, `resume`, and `exec-server` default injection, exact
 `doctor` pass-through, and the real `doctor --json` rejection that originally
 exposed the bug.
+
+The selected `nix-agentic-tools` permission profile is also the effective
+filesystem policy. Codex beta permission profiles do not compose with the legacy
+`sandbox_workspace_write` table from user config, so the profile grants the
+effective `$XDG_CACHE_HOME/semble` path (falling back to `$HOME/.cache`) in its
+own filesystem table. This admits the user-global Semble index without
+duplicating Semble's MCP, instructions, or agent in project scope. A stricter
+profile may deliberately omit that grant.
 
 Two proofs to preserve when touching the gates: with `CI` unset the shell must
 rebuild to the **identical store path** (local behavior unchanged — compare
