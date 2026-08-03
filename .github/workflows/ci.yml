@@ -61,12 +61,16 @@ jobs:
           nix_version: "2.34.7"
           nix_conf: |
             accept-flake-config = true
+            extra-substituters = https://cache.numtide.com
+            extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
 
       - if: runner.os != 'macOS'
         uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             accept-flake-config = true
+            extra-substituters = https://cache.numtide.com
+            extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
 
       - uses: cachix/cachix-action@v17
         with:
@@ -115,6 +119,36 @@ jobs:
             --skip-cached \
             --cachix-cache nix-agentic-tools \
             --no-link
+
+      # Semble intentionally keeps Numtide's derivation identity, so package
+      # builds substitute it from cache.numtide.com. On authenticated main
+      # builds, explicitly mirror the realized runtime closure into this
+      # project's cache; Cachix skips closure paths already served by the
+      # runner's other configured caches.
+      - name: Mirror Semble into project cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          semble_path="$(nix build ".#packages.${{ matrix.system }}.semble" \
+            --no-link --print-out-paths)"
+          printf '%s\n' "$semble_path" | cachix push nix-agentic-tools
+
+          store_name="${semble_path##*/}"
+          store_hash="${store_name%%-*}"
+          for attempt in 1 2 3 4 5; do
+            if curl --fail --silent --show-error --head \
+              "https://nix-agentic-tools.cachix.org/${store_hash}.narinfo" \
+              >/dev/null; then
+              echo "Semble is queryable from nix-agentic-tools.cachix.org"
+              break
+            fi
+            if [ "$attempt" = 5 ]; then
+              echo "Semble was pushed but its narinfo is not queryable" >&2
+              exit 1
+            fi
+            sleep "$attempt"
+          done
 
   # The workflows unlock patches Kiro's proprietary binary. Validate that
   # patch on both supported systems without distributing the result through

@@ -56,6 +56,7 @@
   # — `import` is memoized and the arguments are the same — so this is clarity
   # and cheap insurance, NOT a fix for a measured divergence.
   kiroCliDrv = import ./kiro-cli.nix {inherit inputs final;};
+  sembleDrv = import ./semble.nix {inherit inputs final;};
 
   # ── Flat AI CLIs and unique tools ──────────────────────────────────
   flatDrvs = {
@@ -107,6 +108,7 @@
     kiro-memory-distiller = import ./kiro-memory-distiller.nix {
       inherit inputs final;
     };
+    semble = sembleDrv;
   };
 
   # ── MCP servers ────────────────────────────────────────────────────
@@ -155,6 +157,7 @@
       inherit inputs final;
     };
     serena-mcp = import ./mcp-servers/serena-mcp.nix {inherit inputs final;};
+    semble-mcp = import ./mcp-servers/semble-mcp.nix {semble = sembleDrv;};
     sympy-mcp = import ./mcp-servers/sympy-mcp.nix {
       inherit inputs final;
     };

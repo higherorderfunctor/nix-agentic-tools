@@ -1,7 +1,10 @@
 ## MCP Server Packages
 
-> **Last verified:** 2026-07-27 (commit pending — absorbing `aihubmix-mcp`
-> corrected three stale claims in the "Adding a New Server" checklist below:
+> **Last verified:** 2026-08-02 (commit pending — adds Semble's
+> identity-preserving external-flake MCP role, which shares its CLI derivation
+> and is updated with the flake input rather than a package target). Prior:
+> 2026-07-27 (commit pending — absorbing `aihubmix-mcp` corrected three stale
+> claims in the "Adding a New Server" checklist below:
 > `overlays/mcp-servers/locks/` has never existed, `flake.nix` needs no
 > per-package edit, and the top-level `modules/` directory is gone. It also adds
 > the vendored-lockfile + local-patch shape and the excluded-with-an-annotation
@@ -35,6 +38,12 @@ Servers use one of three Nix builders depending on upstream language:
   use `pyproject = true` with hatchling or setuptools
 - **Go** (`buildGoModule`) — github-mcp. Requires `vendorHash` inline in the
   overlay file
+
+Semble is the explicit non-builder exception. `semble-mcp` is a plain attr/meta
+view of `inputs.llm-agents.packages.${system}.semble`: it changes
+`meta.mainProgram` and shares the upstream CLI's exact derivation. It has no
+local source pin or update-target row; normal flake-input automation updates
+`llm-agents`.
 
 ### Inline Hash Pattern
 
@@ -152,6 +161,11 @@ means it guessed at the location.
 9. Regenerate the instruction files:
    `devenv tasks run --mode before generate:instructions`, and the README:
    `devenv tasks run --mode before generate:repo`.
+
+For an external package role such as `semble-mcp`, replace steps 1 and 8 with a
+direct input-package selection and input update automation. Still register both
+the CLI and MCP roles in cache-hit parity, and add a sibling-derivation
+assertion so a future `overrideAttrs` cannot create a redundant build.
 
 ### Updating
 

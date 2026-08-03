@@ -41,6 +41,7 @@
     };
     # Dev tooling — not published in overlays/modules, only used by
     # this repo's devenv tasks and CI pipeline.
+    llm-agents.url = "github:numtide/llm-agents.nix";
     nix-fast-build = {
       url = "github:Mic92/nix-fast-build";
       inputs.nixpkgs.follows = "nixpkgs";

@@ -131,7 +131,7 @@ Stacked commit workflow skills using git-branchless, git-absorb, and git-revise.
 ## Packages
 
 <details>
-<summary><strong>MCP Servers</strong> (16 servers)</summary>
+<summary><strong>MCP Servers</strong> (17 servers)</summary>
 
 <!-- prettier-ignore -->
 | Server | Description | Credentials |
@@ -149,6 +149,7 @@ Stacked commit workflow skills using git-branchless, git-absorb, and git-revise.
 | `mcp-proxy` | stdio-to-HTTP bridge proxy | None |
 | `nixos-mcp` | NixOS and Nix documentation | None |
 | `openmemory-mcp` | Persistent memory + vector search | None |
+| `semble-mcp` | Local semantic and lexical code search | None |
 | `sequential-thinking-mcp` | Step-by-step reasoning | None |
 | `serena-mcp` | Codebase-aware semantic tools | Optional |
 | `sympy-mcp` | Symbolic mathematics | None |
@@ -233,6 +234,7 @@ nix build .#dns-root-hints
 | `kimchi` | Kimchi CLI |
 | `kiro-cli` | Kiro CLI |
 | `kiro-gateway` | Python proxy API for Kiro |
+| `semble` | Local semantic and lexical code-search CLI |
 
 </details>
 
@@ -260,6 +262,7 @@ instruction building.
 | Unified MCP config | Manual native config | `ai.mcpServers.*` (all four CLIs) | `ai.mcpServers.*` (all four CLIs) |
 | Typed MCP settings | N/A | Shared schema + native extensions | Shared schema + native extensions |
 | MCP credentials | Manual env vars | `plain`, `file`, or `helper` | `plain`, `file`, or `helper` |
+| Semble search integrations | Manual install | `semble.*` (Claude + Codex + Kiro) | Same; project-native paths |
 | Git tool packages | Install manually | Overlay + `nix build` | Overlay + `nix build` |
 | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
 | GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
@@ -308,6 +311,61 @@ ai = {
   codex.settings.model = "gpt-5.6-sol";
 };
 ```
+
+</details>
+
+<details>
+<summary><strong>Semble code search</strong></summary>
+
+Enable the MCP server, CLI guidance, and `semble-search` subagent for Claude,
+Codex, and Kiro without enabling those runtimes themselves:
+
+```nix
+semble.enable = true;
+
+ai.claude.enable = true;
+ai.codex.enable = true;
+ai.kiro.enable = true;
+```
+
+Each feature and runtime set can be selected independently. Nullable feature
+values inherit the umbrella setting:
+
+```nix
+semble = {
+  enable = true;
+  runtimes = ["claude" "codex"];
+
+  mcp = {
+    content = "all";
+    runtimes = ["claude" "kiro"];
+  };
+  instructions.enable = false;
+  subagent.runtimes = ["codex"];
+};
+```
+
+Direct configuration remains available when the convenience feature is disabled:
+
+```nix
+ai.codex = {
+  mcpServers.semble =
+    inputs.nix-agentic-tools.lib.ai.mcpServers.mkSemble {
+      inherit lib pkgs;
+    } {
+      content = "docs";
+    };
+  agents.semble-search =
+    inputs.nix-agentic-tools.lib.ai.semble.semanticAgent;
+  instructions = [inputs.nix-agentic-tools.lib.ai.semble.instruction];
+};
+
+ai.kiro.agents.semble-search =
+  inputs.nix-agentic-tools.lib.ai.semble.kiroAgent;
+```
+
+Copilot is intentionally outside `semble.*`; configure it directly through
+`ai.copilot.*` with the same exported helpers when desired.
 
 </details>
 

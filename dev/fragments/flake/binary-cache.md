@@ -1,5 +1,10 @@
 ## Binary Cache Maintenance
 
+> **Last verified:** 2026-08-02 (commit pending — records Semble's external
+> pinned-package exception: Numtide substitution is CI-only and accepted main
+> builds are mirrored into the public project cache without exposing the
+> upstream cache in consumer flake/devenv configuration).
+
 When adding or removing flake inputs, check whether the input has a public
 Cachix cache. If so, add it to:
 
@@ -7,6 +12,14 @@ Cachix cache. If so, add it to:
   `nixConfig.extra-trusted-public-keys`
 - `devenv.nix` `cachix.pull`
 
-Current upstream caches: `nix-agentic-tools`. The `follows` pattern for nixpkgs
-is intentional — do not remove it to chase upstream cache hits unless the input
-provides pre-built binaries independent of nixpkgs.
+Current public consumer cache: `nix-agentic-tools`. The `follows` pattern for
+nixpkgs is intentional — do not remove it to chase upstream cache hits unless
+the input provides pre-built binaries independent of nixpkgs.
+
+Semble is the deliberate exception. The unfollowed `llm-agents` input supplies
+an already-built package whose exact derivation is part of this repository's
+public contract. Keep `cache.numtide.com` and its key on the CI package-build
+runners only. Authenticated `main` builds explicitly pipe the realized Semble
+path to `cachix push nix-agentic-tools`, mirroring its runtime closure into the
+project cache. Do not add Numtide's cache to public `flake.nix` `nixConfig` or
+`devenv.nix` `cachix.pull`; consumers should need only the project cache.

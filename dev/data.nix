@@ -68,6 +68,10 @@ _: let
       description = "Codebase-aware semantic tools";
       credentials = "Optional";
     };
+    semble-mcp = {
+      description = "Local semantic and lexical code search";
+      credentials = "None";
+    };
     sympy-mcp = {
       description = "Symbolic mathematics";
       credentials = "None";
@@ -82,6 +86,7 @@ _: let
     kimchi = "Kimchi CLI";
     kiro-cli = "Kiro CLI";
     kiro-gateway = "Python proxy API for Kiro";
+    semble = "Local semantic and lexical code-search CLI";
   };
 
   # ── Dev tool descriptions ────────────────────────────────────────────

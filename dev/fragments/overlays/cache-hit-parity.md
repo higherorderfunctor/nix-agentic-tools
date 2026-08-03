@@ -1,6 +1,9 @@
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-07-25 (commit pending — the worked example moved off
+> **Last verified:** 2026-08-02 (commit pending — adds the pinned external
+> Semble exception: direct upstream selection preserves Numtide's derivation,
+> while a plain meta overlay exposes the MCP role without forking the build).
+> Prior: 2026-07-25 (commit pending — the worked example moved off
 > `git-branchless`, which had not carried this shape for a long time, onto
 > `git-absorb`, which does; also corrects the new-package signature, the
 > namespacing in the manual verification snippet, and the pure-binary-fetch
@@ -205,6 +208,20 @@ curl -sI "https://nix-agentic-tools.cachix.org/${HASH}.narinfo" | head -1
 ```
 
 ### Exceptions
+
+**Pinned external derivations preserve the upstream identity.** Semble is
+selected directly from `inputs.llm-agents.packages.${system}.semble`, with no
+nixpkgs follow, `overlays.shared-nixpkgs`, local `ourPkgs` rebuild, or
+`overrideAttrs`. Its cache identity belongs to the upstream flake rather than to
+this repository's nixpkgs pin. Both the standalone output and a deliberately
+divergent consumer must match that upstream `drvPath` and `outPath` exactly.
+
+The `semble-mcp` role uses the same plain attr/meta overlay pattern as the agnix
+role variants, selecting `meta.mainProgram = "semble-mcp"` without re-running
+`mkDerivation`. The parity check asserts the two Semble roles share one
+derivation and that the CLI role is byte-identical to the pinned upstream
+output. Distribution is separate from identity: CI substitutes from Numtide and
+mirrors accepted `main` outputs into this project's Cachix cache.
 
 **Content-only packages don't need this.** Packages that just ship markdown
 files (coding-standards, stacked-workflows-content, fragments-ai) have no

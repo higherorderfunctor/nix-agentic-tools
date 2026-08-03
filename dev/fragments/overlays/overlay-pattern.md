@@ -1,10 +1,12 @@
 ## Overlay Grouping and the `generic` Subtree
 
-> **Last verified:** 2026-08-01 (commit pending — records that `glab`'s
-> `extraExtract` also regenerates its `passthru.extracted` sidecar, via the new
-> shared `vu.mkExtractRegen`, and that glab is the one extracted package where
-> the fixer-then-extract ORDER is forced. It had NO regeneration at all until
-> now, which nothing caught until its first version bump reddened
+> **Last verified:** 2026-08-02 (commit pending — adds Semble's direct
+> external-flake derivation pattern and identity-preserving MCP role). Prior:
+> 2026-08-01 (commit pending — records that `glab`'s `extraExtract` also
+> regenerates its `passthru.extracted` sidecar, via the new shared
+> `vu.mkExtractRegen`, and that glab is the one extracted package where the
+> fixer-then-extract ORDER is forced. It had NO regeneration at all until now,
+> which nothing caught until its first version bump reddened
 > `checks.<system>.glab-extracted` on PR #621). Prior: 2026-07-28 — the commit
 > adding THAT line lands `glab`: the first Go package whose SRC hash also lives
 > in the sidecar (`vu.mkGoSrcVendorFix`), the first GitLab-hosted version check
@@ -50,6 +52,21 @@ package would make sense in a repo called "agentic tools" — a hardened Firefox
 preference set, a btop theme, the DNS root hints, a resource monitor, a JS
 runtime, a JS package manager, a JSON log viewer, the GitHub CLI, a VPN client,
 a shell prompt engine and an OpenTelemetry viewer do not.
+
+### Direct external-flake derivations
+
+Semble is the external pinned-package exception to the local-build patterns
+below. `overlays/semble.nix` returns
+`inputs.llm-agents.packages.${system}.semble` directly. It does not apply the
+input's `overlays.shared-nixpkgs`, rebuild with this repository's `ourPkgs`, or
+call `overrideAttrs`; any of those would replace the upstream cache identity
+that this export promises to preserve.
+
+When one upstream derivation ships multiple role binaries, expose secondary
+roles with a plain attrset/meta overlay. `semble-mcp` changes only
+`meta.mainProgram`, so `lib.getExe` selects the MCP binary while `drvPath` and
+`outPath` remain identical to the CLI and upstream output. The cache-hit-parity
+check locks all three identities.
 
 Two mechanical consequences of living in a subdirectory rather than at the
 `overlays/` root:

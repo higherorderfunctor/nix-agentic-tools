@@ -1,29 +1,31 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-02 (commit pending — Codex named profile files now
-> use one typed settings schema across HM and devenv: HM links user-global
-> files, while devenv safely materializes repository-declared whole-file layers
-> into CODEX_HOME before shell entry). Prior: 2026-08-02 (commit pending —
-> instruction and rule records carry a typed Kiro-only inclusion override with
-> identical HM/devenv fanout; null preserves paths-derived `always`/`fileMatch`,
-> while explicit `auto` and `manual` make all four native modes reachable).
-> Prior 2026-08-02: the generated reference gate now proves exact
-> option-name/type parity for the complete `ai.*` surface; the audit closed its
-> sole gap by sharing `ai.copilot.projectDir` while explicitly rejecting
-> project-only customization in Home Manager, and the instruction fanout points
-> at the current `lib/ai/transformers/` implementation rather than the removed
-> fragments package. Prior: 2026-08-02 (commit 589fa37c — consumer documentation
-> exposes Codex and its intentional fanout exclusions, while generated HM and
-> devenv option references are built and checked for exact Codex option-tree
-> parity plus truthful shared-pool descriptions). Prior: 2026-08-02 (commit
-> d510586b — the reverse extracted-surface audit derives Codex's closed
-> sandbox/approval enums from the pinned sidecar and adds an exact
-> human-reviewed disposition gate for every extracted command, flag, field,
-> feature maturity, model field, and config seam). Prior: 2026-08-02 (commit
-> 2eb54cef — the native-surface audit adds static Home Manager profile files and
-> records why Codex has no LSP or shared wrapper-environment fanout). Prior:
-> 2026-08-02 (commit 3546267a — Codex Home Manager settings reconcile exact
-> Nix-owned TOML leaves into a writable user file because the native trust
+> **Last verified:** 2026-08-02 (commit pending — records plain convenience
+> modules such as Semble contributing selected per-runtime defaults without
+> enabling those runtimes). Prior: 2026-08-02 (commit pending — Codex named
+> profile files now use one typed settings schema across HM and devenv: HM links
+> user-global files, while devenv safely materializes repository-declared
+> whole-file layers into CODEX_HOME before shell entry). Prior: 2026-08-02
+> (commit pending — instruction and rule records carry a typed Kiro-only
+> inclusion override with identical HM/devenv fanout; null preserves
+> paths-derived `always`/`fileMatch`, while explicit `auto` and `manual` make
+> all four native modes reachable). Prior 2026-08-02: the generated reference
+> gate now proves exact option-name/type parity for the complete `ai.*` surface;
+> the audit closed its sole gap by sharing `ai.copilot.projectDir` while
+> explicitly rejecting project-only customization in Home Manager, and the
+> instruction fanout points at the current `lib/ai/transformers/` implementation
+> rather than the removed fragments package. Prior: 2026-08-02 (commit 589fa37c
+> — consumer documentation exposes Codex and its intentional fanout exclusions,
+> while generated HM and devenv option references are built and checked for
+> exact Codex option-tree parity plus truthful shared-pool descriptions). Prior:
+> 2026-08-02 (commit d510586b — the reverse extracted-surface audit derives
+> Codex's closed sandbox/approval enums from the pinned sidecar and adds an
+> exact human-reviewed disposition gate for every extracted command, flag,
+> field, feature maturity, model field, and config seam). Prior: 2026-08-02
+> (commit 2eb54cef — the native-surface audit adds static Home Manager profile
+> files and records why Codex has no LSP or shared wrapper-environment fanout).
+> Prior: 2026-08-02 (commit 3546267a — Codex Home Manager settings reconcile
+> exact Nix-owned TOML leaves into a writable user file because the native trust
 > prompt persists ad-hoc project decisions through `config/batchWrite`; devenv
 > retains whole-file static project ownership until a project-local writer is
 > demonstrated). Prior: 2026-08-01 (commit pending — portable semantic agents
@@ -368,6 +370,13 @@ This is a different discipline from the AI CLI factories (`mkAiApp`), which have
 structural `hm = { config = …; }` / `devenv = { config = …; }` blocks that force
 per-backend separation by construction. Plain modules have no such guardrail —
 authors must decide scope consciously.
+
+Plain convenience modules may contribute directly to selected
+`ai.<runtime>.<pool>` entries at `mkDefault` priority. Semble uses this for its
+named MCP and agent defaults plus unnamed instruction records in both backend
+evaluations. Selecting a runtime configures that runtime's integration only; the
+convenience module must not set `ai.<runtime>.enable`, because package/CLI
+activation remains an explicit consumer choice.
 
 **Worked example — stacked-workflows skills.** Because an `ai.skills` value set
 in one backend is invisible to the other, the stacked-workflows package
