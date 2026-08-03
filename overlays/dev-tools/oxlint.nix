@@ -30,6 +30,12 @@
 in
   (ourPkgs.oxlint.override {inherit tsgolint;}).overrideAttrs (finalAttrs: prev: {
     inherit version src;
+    # The Node binding CLI 3.8.2 probes its own process with /bin/ps.
+    # Darwin's Nix sandbox rejects that spawn before the CLI's fallback can
+    # handle it unless the host executable is admitted explicitly.
+    __impureHostDeps =
+      (prev.__impureHostDeps or [])
+      ++ ourPkgs.lib.optionals ourPkgs.stdenv.hostPlatform.isDarwin ["/bin/ps"];
     cargoDeps = ourPkgs.rustPlatform.fetchCargoVendor {
       inherit (finalAttrs) pname version src;
       hash = "sha256-AJHfTJe1oyflsjqx128FfZJlqVH1hX2ityAoR9E3rXM=";
