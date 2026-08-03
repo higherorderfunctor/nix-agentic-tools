@@ -10,30 +10,17 @@
 # existed because of a cold-store eval bug on an older devenv; the
 # pinned 2.x rev runs green (proven live on PR #438).
 #
-# Cost containment: paths-filtered to the surfaces that can break
-# materialization (a docs/plans PR never pays the ~30-minute cold
-# closure), processes leg skipped under $CI (devenv.nix), 45-minute
-# ceiling.
+# Cost containment: every pull request gets the stable `devenv-test` status
+# context required by branch protection, but the first step checks changed
+# paths and skips the entire Nix closure unless a materialization surface moved
+# (a docs/plans PR pays for one GitHub API call, not the ~30-minute cold
+# closure). Pushes remain paths-filtered. The processes leg is skipped under
+# $CI (devenv.nix), with a 45-minute ceiling.
 
 name: Devenv Test
 
 on:
   pull_request:
-    paths:
-      - .github/actions/warm-ifd/**
-      - .github/workflows/devenv-test.yml
-      - config/**
-      - dev/generate.nix
-      - dev/instructions.nix
-      - dev/tasks/**
-      - devenv.lock
-      - devenv.nix
-      - devenv.yaml
-      - flake.lock
-      - flake.nix
-      - lib/**
-      - modules/**
-      - packages/**
   push:
     branches: [main]
     paths:
@@ -54,6 +41,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   devenv-test:
@@ -62,8 +50,58 @@ jobs:
     # let a hung process leg burn a runner all day.
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@v31
+      # A required workflow cannot use pull_request.paths: GitHub leaves its
+      # context pending forever when the workflow is filtered out. Resolve the
+      # same scope inside the always-created job instead, so an irrelevant PR
+      # succeeds cheaply while a relevant one still runs the real gate.
+      - name: Check whether devenv test is needed
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+
+          needed=true
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            needed=false
+            changed_files="$(
+              gh api --paginate \
+                "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+                --jq '.[].filename'
+            )"
+
+            while IFS= read -r changed_file; do
+              case "$changed_file" in
+                .github/actions/warm-ifd/* | \
+                  .github/workflows/devenv-test.yml | \
+                  config/* | \
+                  dev/generate.nix | \
+                  dev/instructions.nix | \
+                  dev/tasks/* | \
+                  devenv.lock | \
+                  devenv.nix | \
+                  devenv.yaml | \
+                  flake.lock | \
+                  flake.nix | \
+                  lib/* | \
+                  modules/* | \
+                  packages/*)
+                  needed=true
+                  break
+                  ;;
+              esac
+            done <<< "$changed_files"
+          fi
+
+          echo "needed=${needed}" >> "$GITHUB_OUTPUT"
+          echo "devenv test needed: ${needed}"
+
+      - if: steps.scope.outputs.needed == 'true'
+        uses: actions/checkout@v6
+      - if: steps.scope.outputs.needed == 'true'
+        uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             accept-flake-config = true
@@ -81,7 +119,8 @@ jobs:
       # store at save time is roughly: nix + flake inputs + IFD sources
       # + the CI-lean devenv shell closure (~2GB, see devenv.nix) —
       # about 4G; 5G leaves headroom without hoarding the budget.
-      - uses: nix-community/cache-nix-action@v7.0.2
+      - if: steps.scope.outputs.needed == 'true'
+        uses: nix-community/cache-nix-action@v7.0.2
         with:
           gc-max-store-size-linux: 5G
           primary-key:
@@ -89,7 +128,8 @@ jobs:
             'devenv.nix', 'devenv.yaml', 'flake.lock') }}
           restore-prefixes-first-match: nix-store-${{ runner.os }}-
 
-      - uses: cachix/cachix-action@v17
+      - if: steps.scope.outputs.needed == 'true'
+        uses: cachix/cachix-action@v17
         with:
           name: nix-agentic-tools
 
@@ -97,6 +137,7 @@ jobs:
       # repo overlays, whose eval reads fetchFromGitHub sources (IFD) —
       # warm them so a transient fetch blip doesn't fail the job.
       - name: Warm IFD sources (retry, best-effort)
+        if: steps.scope.outputs.needed == 'true'
         uses: ./.github/actions/warm-ifd
         with:
           systems: x86_64-linux
@@ -110,4 +151,5 @@ jobs:
       # INTERNAL builds read the system nix.conf the cachix-action step
       # writes, not this flake's nixConfig.
       - name: Run devenv test
+        if: steps.scope.outputs.needed == 'true'
         run: nix run --inputs-from . devenv -- test

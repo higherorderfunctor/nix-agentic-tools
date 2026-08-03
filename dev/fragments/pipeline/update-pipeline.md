@@ -1,12 +1,14 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-08-03 (commit pending — moves the `gh` and `glab`
-> update targets with their overlay files from `generic/` to `dev-tools/`).
-> Prior: 2026-08-02 (commit pending — the `llm-agents` input update regenerates
-> Semble's upstream-template snapshot through its separate extraction
-> derivation, while human-reviewed content hashes intentionally remain manual
-> and make CI stop on unreviewed drift). Prior: 2026-07-27 (commit pending —
-> re-points the reference-submodule-shape pointer from the gitignored
+> **Last verified:** 2026-08-03 (commit pending — records the fifth required
+> `devenv-test` context in the update workflow's auto-merge contract). Prior:
+> 2026-08-03 (commit pending — moves the `gh` and `glab` update targets with
+> their overlay files from `generic/` to `dev-tools/`). Prior: 2026-08-02
+> (commit pending — the `llm-agents` input update regenerates Semble's
+> upstream-template snapshot through its separate extraction derivation, while
+> human-reviewed content hashes intentionally remain manual and make CI stop on
+> unreviewed drift). Prior: 2026-07-27 (commit pending — re-points the
+> reference-submodule-shape pointer from the gitignored
 > `private/slice-fixture/lib/concerns.nix` at the tracked in-tree registries
 > `lib/fragments-registry.nix` and `lib/checks.nix`; also deletes the hardcoded
 > "29 packages — 16 main-tracking + 13 binary" target count, which had gone

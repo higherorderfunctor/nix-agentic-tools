@@ -201,16 +201,17 @@ jobs:
           #
           # WHY this is safe to do unattended here:
           #   - Branch protection on the base requires ZERO approving reviews
-          #     and does NOT require review threads to be resolved, so no
-          #     human sign-off is being bypassed — there is none to bypass.
+          #     but DOES require review threads to be resolved. No human
+          #     sign-off is being bypassed, and an unresolved Copilot thread
+          #     deliberately leaves the PR armed but unmerged.
           #   - The Copilot review comes from a separate ruleset rule that
-          #     REQUESTS a review. It is not a required approval and it
-          #     contributes no required status check, so it can never gate
-          #     the merge; it only annotates the PR.
-          #   - What auto-merge actually waits on is the four required
+          #     REQUESTS a review. It is not a required approval or status
+          #     check, but an inline finding gates indirectly through the
+          #     review-thread rule.
+          #   - What auto-merge actually waits on is the five required
           #     status checks — build (x86_64-linux, ubuntu-latest),
-          #     build (aarch64-darwin, macos-latest), test, and gitleaks.
-          #     A red check leaves the PR sitting armed and unmerged.
+          #     build (aarch64-darwin, macos-latest), devenv-test, test, and
+          #     gitleaks. A red check leaves the PR sitting armed and unmerged.
           #   - A merge conflict DISABLES auto-merge on GitHub, so a
           #     conflicted update PR drops out of the queue rather than
           #     merging something unresolved. The `gh pr edit` path below

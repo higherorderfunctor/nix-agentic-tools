@@ -284,8 +284,9 @@ jobs:
           echo "heron_brook mitigation review due ${review_by} (today ${today}) — OK."
 
   # The `devenv test` runtime gate lives in its OWN workflow
-  # (devenv-test.yml): paths-filtered so only PRs touching the surfaces
-  # that can break instruction-file materialization pay its cold-closure
+  # (devenv-test.yml). Its job always reports because branch protection
+  # requires that context, but it detects changed paths before checkout so only
+  # PRs touching instruction-file materialization surfaces pay its cold-closure
   # cost. `nix flake check` (the test job above) remains THE validation
   # entrypoint.
 

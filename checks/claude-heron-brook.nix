@@ -4,7 +4,7 @@
 #
 # Why this lives in `nix flake check` rather than in the update workflow: the
 # requirement is that the BOT'S `update/*` PR for claude-code goes red. Those PRs arm
-# GitHub-native auto-merge and land themselves once the four required checks pass, so
+# GitHub-native auto-merge and land themselves once the five required checks pass, so
 # a gate that runs only in the update job would not stop one. `nix flake check` is the
 # repo's stated validation entrypoint, it is covered by the required `test` status
 # check, and it has no path filter to fall through — the same reasoning
