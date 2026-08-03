@@ -1,10 +1,12 @@
 # Kiro-CLI auto-memory
 
-> **Last verified:** 2026-07-23 (commit pending). If you touch
-> `packages/kiro-cli/memory/distiller.ts`,
+> **Last verified:** 2026-08-03 (commit pending — relocates both auto-memory
+> implementation seams under `overlays/` so the overlay subtree no longer
+> imports package-owned source). If you touch
+> `overlays/kiro-memory-distiller/distiller.ts`,
 > `packages/kiro-cli/lib/autoMemory.nix`, `packages/kiro-cli/lib/mkKiro.nix`
 > (hook-file emission), `overlays/kiro-memory-distiller.nix`,
-> `packages/openmemory-mcp/mem/openmemory-mem.ts`,
+> `overlays/mcp-servers/openmemory-mem/openmemory-mem.ts`,
 > `packages/openmemory-mcp/modules/mcp-server.nix` (pgvector prestart), or the
 > auto-memory module-eval checks, and this fragment isn't updated in the same
 > commit, stop and fix it. An out-of-date architecture fragment actively
@@ -246,7 +248,7 @@ D33), `KIRO_MEMORY_RECALL_LIMIT` (3), `KIRO_MEMORY_RECALL_MAX_CHARS` (4000).
 **Distiller (`overlays/kiro-memory-distiller.nix`,
 `pkgs.ai.kiro-memory-distiller`).** A dependency-free (node: built-ins only — no
 `buildNpmPackage`/`npmDepsHash`) `stdenvNoCC.mkDerivation` over
-`packages/kiro-cli/memory/`. The repo's bun-wrapper idiom
+`overlays/kiro-memory-distiller/`. The repo's bun-wrapper idiom
 (`makeWrapper ${bun}/bin/bun --add-flags <entry>`, not `bun build --compile`)
 emits **three role bins** from one derivation, each adding a dispatch flag:
 `kiro-memory-distiller` (bare → `main`), `kiro-memory-flush` (`--flush` →
@@ -413,8 +415,8 @@ the STAGE-5 network SDK write is felt (tuning path P3).
 - Turnkey live-TUI harness: `bash dev/scripts/kiro-memory-hitl.sh` (builds the
   real generators into a throwaway trusted-TUI project; `KIRO_MEMORY_DIR`
   redirected to scratch).
-- Tests: `packages/kiro-cli/memory/distiller.test.ts` (80 bun tests),
-  `packages/openmemory-mcp/mem/openmemory-mem.test.ts` (backend helper),
+- Tests: `overlays/kiro-memory-distiller/distiller.test.ts` (80 bun tests),
+  `overlays/mcp-servers/openmemory-mem/openmemory-mem.test.ts` (backend helper),
   `checks/module-eval.nix` (`module-kiro-auto-memory-*`: hooks, steering,
   HM↔devenv parity, HOME-baked/empty==null, backend-wiring, manual-forces,
   rejects-baked-password).

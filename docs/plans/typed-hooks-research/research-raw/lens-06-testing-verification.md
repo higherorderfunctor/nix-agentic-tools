@@ -132,7 +132,7 @@ executes them, so there is nothing hermetic to drive. Those are emission-only
 
 ### 1c. Language-level unit + subprocess tests for hook logic
 
-Pattern: `packages/kiro-cli/memory/distiller.test.ts` (80 bun tests). Pure
+Pattern: `overlays/kiro-memory-distiller/distiller.test.ts` (80 bun tests). Pure
 functions are unit-tested; the CLI entry is exercised via a **real subprocess
 with a synthetic stdin envelope** (`describe("main …")`, lines 907-1052:
 `execFileSync("bun", [distiller.ts], { input: JSON.stringify({session_id, cwd}), env: {…} })`

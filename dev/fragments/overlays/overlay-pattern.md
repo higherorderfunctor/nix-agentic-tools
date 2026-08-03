@@ -1,12 +1,14 @@
 ## Overlay Grouping and the `generic` Subtree
 
-> **Last verified:** 2026-08-02 (commit pending — adds Semble's direct
-> external-flake derivation pattern and identity-preserving MCP role). Prior:
-> 2026-08-01 (commit pending — records that `glab`'s `extraExtract` also
-> regenerates its `passthru.extracted` sidecar, via the new shared
-> `vu.mkExtractRegen`, and that glab is the one extracted package where the
-> fixer-then-extract ORDER is forced. It had NO regeneration at all until now,
-> which nothing caught until its first version bump reddened
+> **Last verified:** 2026-08-03 (commit pending — makes overlay-owned local
+> implementation sources a boundary invariant and relocates the auto-memory
+> helper and distiller sources accordingly). Prior: 2026-08-02 (commit pending —
+> adds Semble's direct external-flake derivation pattern and identity-preserving
+> MCP role). Prior: 2026-08-01 (commit pending — records that `glab`'s
+> `extraExtract` also regenerates its `passthru.extracted` sidecar, via the new
+> shared `vu.mkExtractRegen`, and that glab is the one extracted package where
+> the fixer-then-extract ORDER is forced. It had NO regeneration at all until
+> now, which nothing caught until its first version bump reddened
 > `checks.<system>.glab-extracted` on PR #621). Prior: 2026-07-28 — the commit
 > adding THAT line lands `glab`: the first Go package whose SRC hash also lives
 > in the sidecar (`vu.mkGoSrcVendorFix`), the first GitLab-hosted version check
@@ -52,6 +54,13 @@ package would make sense in a repo called "agentic tools" — a hardened Firefox
 preference set, a btop theme, the DNS root hints, a resource monitor, a JS
 runtime, a JS package manager, a JSON log viewer, the GitHub CLI, a VPN client,
 a shell prompt engine and an OpenTelemetry viewer do not.
+
+Repo-local implementation sources consumed by an overlay derivation belong
+beside that derivation under `overlays/`, even when a package module is their
+only runtime consumer. An overlay must not import build sources from
+`packages/`: that outbound edge prevents lifting the overlay tree as a clean
+directory move. The auto-memory sources are the worked examples:
+`overlays/kiro-memory-distiller/` and `overlays/mcp-servers/openmemory-mem/`.
 
 ### Direct external-flake derivations
 

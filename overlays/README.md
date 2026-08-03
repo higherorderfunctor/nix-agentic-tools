@@ -105,9 +105,9 @@ computed at eval time via `overlays/lib.nix:mkVersion`
   rebuild with local packages, or use `overrideAttrs`.
 - **In-repo source**: packaged from a path in this repo (no upstream rev/hash,
   not version-tracked). Currently only `kiro-memory-distiller`
-  (`packages/kiro-cli/memory/`). Its whole system — the distiller pipeline, the
-  v3 hook set, the buffer/archive tiers, and the `openmemory-mem` backend seam —
-  is documented end-to-end in
+  (`overlays/kiro-memory-distiller/`). Its whole system — the distiller
+  pipeline, the v3 hook set, the buffer/archive tiers, and the `openmemory-mem`
+  backend seam — is documented end-to-end in
   [`packages/kiro-cli/docs/kiro-auto-memory.md`](../packages/kiro-cli/docs/kiro-auto-memory.md).
 
 ## Package table

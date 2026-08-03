@@ -1,6 +1,6 @@
 # kiro-memory-distiller — packages the kiro-cli auto-memory distiller.
 #
-# Source: packages/kiro-cli/memory/distiller.ts — a dependency-free bun/TS
+# Source: overlays/kiro-memory-distiller/distiller.ts — a dependency-free bun/TS
 # script (only node: built-ins, no npm deps). It is the deterministic Stop-hook
 # write path for kiro-cli auto-memory (see docs/plans/kiro-cli-auto-memory.md).
 # This overlay ships it as three role wrappers the v3 hooks invoke by absolute
@@ -39,7 +39,7 @@ in
   stdenvNoCC.mkDerivation {
     pname = "kiro-memory-distiller";
     version = "0.1.0";
-    src = ../packages/kiro-cli/memory;
+    src = ./kiro-memory-distiller;
 
     nativeBuildInputs = [makeWrapper];
 
