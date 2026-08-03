@@ -16,5 +16,6 @@ in {
 
   semanticAgent = {
     inherit description instructions;
+    tools = ["Bash" "Read"];
   };
 }

@@ -1582,6 +1582,11 @@ in {
           };
           description = "Review changes for correctness.";
           instructions = "Read first, then report concrete findings.";
+          tools = ["Bash" "Read"];
+        };
+        agents.unrestricted = {
+          description = "Review without a portable tool restriction.";
+          instructions = "Report concrete findings.";
         };
         claude.enable = true;
         codex.enable = true;
@@ -1599,6 +1604,7 @@ in {
       hmAgent = hm.config.home.file.".codex/agents/reviewer.toml".source.value;
       devenvAgent = devenv.config.files.".codex/agents/reviewer.toml".source.value;
       claudeAgent = hm.config.programs.claude-code.agents.reviewer;
+      unrestrictedClaudeAgent = hm.config.programs.claude-code.agents.unrestricted;
       copilotAgent = devenv.config.files.".github/agents/reviewer.agent.md".text;
     in
       hmAgent
@@ -1607,7 +1613,12 @@ in {
       && lib.hasPrefix "---\n" claudeAgent
       && lib.hasInfix ''name: "reviewer"'' claudeAgent
       && lib.hasInfix ''description: "Review changes for correctness."'' claudeAgent
+      && lib.hasInfix "tools: Bash, Read" claudeAgent
+      && lib.hasPrefix "---\n" unrestrictedClaudeAgent
+      && lib.hasInfix ''description: "Review without a portable tool restriction."'' unrestrictedClaudeAgent
+      && !(lib.hasInfix "tools:" unrestrictedClaudeAgent)
       && lib.hasInfix "Read first, then report concrete findings." copilotAgent
+      && lib.hasInfix "tools: Bash, Read" copilotAgent
       && !(lib.hasInfix "name:" copilotAgent)
   );
 
@@ -2077,6 +2088,7 @@ in {
       && cfg.ai.claude.agents ? semble-search
       && cfg.ai.codex.agents ? semble-search
       && cfg.ai.kiro.agents ? semble-search
+      && cfg.ai.claude.agents.semble-search.tools == ["Bash" "Read"]
       && !(claudeInstruction ? name)
       && !(codexInstruction ? name)
       && kiroAgent.tools == ["shell" "read"]
@@ -2253,6 +2265,7 @@ in {
       && records.kiroInstruction.name == "semble"
       && records.kiroInstruction.text == records.instruction.text
       && records.semanticAgent.instructions == ../packages/semble/agent-instructions.md
+      && records.semanticAgent.tools == ["Bash" "Read"]
       && kiroAgent.tools == ["shell" "read"]
   );
 

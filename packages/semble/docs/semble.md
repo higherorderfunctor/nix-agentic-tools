@@ -53,6 +53,16 @@ Codex compose the guidance into their single always-loaded `CLAUDE.md` and
 `AGENTS.md` files. Kiro receives a named instruction and writes it to
 `.kiro/steering/semble.md`.
 
+## Instruction content
+
+Upstream's instructions integration primarily explains the MCP tool names and
+marks its managed block for installer removal. This module instead installs the
+reviewed CLI search guidance shared with the `semble-search` subagent, without
+the non-Nix `uvx` fallback. The distinction is deliberate: `semble-mcp` supplies
+its MCP-tool guidance in the server's own session instructions, while the
+always-loaded `CLAUDE.md`, `AGENTS.md`, or Kiro steering file documents the CLI
+path that remains useful to shell-capable agents.
+
 ## Direct configuration
 
 The convenience module is optional. The exported helpers can be composed with

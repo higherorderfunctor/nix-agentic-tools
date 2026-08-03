@@ -654,9 +654,10 @@
         && lib.intersectLists reservedAgentKeys (builtins.attrNames (value.codex or {})) == [];
       message = ''
         Codex agent '${name}' must use the portable { description,
-        instructions, codex? } form, have a safe filename stem without a
-        .toml suffix, and keep name/description/developer_instructions out of
-        the codex extension.
+        instructions, tools?, codex? } form, have a safe filename stem without
+        a .toml suffix, and keep name/description/developer_instructions out of
+        the codex extension. Codex ignores the portable tools allowlist because
+        its agent format has no equivalent field.
       '';
     })
     agents;

@@ -20,6 +20,11 @@
           type = lib.types.either lib.types.lines lib.types.path;
           description = "Core instructions defining the agent's behavior.";
         };
+        tools = lib.mkOption {
+          type = lib.types.nullOr (lib.types.listOf lib.types.str);
+          default = null;
+          description = "Optional Claude/Copilot tool allowlist; Codex has no equivalent agent field.";
+        };
       };
     };
 
@@ -37,7 +42,7 @@
     else ''
       ---
       ${lib.optionalString includeName "name: ${builtins.toJSON name}\n"}description: ${builtins.toJSON value.description}
-      ---
+      ${lib.optionalString ((value.tools or null) != null) "tools: ${lib.concatStringsSep ", " value.tools}\n"}---
 
       ${resolveText value.instructions}
     '';

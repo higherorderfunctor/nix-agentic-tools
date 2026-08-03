@@ -149,9 +149,11 @@ in {
       default = {};
       description = ''
         Agent definitions fanned out to Claude and Copilot. Portable semantic
-        records (`{ description, instructions, codex? }`) also fan out to
-        Codex; legacy Markdown/path values remain Claude/Copilot-only and cause
-        a clear assertion when Codex is enabled. Each entry becomes a file:
+        records (`{ description, instructions, tools?, codex? }`) also fan out
+        to Codex; `tools` is rendered only for Claude and Copilot because Codex
+        has no equivalent agent field. Legacy Markdown/path values remain
+        Claude/Copilot-only and cause a clear assertion when Codex is enabled.
+        Each entry becomes a file:
         - Claude  → ~/.claude/agents/<name>.md
         - Copilot → .github/agents/<name>.agent.md (devenv) or
                     ~/.copilot/agents/<name>.md (HM)

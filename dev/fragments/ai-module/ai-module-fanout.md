@@ -1,9 +1,12 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-02 (commit pending — Semble keeps Claude and Codex
-> instructions unnamed for their single-file composers but names its Kiro
-> instruction so directory-native steering emits `semble.md` instead of the
-> generic `instructions.md`). Prior: 2026-08-02 (commit pending — records plain
+> **Last verified:** 2026-08-02 (commit pending — portable semantic agents may
+> restrict Claude and Copilot with their shared `tools` vocabulary while Codex
+> deliberately omits that field and Kiro retains its native JSON model). Prior:
+> 2026-08-02 (commit pending — Semble keeps Claude and Codex instructions
+> unnamed for their single-file composers but names its Kiro instruction so
+> directory-native steering emits `semble.md` instead of the generic
+> `instructions.md`). Prior: 2026-08-02 (commit pending — records plain
 > convenience modules such as Semble contributing selected per-runtime defaults
 > without enabling those runtimes). Prior: 2026-08-02 (commit pending — Codex
 > named profile files now use one typed settings schema across HM and devenv: HM
@@ -223,8 +226,11 @@ enabled ecosystem whose native model preserves the option's semantics):
   and repository-local `.agents/skills` in devenv; Claude, Copilot, and Kiro use
   their established native directories.
 - `ai.agents` — either legacy Markdown/path entries for Claude and Copilot or a
-  portable `{ description, instructions, codex? }` record. Semantic records
-  render Claude/Copilot frontmatter plus body and Codex standalone TOML. Codex
+  portable `{ description, instructions, tools?, codex? }` record. Semantic
+  records render Claude/Copilot frontmatter plus body and Codex standalone TOML.
+  The optional `tools` list uses Claude and Copilot's shared tool names and
+  renders as their comma-separated frontmatter allowlist; Codex deliberately
+  omits it because its standalone agent format has no equivalent field. Codex
   fails loudly on a legacy raw entry instead of pretending Markdown is a valid
   agent config. Legacy Nix paths stay path-valued for Claude's native option but
   are read into text for Copilot's file writer. Kiro remains excluded because
