@@ -71,6 +71,17 @@ its MCP-tool guidance in the server's own session instructions, while the
 always-loaded `CLAUDE.md`, `AGENTS.md`, or Kiro steering file documents the CLI
 path that remains useful to shell-capable agents.
 
+## Upstream template review gate
+
+`packages/semble/upstream-templates.json` snapshots the four pinned agent
+templates and the installer's instruction block through a separate derivation;
+Semble itself remains unchanged. An `llm-agents` input update regenerates that
+factual snapshot but deliberately leaves the reviewed hashes in
+`lib/templateCoverage.nix` untouched. CI therefore stops on any upstream content
+change until a person checks the local derivatives and updates the matching
+dispositions and hashes. Module evaluation reads only committed files and does
+not introduce IFD.
+
 ## Direct configuration
 
 The convenience module is optional. The exported helpers can be composed with

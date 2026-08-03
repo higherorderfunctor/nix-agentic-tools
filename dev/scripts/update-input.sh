@@ -44,6 +44,21 @@ if ! (
   # Sync devenv.lock
   devenv update
 
+  # Semble comes from the llm-agents flake input rather than a package update
+  # target, so mkUpdateScript's extraExtract hook can never run for it. Refresh
+  # the generated upstream snapshot here instead. The separate human-reviewed
+  # hashes deliberately stay untouched: CI must fail until a reviewer accepts
+  # or adapts each local derivative after upstream content changes.
+  if [ "$name" = "llm-agents" ]; then
+    log_info "Regenerating pinned Semble agent templates..."
+    update_system=$(nix eval --raw --impure --expr builtins.currentSystem)
+    semble_templates_path=$(nix build --no-link --print-out-paths \
+      ".#checks.$update_system.semble-templates-extracted.passthru.extracted")
+    cp "$semble_templates_path" packages/semble/upstream-templates.json
+    chmod 644 packages/semble/upstream-templates.json
+    nix fmt -- packages/semble/upstream-templates.json
+  fi
+
   # Check if anything changed. `git diff --staged --quiet` signals through its
   # exit code, and that code is THREE-valued (0 / 1 / >1), so it goes through
   # git_diff_quiet rather than being tested for truthiness — see the rationale
@@ -52,7 +67,7 @@ if ! (
   # nothing actually moved, the target ran the FULL nix-fast-build
   # verification of every package before failing on an empty commit, and
   # reported the cause as "update or build failed".
-  git add flake.lock devenv.yaml devenv.lock
+  git add flake.lock devenv.yaml devenv.lock packages/semble/upstream-templates.json
   if git_diff_quiet diff --staged; then
     exit 0
   fi

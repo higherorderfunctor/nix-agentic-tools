@@ -252,11 +252,12 @@
       moduleChecks = import ./checks/module-eval.nix {inherit lib pkgs;};
       optionsDocsCheck = import ./checks/options-doc.nix {inherit lib pkgs self;};
       pnpmFetcherParityCheck = import ./checks/pnpm-fetcher-parity.nix {inherit lib pkgs self;};
+      sembleTemplatesCheck = import ./checks/semble-templates.nix {inherit lib pkgs self;};
       splitCodeSpansCheck = {split-code-spans = import ./checks/split-code-spans.nix {inherit pkgs;};};
       updateTargetsParityCheck = {update-targets-parity = import ./checks/update-targets-parity.nix {inherit lib pkgs self;};};
       validateAtStopCheck = {validate-at-stop = import ./checks/validate-at-stop.nix {inherit pkgs;};};
     in
-      bareCommandsCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // codexCoverageCheck // codexExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goToolchainFloorChecks // instructionsDriftCheck // kiroExtractedCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // splitCodeSpansCheck // updateTargetsParityCheck // validateAtStopCheck);
+      bareCommandsCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // codexCoverageCheck // codexExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goToolchainFloorChecks // instructionsDriftCheck // kiroExtractedCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // sembleTemplatesCheck // splitCodeSpansCheck // updateTargetsParityCheck // validateAtStopCheck);
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # from devenv.nix; nothing in this flake constructs it.
