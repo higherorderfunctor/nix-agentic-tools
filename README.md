@@ -317,8 +317,9 @@ ai = {
 <details>
 <summary><strong>Semble code search</strong></summary>
 
-Enable the MCP server, CLI guidance, and `semble-search` subagent for Claude,
-Codex, and Kiro without enabling those runtimes themselves:
+Semble never enables AI runtimes implicitly. Enable its MCP server, CLI
+guidance, and `semble-search` subagent, then separately enable whichever
+runtimes should consume them:
 
 ```nix
 semble.enable = true;
