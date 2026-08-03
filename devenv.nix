@@ -241,11 +241,11 @@ in {
   ];
 
   # ── Overlays ──────────────────────────────────────────────────────────
-  # devenv applies these to pkgs, so pkgs.ai.*, pkgs.gitTools.*, and
+  # devenv applies these to pkgs, so pkgs.ai.* and
   # pkgs.stacked-workflows-content are available everywhere. No manual
   # overlay composition needed.
   overlays = [
-    # Unified AI overlay (pkgs.ai.*, pkgs.gitTools.*)
+    # Unified AI overlay (all binary-package groups under pkgs.ai.*)
     (import ./overlays {inherit inputs;})
     # Content packages (pkgs.coding-standards, pkgs.stacked-workflows-content)
     (import ./packages/coding-standards {})

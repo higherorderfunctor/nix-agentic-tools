@@ -816,7 +816,7 @@ rec {
   # eval this drives.
   #
   #   attr:        name under `packages.<system>` (flake.nix flattens
-  #                `pkgs.generic` into it, so a generic package is
+  #                `pkgs.ai.generic` into it, so a generic package is
   #                reachable by its bare name). This repo has NO
   #                `legacyPackages` output — do not reach for one.
   #   sourcesFile: threaded explicitly by every caller.
@@ -1093,7 +1093,7 @@ rec {
   # true when `src` is a plain fetch of a URL. An overlay that re-points
   # an upstream fetcher carrying a `postFetch` gets a hash over the
   # POST-postFetch tree, which `nix-prefetch-url --unpack` cannot
-  # reproduce. `overlays/generic/glab.nix` is the current consumer:
+  # reproduce. `overlays/dev-tools/glab.nix` is the current consumer:
   # nixpkgs' glab fetches with `leaveDotGit` and a `postFetch` that
   # records COMMIT and then strips `.git`.
   #

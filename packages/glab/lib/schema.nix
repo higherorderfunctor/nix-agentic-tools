@@ -8,14 +8,14 @@
 # grew a bug: the wrapper emitted `GITLAB_HOST` twice, because its
 # secret-key list was built from a different expression than the options'.
 #
-# Reads the COMMITTED sidecar (`overlays/generic/glab-extracted.json`),
+# Reads the COMMITTED sidecar (`overlays/dev-tools/glab-extracted.json`),
 # not `passthru.extracted`. Reading the derivation would be
 # import-from-derivation on every module evaluation; the sidecar is kept
 # honest by `checks.glab-extracted` instead.
 {lib}: let
   schema =
     builtins.fromJSON
-    (builtins.readFile ../../../overlays/generic/glab-extracted.json);
+    (builtins.readFile ../../../overlays/dev-tools/glab-extracted.json);
 
   byName = builtins.listToAttrs (map (k: {
       inherit (k) name;

@@ -1,6 +1,8 @@
 ## Fragment Pipeline Architecture
 
-> **Last verified:** 2026-08-03 (commit pending — the kiro auto-memory category
+> **Last verified:** 2026-08-03 (commit pending — generated README guidance now
+> describes the temporary `pkgs.ai.generic` bucket and classifies `gh`/`glab` as
+> dev tools). Prior: 2026-08-03 (commit pending — the kiro auto-memory category
 > now scopes its moved implementation sources under `overlays/`, keeping the
 > fragment routed to both sides of that abstraction). Prior: 2026-08-03 (commit
 > pending — the generated README now keeps `nix-agentic-tools` on its own

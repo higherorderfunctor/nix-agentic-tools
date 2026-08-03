@@ -3,7 +3,7 @@
 # `version`, `src` and `passthru.updateScript` move, so every build
 # input, phase and hook stays whatever nixpkgs ships.
 #
-# EXPECTED: while our pin and nixpkgs' pin agree, `pkgs.generic.btop`
+# EXPECTED: while our pin and nixpkgs' pin agree, `pkgs.ai.generic.btop`
 # resolves to the SAME store path as plain `pkgs.btop`. A fixed-output
 # derivation's path follows its hash, not its fetcher, and our fetchzip
 # of the repo-archive tarball hashes the same unpacked NAR that

@@ -36,7 +36,7 @@ in {
   imports = [(import ../options.nix {inherit lib;})];
 
   config = lib.mkIf cfg.enable {
-    glab.package = lib.mkDefault pkgs.generic.glab;
+    glab.package = lib.mkDefault pkgs.ai.devTools.glab;
     # A real eval-time path, not a `$DEVENV_STATE` string: `devenv eval
     # devenv.state` resolves to an absolute path, so nothing has to expand
     # at invocation time.

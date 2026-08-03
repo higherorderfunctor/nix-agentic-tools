@@ -140,6 +140,8 @@ computed at eval time via `overlays/lib.nix:mkVersion`
 | git-absorb            | gitTools   | GitHub main             | cargo (nixpkgs override)  | `git-absorb`          | cargo test    | --version           |
 | git-branchless        | gitTools   | flake input             | cargo (upstream overlay)  | —                     | upstream      | —                   |
 | git-revise            | gitTools   | GitHub main             | python (nixpkgs override) | `git-revise`          | pytest        | nixpkgs             |
+| gh                    | devTools   | GitHub archive          | go (nixpkgs override)     | `gh`                  | — (doCheck 0) | --version           |
+| glab                  | devTools   | GitLab tag (fetcher)    | go (nixpkgs override)     | `glab`                | —             | --version           |
 | oxlint                | devTools   | GitHub main             | pnpm (nixpkgs override)   | `oxlint`              | installCheck  | --type-aware        |
 | tsgolint              | devTools   | GitHub main             | go (nixpkgs override)     | `tsgolint`            | upstream      | --help              |
 | arkenfox              | generic    | GitHub archive          | files only                | —                     | —             | —                   |
@@ -149,7 +151,6 @@ computed at eval time via `overlays/lib.nix:mkVersion`
 | catppuccin-btop       | generic    | GitHub archive          | files only                | —                     | —             | —                   |
 | dns-root-hints        | generic    | InterNIC (no version)   | files only                | —                     | —             | —                   |
 | fblog                 | generic    | GitHub archive          | cargo (nixpkgs override)  | `fblog`               | —             | --version           |
-| gh                    | generic    | GitHub archive          | go (nixpkgs override)     | `gh`                  | — (doCheck 0) | --version           |
 | gluetun               | generic    | GitHub archive          | go (linux only)           | —                     | — (subPkg)    | starts + exits      |
 | oh-my-posh            | generic    | GitHub archive          | go (nixpkgs override)     | `oh-my-posh`          | go test       | --version           |
 | otel-tui              | generic    | GitHub archive          | go (nixpkgs override)     | `otel-tui`            | go test       | --version           |

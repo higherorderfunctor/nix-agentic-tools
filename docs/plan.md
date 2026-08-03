@@ -326,8 +326,9 @@ High confidence, small scope. Good for review sessions.
       to document:
       - Overlay source pattern: inline GitHub source + hash, nix-update
         pipeline, nixpkgs overrides with fetchPnpmDeps/finalAttrs
-      - overlay grouping: `pkgs.ai.{mcpServers,lspServers}` +
-        `pkgs.gitTools`, agnix mainProgram overrides
+      - overlay grouping: every binary package under `pkgs.ai`, including
+        `pkgs.ai.{devTools,generic,gitTools,lspServers,mcpServers}`, plus agnix
+        mainProgram overrides
       - factory composition: mkAiApp record + hmTransform/devenvTransform
         (see `memory/project_factory_architecture.md`)
       - Claude delegation model: upstream programs.claude-code.* for

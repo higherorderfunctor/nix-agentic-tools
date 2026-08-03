@@ -8,8 +8,8 @@
 # which is all their own files do.
 #
 # ── The settings surface is GENERATED, not curated ──────────────────
-# `overlays/generic/glab-extracted.json` is built from glab's own
-# `internal/config.KeySchema` (see overlays/generic/glab.nix) and
+# `overlays/dev-tools/glab-extracted.json` is built from glab's own
+# `internal/config.KeySchema` (see overlays/dev-tools/glab.nix) and
 # committed. Every user-settable, non-list key becomes a typed option
 # here, carrying upstream's own description.
 #
@@ -69,7 +69,7 @@ in {
 
       package = mkOption {
         type = types.package;
-        defaultText = lib.literalExpression "pkgs.generic.glab";
+        defaultText = lib.literalExpression "pkgs.ai.devTools.glab";
         description = "The glab package to wrap.";
       };
 

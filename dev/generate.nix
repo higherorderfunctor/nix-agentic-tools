@@ -482,6 +482,8 @@
     <details>
     <summary><strong>Dev Tools</strong></summary>
 
+    Agent-adjacent development utilities exposed as `pkgs.ai.devTools.*`.
+
     <!-- prettier-ignore -->
     | Package | Description |
     |---------|-------------|
@@ -496,8 +498,8 @@
     <details>
     <summary><strong>Generic Packages</strong></summary>
 
-    Nothing agentic about these — they live in a split-ready
-    `overlays/generic/` subtree and are exposed as `pkgs.generic.*`.
+    Temporarily unclassified supporting packages live in the split-ready
+    `overlays/generic/` subtree and are exposed as `pkgs.ai.generic.*`.
 
     <!-- prettier-ignore -->
     | Package | Description |

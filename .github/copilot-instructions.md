@@ -801,11 +801,14 @@ packages/
                       lib, docs, and fragments for that package
   stacked-workflows/  Content package: skills, references, skill-routing fragment
   coding-standards/   Content package: reusable coding standard fragments
-overlays/     Binary package overlays (pkgs.ai.*, pkgs.devTools.*,
-              pkgs.generic.*, pkgs.gitTools.*) plus per-package
+overlays/     Binary package overlays (all groups under pkgs.ai.*) plus per-package
               -sources.json / -extracted.json sidecars
-  generic/    Split-ready subtree: packages with nothing agentic about
-              them, earmarked for a possible future repo split
+  dev-tools/  Agent-adjacent development utilities (pkgs.ai.devTools.*)
+  generic/    Temporary split-ready bucket for supporting packages that have
+              not yet earned a more specific category
+  git-tools/  Git workflow utilities (pkgs.ai.gitTools.*)
+  lsp-servers/  LSP server packages and role projections
+  mcp-servers/  MCP server packages and role projections
 lib/          Shared library: the ai factory (lib/ai/*), fragments, MCP helpers,
               credentials, devshell
 devshell/     Standalone devshell modules (mkAgenticShell)

@@ -1,20 +1,23 @@
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-08-03 (commit pending — relocates the two repo-local
-> auto-memory source trees beside their overlay derivations without changing
-> package inputs or cache-hit semantics). Prior: 2026-08-03 (commit pending —
-> adds a positive control that substitutes the overlay's own `inputs.nixpkgs`
-> the way a consumer's `follows` directive does, proving that unsupported
-> configuration drifts from the cache-published `fblog` path). Prior: 2026-08-02
-> (commit pending — adds the pinned external Semble exception: direct upstream
-> selection preserves Numtide's derivation, while a plain meta overlay exposes
-> the MCP role without forking the build). Prior: 2026-07-25 (commit pending —
-> the worked example moved off `git-branchless`, which had not carried this
-> shape for a long time, onto `git-absorb`, which does; also corrects the
-> new-package signature, the namespacing in the manual verification snippet, and
-> the pure-binary-fetch package list). If you touch any `overlays/<name>.nix`
-> overlay file or the overlay composition machinery and this fragment isn't
-> updated in the same commit, stop and fix it. Regressions are gated by the
+> **Last verified:** 2026-08-03 (commit pending — nests every binary-package
+> group under `pkgs.ai`, moves `gh` and `glab` into `ai.devTools`, and updates
+> the consumer-path registry without changing any derivation). Prior: 2026-08-03
+> (commit pending — relocates the two repo-local auto-memory source trees beside
+> their overlay derivations without changing package inputs or cache-hit
+> semantics). Prior: 2026-08-03 (commit pending — adds a positive control that
+> substitutes the overlay's own `inputs.nixpkgs` the way a consumer's `follows`
+> directive does, proving that unsupported configuration drifts from the
+> cache-published `fblog` path). Prior: 2026-08-02 (commit pending — adds the
+> pinned external Semble exception: direct upstream selection preserves
+> Numtide's derivation, while a plain meta overlay exposes the MCP role without
+> forking the build). Prior: 2026-07-25 (commit pending — the worked example
+> moved off `git-branchless`, which had not carried this shape for a long time,
+> onto `git-absorb`, which does; also corrects the new-package signature, the
+> namespacing in the manual verification snippet, and the pure-binary-fetch
+> package list). If you touch any `overlays/<name>.nix` overlay file or the
+> overlay composition machinery and this fragment isn't updated in the same
+> commit, stop and fix it. Regressions are gated by the
 > `checks.cache-hit-parity` flake check (see "Verification" below).
 
 ### The rule
@@ -187,8 +190,8 @@ Manual (legacy, for ad-hoc debugging):
 
 The two sides are spelled differently on purpose. `flake.nix` flattens every
 package into `packages.<system>` for CLI ergonomics, so the standalone side is
-`.#git-absorb`. The overlay itself is namespaced-only (`pkgs.gitTools.*`,
-`pkgs.generic.*`, …) and never writes a top-level attribute, so the consumer
+`.#git-absorb`. The overlay itself is namespaced-only (`pkgs.ai.gitTools.*`,
+`pkgs.ai.generic.*`, …) and never writes a top-level attribute, so the consumer
 side MUST use the namespaced path — a bare `pkgs.git-absorb` there silently
 resolves to plain nixpkgs' package and reports drift that is not real.
 
@@ -207,7 +210,7 @@ CONSUMER=$(nix eval --raw --impure --expr '
       overlays = [ flake.inputs.nix-agentic-tools.overlays.default ];
       config.allowUnfree = true;
     };
-  in pkgs.gitTools.git-absorb.outPath')
+  in pkgs.ai.gitTools.git-absorb.outPath')
 
 # 3. MUST be identical
 [ "$STANDALONE" = "$CONSUMER" ] && echo "OK" || echo "DRIFT"
@@ -241,7 +244,7 @@ which nixpkgs evaluates them. Skip the ourPkgs pattern for these.
 
 "Content-only" means **no build inputs at all**. It does NOT mean "ships data
 files rather than binaries" — a distinction worth being precise about, because
-the `pkgs.generic.*` packages (arkenfox, catppuccin-btop, dns-root-hints)
+the `pkgs.ai.generic.*` packages (arkenfox, catppuccin-btop, dns-root-hints)
 install nothing but data files and still need the full pattern: each runs a
 fetcher (`fetchzip` / `fetchurl`) inside an stdenv derivation, and both of those
 bind to whichever pkgs set supplies them. They are registered in

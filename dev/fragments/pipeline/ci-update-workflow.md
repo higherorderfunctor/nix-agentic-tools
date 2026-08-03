@@ -1,31 +1,32 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-08-01 (commit pending — Phase 2 now runs on
-> `if: always()` so a timed-out sweep SHIPS what it finished instead of
-> discarding it, and the `ninja-completed.flag` sentinel is re-gated on
-> `steps.ninja.outcome` so a partial sweep can never let the close step delete
-> the PRs it did not reach. Measured on run 30713330569: 47 of 52 edges done,
-> step `skipped`, everything thrown away). Prior: 2026-08-01 — documents the
-> SECOND `extraExtract` self-heal, `vu.mkExtractRegen`, alongside the hash one:
-> which failure it answers, that a red drift check reports a broken MECHANISM
-> rather than a stale file, why extracts get no `fix_sidecar_hashes`-style
-> standalone hatch, and how to tell "never wired" from "ran and failed". glab
-> had no hook at all, which stayed invisible from #560 until PR #621). Prior:
-> 2026-07-27 — adds the three-valued `git diff --quiet` rule and the
-> `git_diff_quiet` helper every dirtiness gate in the update scripts now goes
-> through; the bare form had routed a git ERROR into "there are changes" in
-> `update-input.sh` and into "the tree is dirty" at both of `update-pkg.sh`'s
-> gates. Earlier: the `Detect a newer @aihubmix/mcp on npm` annotation step and
-> the excluded-because-a-local-patch-cannot-be-swept rule behind it, which is
-> about SWEEPABILITY and not about lagging: aihubmix-mcp tracks
-> `dist-tags.latest` and is still excluded. Earlier: the `NAT_UPDATE_JOBS`
-> evaluator budget that killed run 30181958460, the `verify_all_packages`
-> single-definition build gate and the `fix_sidecar_hashes` repair-on-failure
-> retry, and the non-blocking annotation-step family plus the new-pnpm-major
-> raise). If you touch `.github/workflows/update.yml`,
-> `dev/scripts/update-common.sh`, `dev/scripts/update-input.sh`,
-> `dev/scripts/update-pkg.sh`, or the PR creation logic, and this fragment isn't
-> updated in the same commit, stop and fix it.
+> **Last verified:** 2026-08-03 (commit pending — updates the pnpm detector's
+> documented lookup after all package groups move under `pkgs.ai`). Prior:
+> 2026-08-01 (commit pending — Phase 2 now runs on `if: always()` so a timed-out
+> sweep SHIPS what it finished instead of discarding it, and the
+> `ninja-completed.flag` sentinel is re-gated on `steps.ninja.outcome` so a
+> partial sweep can never let the close step delete the PRs it did not reach.
+> Measured on run 30713330569: 47 of 52 edges done, step `skipped`, everything
+> thrown away). Prior: 2026-08-01 — documents the SECOND `extraExtract`
+> self-heal, `vu.mkExtractRegen`, alongside the hash one: which failure it
+> answers, that a red drift check reports a broken MECHANISM rather than a stale
+> file, why extracts get no `fix_sidecar_hashes`-style standalone hatch, and how
+> to tell "never wired" from "ran and failed". glab had no hook at all, which
+> stayed invisible from #560 until PR #621). Prior: 2026-07-27 — adds the
+> three-valued `git diff --quiet` rule and the `git_diff_quiet` helper every
+> dirtiness gate in the update scripts now goes through; the bare form had
+> routed a git ERROR into "there are changes" in `update-input.sh` and into "the
+> tree is dirty" at both of `update-pkg.sh`'s gates. Earlier: the
+> `Detect a newer @aihubmix/mcp on npm` annotation step and the
+> excluded-because-a-local-patch-cannot-be-swept rule behind it, which is about
+> SWEEPABILITY and not about lagging: aihubmix-mcp tracks `dist-tags.latest` and
+> is still excluded. Earlier: the `NAT_UPDATE_JOBS` evaluator budget that killed
+> run 30181958460, the `verify_all_packages` single-definition build gate and
+> the `fix_sidecar_hashes` repair-on-failure retry, and the non-blocking
+> annotation-step family plus the new-pnpm-major raise). If you touch
+> `.github/workflows/update.yml`, `dev/scripts/update-common.sh`,
+> `dev/scripts/update-input.sh`, `dev/scripts/update-pkg.sh`, or the PR creation
+> logic, and this fragment isn't updated in the same commit, stop and fix it.
 
 ### Design: Renovate-style per-dependency PRs
 
@@ -127,9 +128,10 @@ automate because a human has to decide:
     detector would fire on every sweep from now on. It would look like a working
     detector while being pure noise.
   - **Derive "ours" from the repo**, not a literal. The step reads
-    `pkgs.generic.pnpm_*` attribute names out of `nix eval .#packages.<system>`;
-    a hardcoded major rots silently the moment the window slides, and a detector
-    that has stopped detecting is worse than none.
+    `pkgs.ai.generic.pnpm_*` attribute names out of
+    `nix eval .#packages.<system>`; a hardcoded major rots silently the moment
+    the window slides, and a detector that has stopped detecting is worse than
+    none.
 - **`Detect a newer @aihubmix/mcp on npm`** — compares the registry's
   `dist-tags.latest` against the version this repo pins, derived (never
   hardcoded) from `nix eval --raw .#packages.x86_64-linux.aihubmix-mcp.version`
