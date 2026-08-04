@@ -53,6 +53,10 @@
     passthru = package.passthru or {};
   in
     passthru.updateFlakeInput or null;
+  updateTargetExemption = package: let
+    passthru = package.passthru or {};
+  in
+    passthru.updateTargetExempt or null;
   sharesWithTarget = coveredTargets: accessor: package: let
     value = accessor package;
   in
@@ -61,6 +65,7 @@
     builtins.any (pattern: builtins.match pattern name != null) updateRegistry.excludePatterns;
   coverageFor = targets: coveredTargets: name: package: let
     inputOwner = updateFlakeInput package;
+    exemption = updateTargetExemption package;
   in
     if builtins.hasAttr name targets
     then "target row"
@@ -72,6 +77,8 @@
     then "shared update script with a target"
     else if builtins.isString inputOwner && builtins.hasAttr inputOwner inputs
     then "flake input ${inputOwner}"
+    else if builtins.isString exemption && builtins.stringLength exemption > 0
+    then "package exemption: ${exemption}"
     else if explicitlyExcluded name
     then "explicit excludePatterns exemption"
     else null;

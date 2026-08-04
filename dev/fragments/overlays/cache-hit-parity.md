@@ -1,30 +1,30 @@
 ## Overlay Cache-Hit Parity
 
 > **Last verified:** 2026-08-03 (commit pending — annotates Semble's unchanged
-> upstream derivation with its flake-input update owner through a plain attrset
-> extension). Prior: 2026-08-03 (commit pending — patches Oxlint's
-> `@napi-rs/cli` dependency in its pnpm-fetched source rather than admitting
-> Darwin's `/bin/ps` into the sandbox; both fetch and build use pnpm 11 from
-> pinned `ourPkgs`, matching upstream's major). Prior: 2026-08-03 (commit
-> pending — nests every binary-package group under `pkgs.ai`, moves `gh` and
-> `glab` into `ai.devTools`, and updates the consumer-path registry without
-> changing any derivation). Prior: 2026-08-03 (commit pending — relocates the
-> two repo-local auto-memory source trees beside their overlay derivations
-> without changing package inputs or cache-hit semantics). Prior: 2026-08-03
-> (commit pending — adds a positive control that substitutes the overlay's own
-> `inputs.nixpkgs` the way a consumer's `follows` directive does, proving that
-> unsupported configuration drifts from the cache-published `fblog` path).
-> Prior: 2026-08-02 (commit pending — adds the pinned external Semble exception:
-> direct upstream selection preserves Numtide's derivation, while a plain meta
-> overlay exposes the MCP role without forking the build). Prior: 2026-07-25
-> (commit pending — the worked example moved off `git-branchless`, which had not
-> carried this shape for a long time, onto `git-absorb`, which does; also
-> corrects the new-package signature, the namespacing in the manual verification
-> snippet, and the pure-binary-fetch package list). If you touch any
-> `overlays/<name>.nix` overlay file or the overlay composition machinery and
-> this fragment isn't updated in the same commit, stop and fix it. Regressions
-> are gated by the `checks.cache-hit-parity` flake check (see "Verification"
-> below).
+> upstream derivation and git-branchless's passthru with their flake-input
+> update owners without moving either derivation). Prior: 2026-08-03 (commit
+> pending — patches Oxlint's `@napi-rs/cli` dependency in its pnpm-fetched
+> source rather than admitting Darwin's `/bin/ps` into the sandbox; both fetch
+> and build use pnpm 11 from pinned `ourPkgs`, matching upstream's major).
+> Prior: 2026-08-03 (commit pending — nests every binary-package group under
+> `pkgs.ai`, moves `gh` and `glab` into `ai.devTools`, and updates the
+> consumer-path registry without changing any derivation). Prior: 2026-08-03
+> (commit pending — relocates the two repo-local auto-memory source trees beside
+> their overlay derivations without changing package inputs or cache-hit
+> semantics). Prior: 2026-08-03 (commit pending — adds a positive control that
+> substitutes the overlay's own `inputs.nixpkgs` the way a consumer's `follows`
+> directive does, proving that unsupported configuration drifts from the
+> cache-published `fblog` path). Prior: 2026-08-02 (commit pending — adds the
+> pinned external Semble exception: direct upstream selection preserves
+> Numtide's derivation, while a plain meta overlay exposes the MCP role without
+> forking the build). Prior: 2026-07-25 (commit pending — the worked example
+> moved off `git-branchless`, which had not carried this shape for a long time,
+> onto `git-absorb`, which does; also corrects the new-package signature, the
+> namespacing in the manual verification snippet, and the pure-binary-fetch
+> package list). If you touch any `overlays/<name>.nix` overlay file or the
+> overlay composition machinery and this fragment isn't updated in the same
+> commit, stop and fix it. Regressions are gated by the
+> `checks.cache-hit-parity` flake check (see "Verification" below).
 
 ### The rule
 
@@ -248,6 +248,13 @@ that same plain attrset extension. `passthru` metadata changes neither `drvPath`
 nor `outPath`; it tells the update-target completeness check that the normal
 flake-input bump owns this versioned package. The MCP role inherits the property
 with the rest of Semble's attrset.
+
+The same metadata rule applies when an overlay rebuilds around a flake input:
+`git-branchless` keeps its locally pinned `ourPkgs` build but declares
+`passthru.updateFlakeInput = "git-branchless"`, because that input supplies both
+its source and Cargo lock. Adding passthru through `overrideAttrs` is
+derivation-neutral; the cache-hit parity gate remains the authority on the
+resulting path.
 
 **Content-only packages don't need this.** Packages that just ship markdown
 files (coding-standards, stacked-workflows-content, fragments-ai) have no

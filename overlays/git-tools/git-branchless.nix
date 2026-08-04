@@ -43,6 +43,12 @@ in
       builtins.filter
       (p: (p.pname or "") != "version-check-hook")
       (prev.nativeInstallCheckInputs or []);
+    passthru =
+      (prev.passthru or {})
+      // {
+        # Source and Cargo.lock move with the normal flake-input sweep.
+        updateFlakeInput = "git-branchless";
+      };
     meta =
       (removeAttrs prev.meta ["maintainers"])
       // {

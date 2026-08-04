@@ -89,6 +89,8 @@ in
       runHook postInstallCheck
     '';
 
+    passthru.updateTargetExempt = "repository-local source with no upstream release";
+
     meta = {
       description = "Deterministic Stop-hook memory distiller for kiro-cli auto-memory";
       mainProgram = "kiro-memory-distiller";
