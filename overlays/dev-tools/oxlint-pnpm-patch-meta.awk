@@ -41,6 +41,17 @@ function trim(s) {
     next
 }
 
+# Upstream taking ownership of patchedDependencies is the case this must not
+# paper over. Emitting a second top-level key of the same name either fails
+# YAML parsing or, worse, loses to the last one — which drops our entry and
+# ships an UNPATCHED dependency with no error anywhere. Must precede the insert
+# rule below so that key is counted rather than treated as the anchor.
+/^patchedDependencies:[ \t]*$/ {
+    nExisting++
+    print
+    next
+}
+
 # pnpm writes the block immediately before the first top-level key following
 # `overrides:`. Anchoring there reproduces its own placement without caring
 # which key that happens to be.
@@ -98,8 +109,16 @@ tag != "" && index(t, snapPfx) == 1 {
 { print }
 
 END {
+    if (nExisting > 0) {
+        print "oxlint: FILE already declares a top-level patchedDependencies — upstream took ownership of it. Merge our entry into theirs by hand; a second key would be dropped silently." > "/dev/stderr"
+        exit 1
+    }
+    if (!seenOverrides) {
+        print "oxlint: no top-level `overrides:` key — nothing to anchor patchedDependencies against" > "/dev/stderr"
+        exit 1
+    }
     if (nBlock != 1) {
-        print "oxlint: no top-level key after `overrides:` — cannot place patchedDependencies" > "/dev/stderr"
+        print "oxlint: `overrides:` is the last top-level key — no following key to place patchedDependencies before" > "/dev/stderr"
         exit 1
     }
     if (tag == "" && nCatalog == 0) {
