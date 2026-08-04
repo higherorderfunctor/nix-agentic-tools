@@ -90,6 +90,7 @@ emnapi
 endgroup
 endswith
 envrc
+envsubst
 epistemics
 execpolicy
 execve

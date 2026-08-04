@@ -20,6 +20,15 @@
   tomlFormat = pkgs.formats.toml {};
   # Generic idempotent-flag helper shared with mkKiro's wrapper (lib/idempotentFlags.nix).
   idempotentFlags = import ./../lib/idempotentFlags.nix {inherit lib;};
+  # Kiro mcp-secret preprocessor + the rendered mcp.json body the module
+  # feeds into its activation/enterShell writer (mkMcpJsonScript). Tests
+  # assert placeholder content via `renderedMcpJson` and template-store-
+  # path parity between the two backends.
+  inherit (import ./../packages/kiro-cli/lib/mcpSecrets.nix {inherit lib;}) renderKiroSecrets;
+  renderedMcpJson = servers:
+    builtins.toJSON {
+      mcpServers = lib.mapAttrs (name: mcpLib.renderServer pkgs name) (renderKiroSecrets servers).servers;
+    };
   hmLib =
     lib
     // {
@@ -3778,6 +3787,264 @@ in {
       (result.config.programs.claude-code.settings.env.ENABLE_LSP_TOOL or null) == "1"
   );
 
+  # Kiro content pipeline: a credential http HEADER renders to a
+  # `${env:VAR}` placeholder (Kiro expands it at launch) and a credential
+  # URL to a bare `${VAR}` envsubst sentinel (WE expand it at activation)
+  # — the raw secret file path is NEVER serialized, and the `Bearer `
+  # header prefix + `https://` url prefix compose. Content-level (the
+  # shared render both backends feed into). See mcpSecrets.nix.
+  module-kiro-mcp-secret-placeholders = mkTest "kiro-mcp-secret-placeholders" (
+    let
+      mcpJson = renderedMcpJson {
+        jira = {
+          type = "http";
+          url = {
+            file = "/run/secrets/jira-url";
+            prefix = "https://";
+          };
+          timeout = 300000;
+          headers = {
+            "X-MCP-Servers" = "jira";
+            "X-Jira-Token".file = "/run/secrets/jira-pat";
+            "X-Api-Key" = {
+              file = "/run/secrets/llm";
+              prefix = "Bearer ";
+            };
+          };
+        };
+      };
+    in
+      lib.hasInfix "\${env:KIRO_MCP_JIRA_X_JIRA_TOKEN}" mcpJson
+      && lib.hasInfix "Bearer \${env:KIRO_MCP_JIRA_X_API_KEY}" mcpJson
+      && lib.hasInfix "https://\${KIRO_MCP_JIRA_URL}" mcpJson
+      && lib.hasInfix ''"X-MCP-Servers":"jira"'' mcpJson
+      && !(lib.hasInfix "/run/secrets/jira-pat" mcpJson)
+      && !(lib.hasInfix "/run/secrets/llm" mcpJson)
+      && !(lib.hasInfix "/run/secrets/jira-url" mcpJson)
+  );
+
+  # ONE credential shared by TWO servers. A gateway that multiplexes several
+  # backends behind a single endpoint produces this: each server carries its
+  # own token and a routing header, but they authenticate with the SAME api
+  # key. The shared key must collapse to a SINGLE export rather than tripping
+  # the collision guard — that guard rejects one var bound to two DIFFERENT
+  # sources, which is not this case.
+  module-kiro-mcp-secret-shared-across-servers = mkTest "kiro-mcp-secret-shared-across-servers" (
+    let
+      sharedKey = {
+        file = "/run/secrets/gateway-key";
+        prefix = "Bearer ";
+        var = "GW_KEY";
+      };
+      mkServer = route: tokenFile: tokenVar: {
+        type = "http";
+        url = "https://gateway.example.com/mcp/";
+        headers = {
+          "X-Api-Key" = sharedKey;
+          "X-Route" = route;
+          "X-Token" = {
+            file = tokenFile;
+            var = tokenVar;
+          };
+        };
+      };
+      result = renderKiroSecrets {
+        alpha = mkServer "alpha" "/run/secrets/alpha-token" "ALPHA_TOKEN";
+        beta = mkServer "beta" "/run/secrets/beta-token" "BETA_TOKEN";
+      };
+      rendered = builtins.toJSON result.servers;
+    in
+      # The shared key deduped to one export, the per-server tokens stayed distinct.
+      (builtins.attrNames result.secretEnv)
+      == ["ALPHA_TOKEN" "BETA_TOKEN" "GW_KEY"]
+      && result.secretEnv.GW_KEY.file == "/run/secrets/gateway-key"
+      # Both servers reference that one var, with the prefix composed per-server.
+      && (builtins.length (builtins.filter
+        (lib.hasInfix "Bearer \${env:GW_KEY}")
+        (map builtins.toJSON (builtins.attrValues result.servers))))
+      == 2
+      # Plain routing headers pass through untouched; no secret path is serialized.
+      && lib.hasInfix ''"X-Route":"beta"'' rendered
+      && !(lib.hasInfix "/run/secrets/" rendered)
+  );
+
+  # An explicit `var` is user-supplied and lands verbatim in generated shell
+  # (`export <var>=…`, and the envsubst variable list), so an illegal shell
+  # identifier must fail at EVAL rather than produce a broken activation
+  # script at the moment secrets are materialized. A DERIVED name cannot hit
+  # this — `sanitize` builds it — so only the explicit path needs the guard.
+  module-kiro-mcp-secret-illegal-var-throws = mkTest "kiro-mcp-secret-illegal-var-throws" (
+    let
+      renders = var:
+        builtins.tryEval (builtins.toJSON
+          (renderKiroSecrets {
+            a = {
+              type = "http";
+              url = "https://a.example.com/mcp/";
+              headers."X-Key" = {
+                file = "/run/secrets/one";
+                inherit var;
+              };
+            };
+          })
+          .secretEnv);
+    in
+      # Hyphen, space, and a leading digit are all rejected...
+      !(renders "my-key").success
+      && !(renders "my key").success
+      && !(renders "1KEY").success
+      # ...while a legal identifier still goes through.
+      && (renders "MY_KEY_1").success
+  );
+
+  # The collision guard genuinely fires: the SAME var bound to two DIFFERENT
+  # files is ambiguous (silent last-wins would export the wrong secret), so it
+  # must throw rather than pick one. Guards the dedup above from being widened
+  # into "same name always wins".
+  module-kiro-mcp-secret-var-collision-throws = mkTest "kiro-mcp-secret-var-collision-throws" (!(builtins.tryEval (builtins.toJSON
+    (renderKiroSecrets {
+      a = {
+        type = "http";
+        url = "https://a.example.com/mcp/";
+        headers."X-Key" = {
+          file = "/run/secrets/one";
+          var = "SHARED";
+        };
+      };
+      b = {
+        type = "http";
+        url = "https://b.example.com/mcp/";
+        headers."X-Key" = {
+          file = "/run/secrets/two";
+          var = "SHARED";
+        };
+      };
+    })
+      .secretEnv))
+    .success);
+
+  # Kiro HM<->devenv parity: the SAME config yields the SAME rendered
+  # mcp.json template on both backends (identical content -> identical
+  # store path), each delivered as a REAL file (HM activation / devenv
+  # enterShell anchored to $DEVENV_ROOT). Replaces the old home.file
+  # symlink parity now that delivery is uniform real-file.
+  module-kiro-hm-devenv-mcp-json-parity = mkTest "kiro-hm-devenv-mcp-json-parity" (
+    let
+      serversCfg = {
+        jira = {
+          type = "http";
+          url.file = "/run/secrets/jira-url";
+          headers."X-Jira-Token".file = "/run/secrets/jira-pat";
+        };
+      };
+      cfg = {
+        ai.kiro = {
+          enable = true;
+          mcpServers = serversCfg;
+        };
+      };
+      hmScript = (evalHm cfg).config.home.activation.kiroMcpJson.text or "";
+      dvScript = (evalDevenv cfg).config.enterShell or "";
+      # Same content -> same store path on both backends. Strip the
+      # string context: `lib.hasInfix` compiles the needle into a
+      # `builtins.match` regex, which rejects a store-path context.
+      templatePath = builtins.unsafeDiscardStringContext "${pkgs.writeText "kiro-mcp.json" (renderedMcpJson serversCfg)}";
+    in
+      hmScript
+      != ""
+      && dvScript != ""
+      && lib.hasInfix templatePath hmScript
+      && lib.hasInfix templatePath dvScript
+      && lib.hasInfix ''cd "$DEVENV_ROOT"'' dvScript
+  );
+
+  # A credential-valued http header reaching the shared renderServer via a
+  # non-Kiro path throws — non-Kiro ecosystems do not inject secret
+  # headers (rather than serialize the raw file path). Forced via toJSON.
+  module-mcp-credential-header-non-kiro-throws =
+    mkTest "mcp-credential-header-non-kiro-throws" (!(builtins.tryEval (builtins.toJSON (mcpLib.renderServer pkgs "x" {
+      type = "http";
+      url = "u";
+      headers.H.file = "/f";
+    })))
+    .success);
+
+  # A credential-valued http URL reaching the shared renderServer via a
+  # non-Kiro path throws (mirrors the header guard) — only Kiro assembles
+  # a private mcp.json for a secret url.
+  module-mcp-credential-url-non-kiro-throws =
+    mkTest "mcp-credential-url-non-kiro-throws" (!(builtins.tryEval (builtins.toJSON (mcpLib.renderServer pkgs "x" {
+      type = "http";
+      url.file = "/f";
+    })))
+    .success);
+
+  # Kiro HM: a secret url makes mcp.json a REAL-file activation write (NOT
+  # a home.file symlink) that exports the url secret, envsubst's ONLY the
+  # url var (header ${env:...} survive), and locks the file read-only
+  # (overwrite default + secret url -> owner-only 0400).
+  module-kiro-hm-mcp-json-activation-secret-url = mkTest "kiro-hm-mcp-json-activation-secret-url" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          mcpServers.jira = {
+            type = "http";
+            url.file = "/run/secrets/jira-url";
+            headers."X-Jira-Token".file = "/run/secrets/jira-pat";
+          };
+        };
+      };
+      script = result.config.home.activation.kiroMcpJson.text or "";
+    in
+      !(result.config.home.file ? ".kiro/settings/mcp.json")
+      && lib.hasInfix ''TARGET="$HOME/.kiro/settings/mcp.json"'' script
+      && lib.hasInfix "export KIRO_MCP_JIRA_URL=" script
+      && lib.hasInfix "/bin/envsubst '\${KIRO_MCP_JIRA_URL}'" script
+      && lib.hasInfix "chmod 0400" script
+  );
+
+  # Kiro HM: a plain (non-secret) http server still lands as a real-file
+  # overwrite write — locked world-readable 0444, no envsubst step.
+  module-kiro-hm-mcp-json-plain-overwrite = mkTest "kiro-hm-mcp-json-plain-overwrite" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          mcpServers.plain = {
+            type = "http";
+            url = "https://gw/mcp/";
+          };
+        };
+      };
+      script = result.config.home.activation.kiroMcpJson.text or "";
+    in
+      lib.hasInfix "chmod 0444" script
+      && !(lib.hasInfix "envsubst" script)
+      && !(result.config.home.file ? ".kiro/settings/mcp.json")
+  );
+
+  # Kiro HM: mcpWriteMode = "merge" deep-merges Nix servers onto the
+  # on-disk file (jq '.[0] * .[1]', write-if-absent) and leaves it
+  # writeable (0644) so hand edits survive.
+  module-kiro-hm-mcp-json-merge-mode = mkTest "kiro-hm-mcp-json-merge-mode" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          mcpWriteMode = "merge";
+          mcpServers.plain = {
+            type = "http";
+            url = "https://gw/mcp/";
+          };
+        };
+      };
+      script = result.config.home.activation.kiroMcpJson.text or "";
+    in
+      lib.hasInfix "'.[0] * .[1]'" script
+      && lib.hasInfix "chmod 0644" script
+  );
+
   # ── Task 5 (A4b): Claude launch-effort unpin reconciler ────────
 
   # Default reconciler: flags from the committed sidecar are merged into
@@ -4625,7 +4892,9 @@ in {
       !(lib.any (p: (p.name or "") == "kiro-cli-wrapped") packages)
   );
 
-  # HM: mcp.json — verify mergedServers writes mcp config.
+  # HM: mcp.json — mergedServers deliver via a real-file activation write
+  # (uniform real-file; no home.file symlink). Verify the activation
+  # script exists and targets the mcp.json path.
   module-kiro-hm-writes-mcp-json = mkTest "kiro-hm-writes-mcp-json" (
     let
       result = evalHm {
@@ -4636,11 +4905,12 @@ in {
           command = "hello";
         };
       };
-      mcpFile = result.config.home.file.".kiro/settings/mcp.json" or null;
+      script = result.config.home.activation.kiroMcpJson.text or "";
     in
-      mcpFile
-      != null
-      && lib.hasInfix "test-server" (mcpFile.text or "")
+      script
+      != ""
+      && lib.hasInfix ".kiro/settings/mcp.json" script
+      && !(result.config.home.file ? ".kiro/settings/mcp.json")
   );
 
   # HM: lsp.json — verify LSP server config write.
@@ -5346,7 +5616,8 @@ in {
       && lib.hasInfix "set -euETo pipefail" script
   );
 
-  # Devenv: mcp.json write.
+  # Devenv: mcp.json write — real-file enterShell delivery (no files.*
+  # symlink), anchored to $DEVENV_ROOT.
   module-kiro-devenv-writes-mcp-json = mkTest "kiro-devenv-writes-mcp-json" (
     let
       result = evalDevenv {
@@ -5357,8 +5628,11 @@ in {
           command = "hello";
         };
       };
+      script = result.config.enterShell or "";
     in
-      result.config.files ? ".kiro/settings/mcp.json"
+      lib.hasInfix ".kiro/settings/mcp.json" script
+      && lib.hasInfix ''cd "$DEVENV_ROOT"'' script
+      && !(result.config.files ? ".kiro/settings/mcp.json")
   );
 
   # Devenv: lsp.json write.

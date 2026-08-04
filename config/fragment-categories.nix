@@ -211,6 +211,20 @@ _: {
       ];
       sources = ["markdown-formatting"];
     };
+    # mcp-secrets: SOPS/agenix-injectable http MCP headers + url, the Kiro
+    # `${env:VAR}` / activation-envsubst delivery, and `mcpWriteMode`. Scoped to
+    # the schema, the shared renderer, the Kiro secret preprocessor, and the
+    # launcher wrapper that exports the decrypted values at runtime.
+    mcp-secrets = {
+      scopes = [
+        "lib/ai/mcpServer/**"
+        "lib/mcp.nix"
+        "packages/kiro-cli/lib/mcpSecrets.nix"
+        "packages/kiro-cli/lib/mkKiro.nix"
+        "packages/kiro-cli/lib/wrapPackage.nix"
+      ];
+      sources = ["mcp-secrets"];
+    };
     mcp-servers = {
       scopes = [
         "overlays/mcp-servers/**"

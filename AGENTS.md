@@ -93,6 +93,13 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
   - Read:
     [`dev/fragments/markdown-formatting/markdown-formatting.md`](dev/fragments/markdown-formatting/markdown-formatting.md)
 
+- **`mcp-secrets`**
+  - Match: `lib/ai/mcpServer/**`, `lib/mcp.nix`,
+    `packages/kiro-cli/lib/mcpSecrets.nix`, `packages/kiro-cli/lib/mkKiro.nix`,
+    `packages/kiro-cli/lib/wrapPackage.nix`
+  - Read:
+    [`dev/fragments/mcp-secrets/mcp-secrets.md`](dev/fragments/mcp-secrets/mcp-secrets.md)
+
 - **`mcp-servers`**
   - Match: `overlays/mcp-servers/**`
   - Read:
