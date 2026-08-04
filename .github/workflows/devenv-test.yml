@@ -48,7 +48,19 @@ jobs:
     runs-on: ubuntu-latest
     # Cold-cache ceiling; the workflow-less default is 6h, which would
     # let a hung process leg burn a runner all day.
-    timeout-minutes: 45
+    #
+    # 45 was too tight and the way it failed made it self-perpetuating.
+    # Measured across 13 real (non-stub) runs: 31-42m, so the upper tail
+    # already touched the wall. `update/serena` then needed ~46m — 2m30s
+    # setup, 34m15s of `devenv test`, ~9m of cache save — and was cancelled
+    # at 45m05s. `devenv test` itself SUCCEEDED; what got killed was the
+    # post-job `cache-nix-action` SAVE, so the run destroyed the very cache
+    # that would have made the next one cheaper. Overflow always lands on
+    # that step, because it runs last.
+    #
+    # 60 matches every other job in this repository; see the note above
+    # `jobs:` in ci.yml. It is a ceiling for a hung job, not a budget.
+    timeout-minutes: 60
     steps:
       # A required workflow cannot use pull_request.paths: GitHub leaves its
       # context pending forever when the workflow is filtered out. Resolve the

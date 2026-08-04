@@ -50,10 +50,14 @@
         ai.${runtime}.mcpServers.semble = mkDefaultRecursive mcpEntry;
       })
       (lib.mkIf (selected runtime cfg.subagent) {
-        ai.${runtime}.agents.semble-search =
+        # Both records are now typed attrsets (Kiro's shape differs from the
+        # portable semantic one, but neither is pre-rendered), so the same
+        # per-leaf mkDefault applies to each.
+        ai.${runtime}.agents.semble-search = mkDefaultRecursive (
           if runtime == "kiro"
-          then lib.mkDefault records.kiroAgent
-          else mkDefaultRecursive records.semanticAgent;
+          then records.kiroAgent
+          else records.semanticAgent
+        );
       })
     ];
 in {

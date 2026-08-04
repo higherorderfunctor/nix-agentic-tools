@@ -1,0 +1,5 @@
+{
+  "name": "from-file",
+  "description": "raw path-valued agent",
+  "tools": ["read"]
+}

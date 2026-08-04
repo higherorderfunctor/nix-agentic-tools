@@ -24,7 +24,7 @@ inputs:
   llm-agents:
     url: github:numtide/llm-agents.nix/fd0508ef842609ad0c6f5af46c6f572214efebd9
   mcp-nixos:
-    url: github:utensils/mcp-nixos/de85ae4cf8817709866fe91fef58774ef439d0a8
+    url: github:utensils/mcp-nixos/68b1cab92a542875664f8914d2a2ac75b1fa060c
     inputs:
       nixpkgs:
         follows: nixpkgs
@@ -39,7 +39,7 @@ inputs:
       nixpkgs:
         follows: nixpkgs
   nixpkgs:
-    url: github:NixOS/nixpkgs/643809054d65fdd466a63e3155b8c498cb483c04
+    url: github:NixOS/nixpkgs/e72e4f299401a3689d4b3d5fc6496b11db7064eb
   nixpkgs-test:
     url: github:NixOS/nixpkgs/ac62194c3917d5f474c1a844b6fd6da2db95077d
   rust-overlay:
@@ -48,7 +48,7 @@ inputs:
       nixpkgs:
         follows: nixpkgs
   serena:
-    url: github:oraios/serena/cd04838be9a92fd5c4963e59ecbe88419482d741
+    url: github:oraios/serena/e6b3852117b0e53f9233c03fc2ccaaf8b17b542c
     inputs:
       nixpkgs:
         follows: nixpkgs

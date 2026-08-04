@@ -1,0 +1,5 @@
+{
+  "name": "dir-agent",
+  "description": "agent from a directory",
+  "tools": ["read"]
+}
