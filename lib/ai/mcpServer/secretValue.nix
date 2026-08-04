@@ -1,10 +1,18 @@
-# Typed shape for an MCP http `headers.<name>` value that may be either a
-# plaintext string (baked into the world-readable store) or a runtime
-# SOPS/agenix credential injected as a `${env:VAR}` placeholder.
+# Typed shape for an MCP http `headers.<name>` or `url` value that may be
+# either a plaintext string (baked into the world-readable store) or a
+# runtime SOPS/agenix credential kept out of it.
 #
-# NOTE: this is for HEADER values only. Kiro (verified against 2.13.0)
-# env-substitutes header values but NOT the `url` field, so a secret url
-# is not achievable via native injection — url stays a plain string.
+# HEADERS AND URL TAKE DIFFERENT DELIVERY PATHS, because Kiro (verified
+# against 2.13.0) env-substitutes header values but NOT the `url` field:
+#
+#   * header → rendered as a `${env:VAR}` placeholder that Kiro itself
+#     expands at launch, from a var the wrapper exported (wrapPackage.nix).
+#   * url    → Kiro would emit the placeholder literally, so WE substitute
+#     it at activation instead: `envsubst` assembles a real, private
+#     mcp.json with an explicit var list, leaving header placeholders
+#     intact. See `mkMcpJsonScript` / `ai.kiro.mcpWriteMode` in mkKiro.nix.
+#
+# Either way the secret VALUE never enters the store — only its file path.
 #
 # Mirrors the file/helper credential union used by packaged MCP servers
 # (see `mkCredentialsOption` in lib/mcp.nix) and adds `prefix`/`suffix`

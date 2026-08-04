@@ -1,79 +1,82 @@
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-07-23 (commit pending — Option B: SOPS
-> url + `mcpWriteMode`). If you change the `secretValue` shape, the
-> Kiro placeholder/preprocessor, the `renderServer` guard, or the
-> mcp.json writer and this fragment isn't updated in the same
-> commit, stop and fix it.
+> **Last verified:** 2026-08-04 (commit pending — rebased onto the extracted
+> launcher wrapper: `wrapKiroPackage` no longer lives in `mkKiro.nix` and no
+> longer uses `makeWrapper`, so the secret export moved into
+> `packages/kiro-cli/lib/wrapPackage.nix` as a shell `export` line beside
+> `envExports`). Prior: 2026-07-23 (Option B: SOPS url + `mcpWriteMode`). If you
+> change the `secretValue` shape, the Kiro placeholder/preprocessor, the
+> `renderServer` guard, the wrapper export, or the mcp.json writer and this
+> fragment isn't updated in the same commit, stop and fix it.
 
-A `type = "http"` MCP server (`ai.mcpServers` / `ai.kiro.mcpServers`)
-can take SOPS/agenix-injected `headers` and `url` so secrets never
-land in the world-readable store or in committed config. Files:
+A `type = "http"` MCP server (`ai.mcpServers` / `ai.kiro.mcpServers`) can take
+SOPS/agenix-injected `headers` and `url` so secrets never land in the
+world-readable store or in committed config. Files:
 
-- `lib/ai/mcpServer/commonSchema.nix` — the (C) http shape; `url`
-  and each `headers.<name>` are `secretValue`.
+- `lib/ai/mcpServer/commonSchema.nix` — the (C) http shape; `url` and each
+  `headers.<name>` are `secretValue`.
 - `lib/ai/mcpServer/secretValue.nix` — `either str credential`
   (`{ file | helper; prefix?; suffix?; var?; }`).
 - `lib/mcp.nix` `renderServer` — the shared renderer + non-Kiro throw.
 - `packages/kiro-cli/lib/mcpSecrets.nix` — Kiro preprocessor.
 - `packages/kiro-cli/lib/mkKiro.nix` — `mkMcpJsonScript` + wiring.
+- `packages/kiro-cli/lib/wrapPackage.nix` — `secretEnv` → the runtime `export`
+  that puts the decrypted value in the launcher's env.
 
 ### Two secret paths, because Kiro treats headers and url differently
 
-VERIFIED against kiro-cli 2.13.0 (binary): `substitute_env_vars`
-runs over http **header values** and the stdio env only — the
-**url field is never passed through it**. So:
+VERIFIED against kiro-cli 2.13.0 (binary): `substitute_env_vars` runs over http
+**header values** and the stdio env only — the **url field is never passed
+through it**. So:
 
-- **Header secret** → rendered into mcp.json as a
-  `<prefix>${env:VAR}<suffix>` placeholder. The wrapper
-  (`wrapKiroPackage --run`) cats the secret into `$VAR` before
-  launch; Kiro substitutes it at launch. mcp.json (placeholder
-  only) is safe to store/commit. Collected in `secretEnv`.
-- **URL secret** → Kiro won't expand it, so the literal url must be
-  present when Kiro reads mcp.json. It renders to a bare
-  `<prefix>${VAR}<suffix>` sentinel in a store TEMPLATE, and WE
-  substitute it with `envsubst` (explicit var list, so header
-  `${env:...}` survive) into a REAL private mcp.json at activation.
-  Collected in `urlSecretEnv` (kept disjoint from `secretEnv` —
-  different mechanism + time; a shared var name throws).
+- **Header secret** → rendered into mcp.json as a `<prefix>${env:VAR}<suffix>`
+  placeholder. The launcher wrapper (`wrapPackage.nix`) emits an
+  `export VAR="$(cat <file>)"` line — after `envExports`, so a secret always
+  wins over a same-named static value — and Kiro substitutes the placeholder at
+  launch. mcp.json (placeholder only) is safe to store/commit. Collected in
+  `secretEnv`. The `cat` is an absolute coreutils path: this wrapper can be
+  spawned with an empty PATH, where a bare `cat` would silently yield an empty
+  credential.
+- **URL secret** → Kiro won't expand it, so the literal url must be present when
+  Kiro reads mcp.json. It renders to a bare `<prefix>${VAR}<suffix>` sentinel in
+  a store TEMPLATE, and WE substitute it with `envsubst` (explicit var list, so
+  header `${env:...}` survive) into a REAL private mcp.json at activation.
+  Collected in `urlSecretEnv` (kept disjoint from `secretEnv` — different
+  mechanism + time; a shared var name throws).
 
 ### Delivery is Kiro-only; other ecosystems throw
 
-`renderServer` throws on a raw credential header/url reaching a
-non-Kiro path (Claude/Copilot/Kimchi/shared pool). The Kiro
-preprocessor resolves credentials to placeholder strings BEFORE
-`renderServer`; anything else that sees the raw attrset fails loud
-rather than serializing the secret's file path. (`transformMcpServer`
-in `ai-common.nix` is DEAD code — every ecosystem renders via
-`renderServer`.)
+`renderServer` throws on a raw credential header/url reaching a non-Kiro path
+(Claude/Copilot/Kimchi/shared pool). The Kiro preprocessor resolves credentials
+to placeholder strings BEFORE `renderServer`; anything else that sees the raw
+attrset fails loud rather than serializing the secret's file path.
+(`transformMcpServer` in `ai-common.nix` is DEAD code — every ecosystem renders
+via `renderServer`.)
 
 ### mcp.json is a real file, governed by `ai.kiro.mcpWriteMode`
 
-mcp.json is NOT a `home.file`/`files` store symlink — it is
-assembled as a real file by `mkMcpJsonScript` (HM `home.activation`,
-devenv `enterShell`), shared so both backends stay at parity.
-Uniform real-file delivery is what lets a secret url land and
-removes the symlink↔real-file toggle + the devenv `files.*`
+mcp.json is NOT a `home.file`/`files` store symlink — it is assembled as a real
+file by `mkMcpJsonScript` (HM `home.activation`, devenv `enterShell`), shared so
+both backends stay at parity. Uniform real-file delivery is what lets a secret
+url land and removes the symlink↔real-file toggle + the devenv `files.*`
 silent-skip on a flipped name.
 
-- `overwrite` (default) — re-assemble every activation, `chmod`
-  read-only (0400 with a secret url, else 0444). Nix-owned; hand
-  edits don't survive.
-- `merge` — `jq '.[0] * .[1]'` (Nix wins, write-if-absent), left
-  writeable (0600/0644). Hand-added servers/edits survive.
+- `overwrite` (default) — re-assemble every activation, `chmod` read-only (0400
+  with a secret url, else 0444). Nix-owned; hand edits don't survive.
+- `merge` — `jq '.[0] * .[1]'` (Nix wins, write-if-absent), left writeable
+  (0600/0644). Hand-added servers/edits survive.
 
 ### Gotchas
 
-- A credential url reads its secret at ACTIVATION, so a consumer
-  wiring sops-nix/agenix must order the mcp.json activation AFTER
-  the secret provider.
-- `--classic` (non-v3) ships the literal header placeholder → failed
-  auth, not a leak; the factory wrapper forces `--v3`.
+- A credential url reads its secret at ACTIVATION, so a consumer wiring
+  sops-nix/agenix must order the mcp.json activation AFTER the secret provider.
+- `--classic` (non-v3) ships the literal header placeholder → failed auth, not a
+  leak; the factory wrapper forces `--v3`.
 - Static tokens only; rotate = re-export + restart (no refresh hook).
 
 ### Deferred (not yet built)
 
-`mcpWriteMode`/merge generalization to Copilot `mcp-config.json`,
-the settings files, devenv-merge broadly, and Claude `.mcp.json`
-(upstream `programs.claude-code` owns that write into the
-oauth-bearing `.claude.json`). Only the Kiro slice ships today.
+`mcpWriteMode`/merge generalization to Copilot `mcp-config.json`, the settings
+files, devenv-merge broadly, and Claude `.mcp.json` (upstream
+`programs.claude-code` owns that write into the oauth-bearing `.claude.json`).
+Only the Kiro slice ships today.

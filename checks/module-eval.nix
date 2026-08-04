@@ -3780,6 +3780,77 @@ in {
       && !(lib.hasInfix "/run/secrets/jira-url" mcpJson)
   );
 
+  # ONE credential shared by TWO servers. A gateway that multiplexes several
+  # backends behind a single endpoint produces this: each server carries its
+  # own token and a routing header, but they authenticate with the SAME api
+  # key. The shared key must collapse to a SINGLE export rather than tripping
+  # the collision guard — that guard rejects one var bound to two DIFFERENT
+  # sources, which is not this case.
+  module-kiro-mcp-secret-shared-across-servers = mkTest "kiro-mcp-secret-shared-across-servers" (
+    let
+      sharedKey = {
+        file = "/run/secrets/gateway-key";
+        prefix = "Bearer ";
+        var = "GW_KEY";
+      };
+      mkServer = route: tokenFile: tokenVar: {
+        type = "http";
+        url = "https://gateway.example.com/mcp/";
+        headers = {
+          "X-Api-Key" = sharedKey;
+          "X-Route" = route;
+          "X-Token" = {
+            file = tokenFile;
+            var = tokenVar;
+          };
+        };
+      };
+      result = renderKiroSecrets {
+        alpha = mkServer "alpha" "/run/secrets/alpha-token" "ALPHA_TOKEN";
+        beta = mkServer "beta" "/run/secrets/beta-token" "BETA_TOKEN";
+      };
+      rendered = builtins.toJSON result.servers;
+    in
+      # The shared key deduped to one export, the per-server tokens stayed distinct.
+      (builtins.attrNames result.secretEnv)
+      == ["ALPHA_TOKEN" "BETA_TOKEN" "GW_KEY"]
+      && result.secretEnv.GW_KEY.file == "/run/secrets/gateway-key"
+      # Both servers reference that one var, with the prefix composed per-server.
+      && (builtins.length (builtins.filter
+        (lib.hasInfix "Bearer \${env:GW_KEY}")
+        (map builtins.toJSON (builtins.attrValues result.servers))))
+      == 2
+      # Plain routing headers pass through untouched; no secret path is serialized.
+      && lib.hasInfix ''"X-Route":"beta"'' rendered
+      && !(lib.hasInfix "/run/secrets/" rendered)
+  );
+
+  # The collision guard genuinely fires: the SAME var bound to two DIFFERENT
+  # files is ambiguous (silent last-wins would export the wrong secret), so it
+  # must throw rather than pick one. Guards the dedup above from being widened
+  # into "same name always wins".
+  module-kiro-mcp-secret-var-collision-throws = mkTest "kiro-mcp-secret-var-collision-throws" (!(builtins.tryEval (builtins.toJSON
+    (renderKiroSecrets {
+      a = {
+        type = "http";
+        url = "https://a.example.com/mcp/";
+        headers."X-Key" = {
+          file = "/run/secrets/one";
+          var = "SHARED";
+        };
+      };
+      b = {
+        type = "http";
+        url = "https://b.example.com/mcp/";
+        headers."X-Key" = {
+          file = "/run/secrets/two";
+          var = "SHARED";
+        };
+      };
+    })
+      .secretEnv))
+    .success);
+
   # Kiro HM<->devenv parity: the SAME config yields the SAME rendered
   # mcp.json template on both backends (identical content -> identical
   # store path), each delivered as a REAL file (HM activation / devenv

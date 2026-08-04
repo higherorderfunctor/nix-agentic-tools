@@ -956,8 +956,18 @@ in
             # `mcpWriteMode` can govern overwrite-vs-merge. Uniform
             # real-file across both backends dodges the symlink<->real-file
             # toggle + the devenv files.* silent skip. See mkMcpJsonScript.
+            #
+            # Ordered after `sops-nix` as well, because a credential url is
+            # `cat`ed HERE, at activation — unlike a header secret, which the
+            # launcher reads at LAUNCH, long after any secret provider has
+            # run. Without this the assembly can race sops and bake an empty
+            # url into a 0400 file that then looks authoritative. The dep is
+            # deliberately dangling-tolerant: home-manager's topoSort drops an
+            # unknown entry, so this stays secret-manager agnostic and is
+            # simply inert when sops-nix is not in use (same trick as
+            # `mcpRestartOnSecretRotation` in the mcp-services module).
             (lib.mkIf (mergedServers != {}) {
-              home.activation.kiroMcpJson = lib.hm.dag.entryAfter ["linkGeneration"] (
+              home.activation.kiroMcpJson = lib.hm.dag.entryAfter ["linkGeneration" "sops-nix"] (
                 mkMcpJsonScript {
                   mode = cfg.mcpWriteMode;
                   inherit (kiroSecrets) urlSecretEnv;
