@@ -1,24 +1,26 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-08-03 (commit pending — records `devenv-test` as an
-> always-reporting fifth merge gate and corrects the auto-merge thread rule).
-> Prior: 2026-08-03 (commit pending — updates the pnpm detector's documented
-> lookup after all package groups move under `pkgs.ai`). Prior: 2026-08-01
-> (commit pending — Phase 2 now runs on `if: always()` so a timed-out sweep
-> SHIPS what it finished instead of discarding it, and the
-> `ninja-completed.flag` sentinel is re-gated on `steps.ninja.outcome` so a
-> partial sweep can never let the close step delete the PRs it did not reach.
-> Measured on run 30713330569: 47 of 52 edges done, step `skipped`, everything
-> thrown away). Prior: 2026-08-01 — documents the SECOND `extraExtract`
-> self-heal, `vu.mkExtractRegen`, alongside the hash one: which failure it
-> answers, that a red drift check reports a broken MECHANISM rather than a stale
-> file, why extracts get no `fix_sidecar_hashes`-style standalone hatch, and how
-> to tell "never wired" from "ran and failed". glab had no hook at all, which
-> stayed invisible from #560 until PR #621). Prior: 2026-07-27 — adds the
-> three-valued `git diff --quiet` rule and the `git_diff_quiet` helper every
-> dirtiness gate in the update scripts now goes through; the bare form had
-> routed a git ERROR into "there are changes" in `update-input.sh` and into "the
-> tree is dirty" at both of `update-pkg.sh`'s gates. Earlier: the
+> **Last verified:** 2026-08-03 (commit pending — makes the hidden update report
+> artifact upload real and fails loudly when the report is absent). Prior:
+> 2026-08-03 (commit pending — records `devenv-test` as an always-reporting
+> fifth merge gate and corrects the auto-merge thread rule). Prior: 2026-08-03
+> (commit pending — updates the pnpm detector's documented lookup after all
+> package groups move under `pkgs.ai`). Prior: 2026-08-01 (commit pending —
+> Phase 2 now runs on `if: always()` so a timed-out sweep SHIPS what it finished
+> instead of discarding it, and the `ninja-completed.flag` sentinel is re-gated
+> on `steps.ninja.outcome` so a partial sweep can never let the close step
+> delete the PRs it did not reach. Measured on run 30713330569: 47 of 52 edges
+> done, step `skipped`, everything thrown away). Prior: 2026-08-01 — documents
+> the SECOND `extraExtract` self-heal, `vu.mkExtractRegen`, alongside the hash
+> one: which failure it answers, that a red drift check reports a broken
+> MECHANISM rather than a stale file, why extracts get no
+> `fix_sidecar_hashes`-style standalone hatch, and how to tell "never wired"
+> from "ran and failed". glab had no hook at all, which stayed invisible from
+> #560 until PR #621). Prior: 2026-07-27 — adds the three-valued
+> `git diff --quiet` rule and the `git_diff_quiet` helper every dirtiness gate
+> in the update scripts now goes through; the bare form had routed a git ERROR
+> into "there are changes" in `update-input.sh` and into "the tree is dirty" at
+> both of `update-pkg.sh`'s gates. Earlier: the
 > `Detect a newer @aihubmix/mcp on npm` annotation step and the
 > excluded-because-a-local-patch-cannot-be-swept rule behind it, which is about
 > SWEEPABILITY and not about lagging: aihubmix-mcp tracks `dist-tags.latest` and
@@ -541,6 +543,13 @@ Diagnosing it from the pipeline side:
   earlier in this fragment.
 
 ### Sidecar logging and forensic preservation
+
+The workflow uploads `.update-report.txt` as the `update-report` artifact on
+every outcome. The leading dot is load-bearing: `actions/upload-artifact`
+excludes hidden files by default, so the upload explicitly sets
+`include-hidden-files: true`. It also sets `if-no-files-found: error`; a missing
+forensic record must be a visible workflow failure rather than an apparently
+successful upload that produced no artifact.
 
 Every ninja rule wraps its script invocation in
 `2>&1 | tee .update-logs/<target>.log` to capture per-target output
