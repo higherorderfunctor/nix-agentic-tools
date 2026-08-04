@@ -44,9 +44,10 @@ pkgs.runCommandLocal "split-code-spans-check" {
   # invocation with zero arguments (the scanner would report success on a
   # file set it never received, which is the failure mode that makes an
   # empty scan indistinguishable from a passing one).
-  ${pkgs.findutils}/bin/find . -type f -name '*.md' \
+  ${pkgs.findutils}/bin/find . \
+    -path './docs/plans/kiro-v3-research-raw' -prune -o \
+    -type f -name '*.md' \
     ! -path './docs/plan.md' \
-    ! -path './docs/plans/kiro-v3-research-raw/*' \
     -print0 \
     | ${pkgs.findutils}/bin/xargs -0 -r ${pkgs.python3}/bin/python3 ${./split-code-spans.py}
 
