@@ -682,13 +682,30 @@ in
       # is nothing to translate; this is net-new modeling.
       #
       # v3 agent schema (`<configDir>/agents/<name>.{json,md}`; global
-      # ~/.kiro or project .kiro): { description, model, prompt,
+      # ~/.kiro or project .kiro): { name, description, model, prompt,
       # tools:[tag|"*"], mcpServers:{<name>:{command,args,env,timeout}},
       # resources:["file://..."|"skill://..."],
       # permissions:[{capability,effect,match,exclude}], welcomeMessage }.
       # Tool tags: read write shell web subagent knowledge todo_list @mcp
       # @builtin *. `.md` = YAML frontmatter + system-prompt body.
       # Default agent: `kiro-cli agent set-default <name>`.
+      #
+      # ALWAYS EMIT `name` — two parsers disagree about it, and the strict
+      # one fails closed (measured on 2.16.0):
+      #   * Rust CLI (kiro-cli-chat) parses agents as JSON ONLY and REQUIRES
+      #     `name`. A `.json` file without it is rejected outright with
+      #     "missing field name" on EVERY `kiro-cli` invocation, so that
+      #     agent never loads. Its directory scan also SILENTLY skips `.md`
+      #     agents — measured on 2.16.0, a frontmatter agent beside a valid
+      #     JSON one produced no diagnostic and simply never appeared in
+      #     `kiro-cli agent list`, so absence there says nothing about
+      #     whether a `.md` agent is well-formed.
+      #   * Node/ACP bundle (`acp-server.js`) marks `name` `.optional()` in
+      #     both its JSON and frontmatter schemas ("explicit agent name that
+      #     overrides filename-based ID") and falls back to the filename
+      #     stem, so the IDE/ACP path keeps working and HIDES the defect.
+      # When present, `name` overrides the filename-derived id, so emit it
+      # equal to the `<name>` attr key unless a rename is intended.
       #
       # v3 hook schema (`<configDir>/hooks/<name>.json`): { version:"v1",
       # hooks:[{ name, description?, trigger, matcher?,

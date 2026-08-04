@@ -2156,7 +2156,18 @@ in {
       cfg = evaluated.config;
       claudeInstruction = builtins.head cfg.ai.claude.instructions;
       codexInstruction = builtins.head cfg.ai.codex.instructions;
-      kiroAgent = builtins.fromJSON cfg.ai.kiro.agents.semble-search;
+      # Kiro agents are opaque JSON on the module surface, so a round-trip
+      # through fromJSON proves only that the string PARSES — not that it
+      # satisfies either of Kiro's agent schemas. Asserting `tools` alone is
+      # what let a `name`-less agent ship: the Rust CLI parser requires
+      # `name` and rejected the whole file with "missing field name" on every
+      # kiro-cli invocation, while the Node/ACP parser treats it as optional
+      # and kept working — so the defect was invisible from the IDE side.
+      # Assert the emitted field set, and bind `name` to the attr key the
+      # agent is written under, since a present `name` overrides the
+      # filename-derived id and the two must not diverge.
+      kiroAgentName = "semble-search";
+      kiroAgent = builtins.fromJSON cfg.ai.kiro.agents.${kiroAgentName};
       kiroInstruction = builtins.head cfg.ai.kiro.instructions;
     in
       builtins.length cfg.home.packages
@@ -2165,10 +2176,13 @@ in {
       && lib.all (runtime: builtins.length cfg.ai.${runtime}.instructions == 1) ["claude" "codex" "kiro"]
       && cfg.ai.claude.agents ? semble-search
       && cfg.ai.codex.agents ? semble-search
-      && cfg.ai.kiro.agents ? semble-search
+      && cfg.ai.kiro.agents ? ${kiroAgentName}
       && cfg.ai.claude.agents.semble-search.tools == ["Bash" "Read"]
       && !(claudeInstruction ? name)
       && !(codexInstruction ? name)
+      && kiroAgent.name == kiroAgentName
+      && kiroAgent ? description
+      && kiroAgent ? prompt
       && kiroAgent.tools == ["shell" "read"]
       && kiroInstruction.name == "semble"
       && !(cfg.ai.copilot.mcpServers ? semble)
