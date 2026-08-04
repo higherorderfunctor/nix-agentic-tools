@@ -1,29 +1,33 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-08-03 (commit pending — moves glab and its committed
-> extracted sidecar together from `overlays/generic/` to `overlays/dev-tools/`,
-> preserving the eval-pure read and regeneration loop). Prior: 2026-08-02
-> (commit pending — distinguishes Codex's new human-reviewed reverse-coverage
-> gate from generated-sidecar drift and shape checks: update automation may
-> refresh extracted facts but cannot classify a new command, flag, field,
-> maturity, or config seam). Prior: 2026-08-01 (commit pending — documents the
-> sidecar SELF-HEAL loop as a loop: which half is the self-heal and which the
-> backstop, that a red drift check reports a MECHANISM failure rather than a
-> stale file, that it fires on the version-bump path ONLY so an edited extractor
-> does not self-heal, how it differs from the `fix_sidecar_hashes` self-heal,
-> and four debugging entry points. Names `glab` as the fourth extracted package
-> and records that all four now share `vu.mkExtractRegen`; glab had no
-> regeneration at all and proved the latency on PR #621). Prior: 2026-08-01
-> (Codex joins the extracted sidecar pipeline with recursive Clap help,
-> feature-list, and bundled-model probes plus category-specific shape
-> assertions). Prior: 2026-07-25 (the warm composite now forces `drvPath`
-> instead of `version`, so sidecar-versioned packages are covered; also corrects
-> the claim that the check job's `nix flake check` evaluates ALL systems, which
-> it does not, and the devenv-test job moved to its own workflow). If you touch
-> `overlays/lib.nix`, any overlay `.nix` file that calls `vu.mkVersion`, the
-> shared `.github/actions/warm-ifd/action.yml` composite, or the warm steps that
-> consume it in `.github/workflows/ci.yml` / `.github/workflows/update.yml`, and
-> this fragment isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-08-03 (commit pending — records Oxlint's
+> source-before-fetcher pattern for pnpm patched dependencies: patch the
+> workspace metadata and lock before `fetchPnpmDeps` reads them, keeping a
+> sandboxed dependency fix out of workflow-wide host policy). Prior: 2026-08-03
+> (commit pending — moves glab and its committed extracted sidecar together from
+> `overlays/generic/` to `overlays/dev-tools/`, preserving the eval-pure read
+> and regeneration loop). Prior: 2026-08-02 (commit pending — distinguishes
+> Codex's new human-reviewed reverse-coverage gate from generated-sidecar drift
+> and shape checks: update automation may refresh extracted facts but cannot
+> classify a new command, flag, field, maturity, or config seam). Prior:
+> 2026-08-01 (commit pending — documents the sidecar SELF-HEAL loop as a loop:
+> which half is the self-heal and which the backstop, that a red drift check
+> reports a MECHANISM failure rather than a stale file, that it fires on the
+> version-bump path ONLY so an edited extractor does not self-heal, how it
+> differs from the `fix_sidecar_hashes` self-heal, and four debugging entry
+> points. Names `glab` as the fourth extracted package and records that all four
+> now share `vu.mkExtractRegen`; glab had no regeneration at all and proved the
+> latency on PR #621). Prior: 2026-08-01 (Codex joins the extracted sidecar
+> pipeline with recursive Clap help, feature-list, and bundled-model probes plus
+> category-specific shape assertions). Prior: 2026-07-25 (the warm composite now
+> forces `drvPath` instead of `version`, so sidecar-versioned packages are
+> covered; also corrects the claim that the check job's `nix flake check`
+> evaluates ALL systems, which it does not, and the devenv-test job moved to its
+> own workflow). If you touch `overlays/lib.nix`, any overlay `.nix` file that
+> calls `vu.mkVersion`, the shared `.github/actions/warm-ifd/action.yml`
+> composite, or the warm steps that consume it in `.github/workflows/ci.yml` /
+> `.github/workflows/update.yml`, and this fragment isn't updated in the same
+> commit, stop and fix it.
 
 ### What is IFD in this repo
 
@@ -268,6 +272,23 @@ feature maturities, and config-key extraction fail closed.
 
 ### Gotchas when adding new packages
 
+- Package-manager dependency fetchers consume the source tree before normal
+  build phases run. If a pnpm dependency needs a downstream patch, patching
+  materialized `node_modules` in `preBuild` hides ownership at the final-package
+  layer. Instead, use `applyPatches` to add pnpm `patchedDependencies` metadata,
+  its patch file, and the corresponding lock entries to the upstream source;
+  pass that same patched source to both `fetchPnpmDeps` and the final package.
+  Pnpm then applies it at dependency materialization and reaches every peer
+  variant. The fetcher FOD caches the original registry bytes, while the patched
+  source is a separate final-derivation input that tells pnpm how to transform
+  them. Its hash can still change when the fetcher mechanism changes (for
+  example pnpm 10/fetcher v3 to pnpm 11/fetcher v4); that does not mean the
+  dependency tarball was replaced.
+- Do not regenerate a pnpm lock with a different pnpm major just to add that
+  metadata. It can silently re-resolve unrelated peers and even change major
+  dependency selections. Make the minimal lock edit, then prove it with
+  `pnpm install --frozen-lockfile` using the exact pnpm selected by the Nix
+  fetcher. Oxlint's `@napi-rs/cli` patch is the reference implementation.
 - If a new overlay uses `vu.mkVersion` with a `readFile`-based version
   extractor, its source must be fetchable at eval time. The warm step handles
   this automatically for CI.

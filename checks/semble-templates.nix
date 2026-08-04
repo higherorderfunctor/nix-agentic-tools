@@ -14,66 +14,59 @@
   templateNames = ["claude.md" "codex.toml" "copilot.md" "kiro.md"];
 
   extracted = pkgs.runCommand "semble-upstream-templates.json" {} ''
-        agent_dir=""
-        for candidate in ${semble}/lib/python*/site-packages/semble/agents; do
-          [ -d "$candidate" ] || continue
-          if [ -n "$agent_dir" ]; then
-            echo "FAIL: found multiple Semble agent template directories" >&2
-            exit 1
-          fi
-          agent_dir="$candidate"
-        done
+    agent_dir=""
+    for candidate in ${semble}/lib/python*/site-packages/semble/agents; do
+      [ -d "$candidate" ] || continue
+      if [ -n "$agent_dir" ]; then
+        echo "FAIL: found multiple Semble agent template directories" >&2
+        exit 1
+      fi
+      agent_dir="$candidate"
+    done
 
-        if [ -z "$agent_dir" ]; then
-          echo "FAIL: could not find Semble's version-independent agents directory" >&2
-          exit 1
-        fi
+    if [ -z "$agent_dir" ]; then
+      echo "FAIL: could not find Semble's version-independent agents directory" >&2
+      exit 1
+    fi
 
-        for template in ${lib.escapeShellArgs templateNames}; do
-          if [ ! -f "$agent_dir/$template" ]; then
-            echo "FAIL: missing Semble agent template: $template" >&2
-            exit 1
-          fi
-        done
+    for template in ${lib.escapeShellArgs templateNames}; do
+      if [ ! -f "$agent_dir/$template" ]; then
+        echo "FAIL: missing Semble agent template: $template" >&2
+        exit 1
+      fi
+    done
 
-        installer_file="$agent_dir/../installer/agents.py"
-        instructions_file="$TMPDIR/instructions.md"
-        if [ ! -f "$installer_file" ]; then
-          echo "FAIL: missing Semble installer instructions source" >&2
-          exit 1
-        fi
+    installer_home="$TMPDIR/installer-home"
+    instructions_file="$installer_home/.claude/CLAUDE.md"
+    HOME="$installer_home" ${semble}/bin/semble install \
+      --agent claude \
+      --type instructions \
+      --yes
 
-        ${pkgs.python3}/bin/python3 - "$installer_file" "$instructions_file" <<'PY'
-    import runpy
-    import sys
-    from pathlib import Path
+    if [ ! -s "$instructions_file" ]; then
+      echo "FAIL: Semble installer wrote no Claude instructions" >&2
+      exit 1
+    fi
 
-    namespace = runpy.run_path(sys.argv[1])
-    instructions = namespace.get("INSTRUCTIONS")
-    if not isinstance(instructions, str) or not instructions:
-        raise SystemExit("Semble installer INSTRUCTIONS is missing or empty")
-    Path(sys.argv[2]).write_text(instructions, encoding="utf-8")
-    PY
-
-        ${pkgs.jq}/bin/jq -n \
-          --arg pname "${semble.pname}" \
-          --arg version "${semble.version}" \
-          --rawfile instructions "$instructions_file" \
-          --rawfile claude "$agent_dir/claude.md" \
-          --rawfile codex "$agent_dir/codex.toml" \
-          --rawfile copilot "$agent_dir/copilot.md" \
-          --rawfile kiro "$agent_dir/kiro.md" \
-          '{
-            instructions: $instructions,
-            package: { pname: $pname, version: $version },
-            schemaVersion: 1,
-            templates: {
-              "claude.md": $claude,
-              "codex.toml": $codex,
-              "copilot.md": $copilot,
-              "kiro.md": $kiro
-            }
-          }' > "$out"
+    ${pkgs.jq}/bin/jq -n \
+      --arg pname "${semble.pname}" \
+      --arg version "${semble.version}" \
+      --rawfile instructions "$instructions_file" \
+      --rawfile claude "$agent_dir/claude.md" \
+      --rawfile codex "$agent_dir/codex.toml" \
+      --rawfile copilot "$agent_dir/copilot.md" \
+      --rawfile kiro "$agent_dir/kiro.md" \
+      '{
+        instructions: $instructions,
+        package: { pname: $pname, version: $version },
+        schemaVersion: 1,
+        templates: {
+          "claude.md": $claude,
+          "codex.toml": $codex,
+          "copilot.md": $copilot,
+          "kiro.md": $kiro
+        }
+      }' > "$out"
   '';
 
   hash = builtins.hashString "sha256";
