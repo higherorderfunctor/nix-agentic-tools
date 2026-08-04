@@ -1,11 +1,13 @@
 ## ai.\* Collision Semantics
 
-> **Last verified:** 2026-08-01 (commit pending — distinguishes portable hooks,
-> whose per-event matcher-group lists intentionally append, from key-identity
-> pools). Prior: 2026-04-21 (commit pending — refactor of ai-factory-collision
-> plan §3.2). If you add a new shared pool to `ai.*` or change how pools are
-> merged across the L2↔L3 boundary and this fragment isn't updated in the same
-> commit, stop and fix it.
+> **Last verified:** 2026-08-04 (commit pending — kiro's `agents` is still the
+> CLI-specific-shape exemplar, but it is a typed record now rather than raw
+> JSON). Prior: 2026-08-01 (commit pending — distinguishes portable hooks, whose
+> per-event matcher-group lists intentionally append, from key-identity pools).
+> Prior: 2026-04-21 (commit pending — refactor of ai-factory-collision plan
+> §3.2). If you add a new shared pool to `ai.*` or change how pools are merged
+> across the L2↔L3 boundary and this fragment isn't updated in the same commit,
+> stop and fix it.
 
 ### Rule
 
@@ -71,7 +73,8 @@ delete the duplicate.
 1. Declare `ai.<pool>` in `lib/ai/sharedOptions.nix` (attrset shape).
 2. Declare `ai.<cli>.<pool>` in the mkAiApp baseline
    (`lib/ai/app/hmTransform.nix` + `devenvTransform.nix`) OR in the per-CLI
-   factory (for CLI-specific shape, like kiro's JSON `agents`).
+   factory (for CLI-specific shape, like kiro's `agents`, whose typed record
+   models Kiro's own v3 agent schema rather than the portable one).
 3. Add `<pool>Merge = mergeCheck "<pool>" config.ai.<pool> cfg.<pool>;` to the
    transform.
 4. Append `<pool>Merge.assertions` to `collisionAssertions`.

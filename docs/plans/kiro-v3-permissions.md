@@ -110,7 +110,15 @@ here per "don't change v2.")
 later author native `permissions` (e.g. wildcards) or drop the dead `use_aws`.
 Nothing forced.
 
-## Agents / hooks — HELD (decided 2026-06-19)
+## Agents / hooks — HELD (decided 2026-06-19), agents SUPERSEDED 2026-08-04
+
+> **Superseded for agents.** The hold below reasons that agents had no broken
+> mechanism to justify typing them. One surfaced: an agent emitted without
+> `name` is REJECTED by Kiro's Rust CLI on every invocation — while the Node/ACP
+> parser treats the field as optional, which hid it — and an untyped passthrough
+> cannot guarantee the field. `ai.kiro.agents` is a typed record now, with
+> `name` defaulted from the attr key. Hooks remain HELD; they were already typed
+> separately via `kiroHookRecord`.
 
 Permissions warranted action because it had BOTH a typed v2 surface
 (`trustedMcpTools`) AND a broken mechanism (`--trust-tools`). Agents and hooks

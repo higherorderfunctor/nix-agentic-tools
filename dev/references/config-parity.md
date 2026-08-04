@@ -19,7 +19,7 @@ are bugs unless marked N/A with rationale.
 
 | Surface               | lib                           | HM                                                     | devenv                                                 |
 | --------------------- | ----------------------------- | ------------------------------------------------------ | ------------------------------------------------------ |
-| Agents                | N/A                           | per-CLI `.agents` (copilot: md, kiro: json)            | per-CLI `.agents` (copilot: md, kiro: json)            |
+| Agents                | N/A                           | per-CLI `.agents` (copilot: md, kiro: typed record)    | per-CLI `.agents` (copilot: md, kiro: typed record)    |
 | Environment vars      | N/A                           | `ai.environmentVariables`, per-CLI `.environmentVars`  | `ai.environmentVariables`, per-CLI, shared `env`       |
 | Hooks                 | N/A                           | kiro `.hooks`; Claude upstream; copilot N/A (no hooks) | kiro `.hooks`; Claude upstream; copilot N/A (no hooks) |
 | Instructions/steering | N/A                           | `ai.instructions`, per-CLI                             | `ai.instructions`, per-CLI                             |
@@ -32,7 +32,9 @@ are bugs unless marked N/A with rationale.
 ### Per-Surface Notes
 
 **Agents** -- Not fanned out from `ai.*` because each ecosystem uses different
-agent formats (Copilot: markdown, Kiro: JSON, Claude: upstream YAML). Configure
+agent formats (Copilot: markdown, Kiro: a typed record lowered to its own v3
+agent JSON, Claude: upstream YAML) and, for Kiro specifically, a different tool
+vocabulary (capability tags rather than Claude/Copilot tool names). Configure
 per-CLI directly.
 
 **Environment vars** -- HM `ai.environmentVariables` fans to Copilot and Kiro

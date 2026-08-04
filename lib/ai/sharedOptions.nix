@@ -159,10 +159,14 @@ in {
                     ~/.copilot/agents/<name>.md (HM)
         - Codex   → ~/.codex/agents/<name>.toml (HM) or
                     .codex/agents/<name>.toml (devenv)
-        Kiro intentionally excluded — Kiro's agent format is JSON
-        with different semantic fields; use `ai.kiro.agents`
-        directly for that ecosystem. Per-app overrides
-        (ai.<cli>.agents) merge on top; collisions fail.
+        Kiro intentionally excluded, but no longer because its agents are
+        untyped JSON — `ai.kiro.agents` is a typed record now. The blocker is
+        the tool vocabulary: this pool's `tools` list uses Claude/Copilot tool
+        NAMES (`Bash`, `Read`), while Kiro takes capability TAGS (`shell`,
+        `read`, `@mcp`), so lowering one to the other needs a translation
+        table rather than a pass-through. Use `ai.kiro.agents` directly for
+        that ecosystem. Per-app overrides (ai.<cli>.agents) merge on top;
+        collisions fail.
       '';
     };
 
@@ -174,8 +178,10 @@ in {
         Copilot. Each file becomes one entry in `ai.agents` keyed by the
         basename minus `.md`. Codex is excluded because it requires semantic
         records rendered as standalone TOML; use explicit `ai.agents` records
-        for three-runtime fanout. Kiro is excluded because its agent format is
-        JSON; use `ai.kiro.agentsDir` for that ecosystem.
+        for three-runtime fanout. Kiro is excluded because these are Markdown
+        files while Kiro's agents are JSON, and because its tool tags are a
+        different vocabulary from the Claude/Copilot tool names this pool
+        carries; use `ai.kiro.agentsDir` for that ecosystem.
       '';
       example = lib.literalExpression ''./agents'';
     };

@@ -2156,7 +2156,14 @@ in {
       cfg = evaluated.config;
       claudeInstruction = builtins.head cfg.ai.claude.instructions;
       codexInstruction = builtins.head cfg.ai.codex.instructions;
-      kiroAgent = builtins.fromJSON cfg.ai.kiro.agents.semble-search;
+      # Semble's Kiro agent is a TYPED record now. Semble deliberately does not
+      # set `ai.kiro.enable` (selecting a runtime configures it; activating it
+      # stays the consumer's call), so nothing is EMITTED here — this test
+      # covers the fanout of option VALUES. `name` staying null in the record
+      # is the contract: the emitter defaults it from the attr key, which is
+      # asserted end-to-end in `semble-kiro-agent-emits-name` below.
+      kiroAgentName = "semble-search";
+      kiroAgentRecord = cfg.ai.kiro.agents.${kiroAgentName};
       kiroInstruction = builtins.head cfg.ai.kiro.instructions;
     in
       builtins.length cfg.home.packages
@@ -2165,15 +2172,46 @@ in {
       && lib.all (runtime: builtins.length cfg.ai.${runtime}.instructions == 1) ["claude" "codex" "kiro"]
       && cfg.ai.claude.agents ? semble-search
       && cfg.ai.codex.agents ? semble-search
-      && cfg.ai.kiro.agents ? semble-search
+      && cfg.ai.kiro.agents ? ${kiroAgentName}
       && cfg.ai.claude.agents.semble-search.tools == ["Bash" "Read"]
       && !(claudeInstruction ? name)
       && !(codexInstruction ? name)
-      && kiroAgent.tools == ["shell" "read"]
+      && kiroAgentRecord.name == null
+      && kiroAgentRecord.description != null
+      && kiroAgentRecord.tools == ["shell" "read"]
+      # `prompt` is a Nix path in the record; the option's readFile coercion
+      # inlines it. A store path here would mean the path was stringified
+      # instead of read.
+      && !(lib.hasPrefix builtins.storeDir kiroAgentRecord.prompt)
+      && lib.hasInfix "semble" kiroAgentRecord.prompt
       && kiroInstruction.name == "semble"
       && !(cfg.ai.copilot.mcpServers ? semble)
       && !(cfg.ai.copilot.agents ? semble-search)
       && cfg.ai.copilot.instructions == []
+  );
+
+  # End-to-end regression guard for the defect that motivated typing this
+  # surface: Semble's agent file shipped WITHOUT `name`, so Kiro's Rust CLI
+  # rejected it with "missing field name" on every invocation and the agent
+  # never loaded, while the Node/ACP parser (which treats `name` as optional)
+  # kept working and hid it. With Kiro actually enabled the file must carry
+  # `name` equal to its attr key — which is also its filename stem.
+  module-semble-kiro-agent-emits-name = mkTest "semble-kiro-agent-emits-name" (
+    let
+      cfg =
+        (evalHm {
+          semble.enable = true;
+          ai.kiro.enable = true;
+        }).config;
+      emitted =
+        builtins.fromJSON
+        cfg.home.file.".kiro/agents/semble-search.json".text;
+    in
+      emitted.name
+      == "semble-search"
+      && emitted.tools == ["shell" "read"]
+      && emitted ? description
+      && !(lib.hasPrefix builtins.storeDir emitted.prompt)
   );
 
   module-semble-feature-enable-overrides = mkTest "semble-feature-enable-overrides" (
@@ -2332,7 +2370,6 @@ in {
         pkgs = helperPkgs;
       } {content = "all";};
       records = import ../packages/semble/lib/integrations.nix;
-      kiroAgent = builtins.fromJSON records.kiroAgent;
     in
       code.type
       == "stdio"
@@ -2344,7 +2381,13 @@ in {
       && records.kiroInstruction.text == records.instruction.text
       && records.semanticAgent.instructions == ../packages/semble/agent-instructions.md
       && records.semanticAgent.tools == ["Bash" "Read"]
-      && kiroAgent.tools == ["shell" "read"]
+      # `kiroAgent` is a typed record, not pre-rendered JSON. It deliberately
+      # carries NO `name`: the typed `ai.kiro.agents` option defaults that from
+      # the attr key, which keeps the id and the filename a single source of
+      # truth. `prompt` stays a path here and is readFile-coerced at emission.
+      && records.kiroAgent.tools == ["shell" "read"]
+      && !(records.kiroAgent ? name)
+      && records.kiroAgent.prompt == ../packages/semble/agent-instructions.md
   );
 
   # ── glab ───────────────────────────────────────────────────────────
@@ -4918,6 +4961,161 @@ in {
       agentFile != null
   );
 
+  # A TYPED agent record lowers to JSON with `name` defaulted from the attr
+  # key. That default is the whole point of the typed surface: Kiro's Rust CLI
+  # REJECTS an agent file with no `name`, while the Node/ACP parser treats it
+  # as optional — so an omission is invisible from the IDE and fatal on the
+  # CLI. Also asserts null/empty fields are dropped, keeping the emitted file
+  # to the minimal shape both parsers accept.
+  module-kiro-typed-agent-defaults-name = mkTest "kiro-typed-agent-defaults-name" (
+    let
+      emitted = backend:
+        builtins.fromJSON (backend {
+          ai.kiro = {
+            enable = true;
+            agents.reviewer = {
+              description = "Reviews diffs";
+              prompt = "You review diffs.";
+              tools = ["read" "shell"];
+            };
+          };
+        });
+      hmJson = emitted (cfg: (evalHm cfg).config.home.file.".kiro/agents/reviewer.json".text);
+      devenvJson = emitted (cfg: (evalDevenv cfg).config.files.".kiro/agents/reviewer.json".text);
+      wellFormed = j:
+        j.name
+        == "reviewer"
+        && j.description == "Reviews diffs"
+        && j.tools == ["read" "shell"]
+        # null/empty optionals must not reach the file
+        && !(j ? model)
+        && !(j ? dispatchKind)
+        && !(j ? resources)
+        && !(j ? permissions);
+    in
+      wellFormed hmJson && wellFormed devenvJson && hmJson == devenvJson
+  );
+
+  # Pruning must reach INSIDE list elements. A permission rule declared without
+  # `match`/`exclude` still carries their `[]` defaults, and a knowledge-base
+  # resource its `include`/`exclude`. A pruner that only walks attrsets returns
+  # the list untouched, so those empties reach the emitted file.
+  module-kiro-typed-agent-prunes-in-lists = mkTest "kiro-typed-agent-prunes-in-lists" (
+    let
+      emitted =
+        builtins.fromJSON
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            agents.scoped = {
+              description = "d";
+              permissions.rules = [
+                {
+                  capability = "shell";
+                  effect = "deny";
+                }
+              ];
+              resources = [
+                {
+                  type = "knowledgeBase";
+                  source = "file:///docs";
+                }
+              ];
+            };
+          };
+        })
+        .config
+        .home
+        .file
+        .".kiro/agents/scoped.json"
+        .text;
+      rule = builtins.head emitted.permissions.rules;
+      resource = builtins.head emitted.resources;
+    in
+      rule.capability
+      == "shell"
+      && rule.effect == "deny"
+      && !(rule ? match)
+      && !(rule ? exclude)
+      && resource.source == "file:///docs"
+      && !(resource ? include)
+      && !(resource ? exclude)
+      && !(resource ? name)
+  );
+
+  # An explicit `name` overrides the attr-key default — Kiro keys the agent on
+  # `name`, not on the filename, so this has to be reachable.
+  module-kiro-typed-agent-explicit-name = mkTest "kiro-typed-agent-explicit-name" (
+    let
+      cfg =
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            agents.file-stem = {
+              name = "explicit-id";
+              description = "d";
+            };
+          };
+        }).config;
+    in
+      (builtins.fromJSON cfg.home.file.".kiro/agents/file-stem.json".text).name
+      == "explicit-id"
+  );
+
+  # Back-compat: a PATH-valued agent entry. Both backends must write the file
+  # CONTENTS. devenv previously assigned the value straight to `files.*.text`,
+  # which would have embedded the store path string as the file body (or
+  # failed its `types.str` check) — the option type has always permitted a
+  # path, and no test covered it, which is why the asymmetry survived.
+  module-kiro-path-agent-both-backends = mkTest "kiro-path-agent-both-backends" (
+    let
+      mod = {
+        ai.kiro = {
+          enable = true;
+          agents.from-file = ./fixtures/kiro-agent-raw.json;
+        };
+      };
+      hmEntry = (evalHm mod).config.home.file.".kiro/agents/from-file.json";
+      devenvEntry = (evalDevenv mod).config.files.".kiro/agents/from-file.json";
+      # A path routes to `source` in BOTH backends, so neither stringifies it.
+      resolves = e: (e.source or null) == ./fixtures/kiro-agent-raw.json;
+    in
+      resolves hmEntry && resolves devenvEntry
+  );
+
+  # `agents` and `agentsDir` are mutually exclusive; the assertion existed but
+  # nothing exercised it.
+  module-kiro-agents-dir-exclusive = mkTest "kiro-agents-dir-exclusive" (
+    let
+      cfg =
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            agents.reviewer = ''{"name":"reviewer"}'';
+            agentsDir = ./fixtures/kiro-agents-dir;
+          };
+        }).config;
+      failed = builtins.filter (a: !a.assertion) cfg.assertions;
+    in
+      builtins.length failed
+      == 1
+      && lib.hasInfix "cannot set both" (builtins.head failed).message
+  );
+
+  # `agentsDir` alone symlinks the directory wholesale (HM Layout B).
+  module-kiro-agents-dir-symlinks = mkTest "kiro-agents-dir-symlinks" (
+    let
+      entry =
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            agentsDir = ./fixtures/kiro-agents-dir;
+          };
+        }).config.home.file.".kiro/agents";
+    in
+      entry.source == ./fixtures/kiro-agents-dir && entry.recursive
+  );
+
   # HM: hook JSON files written under configDir/hooks/.
   module-kiro-hm-writes-hook-files = mkTest "kiro-hm-writes-hook-files" (
     let
@@ -6399,9 +6597,10 @@ in {
       (upstream.reviewer or null) == "# Claude-specific"
   );
 
-  # Kiro independence: top-level ai.agents is markdown-shape, Kiro agents
-  # are JSON-shape. Setting ai.agents.foo when ai.kiro.enable = true
-  # must NOT produce a .kiro/agents/foo file.
+  # Kiro independence: the top-level `ai.agents` pool carries Claude/Copilot
+  # tool NAMES, while Kiro's typed record takes capability TAGS — different
+  # vocabularies, so there is no pass-through lowering. Setting ai.agents.foo
+  # when ai.kiro.enable = true must NOT produce a .kiro/agents/foo file.
   module-kiro-ignores-top-level-agents = mkTest "kiro-ignores-top-level-agents" (
     let
       result = evalHm {
@@ -7004,7 +7203,8 @@ in {
   # ── ai.*.agentsDir Dir helper ──────────────────────────────
   # Legacy Markdown directories are Claude + Copilot only. Codex is excluded
   # because its agents are semantic records rendered to standalone TOML; Kiro
-  # is excluded because its shape is JSON (separate `ai.kiro.agents` /
+  # is excluded because these are Markdown while Kiro's agents are JSON, and
+  # its tool tags are a different vocabulary (separate `ai.kiro.agents` /
   # `ai.kiro.agentsDir` surfaces handle that).
 
   # Path-only form: `ai.claude.agentsDir = ./fixtures/claude-agents;`
