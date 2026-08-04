@@ -63,12 +63,16 @@ platform-specific pre-built binary from Anthropic's manifest and installs it as
 
 ## heron_brook Delegation Clamp — the default-on mitigation
 
-> **Last verified:** 2026-07-29 (commit pending — confirmed end-to-end against
-> two LIVE sessions on claude-code 2.1.220, which sharpened the attribution
-> rationale and turned the model gate into a measurement. Prior 2026-07-29:
-> initial version, reasoned from the hook payload alone.) If you change
-> `ai.claude.delegationClamp`, the hook script, the injected text, or either
-> tripwire and this fragment isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-08-03 (commit pending — binary re-verification against
+> claude-code 2.1.221 found both clamp strings and all three gate identifiers;
+> the `NotebookEdit` positive control matched, the local feature cache still
+> supplied no kill switch or override, and upstream issue #80988 remained open.
+> Prior 2026-07-29: confirmed end-to-end against two LIVE sessions on
+> claude-code 2.1.220, which sharpened the attribution rationale and turned the
+> model gate into a measurement. Prior 2026-07-29: initial version, reasoned
+> from the hook payload alone.) If you change `ai.claude.delegationClamp`, the
+> hook script, the injected text, or either tripwire and this fragment isn't
+> updated in the same commit, stop and fix it.
 
 Claude Code injects a system-prompt section — internally `heron_brook` —
 instructing the model not to call the Agent tool and not to use workflows or
