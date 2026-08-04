@@ -71,7 +71,10 @@ in
     passthru = {
       updateScript = vu.mkUpdateScript {
         pname = "copilot-cli";
-        versionCheck.cmd = "${ourPkgs.curl}/bin/curl -s https://api.github.com/repos/github/copilot-cli/releases/latest | ${ourPkgs.jq}/bin/jq -r '.tag_name | ltrimstr(\"v\")'";
+        versionCheck.cmd = vu.ghLatestVersionCmd {
+          pkgs = ourPkgs;
+          repo = "github/copilot-cli";
+        };
         platforms = {
           "x86_64-linux" = ver: "https://github.com/github/copilot-cli/releases/download/v${ver}/copilot-linux-x64.tar.gz";
           "aarch64-darwin" = ver: "https://github.com/github/copilot-cli/releases/download/v${ver}/copilot-darwin-arm64.tar.gz";

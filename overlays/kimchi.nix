@@ -80,7 +80,10 @@ in
     passthru = {
       updateScript = vu.mkUpdateScript {
         pname = "kimchi";
-        versionCheck.cmd = "${ourPkgs.curl}/bin/curl -s https://api.github.com/repos/getkimchi/kimchi/releases/latest | ${ourPkgs.jq}/bin/jq -r '.tag_name | ltrimstr(\"v\")'";
+        versionCheck.cmd = vu.ghLatestVersionCmd {
+          pkgs = ourPkgs;
+          repo = "getkimchi/kimchi";
+        };
         platforms = {
           "x86_64-linux" = ver: "https://github.com/getkimchi/kimchi/releases/download/v${ver}/kimchi_linux_amd64.tar.gz";
           "aarch64-darwin" = ver: "https://github.com/getkimchi/kimchi/releases/download/v${ver}/kimchi_darwin_arm64.tar.gz";
