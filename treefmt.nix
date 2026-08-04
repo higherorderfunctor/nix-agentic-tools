@@ -119,5 +119,14 @@
     # hand-formatted lists. These files are cspell-excluded
     # and never merge to main — leave them as-authored.
     "docs/plan.md"
+    # Verbatim research snapshot preserved for semantic retrieval (see
+    # its README). The ungroomed sources carry mis-nested and
+    # newline-straddling code spans, and prettier's span-joining mangles
+    # identifiers when it repairs them (measured: `KIRO_KAS_NODE_PATH`
+    # came out `KIRO*KAS_NODE_PATH`), which breaks exact-identifier
+    # search — the directory's whole purpose. cspell already ignores
+    # `docs/**`; checks/split-code-spans.nix carries the matching
+    # scan exclusion.
+    "docs/plans/kiro-v3-research-raw/**"
   ];
 }

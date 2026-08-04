@@ -1,0 +1,22 @@
+[
+  {"label": "initialize", "method": "initialize",
+   "params": {"protocolVersion": 1,
+              "clientCapabilities": {"fs": {"readTextFile": false, "writeTextFile": false}}}},
+  {"label": "session-new-unknown-top-key", "method": "session/new",
+   "params": {"cwd": "${WORKSPACE}", "mcpServers": [], "model": "probe-unknown-top-level-model-key"},
+   "save": {"SESSION_A": "sessionId"}},
+  {"label": "session-new-meta-model", "method": "session/new",
+   "params": {"cwd": "${WORKSPACE}", "mcpServers": [],
+              "_meta": {"kiro": {"modelId": "probe-meta-model-id", "effortLevel": "high"}}},
+   "save": {"SESSION_B": "sessionId"}},
+  {"label": "set-config-option-model-bogus", "method": "session/set_config_option",
+   "params": {"sessionId": "${SESSION_B}", "configId": "model", "value": "probe-bogus-model-xyz"}},
+  {"label": "set-config-option-effort", "method": "session/set_config_option",
+   "params": {"sessionId": "${SESSION_B}", "configId": "effortLevel", "value": "low"}},
+  {"label": "set-config-option-autopilot", "method": "session/set_config_option",
+   "params": {"sessionId": "${SESSION_B}", "configId": "autopilot", "value": "on"}},
+  {"label": "std-set_model-confirm-32601", "method": "session/set_model",
+   "params": {"sessionId": "${SESSION_B}", "modelId": "anything"}},
+  {"label": "session-context-B", "method": "_kiro/session/context",
+   "params": {"sessionId": "${SESSION_B}"}}
+]
