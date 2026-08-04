@@ -32,9 +32,34 @@
   # prepatched content; pnpm applies this patch while materializing its virtual
   # store. A failed probe still resolves to null, preserving napi-rs's
   # fail-closed stale-lock behavior. Drop this when the catch ships upstream.
+  #
+  # The patch file itself is added as a NEW file, which never conflicts. The
+  # workspace/lock metadata that points pnpm at it is applied by key in
+  # postPatch instead of as hunks: those references track upstream's peer
+  # resolution, which reshuffles on its own schedule, and a positional diff
+  # turns every reshuffle into a held-back sweep needing hand-realigned hunks.
+  # See oxlint-pnpm-patch-meta.awk for what stays loud.
+  napi = {
+    pkg = "@napi-rs/cli";
+    version = "3.8.2";
+    patchPath = "patches/@napi-rs__cli@3.8.2.patch";
+    # pnpm derives this from the patch file's CONTENT, so it moves only when
+    # that file does — not when upstream's lock does.
+    patchHash = "0a540bf50518a292968b0a30583dfbf30d0da4b6871988ed5d2829780fb294ad";
+  };
   src = ourPkgs.applyPatches {
     src = unpatchedSrc;
     patches = [./oxlint-napi-rs-cli.patch];
+    postPatch = ''
+      apply_patch_meta() {
+        awk -v pkg="${napi.pkg}" -v ver="${napi.version}" \
+            -v val="$1" -v q="$2" -v tag="$3" -v ph="${napi.patchHash}" \
+            -f ${./oxlint-pnpm-patch-meta.awk} "$4" > "$4.tmp"
+        mv "$4.tmp" "$4"
+      }
+      apply_patch_meta "${napi.patchPath}" '"' "" pnpm-workspace.yaml
+      apply_patch_meta "${napi.patchHash}" "'" stamp pnpm-lock.yaml
+    '';
   };
   version = vu.mkVersion {
     # upstream: readCargoVersion @ apps/oxlint/Cargo.toml
