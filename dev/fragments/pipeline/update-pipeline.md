@@ -1,11 +1,14 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-08-03 (commit pending — repairs the always-uploaded
-> hidden update-report artifact and makes its absence fail loudly). Prior:
-> 2026-08-03 (commit pending — records the fifth required `devenv-test` context
-> in the update workflow's auto-merge contract). Prior: 2026-08-03 (commit
-> pending — moves the `gh` and `glab` update targets with their overlay files
-> from `generic/` to `dev-tools/`). Prior: 2026-08-02 (commit pending — the
+> **Last verified:** 2026-08-03 (commit pending — limits package DAG edges to
+> initialization plus explicit target-specific constraints and removes
+> base-checkout finalizers that could not observe isolated update branches).
+> Prior: 2026-08-03 (commit pending — repairs the always-uploaded hidden
+> update-report artifact and makes its absence fail loudly). Prior: 2026-08-03
+> (commit pending — records the fifth required `devenv-test` context in the
+> update workflow's auto-merge contract). Prior: 2026-08-03 (commit pending —
+> moves the `gh` and `glab` update targets with their overlay files from
+> `generic/` to `dev-tools/`). Prior: 2026-08-02 (commit pending — the
 > `llm-agents` input update regenerates Semble's upstream-template snapshot
 > through its separate extraction derivation, while human-reviewed content
 > hashes intentionally remain manual and make CI stop on unreviewed drift).
@@ -29,7 +32,11 @@ The update pipeline uses ninja as a DAG executor. A nix expression
 `.update.ninja` with dependency edges (e.g., agnix and git-absorb depend on
 `rust-overlay` input being updated first, via their `dependsOn`).
 `update-init.sh` runs once as the root target to clean stale state (abort stuck
-git ops, delete old `update/*` branches, clear the report file).
+git ops, delete old `update/*` branches, clear the report file). Every package
+depends on that initialization plus its explicit `dependsOn` predecessors. It
+does not depend on the separate nixpkgs or nix-update input targets: their
+branches never feed state into the package worktree, so those edges would only
+serialize independent work.
 
 Targets fall into three categories:
 
@@ -41,8 +48,10 @@ Targets fall into three categories:
   the local derivative is reviewed.
 - **Packages** (`update-pkg.sh <name> [flags] [git-url]`) — runs `nix-update` in
   a worktree, optionally preceded by a rev bump for main-tracking packages. The
-  final target `update-report` runs `update-report.sh` to print a summary
-  grouped by status.
+  `treefmt-nix` input target waits for the other isolated targets, then the
+  final `update-report` target runs `update-report.sh` to print a summary
+  grouped by status. There is no base-checkout format/build finalizer because it
+  cannot observe changes committed only on target branches.
 
 ### Worktree isolation
 

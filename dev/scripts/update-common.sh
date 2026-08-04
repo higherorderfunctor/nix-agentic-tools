@@ -81,9 +81,8 @@ log_info() {
 #   `if git diff --staged --quiet; then skip; fi`   error => "there ARE changes"
 #   `if ! git diff --quiet; then commit; fi`        error => "the tree is dirty"
 #
-# The second shape is the failure-becomes-a-commit path that
-# config/generate-update-ninja.nix's `full-format` rule body had to close
-# with the same idiom.
+# The second shape is the failure-becomes-a-commit path in update-pkg.sh's
+# stage-and-commit gate, which this helper closes.
 #
 # Usage mirrors `git` itself, minus the trailing `--quiet` this appends:
 #
@@ -312,8 +311,8 @@ run_nfb_build() {
   # substitution offers no synchronization with the parent shell, so the
   # tee writer may still be flushing when gate 3 greps the file. The
   # buffered form `2> file` then `cat file >&2` is deterministic — we
-  # only lose real-time stderr streaming, which the caller already
-  # tees through `2>&1 | tee .update-logs/final-build.log` anyway.
+  # only lose real-time stderr streaming, which the per-input target already
+  # tees into its own update log anyway.
   #
   # `|| exit_code=$?` localizes errexit suppression to this single call
   # (NOT a blanket `set +e`) — we want to inspect the exit code AND
@@ -382,11 +381,9 @@ run_nfb_build() {
   return 0
 }
 
-# The pipeline's whole-package-set build verification. Defined once
-# because the invocation has to be IDENTICAL across its callers —
-# update-input.sh's Phase 2, its repair retry, and the ninja
-# `final-build` rule in config/generate-update-ninja.nix. When these
-# drifted apart they silently verified different things.
+# The pipeline's whole-package-set build verification. Defined once because
+# update-input.sh's initial attempt and repair retry must invoke it identically;
+# when copies drifted they silently verified different things.
 verify_all_packages() {
   run_nfb_build nix run --inputs-from . nix-fast-build -- \
     --skip-cached --no-nom --no-link \

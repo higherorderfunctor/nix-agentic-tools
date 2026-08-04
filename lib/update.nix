@@ -66,8 +66,9 @@ in {
           default = [];
           description = ''
             DAG predecessors, e.g. ["rust-overlay"]. The ninja generator turns
-            each entry <d> into an `update-<d>` edge, ordered after the
-            universal baseDeps (update-nixpkgs, update-nix-update).
+            each entry <d> into an `update-<d>` edge after the universal
+            `update-init` predecessor. Package targets do not universally wait
+            for the isolated nixpkgs or nix-update input targets.
           '';
         };
       };
