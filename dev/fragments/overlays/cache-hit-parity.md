@@ -1,6 +1,8 @@
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-08-03 (commit pending — patches Oxlint's
+> **Last verified:** 2026-08-03 (commit pending — annotates Semble's unchanged
+> upstream derivation with its flake-input update owner through a plain attrset
+> extension). Prior: 2026-08-03 (commit pending — patches Oxlint's
 > `@napi-rs/cli` dependency in its pnpm-fetched source rather than admitting
 > Darwin's `/bin/ps` into the sandbox; both fetch and build use pnpm 11 from
 > pinned `ourPkgs`, matching upstream's major). Prior: 2026-08-03 (commit
@@ -240,6 +242,12 @@ role variants, selecting `meta.mainProgram = "semble-mcp"` without re-running
 derivation and that the CLI role is byte-identical to the pinned upstream
 output. Distribution is separate from identity: CI substitutes from Numtide and
 mirrors accepted `main` outputs into this project's Cachix cache.
+
+The CLI overlay also adds `passthru.updateFlakeInput = "llm-agents"` through
+that same plain attrset extension. `passthru` metadata changes neither `drvPath`
+nor `outPath`; it tells the update-target completeness check that the normal
+flake-input bump owns this versioned package. The MCP role inherits the property
+with the rest of Semble's attrset.
 
 **Content-only packages don't need this.** Packages that just ship markdown
 files (coding-standards, stacked-workflows-content, fragments-ai) have no

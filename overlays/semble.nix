@@ -6,5 +6,17 @@
   inputs,
   final,
   ...
-}:
-inputs.llm-agents.packages.${final.stdenv.hostPlatform.system}.semble
+}: let
+  semble = inputs.llm-agents.packages.${final.stdenv.hostPlatform.system}.semble;
+in
+  semble
+  // {
+    passthru =
+      (semble.passthru or {})
+      // {
+        # The update-target completeness check validates this input exists and
+        # treats its normal flake-input bump as Semble's update owner. Plain
+        # attrset extension preserves the upstream drvPath/outPath identity.
+        updateFlakeInput = "llm-agents";
+      };
+  }

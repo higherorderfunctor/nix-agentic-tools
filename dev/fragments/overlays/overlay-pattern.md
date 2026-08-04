@@ -1,44 +1,46 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-08-03 (commit pending — makes `pkgs.ai` the single
-> binary-package namespace, retains `generic` as a temporary nested bucket, and
-> moves the two forge CLIs into `ai.devTools`). Prior: 2026-08-03 (commit
-> pending — makes overlay-owned local implementation sources a boundary
-> invariant and relocates the auto-memory helper and distiller sources
-> accordingly). Prior: 2026-08-02 (commit pending — adds Semble's direct
-> external-flake derivation pattern and identity-preserving MCP role). Prior:
-> 2026-08-01 (commit pending — records that `glab`'s `extraExtract` also
-> regenerates its `passthru.extracted` sidecar, via the new shared
-> `vu.mkExtractRegen`, and that glab is the one extracted package where the
-> fixer-then-extract ORDER is forced. It had NO regeneration at all until now,
-> which nothing caught until its first version bump reddened
-> `checks.<system>.glab-extracted` on PR #621). Prior: 2026-07-28 — the commit
-> adding THAT line lands `glab`: the first Go package whose SRC hash also lives
-> in the sidecar (`vu.mkGoSrcVendorFix`), the first GitLab-hosted version check
-> (`vu.glLatestVersionCmd`), and the collapse of the three sidecar hash fixers
-> onto one `vu.mkHashFix` body driven by `hashFixTargets`. It also corrects the
-> thin-override list, which now has to distinguish the SIDECAR contract (where a
-> hash comes from) from the OVERRIDE SEAM (`.override` vs `overrideAttrs`) —
-> `glab` shares bruno's former but not its latter. Prior: 2026-07-27 retired the
-> "bruno is the ONLY worked example" claim (`overlays/git-tools/git-absorb.nix`
-> is a second one and PREDATES it), replaces the heuristic with the
-> INPUT-vs-OUTPUT rule read out of the pinned nixpkgs' `lib.extendMkDerivation`,
-> and corrects "the failure is SILENT … shape-independent" — silent for
-> `buildNpmPackage`, LOUD for `buildRustPackage`. Prior: 2026-07-25 wired
-> `passthru.fixVendorHash` / `passthru.fixNpmDepsHash` to a real caller
-> (`fix_sidecar_hashes`) for the first time and corrected the `overlays/lib.nix`
-> comment that claimed a re-run which did not exist; see the Go-vendorHash
-> section below. Before that: two changes, both wanted. `bc23e34b` (LANDED)
-> records that the CI warm step now forces `drvPath` and therefore DOES cover
-> sidecar-versioned packages; the commit adding this line (pending) adds the
-> sidecar-vs-inline decision rule and the `.override`-vs-`overrideAttrs` rule
-> for `lib.extendMkDerivation` builders. Both sit on top of the Go
-> sidecar-`vendorHash` mechanism, the derived-Go-toolchain seam, and the
-> platform-gated-attribute rule, on top of the multi-major-attribute shape, the
-> namespaced-only rule and the store-path-parity expectation for thin nixpkgs
-> overrides. If you add, remove or rename an overlay namespace, move a package
-> between namespaces, or change how a `generic` package relates to its nixpkgs
-> original, and this section isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-08-03 (commit pending — records the property used to
+> associate direct external derivations with their flake-input update owner).
+> Prior: 2026-08-03 (commit pending — makes `pkgs.ai` the single binary-package
+> namespace, retains `generic` as a temporary nested bucket, and moves the two
+> forge CLIs into `ai.devTools`). Prior: 2026-08-03 (commit pending — makes
+> overlay-owned local implementation sources a boundary invariant and relocates
+> the auto-memory helper and distiller sources accordingly). Prior: 2026-08-02
+> (commit pending — adds Semble's direct external-flake derivation pattern and
+> identity-preserving MCP role). Prior: 2026-08-01 (commit pending — records
+> that `glab`'s `extraExtract` also regenerates its `passthru.extracted`
+> sidecar, via the new shared `vu.mkExtractRegen`, and that glab is the one
+> extracted package where the fixer-then-extract ORDER is forced. It had NO
+> regeneration at all until now, which nothing caught until its first version
+> bump reddened `checks.<system>.glab-extracted` on PR #621). Prior: 2026-07-28
+> — the commit adding THAT line lands `glab`: the first Go package whose SRC
+> hash also lives in the sidecar (`vu.mkGoSrcVendorFix`), the first
+> GitLab-hosted version check (`vu.glLatestVersionCmd`), and the collapse of the
+> three sidecar hash fixers onto one `vu.mkHashFix` body driven by
+> `hashFixTargets`. It also corrects the thin-override list, which now has to
+> distinguish the SIDECAR contract (where a hash comes from) from the OVERRIDE
+> SEAM (`.override` vs `overrideAttrs`) — `glab` shares bruno's former but not
+> its latter. Prior: 2026-07-27 retired the "bruno is the ONLY worked example"
+> claim (`overlays/git-tools/git-absorb.nix` is a second one and PREDATES it),
+> replaces the heuristic with the INPUT-vs-OUTPUT rule read out of the pinned
+> nixpkgs' `lib.extendMkDerivation`, and corrects "the failure is SILENT …
+> shape-independent" — silent for `buildNpmPackage`, LOUD for
+> `buildRustPackage`. Prior: 2026-07-25 wired `passthru.fixVendorHash` /
+> `passthru.fixNpmDepsHash` to a real caller (`fix_sidecar_hashes`) for the
+> first time and corrected the `overlays/lib.nix` comment that claimed a re-run
+> which did not exist; see the Go-vendorHash section below. Before that: two
+> changes, both wanted. `bc23e34b` (LANDED) records that the CI warm step now
+> forces `drvPath` and therefore DOES cover sidecar-versioned packages; the
+> commit adding this line (pending) adds the sidecar-vs-inline decision rule and
+> the `.override`-vs-`overrideAttrs` rule for `lib.extendMkDerivation` builders.
+> Both sit on top of the Go sidecar-`vendorHash` mechanism, the
+> derived-Go-toolchain seam, and the platform-gated-attribute rule, on top of
+> the multi-major-attribute shape, the namespaced-only rule and the
+> store-path-parity expectation for thin nixpkgs overrides. If you add, remove
+> or rename an overlay namespace, move a package between namespaces, or change
+> how a `generic` package relates to its nixpkgs original, and this section
+> isn't updated in the same commit, stop and fix it.
 
 `overlays/default.nix` aggregates every binary package under the single
 `pkgs.ai` namespace. Flat AI CLIs live directly below it; supporting categories
@@ -77,7 +79,10 @@ below. `overlays/semble.nix` returns
 `inputs.llm-agents.packages.${system}.semble` directly. It does not apply the
 input's `overlays.shared-nixpkgs`, rebuild with this repository's `ourPkgs`, or
 call `overrideAttrs`; any of those would replace the upstream cache identity
-that this export promises to preserve.
+that this export promises to preserve. A plain attrset extension adds
+`passthru.updateFlakeInput = "llm-agents"`; the reverse update-target check
+validates that named input exists and treats its normal input bump as Semble's
+update path without changing the upstream `drvPath` or `outPath`.
 
 When one upstream derivation ships multiple role binaries, expose secondary
 roles with a plain attrset/meta overlay. `semble-mcp` changes only
@@ -95,8 +100,10 @@ Two mechanical consequences of living in a subdirectory rather than at the
 
 Nothing else is relaxed: cache-hit parity applies in full (see that fragment —
 shipping data files is NOT the same as being content-only), each package gets a
-`config.checks.cacheHitParity` row, and each version-tracked one gets a
-`config.update.targets` row.
+`config.checks.cacheHitParity` row, and each version-tracked one must be covered
+by the bidirectional update-target check. Locally pinned packages normally own a
+same-name `config.update.targets` row; direct external derivations name their
+flake-input owner instead.
 
 ### Thin overrides of a nixpkgs package
 

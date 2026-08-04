@@ -1,4 +1,5 @@
-# Update-target resolution + parity gate (config.update.targets ↔ overlays).
+# Update-target completeness + parity gate (packages ↔ config.update.targets ↔
+# overlays).
 #
 # config/update-matrix.nix was dissolved into config.update.targets, so this is
 # now the SOLE update-target gate — there is no coexisting matrix to reconcile.
@@ -7,10 +8,16 @@
 # `.#updateTargets` flake output) is the single source of truth the pipeline
 # reads.
 #
-# For EVERY main-tracking target (one carrying a `git` URL — binary
-# `--use-update-script` packages manage their own sources and never hit
-# resolve_overlay_file), this asserts three things, folding in the old
-# checks/overlay-target-resolution.nix regression gate:
+# The reverse packages → targets direction asserts that every versioned flake
+# package is updated by a same-name row, a row covering the same derivation,
+# source, or update script, a declared flake-input owner, or an explicit
+# excludePatterns exemption. This makes an absent package row visible without
+# replacing the declared update registry with package discovery.
+#
+# In the forward targets → overlays direction, every main-tracking target (one
+# carrying a `git` URL — binary `--use-update-script` packages manage their own
+# sources and never hit resolve_overlay_file) must satisfy three assertions,
+# folding in the old checks/overlay-target-resolution.nix regression gate:
 #   (a) `file` is non-null (main-tracking packages MUST declare an overlay).
 #   (b) `file` == resolve_overlay_file(<git>, overlays) — byte-identical to the
 #       exact string update-pkg.sh consumes, so the declared path can never
@@ -22,11 +29,81 @@
 # Runs the SAME resolver (dev/scripts/resolve-overlay-file.sh) the pipeline
 # uses, against the SAME overlays tree.
 {
+  inputs,
   lib,
   pkgs,
   self,
+  updateRegistry,
 }: let
   inherit (self) updateTargets;
+  packages = self.packages.${pkgs.stdenv.hostPlatform.system};
+  versionedPackages = lib.filterAttrs (_: package: package ? version) packages;
+  targetPackageNames = builtins.filter (name: builtins.hasAttr name packages) (builtins.attrNames updateTargets);
+  targetPackages = map (name: packages.${name}) targetPackageNames;
+
+  sourcePath = package:
+    if package ? src && builtins.isAttrs package.src && package.src ? outPath
+    then package.src.outPath
+    else null;
+  updateScriptPath = package:
+    if package ? updateScript && lib.isDerivation package.updateScript
+    then package.updateScript.drvPath
+    else null;
+  updateFlakeInput = package: let
+    passthru = package.passthru or {};
+  in
+    passthru.updateFlakeInput or null;
+  sharesWithTarget = coveredTargets: accessor: package: let
+    value = accessor package;
+  in
+    value != null && builtins.any (target: accessor target == value) coveredTargets;
+  explicitlyExcluded = name:
+    builtins.any (pattern: builtins.match pattern name != null) updateRegistry.excludePatterns;
+  coverageFor = targets: coveredTargets: name: package: let
+    inputOwner = updateFlakeInput package;
+  in
+    if builtins.hasAttr name targets
+    then "target row"
+    else if builtins.any (target: package.drvPath == target.drvPath) coveredTargets
+    then "shared derivation with a target"
+    else if sharesWithTarget coveredTargets sourcePath package
+    then "shared source with a target"
+    else if sharesWithTarget coveredTargets updateScriptPath package
+    then "shared update script with a target"
+    else if builtins.isString inputOwner && builtins.hasAttr inputOwner inputs
+    then "flake input ${inputOwner}"
+    else if explicitlyExcluded name
+    then "explicit excludePatterns exemption"
+    else null;
+  packageCoverage = lib.mapAttrs (coverageFor updateTargets targetPackages) versionedPackages;
+  uncoveredPackages = lib.filterAttrs (_: coverage: coverage == null) packageCoverage;
+
+  # Positive control: context7-mcp is a real, uniquely sourced package row.
+  # Removing it must make that versioned package uncovered, proving the reverse
+  # direction can fail rather than merely reporting the current registry.
+  positiveControlName = "context7-mcp";
+  positiveControlTargets = builtins.removeAttrs updateTargets [positiveControlName];
+  positiveControlTargetNames = builtins.filter (name: builtins.hasAttr name packages) (builtins.attrNames positiveControlTargets);
+  positiveControlPackages = map (name: packages.${name}) positiveControlTargetNames;
+  positiveControlPass =
+    builtins.hasAttr positiveControlName packages
+    && coverageFor positiveControlTargets positiveControlPackages positiveControlName packages.${positiveControlName} == null;
+  coverageFile = pkgs.writeText "update-target-package-coverage.txt" (
+    lib.concatStringsSep "\n" (
+      lib.mapAttrsToList (
+        name: coverage: "${name}: ${
+          if coverage == null
+          then "MISSING"
+          else coverage
+        }"
+      )
+      packageCoverage
+    )
+  );
+  uncoveredFile = pkgs.writeText "update-target-uncovered-packages.txt" (
+    lib.concatStringsSep "\n" (builtins.attrNames uncoveredPackages)
+  );
+
   # Only entries that carry a `git` URL go through rev-bump resolution
   # (main-tracking packages); binary packages have `git = null`.
   gitEntries = lib.filterAttrs (_: v: v.git != null) updateTargets;
@@ -54,6 +131,20 @@ in
     cd "$src"
     # shellcheck source=dev/scripts/resolve-overlay-file.sh
     source dev/scripts/resolve-overlay-file.sh
+
+    if [ "${lib.boolToString positiveControlPass}" != true ]; then
+      echo "ERROR: removing the context7-mcp row did not make its package uncovered" >&2
+      exit 1
+    fi
+
+    echo "Versioned flake package update coverage:"
+    cat ${coverageFile}
+    if [ -s ${uncoveredFile} ]; then
+      echo "" >&2
+      echo "ERROR: versioned flake packages lack an update target or a property-based exemption:" >&2
+      cat ${uncoveredFile} >&2
+      exit 1
+    fi
 
     # An empty set means every main-tracking target lost its `git` URL — the
     # dissolved registry is expected to carry ~18 of them. Fail loudly rather
@@ -103,7 +194,7 @@ in
       exit 1
     fi
 
-    echo "All main-tracking update targets are byte-identical to resolve_overlay_file output and carry an inline rev."
+    echo "All versioned flake packages are update-covered; main-tracking targets match resolve_overlay_file output and carry an inline rev."
     mkdir -p "$out"
     touch "$out/ok"
   ''
