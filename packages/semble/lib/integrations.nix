@@ -6,24 +6,23 @@ let
 in {
   inherit instruction;
 
-  # Kiro 2.16.0 validates agent files through TWO independent parsers, and
-  # only one of them tolerates a missing `name` — so this field is not
-  # optional in practice:
-  #   * Rust CLI (kiro-cli-chat) — JSON-only, and `name` is REQUIRED. Without
-  #     it the CLI rejects the whole file with "missing field name" on EVERY
-  #     invocation, so the agent never loads on that surface at all.
-  #   * Node/ACP bundle (acp-server.js) — `name` is `.optional()`, documented
-  #     as "explicit agent name that overrides filename-based ID", so that
-  #     path silently falls back to the filename stem and works either way.
-  # Setting it satisfies the strict parser and changes nothing for the lenient
-  # one, because the value equals the `agents.semble-search` attr key that
-  # `modules/common.nix` writes the file under — the filename-derived id and
-  # this explicit override resolve to the SAME id. Keep the two in sync;
-  # `checks/module-eval.nix` binds them together.
-  kiroAgent = builtins.toJSON {
+  # A TYPED `ai.kiro.agents` record (see `kiroAgentRecord` in
+  # packages/kiro-cli/lib/mkKiro.nix) — no longer pre-rendered JSON.
+  #
+  # `name` is deliberately absent. The typed option defaults it to the
+  # attribute key the record is written under, which is the single source of
+  # truth for both the filename and the id Kiro registers, so the two can no
+  # longer disagree. That default is also what makes the field impossible to
+  # omit: Kiro's Rust CLI REQUIRES `name` and rejects an agent file without it
+  # on every invocation, while the Node/ACP parser treats it as optional and
+  # falls back to the filename — which is why the omission was invisible from
+  # the IDE side until it surfaced as CLI noise.
+  #
+  # `prompt` stays a Nix path; the option coerces it with `readFile`, so the
+  # instructions are inlined rather than referenced as a store path.
+  kiroAgent = {
     description = "${baseDescription} Prefer over shell/read tools for any semantic or exploratory question.";
-    name = "semble-search";
-    prompt = builtins.readFile instructions;
+    prompt = instructions;
     tools = ["shell" "read"];
   };
 

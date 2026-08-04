@@ -24,6 +24,11 @@
   # See packages/kiro-cli/lib/wrapPackage.nix.
   wrapKiroPackage = import ./wrapPackage.nix {inherit lib pkgs;};
 
+  # Shared AI helpers (filterNulls, mkLspConfig, flattenDotKeys, …). Hoisted to
+  # the top-level `let` so option TYPES and renderers can reach it too — both
+  # backend blocks previously imported it separately.
+  aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
+
   # Eval-pure read of the committed source list (no IFD).
   knownKiroModels = builtins.fromJSON (builtins.readFile ../models.json);
 
@@ -119,6 +124,276 @@
       };
     };
   };
+
+  # Kiro's runtime capability set (`VALID_CAPABILITIES`). Kept a SOFT enum —
+  # `either (enum …) str` — because Kiro validates capabilities against a
+  # runtime table and SKIPS an unknown one with a warning rather than
+  # rejecting the file, so a closed Nix enum would be stricter than the
+  # binary. `power` and `sandbox_network` were absent from the hand-written
+  # list this replaced. Note `all` expands to the ten builtins plus `mcp` and
+  # does NOT cover `sandbox_network`.
+  kiroCapabilities = [
+    "all"
+    "builtin"
+    "context"
+    "diagnostics"
+    "filesystem"
+    "fs_read"
+    "fs_write"
+    "mcp"
+    "power"
+    "sandbox_network"
+    "shell"
+    "skill"
+    "subagent"
+    "web_fetch"
+    "web_search"
+  ];
+
+  # One capability rule. Shared by `ai.kiro.permissions` (which renders
+  # `settings/permissions.yaml`) and by a typed agent's own `permissions.rules`
+  # — same wire shape in both places, so it is defined once.
+  kiroPermissionRule = lib.types.submodule {
+    options = {
+      capability = lib.mkOption {
+        type = lib.types.either (lib.types.enum kiroCapabilities) lib.types.str;
+        description = "Capability category (soft enum; any string accepted — Kiro skips unknown ones with a warning).";
+      };
+      effect = lib.mkOption {
+        type = lib.types.enum ["allow" "ask" "deny"];
+        description = "deny | ask | allow (resolved by restrictiveness: deny > ask > allow).";
+      };
+      match = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        description = "Glob patterns (mcp: server/tool; `*` only, no `**`/`?`).";
+      };
+      exclude = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        description = "Glob patterns exempting resources from this rule.";
+      };
+    };
+  };
+
+  # A knowledge-base resource entry. `resources` elements are either a bare
+  # URI string (`file://…` / `skill://…`) or one of these.
+  kiroKnowledgeBaseResource = lib.types.submodule {
+    options = {
+      type = lib.mkOption {
+        type = lib.types.enum ["knowledgeBase"];
+        default = "knowledgeBase";
+        description = "Discriminator; the only accepted value.";
+      };
+      source = lib.mkOption {
+        type = lib.types.str;
+        description = "Must be a `file://` URI with a non-empty path.";
+      };
+      name = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Display name.";
+      };
+      description = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Human-readable description.";
+      };
+      indexType = lib.mkOption {
+        type = lib.types.nullOr (lib.types.enum ["best" "fast"]);
+        default = null;
+        description = "Index strategy (a real closed enum in Kiro's schema).";
+      };
+      include = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        description = "Glob patterns to include.";
+      };
+      exclude = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        description = "Glob patterns to exclude.";
+      };
+      autoUpdate = lib.mkOption {
+        type = lib.types.nullOr lib.types.bool;
+        default = null;
+        description = "true → re-index on agent load; false/null → never.";
+      };
+    };
+  };
+
+  # Agent-scoped permission block (`permissions` in an agent file).
+  kiroAgentPermissions = lib.types.submodule {
+    options = {
+      rules = lib.mkOption {
+        type = lib.types.listOf kiroPermissionRule;
+        default = [];
+        description = "Capability rules scoping down what this agent may do.";
+      };
+      policies = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        description = ''
+          Named preset policy ids expanded inline into scoped rules. Kiro ships
+          `allow-all`, `dev-shell`, `edit-workspace`, `read-all`,
+          `read-only-shell`, `read-workspace`; an unknown id is skipped with a
+          warning, so this stays a plain string list rather than a closed enum.
+        '';
+      };
+    };
+  };
+
+  # A typed v3 agent record. Field set mirrors `JsonAgentFileSchema` as read
+  # out of the ACP bundle (`acp-server.js`, 2.16.0). Un-modeled fields —
+  # notably `mcpServers` and inline `hooks` — round-trip through the freeform
+  # JSON tail; they are deliberately NOT modeled here because both already
+  # have their own typed pools in this module whose composition with an
+  # agent-scoped copy is a design question, not a mechanical mapping.
+  #
+  # Only `dispatchKind` and the nested `effect`/`indexType` are real closed
+  # enums in Kiro's schema, so only those are `types.enum` here. Kiro's other
+  # enum-looking fields are runtime tables that skip-with-warning, and the
+  # schema itself lives in a bundle downloaded at runtime under
+  # ~/.local/share/kiro-cli/kas/ — NOT in the Nix store — so it cannot feed
+  # the drift-checked extraction sidecar the way `hookTriggers` does. Closed
+  # enums copied from it by hand would rot unguarded; they stay `str`.
+  kiroAgentRecord = lib.types.submodule {
+    freeformType = (pkgs.formats.json {}).type;
+    options = {
+      name = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          Agent id. Defaults to the attribute key, which is also the filename
+          stem. Kiro's Rust CLI REQUIRES this field and rejects an agent file
+          without it, while the ACP path treats it as optional and falls back
+          to the filename — so it is always emitted.
+        '';
+      };
+      description = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Human-facing guidance shown in `kiro-cli agent list`.";
+      };
+      prompt = lib.mkOption {
+        type = lib.types.nullOr (lib.types.coercedTo lib.types.path builtins.readFile lib.types.str);
+        default = null;
+        description = "System prompt. A Nix path is read at eval time into inline content.";
+      };
+      tools = lib.mkOption {
+        type = lib.types.nullOr (lib.types.either lib.types.str (lib.types.listOf lib.types.str));
+        default = null;
+        description = ''Tool ids, or the literal `"*"` for all tools.'';
+      };
+      excludedTools = lib.mkOption {
+        type = lib.types.nullOr (lib.types.listOf lib.types.str);
+        default = null;
+        description = "Tools to exclude, applied after `tools` matching.";
+      };
+      model = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Model override for this agent.";
+      };
+      effortLevel = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Reasoning effort for reasoning-capable models.";
+      };
+      includeMcpJson = lib.mkOption {
+        type = lib.types.nullOr lib.types.bool;
+        default = null;
+        description = "Include all MCP tools (Kiro default false: MCP tools only via explicit `tools` patterns).";
+      };
+      includePowers = lib.mkOption {
+        type = lib.types.nullOr lib.types.bool;
+        default = null;
+        description = "Include the kiroPowers tool (Kiro default false).";
+      };
+      welcomeMessage = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = "Message shown when switching to this agent.";
+      };
+      dispatchKind = lib.mkOption {
+        type = lib.types.nullOr (lib.types.enum ["custom-agent" "spec" "sub-agent"]);
+        default = null;
+        description = ''
+          Which dispatch adapter runs this agent. A real closed enum in Kiro's
+          schema. Note agents carrying sub-agent-shaped fields are filtered out
+          of `kiro-cli agent list` while still loading and running normally.
+        '';
+      };
+      resources = lib.mkOption {
+        type = lib.types.listOf (lib.types.either lib.types.str kiroKnowledgeBaseResource);
+        default = [];
+        description = ''
+          Context resources: `file://` / `skill://` URI strings, or knowledge-base
+          records. Kiro drops an unrecognized entry with a warning.
+        '';
+      };
+      permissions = lib.mkOption {
+        type = lib.types.nullOr kiroAgentPermissions;
+        default = null;
+        description = "Capability policy scoping down this agent.";
+      };
+    };
+  };
+
+  # Drop nulls AND empty collections, recursively, so an agent file carries
+  # only what was actually declared. `aiCommon.filterNulls` is not enough on
+  # its own: it drops `null` and `{}` but KEEPS `[]`, so a list-valued option
+  # whose default is `[]` (`resources`, and `match`/`exclude` inside a
+  # permission rule) would leak `"resources": []` into every emitted agent.
+  # Kept local rather than widening `filterNulls`, whose empty-list behavior
+  # other emitters in this repo already depend on.
+  # Recurses through LISTS as well as attrsets: `permissions.rules` and
+  # `resources` are lists of submodules, and their elements carry their own
+  # `[]` defaults (`match`/`exclude`, `include`/`exclude`). Walking attrsets
+  # alone returns the list untouched and leaks `"match": []` into every rule.
+  # List elements are pruned in place, never dropped — removing one would
+  # change which rules apply, not just how the file reads.
+  pruneEmptyAgentFields = value:
+    if lib.isList value
+    then map pruneEmptyAgentFields value
+    else if lib.isAttrs value && !(lib.isDerivation value)
+    then
+      lib.filterAttrs (_: v: v != null && v != {} && v != [])
+      (lib.mapAttrs (_: pruneEmptyAgentFields) value)
+    else value;
+
+  # Render one typed agent record → its JSON text. `attrName` supplies `name`
+  # unless the record overrides it — Kiro keys the agent on `name`, so the two
+  # must agree or the agent lists under an id that does not match its file.
+  # Null optionals and empty collections are dropped so the emitted file stays
+  # the minimal shape both parsers accept.
+  renderAgent = attrName: record: let
+    named = record // {name = record.name or null;};
+    withName =
+      named
+      // {
+        name =
+          if named.name == null
+          then attrName
+          else named.name;
+      };
+  in
+    builtins.toJSON (pruneEmptyAgentFields withName);
+
+  # A typed record is a plain attrset; raw entries are strings or paths (a
+  # derivation is stringLike and must stay on the raw path).
+  isTypedAgent = value: builtins.isAttrs value && !(lib.isDerivation value);
+
+  # One `agents` entry → the `{source|text}` attrs BOTH backends write, so the
+  # two cannot drift. Previously HM routed a path to `source` while devenv
+  # assigned it to `.text`, which wrote the store path STRING as the file body
+  # instead of its contents; going through one helper fixes that asymmetry.
+  mkAgentEntry = attrName: value:
+    if isTypedAgent value
+    then {text = renderAgent attrName value;}
+    else if lib.isPath value
+    then {source = value;}
+    else {text = value;};
 
   # Render one typed record → its v3 hook object (an element of an envelope's
   # `hooks` list). `name` = the attr key; null optionals dropped (record +
@@ -566,7 +841,7 @@ in
       # Typed LSP server definitions for settings/lsp.json. Freeform
       # attrs-of-anything matching the legacy `attrsOf jsonFormat.type`.
       lspServers = lib.mkOption {
-        type = lib.types.attrsOf (import ../../../lib/ai/ai-common.nix {inherit lib;}).lspServerModule;
+        type = lib.types.attrsOf aiCommon.lspServerModule;
         default = {};
         description = "Typed LSP server definitions; translated via `mkLspConfig` into settings/lsp.json on emission.";
       };
@@ -619,45 +894,7 @@ in
       # permissions only from `~/.kiro/settings/` (global) or
       # `~/.kiro/workspace-roots/<hash>/`, never project `.kiro/`.
       permissions = lib.mkOption {
-        type = lib.types.listOf (lib.types.submodule {
-          options = {
-            capability = lib.mkOption {
-              type =
-                lib.types.either
-                (lib.types.enum [
-                  "all"
-                  "builtin"
-                  "context"
-                  "diagnostics"
-                  "filesystem"
-                  "fs_read"
-                  "fs_write"
-                  "mcp"
-                  "shell"
-                  "skill"
-                  "subagent"
-                  "web_fetch"
-                  "web_search"
-                ])
-                lib.types.str;
-              description = "Capability category (soft enum; any string accepted).";
-            };
-            effect = lib.mkOption {
-              type = lib.types.enum ["allow" "ask" "deny"];
-              description = "deny | ask | allow (resolved by restrictiveness: deny > ask > allow).";
-            };
-            match = lib.mkOption {
-              type = lib.types.listOf lib.types.str;
-              default = [];
-              description = "Glob patterns (mcp: server/tool; `*` only, no `**`/`?`).";
-            };
-            exclude = lib.mkOption {
-              type = lib.types.listOf lib.types.str;
-              default = [];
-              description = "Glob patterns exempting resources from this rule.";
-            };
-          };
-        });
+        type = lib.types.listOf kiroPermissionRule;
         default = [];
         description = ''
           V3 capability-based permission rules, rendered to
@@ -717,9 +954,33 @@ in
       # Inline agent JSON content. Written under
       # `<configDir>/agents/<name>.json` in both backends.
       agents = lib.mkOption {
-        type = lib.types.attrsOf (lib.types.either lib.types.lines lib.types.path);
+        # Typed record OR the legacy raw forms. `either` tries the string/path
+        # arms first; a typed record is a plain attrset, which is neither
+        # `isString` nor stringLike, so the arms cannot collide. Raw JSON text
+        # and paths keep working unchanged — this widening is additive.
+        type = lib.types.attrsOf (
+          lib.types.either
+          (lib.types.either lib.types.lines lib.types.path)
+          kiroAgentRecord
+        );
         default = {};
-        description = "Agent JSON definitions (written to <configDir>/agents/<name>.json).";
+        description = ''
+          Agent definitions written to `<configDir>/agents/<name>.json`.
+
+          Prefer the typed record: `name` defaults to the attribute key, so the
+          field Kiro's Rust CLI requires can never be omitted, and null/empty
+          fields are dropped from the emitted JSON. Raw JSON text or a path is
+          still accepted and passes through untouched.
+        '';
+        example = lib.literalExpression ''
+          {
+            reviewer = {
+              description = "Reviews diffs";
+              prompt = ./reviewer-prompt.md;
+              tools = ["read" "shell"];
+            };
+          }
+        '';
       };
       # External agents directory. Symlinked at `<configDir>/agents`
       # when set; walked recursively in devenv because devenv's
@@ -790,7 +1051,6 @@ in
         ...
       }: let
         helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
-        aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
 
         steeringDir = "${cfg.configDir}/steering";
         steeringEmitters = mkSteeringEmitters {
@@ -812,12 +1072,15 @@ in
           environmentVariables = mergedEnvironmentVariables;
         };
 
-        # JSON entry generation for agents and hooks (legacy mkJsonEntries).
-        mkJsonEntries = subdir: attrs:
-          lib.mapAttrs' (name: content:
-            lib.nameValuePair "${cfg.configDir}/${subdir}/${name}.json"
-            (helpers.mkSourceEntry content))
-          attrs;
+        # Agent files, keyed by attr name. Shares `mkAgentEntry` with the devenv
+        # backend so a typed record, a raw JSON string, and a path all lower
+        # identically in both. (Replaces the old `mkJsonEntries`, which was
+        # named for agents *and* hooks but only ever served agents — hooks go
+        # through `mkAllHookFiles`.)
+        agentEntries = lib.mapAttrs' (name: value:
+          lib.nameValuePair "${cfg.configDir}/agents/${name}.json"
+          (mkAgentEntry name value))
+        cfg.agents;
       in
         lib.mkMerge ([
             # Package installation — wrapped with symlinkJoin when env
@@ -853,7 +1116,7 @@ in
             })
             # Inline agent JSON files.
             (lib.mkIf (cfg.agents != {}) {
-              home.file = mkJsonEntries "agents" cfg.agents;
+              home.file = agentEntries;
             })
             # External agents directory — symlinked wholesale via
             # `recursive = true` (Layout B).
@@ -959,7 +1222,6 @@ in
         ...
       }: let
         helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
-        aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
 
         steeringDir = "${cfg.configDir}/steering";
         steeringEmitters = mkSteeringEmitters {
@@ -1026,8 +1288,8 @@ in
             # Inline agent JSON files.
             (lib.mkIf (cfg.agents != {}) {
               files =
-                lib.concatMapAttrs (name: content: {
-                  "${cfg.configDir}/agents/${name}.json".text = content;
+                lib.concatMapAttrs (name: value: {
+                  "${cfg.configDir}/agents/${name}.json" = mkAgentEntry name value;
                 })
                 cfg.agents;
             })
