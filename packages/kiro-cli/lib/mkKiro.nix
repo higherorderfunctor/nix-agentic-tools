@@ -698,7 +698,10 @@
   # symlink) is what lets a secret url land and dodges the
   # symlink<->real-file toggle + the devenv files.* silent skip. NOTE:
   # a credential url reads its secret at ACTIVATION, so a consumer wiring
-  # sops-nix/agenix must order this after the secret provider (P2).
+  # sops-nix/agenix must order this after the secret provider (P2). That
+  # ordering is still the consumer's to get right, but getting it WRONG is no
+  # longer silent: an unreadable or empty secret now fails activation loudly
+  # instead of writing `"url": ""` and leaving the server to fail at runtime.
   mkMcpJsonScript = {
     mode,
     templateFile,
@@ -719,13 +722,40 @@
       else if hasUrlSecret
       then "0600"
       else "0644";
+    # A BARE assignment, then a SEPARATE `export`. `export VAR="$(cmd)"` is a
+    # silent-failure trap: the exit status of that line is `export`'s — always
+    # 0 — so a failed read does NOT trip errexit, not even with
+    # `inherit_errexit` set. The empty value then flows into envsubst, which
+    # cheerfully writes `"url": ""`, producing an MCP server that never loads
+    # and reports nothing. A plain `VAR="$(cmd)"` takes the command
+    # substitution's status instead, so an unreadable secret aborts activation.
+    #
+    # Measured 2026-08-04: a gateway url whose secret was not yet readable when
+    # this block ran wrote `"url": ""` into ~/.kiro/settings/mcp.json, and the
+    # only symptom was jira/confluence quietly failing to load.
+    #
+    # The emptiness check covers the other half of the same failure: a secret
+    # file that EXISTS but is empty reads successfully and is just as broken,
+    # so length is checked rather than trusting the exit status alone.
     exports = lib.concatStrings (lib.mapAttrsToList (var: cred: let
-      reader =
-        if (cred.file or null) != null
-        then ''"$(${pkgs.coreutils}/bin/cat ${lib.escapeShellArg cred.file})"''
-        else ''"$(${lib.escapeShellArg cred.helper})"'';
-    in "export ${var}=${reader}\n")
-    urlSecretEnv);
+        isFile = (cred.file or null) != null;
+        reader =
+          if isFile
+          then ''"$(${pkgs.coreutils}/bin/cat ${lib.escapeShellArg cred.file})"''
+          else ''"$(${lib.escapeShellArg cred.helper})"'';
+        source =
+          if isFile
+          then cred.file
+          else cred.helper;
+      in ''
+        ${var}=${reader}
+        if [ -z "''${${var}}" ]; then
+          echo "kiro mcp: credential for ${var} (${source}) is empty — refusing to write an mcp.json with a blank url" >&2
+          false
+        fi
+        export ${var}
+      '')
+      urlSecretEnv);
     envsubstVars =
       lib.concatMapStringsSep " " (v: "\${${v}}") (builtins.attrNames urlSecretEnv);
     # Produce $RENDERED from the store template (envsubst only the url
@@ -752,16 +782,40 @@
           ${pkgs.coreutils}/bin/rm -f "$TARGET"
           ${pkgs.coreutils}/bin/cp "$RENDERED" "$TARGET"
         fi'';
+    # SCOPED in a subshell — required, for two independent reasons:
+    #
+    #   1. Home Manager concatenates every activation DAG entry into ONE script
+    #      that it opens with its own `set -eu` + pipefail. A bare strict-mode
+    #      header here therefore persists into every LATER entry and into home
+    #      manager's own code. The repo Bash standard mandates scoping for
+    #      exactly this reason; this body was the one activation writer not
+    #      following it.
+    #   2. `${exports}` puts a decrypted SECRET in the environment. Unscoped,
+    #      that value stays exported for the remainder of activation, visible to
+    #      every subsequent entry and anything they spawn. A subshell confines it
+    #      to the envsubst that needs it.
+    #
+    # The body has no parent-shell effects to preserve (the exports are
+    # deliberately transient), so scoping costs nothing. Failure still
+    # propagates: the subshell exits non-zero and the caller's `set -e` sees it,
+    # which is why the guards above end in `false` rather than `exit` — `exit`
+    # would truncate the whole concatenated activation script.
+    #
+    # devenv already wraps this body via `anchorToDevenvRoot`; the extra nesting
+    # there is harmless and keeps the invariant one property of THIS function
+    # rather than of each call site.
   in ''
-    set -euETo pipefail
-    shopt -s inherit_errexit 2>/dev/null || :
-    TARGET="${targetExpr}"
-    ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$TARGET")"
-    RENDERED="$(${pkgs.coreutils}/bin/mktemp)"
-    ${assemble}
-    ${writeStep}
-    ${pkgs.coreutils}/bin/chmod ${fileMode} "$TARGET"
-    ${pkgs.coreutils}/bin/rm -f "$RENDERED"
+    (
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      TARGET="${targetExpr}"
+      ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$TARGET")"
+      RENDERED="$(${pkgs.coreutils}/bin/mktemp)"
+      ${assemble}
+      ${writeStep}
+      ${pkgs.coreutils}/bin/chmod ${fileMode} "$TARGET"
+      ${pkgs.coreutils}/bin/rm -f "$RENDERED"
+    )
   '';
 in
   lib.ai.app.mkAiApp {

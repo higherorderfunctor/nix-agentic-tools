@@ -3999,9 +3999,25 @@ in {
     in
       !(result.config.home.file ? ".kiro/settings/mcp.json")
       && lib.hasInfix ''TARGET="$HOME/.kiro/settings/mcp.json"'' script
-      && lib.hasInfix "export KIRO_MCP_JIRA_URL=" script
       && lib.hasInfix "/bin/envsubst '\${KIRO_MCP_JIRA_URL}'" script
       && lib.hasInfix "chmod 0400" script
+      # The secret read must be a BARE assignment whose status errexit can
+      # see, then a separate `export`. `export VAR="$(cmd)"` returns export's
+      # status (always 0), so a failed read is silent and envsubst writes
+      # `"url": ""`. This assertion previously required that exact broken
+      # form, which is how the bug shipped.
+      && lib.hasInfix ''KIRO_MCP_JIRA_URL="$('' script
+      && !(lib.hasInfix ''export KIRO_MCP_JIRA_URL="$('' script)
+      && lib.hasInfix "export KIRO_MCP_JIRA_URL\n" script
+      # A secret file that exists but is EMPTY reads successfully, so length
+      # is checked too rather than trusting the exit status alone.
+      && lib.hasInfix ''if [ -z "''${KIRO_MCP_JIRA_URL}" ]; then'' script
+      # Scoped: HM concatenates every activation entry into one script, so an
+      # unscoped strict-mode header leaks into later entries and HM's own
+      # code, and the exported SECRET would stay live for the rest of
+      # activation.
+      && lib.hasInfix "(\n  set -euETo pipefail" script
+      && lib.hasSuffix ")\n" script
   );
 
   # Kiro HM: a plain (non-secret) http server still lands as a real-file
