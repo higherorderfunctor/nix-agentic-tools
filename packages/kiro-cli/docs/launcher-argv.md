@@ -1,10 +1,23 @@
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-08-01 (commit pending — the `ai.kiro.tui` option is
-> REMOVED, so nothing here injects `--tui` any more; `--tui` selects the new TUI
-> harness for the OLD engine and v3 already uses it. Also corrects the chat
-> binary's clap default, which is **v1** on 2.16.0 and not the `v2` this page
-> asserted: measured via `kiro-cli-chat chat --tui` failing with
+> **Last verified:** 2026-08-04 (commit pending — the PATH-resolution claim
+> below is now **Linux-scoped**, and treating it as general is what made the
+> darwin workflows outage expensive: on darwin the launcher locates
+> `kiro-cli-chat` by argv[0]-relative `.app` BUNDLE DISCOVERY and never consults
+> PATH — a decoy first on PATH is never invoked there, while the same decoy IS
+> invoked on Linux. wrapProgram's `--inherit-argv0` therefore broke discovery
+> and every session silently fell back to the DMG's unpatched
+> `~/.local/bin/kiro-cli-chat`. Fixed in `overlays/kiro-cli.nix` with a
+> darwin-only trailing `--argv0` naming the bundle path — measured working on
+> hardware, including the trap that a SYMLINK to the .app binary still fails
+> because argv[0] is not canonicalized. Also records the standing decision that
+> the two-wrapper composition does not exist on darwin. If you touch
+> `overlays/kiro-cli.nix`'s wrapProgram calls, update this too). Prior:
+> 2026-08-01 (the `ai.kiro.tui` option is REMOVED, so nothing here injects
+> `--tui` any more; `--tui` selects the new TUI harness for the OLD engine and
+> v3 already uses it. Also corrects the chat binary's clap default, which is
+> **v1** on 2.16.0 and not the `v2` this page asserted: measured via
+> `kiro-cli-chat chat --tui` failing with
 > `--tui cannot be used with --agent-engine=v1`. That also shows the old
 > `tui`-implies-`v3` behavior was load-bearing rather than decorative — bare
 > `--tui` never worked). Prior: 2026-07-31 against kiro-cli **2.16.0** (commit
@@ -119,10 +132,52 @@ Two different rules, for two different reasons — do not "make them consistent"
 
 ## THE TWO WRAPPERS COMPOSE — reason about the chain, not the binaries
 
-**`kiro-cli` resolves `kiro-cli-chat` through `PATH`, not from its own store
-directory.** Proof: drop the wrapped bin dir from `PATH` and the launcher fails
-with `No such file or directory (os error 2)` rather than falling back. So in
-any real profile, `kiro-cli acp` runs **both** wrappers:
+**On Linux, `kiro-cli` resolves `kiro-cli-chat` through `PATH`, not from its own
+store directory.** Proof: drop the wrapped bin dir from `PATH` and the launcher
+fails with `No such file or directory (os error 2)` rather than falling back;
+and a decoy `kiro-cli-chat` placed first on `PATH` IS invoked (measured
+2026-08-04, store 2.16.0).
+
+### darwin resolves by argv[0] bundle discovery, and PATH is never consulted
+
+The same decoy — `command -v` confirmed resolving to it — is **never invoked**
+on darwin, tested with both the .app binary and the wrapped launcher via
+`mcp list`, a subcommand the forwarding table shows dispatching. Instead the
+darwin launcher requires argv[0]'s parent to LITERALLY be
+`…/Kiro CLI.app/Contents/MacOS`; when it is not, it falls back to
+`$HOME/.local/bin/kiro-cli-chat` — on any Mac that has run the DMG installer, an
+unpatched build. There is no `KIRO_*` env override for the chat path.
+
+Measured on one machine, `--v3`, all `KIRO_*` stripped (store 2.16.0, DMG
+2.16.1):
+
+| entry point                                | chat resolved to   | features                    |
+| ------------------------------------------ | ------------------ | --------------------------- |
+| `.app/Contents/MacOS/kiro-cli` (real path) | store .app sibling | `["workflows","tangent"]` ✓ |
+| `<store>/bin/kiro-cli` (wrapProgram shim)  | `~/.local/bin`     | `["tangent"]` ✗             |
+| symlink → .app binary                      | `~/.local/bin`     | `["tangent"]` ✗             |
+| hand-written `exec -a "$APP" "$APP"`       | store .app sibling | `["workflows","tangent"]` ✓ |
+
+Row 3 is the trap: **removing wrapProgram does not fix it** — argv[0] is not
+canonicalized, so a symlink is not enough; the string itself must be the bundle
+path. The fix is therefore in `overlays/kiro-cli.nix`: a darwin-only trailing
+`--argv0` on the launcher's wrapProgram call naming the bundle path (makeWrapper
+documents that whichever of `--argv0`/`--inherit-argv0` comes LAST wins, and
+wrapProgram injects `--inherit-argv0` before user args). The chat binary does no
+bundle discovery for itself, so its wrapProgram stays untouched.
+
+**Standing decision, made explicitly rather than inherited:** post-fix, the
+darwin launcher resolves the RAW .app-sibling chat binary — never this repo's
+chat WRAPPER — so the two-wrapper composition below does not exist on darwin and
+`--trust-tools` is unreachable via `kiro-cli` there. That was equally true
+before the fix (the DMG fallback skipped the wrapper too), so nothing regressed;
+it is the accepted cost of keeping the launcher's own dispatch rewrites instead
+of reimplementing them. Under v3 the effective grant is `permissions.yaml`
+(home-manager translates `trustedMcpTools` into it; the TUI's auto-answer keys
+on `--trust-all-tools`, not `--trust-tools`), so the practical loss is confined
+to v2-engine sessions launched via `kiro-cli` on darwin.
+
+So in any real **Linux** profile, `kiro-cli acp` runs **both** wrappers:
 
 ```
 kiro-cli acp
@@ -349,7 +404,15 @@ still gets the real flag.
 Run against the **unwrapped** binary out of `nix build` — a bare `PATH` lookup
 finds the wrapper, which is the thing under test.
 
-Pinning `$KB` is necessary but **not sufficient for the launcher**: it
+On **darwin**, add two probes the PATH recipe cannot express: confirm the
+generated launcher shim still ends in
+`exec -a "<…>/Kiro CLI.app/Contents/ MacOS/kiro-cli"` (the trailing `--argv0`
+must keep beating the injected `--inherit-argv0` across makeWrapper bumps), and
+confirm a session launched via `kiro-cli` still resolves the STORE's chat
+sibling rather than `~/.local/bin` — a DMG-installed Mac is the only place the
+fallback can demonstrate itself. The decoy-on-PATH probe is meaningless there.
+
+Pinning `$KB` is necessary but **not sufficient for the launcher** on Linux: it
 re-resolves `kiro-cli-chat` through `PATH` at runtime, so a wrapped
 `kiro-cli-chat` earlier on `PATH` still lands in the chain. For anything about
 `acp`/`chat` parsing, invoke `$K/bin/kiro-cli-chat` directly; to measure what
@@ -394,6 +457,11 @@ The wrapper ends with `exec -a "$0" <realBin> "$@"`. Keep that shape: recovering
 the real binary by reading the line back out of the generated wrapper is how you
 probe the unwrapped CLI at all (see the re-measure recipe above), and
 `checks/kiro-wrapper-argv.nix` asserts on it.
+
+This governs THIS module's wrappers only. The darwin OVERLAY shim
+(`overlays/kiro-cli.nix`) deliberately ends in `exec -a "<bundle path>"` — the
+argv[0] override IS the bundle-discovery fix — and the check never reads that
+shim, so no carve-out is needed there. Do not "fix" its argv0 back to `"$0"`.
 
 An earlier revision credited "probe scripts under `docs/plans/`" with depending
 on this. Nothing there does — `grep -rl 'exec -a' docs/plans` is empty — so the

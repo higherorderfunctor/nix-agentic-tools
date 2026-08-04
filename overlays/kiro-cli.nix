@@ -47,8 +47,40 @@
 
         postFixup =
           (attrs.postFixup or "")
+          # On darwin the launcher locates `kiro-cli-chat` by argv[0]-relative
+          # .app BUNDLE DISCOVERY: argv[0]'s parent must literally be
+          # `…/Kiro CLI.app/Contents/MacOS`, or it falls back to
+          # `$HOME/.local/bin/kiro-cli-chat` — on any Mac that has run the DMG,
+          # an UNPATCHED build. PATH is never consulted, and current_exe() is
+          # not canonicalized (a symlink to the .app binary still fails —
+          # measured). wrapProgram's own `--inherit-argv0` therefore breaks
+          # discovery, so on darwin we override argv[0] with the bundle path;
+          # makeWrapper documents "whichever comes last of --argv0 and
+          # --inherit-argv0 wins", and wrapProgram injects --inherit-argv0
+          # BEFORE user args. Measured on hardware 2026-08-04 (2.16.0 store,
+          # 2.16.1 DMG): the exec -a "<bundle path>" shape resolves the store's
+          # .app sibling and hands KIRO_ENABLED_FEATURES=["workflows","tangent"]
+          # to kas/2.16.0. See packages/kiro-cli/docs/launcher-argv.md.
+          #
+          # The `test -e` is a fail-loud layout guard: argv[0] is just a string
+          # (the exec'd file is the hidden wrapped binary), so if the bundle
+          # path ever moves, the wrapper would build fine and discovery would
+          # silently regress to the DMG fallback again.
+          + (
+            if ourPkgs.stdenv.hostPlatform.isDarwin
+            then ''
+              test -e "$out/Applications/Kiro CLI.app/Contents/MacOS/kiro-cli" || {
+                echo "kiro-cli: .app bundle layout moved; darwin argv0 fix needs updating" >&2
+                exit 1
+              }
+              wrapProgram $out/bin/kiro-cli --set-default TERM xterm-256color \
+                --argv0 "$out/Applications/Kiro CLI.app/Contents/MacOS/kiro-cli"
+            ''
+            else ''
+              wrapProgram $out/bin/kiro-cli --set-default TERM xterm-256color
+            ''
+          )
           + ''
-            wrapProgram $out/bin/kiro-cli --set-default TERM xterm-256color
             wrapProgram $out/bin/kiro-cli-chat --set-default TERM xterm-256color
           ''
           # Deliberately AFTER the wrapProgram calls: the patcher finds the ELF by
