@@ -1,24 +1,30 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-08-03 (commit pending — records Oxlint's
-> source-before-fetcher pattern for pnpm patched dependencies: patch the
-> workspace metadata and lock before `fetchPnpmDeps` reads them, keeping a
-> sandboxed dependency fix out of workflow-wide host policy). Prior: 2026-08-03
-> (commit pending — moves glab and its committed extracted sidecar together from
-> `overlays/generic/` to `overlays/dev-tools/`, preserving the eval-pure read
-> and regeneration loop). Prior: 2026-08-02 (commit pending — distinguishes
-> Codex's new human-reviewed reverse-coverage gate from generated-sidecar drift
-> and shape checks: update automation may refresh extracted facts but cannot
-> classify a new command, flag, field, maturity, or config seam). Prior:
-> 2026-08-01 (commit pending — documents the sidecar SELF-HEAL loop as a loop:
-> which half is the self-heal and which the backstop, that a red drift check
-> reports a MECHANISM failure rather than a stale file, that it fires on the
-> version-bump path ONLY so an edited extractor does not self-heal, how it
-> differs from the `fix_sidecar_hashes` self-heal, and four debugging entry
-> points. Names `glab` as the fourth extracted package and records that all four
-> now share `vu.mkExtractRegen`; glab had no regeneration at all and proved the
-> latency on PR #621). Prior: 2026-08-01 (Codex joins the extracted sidecar
-> pipeline with recursive Clap help, feature-list, and bundled-model probes plus
+> **Last verified:** 2026-08-04 (commit pending — the pnpm patched-dependency
+> guidance below said to "make the minimal lock edit", and a minimal edit
+> expressed as HUNKS is what held oxlint back in every sweep once upstream
+> reshuffled its peer variants. Records that the metadata is applied by key in
+> `postPatch` instead, and that a patch conflict surfaces as nix-update's
+> "failed to retrieve hash" rather than as anything naming a patch). Prior:
+> 2026-08-03 (commit pending — records Oxlint's source-before-fetcher pattern
+> for pnpm patched dependencies: patch the workspace metadata and lock before
+> `fetchPnpmDeps` reads them, keeping a sandboxed dependency fix out of
+> workflow-wide host policy). Prior: 2026-08-03 (commit pending — moves glab and
+> its committed extracted sidecar together from `overlays/generic/` to
+> `overlays/dev-tools/`, preserving the eval-pure read and regeneration loop).
+> Prior: 2026-08-02 (commit pending — distinguishes Codex's new human-reviewed
+> reverse-coverage gate from generated-sidecar drift and shape checks: update
+> automation may refresh extracted facts but cannot classify a new command,
+> flag, field, maturity, or config seam). Prior: 2026-08-01 (commit pending —
+> documents the sidecar SELF-HEAL loop as a loop: which half is the self-heal
+> and which the backstop, that a red drift check reports a MECHANISM failure
+> rather than a stale file, that it fires on the version-bump path ONLY so an
+> edited extractor does not self-heal, how it differs from the
+> `fix_sidecar_hashes` self-heal, and four debugging entry points. Names `glab`
+> as the fourth extracted package and records that all four now share
+> `vu.mkExtractRegen`; glab had no regeneration at all and proved the latency on
+> PR #621). Prior: 2026-08-01 (Codex joins the extracted sidecar pipeline with
+> recursive Clap help, feature-list, and bundled-model probes plus
 > category-specific shape assertions). Prior: 2026-07-25 (the warm composite now
 > forces `drvPath` instead of `version`, so sidecar-versioned packages are
 > covered; also corrects the claim that the check job's `nix flake check`
@@ -289,6 +295,24 @@ feature maturities, and config-key extraction fail closed.
   dependency selections. Make the minimal lock edit, then prove it with
   `pnpm install --frozen-lockfile` using the exact pnpm selected by the Nix
   fetcher. Oxlint's `@napi-rs/cli` patch is the reference implementation.
+- **Apply that metadata BY KEY in `postPatch`, never as lock hunks.** The patch
+  FILE is a new file and never conflicts, but the workspace and lock entries
+  pointing pnpm at it track upstream's peer resolution, which reshuffles on its
+  own schedule — oxc collapsed five `@napi-rs/cli@3.8.2(…)` snapshot keys to two
+  between two revs, and the six dead hunks held oxlint back in EVERY sweep until
+  someone realigned them by hand. The edit carries no judgement: it inserts one
+  identical `(patch_hash=…)` token wherever pnpm names the resolved dependency,
+  so encoding it positionally buys nothing and costs a held-back target per
+  reshuffle. `overlays/dev-tools/oxlint-pnpm-patch-meta.awk` does it by key, and
+  asserts loudly on the change that IS a judgement call — the dependency moving
+  off the pinned version, which invalidates both the patch target and the patch
+  hash.
+- **A patch conflict presents two layers from its cause.** `applyPatches` dying
+  in `patchPhase` means `nix-build` never emits a hash mismatch, so nix-update
+  reports `failed to retrieve hash when trying to update <pkg>.src` and the
+  sweep records `HELD BACK: <pkg> (nix-update or build failed)`. Neither names a
+  patch. The real `Hunk #N FAILED` lines are in the
+  `--- nix stderr (last 20 lines) ---` tail in the update job log.
 - If a new overlay uses `vu.mkVersion` with a `readFile`-based version
   extractor, its source must be fetchable at eval time. The warm step handles
   this automatically for CI.
