@@ -68,6 +68,21 @@
     '';
   };
 
+  # Re-stage files changed by formatting hooks without hiding a failure from
+  # the producing `git diff`. The previous inline pipeline inherited neither
+  # strict mode nor pipefail, so a broken first stage looked like an empty,
+  # successful xargs invocation.
+  treefmtRestage = pkgs.writeShellApplication {
+    name = "treefmt-restage";
+    runtimeInputs = [pkgs.findutils pkgs.git];
+    extraShellCheckFlags = shellStrict.shellcheckFlags;
+    inherit (shellStrict) bashOptions;
+    text = ''
+      ${shellStrict.shoptHeader}
+      git diff --name-only -z | xargs -0 -r git add --
+    '';
+  };
+
   # CI-lean closure — EVAL-time branch on $CI. Distinct from the RUNTIME
   # $CI guard in processes.docs.exec below: that one skips work inside an
   # already-built shell; this one changes what the shell closure CONTAINS,
@@ -464,7 +479,7 @@ in {
       # `--`: a path beginning with a dash is otherwise parsed as an option —
       # measured, `git add` on a path like `-x.md` dies with an unknown-switch
       # error and stages nothing.
-      entry = "${pkgs.bash}/bin/bash -c 'git diff --name-only -z | xargs -0 -r git add --'";
+      entry = lib.getExe treefmtRestage;
       pass_filenames = false;
       stages = ["pre-commit"];
     };
