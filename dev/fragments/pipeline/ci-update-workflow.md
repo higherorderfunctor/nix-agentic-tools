@@ -1,26 +1,28 @@
 ## CI Update Workflow
 
-> **Last verified:** 2026-08-03 (commit pending — makes the hidden update report
-> artifact upload real and fails loudly when the report is absent). Prior:
-> 2026-08-03 (commit pending — records `devenv-test` as an always-reporting
-> fifth merge gate and corrects the auto-merge thread rule). Prior: 2026-08-03
-> (commit pending — updates the pnpm detector's documented lookup after all
-> package groups move under `pkgs.ai`). Prior: 2026-08-01 (commit pending —
-> Phase 2 now runs on `if: always()` so a timed-out sweep SHIPS what it finished
-> instead of discarding it, and the `ninja-completed.flag` sentinel is re-gated
-> on `steps.ninja.outcome` so a partial sweep can never let the close step
-> delete the PRs it did not reach. Measured on run 30713330569: 47 of 52 edges
-> done, step `skipped`, everything thrown away). Prior: 2026-08-01 — documents
-> the SECOND `extraExtract` self-heal, `vu.mkExtractRegen`, alongside the hash
-> one: which failure it answers, that a red drift check reports a broken
-> MECHANISM rather than a stale file, why extracts get no
-> `fix_sidecar_hashes`-style standalone hatch, and how to tell "never wired"
-> from "ran and failed". glab had no hook at all, which stayed invisible from
-> #560 until PR #621). Prior: 2026-07-27 — adds the three-valued
-> `git diff --quiet` rule and the `git_diff_quiet` helper every dirtiness gate
-> in the update scripts now goes through; the bare form had routed a git ERROR
-> into "there are changes" in `update-input.sh` and into "the tree is dirty" at
-> both of `update-pkg.sh`'s gates. Earlier: the
+> **Last verified:** 2026-08-03 (commit pending — removes package targets'
+> scheduling-only nixpkgs/nix-update predecessors and the ineffective
+> base-checkout format/build finalizer). Prior: 2026-08-03 (commit pending —
+> makes the hidden update report artifact upload real and fails loudly when the
+> report is absent). Prior: 2026-08-03 (commit pending — records `devenv-test`
+> as an always-reporting fifth merge gate and corrects the auto-merge thread
+> rule). Prior: 2026-08-03 (commit pending — updates the pnpm detector's
+> documented lookup after all package groups move under `pkgs.ai`). Prior:
+> 2026-08-01 (commit pending — Phase 2 now runs on `if: always()` so a timed-out
+> sweep SHIPS what it finished instead of discarding it, and the
+> `ninja-completed.flag` sentinel is re-gated on `steps.ninja.outcome` so a
+> partial sweep can never let the close step delete the PRs it did not reach.
+> Measured on run 30713330569: 47 of 52 edges done, step `skipped`, everything
+> thrown away). Prior: 2026-08-01 — documents the SECOND `extraExtract`
+> self-heal, `vu.mkExtractRegen`, alongside the hash one: which failure it
+> answers, that a red drift check reports a broken MECHANISM rather than a stale
+> file, why extracts get no `fix_sidecar_hashes`-style standalone hatch, and how
+> to tell "never wired" from "ran and failed". glab had no hook at all, which
+> stayed invisible from #560 until PR #621). Prior: 2026-07-27 — adds the
+> three-valued `git diff --quiet` rule and the `git_diff_quiet` helper every
+> dirtiness gate in the update scripts now goes through; the bare form had
+> routed a git ERROR into "there are changes" in `update-input.sh` and into "the
+> tree is dirty" at both of `update-pkg.sh`'s gates. Earlier: the
 > `Detect a newer @aihubmix/mcp on npm` annotation step and the
 > excluded-because-a-local-patch-cannot-be-swept rule behind it, which is about
 > SWEEPABILITY and not about lagging: aihubmix-mcp tracks `dist-tags.latest` and
@@ -172,9 +174,10 @@ the negative branch so a silent step is distinguishable from a dead one.
 
 Both worktree update scripts run `nix fmt` before their commit so the
 per-dependency PR ships treefmt-clean files. PR CI's `treefmt-check`
-(`checks.formatting`) runs on each PR branch in isolation, and the base-branch
-`full-format` ninja rule only runs post-merge — too late to gate a PR — so each
-branch must normalize its own tree. The two paths differ in their **trigger**:
+(`checks.formatting`) runs on each PR branch in isolation. There is
+intentionally no base-checkout format finalizer: per-target changes live only on
+their isolated branches, so such a rule cannot see or validate them. Each branch
+must normalize its own tree. The two paths differ in their **trigger**:
 
 - **`update-input.sh` (Phase 2.5)** runs `nix fmt` only when the input bump
   moves `formatter.<system>`'s store path (a new prettier/alejandra/biome
@@ -220,9 +223,9 @@ default `projectRootFile = ".git/config"` does not exist inside a git worktree
 (where `.git` is a gitfile pointer, not a directory), so the default would make
 `nix fmt` error in every worktree.
 
-The base-branch `full-format` ninja rule still runs after the per-input pipeline
-as a safety net for the rare case where two simultaneous input bumps interact in
-a way the per-input passes do not catch on their own.
+There is no cross-branch formatting pass. Update branches are independent PRs,
+so their own formatter pass and PR CI are the only validations that can observe
+the changes they carry.
 
 ### `git diff --quiet` is three-valued — use `git_diff_quiet`
 
@@ -240,10 +243,7 @@ and **which** one depends on whether the test is negated — so one defect
 presents in OPPOSITE directions at different call sites and neither looks wrong
 read locally. `if git diff --quiet` reads an error as "there ARE changes";
 `if ! git diff --quiet` reads it as "the tree is dirty". The second is the
-failure-becomes-a-commit shape that `config/generate-update-ninja.nix`'s
-`full-format` rule body had to close with the same discriminate-by-value idiom
-(that rule body cannot call the helper — it is a ninja `command =` string, so it
-carries the `case` inline, with `$$` escaping).
+failure-becomes-a-commit shape in `update-pkg.sh`'s stage-and-commit gate.
 
 `git_diff_quiet` returns 0 or 1 exactly like the bare command, and on >1 names
 the real cause and exits the calling shell with git's status. Callers therefore
@@ -270,13 +270,11 @@ Two properties are worth keeping in mind when reading these gates:
 Prove changes here with a **four-outcome** control set — 0, 1, >1, and the
 negated/short-circuit variant — driving the >1 case with a stubbed `git` whose
 `diff` exits above 1 while every other subcommand execs the real binary.
-Reasoning is not a substitute: the `full-format` fix read as correct twice
-before a control caught that it still routed an error into the commit branch.
-Measured on the pre-fix scripts, with `git diff` forced to 128 and the tree
-genuinely unchanged: `update-input.sh` ran the FULL `nix-fast-build`
-verification of every package and reported the cause as "update or build
-failed", and when the input HAD moved it reported plain `UPDATED` with the git
-fault invisible; `update-pkg.sh` ran a pointless `nix fmt` and then
+Reasoning is not a substitute. Measured on the pre-fix scripts, with `git diff`
+forced to 128 and the tree genuinely unchanged: `update-input.sh` ran the FULL
+`nix-fast-build` verification of every package and reported the cause as "update
+or build failed", and when the input HAD moved it reported plain `UPDATED` with
+the git fault invisible; `update-pkg.sh` ran a pointless `nix fmt` and then
 `commit --amend --no-edit`, which succeeds on an unchanged tree, so a green
 sweep silently rewrote the update commit.
 
@@ -367,6 +365,27 @@ with cryptic errors about branches named `+ update/foo`.
 | `NAT_UPDATE_JOBS`   | `update.yml` step env (`4`)        | Bounds ninja `-j` AND the evaluator budget (below)   |
 | `WORKTREE_LOCK`     | `$RUNNER_TEMP/nix-update-worktree` | Serializes `git worktree add` (not concurrency-safe) |
 
+### Package edges are explicit, not universal
+
+Every package target depends on `update-init`, plus only the target-specific
+predecessors declared through `config.update.targets.<name>.dependsOn` (for
+example, the retained Rust-package ordering after `rust-overlay`). Package
+targets do NOT depend on the separate `nixpkgs` or `nix-update` input targets.
+
+That distinction is load-bearing because targets run in isolated worktrees on
+independent branches. An input update branch never feeds its changed lock file
+into a package worktree, so those former edges carried no data; they only held
+the entire package fanout behind the slowest input verification. Removing them
+lets package work overlap a long nixpkgs check while `NAT_UPDATE_JOBS` continues
+to bound ninja fanout and evaluator memory together.
+
+The base checkout also has no final format/build rules. They could inspect only
+the unchanged base tree, not any per-target branch, so a green result validated
+none of the changes about to be pushed. Real verification remains inside each
+input/package worktree, followed by normal pull-request CI. `treefmt-nix` still
+runs last as its own isolated input target, and the report waits for all
+targets.
+
 ### The evaluator budget is MULTIPLICATIVE — `NAT_UPDATE_JOBS`
 
 ninja runs `$NAT_UPDATE_JOBS` targets concurrently, and every target that
@@ -435,11 +454,10 @@ the evaluator budget silently re-creates the overcommit.
 
 ### Build verification gate (`run_nfb_build` / `verify_all_packages`)
 
-`update-input.sh` and the `final-build` ninja rule both invoke `nix-fast-build`
-to verify peer packages still build after an input change. The invocation itself
-lives in ONE place, `verify_all_packages` — three callers need it
-byte-identical, and when the copies drifted they silently verified different
-things.
+`update-input.sh` invokes `nix-fast-build` to verify peer packages still build
+after an input change. The invocation itself lives in ONE place,
+`verify_all_packages`, so the initial attempt and repair retry stay
+byte-identical; when copies drifted they silently verified different things.
 
 Upstream has a known bug where `async_main`'s `finally: stack.aclose()` can
 swallow non-zero exit on the build-failure path — per-build failures silently

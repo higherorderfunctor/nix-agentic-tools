@@ -258,10 +258,10 @@ if ! (
   # (dirty tree) rather than "the formatter store path moved" — a
   # package bump can emit non-canonical files even when the formatter
   # itself is unchanged. Without it the per-package PR ships an
-  # unformatted sidecar and PR CI's checks.formatting fails; the
-  # base-branch full-format run happens post-merge, too late to gate
-  # the PR. Gated on a dirty tree so a no-op update doesn't trigger a
-  # spurious reformat commit. `nix fmt` exits 0 on successful in-place
+  # unformatted sidecar and PR CI's checks.formatting fails. No base-checkout
+  # final pass can see the isolated update branch, so this pass is authoritative.
+  # Gated on a dirty tree so a no-op update doesn't trigger a spurious reformat
+  # commit. `nix fmt` exits 0 on successful in-place
   # format (no --fail-on-change); a non-zero exit is a real formatter
   # error and correctly aborts the subshell -> reports HELD BACK.
   #
@@ -278,10 +278,9 @@ if ! (
   fi
 
   # Commit dep hash changes (amend if update commit exists, new commit
-  # otherwise). This is the failure-becomes-a-commit shape that
-  # config/generate-update-ninja.nix's `full-format` rule body had to close:
-  # with the tree genuinely clean and `git diff` merely erroring, the bare
-  # form reached `commit --amend`, which succeeds on an unchanged tree and
+  # otherwise). This is the failure-becomes-a-commit shape git_diff_quiet
+  # closes: with the tree genuinely clean and `git diff` merely erroring, the
+  # bare form reached `commit --amend`, which succeeds on an unchanged tree and
   # rewrote the update commit for no reason.
   if ! git_diff_quiet -C "$wt" diff || ! git_diff_quiet -C "$wt" diff --staged; then
     git -C "$wt" add -A

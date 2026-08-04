@@ -106,8 +106,8 @@ if ! (
   # that want different output than the existing repo files; without
   # this pass the `update/<name>` PR ships only the lock change and
   # PR CI's `treefmt-check` fails because the docs/other files no
-  # longer round-trip through the bumped formatter. The base-branch
-  # `full-format` run happens after merge — too late to gate PRs.
+  # longer round-trip through the bumped formatter. No base-checkout final pass
+  # can see the isolated update branch, so this per-input pass is authoritative.
   # `nix fmt` exits 0 on successful in-place formatting regardless
   # of whether files changed (no --fail-on-change). A non-zero exit
   # here means the formatter itself errored, which correctly aborts
