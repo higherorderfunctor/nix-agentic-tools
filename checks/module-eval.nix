@@ -4996,6 +4996,53 @@ in {
       wellFormed hmJson && wellFormed devenvJson && hmJson == devenvJson
   );
 
+  # Pruning must reach INSIDE list elements. A permission rule declared without
+  # `match`/`exclude` still carries their `[]` defaults, and a knowledge-base
+  # resource its `include`/`exclude`. A pruner that only walks attrsets returns
+  # the list untouched, so those empties reach the emitted file.
+  module-kiro-typed-agent-prunes-in-lists = mkTest "kiro-typed-agent-prunes-in-lists" (
+    let
+      emitted =
+        builtins.fromJSON
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            agents.scoped = {
+              description = "d";
+              permissions.rules = [
+                {
+                  capability = "shell";
+                  effect = "deny";
+                }
+              ];
+              resources = [
+                {
+                  type = "knowledgeBase";
+                  source = "file:///docs";
+                }
+              ];
+            };
+          };
+        })
+        .config
+        .home
+        .file
+        .".kiro/agents/scoped.json"
+        .text;
+      rule = builtins.head emitted.permissions.rules;
+      resource = builtins.head emitted.resources;
+    in
+      rule.capability
+      == "shell"
+      && rule.effect == "deny"
+      && !(rule ? match)
+      && !(rule ? exclude)
+      && resource.source == "file:///docs"
+      && !(resource ? include)
+      && !(resource ? exclude)
+      && !(resource ? name)
+  );
+
   # An explicit `name` overrides the attr-key default — Kiro keys the agent on
   # `name`, not on the filename, so this has to be reachable.
   module-kiro-typed-agent-explicit-name = mkTest "kiro-typed-agent-explicit-name" (

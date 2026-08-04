@@ -347,8 +347,16 @@
   # permission rule) would leak `"resources": []` into every emitted agent.
   # Kept local rather than widening `filterNulls`, whose empty-list behavior
   # other emitters in this repo already depend on.
+  # Recurses through LISTS as well as attrsets: `permissions.rules` and
+  # `resources` are lists of submodules, and their elements carry their own
+  # `[]` defaults (`match`/`exclude`, `include`/`exclude`). Walking attrsets
+  # alone returns the list untouched and leaks `"match": []` into every rule.
+  # List elements are pruned in place, never dropped — removing one would
+  # change which rules apply, not just how the file reads.
   pruneEmptyAgentFields = value:
-    if lib.isAttrs value && !(lib.isDerivation value)
+    if lib.isList value
+    then map pruneEmptyAgentFields value
+    else if lib.isAttrs value && !(lib.isDerivation value)
     then
       lib.filterAttrs (_: v: v != null && v != {} && v != [])
       (lib.mapAttrs (_: pruneEmptyAgentFields) value)
