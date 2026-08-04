@@ -33,6 +33,16 @@
       (lib.stringToCharacters (lib.toUpper s)));
   deriveEnvVar = serverName: fieldName: "KIRO_MCP_${sanitize serverName}_${sanitize fieldName}";
 
+  # A DERIVED name is safe by construction (`sanitize` above), but an
+  # explicit `var` is user-supplied and reaches generated shell verbatim:
+  # `export <var>=…` in the activation writer and `${<var>}` in the
+  # envsubst list. An illegal identifier there produces a BROKEN activation
+  # script — a confusing runtime shell error, at the one moment secrets are
+  # being materialized — instead of a config error. Reject it at eval, where
+  # the message can name the option. POSIX portable-name charset; a leading
+  # digit is invalid.
+  isShellName = v: builtins.match "[A-Za-z_][A-Za-z0-9_]*" v != null;
+
   isCredential = v: builtins.isAttrs v && (v ? file || v ? helper);
 
   # Render one secretValue. A plain string passes through untouched. A
@@ -68,7 +78,8 @@
         else {inherit (value) helper;};
     in
       assert lib.assertMsg (hasFile || hasHelper) "kiro mcp secrets: ${label} on server '${serverName}' sets neither `file` nor `helper` — a credential needs exactly one.";
-      assert lib.assertMsg (!(hasFile && hasHelper)) "kiro mcp secrets: ${label} on server '${serverName}' sets both `file` and `helper` — set exactly one."; {
+      assert lib.assertMsg (!(hasFile && hasHelper)) "kiro mcp secrets: ${label} on server '${serverName}' sets both `file` and `helper` — set exactly one.";
+      assert lib.assertMsg (isShellName var) "kiro mcp secrets: ${label} on server '${serverName}' sets `var = \"${var}\"`, which is not a legal shell variable name (letters, digits and underscore only, not starting with a digit). It is written verbatim into the generated activation script, so an illegal name would break it at activation instead of here."; {
         rendered = "${prefix}${mkPlaceholder var}${suffix}";
         env = {${var} = cred;};
       };

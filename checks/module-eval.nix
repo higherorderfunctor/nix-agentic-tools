@@ -3868,6 +3868,35 @@ in {
       && !(lib.hasInfix "/run/secrets/" rendered)
   );
 
+  # An explicit `var` is user-supplied and lands verbatim in generated shell
+  # (`export <var>=…`, and the envsubst variable list), so an illegal shell
+  # identifier must fail at EVAL rather than produce a broken activation
+  # script at the moment secrets are materialized. A DERIVED name cannot hit
+  # this — `sanitize` builds it — so only the explicit path needs the guard.
+  module-kiro-mcp-secret-illegal-var-throws = mkTest "kiro-mcp-secret-illegal-var-throws" (
+    let
+      renders = var:
+        builtins.tryEval (builtins.toJSON
+          (renderKiroSecrets {
+            a = {
+              type = "http";
+              url = "https://a.example.com/mcp/";
+              headers."X-Key" = {
+                file = "/run/secrets/one";
+                inherit var;
+              };
+            };
+          })
+          .secretEnv);
+    in
+      # Hyphen, space, and a leading digit are all rejected...
+      !(renders "my-key").success
+      && !(renders "my key").success
+      && !(renders "1KEY").success
+      # ...while a legal identifier still goes through.
+      && (renders "MY_KEY_1").success
+  );
+
   # The collision guard genuinely fires: the SAME var bound to two DIFFERENT
   # files is ambiguous (silent last-wins would export the wrong secret), so it
   # must throw rather than pick one. Guards the dedup above from being widened
