@@ -7,28 +7,29 @@ applyTo: "overlays/*.nix,overlays/**/*.nix"
 
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-08-03 (commit pending — pairs Oxlint's Darwin-only
-> `/bin/ps` derivation request with CI's exact-path Darwin host allowlist for
-> the Node binding CLI's process-incarnation probe, without changing the
-> pinned-`ourPkgs` cache identity contract). Prior: 2026-08-03 (commit pending —
-> nests every binary-package group under `pkgs.ai`, moves `gh` and `glab` into
-> `ai.devTools`, and updates the consumer-path registry without changing any
-> derivation). Prior: 2026-08-03 (commit pending — relocates the two repo-local
-> auto-memory source trees beside their overlay derivations without changing
-> package inputs or cache-hit semantics). Prior: 2026-08-03 (commit pending —
-> adds a positive control that substitutes the overlay's own `inputs.nixpkgs`
-> the way a consumer's `follows` directive does, proving that unsupported
-> configuration drifts from the cache-published `fblog` path). Prior: 2026-08-02
-> (commit pending — adds the pinned external Semble exception: direct upstream
-> selection preserves Numtide's derivation, while a plain meta overlay exposes
-> the MCP role without forking the build). Prior: 2026-07-25 (commit pending —
-> the worked example moved off `git-branchless`, which had not carried this
-> shape for a long time, onto `git-absorb`, which does; also corrects the
-> new-package signature, the namespacing in the manual verification snippet, and
-> the pure-binary-fetch package list). If you touch any `overlays/<name>.nix`
-> overlay file or the overlay composition machinery and this fragment isn't
-> updated in the same commit, stop and fix it. Regressions are gated by the
-> `checks.cache-hit-parity` flake check (see "Verification" below).
+> **Last verified:** 2026-08-03 (commit pending — patches Oxlint's
+> `@napi-rs/cli` dependency in its pnpm-fetched source rather than admitting
+> Darwin's `/bin/ps` into the sandbox; both fetch and build use pnpm 11 from
+> pinned `ourPkgs`, matching upstream's major). Prior: 2026-08-03 (commit
+> pending — nests every binary-package group under `pkgs.ai`, moves `gh` and
+> `glab` into `ai.devTools`, and updates the consumer-path registry without
+> changing any derivation). Prior: 2026-08-03 (commit pending — relocates the
+> two repo-local auto-memory source trees beside their overlay derivations
+> without changing package inputs or cache-hit semantics). Prior: 2026-08-03
+> (commit pending — adds a positive control that substitutes the overlay's own
+> `inputs.nixpkgs` the way a consumer's `follows` directive does, proving that
+> unsupported configuration drifts from the cache-published `fblog` path).
+> Prior: 2026-08-02 (commit pending — adds the pinned external Semble exception:
+> direct upstream selection preserves Numtide's derivation, while a plain meta
+> overlay exposes the MCP role without forking the build). Prior: 2026-07-25
+> (commit pending — the worked example moved off `git-branchless`, which had not
+> carried this shape for a long time, onto `git-absorb`, which does; also
+> corrects the new-package signature, the namespacing in the manual verification
+> snippet, and the pure-binary-fetch package list). If you touch any
+> `overlays/<name>.nix` overlay file or the overlay composition machinery and
+> this fragment isn't updated in the same commit, stop and fix it. Regressions
+> are gated by the `checks.cache-hit-parity` flake check (see "Verification"
+> below).
 
 ### The rule
 
@@ -289,10 +290,11 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-08-03 (commit pending — pairs Oxlint's Darwin-only
-> `/bin/ps` host dependency with CI's exact-path Darwin host allowlist, without
-> changing its `mkVersion` or IFD flow). Prior: 2026-08-03 (commit pending —
-> moves glab and its committed extracted sidecar together from
+> **Last verified:** 2026-08-03 (commit pending — records Oxlint's
+> source-before-fetcher pattern for pnpm patched dependencies: patch the
+> workspace metadata and lock before `fetchPnpmDeps` reads them, keeping a
+> sandboxed dependency fix out of workflow-wide host policy). Prior: 2026-08-03
+> (commit pending — moves glab and its committed extracted sidecar together from
 > `overlays/generic/` to `overlays/dev-tools/`, preserving the eval-pure read
 > and regeneration loop). Prior: 2026-08-02 (commit pending — distinguishes
 > Codex's new human-reviewed reverse-coverage gate from generated-sidecar drift
@@ -560,6 +562,23 @@ feature maturities, and config-key extraction fail closed.
 
 ### Gotchas when adding new packages
 
+- Package-manager dependency fetchers consume the source tree before normal
+  build phases run. If a pnpm dependency needs a downstream patch, patching
+  materialized `node_modules` in `preBuild` hides ownership at the final-package
+  layer. Instead, use `applyPatches` to add pnpm `patchedDependencies` metadata,
+  its patch file, and the corresponding lock entries to the upstream source;
+  pass that same patched source to both `fetchPnpmDeps` and the final package.
+  Pnpm then applies it at dependency materialization and reaches every peer
+  variant. The fetcher FOD caches the original registry bytes, while the patched
+  source is a separate final-derivation input that tells pnpm how to transform
+  them. Its hash can still change when the fetcher mechanism changes (for
+  example pnpm 10/fetcher v3 to pnpm 11/fetcher v4); that does not mean the
+  dependency tarball was replaced.
+- Do not regenerate a pnpm lock with a different pnpm major just to add that
+  metadata. It can silently re-resolve unrelated peers and even change major
+  dependency selections. Make the minimal lock edit, then prove it with
+  `pnpm install --frozen-lockfile` using the exact pnpm selected by the Nix
+  fetcher. Oxlint's `@napi-rs/cli` patch is the reference implementation.
 - If a new overlay uses `vu.mkVersion` with a `readFile`-based version
   extractor, its source must be fetchable at eval time. The warm step handles
   this automatically for CI.

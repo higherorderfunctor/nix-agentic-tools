@@ -1,9 +1,10 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-08-03 (commit pending — pairs Oxlint's Darwin-only
-> `/bin/ps` host dependency with CI's exact-path Darwin host allowlist, without
-> changing its `mkVersion` or IFD flow). Prior: 2026-08-03 (commit pending —
-> moves glab and its committed extracted sidecar together from
+> **Last verified:** 2026-08-03 (commit pending — records Oxlint's
+> source-before-fetcher pattern for pnpm patched dependencies: patch the
+> workspace metadata and lock before `fetchPnpmDeps` reads them, keeping a
+> sandboxed dependency fix out of workflow-wide host policy). Prior: 2026-08-03
+> (commit pending — moves glab and its committed extracted sidecar together from
 > `overlays/generic/` to `overlays/dev-tools/`, preserving the eval-pure read
 > and regeneration loop). Prior: 2026-08-02 (commit pending — distinguishes
 > Codex's new human-reviewed reverse-coverage gate from generated-sidecar drift
@@ -271,6 +272,23 @@ feature maturities, and config-key extraction fail closed.
 
 ### Gotchas when adding new packages
 
+- Package-manager dependency fetchers consume the source tree before normal
+  build phases run. If a pnpm dependency needs a downstream patch, patching
+  materialized `node_modules` in `preBuild` hides ownership at the final-package
+  layer. Instead, use `applyPatches` to add pnpm `patchedDependencies` metadata,
+  its patch file, and the corresponding lock entries to the upstream source;
+  pass that same patched source to both `fetchPnpmDeps` and the final package.
+  Pnpm then applies it at dependency materialization and reaches every peer
+  variant. The fetcher FOD caches the original registry bytes, while the patched
+  source is a separate final-derivation input that tells pnpm how to transform
+  them. Its hash can still change when the fetcher mechanism changes (for
+  example pnpm 10/fetcher v3 to pnpm 11/fetcher v4); that does not mean the
+  dependency tarball was replaced.
+- Do not regenerate a pnpm lock with a different pnpm major just to add that
+  metadata. It can silently re-resolve unrelated peers and even change major
+  dependency selections. Make the minimal lock edit, then prove it with
+  `pnpm install --frozen-lockfile` using the exact pnpm selected by the Nix
+  fetcher. Oxlint's `@napi-rs/cli` patch is the reference implementation.
 - If a new overlay uses `vu.mkVersion` with a `readFile`-based version
   extractor, its source must be fetchable at eval time. The warm step handles
   this automatically for CI.

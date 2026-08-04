@@ -61,12 +61,6 @@ jobs:
           nix_version: "2.34.7"
           nix_conf: |
             accept-flake-config = true
-            # nix-quick-install has no Darwin host-path allowlist, and Nix 2.34
-            # does not recognize an `extra-` form for this setting. Restate the
-            # exact nixpkgs stdenv/Node paths, plus /bin/ps for Oxlint's new
-            # process-incarnation probe; avoid directory-wide prefixes.
-            # cspell:ignore urandom libunc
-            allowed-impure-host-deps = /bin/ps /bin/sh /dev/random /dev/urandom /dev/zero /usr/lib/libSystem.B.dylib /usr/lib/system/libunc.dylib
             extra-substituters = https://cache.numtide.com
             extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
 
