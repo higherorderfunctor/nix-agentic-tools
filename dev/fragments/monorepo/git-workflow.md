@@ -1,28 +1,34 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-08-03 (commit pending — adds the always-reporting
-> `devenv-test` context to the required checks). Prior: 2026-08-03 (commit
-> pending — makes post-merge removal of the feature worktree and local branch an
-> explicit agent-owned completion condition). Prior: 2026-07-31 (commit pending
-> — the bootstrap step's "or any devenv task" was WRONG and is removed:
-> `devenv tasks run` does not materialize `.pre-commit-config.yaml`, measured in
-> two fresh worktrees where the task succeeded and the next commit was still
-> rejected. Also records that a push auto-triggered a Copilot review only ONCE
-> in 5 pushes — 0/4 on PR #640, 1/1 on the first push of #644 — so checking the
-> run is mandatory and re-requesting is the expected next step rather than a
-> rare fallback). Prior: 2026-07-31 (commit e06e7601 — the Copilot review loop
-> is the agent's to START, unprompted, the moment the PR is open and non-draft;
-> only continuing past the 5-round cap needs the operator's say-so). Prior:
-> 2026-07-30 (commit pending — records that a re-request issued while a review
-> is still in flight is silently dropped, so the check run, not the API
-> response, is the confirmation). Prior: 2026-07-30 (commit d42d805a) — records
-> that the reviews and comments endpoints attribute Copilot's output to
-> DIFFERENT logins, so the documented `copilot-pull-request-reviewer[bot]`
-> filter returns zero on `/pulls/N/comments` and reads as a clean review while
-> gating threads are open; measured on PR #614. Prior: 2026-07-29 — the ruleset
-> now sets `required_review_thread_resolution: true`, so an unresolved review
-> thread blocks merge including on auto-merging `update/*` PRs, and the claim
-> that Copilot "never gates its merge" is retired; adds the rule that Copilot's
+> **Last verified:** 2026-08-04 (commit pending — records that
+> `requested_reviewers` is the INTERMEDIATE state and the request is CONSUMED by
+> the review it triggers, so an empty list plus no reviewer check run on the
+> head SHA means a re-request is genuinely needed rather than one being pending;
+> observed 2026-08-01 on the retired probe-fixtures branch and re-validated on
+> PR #749's round-2 re-request). Prior: 2026-08-03 (commit pending — adds the
+> always-reporting `devenv-test` context to the required checks). Prior:
+> 2026-08-03 (commit pending — makes post-merge removal of the feature worktree
+> and local branch an explicit agent-owned completion condition). Prior:
+> 2026-07-31 (commit pending — the bootstrap step's "or any devenv task" was
+> WRONG and is removed: `devenv tasks run` does not materialize
+> `.pre-commit-config.yaml`, measured in two fresh worktrees where the task
+> succeeded and the next commit was still rejected. Also records that a push
+> auto-triggered a Copilot review only ONCE in 5 pushes — 0/4 on PR #640, 1/1 on
+> the first push of #644 — so checking the run is mandatory and re-requesting is
+> the expected next step rather than a rare fallback). Prior: 2026-07-31 (commit
+> e06e7601 — the Copilot review loop is the agent's to START, unprompted, the
+> moment the PR is open and non-draft; only continuing past the 5-round cap
+> needs the operator's say-so). Prior: 2026-07-30 (commit pending — records that
+> a re-request issued while a review is still in flight is silently dropped, so
+> the check run, not the API response, is the confirmation). Prior: 2026-07-30
+> (commit d42d805a) — records that the reviews and comments endpoints attribute
+> Copilot's output to DIFFERENT logins, so the documented
+> `copilot-pull-request-reviewer[bot]` filter returns zero on
+> `/pulls/N/comments` and reads as a clean review while gating threads are open;
+> measured on PR #614. Prior: 2026-07-29 — the ruleset now sets
+> `required_review_thread_resolution: true`, so an unresolved review thread
+> blocks merge including on auto-merging `update/*` PRs, and the claim that
+> Copilot "never gates its merge" is retired; adds the rule that Copilot's
 > SUPPRESSED findings must be read on every review, since they create no thread;
 > gates re-review polling on `commit_id` rather than a timestamp, and caps the
 > fix-and-re-review loop at 5 rounds). Prior: 2026-07-24 — the bot's `update/*`
@@ -176,6 +182,23 @@ verify the run exists on the head SHA before trusting it, and if a review is
 already running for an older commit, let it land first. This composes with the
 `commit_id` gate above: that gate tells you a review is stale, this tells you
 why no fresh one is coming.
+
+**`requested_reviewers` is the INTERMEDIATE state, and the request is CONSUMED
+by the review it triggers.** So an empty list there does not mean "no request
+was made" — it is also what you see after a request has already been answered.
+Read it together with the check run:
+
+```bash
+gh api "repos/OWNER/REPO/pulls/N" \
+  --jq '[.requested_reviewers[].login]'
+```
+
+Empty **plus** no `copilot-pull-request-reviewer` check run on the head SHA
+means a re-request is genuinely needed. Empty **plus** a completed run means the
+review already happened and is there to read. A NON-empty list is the one state
+where requesting again is pointless — a request is pending. Reading the list
+alone inverts the first case into the third and leaves you waiting for a review
+nobody asked for.
 
 ### Cap the fix-and-re-review loop at 5 rounds
 
