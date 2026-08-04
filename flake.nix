@@ -112,6 +112,16 @@
     packageLibContributions = lib.foldl' lib.recursiveUpdate {} (
       lib.mapAttrsToList (_: p: p.lib or {}) packagesBarrel
     );
+
+    updateRegistry =
+      (lib.evalModules {
+        modules = [
+          ./lib/update.nix
+          ./config/update-targets.nix
+          ./overlays/mcp-servers/effect-mcp.update.nix
+        ];
+      })
+      .config.update;
   in {
     overlays = {
       ai = aiOverlay;
@@ -133,15 +143,7 @@
     # (the ninja DAG) and update-pkg.sh (via
     # `nix eval --raw .#updateTargets.<name>.file`), and asserted
     # byte-identical to resolve_overlay_file by checks.update-targets-parity.
-    updateTargets =
-      (lib.evalModules {
-        modules = [
-          ./lib/update.nix
-          ./config/update-targets.nix
-          ./overlays/mcp-servers/effect-mcp.update.nix
-        ];
-      })
-      .config.update.targets;
+    updateTargets = updateRegistry.targets;
 
     # Merged cache-hit-parity registry — the six hardcoded package lists in
     # checks/cache-hit-parity.nix were dissolved into this. lib/checks.nix
@@ -254,7 +256,7 @@
       pnpmFetcherParityCheck = import ./checks/pnpm-fetcher-parity.nix {inherit lib pkgs self;};
       sembleTemplatesCheck = import ./checks/semble-templates.nix {inherit lib pkgs self;};
       splitCodeSpansCheck = {split-code-spans = import ./checks/split-code-spans.nix {inherit pkgs;};};
-      updateTargetsParityCheck = {update-targets-parity = import ./checks/update-targets-parity.nix {inherit lib pkgs self;};};
+      updateTargetsParityCheck = {update-targets-parity = import ./checks/update-targets-parity.nix {inherit inputs lib pkgs self updateRegistry;};};
       validateAtStopCheck = {validate-at-stop = import ./checks/validate-at-stop.nix {inherit pkgs;};};
     in
       bareCommandsCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // codexCoverageCheck // codexExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goToolchainFloorChecks // instructionsDriftCheck // kiroExtractedCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // sembleTemplatesCheck // splitCodeSpansCheck // updateTargetsParityCheck // validateAtStopCheck);

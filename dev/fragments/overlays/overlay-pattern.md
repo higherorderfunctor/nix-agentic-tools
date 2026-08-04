@@ -1,9 +1,11 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-08-03 (commit pending — makes `pkgs.ai` the single
-> binary-package namespace, retains `generic` as a temporary nested bucket, and
-> moves the two forge CLIs into `ai.devTools`). Prior: 2026-08-03 (commit
-> pending — makes overlay-owned local implementation sources a boundary
+> **Last verified:** 2026-08-03 (commit pending — records the property used to
+> associate versioned derivations with a flake-input update owner or a reasoned
+> local-source exemption). Prior: 2026-08-03 (commit pending — makes `pkgs.ai`
+> the single binary-package namespace, retains `generic` as a temporary nested
+> bucket, and moves the two forge CLIs into `ai.devTools`). Prior: 2026-08-03
+> (commit pending — makes overlay-owned local implementation sources a boundary
 > invariant and relocates the auto-memory helper and distiller sources
 > accordingly). Prior: 2026-08-02 (commit pending — adds Semble's direct
 > external-flake derivation pattern and identity-preserving MCP role). Prior:
@@ -77,7 +79,10 @@ below. `overlays/semble.nix` returns
 `inputs.llm-agents.packages.${system}.semble` directly. It does not apply the
 input's `overlays.shared-nixpkgs`, rebuild with this repository's `ourPkgs`, or
 call `overrideAttrs`; any of those would replace the upstream cache identity
-that this export promises to preserve.
+that this export promises to preserve. A plain attrset extension adds
+`passthru.updateFlakeInput = "llm-agents"`; the reverse update-target check
+validates that named input exists and treats its normal input bump as Semble's
+update path without changing the upstream `drvPath` or `outPath`.
 
 When one upstream derivation ships multiple role binaries, expose secondary
 roles with a plain attrset/meta overlay. `semble-mcp` changes only
@@ -95,8 +100,17 @@ Two mechanical consequences of living in a subdirectory rather than at the
 
 Nothing else is relaxed: cache-hit parity applies in full (see that fragment —
 shipping data files is NOT the same as being content-only), each package gets a
-`config.checks.cacheHitParity` row, and each version-tracked one gets a
-`config.update.targets` row.
+`config.checks.cacheHitParity` row, and each version-tracked one must be covered
+by the bidirectional update-target check. Locally pinned packages normally own a
+same-name `config.update.targets` row; direct external derivations name their
+flake-input owner instead.
+
+These are package properties, not a second name registry:
+`passthru.updateFlakeInput = "<input>"` is accepted only when the named root
+flake input exists, while `passthru.updateTargetExempt = "<reason>"` must carry
+a non-empty explanation. The latter is for derivations such as the
+repository-local `kiro-memory-distiller`, whose version labels its in-tree
+implementation but has no upstream release to sweep.
 
 ### Thin overrides of a nixpkgs package
 

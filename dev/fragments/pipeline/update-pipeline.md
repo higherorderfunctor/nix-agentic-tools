@@ -1,24 +1,27 @@
 ## Update Pipeline Architecture
 
-> **Last verified:** 2026-08-03 (commit pending — limits package DAG edges to
-> initialization plus explicit target-specific constraints and removes
-> base-checkout finalizers that could not observe isolated update branches).
-> Prior: 2026-08-03 (commit pending — repairs the always-uploaded hidden
-> update-report artifact and makes its absence fail loudly). Prior: 2026-08-03
-> (commit pending — records the fifth required `devenv-test` context in the
-> update workflow's auto-merge contract). Prior: 2026-08-03 (commit pending —
-> moves the `gh` and `glab` update targets with their overlay files from
-> `generic/` to `dev-tools/`). Prior: 2026-08-02 (commit pending — the
-> `llm-agents` input update regenerates Semble's upstream-template snapshot
-> through its separate extraction derivation, while human-reviewed content
-> hashes intentionally remain manual and make CI stop on unreviewed drift).
-> Prior: 2026-07-27 (commit pending — re-points the reference-submodule-shape
-> pointer from the gitignored `private/slice-fixture/lib/concerns.nix` at the
-> tracked in-tree registries `lib/fragments-registry.nix` and `lib/checks.nix`;
-> also deletes the hardcoded "29 packages — 16 main-tracking + 13 binary" target
-> count, which had gone stale, in favour of a derivation command; prior
-> 2026-07-24, dissolves `config/update-matrix.nix` into `config.update.targets`,
-> now the single source of truth). If you touch `dev/scripts/update-*.sh`,
+> **Last verified:** 2026-08-03 (commit pending — adds reverse package-to-target
+> completeness coverage using derivation, source, update-script, flake-input,
+> package-exemption, and registry-exemption properties). Prior: 2026-08-03
+> (commit pending — limits package DAG edges to initialization plus explicit
+> target-specific constraints and removes base-checkout finalizers that could
+> not observe isolated update branches). Prior: 2026-08-03 (commit pending —
+> repairs the always-uploaded hidden update-report artifact and makes its
+> absence fail loudly). Prior: 2026-08-03 (commit pending — records the fifth
+> required `devenv-test` context in the update workflow's auto-merge contract).
+> Prior: 2026-08-03 (commit pending — moves the `gh` and `glab` update targets
+> with their overlay files from `generic/` to `dev-tools/`). Prior: 2026-08-02
+> (commit pending — the `llm-agents` input update regenerates Semble's
+> upstream-template snapshot through its separate extraction derivation, while
+> human-reviewed content hashes intentionally remain manual and make CI stop on
+> unreviewed drift). Prior: 2026-07-27 (commit pending — re-points the
+> reference-submodule-shape pointer from the gitignored
+> `private/slice-fixture/lib/concerns.nix` at the tracked in-tree registries
+> `lib/fragments-registry.nix` and `lib/checks.nix`; also deletes the hardcoded
+> "29 packages — 16 main-tracking + 13 binary" target count, which had gone
+> stale, in favour of a derivation command; prior 2026-07-24, dissolves
+> `config/update-matrix.nix` into `config.update.targets`, now the single source
+> of truth). If you touch `dev/scripts/update-*.sh`,
 > `dev/scripts/resolve-overlay-file.sh`, `config/generate-update-ninja.nix`,
 > `config/update-targets.nix`, `lib/update.nix`, any
 > `overlays/**/<pkg>.update.nix`, or `.github/workflows/update.yml` and this
@@ -162,21 +165,34 @@ registry every package contributes a row to. It replaced the flat, top-level
   The sidecar carries its own `git` URL; `resolve_overlay_file` skips
   `*.update.nix` files (update metadata, never source-pinning overlays), so the
   URL does not make it a second match for `tim-smart/effect-mcp`.
-- **`.#updateTargets`** — a top-level flake output built from an explicit
-  3-module `lib.evalModules` list (`./lib/update.nix` +
-  `./config/update-targets.nix` +
-  `./overlays/mcp-servers/effect-mcp.update.nix`). The barrel walker that would
+- **`.#updateTargets`** — a top-level flake output selected from an internal
+  `updateRegistry` built from an explicit 3-module `lib.evalModules` list
+  (`./lib/update.nix` + `./config/update-targets.nix` +
+  `./overlays/mcp-servers/effect-mcp.update.nix`). Keeping the merged sibling
+  `excludePatterns` in that internal binding lets the completeness check consume
+  both halves without evaluating the modules twice. The barrel walker that would
   `readDir` every `<pkg>.update.nix` is deferred Track B — new contributions are
   added to that list by hand for now.
 - **Consumers** — `config/generate-update-ninja.nix` reads `updateTargets` for
   the ninja DAG (flags space-joined, git, and `dependsOn` → `update-<dep>`
   edges); `update-pkg.sh` reads `.#updateTargets.<name>.file` for the rev-bump
   target.
-- **`checks/update-targets-parity.nix`** — the permanent CI gate (and sole
-  update-target check; the former `overlay-target-resolution.nix` folded into
-  it). For every main-tracking target (with a `git` URL) it asserts `file` is
-  non-null, `file == resolve_overlay_file(<git>, overlays)`, and the resolved
-  overlay carries an inline 40-hex `rev`.
+- **`checks/update-targets-parity.nix`** — the permanent bidirectional CI gate
+  (and sole update-target check; the former `overlay-target-resolution.nix`
+  folded into it). Packages → targets: every versioned flake package must have a
+  same-name row, share a derivation, source, or update script with a targeted
+  package, declare an existing flake input through `passthru.updateFlakeInput`,
+  carry a non-empty `passthru.updateTargetExempt` reason, or match an explicit
+  `excludePatterns` exemption. The first CI run proved the reverse direction by
+  finding two previously unrecorded cases: `git-branchless` is owned by its
+  flake input, while the repository-local `kiro-memory-distiller` has no
+  upstream release to track. Targets → overlays: every main-tracking target
+  (with a `git` URL) must declare a non-null `file` equal to
+  `resolve_overlay_file(<git>, overlays)`, and the resolved overlay must carry
+  an inline 40-hex `rev`. A positive control removes the real, uniquely sourced
+  `context7-mcp` row in memory and requires that its package become uncovered;
+  this proves the reverse direction can fail without mutating the registry on
+  disk.
 
 ### Report format
 

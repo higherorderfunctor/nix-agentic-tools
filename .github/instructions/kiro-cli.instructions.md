@@ -7,10 +7,11 @@ applyTo: "overlays/kiro-memory-distiller.nix,overlays/kiro-memory-distiller/**,o
 
 # Kiro-CLI auto-memory
 
-> **Last verified:** 2026-08-03 (commit pending — relocates both auto-memory
-> implementation seams under `overlays/` so the overlay subtree no longer
-> imports package-owned source). If you touch
-> `overlays/kiro-memory-distiller/distiller.ts`,
+> **Last verified:** 2026-08-03 (commit pending — marks the repository-local
+> distiller as update-target-exempt with a reasoned package property). Prior:
+> 2026-08-03 (commit pending — relocates both auto-memory implementation seams
+> under `overlays/` so the overlay subtree no longer imports package-owned
+> source). If you touch `overlays/kiro-memory-distiller/distiller.ts`,
 > `packages/kiro-cli/lib/autoMemory.nix`, `packages/kiro-cli/lib/mkKiro.nix`
 > (hook-file emission), `overlays/kiro-memory-distiller.nix`,
 > `overlays/mcp-servers/openmemory-mem/openmemory-mem.ts`,
@@ -264,7 +265,8 @@ emits **three role bins** from one derivation, each adding a dispatch flag:
 `project_id` derivation. `checkPhase` runs the 80-test bun suite in-sandbox (a
 real failure fails the build); `installCheck` smokes all three bins with `{}`
 stdin (exit 0). In-repo source ⇒ `version="0.1.0"`, `license=unlicense`, NOT in
-`config.update.targets`; cache-hit-parity allowlisted.
+`config.update.targets`; its non-empty `passthru.updateTargetExempt` explains
+that no upstream release exists, and cache-hit-parity remains allowlisted.
 
 **Backend helper (`openmemory-mem`, the 3rd bin of `openmemory-mcp`, D29).**
 Shipped from the openmemory package — NOT a separate overlay — so it shares the
