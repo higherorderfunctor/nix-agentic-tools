@@ -1,0 +1,9 @@
+[
+  {"label": "initialize", "method": "initialize",
+   "params": {"protocolVersion": 1,
+              "clientCapabilities": {"fs": {"readTextFile": false, "writeTextFile": false}}}},
+  {"label": "rename-persisted-session", "method": "_kiro/session/rename",
+   "params": {"sessionId": "sess_09eaa7b0-1b84-4086-92a4-175faab527a1", "title": "probe-rename-check"}},
+  {"label": "kiro-session-list", "method": "_kiro/session/list", "params": {}},
+  {"label": "std-session-list", "method": "session/list", "params": {}}
+]

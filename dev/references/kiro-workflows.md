@@ -18,9 +18,20 @@ assuming the whole section shares the primary label's strength:
 - **(Measured)** — established empirically on 2026-07-31 / 2026-08-01 against
   `kiro-cli 2.16.0` (kas bundle `2.16.0-9ec8655…`). The evidence is given
   inline.
-- **(Inferred)** — a conclusion drawn from contract text, not observed. Treated
-  as the weakest class. **No section currently carries this label**: §5 was the
-  last one, and it has since been measured.
+- **(Inferred)** — a conclusion that goes beyond what was directly observed,
+  whether drawn from contract text or reasoned from measured behavior such as a
+  timing trace. Treated as the weakest class either way. **No section heading
+  currently carries this label** — §5 was the last one, and it has since been
+  measured — but the label does appear inline where a section's primary label is
+  stronger than one claim inside it: §6's finding 3 and its summary in §3.6 both
+  mark a mechanism as Inferred beneath a Measured ceiling. The convention that
+  governs when a heading also names such content, stated once: a heading names
+  its Inferred content when the section **owns** the claim, which is why §6's
+  qualifier names finding 3's mechanism. A section that only summarizes a claim
+  owned elsewhere keeps whatever qualifier describes its own scope and marks the
+  borrowed Inferred content inline — so §3.6's heading still carries a scope
+  qualifier, because its Inferred sentence is a cross-reference to §6 rather
+  than an independent claim.
 
 Four container sections (§3, §4, §7, §8) carry no label of their own, because
 they deliberately mix classes — read the label on each subsection instead.
@@ -130,9 +141,11 @@ Terms used throughout, several of which are specific to this document:
 
 | term                 | meaning                                                                         |
 | -------------------- | ------------------------------------------------------------------------------- |
+| **engine**           | the dark-shipped workflow feature itself — node types, scheduler, tool surface  |
 | **orchestrator**     | the chat session that calls `run_workflow`. Also "root session", "parent".      |
 | **step agent**       | the agent running one `step` node, in its own isolated session                  |
-| **recipe**           | a stored workflow definition, referenced by `bundled://` or `generated://`      |
+| **recipe**           | a stored workflow definition: `bundled://`, `generated://`, or a file path      |
+| **run**              | one invocation of one recipe — what `run_workflow` returns an id for            |
 | **worker**           | in the §9 pool pattern, one `repeat` loop containing one `step`                 |
 | **task**             | a unit of queued work, represented as a file. Not a workflow node.              |
 | **child**            | a task created at runtime by another task ("runtime-discovered work")           |
@@ -142,6 +155,15 @@ Terms used throughout, several of which are specific to this document:
 | **peak concurrency** | maximum number of simultaneously-open claim→done intervals, by sweep (§13)      |
 | **wave barrier**     | a synchronization point where all parallel work must finish before any restarts |
 | **no-op iteration**  | a `repeat` iteration the engine ran but whose agent did no work (§7)            |
+
+The bare word "workflow" is ambiguous across four senses, and three of the rows
+above exist to keep them apart. The **engine** is the feature: it is what §1.1
+unlocks and what every measurement here is about. A **recipe** is one saved
+definition, whether bundled, generated, or a `.workflow.json` file on disk
+(§4.1). A **run** is one execution of a recipe, the thing `inspect_workflow`
+reports a status and a node tree for; two runs of one recipe are two runs.
+Unqualified, "workflow" carries only the ordinary English sense of a way of
+working, and nothing in this document depends on it.
 
 ## 3. Node types and validation
 
@@ -338,18 +360,34 @@ with no silent fallback to another model (§10).
 
 #### The interpolated-path blind spot (Measured)
 
-The `fileCheck` workspace-root check is a **prefix test on literal text**, so it
-cannot see through interpolation. A path that begins with a template escapes it:
+The `fileCheck` workspace-root check behaves as a **prefix test on literal
+text**: the literal prefix running up to the first template reference is
+resolved and tested against the roots. A path whose template comes first leaves
+no literal prefix to resolve, so nothing is tested; a template anywhere later
+leaves enough literal text to decide:
 
 | `fileCheck` path                          | result                                    |
 | ----------------------------------------- | ----------------------------------------- |
 | `/tmp/c.json`                             | rejected, naming the workspace root       |
 | a sibling worktree of the checkout        | rejected — worktrees are outside the root |
+| `../../../tmp/probe/done.json`            | rejected — a relative escape is caught    |
+| `/tmp/probe/{{leaf}}.json`                | rejected — the literal prefix decides     |
 | `{{workdir}}/../../../../tmp/escape.json` | **valid**                                 |
 
 So §7.1's silent-forever-false failure is still reachable, and reachable exactly
-where it is hardest to spot. The rejection message is worth reading in full,
-because it names the only escape hatch mentioned anywhere in the surface:
+where it is hardest to spot — but the hole is narrower than "interpolation".
+Prefix resolution is the only mechanism all five rows fit, and it is an
+_inference_ from them rather than a reading of the check: the one row that would
+separate it from a test consulting only the first path segment —
+`dev/../../../tmp/x.json`, a literal in-root prefix followed by a literal escape
+— was never sent, and §7.1 states what each candidate predicts for it. Every
+path measured here that escaped the check had a **parameterized root**; whether
+that untried row escapes too is unknown, so read both the mechanism and the
+escape set as observed bounds rather than exhaustive ones. Re-sending the two
+template-bearing shapes as a step `completion` block rather than a `repeat`
+`stopCondition` returned identical results, so those two exercise one shared
+check (§7.1). The rejection message is worth reading in full, because it names
+the only escape hatch mentioned anywhere in the surface:
 
 ```
 ... resolves outside the allowed workspace roots (/home/caubut/.../nix-agentic-tools). The stop condition would never match; move the file inside the workspace or add its directory to additionalDirectories.
@@ -360,11 +398,17 @@ the `watch` handler docs also treat it as an allowed root for `prRef`
 resolution. Nothing in the agent-facing tool surface sets it, so treat it as
 read-only context rather than a lever.
 
+Validating the _agent_ side is no better covered, and it fails in a shape worth
+knowing before you build a pre-flight on it: `kiro-cli agent validate` exits 0
+whatever you hand it, cannot read a Markdown profile at all, and never checks
+tool-group names (§3.8).
+
 ### 3.5 Step agent roster (Measured, this environment)
 
 The `agent` field names a registered agent mode. **Names are not validated at
 authoring time** (see §3.4), but an unregistered name fails the whole run at
-launch, so a typo is loud rather than subtle.
+launch — measured directly, twice, at the end of this section — so a typo is
+loud rather than subtle.
 
 | agent                  | role                                                       |
 | ---------------------- | ---------------------------------------------------------- |
@@ -382,8 +426,169 @@ launch, so a typo is loud rather than subtle.
 Note `semantic_reviewer` uses an **underscore** while every `wf-*` agent uses
 hyphens. Since the field is not validated, that inconsistency is a live trap.
 
-`general-task-execution` and `context-gatherer` are **orchestrator-side subagent
-modes** for `orchestrate_subagent` (§8), not workflow step agents.
+`context-gatherer`, `custom-agent-creator`, `general-task-execution` and
+`introspect` are **orchestrator-side subagent modes** for `orchestrate_subagent`
+(§8), not workflow step agents. None of the four appears in the 15-target
+delegation list a step sees (§3.7).
+
+#### Custom `.kiro/agents/` agents work as step agents (Measured)
+
+The roster above is the **bundled** set. A workspace agent profile is equally
+usable as a step `agent`, and its declared tool groups are honored — which
+matters because three of §3.6's conclusions are properties of the bundled ten,
+not of the step surface.
+
+Measured with throwaway profiles in this repo's (previously empty)
+`.kiro/agents/`, each a one-step workflow on `claude-haiku-4.5` writing its own
+inventory to an absolute path, so the evidence is a file rather than a captured
+output (§7.3):
+
+| profile declared               | ran as a step | tool count | web                                        | delegation     |
+| ------------------------------ | ------------- | ---------- | ------------------------------------------ | -------------- |
+| `read, write, shell, web`      | yes           | 17         | **yes** — `web_fetch`, `remote_web_search` | none           |
+| `read, write, shell, subagent` | yes           | 30         | no                                         | **15 targets** |
+
+The `web` row read **18** in an earlier edition, and the record treated the gap
+against its own 17-name transcription as an open discrepancy — one name lost in
+transcription, perhaps. It was not: a re-run of the reconstructed profile
+(`dev/probes/kiro-workflows/agents/`) returned 17 names matching that
+transcription **exactly**. The original probe miscounted; nothing was lost. The
+`subagent` row reproduced unchanged at 30 tools and 15 targets.
+
+The corrected figures close arithmetically against each other, which is why they
+corroborate both rows at once. Both profiles share a 15-tool base — `code`,
+`delete_file`, `disclose_context`, `execute_bash`, `file_search`, `fs_append`,
+`fs_write`, `grep_search`, `list_directory`, `read_file`, `read_files`,
+`report_progress`, `send_message`, `str_replace`, and `subagent_response`:
+
+```
+15 base + remote_web_search + web_fetch            = 17   (web profile)
+15 base + 15 subagent_<role> delegation targets    = 30   (subagent profile)
+```
+
+`subagent_response` sits in that shared base and delegates nothing (§3.6), so a
+naive "count the `subagent_` prefixes" reading of the delegation row returns 16
+rather than 15. The 15 real targets are the five custom profiles plus all ten
+bundled agents (§3.7).
+
+**That arithmetic is load-bearing, not tidy bookkeeping** — two different things
+went wrong across this repository's own probe runs, and either on its own is
+enough to make a reported total mean nothing until it is reconciled against a
+known base.
+
+The first is a plain miscount. The `web` profile asserted `COUNT=18` above a
+`TOOLS` line holding 17 correct names: the list was right and the count was
+wrong, overstating the total. A count and the list it sits above are reported
+independently, so agreement between them cannot be assumed, and the disagreement
+was detectable only against a base computed separately from both.
+
+The second is not a self-report failure at all, and that is what makes it worth
+recording. The probes were asked for `DELEGATION=` as "tool names beginning with
+`subagent_`" — a definition by name shape. `probe-subagent-step` read it
+literally and counted `subagent_response` among its delegation targets,
+returning 16 where the real target count is 15; `probe-web-step`, which holds
+that same tool, read the field by meaning and answered `DELEGATION=none`. Two
+different profiles, then, not one profile twice. Both emitted correct and
+complete `TOOLS` lines, so neither agent dropped anything: the field admitted
+two readings and got both, and one fixture pair produced two incompatible counts
+of the same quantity (`dev/probes/kiro-workflows/README.md` records the pair and
+the fix).
+
+The sharper find is **which** name a prefix-shaped definition breaks on.
+`subagent_response` carries the `subagent_` prefix while dispatching nobody
+(§3.6), and it is the only name in either inventory that does — so a summary
+field keyed on that prefix cannot be answered consistently however carefully the
+agent reports, and the same name is what a reader reconciling 30 against 15
+targets has to account for. The repair belongs in the definition rather than in
+the prompt's tone: `DELEGATION=` now means tools that dispatch another agent,
+with `subagent_response` excluded by name while still counting on `TOOLS` and in
+`COUNT`. Define a summary field by what a tool does rather than by how its name
+is spelled, and reconcile that one name explicitly whenever a tool inventory
+matters.
+
+Both profiles expanded their declared groups faithfully and neither gained MCP
+tooling, so the step surface honors workspace provisioning rather than
+flattening every step to one profile. Registration is confirmed rather than
+inferred, and by direct measurement rather than by reasoning from §3.4: the
+launch-time refusal was exercised twice below, so a step that runs at all was
+registered.
+
+**Profiles added mid-session are picked up** — the probes above were created
+after the session started and `run_workflow` accepted them without a restart.
+That propagation is confirmed twice over and from two directions: the runs
+themselves succeeded, and the orchestrator's own agent roster came back carrying
+the newly written profiles' `description` text verbatim, so the registry was
+visibly re-read without a restart.
+
+**But a delegation inventory taken right after a registry change is still
+unreliable — re-run it before believing it.** One `subagent` probe run made
+shortly after its profile was written saw only 2 delegation targets and **no
+bundled agents at all**; an identical run later saw the full 15.
+
+Recency alone does not reproduce that, so the earlier reading of this — that a
+run "seconds after" the write is the trigger — is retired. A deliberate
+reproduction attempt **failed**: a run launched 20 seconds after five profiles
+were registered returned the complete 30 tools and 15 targets. The trap is real
+but is **not reliably reproducible on demand**, which is precisely why the
+advice is to re-run rather than to time the run.
+
+What remains unexplained is not the timing but the **asymmetry** of the bad
+state: it held the freshly written **custom** names while missing the
+**bundled** roster entirely — the half that exists independently of any registry
+write and was never absent before or after (§3.7). A partially warmed registry
+would be a plausible story; one that drops only the stable half is not, and the
+mechanism is unestablished (§12).
+
+#### An unregistered name is refused at launch, live against disk (Measured)
+
+Both halves of this were measured directly on 2026-08-01, so the launch-time
+refusal above is a result rather than an inference from §3.4:
+
+- A one-step workflow naming `definitely-not-a-registered-agent-zzz`, a name
+  that never existed, was refused before anything ran:
+
+```
+Workflow execution failed: Workflow references custom agent 'definitely-not-a-registered-agent-zzz' which is not registered.
+```
+
+- A one-step workflow naming `probe-subagent-step` **after that profile's file
+  had been deleted** from `.kiro/agents/` was refused identically — a name that
+  had been registered earlier in the same session and that still appeared in the
+  orchestrator's own delegation-tool list at that moment.
+
+The second is the part a reader cannot guess: resolution is checked **live
+against disk at launch**, not against a snapshot taken when the session started.
+A profile deleted mid-session stops working immediately, and says so. Neither
+attempt produced any artifact — the output directory was empty afterwards — so
+nothing partially executed before the refusal.
+
+**The `not found, using "default"` status line must not be believed on the step
+surface.** Alongside both refusals the host TUI displayed:
+
+```
+agent "probe-subagent-step" not found, using "default"
+```
+
+That announces a fallback which **did not happen here**: the run was refused,
+not silently downgraded. The message is misleading in the worst direction for
+this document's purpose — a reader who saw it would reasonably conclude their
+measurement had quietly run as a generic `default` agent and that every
+custom-agent figure in this section was therefore worthless. On the step surface
+the refusal is the authoritative signal and the status line is not. It was
+observed as a **persistent, non-clearing** status line, so it can still be read
+long after the run that produced it, which makes attributing it to the wrong run
+easy.
+
+**Which component emits it is not established.** It was observed in the host TUI
+concurrently with the two refusals above; whether it originates in the workflow
+engine, the subagent-dispatch path, or the session/TUI layer is unknown, and so
+is whether a silent fallback to `default` genuinely occurs on any surface (§12).
+
+The custom-profile runs recorded above were **not** silently downgraded, and
+that is checkable rather than assumed: their step headers showed the resolved
+agent name — `probe-subagent-step` on `claude-haiku-4.5` — they executed at all,
+and their delegation lists carried the probe profiles' own names, which a
+generic `default` agent could not have produced.
 
 ### 3.6 What tools a step agent has (Measured, all ten agents)
 
@@ -393,15 +598,30 @@ one `parallel` of nine branches under `joinPolicy: allSettled`. Each was told to
 write the list to a file as well as report it, so a claim of "no file tool" is
 corroborated by an absent file rather than taken on trust.
 
+That corroboration has one loophole worth naming, since it is the kind that
+would otherwise be invisible: an agent holding `execute_bash` but no file tool
+could satisfy "write it to a file" with a shell redirection, produce the file,
+and so read as holding a file tool. The result here does not depend on it —
+`wf-workflow-creator`, the only row with no file tool, has no `execute_bash`
+either and could not have written the file by any route — but the fixture's
+instruction now forbids the shell explicitly rather than leaving the inference
+to that coincidence.
+
+The table is **not** alphabetical, in two deliberate steps: `wf-coder` leads as
+the baseline the other rows are described against and the only one probed alone,
+and the remaining nine are ordered by **descending tool count**, alphabetically
+within each count. Sorting the whole thing by name would scatter the tiers that
+are the point of the table.
+
 | agent                  | n   | notable                                                              |
 | ---------------------- | --- | -------------------------------------------------------------------- |
 | `wf-coder`             | 10  | the baseline set below                                               |
+| `semantic_reviewer`    | 10  | **adds `kiro_powers`**, drops `str_replace`                          |
 | `wf-auto-researcher`   | 10  | same as `wf-coder`                                                   |
 | `wf-pr-responder`      | 10  | same as `wf-coder`                                                   |
-| `semantic_reviewer`    | 10  | **adds `kiro_powers`**, drops `str_replace`                          |
-| `wf-planner`           | 9   | no `str_replace`                                                     |
 | `wf-design`            | 9   | no `str_replace`                                                     |
 | `wf-design-reviewer`   | 9   | no `str_replace`                                                     |
+| `wf-planner`           | 9   | no `str_replace`                                                     |
 | `wf-review-aggregator` | 8   | **no `execute_bash`** — cannot run anything                          |
 | `wf-pr-submitter`      | 7   | no `file_search`, no `grep_search`                                   |
 | `wf-workflow-creator`  | 5   | **no file tools, no `execute_bash`**; has `save_workflow_definition` |
@@ -424,25 +644,74 @@ Three of those rows change how you design a workflow:
 - **`semantic_reviewer` alone has `kiro_powers`** and alone lacks `str_replace`
   — it reads and writes whole files, so it is not set up to patch code.
 
-**No step agent can delegate.** There is no `orchestrate_subagent`, `delegate`,
-`subagent`, `spawn`, or `Task` in any of the ten. For `wf-coder` this was
-corroborated three ways: the step's own report, the enumerated list, and the
-absence of any artifact from the delegated work (so it also did not quietly
-perform that work itself).
+**No step agent can delegate** — **of the bundled ten**. There is no
+`orchestrate_subagent`, `delegate`, `subagent`, `spawn`, or `Task` in any of
+them. For `wf-coder` this was corroborated three ways: the step's own report,
+the enumerated list, and the absence of any artifact from the delegated work (so
+it also did not quietly perform that work itself).
 
-**No step agent has web, knowledge, or todo tooling.** A step needing external
-fetch or search cannot get it from any bundled agent; that work belongs to the
-orchestrator or a custom `.kiro/agents/` agent.
+**A custom step agent declaring `subagent` does delegate, and the dispatch
+genuinely works** (§3.5, §3.7). That is a property of the profile, not of the
+step surface. The ban that actually survives is §3.1's on nested **workflow**
+invocation — a step cannot start a workflow. Subagent delegation is a different
+mechanism and is not banned.
 
-Combined with the ban on nested workflows (§3.1), a workflow is exactly **two
-tiers deep**: the orchestrator, and its step agents. No third fanout tier is
-reachable from inside a workflow. Total parallelism is therefore:
+**No step agent has web, knowledge, or todo tooling** — again, of the bundled
+ten. A step needing external fetch or search cannot get it from any _bundled_
+agent, but a custom profile declaring `web` keeps `web_fetch` and
+`remote_web_search` as a step (§3.5).
+
+Combined with the ban on nested workflows (§3.1), a workflow built **entirely
+from bundled agents** is exactly **two tiers deep**: the orchestrator, and its
+step agents. Under that restriction total parallelism is:
 
 ```
 step nodes per run (≤20)  ×  number of concurrent workflow runs
 ```
 
 and never multiplied by fanout from within a step.
+
+**That formula does not hold once a step runs a custom agent holding
+`subagent`.** A third tier is then reachable, so the ceiling gains a fanout
+term:
+
+```
+step nodes per run (≤20)  ×  concurrent runs  ×  fanout per delegating step
+```
+
+**That third factor is now measured at 5, and measured to be scoped to each
+delegating step.** Peak overlap was exactly 5 at both N=8 and N=12 and never 6;
+a third run then put two delegating steps in one `parallel`, five leaves each,
+and reached a peak of 10, with each dispatcher independently reaching exactly 5
+(§6, finding 3). So the term is not a pool the delegating steps share, and the
+formula's multiplication by it is measured rather than assumed. What remains an
+extrapolation is the top of that multiplication: composition was measured at two
+steps, so read the product as an upper bound projected from n=2 — the 100
+concurrent that 20 steps would imply has not been run (§12).
+
+An earlier edition asserted that the term is bounded by the profile rather than
+by the engine — a claim no probe supported when it was written, retracted then
+and now contradicted outright: no profile declares a numeric fan-out limit, and
+the ceiling appeared regardless. Which layer owns the bound is a separate
+question and stays open (§12); the retraction does not need it answered.
+
+The measured figure is also **not** the documented 4. §6's finding 1 stands
+untouched: step _sessions_ do not draw from Kiro's documented pool of 4
+concurrent subagents, and 27 were reached. What is new is that subagents spawned
+_by_ a step are a different population which does have a ceiling — and that
+ceiling is 5, so the documented figure does not describe this population either.
+The ceiling and its per-step scoping are Measured; the limiter behind it is
+Inferred, and which layer owns it remains open (§12) — though the ten
+simultaneous leaves rule out one candidate outright, a single host-wide
+tool-call scheduler with a global pool of 5.
+
+An earlier edition of this section also stated the two-tier claim as a property
+of the step surface. It is a property of the bundled roster, and §3.7 has the
+proof that the third tier is real rather than merely tool-shaped. The irony is
+instructive and is the reason both retractions sit here together: the very next
+sentence of that edition repeated the same error class it had just corrected,
+generalizing a scoped result — this time by promoting an unmeasured bound to a
+stated fact.
 
 Two tool names invite confusion and grant nothing: `subagent_response` returns
 the step's own result to its parent, and `disclose_context` only loads
@@ -461,6 +730,137 @@ unreachable dead surface** for every bundled agent, and the step-agent half of
 `replace_remaining` is too. Only the orchestrator's `replace_remaining` is real
 (§5). A custom `.kiro/agents/` agent might be granted the tool, which is
 untested (§12).
+
+### 3.7 Delegation from a step is per-target, and the third tier is real (Measured)
+
+Two findings that together overturn §3.6's old two-tier claim.
+
+#### The dispatch actually happens
+
+Tool presence is not capability, so this was proved by construction rather than
+by asking. A parent profile was given **`subagent` and nothing else** — no
+`write`, no `shell`, no way to create a file by any means — and told to dispatch
+a leaf profile that writes a supplied token to an absolute path:
+
+```
+parent profile:  tools: [subagent]          # cannot write, cannot shell
+leaf profile:    tools: [write]
+result:          leaf-proof2.txt == "TIER3-AIRTIGHT-4d7e02"
+```
+
+The file exists and holds the token, and the parent had no mechanism to write
+it. Therefore the leaf ran. **A third tier is reachable from inside a workflow
+step.**
+
+The chain dispatches exactly **one** subagent per link, so what it establishes
+is the tier's existence and not how wide a link can go. That width is measured
+separately at **5** concurrent subagents (§6, finding 3).
+
+An earlier attempt at this probe gave the parent `write` as well, which cannot
+distinguish "the leaf ran" from "the parent wrote the file itself despite being
+told not to" — the parent's own `DISPATCH=ok` self-report is not evidence either
+way (§13). Withholding the capability, rather than forbidding its use, is what
+makes the result airtight.
+
+#### The tool shape is one tool per target
+
+Delegation is **not** a single `orchestrate_subagent` taking a role as an
+argument, as it is in an orchestrator session (§8). On the step surface it is
+one tool per callable target, named `subagent_<role>`:
+
+```
+subagent_probe-echo-leaf   subagent_wf-coder   subagent_semantic_reviewer   …
+```
+
+The target set is **every registered custom profile plus all ten bundled
+agents**, and it is **self-inclusive** — a dispatcher can name itself.
+"Registered" is doing real work in that sentence: the target list is not a
+listing of `.kiro/agents/`, which the next paragraph's measurement shows on this
+same surface — ten of the fifteen targets have no file behind them at all. Nor
+is a name's presence in a delegation-tool list an authority on what will resolve
+at launch: on the **orchestrator** surface a name still sat in that session's
+list at a moment when a launch naming it was refused as "not registered", its
+file having been deleted mid-session (§3.5). A list read at one moment can
+therefore name something the engine will already reject. Whether the converse
+holds on the step surface — a file present in `.kiro/agents/` whose name never
+enters the target list — is not established here (§12).
+
+Bundled agents appear as targets **without existing on disk**, which is worth
+stating because it looks like a contradiction and is not. Measured here: 5
+custom profiles in `.kiro/agents/`, no `wf-*` file on disk at all, and 15
+delegation targets — the 5 custom profiles plus the 10 bundled agents.
+
+**Orchestrator-side subagent modes are not step targets either.** The 15-target
+list measured in §3.5 contains no `context-gatherer`, `general-task-execution`,
+`introspect` or `custom-agent-creator`, while the orchestrator's own
+`orchestrate_subagent` roster carries all four — so those names are a fourth
+population, reachable from an orchestrator session and not from a step.
+
+That leaves four categories of name a reader has to keep apart:
+
+| category                        | a step target?                       |
+| ------------------------------- | ------------------------------------ |
+| registered custom profile       | yes                                  |
+| bundled `wf-*` agent            | yes — and never present on disk      |
+| on-disk but unregistered        | open — presence not shown to suffice |
+| orchestrator-side subagent mode | no — `orchestrate_subagent` only     |
+
+The third row is an open case rather than a measured one. No profile has been
+seen here sitting in `.kiro/agents/` and never becoming a target, so presence on
+disk has not been shown to be sufficient — and it cannot be assumed, because the
+target list is already known not to be a directory listing: ten of the fifteen
+targets have no file at all, and on the orchestrator surface a name outlived its
+file (§3.5). §12 states the experiment that would settle it.
+
+The per-target shape has a consequence beyond documentation: a tool **name** is
+something a permission `match` rule can constrain, where a role passed as an
+argument is not. Whether such a rule actually **binds** inside a step is a
+separate question and is **not** established here (§12) — treat that as a
+plausible consequence of the shape, not a measured capability.
+
+### 3.8 `agent validate` is not a gate (Measured)
+
+Since a custom profile can be a step `agent` (§3.5), the obvious pre-flight is
+`kiro-cli agent validate --path <file>`. It cannot be used as one. Measured
+against **kiro-cli 2.16.0**, three limits, in descending order of how badly they
+mislead.
+
+**It exits 0 unconditionally.** Five inputs, five exit codes of zero, with
+stderr quoted verbatim below and only the profile's own absolute path elided as
+`<path>`:
+
+| input                     | stderr                                                                                                                    |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| a valid `.json` profile   | silent                                                                                                                    |
+| malformed JSON            | `Error: Json supplied at <path> is invalid: key must be a string at line 1 column 3`                                      |
+| `"tools": "not-an-array"` | `Error: Json supplied at <path> is invalid: invalid type: string "not-an-array", expected a sequence at line 1 column 34` |
+| a `.md` profile           | `Error: Json supplied at <path> is invalid: invalid number at line 1 column 2`                                            |
+| a nonexistent path        | `Error: Encountered io error: No such file or directory (os error 2)`                                                     |
+
+Only stderr separates them, so anything branching on the exit status treats a
+missing file and a clean profile identically. Gate on stderr being empty, or do
+not gate on this command at all.
+
+**It is JSON-only.** The `.md` row is not a Markdown-specific diagnostic — the
+file is parsed as JSON and the parse dies on the first character of the `---`
+frontmatter, which is what "invalid number at line 1 column 2" is reporting. The
+`Json supplied at <path> is invalid:` prefix is the tell, and it is the same
+prefix the malformed-JSON row carries: nothing in the diagnostic notices it was
+handed Markdown. So Markdown profiles, the form the committed probe profiles use
+(`dev/probes/kiro-workflows/agents/`), cannot be validated by this command in
+any sense.
+
+**It does not check the tool vocabulary.** A profile declaring
+
+```json
+"tools": ["read", "write", "workflow", "grep", "glob", "delegate", "todo", "nonexistent-group"]
+```
+
+passes silently. Nothing reports which of those names the registry recognized,
+so an entry matching no group is invisible here — and it stays invisible at run
+time, since a group that expands to nothing simply contributes no tools. The
+only way to see it is to reconcile the profile's actual tool count against a
+separately computed base, which is what §3.5's arithmetic is for.
 
 ## 4. Launching and monitoring
 
@@ -573,15 +973,16 @@ of `[notification/success]` messages arrived regardless. Treat step
 notifications as something to tolerate, not something you can switch off by
 asking.
 
-#### The three pause reasons (Measured)
+#### The pause reasons (Measured)
 
-A run can be `paused` for three distinct reasons, and the string is diagnostic:
+A run can be `paused` for four distinct reasons, and the string is diagnostic:
 
 | reason string                                                          | cause                                   | resumes itself                       |
 | ---------------------------------------------------------------------- | --------------------------------------- | ------------------------------------ |
 | `Step requested user input via send_message.`                          | a step used `warning` severity          | no                                   |
 | `Step '<id>' is waiting for the next user message.`                    | an unmet step `completion` block (§7.5) | on its own once the condition is met |
 | `Transient model service error (service 5xx/throttling); will resume.` | upstream model error                    | claims to; did not (see below)       |
+| `Step interrupted (agent shutdown or connection reset); will resume.`  | a step agent's session died mid-step    | observed once of three (§7.4)        |
 
 The third is the engine self-healing and needs no action — except that **"will
 resume" is not a guarantee.** One probe (`claude-opus-5`, mid-`repeat`) sat in
@@ -590,6 +991,11 @@ clean iterations behind it, and never advanced. Relaunching the identical
 workflow completed it. So treat a long-lived transient-error pause as a stall to
 relaunch, not a wait to sit out. Frequency is unmeasured — n=1 of the runs in
 this series.
+
+The fourth makes the same promise and keeps it sometimes: three runs entered it,
+two stayed, and the third resumed by re-running an earlier step of the loop
+iteration it was in — which means that step ran twice (§7.4). What triggers the
+resume, and how long the paused window lasts, are open (§12).
 
 ### 4.4 Reading engine state (Measured)
 
@@ -705,7 +1111,7 @@ rather than backfilling (§7.7).
 The engine is a **static DAG with future-rewrite**, not a work-stealing
 scheduler. §9 is the way to get scheduler-like behavior without fighting it.
 
-## 6. Concurrency (Measured)
+## 6. Concurrency (Measured, finding 3's mechanism Inferred)
 
 Each worker is one `repeat` loop containing one `step`. Multiple workflow runs
 launched simultaneously share one filesystem queue.
@@ -736,10 +1142,68 @@ Findings:
 2. **Concurrency composes across runs.** Filesystem coordination means the
    engine never needs to know the pools cooperate. Given §3.2, a single run can
    host up to 20 workers, so multi-run composition is only needed beyond that.
+3. **Subagents spawned _by_ a step are a different population, and that
+   population does have a ceiling: 5 at once, per delegating step.** This takes
+   nothing back from finding 1, which is about step _sessions_ — those still
+   show no ceiling at 27. Each of the first two probes was a single `step`
+   running a custom profile that declares `tools: [subagent]` and nothing else,
+   so it had no write and no shell and therefore no means of appending to the
+   marker log at all: every line in that log is attributable to a leaf. It was
+   told to dispatch one marker leaf N times in a single batch, and each leaf
+   writes a start line, sleeps 15 s, then writes an end line — so the peak
+   number of simultaneously open start-without-end windows is the width. Peak
+   was **exactly 5 at both N=8 and N=12**, never 6, while every leaf did
+   eventually run (8 of 8, 12 of 12; wall 60.4 s at N=12). Kiro's documented
+   pool of 4 therefore does not describe this population either: the number is
+   5, not 4.
+
+   **A third run establishes that the 5 is scoped to each delegating step rather
+   than shared between them.** One `parallel` under `joinPolicy: allSettled`
+   held **two** dispatchers on the same starved profile, each told to dispatch
+   five leaves at once under its own prefix. **Peak was 10**, all ten leaves in
+   flight simultaneously, each dispatcher independently reaching exactly 5. That
+   matters because §3.6's parallelism formula multiplies by this term: a pool of
+   5 shared across the run would have made the multiplication meaningless, and
+   it is now ruled out. It also excludes one candidate mechanism outright — a
+   single host-wide tool-call scheduler with a global pool of 5 — while leaving
+   open which layer owns the per-step limiter (§12). Two things it does **not**
+   establish: that the composition stays linear up to the cap of 20 step nodes,
+   which would be an extrapolation from n=2, and that the ceiling is invariant
+   across profiles, since all three runs used the same parent profile and the
+   same leaf type (§12).
+
+   **The ceiling is Measured; the mechanism behind it is Inferred.** N=8 read
+   alone looks like a hard barrier — five leaves started within 47 ms of each
+   other, all five ended ~15 s later within 47 ms, and only then did leaves 6–8
+   begin, so in-flight went 5 → 0 → 3. N=12 rules that reading out. At **+19.362
+   s** leaf 6 started while leaves 4 and 5 were **still in flight**, which means
+   the dispatcher was not holding out for all five results before more were
+   admitted. That is the shape of a concurrency limiter admitting five at a time
+   rather than of a dispatcher limited to five tool calls per turn. The residual
+   alternative, which nothing measured here excludes, is an engine that
+   re-invokes the model with partial tool results — per-turn batching would
+   produce the same interleaving under that assumption. Every dispatcher in all
+   three runs self-reported `BATCHED=yes`: the N=8 and N=12 parents, and both
+   dispatchers of the two-step run, the latter each reporting `FANOUT=5`,
+   `RETURNED=5` and `BATCHED=yes` for its own five leaves — `s1-1` through
+   `s1-5` and `s2-1` through `s2-5`, every one returning `MARKED=ok`. That is
+   consistent with the limiter reading, but each is a self-report and so not
+   independent evidence for it (§13).
 
 **Fan-out startup latency is erratic**: 24.6 s for a 6-branch fan-out, 5.0 s for
 9 branches, ~0.3 s for 27 across three runs. Unexplained; possibly session
 warmth or prompt length. Do not rely on any of these figures.
+
+Finding 3's runs sharpen that: the first wave of five leaves spanned **47 ms**
+in one run against **5.94 s** in the other — same workflow shape, same model,
+same profiles, launched about two minutes apart. Two orders of magnitude of
+spread across a comparable event: the runs differ in N (8 against 12), so
+fan-out count and prompt length are not held fixed and the pair cannot arbitrate
+between the two standing hypotheses, but the **first wave is five leaves either
+way**, which is what makes the two spans measurements of the same thing. The
+third run's first wave took 6.7 s to admit ten leaves across two dispatchers, at
+the slow end of that range. The variation therefore stays listed as unexplained
+rather than attributed to fan-out size or model.
 
 ### 6.1 Overhead grows with worker count (Measured)
 
@@ -789,23 +1253,143 @@ tasks per worker at 5 or more** so drain and trailing-round costs amortize.
 
 ## 7. Gotchas — the engine
 
-### 7.1 `fileCheck` paths outside the workspace are silently false forever (Measured)
+### 7.1 A `fileCheck` stop condition fails in two directions (Measured)
+
+A `fileCheck` can be wrong in two ways, and they are mirror images of each
+other. One never matches, so the loop burns every iteration it has. The other
+matches before the loop has done anything, so the loop stops after one. Both are
+silent, and the second is the quieter of the two.
+
+#### Unsatisfiable: false forever, and the loop runs to its cap
 
 A `repeat` `stopCondition` or step `completion` whose path lies outside the
 workspace roots evaluates to `false` permanently — no error. The loop then runs
 to `maxIterations` and does whatever `onMaxIterations` says: fails under
 `abort`, halts under `pause`, and continues **silently** under `continue`.
 
-`validate_workflow` now catches the easy half of this: a **literal** outside
-path is rejected before you can run it (§3.4). What it cannot catch is an
-**interpolated** one — `{{workdir}}/../../../../tmp/x.json` validates clean —
-because the check is a prefix test on the un-substituted string. So the silent
-failure survives precisely where it is hardest to see.
-
 Keep all stop-condition state inside the repository. Never `/tmp`. Interpolate
 an absolute path (`{{workdir}}/...`); a bare relative path resolves against the
 workflow's `workspacePath`, which is the session's first workspace folder and
-may not be where agents actually write.
+may not be where agents actually write. Read that advice alongside _What the
+validator catches here_ below before relying on it: an interpolated root is
+precisely the shape the workspace-root check cannot examine, so it buys a path
+that can resolve at run time at the cost of any validator confirmation that it
+does.
+
+#### Already satisfied: a `repeat` is a do-while, so the cap is one iteration
+
+The `stopCondition` is evaluated only **after** an iteration has run, never
+before the first one. A target that already holds the stop value therefore caps
+the loop at exactly one iteration — and the run reports success.
+
+Measured with a `sequence` of two `repeat` nodes identical except for the file
+each watches and the log each appends to, both at `maxIterations: 2` and
+`onMaxIterations: "continue"`, each holding one step that appends a single
+timestamped line (the instrument is `gen-stop-condition.py`, §13):
+
+| `repeat`               | stop target                                     | iterations  | log lines |
+| ---------------------- | ----------------------------------------------- | ----------- | --------- |
+| `repeat-pre-satisfied` | written with `{"complete": true}` before launch | 1           | 1         |
+| `repeat-control`       | never created                                   | 2 — its cap | 2         |
+
+Iteration counts came from the engine node tree (§4.4) and the line counts from
+the logs, measured independently of each other. The pre-satisfied loop produced
+an iteration wrapper for `#0` and none for `#1`. Workflow status was
+`completed`, every node green, with no abort and no warning anywhere.
+
+The control is the load-bearing half, though not because it rules out a harness
+that never ran anything — the pre-satisfied loop's own iteration wrapper and its
+one log line already exclude that. What only the control excludes is the reading
+that a `repeat` here runs its body exactly once whatever its condition says,
+which one iteration on its own is perfectly consistent with. The control reached
+two iterations under an identical cap, so `maxIterations: 2` does grant a second
+iteration and the stop condition is what withheld it from the other loop.
+
+Four consequences:
+
+- **The success report is the failure report.** A pre-satisfied stop condition
+  yields one iteration with every node `[completed]`, and nothing in engine
+  state distinguishes that from a loop which legitimately finished on its first
+  pass.
+- **Exactly-once hides better than zero would.** A loop that did nothing is a
+  conspicuous absence of output. A loop that ran once leaves a partial result,
+  which reads as progress rather than as a defect.
+- **A `repeat` body always executes at least once.** No `fileCheck` arming skips
+  it, so a `repeat` cannot serve as an idempotence guard. Measured directly for
+  `fileCheck`, and weakly corroborated for the `stopWhen` sugar of §3.1: §7.6's
+  `"<watchId>.terminal"` repeat was capped at 3 and stopped after one iteration
+  against a watch aimed at an already-merged pull request, so its terminal path
+  fired on the first poll (§13) — the same pre-satisfied-to-one-iteration
+  signature, but with no control at that cap to exclude a hard floor of one
+  iteration. Whether the `completionSignal` form (§7.6) is evaluated at the same
+  point in the cycle was not tested at all.
+- **The stop target must be created by the run that consumes it.** The rule is
+  freshness, not merely absoluteness: an absolute in-workspace path is still
+  wrong if an earlier run left the file sitting there. Write into a per-run
+  directory, or delete the target before the `repeat` starts.
+
+The two directions differ most in how loudly they fail. Unsatisfiable runs long
+and dies with a diagnostic under `abort`. Already-satisfied stops early and
+**succeeds**, which is why it is worth checking the iteration count of a
+`repeat` that finished suspiciously fast before concluding it had nothing to do.
+
+That symptom has a second cause, so check the count rather than guessing which:
+a `repeat` that completed having done almost nothing is either the agent-side
+no-op of §7.2, where the step was invoked and declined to work, or the
+engine-side already-satisfied stop condition here, where it was never invoked a
+second time. The iteration count separates them, because a no-op still produces
+an iteration wrapper (§4.4) — no-ops leave engine iterations exceeding
+invocations, while a pre-satisfied stop leaves one iteration and one matching
+invocation.
+
+#### What the validator catches here, and what it does not (Measured)
+
+`validate_workflow` rejects a `fileCheck` path it can prove lies outside the
+workspace roots (§3.4). The blind spot is narrower than "interpolation": the
+check is a prefix test on the un-substituted string, and what it tests is the
+**literal prefix up to the first template reference**, resolved against the
+roots. Four calls:
+
+| `fileCheck` path               | validator                   |
+| ------------------------------ | --------------------------- |
+| `/tmp/probe/done.json`         | rejected, naming the root   |
+| `../../../tmp/probe/done.json` | rejected                    |
+| `/tmp/probe/{{leaf}}.json`     | rejected                    |
+| `{{run_dir}}/done.json`        | `valid: true`, `errors: []` |
+
+Only the last shape escapes, and it escapes because a leading template leaves no
+literal prefix to resolve, so there is nothing to test. Every other row leaves
+enough literal text to decide: `/tmp/probe/` resolves outside the roots, and so
+does `../../../tmp/probe/`, which is why a relative literal escape is caught as
+well — it could not be, on a test that read only the first segment. So the
+unchecked shape measured here is a **parameterized root**, not interpolation in
+general. One row that would pin the mechanism down was not tried: a literal
+in-root prefix followed by a literal escape, such as `dev/../../../tmp/x.json`,
+which prefix resolution rejects and a first-segment test would wave through.
+Treat the bound as observed rather than exhaustive. The last two rows were
+re-sent as a step `completion` block rather than a `repeat` `stopCondition`,
+with identical results both ways, so those two shapes exercise one shared check.
+
+**The recommended shape is the unchecked shape.** Interpolating an absolute path
+is still the right advice, but note what it does: it makes the check _pass_,
+which is not the same as making it _hold_. Satisfying it moves the guarantee
+from the validator to the caller, because whatever value the input carries at
+launch is never examined. Every path-carrying example in this document
+interpolates its root the same way — §3.3's artifact maps, §9.1's stop
+conditions, the reference probe's `completion` block (§13) — so read that as
+house style, and read `valid: true` as saying nothing at all about whether a
+stop condition can ever fire.
+
+That is one instance of a general bound. `valid: true` means the node tree
+conforms to the schema and its template references resolve in order. Nothing is
+executed, no prompt is read, and no path is resolved against the filesystem — so
+a recipe can validate clean while carrying defects that make the run impossible
+or meaningless: an unregistered agent name (§3.4), a stop condition that can
+never fire, a stop condition already satisfied, a prompt that instructs the
+wrong work. The response shape is `{valid, errors}` and there is no third
+channel, so a check the validator declines to perform has nowhere to be
+reported. An empty `errors` list is the same observation whether the path was
+approved or never examined.
 
 ### 7.2 Step agents silently skip execution (Measured once)
 
@@ -872,6 +1456,14 @@ a non-idempotent task it invites double-execution — and §7.5 shows a
 the task itself idempotent or claim-guarded (§9.2) rather than relying on prompt
 wording for correctness.
 
+**A green `repeat` that did almost no work has a second, engine-side cause.**
+Before auditing a step agent for no-ops, check the iteration count itself: an
+already-satisfied `stopCondition` caps the loop at one iteration and the run
+still reports success (§7.1), which from the outside looks the same as a loop
+whose agent skipped its work. The two are distinguishable with §4.4's audit — a
+no-op shows engine iterations exceeding invocations, while a pre-satisfied stop
+shows a single iteration with a single matching invocation.
+
 ### 7.3 Captured outputs can be empty, and are never raw (Measured)
 
 Two separate hazards in the same field.
@@ -924,6 +1516,70 @@ only real resume and cancel paths are the hidden `/workflow-resume` and
 So prefer `abort` for review loops so work that cannot be approved fails fast,
 and set `maxIterations` high enough up front. The `pause`-at-exhaustion path
 itself remains untested (§12).
+
+#### An interrupted step pauses the run, and the resume re-runs an earlier step (Measured, n=3)
+
+`maxIterations` is not the only way into that stuck state. When a step agent's
+session dies mid-step — an operator keypress, an agent shutdown, a connection
+reset — the run transitions to `paused` and `inspect_workflow` reports the
+fourth of §4.3's pause reasons:
+
+```
+Step interrupted (agent shutdown or connection reset); will resume.
+```
+
+Seen three times. In each, the run sat `paused` with the interrupted step itself
+`paused` and its successor `pending`. **Two stayed that way; the third
+resumed**, so the reason string's promise is kept at least sometimes and is not
+simply false. In one of the two that stayed, the step had written **nothing**:
+the file it was working on was byte-identical to its pre-run state, with no
+commits and no artifacts, so that pause is not a checkpoint at a partial result
+and there is nothing to salvage from it.
+
+**The resume re-entered the same loop iteration and re-ran an earlier step in
+it.** In run `wf_b00c3256c8147cb8`, an implement-and-review loop, the interrupt
+hit the reviewer step; the run then returned to `running` with the _coder_ step
+running again and the reviewer `pending`, and later read `code [completed]` /
+`review [running]`. The receipt for "same iteration" is node-id continuity: the
+containing node read `sequence:build-loop#0` both before the interrupt and after
+the resume, and within it `step:code` went `completed` → `running` →
+`completed`. A fresh iteration would have been `build-loop#1` (§4.4), so "the
+loop advanced" is excluded.
+
+**So an earlier step in the iteration executes twice.** That is the consequence
+to design against, and it is sharper than the pause itself: anything
+non-idempotent in that step happens a second time — creating a worktree,
+appending to a queue, opening a pull request, sending a notification.
+
+**A loop artifact's presence is not a first-pass test.** The canonical
+implement-and-review loop has its coder branch on whether the reviewer's verdict
+file exists, to tell a first pass from a later one. After a resume that file is
+still absent — the reviewer is the step that died before writing it — so a
+re-running coder concludes "first pass" and may redo work it has already
+committed. Derive idempotence from inspecting the repository, never from whether
+a loop artifact happens to be there. In the run above the coder did get this
+right, continuing rather than duplicating because earlier commits were present,
+but that was the agent's own judgement and not a property of the shape.
+
+**What the label rests on.** `paused` and the coder step `running` again were
+not read in a single tool call, and the earlier step's `completed` state came
+from the host TUI rather than from engine state. Node-id continuity is the
+airtight part, and the re-runs-an-earlier-step claim stands on it alone.
+
+**What triggers the resume is open** (§12): engine self-healing and something
+the operator did in the TUI are not distinguished here, and neither is how long
+the paused window lasts before it happens.
+
+What _is_ actionable follows from the contract above: a paused run cannot be
+retried, since retry applies only to terminal runs. So the move is to relaunch
+the work rather than to wait on the run — and cancelling the stuck one needs the
+TUI-only `/workflow-cancel` (§1), so under ACP it simply sits there while the
+relaunch does the work. If it was launched from a `generated://` reference, the
+relaunch needs a **fresh** definition: that form is single-use and was consumed
+when the run started (§4.1). Under ACP the relaunch therefore races a run that
+may resume behind it, which is the same double-execution hazard as the re-run
+step and wants the same guard: make the work idempotent against the repository,
+not against a marker file.
 
 ### 7.5 A step `completion` block is an unbounded retry loop (Measured)
 
@@ -1224,7 +1880,10 @@ now() {
     return 0
   fi
   t="$(date +%s.%N)"
-  case "$t" in *.N) t="${t%.N}" ;; esac   # no sub-second resolution available
+  case "$t" in
+    *.N) t="${t%.N}" ;; # no sub-second resolution available
+    *) ;;               # already carries fractional seconds
+  esac
   printf '%s\n' "$t"
 }
 
@@ -1539,16 +2198,71 @@ Everything in the previous edition's "never exercised" list has since been
 probed, and the results are folded into the sections above. What remains is
 genuinely open.
 
+### Contradiction and drift ledger
+
+This table is an index into research debt, **not a backlog**. Its working rules
+are sufficient for implementation; probe an open row only when the disputed fact
+would change a concrete design. Raw research preserved under
+`docs/plans/kiro-v3-research-raw/` may contain every side of these claims.
+
+| Topic                        | Competing evidence                                                                                                                                                                                                       | Working rule                                                                       | State               |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- | ------------------- |
+| Web-enabled step inventory   | The first probe reported 18 tools; a later recount closed arithmetically at 17.                                                                                                                                          | Use 17: the 15-tool shared base plus `remote_web_search` and `web_fetch`.          | resolved            |
+| Registry warm-up             | One first run saw fresh custom profiles but omitted the bundled roster; a deliberate immediate retry later returned the full roster.                                                                                     | Re-read the inventory after a registry change before treating it as complete.      | measurement anomaly |
+| Nested workflows             | The workflow contract says a step cannot start another workflow; later static surface analysis found that workflow-step sessions may expose `run_workflow` when enabled. No live nested invocation settles the conflict. | Do not depend on nested workflows without a targeted live probe.                   | open                |
+| Step-side `update_workflow`  | The contract advertises `update_status` to top-level step agents, but none of the ten bundled agents has the tool. Granting it to a custom step agent is untested.                                                       | Treat orchestrator-side `replace_remaining` as the only established mutation path. | open                |
+| Repeat stop-form requirement | Tool prose requires exactly one of `stopCondition` or `stopWhen`; the validator accepts neither and rejects only both.                                                                                                   | Always author exactly one stop form.                                               | resolved policy     |
+
 Open questions about behavior that _was_ measured:
 
 - **The upper concurrency ceiling.** 27 was reached with no engine complaint;
   where it breaks is **UNVERIFIED**. The overhead law (§6.1) suggests the
   economics fail before the engine does.
+- **What imposes the fan-out ceiling of 5, and where else it binds.** The width
+  itself is no longer open: a delegating step admits exactly 5 subagents at
+  once, measured at both N=8 and N=12. Neither is its scope: two delegating
+  steps in one `parallel`, five leaves each, ran ten leaves simultaneously, so
+  the 5 is per delegating step and not a pool they share (§6, finding 3). Five
+  things about it are still open.
+  1. **Whether the limiter belongs to the workflow engine or to a host-side
+     tool-call scheduler.** The +19.362 s interleaving distinguishes a
+     concurrency limiter from per-turn batching but says nothing about which
+     layer owns it, and all three runs went through the same host, so nothing
+     here separates the two. The peak of 10 does narrow this: whichever layer
+     owns the limiter, its scope is per-step, which excludes the variant of the
+     host-side reading in which one global pool of 5 serves the whole host.
+  2. **Why it is 5 where Kiro's subagent documentation says 4.** That documented
+     figure describes neither population measured here — step sessions have no
+     such ceiling (finding 1) and step-spawned subagents have one at 5. Whether
+     the two numbers are the same limiter under different accounting or two
+     different limiters is unestablished.
+  3. **Whether the same ceiling binds the orchestrator's own
+     `orchestrate_subagent`.** Only the step surface was probed. The two
+     surfaces differ in shape already — per-target `subagent_<role>` in a step
+     against one role-taking tool in an orchestrator session (§3.7) — so they
+     may not share a scheduler either. This is the same step-versus-orchestrator
+     asymmetry the tool-shape question below turns on.
+  4. **Whether the per-step composition stays linear up to the cap of 20 step
+     nodes.** Two dispatchers composed cleanly at 5 each. The 100 concurrent
+     that 20 delegating steps would imply is an extrapolation from n=2, and
+     §3.6's formula should be read as an upper bound projected from those two
+     points rather than as a measured figure.
+  5. **Whether the ceiling is invariant across profiles and leaf types.** All
+     three runs used the same capability-starved parent profile (`subagent` and
+     nothing else) dispatching the same shell leaf. A parent holding more tools,
+     or a leaf that is not a shell one-shot, is untested — which is the same
+     scoped-result trap §3.6 records itself falling into.
 - **Why fan-out startup latency varies** by two orders of magnitude (§6).
 - **The mechanism behind no-op iterations** — context leakage versus side-effect
   observation. The _fix_ is no longer confounded (§7.2), but why the failure
   happens is still unestablished, and distinguishing the two would need a step
   that leaves no filesystem trace.
+- **The mechanism behind the registry warm-up anomaly** (§3.5) — a delegation
+  inventory that held the freshly written custom profiles while missing the
+  bundled roster entirely. One deliberate reproduction attempt failed, so
+  recency is not the trigger, the trap is not reliably reproducible on demand,
+  and the asymmetry is unexplained. The standing advice (re-run the inventory)
+  does not depend on the answer.
 - **Whether the overhead curve is like-for-like.** §6.1's 27-worker row is on
   `claude-haiku-4.5` while 9 and 18 are on `claude-opus-5`, so the concurrency
   penalty there is a lower bound. Deliberately not re-run: the doc's actionable
@@ -1559,12 +2273,60 @@ Open questions about behavior that _was_ measured:
   against the existing 19-worker `claude-haiku-4.5` row.
 - **How often a transient-error pause fails to self-resume** (§4.3). Seen once;
   base rate unknown.
+- **What triggers the resume of a run paused by an interrupted step, and how
+  long the paused window lasts** (§7.4). That such a run can resume is now
+  measured — one of three did, re-entering the same loop iteration and
+  re-running an earlier step in it. What is **UNKNOWN** is the cause: engine
+  self-healing on a timer, or something the operator did in the host TUI, are
+  not distinguished, because the resume was noticed rather than provoked and the
+  TUI was in use at the time. Nor is the latency bounded — the two runs that
+  stayed paused were not waited on indefinitely, so they may have been below
+  whatever threshold the third crossed. The experiment is a deliberate mid-step
+  interruption followed by an open-ended wait with **nothing** else touching the
+  run or the host, timing the transition if it comes — cheap in setup and
+  expensive only in patience.
+- **Which surface emits the `not found, using "default"` status line, and
+  whether that fallback ever actually happens.** It appeared in the host TUI
+  alongside the two launch refusals in §3.5, where no fallback occurred at all —
+  the run was rejected. Whether it originates in the workflow engine, the
+  subagent-dispatch path, or the session/TUI layer is unknown, and so is whether
+  any surface silently downgrades to `default` instead of refusing. That second
+  half is the one that matters: a measurement taken on such a surface would look
+  entirely plausible and mean nothing. This is the same asymmetry between the
+  step surface and the subagent surface as the `subagent_<role>` shape question
+  below.
 
 Still untested, and to be treated as weaker than anything labelled Measured:
 
 - **`update_status`** — unreachable rather than merely untested: no bundled
-  agent has `update_workflow` (§3.6). A custom `.kiro/agents/` agent might be
-  granted it; whether the action then works is unknown.
+  agent has `update_workflow` (§3.6). Custom `.kiro/agents/` agents do run as
+  step agents with their declared groups honored, which is now measured (§3.5),
+  so what remains untested is narrower than it was: whether the tool can be
+  **granted** to such a profile at all, and whether the action then works.
+- **Whether the per-target `subagent_<role>` tool shape is specific to the step
+  surface** (§3.7). An orchestrator session still exposes a single
+  `orchestrate_subagent` taking the role as an argument, so rendering one tool
+  per target may be a v3 step-surface detail rather than a general property of
+  delegation. Nothing here distinguishes the two. Same asymmetry as the
+  `default`-fallback question above.
+- **Whether a permission `match` rule on `subagent_<role>` binds inside a
+  step.** §3.7 notes that a tool name is constrainable where an argument is not,
+  but that is a plausible consequence of the shape, not a measured capability.
+  The experiment: give one step agent two delegation targets, write a permission
+  rule that matches one `subagent_<role>` name and not the other, then run a
+  step that calls both. Three outcomes are distinguishable — both calls go
+  through, meaning the rule does not bind; one is refused, meaning it does; or
+  the step stalls resolving neither, which would say the rule is consulted but
+  cannot be answered from where a step runs.
+- **Whether a profile can sit in `.kiro/agents/` and never become a delegation
+  target** (§3.7). Nothing measured here establishes that it can happen, what
+  would cause it, or whether such an exclusion would be registry-wide or
+  specific to the step surface. The experiment is cheap and needs no workflow at
+  all: write a profile, then read the agent roster. Three outcomes, and the
+  likeliest is the null one: present in the roster and present in a step's
+  target list, in which case there is no exclusion to account for and the
+  premise is retired. Absent from the roster, the exclusion is registry-wide;
+  present there but absent from a step's target list, it is step-specific.
 - **`onMaxIterations: "pause"` at exhaustion** (§7.4) — the re-pause-immediately
   claim. The two other `onMaxIterations` values were exercised.
 - **`stopCondition.completionSignal`** (§7.6) — discovered in a runtime schema
@@ -1586,6 +2348,13 @@ Still untested, and to be treated as weaker than anything labelled Measured:
   tools under ACP, where those commands do not exist.
 
 ## 13. Reproducing the measurements
+
+The instruments are committed at **`dev/probes/kiro-workflows/`** — three shell
+scripts (`mark.sh`, `record.sh`, `counter.sh`) and five workflow generators,
+with a README mapping each to the section it produced. Most take the probe root
+as an argument, so copy the shell scripts into a root inside the workspace and
+run the generators against it; the README names the one that does not and says
+why. Everything below describes how they work and why.
 
 The probes coordinated through a queue directory and per-worker append-only
 event logs of the form `<timestamp> w<N> <event> <task>` (§9.2), which is what
@@ -1626,6 +2395,16 @@ read a timestamp. Only the analysis is.
 ```bash
 cat events/*.log \
   | awk '$3=="claim"{print $1,1} $3=="done"{print $1,-1}' \
+  | sort -n \
+  | awk '{s+=$2; if(s>m){m=s;mt=$1}} END{printf "PEAK=%d at t=%.2f\n", m, mt}'
+```
+
+`mark.sh` writes a different event vocabulary — `<timestamp> <name> start|end`
+rather than `<timestamp> w<N> <event> <task>` — so the same sweep reads it with
+one substitution. This is the form that produced §6's finding 3:
+
+```bash
+awk '$3=="start"{print $1,1} $3=="end"{print $1,-1}' log \
   | sort -n \
   | awk '{s+=$2; if(s>m){m=s;mt=$1}} END{printf "PEAK=%d at t=%.2f\n", m, mt}'
 ```
@@ -1744,3 +2523,46 @@ Every branch in the `joinPolicy` probes wrote a start marker and an end marker,
 which is the only reason "aborted" could be distinguished from "finished but its
 result was discarded" (§7.7). A branch that writes once, at the end, cannot tell
 you which happened.
+
+A fifth, about where a command runs rather than what it measures. **Address the
+repository explicitly with `git -C`; never let the answer depend on the
+process's working directory.** Measured across four worktrees of this clone: a
+diff between two explicit SHAs (`A...B`) returned byte-identical output from all
+four, while `origin/main...HEAD` returned three different answers. The
+discriminator is whether the range names a **per-worktree ref**. From the main
+checkout, `git diff --stat origin/main...HEAD` exited 0 with zero bytes on
+stdout and stderr while the range as intended — `origin/main...bf2199b8`, naming
+the branch tip at the time instead of a ref the checkout redefines — was 19
+files, +1907 / -26. The two are not the same range, which is the whole trap:
+from the main checkout `HEAD` _is_ `main`, so the empty output is a correct
+answer to a question nobody meant to ask. Empty-and-successful is
+indistinguishable from "no changes". The same command under `git -C <target>`
+returned the real figures.
+
+So the hazard is not uniform, and knowing which row you are on is the expensive
+part:
+
+| shape                                               | cwd-sensitive |
+| --------------------------------------------------- | ------------- |
+| reading file content                                | yes           |
+| `git worktree add` / `git worktree remove`          | yes           |
+| a range naming `HEAD` or any other per-worktree ref | yes           |
+| a range whose endpoints are explicit commits        | no            |
+
+`git -C` earns its place as a blanket rule precisely because it removes the need
+to classify: one argument, and the answer no longer depends on where the process
+happens to sit. Derive the target in the same direction every time — anchor on
+an absolute path you were handed, then walk to the repository root through
+`--git-common-dir`, rather than assuming the cwd is inside the tree at all; this
+repo documents that walk in `dev/fragments/monorepo/git-workflow.md`. Deriving
+the path _from_ the cwd and then passing it to `-C` launders the same mistake
+through a flag.
+
+A sixth, which that zero-byte reading is the clearest case of. **When a command
+can fail by producing nothing, pair it with a reading that must produce
+something.** No output and exit 0 is what a correct run against an unchanged
+tree looks like, so the wrong-cwd diff was not merely unhelpful — it was
+indistinguishable from a real answer, and nothing about it invited a second
+look. The `git -C <target>` reading was the control that made it visible. This
+is the fourth rule applied to a measurement rather than to a `parallel` branch:
+a probe whose failure mode is silence needs a companion whose success is loud.
