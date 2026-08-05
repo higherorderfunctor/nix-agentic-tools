@@ -6637,6 +6637,13 @@ in {
       services.mcp-servers.servers.git-mcp.enable = true;
     };
     execOf = r: r.config.systemd.user.services.mcp-git-mcp.Service.ExecStart;
+    # Build the expected fragment with the SAME escaper the emitter uses, so
+    # the two cannot disagree. Today `lib.escapeShellArg` leaves a dotted quad
+    # bare (it only quotes strings outside `[[:alnum:],._+:@%/-]+`), so this
+    # renders `--host 127.0.0.2` — but hardcoding either the bare or the
+    # quoted form would turn a future change in that rule into a test failure
+    # against a wrapper that is still correct.
+    expectHost = h: lib.escapeShellArg "--host ${lib.escapeShellArg h}";
   in
     pkgs.runCommand "module-test-mcp-services-bridge-pins-bind-host" {} ''
       fail() {
@@ -6646,9 +6653,9 @@ in {
       o=${execOf overridden}
       d=${execOf defaulted}
       grep -q -- '--host' "$d" || fail "mcp-proxy invoked without --host at all"
-      grep -q -- '--host 127.0.0.2' "$o" \
+      grep -qF -- ${expectHost "127.0.0.2"} "$o" \
         || fail "bind host not threaded from an overridden service.host"
-      grep -q -- '--host 127.0.0.1' "$d" \
+      grep -qF -- ${expectHost "127.0.0.1"} "$d" \
         || fail "default bind host is not loopback"
       echo PASS > "$out"
     '';
