@@ -6652,7 +6652,7 @@ in {
       }
       o=${execOf overridden}
       d=${execOf defaulted}
-      grep -q -- '--host' "$d" || fail "mcp-proxy invoked without --host at all"
+      grep -qF -- '--host' "$d" || fail "mcp-proxy invoked without --host at all"
       grep -qF -- ${expectHost "127.0.0.2"} "$o" \
         || fail "bind host not threaded from an overridden service.host"
       grep -qF -- ${expectHost "127.0.0.1"} "$d" \

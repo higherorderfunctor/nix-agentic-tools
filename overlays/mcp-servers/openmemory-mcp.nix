@@ -151,12 +151,20 @@ in
       # It proves only the phrases listed below — it is NOT a proof that no
       # other listener exists. If upstream grows a second HTTP server, this
       # stays green; the runtime check is `ss -ltn` against a started daemon.
-      lib=$out/lib/openmemory-mcp
-      grep -q 'OM_HOST' "$lib/dist/core/cfg.js" \
+      #
+      # `grep -F` is load-bearing, not style. Every pattern below carries a
+      # `.`, which a basic regex reads as "any character" — so as a regex each
+      # one also accepts a line carrying some OTHER character in that
+      # position, and the control would pass on a dist that does not contain
+      # the phrase it names. A positive control matching more than it claims
+      # is exactly the "proves less than it appears" failure this block exists
+      # to avoid.
+      om_lib=$out/lib/openmemory-mcp
+      grep -qF 'OM_HOST' "$om_lib/dist/core/cfg.js" \
         || { echo "bind patch lost: OM_HOST absent from cfg.js" >&2; exit 1; }
-      grep -q 'SERVER.listen(port, host, cb)' "$lib/dist/server/server.js" \
+      grep -qF 'SERVER.listen(port, host, cb)' "$om_lib/dist/server/server.js" \
         || { echo "bind patch lost: server.js listen has no host" >&2; exit 1; }
-      grep -q 'env.host' "$lib/dist/server/index.js" \
+      grep -qF 'env.host' "$om_lib/dist/server/index.js" \
         || { echo "bind patch lost: index.js does not pass a host" >&2; exit 1; }
     '';
     meta.mainProgram = "openmemory-mcp";
