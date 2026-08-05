@@ -131,10 +131,29 @@
         default = {};
         description = "Upstream programs.claude-code stub (out of doc scope).";
       };
-      systemd.user.services = lib.mkOption {
-        type = lib.types.attrsOf lib.types.anything;
-        default = {};
-        description = "Systemd user services.";
+      systemd.user = {
+        paths = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+          description = "Systemd user path units.";
+        };
+        services = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+          description = "Systemd user services.";
+        };
+      };
+      xdg = {
+        configHome = lib.mkOption {
+          type = lib.types.str;
+          default = "/home/test/.config";
+          description = "XDG configuration directory.";
+        };
+        stateHome = lib.mkOption {
+          type = lib.types.str;
+          default = "/home/test/.local/state";
+          description = "XDG state directory.";
+        };
       };
     };
   };

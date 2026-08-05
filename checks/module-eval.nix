@@ -74,9 +74,15 @@
         type = lib.types.attrsOf lib.types.anything;
         default = {};
       };
-      systemd.user.services = lib.mkOption {
-        type = lib.types.attrsOf lib.types.anything;
-        default = {};
+      systemd.user = {
+        paths = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+        };
+        services = lib.mkOption {
+          type = lib.types.attrsOf lib.types.anything;
+          default = {};
+        };
       };
       # programs.claude-code is collapsed to attrsOf anything —
       # upstream options aren't in our doc scope (options-doc filters
@@ -2698,6 +2704,86 @@ in {
       (builtins.filter (l: l == "export GITLAB_HOST")
         (lib.splitString "\n" script))
       == 1
+  );
+
+  module-glab-keyring-sync-hm-wiring = mkTest "glab-keyring-sync-hm-wiring" (
+    let
+      ev = evalHm {
+        glab = {
+          enable = true;
+          host.file = "/run/secrets/gitlab-url";
+          keyringSync.enable = true;
+          settings.git_protocol = "ssh";
+          token.file = "/run/secrets/gitlab-token";
+        };
+      };
+      pendingFile = "/home/test/.local/state/glab/keyring-sync-pending";
+      sync = import ../packages/glab/lib/mkKeyringSync.nix {
+        cfg = ev.config.glab;
+        configDir = "/home/test/.config/glab-cli";
+        inherit lib pkgs;
+        inherit pendingFile;
+      };
+      activation = ev.config.home.activation.glabKeyringSync.text;
+      pathUnit = ev.config.systemd.user.paths.glab-keyring-sync;
+      service = ev.config.systemd.user.services.glab-keyring-sync;
+      wrapper = (builtins.head ev.config.home.packages).passthru.wrapperText;
+      scriptAfterProbe = builtins.elemAt (lib.splitString "secret-tool store" sync.scriptText) 1;
+    in
+      service.Service.Type
+      == "oneshot"
+      && service.Service.Restart == "no"
+      && service.Service.TimeoutStartSec == "5min"
+      && pathUnit.Path.PathExists == pendingFile
+      && pathUnit.Install.WantedBy == ["graphical-session.target"]
+      && lib.hasInfix pendingFile activation
+      # Splitting after the only probe invocation proves both runtime secret
+      # paths occur later in the generated script, not merely somewhere in it.
+      && lib.hasInfix "secret-tool store" sync.scriptText
+      && lib.hasInfix "/run/secrets/gitlab-url" scriptAfterProbe
+      && lib.hasInfix "/run/secrets/gitlab-token" scriptAfterProbe
+      && lib.hasInfix "--stdin" sync.scriptText
+      && lib.hasInfix "--use-keyring" sync.scriptText
+      && !(lib.hasInfix "--insecure-storage" sync.scriptText)
+      # The synchronized token flows over stdin and is no longer exported by
+      # the ordinary wrapper, where it would override keyring storage.
+      && !(lib.hasInfix "export glab_sync_token" sync.scriptText)
+      && !(lib.hasInfix "export GITLAB_TOKEN" wrapper)
+      && lib.hasInfix "export GITLAB_HOST" wrapper
+  );
+
+  module-glab-keyring-sync-boundaries = mkTest "glab-keyring-sync-boundaries" (
+    let
+      failedMessages = ev:
+        map (entry: entry.message)
+        (builtins.filter (entry: !entry.assertion) ev.config.assertions);
+      devenv = evalDevenv {
+        glab = {
+          enable = true;
+          host.plain = "gitlab.example.com";
+          keyringSync.enable = true;
+          token.file = "/run/secrets/gitlab-token";
+        };
+      };
+      plainToken = evalHm {
+        glab = {
+          enable = true;
+          host.plain = "gitlab.example.com";
+          keyringSync.enable = true;
+          token.plain = "store-visible-token";
+        };
+      };
+      disabled = evalHm {glab.keyringSync.enable = true;};
+    in
+      builtins.elem
+      "glab.keyringSync.enable is Home Manager-only: devenv may consume a user's existing keyring, but a repository shell must not own login or graphical-session services."
+      (failedMessages devenv)
+      && builtins.elem
+      "glab.keyringSync.enable requires glab.token.file or glab.token.helper; token.plain would already expose the token through the Nix store."
+      (failedMessages plainToken)
+      && builtins.elem
+      "glab.keyringSync.enable requires glab.enable."
+      (failedMessages disabled)
   );
 
   # HM and devenv must expose the SAME option tree — that is the whole
