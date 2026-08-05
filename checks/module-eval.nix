@@ -2285,9 +2285,12 @@ in {
   module-semble-codex-sandbox-cache-parity = mkTest "semble-codex-sandbox-cache-parity" (
     let
       config = {
-        ai.codex.settings = {
-          sandbox_mode = "workspace-write";
-          sandbox_workspace_write.writable_roots = ["/consumer-cache"];
+        ai.codex = {
+          enable = true;
+          settings = {
+            sandbox_mode = "workspace-write";
+            sandbox_workspace_write.writable_roots = ["/consumer-cache"];
+          };
         };
         semble = {
           enable = true;
