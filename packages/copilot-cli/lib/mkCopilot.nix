@@ -387,15 +387,35 @@ lib.ai.app.mkAiApp {
   };
   devenv = {
     options = {
-      # Wrapper-aimed config dir — holds files pointed at by CLI
-      # wrapper flags (mcp-config.json) and files Copilot doesn't
-      # auto-read at project scope (lsp-config.json, settings.json).
-      # Project-scope files Copilot DOES auto-read live under
-      # `projectDir` (default `.github`) instead.
+      # Wrapper-aimed config dir. `mcp-config.json` here is LIVE — the
+      # `packages` wrapper points `--additional-mcp-config` at it.
+      # `lsp-config.json` and `settings.json` are INERT: Copilot reads
+      # neither at project scope and offers no flag to inject them
+      # (measured, see dev/fragments/ai-clis/copilot-config-delivery.md).
+      # They are kept as declared-but-undelivered rather than removed, so
+      # the option surface stays at HM parity and they become live for free
+      # if upstream grows discovery. Project-scope files Copilot DOES read
+      # live under `projectDir` (default `.github`) instead — that is also
+      # the surface github.com's Copilot code review consumes, and it is a
+      # different consumer from this CLI.
       configDir = lib.mkOption {
         type = lib.types.str;
         default = ".config/github-copilot";
-        description = "Wrapper-aimed config dir (mcp-config, lsp-config, settings). Relative to devenv root.";
+        description = ''
+          Wrapper-aimed config dir, relative to the devenv root. Holds
+          `mcp-config.json`, which the wrapped `copilot` is pointed at via
+          `--additional-mcp-config`.
+
+          Also holds `lsp-config.json` and `settings.json`, which Copilot
+          does NOT read at project scope and provides no flag to inject;
+          those are written for option parity with Home Manager but are not
+          delivered. Configure LSP servers and settings through the Home
+          Manager module if they must take effect.
+
+          This is NOT the directory github.com's Copilot code review reads —
+          that consumes committed files under `projectDir` (`.github`), and
+          this path is gitignored.
+        '';
       };
     };
     config = {
@@ -426,6 +446,28 @@ lib.ai.app.mkAiApp {
         then builtins.readFile rule.text
         else rule.text;
       dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
+
+      # Wrapper that points copilot at the project's rendered mcp-config.json.
+      # Only built when there is something to point at, so a project with no
+      # MCP servers keeps the bare package and pays for no rebuild. See the
+      # `packages` entry below for why this is required rather than optional,
+      # and dev/fragments/ai-clis/copilot-config-delivery.md for the measured
+      # discovery behavior and the rejected COPILOT_HOME alternative.
+      hasMcp = mergedServers != {};
+      mcpConfigPath = ''\''${DEVENV_ROOT}/${cfg.configDir}/mcp-config.json'';
+      wrappedPackage = pkgs.symlinkJoin {
+        name = "copilot-cli-wrapped";
+        paths = [cfg.package];
+        nativeBuildInputs = [pkgs.makeWrapper];
+        postBuild = ''
+          wrapProgram $out/bin/copilot \
+            --add-flags "--additional-mcp-config @${mcpConfigPath}"
+        '';
+      };
+      copilotPackage =
+        if hasMcp
+        then wrappedPackage
+        else cfg.package;
     in
       lib.mkMerge [
         # L2b → L3: expand `ai.copilot.agentsDir` into
@@ -435,11 +477,27 @@ lib.ai.app.mkAiApp {
             dirHelpers.agentsFromDir cfg.agentsDir
           );
         })
-        # Package installation — devenv projects are shell-scoped, so
-        # env exports go in the devenv `env` attrset directly rather
-        # than an HM-style symlinkJoin wrapper. The binary is enough
-        # here; env wiring is handled by the `env = ...` merge below.
-        {packages = [cfg.package];}
+        # Package installation. ENV wiring needs no wrapper — devenv has a
+        # native `env` attrset (see the merge below). MCP config does, and
+        # that is why `cfg.package` alone was NOT enough here.
+        #
+        # Copilot reads MCP config from exactly two places: `$HOME/.copilot/
+        # mcp-config.json`, and whatever `--additional-mcp-config` points at.
+        # It reads NOTHING from a project-local config dir. Measured by
+        # syscall trace against 1.0.78: inside the project it touches only
+        # `.github/copilot-instructions.md`, `.github/allowed_models.txt` and
+        # `.git`, while `<project>/.config/github-copilot/{mcp,lsp}-config.json`
+        # and `settings.json` are never opened or even stat'd.
+        #
+        # `configDir` was always "wrapper-aimed" (see its option comment);
+        # devenv adopted it WITHOUT the wrapper, so the rendered
+        # mcp-config.json sat on disk and nothing ever loaded it.
+        #
+        # `\''${DEVENV_ROOT}` is escaped so the launched shell expands it, not
+        # the builder — the same hazard that shipped a `/homeless-shelter`
+        # path on the HM side. `@` marks the value a FILE PATH; without it
+        # copilot parses the path string as JSON and every session dies.
+        {packages = [copilotPackage];}
         # agents + agentsDir are no longer mutually exclusive
         # (parity with HM side).
         # Environment variables — devenv has a native `env` attrset
@@ -448,8 +506,13 @@ lib.ai.app.mkAiApp {
         (lib.mkIf (mergedEnvironmentVariables != {}) {
           env = lib.mapAttrs (_: lib.mkDefault) mergedEnvironmentVariables;
         })
-        # lsp-config.json — typed LSP server definitions. Inlined
-        # as `text` for parity with the HM side.
+        # lsp-config.json — INERT at project scope. Copilot opens
+        # `$HOME/.copilot/lsp-config.json` and nothing project-local, and
+        # unlike MCP there is no `--additional-lsp-config` to point it here
+        # (verified against 1.0.78 `--help`). Written anyway for option
+        # parity with HM, and deliberately NOT an assertion: `ai.lspServers`
+        # is a shared pool, so failing here would break a project that
+        # legitimately targets Claude or Kiro with it.
         (lib.mkIf (mergedLspServers != {}) {
           files."${cfg.configDir}/lsp-config.json".text =
             builtins.toJSON (lib.mapAttrs aiCommon.mkCopilotLspConfig mergedLspServers);
@@ -535,6 +598,10 @@ lib.ai.app.mkAiApp {
         # projects are project-local (not a shared home dir), so
         # there's no `trusted_folders` preservation problem to solve
         # here. Static JSON write is sufficient.
+        #
+        # INERT at project scope, same as lsp-config.json above: Copilot
+        # reads its settings from `$HOME/.copilot/config.json` and never
+        # stats a project-local settings.json. Kept for option parity.
         {
           files."${cfg.configDir}/settings.json".text =
             builtins.toJSON cfg.settings;

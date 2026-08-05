@@ -4213,6 +4213,55 @@ in {
       result.config.files ? ".config/github-copilot/mcp-config.json"
   );
 
+  # The test above asserts the FILE is written — and it passed for the entire
+  # life of a devenv module that never told copilot to read it. Copilot loads
+  # MCP config from `$HOME/.copilot/mcp-config.json` or whatever
+  # `--additional-mcp-config` points at, and NOTHING project-local: a syscall
+  # trace of 1.0.78 in a project never even stats
+  # `.config/github-copilot/mcp-config.json`. So writing the file is half the
+  # job; realize the wrapper and read the flag it actually injects.
+  module-copilot-devenv-wrapper-points-at-project-mcp-config = let
+    result = evalDevenv {
+      ai.copilot.enable = true;
+      ai.mcpServers.test-server = {
+        type = "stdio";
+        package = pkgs.hello;
+        command = "hello";
+      };
+    };
+    wrapped =
+      lib.findFirst (p: (p.name or "") == "copilot-cli-wrapped")
+      (throw "devenv produced no copilot-cli-wrapped package")
+      result.config.packages;
+  in
+    pkgs.runCommand "module-test-copilot-devenv-wrapper-points-at-project-mcp-config" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      fail() {
+        echo "FAIL: copilot-devenv-wrapper-points-at-project-mcp-config: $1" >&2
+        exit 1
+      }
+      w=${wrapped}/bin/copilot
+      [ -f "$w" ] || fail "no wrapper produced at $w"
+      grep -qF -- '--additional-mcp-config @' "$w" \
+        || fail "flag lacks the @ file-path prefix; copilot parses it as JSON"
+      grep -qF -- '@''${DEVENV_ROOT}/.config/github-copilot/mcp-config.json' "$w" \
+        || fail "flag does not point at the project's rendered mcp-config.json"
+      if grep -qF -- '/homeless-shelter' "$w"; then
+        fail "builder environment leaked into the shipped wrapper"
+      fi
+      echo PASS > "$out"
+    '';
+
+  # No MCP servers → no wrapper, so a project that configures none keeps the
+  # bare package and pays for no rebuild.
+  module-copilot-devenv-unwrapped-without-mcp = mkTest "copilot-devenv-unwrapped-without-mcp" (
+    let
+      result = evalDevenv {ai.copilot.enable = true;};
+    in
+      !(lib.any (p: (p.name or "") == "copilot-cli-wrapped") result.config.packages)
+  );
+
   # ── Task 4b: Copilot feature-gap closure ───────────────────────
   # lspServers → lsp-config.json (HM and devenv).
   module-copilot-hm-writes-lsp-config-json = mkTest "copilot-hm-writes-lsp-config-json" (
