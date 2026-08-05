@@ -205,6 +205,20 @@ in {
         launcher injects the secret into its environment at start
         (delivered for Kiro only; other ecosystems throw on a credential
         value).
+
+        LIMITATION — a credential header authenticates only the kiro
+        launcher that CARRIES it. The server list and these placeholders
+        live in the user-global mcp.json, but the values are exported by
+        the wrapped package, so any OTHER kiro on PATH reads the same
+        servers and connects with NO credentials, silently. The common
+        case is a devenv project that enables Kiro: it puts a second
+        wrapped kiro on PATH which shadows the Home Manager one inside
+        that shell, carrying secrets only for servers that project
+        declares. Declare the same servers and secrets in the project, or
+        prefer a `services.mcp-servers` daemon, which holds credentials
+        itself and hands clients a credential-free loopback url. Full
+        write-up: `dev/fragments/mcp-secrets/mcp-secrets.md` in the
+        nix-agentic-tools repository.
       '';
     };
     timeout = lib.mkOption {
