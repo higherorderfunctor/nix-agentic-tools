@@ -905,9 +905,9 @@ in
       settingsStateName = "codex-config-${builtins.hashString "sha256" configFile}";
     in {
       ai.codex.settings = lib.mkMerge [
-        {
+        (lib.mkIf cfg.enable {
           _integration_writable_roots = lib.mkAfter ["${config.xdg.cacheHome}/nix"];
-        }
+        })
         (lib.mkIf (topSettings.reasoningEffort != null) {
           model_reasoning_effort = lib.mkDefault topSettings.reasoningEffort;
         })
@@ -1009,12 +1009,12 @@ in
         else null;
     in {
       ai.codex.settings = lib.mkMerge [
-        {
+        (lib.mkIf cfg.enable {
           _integration_writable_roots = lib.mkAfter (
             ["${config.devenv.root}/.git"]
             ++ lib.optional (nixCacheRoot != null) nixCacheRoot
           );
-        }
+        })
         (lib.mkIf (topSettings.reasoningEffort != null) {
           model_reasoning_effort = lib.mkDefault topSettings.reasoningEffort;
         })
