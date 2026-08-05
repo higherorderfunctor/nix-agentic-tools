@@ -181,16 +181,39 @@ lib.ai.app.mkAiApp {
       hasMcp = mergedServers != {};
       hasEnv = mergedEnvironmentVariables != {};
       needsWrapper = hasMcp || hasEnv;
-      # `--add-flags` takes a single string; `makeWrapper` splices
-      # it verbatim into the generated wrapper so shell variables
-      # (`$HOME`) are expanded by bash at runtime. The mcp-config
-      # path therefore refers to whatever `$HOME/${configDir}`
-      # resolves to when copilot is launched, matching the
-      # on-disk write above.
-      mcpConfigPath = "$HOME/${cfg.configDir}/mcp-config.json";
+      # TWO things below are load-bearing. Getting either wrong breaks every
+      # real copilot session — and BOTH were wrong, in a way that masked each
+      # other: the bare path failed JSON parsing before anything ever tried to
+      # open it, so the bogus path never even got the chance to report ENOENT.
+      #
+      # 1. `\''${HOME}` is ESCAPED so it reaches the generated wrapper
+      #    unexpanded and bash expands it at launch. `addFlagsArg` is
+      #    interpolated into `postBuild`, so an unescaped `$HOME` is expanded
+      #    by the BUILDER's shell — and nixpkgs builds run with
+      #    `HOME=/homeless-shelter`. The shipped wrapper literally read:
+      #
+      #      exec … --additional-mcp-config /homeless-shelter/.copilot/mcp-config.json "$@"
+      #
+      #    a path that exists on no machine. (Escaping keeps the derivation
+      #    user-independent; baking `config.home.homeDirectory` would work too
+      #    but would fork the store path per user for no gain.)
+      #
+      # 2. The `@` prefix marks the value a FILE PATH. Copilot's own help:
+      #
+      #      --additional-mcp-config <json>   JSON string or file path (prefix with @)
+      #
+      #    Without it the CLI parses the path STRING as JSON and dies with
+      #    `Invalid JSON: expected value at line 1 column 1` on every session
+      #    start. `--version` and `--help` still work, which is why this hid:
+      #    they short-circuit before the config load.
+      #
+      # This relies on makeWrapper splicing `--add-flags` values unquoted, so
+      # module-eval realizes the wrapper and greps it rather than trusting the
+      # shape — see module-copilot-hm-wrapper-mcp-flag-is-usable.
+      mcpConfigPath = ''\''${HOME}/${cfg.configDir}/mcp-config.json'';
       addFlagsArg =
         lib.optionalString hasMcp
-        ''--add-flags "--additional-mcp-config ${mcpConfigPath}"'';
+        ''--add-flags "--additional-mcp-config @${mcpConfigPath}"'';
       setEnvArgs =
         lib.concatStringsSep " "
         (lib.mapAttrsToList

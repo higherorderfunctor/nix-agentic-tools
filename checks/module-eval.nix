@@ -167,10 +167,22 @@
     // {
       chatgpt-codex = pkgs.ai.chatgpt-codex or pkgs.hello;
       claude-code = pkgs.ai.claude-code or pkgs.hello;
-      copilot-cli = pkgs.ai.copilot-cli or pkgs.hello;
+      # Tiny `bin/copilot` stub, same reasoning as kimchi below plus one more:
+      # the real copilot-cli is a large UNFREE binary, and the wrapper-content
+      # test should not drag it into every `nix flake check`. No test asserts
+      # the underlying package identity — only the `copilot-cli-wrapped` name.
+      copilot-cli = pkgs.writeShellScriptBin "copilot" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        exec true
+      '';
       # Force a tiny `bin/kimchi` stub so the HM wrapper build test is cheap
       # and the wrapProgram target exists (hello has no bin/kimchi).
-      kimchi = pkgs.writeShellScriptBin "kimchi" "exec true";
+      kimchi = pkgs.writeShellScriptBin "kimchi" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        exec true
+      '';
       kiro-cli = pkgs.ai.kiro-cli or pkgs.hello;
       semble = pkgs.ai.semble or pkgs.hello;
       mcpServers = pkgs.ai.mcpServers or {};
@@ -4263,6 +4275,50 @@ in {
       == 1
       && (first.name or "") == "copilot-cli-wrapped"
   );
+
+  # The test above is explicit that it cannot introspect postBuild content —
+  # and postBuild is exactly where two shipped defects lived, together making
+  # every real copilot session fail with
+  # `Invalid JSON: expected value at line 1 column 1`:
+  #
+  #   1. an unescaped `$HOME` was expanded by the BUILDER's shell, so the
+  #      wrapper pointed at `/homeless-shelter/.copilot/mcp-config.json`
+  #   2. the value lacked the `@` prefix that marks it a FILE PATH, so copilot
+  #      parsed the path string itself as JSON
+  #
+  # They masked each other: JSON parsing failed before anything opened the
+  # path, so the bogus path never got to report ENOENT. `--version`/`--help`
+  # kept working (they short-circuit before config load), which is why a
+  # "does it start?" check missed it. So realize the wrapper and read it.
+  module-copilot-hm-wrapper-mcp-flag-is-usable = let
+    result = evalHm {
+      ai.copilot.enable = true;
+      ai.mcpServers.test-server = {
+        type = "stdio";
+        package = pkgs.hello;
+        command = "hello";
+      };
+    };
+    wrapped = builtins.head result.config.home.packages;
+  in
+    pkgs.runCommand "module-test-copilot-hm-wrapper-mcp-flag-is-usable" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      fail() {
+        echo "FAIL: copilot-hm-wrapper-mcp-flag-is-usable: $1" >&2
+        exit 1
+      }
+      w=${wrapped}/bin/copilot
+      [ -f "$w" ] || fail "no wrapper produced at $w"
+      grep -qF -- '--additional-mcp-config @' "$w" \
+        || fail "flag lacks the @ file-path prefix; copilot parses it as JSON"
+      grep -qF -- '@''${HOME}/' "$w" \
+        || fail "HOME not left unexpanded for the runtime shell"
+      if grep -qF -- '/homeless-shelter' "$w"; then
+        fail "builder HOME leaked into the shipped wrapper"
+      fi
+      echo PASS > "$out"
+    '';
 
   module-copilot-hm-wrapper-exports-env-vars = mkTest "copilot-hm-wrapper-exports-env-vars" (
     let
