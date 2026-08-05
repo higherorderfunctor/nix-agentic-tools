@@ -609,6 +609,24 @@ in {
       && overriddenDevenv.env.GIT_SSH_COMMAND == "custom-ssh"
   );
 
+  module-ai-git-ssh-wrapper-is-noninteractive = let
+    command = (evalDevenv {ai.codex.enable = true;}).config.env.GIT_SSH_COMMAND;
+    sshConfig = pkgs.writeText "sandbox-ssh-config" ''
+      Host *
+        BatchMode no
+    '';
+  in
+    pkgs.runCommand "module-test-ai-git-ssh-wrapper-is-noninteractive" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      mkdir -p home/.ssh
+      ln -s ${sshConfig} home/.ssh/config
+      HOME="$PWD/home" ${command} -G github.com > resolved
+      ${pkgs.gnugrep}/bin/grep -Fqx 'batchmode yes' resolved
+      touch "$out"
+    '';
+
   module-codex-default-sandbox-roots = mkTest "codex-default-sandbox-roots" (
     let
       settings = {

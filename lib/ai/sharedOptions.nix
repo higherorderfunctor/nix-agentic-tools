@@ -37,13 +37,13 @@
         resolved_config="$(${pkgs.coreutils}/bin/readlink -f "$ssh_config" 2>/dev/null || :)"
         case "$resolved_config" in
           /nix/store/*)
-            exec ${lib.getExe pkgs.openssh} -F "$ssh_config" "$@"
+            exec ${lib.getExe pkgs.openssh} -o BatchMode=yes -F "$ssh_config" "$@"
             ;;
           *) ;;
         esac
       fi
 
-      exec ${lib.getExe pkgs.openssh} "$@"
+      exec ${lib.getExe pkgs.openssh} -o BatchMode=yes "$@"
     '';
   };
   sandboxSafeSshCommand = lib.getExe sandboxSafeSsh;
@@ -241,7 +241,8 @@ in {
         harness is enabled. The wrapper behaves like ordinary OpenSSH unless
         `~/.ssh/config` resolves into the immutable Nix store; only then does
         it pass that same file through explicit `-F`, avoiding user-namespace
-        owner remapping without discarding host/key routing.
+        owner remapping without discarding host/key routing. OpenSSH batch mode
+        makes missing credentials fail instead of opening a password dialog.
 
         Home Manager contributes `programs.git.settings.core.sshCommand` at
         `mkDefault` priority. Devenv contributes `GIT_SSH_COMMAND` to the shell
