@@ -8,12 +8,45 @@
 {
   config,
   lib,
+  options,
+  pkgs,
   ...
 }: let
   aiCommon = import ./ai-common.nix {inherit lib;};
   agent = import ./agent.nix {inherit lib;};
   dirHelpers = import ./dir-helpers.nix {inherit lib;};
   hooks = import ./hooks.nix {inherit lib;};
+  harnessNames = ["claude" "codex" "copilot" "kimchi" "kiro"];
+  anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
+  hasDevenvEnv = lib.hasAttrByPath ["env"] options;
+  hasHomeManagerGit = lib.hasAttrByPath ["programs" "git" "settings"] options;
+
+  # OpenSSH rejects Home Manager's otherwise-safe ~/.ssh/config symlink inside
+  # Linux user-namespace sandboxes: the root-owned Nix-store target is exposed
+  # as nobody. An explicit -F accepts that same immutable target. Keep the
+  # exception exact so ordinary user-owned configs retain OpenSSH's normal
+  # ownership checks.
+  sandboxSafeSsh = pkgs.writeShellApplication {
+    name = "ai-sandbox-safe-ssh";
+    bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
+    text = ''
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      if [ -n "''${HOME:-}" ]; then
+        ssh_config="$HOME/.ssh/config"
+        resolved_config="$(${pkgs.coreutils}/bin/readlink -f "$ssh_config" 2>/dev/null || :)"
+        case "$resolved_config" in
+          /nix/store/*)
+            exec ${lib.getExe pkgs.openssh} -F "$ssh_config" "$@"
+            ;;
+          *) ;;
+        esac
+      fi
+
+      exec ${lib.getExe pkgs.openssh} "$@"
+    '';
+  };
+  sandboxSafeSshCommand = lib.getExe sandboxSafeSsh;
 in {
   options.ai = {
     context = lib.mkOption {
@@ -200,6 +233,24 @@ in {
       '';
     };
 
+    gitSshConfigWorkaround = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Install a sandbox-safe Git SSH default whenever any supported AI
+        harness is enabled. The wrapper behaves like ordinary OpenSSH unless
+        `~/.ssh/config` resolves into the immutable Nix store; only then does
+        it pass that same file through explicit `-F`, avoiding user-namespace
+        owner remapping without discarding host/key routing.
+
+        Home Manager contributes `programs.git.settings.core.sshCommand` at
+        `mkDefault` priority. Devenv contributes `GIT_SSH_COMMAND` to the shell
+        environment at `mkDefault` priority so its Git and every harness it
+        launches receive the same behavior. Set this false to manage Git SSH
+        delivery independently.
+      '';
+    };
+
     environmentVariables = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
       default = {};
@@ -253,15 +304,30 @@ in {
   #
   # Emission logic lives at L4 inside each per-CLI factory. This
   # layer only reshapes the L1 Dir option into L2 per-file entries.
-  config.ai = {
-    rules = lib.mkIf (config.ai.rulesDir != null) (
-      lib.mapAttrs (_: lib.mkDefault) (dirHelpers.rulesFromDir config.ai.rulesDir)
-    );
-    skills = lib.mkIf (config.ai.skillsDir != null) (
-      lib.mapAttrs (_: lib.mkDefault) (dirHelpers.skillsFromDir config.ai.skillsDir)
-    );
-    agents = lib.mkIf (config.ai.agentsDir != null) (
-      lib.mapAttrs (_: lib.mkDefault) (dirHelpers.agentsFromDir config.ai.agentsDir)
-    );
-  };
+  config = lib.mkMerge [
+    {
+      ai = {
+        rules = lib.mkIf (config.ai.rulesDir != null) (
+          lib.mapAttrs (_: lib.mkDefault) (dirHelpers.rulesFromDir config.ai.rulesDir)
+        );
+        skills = lib.mkIf (config.ai.skillsDir != null) (
+          lib.mapAttrs (_: lib.mkDefault) (dirHelpers.skillsFromDir config.ai.skillsDir)
+        );
+        agents = lib.mkIf (config.ai.agentsDir != null) (
+          lib.mapAttrs (_: lib.mkDefault) (dirHelpers.agentsFromDir config.ai.agentsDir)
+        );
+      };
+    }
+    (lib.mkIf (config.ai.gitSshConfigWorkaround && anyHarnessEnabled) (
+      if hasHomeManagerGit
+      then {
+        programs.git.settings.core.sshCommand = lib.mkDefault sandboxSafeSshCommand;
+      }
+      else if hasDevenvEnv
+      then {
+        env.GIT_SSH_COMMAND = lib.mkDefault sandboxSafeSshCommand;
+      }
+      else {}
+    ))
+  ];
 }

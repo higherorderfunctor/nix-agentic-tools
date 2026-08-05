@@ -1,34 +1,38 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-08-05 (commit pending — re-verifies these conventions
-> while the managed MCP module's bridge-host comment is generalized so adding
-> Context7 to the bridge set cannot stale a hardcoded server count). Prior:
-> 2026-08-03 (commit pending — glab's shared package default now follows its
-> `pkgs.ai.devTools.glab` namespace in both HM and devenv). Prior: 2026-08-02
-> (commit pending — Semble's shared activation condition delegates its Codex
-> cache grant to backend-native sinks; Home Manager appends the user XDG cache
-> path without enabling Codex or choosing its sandbox mode). Prior: 2026-08-02
-> (commit pending — Semble adds one shared HM and devenv option declaration plus
-> shared runtime-fanout logic; only the package installation sink differs).
-> Prior: 2026-08-02 (commit pending — Codex named profiles now use one typed
-> declaration across HM and devenv while each backend delivers the artifact at
-> its native scope: HM links user files and devenv materializes repo
-> declarations into the user-only profile lookup location with explicit
-> ownership). Prior: 2026-08-02 (commit pending — generated option references
-> now enforce exact flattened `ai.*` name/type parity across HM and devenv;
-> backend-only behavior stays discoverable and fails explicitly, as with Home
-> Manager rejecting project-only `ai.copilot.projectDir` overrides). Prior:
-> 2026-08-02 (commit 589fa37c — distinguishes ordinary JSON merge activation
-> from Codex's leaf-owned TOML reconciliation, whose manifest supplies removal
-> semantics while preserving native project-trust state). Prior: 2026-07-28
-> (commit pending — records the ONE-SHARED-DECLARATION form of the config-parity
-> rule, landed by `packages/glab` and asserted by
-> `module-glab-hm-devenv-option-parity`; prior 2026-07-21 was the repo-wide
-> activation reordering `entryAfter ["writeBoundary"]` → `["linkGeneration"]`;
-> earlier revisions added the activation script `exit` warning + Nix path type
-> strictness section). If you touch any `modules/<subdir>/default.nix` file, add
-> a new option, or change an assertion/activation pattern and this fragment
-> isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-08-05 (commit pending — enabled glab facets contribute
+> their effective config directory to Codex's legacy workspace-write sandbox;
+> this follows backend defaults and explicit overrides without coupling the
+> standalone glab module to the AI module). Prior: 2026-08-05 (commit pending —
+> re-verifies these conventions while the managed MCP module's bridge-host
+> comment is generalized so adding Context7 to the bridge set cannot stale a
+> hardcoded server count). Prior: 2026-08-03 (commit pending — glab's shared
+> package default now follows its `pkgs.ai.devTools.glab` namespace in both HM
+> and devenv). Prior: 2026-08-02 (commit pending — Semble's shared activation
+> condition delegates its Codex cache grant to backend-native sinks; Home
+> Manager appends the user XDG cache path without enabling Codex or choosing its
+> sandbox mode). Prior: 2026-08-02 (commit pending — Semble adds one shared HM
+> and devenv option declaration plus shared runtime-fanout logic; only the
+> package installation sink differs). Prior: 2026-08-02 (commit pending — Codex
+> named profiles now use one typed declaration across HM and devenv while each
+> backend delivers the artifact at its native scope: HM links user files and
+> devenv materializes repo declarations into the user-only profile lookup
+> location with explicit ownership). Prior: 2026-08-02 (commit pending —
+> generated option references now enforce exact flattened `ai.*` name/type
+> parity across HM and devenv; backend-only behavior stays discoverable and
+> fails explicitly, as with Home Manager rejecting project-only
+> `ai.copilot.projectDir` overrides). Prior: 2026-08-02 (commit 589fa37c —
+> distinguishes ordinary JSON merge activation from Codex's leaf-owned TOML
+> reconciliation, whose manifest supplies removal semantics while preserving
+> native project-trust state). Prior: 2026-07-28 (commit pending — records the
+> ONE-SHARED-DECLARATION form of the config-parity rule, landed by
+> `packages/glab` and asserted by `module-glab-hm-devenv-option-parity`; prior
+> 2026-07-21 was the repo-wide activation reordering
+> `entryAfter ["writeBoundary"]` → `["linkGeneration"]`; earlier revisions added
+> the activation script `exit` warning + Nix path type strictness section). If
+> you touch any `modules/<subdir>/default.nix` file, add a new option, or change
+> an assertion/activation pattern and this fragment isn't updated in the same
+> commit, stop and fix it.
 
 These conventions are enforced by code review and the `checks/module-eval.nix`
 evaluation tests, not by the module system itself. Follow them when adding or
@@ -160,6 +164,17 @@ pkgs.symlinkJoin {
   '';
 }
 ```
+
+### Optional cross-module contributions
+
+A standalone package module must remain importable without the umbrella AI
+module. Before contributing integration state such as a Codex writable root,
+test the destination option with `lib.hasAttrByPath ... options`, then gate on
+the relevant runtime enable. glab uses this pattern to contribute its effective
+`configDir`: Home Manager resolves its `null` default to
+`${config.xdg.configHome}/glab-cli`, while devenv uses its evaluated project
+state default or the consumer's explicit override. The contribution configures
+an already-enabled Codex; it never enables Codex itself.
 
 ### Activation script patterns
 

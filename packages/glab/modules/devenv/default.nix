@@ -28,6 +28,7 @@
 {
   config,
   lib,
+  options,
   pkgs,
   ...
 }: let
@@ -35,15 +36,20 @@
 in {
   imports = [(import ../options.nix {inherit lib;})];
 
-  config = lib.mkIf cfg.enable {
-    glab.package = lib.mkDefault pkgs.ai.devTools.glab;
-    # A real eval-time path, not a `$DEVENV_STATE` string: `devenv eval
-    # devenv.state` resolves to an absolute path, so nothing has to expand
-    # at invocation time.
-    glab.configDir = lib.mkDefault "${config.devenv.state}/glab-cli";
+  config = lib.mkIf cfg.enable (lib.mkMerge [
+    {
+      glab.package = lib.mkDefault pkgs.ai.devTools.glab;
+      # A real eval-time path, not a `$DEVENV_STATE` string: `devenv eval
+      # devenv.state` resolves to an absolute path, so nothing has to expand
+      # at invocation time.
+      glab.configDir = lib.mkDefault "${config.devenv.state}/glab-cli";
 
-    packages = [
-      (import ../../lib/mkGlab.nix {inherit lib pkgs cfg;})
-    ];
-  };
+      packages = [
+        (import ../../lib/mkGlab.nix {inherit lib pkgs cfg;})
+      ];
+    }
+    (lib.mkIf (lib.hasAttrByPath ["ai" "codex" "settings"] options && config.ai.codex.enable) {
+      ai.codex.settings._integration_writable_roots = lib.mkAfter [cfg.configDir];
+    })
+  ]);
 }

@@ -1,51 +1,54 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-04 (commit pending — `ai.kiro.agents` is now a
-> typed record modelling Kiro's v3 agent schema, with `name` defaulted from the
-> attr key because Kiro's Rust CLI requires that field while its Node/ACP parser
-> treats it as optional; the `ai.agents` Kiro exclusion is re-justified on tool
-> VOCABULARY rather than on JSON-vs-record shape). Prior: 2026-08-02 (commit
-> pending — Codex beta permission profiles remain explicit security boundaries:
-> they do not compose with legacy `sandbox_workspace_write` integration roots,
-> so a selected profile must grant the Semble cache itself). Prior: 2026-08-02
-> (commit pending — portable agent tool lists render native allowlist
-> frontmatter only when non-empty, so both `null` and `[]` preserve unrestricted
-> Claude/Copilot behavior). Prior: 2026-08-02 (commit pending — Semble
-> automatically grants its cache when a selected Codex integration uses the
-> workspace-write sandbox, with user-global XDG cache ownership in HM and
-> project-local state plus an environment override in devenv). Prior: 2026-08-02
-> (commit pending — portable semantic agents may restrict Claude and Copilot
-> with their shared `tools` vocabulary while Codex deliberately omits that field
-> and Kiro retains its native JSON model). Prior: 2026-08-02 (commit pending —
-> Semble keeps Claude and Codex instructions unnamed for their single-file
-> composers but names its Kiro instruction so directory-native steering emits
-> `semble.md` instead of the generic `instructions.md`). Prior: 2026-08-02
-> (commit pending — records plain convenience modules such as Semble
-> contributing selected per-runtime defaults without enabling those runtimes).
-> Prior: 2026-08-02 (commit pending — Codex named profile files now use one
-> typed settings schema across HM and devenv: HM links user-global files, while
-> devenv safely materializes repository-declared whole-file layers into
-> CODEX_HOME before shell entry). Prior: 2026-08-02 (commit pending —
-> instruction and rule records carry a typed Kiro-only inclusion override with
-> identical HM/devenv fanout; null preserves paths-derived `always`/`fileMatch`,
-> while explicit `auto` and `manual` make all four native modes reachable).
-> Prior 2026-08-02: the generated reference gate now proves exact
-> option-name/type parity for the complete `ai.*` surface; the audit closed its
-> sole gap by sharing `ai.copilot.projectDir` while explicitly rejecting
-> project-only customization in Home Manager, and the instruction fanout points
-> at the current `lib/ai/transformers/` implementation rather than the removed
-> fragments package. Prior: 2026-08-02 (commit 589fa37c — consumer documentation
-> exposes Codex and its intentional fanout exclusions, while generated HM and
-> devenv option references are built and checked for exact Codex option-tree
-> parity plus truthful shared-pool descriptions). Prior: 2026-08-02 (commit
-> d510586b — the reverse extracted-surface audit derives Codex's closed
-> sandbox/approval enums from the pinned sidecar and adds an exact
-> human-reviewed disposition gate for every extracted command, flag, field,
-> feature maturity, model field, and config seam). Prior: 2026-08-02 (commit
-> 2eb54cef — the native-surface audit adds static Home Manager profile files and
-> records why Codex has no LSP or shared wrapper-environment fanout). Prior:
-> 2026-08-02 (commit 3546267a — Codex Home Manager settings reconcile exact
-> Nix-owned TOML leaves into a writable user file because the native trust
+> **Last verified:** 2026-08-05 (commit pending — every enabled AI harness now
+> receives a sandbox-safe Git SSH default in both backends; Codex contributes
+> its backend-native Nix cache and devenv Git metadata roots, while enabled
+> integrations such as glab add their effective writable state). Prior:
+> 2026-08-04 (commit pending — `ai.kiro.agents` is now a typed record modelling
+> Kiro's v3 agent schema, with `name` defaulted from the attr key because Kiro's
+> Rust CLI requires that field while its Node/ACP parser treats it as optional;
+> the `ai.agents` Kiro exclusion is re-justified on tool VOCABULARY rather than
+> on JSON-vs-record shape). Prior: 2026-08-02 (commit pending — Codex beta
+> permission profiles remain explicit security boundaries: they do not compose
+> with legacy `sandbox_workspace_write` integration roots, so a selected profile
+> must grant the Semble cache itself). Prior: 2026-08-02 (commit pending —
+> portable agent tool lists render native allowlist frontmatter only when
+> non-empty, so both `null` and `[]` preserve unrestricted Claude/Copilot
+> behavior). Prior: 2026-08-02 (commit pending — Semble automatically grants its
+> cache when a selected Codex integration uses the workspace-write sandbox, with
+> user-global XDG cache ownership in HM and project-local state plus an
+> environment override in devenv). Prior: 2026-08-02 (commit pending — portable
+> semantic agents may restrict Claude and Copilot with their shared `tools`
+> vocabulary while Codex deliberately omits that field and Kiro retains its
+> native JSON model). Prior: 2026-08-02 (commit pending — Semble keeps Claude
+> and Codex instructions unnamed for their single-file composers but names its
+> Kiro instruction so directory-native steering emits `semble.md` instead of the
+> generic `instructions.md`). Prior: 2026-08-02 (commit pending — records plain
+> convenience modules such as Semble contributing selected per-runtime defaults
+> without enabling those runtimes). Prior: 2026-08-02 (commit pending — Codex
+> named profile files now use one typed settings schema across HM and devenv: HM
+> links user-global files, while devenv safely materializes repository-declared
+> whole-file layers into CODEX_HOME before shell entry). Prior: 2026-08-02
+> (commit pending — instruction and rule records carry a typed Kiro-only
+> inclusion override with identical HM/devenv fanout; null preserves
+> paths-derived `always`/`fileMatch`, while explicit `auto` and `manual` make
+> all four native modes reachable). Prior 2026-08-02: the generated reference
+> gate now proves exact option-name/type parity for the complete `ai.*` surface;
+> the audit closed its sole gap by sharing `ai.copilot.projectDir` while
+> explicitly rejecting project-only customization in Home Manager, and the
+> instruction fanout points at the current `lib/ai/transformers/` implementation
+> rather than the removed fragments package. Prior: 2026-08-02 (commit 589fa37c
+> — consumer documentation exposes Codex and its intentional fanout exclusions,
+> while generated HM and devenv option references are built and checked for
+> exact Codex option-tree parity plus truthful shared-pool descriptions). Prior:
+> 2026-08-02 (commit d510586b — the reverse extracted-surface audit derives
+> Codex's closed sandbox/approval enums from the pinned sidecar and adds an
+> exact human-reviewed disposition gate for every extracted command, flag,
+> field, feature maturity, model field, and config seam). Prior: 2026-08-02
+> (commit 2eb54cef — the native-surface audit adds static Home Manager profile
+> files and records why Codex has no LSP or shared wrapper-environment fanout).
+> Prior: 2026-08-02 (commit 3546267a — Codex Home Manager settings reconcile
+> exact Nix-owned TOML leaves into a writable user file because the native trust
 > prompt persists ad-hoc project decisions through `config/batchWrite`; devenv
 > retains whole-file static project ownership until a project-local writer is
 > demonstrated). Prior: 2026-08-01 (commit pending — portable semantic agents
@@ -148,6 +151,23 @@ option that looks like it should "do something" must actually do something. The
 master switch added no information over the per-CLI enables.
 
 Fix landed in commit f2e911c.
+
+### Harness activation also stabilizes Git SSH
+
+`ai.gitSshConfigWorkaround` defaults true. When any supported harness is
+enabled, Home Manager contributes `programs.git.settings.core.sshCommand` and
+devenv contributes `GIT_SSH_COMMAND`, both at `mkDefault` priority. The devenv
+environment setting intentionally covers ordinary Git launched from the dev
+shell as well as Git launched by a harness.
+
+The shared command is a narrow wrapper around the packaged OpenSSH. It resolves
+`~/.ssh/config`; when that symlink points into `/nix/store`, it passes the same
+file explicitly through `ssh -F`. This avoids OpenSSH rejecting the store target
+after a Linux user-namespace sandbox remaps its owner to `nobody`. Other config
+locations use ordinary OpenSSH unchanged, preserving its normal ownership
+checks. The wrapper does not replace the config with `/dev/null`, so Home
+Manager host aliases and per-host identity routing remain active. Consumers can
+set `ai.gitSshConfigWorkaround = false` or override either backend-native value.
 
 ### Fanout data flow
 
@@ -422,6 +442,23 @@ read-only or unrestricted modes get no writable-root contribution. Codex's beta
 sandbox settings. A named permission profile is an explicit security boundary
 and must grant the cache path in its own `filesystem` table; user-global
 integrations must not silently widen every higher-precedence profile.
+
+Codex itself contributes the roots needed by its normal backend lifecycle when
+the consumer selects legacy `sandbox_mode = "workspace-write"`: Home Manager
+adds `${config.xdg.cacheHome}/nix`; devenv adds `${config.devenv.root}/.git`
+plus the effective process user's Nix cache. The devenv cache follows
+`XDG_CACHE_HOME` when present and otherwise `$HOME/.cache`. The Git root is
+deliberately repository-local; a parent directory used for several worktrees
+remains an explicit consumer policy choice.
+
+Enabled integrations can append their own runtime-owned state through the same
+internal root pool. The glab facets add the effective `glab.configDir`, so a
+devenv consumer may point project-local glab at an existing Home Manager
+`~/.config/glab-cli` and reuse its authentication without another login. The
+default devenv glab directory remains project-local state. These automatic roots
+apply only to the legacy workspace-write settings. Named permission profiles
+remain explicit security boundaries and must declare equivalent paths
+themselves.
 
 **Worked example — stacked-workflows skills.** Because an `ai.skills` value set
 in one backend is invisible to the other, the stacked-workflows package
