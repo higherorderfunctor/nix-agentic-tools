@@ -321,7 +321,8 @@ in rec {
     # One block per entry: recorded-hash lookup (grep `|| :`-guarded —
     # first run has no manifest; dots regex-escaped for exact match),
     # then the guarded write fed by a quoted heredoc (delimiters at
-    # column 0, precedent: hm-helpers mkHooksActivationScript).
+    # column 0 via explicit \n concatenation, which the HM subshell
+    # wrapping does not disturb).
     entryBlock = name: entry: let
       regexName = lib.replaceStrings ["."] ["\\."] name;
     in
