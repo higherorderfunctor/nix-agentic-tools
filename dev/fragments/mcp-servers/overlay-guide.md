@@ -1,10 +1,16 @@
 ## MCP Server Packages
 
-> **Last verified:** 2026-08-02 (commit pending — adds Semble's
-> identity-preserving external-flake MCP role, which shares its CLI derivation
-> and is updated with the flake input rather than a package target). Prior:
-> 2026-07-27 (commit pending — absorbing `aihubmix-mcp` corrected three stale
-> claims in the "Adding a New Server" checklist below:
+> **Last verified:** 2026-08-04 (commit pending — the local-patch section
+> claimed "excludePattern + detector, OR a targets row — never both" as though
+> it covered every patch, but it was written about patching published BUILD
+> OUTPUT only. openmemory-mcp's loopback-bind patch is a SOURCE patch on a
+> package that runs tsc itself, and it correctly KEEPS its targets row; a new
+> subsection draws that line, and records why a held-back sweep is the desired
+> signal for a security patch rather than a nuisance). Prior: 2026-08-02 (commit
+> pending — adds Semble's identity-preserving external-flake MCP role, which
+> shares its CLI derivation and is updated with the flake input rather than a
+> package target). Prior: 2026-07-27 (commit pending — absorbing `aihubmix-mcp`
+> corrected three stale claims in the "Adding a New Server" checklist below:
 > `overlays/mcp-servers/locks/` has never existed, `flake.nix` needs no
 > per-package edit, and the top-level `modules/` directory is gone. It also adds
 > the vendored-lockfile + local-patch shape and the excluded-with-an-annotation
@@ -130,6 +136,37 @@ contiguous prepend at the top of the file, where upstream's first import lines
 are the most stable context available, plus the smallest possible insertions
 elsewhere. And confirm it applies with NO fuzz: `patch` taking a hunk with fuzz
 means it guessed at the location.
+
+### Patching SOURCE keeps its targets row — the rule above is about dist
+
+Everything above is scoped to patching upstream's published BUILD OUTPUT. A
+package that builds from source in-tree (runs `tsc` / `cargo` / `go build`
+itself) is a different class, and the exclusion-plus-annotation dance is the
+WRONG shape for it:
+
+- Source anchors track upstream's own code, which moves far less often than a
+  rebuilt `dist/`. The aihubmix failure mode — a rebuild with no source change
+  invalidating every hunk — cannot occur.
+- Express it as `substituteInPlace … --replace-fail` in `postPatch`, not as a
+  `.patch` file. `--replace-fail` is positional-anchor-free and turns drift into
+  a loud build failure; a `.patch` can apply with FUZZ and silently land in the
+  wrong place.
+- So keep the `config.update.targets` row. A held-back sweep here is the SIGNAL,
+  not a channel-occupying nuisance: it means upstream touched the exact lines
+  being patched, which is precisely when a human must look.
+
+For a SECURITY patch that inverts an upstream default, failing the sweep is the
+DESIRED behavior — auto-sweeping past it would silently restore the unsafe
+default. Prefer edits that also make the compiler your backstop: if the patched
+signature is threaded through callers, a partial application fails to typecheck
+rather than compiling into a half-patched binary.
+
+`openmemory-mcp` is the worked example. Upstream calls `listen(port)` with no
+host and ships no bind knob, so the daemon binds every interface; the overlay
+patches `src/core/cfg.ts`, `src/server/server.ts` and `src/server/index.ts` to
+thread a required `host` defaulting to loopback, backed by a `postInstallCheck`
+positive control and negative-control-verified (neutering `postPatch` reddens
+the build; breaking an anchor reddens `substituteInPlace`).
 
 ### Adding a New Server
 

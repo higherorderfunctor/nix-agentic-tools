@@ -243,7 +243,7 @@ in {
     devAllowNoAuth = mkOption {
       type = types.nullOr types.bool;
       default = null;
-      description = "Allow unauthenticated access with a single implicit dev-no-auth tenant (sets OM_DEV_ALLOW_NO_AUTH). Intended for a localhost-only HTTP serve daemon; never expose the port. Only meaningful in HTTP mode.";
+      description = "Allow unauthenticated access with a single implicit dev-no-auth tenant (sets OM_DEV_ALLOW_NO_AUTH). Intended for a localhost-only `openmemory-mcp-serve` daemon: it grants full read/write of every stored memory to anyone who can reach the port. The daemon binds `service.host` (default 127.0.0.1), so that pairing is safe by default — do not combine this with a `service.host` that is reachable off-box. Only meaningful in HTTP mode.";
     };
 
     logAuth = mkOption {
@@ -548,7 +548,15 @@ in {
       OM_USE_SUMMARY_ONLY = boolStr s.useSummaryOnly;
     }
     // optionalAttrs (!s.telemetry) {OM_TELEMETRY = "false";}
-    // optionalAttrs (mode == "http") {OM_PORT = toString cfg.service.port;}
+    # OM_HOST is not an upstream variable — the overlay patches it in, because
+    # upstream binds every interface unconditionally. See the postPatch note in
+    # overlays/mcp-servers/openmemory-mcp.nix. Emitting it here is what makes
+    # the declared `service.host` default (127.0.0.1) actually take effect
+    # instead of being a silently discarded option.
+    // optionalAttrs (mode == "http") {
+      OM_HOST = cfg.service.host;
+      OM_PORT = toString cfg.service.port;
+    }
     // optionalAttrs (s.mode != null) {OM_MODE = s.mode;}
     # ── Auth ────────────────────────────────────────────────────
     // optionalAttrs (mode == "http" && s.devAllowNoAuth != null) {OM_DEV_ALLOW_NO_AUTH = boolStr s.devAllowNoAuth;}

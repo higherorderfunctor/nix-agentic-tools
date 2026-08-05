@@ -6581,6 +6581,85 @@ in {
       && lib.hasSuffix ":19758/mcp" entry.url
   );
 
+  # ── service.host must reach the actual bind ────────────────────────
+  #
+  # `service.host` reads as a security control and defaults to loopback, but
+  # for openmemory it was declared, documented, and then silently discarded:
+  # settingsToEnv emitted OM_PORT and nothing else, and upstream's daemon
+  # calls `listen(port)` with no host, so it bound every interface. A running
+  # instance was reachable over both LAN IPv4 and a routable global IPv6
+  # address, unauthenticated. The overlay patches OM_HOST in (see
+  # overlays/mcp-servers/openmemory-mcp.nix); these assert the module
+  # actually emits it.
+  module-mcp-services-openmemory-binds-loopback-by-default = mkTest "mcp-services-openmemory-binds-loopback-by-default" (
+    let
+      result = evalHm {
+        services.mcp-servers.servers.openmemory-mcp.enable = true;
+      };
+      env = result.config.systemd.user.services.mcp-openmemory-mcp.Service.Environment or [];
+      omHost = lib.findFirst (lib.hasPrefix "OM_HOST=") null env;
+    in
+      omHost != null && lib.hasInfix "127.0.0.1" omHost
+  );
+
+  # ...and that it still follows an explicit opt-in to a wider bind, so the
+  # option is a real knob rather than a hardcoded loopback.
+  module-mcp-services-openmemory-host-override = mkTest "mcp-services-openmemory-host-override" (
+    let
+      result = evalHm {
+        services.mcp-servers.servers.openmemory-mcp = {
+          enable = true;
+          service.host = "0.0.0.0";
+        };
+      };
+      env = result.config.systemd.user.services.mcp-openmemory-mcp.Service.Environment or [];
+      omHost = lib.findFirst (lib.hasPrefix "OM_HOST=") null env;
+    in
+      omHost != null && lib.hasInfix "0.0.0.0" omHost
+  );
+
+  # Bridge servers run mcp-proxy, whose own --host default IS loopback — so
+  # they were already safe, but by upstream happenstance rather than by
+  # anything stated here, and service.host was discarded for all nine of
+  # them. Assert we PIN it, so an upstream default change cannot silently
+  # widen every bridge service at once.
+  module-mcp-services-bridge-pins-bind-host = let
+    # 127.0.0.2 is deliberately NOT mcp-proxy's own default (127.0.0.1), so a
+    # match proves the value was threaded from service.host rather than merely
+    # inherited from upstream — which is the entire point of pinning it.
+    overridden = evalHm {
+      services.mcp-servers.servers.git-mcp = {
+        enable = true;
+        service.host = "127.0.0.2";
+      };
+    };
+    defaulted = evalHm {
+      services.mcp-servers.servers.git-mcp.enable = true;
+    };
+    execOf = r: r.config.systemd.user.services.mcp-git-mcp.Service.ExecStart;
+    # Build the expected fragment with the SAME escaper the emitter uses, so
+    # the two cannot disagree. Today `lib.escapeShellArg` leaves a dotted quad
+    # bare (it only quotes strings outside `[[:alnum:],._+:@%/-]+`), so this
+    # renders `--host 127.0.0.2` — but hardcoding either the bare or the
+    # quoted form would turn a future change in that rule into a test failure
+    # against a wrapper that is still correct.
+    expectHost = h: lib.escapeShellArg "--host ${lib.escapeShellArg h}";
+  in
+    pkgs.runCommand "module-test-mcp-services-bridge-pins-bind-host" {} ''
+      fail() {
+        echo "FAIL: mcp-services-bridge-pins-bind-host: $1" >&2
+        exit 1
+      }
+      o=${execOf overridden}
+      d=${execOf defaulted}
+      grep -qF -- '--host' "$d" || fail "mcp-proxy invoked without --host at all"
+      grep -qF -- ${expectHost "127.0.0.2"} "$o" \
+        || fail "bind host not threaded from an overridden service.host"
+      grep -qF -- ${expectHost "127.0.0.1"} "$d" \
+        || fail "default bind host is not loopback"
+      echo PASS > "$out"
+    '';
+
   # ── Attrs-shape ai.rules / ai.<cli>.rules (unified transformer) ───
 
   # Claude HM: top-level ai.rules → .claude/rules/<name>.md with paths frontmatter.
