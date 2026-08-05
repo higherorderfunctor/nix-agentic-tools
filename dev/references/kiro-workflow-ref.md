@@ -6,13 +6,19 @@
 > blockquote with real content as you go; it must not survive into the
 > ready-for-review PR.
 >
-> **Workspace.** Work in the `docs/workflow-refs` worktree at
-> `~/Documents/projects/nix-agentic-tools-worktrees/workflow-refs` (draft PR
-> #782, branch `docs/workflow-refs`). Pre-flight before your first file write:
-> `git rev-parse --git-dir` must end in `.git/worktrees/workflow-refs` — never
-> author files in the primary checkout, not even untracked drafts. The worktree
-> is already bootstrapped (direnv covers it; `cd` is enough). Read the
-> `project_kiro_harness_matrix_northstar` memory before any Kiro work.
+> **Workspace.** You were almost certainly launched from the PRIMARY CHECKOUT
+> (`~/Documents/projects/nix-agentic-tools`) — the operator never leaves it.
+> Every file you read or write for this task lives in the worktree instead:
+> `~/Documents/projects/nix-agentic-tools-worktrees/workflow-refs` (branch
+> `docs/workflow-refs`, draft PR #782), already bootstrapped. Address it by
+> absolute path, or prefix commands with
+> `cd ~/Documents/projects/nix-agentic-tools-worktrees/workflow-refs &&`; the
+> session cwd resets between Bash calls, so a bare `cd` does not persist.
+> Pre-flight before your first file write:
+> `git -C <worktree> rev-parse --git-dir` must end in
+> `.git/worktrees/workflow-refs`. Never author files in the primary checkout,
+> not even untracked drafts — it is shared with the operator's other sessions.
+> Read the `project_kiro_harness_matrix_northstar` memory before any Kiro work.
 >
 > **Mission.** Write THIS doc: a human-readable reference on the Kiro workflow
 > engine — the mechanics, plus small worked examples of wiring them into
