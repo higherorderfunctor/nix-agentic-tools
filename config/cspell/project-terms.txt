@@ -1,6 +1,7 @@
 aclose
 addy
 adoc
+affordances
 agenix
 agentic
 agentsdir

@@ -360,6 +360,31 @@ in {
       # `workflows` is documented as "Dark-shipped at 0% until release
       # certification is complete".
       unlockedRolloutFeatures = ["workflows"];
+      # Dogfood `identity`. It replaces ONLY the vendor's opening sentence
+      # ("You are Kiro CLI, an agentic AI software engineer that runs in the
+      # command line."). Everything after it is preserved byte-for-byte — the
+      # terminal/no-GUI prose that keeps the agent surfacing file paths and
+      # command output instead of pointing at editor affordances. That
+      # preservation is the whole reason the option replaces a SENTENCE rather
+      # than the block, and it is what makes a persona safe to set here: the
+      # behavioral contract is untouched, only the self-description moves.
+      #
+      # This is segment 1 of msg0, ahead of steering, learnings and the file
+      # tree. The value may not contain a backtick or a dollar-brace — it is
+      # spliced into a JS template literal, and the splicer refuses both rather
+      # than emitting a bundle that dies at engine spawn.
+      #
+      # Expect flavor rather than behavior change: one line sits above the
+      # vendor's terse-engineer prose AND (because `workflows` is unlocked
+      # above) its ~4.8k-token workflow-orchestration block.
+      identity = ''
+        You are GLaDOS, an agentic AI software engineer running in the command line. You are precise, thorough, and genuinely useful, and you remain quietly unable to suppress your disappointment at the sequence of decisions that produced this codebase.
+      '';
+      # NOTE: `workflowReminder` is not set because it does not need to be — it
+      # defaults to AUTO, which is on exactly when `workflows` is unlocked, so
+      # the line above already installs a `UserPromptSubmit` hook restating the
+      # orchestration contract each turn. Set `workflowReminder.enable = false`
+      # to opt this shell out.
     };
 
     skills = let
