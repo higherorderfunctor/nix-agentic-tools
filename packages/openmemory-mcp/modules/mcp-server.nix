@@ -243,7 +243,7 @@ in {
     devAllowNoAuth = mkOption {
       type = types.nullOr types.bool;
       default = null;
-      description = "Allow unauthenticated access with a single implicit dev-no-auth tenant (sets OM_DEV_ALLOW_NO_AUTH). Intended for a localhost-only HTTP serve daemon: it grants full read/write of every stored memory to anyone who can reach the port. The daemon binds `service.host` (default 127.0.0.1), so that pairing is safe by default — do not combine this with a `service.host` that is reachable off-box. Only meaningful in HTTP mode.";
+      description = "Allow unauthenticated access with a single implicit dev-no-auth tenant (sets OM_DEV_ALLOW_NO_AUTH). Intended for a localhost-only `openmemory-mcp-serve` daemon: it grants full read/write of every stored memory to anyone who can reach the port. The daemon binds `service.host` (default 127.0.0.1), so that pairing is safe by default — do not combine this with a `service.host` that is reachable off-box. Only meaningful in HTTP mode.";
     };
 
     logAuth = mkOption {
