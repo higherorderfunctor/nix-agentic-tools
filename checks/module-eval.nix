@@ -4970,6 +4970,52 @@ in {
       soleSame a b
   );
 
+  # The splice re-joins the preserved vendor text directly after the
+  # replacement, so an identity that does not close its own final sentence
+  # MERGES into it. Caught at EVAL rather than by the splicer's backstop,
+  # because the splicer runs on a FAIL-OPEN launch path — a value rejected
+  # there presents as "the identity silently did nothing", which is the exact
+  # shape that let a multi-sentence identity ship broken.
+  module-kiro-identity-requires-sentence-punctuation = mkTest "kiro-identity-requires-sentence-punctuation" (
+    let
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          v3 = true;
+          identity = "You are Atlas, a senior systems engineer";
+        };
+      };
+      asserts =
+        builtins.filter (a: lib.hasInfix "must end with sentence punctuation" a.message)
+        (ev.config.assertions or []);
+    in
+      asserts != [] && (builtins.head asserts).assertion == false
+  );
+
+  # Positive control: the same assertion must PASS on a punctuated value, and
+  # on `!`/`?` as well as `.`. Without this the test above passes for a config
+  # that fails every assertion, including for unrelated reasons.
+  module-kiro-identity-punctuation-accepts-terminators = mkTest "kiro-identity-punctuation-accepts-terminators" (
+    let
+      failing = ident: let
+        ev = evalHm {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+            identity = ident;
+          };
+        };
+      in
+        builtins.filter
+        (a: lib.hasInfix "must end with sentence punctuation" a.message && !a.assertion)
+        (ev.config.assertions or []);
+    in
+      failing "You are Atlas, a senior systems engineer."
+      == []
+      && failing "You are Atlas! You judge silently." == []
+      && failing "Are you sure about that?" == []
+  );
+
   # ── workflow reminder ──────────────────────────────────────────────────────
   # AUTO means "on iff workflows is unlocked". All four corners of the tri-state
   # are pinned, because null/true/false is exactly where an off-by-default and

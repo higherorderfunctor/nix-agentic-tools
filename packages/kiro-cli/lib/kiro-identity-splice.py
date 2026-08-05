@@ -134,6 +134,25 @@ def main(argv):
     # engine spawn with a stack trace pointing at vendor code.
     if b"`" in replacement or b"${" in replacement:
         die("replacement may not contain a backtick or `${` (breaks the JS literal)")
+    # The literal is reassembled as `replacement + " " + tail`, so a replacement
+    # that does not close its own final sentence MERGES into the preserved
+    # vendor text ("You are GLaDOS You operate in a terminal environment: ...")
+    # and the splice stops meaning "replace the first sentence".
+    #
+    # The `find_literal` verification below cannot catch this: the reassembled
+    # literal is byte-for-byte what was asked for, it simply no longer has a
+    # sentence boundary where one is required.
+    #
+    # BACKSTOP ONLY -- the primary gate is a module assertion in mkKiro.nix that
+    # fires at EVAL. This path fails open, so a value rejected here presents as
+    # a silently unpatched identity rather than as a configuration error.
+    if replacement[-1:] not in (b".", b"!", b"?"):
+        die(
+            "replacement must end with sentence punctuation (. ! ?); it would "
+            "otherwise run into the preserved vendor text instead of replacing "
+            "a sentence. Got: ...%s"
+            % replacement[-40:].decode("utf-8", "replace")
+        )
 
     patched = data[:off] + replacement + b" " + tail + data[off + len(first) + 1 + len(tail) :]
 
