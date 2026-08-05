@@ -721,13 +721,16 @@ already running for an older commit, let it land first. This composes with the
 `commit_id` gate above: that gate tells you a review is stale, this tells you
 why no fresh one is coming.
 
-**Re-request through the github-mcp `request_copilot_review` tool, NOT
-`gh api …/requested_reviewers`.** That REST endpoint silently no-ops for
-Copilot: it answers HTTP 200 with `requested_reviewers: []` and never creates a
-check run. Measured on PR #766 (2026-08-05) with NO review in flight, so this is
-a SEPARATE failure from the in-flight drop above — Copilot is simply not
-addressable as an ordinary reviewer login there. Both spellings failed
-identically across ~40s of polling:
+**Re-request through the GitHub MCP server's copilot-review request tool, NOT
+`gh api …/requested_reviewers`.** The GitHub MCP server exposes a dedicated
+"request a Copilot review" operation — `request_copilot_review` on the server
+side, though the name your client shows is prefixed and varies by MCP client
+config, so match on the trailing segment rather than the full identifier. That
+REST endpoint silently no-ops for Copilot: it answers HTTP 200 with
+`requested_reviewers: []` and never creates a check run. Measured on PR #766
+(2026-08-05) with NO review in flight, so this is a SEPARATE failure from the
+in-flight drop above — Copilot is simply not addressable as an ordinary reviewer
+login there. Both spellings failed identically across ~40s of polling:
 
 ```bash
 # both of these return 200 and do NOTHING
