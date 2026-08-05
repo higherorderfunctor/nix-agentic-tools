@@ -26,6 +26,7 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
     `overlays/kiro-gateway.nix`, `packages/chatgpt-codex/**`,
     `packages/copilot-cli/**`, `packages/kiro-cli/**`
   - Read:
+    [`dev/fragments/ai-clis/copilot-config-delivery.md`](dev/fragments/ai-clis/copilot-config-delivery.md),
     [`dev/fragments/ai-clis/packaging-guide.md`](dev/fragments/ai-clis/packaging-guide.md)
 
 - **`ai-module`**

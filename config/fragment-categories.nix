@@ -48,7 +48,7 @@ _: {
         "packages/copilot-cli/**"
         "packages/kiro-cli/**"
       ];
-      sources = ["packaging-guide"];
+      sources = ["copilot-config-delivery" "packaging-guide"];
     };
     # ai-module: fanout semantics and per-CLI enable-as-sole-gate.
     # Post-factory, the fanout logic lives in each per-package factory
