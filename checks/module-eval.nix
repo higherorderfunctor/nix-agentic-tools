@@ -311,6 +311,58 @@
       }
     '';
 
+  # Realize a wrapper the MODULE produced and read the shipped script.
+  #
+  # This is the WIRING level: it proves the module fed the right value into the
+  # wrapper. Argv SEMANTICS — that the `@` prefix is present, that a root var
+  # still expands at launch rather than at build, that a value survives as a
+  # single argv token — are owned by the two run-the-wrapper checks
+  # (checks/copilot-wrapper-argv.nix, checks/kiro-wrapper-argv.nix), which
+  # EXECUTE the wrapper against an argv-printing stub. A grep cannot prove any
+  # of those three: a builder-frozen `/homeless-shelter/...` and a live
+  # `''${HOME}/...` are equally "present". Do not re-assert them here.
+  #
+  # `/homeless-shelter` is rejected on every use as the universal canary for a
+  # runtime variable the BUILDER expanded — the defect class that shipped twice
+  # in the copilot wrapper, once per backend.
+  mkWrapperGrepTest = {
+    name,
+    package,
+    bin,
+    needles,
+  }:
+    pkgs.runCommand "module-test-${name}" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      fail() {
+        echo "FAIL: ${name}: $1" >&2
+        exit 1
+      }
+      w=${package}/bin/${bin}
+      [ -f "$w" ] || fail "no wrapper produced at $w"
+      ${lib.concatMapStringsSep "\n" (needle: ''
+          grep -qF -- ${lib.escapeShellArg needle} "$w" \
+            || fail ${lib.escapeShellArg "wrapper does not carry: ${needle}"}
+        '')
+        needles}
+      if grep -qF -- '/homeless-shelter' "$w"; then
+        fail "builder HOME leaked into the shipped wrapper"
+      fi
+      echo PASS > "$out"
+    '';
+
+  # The relative path a module actually rendered mcp-config.json to, read back
+  # out of the module's own output. Wiring tests derive their expected flag
+  # value from this rather than hardcoding it, so a `configDir` change moves
+  # both ends together and only a genuine DIVERGENCE between "where the file is
+  # written" and "where the flag points" can fail.
+  mcpConfigKeyOf = name: files: let
+    hits = lib.filter (lib.hasSuffix "/mcp-config.json") (lib.attrNames files);
+  in
+    if lib.length hits == 1
+    then lib.head hits
+    else throw "module-test-${name}: expected exactly one rendered mcp-config.json, found ${toString (lib.length hits)}";
+
   # ── Steering materializer helpers ────────────────────────────────
   # Kiro steering emission migrated from home.file/files.* symlinks to
   # the derived `ai.kiro.steeringFiles` attrset + the shared
@@ -4219,7 +4271,9 @@ in {
   # `--additional-mcp-config` points at, and NOTHING project-local: a syscall
   # trace of 1.0.78 in a project never even stats
   # `.config/github-copilot/mcp-config.json`. So writing the file is half the
-  # job; realize the wrapper and read the flag it actually injects.
+  # job — and the half that matters here is that the flag points at the very
+  # path the module rendered, which is why the needle is DERIVED from
+  # `result.config.files` rather than spelled out.
   module-copilot-devenv-wrapper-points-at-project-mcp-config = let
     result = evalDevenv {
       ai.copilot.enable = true;
@@ -4229,29 +4283,19 @@ in {
         command = "hello";
       };
     };
-    wrapped =
-      lib.findFirst (p: (p.name or "") == "copilot-cli-wrapped")
-      (throw "devenv produced no copilot-cli-wrapped package")
-      result.config.packages;
+    name = "copilot-devenv-wrapper-points-at-project-mcp-config";
   in
-    pkgs.runCommand "module-test-copilot-devenv-wrapper-points-at-project-mcp-config" {} ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      fail() {
-        echo "FAIL: copilot-devenv-wrapper-points-at-project-mcp-config: $1" >&2
-        exit 1
-      }
-      w=${wrapped}/bin/copilot
-      [ -f "$w" ] || fail "no wrapper produced at $w"
-      grep -qF -- '--additional-mcp-config @' "$w" \
-        || fail "flag lacks the @ file-path prefix; copilot parses it as JSON"
-      grep -qF -- '@''${DEVENV_ROOT}/.config/github-copilot/mcp-config.json' "$w" \
-        || fail "flag does not point at the project's rendered mcp-config.json"
-      if grep -qF -- '/homeless-shelter' "$w"; then
-        fail "builder environment leaked into the shipped wrapper"
-      fi
-      echo PASS > "$out"
-    '';
+    mkWrapperGrepTest {
+      inherit name;
+      package =
+        lib.findFirst (p: (p.name or "") == "copilot-cli-wrapped")
+        (throw "devenv produced no copilot-cli-wrapped package")
+        result.config.packages;
+      bin = "copilot";
+      needles = [
+        ''--additional-mcp-config @''${DEVENV_ROOT}/${mcpConfigKeyOf name result.config.files}''
+      ];
+    };
 
   # No MCP servers → no wrapper, so a project that configures none keeps the
   # bare package and pays for no rebuild.
@@ -4313,12 +4357,18 @@ in {
       (result.config.env.COPILOT_MODEL or null) == "claude-sonnet-4"
   );
 
-  # HM wrapper injects --additional-mcp-config flag when MCP servers
-  # are present. We assert that home.packages contains exactly one
-  # entry (the wrapped derivation) and that it carries the expected
-  # name — the stub can't introspect postBuild content, but a named
-  # symlinkJoin is a strong signal the wrapper fired.
-  module-copilot-hm-wrapper-injects-mcp-config-flag = mkTest "copilot-hm-wrapper-injects-mcp-config-flag" (
+  # Configuring MCP servers PRODUCES a wrapper. That is all this asserts: one
+  # entry in home.packages, carrying the wrapped derivation's name.
+  #
+  # It was called `...-wrapper-injects-mcp-config-flag`, which claimed a great
+  # deal more than it checked — nothing here reaches the flag, and the wrapper
+  # shipped broken twice underneath a green result. The flag's VALUE is now
+  # asserted by `module-copilot-hm-wrapper-points-at-mcp-config` below, and its
+  # argv behavior by checks/copilot-wrapper-argv.nix. Deliberately NOT
+  # strengthened: "the trigger produces a wrapper" is a real and separate
+  # thing to know, and duplicating the other two would only make three tests
+  # fail together.
+  module-copilot-hm-mcp-servers-produce-wrapper = mkTest "copilot-hm-mcp-servers-produce-wrapper" (
     let
       result = evalHm {
         ai.copilot.enable = true;
@@ -4336,21 +4386,15 @@ in {
       && (first.name or "") == "copilot-cli-wrapped"
   );
 
-  # The test above is explicit that it cannot introspect postBuild content —
-  # and postBuild is exactly where two shipped defects lived, together making
-  # every real copilot session fail with
-  # `Invalid JSON: expected value at line 1 column 1`:
+  # The wiring counterpart on the HM side: the flag must point at the very
+  # path this module rendered mcp-config.json to.
   #
-  #   1. an unescaped `$HOME` was expanded by the BUILDER's shell, so the
-  #      wrapper pointed at `/homeless-shelter/.copilot/mcp-config.json`
-  #   2. the value lacked the `@` prefix that marks it a FILE PATH, so copilot
-  #      parsed the path string itself as JSON
-  #
-  # They masked each other: JSON parsing failed before anything opened the
-  # path, so the bogus path never got to report ENOENT. `--version`/`--help`
-  # kept working (they short-circuit before config load), which is why a
-  # "does it start?" check missed it. So realize the wrapper and read it.
-  module-copilot-hm-wrapper-mcp-flag-is-usable = let
+  # The previous version of this test matched only `@''${HOME}/` — the PREFIX —
+  # so it could not have caught a `configDir` change that moved the rendered
+  # file out from under the flag. Deriving the needle from
+  # `result.config.home.file` closes that: both ends move together, and only a
+  # divergence fails.
+  module-copilot-hm-wrapper-points-at-mcp-config = let
     result = evalHm {
       ai.copilot.enable = true;
       ai.mcpServers.test-server = {
@@ -4359,28 +4403,23 @@ in {
         command = "hello";
       };
     };
-    wrapped = builtins.head result.config.home.packages;
+    name = "copilot-hm-wrapper-points-at-mcp-config";
   in
-    pkgs.runCommand "module-test-copilot-hm-wrapper-mcp-flag-is-usable" {} ''
-      set -euETo pipefail
-      shopt -s inherit_errexit 2>/dev/null || :
-      fail() {
-        echo "FAIL: copilot-hm-wrapper-mcp-flag-is-usable: $1" >&2
-        exit 1
-      }
-      w=${wrapped}/bin/copilot
-      [ -f "$w" ] || fail "no wrapper produced at $w"
-      grep -qF -- '--additional-mcp-config @' "$w" \
-        || fail "flag lacks the @ file-path prefix; copilot parses it as JSON"
-      grep -qF -- '@''${HOME}/' "$w" \
-        || fail "HOME not left unexpanded for the runtime shell"
-      if grep -qF -- '/homeless-shelter' "$w"; then
-        fail "builder HOME leaked into the shipped wrapper"
-      fi
-      echo PASS > "$out"
-    '';
+    mkWrapperGrepTest {
+      inherit name;
+      package = builtins.head result.config.home.packages;
+      bin = "copilot";
+      needles = [
+        ''--additional-mcp-config @''${HOME}/${mcpConfigKeyOf name result.config.home.file}''
+      ];
+    };
 
-  module-copilot-hm-wrapper-exports-env-vars = mkTest "copilot-hm-wrapper-exports-env-vars" (
+  # Configuring env vars PRODUCES a wrapper — the second, independent trigger.
+  # Renamed from `...-wrapper-exports-env-vars`: it never observed an export.
+  # That the values actually reach the process is asserted by
+  # checks/copilot-wrapper-argv.nix, which runs the wrapper and reads its
+  # environment.
+  module-copilot-hm-env-vars-produce-wrapper = mkTest "copilot-hm-env-vars-produce-wrapper" (
     let
       result = evalHm {
         ai.copilot = {
@@ -5582,9 +5621,12 @@ in {
       skillEntry != null
   );
 
-  # HM: wrapper injects env vars. When env vars are set, the
-  # installed package should be the wrapped derivation.
-  module-kiro-hm-wrapper-exports-env-vars = mkTest "kiro-hm-wrapper-exports-env-vars" (
+  # HM: setting env vars PRODUCES a wrapper. Renamed from
+  # `...-wrapper-exports-env-vars` — it never observed an export, only that the
+  # installed package was the wrapped derivation. The export itself is asserted
+  # behaviorally in checks/kiro-wrapper-argv.nix, which runs the wrapper and
+  # reads `KIRO_WRAPPER_TEST` back out of the process.
+  module-kiro-hm-env-vars-produce-wrapper = mkTest "kiro-hm-env-vars-produce-wrapper" (
     let
       result = evalHm {
         ai.kiro = {
@@ -7393,20 +7435,28 @@ in {
       (upstream.nixd.command or null) == "nixd-claude-specific"
   );
 
-  # HM: top-level ai.environmentVariables fans out to Kiro wrapper + Copilot wrapper.
-  module-kiro-hm-top-level-env-fanout = mkTest "kiro-hm-top-level-env-fanout" (
-    let
-      result = evalHm {
-        ai.kiro.enable = true;
-        ai.environmentVariables.KIRO_FOO = "bar";
-      };
-      packages = result.config.home.packages or [];
-      first = builtins.head packages;
-    in
-      builtins.length packages
-      == 1
-      && (first.name or "") == "kiro-cli-wrapped"
-  );
+  # HM: top-level ai.environmentVariables fans out to the Kiro wrapper.
+  #
+  # This asserted only that A wrapper appeared, which cannot tell "the
+  # top-level value fanned out" apart from "some other trigger wrapped the
+  # package" — the fanout, the thing the name promises, went unobserved. HM has
+  # no native env surface (the wrapper IS the delivery mechanism), so the value
+  # has to be read back out of the shipped script.
+  #
+  # The sentinel is deliberately distinctive: `grep -F bar` would match store
+  # paths incidentally and pass without the fanout ever happening.
+  module-kiro-hm-top-level-env-fanout = let
+    result = evalHm {
+      ai.kiro.enable = true;
+      ai.environmentVariables.KIRO_FOO = "kiro-hm-fanout-sentinel";
+    };
+  in
+    mkWrapperGrepTest {
+      name = "kiro-hm-top-level-env-fanout";
+      package = builtins.head result.config.home.packages;
+      bin = "kiro-cli";
+      needles = ["KIRO_FOO" "kiro-hm-fanout-sentinel"];
+    };
 
   # Devenv: top-level ai.environmentVariables fans to Kiro env blob.
   module-kiro-devenv-top-level-env-fanout = mkTest "kiro-devenv-top-level-env-fanout" (
@@ -7419,20 +7469,21 @@ in {
       (result.config.env.KIRO_DEBUG or null) == "1"
   );
 
-  # HM: top-level ai.environmentVariables triggers Copilot wrapper.
-  module-copilot-hm-top-level-env-fanout = mkTest "copilot-hm-top-level-env-fanout" (
-    let
-      result = evalHm {
-        ai.copilot.enable = true;
-        ai.environmentVariables.COPILOT_FOO = "bar";
-      };
-      packages = result.config.home.packages or [];
-      first = builtins.head packages;
-    in
-      builtins.length packages
-      == 1
-      && (first.name or "") == "copilot-cli-wrapped"
-  );
+  # HM: top-level ai.environmentVariables fans out to the Copilot wrapper.
+  # Same reasoning as the Kiro counterpart above — the value, not merely the
+  # wrapper's existence, is what the name promises.
+  module-copilot-hm-top-level-env-fanout = let
+    result = evalHm {
+      ai.copilot.enable = true;
+      ai.environmentVariables.COPILOT_FOO = "copilot-hm-fanout-sentinel";
+    };
+  in
+    mkWrapperGrepTest {
+      name = "copilot-hm-top-level-env-fanout";
+      package = builtins.head result.config.home.packages;
+      bin = "copilot";
+      needles = ["COPILOT_FOO" "copilot-hm-fanout-sentinel"];
+    };
 
   # Devenv: top-level ai.environmentVariables fans to Copilot env blob.
   module-copilot-devenv-top-level-env-fanout = mkTest "copilot-devenv-top-level-env-fanout" (

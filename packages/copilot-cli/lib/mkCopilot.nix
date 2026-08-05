@@ -178,62 +178,25 @@ lib.ai.app.mkAiApp {
       # (substituting the real store path), which is the
       # conventional correct shape and matches the rest of the
       # ai-clis overlay.
-      hasMcp = mergedServers != {};
-      hasEnv = mergedEnvironmentVariables != {};
-      needsWrapper = hasMcp || hasEnv;
-      # TWO things below are load-bearing. Getting either wrong breaks every
-      # real copilot session — and BOTH were wrong, in a way that masked each
-      # other: the bare path failed JSON parsing before anything ever tried to
-      # open it, so the bogus path never even got the chance to report ENOENT.
+      # The wrapper itself — including the `\''${HOME}` escaping and the `@`
+      # file-path prefix, both of which shipped broken once — lives in
+      # ./wrapPackage.nix and is shared with the devenv backend. Read that file
+      # before changing anything here; the two details it guards are not
+      # visible from the Nix side, and duplicating them is what let the same
+      # pair of defects ship twice.
       #
-      # 1. `\''${HOME}` is ESCAPED so it reaches the generated wrapper
-      #    unexpanded and bash expands it at launch. `addFlagsArg` is
-      #    interpolated into `postBuild`, so an unescaped `$HOME` is expanded
-      #    by the BUILDER's shell — and nixpkgs builds run with
-      #    `HOME=/homeless-shelter`. The shipped wrapper literally read:
-      #
-      #      exec … --additional-mcp-config /homeless-shelter/.copilot/mcp-config.json "$@"
-      #
-      #    a path that exists on no machine. (Escaping keeps the derivation
-      #    user-independent; baking `config.home.homeDirectory` would work too
-      #    but would fork the store path per user for no gain.)
-      #
-      # 2. The `@` prefix marks the value a FILE PATH. Copilot's own help:
-      #
-      #      --additional-mcp-config <json>   JSON string or file path (prefix with @)
-      #
-      #    Without it the CLI parses the path STRING as JSON and dies with
-      #    `Invalid JSON: expected value at line 1 column 1` on every session
-      #    start. `--version` and `--help` still work, which is why this hid:
-      #    they short-circuit before the config load.
-      #
-      # This relies on makeWrapper splicing `--add-flags` values unquoted, so
-      # module-eval realizes the wrapper and greps it rather than trusting the
-      # shape — see module-copilot-hm-wrapper-mcp-flag-is-usable.
-      mcpConfigPath = ''\''${HOME}/${cfg.configDir}/mcp-config.json'';
-      addFlagsArg =
-        lib.optionalString hasMcp
-        ''--add-flags "--additional-mcp-config @${mcpConfigPath}"'';
-      setEnvArgs =
-        lib.concatStringsSep " "
-        (lib.mapAttrsToList
-          (k: v: "--set ${lib.escapeShellArg k} ${lib.escapeShellArg v}")
-          mergedEnvironmentVariables);
-      wrappedPackage = pkgs.symlinkJoin {
-        name = "copilot-cli-wrapped";
-        paths = [cfg.package];
-        nativeBuildInputs = [pkgs.makeWrapper];
-        postBuild = ''
-          wrapProgram $out/bin/copilot \
-            ${addFlagsArg} \
-            ${setEnvArgs}
-        '';
+      # HM passes `environmentVariables` through because symlinkJoin is its
+      # only export mechanism. It therefore wraps when EITHER MCP servers or
+      # env vars are configured; the helper decides that from its arguments, so
+      # there is no `needsWrapper` to keep in sync here.
+      copilotPackage = wrapCopilotPackage {
+        inherit (cfg) package configDir;
+        rootVar = "HOME";
+        mcp = mergedServers != {};
+        environmentVariables = mergedEnvironmentVariables;
       };
-      copilotPackage =
-        if needsWrapper
-        then wrappedPackage
-        else cfg.package;
       dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
+      wrapCopilotPackage = import ./wrapPackage.nix {inherit lib pkgs;};
     in
       lib.mkMerge [
         # `projectDir` is shared for option-tree parity and discoverability, but
@@ -446,6 +409,7 @@ lib.ai.app.mkAiApp {
         then builtins.readFile rule.text
         else rule.text;
       dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
+      wrapCopilotPackage = import ./wrapPackage.nix {inherit lib pkgs;};
 
       # Wrapper that points copilot at the project's rendered mcp-config.json.
       # Only built when there is something to point at, so a project with no
@@ -453,21 +417,16 @@ lib.ai.app.mkAiApp {
       # `packages` entry below for why this is required rather than optional,
       # and dev/fragments/ai-clis/copilot-config-delivery.md for the measured
       # discovery behavior and the rejected COPILOT_HOME alternative.
-      hasMcp = mergedServers != {};
-      mcpConfigPath = ''\''${DEVENV_ROOT}/${cfg.configDir}/mcp-config.json'';
-      wrappedPackage = pkgs.symlinkJoin {
-        name = "copilot-cli-wrapped";
-        paths = [cfg.package];
-        nativeBuildInputs = [pkgs.makeWrapper];
-        postBuild = ''
-          wrapProgram $out/bin/copilot \
-            --add-flags "--additional-mcp-config @${mcpConfigPath}"
-        '';
+      #
+      # `environmentVariables` is deliberately NOT passed: devenv exports via
+      # its native `env` attrset (see the merge below), so the only reason this
+      # backend wraps at all is the flag. That asymmetry with HM is the whole
+      # reason the helper takes both as separate inputs.
+      copilotPackage = wrapCopilotPackage {
+        inherit (cfg) package configDir;
+        rootVar = "DEVENV_ROOT";
+        mcp = mergedServers != {};
       };
-      copilotPackage =
-        if hasMcp
-        then wrappedPackage
-        else cfg.package;
     in
       lib.mkMerge [
         # L2b → L3: expand `ai.copilot.agentsDir` into

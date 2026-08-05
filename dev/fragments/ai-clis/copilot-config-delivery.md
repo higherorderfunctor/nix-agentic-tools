@@ -1,12 +1,18 @@
 ## Copilot config delivery — two consumers, one product name
 
-> **Last verified:** 2026-08-05 (commit pending — first version. Records the
-> syscall-traced config discovery of copilot-cli 1.0.78, why the devenv MCP fix
-> is a wrapper flag rather than `COPILOT_HOME`, and why `lsp-config.json` /
-> `settings.json` stay written-but-undelivered instead of asserting). If you
-> change how `packages/copilot-cli/` delivers config in either backend, or bump
-> copilot-cli across a release that moves config discovery, re-run the probe
-> below and update this in the same commit.
+> **Last verified:** 2026-08-05 (commit pending — the wrapper both backends use
+> now lives in ONE place, `packages/copilot-cli/lib/wrapPackage.nix`, and is
+> exercised behaviorally by `checks/copilot-wrapper-argv.nix`. It had been
+> inlined once per backend, and that duplication is why the identical pair of
+> defects — builder-expanded `$HOME`, missing `@` prefix — shipped twice, as
+> #767 and then #769. Nothing about the DISCOVERY behavior below changed).
+> Prior: 2026-08-05 (first version. Records the syscall-traced config discovery
+> of copilot-cli 1.0.78, why the devenv MCP fix is a wrapper flag rather than
+> `COPILOT_HOME`, and why `lsp-config.json` / `settings.json` stay
+> written-but-undelivered instead of asserting). If you change how
+> `packages/copilot-cli/` delivers config in either backend, or bump copilot-cli
+> across a release that moves config discovery, re-run the probe below and
+> update this in the same commit.
 
 ### The trap: "Copilot" is two different consumers here
 
