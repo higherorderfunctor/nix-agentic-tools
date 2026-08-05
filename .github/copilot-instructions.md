@@ -373,7 +373,15 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-08-04 (commit pending — records that
+> **Last verified:** 2026-08-05 (commit pending — two corrections, both from
+> operating the loop on PR #766 and both making it silently unreliable when
+> unknown. The suppressed-block heading is NOT stable, so the documented
+> `sed -n '/low confidence/,$p'` matched nothing against a
+> `Suppressed comments (1)` block and nearly reported a real finding as a clean
+> round; the command now prints the whole body. And
+> `gh api …/requested_reviewers` silently no-ops for Copilot — 200 with an empty
+> list, no check run, with nothing in flight — so re-requests go through the
+> github-mcp tool). Prior: 2026-08-04 (commit pending — records that
 > `requested_reviewers` is the INTERMEDIATE state and the request is CONSUMED by
 > the review it triggers, so an empty list plus no reviewer check run on the
 > head SHA means a re-request is genuinely needed rather than one being pending;
@@ -445,9 +453,12 @@ thread:
 
 1. **Inline review comments** — these become resolvable threads, appear in
    `pull_request_read` with `method: get_review_comments`, and now gate merge.
-2. **A `<details>Comments suppressed due to low confidence (N)</details>` block
-   inside the review BODY** — no thread, nothing to resolve, invisible to any
-   thread query.
+2. **A `<details>` block inside the review BODY** — no thread, nothing to
+   resolve, invisible to any thread query. **Its heading is NOT stable.** Two
+   spellings have been observed on this repo:
+   `Comments suppressed due to low confidence (N)`, and plain
+   `Suppressed comments (N)` (PR #766 round 2, 2026-08-05). Do not anchor a read
+   on either — see the command below.
 
 **The two endpoints attribute Copilot to DIFFERENT logins, and mixing them up
 reads as a clean review.** `/pulls/N/reviews` credits the review to
@@ -491,8 +502,22 @@ fetch the review BODY too, not just the threads:
 ```bash
 gh api --paginate "repos/OWNER/REPO/pulls/N/reviews" \
   --jq '[.[] | select(.user.login=="copilot-pull-request-reviewer[bot]")]
-        | last | .body' | sed -n '/low confidence/,$p'
+        | last | .body'
 ```
+
+**Print the WHOLE body and read it. Do not pipe it through a heading grep.**
+This command used to end in `sed -n '/low confidence/,$p'`, and that is exactly
+how the bucket gets missed: on PR #766 round 2 the block was titled
+`Suppressed comments (1)`, the `sed` matched nothing, and the round was about to
+be reported clean in both buckets. The finding underneath was real — a security
+positive control whose greps were basic regexes, so `.` matched any character. A
+phrase grep that returns empty is indistinguishable from a genuinely clean
+bucket, which makes this failure silent and self-confirming.
+
+**"generated no new comments" does NOT mean there is nothing to read.** That is
+the count of INLINE comments. The same review body carried a suppressed finding
+alongside that line. Cross-check the two independently: the count line describes
+bucket 1, the `<details>` block is bucket 2.
 
 `--paginate` is load-bearing, not tidiness. The endpoint pages at 30, and a PR
 that has been through a review loop reaches that easily — #568 took twenty.
@@ -555,6 +580,30 @@ verify the run exists on the head SHA before trusting it, and if a review is
 already running for an older commit, let it land first. This composes with the
 `commit_id` gate above: that gate tells you a review is stale, this tells you
 why no fresh one is coming.
+
+**Re-request through the GitHub MCP server's copilot-review request tool, NOT
+`gh api …/requested_reviewers`.** The GitHub MCP server exposes a dedicated
+"request a Copilot review" operation — `request_copilot_review` on the server
+side, though the name your client shows is prefixed and varies by MCP client
+config, so match on the trailing segment rather than the full identifier. That
+REST endpoint silently no-ops for Copilot: it answers HTTP 200 with
+`requested_reviewers: []` and never creates a check run. Measured on PR #766
+(2026-08-05) with NO review in flight, so this is a SEPARATE failure from the
+in-flight drop above — Copilot is simply not addressable as an ordinary reviewer
+login there. Both spellings failed identically across ~40s of polling:
+
+```bash
+# both of these return 200 and do NOTHING
+gh api --method POST "repos/OWNER/REPO/pulls/N/requested_reviewers" \
+  -f "reviewers[]=Copilot"
+echo '{"reviewers":["Copilot"]}' | gh api --method POST \
+  "repos/OWNER/REPO/pulls/N/requested_reviewers" --input -
+```
+
+The MCP tool produced `requested_reviewers: [Copilot]` and a `queued` run on the
+first try. Because BOTH failure modes present as "200 and nothing happened",
+always confirm by polling for the run on the head SHA rather than trusting the
+call's response.
 
 **`requested_reviewers` is the INTERMEDIATE state, and the request is CONSUMED
 by the review it triggers.** So an empty list there does not mean "no request
