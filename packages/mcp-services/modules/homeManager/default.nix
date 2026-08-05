@@ -139,9 +139,21 @@
       then mcpLib.mkCredentialsSnippet pkgs credVars evaluatedSettings
       else "";
 
+    # `--host` is passed explicitly rather than left to mcp-proxy's own
+    # default. That default IS 127.0.0.1 today, so bridge servers were
+    # already loopback-only — but by mcp-proxy's happenstance, not by
+    # anything this repo states, and `service.host` was silently discarded
+    # for every bridge server. Naming it makes the declared option
+    # load-bearing and stops an upstream default change from quietly
+    # widening nine services at once.
+    #
+    # Interpolated literally instead of via an env var: the bridge runs with
+    # `--pass-environment`, so anything exported to the unit also lands in
+    # the spawned stdio child's environment, and the bind address is the
+    # proxy's business alone.
     rawCmd =
       if httpCmd == "bridge"
-      then "mcp-proxy --pass-environment --port \"$MCP_PORT\" -- ${stdioCmdForBridge}"
+      then "mcp-proxy --pass-environment --host ${escapeShellArg srv.service.host} --port \"$MCP_PORT\" -- ${stdioCmdForBridge}"
       else httpCmd;
 
     wrapper = pkgs.writeShellApplication {

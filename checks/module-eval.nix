@@ -6618,6 +6618,41 @@ in {
       omHost != null && lib.hasInfix "0.0.0.0" omHost
   );
 
+  # Bridge servers run mcp-proxy, whose own --host default IS loopback — so
+  # they were already safe, but by upstream happenstance rather than by
+  # anything stated here, and service.host was discarded for all nine of
+  # them. Assert we PIN it, so an upstream default change cannot silently
+  # widen every bridge service at once.
+  module-mcp-services-bridge-pins-bind-host = let
+    # 127.0.0.2 is deliberately NOT mcp-proxy's own default (127.0.0.1), so a
+    # match proves the value was threaded from service.host rather than merely
+    # inherited from upstream — which is the entire point of pinning it.
+    overridden = evalHm {
+      services.mcp-servers.servers.git-mcp = {
+        enable = true;
+        service.host = "127.0.0.2";
+      };
+    };
+    defaulted = evalHm {
+      services.mcp-servers.servers.git-mcp.enable = true;
+    };
+    execOf = r: r.config.systemd.user.services.mcp-git-mcp.Service.ExecStart;
+  in
+    pkgs.runCommand "module-test-mcp-services-bridge-pins-bind-host" {} ''
+      fail() {
+        echo "FAIL: mcp-services-bridge-pins-bind-host: $1" >&2
+        exit 1
+      }
+      o=${execOf overridden}
+      d=${execOf defaulted}
+      grep -q -- '--host' "$d" || fail "mcp-proxy invoked without --host at all"
+      grep -q -- '--host 127.0.0.2' "$o" \
+        || fail "bind host not threaded from an overridden service.host"
+      grep -q -- '--host 127.0.0.1' "$d" \
+        || fail "default bind host is not loopback"
+      echo PASS > "$out"
+    '';
+
   # ── Attrs-shape ai.rules / ai.<cli>.rules (unified transformer) ───
 
   # Claude HM: top-level ai.rules → .claude/rules/<name>.md with paths frontmatter.
