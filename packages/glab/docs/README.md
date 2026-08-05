@@ -148,6 +148,26 @@ or `"${config.devenv.state}/…"` under devenv, rather than a shell string.
 `devenv eval devenv.state` — which is why the devenv default needs no runtime
 expansion.
 
+A devenv project can deliberately reuse the user's Home Manager glab state and
+authentication without logging in twice:
+
+```nix
+let
+  userHome = builtins.getEnv "HOME";
+in {
+  glab = {
+    enable = true;
+    configDir = "${userHome}/.config/glab-cli";
+  };
+}
+```
+
+This points the devenv wrapper at the same `config.yml`; it does not copy or
+redeclare credentials. When Codex is also enabled, the glab module automatically
+adds the effective directory to Codex's legacy `workspace-write` writable roots.
+The grant follows any explicit `configDir` override and is inert for other
+sandbox modes and named permission profiles.
+
 That difference is a `config` default, not a differing option _declaration_ —
 the two facets' option trees stay identical, which
 `module-glab-hm-devenv-option-parity` asserts.

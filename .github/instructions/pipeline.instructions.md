@@ -7,29 +7,31 @@ applyTo: ".github/workflows/update.yml,config/fragment-categories.nix,config/gen
 
 ## CI Update Workflow
 
-> **Last verified:** 2026-08-03 (commit pending — removes package targets'
-> scheduling-only nixpkgs/nix-update predecessors and the ineffective
-> base-checkout format/build finalizer). Prior: 2026-08-03 (commit pending —
-> makes the hidden update report artifact upload real and fails loudly when the
-> report is absent). Prior: 2026-08-03 (commit pending — records `devenv-test`
-> as an always-reporting fifth merge gate and corrects the auto-merge thread
-> rule). Prior: 2026-08-03 (commit pending — updates the pnpm detector's
-> documented lookup after all package groups move under `pkgs.ai`). Prior:
-> 2026-08-01 (commit pending — Phase 2 now runs on `if: always()` so a timed-out
-> sweep SHIPS what it finished instead of discarding it, and the
-> `ninja-completed.flag` sentinel is re-gated on `steps.ninja.outcome` so a
-> partial sweep can never let the close step delete the PRs it did not reach.
-> Measured on run 30713330569: 47 of 52 edges done, step `skipped`, everything
-> thrown away). Prior: 2026-08-01 — documents the SECOND `extraExtract`
-> self-heal, `vu.mkExtractRegen`, alongside the hash one: which failure it
-> answers, that a red drift check reports a broken MECHANISM rather than a stale
-> file, why extracts get no `fix_sidecar_hashes`-style standalone hatch, and how
-> to tell "never wired" from "ran and failed". glab had no hook at all, which
-> stayed invisible from #560 until PR #621). Prior: 2026-07-27 — adds the
-> three-valued `git diff --quiet` rule and the `git_diff_quiet` helper every
-> dirtiness gate in the update scripts now goes through; the bare form had
-> routed a git ERROR into "there are changes" in `update-input.sh` and into "the
-> tree is dirty" at both of `update-pkg.sh`'s gates. Earlier: the
+> **Last verified:** 2026-08-05 (commit pending — `devenv-test` still reports on
+> update PRs but is no longer one of the four required status contexts). Prior:
+> 2026-08-03 (commit pending — removes package targets' scheduling-only
+> nixpkgs/nix-update predecessors and the ineffective base-checkout format/build
+> finalizer). Prior: 2026-08-03 (commit pending — makes the hidden update report
+> artifact upload real and fails loudly when the report is absent). Prior:
+> 2026-08-03 (commit pending — records `devenv-test` as an always-reporting
+> fifth merge gate and corrects the auto-merge thread rule). Prior: 2026-08-03
+> (commit pending — updates the pnpm detector's documented lookup after all
+> package groups move under `pkgs.ai`). Prior: 2026-08-01 (commit pending —
+> Phase 2 now runs on `if: always()` so a timed-out sweep SHIPS what it finished
+> instead of discarding it, and the `ninja-completed.flag` sentinel is re-gated
+> on `steps.ninja.outcome` so a partial sweep can never let the close step
+> delete the PRs it did not reach. Measured on run 30713330569: 47 of 52 edges
+> done, step `skipped`, everything thrown away). Prior: 2026-08-01 — documents
+> the SECOND `extraExtract` self-heal, `vu.mkExtractRegen`, alongside the hash
+> one: which failure it answers, that a red drift check reports a broken
+> MECHANISM rather than a stale file, why extracts get no
+> `fix_sidecar_hashes`-style standalone hatch, and how to tell "never wired"
+> from "ran and failed". glab had no hook at all, which stayed invisible from
+> #560 until PR #621). Prior: 2026-07-27 — adds the three-valued
+> `git diff --quiet` rule and the `git_diff_quiet` helper every dirtiness gate
+> in the update scripts now goes through; the bare form had routed a git ERROR
+> into "there are changes" in `update-input.sh` and into "the tree is dirty" at
+> both of `update-pkg.sh`'s gates. Earlier: the
 > `Detect a newer @aihubmix/mcp on npm` annotation step and the
 > excluded-because-a-local-patch-cannot-be-swept rule behind it, which is about
 > SWEEPABILITY and not about lagging: aihubmix-mcp tracks `dist-tags.latest` and
@@ -119,8 +121,8 @@ to "some dependencies landed" instead of "none", which is the point.
 PRs trigger ci.yml's `pull_request` event, which runs builds on both linux and
 darwin runners, plus the always-reporting `devenv-test` workflow. That runtime
 gate performs its expensive work only when the pull request touches a relevant
-path; otherwise it succeeds after a changed-files API query. PRs can merge only
-after all five required status contexts pass.
+path; otherwise it succeeds after a changed-files API query. It is not a merge
+gate; PRs can merge only after the four required status contexts pass.
 
 ### Non-blocking annotation steps
 

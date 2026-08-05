@@ -7,22 +7,24 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 
 # CI-lean closure taxonomy
 
-> **Last verified:** 2026-08-03 (commit pending — makes `devenv-test` an
-> always-reporting required context while preserving the cold closure only for
-> relevant paths). Prior: 2026-08-03 (commit pending — updates the
-> consumer-export taxonomy after dev tools move beneath `pkgs.ai.devTools`;
-> shell membership is unchanged). Prior: 2026-08-02 (commit pending — the repo's
-> beta Codex permission profile explicitly grants the user-global Semble cache
-> because beta profiles do not compose with the legacy user sandbox table).
-> Prior: 2026-08-02 (commit pending — the repo-aware Codex wrapper now
-> distinguishes runtime commands from administrative commands before injecting
-> the worktree root and named profile; an argv-probe build lets enterTest verify
-> runtime injection (including `apply` and `exec-server`) and doctor
-> pass-through exactly). Prior: 2026-08-02 (PR #698 — introduced the wrapper and
-> verified PATH precedence plus explicit-flag idempotence). Prior: 2026-07-22
-> (PR #439). If you change what `devenv.nix` puts in the shell, which factories
-> install CLI wrappers, or the `devenv-test.yml` cache wiring, re-verify this
-> and bump the marker.
+> **Last verified:** 2026-08-05 (commit pending — records that `devenv-test`
+> remains always-reporting but is no longer required by branch protection; the
+> path-filter constraint is therefore optional rather than load-bearing). Prior:
+> 2026-08-03 (commit pending — makes `devenv-test` an always-reporting required
+> context while preserving the cold closure only for relevant paths). Prior:
+> 2026-08-03 (commit pending — updates the consumer-export taxonomy after dev
+> tools move beneath `pkgs.ai.devTools`; shell membership is unchanged). Prior:
+> 2026-08-02 (commit pending — the repo's beta Codex permission profile
+> explicitly grants the user-global Semble cache because beta profiles do not
+> compose with the legacy user sandbox table). Prior: 2026-08-02 (commit pending
+> — the repo-aware Codex wrapper now distinguishes runtime commands from
+> administrative commands before injecting the worktree root and named profile;
+> an argv-probe build lets enterTest verify runtime injection (including `apply`
+> and `exec-server`) and doctor pass-through exactly). Prior: 2026-08-02 (PR
+> #698 — introduced the wrapper and verified PATH precedence plus explicit-flag
+> idempotence). Prior: 2026-07-22 (PR #439). If you change what `devenv.nix`
+> puts in the shell, which factories install CLI wrappers, or the
+> `devenv-test.yml` cache wiring, re-verify this and bump the marker.
 
 The `devenv-test` CI gate (`.github/workflows/devenv-test.yml`) runs
 `devenv test` on ephemeral runners, so **everything in the shell closure is
@@ -31,13 +33,23 @@ download cost on every cold run** and feeds the `cache-nix-action` cache size.
 `isCI` binding — EVAL-time, distinct from the RUNTIME `$CI` guard in
 `processes.docs.exec`).
 
-Branch protection requires the job's `devenv-test` context. The workflow cannot
-retain a `pull_request.paths` filter because GitHub leaves a required context
-pending when its workflow never starts. Instead, its first step queries the pull
-request's changed files and every closure-producing step is conditional on the
-same path set. An irrelevant pull request therefore reports success after one
-API call; a relevant one still pays for and waits on the runtime gate. Pushes to
-`main` retain the workflow-level path filter because they are not merge gates.
+The job reports on every pull request rather than carrying a
+`pull_request.paths` filter: its first step queries the changed files and every
+closure-producing step is conditional on the same path set. An irrelevant pull
+request therefore reports success after one API call; a relevant one still pays
+for and waits on the runtime gate. Pushes to `main` retain the workflow-level
+path filter because they are not merge gates.
+
+**The constraint that FORCED this shape is gone, but the shape remains.** It was
+built because branch protection required the `devenv-test` context, and GitHub
+leaves a required context pending forever when its workflow never starts — so a
+paths filter would have deadlocked every unrelated PR. `devenv-test` was
+un-required on 2026-08-05 (see the git-workflow fragment), so a workflow-level
+paths filter is now _possible_ again. It has not been reinstated, and the
+always-report shape is still the cheaper thing to reason about. If you do
+reinstate one, re-check the ruleset first — putting the context back under
+branch protection while a paths filter is live would resurrect exactly the
+deadlock this design was built to avoid.
 
 ## The four buckets
 
@@ -82,12 +94,14 @@ rebuild to the **identical store path** (local behavior unchanged — compare
 
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-08-02 (commit pending — Semble's devenv facet keeps
-> its sandbox-writable cache in project state and exports the same path through
-> `SEMBLE_CACHE_LOCATION`; this is environment/settings fanout, not a `files.*`
-> artifact). Prior: 2026-07-21 (commit pending — corrects the Kiro-symlink
-> citation to kirodotdev/Kiro#9787 with the engine qualifier, and the
-> `files.<name>.source` claim; earlier revision added auto-regeneration via
+> **Last verified:** 2026-08-05 (commit pending — Codex and glab sandbox-root
+> fanout is settings/environment integration and deliberately creates no
+> `files.*` artifact). Prior: 2026-08-02 (commit pending — Semble's devenv facet
+> keeps its sandbox-writable cache in project state and exports the same path
+> through `SEMBLE_CACHE_LOCATION`; this is environment/settings fanout, not a
+> `files.*` artifact). Prior: 2026-07-21 (commit pending — corrects the
+> Kiro-symlink citation to kirodotdev/Kiro#9787 with the engine qualifier, and
+> the `files.<name>.source` claim; earlier revision added auto-regeneration via
 > `gen` import). devenv internals are pinned to whatever version is in
 > flake.lock; if you touch `modules/devenv/**`,
 > `lib/hm-helpers.nix:mkDevenvSkillEntries`, `devenv.nix` `files` block, or

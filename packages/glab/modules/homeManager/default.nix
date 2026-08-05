@@ -9,6 +9,7 @@
 {
   config,
   lib,
+  options,
   pkgs,
   ...
 }: let
@@ -16,11 +17,22 @@
 in {
   imports = [(import ../options.nix {inherit lib;})];
 
-  config = lib.mkIf cfg.enable {
-    glab.package = lib.mkDefault pkgs.ai.devTools.glab;
+  config = lib.mkIf cfg.enable (lib.mkMerge [
+    {
+      glab.package = lib.mkDefault pkgs.ai.devTools.glab;
 
-    home.packages = [
-      (import ../../lib/mkGlab.nix {inherit lib pkgs cfg;})
-    ];
-  };
+      home.packages = [
+        (import ../../lib/mkGlab.nix {inherit lib pkgs cfg;})
+      ];
+    }
+    (lib.mkIf (lib.hasAttrByPath ["ai" "codex" "settings"] options && config.ai.codex.enable) {
+      ai.codex.settings._integration_writable_roots = lib.mkAfter [
+        (
+          if cfg.configDir != null
+          then cfg.configDir
+          else "${config.xdg.configHome}/glab-cli"
+        )
+      ];
+    })
+  ]);
 }

@@ -314,6 +314,21 @@ ai = {
 };
 ```
 
+Enabling any harness also installs a sandbox-safe Git SSH default. It preserves
+Home Manager's `~/.ssh/config` host/key routing when a Linux user-namespace
+sandbox remaps the Nix-store target's owner; devenv exports the same wrapper as
+`GIT_SSH_COMMAND`, so ordinary dev-shell Git and harness-launched Git behave the
+same. OpenSSH batch mode makes missing credentials fail instead of opening a
+password dialog. Set `ai.gitSshConfigWorkaround = false` to manage this
+yourself.
+
+For Codex's legacy `workspace-write` sandbox, the module automatically adds the
+Nix cache and, under devenv, the current repository's `.git`. Integration
+modules add their own state when enabled: Semble adds its cache and glab adds
+its effective `configDir`. A parent containing multiple worktrees remains an
+explicit consumer root. Named permission profiles are separate security
+boundaries and do not inherit these legacy roots.
+
 </details>
 
 <details>

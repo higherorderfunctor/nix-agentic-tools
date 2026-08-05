@@ -94,6 +94,10 @@
         type = lib.types.str;
         default = "/home/test/.cache";
       };
+      xdg.configHome = lib.mkOption {
+        type = lib.types.str;
+        default = "/home/test/.config";
+      };
       xdg.stateHome = lib.mkOption {
         type = lib.types.str;
         default = "/home/test/.local/state";
@@ -115,9 +119,15 @@
       # a project-local configDir with no runtime shell expansion. Same
       # stub shape checks/claude-devenv-hooks-real-type.nix uses for
       # devenv.root.
-      devenv.state = lib.mkOption {
-        type = lib.types.str;
-        default = "/tmp/devenv-state";
+      devenv = {
+        root = lib.mkOption {
+          type = lib.types.str;
+          default = "/tmp/devenv-root";
+        };
+        state = lib.mkOption {
+          type = lib.types.str;
+          default = "/tmp/devenv-state";
+        };
       };
       env = lib.mkOption {
         type = lib.types.attrsOf lib.types.str;
@@ -213,9 +223,10 @@
       ];
     };
 
-  evalDevenv = config:
+  evalDevenvWithGetEnv = codexGetEnv: config:
     lib.evalModules {
       specialArgs = {
+        inherit codexGetEnv;
         lib = hmLib;
         pkgs = pkgs // {ai = pkgs.ai or {};};
       };
@@ -234,6 +245,7 @@
         {inherit config;}
       ];
     };
+  evalDevenv = evalDevenvWithGetEnv builtins.getEnv;
 
   # Codex HM settings are embedded as one-line JSON in the reconciliation
   # activation script rather than exposed as a home.file source. Keeping this
@@ -554,6 +566,94 @@ in {
       hm.config.home.packages
       == [expected]
       && devenv.config.packages == [expected]
+  );
+
+  module-ai-git-ssh-default-follows-harnesses = mkTest "ai-git-ssh-default-follows-harnesses" (
+    let
+      harnessNames = ["claude" "codex" "copilot" "kimchi" "kiro"];
+      commands =
+        lib.concatMap (name: let
+          config = lib.setAttrByPath ["ai" name "enable"] true;
+        in [
+          (evalHm config).config.programs.git.settings.core.sshCommand
+          (evalDevenv config).config.env.GIT_SSH_COMMAND
+        ])
+        harnessNames;
+      disabledHm = (evalHm {}).config;
+      disabledDevenv = (evalDevenv {}).config;
+      optedOutHm =
+        (evalHm {
+          ai.codex.enable = true;
+          ai.gitSshConfigWorkaround = false;
+        }).config;
+      optedOutDevenv =
+        (evalDevenv {
+          ai.codex.enable = true;
+          ai.gitSshConfigWorkaround = false;
+        }).config;
+      overriddenHm =
+        (evalHm {
+          ai.codex.enable = true;
+          programs.git.settings.core.sshCommand = "custom-ssh";
+        }).config;
+      overriddenDevenv =
+        (evalDevenv {
+          ai.codex.enable = true;
+          env.GIT_SSH_COMMAND = "custom-ssh";
+        }).config;
+    in
+      builtins.all (lib.hasSuffix "/bin/ai-sandbox-safe-ssh") commands
+      && !(disabledHm.programs.git.settings ? core)
+      && !(disabledDevenv.env ? GIT_SSH_COMMAND)
+      && !(optedOutHm.programs.git.settings ? core)
+      && !(optedOutDevenv.env ? GIT_SSH_COMMAND)
+      && overriddenHm.programs.git.settings.core.sshCommand == "custom-ssh"
+      && overriddenDevenv.env.GIT_SSH_COMMAND == "custom-ssh"
+  );
+
+  module-ai-git-ssh-wrapper-is-noninteractive = let
+    command = (evalDevenv {ai.codex.enable = true;}).config.env.GIT_SSH_COMMAND;
+    sshConfig = pkgs.writeText "sandbox-ssh-config" ''
+      Host *
+        BatchMode no
+    '';
+  in
+    pkgs.runCommand "module-test-ai-git-ssh-wrapper-is-noninteractive" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      mkdir -p home/.ssh
+      ln -s ${sshConfig} home/.ssh/config
+      HOME="$PWD/home" ${command} -G github.com > resolved
+      ${pkgs.gnugrep}/bin/grep -Fqx 'batchmode yes' resolved || {
+        echo "FAIL: expected OpenSSH to resolve 'batchmode yes'; got:" >&2
+        ${pkgs.gnugrep}/bin/grep -F 'batchmode ' resolved >&2 || :
+        exit 1
+      }
+      touch "$out"
+    '';
+
+  module-codex-default-sandbox-roots = mkTest "codex-default-sandbox-roots" (
+    let
+      settings = {
+        ai.codex = {
+          enable = true;
+          settings.sandbox_mode = "workspace-write";
+        };
+      };
+      hmRoots = (evalHm settings).config.ai.codex.settings.sandbox_workspace_write.writable_roots;
+      rootsWithEnvironment = environment:
+        (evalDevenvWithGetEnv (name: environment.${name} or "") settings).config.ai.codex.settings.sandbox_workspace_write.writable_roots;
+      devenvHomeRoots = rootsWithEnvironment {HOME = "/home/test";};
+      devenvXdgRoots = rootsWithEnvironment {
+        HOME = "/home/ignored";
+        XDG_CACHE_HOME = "/tmp/xdg-cache";
+      };
+    in
+      hmRoots
+      == ["/home/test/.cache/nix"]
+      && devenvHomeRoots == ["/tmp/devenv-root/.git" "/home/test/.cache/nix"]
+      && devenvXdgRoots == ["/tmp/devenv-root/.git" "/tmp/xdg-cache/nix"]
   );
 
   module-codex-skills-disabled-emits-nothing = mkTest "codex-skills-disabled-emits-nothing" (
@@ -1250,13 +1350,23 @@ in {
       };
       hmSettings = hmCodexSettings (evalHm config);
       devenvSettings = (evalDevenv config).config.files.".codex/config.toml".source.value;
+      withoutBackendRoots = settings:
+        settings
+        // {
+          sandbox_workspace_write = removeAttrs settings.sandbox_workspace_write ["writable_roots"];
+        };
     in
-      hmSettings
-      == devenvSettings
+      withoutBackendRoots hmSettings
+      == withoutBackendRoots devenvSettings
       && hmSettings.approval_policy.granular.rules
       && !hmSettings.approval_policy.granular.request_permissions
       && hmSettings.sandbox_mode == "workspace-write"
-      && hmSettings.sandbox_workspace_write.writable_roots == ["/var/lib/project-cache"]
+      && builtins.all
+      (root: builtins.elem root hmSettings.sandbox_workspace_write.writable_roots)
+      ["/var/lib/project-cache" "/home/test/.cache/nix"]
+      && builtins.all
+      (root: builtins.elem root devenvSettings.sandbox_workspace_write.writable_roots)
+      ["/var/lib/project-cache" "/tmp/devenv-root/.git"]
   );
 
   module-codex-security-toml-syntax = let
@@ -2175,9 +2285,12 @@ in {
   module-semble-codex-sandbox-cache-parity = mkTest "semble-codex-sandbox-cache-parity" (
     let
       config = {
-        ai.codex.settings = {
-          sandbox_mode = "workspace-write";
-          sandbox_workspace_write.writable_roots = ["/consumer-cache"];
+        ai.codex = {
+          enable = true;
+          settings = {
+            sandbox_mode = "workspace-write";
+            sandbox_workspace_write.writable_roots = ["/consumer-cache"];
+          };
         };
         semble = {
           enable = true;
@@ -2218,13 +2331,17 @@ in {
           };
         }).config;
     in
-      hm.ai.codex.settings.sandbox_workspace_write.writable_roots
-      == ["/consumer-cache" "/home/test/.cache/semble"]
-      && devenv.ai.codex.settings.sandbox_workspace_write.writable_roots
-      == ["/consumer-cache" "/tmp/devenv-state/semble-cache"]
+      builtins.all
+      (root: builtins.elem root hm.ai.codex.settings.sandbox_workspace_write.writable_roots)
+      ["/consumer-cache" "/home/test/.cache/nix" "/home/test/.cache/semble"]
+      && builtins.length hm.ai.codex.settings.sandbox_workspace_write.writable_roots == 3
+      && builtins.all
+      (root: builtins.elem root devenv.ai.codex.settings.sandbox_workspace_write.writable_roots)
+      ["/consumer-cache" "/tmp/devenv-root/.git" "/tmp/devenv-state/semble-cache"]
       && devenv.env.SEMBLE_CACHE_LOCATION == "/tmp/devenv-state/semble-cache"
-      && customDevenv.ai.codex.settings.sandbox_workspace_write.writable_roots
-      == ["/consumer-cache" "/custom/semble-cache"]
+      && builtins.all
+      (root: builtins.elem root customDevenv.ai.codex.settings.sandbox_workspace_write.writable_roots)
+      ["/consumer-cache" "/tmp/devenv-root/.git" "/custom/semble-cache"]
       && customDevenv.env.SEMBLE_CACHE_LOCATION == "/custom/semble-cache"
       && readOnly.ai.codex.settings.sandbox_workspace_write == null
       && readOnly.env.SEMBLE_CACHE_LOCATION == "/tmp/devenv-state/semble-cache"
@@ -2607,6 +2724,32 @@ in {
       && dv.config.glab.configDir == "/tmp/devenv-state/glab-cli"
       # mkDefault, so a project can still point it elsewhere.
       && overridden.config.glab.configDir == "/tmp/explicit"
+  );
+
+  module-glab-codex-sandbox-grants-effective-configdir = mkTest "glab-codex-sandbox-grants-effective-configdir" (
+    let
+      base = {
+        ai.codex = {
+          enable = true;
+          settings.sandbox_mode = "workspace-write";
+        };
+        glab = {
+          enable = true;
+          host.plain = "gitlab.example.com";
+        };
+      };
+      hm = (evalHm base).config;
+      devenv =
+        (evalDevenv (lib.recursiveUpdate base {
+          glab.configDir = "/home/test/.config/glab-cli";
+        })).config;
+    in
+      builtins.elem
+      "/home/test/.config/glab-cli"
+      hm.ai.codex.settings.sandbox_workspace_write.writable_roots
+      && builtins.elem
+      "/home/test/.config/glab-cli"
+      devenv.ai.codex.settings.sandbox_workspace_write.writable_roots
   );
 
   # Runtime test of the preflight, with a STUB standing in for glab so the
@@ -8563,7 +8706,9 @@ in {
     in
       builtins.length result.config.packages
       == 1
-      && result.config.env == {}
+      # The cross-harness SSH default is exercised separately; this assertion
+      # guards only against baking the Kimchi credential into the environment.
+      && removeAttrs result.config.env ["GIT_SSH_COMMAND"] == {}
   );
 
   # Real-execution gate for the wrapProgram blocker (#1) + secret handling

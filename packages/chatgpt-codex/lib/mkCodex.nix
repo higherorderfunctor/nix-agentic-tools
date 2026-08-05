@@ -1,5 +1,6 @@
 # Codex-specific factory-of-factory.
 {
+  getEnv ? builtins.getEnv,
   lib,
   pkgs,
   ...
@@ -882,6 +883,7 @@ in
     };
 
     hm.config = {
+      config,
       cfg,
       mergedInstructions,
       mergedRules,
@@ -903,9 +905,14 @@ in
         });
       settingsStateName = "codex-config-${builtins.hashString "sha256" configFile}";
     in {
-      ai.codex.settings = lib.mkIf (topSettings.reasoningEffort != null) {
-        model_reasoning_effort = lib.mkDefault topSettings.reasoningEffort;
-      };
+      ai.codex.settings = lib.mkMerge [
+        (lib.mkIf cfg.enable {
+          _integration_writable_roots = lib.mkAfter ["${config.xdg.cacheHome}/nix"];
+        })
+        (lib.mkIf (topSettings.reasoningEffort != null) {
+          model_reasoning_effort = lib.mkDefault topSettings.reasoningEffort;
+        })
+      ];
       assertions =
         mkPathAssertions {inherit mergedInstructions mergedRules;}
         ++ mkAgentAssertions mergedAgents
@@ -970,6 +977,7 @@ in
     };
 
     devenv.config = {
+      config,
       cfg,
       mergedInstructions,
       mergedRules,
@@ -992,10 +1000,26 @@ in
       profileMaterializer = mkDevenvProfileMaterializer {
         inherit (cfg) configDir profiles;
       };
+      environmentCacheHome = getEnv "XDG_CACHE_HOME";
+      environmentHome = getEnv "HOME";
+      nixCacheRoot =
+        if environmentCacheHome != ""
+        then "${environmentCacheHome}/nix"
+        else if environmentHome != ""
+        then "${environmentHome}/.cache/nix"
+        else null;
     in {
-      ai.codex.settings = lib.mkIf (topSettings.reasoningEffort != null) {
-        model_reasoning_effort = lib.mkDefault topSettings.reasoningEffort;
-      };
+      ai.codex.settings = lib.mkMerge [
+        (lib.mkIf cfg.enable {
+          _integration_writable_roots = lib.mkAfter (
+            ["${config.devenv.root}/.git"]
+            ++ lib.optional (nixCacheRoot != null) nixCacheRoot
+          );
+        })
+        (lib.mkIf (topSettings.reasoningEffort != null) {
+          model_reasoning_effort = lib.mkDefault topSettings.reasoningEffort;
+        })
+      ];
       assertions =
         mkPathAssertions {inherit mergedInstructions mergedRules;}
         ++ mkAgentAssertions mergedAgents
