@@ -1,5 +1,6 @@
 # Codex-specific factory-of-factory.
 {
+  getEnv ? builtins.getEnv,
   lib,
   pkgs,
   ...
@@ -999,8 +1000,8 @@ in
       profileMaterializer = mkDevenvProfileMaterializer {
         inherit (cfg) configDir profiles;
       };
-      environmentCacheHome = builtins.getEnv "XDG_CACHE_HOME";
-      environmentHome = builtins.getEnv "HOME";
+      environmentCacheHome = getEnv "XDG_CACHE_HOME";
+      environmentHome = getEnv "HOME";
       nixCacheRoot =
         if environmentCacheHome != ""
         then "${environmentCacheHome}/nix"

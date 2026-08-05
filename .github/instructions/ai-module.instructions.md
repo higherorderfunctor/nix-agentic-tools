@@ -7,11 +7,14 @@ applyTo: "lib/ai/agent.nix,lib/ai/app/**,lib/ai/default.nix,lib/ai/hooks.nix,lib
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-05 (commit pending — Codex's backend-native
-> writable roots are now gated by `ai.codex.enable`, so merely configuring
-> dormant Codex settings cannot create an active sandbox root set). Prior:
-> 2026-08-05 (commit pending — sandbox-safe Git SSH now forces batch mode so
-> agent-backed authentication works but missing credentials fail without an
+> **Last verified:** 2026-08-05 (commit pending — Codex's devenv Nix-cache
+> resolver remains environment-backed in production but is injectable at the
+> module boundary, letting pure module tests prove both XDG precedence and HOME
+> fallback deterministically). Prior: 2026-08-05 (commit pending — Codex's
+> backend-native writable roots are now gated by `ai.codex.enable`, so merely
+> configuring dormant Codex settings cannot create an active sandbox root set).
+> Prior: 2026-08-05 (commit pending — sandbox-safe Git SSH now forces batch mode
+> so agent-backed authentication works but missing credentials fail without an
 > interactive dialog). Prior: 2026-08-05 (commit pending — every enabled AI
 > harness now receives a sandbox-safe Git SSH default in both backends; Codex
 > contributes its backend-native Nix cache and devenv Git metadata roots, while

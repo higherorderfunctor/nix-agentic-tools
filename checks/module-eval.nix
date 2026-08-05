@@ -223,9 +223,10 @@
       ];
     };
 
-  evalDevenv = config:
+  evalDevenvWithGetEnv = codexGetEnv: config:
     lib.evalModules {
       specialArgs = {
+        inherit codexGetEnv;
         lib = hmLib;
         pkgs = pkgs // {ai = pkgs.ai or {};};
       };
@@ -244,6 +245,7 @@
         {inherit config;}
       ];
     };
+  evalDevenv = evalDevenvWithGetEnv builtins.getEnv;
 
   # Codex HM settings are embedded as one-line JSON in the reconciliation
   # activation script rather than exposed as a home.file source. Keeping this
@@ -623,7 +625,11 @@ in {
       mkdir -p home/.ssh
       ln -s ${sshConfig} home/.ssh/config
       HOME="$PWD/home" ${command} -G github.com > resolved
-      ${pkgs.gnugrep}/bin/grep -Fqx 'batchmode yes' resolved
+      ${pkgs.gnugrep}/bin/grep -Fqx 'batchmode yes' resolved || {
+        echo "FAIL: expected OpenSSH to resolve 'batchmode yes'; got:" >&2
+        ${pkgs.gnugrep}/bin/grep -F 'batchmode ' resolved >&2 || :
+        exit 1
+      }
       touch "$out"
     '';
 
@@ -636,24 +642,18 @@ in {
         };
       };
       hmRoots = (evalHm settings).config.ai.codex.settings.sandbox_workspace_write.writable_roots;
-      devenvRoots = (evalDevenv settings).config.ai.codex.settings.sandbox_workspace_write.writable_roots;
-      environmentCacheHome = builtins.getEnv "XDG_CACHE_HOME";
-      environmentHome = builtins.getEnv "HOME";
-      expectedDevenvNixCache =
-        if environmentCacheHome != ""
-        then "${environmentCacheHome}/nix"
-        else if environmentHome != ""
-        then "${environmentHome}/.cache/nix"
-        else null;
+      rootsWithEnvironment = environment:
+        (evalDevenvWithGetEnv (name: environment.${name} or "") settings).config.ai.codex.settings.sandbox_workspace_write.writable_roots;
+      devenvHomeRoots = rootsWithEnvironment {HOME = "/home/test";};
+      devenvXdgRoots = rootsWithEnvironment {
+        HOME = "/home/ignored";
+        XDG_CACHE_HOME = "/tmp/xdg-cache";
+      };
     in
       hmRoots
       == ["/home/test/.cache/nix"]
-      && builtins.elem "/tmp/devenv-root/.git" devenvRoots
-      && (
-        if expectedDevenvNixCache == null
-        then builtins.length devenvRoots == 1
-        else builtins.elem expectedDevenvNixCache devenvRoots
-      )
+      && devenvHomeRoots == ["/tmp/devenv-root/.git" "/home/test/.cache/nix"]
+      && devenvXdgRoots == ["/tmp/devenv-root/.git" "/tmp/xdg-cache/nix"]
   );
 
   module-codex-skills-disabled-emits-nothing = mkTest "codex-skills-disabled-emits-nothing" (
