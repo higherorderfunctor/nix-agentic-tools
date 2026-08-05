@@ -1332,13 +1332,23 @@ in {
       };
       hmSettings = hmCodexSettings (evalHm config);
       devenvSettings = (evalDevenv config).config.files.".codex/config.toml".source.value;
+      withoutBackendRoots = settings:
+        settings
+        // {
+          sandbox_workspace_write = removeAttrs settings.sandbox_workspace_write ["writable_roots"];
+        };
     in
-      hmSettings
-      == devenvSettings
+      withoutBackendRoots hmSettings
+      == withoutBackendRoots devenvSettings
       && hmSettings.approval_policy.granular.rules
       && !hmSettings.approval_policy.granular.request_permissions
       && hmSettings.sandbox_mode == "workspace-write"
-      && hmSettings.sandbox_workspace_write.writable_roots == ["/var/lib/project-cache"]
+      && builtins.all
+      (root: builtins.elem root hmSettings.sandbox_workspace_write.writable_roots)
+      ["/var/lib/project-cache" "/home/test/.cache/nix"]
+      && builtins.all
+      (root: builtins.elem root devenvSettings.sandbox_workspace_write.writable_roots)
+      ["/var/lib/project-cache" "/tmp/devenv-root/.git"]
   );
 
   module-codex-security-toml-syntax = let
