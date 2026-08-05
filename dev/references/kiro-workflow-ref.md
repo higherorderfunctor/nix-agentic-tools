@@ -548,24 +548,49 @@ injected every turn, and its default text says:
 > then `semantic_reviewer`, in that order, with a stopCondition on the review
 > verdict file. The reviewer is always last.
 
-That is live repo behavior, not a note. **It also auto-enables**: the reminder
-defaults on whenever `workflows` is in `unlockedRolloutFeatures`
-(`mkKiro.nix:792-795` — `null` means auto, "the feature under-elicits without
-it"). So in any session with the feature unlocked, this repo is prescribing that
-exact agent ordering on every turn, on top of the vendor's ~19.3k-character
-`workflows_default` steering that pushes delegation generally.
+That is live repo behavior, and it **auto-enables**: the reminder defaults on
+whenever `workflows` is in `unlockedRolloutFeatures` (`mkKiro.nix:792-795` —
+`null` means auto, "the feature under-elicits without it").
 
-**That matters for where the pattern comes from.** An operator who sees
+**But the hook is a remedy, not the cause — and the difference is the whole
+mechanism.** Operator account, 2026-08, with the ordering established
+first-hand: the pattern was already appearing unprompted _before_ the hook
+existed. Talking about workflows elicited it; working on an unrelated task
+without saying the word stopped it. The hook was added days later precisely
+because that coupling made the behavior unreliable.
+
+The elicitation source is therefore the **vendor's** `workflows_default`
+steering — ~19.3k characters, emphatic ("always delegate implementation to
+workflows"). What makes it topic-coupled is _where_ it sits, and
+`workflowReminder.nix`'s own header names the symptom exactly:
+
+> What decays is ATTENTION: one block near the top of a growing conversation
+> loses out to everything since, which is exactly the reported symptom (the
+> model elects workflows while you are talking about workflows, and stops when
+> you stop).
+
+`workflows_default` lands in **msg0**, computed on the first turn and thereafter
+replayed byte-for-byte. It never decays in _content_; it decays in _position_,
+losing ground to everything said since — so the operator's own prompt is what
+re-activates a standing instruction that was there all along. A
+`UserPromptSubmit` hook lands beside each prompt, which is why it works where
+more steering would not: a second copy would sit in the same place, competing
+with the same context.
+
+**That matters for where the pattern comes from.** Someone who sees
 `wf-planner → [repeat] → (wf-coder, semantic_reviewer)` appear without having
-designed it is not seeing a bundled recipe run — they are seeing bundled
-_agents_, assembled into a shape that bundled _and repo-local_ steering asked
-for. Three layers, easy to conflate:
+designed it is not seeing a bundled recipe run, and need not have any repo-local
+config at all — they are seeing bundled _agents_ assembled into a shape bundled
+_steering_ asked for. Three layers, easy to conflate:
 
-| Layer          | Bundled?                     | Evidence                                                  |
-| -------------- | ---------------------------- | --------------------------------------------------------- |
-| the agents     | **yes** — all ten, vendor    | ledger §3.5                                               |
-| the pattern    | **yes** — vendor + this repo | `workflows_default`; `workflowReminder.nix`, auto-enabled |
-| the definition | **no** — generated per run   | node ids vary across runs (below)                         |
+| Layer          | Bundled?                   | Evidence                                                      |
+| -------------- | -------------------------- | ------------------------------------------------------------- |
+| the agents     | **yes** — all ten, vendor  | ledger §3.5                                                   |
+| the pattern    | **yes** — vendor steering  | `workflows_default` in msg0; elicited pre-hook, topic-coupled |
+| the definition | **no** — generated per run | node ids vary across runs (below)                             |
+
+This repo's hook amplifies the middle row by buying it position; it does not
+supply it.
 
 The receipt for that last row: two runs of the same shape observed 2026-08-05
 carried **different loop ids** — `review-loop` in one, `build-loop` in the
