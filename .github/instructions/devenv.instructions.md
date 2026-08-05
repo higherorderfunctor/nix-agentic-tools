@@ -94,14 +94,17 @@ rebuild to the **identical store path** (local behavior unchanged — compare
 
 ## devenv `files` Option Internals
 
-> **Last verified:** 2026-08-05 (commit pending — Codex and glab sandbox-root
-> fanout is settings/environment integration and deliberately creates no
-> `files.*` artifact). Prior: 2026-08-02 (commit pending — Semble's devenv facet
-> keeps its sandbox-writable cache in project state and exports the same path
-> through `SEMBLE_CACHE_LOCATION`; this is environment/settings fanout, not a
-> `files.*` artifact). Prior: 2026-07-21 (commit pending — corrects the
-> Kiro-symlink citation to kirodotdev/Kiro#9787 with the engine qualifier, and
-> the `files.<name>.source` claim; earlier revision added auto-regeneration via
+> **Last verified:** 2026-08-05 (commit pending — re-verifies that Codex's
+> environment resolver and sandbox-root fanout create no `files.*` artifact
+> while its test override moves out of the formal module argument set). Prior:
+> 2026-08-05 (commit pending — Codex and glab sandbox-root fanout is
+> settings/environment integration and deliberately creates no `files.*`
+> artifact). Prior: 2026-08-02 (commit pending — Semble's devenv facet keeps its
+> sandbox-writable cache in project state and exports the same path through
+> `SEMBLE_CACHE_LOCATION`; this is environment/settings fanout, not a `files.*`
+> artifact). Prior: 2026-07-21 (commit pending — corrects the Kiro-symlink
+> citation to kirodotdev/Kiro#9787 with the engine qualifier, and the
+> `files.<name>.source` claim; earlier revision added auto-regeneration via
 > `gen` import). devenv internals are pinned to whatever version is in
 > flake.lock; if you touch `modules/devenv/**`,
 > `lib/hm-helpers.nix:mkDevenvSkillEntries`, `devenv.nix` `files` block, or

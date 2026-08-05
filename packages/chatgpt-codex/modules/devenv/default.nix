@@ -1,11 +1,11 @@
 # Applies the devenv transform to the chatgpt-codex app record.
 {
-  codexGetEnv ? builtins.getEnv,
   lib,
   pkgs,
   ...
 } @ args: let
   aiLib = import ../../../../lib/ai {inherit lib;};
+  codexGetEnv = args.codexGetEnv or builtins.getEnv;
 in
   (aiLib.app.devenvTransform (import ../../lib/mkCodex.nix {
     getEnv = codexGetEnv;
