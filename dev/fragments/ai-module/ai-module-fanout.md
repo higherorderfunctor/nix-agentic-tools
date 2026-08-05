@@ -1,17 +1,19 @@
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-08-05 (commit pending — Codex's devenv Nix-cache
-> resolver remains environment-backed in production but is injectable at the
-> module boundary, letting pure module tests prove both XDG precedence and HOME
-> fallback deterministically). Prior: 2026-08-05 (commit pending — Codex's
-> backend-native writable roots are now gated by `ai.codex.enable`, so merely
-> configuring dormant Codex settings cannot create an active sandbox root set).
-> Prior: 2026-08-05 (commit pending — sandbox-safe Git SSH now forces batch mode
-> so agent-backed authentication works but missing credentials fail without an
-> interactive dialog). Prior: 2026-08-05 (commit pending — every enabled AI
-> harness now receives a sandbox-safe Git SSH default in both backends; Codex
-> contributes its backend-native Nix cache and devenv Git metadata roots, while
-> enabled integrations such as glab add their effective writable state). Prior:
+> resolver remains environment-backed in production but accepts a test-only
+> `specialArgs` override through the module's ellipsis instead of declaring an
+> unsatisfied formal module argument; ordinary module evaluation now has an
+> explicit regression test alongside deterministic XDG/HOME cases). Prior:
+> 2026-08-05 (commit pending — Codex's backend-native writable roots are now
+> gated by `ai.codex.enable`, so merely configuring dormant Codex settings
+> cannot create an active sandbox root set). Prior: 2026-08-05 (commit pending —
+> sandbox-safe Git SSH now forces batch mode so agent-backed authentication
+> works but missing credentials fail without an interactive dialog). Prior:
+> 2026-08-05 (commit pending — every enabled AI harness now receives a
+> sandbox-safe Git SSH default in both backends; Codex contributes its
+> backend-native Nix cache and devenv Git metadata roots, while enabled
+> integrations such as glab add their effective writable state). Prior:
 > 2026-08-04 (commit pending — `ai.kiro.agents` is now a typed record modelling
 > Kiro's v3 agent schema, with `name` defaulted from the attr key because Kiro's
 > Rust CLI requires that field while its Node/ACP parser treats it as optional;

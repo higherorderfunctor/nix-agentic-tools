@@ -1,6 +1,7 @@
 # End-to-end module eval tests. Each test evaluates the full HM module
 # (sharedOptions + every package's modules/homeManager) against a
 # synthetic config and asserts the resulting option tree + config.
+# cspell:ignore batchmode
 {
   lib,
   pkgs,
@@ -90,17 +91,19 @@
       # Home-manager provides these XDG paths in a real eval. Semble uses
       # cacheHome for its Codex sandbox grant; living-workflow uses stateHome
       # for its generated skill.
-      xdg.cacheHome = lib.mkOption {
-        type = lib.types.str;
-        default = "/home/test/.cache";
-      };
-      xdg.configHome = lib.mkOption {
-        type = lib.types.str;
-        default = "/home/test/.config";
-      };
-      xdg.stateHome = lib.mkOption {
-        type = lib.types.str;
-        default = "/home/test/.local/state";
+      xdg = {
+        cacheHome = lib.mkOption {
+          type = lib.types.str;
+          default = "/home/test/.cache";
+        };
+        configHome = lib.mkOption {
+          type = lib.types.str;
+          default = "/home/test/.config";
+        };
+        stateHome = lib.mkOption {
+          type = lib.types.str;
+          default = "/home/test/.local/state";
+        };
       };
     };
   };
@@ -223,13 +226,14 @@
       ];
     };
 
-  evalDevenvWithGetEnv = codexGetEnv: config:
+  evalDevenvWithSpecialArgs = extraSpecialArgs: config:
     lib.evalModules {
-      specialArgs = {
-        inherit codexGetEnv;
-        lib = hmLib;
-        pkgs = pkgs // {ai = pkgs.ai or {};};
-      };
+      specialArgs =
+        {
+          lib = hmLib;
+          pkgs = pkgs // {ai = pkgs.ai or {};};
+        }
+        // extraSpecialArgs;
       modules = [
         ./../lib/ai/sharedOptions.nix
         ./../packages/chatgpt-codex/modules/devenv
@@ -245,7 +249,8 @@
         {inherit config;}
       ];
     };
-  evalDevenv = evalDevenvWithGetEnv builtins.getEnv;
+  evalDevenv = evalDevenvWithSpecialArgs {};
+  evalDevenvWithGetEnv = codexGetEnv: evalDevenvWithSpecialArgs {inherit codexGetEnv;};
 
   # Codex HM settings are embedded as one-line JSON in the reconciliation
   # activation script rather than exposed as a home.file source. Keeping this
@@ -654,6 +659,19 @@ in {
       == ["/home/test/.cache/nix"]
       && devenvHomeRoots == ["/tmp/devenv-root/.git" "/home/test/.cache/nix"]
       && devenvXdgRoots == ["/tmp/devenv-root/.git" "/tmp/xdg-cache/nix"]
+  );
+
+  module-codex-default-getenv-needs-no-module-arg = mkTest "codex-default-getenv-needs-no-module-arg" (
+    let
+      roots =
+        (evalDevenv {
+          ai.codex = {
+            enable = true;
+            settings.sandbox_mode = "workspace-write";
+          };
+        }).config.ai.codex.settings.sandbox_workspace_write.writable_roots;
+    in
+      builtins.deepSeq roots (builtins.elem "/tmp/devenv-root/.git" roots)
   );
 
   module-codex-skills-disabled-emits-nothing = mkTest "codex-skills-disabled-emits-nothing" (
