@@ -1,8 +1,13 @@
 # Shared strategy-driven file materializer.
 #
-# Consumes a `{ <name> = { text, source, strategy }; }` attrset (the
-# `ai.<app>.steeringFiles` option shape — see `fileEntryType`) plus a
-# target directory, and emits per-backend writers:
+# Consumes a `{ <name> = { text, source, strategy }; }` attrset (see
+# `fileEntryType`) plus a target directory, and emits per-backend
+# writers. Two surfaces use it today — `ai.kiro.steeringFiles` (both
+# strategies) and the Kiro hooks surface (copy only; v3 drops symlinked
+# hooks) — so caller-facing messages take an explicit `surface` label
+# rather than saying "steering".
+#
+# The writers emit:
 #
 #   - strategy = "symlink" → exactly the legacy declarative shapes
 #     (HM `home.file`, devenv `files.*`) via `mkSymlinkEntries`.
@@ -110,8 +115,12 @@ in rec {
     else s;
 
   # ── Eval assertions (both backends) ────────────────────────────────
+  # `surface` names the option surface in the message and has NO default:
+  # two surfaces ride this now, and a wrong-but-plausible "steering" in a
+  # hooks diagnostic sends the reader to the wrong option.
   mkEntryAssertions = {
     app,
+    surface,
     files,
   }: let
     badShape =
@@ -125,11 +134,11 @@ in rec {
   in [
     {
       assertion = badShape == [];
-      message = "ai.${app}: steering entries must set exactly one of `text`/`source`; offending: ${lib.concatStringsSep ", " badShape}";
+      message = "ai.${app}: ${surface} entries must set exactly one of `text`/`source`; offending: ${lib.concatStringsSep ", " badShape}";
     }
     {
       assertion = badNames == [];
-      message = "ai.${app}: copy-strategy steering file names must match ${nameRegex} (they are interpolated into shell words, target paths, and the temp-sweep pattern); offending: ${lib.concatStringsSep ", " badNames}";
+      message = "ai.${app}: copy-strategy ${surface} file names must match ${nameRegex} (they are interpolated into shell words, target paths, and the temp-sweep pattern); offending: ${lib.concatStringsSep ", " badNames}";
     }
   ];
 
@@ -312,7 +321,8 @@ in rec {
     # One block per entry: recorded-hash lookup (grep `|| :`-guarded —
     # first run has no manifest; dots regex-escaped for exact match),
     # then the guarded write fed by a quoted heredoc (delimiters at
-    # column 0, precedent: hm-helpers mkHooksActivationScript).
+    # column 0 via explicit \n concatenation, which the HM subshell
+    # wrapping does not disturb).
     entryBlock = name: entry: let
       regexName = lib.replaceStrings ["."] ["\\."] name;
     in

@@ -155,9 +155,11 @@
         description = "Upstream devenv claude.code stub (out of doc scope).";
       };
       # Stub: devenv's enterShell hook. The kiro-cli devenv module
-      # writes hook JSON files via enterShell (real files, not store
-      # symlinks — kiro v3 skips symlinked hooks). types.lines because
-      # multiple mkIf blocks (inline hooks + hooksDir) contribute.
+      # assembles settings/mcp.json through it (a real file, not a store
+      # symlink, so a SOPS-injected url can be substituted in).
+      # types.lines because several mkIf blocks contribute. (Hooks and
+      # steering used to write here too; both now ride the shared
+      # materializer's own task.)
       enterShell = lib.mkOption {
         type = lib.types.lines;
         default = "";

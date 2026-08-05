@@ -217,42 +217,12 @@ in rec {
         NAT_TOML_SETTINGS_EOF
       '';
 
-  # Write Kiro hook envelope files as REAL files under $HOME/<hooksDir>/ during
-  # activation. Kiro v3 scans that dir but does NOT follow store symlinks
-  # (verified live on 2.13.0 — global scan fires real files, skips symlinks), so
-  # home.file (symlink) delivery never loads. Mirrors the devenv enterShell
-  # real-file install. `hooks` = { <name> = <json string>; }; `hooksDir` is
-  # relative to $HOME (e.g. ".kiro/hooks"). The content rides an inline heredoc
-  # (delimiter at col 0 via explicit newlines) so module-eval can read it.
-  # scopedActivation: the strict-mode flags below would otherwise stay set for
-  # every LATER home-manager DAG entry. Wrapping keeps them for this body only.
-  # Safe here — no export/cd/trap. The heredoc delimiter is emitted at column 0
-  # via explicit \n concatenation, which subshell wrapping does not disturb.
-  mkHooksActivationScript = {
-    hooks,
-    hooksDir,
-    coreutils,
-  }:
-    aiCommon.scopedActivation (
-      ''
-        set -euETo pipefail
-        shopt -s inherit_errexit 2>/dev/null || :
-        HOOKS_DIR="$HOME/${hooksDir}"
-        ${coreutils}/bin/mkdir -p "$HOOKS_DIR"
-        # The hooks dir's *.json is Nix-owned (mirrors home.file recursive
-        # ownership): prune stale entries first so a hook removed or renamed in
-        # config actually stops firing — Kiro loads every *.json in the dir.
-        for f in "$HOOKS_DIR"/*.json; do
-          if [ -e "$f" ]; then ${coreutils}/bin/rm -f "$f"; fi
-        done
-      ''
-      + lib.concatStrings (lib.mapAttrsToList (
-          name: content:
-            "${coreutils}/bin/cat > \"$HOOKS_DIR/${name}.json\" <<'NAT_KIRO_HOOK_EOF'\n"
-            + content
-            + "\nNAT_KIRO_HOOK_EOF\n"
-            + "${coreutils}/bin/chmod 644 \"$HOOKS_DIR/${name}.json\"\n"
-        )
-        hooks)
-    );
+  # NOTE: Kiro hook files used to be written here by `mkHooksActivationScript`.
+  # They now ride the shared strategy-driven materializer
+  # (`lib/ai/materialize.nix`), like Kiro steering, because that helper's prune
+  # (`rm -f "$HOOKS_DIR"/*.json`) lived INSIDE the caller's
+  # `mkIf (hooks != {})` gate: taking the hook surface from N to zero never
+  # emitted the entry, so the prune never ran and every previously written hook
+  # kept firing forever. The materializer's per-file manifest prunes
+  # unconditionally and claims only the files it wrote.
 }
