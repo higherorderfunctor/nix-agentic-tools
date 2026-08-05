@@ -92,6 +92,7 @@ endswith
 envrc
 envsubst
 epistemics
+esbuild
 execpolicy
 execve
 extensionless
@@ -177,6 +178,7 @@ libsets
 licence
 lifecycles
 lintable
+listdir
 livelink
 livelock
 llms
