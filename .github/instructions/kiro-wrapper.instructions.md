@@ -7,13 +7,18 @@ applyTo: "checks/kiro-wrapper-argv.nix,lib/idempotentFlags.nix,overlays/kiro-cli
 
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-08-04 (commit pending — the PATH-resolution claim
-> below is now **Linux-scoped**, and treating it as general is what made the
-> darwin workflows outage expensive: on darwin the launcher locates
-> `kiro-cli-chat` by argv[0]-relative `.app` BUNDLE DISCOVERY and never consults
-> PATH — a decoy first on PATH is never invoked there, while the same decoy IS
-> invoked on Linux. wrapProgram's `--inherit-argv0` therefore broke discovery
-> and every session silently fell back to the DMG's unpatched
+> **Last verified:** 2026-08-05 (commit pending — the wrapper now also exports
+> `KIRO_KAS_SERVER_PATH` when `ai.kiro.identity` is set, which is the first
+> thing it injects that is NOT argv and the first that can fail without aborting
+> the launch. Recorded because the two existing injections are both argv and
+> both infallible, so "what the wrapper does" no longer means "what flags it
+> adds"). Prior: 2026-08-04 (commit pending — the PATH-resolution claim below is
+> now **Linux-scoped**, and treating it as general is what made the darwin
+> workflows outage expensive: on darwin the launcher locates `kiro-cli-chat` by
+> argv[0]-relative `.app` BUNDLE DISCOVERY and never consults PATH — a decoy
+> first on PATH is never invoked there, while the same decoy IS invoked on
+> Linux. wrapProgram's `--inherit-argv0` therefore broke discovery and every
+> session silently fell back to the DMG's unpatched
 > `~/.local/bin/kiro-cli-chat`. Fixed in `overlays/kiro-cli.nix` with a
 > darwin-only trailing `--argv0` naming the bundle path — measured working on
 > hardware, including the trap that a SYMLINK to the .app binary still fails
@@ -136,6 +141,42 @@ Two different rules, for two different reasons — do not "make them consistent"
   on `chat` and `acp` and **not** at top level, so a bare
   `kiro-cli-chat --trust-tools=…` is an "unexpected argument". It is appended
   and gated.
+
+### `KIRO_KAS_SERVER_PATH` — an ENV injection, not a flag
+
+`ai.kiro.identity` adds a third thing the wrapper does. It is deliberately not
+in the table above, because it is not argv at all:
+
+| Binary                         | Variable               | When               |
+| ------------------------------ | ---------------------- | ------------------ |
+| `kiro-cli` AND `kiro-cli-chat` | `KIRO_KAS_SERVER_PATH` | `identity != null` |
+
+Three properties worth knowing before touching it:
+
+- **It is exported in BOTH wrappers.** The launcher resolves `kiro-cli-chat`
+  through PATH, so the variable would normally be inherited down the chain — but
+  `kiro-cli-chat` invoked directly is a supported entry point, and it is the
+  binary that actually spawns node. Exporting in one place only patches the
+  composed path and silently misses the direct one.
+- **It is computed at LAUNCH, not at eval.** The value is the stdout of a
+  materializer that resolves the installed engine bundle, splices the identity
+  sentence into a mirrored copy, and caches the result. The engine bundle is
+  unpacked from the binary on first use and never lands in the nix store, so
+  there is nothing to point at until the CLI has run once — on a fresh machine
+  the first launch is legitimately unpatched.
+- **It FAILS OPEN.** The materializer writes a reason to stderr and exits
+  non-zero when it cannot resolve a bundle; the wrapper leaves the variable
+  unset and launches stock. That is a deliberate asymmetry with the argv
+  injections, which cannot fail: refusing to start would let a vendor reshuffle
+  brick the CLI over a cosmetic prompt edit. The stderr line is what keeps it
+  from being SILENT.
+
+Because it is an env export rather than a flag, `checks/kiro-wrapper-argv.nix`
+does not cover it. The module-eval tests do:
+`module-kiro-{hm,devenv}-identity-forks-package` assert the wrapper forks when
+the option is set, and `module-kiro-identity-default-is-stock` asserts it stays
+byte-identical to stock when it is not — which is what protects the cache hit.
+Bundle mechanics live in `packages/kiro-cli/lib/identityBundle.nix`.
 
 ## THE TWO WRAPPERS COMPOSE — reason about the chain, not the binaries
 

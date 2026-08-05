@@ -67,12 +67,14 @@ in
     trustedMcpTools,
     environmentVariables ? {},
     secretEnv ? {},
+    identityMaterializer ? null,
   }: let
     hasEnv = environmentVariables != {};
     hasSecret = secretEnv != {};
     hasV3 = v3;
     hasTrust = trustedMcpTools != [];
-    needsWrapper = hasEnv || hasSecret || hasTrust || hasV3;
+    hasIdentity = identityMaterializer != null;
+    needsWrapper = hasEnv || hasSecret || hasTrust || hasV3 || hasIdentity;
     trustToolsCsv = lib.concatStringsSep "," trustedMcpTools;
     # env baked as `export`s (was makeWrapper `--set`), so the hand-written
     # wrapper can ALSO position the flags. makeWrapper only appends
@@ -104,6 +106,28 @@ in
           else "export ${lib.escapeShellArg var}=\"$(${lib.escapeShellArg cred.helper})\"")
         secretEnv);
 
+    # Point the engine at a bundle whose identity sentence has been replaced.
+    # Materialization is LAZY (at launch) rather than at activation, because the
+    # engine bundle is unpacked from the binary on first use: at activation time
+    # on a fresh machine there is nothing to patch yet. It is idempotent and
+    # cached, so every later launch is a file test.
+    #
+    # FAIL-OPEN, deliberately. The materializer writes a reason to stderr and
+    # exits non-zero when it cannot resolve a bundle, and the launch then
+    # proceeds unpatched. The alternative -- refusing to start -- would let a
+    # vendor reshuffle brick the terminal agent over a cosmetic prompt edit,
+    # which is a worse failure than an unpatched identity. The stderr line is
+    # what keeps it from being SILENT.
+    #
+    # Exported in BOTH wrappers: the launcher resolves `kiro-cli-chat` through
+    # PATH so the variable would normally be inherited, but `kiro-cli-chat`
+    # invoked directly is a supported entry point and must patch too.
+    identityInjection = lib.optionalString hasIdentity ''
+      if nat_kas_server="$(${lib.getExe identityMaterializer})"; then
+        export KIRO_KAS_SERVER_PATH="$nat_kas_server"
+      fi
+    '';
+
     # `--v3` is injected for EVERY subcommand, because it is global and because
     # that is what makes it reach `acp`: the launcher rewrites its own `--v3`
     # into `--agent-engine v3` — TWO tokens; the error text's `--agent-engine=v3`
@@ -119,7 +143,9 @@ in
     # There is deliberately no `--tui` injection. The option that produced it
     # was REMOVED, not merely defaulted off — see the note at the top of this
     # file for the measurements behind that.
-    launcherInjection = v3Block;
+    launcherInjection =
+      lib.concatStringsSep "\n"
+      (lib.filter (s: s != "") [identityInjection v3Block]);
 
     # `--trust-tools` on the chat binary: appended, and gated to the subcommands
     # that declare it. Not idempotence-guarded — unlike `--tui`, repeating it is
@@ -226,18 +252,20 @@ in
         name = "kiro-cli-wrapped";
         paths = [package];
         postBuild = ''
-          ${lib.optionalString (hasEnv || hasSecret || hasV3) ''
+          ${lib.optionalString (hasEnv || hasSecret || hasV3 || hasIdentity) ''
             rm -f "$out/bin/kiro-cli"
             ln -s ${mkWrapper "kiro-cli-launcher" {
               realBin = "${package}/bin/kiro-cli";
               injection = launcherInjection;
             }} "$out/bin/kiro-cli"
           ''}
-          ${lib.optionalString (hasEnv || hasSecret || hasTrust) ''
+          ${lib.optionalString (hasEnv || hasSecret || hasTrust || hasIdentity) ''
             rm -f "$out/bin/kiro-cli-chat"
             ln -s ${mkWrapper "kiro-cli-chat-wrapper" {
               realBin = "${package}/bin/kiro-cli-chat";
-              injection = trustInjection;
+              injection =
+                lib.concatStringsSep "\n"
+                (lib.filter (s: s != "") [identityInjection trustInjection]);
             }} "$out/bin/kiro-cli-chat"
           ''}
         '';

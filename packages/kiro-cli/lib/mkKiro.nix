@@ -24,6 +24,13 @@
   # See packages/kiro-cli/lib/wrapPackage.nix.
   wrapKiroPackage = import ./wrapPackage.nix {inherit lib pkgs;};
 
+  # Engine-bundle rewrites. Both reach INTO the KAS bundle, which is unpacked
+  # from the binary at runtime and never lands in the nix store, so both are
+  # runtime helpers rather than derivations. Each file's header records why
+  # build-time extraction is not available.
+  mkIdentityMaterializer = import ./identityBundle.nix {inherit lib pkgs;};
+  workflowReminder = import ./workflowReminder.nix {inherit lib pkgs;};
+
   # Shared AI helpers (filterNulls, mkLspConfig, flattenDotKeys, …). Hoisted to
   # the top-level `let` so option TYPES and renderers can reach it too — both
   # backend blocks previously imported it separately.
@@ -671,6 +678,69 @@
     then cfg.package
     else cfg.package.withRolloutFeatures cfg.unlockedRolloutFeatures;
 
+  # ── Engine-bundle rewrites, shared by BOTH backends (config parity) ────────
+  # These three live here rather than in either backend block for the same
+  # reason `resolvePackage` does: a surface configurable under home-manager
+  # must be configurable under devenv, and one definition is what keeps the two
+  # from drifting.
+
+  # The materializer is version-pinned, so it must be built from the RESOLVED
+  # package (a rollout-unlocked variant is a different derivation but the same
+  # version) rather than from `cfg.package`.
+  resolveIdentityMaterializer = cfg:
+    if cfg.identity == null
+    then null
+    else
+      mkIdentityMaterializer {
+        inherit (cfg) identity;
+        cliVersion = (resolvePackage cfg).version;
+      };
+
+  # `null` means auto: the reminder is meaningless without the feature, and the
+  # feature under-elicits without it, so they default on together.
+  workflowReminderEnabled = cfg:
+    if cfg.workflowReminder.enable != null
+    then cfg.workflowReminder.enable
+    else builtins.elem "workflows" cfg.unlockedRolloutFeatures;
+
+  # Contributed as an ordinary typed hook record, so it rides the existing
+  # envelope writer on both backends instead of adding a second hook path.
+  #
+  # `type = "agent"` appends the prompt straight to model context with no
+  # subprocess (and ignores `timeout`), which is why the SHORT reminder needs no
+  # script at all. The vendor-steering variant has to be `type = "command"`:
+  # its text lives in the runtime-unpacked engine bundle, so it cannot be a
+  # string known at eval time.
+  workflowReminderHooks = cfg:
+    lib.optionalAttrs (workflowReminderEnabled cfg) {
+      workflow-reminder =
+        {
+          trigger = "UserPromptSubmit";
+          description = "Re-state the workflow orchestration contract each turn (position, not content — see workflowReminder.nix).";
+        }
+        // (
+          if cfg.workflowReminder.includeVendorSteering
+          then {
+            action = {
+              type = "command";
+              command = workflowReminder.mkVendorReminder {
+                cliVersion = (resolvePackage cfg).version;
+              };
+            };
+            # The extractor reads a 20 MB file on a cold cache; every later turn
+            # is a `cat`. Kiro's default is 60s, which is ample, but a hook that
+            # hangs blocks the turn, so this is bounded explicitly.
+            timeout = 30;
+          }
+          else {
+            action = {
+              type = "agent";
+              prompt = cfg.workflowReminder.text;
+            };
+          }
+        );
+    };
+
   # Rendered mcp.json body (DRY: both backends AND the mkMcpJsonScript
   # template use this — was duplicated inline per backend). `kiroServers`
   # is the preprocessed pool: credential headers already `${env:VAR}`,
@@ -854,6 +924,89 @@ in
           Unlocking `workflows` also enables `/goal`, since the client maps the
           one flag onto both the `workflows` and `goal` session settings.
         '';
+      };
+      identity = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "You are Atlas, a senior systems engineer working in a terminal.";
+        description = ''
+          Replace the FIRST SENTENCE of the kiro-cli identity in the engine's
+          system prompt. The rest of the vendor block — the prose about running
+          in a terminal with no graphical editor, referring to files by path,
+          and surfacing command output directly — is preserved byte-for-byte,
+          because that is the part that keeps the agent behaving like a terminal
+          program.
+
+          This is the very first segment of msg0, ahead of steering, learnings
+          and file tree, so it is the highest-leverage place to state what the
+          agent IS.
+
+          Mechanically: the patched engine bundle is materialized under
+          `$XDG_CACHE_HOME/nix-agentic-tools/kiro-identity/` at launch and
+          selected via `KIRO_KAS_SERVER_PATH`. Vendor state is never modified.
+          The vendor sentence being replaced is written alongside the patch as
+          `vendor-sentence.txt`.
+
+          FAIL-OPEN: if the engine bundle cannot be resolved or the vendor
+          prompt module has been restructured, the reason goes to stderr and the
+          CLI launches UNPATCHED rather than refusing to start.
+
+          May not contain a backtick or `''${` — the value is spliced into a JS
+          template literal.
+        '';
+      };
+      workflowReminder = {
+        enable = lib.mkOption {
+          # `null` = auto, resolved by `workflowReminderEnabled` in the backend
+          # config blocks. It cannot be a computed default here: the record's
+          # shared `options` attrset is built in this file's scope, where the
+          # module fixpoint's `config` is not bound.
+          type = lib.types.nullOr lib.types.bool;
+          default = null;
+          defaultText = lib.literalExpression ''
+            null  # auto: true iff "workflows" is in unlockedRolloutFeatures
+          '';
+          description = ''
+            Install a `UserPromptSubmit` hook that re-states the workflow
+            orchestration contract on every turn. `null` (the default) means
+            AUTO: on exactly when `workflows` is unlocked, since the reminder is
+            meaningless without the feature and the feature under-elicits
+            without the reminder. Set `true`/`false` to force it either way.
+
+            Why a hook rather than more steering: when workflows are enabled the
+            engine ALREADY appends its own ~4.8k-token `workflows_default` block
+            to the system prompt, and msg0 is computed once on turn one and
+            replayed byte-for-byte thereafter. The instruction never decays —
+            ATTENTION does. A hook lands as a context message beside each
+            prompt, so it buys position, not content.
+          '';
+        };
+        text = lib.mkOption {
+          type = lib.types.str;
+          default = workflowReminder.defaultText;
+          defaultText = lib.literalExpression "<a short pointer at the workflow contract>";
+          description = ''
+            The reminder appended to model context on each turn. Deliberately
+            SHORT and deliberately a pointer rather than a summary: the vendor's
+            full contract is already in msg0, so restating its rules here would
+            fork a second source of truth that goes stale on the next engine
+            bump.
+          '';
+        };
+        includeVendorSteering = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = ''
+            Inject the vendor's COMPLETE `workflows_default` steering text every
+            turn instead of the short reminder, extracted from the installed
+            engine bundle and cached.
+
+            Off by default because it costs roughly 4.8k tokens PER TURN (~240k
+            across a 50-turn session) to repeat text the model already has in
+            msg0. Turn it on only if you have measured that the short reminder
+            is not enough.
+          '';
+        };
       };
       # Config directory (HOME-relative for HM, project-relative for
       # devenv). All file writes use this as root prefix. Exposed as an
@@ -1248,6 +1401,7 @@ in
           package = resolvePackage cfg;
           environmentVariables = mergedEnvironmentVariables;
           inherit (kiroSecrets) secretEnv;
+          identityMaterializer = resolveIdentityMaterializer cfg;
         };
 
         # Agent files, keyed by attr name. Shares `mkAgentEntry` with the devenv
@@ -1264,6 +1418,12 @@ in
             # Package installation — wrapped with symlinkJoin when env
             # vars are configured. Matches the legacy wrapper shape.
             {home.packages = [kiroPackage];}
+            # Per-turn workflow reminder, contributed as an ordinary typed hook
+            # record so it rides the existing envelope writer rather than
+            # adding a second hook path. Defining `ai.kiro.hooks` here and
+            # reading it via `mkAllHookFiles` is not circular: the record
+            # depends only on `workflowReminder.*` and `unlockedRolloutFeatures`.
+            {ai.kiro.hooks = workflowReminderHooks cfg;}
             # Shared assertions (see mkAssertions): exclusive inline/dir
             # pairs, hook-name charset, steering-entry guards.
             {assertions = mkAssertions cfg;}
@@ -1465,9 +1625,14 @@ in
                   package = resolvePackage cfg;
                   environmentVariables = {};
                   inherit (kiroSecrets) secretEnv;
+                  identityMaterializer = resolveIdentityMaterializer cfg;
                 })
               ];
             }
+            # Per-turn workflow reminder — same contribution as the HM backend
+            # (config parity; the record itself is built by the shared
+            # `workflowReminderHooks`).
+            {ai.kiro.hooks = workflowReminderHooks cfg;}
             # Shared assertions (see mkAssertions): exclusive inline/dir
             # pairs, hook-name charset, steering-entry guards.
             {assertions = mkAssertions cfg;}

@@ -4871,6 +4871,221 @@ in {
       && builtins.length extracted.rolloutFeatures >= 6
   );
 
+  # ── identity ───────────────────────────────────────────────────────────────
+  # Same drvPath discipline as the rollout tests above, and for the same reason:
+  # both sides are named `kiro-cli-wrapped`, so a name check cannot tell a
+  # patched launcher from an unpatched one and would pass VACUOUSLY.
+  module-kiro-hm-identity-forks-package = mkTest "kiro-hm-identity-forks-package" (
+    let
+      a =
+        kiroWrappedDrvs
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+          };
+        })
+        .config
+        .home
+        .packages or [
+        ];
+      b =
+        kiroWrappedDrvs
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+            identity = "You are Atlas, a senior systems engineer.";
+          };
+        })
+        .config
+        .home
+        .packages or [
+        ];
+    in
+      soleFork a b
+  );
+
+  # devenv parity: the materializer is threaded through the SHARED
+  # `resolveIdentityMaterializer`, so a fork here proves both backends wire it.
+  module-kiro-devenv-identity-forks-package = mkTest "kiro-devenv-identity-forks-package" (
+    let
+      a =
+        kiroWrappedDrvs
+        (evalDevenv {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+          };
+        })
+        .config
+        .packages or [
+        ];
+      b =
+        kiroWrappedDrvs
+        (evalDevenv {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+            identity = "You are Atlas, a senior systems engineer.";
+          };
+        })
+        .config
+        .packages or [
+        ];
+    in
+      soleFork a b
+  );
+
+  # The default must stay byte-identical to stock. An option that silently
+  # wrapped every consumer would cost the cache hit it exists to preserve.
+  module-kiro-identity-default-is-stock = mkTest "kiro-identity-default-is-stock" (
+    let
+      a =
+        kiroWrappedDrvs
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+          };
+        })
+        .config
+        .home
+        .packages or [
+        ];
+      b =
+        kiroWrappedDrvs
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+            identity = null;
+          };
+        })
+        .config
+        .home
+        .packages or [
+        ];
+    in
+      soleSame a b
+  );
+
+  # ── workflow reminder ──────────────────────────────────────────────────────
+  # AUTO means "on iff workflows is unlocked". All four corners of the tri-state
+  # are pinned, because null/true/false is exactly where an off-by-default and
+  # an on-by-default implementation look identical from any single test.
+  module-kiro-workflow-reminder-auto-on-with-workflows = mkTest "kiro-workflow-reminder-auto-on-with-workflows" (
+    let
+      hooks =
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+            unlockedRolloutFeatures = ["workflows"];
+          };
+        })
+        .config
+        .ai
+        .kiro
+        .hooks;
+    in
+      hooks ? workflow-reminder
+      && hooks.workflow-reminder.trigger == "UserPromptSubmit"
+      # `agent` is the no-subprocess action: the short reminder is a static
+      # string, so it needs no script and ignores timeout.
+      && hooks.workflow-reminder.action.type == "agent"
+      && hooks.workflow-reminder.action.prompt != null
+  );
+
+  module-kiro-workflow-reminder-absent-without-workflows =
+    mkTest "kiro-workflow-reminder-absent-without-workflows" (!((evalHm {
+      ai.kiro = {
+        enable = true;
+        v3 = true;
+      };
+    })
+      .config
+      .ai
+      .kiro
+      .hooks
+      ? workflow-reminder));
+
+  # Explicit `false` must beat the auto-on inference.
+  module-kiro-workflow-reminder-forced-off =
+    mkTest "kiro-workflow-reminder-forced-off" (!((evalHm {
+      ai.kiro = {
+        enable = true;
+        v3 = true;
+        unlockedRolloutFeatures = ["workflows"];
+        workflowReminder.enable = false;
+      };
+    })
+      .config
+      .ai
+      .kiro
+      .hooks
+      ? workflow-reminder));
+
+  # Explicit `true` must beat the auto-off inference — the reminder is still
+  # useful on a build where workflows were unlocked by some path other than
+  # this option (KIRO_ENABLED_FEATURES, say).
+  module-kiro-workflow-reminder-forced-on = mkTest "kiro-workflow-reminder-forced-on" (
+    (evalHm {
+      ai.kiro = {
+        enable = true;
+        v3 = true;
+        workflowReminder.enable = true;
+      };
+    })
+    .config
+    .ai
+    .kiro
+    .hooks
+    ? workflow-reminder
+  );
+
+  # The vendor-steering variant CANNOT be an `agent` action: its text lives in
+  # the runtime-unpacked engine bundle, so it is not knowable at eval time and
+  # has to shell out.
+  module-kiro-workflow-reminder-vendor-steering-is-command = mkTest "kiro-workflow-reminder-vendor-steering-is-command" (
+    let
+      hook =
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+            unlockedRolloutFeatures = ["workflows"];
+            workflowReminder.includeVendorSteering = true;
+          };
+        })
+        .config
+        .ai
+        .kiro
+        .hooks
+        .workflow-reminder;
+    in
+      hook.action.type == "command" && hook.action.command != null
+  );
+
+  # devenv parity for the reminder: same option, same contributed record.
+  module-kiro-devenv-workflow-reminder-parity = mkTest "kiro-devenv-workflow-reminder-parity" (
+    let
+      hooks =
+        (evalDevenv {
+          ai.kiro = {
+            enable = true;
+            v3 = true;
+            unlockedRolloutFeatures = ["workflows"];
+          };
+        })
+        .config
+        .ai
+        .kiro
+        .hooks;
+    in
+      hooks ? workflow-reminder && hooks.workflow-reminder.action.type == "agent"
+  );
+
   module-kiro-devenv-v3-wraps-package = mkTest "kiro-devenv-v3-wraps-package" (
     let
       result = evalDevenv {

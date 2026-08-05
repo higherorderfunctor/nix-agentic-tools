@@ -1,6 +1,7 @@
 aclose
 addy
 adoc
+affordances
 agenix
 agentic
 agentsdir
@@ -92,6 +93,7 @@ endswith
 envrc
 envsubst
 epistemics
+esbuild
 execpolicy
 execve
 extensionless
@@ -177,6 +179,7 @@ libsets
 licence
 lifecycles
 lintable
+listdir
 livelink
 livelock
 llms
@@ -198,6 +201,7 @@ metacharacter
 misattributes
 miscited
 modelcontextprotocol
+mojibake
 mtimes
 mystor
 napi
