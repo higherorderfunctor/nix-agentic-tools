@@ -95,16 +95,23 @@ This is the single most useful thing to hold in your head, because the surfaces
 have **different capabilities**, and most confusion about the engine comes from
 generalizing one to another.
 
-| Surface                   | What it is                                                          | Run control                                           |
-| ------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------- |
-| **TUI slash commands**    | 7 feature-gated commands, 2 visible + 5 hidden (ledger §1)          | full: run, cancel, resume, status, browse             |
-| **Agent-facing tools**    | the 6 above; how the agent itself drives a workflow                 | **launch and mutate only** — no resume, no cancel     |
-| **ACP extension methods** | `_kiro/workflow/*`, registered **unconditionally** (raw ACP probes) | full: pause, resume, resumeAll, cancel, retry, delete |
+| Surface                   | What it is                                                          | Run control                                                   |
+| ------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------- |
+| **TUI**                   | 7 feature-gated slash commands + the workflow viewer (§2)           | fullest: run, cancel, resume, pause, stop, **per-node steer** |
+| **Agent-facing tools**    | the 6 above; how the agent itself drives a workflow                 | **launch and mutate only** — no resume, no cancel             |
+| **ACP extension methods** | `_kiro/workflow/*`, registered **unconditionally** (raw ACP probes) | full: pause, resume, resumeAll, cancel, retry, delete         |
 
 The ledger's measurements were all taken through the **agent-facing tools** in
 an ACP session, which is why it reports "the agent-facing tools cannot resume a
 run at all" (§7.4). That is true of those tools and is not true of the engine.
-§2 has the details and the caveat.
+
+**Mind the sampling bias in the sources.** No research in this repository ever
+drove the TUI — the ledger took every measurement under ACP, where the slash
+commands do not exist, and §12 lists the seven commands as "read out of the TUI
+registry, not driven". So the TUI is the _least_ documented surface here and, on
+direct observation, the _most_ capable one. Treat any flat negative about what
+the engine can do as scoped to the two surfaces that were measured, unless it is
+sourced to a code read. §2 has the worked case.
 
 ### The shape of a run
 
@@ -174,13 +181,44 @@ of the per-session workflows setting.
 
 ### Can you steer an individual agent from the TUI?
 
-**No — there is no per-agent steering channel.** Nothing in any of the three
-surfaces addresses one step agent inside a running workflow. Every control verb
-takes a **run** id; the one mutation verb takes the run's top-level step list.
-That is a clean negative across all three surfaces, and it is the answer to plan
-around.
+**Yes — from the workflow viewer, and only as a human.** This is the one answer
+in this document that comes from neither the ledger nor the records: none of the
+research ever drove the TUI, so both sources describe a surface they never
+touched. Observed directly in the viewer on **2026-08-05**:
 
-What you get instead, in decreasing order of usefulness:
+```
+Steps                                                  Output
+> ─ ◐ wf-planner  thinking…   claude-opus-5 · High     WORKFLOW OUTPUT [wf-planner]
+    └─ ○ [repeat] review-loop                            j/k scroll · ^d/^u page
+         ├─ ○ wf-coder           claude-opus-5 · High
+         └─ ○ semantic_reviewer  claude-opus-5 · High
+
+s steer │ p pause │ Ctrl+X stop │ Up/Down nodes │ Left/Right workflows │ Tab agents
+```
+
+`Up/Down` moves a selection through the **node tree**, and `s` steers the
+selected node. So the addressing unit here is a **node**, not a run — which is
+exactly what the other two surfaces lack. The viewer also carries `p pause`,
+`Ctrl+X stop`, per-node output with its own scrollback, an agents view (`Tab`),
+and per-node `model · effort` display confirming the §5 cascade resolves and is
+shown per step.
+
+**The distinction that matters for design: this is HITL steering, not an
+agent-invoked channel.** A human at the viewer can redirect one running agent.
+No workflow node, step agent, or orchestrator can do the same thing to a sibling
+— that half of the original negative stands, and it is the half that governs
+what you can automate. Do not design a workflow that depends on one step nudging
+another; do expect a human to be able to intervene per-node while it runs.
+
+What the steer _mechanically does_ is not established here. One plausible link
+worth flagging rather than asserting: R-limits-1 records that a **queued
+steering message** short-circuits the sub-execution iteration-limit check and
+resets the counter to zero, and a TUI steer is the obvious producer of such a
+message. If that is the same path, steering a long-running node extends its
+300-turn budget as a side effect. Register item R-16.
+
+Everything below is what remains available **without a human at the keyboard**,
+in decreasing order of usefulness:
 
 **1. Rewriting the future (`update_workflow`, action `replace_remaining`).**
 Replaces all steps after the currently-running step. Two things about it are not
@@ -1195,23 +1233,25 @@ measurement that would settle it. Borrowing the ledger's own framing: **this is
 an index into research debt, not a backlog.** Probe a row only when the answer
 would change a concrete design.
 
-| #    | Question                                                                                                                                                                                 | The one measurement                                                                                                                                                                                                                        |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| R-1  | What is the node structure of `feature-pipeline` and `semantic-review-multi-model`? Only their input schemas are recorded, and six of seven recipes were never run.                      | No run needed: `_kiro/workflow/listRecipes` returns a per-recipe `plan` field. The probe that ran it recorded only names, sources and inputs — re-run it and read `plan`. Token-free, model-free.                                          |
-| R-2  | Does a `subagent_<role>` dispatch **block** the calling step, or is there an async mode?                                                                                                 | One step on a `subagent`-only profile dispatches one leaf that sleeps 30 s and writes an end marker; the step writes its own marker on return. Compare timestamps: step-marker after leaf-marker means blocking.                           |
-| R-3  | Can a step create or launch a **second workflow**? The contract forbids it; the step-session builder demonstrably turns the gate on.                                                     | One step whose profile carries the workflow tool group, prompted to call `run_workflow` on a trivial one-step definition and report the exact response. Three outcomes: it runs; it is refused with an engine message; the tool is absent. |
-| R-4  | Do the ACP run-control verbs actually drive a live run? They were probed for reachability and param shape; **`invoke` was never sent**, so nothing shows a run executes while ungated.   | Launch the §7 pool over ACP, `pause` mid-drain, `inspect` to confirm the transition, `resume`, confirm workers resume claiming. One session, one run.                                                                                      |
-| R-5  | Which iteration limit binds a workflow **step** session? The chat flavour carries `ITERATION_LIMIT = 300` with an 8× transition factor; the custom-agent flavour 300 with 4×.            | Read which flavour `workflow.session_driver.starting_step` constructs. A static read, no run.                                                                                                                                              |
-| R-6  | Can `update_workflow` / `update_status` be **granted** to a custom step agent? No bundled agent has it, contradicting the contract.                                                      | Write a `.kiro/agents/` profile declaring the group that carries `update_workflow`, run it as a single top-level step, have it report its own tool inventory.                                                                              |
-| R-7  | Does a permission `match` rule on a `subagent_<role>` tool name **bind** inside a step?                                                                                                  | Give one step agent two delegation targets, write a rule matching one name and not the other, run a step that calls both. Three distinguishable outcomes: both go through (no bind), one refused (binds), or the step stalls.              |
-| R-8  | Is the per-target `subagent_<role>` shape a step-surface property or a version change? Raw notes see one role-taking `invoke_sub_agent` at 2.15.1; the ledger sees per-target at 2.16.0. | Enumerate the delegation tools in a step session and in a chat session **on the same build**. If they differ, it is the surface; if not, the version.                                                                                      |
-| R-9  | Where does step-session concurrency actually break? 19 in one run, 27 across three, with no engine complaint.                                                                            | The economics likely fail before the engine does, so make it a cost question: wall-clock per task at 20 / 25 / 30 workers in a **single** run, and find where it stops improving.                                                          |
-| R-10 | Is `stopCondition.completionSignal` real? Discovered in a runtime schema error and it validates, but it is absent from every upstream document and has never been run.                   | A two-iteration `repeat` whose step signals `success` via `send_message`, with `"stopCondition": {"completionSignal": "success"}` and `maxIterations: 3`. Count the iteration wrappers.                                                    |
-| R-11 | Does the fan-out ceiling of 5 hold across profiles and leaf types? All three runs used the same capability-starved parent and the same shell leaf.                                       | Repeat the N=8 dispatch probe with a parent holding a full tool set and a leaf that is not a shell one-shot.                                                                                                                               |
-| R-12 | Does the same ceiling bind the **orchestrator's** own `orchestrate_subagent`? Only the step surface was probed, and the two differ in tool shape already.                                | The same peak-overlap sweep, run from an orchestrator session instead of a step.                                                                                                                                                           |
-| R-13 | What triggers the resume of a run paused by an interrupted step, and how long is the paused window?                                                                                      | A deliberate mid-step interruption followed by an open-ended wait with **nothing** else touching the run or the host, timing the transition if it comes. Cheap in setup, expensive only in patience.                                       |
-| R-14 | Which component emits `agent "<name>" not found, using "default"`, and does a silent fallback to `default` ever actually happen?                                                         | The second half is what matters — a measurement taken on a silently-downgraded surface would look plausible and mean nothing. Run one step naming a deleted profile and check whether _any_ artifact appears.                              |
-| R-15 | Is `save_workflow_definition`'s validation genuinely stricter? The bundled spec claims agent names are checked at load time; `validate_workflow` does not check them.                    | Have the creator agent save a definition naming `wf-imaginary` and report the response. It is not a tool the orchestrator can call directly, so this has to go through the agent.                                                          |
+| #    | Question                                                                                                                                                                                                                 | The one measurement                                                                                                                                                                                                                        |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| R-1  | What is the node structure of `feature-pipeline` and `semantic-review-multi-model`? Only their input schemas are recorded, and six of seven recipes were never run.                                                      | No run needed: `_kiro/workflow/listRecipes` returns a per-recipe `plan` field. The probe that ran it recorded only names, sources and inputs — re-run it and read `plan`. Token-free, model-free.                                          |
+| R-2  | Does a `subagent_<role>` dispatch **block** the calling step, or is there an async mode?                                                                                                                                 | One step on a `subagent`-only profile dispatches one leaf that sleeps 30 s and writes an end marker; the step writes its own marker on return. Compare timestamps: step-marker after leaf-marker means blocking.                           |
+| R-3  | Can a step create or launch a **second workflow**? The contract forbids it; the step-session builder demonstrably turns the gate on.                                                                                     | One step whose profile carries the workflow tool group, prompted to call `run_workflow` on a trivial one-step definition and report the exact response. Three outcomes: it runs; it is refused with an engine message; the tool is absent. |
+| R-4  | Do the ACP run-control verbs actually drive a live run? They were probed for reachability and param shape; **`invoke` was never sent**, so nothing shows a run executes while ungated.                                   | Launch the §7 pool over ACP, `pause` mid-drain, `inspect` to confirm the transition, `resume`, confirm workers resume claiming. One session, one run.                                                                                      |
+| R-5  | Which iteration limit binds a workflow **step** session? The chat flavour carries `ITERATION_LIMIT = 300` with an 8× transition factor; the custom-agent flavour 300 with 4×.                                            | Read which flavour `workflow.session_driver.starting_step` constructs. A static read, no run.                                                                                                                                              |
+| R-6  | Can `update_workflow` / `update_status` be **granted** to a custom step agent? No bundled agent has it, contradicting the contract.                                                                                      | Write a `.kiro/agents/` profile declaring the group that carries `update_workflow`, run it as a single top-level step, have it report its own tool inventory.                                                                              |
+| R-7  | Does a permission `match` rule on a `subagent_<role>` tool name **bind** inside a step?                                                                                                                                  | Give one step agent two delegation targets, write a rule matching one name and not the other, run a step that calls both. Three distinguishable outcomes: both go through (no bind), one refused (binds), or the step stalls.              |
+| R-8  | Is the per-target `subagent_<role>` shape a step-surface property or a version change? Raw notes see one role-taking `invoke_sub_agent` at 2.15.1; the ledger sees per-target at 2.16.0.                                 | Enumerate the delegation tools in a step session and in a chat session **on the same build**. If they differ, it is the surface; if not, the version.                                                                                      |
+| R-9  | Where does step-session concurrency actually break? 19 in one run, 27 across three, with no engine complaint.                                                                                                            | The economics likely fail before the engine does, so make it a cost question: wall-clock per task at 20 / 25 / 30 workers in a **single** run, and find where it stops improving.                                                          |
+| R-10 | Is `stopCondition.completionSignal` real? Discovered in a runtime schema error and it validates, but it is absent from every upstream document and has never been run.                                                   | A two-iteration `repeat` whose step signals `success` via `send_message`, with `"stopCondition": {"completionSignal": "success"}` and `maxIterations: 3`. Count the iteration wrappers.                                                    |
+| R-11 | Does the fan-out ceiling of 5 hold across profiles and leaf types? All three runs used the same capability-starved parent and the same shell leaf.                                                                       | Repeat the N=8 dispatch probe with a parent holding a full tool set and a leaf that is not a shell one-shot.                                                                                                                               |
+| R-12 | Does the same ceiling bind the **orchestrator's** own `orchestrate_subagent`? Only the step surface was probed, and the two differ in tool shape already.                                                                | The same peak-overlap sweep, run from an orchestrator session instead of a step.                                                                                                                                                           |
+| R-13 | What triggers the resume of a run paused by an interrupted step, and how long is the paused window?                                                                                                                      | A deliberate mid-step interruption followed by an open-ended wait with **nothing** else touching the run or the host, timing the transition if it comes. Cheap in setup, expensive only in patience.                                       |
+| R-14 | Which component emits `agent "<name>" not found, using "default"`, and does a silent fallback to `default` ever actually happen?                                                                                         | The second half is what matters — a measurement taken on a silently-downgraded surface would look plausible and mean nothing. Run one step naming a deleted profile and check whether _any_ artifact appears.                              |
+| R-15 | Is `save_workflow_definition`'s validation genuinely stricter? The bundled spec claims agent names are checked at load time; `validate_workflow` does not check them.                                                    | Have the creator agent save a definition naming `wf-imaginary` and report the response. It is not a tool the orchestrator can call directly, so this has to go through the agent.                                                          |
+| R-16 | What does the viewer's `s steer` actually do to the selected node — inject a user message into that node's session, queue one for the whole run, or something else? And does it reset the 300-turn counter (R-limits-1)? | Steer a node mid-run with a distinctive token, then read that node's captured output and its siblings' for the token. Sibling containment answers the addressing question; `inspect_workflow` iteration counts answer the budget one.      |
+| R-17 | What else does the TUI expose that the other two surfaces do not? The viewer alone shows `Tab agents`, `l stack`, and per-node output panes that appear nowhere in the research.                                         | Drive the TUI once with the feature unlocked and enumerate every binding and view, the way the ledger's §3.5 enumerated the agent roster. The surface is currently undocumented here.                                                      |
 
 Three standing caveats that are not open questions but should travel with every
 figure above:
