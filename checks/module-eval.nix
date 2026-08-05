@@ -321,6 +321,17 @@
   hmPruneScript = ev: (ev.config.home.activation."materialize-kiro-steering-prune" or {}).text or "";
   hmWriteScript = ev: (ev.config.home.activation."materialize-kiro-steering-write" or {}).text or "";
   dvTaskExec = ev: ((ev.config.tasks or {})."ai:kiro:materialize-steering" or {}).exec or "";
+  # Kiro HOOKS ride the same materializer (copy-only; v3 drops symlinked
+  # hooks), so they get the same accessor trio against the hooks slug.
+  hmHookPruneScript = ev: (ev.config.home.activation."materialize-kiro-hooks-prune" or {}).text or "";
+  hmHookWriteScript = ev: (ev.config.home.activation."materialize-kiro-hooks-write" or {}).text or "";
+  dvHookTaskExec = ev: ((ev.config.tasks or {})."ai:kiro:materialize-hooks" or {}).exec or "";
+  # `lib.hasInfix` compiles its argument into a `builtins.match` regex, so a
+  # needle containing `*` or `.` — which every glob does — silently matches
+  # strings it should not (`"/*.json"` matches any `".json"`). `splitString`
+  # escapes its separator, so this is a true literal search. Use it whenever
+  # the needle is shell syntax rather than prose.
+  hasLiteral = needle: hay: builtins.length (lib.splitString needle hay) > 1;
   # Extract the heredoc body a copy writer embeds for <name> — the
   # #433 heredoc-extraction idiom (see module-kiro-hooks-typed-
   # colocation). The per-script EOF marker is content-hash-derived, so
@@ -4424,7 +4435,7 @@ in {
           hooksJson = mem.hooks;
         };
       };
-      hookText = (result.config.home.activation.kiroHooks or {}).text or "";
+      hookText = hmHookWriteScript result;
     in
       lib.hasInfix ''"version":"v1"'' hookText
       && lib.hasInfix ''"trigger":"Stop"'' hookText
@@ -4475,13 +4486,20 @@ in {
           inherit (mem) rules;
         };
       };
-      hmHook = (hm.config.home.activation.kiroHooks or {}).text or "";
-      # BOTH backends now install the hook as a REAL file (kiro v3 skips symlinked
-      # hooks — verified live on 2.13.0): HM via home.activation, devenv via
-      # enterShell. Parity is by construction (both emit `mem.hooks."kiro-memory"`):
-      # assert each backend's script carries the generator output verbatim AND
-      # installs it into .kiro/hooks/.
-      dvEnter = dv.config.enterShell or "";
+      # BOTH backends install the hook as a REAL file (kiro v3 skips symlinked
+      # hooks — verified live on 2.13.0), and both now do it through the SHARED
+      # materializer: HM via the activation pair, devenv via the
+      # `ai:kiro:materialize-hooks` task. Parity is by construction (both lower
+      # `mem.hooks."kiro-memory"` through `mkHookEntries`): assert each backend's
+      # writer carries the generator output verbatim, byte-for-byte, via the same
+      # heredoc-extraction idiom the steering half uses below.
+      hmHook = hmHookWriteScript hm;
+      dvHook = dvHookTaskExec dv;
+      expectedHookBody =
+        matLib.stripTrailingNewline
+        (builtins.unsafeDiscardStringContext mem.hooks."kiro-memory");
+      hmHookBody = matHeredocBody hmHook "kiro-memory.json";
+      dvHookBody = matHeredocBody dvHook "kiro-memory.json";
       # Steering is ALSO a real file now (the strategy-driven
       # materializer, copy default). Parity keeps BOTH layers: attrset
       # equality over steeringFiles (== is decidable over
@@ -4499,17 +4517,14 @@ in {
     in
       hmHook
       != ""
-      # `hasInfix` compiles the infix into a `builtins.match` regex, which rejects
-      # a pattern carrying string context; the generator output embeds the wrapper
-      # store paths, so strip context before matching (byte content is unchanged).
-      && lib.hasInfix (builtins.unsafeDiscardStringContext mem.hooks."kiro-memory") hmHook
-      && lib.hasInfix "kiro-memory.json" hmHook
-      && lib.hasInfix ".kiro/hooks/kiro-memory.json" dvEnter
-      && lib.hasInfix "install -m 0644" dvEnter
-      # devenv enterShell runs in the caller's cwd (direnv activates in
+      && hmHookBody == expectedHookBody
+      && dvHookBody == expectedHookBody
+      && lib.hasInfix ".kiro/hooks" hmHook
+      && lib.hasInfix ".kiro/hooks" dvHook
+      # The devenv task runs in the caller's cwd (direnv activates in
       # subdirectories), so the relative hook write must be anchored to
-      # the project root in a subshell.
-      && lib.hasInfix ''cd "$DEVENV_ROOT"'' dvEnter
+      # the project root.
+      && lib.hasInfix ''cd "$DEVENV_ROOT"'' dvHook
       && hmSteer != ""
       && hmSteerFiles == dvSteerFiles
       && hmBody == expectedBody
@@ -5728,7 +5743,7 @@ in {
           hooksJson.pre-commit = ''{"event": "pre-commit"}'';
         };
       };
-      hookScript = (result.config.home.activation.kiroHooks or {}).text or "";
+      hookScript = hmHookWriteScript result;
     in
       lib.hasInfix "pre-commit.json" hookScript
       && lib.hasInfix ''"event": "pre-commit"'' hookScript
@@ -5749,7 +5764,7 @@ in {
           };
         };
       };
-      t = (result.config.home.activation.kiroHooks or {}).text or "";
+      t = hmHookWriteScript result;
     in
       lib.hasInfix ''"version":"v1"'' t
       && lib.hasInfix ''"name":"lint"'' t
@@ -5776,13 +5791,13 @@ in {
           };
         };
       };
-      t = (result.config.home.activation.kiroHooks or {}).text or "";
+      t = hmHookWriteScript result;
     in
       lib.hasInfix ''"command":"/nix/store'' t && lib.hasInfix "/bin/hello" t
   );
 
-  # HM↔devenv: the same typed hook emits the envelope on HM (home.file text) and
-  # devenv installs the REAL file via enterShell (v3 skips symlinked hooks).
+  # HM↔devenv: the same typed hook lands as a REAL file on both backends
+  # (v3 skips symlinked hooks), through the shared materializer.
   module-kiro-hooks-typed-devenv-installs = mkTest "kiro-hooks-typed-devenv-installs" (
     let
       cfg = {
@@ -5794,15 +5809,21 @@ in {
           };
         };
       };
-      hmT = ((evalHm cfg).config.home.activation.kiroHooks or {}).text or "";
-      dvEnter = (evalDevenv cfg).config.enterShell or "";
+      dv = evalDevenv cfg;
+      hmT = hmHookWriteScript (evalHm cfg);
+      dvT = dvHookTaskExec dv;
     in
       lib.hasInfix ''"trigger":"PostToolUse"'' hmT
-      && lib.hasInfix ".kiro/hooks/lint.json" dvEnter
-      && lib.hasInfix "install -m 0644" dvEnter
-      # relative hook write anchored to the project root (enterShell runs
+      && lib.hasInfix ''"trigger":"PostToolUse"'' dvT
+      && lib.hasInfix "lint.json" dvT
+      && lib.hasInfix ".kiro/hooks" dvT
+      # relative hook write anchored to the project root (the task runs
       # in the caller's cwd).
-      && lib.hasInfix ''cd "$DEVENV_ROOT"'' dvEnter
+      && lib.hasInfix ''cd "$DEVENV_ROOT"'' dvT
+      # NOT a devenv `files.*` symlink
+      && !((dv.config.files or {}) ? ".kiro/hooks/lint.json")
+      # the enterTest backstop asserts it landed as a real file
+      && lib.hasInfix ".kiro/hooks/lint.json" (dv.config.enterTest or "")
   );
 
   # HM+devenv: records sharing a `file` co-locate into ONE envelope (N hooks in
@@ -5812,7 +5833,9 @@ in {
   # PR #433 moved HM hook delivery to home.activation real files (kiro v3 skips
   # store symlinks), so each envelope is read back out of its activation-script
   # heredoc body and structurally asserted via fromJSON — same strength as the
-  # old home.file text read.
+  # old home.file text read. The writer is now the SHARED materializer, so the
+  # extraction uses `matHeredocBody` (content-hash-derived EOF marker) rather
+  # than the retired fixed `NAT_KIRO_HOOK_EOF` delimiter.
   module-kiro-hooks-typed-colocation = mkTest "kiro-hooks-typed-colocation" (
     let
       cfg = {
@@ -5838,23 +5861,16 @@ in {
         };
       };
       # The activation script embeds coreutils store paths, and every substring
-      # inherits the whole string's context — which fromJSON rejects. Strip it
-      # (same idiom as the auto-memory parity test); byte content is unchanged.
+      # inherits the whole string's context — which fromJSON rejects.
+      # `matHeredocBody` strips it; byte content is unchanged.
       hmT =
         builtins.unsafeDiscardStringContext
-        (((evalHm cfg).config.home.activation.kiroHooks or {}).text or "");
-      # Exact heredoc body for one emitted hook file: the script writes
-      # `cat > "$HOOKS_DIR/<file>.json" <<'NAT_KIRO_HOOK_EOF'` + body + EOF.
-      hookBody = file: let
-        parts = lib.splitString "\"$HOOKS_DIR/${file}.json\" <<'NAT_KIRO_HOOK_EOF'\n" hmT;
-      in
-        if builtins.length parts < 2
-        then ""
-        else builtins.head (lib.splitString "\nNAT_KIRO_HOOK_EOF" (builtins.elemAt parts 1));
+        (hmHookWriteScript (evalHm cfg));
+      hookBody = file: matHeredocBody hmT "${file}.json";
       coText = hookBody "kiro-memory";
       co = builtins.fromJSON coText;
       soloText = hookBody "solo";
-      dvEnter = (evalDevenv cfg).config.enterShell or "";
+      dvT = dvHookTaskExec (evalDevenv cfg);
     in
       # both co-located records land in ONE kiro-memory.json envelope
       co.version
@@ -5871,8 +5887,8 @@ in {
       && !(lib.hasInfix "mem-stop.json" hmT)
       && !(lib.hasInfix "mem-recall.json" hmT)
       # devenv installs the SAME grouped file (parity) and NOT per-record files
-      && lib.hasInfix ".kiro/hooks/kiro-memory.json" dvEnter
-      && !(lib.hasInfix "mem-stop.json" dvEnter)
+      && lib.hasInfix "kiro-memory.json" dvT
+      && !(lib.hasInfix "mem-stop.json" dvT)
   );
 
   # A PATH-valued hooksJson entry must emit the file CONTENT, not the path string
@@ -5885,7 +5901,7 @@ in {
           hooksJson.raw = ./fixtures/kiro-hook-raw.json;
         };
       };
-      t = (result.config.home.activation.kiroHooks or {}).text or "";
+      t = hmHookWriteScript result;
     in
       lib.hasInfix "raw-envelope-loaded" t
   );
@@ -5929,8 +5945,10 @@ in {
       nameAsserts != [] && (builtins.head nameAsserts).assertion == true
   );
 
-  # Hardening (PR #433 review): the HM hook activation prunes stale *.json first,
-  # so a hook removed/renamed in config stops firing.
+  # Hardening (PR #433 review): the HM hook writer prunes first, so a hook
+  # removed or renamed in config stops firing. The prune is now the shared
+  # materializer's manifest walk, not a whole-dir `*.json` glob — see the
+  # ownership test below for why that distinction is load-bearing.
   module-kiro-hooks-hm-prunes-stale = mkTest "kiro-hooks-hm-prunes-stale" (
     let
       ev = evalHm {
@@ -5942,12 +5960,189 @@ in {
           };
         };
       };
-      script = (ev.config.home.activation.kiroHooks or {}).text or "";
+      prune = hmHookPruneScript ev;
     in
-      lib.hasInfix ''for f in "$HOOKS_DIR"/*.json'' script
-      && lib.hasInfix "rm -f" script
-      && lib.hasInfix "set -euETo pipefail" script
+      lib.hasInfix "$NAT_MAT_MANIFEST" prune
+      && lib.hasInfix "rm -f" prune
+      && lib.hasInfix "set -euETo pipefail" prune
+      # the CURRENT name is kept (it is rewritten by the write pass), so the
+      # prune's keep-case must carry it
+      && hasLiteral "demo.json) continue" prune
   );
+
+  # THE DEFECT (N→0). The hook writers must exist whenever the module is
+  # enabled — NOT gated on a non-empty hook set — so REMOVING THE LAST HOOK
+  # still prunes. The previous writers carried their prune inside
+  # `mkIf (hooks != {} || hooksJson != {})` / `mkIf (hooksDir != null)`, so
+  # emptying the surface emitted nothing at all, the prune never ran, and
+  # every previously written hook file stayed on disk and kept firing —
+  # forever, since nothing else claims that directory. Both backends.
+  module-kiro-hooks-empty-set-still-prunes = mkTest "kiro-hooks-empty-set-still-prunes" (
+    let
+      hm = evalHm {ai.kiro.enable = true;};
+      prune = hmHookPruneScript hm;
+      write = hmHookWriteScript hm;
+      dv = evalDevenv {ai.kiro.enable = true;};
+      task = (dv.config.tasks or {})."ai:kiro:materialize-hooks" or null;
+    in
+      # no hooks declared at all…
+      hm.config.ai.kiro.hooks
+      == {}
+      && hm.config.ai.kiro.hooksJson == {}
+      && hm.config.ai.kiro.hooksDir == null
+      # …yet the prune pass is still emitted and still walks the manifest
+      && lib.hasInfix "$NAT_MAT_MANIFEST" prune
+      && lib.hasInfix "rm -f" prune
+      && lib.hasInfix ".kiro/hooks" prune
+      # …and the write pass still rewrites the manifest (to empty)
+      && lib.hasInfix "NAT_MAT_NEW_MANIFEST" write
+      # …and devenv keeps its task, for the same reason
+      && task != null
+      && lib.hasInfix "$NAT_MAT_MANIFEST" (task.exec or "")
+      && lib.hasInfix ".kiro/hooks" (task.exec or "")
+  );
+
+  # THE TRAP the fix had to avoid. Making the OLD prune unconditional would
+  # have made `rm -f "$HOOKS_DIR"/*.json` run on every activation for every
+  # consumer who merely enables `ai.kiro` — deleting hand-placed hooks this
+  # module never wrote. The materializer claims only the files it WROTE, so
+  # the generated scripts must contain no whole-directory hook glob on
+  # either backend.
+  module-kiro-hooks-prune-is-manifest-scoped = mkTest "kiro-hooks-prune-is-manifest-scoped" (
+    let
+      cfg = {
+        ai.kiro = {
+          enable = true;
+          hooksJson.demo = builtins.toJSON {
+            version = "v1";
+            hooks = [];
+          };
+        };
+      };
+      hm = evalHm cfg;
+      scripts = [
+        (hmHookPruneScript hm)
+        (hmHookWriteScript hm)
+        (dvHookTaskExec (evalDevenv cfg))
+      ];
+    in
+      # no whole-directory hook glob anywhere in the generated shell…
+      builtins.all (s: !(hasLiteral "*.json" s)) scripts
+      # …deletion is driven by the manifest…
+      && builtins.all (hasLiteral "$NAT_MAT_MANIFEST") scripts
+      # …and the ONE declared non-manifest deletion class is the reserved
+      # `.nat-tmp.` stale-temp sweep ([B8]), not a bare glob.
+      && builtins.all (hasLiteral ".nat-tmp.") scripts
+  );
+
+  # RUNTIME proof of the two properties the string assertions above can only
+  # approximate. Grepping generated bash cannot show that a file is actually
+  # deleted or actually left alone, and both are the whole point of this
+  # surface — so RUN the real writers across three generations, on BOTH
+  # backends, against a sandbox HOME/DEVENV_ROOT:
+  #
+  #   gen 1: two hooks           → both materialize as real 0444 files
+  #   gen 2: one hook            → the dropped hook is pruned
+  #   gen 3: NO hooks at all     → the last hook is pruned (N→0, the defect)
+  #
+  # A hand-placed `handwritten.json` is planted after gen 1 and must survive
+  # all of it (the ownership decision: this claims only what it wrote).
+  #
+  # `mkTest`'s eval-time assertion cannot express this, so it is a plain
+  # runCommand. No strict-mode header: stdenv's setup.sh already sets all
+  # four and phases share one shell (see the Bash standard's per-site table).
+  module-kiro-hooks-materialize-runtime = let
+    mkHook = command:
+      builtins.toJSON {
+        version = "v1";
+        hooks = [
+          {
+            name = "probe";
+            trigger = "Stop";
+            action = {
+              type = "command";
+              inherit command;
+            };
+          }
+        ];
+      };
+    genCfg = hooks: {
+      ai.kiro = {
+        enable = true;
+        hooksJson = hooks;
+      };
+    };
+    gens = [
+      (genCfg {
+        alpha = mkHook "alpha";
+        beta = mkHook "beta";
+      })
+      (genCfg {alpha = mkHook "alpha";})
+      (genCfg {})
+    ];
+    # HM delivers as a PAIR (prune entryBefore checkLinkTargets, write
+    # entryAfter linkGeneration); replay them in that order.
+    hmGen = cfg: let
+      ev = evalHm cfg;
+    in
+      pkgs.writeShellScript "kiro-hooks-hm-gen"
+      (hmHookPruneScript ev + "\n" + hmHookWriteScript ev);
+    dvGen = cfg: pkgs.writeShellScript "kiro-hooks-dv-gen" (dvHookTaskExec (evalDevenv cfg));
+  in
+    pkgs.runCommand "module-test-kiro-hooks-materialize-runtime" {
+      hmGens = map hmGen gens;
+      dvGens = map dvGen gens;
+    } ''
+      set -u
+      fail() { echo "FAIL: kiro-hooks-materialize-runtime: $1" >&2; exit 1; }
+
+      run_backend() {
+        backend="$1"
+        hooks_dir="$2"
+        shift 2
+
+        gen1="$1"; gen2="$2"; gen3="$3"
+
+        "$gen1"
+        [ -f "$hooks_dir/alpha.json" ] || fail "$backend gen1: alpha.json missing"
+        [ -f "$hooks_dir/beta.json" ] || fail "$backend gen1: beta.json missing"
+        [ ! -L "$hooks_dir/alpha.json" ] || fail "$backend gen1: alpha.json is a symlink (v3 would skip it)"
+        [ "$(${pkgs.coreutils}/bin/stat -c %a "$hooks_dir/alpha.json")" = 444 ] \
+          || fail "$backend gen1: alpha.json is not the managed read-only mode"
+        ${pkgs.gnugrep}/bin/grep -q '"command":"alpha"' "$hooks_dir/alpha.json" \
+          || fail "$backend gen1: alpha.json content not materialized"
+
+        # A hook this module never wrote. It must survive every later
+        # generation — the old whole-dir `rm -f "$HOOKS_DIR"/*.json` ate it.
+        echo '{"handwritten":true}' > "$hooks_dir/handwritten.json"
+
+        "$gen2"
+        [ -f "$hooks_dir/alpha.json" ] || fail "$backend gen2: alpha.json vanished"
+        [ ! -e "$hooks_dir/beta.json" ] || fail "$backend gen2: removed hook beta.json still on disk"
+        [ -f "$hooks_dir/handwritten.json" ] || fail "$backend gen2: unmanaged hook was deleted"
+
+        # THE DEFECT: emptying the surface must still prune. Under the old
+        # `mkIf`-gated writer this generation emitted nothing at all and
+        # alpha.json kept firing forever.
+        "$gen3"
+        [ ! -e "$hooks_dir/alpha.json" ] || fail "$backend gen3: N->0 did not prune alpha.json"
+        [ -f "$hooks_dir/handwritten.json" ] || fail "$backend gen3: unmanaged hook was deleted"
+        ${pkgs.gnugrep}/bin/grep -q handwritten "$hooks_dir/handwritten.json" \
+          || fail "$backend gen3: unmanaged hook was rewritten"
+      }
+
+      export HOME="$TMPDIR/hm-home"
+      export XDG_STATE_HOME="$HOME/.local/state"
+      ${pkgs.coreutils}/bin/mkdir -p "$HOME"
+      run_backend hm "$HOME/.kiro/hooks" $hmGens
+
+      export DEVENV_ROOT="$TMPDIR/dv-root"
+      export DEVENV_STATE="$TMPDIR/dv-state"
+      ${pkgs.coreutils}/bin/mkdir -p "$DEVENV_ROOT" "$DEVENV_STATE"
+      run_backend devenv "$DEVENV_ROOT/.kiro/hooks" $dvGens
+
+      echo "PASS: kiro-hooks-materialize-runtime" > $out
+    '';
 
   # Devenv: mcp.json write — real-file enterShell delivery (no files.*
   # symlink), anchored to $DEVENV_ROOT.
@@ -6066,9 +6261,9 @@ in {
       && lib.hasInfix "reviewer" (agentFile.text or "")
   );
 
-  # Devenv: hook files written as REAL files via enterShell (kiro v3 does not
-  # discover symlinked hooks, so devenv `files.*` symlinks are wrong here — the
-  # enterShell copies the content into a plain `.kiro/hooks/<name>.json`).
+  # Devenv: hook files written as REAL files by the materialize task (kiro v3
+  # does not discover symlinked hooks, so devenv `files.*` symlinks are wrong
+  # here — the task writes a plain `.kiro/hooks/<name>.json`).
   module-kiro-devenv-writes-hook-files = mkTest "kiro-devenv-writes-hook-files" (
     let
       result = evalDevenv {
@@ -6077,38 +6272,106 @@ in {
           hooksJson.pre-commit = ''{"event": "pre-commit"}'';
         };
       };
-      enter = result.config.enterShell or "";
+      task = dvHookTaskExec result;
     in
-      lib.hasInfix ".kiro/hooks/pre-commit.json" enter
-      && lib.hasInfix "install -m 0644" enter
-      # relative hook write anchored to the project root (enterShell runs
+      hasLiteral "nat_mat_write pre-commit.json" task
+      && lib.hasInfix ''{"event": "pre-commit"}'' task
+      && lib.hasInfix ".kiro/hooks" task
+      # relative hook write anchored to the project root (the task runs
       # in the caller's cwd — direnv activates in subdirectories).
-      && lib.hasInfix ''cd "$DEVENV_ROOT"'' enter
+      && lib.hasInfix ''cd "$DEVENV_ROOT"'' task
       # not a devenv `files.*` symlink
       && !((result.config.files or {}) ? ".kiro/hooks/pre-commit.json")
+      # the write is ordered before shell entry, and after devenv's own
+      # files cleanup (same edge contract as the steering task)
+      && ((result.config.tasks or {})."ai:kiro:materialize-hooks".after or [])
+      == ["devenv:files:cleanup"]
   );
 
-  # Devenv: the external `hooksDir` fragment copies the directory contents
-  # into `.kiro/hooks/` as real files via enterShell — same v3-symlink
-  # rationale as the inline fragment above, and the same project-root
-  # anchoring (the relative destination would otherwise land in whatever
-  # subdirectory the shell was entered from).
-  module-kiro-devenv-hooks-dir-copies-anchored = mkTest "kiro-devenv-hooks-dir-copies-anchored" (
+  # Devenv: the external `hooksDir` surface materializes the directory's
+  # top-level `*.json` files into `.kiro/hooks/` as real files — same
+  # v3-symlink rationale as the inline surface above, same project-root
+  # anchoring, and now the SAME manifest, so flipping between the two
+  # surfaces prunes the previous one instead of orphaning it.
+  #
+  # Also pins what is deliberately dropped vs. the retired `cp -rL`: a
+  # subdirectory and a non-`.json` sibling in the fixture are BOTH ignored.
+  # Kiro loads neither, and the retired whole-dir prune never removed
+  # either — but the `.json` filter is additionally what keeps a dotfile
+  # like `.gitkeep` from tripping the copy-mode name regex.
+  module-kiro-devenv-hooks-dir-materializes = mkTest "kiro-devenv-hooks-dir-materializes" (
     let
-      result = evalDevenv {
+      cfg = {
         ai.kiro = {
           enable = true;
           hooksDir = ./fixtures/kiro-hooks-dir;
         };
       };
-      enter = result.config.enterShell or "";
+      result = evalDevenv cfg;
+      task = dvHookTaskExec result;
+      hmWrite = hmHookWriteScript (evalHm cfg);
     in
-      lib.hasInfix ''cd "$DEVENV_ROOT"'' enter
-      && lib.hasInfix "cp -rL --no-preserve=mode" enter
-      && lib.hasInfix "kiro-hooks-dir/." enter
-      && lib.hasInfix ".kiro/hooks/" enter
-      # real-file copy, not devenv `files.*` symlinks
+      lib.hasInfix ''cd "$DEVENV_ROOT"'' task
+      && hasLiteral "nat_mat_write sample.json" task
+      && lib.hasInfix "hooks-dir-sample" task
+      && lib.hasInfix ".kiro/hooks" task
+      # HM parity — same entry, same writer, no second mechanism
+      && lib.hasInfix "hooks-dir-sample" hmWrite
+      # dropped: the subdirectory and the non-`.json` sibling are ignored
+      && !(lib.hasInfix "nested" task)
+      && !(lib.hasInfix "inner.json" task)
+      && !(lib.hasInfix "ignore-me.txt" task)
+      && !(lib.hasInfix "nested" hmWrite)
+      && !(lib.hasInfix "ignore-me.txt" hmWrite)
+      # real files, not devenv `files.*` symlinks
       && !(lib.any (n: lib.hasPrefix ".kiro/hooks/" n) (lib.attrNames (result.config.files or {})))
+      # the enterTest backstop covers the dir surface too
+      && lib.hasInfix ".kiro/hooks/sample.json" (result.config.enterTest or "")
+  );
+
+  # `hooksDir` unset again (N→0 for the DIR surface specifically): the writers
+  # survive, so the files the previous generation copied out of that directory
+  # are pruned rather than left firing. The old `mkIf (hooksDir != null)` gate
+  # made this the exact case that leaked.
+  module-kiro-hooks-dir-unset-still-prunes = mkTest "kiro-hooks-dir-unset-still-prunes" (
+    let
+      hm = evalHm {ai.kiro.enable = true;};
+      dv = evalDevenv {ai.kiro.enable = true;};
+      withDir = evalHm {
+        ai.kiro = {
+          enable = true;
+          hooksDir = ./fixtures/kiro-hooks-dir;
+        };
+      };
+    in
+      # the dir surface really does produce a managed entry…
+      hasLiteral "nat_mat_write sample.json" (hmHookWriteScript withDir)
+      # …and with it back to null the prune pass is still emitted, on both
+      # backends, still reading the manifest that recorded `sample.json`
+      && hm.config.ai.kiro.hooksDir == null
+      && lib.hasInfix "$NAT_MAT_MANIFEST" (hmHookPruneScript hm)
+      && !(lib.hasInfix "sample.json" (hmHookWriteScript hm))
+      && lib.hasInfix "$NAT_MAT_MANIFEST" (dvHookTaskExec dv)
+      && !(lib.hasInfix "sample.json" (dvHookTaskExec dv))
+  );
+
+  # A `hooksDir` filename that is unsafe to interpolate into the generated
+  # shell must fail at EVAL. `hookNameAssertion` covers only the inline
+  # surfaces' attr keys, so without the materializer's entry assertions the
+  # dir surface had no name guard at all.
+  module-kiro-hooks-dir-rejects-unsafe-filename = mkTest "kiro-hooks-dir-rejects-unsafe-filename" (
+    let
+      ev = evalHm {
+        ai.kiro = {
+          enable = true;
+          hooksDir = ./fixtures/kiro-hooks-dir-unsafe;
+        };
+      };
+      nameAsserts =
+        builtins.filter (a: lib.hasInfix "copy-strategy hook file names must match" a.message)
+        (ev.config.assertions or []);
+    in
+      nameAsserts != [] && (builtins.head nameAsserts).assertion == false
   );
 
   # ── Steering materializer (strategy-driven) ────────────────────────

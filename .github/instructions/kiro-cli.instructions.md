@@ -7,11 +7,21 @@ applyTo: "overlays/kiro-memory-distiller.nix,overlays/kiro-memory-distiller/**,o
 
 # Kiro-CLI auto-memory
 
-> **Last verified:** 2026-08-03 (commit pending — marks the repository-local
-> distiller as update-target-exempt with a reasoned package property). Prior:
-> 2026-08-03 (commit pending — relocates both auto-memory implementation seams
-> under `overlays/` so the overlay subtree no longer imports package-owned
-> source). If you touch `overlays/kiro-memory-distiller/distiller.ts`,
+> **Last verified:** 2026-08-05 (commit pending — hook delivery moved off its
+> two bespoke writers onto the shared strategy-driven materializer
+> `lib/ai/materialize.nix`, the same one steering already used. The bespoke
+> writers carried their prune INSIDE the emitter's `mkIf`, so taking the hook
+> surface from N to ZERO emitted nothing, the prune never ran, and every
+> previously written hook file kept firing forever — the one case where pruning
+> matters most. The materializer's writers are emitted whenever the module is
+> enabled and its manifest claims only the files it WROTE, so an unmanaged
+> hand-placed `~/.kiro/hooks/*.json` now survives where the old
+> `rm -f "$HOOKS_DIR"/*.json` deleted it). Prior: 2026-08-03 (commit pending —
+> marks the repository-local distiller as update-target-exempt with a reasoned
+> package property). Prior: 2026-08-03 (commit pending — relocates both
+> auto-memory implementation seams under `overlays/` so the overlay subtree no
+> longer imports package-owned source). If you touch
+> `overlays/kiro-memory-distiller/distiller.ts`,
 > `packages/kiro-cli/lib/autoMemory.nix`, `packages/kiro-cli/lib/mkKiro.nix`
 > (hook-file emission), `overlays/kiro-memory-distiller.nix`,
 > `overlays/mcp-servers/openmemory-mem/openmemory-mem.ts`,
@@ -308,20 +318,43 @@ or this hook.
   `--no-interactive` runs the model but SKIPS the hook engine, so a one-shot
   probe fires nothing. `KIRO_HOME` does NOT relocate the global-hooks dir — the
   loader reads the real `$HOME/.kiro/hooks`. Consequences: **(a)** HM
-  `ai.kiro.hooks` delivered as REAL files to `~/.kiro/hooks/` (PR #433's
-  `home.activation.kiroHooks`, not `home.file` symlinks) DOES load under v3; a
-  HM generation predating that fix ships a store SYMLINK and is silently dropped
-  — this (NOT global-ness) is why live-system auto-memory dies under v3, and a
-  consumer repin + re-activation restores it. **(b)** the **devenv** backend
-  writes hooks as REAL files via `enterShell`
-  (`install -m 0644 <writeText> .kiro/hooks/<name>.json`), NOT devenv `files.*`
-  symlinks (which v3 skips). Both enterShell fragments (inline hooks and
-  `hooksDir`) run in a subshell anchored to `$DEVENV_ROOT` — enterShell executes
-  in the CALLER's cwd (direnv activates in subdirectories), so an unanchored
-  relative `.kiro/hooks/...` write would land in whatever subdir the shell was
-  entered from. Steering is real files too (see below). Agents and skills, by
+  `ai.kiro.hooks` delivered as REAL files to `~/.kiro/hooks/` DOES load under
+  v3; a HM generation predating that fix ships a store SYMLINK and is silently
+  dropped — this (NOT global-ness) is why live-system auto-memory dies under v3,
+  and a consumer repin + re-activation restores it. **(b)** the **devenv**
+  backend writes hooks as REAL files too, NOT devenv `files.*` symlinks (which
+  v3 skips). Steering is real files too (see below). Agents and skills, by
   contrast, LOAD when symlinked — the symlink drop is **per-surface** (hooks +
   steering only; probed 2026-07-23) — so those emitters stay on symlinks.
+- **How hooks reach disk: the SHARED materializer** (`lib/ai/materialize.nix`),
+  the same writer steering uses. `mkHookEntries` lowers BOTH hook surfaces —
+  inline (`hooks`/`hooksJson`) and the external `hooksDir` — into one
+  `{ <file>.json → { text|source, strategy = "copy" } }` entry set, so the two
+  share a manifest and flipping a consumer between them prunes the previous
+  surface instead of orphaning it. HM gets the two-phase activation pair
+  (`materialize-kiro-hooks-{prune,write}`), devenv the
+  `ai:kiro:materialize-hooks` task (which `cd`s to `$DEVENV_ROOT` itself — the
+  task runs in the CALLER's cwd because direnv activates in subdirectories) plus
+  an `enterTest` real-file backstop. Unlike steering there is deliberately **no
+  symlink escape hatch**: a symlinked hook cannot load at all, so a
+  `hooksStrategy` option would only offer a way to break hooks.
+  - **Both writers are emitted whenever the module is ENABLED**, never gated on
+    a non-empty hook set. That gate was a real defect: the previous bespoke
+    writers put their prune inside `mkIf (hooks != {} || hooksJson != {})` and
+    `mkIf (hooksDir != null)`, so removing the LAST hook emitted nothing at all,
+    the prune never ran, and the orphaned files kept firing forever. Do not
+    reintroduce a gate here — `module-kiro-hooks-empty-set-still-prunes` and the
+    runtime `module-kiro-hooks-materialize-runtime` both fail if you do.
+  - **Ownership: only the files it WROTE.** Deletion walks the per-file manifest
+    under `${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/materialize`
+    (HM) / `$DEVENV_STATE` (devenv), never a `<dir>/*.json` glob. A hand-placed
+    hook this module never wrote survives every activation; the retired
+    `rm -f "$HOOKS_DIR"/*.json` deleted it, which is exactly why that prune
+    could not simply be made unconditional. Managed copies land read-only
+    (0444).
+  - `hooksDir` is enumerated at EVAL and carries only the directory's top-level
+    `*.json` files. Subdirectories and non-`.json` siblings are ignored — Kiro
+    loads neither, and the retired whole-dir prune never removed either.
 - `ai.kiro.rules` — attrs-shape ai-common ruleModule → an entry in the derived
   `ai.kiro.steeringFiles` attrset (key `<name>.md`, rendered with
   `inclusion:`/`fileMatchPattern:` frontmatter; `paths=null` →
@@ -331,13 +364,13 @@ or this hook.
   `ai.kiro.steeringStrategy = "symlink"` restores the legacy store-symlink
   shape).
 
-Because both surfaces ride the existing HM↔devenv fanout, parity is
-**structural-by-construction** — no new module axis. Proven by
-`module-kiro-auto-memory-hm-devenv-parity`: BOTH backends install hooks as REAL
-files carrying the generator output verbatim (PR #433: HM via the
-`home.activation.kiroHooks` script, devenv via `enterShell`), and steering is
-identical on both (attrset equality over `ai.kiro.steeringFiles` plus a
-writer-output byte check per backend).
+Because both surfaces ride the existing HM↔devenv fanout — and now the same
+writer as well — parity is **structural-by-construction**, with no new module
+axis. Proven by `module-kiro-auto-memory-hm-devenv-parity`: BOTH backends
+install hooks as REAL files carrying the generator output verbatim (asserted
+byte-for-byte out of each writer's heredoc body), and steering is identical on
+both (attrset equality over `ai.kiro.steeringFiles` plus a writer-output byte
+check per backend).
 
 > **Correction (settled):** "only hooks need real files" was wrong — the v3 hook
 > AND steering loaders keep only `entry.isFile()` entries, dropping symlinked
@@ -386,8 +419,13 @@ the STAGE-5 network SDK write is felt (tuning path P3).
 11. Hooks reach kiro as REAL files — a store symlink is silently dropped by v3's
     `entry.isFile()` hook scan on BOTH the workspace `.kiro/hooks/` and the
     global `~/.kiro/hooks/` (which 2.13.0 DOES read for real files). The devenv
-    `enterShell` copy is load-bearing: reverting it to devenv `files.*`
-    (symlink) makes `/hooks` silently show 0.
+    real-file write is load-bearing: reverting it to devenv `files.*` (symlink)
+    makes `/hooks` silently show 0.
+12. The hook writers are emitted whenever `ai.kiro` is ENABLED, never gated on a
+    non-empty hook set — otherwise removing the last hook never runs the prune
+    and the orphans keep firing. And the prune stays MANIFEST-scoped, never a
+    `<dir>/*.json` glob, or enabling `ai.kiro` starts deleting hooks the module
+    never wrote.
 
 ## Not done yet / tuning paths
 
@@ -400,10 +438,10 @@ the STAGE-5 network SDK write is felt (tuning path P3).
 - **Hook delivery + the live gap (activation lag, not scope).** v3 loads
   REAL-file hooks in BOTH the workspace `.kiro/hooks/` and the global
   `~/.kiro/hooks/` (2.13.0), dropping symlinked ones (see the CRITICAL note
-  under Module surface). devenv delivers project-local real files
-  (`enterShell`); HM delivers real files to the global dir (PR #433). The live
-  gap is that a HM generation predating the real-file fix installs a store
-  SYMLINK, so auto-memory is silently dead under v3 until the consumer repins +
+  under Module surface). Both backends deliver real files through the shared
+  materializer — devenv project-local, HM into the global dir. The live gap is
+  that a HM generation predating the real-file fix installs a store SYMLINK, so
+  auto-memory is silently dead under v3 until the consumer repins +
   re-activates. (Non-nix repos without devenv still want a direnv/manual
   real-file drop — backlog.)
 - **Tuning (post-flip, MEASURE first, B4):** per-prompt `openmemory-mem` spawn
@@ -426,6 +464,8 @@ the STAGE-5 network SDK write is felt (tuning path P3).
   redirected to scratch).
 - Tests: `overlays/kiro-memory-distiller/distiller.test.ts` (80 bun tests),
   `overlays/mcp-servers/openmemory-mem/openmemory-mem.test.ts` (backend helper),
-  `checks/module-eval.nix` (`module-kiro-auto-memory-*`: hooks, steering,
+  `checks/module-eval.nix` (`module-kiro-hooks-*`, notably
+  `-empty-set-still-prunes`, `-prune-is-manifest-scoped` and the executing
+  `-materialize-runtime`; and `module-kiro-auto-memory-*`: hooks, steering,
   HM↔devenv parity, HOME-baked/empty==null, backend-wiring, manual-forces,
   rejects-baked-password).
