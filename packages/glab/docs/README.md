@@ -1,7 +1,9 @@
 # glab
 
 Declarative configuration for the GitLab CLI, with the instance URL and token
-supplied at invocation time so neither reaches the Nix store.
+resolved at runtime so neither reaches the Nix store. Home Manager can either
+supply the token to each invocation or synchronize it into glab's operating
+system keyring.
 
 The same `glab.*` options exist in the home-manager module and the devenv module
 — they are one shared declaration (`packages/glab/modules/options.nix`), not two
@@ -37,6 +39,53 @@ glab = {
 };
 ```
 
+## OS-keyring synchronization
+
+Linux Home Manager users can persist a runtime-provided token through glab's
+Secret Service backend:
+
+```nix
+glab = {
+  enable = true;
+  host.file = config.sops.secrets.gitlab-url.path;
+  keyringSync.enable = true;
+  token.file = config.sops.secrets.gitlab-token.path;
+
+  settings.git_protocol = "ssh";
+};
+```
+
+Each Home Manager activation creates a non-secret marker under XDG state. A
+systemd path unit watches that marker only while `graphical-session.target` is
+active and launches one `Type=oneshot` service. A headless rebuild therefore
+queues the synchronization until the next graphical login instead of trying to
+open a desktop keyring from a system activation context.
+
+The service first stores and removes a harmless Secret Service probe. If the
+keyring is locked, that is the operation that may request an unlock. If it is
+cancelled or no backend is available, the real token has not been read and glab
+cannot take its normal plaintext-config fallback. The service has `Restart=no`
+and removes the marker on every exit, so one activation permits at most one
+prompt. A later activation creates a fresh marker and permits one new attempt.
+
+After that probe, the service reads `host` and `token` from their `file` or
+`helper` branches and passes the token to
+`glab auth login --stdin --use-keyring`. The explicit (now deprecated) keyring
+flag keeps package overrides predating keyring-by-default behavior secure. The
+token is never placed in command arguments, a persistent environment variable,
+or the Nix store. `token.plain` is rejected because it would already have
+exposed the credential through the store.
+
+While synchronization is enabled, the ordinary Home Manager wrapper stops
+exporting `GITLAB_TOKEN`; environment credentials take precedence over stored
+credentials and would otherwise bypass the keyring it just populated. Other
+configured values, including `host`, retain their normal runtime behavior.
+
+This is deliberately a Home Manager lifecycle. The option remains declared in
+the devenv facet so the two option trees cannot drift, but enabling it there is
+an evaluation error: a repository shell may consume a user's keyring, but it
+must not own login, Secret Service, or graphical-session units.
+
 ## Secret-capable options
 
 `host`, `token` and `job_token` each take **exactly one** of three branches. The
@@ -46,14 +95,18 @@ can construct — there is no runtime assertion to forget.
 | branch   | behavior                                                       |
 | -------- | -------------------------------------------------------------- |
 | `plain`  | literal value, interpolated into the store, **world-readable** |
-| `file`   | path read at invocation time; nothing enters the store         |
-| `helper` | executable run at invocation time; nothing enters the store    |
+| `file`   | path read at runtime; nothing enters the store                 |
+| `helper` | executable run at runtime; nothing enters the store            |
 
 `file` and `helper` both **abort** when the value comes back empty, rather than
 exporting nothing and letting glab fall back to its own default. That matters
 most for `host`, whose default is `gitlab.com`: an empty self-managed URI would
 otherwise send your token to the wrong instance, silently. A half-applied sops
 rotation, or a key the reader cannot decrypt, produces exactly that empty file.
+
+With `keyringSync.enable`, `token.file` or `token.helper` becomes the source for
+the one-shot synchronizer instead of an environment export on every glab
+invocation.
 
 `token` and `job_token` are secret-capable because glab's own schema marks them
 keyring-eligible. `host` is included on top of that: a self-hosted instance URL
@@ -162,7 +215,8 @@ in {
 }
 ```
 
-This points the devenv wrapper at the same `config.yml`; it does not copy or
+This points the devenv wrapper at the same `config.yml` and, when the host entry
+selects keyring storage, the same OS-keyring credential; it does not copy or
 redeclare credentials. When Codex is also enabled, the glab module automatically
 adds the effective directory to Codex's legacy `workspace-write` writable roots.
 The grant follows any explicit `configDir` override and is inert for other

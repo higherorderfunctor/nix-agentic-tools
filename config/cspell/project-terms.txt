@@ -138,6 +138,7 @@ goproxy
 GOTOOLCHAIN
 GOWORK
 gpgsign
+headlessly
 heredocs
 higherorderfunctor
 hitl
@@ -228,6 +229,7 @@ nuschtos
 nvfetcher
 ohmyposh
 oled
+oneshot
 ollama
 openat
 openclaw

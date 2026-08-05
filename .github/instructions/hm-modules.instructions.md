@@ -7,9 +7,13 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-08-05 (commit pending — enabled glab facets contribute
-> their effective config directory to Codex's legacy workspace-write sandbox;
-> this follows backend defaults and explicit overrides without coupling the
+> **Last verified:** 2026-08-05 (commit pending — glab's Linux Home Manager
+> facet can queue one OS-keyring synchronization per activation through a
+> graphical-session path unit; the shared option is an explicit devenv
+> exclusion, and the ordinary wrapper stops exporting the synchronized token).
+> Prior: 2026-08-05 (commit pending — enabled glab facets contribute their
+> effective config directory to Codex's legacy workspace-write sandbox; this
+> follows backend defaults and explicit overrides without coupling the
 > standalone glab module to the AI module). Prior: 2026-08-05 (commit pending —
 > re-verifies these conventions while the managed MCP module's bridge-host
 > comment is generalized so adding Context7 to the bridge set cannot stale a
@@ -280,6 +284,23 @@ with global config. Upstream devenv claude does the same (unconditional).
 `cat "$path"`. Do NOT `builtins.readFile` them at eval time — sops decryption
 happens after nix eval finishes.
 
+**A prompt-capable user service needs a consumable activation marker.** glab's
+keyring synchronization does not invoke Secret Service directly from Home
+Manager activation, which may run headlessly during a NixOS rebuild. Activation
+creates a non-secret XDG-state marker; a systemd path unit wanted by
+`graphical-session.target` consumes it through a `Type=oneshot` service. The
+service removes the marker on success, cancellation, timeout, and failure and
+sets `Restart=no`. Without that consume-on-every-exit invariant, a still-true
+`PathExists` condition immediately reactivates a failed service and turns one
+keyring unlock prompt into a loop.
+
+Probe Secret Service BEFORE reading the real secret. glab deliberately falls
+back to plaintext `config.yml` storage when no keyring backend is available. The
+synchronizer therefore writes and removes a harmless libsecret sentinel first;
+cancellation fails before the sops/helper token is read. The ordinary wrapper
+also omits `GITLAB_TOKEN` in this mode because environment credentials take
+precedence over the stored keyring value.
+
 ### home.file vs home.activation vs outOfStoreSymlink
 
 **`home.file` with `source =`** — immutable store-backed content. Used for
@@ -315,11 +336,12 @@ construction.
 **Stronger than shared types: one shared DECLARATION.** `packages/glab` puts its
 entire `options.glab` block in `packages/glab/modules/options.nix` and both
 facets `imports` it, so the two surfaces are the same expression rather than two
-that currently agree. Prefer this whenever the facets differ only in where the
-result is installed — glab's HM file sets `home.packages`, its devenv file sets
-`packages`, and nothing else differs. `checks/module-eval.nix` asserts the two
-option trees are equal (`module-glab-hm-devenv-option-parity`), which is a real
-test rather than a code-review convention.
+that currently agree. Prefer this when the declaration is shared even if backend
+lowering differs: glab's HM file owns package installation and optional keyring
+lifecycle, while devenv installs the package and explicitly rejects that
+user-session lifecycle. `checks/module-eval.nix` asserts the two option trees
+are equal (`module-glab-hm-devenv-option-parity`), which is a real test rather
+than a code-review convention.
 
 Note this is NOT free for every module: it only works when the options carry no
 facet-specific defaults or `defaultText`. Modules whose options reference
@@ -338,6 +360,9 @@ corresponding CLI.
 - Activation scripts are HM-only (devenv lifecycle is different)
 - HM uses `home.file` / `home.activation`; devenv uses `files.*` (per-project
   writable tree, not home dir)
+- glab's `keyringSync` declaration exists in both facets, but devenv rejects
+  enabling it: repository shells may consume global keyring state, while login,
+  Secret Service, and graphical-session lifecycle belong to Home Manager
 - Scope-only behavior remains declared in both trees and fails explicitly where
   unsupported. For example, `ai.copilot.projectDir` has one shared declaration;
   devenv consumes it, while Home Manager rejects non-default overrides because

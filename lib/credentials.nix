@@ -90,7 +90,7 @@
           type = types.str;
           description = ''
             Path to an executable printing the raw value on stdout, run at
-            invocation time. Nothing is placed in the Nix store. Mapped to
+            runtime. Nothing is placed in the Nix store. Mapped to
             ${envVar}.
           '';
         };
@@ -186,25 +186,35 @@
       exit 1
     fi'';
 
-  mkSecretExport = pkgs: envVar: secret:
+  # Shell lines assigning ONE secret to a caller-selected variable, without
+  # exporting it. This is the lower-level primitive for consumers that need to
+  # pass a secret over stdin instead of exposing it to a child process through
+  # the environment (glab's keyring synchronizer is the first such caller).
+  mkSecretAssignment = pkgs: variable: secret:
     if secret == null
     then ""
     else if secret ? helper
     then ''
-      ${envVar}="$("${secret.helper}")"
-      ${emptyGuard envVar secret.helper}
-      export ${envVar}''
+      ${variable}="$("${secret.helper}")"
+      ${emptyGuard variable secret.helper}''
     else if secret ? file
     then ''
-      ${missingFileGuard envVar secret.file}
-      ${envVar}="$(${pkgs.coreutils}/bin/cat "${secret.file}")"
-      ${emptyGuard envVar secret.file}
-      export ${envVar}''
+      ${missingFileGuard variable secret.file}
+      ${variable}="$(${pkgs.coreutils}/bin/cat "${secret.file}")"
+      ${emptyGuard variable secret.file}''
     else if secret ? plain
     then ''
-      ${envVar}=${lib.escapeShellArg secret.plain}
-      export ${envVar}''
+      ${variable}=${lib.escapeShellArg secret.plain}''
     else "";
+
+  mkSecretExport = pkgs: envVar: secret: let
+    assignment = mkSecretAssignment pkgs envVar secret;
+  in
+    if assignment == ""
+    then ""
+    else ''
+      ${assignment}
+      export ${envVar}'';
 
   # ── Credentials helpers ──────────────────────────────────────────
   # credentialVars: { settingsOptionName = { envVar = "ENV_VAR"; ... }; }
@@ -217,6 +227,7 @@ in {
   inherit
     mkCredentialsOption
     mkCredentialsSnippet
+    mkSecretAssignment
     mkSecretExport
     mkSecretOption
     ;

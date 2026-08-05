@@ -42,10 +42,18 @@
   glabSchema = import ./schema.nix {inherit lib;};
   inherit (glabSchema) envVarOf secretKeys;
 
+  # A synchronized token must be read back through glab's keyring-aware config
+  # path. Exporting GITLAB_TOKEN here would take precedence over that stored
+  # credential and keep exposing it to every glab process, defeating the mode.
+  invocationSecretKeys =
+    if cfg.keyringSync.enable or false
+    then builtins.filter (name: name != "token") secretKeys
+    else secretKeys;
+
   secretExports =
     lib.concatStringsSep "\n"
     (builtins.filter (s: s != "")
-      (map (n: credentialsLib.mkSecretExport pkgs (envVarOf n) (cfg.${n} or null)) secretKeys));
+      (map (n: credentialsLib.mkSecretExport pkgs (envVarOf n) (cfg.${n} or null)) invocationSecretKeys));
 
   # Non-secret settings: plain exports, no store-visibility concern.
   # Booleans become "true"/"false", which is what glab's own bool parser

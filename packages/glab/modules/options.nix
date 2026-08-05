@@ -4,8 +4,9 @@
 # One copy on purpose. The config-parity rule says a feature configurable
 # in HM must be configurable in devenv and vice versa, and the reliable
 # way to hold that is a single declaration rather than two that agree
-# today. The facets differ only in WHERE the wrapped package is installed,
-# which is all their own files do.
+# today. Facet files own installation and lifecycle lowering: Home Manager can
+# synchronize a token through the graphical user's keyring, while devenv
+# rejects that user-session lifecycle explicitly.
 #
 # ── The settings surface is GENERATED, not curated ──────────────────
 # `overlays/dev-tools/glab-extracted.json` is built from glab's own
@@ -62,8 +63,10 @@ in {
         type = types.bool;
         default = false;
         description = ''
-          Install glab wrapped so that its host URL, token and settings
-          are supplied from this configuration at invocation time.
+          Install glab wrapped so that its host URL, credentials and settings
+          are supplied from this configuration. Credentials normally resolve
+          at invocation time; `keyringSync.enable` instead persists the token
+          through glab's operating-system keyring.
         '';
       };
 
@@ -99,6 +102,35 @@ in {
           wrapper seeds a `hosts:` entry into it on first run so that
           `glab auth status` can see the configured instance.
         '';
+      };
+
+      keyringSync = mkOption {
+        type = types.submodule {
+          options.enable = mkOption {
+            type = types.bool;
+            default = false;
+            description = ''
+              Copy `glab.token` into glab's operating-system keyring once per
+              Home Manager activation, deferred until a graphical Linux user
+              session is available.
+
+              The synchronizer reads `file` and `helper` credentials only at
+              service runtime and passes the token to glab over standard input.
+              It never places the token in the Nix store, command arguments, or
+              a persistent environment variable. A Secret Service availability
+              probe runs before the token is read, preventing glab's normal
+              plaintext-config fallback when no keyring is available.
+
+              This lifecycle is Home Manager-only. The shared declaration stays
+              visible under devenv for option-tree parity, but the devenv facet
+              rejects enabling it: repository shells may consume a user's
+              existing global keyring, but must not own login or graphical
+              session services.
+            '';
+          };
+        };
+        default = {};
+        description = "Home Manager synchronization into glab's OS keyring.";
       };
 
       settings = mkOption {
