@@ -48,8 +48,16 @@ def die(msg):
     sys.exit(1)
 
 
-def locate(data):
-    """Return (abs_offset, first_sentence, tail) for the kiro-cli identity."""
+def find_literal(data):
+    """Return (abs_offset, body) for the kiro-cli identity template literal.
+
+    Split out from `locate` so verification can compare the REASSEMBLED literal
+    rather than re-deriving a "first sentence" from it. Those are not the same
+    check once the replacement itself contains sentence punctuation, and
+    conflating them silently broke every multi-sentence identity: the re-split
+    yielded only the replacement's FIRST sentence, which never equalled the
+    whole replacement, so a correct splice was reported as a failed one.
+    """
     fns = list(FN.finditer(data))
     if len(fns) != 1:
         die(
@@ -83,7 +91,12 @@ def locate(data):
                 "cannot be trusted either." % (cid.decode(), n)
             )
 
-    body = hits[0].group(1)
+    return start + hits[0].start(1), hits[0].group(1)
+
+
+def locate(data):
+    """Return (abs_offset, first_sentence, tail) for the kiro-cli identity."""
+    off, body = find_literal(data)
     # Any sentence-ending punctuation followed by exactly one space. Matching
     # only `". "` would silently refuse to patch if upstream ever ends the
     # identity with `!` or `?` -- and because the caller FAILS OPEN, that
@@ -97,9 +110,7 @@ def locate(data):
             "'replace the first sentence' should now mean."
         )
 
-    first = body[: m.start() + 1]
-    tail = body[m.end() :]
-    return start + hits[0].start(1), first, tail
+    return off, body[: m.start() + 1], body[m.end() :]
 
 
 def main(argv):
@@ -132,12 +143,23 @@ def main(argv):
     # Re-read and re-locate: proves the written bundle still parses under the
     # same anchor and now carries the replacement, rather than trusting the
     # arithmetic above.
+    #
+    # Compare the whole reassembled literal, NOT a re-derived "first sentence".
+    # The replacement may itself contain sentence punctuation -- a multi-sentence
+    # identity is a supported and expected use -- and re-splitting would then
+    # yield only its first sentence and fail every such splice. That is not
+    # hypothetical: it rejected every multi-sentence identity while single
+    # sentence ones passed, so the option appeared to work for some values and
+    # silently fall back to stock for others.
     check = open(dst, "rb").read()
-    _, new_first, new_tail = locate(check)
-    if new_first != replacement:
-        die("verification failed: spliced sentence is not the requested one")
-    if new_tail != tail:
-        die("verification failed: the preserved tail was altered")
+    _, new_body = find_literal(check)
+    expected = replacement + b" " + tail
+    if new_body != expected:
+        die(
+            "verification failed: the spliced literal does not match "
+            "replacement + tail (got %d bytes, expected %d)"
+            % (len(new_body), len(expected))
+        )
 
     sys.stderr.write(
         "kiro-identity: spliced (%d -> %d bytes), %d-byte tail preserved\n"
