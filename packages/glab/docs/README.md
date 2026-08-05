@@ -152,10 +152,14 @@ A devenv project can deliberately reuse the user's Home Manager glab state and
 authentication without logging in twice:
 
 ```nix
-glab = {
-  enable = true;
-  configDir = "${userHome}/.config/glab-cli";
-};
+let
+  userHome = builtins.getEnv "HOME";
+in {
+  glab = {
+    enable = true;
+    configDir = "${userHome}/.config/glab-cli";
+  };
+}
 ```
 
 This points the devenv wrapper at the same `config.yml`; it does not copy or
