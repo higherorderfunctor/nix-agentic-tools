@@ -8706,7 +8706,9 @@ in {
     in
       builtins.length result.config.packages
       == 1
-      && result.config.env == {}
+      # The cross-harness SSH default is exercised separately; this assertion
+      # guards only against baking the Kimchi credential into the environment.
+      && removeAttrs result.config.env ["GIT_SSH_COMMAND"] == {}
   );
 
   # Real-execution gate for the wrapProgram blocker (#1) + secret handling
