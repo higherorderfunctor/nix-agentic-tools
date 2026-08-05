@@ -126,8 +126,11 @@ in
     # accepted rather than fatal.
     #
     # `acp` is conditional, because THE TWO WRAPPERS COMPOSE. The launcher
-    # resolves `kiro-cli-chat` through PATH, so in a real profile `kiro-cli acp`
-    # runs the launcher wrapper AND then this one:
+    # resolves `kiro-cli-chat` through PATH — ON LINUX; darwin resolves by
+    # argv[0] .app bundle discovery instead and never runs this wrapper via
+    # the launcher at all (see launcher-argv.md, "darwin resolves by argv[0]
+    # bundle discovery") — so in a real Linux profile `kiro-cli acp` runs the
+    # launcher wrapper AND then this one:
     #
     #   kiro-cli acp
     #     -> launcher wrapper prepends --v3

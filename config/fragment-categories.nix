@@ -184,6 +184,9 @@ _: {
       scopes = [
         "checks/kiro-wrapper-argv.nix"
         "lib/idempotentFlags.nix"
+        # The overlay's wrapProgram calls carry the darwin argv0
+        # bundle-discovery fix, which is part of this argv contract.
+        "overlays/kiro-cli.nix"
         "packages/kiro-cli/lib/**"
       ];
       sources = [
