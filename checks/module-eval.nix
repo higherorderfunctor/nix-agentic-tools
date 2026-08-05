@@ -250,6 +250,9 @@
       ];
     };
   evalDevenv = evalDevenvWithSpecialArgs {};
+  # The deterministic root tests assert paths only their injected resolver can
+  # produce, so losing this specialArgs-only seam fails loudly instead of
+  # silently measuring production builtins.getEnv behavior.
   evalDevenvWithGetEnv = codexGetEnv: evalDevenvWithSpecialArgs {inherit codexGetEnv;};
 
   # Codex HM settings are embedded as one-line JSON in the reconciliation
