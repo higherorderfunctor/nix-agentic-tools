@@ -108,6 +108,14 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
     [`dev/fragments/mcp-servers/js-server-packaging.md`](dev/fragments/mcp-servers/js-server-packaging.md),
     [`dev/fragments/mcp-servers/overlay-guide.md`](dev/fragments/mcp-servers/overlay-guide.md)
 
+- **`mcp-services`**
+  - Match: `checks/factory-eval.nix`, `checks/module-eval.nix`,
+    `lib/ai/mcpServer/mkServiceModule.nix`,
+    `lib/ai/mcpServer/serviceSchema.nix`, `packages/*/modules/mcp-server.nix`,
+    `packages/mcp-services/modules/homeManager/default.nix`
+  - Read:
+    [`dev/fragments/mcp-services/service-host-contract.md`](dev/fragments/mcp-services/service-host-contract.md)
+
 - **`nix-standards`**
   - Match: `**/*.nix`
   - Read:

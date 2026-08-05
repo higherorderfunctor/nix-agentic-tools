@@ -3,22 +3,15 @@
   mcpLib,
   ...
 }: let
-  inherit (lib) mkOption types optionalAttrs optionals;
+  inherit (lib) mkOption optionalAttrs types;
 in {
   meta = {
     modes = {
       stdio = "context7-mcp --transport stdio";
-      # FIXME(context7 >=3.0.0): the `http` transport unconditionally builds a
-      # Redis-backed session store at startup (createSessionStore -> getRedis in
-      # dist/index.js) and aborts with "Upstash Redis credentials are required"
-      # unless UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN are set. This is
-      # wired for upstream's hosted/NGINX deployment, not local self-hosting, so
-      # running this mode without an Upstash instance crash-loops the service.
-      # The `stdio` mode above skips the session store entirely and is the
-      # working default. To make `http` usable when self-hosting we'd need to
-      # surface the UPSTASH_* vars via credentialVars below (required only in
-      # http mode) and document standing up a (Upstash-compatible) Redis.
-      http = "context7-mcp --transport http";
+      # Native HTTP requires Upstash Redis and exposes no bind-address knob.
+      # Bridge the working stdio transport so the shared mcp-proxy owns the
+      # listener and makes service.host load-bearing.
+      http = "bridge";
     };
     scope = "remote";
     defaultPort = 19750;
@@ -37,7 +30,7 @@ in {
     path = mkOption {
       type = types.str;
       default = "/mcp";
-      description = "HTTP endpoint path. Only used in HTTP mode.";
+      description = "HTTP endpoint path where mcp-proxy serves this server.";
     };
 
     apiUrl = mkOption {
@@ -52,6 +45,5 @@ in {
       CONTEXT7_API_URL = cfg.settings.apiUrl;
     };
 
-  settingsToArgs = cfg: mode:
-    optionals (mode == "http") ["--port" (toString cfg.service.port)];
+  settingsToArgs = _cfg: _mode: [];
 }

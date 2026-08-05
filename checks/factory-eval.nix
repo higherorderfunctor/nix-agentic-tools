@@ -43,6 +43,43 @@
         else throw "FAIL: ${name}"
       }
     '';
+
+  mkServiceServerDef = httpMode: meta: {
+    meta =
+      {
+        defaultPort = 12345;
+        modes = {
+          http = httpMode;
+          stdio = "test-mcp";
+        };
+        scope = "remote";
+        tools = [];
+      }
+      // meta;
+    settingsOptions = {};
+    settingsToArgs = _cfg: _mode: [];
+    settingsToEnv = _cfg: _mode: {};
+  };
+
+  evalService = {
+    config ? {},
+    name ? "test-mcp",
+    serverDef,
+  }:
+    lib.evalModules {
+      modules = [
+        {
+          options.server = lib.mkOption {
+            type = lib.types.submodule (ai.mcpServer.mkServiceModule {
+              inherit name serverDef;
+              resolvePackage = _: pkgs.hello;
+            });
+            default = {};
+          };
+          config.server = config;
+        }
+      ];
+    };
 in {
   # ── Transformer shape tests ─────────────────────────────────────
   factory-transformer-claude-empty = mkTest "transformer-claude-empty" (
@@ -211,6 +248,55 @@ in {
         }).config.type;
     in
       !result.success
+  );
+
+  # Bridge mode honors service.host in the shared mcp-proxy wrapper, so it
+  # needs no per-server metadata declaration and still accepts overrides.
+  factory-mcpServer-service-host-bridge-accepted = mkTest "mcpServer-service-host-bridge-accepted" (
+    let
+      result = evalService {
+        config.service.host = "127.0.0.2";
+        serverDef = mkServiceServerDef "bridge" {};
+      };
+    in
+      result.config.server.service.host == "127.0.0.2"
+  );
+
+  # A native mode must state its audit result. This is the structural guard
+  # that turns a future bridge -> native switch into an evaluation failure.
+  factory-mcpServer-service-host-native-audit-required = mkTest "mcpServer-service-host-native-audit-required" (
+    let
+      attempt = builtins.tryEval (builtins.deepSeq
+        (evalService {
+          serverDef = mkServiceServerDef "test-mcp --http" {};
+        }).config.server.service.host
+        true);
+    in
+      !attempt.success
+  );
+
+  factory-mcpServer-service-host-native-supported = mkTest "mcpServer-service-host-native-supported" (
+    let
+      result = evalService {
+        config.service.host = "127.0.0.2";
+        serverDef = mkServiceServerDef "test-mcp --http" {honorsServiceHost = true;};
+      };
+    in
+      result.config.server.service.host == "127.0.0.2"
+  );
+
+  # Any concrete value is rejected for an unsupported native mode, including
+  # the old apparent default. Leaving it unset is the only accepted shape.
+  factory-mcpServer-service-host-native-unsupported-rejected = mkTest "mcpServer-service-host-native-unsupported-rejected" (
+    let
+      attempt = builtins.tryEval (builtins.deepSeq
+        (evalService {
+          config.service.host = "127.0.0.1";
+          serverDef = mkServiceServerDef "test-mcp --http" {honorsServiceHost = false;};
+        }).config.server.service.host
+        true);
+    in
+      !attempt.success
   );
 
   # ── mcpServer.mkMcpServer tests ─────────────────────────────────
