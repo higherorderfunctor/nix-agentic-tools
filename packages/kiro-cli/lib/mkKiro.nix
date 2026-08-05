@@ -483,6 +483,31 @@
       }
       (hookNameAssertion cfg)
       {
+        # The splice reassembles the literal as `replacement + " " + tail`. If
+        # the replacement does not close its own final sentence it MERGES into
+        # the vendor tail ("You are GLaDOS You operate in a terminal
+        # environment: …"), and the option stops meaning "replace the first
+        # sentence" at all.
+        #
+        # Asserted at EVAL, not left to the splicer's own guard (which stays as
+        # a backstop). The splicer runs on the LAUNCH path, and that path FAILS
+        # OPEN by design — so a value rejected there presents as "the identity
+        # silently did nothing", which is precisely the failure shape that let
+        # a multi-sentence identity ship broken. A config error belongs where
+        # the config is written.
+        assertion =
+          cfg.identity
+          == null
+          || builtins.match ".*[.!?][[:space:]]*" cfg.identity != null;
+        message = ''
+          ai.kiro: `identity` must end with sentence punctuation (`.`, `!` or
+          `?`). It replaces the FIRST SENTENCE of the vendor identity and the
+          preserved remainder is re-joined directly after it, so a value that
+          does not close its own sentence runs INTO that remainder instead of
+          replacing a sentence.
+        '';
+      }
+      {
         # An overridden `package` need not carry the overlay's passthru, and
         # without this the failure is a bare "attribute 'withRolloutFeatures'
         # missing" pointing at factory internals rather than at the two
