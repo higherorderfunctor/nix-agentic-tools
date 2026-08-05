@@ -3,7 +3,7 @@
   mcpLib,
   ...
 }: let
-  inherit (lib) mkOption types optionalAttrs optionals;
+  inherit (lib) mkOption optionalAttrs types;
 in {
   meta = {
     modes = {
@@ -30,7 +30,7 @@ in {
     path = mkOption {
       type = types.str;
       default = "/mcp";
-      description = "HTTP endpoint path. Only used in HTTP mode.";
+      description = "HTTP endpoint path where mcp-proxy serves this server.";
     };
 
     apiUrl = mkOption {
@@ -45,6 +45,5 @@ in {
       CONTEXT7_API_URL = cfg.settings.apiUrl;
     };
 
-  settingsToArgs = cfg: mode:
-    optionals (mode == "http") ["--port" (toString cfg.service.port)];
+  settingsToArgs = _cfg: _mode: [];
 }

@@ -7069,6 +7069,9 @@ in {
         || fail "default bind host is not loopback"
       grep -qF -- 'context7-mcp --transport stdio' "$o" \
         || fail "context7 bridge does not launch its working stdio transport"
+      if grep -qF -- 'context7-mcp --transport stdio --port' "$o"; then
+        fail "context7 bridge passes the proxy port to its stdio child"
+      fi
       if grep -qF -- 'context7-mcp --transport http' "$o"; then
         fail "context7 bridge still launches its Upstash-only native HTTP transport"
       fi
