@@ -221,6 +221,7 @@ nixpkgs
 nixvim
 nohup
 nomic
+northstar
 nullary
 nullglob
 numtide
@@ -229,8 +230,8 @@ nuschtos
 nvfetcher
 ohmyposh
 oled
-oneshot
 ollama
+oneshot
 openat
 openclaw
 openhands
