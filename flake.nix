@@ -239,6 +239,7 @@
       cacheHitParityCheck = import ./checks/cache-hit-parity.nix {inherit inputs lib pkgs self;};
       codexCoverageCheck = import ./checks/chatgpt-codex-coverage.nix {inherit lib pkgs;};
       codexExtractedCheck = import ./checks/chatgpt-codex-extracted.nix {inherit pkgs self;};
+      copilotWrapperArgvCheck = {copilot-wrapper-argv = import ./checks/copilot-wrapper-argv.nix {inherit lib pkgs;};};
       claudeDelegationClampCheck = {claude-delegation-clamp = import ./checks/claude-delegation-clamp.nix {inherit pkgs;};};
       claudeDevenvHooksRealTypeCheck = import ./checks/claude-devenv-hooks-real-type.nix {inherit pkgs inputs;};
       claudeExtractedCheck = import ./checks/claude-code-extracted.nix {inherit pkgs self;};
@@ -259,7 +260,7 @@
       updateTargetsParityCheck = {update-targets-parity = import ./checks/update-targets-parity.nix {inherit inputs lib pkgs self updateRegistry;};};
       validateAtStopCheck = {validate-at-stop = import ./checks/validate-at-stop.nix {inherit pkgs;};};
     in
-      bareCommandsCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // codexCoverageCheck // codexExtractedCheck // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goToolchainFloorChecks // instructionsDriftCheck // kiroExtractedCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // sembleTemplatesCheck // splitCodeSpansCheck // updateTargetsParityCheck // validateAtStopCheck);
+      bareCommandsCheck // cacheHitParityCheck // claudeDelegationClampCheck // claudeDevenvHooksRealTypeCheck // claudeExtractedCheck // claudeHeronBrookCheck // codexCoverageCheck // codexExtractedCheck // copilotWrapperArgvCheck // factoryChecks // formattingCheck // fragmentsChecks // glabExtractedCheck // goToolchainFloorChecks // instructionsDriftCheck // kiroExtractedCheck // kiroWrapperArgvCheck // moduleChecks // optionsDocsCheck // pnpmFetcherParityCheck // sembleTemplatesCheck // splitCodeSpansCheck // updateTargetsParityCheck // validateAtStopCheck);
 
     # devShells.default provided by devenv CLI (devenv shell / devenv test)
     # from devenv.nix; nothing in this flake constructs it.

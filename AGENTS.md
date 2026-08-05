@@ -21,10 +21,11 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
 `.github/instructions/`, or `.kiro/steering/` projections directly.
 
 - **`ai-clis`**
-  - Match: `overlays/chatgpt-codex.nix`, `overlays/claude-code.nix`,
-    `overlays/copilot-cli.nix`, `overlays/kimchi.nix`, `overlays/kiro-cli.nix`,
-    `overlays/kiro-gateway.nix`, `packages/chatgpt-codex/**`,
-    `packages/copilot-cli/**`, `packages/kiro-cli/**`
+  - Match: `checks/copilot-wrapper-argv.nix`, `overlays/chatgpt-codex.nix`,
+    `overlays/claude-code.nix`, `overlays/copilot-cli.nix`,
+    `overlays/kimchi.nix`, `overlays/kiro-cli.nix`, `overlays/kiro-gateway.nix`,
+    `packages/chatgpt-codex/**`, `packages/copilot-cli/**`,
+    `packages/kiro-cli/**`
   - Read:
     [`dev/fragments/ai-clis/copilot-config-delivery.md`](dev/fragments/ai-clis/copilot-config-delivery.md),
     [`dev/fragments/ai-clis/packaging-guide.md`](dev/fragments/ai-clis/packaging-guide.md)

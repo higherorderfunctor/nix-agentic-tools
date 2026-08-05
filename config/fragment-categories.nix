@@ -38,6 +38,11 @@ _: {
     # agnix and kiro-memory-distiller.
     ai-clis = {
       scopes = [
+        # The behavioral wrapper check belongs here for the same reason
+        # `checks/kiro-wrapper-argv.nix` sits in `kiro-wrapper`: editing it
+        # means reasoning about how Copilot discovers config, which is exactly
+        # what `copilot-config-delivery` documents.
+        "checks/copilot-wrapper-argv.nix"
         "overlays/chatgpt-codex.nix"
         "overlays/claude-code.nix"
         "overlays/copilot-cli.nix"
