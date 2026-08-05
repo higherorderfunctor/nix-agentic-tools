@@ -171,10 +171,18 @@
       # the real copilot-cli is a large UNFREE binary, and the wrapper-content
       # test should not drag it into every `nix flake check`. No test asserts
       # the underlying package identity — only the `copilot-cli-wrapped` name.
-      copilot-cli = pkgs.writeShellScriptBin "copilot" "exec true";
+      copilot-cli = pkgs.writeShellScriptBin "copilot" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        exec true
+      '';
       # Force a tiny `bin/kimchi` stub so the HM wrapper build test is cheap
       # and the wrapProgram target exists (hello has no bin/kimchi).
-      kimchi = pkgs.writeShellScriptBin "kimchi" "exec true";
+      kimchi = pkgs.writeShellScriptBin "kimchi" ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+        exec true
+      '';
       kiro-cli = pkgs.ai.kiro-cli or pkgs.hello;
       semble = pkgs.ai.semble or pkgs.hello;
       mcpServers = pkgs.ai.mcpServers or {};
