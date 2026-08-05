@@ -671,7 +671,7 @@ in {
           };
         }).config.ai.codex.settings.sandbox_workspace_write.writable_roots;
     in
-      builtins.elem "/tmp/devenv-root/.git" roots
+      builtins.deepSeq roots (builtins.elem "/tmp/devenv-root/.git" roots)
   );
 
   module-codex-skills-disabled-emits-nothing = mkTest "codex-skills-disabled-emits-nothing" (
