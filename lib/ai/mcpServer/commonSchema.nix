@@ -216,8 +216,9 @@ in {
         that shell, carrying secrets only for servers that project
         declares. Declare the same servers and secrets in the project, or
         prefer a `services.mcp-servers` daemon, which holds credentials
-        itself and hands clients a credential-free loopback url. See the
-        `mcp-secrets` fragment.
+        itself and hands clients a credential-free loopback url. Full
+        write-up: `dev/fragments/mcp-secrets/mcp-secrets.md` in the
+        nix-agentic-tools repository.
       '';
     };
     timeout = lib.mkOption {

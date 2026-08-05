@@ -42,12 +42,12 @@ through it**. So:
 
 - **Header secret** → rendered into mcp.json as a `<prefix>${env:VAR}<suffix>`
   placeholder. The launcher wrapper (`wrapPackage.nix`) emits an
-  `export VAR="$(cat <file>)"` line — after `envExports`, so a secret always
-  wins over a same-named static value — and Kiro substitutes the placeholder at
-  launch. mcp.json (placeholder only) is safe to store/commit. Collected in
-  `secretEnv`. The `cat` is an absolute coreutils path: this wrapper can be
-  spawned with an empty PATH, where a bare `cat` would silently yield an empty
-  credential.
+  `export VAR="$(<coreutils>/bin/cat <file>)"` line — after `envExports`, so a
+  secret always wins over a same-named static value — and Kiro substitutes the
+  placeholder at launch. mcp.json (placeholder only) is safe to store/commit.
+  Collected in `secretEnv`. The `cat` is spelled as an ABSOLUTE coreutils path
+  in the emitted line, never bare: this wrapper can be spawned with an empty
+  PATH, where a bare `cat` would silently yield an empty credential.
 - **URL secret** → Kiro won't expand it, so the literal url must be present when
   Kiro reads mcp.json. It renders to a bare `<prefix>${VAR}<suffix>` sentinel in
   a store TEMPLATE, and WE substitute it with `envsubst` (explicit var list, so
@@ -90,12 +90,13 @@ sent; the distinction only changes how the remote end reports it. Do not write
 one down as fact without probing it.
 
 **Related, same family:** `wrapPackage.nix` exports each header credential with
-`export VAR="$(cat <file>)"`. That line's exit status is `export`'s — always 0 —
-so an unreadable secret at LAUNCH yields an empty credential rather than a
-failure, even under strict mode. (`mkMcpJsonScript` had the identical idiom for
-the url and now uses a bare assignment plus an emptiness guard; the wrapper has
-NOT been changed, because failing closed there would refuse to launch kiro at
-all and that is a product decision, not a cleanup.)
+`export VAR="$(<coreutils>/bin/cat <file>)"` (absolute, as above). That line's
+exit status is `export`'s — always 0 — so an unreadable secret at LAUNCH yields
+an empty credential rather than a failure, even under strict mode.
+(`mkMcpJsonScript` had the identical idiom for the url and now uses a bare
+assignment plus an emptiness guard; the wrapper has NOT been changed, because
+failing closed there would refuse to launch kiro at all and that is a product
+decision, not a cleanup.)
 
 **The fix direction already exists in this repo — it is
 `services.mcp-servers`.** A server in that registry (`serverNames` in
