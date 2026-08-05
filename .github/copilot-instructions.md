@@ -373,7 +373,12 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-08-05 (commit pending — two corrections, both from
+> **Last verified:** 2026-08-05 (commit pending — `devenv-test` is NO LONGER a
+> required check; the ruleset now lists FOUR, verified by reading it back rather
+> than by trusting this file. It was made required on 2026-08-03 and demoted two
+> days later as a merge-blocking liability, risk accepted. The entry below that
+> announced the promotion is kept so the reversal is legible rather than looking
+> like drift). Prior: 2026-08-05 (commit pending — two corrections, both from
 > operating the loop on PR #766 and both making it silently unreliable when
 > unknown. The suppressed-block heading is NOT stable, so the documented
 > `sed -n '/low confidence/,$p'` matched nothing against a
@@ -422,11 +427,25 @@ the repo before committing.
 > isn't updated in the same commit, stop and fix it.
 
 `main` is the trunk. Its branch-protection ruleset requires a pull request, no
-force-push, no deletion, and five required status checks —
+force-push, no deletion, and four required status checks —
 `build (x86_64-linux, ubuntu-latest)`, `build (aarch64-darwin, macos-latest)`,
-`devenv-test`, `gitleaks`, and `test`. It requires **zero approving reviews**
-but it DOES require **every review thread to be resolved**
+`test`, and `gitleaks`. It requires **zero approving reviews** but it DOES
+require **every review thread to be resolved**
 (`required_review_thread_resolution`, enabled 2026-07-29).
+
+`devenv-test` still RUNS on every PR and is still worth reading, but it is no
+longer required and does not block a merge. It was promoted to a required check
+on 2026-08-03 and demoted on 2026-08-05, having aged badly enough in two days to
+be a merge-blocking liability rather than a signal; the resulting risk is
+accepted deliberately. Do not "restore" it to the list to make this fragment
+match the older prose — read the ruleset:
+
+```bash
+gh api "repos/OWNER/REPO/rulesets" --jq '.[] | "\(.id)  \(.name)"'
+gh api "repos/OWNER/REPO/rulesets/<id>" \
+  --jq '.rules[] | select(.type=="required_status_checks")
+        | [.parameters.required_status_checks[].context]'
+```
 
 **Squash-merge only** — but that is the REPOSITORY settings, not the ruleset:
 `allow_squash_merge` true, `allow_merge_commit` and `allow_rebase_merge` false.
@@ -753,8 +772,8 @@ silently resolves one level too deep, into
 `.github/workflows/update.yml` sweeps dependencies 4x/day (00:00, 06:00, 12:00,
 18:00 UTC) and opens one PR per dependency that actually moved. Each is armed
 with GitHub-native **auto-merge (squash)** as it is created, and re-armed on
-every later sweep, so it merges itself once the five required checks go green.
-Safe precisely because the ruleset requires no approving review, all five status
+every later sweep, so it merges itself once the four required checks go green.
+Safe precisely because the ruleset requires no approving review, all four status
 checks must pass, and an unresolved Copilot thread still holds the merge through
 the separate review-thread rule.
 
