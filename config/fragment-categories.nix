@@ -242,6 +242,19 @@ _: {
         "overlay-guide"
       ];
     };
+    # mcp-services: managed HTTP service capability metadata, especially the
+    # bind-address contract shared by native servers and the mcp-proxy bridge.
+    mcp-services = {
+      scopes = [
+        "checks/factory-eval.nix"
+        "checks/module-eval.nix"
+        "lib/ai/mcpServer/mkServiceModule.nix"
+        "lib/ai/mcpServer/serviceSchema.nix"
+        "packages/*/modules/mcp-server.nix"
+        "packages/mcp-services/modules/homeManager/default.nix"
+      ];
+      sources = ["service-host-contract"];
+    };
     # monorepo: always-loaded orientation — no scoping.
     monorepo = {
       scopes = null;

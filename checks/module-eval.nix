@@ -7030,7 +7030,7 @@ in {
 
   # Bridge servers run mcp-proxy, whose own --host default IS loopback — so
   # they were already safe, but by upstream happenstance rather than by
-  # anything stated here, and service.host was discarded for all nine of
+  # anything stated here, and service.host was discarded for all ten of
   # them. Assert we PIN it, so an upstream default change cannot silently
   # widen every bridge service at once.
   module-mcp-services-bridge-pins-bind-host = let
@@ -7038,15 +7038,15 @@ in {
     # match proves the value was threaded from service.host rather than merely
     # inherited from upstream — which is the entire point of pinning it.
     overridden = evalHm {
-      services.mcp-servers.servers.git-mcp = {
+      services.mcp-servers.servers.context7-mcp = {
         enable = true;
         service.host = "127.0.0.2";
       };
     };
     defaulted = evalHm {
-      services.mcp-servers.servers.git-mcp.enable = true;
+      services.mcp-servers.servers.context7-mcp.enable = true;
     };
-    execOf = r: r.config.systemd.user.services.mcp-git-mcp.Service.ExecStart;
+    execOf = r: r.config.systemd.user.services.mcp-context7-mcp.Service.ExecStart;
     # Build the expected fragment with the SAME escaper the emitter uses, so
     # the two cannot disagree. Today `lib.escapeShellArg` leaves a dotted quad
     # bare (it only quotes strings outside `[[:alnum:],._+:@%/-]+`), so this
@@ -7067,6 +7067,11 @@ in {
         || fail "bind host not threaded from an overridden service.host"
       grep -qF -- ${expectHost "127.0.0.1"} "$d" \
         || fail "default bind host is not loopback"
+      grep -qF -- 'context7-mcp --transport stdio' "$o" \
+        || fail "context7 bridge does not launch its working stdio transport"
+      if grep -qF -- 'context7-mcp --transport http' "$o"; then
+        fail "context7 bridge still launches its Upstash-only native HTTP transport"
+      fi
       echo PASS > "$out"
     '';
 

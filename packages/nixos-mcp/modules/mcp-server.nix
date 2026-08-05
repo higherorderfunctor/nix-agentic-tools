@@ -13,6 +13,7 @@ in {
     };
     scope = "remote";
     defaultPort = 19752;
+    honorsServiceHost = true;
     tools = ["nix" "nix_versions"];
   };
 

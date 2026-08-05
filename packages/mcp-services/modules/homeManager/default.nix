@@ -145,7 +145,7 @@
     # anything this repo states, and `service.host` was silently discarded
     # for every bridge server. Naming it makes the declared option
     # load-bearing and stops an upstream default change from quietly
-    # widening nine services at once.
+    # widening every bridge service at once.
     #
     # Interpolated literally instead of via an env var: the bridge runs with
     # `--pass-environment`, so anything exported to the unit also lands in

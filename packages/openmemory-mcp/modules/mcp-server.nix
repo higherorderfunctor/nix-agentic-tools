@@ -12,6 +12,7 @@ in {
     };
     scope = "remote";
     defaultPort = 19758;
+    honorsServiceHost = true;
     credentialVars = {
       credentials = {
         envVar = "OM_API_KEY";

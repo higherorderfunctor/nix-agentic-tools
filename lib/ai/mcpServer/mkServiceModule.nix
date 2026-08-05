@@ -12,7 +12,7 @@
 #   scope           — readOnly enum (from meta.scope)
 #   package?        — package (when server has a local package)
 #   service.port?   — port (when server has HTTP mode + local package)
-#   service.host?   — str (when server has HTTP mode + local package)
+#   service.host?   — bind address (when server has HTTP mode + local package)
 {lib}: let
   inherit
     (lib)
@@ -29,7 +29,9 @@ in
     name,
     serverDef,
     resolvePackage,
-  }: _: {
+  }: _: let
+    honorsServiceHost = serviceSchema.honorsServiceHost name serverDef;
+  in {
     options =
       {
         enable = mkEnableOption "the ${name} MCP server";
@@ -77,9 +79,24 @@ in
           };
 
           host = mkOption {
-            type = types.str;
-            default = "127.0.0.1";
-            description = "Host/address to bind for the HTTP service.";
+            type =
+              if honorsServiceHost
+              then types.str
+              else types.nullOr types.str;
+            default =
+              if honorsServiceHost
+              then serviceSchema.defaultServiceHost
+              else null;
+            apply = host:
+              if honorsServiceHost
+              then host
+              else if host == null
+              then serviceSchema.defaultServiceHost
+              else throw "services.mcp-servers.servers.${name}.service.host cannot be set because ${name}'s native HTTP mode does not honor a bind address";
+            description =
+              if honorsServiceHost
+              then "Host/address to bind for the HTTP service."
+              else "Bind-address control is unavailable for ${name}; leave this unset. Setting an address fails evaluation instead of being ignored.";
           };
         };
       };
