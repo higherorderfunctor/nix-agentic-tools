@@ -200,6 +200,7 @@ metacharacter
 misattributes
 miscited
 modelcontextprotocol
+mojibake
 mtimes
 mystor
 napi

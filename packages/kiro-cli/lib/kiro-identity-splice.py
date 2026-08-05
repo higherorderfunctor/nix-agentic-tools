@@ -28,6 +28,10 @@ import sys
 FN = re.compile(rb"function getIdentity\(")
 BRANCH = re.compile(rb'if \(client\d* === "kiro-cli"\) \{\s*\n\s*return `([^`]*)`')
 NEXT_FN = re.compile(rb"\nfunction \w+\(")
+# Sentence-ending punctuation plus the single separating space. The space is
+# part of the match so the tail is sliced at `m.end()` and stays byte-for-byte
+# identical to what followed it.
+SENTENCE_END = re.compile(rb"[.!?] ")
 # Siblings that must remain findable by the same method. Without them, "the
 # branch is gone" and "my pattern no longer parses this file" are the same
 # observation, and the second silently reads as the first.
@@ -80,17 +84,21 @@ def locate(data):
             )
 
     body = hits[0].group(1)
-    try:
-        idx = body.index(b". ")
-    except ValueError:
+    # Any sentence-ending punctuation followed by exactly one space. Matching
+    # only `". "` would silently refuse to patch if upstream ever ends the
+    # identity with `!` or `?` -- and because the caller FAILS OPEN, that
+    # refusal would present as "the option quietly stopped working" rather than
+    # as an error anyone reads.
+    m = SENTENCE_END.search(body)
+    if not m:
         die(
             "the kiro-cli identity literal has no sentence boundary to split on. "
             "Upstream collapsed it to a single sentence; decide explicitly what "
             "'replace the first sentence' should now mean."
         )
 
-    first = body[: idx + 1]
-    tail = body[idx + 2 :]
+    first = body[: m.start() + 1]
+    tail = body[m.end() :]
     return start + hits[0].start(1), first, tail
 
 

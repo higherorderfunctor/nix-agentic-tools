@@ -17,6 +17,7 @@ Usage:  kiro-workflows-steering.py <bundle>            # decoded text on stdout
         kiro-workflows-steering.py <bundle> --stats    # size only, no body
 """
 
+import ast
 import re
 import sys
 
@@ -59,7 +60,27 @@ def extract(data):
         out += c
         i += 1
 
-    text = out.decode("utf-8").encode().decode("unicode_escape")
+    # Decode the JS escapes with `ast.literal_eval`, not `unicode_escape`.
+    #
+    # `unicode_escape` is a LATIN-1 codec: it decodes BYTES, so non-ASCII in the
+    # literal survives only while esbuild happens to emit it as `\uXXXX`.
+    # Measured on 2.16.0 it does (pure ASCII, 24 `\u` escapes), so the older
+    # `.encode().decode("unicode_escape")` round-trip was correct HERE -- but
+    # correct by luck, and the day esbuild emits a raw UTF-8 em dash it would
+    # silently mojibake the reminder rather than fail.
+    #
+    # Normalizing into JSON was tried and is WRONG: a JS literal may contain
+    # `\\"` (escaped backslash, then a bare quote), where a "quote not preceded
+    # by a backslash" rule declines to escape the quote and JSON then terminates
+    # the string early. Measured -- it died at char 937 of this very block.
+    #
+    # A Python single-quoted literal accepts JS's escape set directly (`\'`,
+    # `\n`, `\uXXXX`, a bare `"`), so `literal_eval` decodes it exactly. It
+    # parses rather than evaluates, so there is no code-execution surface.
+    try:
+        text = ast.literal_eval("'''" + out.decode("utf-8") + "'''")
+    except (ValueError, SyntaxError) as exc:
+        die("could not decode the steering literal: %s" % exc)
 
     # Shape assertion, not a non-empty guard. A dead anchor that matched some
     # other string would still produce "something", and the failure would then

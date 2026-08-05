@@ -63,8 +63,13 @@ in
         # The replacement is written to a file rather than passed as argv so the
         # sentence can contain anything the JS literal tolerates, and so the
         # cache key is a hash of the exact bytes that will be spliced.
-        repl_file="$(mktemp "''${TMPDIR:-/tmp}/kiro-identity.XXXXXX")"
-        trap '"'"'rm -f "$repl_file"'"'"' EXIT
+        #
+        # `mktemp` is given an explicit template because BSD/macOS REQUIRES one
+        # (GNU supplies a default and succeeds, which is how this portability
+        # bug reaches a darwin user unnoticed).
+        repl_file="$("$coreutils"/bin/mktemp "''${TMPDIR:-/tmp}/kiro-identity.XXXXXX")"
+        cleanup() { "$coreutils"/bin/rm -f "$repl_file"; }
+        trap cleanup EXIT
         printf %s ${lib.escapeShellArg identity} > "$repl_file"
 
         # Resolve the engine bundle deterministically, never by glob order.
