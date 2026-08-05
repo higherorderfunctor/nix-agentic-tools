@@ -601,7 +601,7 @@ lib.ai.app.mkAiApp {
         #
         # INERT at project scope, same as lsp-config.json above: Copilot
         # reads its settings from `$HOME/.copilot/config.json` and never
-        # stat's a project-local settings.json. Kept for option parity.
+        # stats a project-local settings.json. Kept for option parity.
         {
           files."${cfg.configDir}/settings.json".text =
             builtins.toJSON cfg.settings;

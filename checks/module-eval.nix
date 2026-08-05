@@ -4206,7 +4206,7 @@ in {
   # life of a devenv module that never told copilot to read it. Copilot loads
   # MCP config from `$HOME/.copilot/mcp-config.json` or whatever
   # `--additional-mcp-config` points at, and NOTHING project-local: a syscall
-  # trace of 1.0.78 in a project never even stat's
+  # trace of 1.0.78 in a project never even stats
   # `.config/github-copilot/mcp-config.json`. So writing the file is half the
   # job; realize the wrapper and read the flag it actually injects.
   module-copilot-devenv-wrapper-points-at-project-mcp-config = let
