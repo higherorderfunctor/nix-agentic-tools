@@ -63,11 +63,12 @@ platform-specific pre-built binary from Anthropic's manifest and installs it as
 
 ## heron_brook Delegation Clamp — the default-on mitigation
 
-> **Last verified:** 2026-08-03 (commit pending — binary re-verification against
-> claude-code 2.1.221 found both clamp strings and all three gate identifiers;
+> **Last verified:** 2026-08-04 (commit pending — binary re-verification against
+> claude-code 2.1.222 found both clamp strings and all three gate identifiers;
 > the `NotebookEdit` positive control matched, the local feature cache still
 > supplied no kill switch or override, and upstream issue #80988 remained open.
-> Prior 2026-07-29: confirmed end-to-end against two LIVE sessions on
+> Prior 2026-08-03 (commit d88d362a): same re-verification against claude-code
+> 2.1.221. Prior 2026-07-29: confirmed end-to-end against two LIVE sessions on
 > claude-code 2.1.220, which sharpened the attribution rationale and turned the
 > model gate into a measurement. Prior 2026-07-29: initial version, reasoned
 > from the hook payload alone.) If you change `ai.claude.delegationClamp`, the
