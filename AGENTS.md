@@ -523,17 +523,22 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-08-05 (commit pending — `devenv-test` is NO LONGER a
-> required check; the ruleset now lists FOUR, verified by reading it back rather
-> than by trusting this file. It was made required on 2026-08-03 and demoted two
-> days later as a merge-blocking liability, risk accepted. The entry below that
-> announced the promotion is kept so the reversal is legible rather than looking
-> like drift). Prior: 2026-08-05 (commit pending — two corrections, both from
-> operating the loop on PR #766 and both making it silently unreliable when
-> unknown. The suppressed-block heading is NOT stable, so the documented
-> `sed -n '/low confidence/,$p'` matched nothing against a
-> `Suppressed comments (1)` block and nearly reported a real finding as a clean
-> round; the command now prints the whole body. And
+> **Last verified:** 2026-08-05 (commit pending — "change" now EXPLICITLY
+> includes untracked drafts and working docs: authoring any repo-destined file
+> in the primary checkout is a violation, with a pre-flight `git rev-parse`
+> check added to the worktree section. Driven by a reference doc drafted in the
+> primary checkout whose lint findings failed the shared stop/commit hooks in
+> every parallel session sharing that cwd). Prior: 2026-08-05 (commit pending —
+> `devenv-test` is NO LONGER a required check; the ruleset now lists FOUR,
+> verified by reading it back rather than by trusting this file. It was made
+> required on 2026-08-03 and demoted two days later as a merge-blocking
+> liability, risk accepted. The entry below that announced the promotion is kept
+> so the reversal is legible rather than looking like drift). Prior: 2026-08-05
+> (commit pending — two corrections, both from operating the loop on PR #766 and
+> both making it silently unreliable when unknown. The suppressed-block heading
+> is NOT stable, so the documented `sed -n '/low confidence/,$p'` matched
+> nothing against a `Suppressed comments (1)` block and nearly reported a real
+> finding as a clean round; the command now prints the whole body. And
 > `gh api …/requested_reviewers` silently no-ops for Copilot — 200 with an empty
 > list, no check run, with nothing in flight — so re-requests go through the
 > github-mcp tool). Prior: 2026-08-04 (commit pending — records that
@@ -823,6 +828,39 @@ ruleset rejects the _push_. Still branch **before** you start — the guard is a
 safety net, not the workflow.
 
 ### Every change goes through an isolated worktree + PR
+
+**"Change" includes untracked drafts.** The rule is not "worktree before you
+commit" — it is worktree before you author the FIRST repo-destined file, and a
+working doc you have not decided to commit yet still counts. Added 2026-08-05
+after a reference doc was drafted directly in the primary checkout: the operator
+runs multiple parallel sessions that share that cwd, so every one of them
+started failing the shared lint hooks on a file none of them had written, while
+the drafting session was the only one that could not see the damage. The primary
+checkout belongs to the operator, not to any agent session.
+
+Pre-flight before the first Write/Edit of any repo file in a session:
+
+```bash
+git rev-parse --path-format=absolute --git-dir
+# ends in .git/worktrees/<slug> → linked worktree, proceed
+# ends in a bare <clone>/.git   → primary checkout: STOP, make a worktree first
+```
+
+`--path-format=absolute` is load-bearing, not decoration, and the bare form is
+actively misleading here. `git rev-parse --git-dir` prints a path **relative to
+cwd when it can**, so at the top of the primary checkout it answers `.git` —
+while in a linked worktree it answers an absolute
+`<clone>/.git/worktrees/<slug>`. Measured both ways on 2026-08-05. So the one
+case the check exists to catch is the case whose output does not look like the
+`<clone>/.git` you are comparing against, and a reader matching on that string
+concludes "not the primary checkout" precisely when they are standing in it.
+Forcing absolute makes both arms comparable. This is the same flag the worktree
+derivation below already uses for `--git-common-dir`, and the same one
+`devenv.nix` uses for its related checks.
+
+Only the session scratchpad is exempt, because it never touches the repo tree at
+all. There is no "just a draft" exemption, no "I'll move it before committing"
+exemption, and no "it's gitignored-adjacent" exemption.
 
 Worktrees live in `<repo>-worktrees/`, a **sibling of the primary checkout** — a
 clone at `~/src/nix-agentic-tools` puts them in
