@@ -373,22 +373,37 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-08-05 (commit pending — "change" now EXPLICITLY
-> includes untracked drafts and working docs: authoring any repo-destined file
-> in the primary checkout is a violation, with a pre-flight `git rev-parse`
-> check added to the worktree section. Driven by a reference doc drafted in the
-> primary checkout whose lint findings failed the shared stop/commit hooks in
-> every parallel session sharing that cwd). Prior: 2026-08-05 (commit pending —
-> `devenv-test` is NO LONGER a required check; the ruleset now lists FOUR,
-> verified by reading it back rather than by trusting this file. It was made
-> required on 2026-08-03 and demoted two days later as a merge-blocking
-> liability, risk accepted. The entry below that announced the promotion is kept
-> so the reversal is legible rather than looking like drift). Prior: 2026-08-05
-> (commit pending — two corrections, both from operating the loop on PR #766 and
-> both making it silently unreliable when unknown. The suppressed-block heading
-> is NOT stable, so the documented `sed -n '/low confidence/,$p'` matched
-> nothing against a `Suppressed comments (1)` block and nearly reported a real
-> finding as a clean round; the command now prints the whole body. And
+> **Last verified:** 2026-08-05 (commit pending — the Copilot TRIGGER MODEL was
+> wrong and is corrected: the automatic review fires once, on the PR becoming
+> ready for review, and a push NEVER triggers one. "Becomes ready" covers a PR
+> opened non-draft as well as a draft flipped later — measured on PR #801, which
+> was opened non-draft and got a queued reviewer run within seconds, so the
+> narrower "draft → ready transition" spelling is deliberately avoided as it
+> reads as excluding never-drafted PRs. The old "only ONCE in 5 pushes" datum
+> was not a flaky trigger — it was #644's ready transition landing on the same
+> push, with #640's four misses being correct behavior — so the advice to treat
+> re-requesting as the expected next step is dropped, along with any reason to
+> wait on a run that is never coming. Every review after the first is a paid
+> manual request, which is now stated where the round cap is. Also adds agent
+> memory to the shared-across-worktrees list: concurrent sessions share the
+> memory directory, neither sees the other's write, and a duplicate under a
+> different name is invisible to the wikilink graph). Prior: 2026-08-05 (commit
+> pending — "change" now EXPLICITLY includes untracked drafts and working docs:
+> authoring any repo-destined file in the primary checkout is a violation, with
+> a pre-flight `git rev-parse` check added to the worktree section. Driven by a
+> reference doc drafted in the primary checkout whose lint findings failed the
+> shared stop/commit hooks in every parallel session sharing that cwd). Prior:
+> 2026-08-05 (commit pending — `devenv-test` is NO LONGER a required check; the
+> ruleset now lists FOUR, verified by reading it back rather than by trusting
+> this file. It was made required on 2026-08-03 and demoted two days later as a
+> merge-blocking liability, risk accepted. The entry below that announced the
+> promotion is kept so the reversal is legible rather than looking like drift).
+> Prior: 2026-08-05 (commit pending — two corrections, both from operating the
+> loop on PR #766 and both making it silently unreliable when unknown. The
+> suppressed-block heading is NOT stable, so the documented
+> `sed -n '/low confidence/,$p'` matched nothing against a
+> `Suppressed comments (1)` block and nearly reported a real finding as a clean
+> round; the command now prints the whole body. And
 > `gh api …/requested_reviewers` silently no-ops for Copilot — 200 with an empty
 > list, no check run, with nothing in flight — so re-requests go through the
 > github-mcp tool). Prior: 2026-08-04 (commit pending — records that
@@ -455,9 +470,10 @@ gh api "repos/OWNER/REPO/rulesets/<id>" \
 **Squash-merge only** — but that is the REPOSITORY settings, not the ruleset:
 `allow_squash_merge` true, `allow_merge_commit` and `allow_rebase_merge` false.
 The ruleset's own `allowed_merge_methods` still lists all three, so changing it
-there changes nothing. Copilot review runs on every PR from a separate ruleset
-rule (`Copilot review for default branch`) that _requests_ a review: not a
-required approval and not a required status check.
+there changes nothing. Copilot review comes from a separate ruleset rule
+(`Copilot review for default branch`) that _requests_ a review **once per PR,
+when it becomes ready** — not on every push (see the trigger model below): it is
+neither a required approval nor a required status check.
 
 **But it can now block a merge indirectly**, and that is deliberate. Since
 threads must be resolved, an unaddressed Copilot comment holds the PR — a bot
@@ -566,31 +582,56 @@ sufficient until it wasn't:
 3. requiring `commit_id == head` → correct.
 
 A related tell, useful because it needs no baseline at all: **check whether a
-check run named `copilot-pull-request-reviewer` exists on the head commit.** A
-push does not always trigger a review, and this distinguishes "not run yet" from
-"ran and found nothing" — which otherwise look identical.
+check run named `copilot-pull-request-reviewer` exists on the head commit.** It
+distinguishes "never ran on this commit" from "ran and found nothing" — which
+otherwise look identical.
 
 ```bash
 gh api --paginate "repos/OWNER/REPO/commits/<head-sha>/check-runs" \
   --jq '.check_runs[] | select(.name=="copilot-pull-request-reviewer") | .status'
 ```
 
-Absent means it never started, so re-request it; `in_progress` means wait;
-`completed` means the review is there to read. Ask for the run BY NAME rather
-than counting the checks: a total count is only correct until the CI matrix
-changes.
+Absent means no review ran on this commit; `in_progress` means wait; `completed`
+means the review is there to read. Ask for the run BY NAME rather than counting
+the checks: a total count is only correct until the CI matrix changes.
 
-**Expect absent — a push auto-triggered a review only ONCE in 5 pushes**,
-measured 2026-07-31: 0 for 4 on PR #640, then 1 for 1 on the first push of PR
-#644. The four misses each left no reviewer check run on the new head while the
-previous commit's review sat there looking current. So ALWAYS read the run
-before concluding anything, and treat re-requesting as the expected next step
-rather than a rare fallback — while still checking first, because a re-request
-issued while a review IS in flight is silently dropped (next section).
+**The automatic review fires exactly once per PR, when the PR becomes ready for
+review. Pushes never trigger it.** That is how the ruleset's
+`Copilot review for default branch` rule is configured and always has been, so
+after any push the head commit has no reviewer check run and never will acquire
+one on its own. Absent is not a miss to wait out — it is the resting state.
 
-Pair this with the `commit_id` gate below, because the two failure modes
-compound: a miss is not merely "no review yet" — the stale review stays readable
-and is indistinguishable from a fresh clean one.
+**"Becomes ready" covers both paths, and the narrower phrasing is a trap.** A
+draft flipped to ready fires it, and so does a PR **opened non-draft in the
+first place**, which never has a draft → ready transition at all. Measured on PR
+#801: `gh pr create` without `--draft` produced `requested_reviewers: [Copilot]`
+and a `queued` reviewer check run within seconds. Writing this rule as "on the
+draft → ready transition" reads as excluding never-drafted PRs — it is the right
+mechanism stated too narrowly, and it would have you re-request a review you had
+already been given.
+
+This corrects a datum that read as flakiness. An earlier revision recorded "a
+push auto-triggered a review only ONCE in 5 pushes" (0 for 4 on PR #640, 1 for 1
+on the first push of PR #644) and concluded the trigger was unreliable. It is
+not unreliable; it is not a push trigger at all. The single hit was PR #644's
+draft → ready transition landing on the same push, and the four misses were the
+rule behaving correctly. **Do not re-derive an auto-trigger rate from
+observations like these** — the sampling looks like a flaky trigger and is
+actually a deterministic one being read through the wrong event.
+
+Two consequences, and the second is the expensive one:
+
+- **Never poll or wait for a review after a push.** Nothing is coming. Read the
+  run once to confirm which commit the existing review covers, then decide.
+- **Every review after the first is a deliberate, paid manual request.** Spend
+  it on a content change that is worth a fresh review, not on re-establishing a
+  trigger. Batch fixes into one push and request once, rather than requesting
+  per round.
+
+Pair this with the `commit_id` gate below. The two compound: after a push the
+previous commit's review stays readable and is indistinguishable from a fresh
+clean one, so a stale review plus an absent run is the normal post-push state
+and reads exactly like a PR that has been reviewed.
 
 **A re-request issued while a review is still in flight is silently dropped.**
 The API returns success, no new check run appears, and the call is
@@ -648,11 +689,16 @@ nobody asked for.
 
 ### Cap the fix-and-re-review loop at 5 rounds
 
-Run at most **five** fix → push → re-trigger → verify rounds, then STOP and get
+Run at most **five** fix → push → re-request → verify rounds, then STOP and get
 explicit approval before continuing. Exit earlier if a round returns clean in
 BOTH buckets — that is the real terminus. The cap is the only place in this loop
 where approval is required: you enter round one without asking, and you leave
 round five without proceeding.
+
+Five is a ceiling, not a target. Round one is free — it is the automatic review
+the ready transition buys — and **every round after it spends a paid manual
+request**, so the loop is not merely long when it runs hot, it is expensive.
+Batch a round's fixes into one push and request once.
 
 The failure mode this prevents is not a bad round, it is a good one repeating.
 On PR #568 every round produced a genuine finding, so each was individually
@@ -773,10 +819,15 @@ silently resolves one level too deep, into
 
 3. **Push at the first commit** — not at the end — so the branch is a continuous
    off-machine backup. Open the PR **ready (non-draft) as soon as the work is
-   dev-complete**: Copilot review does **not** run on draft PRs in this repo, so
-   a draft that is actually ready silently skips review. Reserve **draft** for
-   genuine WIP, or when you explicitly want to preview the branch in GitHub
+   dev-complete**: becoming ready for review is the _only_ thing that
+   automatically requests a Copilot review, so a draft that is actually ready
+   silently skips review and a later flip is what fires it. Reserve **draft**
+   for genuine WIP, or when you explicitly want to preview the branch in GitHub
    without review. Draft and ready PRs both get full CI here.
+
+   Corollary worth internalizing: that one automatic review is the only free
+   one, so **flip to ready when the branch is worth reviewing** — not
+   mid-refactor, where it is spent on code you are about to replace.
 
 4. Keep pushing as work lands. Flip draft → ready the moment it is dev-complete
    so review can start.
@@ -784,7 +835,7 @@ silently resolves one level too deep, into
 5. **The moment the PR is open and non-draft, run the Copilot review loop on
    your own initiative.** Nobody has to ask. Poll for the review on the head
    commit, read BOTH buckets, fix what is real, reply, resolve each gating
-   thread, re-trigger, verify — the sections above say how. Handing back a
+   thread, re-request, verify — the sections above say how. Handing back a
    freshly-opened PR with an unread review is an incomplete task, not a
    checkpoint: it makes the operator notice the review, chase it, and hand it
    back to you, when you are the one still holding the context to act on it.
@@ -845,6 +896,30 @@ The prek **config** is the one thing made per-worktree: the
 `.pre-commit-config.yaml` from the _committing_ worktree's toplevel at hook-run
 time. That is what stops a shell entry in one worktree from changing what
 another worktree validates against.
+
+One more shared thing, and it lives outside the repository entirely: **the
+agent's own memory directory is shared across concurrent sessions, and no
+session sees another's writes.** There is no locking and no notification — a
+session reads the memory index once and then writes into a directory that may
+have moved underneath it. Two sessions on 2026-08-05 recorded the same concept
+under different filenames minutes apart, and they agreed only by luck; had the
+wording diverged, the repo would now carry two half-truths with no link between
+them. A duplicate under a different name is invisible to the `[[wikilink]]`
+graph, so it does not surface as a conflict — it just quietly fails to be found.
+
+Before writing a memory, **list the directory by mtime and grep it for the
+concept**, not for the filename you intend to use. Anything written in the last
+few minutes is a live concurrent session, and the right move is to extend that
+file rather than open a second one:
+
+```bash
+ls -lt "$MEMORY_DIR" | head -20
+grep -rl "<the concept, not the slug>" "$MEMORY_DIR"
+```
+
+This is a general cross-harness rule, not a Claude Code one: any two agent
+sessions sharing a memory store have it, and the failure is silent in all of
+them.
 
 ### Rebasing: back up with a TAG, not a branch
 

@@ -21,6 +21,16 @@ repo-local hook that turned out to postdate the behavior). Each was caught by
 someone glancing at a screen, not by re-reading sources. Expect more of the
 same.
 
+**Revised 2026-08-05** by the first probe run against this document rather than
+by another read of it: `listRecipes` closed R-1 and R-19, and §3 and §8 carry
+the answers. The calibration lesson is the interesting half. The claim the
+operator flagged — that no bundled recipe has the planner/coder/reviewer shape —
+turned out to be **correct**; what was wrong was the confidence it was stated
+with, since five of the seven structures had never been looked at. The fix that
+review produced was a hedge, and the hedge was also wrong, in the other
+direction. A measurement costing one unauthenticated ACP call settled it. Prefer
+that to arguing about how strongly to word a claim.
+
 So: **§8 is the list of things known to be unknown. Everything outside §8 should
 be read as confident-but-unverified rather than established** — the prose runs
 at one register throughout while the evidence underneath it varies a lot, which
@@ -480,14 +490,15 @@ and may not be where agents actually write (ledger §7.1).
 The brief asks about "the built-in coder workflow (planner → looper(writer →
 reviewer))". Two things need separating.
 
-**First: no recipe whose structure we can actually see has that shape — which is
-not the same as "none ships".** Only two of the seven have been reproduced, and
-the two whose names most suggest a multi-stage pipeline are not among them, so
-this claim is narrower than it looks and R-1 is what would close it.
+**First: none of the seven bundled recipes has that shape.** This was a hedge
+until 2026-08-05 — only two of seven had been reproduced, and the two whose
+names most suggest a multi-stage pipeline were not among them. `listRecipes`
+returns a per-recipe `plan`, so all seven structures are now on this page (R-1,
+closed below), and the claim is a flat negative rather than a narrow one.
 
-Of the two that are reproduced: `ralph` (R-workflow-7, verbatim from the bundle)
-is a **single-agent sequential drain** — one `repeat` wrapping one `step` on
-`wf-coder`, 200 iterations, terminated by a file check:
+Of the two that were already reproduced: `ralph` (R-workflow-7, verbatim from
+the bundle) is a **single-agent sequential drain** — one `repeat` wrapping one
+`step` on `wf-coder`, 200 iterations, terminated by a file check:
 
 ```json
 {
@@ -519,14 +530,213 @@ is a **single-agent sequential drain** — one `repeat` wrapping one `step` on
 }
 ```
 
-`goal` is partially reproduced too and is the same single-agent shape. No
-`wf-writer` or `wf-reviewer` agent id appears anywhere in the corpus.
-`feature-pipeline` and `semantic-review-multi-model` are the two whose _names_
-suggest a multi-stage shape, but only their input schemas are recorded —
-`feature-pipeline{task:prompt, workdir:string}` and
-`semantic-review-multi-model{target:prompt, workdir:string}`. **Their node
-structure is nowhere in this repository**, and six of the seven recipes were
-never run (register item R-1).
+`goal` is the same single-agent shape, and no `wf-writer` or `wf-reviewer` agent
+id appears anywhere in the corpus.
+
+#### All seven, structurally — R-1 closed
+
+`_kiro/workflow/listRecipes` returns a `plan` array per recipe. Captured
+2026-08-05 by replaying the in-repo ACP driver
+(`docs/plans/kiro-v3-research-raw/phase2/probes/acp-drive.py` with
+`steps-6-recipes.json`), which is **token-free and model-free**: the driver
+refuses the engine's one `_kiro/auth/getAccessToken` request, so no credits are
+spent and no model runs. The seven plans came back **byte-identical on kiro-cli
+2.15.1 and 2.16.1** — descriptions, inputs and plans all — which is worth more
+than either reading alone given the version-skew caveat in §8.
+
+**`plan` is a structural projection, not the definition.** It carries `nodeId` /
+`type` / `agentName` plus the loop controls, and it omits every `prompt`: you
+can read a recipe's graph from it, you cannot reconstruct the recipe. It also
+renames as it projects — definitions use `id` / `agent` / `handler` (§1), and a
+`watch` node's handler comes back as `agentName`, which is why `publish-pr`'s
+`wait` node reports `agentName: "github-pr"`. The projection reproduces `ralph`
+exactly as R-workflow-7 transcribed it, which is the cross-check that makes the
+other six trustworthy.
+
+```
+autoresearch                 experiments[repeat] → experiment            (wf-auto-researcher)
+goal                         goal-loop[repeat]   → work                  (wf-coder)
+investigate                  investigate                                 (wf-planner)
+ralph                        ralph-loop[repeat]  → iterate               (wf-coder)
+publish-pr                   submit                                      (wf-pr-submitter)
+                             pr-loop[repeat]     → wait                  (watch: github-pr)
+                                                 → respond               (wf-pr-responder)
+semantic-review-multi-model  setup                                       (wf-coder)
+                             reviews[parallel]   → review-fable          (semantic_reviewer)
+                                                 → review-gpt            (semantic_reviewer)
+                             aggregate                                   (wf-coder)
+feature-pipeline             setup                                       (wf-coder)
+                             requirements                                (wf-design)
+                             design-loop[repeat] → design-draft          (wf-design)
+                                                 → design-review         (wf-design-reviewer)
+                             plan                                        (wf-planner)
+                             code-loop[repeat]   → implement             (wf-coder)
+                                                 → code-reviews[parallel]
+                                                      → review-fable     (semantic_reviewer)
+                                                      → review-gpt       (semantic_reviewer)
+                                                 → code-aggregate        (wf-review-aggregator)
+                             validate-gate[repeat] → validate            (wf-coder)
+```
+
+Four things fall out of that block that no amount of re-reading the old sources
+would have given:
+
+- **The vendor's own multi-model review idiom.** `review-fable` and `review-gpt`
+  are the same `semantic_reviewer` agent pinned to **different `modelId`s** —
+  `claude-fable-5` and `gpt-5.6-sol`, both at `effortLevel: "xhigh"` — run as
+  `parallel` branches so neither sees the other's output, then merged. `modelId`
+  and `effortLevel` are per-node, and this is what they are for.
+- **`stopCondition.completionSignal` is vendor-used, not invented.** `goal`
+  carries `"stopCondition": {"completionSignal": "success"}` verbatim. That does
+  not prove the runtime honors it — R-10's iteration-count measurement is still
+  the thing that would — but it retires the "absent from every upstream
+  document, possibly a schema artifact" half of that doubt.
+- **`stopWhen` is a sibling of `stopCondition`, not a spelling of it.**
+  `publish-pr`'s loop uses `"stopWhen": "wait.terminal"` — a bare `<nodeId>.`
+  reference to a watch node's terminal state, with no `stopCondition` key at
+  all.
+- **`onMaxIterations: "abort"` is the bundle's default posture for review
+  loops** (`feature-pipeline`, all three loops), while the two autonomous drains
+  — `goal` and `ralph` — use `"pause"` at 200. Pause when a human should look;
+  abort when the gate genuinely failed.
+
+The two recipes R-1 named, in full, because their stop conditions are the
+canonical form §7's pattern C is trying to reproduce:
+
+```json
+[
+  {
+    "nodeId": "setup",
+    "type": "step",
+    "agentName": "wf-coder",
+    "effortLevel": "low"
+  },
+  { "nodeId": "requirements", "type": "step", "agentName": "wf-design" },
+  {
+    "nodeId": "design-loop",
+    "type": "repeat",
+    "steps": [
+      { "nodeId": "design-draft", "type": "step", "agentName": "wf-design" },
+      {
+        "nodeId": "design-review",
+        "type": "step",
+        "agentName": "wf-design-reviewer"
+      }
+    ],
+    "maxIterations": 3,
+    "onMaxIterations": "abort",
+    "stopCondition": {
+      "fileCheck": {
+        "path": "{{setup.output}}/design-review.json",
+        "jsonPath": "verdict",
+        "value": "APPROVED"
+      }
+    }
+  },
+  { "nodeId": "plan", "type": "step", "agentName": "wf-planner" },
+  {
+    "nodeId": "code-loop",
+    "type": "repeat",
+    "steps": [
+      { "nodeId": "implement", "type": "step", "agentName": "wf-coder" },
+      {
+        "nodeId": "code-reviews",
+        "type": "parallel",
+        "branches": [
+          {
+            "nodeId": "review-fable",
+            "type": "step",
+            "agentName": "semantic_reviewer",
+            "modelId": "claude-fable-5",
+            "effortLevel": "xhigh"
+          },
+          {
+            "nodeId": "review-gpt",
+            "type": "step",
+            "agentName": "semantic_reviewer",
+            "modelId": "gpt-5.6-sol",
+            "effortLevel": "xhigh"
+          }
+        ]
+      },
+      {
+        "nodeId": "code-aggregate",
+        "type": "step",
+        "agentName": "wf-review-aggregator"
+      }
+    ],
+    "maxIterations": 3,
+    "onMaxIterations": "abort",
+    "stopCondition": {
+      "fileCheck": {
+        "path": "{{setup.output}}/code-review.json",
+        "jsonPath": "verdict",
+        "value": "APPROVED"
+      }
+    }
+  },
+  {
+    "nodeId": "validate-gate",
+    "type": "repeat",
+    "steps": [
+      { "nodeId": "validate", "type": "step", "agentName": "wf-coder" }
+    ],
+    "maxIterations": 1,
+    "onMaxIterations": "abort",
+    "stopCondition": {
+      "fileCheck": {
+        "path": "{{setup.output}}/validation.json",
+        "jsonPath": "verdict",
+        "value": "PASS"
+      }
+    }
+  }
+]
+```
+
+```json
+[
+  {
+    "nodeId": "setup",
+    "type": "step",
+    "agentName": "wf-coder",
+    "effortLevel": "low"
+  },
+  {
+    "nodeId": "reviews",
+    "type": "parallel",
+    "branches": [
+      {
+        "nodeId": "review-fable",
+        "type": "step",
+        "agentName": "semantic_reviewer",
+        "modelId": "claude-fable-5",
+        "effortLevel": "xhigh"
+      },
+      {
+        "nodeId": "review-gpt",
+        "type": "step",
+        "agentName": "semantic_reviewer",
+        "modelId": "gpt-5.6-sol",
+        "effortLevel": "xhigh"
+      }
+    ]
+  },
+  {
+    "nodeId": "aggregate",
+    "type": "step",
+    "agentName": "wf-coder",
+    "modelId": "claude-fable-5",
+    "effortLevel": "xhigh"
+  }
+]
+```
+
+Note `feature-pipeline`'s `{{setup.output}}` — a leading cheap step exists
+purely to mint one timestamped run directory that every later node interpolates,
+so re-runs cannot overwrite each other or leave a stale verdict file for the
+next iteration's stop check to read. That is the vendor's answer to the
+first-pass hazard at the end of this section, and it is worth copying.
 
 **Second, and more useful: the shape you are describing does exist — as a tool,
 not a recipe.** `orchestrate_subagent` is a model-elected staged DAG, and under
@@ -606,21 +816,41 @@ designed it is not seeing a bundled recipe run, and need not have any repo-local
 config at all — they are seeing bundled _agents_ assembled into a shape bundled
 _steering_ asked for. Three layers, easy to conflate:
 
-| Layer          | Bundled?                   | Evidence                                                      |
-| -------------- | -------------------------- | ------------------------------------------------------------- |
-| the agents     | **yes** — all ten, vendor  | ledger §3.5                                                   |
-| the pattern    | **yes** — vendor steering  | `workflows_default` in msg0; elicited pre-hook, topic-coupled |
-| the definition | **no** — generated per run | node ids vary across runs (below)                             |
+| Layer          | Bundled?                   | Evidence                                                       |
+| -------------- | -------------------------- | -------------------------------------------------------------- |
+| the agents     | **yes** — all ten, vendor  | ledger §3.5                                                    |
+| the pattern    | **yes** — vendor steering  | `workflows_default` in msg0; elicited pre-hook, topic-coupled  |
+| the definition | **no** — generated per run | matches no bundled recipe's plan; ids vary across runs (below) |
 
 This repo's hook amplifies the middle row by buying it position; it does not
 supply it.
 
-The receipt for that last row: two runs of the same shape observed 2026-08-05
-carried **different loop ids** — `review-loop` in one, `build-loop` in the
-other, with the same three agents in the same order. A `bundled://` recipe has
-fixed node ids (`ralph`'s loop is always `ralph-loop`), so ids that vary run to
-run are the signature of a definition being synthesized each time rather than
-replayed.
+The receipt for that last row, in two independent parts. First, two runs of the
+same shape observed 2026-08-05 carried **different loop ids** — `review-loop` in
+one, `build-loop` in the other, with the same three agents in the same order. A
+`bundled://` recipe has fixed node ids (`ralph`'s loop is always `ralph-loop`),
+so ids that vary run to run are the signature of a definition being synthesized
+each time rather than replayed.
+
+Second, and this is what closes **R-19**: the elicited shape can now be compared
+against the recipe it was suspected of being. It is **not** `feature-pipeline`
+under a generated name, and it is not any of the other six either. Neither
+`review-loop` nor `build-loop` appears in any bundled plan, and
+`feature-pipeline` differs structurally in every way that matters — it runs a
+whole `design-loop` on `wf-design` / `wf-design-reviewer` **before** its planner
+node, wraps its reviewers in a `parallel` pair pinned to two different models,
+follows them with a `wf-review-aggregator`, and ends on a separate
+`validate-gate`. The elicited shape has none of that: one planner, one loop, two
+agents, no parallel, no aggregator, no gate. Fourteen nodes and six agents
+against roughly four nodes and three.
+
+What the comparison does confirm is the middle row. Every agent the elicited
+shape uses — `wf-planner`, `wf-coder`, `semantic_reviewer` — is a bundled one
+that `feature-pipeline` also uses, and `feature-pipeline` even orders its
+reviewer after its coder inside a `repeat` with a verdict-file stop condition.
+So the model is not inventing the vocabulary or the idiom; it is assembling
+bundled parts into a graph of its own each run, which is exactly what "bundled
+agents, bundled pattern, generated definition" predicted.
 
 The sanctioned channel is a **verdict file**, read by a `stopCondition`.
 
@@ -1309,27 +1539,48 @@ measurement that would settle it. Borrowing the ledger's own framing: **this is
 an index into research debt, not a backlog.** Probe a row only when the answer
 would change a concrete design.
 
-| #    | Question                                                                                                                                                                                                                                                                                | The one measurement                                                                                                                                                                                                                                                                       |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R-1  | What is the node structure of `feature-pipeline` and `semantic-review-multi-model`? Only their input schemas are recorded, and six of seven recipes were never run.                                                                                                                     | No run needed: `_kiro/workflow/listRecipes` returns a per-recipe `plan` field. The probe that ran it recorded only names, sources and inputs — re-run it and read `plan`. Token-free, model-free.                                                                                         |
-| R-2  | Does a `subagent_<role>` dispatch **block** the calling step, or is there an async mode?                                                                                                                                                                                                | One step on a `subagent`-only profile dispatches one leaf that sleeps 30 s and writes an end marker; the step writes its own marker on return. Compare timestamps: step-marker after leaf-marker means blocking.                                                                          |
-| R-3  | Can a step create or launch a **second workflow**? The contract forbids it; the step-session builder demonstrably turns the gate on.                                                                                                                                                    | One step whose profile carries the workflow tool group, prompted to call `run_workflow` on a trivial one-step definition and report the exact response. Three outcomes: it runs; it is refused with an engine message; the tool is absent.                                                |
-| R-4  | Do the ACP run-control verbs actually drive a live run? They were probed for reachability and param shape; **`invoke` was never sent**, so nothing shows a run executes while ungated.                                                                                                  | Launch the §7 pool over ACP, `pause` mid-drain, `inspect` to confirm the transition, `resume`, confirm workers resume claiming. One session, one run.                                                                                                                                     |
-| R-5  | Which iteration limit binds a workflow **step** session? The chat flavour carries `ITERATION_LIMIT = 300` with an 8× transition factor; the custom-agent flavour 300 with 4×.                                                                                                           | Read which flavour `workflow.session_driver.starting_step` constructs. A static read, no run.                                                                                                                                                                                             |
-| R-6  | Can `update_workflow` / `update_status` be **granted** to a custom step agent? No bundled agent has it, contradicting the contract.                                                                                                                                                     | Write a `.kiro/agents/` profile declaring the group that carries `update_workflow`, run it as a single top-level step, have it report its own tool inventory.                                                                                                                             |
-| R-7  | Does a permission `match` rule on a `subagent_<role>` tool name **bind** inside a step?                                                                                                                                                                                                 | Give one step agent two delegation targets, write a rule matching one name and not the other, run a step that calls both. Three distinguishable outcomes: both go through (no bind), one refused (binds), or the step stalls.                                                             |
-| R-8  | Is the per-target `subagent_<role>` shape a step-surface property or a version change? Raw notes see one role-taking `invoke_sub_agent` at 2.15.1; the ledger sees per-target at 2.16.0.                                                                                                | Enumerate the delegation tools in a step session and in a chat session **on the same build**. If they differ, it is the surface; if not, the version.                                                                                                                                     |
-| R-9  | Where does step-session concurrency actually break? 19 in one run, 27 across three, with no engine complaint.                                                                                                                                                                           | The economics likely fail before the engine does, so make it a cost question: wall-clock per task at 20 / 25 / 30 workers in a **single** run, and find where it stops improving.                                                                                                         |
-| R-10 | Is `stopCondition.completionSignal` real? Discovered in a runtime schema error and it validates, but it is absent from every upstream document and has never been run.                                                                                                                  | A two-iteration `repeat` whose step signals `success` via `send_message`, with `"stopCondition": {"completionSignal": "success"}` and `maxIterations: 3`. Count the iteration wrappers.                                                                                                   |
-| R-11 | Does the fan-out ceiling of 5 hold across profiles and leaf types? All three runs used the same capability-starved parent and the same shell leaf.                                                                                                                                      | Repeat the N=8 dispatch probe with a parent holding a full tool set and a leaf that is not a shell one-shot.                                                                                                                                                                              |
-| R-12 | Does the same ceiling bind the **orchestrator's** own `orchestrate_subagent`? Only the step surface was probed, and the two differ in tool shape already.                                                                                                                               | The same peak-overlap sweep, run from an orchestrator session instead of a step.                                                                                                                                                                                                          |
-| R-13 | What triggers the resume of a run paused by an interrupted step, and how long is the paused window?                                                                                                                                                                                     | A deliberate mid-step interruption followed by an open-ended wait with **nothing** else touching the run or the host, timing the transition if it comes. Cheap in setup, expensive only in patience.                                                                                      |
-| R-14 | Which component emits `agent "<name>" not found, using "default"`, and does a silent fallback to `default` ever actually happen?                                                                                                                                                        | The second half is what matters — a measurement taken on a silently-downgraded surface would look plausible and mean nothing. Run one step naming a deleted profile and check whether _any_ artifact appears.                                                                             |
-| R-15 | Is `save_workflow_definition`'s validation genuinely stricter? The bundled spec claims agent names are checked at load time; `validate_workflow` does not check them.                                                                                                                   | Have the creator agent save a definition naming `wf-imaginary` and report the response. It is not a tool the orchestrator can call directly, so this has to go through the agent.                                                                                                         |
-| R-16 | What does the viewer's `s steer` actually do to the selected node — inject a user message into that node's session, queue one for the whole run, or something else? And does it reset the 300-turn counter (R-limits-1)?                                                                | Steer a node mid-run with a distinctive token, then read that node's captured output and its siblings' for the token. Sibling containment answers the addressing question; `inspect_workflow` iteration counts answer the budget one.                                                     |
-| R-17 | What else does the TUI expose that the other two surfaces do not? The viewer alone shows `Tab agents`, `l stack`, and per-node output panes that appear nowhere in the research.                                                                                                        | Drive the TUI once with the feature unlocked and enumerate every binding and view, the way the ledger's §3.5 enumerated the agent roster. The surface is currently undocumented here.                                                                                                     |
-| R-18 | What total concurrency does a delegating workflow actually reach? Arithmetic says 20 step nodes x 5 permits = ~100 leaves at one delegating tier, but composition was only ever measured at n=2 dispatchers, and the overhead law suggests the economics break before the engine does.  | Scale the peak-overlap sweep: 4, then 8, then 16 delegating steps, each dispatching 5 marker leaves, one run each. Read peak simultaneous leaf windows and wall-clock per leaf. Stop when wall-clock per leaf stops improving — that number, not the engine's ceiling, is the usable one. |
-| R-19 | Is the planner/coder/reviewer shape actually `bundled://feature-pipeline` under a generated name, or synthesized fresh each run? Observed node ids vary run to run (`review-loop` vs `build-loop`), which points at synthesis, but nobody has compared a run's tree against the recipe. | Falls out of R-1 for free: read `feature-pipeline`'s `plan` from `listRecipes` and compare its node ids and agent ordering against an elicited run's tree.                                                                                                                                |
+| #    | Question                                                                                                                                                                                                                                                                               | The one measurement                                                                                                                                                                                                                                                                       |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R-2  | Does a `subagent_<role>` dispatch **block** the calling step, or is there an async mode?                                                                                                                                                                                               | One step on a `subagent`-only profile dispatches one leaf that sleeps 30 s and writes an end marker; the step writes its own marker on return. Compare timestamps: step-marker after leaf-marker means blocking.                                                                          |
+| R-3  | Can a step create or launch a **second workflow**? The contract forbids it; the step-session builder demonstrably turns the gate on.                                                                                                                                                   | One step whose profile carries the workflow tool group, prompted to call `run_workflow` on a trivial one-step definition and report the exact response. Three outcomes: it runs; it is refused with an engine message; the tool is absent.                                                |
+| R-4  | Do the ACP run-control verbs actually drive a live run? They were probed for reachability and param shape; **`invoke` was never sent**, so nothing shows a run executes while ungated.                                                                                                 | Launch the §7 pool over ACP, `pause` mid-drain, `inspect` to confirm the transition, `resume`, confirm workers resume claiming. One session, one run.                                                                                                                                     |
+| R-5  | Which iteration limit binds a workflow **step** session? The chat flavour carries `ITERATION_LIMIT = 300` with an 8× transition factor; the custom-agent flavour 300 with 4×.                                                                                                          | Read which flavour `workflow.session_driver.starting_step` constructs. A static read, no run.                                                                                                                                                                                             |
+| R-6  | Can `update_workflow` / `update_status` be **granted** to a custom step agent? No bundled agent has it, contradicting the contract.                                                                                                                                                    | Write a `.kiro/agents/` profile declaring the group that carries `update_workflow`, run it as a single top-level step, have it report its own tool inventory.                                                                                                                             |
+| R-7  | Does a permission `match` rule on a `subagent_<role>` tool name **bind** inside a step?                                                                                                                                                                                                | Give one step agent two delegation targets, write a rule matching one name and not the other, run a step that calls both. Three distinguishable outcomes: both go through (no bind), one refused (binds), or the step stalls.                                                             |
+| R-8  | Is the per-target `subagent_<role>` shape a step-surface property or a version change? Raw notes see one role-taking `invoke_sub_agent` at 2.15.1; the ledger sees per-target at 2.16.0.                                                                                               | Enumerate the delegation tools in a step session and in a chat session **on the same build**. If they differ, it is the surface; if not, the version.                                                                                                                                     |
+| R-9  | Where does step-session concurrency actually break? 19 in one run, 27 across three, with no engine complaint.                                                                                                                                                                          | The economics likely fail before the engine does, so make it a cost question: wall-clock per task at 20 / 25 / 30 workers in a **single** run, and find where it stops improving.                                                                                                         |
+| R-10 | Is `stopCondition.completionSignal` **honored at runtime**? The bundled `goal` recipe uses it verbatim (§3), so it is vendor-real rather than a schema artifact — but no run has ever confirmed the engine acts on it.                                                                 | A two-iteration `repeat` whose step signals `success` via `send_message`, with `"stopCondition": {"completionSignal": "success"}` and `maxIterations: 3`. Count the iteration wrappers.                                                                                                   |
+| R-11 | Does the fan-out ceiling of 5 hold across profiles and leaf types? All three runs used the same capability-starved parent and the same shell leaf.                                                                                                                                     | Repeat the N=8 dispatch probe with a parent holding a full tool set and a leaf that is not a shell one-shot.                                                                                                                                                                              |
+| R-12 | Does the same ceiling bind the **orchestrator's** own `orchestrate_subagent`? Only the step surface was probed, and the two differ in tool shape already.                                                                                                                              | The same peak-overlap sweep, run from an orchestrator session instead of a step.                                                                                                                                                                                                          |
+| R-13 | What triggers the resume of a run paused by an interrupted step, and how long is the paused window?                                                                                                                                                                                    | A deliberate mid-step interruption followed by an open-ended wait with **nothing** else touching the run or the host, timing the transition if it comes. Cheap in setup, expensive only in patience.                                                                                      |
+| R-14 | Which component emits `agent "<name>" not found, using "default"`, and does a silent fallback to `default` ever actually happen?                                                                                                                                                       | The second half is what matters — a measurement taken on a silently-downgraded surface would look plausible and mean nothing. Run one step naming a deleted profile and check whether _any_ artifact appears.                                                                             |
+| R-15 | Is `save_workflow_definition`'s validation genuinely stricter? The bundled spec claims agent names are checked at load time; `validate_workflow` does not check them.                                                                                                                  | Have the creator agent save a definition naming `wf-imaginary` and report the response. It is not a tool the orchestrator can call directly, so this has to go through the agent.                                                                                                         |
+| R-16 | What does the viewer's `s steer` actually do to the selected node — inject a user message into that node's session, queue one for the whole run, or something else? And does it reset the 300-turn counter (R-limits-1)?                                                               | Steer a node mid-run with a distinctive token, then read that node's captured output and its siblings' for the token. Sibling containment answers the addressing question; `inspect_workflow` iteration counts answer the budget one.                                                     |
+| R-17 | What else does the TUI expose that the other two surfaces do not? The viewer alone shows `Tab agents`, `l stack`, and per-node output panes that appear nowhere in the research.                                                                                                       | Drive the TUI once with the feature unlocked and enumerate every binding and view, the way the ledger's §3.5 enumerated the agent roster. The surface is currently undocumented here.                                                                                                     |
+| R-18 | What total concurrency does a delegating workflow actually reach? Arithmetic says 20 step nodes x 5 permits = ~100 leaves at one delegating tier, but composition was only ever measured at n=2 dispatchers, and the overhead law suggests the economics break before the engine does. | Scale the peak-overlap sweep: 4, then 8, then 16 delegating steps, each dispatching 5 marker leaves, one run each. Read peak simultaneous leaf windows and wall-clock per leaf. Stop when wall-clock per leaf stops improving — that number, not the engine's ceiling, is the usable one. |
+
+### Closed by measurement
+
+Rows leave this register when they are answered, so the table above stays a list
+of open debt. What they cost and what they bought is recorded here, because "how
+expensive was that actually" is the part a future reader needs in order to price
+the next row.
+
+| #    | Closed     | Answer                                                                                                                                                                                  | Cost                                     |
+| ---- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| R-1  | 2026-08-05 | All seven recipe plans are in §3. `plan` is a structural projection — no prompts — so it answers node structure and cannot reconstruct a definition. Identical on 2.15.1 and 2.16.1.    | One ACP call. No model, no tokens, ~10s. |
+| R-19 | 2026-08-05 | **No.** The elicited planner/coder/reviewer shape is not `feature-pipeline` under a generated name, nor any other bundled recipe. It reuses bundled _agents_; the graph is synthesized. | Free — fell out of R-1 as predicted.     |
+
+Both were closed by replaying the in-repo ACP driver against
+`_kiro/workflow/listRecipes`, which is the cheapest probe in this document by a
+wide margin: the extension methods are registered unconditionally, so it needs
+**no `workflows` unlock, no session, no model and no credentials** — the driver
+answers the engine's one `_kiro/auth/getAccessToken` request with a JSON-RPC
+error and the call still succeeds. If a question can be phrased against
+`listRecipes`, `inspect` or `list`, ask it that way before designing a run.
+
+The register's estimate for R-1 said "token-free, model-free" and was right,
+which is a small mark in favor of trusting the other rows' cost estimates.
 
 Three standing caveats that are not open questions but should travel with every
 figure above:
@@ -1337,7 +1588,10 @@ figure above:
 - **Version skew.** The live measurements are `kiro-cli 2.16.0`; the code reads
   are KAS 2.15.1, with byte offsets known to have moved in 2.15.2. Where both
   exist they agree, which is the main reason to trust either. **The constants
-  are the durable part; the offsets are not.**
+  are the durable part; the offsets are not.** One direct measurement now backs
+  that split: the seven recipe plans are byte-identical on 2.15.1 and 2.16.1
+  (§3), so the bundle's _content_ held across the same range in which its
+  offsets moved.
 - **Static reads predict; live runs measure.** The `KIRO_ENABLED_FEATURES` story
   in §1 is the cautionary case: a 2.15.2 static read showed the consumer had
   appeared and concluded the variable should now work, and a 2.16.0 live probe

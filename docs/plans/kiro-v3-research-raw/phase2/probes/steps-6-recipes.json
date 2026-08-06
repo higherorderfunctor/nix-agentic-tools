@@ -1,0 +1,16 @@
+[
+  {
+    "label": "initialize",
+    "method": "initialize",
+    "params": {
+      "protocolVersion": 1,
+      "clientCapabilities": { "fs": { "readTextFile": false, "writeTextFile": false } }
+    }
+  },
+  { "label": "listRecipes-bare", "method": "_kiro/workflow/listRecipes", "params": {} },
+  {
+    "label": "listRecipes-ws",
+    "method": "_kiro/workflow/listRecipes",
+    "params": { "workspacePaths": ["${WORKSPACE}"] }
+  }
+]
