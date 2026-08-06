@@ -1614,7 +1614,7 @@ in
                 files = hookEntries;
                 targetDir = hooksTargetDir;
                 stateSlug = materializeLib.mkStateSlug hooksTargetDir;
-                inherit (pkgs) coreutils diffutils gnugrep;
+                inherit (pkgs) coreutils diffutils flock gnugrep;
               };
             }
             # Steering delivery — strategy-driven materializer (see
@@ -1634,7 +1634,7 @@ in
                 files = cfg.steeringFiles;
                 targetDir = steeringDir;
                 stateSlug = materializeLib.mkStateSlug steeringDir;
-                inherit (pkgs) coreutils diffutils gnugrep;
+                inherit (pkgs) coreutils diffutils flock gnugrep;
               };
             }
             # Skills fanout via mkSkillEntries, which uses
@@ -1831,7 +1831,7 @@ in
                 targetDir = hooksTargetDir;
                 stateSlug = materializeLib.mkStateSlug hooksTargetDir;
                 hasFiles = config.files != {};
-                inherit (pkgs) coreutils diffutils gnugrep;
+                inherit (pkgs) coreutils diffutils flock gnugrep;
               };
               enterTest = materializeLib.mkEnterTest {
                 app = "kiro";
@@ -1859,7 +1859,7 @@ in
                 targetDir = steeringDir;
                 stateSlug = materializeLib.mkStateSlug steeringDir;
                 hasFiles = config.files != {};
-                inherit (pkgs) coreutils diffutils gnugrep;
+                inherit (pkgs) coreutils diffutils flock gnugrep;
               };
               enterTest = materializeLib.mkEnterTest {
                 app = "kiro";

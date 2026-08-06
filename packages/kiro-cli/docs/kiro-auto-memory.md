@@ -1,20 +1,26 @@
 # Kiro-CLI auto-memory
 
-> **Last verified:** 2026-08-05 (commit pending — hook delivery moved off its
-> two bespoke writers onto the shared strategy-driven materializer
-> `lib/ai/materialize.nix`, the same one steering already used. The bespoke
-> writers carried their prune INSIDE the emitter's `mkIf`, so taking the hook
-> surface from N to ZERO emitted nothing, the prune never ran, and every
-> previously written hook file kept firing forever — the one case where pruning
-> matters most. The materializer's writers are emitted whenever the module is
-> enabled and its manifest claims only the files it WROTE, so an unmanaged
-> hand-placed `~/.kiro/hooks/*.json` now survives where the old
-> `rm -f "$HOOKS_DIR"/*.json` deleted it). Prior: 2026-08-03 (commit pending —
-> marks the repository-local distiller as update-target-exempt with a reasoned
-> package property). Prior: 2026-08-03 (commit pending — relocates both
-> auto-memory implementation seams under `overlays/` so the overlay subtree no
-> longer imports package-owned source). If you touch
-> `overlays/kiro-memory-distiller/distiller.ts`,
+> **Last verified:** 2026-08-05 (commit pending — every destructive materializer
+> phase now holds one backend state-directory advisory lock. Devenv holds it
+> across sweep→prune→write; HM reacquires it for its separated phases. Hooks and
+> steering run in parallel under devenv; without the lock, PR #794's hooks task
+> swept steering's live manifest temp between `mktemp` and `mv`. The lock is
+> deliberately cross-surface and process-owned, so it also guards duplicate
+> concurrent invocations without leaving stale locks after a killed activation).
+> Prior: 2026-08-05 (commit pending — hook delivery moved off its two bespoke
+> writers onto the shared strategy-driven materializer `lib/ai/materialize.nix`,
+> the same one steering already used. The bespoke writers carried their prune
+> INSIDE the emitter's `mkIf`, so taking the hook surface from N to ZERO emitted
+> nothing, the prune never ran, and every previously written hook file kept
+> firing forever — the one case where pruning matters most. The materializer's
+> writers are emitted whenever the module is enabled and its manifest claims
+> only the files it WROTE, so an unmanaged hand-placed `~/.kiro/hooks/*.json`
+> now survives where the old `rm -f "$HOOKS_DIR"/*.json` deleted it). Prior:
+> 2026-08-03 (commit pending — marks the repository-local distiller as
+> update-target-exempt with a reasoned package property). Prior: 2026-08-03
+> (commit pending — relocates both auto-memory implementation seams under
+> `overlays/` so the overlay subtree no longer imports package-owned source). If
+> you touch `overlays/kiro-memory-distiller/distiller.ts`,
 > `packages/kiro-cli/lib/autoMemory.nix`, `packages/kiro-cli/lib/mkKiro.nix`
 > (hook-file emission), `overlays/kiro-memory-distiller.nix`,
 > `overlays/mcp-servers/openmemory-mem/openmemory-mem.ts`,
@@ -345,6 +351,14 @@ or this hook.
     `rm -f "$HOOKS_DIR"/*.json` deleted it, which is exactly why that prune
     could not simply be made unconditional. Managed copies land read-only
     (0444).
+  - **Concurrency: one lock across every surface sharing the materializer state
+    directory.** Devenv may dispatch hooks and steering in parallel, and both
+    sweep the reserved `.nat-tmp.` namespace before pruning and writing. The
+    complete devenv transaction holds an advisory `flock`, preventing either
+    task — or a duplicate concurrent shell entry — from deleting or rewriting
+    another live transaction's state. HM's separated prune and write phases
+    reacquire the same lock. Process-owned release keeps crash recovery
+    automatic.
   - `hooksDir` is enumerated at EVAL and carries only the directory's top-level
     `*.json` files. Subdirectories and non-`.json` siblings are ignored — Kiro
     loads neither, and the retired whole-dir prune never removed either.
@@ -419,6 +433,10 @@ the STAGE-5 network SDK write is felt (tuning path P3).
     and the orphans keep firing. And the prune stays MANIFEST-scoped, never a
     `<dir>/*.json` glob, or enabling `ai.kiro` starts deleting hooks the module
     never wrote.
+13. Every destructive materializer phase holds the shared backend
+    state-directory lock; devenv holds it across sweep→prune→write. Narrowing it
+    to one slug reopens the cross-surface live-temp deletion that failed PR
+    #794.
 
 ## Not done yet / tuning paths
 
