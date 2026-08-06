@@ -35,17 +35,21 @@
 # test sweep, and the tun-device removal it used to need, are gone with
 # it.
 #
-# THE GO TOOLCHAIN IS DERIVED, NOT PINNED, and the seemingly-redundant
-# `goFloor` below is deliberate — do not "clean it up". A pinned toolchain
-# cannot tell "still filling a real gap" from "nixpkgs caught up and this
-# is now a downgrade". `vu.goToolchainForFloor` declares the durable fact
-# instead — gluetun 3.41.1's `go.mod` says `go 1.25.0` with no `toolchain`
-# directive — and returns `ourPkgs.go` whenever our pin satisfies it
-# (which it does today, so this resolves to plain go 1.26.5 and go-bin is
-# never instantiated). It only reaches for a prebuilt toolchain if
-# upstream raises the floor past nixpkgs-unstable, and self-clears the
-# moment nixpkgs catches up. See the helper's header in overlays/lib.nix,
-# and checks/go-toolchain-floor.nix for its branch coverage.
+# THE GO TOOLCHAIN IS DERIVED, NOT PINNED, and so is the floor it derives
+# from — do not "clean up" either. A pinned toolchain cannot tell "still
+# filling a real gap" from "nixpkgs caught up and this is now a
+# downgrade", and a hand-written floor is just a slower-rotting pin: the
+# 4x/day sweep bumps this package and would never touch it.
+#
+# So `goFloor` is EXTRACTED from the pinned source's go.mod into the
+# sidecar by `vu.mkGoFloorFix`, and `vu.mkGoBuilder` turns it into a
+# builder. No version literals here on purpose — the sidecar holds the
+# current value and `checks/go-floor-drift.nix` asserts it still matches
+# source. `goToolchainForFloor` returns `ourPkgs.go` whenever our pin
+# satisfies the floor, reaching for a prebuilt `go-bin` only when upstream
+# outruns nixpkgs-unstable, and self-clearing the moment nixpkgs catches
+# up. See overlays/lib.nix, and checks/go-toolchain-floor.nix for the
+# selector's branch coverage.
 #
 # vendorHash lives in the SIDECAR rather than inline: `mkUpdateScript`
 # rebuilds the sidecar from scratch on every write, so any key it does not
@@ -89,19 +93,26 @@
     inherit sourcesFile;
   };
 
-  # `go` directive of go.mod at the packaged version. Raise it when
-  # upstream raises it; never lower it, and never replace it with a
-  # toolchain version.
-  goFloor = "1.25.0";
-  go = vu.goToolchainForFloor {
-    floor = goFloor;
-    goBin = ourPkgs.go-bin;
-    ourGo = ourPkgs.go;
+  fixGoFloor = vu.mkGoFloorFix {
+    attr = "gluetun";
+    pkgs = ourPkgs;
     pname = "gluetun";
-    inherit lib;
+    inherit sourcesFile;
   };
 
-  buildGoModule = ourPkgs.buildGoModule.override {inherit go;};
+  # DERIVED from the pinned source's go.mod by `fixGoFloor` above, never
+  # hand-written. This used to be the literal `"1.25.0"`, which was
+  # correct only for as long as someone kept re-checking it — the update
+  # pipeline bumps this package 4x/day and never touched it. See
+  # `vu.goFloorUnknown` for why the missing-key fallback is silent and
+  # `checks/go-floor-drift.nix` for the loud half.
+  goFloor = sources.goFloor or vu.goFloorUnknown;
+
+  buildGoModule = vu.mkGoBuilder {
+    floor = goFloor;
+    pkgs = ourPkgs;
+    pname = "gluetun";
+  };
 in
   buildGoModule {
     pname = "gluetun";
@@ -114,9 +125,14 @@ in
     subPackages = ["cmd/gluetun"];
 
     passthru = {
-      inherit fixVendorHash;
+      inherit fixGoFloor fixVendorHash goFloor;
       updateScript = vu.ghArchiveUpdateScript {
-        extraExtract = "${fixVendorHash}";
+        # ORDER: hash fixer first, then the floor. `fixGoFloor` builds
+        # `.src`, so anything restoring a src hash has to land before it.
+        extraExtract = ''
+          ${fixVendorHash}
+          ${fixGoFloor}
+        '';
         pkgs = ourPkgs;
         pname = "gluetun";
         repo = "passteque/gluetun";

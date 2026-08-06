@@ -1,19 +1,25 @@
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-08-03 (commit pending — records the property used to
-> associate versioned derivations with a flake-input update owner or a reasoned
-> local-source exemption). Prior: 2026-08-03 (commit pending — makes `pkgs.ai`
-> the single binary-package namespace, retains `generic` as a temporary nested
-> bucket, and moves the two forge CLIs into `ai.devTools`). Prior: 2026-08-03
-> (commit pending — makes overlay-owned local implementation sources a boundary
-> invariant and relocates the auto-memory helper and distiller sources
-> accordingly). Prior: 2026-08-02 (commit pending — adds Semble's direct
-> external-flake derivation pattern and identity-preserving MCP role). Prior:
-> 2026-08-01 (commit pending — records that `glab`'s `extraExtract` also
-> regenerates its `passthru.extracted` sidecar, via the new shared
-> `vu.mkExtractRegen`, and that glab is the one extracted package where the
-> fixer-then-extract ORDER is forced. It had NO regeneration at all until now,
-> which nothing caught until its first version bump reddened
+> **Last verified:** 2026-08-05 (commit pending — the Go toolchain floor is now
+> DERIVED from the pinned source's go.mod rather than hand-written, is carried
+> by ALL SEVEN Go packages rather than two, and is reached through the new
+> `vu.mkGoBuilder`; adds `checks/go-floor-drift.nix` as the loud half and
+> records that the toolchain is a BUILDER argument only `.override` can reach.
+> Measured: `gh` had ALREADY silently required Go >= 1.26.5, so it was the next
+> package to break after `glab`). Prior: 2026-08-03 (commit pending — records
+> the property used to associate versioned derivations with a flake-input update
+> owner or a reasoned local-source exemption). Prior: 2026-08-03 (commit pending
+> — makes `pkgs.ai` the single binary-package namespace, retains `generic` as a
+> temporary nested bucket, and moves the two forge CLIs into `ai.devTools`).
+> Prior: 2026-08-03 (commit pending — makes overlay-owned local implementation
+> sources a boundary invariant and relocates the auto-memory helper and
+> distiller sources accordingly). Prior: 2026-08-02 (commit pending — adds
+> Semble's direct external-flake derivation pattern and identity-preserving MCP
+> role). Prior: 2026-08-01 (commit pending — records that `glab`'s
+> `extraExtract` also regenerates its `passthru.extracted` sidecar, via the new
+> shared `vu.mkExtractRegen`, and that glab is the one extracted package where
+> the fixer-then-extract ORDER is forced. It had NO regeneration at all until
+> now, which nothing caught until its first version bump reddened
 > `checks.<system>.glab-extracted` on PR #621). Prior: 2026-07-28 — the commit
 > adding THAT line lands `glab`: the first Go package whose SRC hash also lives
 > in the sidecar (`vu.mkGoSrcVendorFix`), the first GitLab-hosted version check
@@ -414,6 +420,68 @@ candidate set on purpose: `go-bin.latest` is currently a prerelease, and Nix
 sorts `1.27rc1` ABOVE `1.27.0`. `checks/go-toolchain-floor.nix` exercises all
 three branches plus two positive controls, which is also what keeps the input
 from shipping dormant.
+
+**ALL SEVEN Go packages carry the seam**, not just the two that once needed it —
+`gh`, `glab`, `github-mcp`, `gluetun`, `mcp-language-server`, `oh-my-posh`,
+`otel-tui`. Scoping it to "whatever broke most recently" is how the same defect
+gets rediscovered per package: when `glab` broke, `gh` had ALREADY silently
+required Go >= 1.26.5 and would have been next.
+
+Reach it through **`vu.mkGoBuilder`**, which composes floor -> toolchain ->
+`buildGoModule.override` in one call. Do not re-expand that chain per package;
+that three-line repeat across three sites is what the helper replaced. `glab` is
+the one legitimate exception — it needs the TOOLCHAIN itself a second time, for
+its schema-dump extract (which compiles upstream's `internal/config` and is
+subject to the same floor), so it calls `goToolchainForFloor` directly and binds
+the result once.
+
+**The toolchain is a BUILDER argument, so `.override` is the only seam that
+reaches it.** `overrideAttrs` cannot: `version`/`src`/`vendorHash` are attrs
+`buildGoModule` reads off `finalAttrs`, but `go` is consumed when the builder is
+called. Packages needing both do
+`(pkgs.<name>.override { buildGoModule = …; }).overrideAttrs (…)`, in that
+order. `gh`, `glab` and `otel-tui` all gained the `.override` layer for exactly
+this reason.
+
+#### The floor itself is DERIVED, never hand-written
+
+A hand-maintained floor literal is still a pin — it just rots more slowly. The
+update pipeline bumps these packages 4x/day and would never touch it, and a
+stale-LOW floor is the dangerous direction: `versionAtLeast ourGo floor` then
+returns `ourGo` and the seam **silently does nothing**.
+
+So the floor is extracted from the pinned source's go.mod, by mechanism:
+
+- **Release mode (sidecar-versioned: `gh`, `glab`, `gluetun`, `oh-my-posh`,
+  `otel-tui`)** — `vu.mkGoFloorFix` runs as `extraExtract` and writes a
+  `goFloor` key into the sidecar. Correct home for it because the floor is a
+  function of the pinned version, so it changes only when the version does —
+  unlike `vendorHash`, which can be invalidated with no version bump and
+  therefore also needs a standalone `passthru` escape hatch.
+- **Trunk mode (rev-pinned: `github-mcp`, `mcp-language-server`)** — a literal
+  in the overlay. These have no sidecar and are bumped by `nix-update` (`git`
+  targets in `config/update-targets.nix`), so there is no repo-owned update
+  script to hook a rewrite into.
+
+**ORDER: hash fixers first, then the floor.** `mkGoFloorFix` builds `.src`, so a
+package whose `srcHash` also lives in the sidecar (`glab`) must have that
+restored first. For `glab` the floor then precedes `mkExtractRegen`, because the
+schema dump compiles the module and needs the toolchain the fresh floor selects.
+
+Reading the floor is **silent by construction** — overlays read
+`sources.goFloor or vu.goFloorUnknown`, and `goFloorUnknown` (`"0"`) is
+satisfied by everything. That is deliberate and not a hole: `mkGoFloorFix` must
+evaluate the package to build its `.src`, so a `throw` on the missing key would
+deadlock the fixer that repairs it. `checks/go-floor-drift.nix` is the loud half
+— it compares every recorded floor against the real go.mod and fails naming the
+package, the actual requirement, and the remedy (fixer vs. literal).
+
+That check takes **NO REGISTRY**: it filters `self.packages.<system>` for
+`passthru.goFloor`. A list of Go packages would be a second source of truth a
+new package could be added without touching, which is exactly how one ends up
+unprotected. It shares `vu.goModFloorFn` with the writer, so gate and writer
+cannot disagree about what the floor is. `goModPath` is a parameter, not a
+constant — `oh-my-posh` keeps its module under `src/`.
 
 ### A genuinely platform-specific package is gated at the ATTRIBUTE
 

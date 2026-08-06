@@ -17,24 +17,29 @@
 # back, which is why the read below is `sources.vendorHash or fakeHash`:
 # the `or` covers exactly the window between the two.
 #
-# No Go toolchain override. nixpkgs owns this derivation's builder and
-# ships a `go` that satisfies cli/cli's go.mod (`go 1.26.0`,
-# `toolchain go1.26.4`, against our pin's go 1.26.5), and threading a
-# builder override through would perturb the byte-identical-to-nixpkgs
-# derivation that is the whole point of a thin override. If a future
-# release raises the floor past our pin the build fails loudly with go's
-# own "go.mod requires go >= X" — `GOTOOLCHAIN=local` forbids a silent
-# download — and the fix is the `goToolchainForFloor` seam that
-# generic/gluetun.nix and generic/oh-my-posh.nix already carry.
+# The Go TOOLCHAIN is derived from the go.mod floor, via `vu.mkGoBuilder`.
+# That needs `.override` rather than `overrideAttrs` — it is a builder
+# argument, not an attr — so this file uses both seams: `.override` for
+# the builder, `overrideAttrs` for version/src/vendorHash.
 #
-# EXPECTED: while our pin and nixpkgs' pin name the same version,
-# `pkgs.ai.devTools.gh` resolves to the SAME store path as plain `pkgs.gh`. A
-# fixed-output derivation's path follows its hash, not its fetcher, and
-# our `fetchzip` of the repo-archive tarball hashes the same unpacked NAR
-# `fetchFromGitHub` does. That is not a bug and not a reason to delete the
-# package: it exists so a gh release lands here on the 4x/day update sweep
-# instead of waiting on a nixpkgs channel bump, and the paths diverge the
-# moment upstream moves.
+# This header used to say "No Go toolchain override", on the reasoning
+# that threading one through "would perturb the byte-identical-to-nixpkgs
+# derivation that is the whole point of a thin override". Both halves
+# were wrong. Measured: `buildGoModule.override` with an unchanged
+# toolchain is derivation-IDENTICAL, so adopting the seam moved no store
+# path. And cli/cli quietly raised its floor to `go 1.26.5` — the version
+# that broke `glab` for consumers on an older nixpkgs — so gh was one bump
+# from the same failure while this file asserted it could not happen.
+#
+# WHY THIS PACKAGE EXISTS: update CADENCE. A gh release lands here on the
+# 4x/day sweep instead of waiting on a nixpkgs channel bump. It is NOT
+# here to be ahead of nixpkgs at any given moment, and the gap is often
+# zero — that is expected and is not a reason to delete the package.
+#
+# Do not re-add a claim that this resolves to the same store path as plain
+# `pkgs.gh`. It does not, measured at equal versions with identical `src`,
+# `vendorHash` and derivation `env`; the divergence is in an input and has
+# not been root-caused. The old claim predated that measurement.
 #
 # Not agentic-tools-specific — it lives under overlays/generic/ so the
 # earmarked repo split can lift the subtree whole.
@@ -49,9 +54,13 @@
   # Cache-hit parity: every build input comes from THIS repo's nixpkgs
   # pin, never the consumer's `final`. `final.stdenv.hostPlatform.system`
   # is the only thing read from the consumer — see
-  # dev/fragments/overlays/overlay-pattern.md.
+  # dev/fragments/overlays/overlay-pattern.md. go-overlay is applied
+  # INSIDE this import so `go-bin` resolves against our own pin; it is
+  # purely additive (`pkgs.go` is byte-identical with and without it), so
+  # it moves no derivation.
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
+    overlays = [inputs.go-overlay.overlays.default];
   };
   inherit (ourPkgs) fetchzip lib;
   vu = import ../lib.nix;
@@ -69,8 +78,33 @@
     pname = "gh";
     inherit sourcesFile;
   };
+
+  fixGoFloor = vu.mkGoFloorFix {
+    attr = "gh";
+    pkgs = ourPkgs;
+    pname = "gh";
+    inherit sourcesFile;
+  };
+
+  # DERIVED from the pinned source's go.mod by `fixGoFloor`, never
+  # hand-written. See `vu.mkGoFloorFix` for why, and
+  # `checks/go-floor-drift.nix` for the gate that keeps it honest.
+  goFloor = sources.goFloor or vu.goFloorUnknown;
 in
-  ourPkgs.gh.overrideAttrs (prev: {
+  # TWO override seams, and they are not interchangeable. The toolchain is
+  # a BUILDER argument, so it can only be reached with `.override`;
+  # `version`/`src`/`vendorHash` are ordinary attrs that `buildGoModule`
+  # reads off `finalAttrs`, so they compose on the output with
+  # `overrideAttrs`. See the overlays fragment's `.override`-vs-
+  # -`overrideAttrs` rule.
+  (ourPkgs.gh.override {
+    buildGoModule = vu.mkGoBuilder {
+      floor = goFloor;
+      pkgs = ourPkgs;
+      pname = "gh";
+    };
+  })
+  .overrideAttrs (prev: {
     inherit (sources) version;
     # fetchzip, so the recorded hash is over the UNPACKED NAR — which is
     # why the updateScript below prefetches with --unpack.
@@ -84,9 +118,14 @@ in
     passthru =
       (prev.passthru or {})
       // {
-        inherit fixVendorHash;
+        inherit fixGoFloor fixVendorHash goFloor;
         updateScript = vu.ghArchiveUpdateScript {
-          extraExtract = "${fixVendorHash}";
+          # ORDER: hash fixer first, then the floor. `fixGoFloor` builds
+          # `.src`, so anything restoring a src hash lands before it.
+          extraExtract = ''
+            ${fixVendorHash}
+            ${fixGoFloor}
+          '';
           pkgs = ourPkgs;
           pname = "gh";
           repo = "cli/cli";

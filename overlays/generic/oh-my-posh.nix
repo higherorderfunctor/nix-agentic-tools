@@ -67,19 +67,20 @@
 # Note that `overrideAttrs` REPLACES `postPatch` rather than appending, so
 # this restates the whole list rather than adding to nixpkgs'.
 #
-# THE GO TOOLCHAIN IS DERIVED, NOT PINNED, and the seemingly-redundant
-# `goFloor` below is deliberate — do not "clean it up". The sibling pinned
+# THE GO TOOLCHAIN IS DERIVED, NOT PINNED, and so is the floor it derives
+# from — do not "clean up" either. The sibling repo pinned
 # `go-bin.versions."1.26.0"` here; that was a gap-filler when written and
-# is a DOWNGRADE today, because our nixpkgs pin has since moved to go
-# 1.26.5 and nothing announced the transition. `vu.goToolchainForFloor`
-# declares the durable fact instead — oh-my-posh 29.36.0's `src/go.mod`
-# says `go 1.26.0` with no `toolchain` directive — and returns
-# `ourPkgs.go` whenever our pin satisfies it (which it does today, so this
-# resolves to plain go 1.26.5 and go-bin is never instantiated). It only
-# reaches for a prebuilt toolchain if upstream raises the floor past
-# nixpkgs-unstable, and it self-clears the moment nixpkgs catches up. See
-# the helper's header in overlays/lib.nix, and
-# checks/go-toolchain-floor.nix for its branch coverage.
+# is a DOWNGRADE now that our nixpkgs pin ships go 1.26.5, with nothing
+# announcing the transition. A hand-written FLOOR is only a slower-rotting
+# version of the same mistake, so `goFloor` is EXTRACTED from the pinned
+# source's `src/go.mod` into the sidecar by `vu.mkGoFloorFix`, and
+# `vu.mkGoBuilder` turns it into a builder.
+#
+# This project keeps its module under `src/`, so it is the one package
+# passing a non-default `goModPath`. No version literals here on purpose —
+# the sidecar holds the current floor and `checks/go-floor-drift.nix`
+# asserts it still matches source. See overlays/lib.nix, and
+# checks/go-toolchain-floor.nix for the selector's branch coverage.
 #
 # vendorHash lives in the SIDECAR rather than inline: `mkUpdateScript`
 # rebuilds the sidecar from scratch on every write, so any key it does not
@@ -139,20 +140,31 @@
     inherit sourcesFile;
   };
 
-  # `go` directive of src/go.mod at the packaged version. Raise it when
-  # upstream raises it; never lower it, and never replace it with a
-  # toolchain version.
-  goFloor = "1.26.0";
-  go = vu.goToolchainForFloor {
-    floor = goFloor;
-    goBin = ourPkgs.go-bin;
-    ourGo = ourPkgs.go;
+  # This project keeps its Go module under `src/`, NOT at the repo root —
+  # the one place the floor mechanism is not uniform across the seven Go
+  # packages, and the reason `goModPath` is a parameter rather than a
+  # constant. Both the fixer and `checks/go-floor-drift.nix` read it from
+  # `passthru.goModPath` below, so they cannot disagree.
+  goModPath = "src/go.mod";
+
+  fixGoFloor = vu.mkGoFloorFix {
+    attr = "oh-my-posh";
+    pkgs = ourPkgs;
     pname = "oh-my-posh";
-    inherit lib;
+    inherit goModPath sourcesFile;
   };
+
+  # DERIVED from the pinned source's src/go.mod by `fixGoFloor` above,
+  # never hand-written — see gluetun.nix for the rationale, and
+  # `vu.goFloorUnknown` for why the missing-key fallback is silent.
+  goFloor = sources.goFloor or vu.goFloorUnknown;
 in
   (ourPkgs.oh-my-posh.override {
-    buildGoModule = ourPkgs.buildGoModule.override {inherit go;};
+    buildGoModule = vu.mkGoBuilder {
+      floor = goFloor;
+      pkgs = ourPkgs;
+      pname = "oh-my-posh";
+    };
   })
   .overrideAttrs (prev: {
     inherit (sources) version;
@@ -185,9 +197,14 @@ in
     passthru =
       (prev.passthru or {})
       // {
-        inherit fixVendorHash;
+        inherit fixGoFloor fixVendorHash goFloor goModPath;
         updateScript = vu.ghArchiveUpdateScript {
-          extraExtract = "${fixVendorHash}";
+          # ORDER: hash fixer first, then the floor. `fixGoFloor` builds
+          # `.src`, so anything restoring a src hash lands before it.
+          extraExtract = ''
+            ${fixVendorHash}
+            ${fixGoFloor}
+          '';
           pkgs = ourPkgs;
           pname = "oh-my-posh";
           repo = "JanDeDobbeleer/oh-my-posh";

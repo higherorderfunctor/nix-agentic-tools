@@ -362,8 +362,8 @@
     # flake.nix
     inputs.nix-agentic-tools = {
       url = "github:higherorderfunctor/nix-agentic-tools";
-      # Do not follow nixpkgs: the additional pin preserves the store paths
-      # served by nix-agentic-tools.cachix.org.
+      # Do NOT add `inputs.nixpkgs.follows = "nixpkgs"` here. See the
+      # warning below — it costs you the binary cache and can break builds.
     };
 
     # Apply overlay
@@ -413,8 +413,8 @@
     inputs:
       nix-agentic-tools:
         url: github:higherorderfunctor/nix-agentic-tools
-        # Do not follow nixpkgs: the additional pin preserves the store paths
-        # served by nix-agentic-tools.cachix.org.
+        # Do NOT add a `nixpkgs: follows: nixpkgs` block here. See the
+        # warning below — it costs you the binary cache and can break builds.
     ```
 
     ```nix
@@ -438,6 +438,38 @@
     ```
 
     </details>
+
+    ### Do not make this flake follow your nixpkgs
+
+    > **`inputs.nix-agentic-tools.inputs.nixpkgs.follows = "nixpkgs"` is not
+    > supported.** It is the one configuration that defeats everything below.
+
+    Every compiled package here instantiates its build inputs from **this
+    repo's own nixpkgs pin**, never from the consumer's package set. That is
+    the only reason `nix-agentic-tools.cachix.org` can serve you: CI builds
+    against that pin, so the store paths you ask for are the ones that were
+    published.
+
+    A `follows` directive rewrites this flake's `nixpkgs` input at lock time,
+    before any of its code evaluates — so those build inputs silently become
+    **yours**. Two consequences, and the second is the one that surprises
+    people:
+
+    1. **You lose the binary cache entirely.** Every package rebuilds from
+       source on every consumer rebuild, because the paths you now request
+       were never built by anyone.
+    2. **Builds can fail outright**, not merely rebuild, when a pin older
+       than ours cannot satisfy what a package's upstream requires. This is
+       not hypothetical: until the Go toolchain floor landed, a followed
+       nixpkgs from April 2026 (Go 1.26.2) could not build `glab` or `gh`,
+       both of which need Go >= 1.26.5. Those two now select a newer
+       toolchain and build — but that guarantee is per-mechanism, not
+       general. Nothing makes the next dependency of that shape safe.
+
+    The cost of not following is two nixpkgs evaluations in your store. Most
+    of the closure dedupes via content-addressing, and cache hits are only
+    reachable this way. If you have already added the `follows`, remove it —
+    that is the fix.
 
     ## Skills
 

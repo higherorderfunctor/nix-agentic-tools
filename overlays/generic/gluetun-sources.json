@@ -4,5 +4,6 @@
     "url": "https://github.com/passteque/gluetun/archive/v3.41.3.tar.gz",
     "hash": "sha256-75iE2fk74oDqRDhwsL2D6T/+4NO5pnQkXMRUl4ptSJk="
   },
-  "vendorHash": "sha256-5A72iEcbEpui4u3vv2A6DlGnVsd5ko1ngjL5z0YccMI="
+  "vendorHash": "sha256-5A72iEcbEpui4u3vv2A6DlGnVsd5ko1ngjL5z0YccMI=",
+  "goFloor": "1.25.0"
 }

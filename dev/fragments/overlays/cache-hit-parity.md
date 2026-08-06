@@ -1,30 +1,36 @@
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-08-03 (commit pending — annotates Semble's unchanged
-> upstream derivation and git-branchless's passthru with their flake-input
-> update owners without moving either derivation). Prior: 2026-08-03 (commit
-> pending — patches Oxlint's `@napi-rs/cli` dependency in its pnpm-fetched
-> source rather than admitting Darwin's `/bin/ps` into the sandbox; both fetch
-> and build use pnpm 11 from pinned `ourPkgs`, matching upstream's major).
-> Prior: 2026-08-03 (commit pending — nests every binary-package group under
-> `pkgs.ai`, moves `gh` and `glab` into `ai.devTools`, and updates the
-> consumer-path registry without changing any derivation). Prior: 2026-08-03
-> (commit pending — relocates the two repo-local auto-memory source trees beside
-> their overlay derivations without changing package inputs or cache-hit
-> semantics). Prior: 2026-08-03 (commit pending — adds a positive control that
-> substitutes the overlay's own `inputs.nixpkgs` the way a consumer's `follows`
-> directive does, proving that unsupported configuration drifts from the
-> cache-published `fblog` path). Prior: 2026-08-02 (commit pending — adds the
-> pinned external Semble exception: direct upstream selection preserves
-> Numtide's derivation, while a plain meta overlay exposes the MCP role without
-> forking the build). Prior: 2026-07-25 (commit pending — the worked example
-> moved off `git-branchless`, which had not carried this shape for a long time,
-> onto `git-absorb`, which does; also corrects the new-package signature, the
-> namespacing in the manual verification snippet, and the pure-binary-fetch
-> package list). If you touch any `overlays/<name>.nix` overlay file or the
-> overlay composition machinery and this fragment isn't updated in the same
-> commit, stop and fix it. Regressions are gated by the
-> `checks.cache-hit-parity` flake check (see "Verification" below).
+> **Last verified:** 2026-08-05 (commit pending — records that a consumer's
+> `inputs.nixpkgs.follows` defeats `ourPkgs` BY CONSTRUCTION, since it rewrites
+> the input rather than the overlay argument, and that its cost is not merely
+> the documented cache miss: measured on a real consumer, a followed April 2026
+> nixpkgs FAILED the `glab` build outright on the Go floor. Do not "fix"
+> `ourPkgs` for this — `checks/cache-hit-parity.nix` already asserts the drift).
+> Prior: 2026-08-03 (commit pending — annotates Semble's unchanged upstream
+> derivation and git-branchless's passthru with their flake-input update owners
+> without moving either derivation). Prior: 2026-08-03 (commit pending — patches
+> Oxlint's `@napi-rs/cli` dependency in its pnpm-fetched source rather than
+> admitting Darwin's `/bin/ps` into the sandbox; both fetch and build use pnpm
+> 11 from pinned `ourPkgs`, matching upstream's major). Prior: 2026-08-03
+> (commit pending — nests every binary-package group under `pkgs.ai`, moves `gh`
+> and `glab` into `ai.devTools`, and updates the consumer-path registry without
+> changing any derivation). Prior: 2026-08-03 (commit pending — relocates the
+> two repo-local auto-memory source trees beside their overlay derivations
+> without changing package inputs or cache-hit semantics). Prior: 2026-08-03
+> (commit pending — adds a positive control that substitutes the overlay's own
+> `inputs.nixpkgs` the way a consumer's `follows` directive does, proving that
+> unsupported configuration drifts from the cache-published `fblog` path).
+> Prior: 2026-08-02 (commit pending — adds the pinned external Semble exception:
+> direct upstream selection preserves Numtide's derivation, while a plain meta
+> overlay exposes the MCP role without forking the build). Prior: 2026-07-25
+> (commit pending — the worked example moved off `git-branchless`, which had not
+> carried this shape for a long time, onto `git-absorb`, which does; also
+> corrects the new-package signature, the namespacing in the manual verification
+> snippet, and the pure-binary-fetch package list). If you touch any
+> `overlays/<name>.nix` overlay file or the overlay composition machinery and
+> this fragment isn't updated in the same commit, stop and fix it. Regressions
+> are gated by the `checks.cache-hit-parity` flake check (see "Verification"
+> below).
 
 ### The rule
 
@@ -105,6 +111,45 @@ Note that the `.override`-on-the-builder seam above is a SEPARATE question from
 cache-hit parity. Parity only cares that the base derivation and every build
 input come from `ourPkgs`; which override seam is correct depends on how the
 upstream builder is written. See the overlay-pattern fragment for that decision.
+
+### `follows` defeats this by construction — and can HARD-FAIL, not just miss
+
+`ourPkgs` guards the overlay ARGUMENT (`final` / `prev`). It cannot guard the
+flake INPUT. A consumer writing
+
+```nix
+nix-agentic-tools = {
+  url = "github:higherorderfunctor/nix-agentic-tools";
+  inputs.nixpkgs.follows = "nixpkgs";   # UNSUPPORTED
+};
+```
+
+rewrites THIS flake's `nixpkgs` input at lock time, before any of our code
+evaluates, so `ourPkgs = import inputs.nixpkgs { … }` faithfully imports
+**theirs**. No Nix expression can reference "my nixpkgs input, ignoring the
+consumer's follows" — there is nothing `ourPkgs` could have done differently. It
+is visible in the consumer's lock as
+`nodes["nix-agentic-tools"].inputs.nixpkgs = ["nixpkgs"]`, a follows pointer
+where our own locked node would otherwise be.
+
+**Do not treat this as a hole to plug.** It is already encoded as unsupported:
+the `followsControl` in `checks/cache-hit-parity.nix` constructs exactly this
+scenario and asserts the output **drifts**. The check fails if `follows` ever
+stops breaking parity.
+
+**The cost is worse than the cache miss this fragment used to describe.**
+Measured 2026-08-05 against a real consumer following an April 2026 nixpkgs
+(`01fbdeef`, Go 1.26.2): `glab` did not merely rebuild from source, it failed
+outright with `go.mod requires go >= 1.26.5 (running go 1.26.2)`. A package with
+no toolchain-floor seam inherits whatever `go` the followed nixpkgs ships, and
+`gh` was silently one bump behind the same fate.
+
+The Go floor seam (overlay-pattern fragment) now covers all seven Go packages,
+so that specific class is handled — a followed older nixpkgs gets a `go-bin`
+toolchain instead of a failure. It does NOT make `follows` supported: the
+consumer still gets zero cache hits, and the next toolchain-shaped dependency
+that lacks a floor seam will break the same way. The README carries the
+consumer-facing version of this warning.
 
 ### The trade-off (accepted in commit e5406977)
 

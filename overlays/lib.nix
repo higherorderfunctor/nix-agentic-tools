@@ -1023,6 +1023,131 @@ rec {
           Run `nix flake update go-overlay` to pick up newly published toolchains.''
       else goBin.versions.${builtins.head satisfying};
 
+  # The placeholder a Go overlay reads when its recorded floor is absent.
+  # Every version satisfies it, so `goToolchainForFloor` returns `ourGo`
+  # and applies no override.
+  #
+  # This is the `lib.fakeHash` of floors, and it exists for the same
+  # reason: `mkUpdateScript` rebuilds the sidecar FROM SCRATCH
+  # (`jq -n '{version: $v}'`), so `goFloor` is destroyed on every write
+  # and restored by `mkGoFloorFix` as `extraExtract`. Between those two
+  # moments the key does not exist, and `mkGoFloorFix` itself has to
+  # evaluate the package to build its `.src` — so a `throw` here would
+  # deadlock the very fixer that repairs it.
+  #
+  # Reading it is therefore SILENT by construction. That is deliberate,
+  # and `checks/go-floor-drift.nix` is the loud half: it compares every
+  # recorded floor against the package's real go.mod and fails naming the
+  # package and the expected value. Same division of labour as the
+  # extracted sidecars — permissive at eval, gated by a check.
+  goFloorUnknown = "0";
+
+  # Shell function printing the EFFECTIVE Go floor of a go.mod: the
+  # higher of its `go` and `toolchain` directives.
+  #
+  # ONE definition, consumed by BOTH `mkGoFloorFix` (writes the floor at
+  # bump time) and `checks/go-floor-drift.nix` (asserts it still matches
+  # source). A second copy of this parse is precisely how the writer and
+  # the gate would come to disagree about what the floor is, and the
+  # disagreement would present as a drift check that cannot be made green.
+  #
+  # `toolchain` is spelled `go1.26.5` and `go` is spelled `1.26.5`; both
+  # normalize to the bare version. `sort -V` orders them — a plain string
+  # compare gets "1.9" vs "1.26" backwards, the same trap
+  # `goToolchainForFloor` avoids with `lib.versionAtLeast`.
+  #
+  # Fails loud on a go.mod carrying no `go` directive rather than
+  # printing empty. An empty floor is the worst possible outcome here: it
+  # makes `goToolchainForFloor` return `ourGo`, so the seam silently does
+  # nothing and the package builds against whatever toolchain happens to
+  # be in scope — the exact failure this mechanism exists to remove.
+  goModFloorFn = {pkgs}: ''
+    go_floor_of() {
+      gm="$1"
+      gd=$(${pkgs.gnused}/bin/sed -n 's/^go[[:space:]]\{1,\}\([0-9][0-9.]*\).*/\1/p' "$gm" | ${pkgs.coreutils}/bin/head -n1)
+      td=$(${pkgs.gnused}/bin/sed -n 's/^toolchain[[:space:]]\{1,\}go\([0-9][0-9.]*\).*/\1/p' "$gm" | ${pkgs.coreutils}/bin/head -n1)
+      if [ -z "$gd" ]; then
+        echo "go-floor: no 'go' directive in $gm (upstream restructured go.mod)" >&2
+        return 1
+      fi
+      if [ -n "$td" ]; then
+        printf '%s\n%s\n' "$gd" "$td" | ${pkgs.coreutils}/bin/sort -V | ${pkgs.coreutils}/bin/tail -n1
+      else
+        printf '%s\n' "$gd"
+      fi
+    }
+  '';
+
+  # Floor fixer for a Go package pinned via a sidecar. Derives the floor
+  # from the FRESHLY PINNED source's go.mod and writes it back as
+  # `goFloor`. Wired as `extraExtract`, the same seam the hash fixers use.
+  #
+  # WHY DERIVED AND NOT DECLARED. A hand-maintained floor literal is a
+  # pin, and `goToolchainForFloor`'s own header explains at length why a
+  # pinned toolchain rots silently. Moving the pin from toolchain-version
+  # to floor-version made it rot more slowly, not never: the update
+  # pipeline bumps these packages 4x/day and would never touch the
+  # literal. A stale-LOW floor is the dangerous direction — the seam then
+  # returns `ourGo` and quietly does nothing.
+  #
+  # The floor is a function of the pinned source, so it changes only when
+  # the version changes — which is exactly when this runs. That is what
+  # makes `extraExtract` (a version-bump-only seam) the correct home for
+  # it, unlike `vendorHash`, which can be invalidated with no version
+  # bump and therefore also needs a standalone `passthru` escape hatch.
+  #
+  # ORDER: run this AFTER any hash fixer. It builds `.src`, so a package
+  # whose `srcHash` also lives in the sidecar (glab) must have that
+  # restored first or this fails on the src mismatch instead.
+  #
+  #   attr:       flake package attribute (built through `.#<attr>.src`)
+  #   goModPath:  go.mod location inside src — NOT always the root;
+  #               oh-my-posh keeps its module under `src/`.
+  mkGoFloorFix = {
+    attr,
+    goModPath ? "go.mod",
+    pkgs,
+    pname,
+    sourcesFile ? "overlays/${pname}-sources.json",
+  }:
+    pkgs.writeShellScript "fix-go-floor-${pname}" ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      ${goModFloorFn {inherit pkgs;}}
+
+      src=$(${pkgs.nix}/bin/nix build --no-link --print-out-paths ".#${attr}.src")
+      floor=$(go_floor_of "$src/${goModPath}")
+
+      ${pkgs.jq}/bin/jq --arg f "$floor" '. + {goFloor: $f}' "${sourcesFile}" \
+        > "${sourcesFile}.new"
+      ${pkgs.coreutils}/bin/mv "${sourcesFile}.new" "${sourcesFile}"
+      echo "${pname}: goFloor = $floor"
+    '';
+
+  # `buildGoModule` with its toolchain derived from `floor`. The one
+  # composition every Go overlay here uses, so the floor -> toolchain ->
+  # builder chain is written once instead of once per package.
+  #
+  # `pkgs` MUST carry go-overlay's overlay (for `go-bin`). It is purely
+  # additive — `pkgs.go` is byte-identical with and without it — so
+  # adding it to a package's `ourPkgs` moves no derivation, and every Go
+  # package sharing one overlay list collapses to a single nixpkgs
+  # instantiation rather than one apiece.
+  mkGoBuilder = {
+    floor,
+    pkgs,
+    pname,
+  }:
+    pkgs.buildGoModule.override {
+      go = goToolchainForFloor {
+        inherit floor pname;
+        goBin = pkgs.go-bin;
+        inherit (pkgs) lib;
+        ourGo = pkgs.go;
+      };
+    };
+
   # The (attrPath, drvPattern, key) triples that the sidecar hash fixers
   # below compose. Declared once and named, so the derivation-name
   # patterns — which are load-bearing rather than decorative; see
