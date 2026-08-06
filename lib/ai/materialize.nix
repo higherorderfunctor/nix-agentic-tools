@@ -20,8 +20,12 @@
 #
 # Lifecycle: a manifest (`<name>\t<sha256-of-what-we-wrote>` per line)
 # lives OUTSIDE the scanned dir (HM: XDG state; devenv: $DEVENV_STATE)
-# and is rewritten atomically once per run. Every destructive path runs
-# the clobber guard (see the state table in
+# and is rewritten atomically once per run. Every destructive phase holds one
+# advisory lock for that state directory, so parallel surfaces and duplicate
+# concurrent invocations cannot sweep or rewrite each other's live temporary
+# state. Devenv's single task holds it across sweep→prune→write; HM's required
+# two-phase activation reacquires it on either side of link generation. Every
+# destructive path runs the clobber guard (see the state table in
 # docs/plans/factory-materializer-design.md §3): symlinks are never user
 # content and are replaced/deleted; user-edited and foreign regular
 # files are backed up (per-slug, outside the working tree) + warned
@@ -165,6 +169,7 @@ in rec {
     stateDirExpr,
     stateSlug,
     coreutils,
+    flock,
   }: ''
     set -euETo pipefail
     shopt -s inherit_errexit 2>/dev/null || :
@@ -175,6 +180,12 @@ in rec {
     NAT_MAT_TAB="$(printf '\t')"
     NAT_MAT_ERRORS=0
     ${coreutils}/bin/mkdir -p "$NAT_MAT_TARGET_DIR" "$NAT_MAT_STATE_DIR"
+    # State-dir-wide, not per slug: the stale-temp sweep below intentionally
+    # owns the reserved namespace across every surface sharing this backend.
+    # flock releases on process death, so a killed activation cannot strand a
+    # lock that turns every later shell entry into a manual-recovery exercise.
+    exec {NAT_MAT_LOCK_FD}> "$NAT_MAT_STATE_DIR/lock"
+    ${lib.getExe flock} "$NAT_MAT_LOCK_FD"
     nat_mat_backup() {
       ${coreutils}/bin/mkdir -p "$NAT_MAT_BACKUP_DIR"
       # mktemp guarantees uniqueness even for same-second backups of the
@@ -357,13 +368,14 @@ in rec {
     stateSlug,
     coreutils,
     diffutils,
+    flock,
     gnugrep,
   }:
     assert lib.assertMsg (nameSafe stateSlug)
     "materialize: stateSlug must match ${nameRegex}: '${stateSlug}'"; let
       copies = copyEntries files;
       common = {
-        inherit stateSlug coreutils;
+        inherit stateSlug coreutils flock;
         targetDirExpr = "$HOME/${targetDir}";
         stateDirExpr = "\${XDG_STATE_HOME:-$HOME/.local/state}/nix-agentic-tools/materialize";
       };
@@ -413,13 +425,14 @@ in rec {
     hasFiles, # config.files != {} at the call site
     coreutils,
     diffutils,
+    flock,
     gnugrep,
   }:
     assert lib.assertMsg (nameSafe stateSlug)
     "materialize: stateSlug must match ${nameRegex}: '${stateSlug}'"; let
       copies = copyEntries files;
       common = {
-        inherit stateSlug coreutils;
+        inherit stateSlug coreutils flock;
         targetDirExpr = "$DEVENV_ROOT/${targetDir}";
         stateDirExpr = "$DEVENV_STATE/nix-agentic-tools/materialize";
       };

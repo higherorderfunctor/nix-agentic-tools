@@ -6376,6 +6376,70 @@ in {
       && builtins.all (hasLiteral ".nat-tmp.") scripts
   );
 
+  # The hooks and steering tasks share one materializer state directory and
+  # devenv may run them concurrently. The lock is deliberately STATE-DIR-wide,
+  # not per slug: every stale-temp sweep must exclude every other writer's live
+  # manifest temp before it can delete the reserved `.nat-tmp.` namespace.
+  # Prove both real generated tasks block behind that same lock, then release it
+  # and run them concurrently to prove both surfaces and manifests survive.
+  module-kiro-materializer-tasks-serialize-runtime = let
+    ev = evalDevenv {
+      ai.kiro = {
+        enable = true;
+        context = "SERIALIZED-STEERING-TOKEN.";
+        hooksJson.demo = builtins.toJSON {
+          version = "v1";
+          hooks = [];
+        };
+      };
+    };
+    hookTask = pkgs.writeShellScript "kiro-hooks-lock-probe" (dvHookTaskExec ev);
+    steeringTask = pkgs.writeShellScript "kiro-steering-lock-probe" (dvTaskExec ev);
+  in
+    pkgs.runCommand "module-test-kiro-materializer-tasks-serialize-runtime" {
+      inherit hookTask steeringTask;
+    } ''
+      set -u
+      fail() { echo "FAIL: kiro-materializer-tasks-serialize-runtime: $1" >&2; exit 1; }
+
+      export DEVENV_ROOT="$TMPDIR/root"
+      export DEVENV_STATE="$TMPDIR/state"
+      state_dir="$DEVENV_STATE/nix-agentic-tools/materialize"
+      ${pkgs.coreutils}/bin/mkdir -p "$DEVENV_ROOT" "$state_dir"
+
+      exec 9> "$state_dir/lock"
+      ${lib.getExe pkgs.flock} 9
+      for probe in hookTask steeringTask; do
+        task="''${!probe}"
+        if ${pkgs.coreutils}/bin/timeout 1 "$task"; then
+          fail "$probe ignored the shared materializer lock"
+        else
+          timeout_code=$?
+        fi
+        [ "$timeout_code" -eq 124 ] \
+          || fail "$probe failed with $timeout_code instead of blocking on the lock"
+      done
+      ${lib.getExe pkgs.flock} -u 9
+      exec 9>&-
+
+      "$hookTask" &
+      hook_pid=$!
+      "$steeringTask" &
+      steering_pid=$!
+      wait "$hook_pid"
+      wait "$steering_pid"
+
+      [ -f "$DEVENV_ROOT/.kiro/hooks/demo.json" ] \
+        || fail "hook task did not materialize demo.json"
+      [ -f "$DEVENV_ROOT/.kiro/steering/AGENTS.md" ] \
+        || fail "steering task did not materialize AGENTS.md"
+      manifests=("$state_dir"/*.manifest)
+      [ "''${#manifests[@]}" -eq 2 ] \
+        || fail "concurrent tasks did not preserve both manifests"
+
+      echo "PASS: kiro-materializer-tasks-serialize-runtime" > $out
+    '';
+
   # RUNTIME proof of the two properties the string assertions above can only
   # approximate. Grepping generated bash cannot show that a file is actually
   # deleted or actually left alone, and both are the whole point of this

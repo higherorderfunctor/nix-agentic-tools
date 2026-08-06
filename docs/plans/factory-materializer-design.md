@@ -103,13 +103,18 @@ the safety proof: a bare `.<name>.*` pattern would eat user dotfiles like a vim
 `.foo.md.swp` or a `.a.md.notes`, whereas no managed name (regex bars dots at
 start) and essentially no user file carries `.nat-tmp.`; the infix is documented
 reserved. Temps are the ONE declared non-manifest deletion class (see the §3
-table row) — Kiro slurping a stranded partial temp forever was the hazard;
-`cmp -s` skip-guard from **diffutils**; `[ -L "$target" ]` force-write before
-cmp (constraint 9); `sha256sum` et al by absolute `${pkgs.coreutils}` path;
-manifest greps `|| :`-guarded (first run has no manifest); per-script unique
-heredoc EOF marker; `lib.escapeShellArg` on names; no `exit` (HM activation
-rule); `$HOME` anchoring on HM; written files land **mode 0444** (D3 guardrail —
-see §8; temp is chmod 444 before the mv).
+table row) — Kiro slurping a stranded partial temp forever was the hazard; every
+destructive phase holds a state-directory-wide advisory `flock`, so parallel
+surfaces and duplicate concurrent invocations cannot sweep or rewrite one
+another's live temporary state (devenv's single task holds it across the
+complete transaction; HM's required two phases reacquire it on either side of
+link generation); the lock is process-owned and therefore cannot be stranded by
+a killed activation; `cmp -s` skip-guard from **diffutils**; `[ -L "$target" ]`
+force-write before cmp (constraint 9); `sha256sum` et al by absolute
+`${pkgs.coreutils}` path; manifest greps `|| :`-guarded (first run has no
+manifest); per-script unique heredoc EOF marker; `lib.escapeShellArg` on names;
+no `exit` (HM activation rule); `$HOME` anchoring on HM; written files land
+**mode 0444** (D3 guardrail — see §8; temp is chmod 444 before the mv).
 
 **Consumer backstop [B7]**: the devenv backend also emits an `enterTest`
 fragment asserting every copy-entry exists as a real file
@@ -264,8 +269,12 @@ belt-and-braces rather than load-bearing — safe either way); the prune phase i
 now the earliest activation entry and adds `-E -T inherit_errexit` to the shell
 HM core runs under (benign against current HM; re-check on HM bumps).
 
-**Gated on the SECOND copy surface** (Copilot git-tracked follow-up), tracked as
-`oi-mat-second-surface-prereqs`: cross-surface stateSlug uniqueness assertion;
-per-slug temp-sweep scope or inter-task ordering (parallel devenv tasks could
-sweep each other's live manifest temps); 0444 re-assert in the cmp-skip branch
-(mode drift).
+**Second-copy-surface follow-up (2026-08-05):** hooks and steering exposed the
+predicted parallel-task race in PR #794: hooks swept steering's live manifest
+temp between `mktemp` and `mv`. A state-directory-wide advisory lock now wraps
+every destructive phase; devenv's complete sweep→prune→write task is one
+critical section, while HM reacquires the same lock for its separated prune and
+write phases. An executing regression proves both devenv tasks block on the same
+lock and both manifests survive concurrent dispatch. Remaining prerequisites
+tracked by `oi-mat-second-surface-prereqs`: cross-surface stateSlug uniqueness
+assertion; 0444 re-assert in the cmp-skip branch (mode drift).
