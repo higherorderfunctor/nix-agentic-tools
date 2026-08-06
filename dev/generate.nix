@@ -643,8 +643,8 @@
     explicit consumer root.
 
     Codex's beta permission model — `ai.codex.profiles`,
-    `settings.default_permissions`, and `settings.permissions` — is **locked
-    out** and fails evaluation if set. Those layers do not inherit the automatic
+    `ai.codex.settings.default_permissions`, and `ai.codex.settings.permissions`
+    — is **locked out** and fails evaluation if set. Those layers do not inherit the automatic
     roots above; worse, Codex resolves a layer carrying them by overriding
     rather than merging the `sandbox_mode`/`sandbox_workspace_write` settings
     beneath it, silently dropping every writable root the lower layer granted.

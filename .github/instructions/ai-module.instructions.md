@@ -8,12 +8,12 @@ applyTo: "lib/ai/agent.nix,lib/ai/app/**,lib/ai/default.nix,lib/ai/hooks.nix,lib
 ## ai Module Fanout Semantics
 
 > **Last verified:** 2026-08-05 (commit pending — Codex's beta permission model
-> is LOCKED OUT: `ai.codex.profiles`, `settings.default_permissions`, and
-> `settings.permissions` stay typed and still emit, but every entry point now
-> asserts. A layer carrying the beta model OVERRIDES rather than merges the
-> legacy sandbox settings beneath it, and a Nix evaluation cannot see across
-> config layers to catch that — measured with `codex sandbox` 0.146.1, where
-> this repo's own former profile silently dropped the module-contributed
+> is LOCKED OUT: `ai.codex.profiles`, `ai.codex.settings.default_permissions`,
+> and `ai.codex.settings.permissions` stay typed and still emit, but every entry
+> point now asserts. A layer carrying the beta model OVERRIDES rather than
+> merges the legacy sandbox settings beneath it, and a Nix evaluation cannot see
+> across config layers to catch that — measured with `codex sandbox` 0.146.1,
+> where this repo's own former profile silently dropped the module-contributed
 > `~/.cache/nix` root). Prior: 2026-08-05 (commit pending — Codex's devenv
 > Nix-cache resolver remains environment-backed in production but accepts a
 > test-only `specialArgs` override through the module's ellipsis instead of

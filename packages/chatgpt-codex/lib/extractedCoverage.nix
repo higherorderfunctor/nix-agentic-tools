@@ -131,7 +131,8 @@
       #
       # `--profile` and `--permission-profile` keep this disposition even
       # though their declarative counterparts (`ai.codex.profiles`,
-      # `settings.default_permissions`, `settings.permissions`) are currently
+      # `ai.codex.settings.default_permissions`,
+      # `ai.codex.settings.permissions`) are currently
       # LOCKED OUT by assertion. The classification records that a typed
       # representation EXISTS, not that it is reachable; see the lockout
       # comment in ./mkCodex.nix. Do not reclassify them as unrepresented —
