@@ -7,31 +7,37 @@ applyTo: "overlays/*.nix,overlays/**/*.nix"
 
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-08-03 (commit pending — annotates Semble's unchanged
-> upstream derivation and git-branchless's passthru with their flake-input
-> update owners without moving either derivation). Prior: 2026-08-03 (commit
-> pending — patches Oxlint's `@napi-rs/cli` dependency in its pnpm-fetched
-> source rather than admitting Darwin's `/bin/ps` into the sandbox; both fetch
-> and build use pnpm 11 from pinned `ourPkgs`, matching upstream's major).
-> Prior: 2026-08-03 (commit pending — nests every binary-package group under
-> `pkgs.ai`, moves `gh` and `glab` into `ai.devTools`, and updates the
-> consumer-path registry without changing any derivation). Prior: 2026-08-03
-> (commit pending — relocates the two repo-local auto-memory source trees beside
-> their overlay derivations without changing package inputs or cache-hit
-> semantics). Prior: 2026-08-03 (commit pending — adds a positive control that
-> substitutes the overlay's own `inputs.nixpkgs` the way a consumer's `follows`
-> directive does, proving that unsupported configuration drifts from the
-> cache-published `fblog` path). Prior: 2026-08-02 (commit pending — adds the
-> pinned external Semble exception: direct upstream selection preserves
-> Numtide's derivation, while a plain meta overlay exposes the MCP role without
-> forking the build). Prior: 2026-07-25 (commit pending — the worked example
-> moved off `git-branchless`, which had not carried this shape for a long time,
-> onto `git-absorb`, which does; also corrects the new-package signature, the
-> namespacing in the manual verification snippet, and the pure-binary-fetch
-> package list). If you touch any `overlays/<name>.nix` overlay file or the
-> overlay composition machinery and this fragment isn't updated in the same
-> commit, stop and fix it. Regressions are gated by the
-> `checks.cache-hit-parity` flake check (see "Verification" below).
+> **Last verified:** 2026-08-05 (commit pending — records that a consumer's
+> `inputs.nixpkgs.follows` defeats `ourPkgs` BY CONSTRUCTION, since it rewrites
+> the input rather than the overlay argument, and that its cost is not merely
+> the documented cache miss: measured on a real consumer, a followed April 2026
+> nixpkgs FAILED the `glab` build outright on the Go floor. Do not "fix"
+> `ourPkgs` for this — `checks/cache-hit-parity.nix` already asserts the drift).
+> Prior: 2026-08-03 (commit pending — annotates Semble's unchanged upstream
+> derivation and git-branchless's passthru with their flake-input update owners
+> without moving either derivation). Prior: 2026-08-03 (commit pending — patches
+> Oxlint's `@napi-rs/cli` dependency in its pnpm-fetched source rather than
+> admitting Darwin's `/bin/ps` into the sandbox; both fetch and build use pnpm
+> 11 from pinned `ourPkgs`, matching upstream's major). Prior: 2026-08-03
+> (commit pending — nests every binary-package group under `pkgs.ai`, moves `gh`
+> and `glab` into `ai.devTools`, and updates the consumer-path registry without
+> changing any derivation). Prior: 2026-08-03 (commit pending — relocates the
+> two repo-local auto-memory source trees beside their overlay derivations
+> without changing package inputs or cache-hit semantics). Prior: 2026-08-03
+> (commit pending — adds a positive control that substitutes the overlay's own
+> `inputs.nixpkgs` the way a consumer's `follows` directive does, proving that
+> unsupported configuration drifts from the cache-published `fblog` path).
+> Prior: 2026-08-02 (commit pending — adds the pinned external Semble exception:
+> direct upstream selection preserves Numtide's derivation, while a plain meta
+> overlay exposes the MCP role without forking the build). Prior: 2026-07-25
+> (commit pending — the worked example moved off `git-branchless`, which had not
+> carried this shape for a long time, onto `git-absorb`, which does; also
+> corrects the new-package signature, the namespacing in the manual verification
+> snippet, and the pure-binary-fetch package list). If you touch any
+> `overlays/<name>.nix` overlay file or the overlay composition machinery and
+> this fragment isn't updated in the same commit, stop and fix it. Regressions
+> are gated by the `checks.cache-hit-parity` flake check (see "Verification"
+> below).
 
 ### The rule
 
@@ -112,6 +118,45 @@ Note that the `.override`-on-the-builder seam above is a SEPARATE question from
 cache-hit parity. Parity only cares that the base derivation and every build
 input come from `ourPkgs`; which override seam is correct depends on how the
 upstream builder is written. See the overlay-pattern fragment for that decision.
+
+### `follows` defeats this by construction — and can HARD-FAIL, not just miss
+
+`ourPkgs` guards the overlay ARGUMENT (`final` / `prev`). It cannot guard the
+flake INPUT. A consumer writing
+
+```nix
+nix-agentic-tools = {
+  url = "github:higherorderfunctor/nix-agentic-tools";
+  inputs.nixpkgs.follows = "nixpkgs";   # UNSUPPORTED
+};
+```
+
+rewrites THIS flake's `nixpkgs` input at lock time, before any of our code
+evaluates, so `ourPkgs = import inputs.nixpkgs { … }` faithfully imports
+**theirs**. No Nix expression can reference "my nixpkgs input, ignoring the
+consumer's follows" — there is nothing `ourPkgs` could have done differently. It
+is visible in the consumer's lock as
+`nodes["nix-agentic-tools"].inputs.nixpkgs = ["nixpkgs"]`, a follows pointer
+where our own locked node would otherwise be.
+
+**Do not treat this as a hole to plug.** It is already encoded as unsupported:
+the `followsControl` in `checks/cache-hit-parity.nix` constructs exactly this
+scenario and asserts the output **drifts**. The check fails if `follows` ever
+stops breaking parity.
+
+**The cost is worse than the cache miss this fragment used to describe.**
+Measured 2026-08-05 against a real consumer following an April 2026 nixpkgs
+(`01fbdeef`, Go 1.26.2): `glab` did not merely rebuild from source, it failed
+outright with `go.mod requires go >= 1.26.5 (running go 1.26.2)`. A package with
+no toolchain-floor seam inherits whatever `go` the followed nixpkgs ships, and
+`gh` was silently one bump behind the same fate.
+
+The Go floor seam (overlay-pattern fragment) now covers all seven Go packages,
+so that specific class is handled — a followed older nixpkgs gets a `go-bin`
+toolchain instead of a failure. It does NOT make `follows` supported: the
+consumer still gets zero cache hits, and the next toolchain-shaped dependency
+that lacks a floor seam will break the same way. The README carries the
+consumer-facing version of this warning.
 
 ### The trade-off (accepted in commit e5406977)
 
@@ -642,20 +687,26 @@ feature maturities, and config-key extraction fail closed.
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-08-03 (commit pending — records the property used to
-> associate versioned derivations with a flake-input update owner or a reasoned
-> local-source exemption). Prior: 2026-08-03 (commit pending — makes `pkgs.ai`
-> the single binary-package namespace, retains `generic` as a temporary nested
-> bucket, and moves the two forge CLIs into `ai.devTools`). Prior: 2026-08-03
-> (commit pending — makes overlay-owned local implementation sources a boundary
-> invariant and relocates the auto-memory helper and distiller sources
-> accordingly). Prior: 2026-08-02 (commit pending — adds Semble's direct
-> external-flake derivation pattern and identity-preserving MCP role). Prior:
-> 2026-08-01 (commit pending — records that `glab`'s `extraExtract` also
-> regenerates its `passthru.extracted` sidecar, via the new shared
-> `vu.mkExtractRegen`, and that glab is the one extracted package where the
-> fixer-then-extract ORDER is forced. It had NO regeneration at all until now,
-> which nothing caught until its first version bump reddened
+> **Last verified:** 2026-08-05 (commit pending — the Go toolchain floor is now
+> DERIVED from the pinned source's go.mod rather than hand-written, is carried
+> by ALL SEVEN Go packages rather than two, and is reached through the new
+> `vu.mkGoBuilder`; adds `checks/go-floor-drift.nix` as the loud half and
+> records that the toolchain is a BUILDER argument only `.override` can reach.
+> Measured: `gh` had ALREADY silently required Go >= 1.26.5, so it was the next
+> package to break after `glab`). Prior: 2026-08-03 (commit pending — records
+> the property used to associate versioned derivations with a flake-input update
+> owner or a reasoned local-source exemption). Prior: 2026-08-03 (commit pending
+> — makes `pkgs.ai` the single binary-package namespace, retains `generic` as a
+> temporary nested bucket, and moves the two forge CLIs into `ai.devTools`).
+> Prior: 2026-08-03 (commit pending — makes overlay-owned local implementation
+> sources a boundary invariant and relocates the auto-memory helper and
+> distiller sources accordingly). Prior: 2026-08-02 (commit pending — adds
+> Semble's direct external-flake derivation pattern and identity-preserving MCP
+> role). Prior: 2026-08-01 (commit pending — records that `glab`'s
+> `extraExtract` also regenerates its `passthru.extracted` sidecar, via the new
+> shared `vu.mkExtractRegen`, and that glab is the one extracted package where
+> the fixer-then-extract ORDER is forced. It had NO regeneration at all until
+> now, which nothing caught until its first version bump reddened
 > `checks.<system>.glab-extracted` on PR #621). Prior: 2026-07-28 — the commit
 > adding THAT line lands `glab`: the first Go package whose SRC hash also lives
 > in the sidecar (`vu.mkGoSrcVendorFix`), the first GitLab-hosted version check
@@ -1056,6 +1107,68 @@ candidate set on purpose: `go-bin.latest` is currently a prerelease, and Nix
 sorts `1.27rc1` ABOVE `1.27.0`. `checks/go-toolchain-floor.nix` exercises all
 three branches plus two positive controls, which is also what keeps the input
 from shipping dormant.
+
+**ALL SEVEN Go packages carry the seam**, not just the two that once needed it —
+`gh`, `glab`, `github-mcp`, `gluetun`, `mcp-language-server`, `oh-my-posh`,
+`otel-tui`. Scoping it to "whatever broke most recently" is how the same defect
+gets rediscovered per package: when `glab` broke, `gh` had ALREADY silently
+required Go >= 1.26.5 and would have been next.
+
+Reach it through **`vu.mkGoBuilder`**, which composes floor -> toolchain ->
+`buildGoModule.override` in one call. Do not re-expand that chain per package;
+that three-line repeat across three sites is what the helper replaced. `glab` is
+the one legitimate exception — it needs the TOOLCHAIN itself a second time, for
+its schema-dump extract (which compiles upstream's `internal/config` and is
+subject to the same floor), so it calls `goToolchainForFloor` directly and binds
+the result once.
+
+**The toolchain is a BUILDER argument, so `.override` is the only seam that
+reaches it.** `overrideAttrs` cannot: `version`/`src`/`vendorHash` are attrs
+`buildGoModule` reads off `finalAttrs`, but `go` is consumed when the builder is
+called. Packages needing both do
+`(pkgs.<name>.override { buildGoModule = …; }).overrideAttrs (…)`, in that
+order. `gh`, `glab` and `otel-tui` all gained the `.override` layer for exactly
+this reason.
+
+#### The floor itself is DERIVED, never hand-written
+
+A hand-maintained floor literal is still a pin — it just rots more slowly. The
+update pipeline bumps these packages 4x/day and would never touch it, and a
+stale-LOW floor is the dangerous direction: `versionAtLeast ourGo floor` then
+returns `ourGo` and the seam **silently does nothing**.
+
+So the floor is extracted from the pinned source's go.mod, by mechanism:
+
+- **Release mode (sidecar-versioned: `gh`, `glab`, `gluetun`, `oh-my-posh`,
+  `otel-tui`)** — `vu.mkGoFloorFix` runs as `extraExtract` and writes a
+  `goFloor` key into the sidecar. Correct home for it because the floor is a
+  function of the pinned version, so it changes only when the version does —
+  unlike `vendorHash`, which can be invalidated with no version bump and
+  therefore also needs a standalone `passthru` escape hatch.
+- **Trunk mode (rev-pinned: `github-mcp`, `mcp-language-server`)** — a literal
+  in the overlay. These have no sidecar and are bumped by `nix-update` (`git`
+  targets in `config/update-targets.nix`), so there is no repo-owned update
+  script to hook a rewrite into.
+
+**ORDER: hash fixers first, then the floor.** `mkGoFloorFix` builds `.src`, so a
+package whose `srcHash` also lives in the sidecar (`glab`) must have that
+restored first. For `glab` the floor then precedes `mkExtractRegen`, because the
+schema dump compiles the module and needs the toolchain the fresh floor selects.
+
+Reading the floor is **silent by construction** — overlays read
+`sources.goFloor or vu.goFloorUnknown`, and `goFloorUnknown` (`"0"`) is
+satisfied by everything. That is deliberate and not a hole: `mkGoFloorFix` must
+evaluate the package to build its `.src`, so a `throw` on the missing key would
+deadlock the fixer that repairs it. `checks/go-floor-drift.nix` is the loud half
+— it compares every recorded floor against the real go.mod and fails naming the
+package, the actual requirement, and the remedy (fixer vs. literal).
+
+That check takes **NO REGISTRY**: it filters `self.packages.<system>` for
+`passthru.goFloor`. A list of Go packages would be a second source of truth a
+new package could be added without touching, which is exactly how one ends up
+unprotected. It shares `vu.goModFloorFn` with the writer, so gate and writer
+cannot disagree about what the floor is. `goModPath` is a parameter, not a
+constant — `oh-my-posh` keeps its module under `src/`.
 
 ### A genuinely platform-specific package is gated at the ATTRIBUTE
 

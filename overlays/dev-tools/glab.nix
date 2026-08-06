@@ -23,20 +23,32 @@
 # nixpkgs passes `tag` (the fetcher asserts exactly one of `rev`/`tag`),
 # so only `tag` is overridden.
 #
-# `overrideAttrs`, NOT `.override` — the opposite of bruno, and for a
-# reason that is structural rather than stylistic. bruno's
-# `buildNpmPackage` is a `lib.extendMkDerivation` whose `extendDrvArgs`
-# consumes `npmDepsHash` from the INCOMING args, which makes an
-# `overrideAttrs`-injected hash inert. `buildGoModule` reads `vendorHash`
-# and `src` off `finalAttrs`, so composing on the output is correct here.
-# `overlays/dev-tools/gh.nix` is the standing proof for a Go package.
+# BOTH override seams are used, for different things — and they are not
+# interchangeable. Sort the attr into INPUT or OUTPUT:
 #
-# No Go toolchain override. nixpkgs owns this derivation's builder and
-# ships a `go` that satisfies gitlab-org/cli's go.mod. If a future
-# release raises the floor past our pin the build fails loudly with go's
-# own "go.mod requires go >= X", and the fix is the
-# `vu.goToolchainForFloor` seam that generic/gluetun.nix and
-# generic/oh-my-posh.nix already carry.
+#   `vendorHash` / `src` / `version` -> OUTPUT. `buildGoModule` reads
+#   these off `finalAttrs`, so composing on the result with
+#   `overrideAttrs` is correct. This is the opposite of bruno, whose
+#   `buildNpmPackage` is a `lib.extendMkDerivation` consuming
+#   `npmDepsHash` from the INCOMING args, which makes an
+#   `overrideAttrs`-injected hash inert.
+#
+#   the Go TOOLCHAIN -> INPUT. It is a builder argument, not an attr, so
+#   `overrideAttrs` cannot reach it at all; only `.override` can. That is
+#   why the expression below opens with `.override { buildGoModule = …; }`
+#   and THEN composes `overrideAttrs` on the result.
+#
+# `overlays/dev-tools/gh.nix` carries the identical pair.
+#
+# The toolchain is DERIVED FROM THE go.mod FLOOR, not pinned and not
+# inherited from nixpkgs. This header previously said "No Go toolchain
+# override … nixpkgs ships a `go` that satisfies gitlab-org/cli's go.mod",
+# and predicted that a floor bump would "fail loudly". It did — but only
+# for consumers whose nixpkgs is older than ours, because our own pin
+# happened to keep pace. gitlab-org/cli has required Go >= 1.26.5 since
+# v1.109.0; a consumer following a nixpkgs shipping 1.26.2 got
+# `go.mod requires go >= 1.26.5 (running go 1.26.2)` with nothing in this
+# repo red. `vu.mkGoBuilder` removes that asymmetry.
 #
 # Not agentic-tools-specific — it lives under overlays/generic/ so the
 # earmarked repo split can lift the subtree whole.
@@ -52,14 +64,36 @@
   # pin, never the consumer's `final`. `final.stdenv.hostPlatform.system`
   # is the only thing read from the consumer — see
   # dev/fragments/overlays/overlay-pattern.md.
+  # go-overlay is applied INSIDE this import so `go-bin` resolves against
+  # our own pin; it is purely additive (`pkgs.go` is byte-identical with
+  # and without it), so it moves no derivation.
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
+    overlays = [inputs.go-overlay.overlays.default];
   };
   inherit (ourPkgs) lib runCommand writeText;
   vu = import ../lib.nix;
 
   sources = builtins.fromJSON (builtins.readFile ./glab-sources.json);
   inherit (sources) version;
+
+  # DERIVED from the pinned source's go.mod by `fixGoFloor` below, never
+  # hand-written. See `vu.mkGoFloorFix` for why, and
+  # `checks/go-floor-drift.nix` for the gate that keeps it honest.
+  goFloor = sources.goFloor or vu.goFloorUnknown;
+
+  # Bound once and shared: the package builder AND the schema-dump extract
+  # below both compile this module's Go, so both need the toolchain the
+  # floor selects. Giving the extract plain `ourPkgs.go` would leave it
+  # failing with go's own "go.mod requires go >= X" precisely when the
+  # floor mechanism is doing its job.
+  goToolchain = vu.goToolchainForFloor {
+    floor = goFloor;
+    goBin = ourPkgs.go-bin;
+    ourGo = ourPkgs.go;
+    pname = "glab";
+    inherit lib;
+  };
 
   # Bound once: passed to BOTH the hash fixer and the update script, and
   # the default (`overlays/<pname>-sources.json`) is wrong for a grouped
@@ -73,58 +107,79 @@
     inherit sourcesFile;
   };
 
+  fixGoFloor = vu.mkGoFloorFix {
+    attr = "glab";
+    pkgs = ourPkgs;
+    pname = "glab";
+    inherit sourcesFile;
+  };
+
   # ── The package ──────────────────────────────────────────────────
   # Split in two so the schema extract below can read `.src` and
   # `.goModules` without the exported attribute referring to a
   # derivation that refers back to it. `passthru` is not a derivation
   # input, so the second `overrideAttrs` does not move the store path.
-  glabBase = ourPkgs.glab.overrideAttrs (prev: {
-    inherit version;
+  #
+  # `vu.mkGoBuilder` is the one-call sugar the other six Go packages use.
+  # glab reaches the primitive instead because it needs the TOOLCHAIN
+  # itself a second time, for the schema-dump extract below — running the
+  # sugar as well would derive the same value by a second path.
+  glabBase =
+    (ourPkgs.glab.override {
+      buildGoModule = ourPkgs.buildGoModule.override {go = goToolchain;};
+    })
+  .overrideAttrs (prev: {
+      inherit version;
 
-    src = prev.src.override {
-      tag = "v${version}";
-      hash = sources.srcHash or lib.fakeHash;
-    };
+      src = prev.src.override {
+        tag = "v${version}";
+        hash = sources.srcHash or lib.fakeHash;
+      };
 
-    vendorHash = sources.vendorHash or lib.fakeHash;
+      vendorHash = sources.vendorHash or lib.fakeHash;
 
-    # Merge, never replace: buildGoModule hangs `goModules` and
-    # `overrideModAttrs` here, module.nix warns loudly when an overlay
-    # drops them, and `fixHashes` builds `.goModules` through this very
-    # attrset. See the nix-standards fragment.
-    passthru =
-      (prev.passthru or {})
-      // {
-        inherit fixHashes;
-        updateScript = vu.mkUpdateScript {
-          # ORDER IS FORCED, and this is the only extracted package where
-          # that is true. `fixHashes` must land FIRST: until it has
-          # written the real `srcHash` and `vendorHash`, the sidecar still
-          # holds `lib.fakeHash`, and the extract below builds
-          # `glabBase.src` and `glabBase.goModules` — so it would fail on
-          # the hash mismatch rather than produce a schema. The other
-          # three extracted packages fetch a prebuilt binary and have no
-          # hash to restore, so they pass `mkExtractRegen` alone.
-          extraExtract = ''
-            ${fixHashes}
-            ${vu.mkExtractRegen {
-              attr = "glab";
-              dest = "overlays/dev-tools/glab-extracted.json";
-              pkgs = ourPkgs;
-            }}
-          '';
-          pkgs = ourPkgs;
-          platforms = {};
-          pname = "glab";
-          inherit sourcesFile;
-          versionCheck.cmd = vu.glLatestVersionCmd {
+      # Merge, never replace: buildGoModule hangs `goModules` and
+      # `overrideModAttrs` here, module.nix warns loudly when an overlay
+      # drops them, and `fixHashes` builds `.goModules` through this very
+      # attrset. See the nix-standards fragment.
+      passthru =
+        (prev.passthru or {})
+        // {
+          inherit fixGoFloor fixHashes goFloor;
+          updateScript = vu.mkUpdateScript {
+            # ORDER IS FORCED, and this is the only extracted package where
+            # that is true. `fixHashes` must land FIRST: until it has
+            # written the real `srcHash` and `vendorHash`, the sidecar still
+            # holds `lib.fakeHash`, and both `fixGoFloor` and the extract
+            # below build `glabBase.src` — so they would fail on the hash
+            # mismatch rather than produce a floor or a schema. The other
+            # three extracted packages fetch a prebuilt binary and have no
+            # hash to restore, so they pass `mkExtractRegen` alone.
+            #
+            # `fixGoFloor` then precedes the extract for the same reason it
+            # follows `fixHashes`: the schema dump COMPILES this module, so
+            # it needs the toolchain the freshly-written floor selects.
+            extraExtract = ''
+              ${fixHashes}
+              ${fixGoFloor}
+              ${vu.mkExtractRegen {
+                attr = "glab";
+                dest = "overlays/dev-tools/glab-extracted.json";
+                pkgs = ourPkgs;
+              }}
+            '';
             pkgs = ourPkgs;
-            # URL-encoded project path — the `/` MUST be `%2F`.
-            project = "gitlab-org%2Fcli";
+            platforms = {};
+            pname = "glab";
+            inherit sourcesFile;
+            versionCheck.cmd = vu.glLatestVersionCmd {
+              pkgs = ourPkgs;
+              # URL-encoded project path — the `/` MUST be `%2F`.
+              project = "gitlab-org%2Fcli";
+            };
           };
         };
-      };
-  });
+    });
 
   # ── Config-key schema extract ────────────────────────────────────
   # `internal/config.KeySchema` is upstream's declared single source of
@@ -225,7 +280,12 @@
   # satisfies it.
   extracted =
     runCommand "glab-extracted.json" {
-      nativeBuildInputs = [ourPkgs.go ourPkgs.jq];
+      # `goToolchain`, NOT `ourPkgs.go`. This dump compiles against
+      # upstream's own `internal/config`, so it is subject to the same
+      # go.mod floor the package is — with plain `ourPkgs.go` it would
+      # fail on "go.mod requires go >= X" exactly when the floor seam is
+      # earning its keep.
+      nativeBuildInputs = [goToolchain ourPkgs.jq];
     } ''
       export HOME="$TMPDIR"
       export GOCACHE="$TMPDIR/go-cache"

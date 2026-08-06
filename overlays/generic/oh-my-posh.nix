@@ -139,20 +139,31 @@
     inherit sourcesFile;
   };
 
-  # `go` directive of src/go.mod at the packaged version. Raise it when
-  # upstream raises it; never lower it, and never replace it with a
-  # toolchain version.
-  goFloor = "1.26.0";
-  go = vu.goToolchainForFloor {
-    floor = goFloor;
-    goBin = ourPkgs.go-bin;
-    ourGo = ourPkgs.go;
+  # This project keeps its Go module under `src/`, NOT at the repo root —
+  # the one place the floor mechanism is not uniform across the seven Go
+  # packages, and the reason `goModPath` is a parameter rather than a
+  # constant. Both the fixer and `checks/go-floor-drift.nix` read it from
+  # `passthru.goModPath` below, so they cannot disagree.
+  goModPath = "src/go.mod";
+
+  fixGoFloor = vu.mkGoFloorFix {
+    attr = "oh-my-posh";
+    pkgs = ourPkgs;
     pname = "oh-my-posh";
-    inherit lib;
+    inherit goModPath sourcesFile;
   };
+
+  # DERIVED from the pinned source's src/go.mod by `fixGoFloor` above,
+  # never hand-written — see gluetun.nix for the rationale, and
+  # `vu.goFloorUnknown` for why the missing-key fallback is silent.
+  goFloor = sources.goFloor or vu.goFloorUnknown;
 in
   (ourPkgs.oh-my-posh.override {
-    buildGoModule = ourPkgs.buildGoModule.override {inherit go;};
+    buildGoModule = vu.mkGoBuilder {
+      floor = goFloor;
+      pkgs = ourPkgs;
+      pname = "oh-my-posh";
+    };
   })
   .overrideAttrs (prev: {
     inherit (sources) version;
@@ -185,9 +196,14 @@ in
     passthru =
       (prev.passthru or {})
       // {
-        inherit fixVendorHash;
+        inherit fixGoFloor fixVendorHash goFloor goModPath;
         updateScript = vu.ghArchiveUpdateScript {
-          extraExtract = "${fixVendorHash}";
+          # ORDER: hash fixer first, then the floor. `fixGoFloor` builds
+          # `.src`, so anything restoring a src hash lands before it.
+          extraExtract = ''
+            ${fixVendorHash}
+            ${fixGoFloor}
+          '';
           pkgs = ourPkgs;
           pname = "oh-my-posh";
           repo = "JanDeDobbeleer/oh-my-posh";

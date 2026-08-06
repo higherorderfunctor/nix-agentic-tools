@@ -89,19 +89,26 @@
     inherit sourcesFile;
   };
 
-  # `go` directive of go.mod at the packaged version. Raise it when
-  # upstream raises it; never lower it, and never replace it with a
-  # toolchain version.
-  goFloor = "1.25.0";
-  go = vu.goToolchainForFloor {
-    floor = goFloor;
-    goBin = ourPkgs.go-bin;
-    ourGo = ourPkgs.go;
+  fixGoFloor = vu.mkGoFloorFix {
+    attr = "gluetun";
+    pkgs = ourPkgs;
     pname = "gluetun";
-    inherit lib;
+    inherit sourcesFile;
   };
 
-  buildGoModule = ourPkgs.buildGoModule.override {inherit go;};
+  # DERIVED from the pinned source's go.mod by `fixGoFloor` above, never
+  # hand-written. This used to be the literal `"1.25.0"`, which was
+  # correct only for as long as someone kept re-checking it — the update
+  # pipeline bumps this package 4x/day and never touched it. See
+  # `vu.goFloorUnknown` for why the missing-key fallback is silent and
+  # `checks/go-floor-drift.nix` for the loud half.
+  goFloor = sources.goFloor or vu.goFloorUnknown;
+
+  buildGoModule = vu.mkGoBuilder {
+    floor = goFloor;
+    pkgs = ourPkgs;
+    pname = "gluetun";
+  };
 in
   buildGoModule {
     pname = "gluetun";
@@ -114,9 +121,14 @@ in
     subPackages = ["cmd/gluetun"];
 
     passthru = {
-      inherit fixVendorHash;
+      inherit fixGoFloor fixVendorHash goFloor;
       updateScript = vu.ghArchiveUpdateScript {
-        extraExtract = "${fixVendorHash}";
+        # ORDER: hash fixer first, then the floor. `fixGoFloor` builds
+        # `.src`, so anything restoring a src hash has to land before it.
+        extraExtract = ''
+          ${fixVendorHash}
+          ${fixGoFloor}
+        '';
         pkgs = ourPkgs;
         pname = "gluetun";
         repo = "passteque/gluetun";

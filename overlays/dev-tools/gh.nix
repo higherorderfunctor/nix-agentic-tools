@@ -49,9 +49,13 @@
   # Cache-hit parity: every build input comes from THIS repo's nixpkgs
   # pin, never the consumer's `final`. `final.stdenv.hostPlatform.system`
   # is the only thing read from the consumer — see
-  # dev/fragments/overlays/overlay-pattern.md.
+  # dev/fragments/overlays/overlay-pattern.md. go-overlay is applied
+  # INSIDE this import so `go-bin` resolves against our own pin; it is
+  # purely additive (`pkgs.go` is byte-identical with and without it), so
+  # it moves no derivation.
   ourPkgs = import inputs.nixpkgs {
     inherit (final.stdenv.hostPlatform) system;
+    overlays = [inputs.go-overlay.overlays.default];
   };
   inherit (ourPkgs) fetchzip lib;
   vu = import ../lib.nix;
@@ -69,8 +73,33 @@
     pname = "gh";
     inherit sourcesFile;
   };
+
+  fixGoFloor = vu.mkGoFloorFix {
+    attr = "gh";
+    pkgs = ourPkgs;
+    pname = "gh";
+    inherit sourcesFile;
+  };
+
+  # DERIVED from the pinned source's go.mod by `fixGoFloor`, never
+  # hand-written. See `vu.mkGoFloorFix` for why, and
+  # `checks/go-floor-drift.nix` for the gate that keeps it honest.
+  goFloor = sources.goFloor or vu.goFloorUnknown;
 in
-  ourPkgs.gh.overrideAttrs (prev: {
+  # TWO override seams, and they are not interchangeable. The toolchain is
+  # a BUILDER argument, so it can only be reached with `.override`;
+  # `version`/`src`/`vendorHash` are ordinary attrs that `buildGoModule`
+  # reads off `finalAttrs`, so they compose on the output with
+  # `overrideAttrs`. See the overlays fragment's `.override`-vs-
+  # -`overrideAttrs` rule.
+  (ourPkgs.gh.override {
+    buildGoModule = vu.mkGoBuilder {
+      floor = goFloor;
+      pkgs = ourPkgs;
+      pname = "gh";
+    };
+  })
+  .overrideAttrs (prev: {
     inherit (sources) version;
     # fetchzip, so the recorded hash is over the UNPACKED NAR — which is
     # why the updateScript below prefetches with --unpack.
@@ -84,9 +113,14 @@ in
     passthru =
       (prev.passthru or {})
       // {
-        inherit fixVendorHash;
+        inherit fixGoFloor fixVendorHash goFloor;
         updateScript = vu.ghArchiveUpdateScript {
-          extraExtract = "${fixVendorHash}";
+          # ORDER: hash fixer first, then the floor. `fixGoFloor` builds
+          # `.src`, so anything restoring a src hash lands before it.
+          extraExtract = ''
+            ${fixVendorHash}
+            ${fixGoFloor}
+          '';
           pkgs = ourPkgs;
           pname = "gh";
           repo = "cli/cli";
