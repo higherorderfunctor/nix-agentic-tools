@@ -318,10 +318,22 @@ checkout belongs to the operator, not to any agent session.
 Pre-flight before the first Write/Edit of any repo file in a session:
 
 ```bash
-git rev-parse --git-dir
+git rev-parse --path-format=absolute --git-dir
 # ends in .git/worktrees/<slug> → linked worktree, proceed
-# a bare <clone>/.git         → primary checkout: STOP, make a worktree first
+# ends in a bare <clone>/.git   → primary checkout: STOP, make a worktree first
 ```
+
+`--path-format=absolute` is load-bearing, not decoration, and the bare form is
+actively misleading here. `git rev-parse --git-dir` prints a path **relative to
+cwd when it can**, so at the top of the primary checkout it answers `.git` —
+while in a linked worktree it answers an absolute
+`<clone>/.git/worktrees/<slug>`. Measured both ways on 2026-08-05. So the one
+case the check exists to catch is the case whose output does not look like the
+`<clone>/.git` you are comparing against, and a reader matching on that string
+concludes "not the primary checkout" precisely when they are standing in it.
+Forcing absolute makes both arms comparable. This is the same flag the worktree
+derivation below already uses for `--git-common-dir`, and the same one
+`devenv.nix` uses for its related checks.
 
 Only the session scratchpad is exempt, because it never touches the repo tree at
 all. There is no "just a draft" exemption, no "I'll move it before committing"
