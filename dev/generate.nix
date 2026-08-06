@@ -458,11 +458,13 @@
     1. **You lose the binary cache entirely.** Every package rebuilds from
        source on every consumer rebuild, because the paths you now request
        were never built by anyone.
-    2. **Builds can fail outright**, not merely rebuild. Packages derive
-       toolchains from their own upstream requirements, and a nixpkgs pin
-       older than ours may simply not carry a new enough one. A followed
+    2. **Builds can fail outright**, not merely rebuild, when a pin older
+       than ours cannot satisfy what a package's upstream requires. This is
+       not hypothetical: until the Go toolchain floor landed, a followed
        nixpkgs from April 2026 (Go 1.26.2) could not build `glab` or `gh`,
-       both of which require Go >= 1.26.5.
+       both of which need Go >= 1.26.5. Those two now select a newer
+       toolchain and build — but that guarantee is per-mechanism, not
+       general. Nothing makes the next dependency of that shape safe.
 
     The cost of not following is two nixpkgs evaluations in your store. Most
     of the closure dedupes via content-addressing, and cache hits are only

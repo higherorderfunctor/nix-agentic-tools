@@ -1,5 +1,8 @@
-# glab — the GitLab CLI, re-pinned onto this repo's update cadence.
-# Our pin sits at 1.110.0; the nixpkgs pin ships 1.86.0.
+# glab — the GitLab CLI, re-pinned onto this repo's update CADENCE: a
+# release lands here on the 4x/day sweep instead of waiting on a nixpkgs
+# channel bump. Deliberately no version numbers here — they rot, and the
+# size of the gap against nixpkgs is not the justification. The gap is
+# often small and sometimes zero; that is expected.
 #
 # NOT THE `gh` SHAPE, despite being the sibling tool and also a Go
 # package. `overlays/dev-tools/gh.nix` lets `mkUpdateScript` prefetch its

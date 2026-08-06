@@ -67,19 +67,20 @@
 # Note that `overrideAttrs` REPLACES `postPatch` rather than appending, so
 # this restates the whole list rather than adding to nixpkgs'.
 #
-# THE GO TOOLCHAIN IS DERIVED, NOT PINNED, and the seemingly-redundant
-# `goFloor` below is deliberate — do not "clean it up". The sibling pinned
+# THE GO TOOLCHAIN IS DERIVED, NOT PINNED, and so is the floor it derives
+# from — do not "clean up" either. The sibling repo pinned
 # `go-bin.versions."1.26.0"` here; that was a gap-filler when written and
-# is a DOWNGRADE today, because our nixpkgs pin has since moved to go
-# 1.26.5 and nothing announced the transition. `vu.goToolchainForFloor`
-# declares the durable fact instead — oh-my-posh 29.36.0's `src/go.mod`
-# says `go 1.26.0` with no `toolchain` directive — and returns
-# `ourPkgs.go` whenever our pin satisfies it (which it does today, so this
-# resolves to plain go 1.26.5 and go-bin is never instantiated). It only
-# reaches for a prebuilt toolchain if upstream raises the floor past
-# nixpkgs-unstable, and it self-clears the moment nixpkgs catches up. See
-# the helper's header in overlays/lib.nix, and
-# checks/go-toolchain-floor.nix for its branch coverage.
+# is a DOWNGRADE now that our nixpkgs pin ships go 1.26.5, with nothing
+# announcing the transition. A hand-written FLOOR is only a slower-rotting
+# version of the same mistake, so `goFloor` is EXTRACTED from the pinned
+# source's `src/go.mod` into the sidecar by `vu.mkGoFloorFix`, and
+# `vu.mkGoBuilder` turns it into a builder.
+#
+# This project keeps its module under `src/`, so it is the one package
+# passing a non-default `goModPath`. No version literals here on purpose —
+# the sidecar holds the current floor and `checks/go-floor-drift.nix`
+# asserts it still matches source. See overlays/lib.nix, and
+# checks/go-toolchain-floor.nix for the selector's branch coverage.
 #
 # vendorHash lives in the SIDECAR rather than inline: `mkUpdateScript`
 # rebuilds the sidecar from scratch on every write, so any key it does not

@@ -35,17 +35,21 @@
 # test sweep, and the tun-device removal it used to need, are gone with
 # it.
 #
-# THE GO TOOLCHAIN IS DERIVED, NOT PINNED, and the seemingly-redundant
-# `goFloor` below is deliberate — do not "clean it up". A pinned toolchain
-# cannot tell "still filling a real gap" from "nixpkgs caught up and this
-# is now a downgrade". `vu.goToolchainForFloor` declares the durable fact
-# instead — gluetun 3.41.1's `go.mod` says `go 1.25.0` with no `toolchain`
-# directive — and returns `ourPkgs.go` whenever our pin satisfies it
-# (which it does today, so this resolves to plain go 1.26.5 and go-bin is
-# never instantiated). It only reaches for a prebuilt toolchain if
-# upstream raises the floor past nixpkgs-unstable, and self-clears the
-# moment nixpkgs catches up. See the helper's header in overlays/lib.nix,
-# and checks/go-toolchain-floor.nix for its branch coverage.
+# THE GO TOOLCHAIN IS DERIVED, NOT PINNED, and so is the floor it derives
+# from — do not "clean up" either. A pinned toolchain cannot tell "still
+# filling a real gap" from "nixpkgs caught up and this is now a
+# downgrade", and a hand-written floor is just a slower-rotting pin: the
+# 4x/day sweep bumps this package and would never touch it.
+#
+# So `goFloor` is EXTRACTED from the pinned source's go.mod into the
+# sidecar by `vu.mkGoFloorFix`, and `vu.mkGoBuilder` turns it into a
+# builder. No version literals here on purpose — the sidecar holds the
+# current value and `checks/go-floor-drift.nix` asserts it still matches
+# source. `goToolchainForFloor` returns `ourPkgs.go` whenever our pin
+# satisfies the floor, reaching for a prebuilt `go-bin` only when upstream
+# outruns nixpkgs-unstable, and self-clearing the moment nixpkgs catches
+# up. See overlays/lib.nix, and checks/go-toolchain-floor.nix for the
+# selector's branch coverage.
 #
 # vendorHash lives in the SIDECAR rather than inline: `mkUpdateScript`
 # rebuilds the sidecar from scratch on every write, so any key it does not
