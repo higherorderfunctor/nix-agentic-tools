@@ -7,7 +7,15 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 
 # CI-lean closure taxonomy
 
-> **Last verified:** 2026-08-05 (commit pending — records that `devenv-test`
+> **Last verified:** 2026-08-05 (commit pending — the repo-aware Codex wrapper
+> and the `nix-agentic-tools` permission profile are both DELETED; this shell
+> converges on the legacy `workspace-write` sandbox that every other repository
+> the maintainer runs already uses, and the beta permission model is locked out
+> at the factory. Two measured facts drove it, both from `codex sandbox` on
+> 0.146.1 with no model in the loop: the profile denied `~/.cache/nix` while the
+> identical grant was live everywhere else, and it ALLOWED the primary
+> checkout's working tree, which is the opposite of what its own comment
+> claimed). Prior: 2026-08-05 (commit pending — records that `devenv-test`
 > remains always-reporting but is no longer required by branch protection; the
 > path-filter constraint is therefore optional rather than load-bearing). Prior:
 > 2026-08-03 (commit pending — makes `devenv-test` an always-reporting required
@@ -67,24 +75,48 @@ enterTest assertions) invoke it?** If not, it goes in the `!isCI` list. When in
 doubt, `CI=1 devenv test` locally is the oracle — green means the gate never
 needed it.
 
-This repository additionally supplies `codexForRepository` through the shared
-`ai.codex.package` override. It is a small shell wrapper around the same base
-Codex package, not a second CLI closure. The wrapper injects the evaluated
-`config.devenv.root` and `nix-agentic-tools` profile only when the caller did
-not provide `--cd`/`-C` or `--profile`/`-p`, and only for Codex runtime command
-families that accept those flags. Administrative commands such as `doctor`,
-`login`, and `features` pass through unchanged. enterTest covers explicit-flag
-idempotence, exact `apply`, `resume`, and `exec-server` default injection, exact
-`doctor` pass-through, and the real `doctor --json` rejection that originally
-exposed the bug.
+### Codex ships unwrapped, on the legacy sandbox
 
-The selected `nix-agentic-tools` permission profile is also the effective
-filesystem policy. Codex beta permission profiles do not compose with the legacy
-`sandbox_workspace_write` table from user config, so the profile grants the
-effective `$XDG_CACHE_HOME/semble` path (falling back to `$HOME/.cache`) in its
-own filesystem table. This admits the user-global Semble index without
-duplicating Semble's MCP, instructions, or agent in project scope. A stricter
-profile may deliberately omit that grant.
+This repository used to supply a `codexForRepository` wrapper through
+`ai.codex.package`, injecting `--cd` and `--profile nix-agentic-tools` for
+runtime command families only. **Both the wrapper and the profile are gone.**
+Codex is now the plain package with a legacy `sandbox_mode = "workspace-write"`
+project config, matching nixos-config and the maintainer's work repository. Do
+not reintroduce the wrapper: `--profile` is what dragged the beta permission
+model back in, and the model is locked out at the factory (see the lockout
+comment in `packages/chatgpt-codex/lib/mkCodex.nix`).
+
+Two measured facts retired the profile, both from `codex sandbox` on 0.146.1,
+which resolves the policy with no model in the loop:
+
+- **It denied `~/.cache/nix`.** Beta permission profiles do not compose with the
+  legacy `sandbox_workspace_write` table, so the module's automatic Nix-cache
+  root never reached the profile and the profile never restated it. A sandboxed
+  `nix build` here could not write its own cache, while the identical grant was
+  live in every other checkout on the machine. Nothing reported it.
+- **It ALLOWED the primary checkout's working tree.** The profile's own comment
+  claimed it granted the shared Git directory "without granting write access to
+  the main checkout's working files". `extends = ":workspace"` plus
+  `:workspace_roots."." = "write"` made that false from the start. The stated
+  security property never existed.
+
+`devenv.nix` declares exactly the two roots the factory cannot infer: the
+worktree collection (work spans sibling worktrees of one clone, so a session
+started in any of them must write the others) and the **user-global** Semble
+cache. The Semble one is easy to get wrong — this repository deliberately does
+NOT enable the Semble devenv module, because that would pull Semble's MCP
+server, instructions, and agent into project scope. It consumes the user-global
+index, so `${XDG_CACHE_HOME:-$HOME/.cache}/semble` has to be granted by hand;
+the automatic `${config.devenv.state}/semble-cache` root the Semble facet
+contributes belongs to consumers that DO enable the module and is a different
+path. The retired permission profile granted the same user-global path for the
+same reason, so this is a faithful conversion rather than a new grant.
+
+`${config.devenv.root}/.git` and the effective Nix cache root are contributed by
+Codex's own devenv branch and must not be hand-written. enterTest asserts the
+unwrapped binary is on PATH, that the project config selects `workspace-write`
+and carries no beta keys, that no stale profile remains in `CODEX_HOME`, and
+that all four roots are present.
 
 Two proofs to preserve when touching the gates: with `CI` unset the shell must
 rebuild to the **identical store path** (local behavior unchanged — compare

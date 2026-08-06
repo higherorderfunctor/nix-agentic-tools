@@ -761,104 +761,58 @@ in {
       && !(devenv.config.files ? ".codex/hooks.json")
   );
 
-  module-codex-profile-materializer-lifecycle = let
-    taskFor = profiles:
-      (evalDevenv {
-        ai.codex = {
-          enable = true;
-          inherit profiles;
-        };
-      }).config.tasks."ai:codex:materialize-profiles".exec;
-    initialTask = taskFor {
-      review.model_reasoning_effort = "low";
-    };
-    updatedTask = taskFor {
-      review.model_reasoning_effort = "high";
-    };
-    removedTask = taskFor {};
-  in
-    pkgs.runCommand "module-test-codex-profile-materializer-lifecycle" {} ''
-      export HOME="$PWD/home"
-      export XDG_STATE_HOME="$PWD/state"
-      export DEVENV_ROOT="$PWD/repo"
-      export DEVENV_STATE="$PWD/devenv-state"
-      mkdir -p "$DEVENV_ROOT"
+  # ── Beta permission model lockout ──────────────────────────────────────
+  # A profile-materializer lifecycle test and a materializer collision test
+  # lived here and drove `ai.codex.profiles` end to end. That option and the
+  # `default_permissions`/`permissions` settings beside it are now locked out
+  # (see the lockout comment in packages/chatgpt-codex/lib/mkCodex.nix), so
+  # their runtime behavior is unreachable and these assert the lockout itself.
+  # The profile name-shape and intra-layer sandbox-model tests below are kept:
+  # they cover the surface that has to still be valid if this is ever undone.
+  module-codex-profiles-locked-out = mkTest "codex-profiles-locked-out" (
+    let
+      config.ai.codex = {
+        enable = true;
+        profiles.review.model_reasoning_effort = "low";
+      };
+      rejects = evaluated:
+        builtins.any (assertion:
+          !assertion.assertion
+          && lib.hasInfix "ai.codex.profiles is locked out" assertion.message)
+        evaluated.config.assertions;
+    in
+      rejects (evalHm config) && rejects (evalDevenv config)
+  );
 
-      (
-        ${initialTask}
-      )
-      test -L "$HOME/.codex/review.config.toml"
-      grep -Fqx 'model_reasoning_effort = "low"' "$HOME/.codex/review.config.toml"
+  module-codex-default-permissions-locked-out = mkTest "codex-default-permissions-locked-out" (
+    let
+      config.ai.codex = {
+        enable = true;
+        settings.default_permissions = ":workspace";
+      };
+      rejects = evaluated:
+        builtins.any (assertion:
+          !assertion.assertion
+          && lib.hasInfix "ai.codex.settings.default_permissions is locked out" assertion.message)
+        evaluated.config.assertions;
+    in
+      rejects (evalHm config) && rejects (evalDevenv config)
+  );
 
-      lock_files=("$XDG_STATE_HOME"/nix-agentic-tools/codex-profiles/*/lock)
-      test "''${#lock_files[@]}" -eq 1
-      lock_file="''${lock_files[0]}"
-      test -f "$lock_file"
-      exec 9> "$lock_file"
-      ${lib.getExe pkgs.flock} 9
-      if ${pkgs.coreutils}/bin/timeout 1 ${pkgs.bash}/bin/bash -c ${lib.escapeShellArg updatedTask}; then
-        echo "profile materializer unexpectedly ignored its repository lock" >&2
-        exit 1
-      else
-        timeout_code=$?
-      fi
-      test "$timeout_code" -eq 124
-      grep -Fqx 'model_reasoning_effort = "low"' "$HOME/.codex/review.config.toml"
-      ${lib.getExe pkgs.flock} -u 9
-      exec 9>&-
-
-      (
-        ${updatedTask}
-      )
-      test -L "$HOME/.codex/review.config.toml"
-      grep -Fqx 'model_reasoning_effort = "high"' "$HOME/.codex/review.config.toml"
-
-      (
-        ${removedTask}
-      )
-      test ! -e "$HOME/.codex/review.config.toml"
-      touch "$out"
-    '';
-
-  module-codex-profile-materializer-refuses-collision = let
-    initialTask =
-      (evalDevenv {
-        ai.codex = {
-          enable = true;
-          profiles.owned.model_reasoning_effort = "low";
-        };
-      }).config.tasks."ai:codex:materialize-profiles".exec;
-    collidingTask =
-      (evalDevenv {
-        ai.codex = {
-          enable = true;
-          profiles.review.model_reasoning_effort = "high";
-        };
-      }).config.tasks."ai:codex:materialize-profiles".exec;
-  in
-    pkgs.runCommand "module-test-codex-profile-materializer-refuses-collision" {} ''
-      export HOME="$PWD/home"
-      export XDG_STATE_HOME="$PWD/state"
-      export DEVENV_ROOT="$PWD/repo"
-      export DEVENV_STATE="$PWD/devenv-state"
-      mkdir -p "$DEVENV_ROOT"
-
-      (
-        ${initialTask}
-      )
-      test -L "$HOME/.codex/owned.config.toml"
-      printf '%s\n' 'externally managed' > "$HOME/.codex/review.config.toml"
-
-      if (
-        ${collidingTask}
-      ); then
-        echo "profile materializer unexpectedly replaced an external file" >&2
-        exit 1
-      fi
-      test -L "$HOME/.codex/owned.config.toml"
-      grep -Fqx 'externally managed' "$HOME/.codex/review.config.toml"
-      touch "$out"
-    '';
+  module-codex-permissions-locked-out = mkTest "codex-permissions-locked-out" (
+    let
+      config.ai.codex = {
+        enable = true;
+        settings.permissions.project-edit.extends = ":workspace";
+      };
+      rejects = evaluated:
+        builtins.any (assertion:
+          !assertion.assertion
+          && lib.hasInfix "ai.codex.settings.permissions is locked out" assertion.message)
+        evaluated.config.assertions;
+    in
+      rejects (evalHm config) && rejects (evalDevenv config)
+  );
 
   module-codex-profile-name-rejects-unsafe-stems = mkTest "codex-profile-name-rejects-unsafe-stems" (
     let
@@ -924,6 +878,11 @@ in {
       hm = evalHm config;
       devenv = evalDevenv config;
       profile = hm.config.home.file.".codex/deep-review.config.toml".source.value;
+      # Emission parity is still proven while the option is locked out, so
+      # re-enabling restores a TESTED path rather than an untested one. The
+      # lockout must also be the ONLY thing blocking it — if a second assertion
+      # starts failing here, the retained code has rotted behind the lock.
+      failing = builtins.filter (assertion: !assertion.assertion) devenv.config.assertions;
     in
       profile
       == {
@@ -931,7 +890,8 @@ in {
         model_reasoning_effort = "high";
       }
       && devenv.config.tasks ? "ai:codex:materialize-profiles"
-      && builtins.all (assertion: assertion.assertion) devenv.config.assertions
+      && builtins.length failing == 1
+      && lib.hasInfix "ai.codex.profiles is locked out" (builtins.head failing).message
   );
 
   module-codex-mcp-lowering-parity = mkTest "codex-mcp-lowering-parity" (

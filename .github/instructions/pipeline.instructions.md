@@ -841,9 +841,12 @@ example, Codex's user `config.toml` is reconciled by Home Manager activation,
 while project config remains statically owned by devenv. Codex named profile
 files are immutable whole-file layers: Home Manager links them directly, while a
 devenv pre-shell task safely materializes repository declarations into the user
-CODEX_HOME where native `--profile` lookup requires them. These app-level
-materialization tasks are separate from the repository instruction generator
-described here.
+CODEX_HOME where native `--profile` lookup requires them. That path is currently
+unreachable — `ai.codex.profiles` is LOCKED OUT and fails evaluation (see the
+lockout comment in `packages/chatgpt-codex/lib/mkCodex.nix`) — so no repository
+here drives the materializer; it is described because the code is retained for
+re-enablement. These app-level materialization tasks are separate from the
+repository instruction generator described here.
 
 Instruction files are the exception: they are **copies**, not symlinks,
 materialized on every shell entry by `generate:instructions:materialize`

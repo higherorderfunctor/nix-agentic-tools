@@ -128,6 +128,14 @@
       # settings, named profiles, permission profiles, feature toggles, or MCP
       # records. Dedicated typed enums consume extracted values where the CLI
       # publishes a closed set; the flag itself remains invocation-only.
+      #
+      # `--profile` and `--permission-profile` keep this disposition even
+      # though their declarative counterparts (`ai.codex.profiles`,
+      # `settings.default_permissions`, `settings.permissions`) are currently
+      # LOCKED OUT by assertion. The classification records that a typed
+      # representation EXISTS, not that it is reachable; see the lockout
+      # comment in ./mkCodex.nix. Do not reclassify them as unrepresented —
+      # that would assert this repository has no model for the flags at all.
       declarativeEquivalent = [
         "--ask-for-approval"
         "--bearer-token-env-var"
