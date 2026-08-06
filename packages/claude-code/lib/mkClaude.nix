@@ -627,26 +627,6 @@ in
                 so a pivot does not have to re-derive the trade-off.
               '';
             };
-            windowMinutes = lib.mkOption {
-              type = lib.types.ints.positive;
-              default = 10;
-              description = ''
-                Minutes within which a neighbouring memory file's mtime is reported as a
-                live concurrent session rather than as history. The signal this exists to
-                surface is "another session is writing here RIGHT NOW", so this wants to
-                be close to a session's working tempo, not to a retention period.
-              '';
-            };
-            listCount = lib.mkOption {
-              type = lib.types.ints.positive;
-              default = 10;
-              description = ''
-                How many recently-modified neighbours to list, most recent first. Each
-                contributes its filename, mtime and `description:` frontmatter line — file
-                bodies are never read, so this cannot spill memory contents into a hook
-                payload.
-              '';
-            };
             extraDirectories = lib.mkOption {
               type = lib.types.listOf lib.types.str;
               default = [];
@@ -663,6 +643,26 @@ in
                 Use this only for memory stores living outside that layout.
               '';
               example = lib.literalExpression ''["/srv/shared/agent-memory"]'';
+            };
+            listCount = lib.mkOption {
+              type = lib.types.ints.positive;
+              default = 10;
+              description = ''
+                How many recently-modified neighbours to list, most recent first. Each
+                contributes its filename, mtime and `description:` frontmatter line — file
+                bodies are never read, so this cannot spill memory contents into a hook
+                payload.
+              '';
+            };
+            windowMinutes = lib.mkOption {
+              type = lib.types.ints.positive;
+              default = 10;
+              description = ''
+                Minutes within which a neighbouring memory file's mtime is reported as a
+                live concurrent session rather than as history. The signal this exists to
+                surface is "another session is writing here RIGHT NOW", so this wants to
+                be close to a session's working tempo, not to a retention period.
+              '';
             };
           };
         };
