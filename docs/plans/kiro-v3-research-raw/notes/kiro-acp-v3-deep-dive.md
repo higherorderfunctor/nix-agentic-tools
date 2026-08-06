@@ -400,6 +400,10 @@ append-fails, `--v3` translation intact, escape hatch intact.
   `session/set_model` → -32601.
 - `steps-4-refine.json`, `steps-5-rename.json` — permissions/policy/steer
   refinements; rename/delete persistence.
+- `steps-6-recipes.json` — `listRecipes` with and without `workspacePaths`,
+  for the per-recipe `plan` field. Closed R-1/R-19 in
+  `dev/references/kiro-workflow-ref.md` §3; needs no `workflows` unlock, no
+  session and no credentials, so it is the cheapest probe here.
 
 ```bash
 P=private/kiro-phase2/probes
