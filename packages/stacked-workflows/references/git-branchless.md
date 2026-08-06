@@ -148,6 +148,13 @@ Operations like `git move` and `git sync` speculatively apply rebases in-memory.
 If a merge conflict would occur, they abort cleanly without starting conflict
 resolution (unless `--merge` is passed).
 
+That parenthetical is the whole contract, and it is easy to read past: `--merge`
+is precisely the opt-in to an **on-disk** rebase. Once the in-memory attempt
+fails, the command re-runs the rebase against the real working copy and stops at
+the conflict, leaving a detached HEAD and an in-progress rebase to finish or
+`git rebase --abort`. `--in-memory` forbids that fallback outright; it is the
+flag to reach for when you want a guaranteed no-side-effect attempt.
+
 ### Bitemporality
 
 git-branchless tracks how commits change over time (like Mercurial's Changeset
@@ -252,10 +259,17 @@ git move -d <dest>             # move current stack onto dest (default -b HEAD)
 git move -s <src>              # move src onto HEAD (default -d HEAD)
 git move -I                    # insert commit between others
 git move -F -x <src> -d <dest> # fixup: combine src into dest
+git move --dry-run -d <dest>   # test the IN-MEMORY rebase only (see below)
+git move --in-memory -d <dest> # never fall back to an on-disk rebase
 ```
 
 Defaults: no `-d` → `HEAD`; no `-s`/`-b` → `-b HEAD`. Conflicts: fails cleanly
 unless `--merge` is passed.
+
+`--dry-run` is `Test whether an in-memory rebase would succeed` — **scoped to
+the in-memory attempt, not to the command**. It does not suppress the on-disk
+fallback, so it is not a general preview flag the way `git submit --dry-run` is.
+See the pitfall below before pairing it with `--merge`.
 
 **`git split`** — Extract changes from a commit.
 
@@ -687,6 +701,31 @@ When branchless says "This operation abandoned N commits!", run `git restack`
 
 `git move` and `git sync` skip conflicts by default. Only pass `--merge` when
 you're ready to resolve. This lets you safely try operations without risk.
+
+### Don't read `--dry-run` as a preview of the whole command
+
+`git move --dry-run` tests **whether an in-memory rebase would succeed** — that
+is its documented scope, and it is narrower than the name suggests. Paired with
+`--merge` it does not preview anything: the in-memory attempt fails on the
+conflict, `--merge` sends it to an on-disk rebase, and you are left with a
+detached HEAD and a real conflicted working copy from a command you thought was
+read-only.
+
+The trap is inherited from a sibling command. `git submit --dry-run` genuinely
+has no side effects, so `--dry-run` reads as a universal safety flag across the
+suite. It is not one here.
+
+```bash
+git move --dry-run --merge -d main   # NOT a preview — can start a real rebase
+git move --dry-run -d main           # safe: no --merge, so a conflict aborts
+git move --dry-run --in-memory -d main  # safe and explicit
+```
+
+The safe preview of a _conflicting_ move is to **omit a flag, not add one**:
+without `--merge` the clean abort is the dry run. If you did start one by
+accident, `git rebase --abort` returns you to the pre-move tip — and this is
+exactly why the rebase backup should be a **tag**, since `--update-refs` moves a
+backup branch along with everything else.
 
 ### Don't use `feature.manyFiles = true` without workaround
 
