@@ -113,6 +113,35 @@
     PreCompact = [{hooks = [{command = "${bin} clear";}];}];
     UserPromptSubmit = [{hooks = [{command = "${bin} inject";}];}];
   };
+
+  # Agent-memory collision guard — one PreToolUse entry.
+  #
+  # The `matcher` is what keeps this cheap: the hook is only spawned for Write and
+  # Edit, and the script's own path test then drops everything outside a memory
+  # directory. Both filters are needed — the matcher cannot see file paths, and the
+  # path test cannot see which tool asked.
+  #
+  # The matcher is a REGEX and is not anchored, so `Edit` also catches `MultiEdit`
+  # and `NotebookEdit`. That is left deliberately wide: every one of them can create
+  # a memory file, the path test is the real gate, and a tool name added upstream
+  # should fail toward being guarded rather than toward slipping through.
+  #
+  # Emitted as an `ai.claude.hooks` DEFINITION for the same reason the clamp is: an
+  # option default is discarded wholesale once a consumer defines the option at all,
+  # whereas a definition list-merges with consumer entries on the same event.
+  memoryCollisionGuardHooks = guard: let
+    bin = lib.getExe (import ./memoryCollisionGuard.nix {
+      inherit lib pkgs;
+      inherit (guard) windowMinutes listCount extraDirectories;
+    });
+  in {
+    PreToolUse = [
+      {
+        matcher = "Write|Edit";
+        hooks = [{command = bin;}];
+      }
+    ];
+  };
 in
   lib.ai.app.mkAiApp {
     name = "claude";
@@ -563,6 +592,86 @@ in
         '';
         example = lib.literalExpression ''./hooks'';
       };
+      memoryCollisionGuard = lib.mkOption {
+        type = lib.types.submodule {
+          options = {
+            enable = lib.mkOption {
+              type = lib.types.bool;
+              default = false;
+              description = ''
+                Pause the first write to each agent-memory file per session and hand the
+                model the directory's recently-modified neighbours first. Off by default.
+
+                Concurrent Claude Code sessions share one memory directory and neither
+                sees the other's writes — no locking, no notification. A session reads
+                the memory index once at start and then writes into a directory that may
+                have moved underneath it. Two sessions on 2026-08-05 recorded the same
+                concept under different filenames minutes apart and agreed only by luck.
+                The failure is silent: a duplicate under a different name raises no
+                conflict, it just stops being findable, because the wikilink graph
+                resolves by name.
+
+                A `PreToolUse` hook on `Write|Edit` returns `permissionDecision: "deny"`
+                with the neighbour listing as the reason, then allows the retry — one
+                extra round trip per distinct file, once per session.
+
+                OFF by default deliberately, unlike `delegationClamp`. That one corrects
+                a vendor defect and is strictly additive; this one BLOCKS a tool call,
+                and its cadence is an untuned gut call rather than a measured one. Opt in
+                per consumer until there is evidence about whether it helps more than it
+                interrupts.
+
+                The alternative instrumentation — allow the write and inject the listing
+                as `additionalContext`, reactive rather than blocking — is documented
+                alongside this one in `packages/claude-code/lib/memory-collision-guard.sh`
+                so a pivot does not have to re-derive the trade-off.
+              '';
+            };
+            extraDirectories = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              default = [];
+              description = ''
+                Additional absolute directories to guard.
+
+                By default the guard matches the PATTERN
+                `<claude config dir>/projects/*/memory/*`, resolved at run time from
+                `CLAUDE_CONFIG_DIR`. That is a pattern rather than a computed path on
+                purpose: the memory directory is keyed by a slug of the session's cwd, so
+                every worktree of one repository gets its own, and deriving the exact path
+                would need the slug rule and would silently miss whenever it changed.
+
+                Use this only for memory stores living outside that layout.
+              '';
+              example = lib.literalExpression ''["/srv/shared/agent-memory"]'';
+            };
+            listCount = lib.mkOption {
+              type = lib.types.ints.positive;
+              default = 10;
+              description = ''
+                How many recently-modified neighbours to list, most recent first. Each
+                contributes its filename, mtime and `description:` frontmatter line — file
+                bodies are never read, so this cannot spill memory contents into a hook
+                payload.
+              '';
+            };
+            windowMinutes = lib.mkOption {
+              type = lib.types.ints.positive;
+              default = 10;
+              description = ''
+                Minutes within which a neighbouring memory file's mtime is reported as a
+                live concurrent session rather than as history. The signal this exists to
+                surface is "another session is writing here RIGHT NOW", so this wants to
+                be close to a session's working tempo, not to a retention period.
+              '';
+            };
+          };
+        };
+        default = {};
+        description = ''
+          Guard against two concurrent sessions recording the same memory under
+          different filenames. Off by default; see `enable`.
+        '';
+      };
     };
     # HM-specific projection
     hm = {
@@ -640,6 +749,13 @@ in
           # existing hooks fanout rather than adding a module axis.
           (lib.mkIf cfg.delegationClamp.mitigate {
             ai.claude.hooks = delegationClampHooks cfg.delegationClamp;
+          })
+          # Agent-memory collision guard (default OFF). Same `ai.claude.hooks`
+          # definition write as the clamp, so it list-merges onto PreToolUse with
+          # any consumer entries instead of clobbering them. Paired with the
+          # identical devenv-side write below.
+          (lib.mkIf cfg.memoryCollisionGuard.enable {
+            ai.claude.hooks = memoryCollisionGuardHooks cfg.memoryCollisionGuard;
           })
           # Meta option: ultracode on at every launch. Writes the
           # (undocumented, officially session-only) `ultracode` key plus the
@@ -848,6 +964,13 @@ in
           # git-hooks-run entry instead of replacing it.
           (lib.mkIf cfg.delegationClamp.mitigate {
             ai.claude.hooks = delegationClampHooks cfg.delegationClamp;
+          })
+          # Agent-memory collision guard (parity with HM side). Same
+          # `ai.claude.hooks` write, so it flows through the typed event map →
+          # settings.json lowering below and concatenates with devenv's own
+          # entries rather than replacing them.
+          (lib.mkIf cfg.memoryCollisionGuard.enable {
+            ai.claude.hooks = memoryCollisionGuardHooks cfg.memoryCollisionGuard;
           })
           # Meta option: ultracode on at every launch (parity with HM side).
           # Writes the (undocumented, officially session-only) `ultracode` key

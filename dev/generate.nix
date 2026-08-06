@@ -776,6 +776,41 @@
     </details>
 
     <details>
+    <summary><strong>Claude Memory-Collision Guard (off by default)</strong></summary>
+
+    Concurrent Claude Code sessions share one agent-memory directory and neither
+    sees the other's writes — no locking, no notification. A session reads the
+    memory index once at start, then writes into a directory that may have moved
+    underneath it. The failure is silent: a duplicate saved under a *different*
+    filename raises no conflict, it just stops being findable, because the
+    wikilink graph resolves by name.
+
+    A `PreToolUse` hook on `Write|Edit`, scoped to memory directories, pauses the
+    first write to each file per session and hands the model that directory's
+    recently-modified neighbours — filename, mtime, and `description:`
+    frontmatter, with anything written in the last few minutes flagged as a live
+    concurrent session. The model decides whether to extend an existing file or
+    proceed; re-issuing the same write goes through.
+
+    ```nix
+    ai.claude.memoryCollisionGuard = {
+      enable = true;          # default false
+      windowMinutes = 10;     # mtime window counted as "a session is active now"
+      listCount = 10;         # neighbours to show, most recent first
+      extraDirectories = [];  # stores outside <claude config>/projects/*/memory/
+    };
+    ```
+
+    Off by default because it **blocks a tool call** and its cadence is an
+    untuned judgement call, not a measured one. The alternative instrumentation —
+    allow the write and inject the listing as `additionalContext`, reactive
+    rather than blocking — is documented alongside the chosen one in
+    `packages/claude-code/lib/memory-collision-guard.sh`, so revisiting the
+    trade-off does not mean re-deriving it.
+
+    </details>
+
+    <details>
     <summary><strong>MCP Servers (Home-Manager)</strong></summary>
 
     ```nix
