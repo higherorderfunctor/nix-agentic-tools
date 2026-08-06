@@ -525,28 +525,32 @@ the repo before committing.
 
 > **Last verified:** 2026-08-05 (commit pending — the Copilot TRIGGER MODEL was
 > wrong and is corrected: the automatic review fires once, on the PR becoming
-> ready for review, and a push NEVER triggers one. The old "only ONCE in 5
-> pushes" datum was not a flaky trigger — it was #644's ready transition landing
-> on the same push, with #640's four misses being correct behavior — so the
-> advice to treat re-requesting as the expected next step is dropped, along with
-> any reason to wait on a run that is never coming. Every review after the first
-> is a paid manual request, which is now stated where the round cap is. Also
-> adds agent memory to the shared-across-worktrees list: concurrent sessions
-> share the memory directory, neither sees the other's write, and a duplicate
-> under a different name is invisible to the wikilink graph). Prior: 2026-08-05
-> (commit pending — "change" now EXPLICITLY includes untracked drafts and
-> working docs: authoring any repo-destined file in the primary checkout is a
-> violation, with a pre-flight `git rev-parse` check added to the worktree
-> section. Driven by a reference doc drafted in the primary checkout whose lint
-> findings failed the shared stop/commit hooks in every parallel session sharing
-> that cwd). Prior: 2026-08-05 (commit pending — `devenv-test` is NO LONGER a
-> required check; the ruleset now lists FOUR, verified by reading it back rather
-> than by trusting this file. It was made required on 2026-08-03 and demoted two
-> days later as a merge-blocking liability, risk accepted. The entry below that
-> announced the promotion is kept so the reversal is legible rather than looking
-> like drift). Prior: 2026-08-05 (commit pending — two corrections, both from
-> operating the loop on PR #766 and both making it silently unreliable when
-> unknown. The suppressed-block heading is NOT stable, so the documented
+> ready for review, and a push NEVER triggers one. "Becomes ready" covers a PR
+> opened non-draft as well as a draft flipped later — measured on PR #801, which
+> was opened non-draft and got a queued reviewer run within seconds, so the
+> narrower "draft → ready transition" spelling is deliberately avoided as it
+> reads as excluding never-drafted PRs. The old "only ONCE in 5 pushes" datum
+> was not a flaky trigger — it was #644's ready transition landing on the same
+> push, with #640's four misses being correct behavior — so the advice to treat
+> re-requesting as the expected next step is dropped, along with any reason to
+> wait on a run that is never coming. Every review after the first is a paid
+> manual request, which is now stated where the round cap is. Also adds agent
+> memory to the shared-across-worktrees list: concurrent sessions share the
+> memory directory, neither sees the other's write, and a duplicate under a
+> different name is invisible to the wikilink graph). Prior: 2026-08-05 (commit
+> pending — "change" now EXPLICITLY includes untracked drafts and working docs:
+> authoring any repo-destined file in the primary checkout is a violation, with
+> a pre-flight `git rev-parse` check added to the worktree section. Driven by a
+> reference doc drafted in the primary checkout whose lint findings failed the
+> shared stop/commit hooks in every parallel session sharing that cwd). Prior:
+> 2026-08-05 (commit pending — `devenv-test` is NO LONGER a required check; the
+> ruleset now lists FOUR, verified by reading it back rather than by trusting
+> this file. It was made required on 2026-08-03 and demoted two days later as a
+> merge-blocking liability, risk accepted. The entry below that announced the
+> promotion is kept so the reversal is legible rather than looking like drift).
+> Prior: 2026-08-05 (commit pending — two corrections, both from operating the
+> loop on PR #766 and both making it silently unreliable when unknown. The
+> suppressed-block heading is NOT stable, so the documented
 > `sed -n '/low confidence/,$p'` matched nothing against a
 > `Suppressed comments (1)` block and nearly reported a real finding as a clean
 > round; the command now prints the whole body. And
@@ -741,11 +745,20 @@ Absent means no review ran on this commit; `in_progress` means wait; `completed`
 means the review is there to read. Ask for the run BY NAME rather than counting
 the checks: a total count is only correct until the CI matrix changes.
 
-**The automatic review fires exactly once per PR, on the draft → ready
-transition. Pushes never trigger it.** That is how the ruleset's
+**The automatic review fires exactly once per PR, when the PR becomes ready for
+review. Pushes never trigger it.** That is how the ruleset's
 `Copilot review for default branch` rule is configured and always has been, so
 after any push the head commit has no reviewer check run and never will acquire
 one on its own. Absent is not a miss to wait out — it is the resting state.
+
+**"Becomes ready" covers both paths, and the narrower phrasing is a trap.** A
+draft flipped to ready fires it, and so does a PR **opened non-draft in the
+first place**, which never has a draft → ready transition at all. Measured on PR
+#801: `gh pr create` without `--draft` produced `requested_reviewers: [Copilot]`
+and a `queued` reviewer check run within seconds. Writing this rule as "on the
+draft → ready transition" reads as excluding never-drafted PRs — it is the right
+mechanism stated too narrowly, and it would have you re-request a review you had
+already been given.
 
 This corrects a datum that read as flakiness. An earlier revision recorded "a
 push auto-triggered a review only ONCE in 5 pushes" (0 for 4 on PR #640, 1 for 1
