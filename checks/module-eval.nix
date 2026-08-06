@@ -429,13 +429,15 @@
     in
       builtins.head (lib.splitString "\n${marker}\n" body);
 
-  # ── heron_brook delegation-clamp helpers ─────────────────────────
-  # The mitigation's handler command is a /nix/store path, so match on
-  # the derivation name rather than on an exact string.
-  clampCommands = blocks:
+  # ── built-in Claude hook helpers ─────────────────────────────────
+  # Every built-in hook's handler command is a /nix/store path, so match on the
+  # derivation name rather than on an exact string.
+  handlerCommands = blocks:
     lib.concatMap (b: map (h: h.command or "") (b.hooks or [])) blocks;
   hasClampHook = blocks:
-    builtins.any (lib.hasInfix "claude-delegation-clamp") (clampCommands blocks);
+    builtins.any (lib.hasInfix "claude-delegation-clamp") (handlerCommands blocks);
+  hasGuardHook = blocks:
+    builtins.any (lib.hasInfix "claude-memory-collision-guard") (handlerCommands blocks);
 in {
   # ── Kiro launcher wrapper: flag injection ────────────────────────
   # Launcher-GLOBAL options are PREPENDED — appended after a subcommand,
@@ -8091,10 +8093,82 @@ in {
         };
       };
       blocks = ((result.config.programs.claude-code.settings or {}).hooks or {}).UserPromptSubmit or [];
-      cmds = clampCommands blocks;
+      cmds = handlerCommands blocks;
     in
       builtins.elem "consumer-hook" cmds
       && builtins.any (lib.hasInfix "claude-delegation-clamp") cmds
+  );
+
+  # ── memory-collision guard (ai.claude.memoryCollisionGuard) ───────
+  # Default-OFF is the requirement here, and it is the exact inverse of the
+  # delegation clamp's above. This hook DENIES a tool call, so shipping it on by
+  # default would block writes for every consumer who never asked for it.
+  module-claude-hm-memory-collision-guard-default-off = mkTest "claude-hm-memory-collision-guard-default-off" (
+    let
+      result = evalHm {ai.claude.enable = true;};
+      settingsHooks = (result.config.programs.claude-code.settings or {}).hooks or {};
+    in
+      hasGuardHook (settingsHooks.PreToolUse or []) == false
+  );
+
+  # Opting in must produce a PreToolUse entry matching the write-shaped tools. The
+  # matcher is asserted because it is half the filter: the script's path test is the
+  # other half, and a matcher regression would spawn the hook on every tool call.
+  module-claude-hm-memory-collision-guard-opt-in = mkTest "claude-hm-memory-collision-guard-opt-in" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          memoryCollisionGuard.enable = true;
+        };
+      };
+      blocks = ((result.config.programs.claude-code.settings or {}).hooks or {}).PreToolUse or [];
+      guardBlocks = builtins.filter (b: hasGuardHook [b]) blocks;
+    in
+      builtins.length guardBlocks
+      == 1
+      && (builtins.head guardBlocks).matcher == "Write|Edit"
+  );
+
+  # Devenv parity — same hook, same default, per the repo's config-parity rule.
+  module-claude-devenv-memory-collision-guard-opt-in = mkTest "claude-devenv-memory-collision-guard-opt-in" (
+    let
+      result = evalDevenv {
+        ai.claude = {
+          enable = true;
+          memoryCollisionGuard.enable = true;
+        };
+      };
+      settingsJson = (result.config.files.".claude/settings.json" or {}).json or {};
+      offResult = evalDevenv {ai.claude.enable = true;};
+      offJson = (offResult.config.files.".claude/settings.json" or {}).json or {};
+    in
+      hasGuardHook (settingsJson.hooks.PreToolUse or [])
+      && hasGuardHook (offJson.hooks.PreToolUse or []) == false
+  );
+
+  # Compose-not-clobber, same reasoning as the clamp's: emitted as a DEFINITION of
+  # ai.claude.hooks rather than as that option's `default`, so a consumer who
+  # defines PreToolUse for their own reasons keeps both.
+  module-claude-memory-collision-guard-composes-with-consumer-hook = mkTest "claude-memory-collision-guard-composes-with-consumer-hook" (
+    let
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          memoryCollisionGuard.enable = true;
+          hooks.PreToolUse = [
+            {
+              matcher = "Bash";
+              hooks = [{command = "consumer-hook";}];
+            }
+          ];
+        };
+      };
+      blocks = ((result.config.programs.claude-code.settings or {}).hooks or {}).PreToolUse or [];
+      cmds = handlerCommands blocks;
+    in
+      builtins.elem "consumer-hook" cmds
+      && builtins.any (lib.hasInfix "claude-memory-collision-guard") cmds
   );
 
   # Compose-not-clobber invariant (decision #3): settings.json's formats.json
