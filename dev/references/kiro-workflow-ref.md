@@ -1,11 +1,34 @@
-# Kiro Workflow Engine — Working Reference
+# Kiro Workflow Engine — Working Notes
 
-A human-readable guide to what the Kiro workflow engine actually does, and how
-to wire its pieces into useful shapes. Sibling of `claude-workflows.md`.
+## What this is, and how much to trust it
 
-This document **synthesizes**; it does not measure. Everything here comes from
-research already in this repository, and each claim names its source so you can
-go read the evidence:
+An **LLM synthesis** of Kiro workflow research already sitting in this
+repository, written 2026-08-05 against **kiro-cli 2.16.0** / **KAS 2.15.1**,
+with light operator review on the seven questions that drove it. It measured
+nothing itself.
+
+**Treat it as a launch point, not a settled reference.** It is a snapshot of the
+best current understanding of a feature that is dark-shipped, undocumented
+upstream, and pre-release. It exists to save the next person the discovery cost,
+not to be right about everything.
+
+**Calibration, stated plainly because it is the most useful thing on this page:
+a single operator review pass corrected three of its claims** — §2 (asserted no
+per-agent steering existed; the TUI viewer has it), §3 (asserted no bundled
+recipe has the planner/coder/reviewer shape; only two of seven recipes are
+actually reproduced anywhere), and §3 again (attributed the elicited loop to a
+repo-local hook that turned out to postdate the behavior). Each was caught by
+someone glancing at a screen, not by re-reading sources. Expect more of the
+same.
+
+So: **§8 is the list of things known to be unknown. Everything outside §8 should
+be read as confident-but-unverified rather than established** — the prose runs
+at one register throughout while the evidence underneath it varies a lot, which
+is the main way this document will mislead you. Where a claim carries a
+citation, the citation is the real content; where two independent methods agree,
+it says so explicitly, and those are the claims worth leaning on.
+
+Sources, all in this repository:
 
 | Source                                           | What it is                                                                                  |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------- |
@@ -14,9 +37,9 @@ go read the evidence:
 | `fixtures/kiro-primitives/workflows/contract.jq` | the definition contract re-implemented from those reads, as a runnable checker              |
 | `docs/plans/kiro-v3-research-raw/`               | raw working notes, including live ACP protocol probes                                       |
 
-Where a live measurement and a code read agree, the claim is strong and said so
-plainly. Where only one exists, or they disagree, it is flagged inline and §8
-records it.
+If you are reading this outside `nix-agentic-tools`, those citations are dead
+pointers — the evidence lives in that repository, and a claim you cannot trace
+back to it should carry less weight, not the same weight.
 
 **The feature is dark-shipped and off by default.** Upstream describes
 `workflows` as "Dark-shipped at 0% until release certification is complete", and
@@ -752,8 +775,8 @@ the engine's constants from the installed bundle on every run.
 
 ### The node cap is 20, not 18 — and it counts `step` nodes only
 
-Two independent methods agree, which makes this the best-established number in
-the document:
+Two independent methods agree, which makes this one of the few numbers here
+worth leaning on directly:
 
 - **Static read:** `DEFAULT_MAX_STEP_NODES = 20`, alongside
   `DEFAULT_MAX_NESTING_DEPTH = 8` and `MAX_REPEAT_ITERATIONS = 1000`
@@ -816,7 +839,7 @@ cross-run coordination and carried an in-workflow verification step as its 20th
 step node.
 
 Subagents spawned _by_ a step are a different population with a ceiling of **5**
-— and the two methods agree beautifully:
+— and two independent methods agree:
 
 - **Measured:** peak overlap was exactly 5 at both N=8 and N=12, never 6, while
   every leaf eventually ran. A third run put two dispatchers in one `parallel`,
