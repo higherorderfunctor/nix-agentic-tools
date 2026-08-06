@@ -149,11 +149,12 @@ If a merge conflict would occur, they abort cleanly without starting conflict
 resolution (unless `--merge` is passed).
 
 That parenthetical is the whole contract, and it is easy to read past: `--merge`
-is precisely the opt-in to an **on-disk** rebase. Once the in-memory attempt
-fails, the command re-runs the rebase against the real working copy and stops at
-the conflict, leaving a detached HEAD and an in-progress rebase to finish or
-`git rebase --abort`. `--in-memory` forbids that fallback outright; it is the
-flag to reach for when you want a guaranteed no-side-effect attempt.
+is precisely the opt-in to an **on-disk** rebase. Without it a conflict simply
+aborts and nothing is touched. **With `--merge`**, a failed in-memory attempt
+falls back to re-running the rebase against the real working copy, where it
+stops at the conflict — leaving a detached HEAD and an in-progress rebase to
+finish or `git rebase --abort`. `--in-memory` forbids that fallback outright, so
+it is the flag to reach for when you need a guaranteed **no on-disk rebase**.
 
 ### Bitemporality
 
@@ -259,7 +260,7 @@ git move -d <dest>             # move current stack onto dest (default -b HEAD)
 git move -s <src>              # move src onto HEAD (default -d HEAD)
 git move -I                    # insert commit between others
 git move -F -x <src> -d <dest> # fixup: combine src into dest
-git move --dry-run -d <dest>   # test the IN-MEMORY rebase only (see below)
+git move --dry-run -d <dest>   # test the in-memory rebase only (see below)
 git move --in-memory -d <dest> # never fall back to an on-disk rebase
 ```
 
