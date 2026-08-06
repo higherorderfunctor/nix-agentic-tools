@@ -270,7 +270,7 @@
       default_permissions = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = null;
-        description = "Named or built-in beta permission profile Codex applies by default.";
+        description = "LOCKED OUT. Named or built-in beta permission profile Codex applies by default. Setting this fails evaluation: the beta model silently overrides legacy sandbox settings in lower config layers. Use sandbox_mode/sandbox_workspace_write.";
       };
       features = lib.mkOption {
         type = lib.types.nullOr (lib.types.submodule {
@@ -314,7 +314,7 @@
       permissions = lib.mkOption {
         type = lib.types.attrsOf permissionProfileType;
         default = {};
-        description = "Beta named least-privilege filesystem and network permission profiles.";
+        description = "LOCKED OUT. Beta named least-privilege filesystem and network permission profiles. Setting this fails evaluation: the beta model silently overrides legacy sandbox settings in lower config layers. Use sandbox_mode/sandbox_workspace_write.";
       };
       projects = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submodule {
@@ -519,8 +519,67 @@
     message = "${optionPath} must use either sandbox_mode/sandbox_workspace_write or default_permissions/permissions, never both";
   };
 
+  # ── Codex beta permission model: DELIBERATELY LOCKED OUT ──────────────
+  #
+  # `default_permissions`, `permissions`, and the named `profiles` layers that
+  # carry them are typed below and emit correctly. They are nonetheless
+  # unreachable: every entry point asserts. This is a considered product
+  # decision, not an unfinished migration — do not "restore" them to make the
+  # types look used.
+  #
+  # WHY. Codex resolves the beta model and the legacy
+  # `sandbox_mode`/`sandbox_workspace_write` model as MUTUALLY EXCLUSIVE, and
+  # when both are present the beta model wins OUTRIGHT — it does not merge, and
+  # it does not warn. `mkSandboxModelAssertion` above catches that mix within a
+  # single settings tree, which is the only scope a Nix evaluation can see.
+  # It structurally CANNOT catch the mix across config LAYERS, because the
+  # layers are separate files owned by separate evaluations:
+  #
+  #   ~/.codex/config.toml            (Home Manager)  -> legacy, N writable roots
+  #   ~/.codex/<name>.config.toml     (a devenv repo) -> beta permissions
+  #
+  # Stack those with `codex --profile <name>` and every writable root the user
+  # config granted silently evaporates. Measured 2026-08-05 with
+  # `codex sandbox` (0.146.1, no model in the loop) against this repository's
+  # own former profile: `~/.cache/nix` came back DENY here while the identical
+  # grant was live in every other checkout on the machine, because the profile
+  # never restated it. A sandboxed `nix build` cannot write its cache, and
+  # nothing anywhere reports why.
+  #
+  # The failure is silent in both directions and survives review: the profile
+  # reads as correct in isolation, the user config reads as correct in
+  # isolation, and the interaction is only visible by probing the resolved
+  # policy. That is the specific footgun this lockout closes.
+  #
+  # TO RE-ENABLE, the layering has to be made safe first — at minimum, the
+  # composed policy must be inspectable from Nix, or the beta model must
+  # inherit rather than replace the layers beneath it. Deleting these
+  # assertions without solving that reinstates the footgun exactly.
+  mkBetaPermissionLockout = optionPath: settings: [
+    {
+      assertion = settings.default_permissions == null;
+      message = "${optionPath}.default_permissions is locked out: Codex's beta permission model silently overrides legacy sandbox settings in lower config layers. See the lockout comment in packages/chatgpt-codex/lib/mkCodex.nix.";
+    }
+    {
+      assertion = settings.permissions == {};
+      message = "${optionPath}.permissions is locked out: Codex's beta permission model silently overrides legacy sandbox settings in lower config layers. See the lockout comment in packages/chatgpt-codex/lib/mkCodex.nix.";
+    }
+  ];
+
+  # Locked out with the beta permission model above: a named profile is the
+  # LAYER whose silent override of lower-layer sandbox settings is the whole
+  # hazard, so it is closed even when the profile itself carries no
+  # `permissions` table. The per-profile shape assertions below are retained
+  # unreached, so re-enabling restores a validated surface rather than a bare
+  # option.
   mkProfileAssertions = profiles:
-    lib.concatLists (lib.mapAttrsToList (name: settings: [
+    [
+      {
+        assertion = profiles == {};
+        message = "ai.codex.profiles is locked out: a named profile layer silently overrides legacy sandbox settings in the user config beneath it. See the lockout comment in packages/chatgpt-codex/lib/mkCodex.nix.";
+      }
+    ]
+    ++ lib.concatLists (lib.mapAttrsToList (name: settings: [
         {
           assertion = builtins.match "[A-Za-z0-9][A-Za-z0-9_-]*" name != null;
           message = "ai.codex.profiles.${name} must start with a letter or number and contain only letters, numbers, hyphens, and underscores";
@@ -832,6 +891,14 @@ in
         default = {};
         apply = lib.mapAttrs (_name: stripIntegrationRoots);
         description = ''
+          LOCKED OUT. Setting this fails evaluation. A named profile is a
+          config LAYER, and Codex resolves a layer carrying the beta
+          permission model by overriding — not merging — the legacy
+          `sandbox_mode`/`sandbox_workspace_write` settings beneath it,
+          silently dropping every writable root the lower layer granted. Nix
+          cannot see across layers to catch that. See the lockout comment in
+          `packages/chatgpt-codex/lib/mkCodex.nix`.
+
           Named user configuration layers written as
           `''${configDir}/<name>.config.toml` and selected explicitly with
           `codex --profile <name>`. Codex 0.134.0 and later no longer support
@@ -918,6 +985,7 @@ in
         ++ mkAgentAssertions mergedAgents
         ++ mkExecpolicyAssertions cfg.execpolicyRules
         ++ mkProfileAssertions cfg.profiles
+        ++ mkBetaPermissionLockout "ai.codex.settings" cfg.settings
         ++ [
           (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
           {
@@ -1025,6 +1093,7 @@ in
         ++ mkAgentAssertions mergedAgents
         ++ mkExecpolicyAssertions cfg.execpolicyRules
         ++ mkProfileAssertions cfg.profiles
+        ++ mkBetaPermissionLockout "ai.codex.settings" cfg.settings
         ++ [
           (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
           {

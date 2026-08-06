@@ -351,12 +351,20 @@ same. OpenSSH batch mode makes missing credentials fail instead of opening a
 password dialog. Set `ai.gitSshConfigWorkaround = false` to manage this
 yourself.
 
-For Codex's legacy `workspace-write` sandbox, the module automatically adds the
-Nix cache and, under devenv, the current repository's `.git`. Integration
-modules add their own state when enabled: Semble adds its cache and glab adds
-its effective `configDir`. A parent containing multiple worktrees remains an
-explicit consumer root. Named permission profiles are separate security
-boundaries and do not inherit these legacy roots.
+For Codex's `workspace-write` sandbox, the module automatically adds the Nix
+cache and, under devenv, the current repository's `.git`. Integration modules
+add their own state when enabled: Semble adds its cache and glab adds its
+effective `configDir`. A parent containing multiple worktrees remains an
+explicit consumer root.
+
+Codex's beta permission model — `ai.codex.profiles`,
+`ai.codex.settings.default_permissions`, and `ai.codex.settings.permissions` —
+is **locked out** and fails evaluation if set. Those layers do not inherit the
+automatic roots above; worse, Codex resolves a layer carrying them by overriding
+rather than merging the `sandbox_mode`/`sandbox_workspace_write` settings
+beneath it, silently dropping every writable root the lower layer granted. Nix
+cannot see across config layers to catch that, so the surface is closed until
+the layering can be made safe. Use `sandbox_mode` / `sandbox_workspace_write`.
 
 </details>
 
@@ -448,11 +456,9 @@ Devenv rejects that bootstrap-global setting because project config cannot grant
 the trust required to load itself.
 
 Native-only settings remain under `ai.codex.settings`. Named whole-file layers
-use the shared typed `ai.codex.profiles` option: Home Manager links them
-user-globally, while devenv materializes repository-declared profiles into
-`$CODEX_HOME` before shell entry because Codex only discovers profile files
-there. Select one explicitly with `codex --profile <name>`. Native Starlark
-command policy uses `ai.codex.execpolicyRules` rather than Markdown `ai.rules`.
+(`ai.codex.profiles`) are typed and emit correctly in both backends but are
+**locked out** — see the sandbox section above for why. Native Starlark command
+policy uses `ai.codex.execpolicyRules` rather than Markdown `ai.rules`.
 
 </details>
 

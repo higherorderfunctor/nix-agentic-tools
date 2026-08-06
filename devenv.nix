@@ -102,10 +102,16 @@
   isCI = builtins.getEnv "CI" != "";
 
   # Normalize the repository's canonical checkout and worktree collection from
-  # either the main checkout or one of the conventional sibling worktrees. The
-  # Codex permission profile needs the shared Git directory writable for
-  # git-branchless bookkeeping without granting write access to the main
-  # checkout's working files.
+  # either the main checkout or one of the conventional sibling worktrees, so
+  # `worktreesRoot` resolves to the same directory whichever one the shell is
+  # entered from. Codex's writable roots are derived from it below.
+  #
+  # This previously claimed the Codex permission profile granted the shared
+  # Git directory "without granting write access to the main checkout's
+  # working files". That was never true of the config it described: `extends =
+  # ":workspace"` plus `:workspace_roots."." = "write"` made the checked-out
+  # working tree writable, measured with `codex sandbox` on 2026-08-05. The
+  # claim is recorded here only so it is not reintroduced from memory.
   devenvRoot = toString config.devenv.root;
   devenvRootParent = builtins.dirOf devenvRoot;
   devenvRootParentName = builtins.baseNameOf devenvRootParent;
@@ -114,6 +120,12 @@
     then "${builtins.dirOf devenvRootParent}/${lib.removeSuffix "-worktrees" devenvRootParentName}"
     else devenvRoot;
   worktreesRoot = "${repositoryRoot}-worktrees";
+  # This repository does NOT enable the Semble devenv module — doing so would
+  # pull Semble's MCP server, instructions, and agent into project scope. It
+  # consumes the USER-GLOBAL index instead, so the sandbox has to grant that
+  # cache itself; the automatic `${config.devenv.state}/semble-cache` root the
+  # Semble facet contributes is for consumers that enable the module and is not
+  # the path in play here.
   userCacheHome = let
     homeDir = builtins.getEnv "HOME";
     xdgCacheHome = builtins.getEnv "XDG_CACHE_HOME";
@@ -124,120 +136,6 @@
     then "${homeDir}/.cache"
     else throw "devenv requires XDG_CACHE_HOME or HOME to locate the user-global Semble cache";
   sembleCache = "${userCacheHome}/semble";
-
-  # The selected named profile is a launch-time Codex layer, and Codex treats
-  # the process cwd as the project unless --cd is explicit. Keep both defaults
-  # inside this repo's devenv PATH while preserving caller overrides. Codex
-  # rejects runtime flags on administrative commands such as doctor and login,
-  # so only inject them for the runtime command families that accept them. The
-  # evaluated devenv root is already the current Git worktree root, so no
-  # runtime Git lookup is needed and each sibling worktree gets its own cwd.
-  mkCodexForRepository = {
-    codexExe,
-    name,
-  }:
-    pkgs.writeShellApplication {
-      inherit name;
-      extraShellCheckFlags = shellStrict.shellcheckFlags;
-      inherit (shellStrict) bashOptions;
-      text = ''
-        ${shellStrict.shoptHeader}
-
-        nat_command=""
-        nat_debug_command=""
-        nat_expect_value=0
-        nat_parse_scope=root
-        for nat_arg in "$@"; do
-          if [ "$nat_expect_value" = 1 ]; then
-            nat_expect_value=0
-            continue
-          fi
-          if [ "$nat_parse_scope" = root ]; then
-            case "$nat_arg" in
-              --) break ;;
-              --add-dir|--ask-for-approval|--cd|--config|--disable|--enable|--image|--local-provider|--model|--profile|--remote|--remote-auth-token-env|--sandbox|-C|-a|-c|-i|-m|-p|-s)
-                nat_expect_value=1
-                ;;
-              -*) ;;
-              *)
-                nat_command="$nat_arg"
-                if [ "$nat_command" = debug ]; then
-                  nat_parse_scope=debug
-                else
-                  break
-                fi
-                ;;
-            esac
-          else
-            case "$nat_arg" in
-              --) break ;;
-              --config|--disable|--enable|-c)
-                nat_expect_value=1
-                ;;
-              -*) ;;
-              *)
-                nat_debug_command="$nat_arg"
-                break
-                ;;
-            esac
-          fi
-        done
-
-        nat_apply_repo_defaults=0
-        case "$nat_command" in
-          ""|apply|archive|delete|exec|exec-server|fork|mcp|resume|review|sandbox|unarchive)
-            nat_apply_repo_defaults=1
-            ;;
-          debug)
-          if [ "$nat_debug_command" = prompt-input ]; then
-            nat_apply_repo_defaults=1
-          fi
-          ;;
-          *) ;;
-        esac
-
-        nat_seen_cd=0
-        nat_seen_profile=0
-        for nat_arg in "$@"; do
-          case "$nat_arg" in
-            --) break ;;
-            --cd|-C|--cd=*|-C?*) nat_seen_cd=1 ;;
-            --profile|-p|--profile=*|-p?*) nat_seen_profile=1 ;;
-            *) ;;
-          esac
-        done
-
-        nat_codex_args=()
-        if [ "$nat_apply_repo_defaults" = 1 ]; then
-          if [ "$nat_seen_cd" = 0 ]; then
-            nat_codex_args+=(--cd ${lib.escapeShellArg devenvRoot})
-          fi
-          if [ "$nat_seen_profile" = 0 ]; then
-            nat_codex_args+=(--profile nix-agentic-tools)
-          fi
-        fi
-
-        exec ${codexExe} "''${nat_codex_args[@]}" "$@"
-      '';
-    };
-
-  codexArgvProbe = pkgs.writeShellApplication {
-    name = "codex-argv-probe";
-    extraShellCheckFlags = shellStrict.shellcheckFlags;
-    inherit (shellStrict) bashOptions;
-    text = ''
-      ${shellStrict.shoptHeader}
-      printf '%s\n' "$@"
-    '';
-  };
-  codexForRepository = mkCodexForRepository {
-    codexExe = lib.getExe pkgs.ai.chatgpt-codex;
-    name = "codex";
-  };
-  codexForRepositoryArgvProbe = mkCodexForRepository {
-    codexExe = lib.getExe codexArgvProbe;
-    name = "codex-wrapper-argv-probe";
-  };
 in {
   imports = [
     ./lib/ai/sharedOptions.nix
@@ -310,28 +208,34 @@ in {
     claude.enable = true;
     codex = {
       enable = true;
-      package = codexForRepository;
-      profiles.nix-agentic-tools = {
-        approval_policy = "never";
-        default_permissions = "nix-agentic-tools";
-        permissions.nix-agentic-tools = {
-          description = "Repository and sibling-worktree development with Git metadata access.";
-          extends = ":workspace";
-          filesystem = {
-            "${repositoryRoot}/.git" = "write";
-            "${sembleCache}" = "write";
-            ":workspace_roots" = {
-              "." = "write";
-              ".git" = "write";
-            };
-          };
-          network.enabled = true;
-          workspace_roots."${worktreesRoot}" = true;
-        };
-      };
+      # Legacy sandbox model, matching every other repository the maintainer
+      # runs. This replaced a named permission profile — see the lockout
+      # comment in packages/chatgpt-codex/lib/mkCodex.nix for why the beta
+      # model is now unreachable, and note the concrete regression it caused
+      # HERE: the profile never restated `~/.cache/nix`, so a sandboxed
+      # `nix build` in this repository could not write its own cache while the
+      # identical grant was live in every other checkout.
+      #
+      # `${config.devenv.root}/.git` and the effective Nix cache root are
+      # contributed automatically once Codex is enabled; hand-writing either
+      # would fight the factory rather than help it. Only the two roots the
+      # factory cannot know about are declared here.
       settings = {
+        approval_policy = "never";
         model = "gpt-5.6-sol";
         model_reasoning_effort = "high";
+        sandbox_mode = "workspace-write";
+        sandbox_workspace_write = {
+          network_access = true;
+          writable_roots = [
+            # The user-global Semble index — see the sembleCache comment above.
+            sembleCache
+            # The worktree collection, not this checkout: work routinely spans
+            # sibling worktrees of one clone, and a session started in any of
+            # them must be able to write the others.
+            worktreesRoot
+          ];
+        };
       };
     };
     copilot.enable = true;
@@ -638,25 +542,25 @@ in {
   # ── Validation ─────────────────────────────────────────────────────────
   enterTest = ''
     echo "Validating devenv configuration..."
-    test "$(command -v codex)" = "${lib.getExe codexForRepository}" || { echo "FAIL: repo-aware Codex wrapper is not first on PATH"; exit 1; }
-    ${lib.getExe codexForRepository} --cd "$PWD" --profile nix-agentic-tools --help >/dev/null 2>&1 || { echo "FAIL: Codex wrapper duplicated explicit launch flags"; exit 1; }
-    nat_profile_path="''${CODEX_HOME:-$HOME/.codex}/nix-agentic-tools.config.toml"
-    test -f "$nat_profile_path" || { echo "FAIL: Codex permission profile was not materialized at $nat_profile_path"; exit 1; }
-    ${pkgs.gnugrep}/bin/grep -Fq ${lib.escapeShellArg "\"${sembleCache}\" = \"write\""} "$nat_profile_path" || { echo "FAIL: Codex permission profile does not grant the user-global Semble cache"; exit 1; }
-    nat_expected_resume_argv="$(printf '%s\n' --cd ${lib.escapeShellArg devenvRoot} --profile nix-agentic-tools resume session-id)"
-    test "$(${lib.getExe codexForRepositoryArgvProbe} resume session-id)" = "$nat_expected_resume_argv" || { echo "FAIL: Codex wrapper did not apply repo defaults to resume"; exit 1; }
-    nat_expected_apply_argv="$(printf '%s\n' --cd ${lib.escapeShellArg devenvRoot} --profile nix-agentic-tools apply task-id)"
-    test "$(${lib.getExe codexForRepositoryArgvProbe} apply task-id)" = "$nat_expected_apply_argv" || { echo "FAIL: Codex wrapper did not apply repo defaults to apply"; exit 1; }
-    nat_expected_exec_server_argv="$(printf '%s\n' --cd ${lib.escapeShellArg devenvRoot} --profile nix-agentic-tools exec-server)"
-    test "$(${lib.getExe codexForRepositoryArgvProbe} exec-server)" = "$nat_expected_exec_server_argv" || { echo "FAIL: Codex wrapper did not apply repo defaults to exec-server"; exit 1; }
-    nat_expected_doctor_argv="$(printf '%s\n' doctor --json)"
-    test "$(${lib.getExe codexForRepositoryArgvProbe} doctor --json)" = "$nat_expected_doctor_argv" || { echo "FAIL: Codex wrapper did not pass doctor through unchanged"; exit 1; }
-    nat_doctor_output="$(${lib.getExe codexForRepository} doctor --json 2>&1 || :)"
-    case "$nat_doctor_output" in
-      *"--profile only applies"*) echo "FAIL: Codex wrapper applied runtime flags to doctor"; exit 1 ;;
-      *'"schemaVersion"'*) ;;
-      *) echo "FAIL: Codex doctor did not emit its JSON report"; exit 1 ;;
-    esac
+    # Codex ships unwrapped: no argv wrapper, no named profile. This guards the
+    # convergence itself — a reintroduced wrapper would silently re-add
+    # `--profile` and take the beta permission model back with it.
+    test "$(command -v codex)" = "${lib.getExe pkgs.ai.chatgpt-codex}" || { echo "FAIL: Codex on PATH is not the unwrapped package"; exit 1; }
+    nat_codex_config=.codex/config.toml
+    test -f "$nat_codex_config" || { echo "FAIL: Codex project config was not written"; exit 1; }
+    ${pkgs.gnugrep}/bin/grep -Fq 'sandbox_mode = "workspace-write"' "$nat_codex_config" || { echo "FAIL: Codex project config does not select the legacy workspace-write sandbox"; exit 1; }
+    ! ${pkgs.gnugrep}/bin/grep -Eq '^(default_permissions|\[permissions)' "$nat_codex_config" || { echo "FAIL: Codex project config carries the locked-out beta permission model"; exit 1; }
+    test ! -e "''${CODEX_HOME:-$HOME/.codex}/nix-agentic-tools.config.toml" || { echo "FAIL: a stale nix-agentic-tools Codex profile is still materialized in CODEX_HOME"; exit 1; }
+    # The module-contributed roots. `cache/nix` is the regression this
+    # convergence fixed: the former permission profile never restated it, so a
+    # sandboxed `nix build` here could not write its own cache.
+    nat_roots="$(${pkgs.gnugrep}/bin/grep -F 'writable_roots' "$nat_codex_config")"
+    for nat_want in ${lib.escapeShellArg worktreesRoot} ${lib.escapeShellArg sembleCache} ${lib.escapeShellArg "${devenvRoot}/.git"} cache/nix; do
+      case "$nat_roots" in
+        *"$nat_want"*) ;;
+        *) echo "FAIL: Codex writable_roots is missing $nat_want"; exit 1 ;;
+      esac
+    done
     test -f .claude/skills/dev-stack-fix/SKILL.md || { echo "FAIL: .claude/skills/dev-stack-fix/SKILL.md missing"; exit 1; }
     # Deref'd references must resolve on disk (guards the dangling-symlink
     # regression end-to-end, not just at the store-path level).

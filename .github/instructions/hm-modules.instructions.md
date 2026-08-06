@@ -7,7 +7,10 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-08-05 (commit pending — glab's Linux Home Manager
+> **Last verified:** 2026-08-05 (commit pending — the Codex named-profile
+> delivery-path example is retained but `ai.codex.profiles` is now LOCKED OUT
+> and fails evaluation; the asymmetry it teaches is still correct, the option is
+> not usable). Prior: 2026-08-05 (commit pending — glab's Linux Home Manager
 > facet can queue one OS-keyring synchronization per activation through a
 > graphical-session path unit; the shared option is an explicit devenv
 > exclusion, and the ordinary wrapper stops exporting the synchronized token).
@@ -250,15 +253,20 @@ still preferred when no required native writer shares the artifact. That is why
 Codex's devenv project `.codex/config.toml` remains a store-backed file: project
 config is trust-gated and no project-local writer has been demonstrated.
 
-**Parity does not require identical delivery paths.** Codex named profiles are
-user artifacts even when their declaration is repository-local: upstream only
-loads `$CODEX_HOME/<name>.config.toml`. `ai.codex.profiles` therefore has one
-typed option schema in HM and devenv, but HM links the file directly while
-devenv materializes its store file before shell entry. The devenv ownership
-ledger and repository lock serialize concurrent shell entries, permit updates
-and pruning only for owned symlinks, and refuse all conflicts before changing an
-artifact. Do not change `CODEX_HOME` merely to force a project-local path; that
-would also fork authentication, sessions, logs, and caches.
+**Parity does not require identical delivery paths.** Codex named profiles
+remain the worked example here even though `ai.codex.profiles` is now LOCKED OUT
+(setting it fails evaluation — see the lockout comment in
+`packages/chatgpt-codex/lib/mkCodex.nix`). The delivery-path asymmetry is the
+transferable lesson and the code is retained, so the example is kept rather than
+deleted; just do not read it as an invitation to use the option. Codex named
+profiles are user artifacts even when their declaration is repository-local:
+upstream only loads `$CODEX_HOME/<name>.config.toml`. `ai.codex.profiles`
+therefore has one typed option schema in HM and devenv, but HM links the file
+directly while devenv materializes its store file before shell entry. The devenv
+ownership ledger and repository lock serialize concurrent shell entries, permit
+updates and pruning only for owned symlinks, and refuse all conflicts before
+changing an artifact. Do not change `CODEX_HOME` merely to force a project-local
+path; that would also fork authentication, sessions, logs, and caches.
 
 **HM settings writes are conditional; devenv writes are not.** The HM activation
 merge (copilot `copilotSettingsMerge`, kiro `kiroSettingsMerge`) is gated on

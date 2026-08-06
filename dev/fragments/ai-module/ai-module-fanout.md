@@ -1,12 +1,19 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-05 (commit pending — Codex's devenv Nix-cache
-> resolver remains environment-backed in production but accepts a test-only
-> `specialArgs` override through the module's ellipsis instead of declaring an
-> unsatisfied formal module argument; ordinary module evaluation now has an
-> explicit regression test alongside deterministic XDG/HOME cases). Prior:
-> 2026-08-05 (commit pending — Codex's backend-native writable roots are now
-> gated by `ai.codex.enable`, so merely configuring dormant Codex settings
+> **Last verified:** 2026-08-05 (commit pending — Codex's beta permission model
+> is LOCKED OUT: `ai.codex.profiles`, `ai.codex.settings.default_permissions`,
+> and `ai.codex.settings.permissions` stay typed and still emit, but every entry
+> point now asserts. A layer carrying the beta model OVERRIDES rather than
+> merges the legacy sandbox settings beneath it, and a Nix evaluation cannot see
+> across config layers to catch that — measured with `codex sandbox` 0.146.1,
+> where this repo's own former profile silently dropped the module-contributed
+> `~/.cache/nix` root). Prior: 2026-08-05 (commit pending — Codex's devenv
+> Nix-cache resolver remains environment-backed in production but accepts a
+> test-only `specialArgs` override through the module's ellipsis instead of
+> declaring an unsatisfied formal module argument; ordinary module evaluation
+> now has an explicit regression test alongside deterministic XDG/HOME cases).
+> Prior: 2026-08-05 (commit pending — Codex's backend-native writable roots are
+> now gated by `ai.codex.enable`, so merely configuring dormant Codex settings
 > cannot create an active sandbox root set). Prior: 2026-08-05 (commit pending —
 > sandbox-safe Git SSH now forces batch mode so agent-backed authentication
 > works but missing credentials fail without an interactive dialog). Prior:
@@ -210,7 +217,18 @@ The ai module fans out TWO kinds of configuration:
   `approvals_reviewer`, `sandbox_mode`, and `sandbox_workspace_write`. Beta
   `default_permissions` and named `permissions` profiles type inheritance,
   workspace roots, filesystem access and scoped paths, deny-glob scan depth, and
-  network proxy/domain/socket policy. The older sandbox model and permission
+  network proxy/domain/socket policy. **All three of `default_permissions`,
+  `permissions`, and `profiles` are LOCKED OUT: they are typed and emit
+  correctly, but setting any of them fails evaluation.** The two sandbox models
+  are mutually exclusive and Codex resolves a layer carrying the beta model by
+  OVERRIDING rather than merging the legacy settings beneath it, silently
+  dropping every writable root the lower layer granted. The intra-layer
+  assertion below is the only scope a Nix evaluation can see; the cross-layer
+  case is structurally invisible to it, which is why the surface is closed
+  rather than merely asserted. See the lockout comment in
+  `packages/chatgpt-codex/lib/mkCodex.nix` for the measurement that drove it and
+  what re-enabling would require. The mechanics below are retained because they
+  are what re-enabling would restore. The older sandbox model and permission
   profiles are mutually exclusive, so the module fails when both are present.
   Profile names and inheritance graphs remain runtime-validated by Codex because
   config layers may contribute parents dynamically. `ai.codex.profiles.<name>`
