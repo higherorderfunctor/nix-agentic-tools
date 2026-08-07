@@ -821,6 +821,8 @@
     mergedRules;
 in
   lib.ai.app.mkAiApp {
+    # Carried as DATA, not a module argument — see mkAiApp.nix.
+    inherit pkgs;
     name = "codex";
     transformers.markdown = lib.ai.transformers.agentsmd;
     defaults.package = pkgs.ai.chatgpt-codex;

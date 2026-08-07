@@ -980,6 +980,8 @@
   '';
 in
   lib.ai.app.mkAiApp {
+    # Carried as DATA, not a module argument — see mkAiApp.nix.
+    inherit pkgs;
     name = "kiro";
     transformers.markdown = lib.ai.transformers.kiro;
     defaults = {

@@ -37,6 +37,8 @@ brocode
 btop
 burndown
 cachix
+caddy
+caddyfile
 catchable
 catppuccin
 caubut
@@ -333,6 +335,7 @@ starlark
 startswith
 statix
 stdenv
+streamable
 subdirs
 subkeys
 subshell
