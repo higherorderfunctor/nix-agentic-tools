@@ -32,20 +32,39 @@
   ciLines = lib.splitString "\n" (builtins.readFile ciFile);
 
   # Match on BOTH tokens: `head_ref ==` alone could pick up an unrelated future
-  # step, and `update/` alone appears in prose comments.
-  gate =
-    lib.findFirst
+  # step, and `update/` alone appears in prose comments above.
+  #
+  # Collect ALL matches and require exactly one, rather than taking the first.
+  # A `findFirst` here would silently start validating a DIFFERENT step the day
+  # someone adds another `head_ref == 'update/…'` gate earlier in the file —
+  # the heron_brook gate could then be renamed with this guard still green,
+  # which is the precise failure it exists to prevent. Same exactly-one
+  # discipline vu.mkClaudeExtract applies to its enum greps.
+  gates =
+    builtins.filter
     (line: lib.hasInfix "head_ref ==" line && lib.hasInfix "update/" line)
-    null
     ciLines;
+  gateCount = builtins.length gates;
 
   captured =
-    if gate == null
+    if gateCount != 1
     then null
-    else builtins.match ".*'update/([A-Za-z0-9._-]+)'.*" gate;
+    else builtins.match ".*'update/([A-Za-z0-9._-]+)'.*" (builtins.head gates);
 in {
   claude-heron-brook =
-    if gate == null
+    if gateCount > 1
+    then
+      throw ''
+        heron_brook guard: ${toString gateCount} steps in
+        .github/workflows/ci.yml carry a `head_ref == 'update/…'` gate:
+
+        ${lib.concatStringsSep "\n" gates}
+
+        This guard can no longer tell which one belongs to the heron_brook
+        reminder. Narrow the matcher in checks/claude-heron-brook.nix so it
+        selects that step specifically.
+      ''
+    else if gateCount == 0
     then
       throw ''
         heron_brook guard: no `head_ref == 'update/…'` gate found in
@@ -62,7 +81,7 @@ in {
         heron_brook guard: found the ci.yml gate but could not parse a branch
         name out of it:
 
-          ${gate}
+          ${builtins.head gates}
 
         Expected `head_ref == 'update/<key>'`. Restore that shape, or update
         the matcher in checks/claude-heron-brook.nix.
