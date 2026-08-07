@@ -16,11 +16,13 @@
     "PreTaskExec"
   ],
   "rolloutFeatures": [
+    "auto_agent_upgrade",
     "c2s",
     "infra_safety",
     "kas",
     "lite",
     "memory",
+    "remote_changelog",
     "remote_sandbox",
     "tangent",
     "test",
