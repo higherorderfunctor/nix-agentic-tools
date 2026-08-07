@@ -142,6 +142,11 @@ _: {
     bun = {flags = ["--use-update-script" "--override-filename" "overlays/generic/bun.nix"];};
     catppuccin-btop = {flags = ["--use-update-script" "--override-filename" "overlays/generic/catppuccin-btop.nix"];};
     chatgpt-codex = {flags = ["--use-update-script" "--override-filename" "overlays/chatgpt-codex.nix"];};
+    # This key names the bot's branch (`update/claude-code`), and
+    # .github/workflows/ci.yml gates the heron_brook reminder step on exactly
+    # that branch. Rename it here and you must rename it there too, or the
+    # reminder silently never fires — checks/claude-heron-brook.nix asserts the
+    # two agree.
     claude-code = {flags = ["--use-update-script"];};
     copilot-cli = {flags = ["--use-update-script" "--override-filename" "overlays/copilot-cli.nix"];};
     dns-root-hints = {flags = ["--use-update-script" "--override-filename" "overlays/generic/dns-root-hints.nix"];};

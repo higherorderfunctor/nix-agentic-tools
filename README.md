@@ -463,35 +463,34 @@ policy uses `ai.codex.execpolicyRules` rather than Markdown `ai.rules`.
 </details>
 
 <details>
-<summary><strong>Claude Delegation-Clamp Mitigation (on by default)</strong></summary>
+<summary><strong>Claude Delegation-Clamp Mitigation (off by default)</strong></summary>
 
 Claude Code injects a system-prompt section telling the model not to use
 subagents, workflows, or deep research "unless the user requested it". It is
-gated on a **model capability**, not on your configuration — on by default for
-Opus 5 — and no setting, flag, or environment variable turns it off. It never
-appears in the transcript, so a session with delegation silently suppressed
-looks identical to a normal one. It also directly contradicts
-`ai.claude.ultracodeOnLaunch`, which asks for the opposite.
+gated on a **model capability**, not on your configuration — on for Opus 5 — and
+no setting, flag, or environment variable turns it off. It never appears in the
+transcript, so a session with delegation silently suppressed looks identical to
+a normal one. It also directly contradicts `ai.claude.ultracodeOnLaunch`, which
+asks for the opposite.
 
-Enabling Claude through `ai.claude` installs a mitigation automatically. It
-patches nothing: a `UserPromptSubmit` hook supplies the request that the clamp's
-own escape clause is asking for, as user-side context. It is injected once per
-session and re-armed by a `PreCompact` hook, so the cost is roughly 75 tokens
-per session rather than per turn.
+Opting in installs a mitigation that patches nothing: a `UserPromptSubmit` hook
+supplies the request that the clamp's own escape clause is asking for, as
+user-side context. It is injected once per session and re-armed by a
+`PreCompact` hook, so the cost is roughly 75 tokens per session rather than per
+turn.
 
 ```nix
 ai.claude.delegationClamp = {
-  mitigate = true;        # default; set false for stock behavior
+  mitigate = true;        # off by default; set true to enable
   text = "…";             # the standing request — wording is load-bearing
 };
 ```
 
 Upstream:
 [anthropics/claude-code#80988](https://github.com/anthropics/claude-code/issues/80988).
-Two tripwires force re-evaluation instead of letting this calcify — a flake
-check fails when the pinned Claude Code version moves, and a dated CI step fails
-once `config/heron-brook-tripwire.json`'s `reviewBy` passes. See
-`packages/claude-code/docs/heron-brook-clamp.md`.
+A dated CI step re-surfaces this roughly every 90 days, once
+`config/heron-brook-tripwire.json`'s `reviewBy` passes, so the mitigation does
+not outlive its cause. See `packages/claude-code/docs/heron-brook-clamp.md`.
 
 </details>
 

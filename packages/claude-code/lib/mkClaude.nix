@@ -90,7 +90,7 @@
     )
     hooksAttr;
 
-  # heron_brook delegation clamp — the default-on mitigation's hook pair.
+  # heron_brook delegation clamp — the opt-in mitigation's hook pair.
   #
   # Two events, one script (./delegationClamp.nix):
   #   UserPromptSubmit → inject the standing request ONCE per session. This event
@@ -461,18 +461,18 @@ in
           options = {
             mitigate = lib.mkOption {
               type = lib.types.bool;
-              default = true;
+              default = false;
               description = ''
-                Counteract Claude Code's `heron_brook` delegation clamp. On by default.
+                Counteract Claude Code's `heron_brook` delegation clamp. Off by default.
 
                 Claude Code injects a system-prompt section instructing the model not to
                 call the Agent tool and not to use workflows or deep research "unless the
                 user requested it". It is gated on a MODEL capability rather than on user
-                configuration — on by default for Opus 5 — and there is no settings key,
-                CLI flag, or environment variable that disables it. It never appears in
-                the transcript, so a session with delegation silently suppressed looks
-                identical to a normal one. It also directly negates
-                `ai.claude.ultracodeOnLaunch`, which asks for the opposite.
+                configuration — on for Opus 5 — and there is no settings key, CLI flag, or
+                environment variable that disables it. It never appears in the transcript,
+                so a session with delegation silently suppressed looks identical to a
+                normal one. It also directly negates `ai.claude.ultracodeOnLaunch`, which
+                asks for the opposite.
 
                 Rather than patch anything, this supplies the request the clamp's own
                 escape clause is asking for: a `UserPromptSubmit` hook injects a standing
@@ -485,10 +485,8 @@ in
                 in conversation history.
 
                 Upstream issue: https://github.com/anthropics/claude-code/issues/80988.
-                Set false for stock behavior. Two tripwires force re-evaluation rather
-                than letting this calcify: `checks/claude-heron-brook.nix` fails when the
-                pinned Claude Code version moves, and a dated CI step fails once
-                `config/heron-brook-tripwire.json`'s `reviewBy` passes.
+                Set true to enable. A dated CI step re-surfaces this roughly every 90 days
+                so the mitigation does not outlive its cause.
               '';
             };
             text = lib.mkOption {

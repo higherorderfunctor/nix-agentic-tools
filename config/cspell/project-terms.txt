@@ -343,6 +343,7 @@ sweepability
 sweepable
 sympy
 taplo
+tengu
 testapp
 timespec
 tinyduck

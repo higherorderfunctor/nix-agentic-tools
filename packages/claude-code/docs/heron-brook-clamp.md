@@ -1,15 +1,15 @@
-## heron_brook Delegation Clamp — the default-on mitigation
+## heron_brook Delegation Clamp — the opt-in mitigation
 
-> **Last verified:** 2026-08-04 (commit pending — binary re-verification against
-> claude-code 2.1.222 found both clamp strings and all three gate identifiers;
-> the `NotebookEdit` positive control matched, the local feature cache still
-> supplied no kill switch or override, and upstream issue #80988 remained open.
-> Prior 2026-08-03 (commit d88d362a): same re-verification against claude-code
-> 2.1.221. Prior 2026-07-29: confirmed end-to-end against two LIVE sessions on
-> claude-code 2.1.220, which sharpened the attribution rationale and turned the
-> model gate into a measurement. Prior 2026-07-29: initial version, reasoned
-> from the hook payload alone.) If you change `ai.claude.delegationClamp`, the
-> hook script, the injected text, or either tripwire and this fragment isn't
+> **Last verified:** 2026-08-06 (commit pending — `delegationClamp.mitigate` is
+> now **opt-in**, and the per-update version tripwire is gone. It compared the
+> pinned claude-code version against a recorded `verifiedClaudeVersion`, so it
+> went red on every release and was right on none of them; three discharges, all
+> clean. What replaced it is a ~90-day dated reminder scoped to the claude-code
+> update PR, plus an eval-only guard that the two agree on the branch name.
+> Prior 2026-08-04: binary re-verification against 2.1.222. Prior 2026-07-29:
+> confirmed end-to-end against two LIVE sessions on 2.1.220, which turned the
+> model gate into a measurement.) If you change `ai.claude.delegationClamp`, the
+> hook script, the injected text, or the reminder and this fragment isn't
 > updated in the same commit, stop and fix it.
 
 Claude Code injects a system-prompt section — internally `heron_brook` —
@@ -20,9 +20,7 @@ disables it, and it **never appears in the transcript** — so a session with
 delegation suppressed looks identical to a normal one. It also contradicts
 `ai.claude.ultracodeOnLaunch`, which asks for the opposite.
 
-Evidence, reproduction commands, dead-end workarounds, and the full verification
-record live in `private/heron-brook-delegation-clamp.md` (untracked). Do not
-re-derive them here.
+Set `ai.claude.delegationClamp.mitigate = true` to enable it.
 
 ### Why the mitigation is user-side context, not a patch
 
@@ -130,23 +128,28 @@ current builds and a live session flagged the mismatch, but the redundancy is
 deliberate: this package ships across versions that used either name, and a
 spare word is cheaper than a missed escape clause.
 
-### The two tripwires
+### The reminder, and why it is not a check
 
-A mitigation for undocumented vendor behavior must not outlive its cause:
+A mitigation for undocumented vendor behavior must not outlive its cause — but
+the check that used to enforce that was the wrong instrument. It compared the
+pinned claude-code version against a recorded `verifiedClaudeVersion`, which is
+a **proxy**: it cannot tell "the clamp changed" from "the version number moved",
+so it went red on every claude-code release and was right on none of them.
 
-- **`checks/claude-heron-brook.nix`** fails when
-  `overlays/claude-code-sources.json`'s pinned version leaves
-  `config/heron-brook-tripwire.json`'s `verifiedClaudeVersion`. It lives in
-  `nix flake check` because the requirement is that the bot's auto-merging
-  `update/*` PR goes red — a gate in the update job could not do that.
-- **A dated step in `ci.yml`'s `test` job** fails once `reviewBy` passes. It
-  cannot be a Nix check: reading the date in a derivation is impure and cached.
-  Once past it reddens a required check on every PR, which is the point; it is
-  self-discharging.
+What replaced it:
 
-Discharging either means re-verifying against the new binary (the procedure,
-with its **mandatory positive control**, is in
-`private/heron-brook-delegation-clamp.md` § 5), then either recording the new
-version/date or — if upstream fixed it — **deleting the mitigation and both
-tripwires**. An expired justification is a finding, not a formality to bump
-past.
+- **A dated step in `ci.yml`'s `test` job** fails once
+  `config/heron-brook-tripwire.json`'s `reviewBy` passes, gated on
+  `head_ref == 'update/claude-code'` so it touches no other PR. It cannot be a
+  Nix check — reading the date in a derivation is impure and cached. **The
+  discharge procedure, with its mandatory positive control, is the comment
+  directly above that step.** Read it there; it is deliberately not duplicated
+  here.
+- **`checks/claude-heron-brook.nix`** is now an eval-only guard on that gate. It
+  reads the branch name back out of `ci.yml` and fails if no such update target
+  exists, so renaming the target cannot silently stop the reminder from ever
+  firing again. No binary, no IFD, no derivation.
+
+Discharging means bumping `reviewBy` ~90 days or — if upstream fixed it —
+**deleting the mitigation, the ci.yml step, and that guard together**. An
+expired justification is a finding, not a formality to bump past.
