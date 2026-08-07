@@ -144,6 +144,8 @@
   };
 in
   lib.ai.app.mkAiApp {
+    # Carried as DATA, not a module argument — see mkAiApp.nix.
+    inherit pkgs;
     name = "claude";
     transformers.markdown = lib.ai.transformers.claude;
     defaults = {

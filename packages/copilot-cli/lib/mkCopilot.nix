@@ -21,6 +21,8 @@
   ...
 }:
 lib.ai.app.mkAiApp {
+  # Carried as DATA, not a module argument — see mkAiApp.nix.
+  inherit pkgs;
   name = "copilot";
   transformers.markdown = lib.ai.transformers.copilot;
   defaults = {

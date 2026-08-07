@@ -26,6 +26,33 @@
   # assert placeholder content via `renderedMcpJson` and template-store-
   # path parity between the two backends.
   inherit (import ./../packages/kiro-cli/lib/mcpSecrets.nix {inherit lib;}) renderKiroSecrets;
+  # Local credential-injecting reverse proxy (lib/ai/mcpProxy.nix).
+  mcpProxyLib = import ./../lib/ai/mcpProxy.nix {inherit lib pkgs;};
+  # Exercises all three header shapes the renderer must handle: a
+  # credential WITH a prefix, a credential without one, and a plain
+  # literal string that is not a secret at all — plus a credential url.
+  #
+  # Deliberately generic. A fixture copied from a real deployment
+  # documents that deployment's topology in a public repository, and this
+  # one only needs the SHAPES.
+  proxySampleServer = {
+    type = "http";
+    url.file = "/run/secrets/upstream-url";
+    timeout = 300000;
+    headers = {
+      "X-Api-Key" = {
+        file = "/run/secrets/api-key";
+        prefix = "Bearer ";
+      };
+      "X-Route" = "primary";
+      "X-Service-Token".file = "/run/secrets/service-token";
+    };
+    proxy = {
+      enable = true;
+      host = "127.0.0.1";
+      port = 9501;
+    };
+  };
   renderedMcpJson = servers:
     builtins.toJSON {
       mcpServers = lib.mapAttrs (name: mcpLib.renderServer pkgs name) (renderKiroSecrets servers).servers;
@@ -4080,6 +4107,91 @@ in {
   # — the raw secret file path is NEVER serialized, and the `Bearer `
   # header prefix + `https://` url prefix compose. Content-level (the
   # shared render both backends feed into). See mcpSecrets.nix.
+  # ── Local credential-injecting proxy (lib/ai/mcpProxy.nix) ─────────
+  # The property under test is NEGATIVE and easy to regress silently: a
+  # proxied server must hand the client NOTHING secret. Assert the
+  # loopback url is there AND that no header, no secret path, and no
+  # placeholder survives into the entry.
+  module-mcp-proxy-client-entry-drops-credentials = mkTest "mcp-proxy-client-entry-drops-credentials" (
+    let
+      entry = mcpProxyLib.clientEntry "example" proxySampleServer;
+      json = builtins.toJSON entry;
+    in
+      entry.url
+      == "http://127.0.0.1:9501/"
+      && entry.type == "http"
+      # `timeout` is client behavior, not a credential — it must survive.
+      && entry.timeout == 300000
+      && !(entry ? headers)
+      && !(lib.hasInfix "/run/secrets" json)
+      && !(lib.hasInfix "Bearer" json)
+      && !(lib.hasInfix "env:" json)
+  );
+
+  # The Caddyfile lands in the WORLD-READABLE Nix store, so it may carry
+  # only `{$VAR}` tokens. This also pins the escaping trap: Nix's `$${`
+  # is an escape for a literal `${`, so a regression here silently emits
+  # an unexpanded `{${VAR}}` that Caddy would forward verbatim.
+  module-mcp-proxy-caddyfile-has-no-secrets = mkTest "mcp-proxy-caddyfile-has-no-secrets" (
+    let
+      cf = builtins.readFile (mcpProxyLib.caddyfileFor (mcpProxyLib.specFor "example" proxySampleServer));
+    in
+      # `bind <host>` is the ONLY thing that restricts the listener to an
+      # interface, and it is the assertion that matters most here: the
+      # endpoint is unauthenticated, so a wildcard listener publishes use
+      # of the upstream credential to the whole network.
+      #
+      # Do NOT weaken this to a site-address check like
+      # `hasInfix "127.0.0.1:9501 {"`. That string is satisfied by a
+      # config that still listens on every interface — in Caddy a site
+      # address host is a Host-HEADER matcher, not a bind — so such a
+      # test goes green on the insecure config. Measured.
+      lib.hasInfix "bind 127.0.0.1" cf
+      && lib.hasInfix "{$MCP_PROXY_EXAMPLE_X_SERVICE_TOKEN}" cf
+      && lib.hasInfix "Bearer {$MCP_PROXY_EXAMPLE_X_API_KEY}" cf
+      && lib.hasInfix "{$MCP_PROXY_EXAMPLE_ORIGIN}" cf
+      && lib.hasInfix "{$MCP_PROXY_EXAMPLE_PATH}" cf
+      # Plain-string headers are not secrets and stay literal.
+      && lib.hasInfix ''header_up X-Route "primary"'' cf
+      # Streaming: without this, SSE responses buffer to the end.
+      && lib.hasInfix "flush_interval -1" cf
+      # Byte-identical upstream request: Caddy adds these four on its own
+      # and they must be deleted, not merely overwritten. Measured — the
+      # `Via` header is NOT covered by dropping the X-Forwarded-* trio.
+      && lib.hasInfix "header_up -Via" cf
+      && lib.hasInfix "header_up -X-Forwarded-For" cf
+      && lib.hasInfix "header_up -X-Forwarded-Host" cf
+      && lib.hasInfix "header_up -X-Forwarded-Proto" cf
+      # Go's transport adds `Accept-Encoding: gzip` below the header
+      # layer, so no `header_up -` can reach it; only turning transport
+      # compression off keeps the request identical to the client's.
+      && lib.hasInfix "compression off" cf
+      && !(lib.hasInfix "/run/secrets" cf)
+      # The escape regression: an unexpanded Nix interpolation token.
+      && !(lib.hasInfix "{\${" cf)
+  );
+
+  # Secrets must be read at RUNTIME from their files and never appear in
+  # argv — /proc/<pid>/cmdline is world-readable, /proc/<pid>/environ is
+  # not. Also pins the absolute-coreutils-path rule and fail-closed.
+  module-mcp-proxy-start-script-reads-secrets-at-runtime = mkTest "mcp-proxy-start-script-reads-secrets-at-runtime" (
+    let
+      s = builtins.readFile (mcpProxyLib.startScriptFor (mcpProxyLib.specFor "example" proxySampleServer));
+    in
+      lib.hasInfix "/bin/cat \"/run/secrets/service-token\"" s
+      && lib.hasInfix "export MCP_PROXY_EXAMPLE_X_SERVICE_TOKEN" s
+      && lib.hasInfix "set -euETo pipefail" s
+      && lib.hasInfix "shopt -s inherit_errexit" s
+      # Fail closed: an empty or unreadable secret must not start a proxy
+      # that would answer every client with the upstream's 401.
+      && lib.hasInfix "resolved empty from" s
+      && lib.hasInfix "the file is missing or unreadable" s
+      # Never a bare `cat` — this wrapper can be spawned with no PATH.
+      && !(lib.hasInfix "\ncat " s)
+      # The secret must not be an ARGUMENT to caddy.
+      && !(lib.hasInfix "--header" s)
+  );
+
   module-kiro-mcp-secret-placeholders = mkTest "kiro-mcp-secret-placeholders" (
     let
       mcpJson = renderedMcpJson {
@@ -4092,7 +4204,7 @@ in {
           timeout = 300000;
           headers = {
             "X-MCP-Servers" = "jira";
-            "X-Jira-Token".file = "/run/secrets/jira-pat";
+            "X-Jira-Token".file = "/run/secrets/service-token";
             "X-Api-Key" = {
               file = "/run/secrets/llm";
               prefix = "Bearer ";
@@ -4105,7 +4217,7 @@ in {
       && lib.hasInfix "Bearer \${env:KIRO_MCP_JIRA_X_API_KEY}" mcpJson
       && lib.hasInfix "https://\${KIRO_MCP_JIRA_URL}" mcpJson
       && lib.hasInfix ''"X-MCP-Servers":"jira"'' mcpJson
-      && !(lib.hasInfix "/run/secrets/jira-pat" mcpJson)
+      && !(lib.hasInfix "/run/secrets/service-token" mcpJson)
       && !(lib.hasInfix "/run/secrets/llm" mcpJson)
       && !(lib.hasInfix "/run/secrets/jira-url" mcpJson)
   );
@@ -4221,7 +4333,7 @@ in {
         jira = {
           type = "http";
           url.file = "/run/secrets/jira-url";
-          headers."X-Jira-Token".file = "/run/secrets/jira-pat";
+          headers."X-Jira-Token".file = "/run/secrets/service-token";
         };
       };
       cfg = {
@@ -4278,7 +4390,7 @@ in {
           mcpServers.jira = {
             type = "http";
             url.file = "/run/secrets/jira-url";
-            headers."X-Jira-Token".file = "/run/secrets/jira-pat";
+            headers."X-Jira-Token".file = "/run/secrets/service-token";
           };
         };
       };

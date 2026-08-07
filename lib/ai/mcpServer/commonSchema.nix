@@ -221,6 +221,81 @@ in {
         nix-agentic-tools repository.
       '';
     };
+    proxy = lib.mkOption {
+      type = lib.types.nullOr (lib.types.submodule {
+        options = {
+          enable = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+            description = ''
+              Route this remote http server through a LOCAL
+              credential-injecting reverse proxy instead of handing the
+              credentials to the client.
+
+              `url` and every `headers.<name>` move into the proxy
+              daemon's ENVIRONMENT, read from their secret files when the
+              daemon starts. The client receives a credential-free
+              `http://<host>:<port>/` entry, so it no longer matters which
+              binary launches it — the per-binary scope mismatch that
+              affects `''${env:VAR}` header placeholders cannot apply,
+              because the client holds no credential to get wrong.
+
+              This also makes the server harness-agnostic. A credential
+              header or url is Kiro-only (`renderServer` throws for other
+              ecosystems rather than serialize a secret's path); the
+              proxied entry carries neither, so Claude Code and Copilot
+              can use it too.
+
+              SCOPE — Home Manager on Linux only today. devenv parity and
+              Darwin (launchd) are deliberately OUT OF SCOPE for this
+              change and are explicitly NOT decided against — this is a
+              deferral, not a WONTFIX. See
+              `dev/fragments/mcp-secrets/mcp-secrets.md`. The devenv
+              transform throws rather than silently ignoring the option.
+            '';
+          };
+          host = lib.mkOption {
+            type = lib.types.str;
+            default = "127.0.0.1";
+            description = ''
+              Address the proxy listens on. Emitted as the Caddy `bind`
+              directive — NOT as the site address, which would be a
+              Host-header matcher and would leave the listener on every
+              interface — and used as the host in the url handed to
+              clients.
+
+              The endpoint is UNAUTHENTICATED by design — that is what
+              makes it independent of which binary connects. Two
+              consequences worth being explicit about:
+
+              - Binding a routable address publishes the use of the
+                upstream credential to that whole network. Anyone who can
+                reach the port can make authenticated requests.
+              - Even on loopback it is reachable by ANY LOCAL USER, not
+                just by you. On a multi-user machine that is a real
+                boundary: local users cannot read the secret (it is only
+                in the daemon's 0400 environ) but they CAN use it through
+                this port.
+            '';
+          };
+          port = lib.mkOption {
+            type = lib.types.port;
+            description = ''
+              Port the proxy listens on. REQUIRED and explicit on
+              purpose — a port derived from the server name would collide
+              silently between two servers sharing a loopback address,
+              and a silent loopback collision is a bad failure mode.
+            '';
+          };
+        };
+      });
+      default = null;
+      description = ''
+        Local credential-injecting reverse proxy for a remote http server
+        (shape C). Null (the default) disables it and the credentials are
+        delivered to the client instead.
+      '';
+    };
     timeout = lib.mkOption {
       type = lib.types.nullOr lib.types.ints.positive;
       default = null;

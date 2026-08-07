@@ -38,6 +38,25 @@ _: {
   options ? {},
   hm ? {},
   devenv ? {},
+  # The package set the factory was built with, carried on the record so
+  # backend transforms can build derivations WITHOUT taking `pkgs` as a
+  # module argument.
+  #
+  # That distinction is load-bearing, not stylistic. A module function
+  # that names `pkgs` in its formals resolves it through `_module.args`,
+  # which requires `config`; a factory whose options use
+  # `pkgs.formats.json` for a freeform type then closes the loop and
+  # evaluation dies with "infinite recursion encountered" while
+  # evaluating `_module.freeformType`. It does NOT reproduce through
+  # ordinary HM evaluation, where the wrapper applies the transform to
+  # its own args and `pkgs` is externally provided — only through
+  # harnesses that call `lib.evalModules` directly, such as
+  # `checks/options-doc.nix`. Passing it as data sidesteps the module
+  # argument system entirely.
+  #
+  # Optional so a record built without it still evaluates; features that
+  # need it must degrade rather than throw.
+  pkgs ? null,
 }: {
-  inherit name transformers defaults options hm devenv;
+  inherit name transformers defaults options hm devenv pkgs;
 }

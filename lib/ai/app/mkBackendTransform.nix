@@ -41,6 +41,15 @@
 }: appRecord: {config, ...}: let
   aiCommon = import ../ai-common.nix {inherit lib;};
   dirHelpers = import ../dir-helpers.nix {inherit lib;};
+  # `pkgs` comes off the RECORD, never from the module arguments. Naming
+  # it in this function's formals makes the module system resolve it via
+  # `_module.args`, which requires `config` and deadlocks against any
+  # factory whose options use `pkgs.formats.json` as a freeform type —
+  # see the note on `pkgs` in mkAiApp.nix.
+  mcpProxy = import ../mcpProxy.nix {
+    inherit lib;
+    inherit (appRecord) pkgs;
+  };
   cfg = config.ai.${appRecord.name};
   # Collision-as-failure merges — shared ai.<pool> vs ai.<cli>.<pool>.
   # See lib/ai/ai-common.nix:mergeWithCollisionCheck. Assertions are
@@ -63,7 +72,99 @@
     ++ lspMerge.assertions
     ++ envMerge.assertions
     ++ agentsMerge.assertions;
-  mergedServers = serversMerge.merged;
+  # ── Local credential-injecting proxy split ──────────────────────
+  # A server with `proxy.enable` has its url + headers moved into a
+  # systemd user daemon (lib/ai/mcpProxy.nix) and is handed to every
+  # ecosystem as a credential-free loopback entry. This runs BEFORE the
+  # per-app callback, so no factory — Kiro's credential preprocessor
+  # included — ever sees the secret for a proxied server, and the
+  # rendered entry passes `renderServer`'s non-Kiro credential guards
+  # because there is no credential left in it.
+  rawMergedServers = serversMerge.merged;
+  proxiedServers = mcpProxy.proxiedServers rawMergedServers;
+  mergedServers =
+    rawMergedServers
+    // lib.mapAttrs mcpProxy.clientEntry proxiedServers;
+
+  # SCOPE — Home Manager only, and in practice Linux only because the
+  # daemon is a systemd user service. Neither devenv nor Darwin is a
+  # WONTFIX; see the `proxy` option in mcpServer/commonSchema.nix.
+  #
+  # Gated on `backend` ALONE, deliberately. `backend` is a build-time
+  # parameter, so testing it forces nothing. Adding
+  # `pkgs.stdenv.hostPlatform.isLinux` here would force the `pkgs` module
+  # argument while the `config` attrset is being CONSTRUCTED, and `pkgs`
+  # resolves through `_module.args`, which requires `config` — an
+  # infinite recursion that surfaces far away, as
+  # "while evaluating the option `_module.freeformType'" in a factory
+  # that uses `pkgs.formats.json` for a freeform type. Every other `pkgs`
+  # use below sits inside an attribute VALUE and stays lazy.
+  #
+  # The Darwin gate is therefore documentation plus the devenv assertion,
+  # not a platform conditional. home-manager's own systemd.user options
+  # are already inert off Linux.
+  # `backend` ONLY. Testing `appRecord.pkgs != null` here looks harmless
+  # and is not: `appRecord.pkgs` is the factory's `pkgs` argument, so
+  # forcing it inside the `optionalAttrs` CONDITION forces that argument
+  # while `config` is being constructed. Under a harness that does not
+  # externally provide `pkgs` (checks/options-doc.nix), it resolves
+  # through `_module.args`, which requires `config` — the same infinite
+  # recursion, reached by a different route.
+  #
+  # A null `pkgs` is caught by the lazy assertion below instead, and
+  # `proxyUnits` is `{}` when nothing is proxied, so nothing forces it.
+  proxyIsSupported = backend == "hm";
+
+  # A proxied server with no `url` has nothing to forward to. The start
+  # script would export no url variable, then dereference it under
+  # `set -u` and die at SERVICE START with a bare unbound-variable error
+  # naming a generated variable — far from the option that is actually
+  # wrong. Reject it at eval, where the message can name the server.
+  proxiedWithoutUrl =
+    builtins.attrNames
+    (lib.filterAttrs (_: srv: (srv.url or null) == null) proxiedServers);
+
+  proxyAssertions = [
+    {
+      assertion = proxiedWithoutUrl == [];
+      message = "ai.${appRecord.name}.mcpServers: ${lib.concatStringsSep ", " proxiedWithoutUrl} set `proxy.enable` but no `url`. The proxy forwards to that url, so there is nothing to proxy to — set `url` (a plain string or a credential), or drop `proxy.enable`.";
+    }
+    {
+      assertion = appRecord.pkgs != null || proxiedServers == {};
+      message = "ai.${appRecord.name}.mcpServers: ${lib.concatStringsSep ", " (builtins.attrNames proxiedServers)} set `proxy.enable`, but the ${appRecord.name} app record carries no `pkgs`, so the proxy daemon cannot be built. Pass `inherit pkgs;` to `mkAiApp` in that factory.";
+    }
+    {
+      assertion = backend != "devenv" || proxiedServers == {};
+      message = "ai.${appRecord.name}.mcpServers: ${lib.concatStringsSep ", " (builtins.attrNames proxiedServers)} set `proxy.enable`, which the devenv backend does not implement. The proxy is a systemd user service and devenv has no equivalent wired yet — deliberately out of scope, NOT a decision against it. Declare these servers in Home Manager, or drop `proxy.enable` and accept client-side credentials.";
+    }
+  ];
+
+  # One unit per proxied server, keyed by SERVER name rather than by app,
+  # so a server shared across two enabled ecosystems yields one daemon.
+  # Two apps seeing the same top-level server produce byte-identical
+  # definitions, which the module system merges; they differ only if the
+  # server itself differs, and that is a real conflict worth failing on.
+  proxyUnits = lib.mapAttrs' (name: srv: let
+    spec = mcpProxy.specFor name srv;
+  in
+    lib.nameValuePair "mcp-proxy-${name}" {
+      Unit = {
+        Description = "Credential-injecting MCP proxy for ${name}";
+        After = ["network.target"];
+      };
+      Service = {
+        ExecStart = "${mcpProxy.startScriptFor spec}";
+        Restart = "on-failure";
+        RestartSec = 5;
+        # The decrypted values live only here and in the process's own
+        # memory: /proc/<pid>/environ is 0400, while /proc/<pid>/cmdline
+        # is world-readable — which is why nothing is passed as argv.
+        PrivateTmp = true;
+      };
+      Install.WantedBy = ["default.target"];
+    })
+  proxiedServers;
+
   mergedInstructions = config.ai.instructions ++ cfg.instructions;
   mergedSkills = skillsMerge.merged;
   mergedRules = rulesMerge.merged;
@@ -151,7 +252,33 @@ in {
     # Collision-as-failure: always evaluate (no mkIf cfg.enable
     # guard) so misconfigurations surface even when the feature
     # is toggled off.
-    {assertions = collisionAssertions;}
+    {assertions = collisionAssertions ++ proxyAssertions;}
+    # The proxy daemon is emitted OUTSIDE `mkIf cfg.enable`, unlike the
+    # on-disk config. A client entry pointing at a dead loopback port is
+    # a confusing failure, so the daemon's lifetime follows the SERVER
+    # declaration rather than any one ecosystem being turned on.
+    #
+    # `optionalAttrs`, NOT `lib.mkIf`. This body is shared with the devenv
+    # backend, which has no `systemd` option at all, and `mkIf false` still
+    # places the attribute path in the definition tree — the module system
+    # then rejects it with "The option `systemd' does not exist" even though
+    # the condition is false. Only dropping the key outright works, and it
+    # is safe because `backend` is a build-time parameter, not config.
+    #
+    # The condition must be answerable WITHOUT touching `config` or the
+    # factory's `pkgs`. Both were tried and both are infinite recursions:
+    # `appRecord.pkgs != null` forces a module argument that resolves
+    # through `_module.args`, and `proxiedServers != {}` forces
+    # `config.ai.mcpServers` while `config` is being constructed. `backend`
+    # is a build-time parameter and forces nothing.
+    #
+    # Consequence: for the HM backend this key is ALWAYS defined, as `{}`
+    # when nothing is proxied. Any harness evaluating this transform must
+    # therefore declare a `systemd.user.services` option — `hmStubs` in
+    # checks/factory-eval.nix and checks/module-eval.nix do.
+    (lib.optionalAttrs proxyIsSupported {
+      systemd.user.services = proxyUnits;
+    })
     # L2b → L3 fanout for per-CLI Dir options. Expansion happens
     # unconditionally (no mkIf cfg.enable) so the collision check
     # still has visibility even when the CLI is disabled — the

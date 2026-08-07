@@ -7,14 +7,22 @@ applyTo: "lib/ai/mcpServer/**,lib/mcp.nix,packages/kiro-cli/lib/mcpSecrets.nix,p
 
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-08-04 (commit pending — records the PER-BINARY vs
-> USER-GLOBAL scope mismatch that lets a devshell kiro connect to gateway MCP
-> servers with no credentials, and the `export VAR="$(cat …)"` masking that
-> makes an unreadable secret silent; the url writer now fails loudly, the
-> launcher wrapper deliberately does not). Prior: 2026-08-04 (commit pending —
-> rebased onto the extracted launcher wrapper: `wrapKiroPackage` no longer lives
-> in `mkKiro.nix` and no longer uses `makeWrapper`, so the secret export moved
-> into `packages/kiro-cli/lib/wrapPackage.nix` as a shell `export` line beside
+> **Last verified:** 2026-08-06 (commit pending — adds the LOCAL
+> CREDENTIAL-INJECTING PROXY (`proxy.enable`, `lib/ai/mcpProxy.nix`), which
+> retires the per-binary scope mismatch below for any server that opts in: the
+> credential moves into a systemd user daemon and the client gets an
+> unauthenticated loopback url, so no client holds a credential to get wrong.
+> Records the measured argv-vs-environ fact that decides the whole design, and
+> the Nix `$${` escaping trap that silently produces an unexpanded Caddy token.
+> HM + Linux only; devenv and Darwin are deferred, NOT WONTFIX). Prior:
+> 2026-08-04 (commit pending — records the PER-BINARY vs USER-GLOBAL scope
+> mismatch that lets a devshell kiro connect to gateway MCP servers with no
+> credentials, and the `export VAR="$(cat …)"` masking that makes an unreadable
+> secret silent; the url writer now fails loudly, the launcher wrapper
+> deliberately does not). Prior: 2026-08-04 (commit pending — rebased onto the
+> extracted launcher wrapper: `wrapKiroPackage` no longer lives in `mkKiro.nix`
+> and no longer uses `makeWrapper`, so the secret export moved into
+> `packages/kiro-cli/lib/wrapPackage.nix` as a shell `export` line beside
 > `envExports`). Prior: 2026-07-23 (Option B: SOPS url + `mcpWriteMode`). If you
 > change the `secretValue` shape, the Kiro placeholder/preprocessor, the
 > `renderServer` guard, the wrapper export, or the mcp.json writer and this
@@ -33,6 +41,94 @@ world-readable store or in committed config. Files:
 - `packages/kiro-cli/lib/mkKiro.nix` — `mkMcpJsonScript` + wiring.
 - `packages/kiro-cli/lib/wrapPackage.nix` — `secretEnv` → the runtime `export`
   that puts the decrypted value in the launcher's env.
+
+### The proxy path — `proxy.enable`, and why it is the preferred one
+
+`proxy.enable` on a `type = "http"` server moves the credential OFF the client
+entirely. `lib/ai/mcpProxy.nix` renders a Caddy daemon
+(`systemd.user.services.mcp-proxy-<name>`) that reads each secret from its file
+at START, injects the headers outbound, and listens UNAUTHENTICATED on loopback.
+Clients get `{ type = "http"; url = "http://127.0.0.1:<port>/"; }`.
+
+This is not merely a nicer delivery mechanism — it dissolves the scope mismatch
+documented below, because **there is no client-side credential left to get
+wrong.** It also stops being Kiro-only: `renderServer` throws when a credential
+reaches Claude/Copilot/the shared pool, and the proxied entry contains none, so
+those ecosystems can consume it.
+
+**Where the secret is, and is not** — the measurement that decides the design:
+
+| Location                  | Mode   | Secret there?                |
+| ------------------------- | ------ | ---------------------------- |
+| `/proc/<pid>/environ`     | `0400` | yes                          |
+| `/proc/<pid>/cmdline`     | `0444` | **never**                    |
+| the Caddyfile (Nix store) | `0444` | never — `{$VAR}` tokens only |
+| `mcp.json`                | varies | never                        |
+
+**`$(cat …)` does NOT keep a secret out of argv.** The shell expands command
+substitution BEFORE `execve()`, so the kernel stores the literal value and any
+local user can read it. Measured 2026-08-06: a process spawned as
+`… -H X-Token "$(cat f)"` shows `FAKE-SECRET-abc123` in a world-readable
+`cmdline`. This is why nothing is passed as an argument and everything goes
+through the environment.
+
+**Three traps worth knowing before editing `mcpProxy.nix`:**
+
+- **`bind <host>` is the ONLY thing that restricts the listener**, and getting
+  this wrong is a security bug, not a cosmetic one: a bare `:<port>` site
+  address listens on EVERY interface, publishing an unauthenticated endpoint
+  while `proxy.host` sits unused and the client entry still claims loopback.
+  Writing the host into the SITE ADDRESS instead (`127.0.0.1:9501 { … }`) does
+  not fix it and additionally breaks the proxy — in Caddy a site-address host is
+  a Host-HEADER matcher, so the listener still covers everything and mismatched
+  requests 400. **A string assertion cannot tell these apart**: `127.0.0.1:9501`
+  appears in the config either way. Verify with `ss` plus a refused connection
+  from a routable address. This repo has shipped the same class of defect before
+  in `service.host`.
+- **`$${` is a Nix ESCAPE for a literal `${`** in BOTH quoted and indented
+  strings. The natural-looking `"{$${var}}"` therefore emits `{${var}}` — no
+  substitution, no error, and a Caddyfile that proxies to an unexpanded token.
+  The `envRef` helper builds the token by explicit concatenation for exactly
+  this reason; do not "simplify" it back into an interpolated string.
+- **`reverse_proxy` rejects a PATH in its upstream.** An upstream url may carry
+  one, and it may itself be a secret, so it cannot be split at eval time. The
+  wrapper splits it in shell at runtime into origin + path and applies the path
+  with `rewrite *`. The `case` around that split is load-bearing: with no `/`
+  after the host, `${_rest#*/}` returns `_rest` unchanged and the path silently
+  becomes the hostname.
+
+It fails CLOSED, deliberately differing from the launcher wrapper below: an
+empty or unreadable secret exits 1 naming the variable and the file, rather than
+starting a proxy that would answer every client with the upstream's 401.
+
+**The upstream request is byte-identical to the un-proxied one**, plus the
+injected credentials and nothing else. That is a deliberate property, not a
+happy accident, and it took two fixes beyond the obvious one:
+
+- Caddy adds `X-Forwarded-For/Host/Proto` **and `Via: 1.1 Caddy`**. Removing the
+  X-Forwarded trio alone leaves `Via` behind — measured, and easy to miss
+  because the trio is what everyone thinks of. All four are deleted with
+  `header_up -<name>`.
+- `Accept-Encoding: gzip` is added by Go's HTTP transport, BELOW the header
+  layer, so no `header_up -Accept-Encoding` can remove it. It needs
+  `transport http { compression off }`. A header-level fix here looks correct
+  and silently does nothing.
+
+Why bother: a proxy-shaped request can trip WAF rules, change how an upstream
+derives client identity, and leaks the loopback address and port. It is also one
+more thing to rule out when debugging a remote 4xx.
+
+Verified end-to-end 2026-08-06 against a local fake upstream, by DIFFING the
+header set the upstream received directly against the set it received through
+the proxy: the only difference is the three injected credential headers, with
+nothing added and nothing dropped. Also verified: an upstream URL carrying a
+path is rewritten correctly, responses streamed incrementally with compression
+off (four chunks 0.5 s apart, not buffered), argv clean, and both failure modes
+loud.
+
+SCOPE — Home Manager on Linux only. devenv (process-compose) and Darwin
+(launchd) are deferred and **explicitly not WONTFIX**; the devenv transform
+asserts rather than dropping the daemon silently.
 
 ### Two secret paths, because Kiro treats headers and url differently
 
@@ -59,8 +155,12 @@ through it**. So:
 
 **A kiro that is not the wrapper carrying the secrets still finds those servers
 in the global mcp.json and connects to them with NO credentials.** This is a
-scope mismatch in the current design, not a defect in any one file, and it is
-UNFIXED. Read this before adding a consumer or "simplifying" the wrapper.
+scope mismatch in the design, not a defect in any one file.
+
+**It now has a fix — `proxy.enable`, above — but only for servers that OPT IN.**
+Everything in this section still applies verbatim to any credential header or
+url delivered the `${env:VAR}` way. Read it before adding such a consumer or
+"simplifying" the wrapper.
 
 The two halves live at different scopes:
 
@@ -108,13 +208,12 @@ unprivileged, so it does not matter WHICH kiro binary runs — which is exactly
 the property the header-placeholder path lacks.
 
 `gitlab-mcp` ships this way and nixos-config runs it today (its daemon stays
-enabled while the shared-pool exposure is Kiro-only). The gateway-backed
-jira/confluence servers are simply NOT on that path: they are raw
-`type = "http"` entries pointing at a remote gateway, with auth pushed onto the
-client. Moving them onto a local proxy daemon is the design change under
-consideration, and it is a nixos-config change plus (for a remote upstream) a
-proxy that injects headers rather than the usual "run the server locally"
-daemon.
+enabled while the shared-pool exposure is Kiro-only). Gateway-backed remote
+servers are simply NOT on that path: they are raw `type = "http"` entries
+pointing at a remote gateway, with auth pushed onto the client. Moving them onto
+a local proxy daemon is the design change under consideration, and it is a
+nixos-config change plus (for a remote upstream) a proxy that injects headers
+rather than the usual "run the server locally" daemon.
 
 Until that lands, do not enable kiro in a devshell on a machine whose gateway
 MCP servers come from Home Manager — or declare the same servers and secrets in

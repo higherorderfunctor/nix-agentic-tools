@@ -18,6 +18,13 @@
   # hmStubs pattern in checks/module-eval.nix.
   hmStubs = {
     options = {
+      # The HM transform always defines this for the hm backend (it is
+      # `{}` when no server sets `proxy.enable`), because the condition
+      # cannot read `config` without recursing. See mkBackendTransform.
+      systemd.user.services = lib.mkOption {
+        type = lib.types.attrsOf lib.types.anything;
+        default = {};
+      };
       assertions = lib.mkOption {
         type = lib.types.listOf lib.types.anything;
         default = [];
