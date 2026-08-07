@@ -4021,20 +4021,14 @@ in {
   # Devenv: empty ai.claude.settings produces no gap file (lib.mkIf
   # gate on hasGapSettings).
   #
-  # delegationClamp.mitigate = false is REQUIRED here, and is not a workaround.
-  # The heron_brook mitigation is default-on and writes hooks into the same
-  # settings.json through a DIFFERENT writer, so under stock config that file now
-  # always exists. This test is about the gap writer's own mkIf gate, so it turns
-  # the other writer off to isolate it. Coverage of the default is
-  # module-claude-devenv-delegation-clamp-default-on.
+  # The heron_brook mitigation writes hooks into the same settings.json through
+  # a DIFFERENT writer, so it must stay off here for this test to be about the
+  # gap writer's own mkIf gate. That is now the default, so no explicit opt-out
+  # is needed — but if delegationClamp ever becomes default-on again, this test
+  # will start failing for a reason that has nothing to do with the gap writer.
   module-claude-devenv-settings-empty-no-gap-file = mkTest "claude-devenv-settings-empty-no-gap-file" (
     let
-      result = evalDevenv {
-        ai.claude = {
-          enable = true;
-          delegationClamp.mitigate = false;
-        };
-      };
+      result = evalDevenv {ai.claude.enable = true;};
     in
       !(result.config.files ? ".claude/settings.json")
   );
@@ -8111,29 +8105,14 @@ in {
   );
 
   # ── heron_brook delegation clamp (ai.claude.delegationClamp) ──────
-  # Default-ON is the whole requirement: a bare `enable = true` must already
-  # carry both hooks, because a consumer is meant to do nothing to get the
-  # mitigation. If this test ever needs a flag added to pass, the feature broke.
-  module-claude-hm-delegation-clamp-default-on = mkTest "claude-hm-delegation-clamp-default-on" (
+  # OPT-IN is the requirement: a bare `enable = true` must carry NEITHER hook.
+  # Asserting both are absent also pins the all-or-nothing property — emitting
+  # only the PreCompact half would leave a hook clearing a marker nothing ever
+  # writes, inert but confusing to find in a settings.json you never asked to
+  # be modified.
+  module-claude-hm-delegation-clamp-default-off = mkTest "claude-hm-delegation-clamp-default-off" (
     let
       result = evalHm {ai.claude.enable = true;};
-      settingsHooks = (result.config.programs.claude-code.settings or {}).hooks or {};
-    in
-      hasClampHook (settingsHooks.UserPromptSubmit or [])
-      && hasClampHook (settingsHooks.PreCompact or [])
-  );
-
-  # The escape hatch must remove BOTH hooks. Dropping only the injector would
-  # leave a PreCompact hook that clears a marker nothing ever writes — inert, but
-  # a confusing thing to find in a settings.json you asked to be stock.
-  module-claude-hm-delegation-clamp-opt-out = mkTest "claude-hm-delegation-clamp-opt-out" (
-    let
-      result = evalHm {
-        ai.claude = {
-          enable = true;
-          delegationClamp.mitigate = false;
-        };
-      };
       settingsHooks = (result.config.programs.claude-code.settings or {}).hooks or {};
     in
       (settingsHooks.UserPromptSubmit or [])
@@ -8141,10 +8120,32 @@ in {
       && (settingsHooks.PreCompact or []) == []
   );
 
-  # Devenv parity — same two hooks, same default, per the repo's config-parity rule.
-  module-claude-devenv-delegation-clamp-default-on = mkTest "claude-devenv-delegation-clamp-default-on" (
+  # Opting in must produce BOTH hooks: the injector and the PreCompact re-arm.
+  # Compaction is the one event that erases the injected context, so an injector
+  # without the re-arm silently loses the mitigation on the first compaction.
+  module-claude-hm-delegation-clamp-opt-in = mkTest "claude-hm-delegation-clamp-opt-in" (
     let
-      result = evalDevenv {ai.claude.enable = true;};
+      result = evalHm {
+        ai.claude = {
+          enable = true;
+          delegationClamp.mitigate = true;
+        };
+      };
+      settingsHooks = (result.config.programs.claude-code.settings or {}).hooks or {};
+    in
+      hasClampHook (settingsHooks.UserPromptSubmit or [])
+      && hasClampHook (settingsHooks.PreCompact or [])
+  );
+
+  # Devenv parity — same two hooks behind the same flag, per the config-parity rule.
+  module-claude-devenv-delegation-clamp-opt-in = mkTest "claude-devenv-delegation-clamp-opt-in" (
+    let
+      result = evalDevenv {
+        ai.claude = {
+          enable = true;
+          delegationClamp.mitigate = true;
+        };
+      };
       settingsJson = (result.config.files.".claude/settings.json" or {}).json or {};
     in
       hasClampHook (settingsJson.hooks.UserPromptSubmit or [])
@@ -8161,6 +8162,7 @@ in {
       result = evalHm {
         ai.claude = {
           enable = true;
+          delegationClamp.mitigate = true;
           hooks.UserPromptSubmit = [{hooks = [{command = "consumer-hook";}];}];
         };
       };

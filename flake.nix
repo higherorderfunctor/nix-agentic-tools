@@ -243,7 +243,7 @@
       claudeDelegationClampCheck = {claude-delegation-clamp = import ./checks/claude-delegation-clamp.nix {inherit pkgs;};};
       claudeDevenvHooksRealTypeCheck = import ./checks/claude-devenv-hooks-real-type.nix {inherit pkgs inputs;};
       claudeExtractedCheck = import ./checks/claude-code-extracted.nix {inherit pkgs self;};
-      claudeHeronBrookCheck = import ./checks/claude-heron-brook.nix {inherit pkgs;};
+      claudeHeronBrookCheck = import ./checks/claude-heron-brook.nix {inherit lib pkgs self;};
       claudeMemoryCollisionGuardCheck = {claude-memory-collision-guard = import ./checks/claude-memory-collision-guard.nix {inherit pkgs;};};
       factoryChecks = import ./checks/factory-eval.nix {inherit lib pkgs;};
       formattingCheck = import ./checks/formatting.nix {inherit inputs pkgs self;};

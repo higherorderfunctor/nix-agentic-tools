@@ -264,24 +264,39 @@ jobs:
       - name: Run flake checks
         run: nix flake check
 
-      # TRIPWIRE 1 for the heron_brook delegation-clamp mitigation
-      # (ai.claude.delegationClamp). Forces a human re-evaluation by the
-      # committed `reviewBy` date rather than letting a token-costing mitigation
-      # for undocumented vendor behavior calcify into permanent overhead after
-      # upstream fixes it.
+      # ~90-day reminder to re-check the heron_brook delegation clamp
+      # (ai.claude.delegationClamp, opt-in). A CALENDAR, not a gate on content:
+      # it fires only past `reviewBy`, and only on the claude-code update PR.
+      # The sweep opens one of those several times a week, so the reminder
+      # surfaces within days of the date passing while never touching any other
+      # PR. `head_ref` is empty on push events, so non-PR runs skip for free.
       #
-      # A STEP in this job, not a job of its own: `test` is already a required
-      # status check, so this needs no new required-context string that a job
+      # It cannot live in a Nix check: reading the current date inside a
+      # derivation is impure and would be cached. It is a STEP in `test` rather
+      # than its own job so it needs no new required-context string that a job
       # rename could silently break — the same reasoning
       # checks/instructions-drift.nix records for living in `nix flake check`.
-      # It cannot live in a Nix check at all, because reading the current date
-      # inside a derivation is impure and would be cached.
       #
-      # Deliberate consequence: once the date passes, this reddens a required
-      # check on EVERY PR, the bot's auto-merging `update/*` PRs included. That
-      # is the forcing function, and it is self-discharging — the PR that bumps
-      # `reviewBy` (or deletes the mitigation) goes green.
+      # The branch name below is generated as `update/<key>` from
+      # config.update.targets. checks/claude-heron-brook.nix reads that name
+      # back out of THIS file and fails if the key is renamed out from under it,
+      # so this gate cannot silently stop matching.
+      #
+      # TO DISCHARGE — build the binary and grep it. The positive control is NOT
+      # optional; a clean negative from an unverified grep on a ~275 MB binary
+      # proves nothing:
+      #   B=$(nix build --no-link --print-out-paths .#claude-code)/bin/claude
+      #   grep -ac 'NotebookEdit' "$B"                            # control, must be >0
+      #   grep -ac 'Do not call the AgentTool unless the user requested it' "$B"
+      #                                                           # 0 => upstream fixed it
+      #   grep -ac 'tengu_heron_brook' "$B"                       # the gate
+      # Presence is the signal, never the count: grep counts LINES and the
+      # bundle is minified, so counts drift with no behavior change.
+      #
+      # Then EITHER bump `reviewBy` ~90 days, OR — if upstream fixed it — delete
+      # ai.claude.delegationClamp, this step, and checks/claude-heron-brook.nix.
       - name: Heron-brook mitigation review tripwire
+        if: github.head_ref == 'update/claude-code'
         run: |
           set -euETo pipefail
           shopt -s inherit_errexit 2>/dev/null || :
@@ -291,7 +306,7 @@ jobs:
           today="$(date -u +%F)"
           # Lexicographic compare is correct for ISO-8601 dates.
           if [[ "$today" > "$review_by" ]]; then
-            echo "::error file=${tripwire}::heron_brook mitigation is past its ${review_by} review date (today ${today}). Re-verify whether Claude Code still ships the delegation clamp: see ${issue} and packages/claude-code/docs/heron-brook-clamp.md. Then EITHER bump reviewBy in ${tripwire}, OR delete ai.claude.delegationClamp and both tripwires if upstream fixed it. An expired justification is a finding, not a formality."
+            echo "::error file=${tripwire}::heron_brook mitigation is past its ${review_by} review date (today ${today}). Re-check whether Claude Code still ships the delegation clamp — the grep procedure is in the comment above this step, and ${issue} tracks it upstream. Then EITHER bump reviewBy in ${tripwire}, OR delete ai.claude.delegationClamp, this step, and checks/claude-heron-brook.nix if upstream fixed it. An expired justification is a finding, not a formality."
             exit 1
           fi
           echo "heron_brook mitigation review due ${review_by} (today ${today}) — OK."
