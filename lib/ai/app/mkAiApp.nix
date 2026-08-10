@@ -33,10 +33,18 @@
 #     };
 #   }
 #
-# Consumer callbacks receive {cfg, mergedServers, mergedInstructions,
-# mergedSkills, resolvedShell} and return an attrset of module config attributes
+# Consumer callbacks receive ONE attrset and return module config attributes
 # (home.file.*, programs.claude-code.*, home.activation.*, files.*,
 # claude.code.*, etc.) appropriate for their backend.
+#
+# That attrset is assembled in exactly one place — `customConfig` in
+# `mkBackendTransform.nix` — and read it rather than trusting a list here.
+# It currently carries `cfg`, `config`, every `merged*` pool,
+# `resolvedShell`, `topContext`, `topHooks` and `topSettings`. This comment
+# used to enumerate four of them and had silently drifted from the real
+# call, which is the failure mode a second copy of the list invites; every
+# callback takes `...` anyway, so a stale list here misleads without ever
+# breaking a build.
 _: {
   name,
   transformers,

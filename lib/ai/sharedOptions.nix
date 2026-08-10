@@ -281,9 +281,12 @@ in {
         wins, `null` inherits this one.
 
         Fans out to **Claude, Codex and Kiro only**, through three different
-        mechanisms — Claude reads `CLAUDE_CODE_SHELL` from its settings file,
-        while Codex and Kiro read `SHELL` from their own process environment
-        and receive it through a launcher wrapper. Copilot and Kimchi are
+        mechanisms. Claude reads `CLAUDE_CODE_SHELL` from its settings file.
+        Codex and Kiro both read `SHELL` from their own process environment,
+        but receive it differently: Codex through a launcher wrapper added for
+        this option, Kiro through its existing `environmentVariables`
+        delivery — a wrapper export under Home Manager, and the project shell's
+        `env` attrset under devenv. Copilot and Kimchi are
         deliberately excluded rather than silently ignored: neither one's
         shell selection has been established, so `ai.copilot.shell` and
         `ai.kimchi.shell` do not exist and setting either is an eval error.
