@@ -62,11 +62,17 @@ unwrapped. A devenv integration relocates it to
 project shell. Consumer override of the variable through `env` is deliberately
 gone: devenv/Nix is the only config path.
 
-Two things changed on 2026-08-10. The relocation is now unconditional on devenv;
-it used to live inside the Codex cache hook, so the cache silently moved
-depending on whether Codex was enabled. The writable-root grant is still
-conditional — on a selected feature targeting Codex with `sandbox_mode` set to
-`workspace-write`. The module does not choose a sandbox mode.
+The devenv relocation is unconditional: a project-local index is the point, and
+nothing about it is Codex-specific. Until 2026-08-10 it read otherwise, because
+the environment write lived inside the Codex cache hook and so was gated on
+Codex being selected — Semble for Claude alone got the XDG default, while the
+same project with Codex on got the project-local one. Codex had simply inherited
+the write path by sitting next to it.
+
+The writable-root grant IS still conditional, on a selected feature targeting
+Codex with `sandbox_mode` set to `workspace-write`. That gate is about Codex's
+sandbox rather than about where Semble keeps its index. The module does not
+choose a sandbox mode.
 
 ## Instruction content
 

@@ -42,14 +42,20 @@
 
   cacheDir = cacheLocation {inherit config lib;};
 
-  # NOTE — behavior change, 2026-08-10. The relocation is now unconditional on
-  # a relocating backend. It used to live inside the codex-cache hook, so the
-  # `SEMBLE_CACHE_LOCATION` write was gated on `codexSelected` and semble's
-  # cache silently moved depending on whether CODEX happened to be enabled: a
-  # devenv project running semble for Claude alone got the XDG default, the
-  # same project with Codex on got the project-local one. That coupling was
-  # incidental to where the write sat, not intended. Granting Codex the
-  # writable root stays gated on `codexSelected` below — that part is real.
+  # A relocating backend relocates UNCONDITIONALLY. The intent is a
+  # project-local cache, full stop — nothing about it is Codex-specific.
+  #
+  # It read otherwise until 2026-08-10 only because the `SEMBLE_CACHE_LOCATION`
+  # write happened to live inside the codex-cache hook, which is gated on
+  # `codexSelected`. The cache therefore moved depending on whether CODEX was
+  # enabled: semble for Claude alone got the XDG default, the same project with
+  # Codex on got the project-local one. That was an artifact of where the write
+  # sat, and the operator confirmed the project-local cache was always the
+  # point; Codex merely inherited the write path by being co-located with it.
+  #
+  # Granting Codex the writable root DOES stay gated on `codexSelected` below.
+  # That gate is real: it is about Codex's sandbox, not about where semble
+  # keeps its index.
 
   # Wrapped once, for every entry point, so `semble` and `semble-mcp` cannot
   # disagree about where the cache lives — and so the MCP server needs no
