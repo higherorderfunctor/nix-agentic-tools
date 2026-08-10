@@ -137,7 +137,29 @@
       # representation EXISTS, not that it is reachable; see the lockout
       # comment in ./mkCodex.nix. Do not reclassify them as unrepresented —
       # that would assert this repository has no model for the flags at all.
+      #
+      # `--approve-for-me` is the one entry whose durable counterpart is a PAIR
+      # of typed settings rather than a single key. Its help — route approval
+      # requests through automatic review using the workspace-write sandbox —
+      # is exactly `ai.codex.settings.approvals_reviewer = "auto_review"` plus
+      # `ai.codex.settings.sandbox_mode = "workspace-write"`, both live and
+      # reachable. Grepping for a lone `approve_for_me` config key finds
+      # nothing; that absence is not evidence the flag is unrepresented. It is
+      # also why this flag does NOT share
+      # `--dangerously-bypass-approvals-and-sandbox`'s session-only
+      # disposition — though NOT for want of a counterpart on the bypass's
+      # side. That bypass decomposes just as cleanly onto
+      # `approval_policy = "never"` plus `sandbox_mode = "danger-full-access"`,
+      # and checks/module-eval.nix asserts both settings accept every value the
+      # extractor publishes for `--ask-for-approval` and `--sandbox`. It is
+      # sessionOnly under this category's own "dangerous bypasses" clause: an
+      # escape hatch that disables the sandbox boundary must stay on the
+      # invocation rather than become a persisted default. `--approve-for-me`
+      # only redirects who reviews an approval request WITHIN the
+      # workspace-write boundary, so it carries no such hazard: its disposition
+      # follows from what Nix can represent, not from what it would let through.
       declarativeEquivalent = [
+        "--approve-for-me"
         "--ask-for-approval"
         "--bearer-token-env-var"
         "--config"
@@ -156,13 +178,21 @@
         "--url"
       ];
 
-      # App/exec-server transport, generated-schema, and sandbox diagnostic
-      # controls configure one protocol process or generated artifact, not the
-      # durable Codex user/project configuration managed by this factory.
+      # App/exec-server transport, concurrency, process-lifetime,
+      # generated-schema, and sandbox diagnostic controls configure one protocol
+      # process or generated artifact, not the durable Codex user/project
+      # configuration managed by this factory.
+      #
+      # `--exit-on-stdin-close` keeps this disposition despite advertising a
+      # CODEX_EXEC_SERVER_EXIT_ON_STDIN_CLOSE environment alias: that alias is
+      # how a parent process spawns and reaps one exec-server, not a durable
+      # configuration surface this factory owns.
       developerTooling = [
         "--analytics-default-enabled"
         "--code-mode-host"
+        "--concurrent-requests"
         "--environment-id"
+        "--exit-on-stdin-close"
         "--experimental"
         "--listen"
         "--name"
