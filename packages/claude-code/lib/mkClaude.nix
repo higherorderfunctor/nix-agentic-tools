@@ -162,11 +162,28 @@
   #
   # Identical on both backends because both write the same settings tree,
   # so it is defined once here rather than duplicated per callback.
-  shellSettings = resolvedShell:
-    lib.mkIf (resolvedShell != null) {
-      ai.claude.settings.env.CLAUDE_CODE_SHELL =
-        lib.mkDefault (lib.getExe resolvedShell);
-    };
+  # Claude is the only harness here with no launcher wrapper, so its process
+  # environment is expressed through `settings.env` — which upstream writes
+  # into settings.json. Both the typed shell and the module-contributed
+  # sandbox-safe SSH command ride it.
+  #
+  # mkDefault keeps an explicit `ai.claude.settings.env.<KEY>` winning, which
+  # is the same precedence the wrapper harnesses get by merging module
+  # defaults UNDER the consumer's pool.
+  shellSettings = {
+    resolvedShell,
+    moduleEnvironmentVariables,
+  }:
+    lib.mkMerge [
+      (lib.mkIf (resolvedShell != null) {
+        ai.claude.settings.env.CLAUDE_CODE_SHELL =
+          lib.mkDefault (lib.getExe resolvedShell);
+      })
+      {
+        ai.claude.settings.env =
+          lib.mapAttrs (_: lib.mkDefault) moduleEnvironmentVariables;
+      }
+    ];
 in
   lib.ai.app.mkAiApp {
     # Carried as DATA, not a module argument — see mkAiApp.nix.
@@ -712,6 +729,7 @@ in
         mergedRules,
         mergedLspServers,
         mergedAgents,
+        moduleEnvironmentVariables,
         resolvedShell,
         topContext,
         topHooks,
@@ -753,7 +771,7 @@ in
           (lib.mkIf (topSettings.reasoningEffort != null) {
             ai.claude.settings.effortLevel = lib.mkDefault topSettings.reasoningEffort;
           })
-          (shellSettings resolvedShell)
+          (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
           # L2b → L3: expand `ai.claude.agentsDir` into per-CLI
           # `ai.claude.agents`. mkDefault lets explicit
           # `ai.claude.agents.<name>` entries win within this layer;
@@ -922,6 +940,7 @@ in
         mergedInstructions,
         mergedSkills,
         mergedRules,
+        moduleEnvironmentVariables,
         resolvedShell,
         topContext,
         topHooks,
@@ -980,7 +999,7 @@ in
           (lib.mkIf (topSettings.reasoningEffort != null) {
             ai.claude.settings.effortLevel = lib.mkDefault topSettings.reasoningEffort;
           })
-          (shellSettings resolvedShell)
+          (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
           # L2b → L3: expand `ai.claude.hookScriptsDir` into
           # `ai.claude.hookScripts` (parity with HM side). The devenv
           # factory merges `cfg.hookScripts` into `claude.code.hooks`

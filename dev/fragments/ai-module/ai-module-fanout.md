@@ -351,14 +351,21 @@ enabled ecosystem whose native model preserves the option's semantics):
   Kiro native config. Codex is deliberately excluded: its current public config
   reference and pinned CLI expose no LSP-server registration surface, so
   pretending to fan out this pool would silently discard the declaration.
-- `ai.environmentVariables` — shared env vars; Copilot and Kiro fan out
-  directly, Claude has no native option so Claude itself receives nothing from
-  this (intentional — Claude env goes via `programs.claude-code.settings.env`
-  directly). Codex is also excluded: its `shell_environment_policy` configures
-  the environment inherited by spawned commands, while this pool configures the
-  AI CLI process itself. Consumers should use normal Home Manager/devenv
-  environment facilities for Codex runtime variables and the native freeform
-  setting for child-command filtering.
+- `ai.environmentVariables` — shared env vars, baked into the launcher wrapper
+  of every harness that has one: **Codex, Copilot, Kimchi and Kiro**. Codex
+  joined on 2026-08-10 when it gained a wrapper; its `shell_environment_policy`
+  is a different thing and still is — that filters what SPAWNED commands
+  inherit, while this pool configures the CLI process itself. Claude is the one
+  exclusion: it has no wrapper here, and `ai.claude.settings.env` is its native
+  equivalent.
+
+  **Never reach for Home Manager session variables or devenv `env` to deliver a
+  runtime variable** — not for Codex, not for anything. An earlier revision of
+  this bullet advised exactly that, and it is the one thing this repo does not
+  do: those write the user's shell, so the value also reaches the developer's
+  own session and every other process in it. Wrappers are inherited across
+  `fork`/`exec`, so a harness's children still see it. See `shell-option.md` §
+  NEVER write the shell environment.
 
 Cross-ecosystem scalar defaults and per-entry fanouts use `mkDefault` so per-CLI
 overrides take precedence. Collection pools use their documented collision or

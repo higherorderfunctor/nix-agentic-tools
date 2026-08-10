@@ -638,17 +638,19 @@ in {
   module-ai-git-ssh-default-follows-harnesses = mkTest "ai-git-ssh-default-follows-harnesses" (
     let
       harnessNames = ["claude" "codex" "copilot" "kimchi" "kiro"];
-      # devenv has no `programs.git`, so the workaround rides each harness's
-      # OWN process-environment surface — its launcher wrapper, or for Claude
-      # (which has no wrapper here) `settings.env`. It is deliberately no
-      # longer a single write to the project shell: that reached every other
-      # process in the shell, the developer's own git included.
-      devenvCommandFor = name: let
+      # devenv has no `programs.git`, so the workaround travels the INTERNAL
+      # channel (`ai._sandboxSafeSshCommand`) and each factory merges it into
+      # its launcher wrapper. It is deliberately neither a project-shell write
+      # (which reached the developer's own git) nor a contribution into
+      # `ai.<cli>.environmentVariables` (which is collision-checked, so a
+      # module default there turns a consumer's own entry for the same key
+      # into a hard eval error). Claude has no wrapper and uses settings.env.
+      devenvChannel = name: let
         cfg = (evalDevenv (lib.setAttrByPath ["ai" name "enable"] true)).config;
       in
         if name == "claude"
         then cfg.ai.claude.settings.env.GIT_SSH_COMMAND
-        else cfg.ai.${name}.environmentVariables.GIT_SSH_COMMAND;
+        else cfg.ai._sandboxSafeSshCommand;
       commands =
         lib.concatMap (name: [
           (evalHm (lib.setAttrByPath ["ai" name "enable"] true))
@@ -658,7 +660,7 @@ in {
           .settings
           .core
           .sshCommand
-          (devenvCommandFor name)
+          (devenvChannel name)
         ])
         harnessNames;
       disabledHm = (evalHm {}).config;
@@ -678,33 +680,27 @@ in {
           ai.codex.enable = true;
           programs.git.settings.core.sshCommand = "custom-ssh";
         }).config;
-      # The override is now the harness's own env pool, not the shell.
-      overriddenDevenv =
+      # REGRESSION GUARD: a consumer setting the shared pool key the module
+      # also contributes must NOT be a collision error. It was, briefly —
+      # the module wrote into `ai.<cli>.environmentVariables`, which is
+      # compared by key presence and cannot see `mkDefault`.
+      sharedPoolCollision =
         (evalDevenv {
-          ai.codex = {
-            enable = true;
-            environmentVariables.GIT_SSH_COMMAND = "custom-ssh";
-          };
+          ai.codex.enable = true;
+          ai.environmentVariables.GIT_SSH_COMMAND = "consumer-ssh";
         }).config;
-      hasCodexSsh = cfg: cfg.ai.codex.environmentVariables ? GIT_SSH_COMMAND;
     in
       builtins.all (lib.hasSuffix "/bin/ai-sandbox-safe-ssh") commands
       && !(disabledHm.programs.git.settings ? core)
-      && !(hasCodexSsh disabledDevenv)
+      && disabledDevenv.ai._sandboxSafeSshCommand == null
       && !(optedOutHm.programs.git.settings ? core)
-      && !(hasCodexSsh optedOutDevenv)
+      && optedOutDevenv.ai._sandboxSafeSshCommand == null
       && overriddenHm.programs.git.settings.core.sshCommand == "custom-ssh"
-      && overriddenDevenv.ai.codex.environmentVariables.GIT_SSH_COMMAND == "custom-ssh"
+      && builtins.all (a: a.assertion) sharedPoolCollision.assertions
   );
 
   module-ai-git-ssh-wrapper-is-noninteractive = let
-    command =
-      (evalDevenv {ai.codex.enable = true;})
-      .config
-      .ai
-      .codex
-      .environmentVariables
-      .GIT_SSH_COMMAND;
+    command = (evalDevenv {ai.codex.enable = true;}).config.ai._sandboxSafeSshCommand;
     sshConfig = pkgs.writeText "sandbox-ssh-config" ''
       Host *
         BatchMode no
@@ -2417,6 +2413,41 @@ in {
       && profileOnly.ai.codex.settings.sandbox_workspace_write == null
       && builtins.all (assertion: assertion.assertion) profileOnly.assertions
   );
+
+  # CONTENT coverage for semble's relocated cache. The parity test above can
+  # only assert the derivation NAME, which symlinkJoin emits whether or not
+  # the wrapper actually carries anything — so on its own it would pass a
+  # wrapper that sets nothing at all. This greps every entry point, because
+  # `semble` and `semble-mcp` disagreeing about the cache location is the
+  # specific failure the single-wrapper design exists to prevent.
+  module-semble-devenv-cache-in-every-entry-point = let
+    semblePackage =
+      builtins.head
+      (evalDevenv {
+        semble = {
+          enable = true;
+          runtimes = ["codex"];
+        };
+      })
+      .config
+      .packages;
+  in
+    pkgs.runCommand "module-test-semble-devenv-cache-in-every-entry-point" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+      pkg=${semblePackage}
+      found=0
+      for bin in "$pkg"/bin/*; do
+        found=$((found + 1))
+        grep -qF -- 'SEMBLE_CACHE_LOCATION' "$bin" \
+          || { echo "FAIL: $bin does not carry SEMBLE_CACHE_LOCATION" >&2; exit 1; }
+        grep -qF -- '/semble-cache' "$bin" \
+          || { echo "FAIL: $bin does not carry the relocated cache path" >&2; exit 1; }
+      done
+      # An empty bin/ would pass the loop vacuously.
+      [ "$found" -gt 0 ] || { echo "FAIL: wrapper exposes no entry points" >&2; exit 1; }
+      echo PASS > "$out"
+    '';
 
   module-semble-umbrella-fanout = mkTest "semble-umbrella-fanout" (
     let
@@ -8924,6 +8955,49 @@ in {
     in
       (settings.env.CLAUDE_CODE_SHELL or null) == "/usr/bin/bash"
   );
+
+  # PRECEDENCE, and it must be the SAME on every runtime. Module-contributed
+  # values (the typed `ai.shell`, the sandbox-safe SSH default) merge UNDER
+  # the consumer's `environmentVariables`, so an explicit entry wins.
+  #
+  # Codex briefly did the opposite — it applied the typed option last, on the
+  # reasoning that the typed surface is more specific. Defensible alone, wrong
+  # in aggregate: the identical two-key config then resolved differently
+  # depending on which runtime the consumer named. These two tests exist to
+  # keep the two runtimes agreeing, so change them together or not at all.
+  module-ai-shell-explicit-env-beats-typed-codex = let
+    result = evalHm {
+      ai.shell = pkgs.bash;
+      ai.codex = {
+        enable = true;
+        environmentVariables.SHELL = "/explicit/zsh";
+      };
+    };
+  in
+    mkWrapperGrepTest {
+      name = "ai-shell-explicit-env-beats-typed-codex";
+      package = builtins.head result.config.home.packages;
+      bin = "codex";
+      needles = ["/explicit/zsh"];
+      absentNeedles = [(lib.getExe pkgs.bash)];
+    };
+
+  module-ai-shell-explicit-env-beats-typed-kiro = let
+    result = evalHm {
+      ai.shell = pkgs.bash;
+      ai.kiro = {
+        enable = true;
+        environmentVariables.SHELL = "/explicit/zsh";
+      };
+    };
+  in
+    mkWrapperGrepTest {
+      name = "ai-shell-explicit-env-beats-typed-kiro";
+      package = builtins.head result.config.home.packages;
+      bin = "kiro-cli";
+      needles = ["/explicit/zsh"];
+      absentNeedles = [(lib.getExe pkgs.bash)];
+    };
 
   # POSITIVE CONTROL for the two exclusion tests below. They assert an
   # eval FAILURE, and a test that only ever asserts failure passes just as

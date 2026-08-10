@@ -35,13 +35,13 @@ the same category as `backend` — it forces neither `config` nor the factory's
 `pkgs`, so it cannot reintroduce the `_module.args` recursion documented against
 `proxyIsSupported`.
 
-| runtime | knob                       | delivery                                |
-| ------- | -------------------------- | --------------------------------------- |
-| Claude  | `CLAUDE_CODE_SHELL`        | `settings.env` → `settings.json`        |
-| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`                |
-| Kiro    | `SHELL` (own process env)  | `environmentVariables` → wrapper export |
-| Copilot | **unknown — verified gap** | excluded                                |
-| Kimchi  | unassessed                 | excluded                                |
+| runtime | knob                       | delivery                         |
+| ------- | -------------------------- | -------------------------------- |
+| Claude  | `CLAUDE_CODE_SHELL`        | `settings.env` → `settings.json` |
+| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`         |
+| Kiro    | `SHELL` (own process env)  | launcher wrapper `export`        |
+| Copilot | **unknown — verified gap** | excluded                         |
+| Kimchi  | unassessed                 | excluded                         |
 
 Four runtimes were asked for; five go through `mkAiApp`. Kimchi is easy to miss
 because the issue that requested this never mentioned it.
@@ -125,10 +125,24 @@ three runtimes demonstrably do not perform.
   `environmentVariables` option when its wrapper was built, so the root pool
   fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — it
   has no wrapper here and `settings.env` is its native equivalent.
-- **`resolvedShell` is applied AFTER the env pool in the Codex wrapper**, so the
-  typed option beats a hand-set `SHELL` in `environmentVariables`. Both are user
-  intent; the typed one is the specific surface and carries a package the store
-  guarantees exists.
+- **One precedence rule, everywhere: module defaults merge UNDER the consumer's
+  `environmentVariables`, so an explicit entry wins.** Codex briefly did the
+  reverse — typed option last, on the reasoning that the typed surface is more
+  specific. Defensible alone, wrong in aggregate: Claude and Kiro both let the
+  explicit entry win, so the identical two-key config resolved differently
+  depending on which runtime the consumer named. Guarded by
+  `module-ai-shell-explicit-env-beats-typed-{codex,kiro}`; change them together
+  or not at all.
+- **A module must NEVER contribute into `ai.<cli>.environmentVariables`.** That
+  pool is collision-checked against `ai.environmentVariables` by
+  `builtins.intersectAttrs` — KEY PRESENCE, with no awareness of `mkDefault`. So
+  a module default there does not "yield" to a consumer's entry for the same
+  key, it turns that config into a hard eval failure naming a pool the consumer
+  never wrote, and it fires even for merely-imported harnesses because
+  `collisionAssertions` sits outside `mkIf cfg.enable`. Both `ai.shell` and
+  `gitSshConfigWorkaround` shipped this bug for one commit. Module contributions
+  ride `ai._sandboxSafeSshCommand` / the `resolvedShell` callback argument and
+  are merged at the wrapper call site instead.
 - **`shell_environment_policy` is not the Codex knob.** It filters what SPAWNED
   commands inherit; writing the shell there configures the children, not Codex.
 - **`KIRO_CHAT_SHELL` is a dead end.** It exists only in Kiro's Rust binary, is

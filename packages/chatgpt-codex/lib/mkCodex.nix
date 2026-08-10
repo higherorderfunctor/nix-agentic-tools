@@ -17,17 +17,25 @@
   # process environment and has no config key for it — `shell_environment_policy`
   # governs what SPAWNED commands inherit, which is a different thing.
   #
-  # `resolvedShell` is applied last so the typed option beats a hand-set
-  # `SHELL` in the env pool; both are user intent, but the typed one is the
-  # specific surface and carries a package the store guarantees exists.
-  codexPackageFor = cfg: mergedEnvironmentVariables: resolvedShell:
+  # Ordering is the contract, and it is the same one Claude and Kiro use:
+  # module-contributed defaults first, the consumer's own pool LAST, so an
+  # explicit `environmentVariables.SHELL` wins.
+  #
+  # This previously applied `resolvedShell` last, on the reasoning that the
+  # typed option is the more specific surface. That was defensible in
+  # isolation and wrong in aggregate: Claude (`settings.env`, mkDefault) and
+  # Kiro both let the explicit entry win, so the same two-key config resolved
+  # differently depending on which runtime the consumer happened to name.
+  # One rule everywhere beats a better rule in one place.
+  codexPackageFor = cfg: moduleEnvironmentVariables: mergedEnvironmentVariables: resolvedShell:
     wrapCodexPackage {
       inherit (cfg) package;
       environmentVariables =
-        mergedEnvironmentVariables
+        moduleEnvironmentVariables
         // lib.optionalAttrs (resolvedShell != null) {
           SHELL = lib.getExe resolvedShell;
-        };
+        }
+        // mergedEnvironmentVariables;
     };
   jsonFormat = pkgs.formats.json {};
   tomlReconciler = ../../../lib/ai/reconcile-toml.py;
@@ -993,6 +1001,7 @@ in
       mergedSkills,
       mergedAgents,
       mergedEnvironmentVariables,
+      moduleEnvironmentVariables,
       resolvedShell,
       topContext,
       topHooks,
@@ -1077,7 +1086,7 @@ in
             "${cfg.configDir}/hooks.json".source = jsonFormat.generate "codex-hooks.json" {hooks = renderHooks effectiveHooks;};
           })
         ];
-        packages = [(codexPackageFor cfg mergedEnvironmentVariables resolvedShell)];
+        packages = [(codexPackageFor cfg moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell)];
       };
     };
 
@@ -1090,6 +1099,7 @@ in
       mergedSkills,
       mergedAgents,
       mergedEnvironmentVariables,
+      moduleEnvironmentVariables,
       resolvedShell,
       topContext,
       topHooks,
@@ -1172,7 +1182,7 @@ in
           ".codex/config.toml".source = tomlFormat.generate "codex-project-config.toml" settings;
         })
       ];
-      packages = [(codexPackageFor cfg mergedEnvironmentVariables resolvedShell)];
+      packages = [(codexPackageFor cfg moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell)];
       tasks."ai:codex:materialize-profiles" = {
         exec = ''
           set -euETo pipefail

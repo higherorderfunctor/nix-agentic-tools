@@ -53,13 +53,20 @@ Codex compose the guidance into their single always-loaded `CLAUDE.md` and
 `AGENTS.md` files. Kiro receives a named instruction and writes it to
 `.kiro/steering/semble.md`.
 
-When a selected Semble feature targets Codex and `sandbox_mode` is
-`workspace-write`, the module automatically grants Semble a writable cache. Home
-Manager appends `${config.xdg.cacheHome}/semble`. A Codex-targeted devenv
-integration uses `${config.devenv.state}/semble-cache`, exports that path as
-`SEMBLE_CACHE_LOCATION`, and follows a consumer override of the variable. The
-module does not choose a sandbox mode; it only adds the matching writable root
-when the consumer selects `workspace-write`.
+Home Manager leaves the cache where Semble puts it by default,
+`${config.xdg.cacheHome}/semble`, so nothing needs telling and the package ships
+unwrapped. A devenv integration relocates it to
+`${config.devenv.state}/semble-cache` and tells Semble by baking
+`SEMBLE_CACHE_LOCATION` into every entry point of a launcher wrapper — so
+`semble` and `semble-mcp` cannot disagree, and the value never enters the
+project shell. Consumer override of the variable through `env` is deliberately
+gone: devenv/Nix is the only config path.
+
+Two things changed on 2026-08-10. The relocation is now unconditional on devenv;
+it used to live inside the Codex cache hook, so the cache silently moved
+depending on whether Codex was enabled. The writable-root grant is still
+conditional — on a selected feature targeting Codex with `sandbox_mode` set to
+`workspace-write`. The module does not choose a sandbox mode.
 
 ## Instruction content
 

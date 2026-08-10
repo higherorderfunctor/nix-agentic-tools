@@ -194,6 +194,19 @@
       }
     else null;
 
+  # Module-contributed process env, delivered on the internal channel rather
+  # than through `ai.<cli>.environmentVariables` — see the note on
+  # `_sandboxSafeSshCommand` in sharedOptions.nix for why injecting into a
+  # collision-checked pool cannot work.
+  #
+  # Callers merge this UNDER `mergedEnvironmentVariables`, so an explicit
+  # consumer entry for the same key wins. That ordering is the contract; do
+  # not flip it at a call site.
+  sandboxSshCommand = config.ai._sandboxSafeSshCommand or null;
+  moduleEnvironmentVariables = lib.optionalAttrs (sandboxSshCommand != null) {
+    GIT_SSH_COMMAND = sandboxSshCommand;
+  };
+
   mergedInstructions = config.ai.instructions ++ cfg.instructions;
   mergedSkills = skillsMerge.merged;
   mergedRules = rulesMerge.merged;
@@ -216,7 +229,7 @@
   # options — e.g. the devenv materializer's conditional `devenv:files`
   # task edge needs `config.files != {}`.
   customConfig = backendConfigFn {
-    inherit cfg config mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables mergedAgents resolvedShell topContext topHooks topSettings;
+    inherit cfg config mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables moduleEnvironmentVariables mergedAgents resolvedShell topContext topHooks topSettings;
   };
 in {
   options.ai.${appRecord.name} =

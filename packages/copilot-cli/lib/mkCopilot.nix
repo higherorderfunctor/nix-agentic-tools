@@ -9,8 +9,8 @@
 # project directory, and skills routing to that same project directory.
 #
 # Fanout absorbed in Task 4b (A3 gap-fill): lspServers typed LSP
-# config write, environmentVariables fed into the HM symlinkJoin
-# wrapper (export) and the devenv `env` blob, agents + agentsDir
+# config write, environmentVariables fed into the symlinkJoin wrapper on both
+# backends (devenv's `env` blob was retired 2026-08-10), agents + agentsDir
 # option pair writing under `${configDir}/agents/`, and the HM
 # symlinkJoin wrapper that injects `--additional-mcp-config` so the
 # rendered mcp-config.json actually gets loaded by the copilot
@@ -90,14 +90,14 @@ lib.ai.app.mkAiApp {
       default = {};
       description = "Typed LSP server definitions; translated via `mkCopilotLspConfig` into lsp-config.json on emission (adds fileExtensions mapping).";
     };
-    # Env vars exported when launching copilot. In HM they're baked
-    # into the symlinkJoin wrapper's `export FOO=bar` lines; in
-    # devenv they populate the native `env` attrset. `attrsOf str` —
-    # matching the legacy surface exactly.
+    # Baked into the symlinkJoin wrapper on BOTH backends. devenv used to
+    # populate its native `env` attrset instead, which exported them into the
+    # project shell rather than into Copilot. `attrsOf str` — matching the
+    # legacy surface exactly.
     environmentVariables = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
       default = {};
-      description = "Environment variables exported when launching copilot (HM: via wrapper; devenv: via native env).";
+      description = "Environment variables baked into the copilot launcher wrapper. Scoped to the Copilot process and the commands it spawns; never exported into the project shell.";
     };
     # Inline agent markdown content. Written under
     # `<configDir>/agents/<name>.md` in HM and
@@ -141,6 +141,7 @@ lib.ai.app.mkAiApp {
       mergedRules,
       mergedLspServers,
       mergedEnvironmentVariables,
+      moduleEnvironmentVariables,
       mergedAgents,
       topContext,
       ...
@@ -195,7 +196,7 @@ lib.ai.app.mkAiApp {
         inherit (cfg) package configDir;
         rootVar = "HOME";
         mcp = mergedServers != {};
-        environmentVariables = mergedEnvironmentVariables;
+        environmentVariables = moduleEnvironmentVariables // mergedEnvironmentVariables;
       };
       dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
       wrapCopilotPackage = import ./wrapPackage.nix {inherit lib pkgs;};
@@ -391,6 +392,7 @@ lib.ai.app.mkAiApp {
       mergedRules,
       mergedLspServers,
       mergedEnvironmentVariables,
+      moduleEnvironmentVariables,
       mergedAgents,
       topContext,
       ...
@@ -432,7 +434,7 @@ lib.ai.app.mkAiApp {
         inherit (cfg) package configDir;
         rootVar = "DEVENV_ROOT";
         mcp = mergedServers != {};
-        environmentVariables = mergedEnvironmentVariables;
+        environmentVariables = moduleEnvironmentVariables // mergedEnvironmentVariables;
       };
     in
       lib.mkMerge [

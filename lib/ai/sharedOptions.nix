@@ -276,6 +276,20 @@ in {
       '';
     };
 
+    # Internal module-to-module channel. NOT a consumer surface: it exists so
+    # `gitSshConfigWorkaround` can reach each harness's launcher wrapper
+    # without writing into `ai.<cli>.environmentVariables`, which is
+    # collision-checked and would reject the consumer's own entry for the same
+    # key. Read by the per-package factories; `internal` keeps it out of the
+    # generated options documentation.
+    _sandboxSafeSshCommand = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      internal = true;
+      visible = false;
+      description = "Resolved sandbox-safe Git SSH command, delivered to harness wrappers. Set by `gitSshConfigWorkaround`; not for direct use.";
+    };
+
     shell = lib.mkOption {
       type = lib.types.nullOr lib.types.package;
       default = null;
@@ -287,13 +301,13 @@ in {
         Override per app with `ai.<name>.shell`; a non-null per-app value
         wins, `null` inherits this one.
 
-        Fans out to **Claude, Codex and Kiro only**, through three different
-        mechanisms. Claude reads `CLAUDE_CODE_SHELL` from its settings file.
-        Codex and Kiro both read `SHELL` from their own process environment,
-        but receive it differently: Codex through a launcher wrapper added for
-        this option, Kiro through its existing `environmentVariables`
-        delivery — a wrapper export under Home Manager, and the project shell's
-        `env` attrset under devenv. Copilot and Kimchi are
+        Fans out to **Claude, Codex and Kiro only**. Claude reads
+        `CLAUDE_CODE_SHELL` from its settings file; Codex and Kiro read
+        `SHELL` from their own process environment and receive it baked into
+        their launcher wrapper, on both backends. An explicit
+        `ai.<name>.environmentVariables.SHELL` beats this option, the same way
+        an explicit `settings.env` entry beats it for Claude. Copilot and
+        Kimchi are
         deliberately excluded rather than silently ignored: neither one's
         shell selection has been established, so `ai.copilot.shell` and
         `ai.kimchi.shell` do not exist and setting either is an eval error.
@@ -371,28 +385,29 @@ in {
     # other process in the project. A wrapper is inherited across fork/exec,
     # so Git spawned BY a harness still sees it; nothing else does.
     #
-    # Each arm is guarded on the option existing, not merely on the harness
-    # being enabled: a definition for an option no harness declared is an
-    # eval error, and these modules are imported à la carte.
     (lib.mkIf (config.ai.gitSshConfigWorkaround && anyHarnessEnabled) (
       if hasHomeManagerGit
       then {
         programs.git.settings.core.sshCommand = lib.mkDefault sandboxSafeSshCommand;
       }
-      else
-        lib.mkMerge (
-          # Claude has no `environmentVariables` pool; `settings.env` is its
-          # native process-environment surface and lands in settings.json.
-          lib.optional (lib.hasAttrByPath ["ai" "claude" "settings"] options) {
-            ai.claude.settings.env.GIT_SSH_COMMAND = lib.mkDefault sandboxSafeSshCommand;
-          }
-          ++ map (harness: {
-            ai.${harness}.environmentVariables.GIT_SSH_COMMAND =
-              lib.mkDefault sandboxSafeSshCommand;
-          }) (lib.filter
-            (harness: lib.hasAttrByPath ["ai" harness "environmentVariables"] options)
-            ["codex" "copilot" "kimchi" "kiro"])
-        )
+      else {
+        # Published on the INTERNAL channel, never into
+        # `ai.<cli>.environmentVariables`.
+        #
+        # Writing a module default into that pool looks equivalent and is not:
+        # `mergeWithCollisionCheck` decides collisions with
+        # `builtins.intersectAttrs`, which sees KEY PRESENCE and knows nothing
+        # about `mkDefault`. So a module contribution there turns any consumer
+        # who also sets `ai.environmentVariables.GIT_SSH_COMMAND` into a hard
+        # eval failure — naming a per-CLI pool they never wrote, and firing
+        # even for harnesses that are merely imported, since
+        # `collisionAssertions` is emitted outside `mkIf cfg.enable`.
+        #
+        # The pool belongs to the consumer. Module contributions ride this
+        # channel and are merged UNDER the pool at each wrapper call site, so
+        # an explicit entry simply wins.
+        ai._sandboxSafeSshCommand = sandboxSafeSshCommand;
+      }
     ))
   ];
 }

@@ -588,7 +588,8 @@
     | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot) | Same; project-native paths |
     | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same |
     | LSP server config | Per-CLI config | `ai.lspServers.*` (Claude + Copilot + Kiro) | Same; Codex has no native LSP registry |
-    | CLI process environment | Shell config | `ai.environmentVariables` (Copilot + Kiro) | Same; Claude/Codex use other mechanisms |
+    | CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.settings.env` |
+    | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / `ai.<cli>.shell` (Claude + Codex + Kiro) | Same; takes a package. Copilot and Kimchi are explicit exclusions |
     | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
 
     ## Configuration
@@ -690,12 +691,13 @@
     `CLAUDE.md` and `AGENTS.md` files. Kiro writes its named instruction to
     `.kiro/steering/semble.md`.
 
-    When a selected Semble feature targets Codex in `workspace-write` mode, the
-    module automatically grants its cache as a writable root. Home Manager uses
-    the user XDG cache. A Codex-targeted devenv integration always uses a
-    project-local state cache and exports it as `SEMBLE_CACHE_LOCATION`; the
-    writable-root grant remains conditional on `workspace-write`. The module
-    does not select the sandbox mode itself.
+    Home Manager leaves the cache at Semble's own XDG default. A devenv
+    integration relocates it to a project-local state directory and tells
+    Semble where by baking `SEMBLE_CACHE_LOCATION` into the launcher wrapper —
+    never into the project shell's environment. The relocation is
+    unconditional on devenv; only the Codex writable-root grant is
+    conditional, on a selected feature targeting Codex in `workspace-write`
+    mode. The module does not select the sandbox mode itself.
 
     Direct configuration remains available when the convenience feature is
     disabled:

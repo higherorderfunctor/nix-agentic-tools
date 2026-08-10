@@ -26,6 +26,7 @@
     cfg,
     mergedInstructions,
     mergedEnvironmentVariables,
+    moduleEnvironmentVariables ? {},
     topContext,
   }: let
     effectiveContext =
@@ -63,7 +64,10 @@
           then "1"
           else "0";
       };
-    effectiveEnvVars = mergedEnvironmentVariables // kimchiEnvVars;
+    # Module-contributed defaults (e.g. the sandbox-safe GIT_SSH_COMMAND) sit
+    # UNDER the consumer's pool, matching every other harness. `kimchiEnvVars`
+    # stays last: those are derived from typed options, not free-form entries.
+    effectiveEnvVars = moduleEnvironmentVariables // mergedEnvironmentVariables // kimchiEnvVars;
 
     # The Cast AI key is a secret: read it from its decrypted file (or
     # helper) at launch via the repo's shared credential snippet, so it is
@@ -242,10 +246,11 @@ in
         mergedInstructions,
         mergedSkills,
         mergedEnvironmentVariables,
+        moduleEnvironmentVariables,
         topContext,
         ...
       }: let
-        prep = mkPrep {inherit cfg mergedInstructions mergedEnvironmentVariables topContext;};
+        prep = mkPrep {inherit cfg mergedInstructions mergedEnvironmentVariables moduleEnvironmentVariables topContext;};
         inherit (prep) filteredSettings filteredHarnessSettings allAgencyTexts;
       in
         lib.mkMerge [
@@ -300,10 +305,11 @@ in
         mergedInstructions,
         mergedSkills,
         mergedEnvironmentVariables,
+        moduleEnvironmentVariables,
         topContext,
         ...
       }: let
-        prep = mkPrep {inherit cfg mergedInstructions mergedEnvironmentVariables topContext;};
+        prep = mkPrep {inherit cfg mergedInstructions mergedEnvironmentVariables moduleEnvironmentVariables topContext;};
         inherit (prep) filteredSettings filteredHarnessSettings allAgencyTexts;
       in
         lib.mkMerge [
