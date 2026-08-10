@@ -383,6 +383,10 @@
     package,
     bin,
     needles,
+    # Strings that must NOT appear. A presence-only assertion cannot
+    # distinguish "the winning value is baked in" from "both values are",
+    # which is exactly what a precedence test has to prove.
+    absentNeedles ? [],
   }:
     pkgs.runCommand "module-test-${name}" {} ''
       set -euETo pipefail
@@ -398,6 +402,12 @@
             || fail ${lib.escapeShellArg "wrapper does not carry: ${needle}"}
         '')
         needles}
+      ${lib.concatMapStringsSep "\n" (needle: ''
+          if grep -qF -- ${lib.escapeShellArg needle} "$w"; then
+            fail ${lib.escapeShellArg "wrapper unexpectedly carries: ${needle}"}
+          fi
+        '')
+        absentNeedles}
       if grep -qF -- '/homeless-shelter' "$w"; then
         fail "builder HOME leaked into the shipped wrapper"
       fi
@@ -600,26 +610,55 @@ in {
       && devenv.config.packages == []
   );
 
+  # The two backends legitimately install DIFFERENT derivations here, and the
+  # asymmetry is the sandbox-safe Git SSH default rather than anything about
+  # Codex. Home Manager states it in Git's own config, so nothing has to reach
+  # Codex's process environment and the upstream package ships untouched.
+  # devenv has no `programs.git`, so the same default rides Codex's launcher
+  # wrapper — deliberately, because the alternative is exporting
+  # `GIT_SSH_COMMAND` into the project shell and rewriting Git for the
+  # developer's own session too. Net effect: enabling Codex on devenv always
+  # produces a wrapper. The VALUE it carries is asserted by
+  # `module-ai-git-ssh-default-follows-harnesses`; this one is about shape.
   module-codex-enabled-installs-package = mkTest "codex-enabled-installs-package" (
     let
       hm = evalHm {ai.codex.enable = true;};
       devenv = evalDevenv {ai.codex.enable = true;};
       expected = aiStubs.chatgpt-codex;
+      devenvPackages = devenv.config.packages;
     in
       hm.config.home.packages
       == [expected]
-      && devenv.config.packages == [expected]
+      && builtins.length devenvPackages == 1
+      && lib.hasSuffix "chatgpt-codex-wrapped" (
+        builtins.baseNameOf (builtins.head devenvPackages)
+      )
   );
 
   module-ai-git-ssh-default-follows-harnesses = mkTest "ai-git-ssh-default-follows-harnesses" (
     let
       harnessNames = ["claude" "codex" "copilot" "kimchi" "kiro"];
+      # devenv has no `programs.git`, so the workaround rides each harness's
+      # OWN process-environment surface — its launcher wrapper, or for Claude
+      # (which has no wrapper here) `settings.env`. It is deliberately no
+      # longer a single write to the project shell: that reached every other
+      # process in the shell, the developer's own git included.
+      devenvCommandFor = name: let
+        cfg = (evalDevenv (lib.setAttrByPath ["ai" name "enable"] true)).config;
+      in
+        if name == "claude"
+        then cfg.ai.claude.settings.env.GIT_SSH_COMMAND
+        else cfg.ai.${name}.environmentVariables.GIT_SSH_COMMAND;
       commands =
-        lib.concatMap (name: let
-          config = lib.setAttrByPath ["ai" name "enable"] true;
-        in [
-          (evalHm config).config.programs.git.settings.core.sshCommand
-          (evalDevenv config).config.env.GIT_SSH_COMMAND
+        lib.concatMap (name: [
+          (evalHm (lib.setAttrByPath ["ai" name "enable"] true))
+          .config
+          .programs
+          .git
+          .settings
+          .core
+          .sshCommand
+          (devenvCommandFor name)
         ])
         harnessNames;
       disabledHm = (evalHm {}).config;
@@ -639,23 +678,33 @@ in {
           ai.codex.enable = true;
           programs.git.settings.core.sshCommand = "custom-ssh";
         }).config;
+      # The override is now the harness's own env pool, not the shell.
       overriddenDevenv =
         (evalDevenv {
-          ai.codex.enable = true;
-          env.GIT_SSH_COMMAND = "custom-ssh";
+          ai.codex = {
+            enable = true;
+            environmentVariables.GIT_SSH_COMMAND = "custom-ssh";
+          };
         }).config;
+      hasCodexSsh = cfg: cfg.ai.codex.environmentVariables ? GIT_SSH_COMMAND;
     in
       builtins.all (lib.hasSuffix "/bin/ai-sandbox-safe-ssh") commands
       && !(disabledHm.programs.git.settings ? core)
-      && !(disabledDevenv.env ? GIT_SSH_COMMAND)
+      && !(hasCodexSsh disabledDevenv)
       && !(optedOutHm.programs.git.settings ? core)
-      && !(optedOutDevenv.env ? GIT_SSH_COMMAND)
+      && !(hasCodexSsh optedOutDevenv)
       && overriddenHm.programs.git.settings.core.sshCommand == "custom-ssh"
-      && overriddenDevenv.env.GIT_SSH_COMMAND == "custom-ssh"
+      && overriddenDevenv.ai.codex.environmentVariables.GIT_SSH_COMMAND == "custom-ssh"
   );
 
   module-ai-git-ssh-wrapper-is-noninteractive = let
-    command = (evalDevenv {ai.codex.enable = true;}).config.env.GIT_SSH_COMMAND;
+    command =
+      (evalDevenv {ai.codex.enable = true;})
+      .config
+      .ai
+      .codex
+      .environmentVariables
+      .GIT_SSH_COMMAND;
     sshConfig = pkgs.writeText "sandbox-ssh-config" ''
       Host *
         BatchMode no
@@ -2295,7 +2344,6 @@ in {
       && clean devenv
       && hm.config.home.packages == []
       && devenv.config.packages == []
-      && !(devenv.config.env ? SEMBLE_CACHE_LOCATION)
   );
 
   module-semble-codex-sandbox-cache-parity = mkTest "semble-codex-sandbox-cache-parity" (
@@ -2315,10 +2363,6 @@ in {
       };
       hm = (evalHm config).config;
       devenv = (evalDevenv config).config;
-      customDevenv =
-        (evalDevenv (lib.recursiveUpdate config {
-          env.SEMBLE_CACHE_LOCATION = "/custom/semble-cache";
-        })).config;
       readOnly =
         (evalDevenv {
           ai.codex.settings.sandbox_mode = "read-only";
@@ -2354,15 +2398,22 @@ in {
       && builtins.all
       (root: builtins.elem root devenv.ai.codex.settings.sandbox_workspace_write.writable_roots)
       ["/consumer-cache" "/tmp/devenv-root/.git" "/tmp/devenv-state/semble-cache"]
-      && devenv.env.SEMBLE_CACHE_LOCATION == "/tmp/devenv-state/semble-cache"
-      && builtins.all
-      (root: builtins.elem root customDevenv.ai.codex.settings.sandbox_workspace_write.writable_roots)
-      ["/consumer-cache" "/tmp/devenv-root/.git" "/custom/semble-cache"]
-      && customDevenv.env.SEMBLE_CACHE_LOCATION == "/custom/semble-cache"
+      # HM leaves the cache at semble's own default, so semble needs telling
+      # nothing and the package ships unwrapped.
+      && builtins.elem aiStubs.semble hm.home.packages
+      # devenv RELOCATES it project-local, so semble is told through its
+      # launcher wrapper. Never through the project shell: that would export
+      # the value to the developer's session and everything else in it. The
+      # `env.SEMBLE_CACHE_LOCATION` override this test used to exercise is
+      # deliberately gone — devenv/Nix is the only config path.
+      && builtins.any
+      (drv:
+        lib.hasSuffix "${lib.getName aiStubs.semble}-wrapped" (
+          builtins.baseNameOf drv
+        ))
+      devenv.packages
       && readOnly.ai.codex.settings.sandbox_workspace_write == null
-      && readOnly.env.SEMBLE_CACHE_LOCATION == "/tmp/devenv-state/semble-cache"
       && noCodex.ai.codex.settings.sandbox_workspace_write == null
-      && !(noCodex.env ? SEMBLE_CACHE_LOCATION)
       && profileOnly.ai.codex.settings.sandbox_workspace_write == null
       && builtins.all (assertion: assertion.assertion) profileOnly.assertions
   );
@@ -2524,8 +2575,15 @@ in {
       };
       instruction = builtins.head evaluated.config.ai.kiro.instructions;
     in
-      evaluated.config.packages
-      == [pkgs.hello]
+      # devenv relocates the cache, so semble is installed WRAPPED. The
+      # wrapper is named after what it wraps, which is what keeps the
+      # `package` override observable here rather than hidden behind a
+      # fixed derivation name.
+      builtins.length evaluated.config.packages
+      == 1
+      && lib.hasSuffix "hello-wrapped" (
+        builtins.baseNameOf (builtins.head evaluated.config.packages)
+      )
       && evaluated.config.ai.kiro.mcpServers == {}
       && instruction.name == "semble"
       && instruction.text == ../packages/semble/agent-instructions.md
@@ -4026,9 +4084,19 @@ in {
   # gap writer's own mkIf gate. That is now the default, so no explicit opt-out
   # is needed — but if delegationClamp ever becomes default-on again, this test
   # will start failing for a reason that has nothing to do with the gap writer.
+  # `gitSshConfigWorkaround` is the second such writer and it IS default-on:
+  # devenv has no `programs.git`, so the sandbox-safe SSH command reaches
+  # Claude through `settings.env.GIT_SSH_COMMAND` — which makes settings
+  # non-empty and would fail this test for a reason that has nothing to do
+  # with the gap writer. Opted out here so the assertion stays about the
+  # writer's own gate. The workaround's own delivery is covered by
+  # `module-ai-git-ssh-default-follows-harnesses`.
   module-claude-devenv-settings-empty-no-gap-file = mkTest "claude-devenv-settings-empty-no-gap-file" (
     let
-      result = evalDevenv {ai.claude.enable = true;};
+      result = evalDevenv {
+        ai.claude.enable = true;
+        ai.gitSshConfigWorkaround = false;
+      };
     in
       !(result.config.files ? ".claude/settings.json")
   );
@@ -4617,9 +4685,15 @@ in {
 
   # No MCP servers → no wrapper, so a project that configures none keeps the
   # bare package and pays for no rebuild.
+  # Opts out of `gitSshConfigWorkaround` for the same reason as the Kiro
+  # counterpart: on devenv it lands in `environmentVariables`, which is itself
+  # a wrap trigger, and this test is about the MCP gate.
   module-copilot-devenv-unwrapped-without-mcp = mkTest "copilot-devenv-unwrapped-without-mcp" (
     let
-      result = evalDevenv {ai.copilot.enable = true;};
+      result = evalDevenv {
+        ai.copilot.enable = true;
+        ai.gitSshConfigWorkaround = false;
+      };
     in
       !(lib.any (p: (p.name or "") == "copilot-cli-wrapped") result.config.packages)
   );
@@ -4662,18 +4736,23 @@ in {
       && lib.hasInfix "typescript-language-server" (lspFile.text or "")
   );
 
-  # environmentVariables → devenv env blob (native) and HM wrapper.
-  module-copilot-devenv-env-blob-populated = mkTest "copilot-devenv-env-blob-populated" (
-    let
-      result = evalDevenv {
-        ai.copilot = {
-          enable = true;
-          environmentVariables.COPILOT_MODEL = "claude-sonnet-4";
-        };
+  # environmentVariables → the launcher wrapper, on devenv exactly as on HM.
+  # This used to assert devenv's native `env` blob; that wrote the PROJECT
+  # SHELL, so the value also reached the developer's session.
+  module-copilot-devenv-env-wrapper-populated = let
+    result = evalDevenv {
+      ai.copilot = {
+        enable = true;
+        environmentVariables.COPILOT_MODEL = "claude-sonnet-4";
       };
-    in
-      (result.config.env.COPILOT_MODEL or null) == "claude-sonnet-4"
-  );
+    };
+  in
+    mkWrapperGrepTest {
+      name = "copilot-devenv-env-wrapper-populated";
+      package = builtins.head result.config.packages;
+      bin = "copilot";
+      needles = ["COPILOT_MODEL" "claude-sonnet-4"];
+    };
 
   # Configuring MCP servers PRODUCES a wrapper. That is all this asserts: one
   # entry in home.packages, carrying the wrapped derivation's name.
@@ -5636,10 +5715,15 @@ in {
 
   # devenv: with no v3/trust and no env, the package is installed RAW (the
   # shared wrapper returns the unwrapped derivation — no needless symlinkJoin).
+  # Opts out of `gitSshConfigWorkaround`: on devenv that default reaches Kiro
+  # through `environmentVariables`, which is itself a reason to wrap. Leaving
+  # it on would make this pass or fail on the SSH default rather than on the
+  # wrapper gate it exists to test.
   module-kiro-devenv-no-flags-no-wrap = mkTest "kiro-devenv-no-flags-no-wrap" (
     let
       result = evalDevenv {
         ai.kiro.enable = true;
+        ai.gitSshConfigWorkaround = false;
       };
       packages = result.config.packages or [];
     in
@@ -6655,18 +6739,22 @@ in {
       && lib.hasInfix "nixd" (lspFile.text or "")
   );
 
-  # Devenv: environment variables populate the env blob.
-  module-kiro-devenv-env-blob-populated = mkTest "kiro-devenv-env-blob-populated" (
-    let
-      result = evalDevenv {
-        ai.kiro = {
-          enable = true;
-          environmentVariables.KIRO_LOG_LEVEL = "debug";
-        };
+  # Devenv: environment variables are baked into the launcher, not exported
+  # into the project shell (which is what the old `env` blob did).
+  module-kiro-devenv-env-wrapper-populated = let
+    result = evalDevenv {
+      ai.kiro = {
+        enable = true;
+        environmentVariables.KIRO_LOG_LEVEL = "debug";
       };
-    in
-      (result.config.env.KIRO_LOG_LEVEL or null) == "debug"
-  );
+    };
+  in
+    mkWrapperGrepTest {
+      name = "kiro-devenv-env-wrapper-populated";
+      package = builtins.head result.config.packages;
+      bin = "kiro-cli";
+      needles = ["KIRO_LOG_LEVEL" "debug"];
+    };
 
   # Devenv: settings/cli.json static write.
   module-kiro-devenv-writes-settings-json = mkTest "kiro-devenv-writes-settings-json" (
@@ -7848,16 +7936,19 @@ in {
       needles = ["KIRO_FOO" "kiro-hm-fanout-sentinel"];
     };
 
-  # Devenv: top-level ai.environmentVariables fans to Kiro env blob.
-  module-kiro-devenv-top-level-env-fanout = mkTest "kiro-devenv-top-level-env-fanout" (
-    let
-      result = evalDevenv {
-        ai.kiro.enable = true;
-        ai.environmentVariables.KIRO_DEBUG = "1";
-      };
-    in
-      (result.config.env.KIRO_DEBUG or null) == "1"
-  );
+  # Devenv: top-level ai.environmentVariables fans to the Kiro wrapper.
+  module-kiro-devenv-top-level-env-fanout = let
+    result = evalDevenv {
+      ai.kiro.enable = true;
+      ai.environmentVariables.KIRO_DEBUG = "kiro-devenv-fanout-sentinel";
+    };
+  in
+    mkWrapperGrepTest {
+      name = "kiro-devenv-top-level-env-fanout";
+      package = builtins.head result.config.packages;
+      bin = "kiro-cli";
+      needles = ["KIRO_DEBUG" "kiro-devenv-fanout-sentinel"];
+    };
 
   # HM: top-level ai.environmentVariables fans out to the Copilot wrapper.
   # Same reasoning as the Kiro counterpart above — the value, not merely the
@@ -7875,30 +7966,40 @@ in {
       needles = ["COPILOT_FOO" "copilot-hm-fanout-sentinel"];
     };
 
-  # Devenv: top-level ai.environmentVariables fans to Copilot env blob.
-  module-copilot-devenv-top-level-env-fanout = mkTest "copilot-devenv-top-level-env-fanout" (
-    let
-      result = evalDevenv {
-        ai.copilot.enable = true;
-        ai.environmentVariables.COPILOT_DEBUG = "1";
-      };
-    in
-      (result.config.env.COPILOT_DEBUG or null) == "1"
-  );
+  # Devenv: top-level ai.environmentVariables fans to the Copilot wrapper.
+  module-copilot-devenv-top-level-env-fanout = let
+    result = evalDevenv {
+      ai.copilot.enable = true;
+      ai.environmentVariables.COPILOT_DEBUG = "copilot-devenv-fanout-sentinel";
+    };
+  in
+    mkWrapperGrepTest {
+      name = "copilot-devenv-top-level-env-fanout";
+      package = builtins.head result.config.packages;
+      bin = "copilot";
+      needles = ["COPILOT_DEBUG" "copilot-devenv-fanout-sentinel"];
+    };
 
-  # Devenv: per-CLI ai.kiro.environmentVariables wins over top-level on name collision.
-  module-kiro-devenv-per-cli-env-wins = mkTest "kiro-devenv-per-cli-env-wins" (
-    let
-      result = evalDevenv {
-        ai = {
-          kiro.enable = true;
-          environmentVariables.SHARED = "top-level";
-          kiro.environmentVariables.SHARED = "kiro-specific";
-        };
+  # Devenv: per-CLI ai.kiro.environmentVariables wins over top-level on name
+  # collision. `absentNeedles` is the half that matters — the wrapper baking
+  # BOTH values would satisfy a presence-only check while leaving which one
+  # actually wins undetermined.
+  module-kiro-devenv-per-cli-env-wins = let
+    result = evalDevenv {
+      ai = {
+        kiro.enable = true;
+        environmentVariables.SHARED = "top-level-loser";
+        kiro.environmentVariables.SHARED = "kiro-specific-winner";
       };
-    in
-      (result.config.env.SHARED or null) == "kiro-specific"
-  );
+    };
+  in
+    mkWrapperGrepTest {
+      name = "kiro-devenv-per-cli-env-wins";
+      package = builtins.head result.config.packages;
+      bin = "kiro-cli";
+      needles = ["SHARED" "kiro-specific-winner"];
+      absentNeedles = ["top-level-loser"];
+    };
 
   # Copilot HM: typed LSP with `extensions` emits fileExtensions
   # mapping. Per-ecosystem Copilot translator (mkCopilotLspConfig).

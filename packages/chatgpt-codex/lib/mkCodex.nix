@@ -12,20 +12,22 @@
   # Launcher wrapper — see ./wrapPackage.nix for why Codex needs one at all.
   wrapCodexPackage = import ./wrapPackage.nix {inherit lib pkgs;};
 
-  # `ai.shell` / `ai.codex.shell` → `SHELL` on Codex's own process.
+  # Everything destined for Codex's own process environment: the merged
+  # `environmentVariables` pool plus `ai.shell`. Codex reads `SHELL` from its
+  # process environment and has no config key for it — `shell_environment_policy`
+  # governs what SPAWNED commands inherit, which is a different thing.
   #
-  # Deliberately NOT `mergedEnvironmentVariables`. Codex has no
-  # `environmentVariables` option, so that merged value is the ROOT
-  # `ai.environmentVariables` pool alone — a pool whose contract is
-  # "Kiro and Copilot only". Feeding it to this wrapper would silently
-  # start fanning that pool out to Codex, which is a different change
-  # than the one this option makes. Only the shell goes through here.
-  codexPackageFor = cfg: resolvedShell:
+  # `resolvedShell` is applied last so the typed option beats a hand-set
+  # `SHELL` in the env pool; both are user intent, but the typed one is the
+  # specific surface and carries a package the store guarantees exists.
+  codexPackageFor = cfg: mergedEnvironmentVariables: resolvedShell:
     wrapCodexPackage {
       inherit (cfg) package;
       environmentVariables =
-        lib.optionalAttrs (resolvedShell != null)
-        {SHELL = lib.getExe resolvedShell;};
+        mergedEnvironmentVariables
+        // lib.optionalAttrs (resolvedShell != null) {
+          SHELL = lib.getExe resolvedShell;
+        };
     };
   jsonFormat = pkgs.formats.json {};
   tomlReconciler = ../../../lib/ai/reconcile-toml.py;
@@ -849,6 +851,16 @@ in
     defaults.package = pkgs.ai.chatgpt-codex;
 
     options = {
+      # Baked into the launcher wrapper (./wrapPackage.nix), so the value
+      # lands on Codex's own process and the commands it spawns — never in
+      # the project shell or the user's session. Codex has no config-file
+      # surface for its process environment; `shell_environment_policy`
+      # filters what SPAWNED commands inherit, which is a different thing.
+      environmentVariables = lib.mkOption {
+        type = lib.types.attrsOf lib.types.str;
+        default = {};
+        description = "Environment variables baked into the codex launcher wrapper. Scoped to the Codex process and the commands it spawns; never exported into the project shell.";
+      };
       configDir = lib.mkOption {
         type = lib.types.addCheck lib.types.str (value:
           value
@@ -980,6 +992,7 @@ in
       mergedServers,
       mergedSkills,
       mergedAgents,
+      mergedEnvironmentVariables,
       resolvedShell,
       topContext,
       topHooks,
@@ -1064,7 +1077,7 @@ in
             "${cfg.configDir}/hooks.json".source = jsonFormat.generate "codex-hooks.json" {hooks = renderHooks effectiveHooks;};
           })
         ];
-        packages = [(codexPackageFor cfg resolvedShell)];
+        packages = [(codexPackageFor cfg mergedEnvironmentVariables resolvedShell)];
       };
     };
 
@@ -1076,6 +1089,7 @@ in
       mergedServers,
       mergedSkills,
       mergedAgents,
+      mergedEnvironmentVariables,
       resolvedShell,
       topContext,
       topHooks,
@@ -1158,7 +1172,7 @@ in
           ".codex/config.toml".source = tomlFormat.generate "codex-project-config.toml" settings;
         })
       ];
-      packages = [(codexPackageFor cfg resolvedShell)];
+      packages = [(codexPackageFor cfg mergedEnvironmentVariables resolvedShell)];
       tasks."ai:codex:materialize-profiles" = {
         exec = ''
           set -euETo pipefail

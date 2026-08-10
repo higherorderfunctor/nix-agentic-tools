@@ -883,16 +883,42 @@ the same category as `backend` — it forces neither `config` nor the factory's
 `pkgs`, so it cannot reintroduce the `_module.args` recursion documented against
 `proxyIsSupported`.
 
-| runtime | knob                       | delivery                                               |
-| ------- | -------------------------- | ------------------------------------------------------ |
-| Claude  | `CLAUDE_CODE_SHELL`        | `settings.env` → `settings.json`                       |
-| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`                               |
-| Kiro    | `SHELL` (own process env)  | `environmentVariables` → wrapper export / devenv `env` |
-| Copilot | **unknown — verified gap** | excluded                                               |
-| Kimchi  | unassessed                 | excluded                                               |
+| runtime | knob                       | delivery                                |
+| ------- | -------------------------- | --------------------------------------- |
+| Claude  | `CLAUDE_CODE_SHELL`        | `settings.env` → `settings.json`        |
+| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`                |
+| Kiro    | `SHELL` (own process env)  | `environmentVariables` → wrapper export |
+| Copilot | **unknown — verified gap** | excluded                                |
+| Kimchi  | unassessed                 | excluded                                |
 
 Four runtimes were asked for; five go through `mkAiApp`. Kimchi is easy to miss
 because the issue that requested this never mentioned it.
+
+### NEVER write the shell environment
+
+**This repo does not set Home Manager session variables or devenv `env` entries.
+Anything a runtime needs in its process environment goes into that runtime's
+launcher wrapper.** Children inherit across `fork`/`exec`, so git or any other
+command a harness spawns still sees the value — while the developer's own shell,
+and every other process in it, does not.
+
+There is no exception, and the rule is the operator's: devenv/Nix is the only
+config path, so a shell-level escape hatch buys nothing and costs scope.
+
+Enforcement is by eye. `rg '^\s*env\s*=|^\s*env\.[A-Z_]+\s*=|sessionVariables'`
+over `packages/ lib/ devshell/` should return only `mkOption` declarations. Two
+other `env` shapes are legitimate and will show up in a careless grep: an MCP
+server's `env` field (`lib/mcp.nix`, `mcpSecrets.nix`) is the MCP protocol's
+per-server environment and reaches the server process, not your shell; and
+option declarations are not writes.
+
+This was not always true — four sites wrote the devenv shell until 2026-08-10,
+each with a comment reasoning that devenv "has a native `env` attrset so no
+wrapper is required". That was correct about the mechanism and wrong about the
+scope, and it went unnoticed because the variables involved (`KIRO_LOG_LEVEL`,
+`COPILOT_MODEL`) were harmless to leak. `SHELL` is the one that made it visible,
+since it changes what tmux, editors and anything else spawning `$SHELL` will
+run.
 
 ### The fallback behavior is asymmetric, and that is the whole safety argument
 
@@ -933,14 +959,24 @@ three runtimes demonstrably do not perform.
   shell must beat the ambient environment. For Codex this matters more than it
   looks, because "unset" is not neutral — it lands on the passwd shell.
 - **Codex had no wrapper before this option.**
-  `packages/chatgpt-codex/lib/wrapPackage.nix` is new; a Codex with no shell set
-  still gets the bare upstream path, because the wrapper is skipped entirely
-  when its env set is empty.
-- **Do not feed `mergedEnvironmentVariables` to the Codex wrapper.** Codex has
-  no `environmentVariables` option, so that value is the ROOT
-  `ai.environmentVariables` pool alone — a pool whose contract is "Kiro and
-  Copilot only". Passing it would silently start fanning that pool out to Codex,
-  which is a different change than this one.
+  `packages/chatgpt-codex/lib/wrapPackage.nix` is new; the wrapper is skipped
+  entirely when its env set is empty, so a Codex with nothing to deliver still
+  gets the bare upstream path.
+- **On devenv that empty case is unreachable in practice.** devenv has no
+  `programs.git`, so the sandbox-safe Git SSH default (`gitSshConfigWorkaround`,
+  on by default) lands in Codex's `environmentVariables` — which means enabling
+  Codex on devenv ALWAYS builds a wrapper, while Home Manager ships it bare.
+  That divergence is asserted by `module-codex-enabled-installs-package`; if you
+  are wondering why the two backends install different store paths, this is why,
+  and it is intended.
+- **`ai.environmentVariables` now reaches Codex too.** Codex gained an
+  `environmentVariables` option when its wrapper was built, so the root pool
+  fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — it
+  has no wrapper here and `settings.env` is its native equivalent.
+- **`resolvedShell` is applied AFTER the env pool in the Codex wrapper**, so the
+  typed option beats a hand-set `SHELL` in `environmentVariables`. Both are user
+  intent; the typed one is the specific surface and carries a package the store
+  guarantees exists.
 - **`shell_environment_policy` is not the Codex knob.** It filters what SPAWNED
   commands inherit; writing the shell there configures the children, not Codex.
 - **`KIRO_CHAT_SHELL` is a dead end.** It exists only in Kiro's Rust binary, is

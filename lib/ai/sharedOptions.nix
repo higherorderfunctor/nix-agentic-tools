@@ -18,7 +18,6 @@
   hooks = import ./hooks.nix {inherit lib;};
   harnessNames = ["claude" "codex" "copilot" "kimchi" "kiro"];
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
-  hasDevenvEnv = lib.hasAttrByPath ["env"] options;
   hasHomeManagerGit = lib.hasAttrByPath ["programs" "git" "settings"] options;
 
   # OpenSSH rejects Home Manager's otherwise-safe ~/.ssh/config symlink inside
@@ -256,16 +255,24 @@ in {
       type = lib.types.attrsOf lib.types.str;
       default = {};
       description = ''
-        Environment variables fanned out to every enabled AI app that
-        supports a wrapper/env surface (Kiro, Copilot). Per-app entries
+        Environment variables fanned out to every enabled AI app with a
+        launcher wrapper: Codex, Copilot, Kimchi and Kiro. Per-app entries
         (ai.<name>.environmentVariables) add runtime-specific variables;
         duplicate names across the shared and per-app pools fail the collision
         check.
-        Claude does NOT currently consume this pool — Claude env vars
-        should be set via `ai.claude.settings.env` instead (upstream
-        writes them into `~/.claude/settings.json`). Codex also does not
-        consume it: `shell_environment_policy` controls spawned-command
-        inheritance, not the Codex process environment represented here.
+
+        Delivered by baking them into each app's wrapper, so they scope to
+        that process and the commands it spawns. They are NOT written into
+        the Home Manager session or the devenv project shell — this module
+        does not touch the shell environment, because a variable exported
+        there also reaches the developer's own session and every other
+        process in it. Codex's `shell_environment_policy` is a different
+        thing again: it filters what SPAWNED commands inherit, not what
+        Codex itself runs with.
+
+        Claude does NOT consume this pool — it has no wrapper here, and
+        `ai.claude.settings.env` is its native equivalent (upstream writes
+        it into `~/.claude/settings.json`).
       '';
     };
 
@@ -354,16 +361,38 @@ in {
         );
       };
     }
+    # Home Manager has a native Git surface, so say it in Git's own config.
+    #
+    # Everywhere else this rides each enabled harness's LAUNCHER WRAPPER, one
+    # `GIT_SSH_COMMAND` per harness, rather than the single devenv `env` write
+    # this used to be. That write was one line and reached every harness at
+    # once, but it did so by exporting into the PROJECT SHELL — so it also
+    # rewrote Git's SSH command for the developer's own session and for every
+    # other process in the project. A wrapper is inherited across fork/exec,
+    # so Git spawned BY a harness still sees it; nothing else does.
+    #
+    # Each arm is guarded on the option existing, not merely on the harness
+    # being enabled: a definition for an option no harness declared is an
+    # eval error, and these modules are imported à la carte.
     (lib.mkIf (config.ai.gitSshConfigWorkaround && anyHarnessEnabled) (
       if hasHomeManagerGit
       then {
         programs.git.settings.core.sshCommand = lib.mkDefault sandboxSafeSshCommand;
       }
-      else if hasDevenvEnv
-      then {
-        env.GIT_SSH_COMMAND = lib.mkDefault sandboxSafeSshCommand;
-      }
-      else {}
+      else
+        lib.mkMerge (
+          # Claude has no `environmentVariables` pool; `settings.env` is its
+          # native process-environment surface and lands in settings.json.
+          lib.optional (lib.hasAttrByPath ["ai" "claude" "settings"] options) {
+            ai.claude.settings.env.GIT_SSH_COMMAND = lib.mkDefault sandboxSafeSshCommand;
+          }
+          ++ map (harness: {
+            ai.${harness}.environmentVariables.GIT_SSH_COMMAND =
+              lib.mkDefault sandboxSafeSshCommand;
+          }) (lib.filter
+            (harness: lib.hasAttrByPath ["ai" harness "environmentVariables"] options)
+            ["codex" "copilot" "kimchi" "kiro"])
+        )
     ))
   ];
 }

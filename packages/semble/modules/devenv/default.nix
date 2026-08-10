@@ -1,13 +1,11 @@
 # Semble devenv integration. Options and cross-runtime contributions are shared
 # byte-for-byte with Home Manager; only backend-native effects differ.
 import ../common.nix {
-  configureCodexCache = {
-    config,
-    lib,
-  }: {
-    ai.codex.settings._integration_writable_roots =
-      lib.mkAfter [config.env.SEMBLE_CACHE_LOCATION];
-    env.SEMBLE_CACHE_LOCATION = lib.mkDefault "${config.devenv.state}/semble-cache";
-  };
+  # devenv keeps the cache project-local rather than in the user's XDG cache,
+  # so semble has to be told — delivered through the launcher wrapper, never
+  # through devenv's `env` attrset, which would export it into the project
+  # shell and hand it to the developer's own session too.
+  cacheLocation = {config, ...}: "${config.devenv.state}/semble-cache";
   installPackage = package: {packages = [package];};
+  relocatesCache = true;
 }

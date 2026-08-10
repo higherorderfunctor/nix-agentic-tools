@@ -1,6 +1,16 @@
 {
-  configureCodexCache,
+  # Where this backend keeps semble's cache. Both backends answer; only a
+  # backend that MOVES the cache off semble's own default has to tell semble
+  # about it (see `relocatesCache`).
+  cacheLocation,
   installPackage,
+  # True when `cacheLocation` is a relocation rather than semble's default.
+  # Relocating means semble must be told, and the only honest place to put
+  # that is the process that reads it. This module does not write the shell
+  # environment on either backend: devenv's `env` attrset would export the
+  # value into the project shell, handing it to the developer's own session
+  # and every other process running there, not just semble.
+  relocatesCache ? false,
 }: {
   config,
   lib,
@@ -30,9 +40,43 @@
   ];
   mkDefaultRecursive = lib.mapAttrsRecursive (_path: lib.mkDefault);
 
+  cacheDir = cacheLocation {inherit config lib;};
+
+  # NOTE — behavior change, 2026-08-10. The relocation is now unconditional on
+  # a relocating backend. It used to live inside the codex-cache hook, so the
+  # `SEMBLE_CACHE_LOCATION` write was gated on `codexSelected` and semble's
+  # cache silently moved depending on whether CODEX happened to be enabled: a
+  # devenv project running semble for Claude alone got the XDG default, the
+  # same project with Codex on got the project-local one. That coupling was
+  # incidental to where the write sat, not intended. Granting Codex the
+  # writable root stays gated on `codexSelected` below — that part is real.
+
+  # Wrapped once, for every entry point, so `semble` and `semble-mcp` cannot
+  # disagree about where the cache lives — and so the MCP server needs no
+  # `env` block of its own, since its command already carries the setting.
+  semblePackage =
+    if !relocatesCache
+    then cfg.package
+    else
+      pkgs.symlinkJoin {
+        # Named after what it wraps, so a `semble.package` override stays
+        # OBSERVABLE once the package is no longer installed bare. A fixed
+        # name would make the override untestable — the wrapped derivation
+        # would look identical whatever went into it.
+        name = "${lib.getName cfg.package}-wrapped";
+        paths = [cfg.package];
+        nativeBuildInputs = [pkgs.makeWrapper];
+        postBuild = ''
+          for bin in "$out"/bin/*; do
+            wrapProgram "$bin" \
+              --set SEMBLE_CACHE_LOCATION ${lib.escapeShellArg cacheDir}
+          done
+        '';
+      };
+
   mcpEntry = {
     args = lib.optionals (cfg.mcp.content != "code") ["--content" cfg.mcp.content];
-    command = "${cfg.package}/bin/semble-mcp";
+    command = "${semblePackage}/bin/semble-mcp";
     type = "stdio";
   };
 
@@ -70,9 +114,12 @@ in {
           || featureActive cfg.mcp
           || featureActive cfg.subagent
         )
-        (installPackage cfg.package))
-      (lib.mkIf codexSelected
-        (configureCodexCache {inherit config lib;}))
+        (installPackage semblePackage))
+      # Uniform across backends now that the location is a plain value rather
+      # than a round-trip through the shell environment.
+      (lib.mkIf codexSelected {
+        ai.codex.settings._integration_writable_roots = lib.mkAfter [cacheDir];
+      })
     ]
     ++ map runtimeConfig runtimes
   );

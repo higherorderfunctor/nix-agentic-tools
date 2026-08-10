@@ -1292,12 +1292,14 @@ in
         description = "Typed LSP server definitions; translated via `mkLspConfig` into settings/lsp.json on emission.";
       };
       # Env vars exported when launching kiro. In HM they're baked into
-      # the symlinkJoin wrapper; in devenv they populate the native
-      # `env` attrset. `attrsOf str` — matching the legacy surface.
+      # Baked into the symlinkJoin launcher on BOTH backends. devenv used to
+      # populate its native `env` attrset instead, which exported them into
+      # the project shell rather than into Kiro. `attrsOf str` — matching the
+      # legacy surface.
       environmentVariables = lib.mkOption {
         type = lib.types.attrsOf lib.types.str;
         default = {};
-        description = "Environment variables exported when launching kiro (HM: via wrapper; devenv: via native env).";
+        description = "Environment variables baked into the kiro launcher wrapper. Scoped to the Kiro process and the commands it spawns; never exported into the project shell.";
       };
       # V3 next-gen agent — appends `--v3` to the top-level `kiro-cli`
       # launcher. The granular `--agent-engine`/`--mode` flags live ONLY on the
@@ -1762,7 +1764,12 @@ in
                 (wrapKiroPackage {
                   inherit (cfg) v3 trustedMcpTools;
                   package = resolvePackage cfg;
-                  environmentVariables = {};
+                  # Baked into the launcher, NOT devenv's `env` attrset. This
+                  # module does not write the project shell's environment —
+                  # devenv/Nix is the config path, and a variable exported
+                  # shell-wide reaches the developer's own session and every
+                  # other process in it, not just Kiro.
+                  environmentVariables = mergedEnvironmentVariables;
                   inherit (kiroSecrets) secretEnv;
                   identityMaterializer = resolveIdentityMaterializer cfg;
                 })
@@ -1775,11 +1782,15 @@ in
             # Shared assertions (see mkAssertions): exclusive inline/dir
             # pairs, hook-name charset, steering-entry guards.
             {assertions = mkAssertions cfg;}
-            # Environment variables — devenv has a native `env` attrset
-            # so no wrapper is required.
-            (lib.mkIf (mergedEnvironmentVariables != {}) {
-              env = lib.mapAttrs (_: lib.mkDefault) mergedEnvironmentVariables;
-            })
+            # Environment variables ride the launcher wrapper above, exactly
+            # as they do under Home Manager. They used to be written into
+            # devenv's native `env` attrset instead ("no wrapper is
+            # required"), which was true of the mechanism and wrong about the
+            # scope: that exports into the project shell, so every variable
+            # here also reached the developer's interactive session. `SHELL`
+            # made the difference concrete — it changes what tmux, editors and
+            # anything else spawning `$SHELL` do — but the leak was never
+            # specific to it.
             # settings/lsp.json — typed LSP server definitions.
             (lib.mkIf (mergedLspServers != {}) {
               files."${cfg.configDir}/settings/lsp.json".text =

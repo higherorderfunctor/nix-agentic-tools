@@ -30,6 +30,7 @@
       "ai.codex.configDir"
       "ai.codex.context"
       "ai.codex.enable"
+      "ai.codex.environmentVariables"
       "ai.codex.execpolicyRules"
       "ai.codex.hooks"
       "ai.codex.instructions"
