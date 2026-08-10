@@ -542,10 +542,24 @@ in {
   # ── Validation ─────────────────────────────────────────────────────────
   enterTest = ''
     echo "Validating devenv configuration..."
-    # Codex ships unwrapped: no argv wrapper, no named profile. This guards the
-    # convergence itself — a reintroduced wrapper would silently re-add
-    # `--profile` and take the beta permission model back with it.
-    test "$(command -v codex)" = "${lib.getExe pkgs.ai.chatgpt-codex}" || { echo "FAIL: Codex on PATH is not the unwrapped package"; exit 1; }
+    # Codex must inject no ARGV: a reintroduced `--profile` would silently take
+    # the locked-out beta permission model back with it. That is what this
+    # guard has always been protecting.
+    #
+    # It used to assert "is the unwrapped package", which was a proxy for the
+    # same thing and stopped being true on 2026-08-10: Codex is now wrapped to
+    # carry process ENVIRONMENT (`SHELL` from `ai.shell`, `GIT_SSH_COMMAND`
+    # from `gitSshConfigWorkaround`) — see packages/chatgpt-codex/lib/wrapPackage.nix,
+    # which only ever emits `--set`. An env-only wrapper cannot reintroduce the
+    # profile, so the guard now tests the hazard directly instead of the proxy.
+    nat_codex_bin="$(command -v codex)"
+    test -n "$nat_codex_bin" || { echo "FAIL: Codex is not on PATH"; exit 1; }
+    if ${pkgs.coreutils}/bin/head -c2 "$nat_codex_bin" | ${pkgs.gnugrep}/bin/grep -Fq '#!'; then
+      # A generated wrapper script — it must set env and nothing else.
+      ! ${pkgs.gnugrep}/bin/grep -Fq -- '--profile' "$nat_codex_bin" || { echo "FAIL: Codex wrapper injects --profile"; exit 1; }
+    else
+      test "$nat_codex_bin" = "${lib.getExe pkgs.ai.chatgpt-codex}" || { echo "FAIL: Codex on PATH is neither the expected package nor a wrapper for it"; exit 1; }
+    fi
     nat_codex_config=.codex/config.toml
     test -f "$nat_codex_config" || { echo "FAIL: Codex project config was not written"; exit 1; }
     ${pkgs.gnugrep}/bin/grep -Fq 'sandbox_mode = "workspace-write"' "$nat_codex_config" || { echo "FAIL: Codex project config does not select the legacy workspace-write sandbox"; exit 1; }
