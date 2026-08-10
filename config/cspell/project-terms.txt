@@ -35,6 +35,7 @@ bitemporality
 boehm
 brocode
 btop
+bubblewrap
 burndown
 cachix
 caddy
