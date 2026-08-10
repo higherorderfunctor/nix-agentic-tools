@@ -136,6 +136,90 @@
     then "${homeDir}/.cache"
     else throw "devenv requires XDG_CACHE_HOME or HOME to locate the user-global Semble cache";
   sembleCache = "${userCacheHome}/semble";
+
+  # ── ai.shell test vector ───────────────────────────────────────────────
+  # Proves, per runtime, that the configured shell actually ARRIVES — against
+  # the real artifacts on PATH in this worktree, not against module eval.
+  # `checks/module-eval.nix` already covers the option's semantics; what it
+  # cannot see is whether the thing a developer's `$PATH` resolves to carries
+  # the value. Three runtimes, three different delivery mechanisms, so three
+  # different places to look.
+  #
+  # Copilot is asserted to NOT carry it. That arm is the interesting one: it
+  # distinguishes "excluded by design" from "silently failed to deliver",
+  # which every positive check alone would conflate. It cross-checks against
+  # GIT_SSH_COMMAND, which Copilot's wrapper DOES carry — so the wrapper
+  # demonstrably exists and demonstrably received module env, and the absence
+  # of SHELL is therefore a real exclusion rather than a dead wrapper.
+  #
+  # Shared by `devenv test` and the `ai:shell:verify` task so the CI gate and
+  # the hand-run check can never disagree.
+  expectedShell = lib.getExe pkgs.bash;
+  verifyAiShell = pkgs.writeShellApplication {
+    name = "verify-ai-shell";
+    bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
+    runtimeInputs = [pkgs.jq pkgs.gnugrep pkgs.coreutils];
+    text = ''
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      expected=${lib.escapeShellArg expectedShell}
+      root="''${DEVENV_ROOT:-$PWD}"
+      rc=0
+      pass() { printf '  ok    %-8s %s\n' "$1" "$2"; }
+      fail() { printf '  FAIL  %-8s %s\n' "$1" "$2" >&2; rc=1; }
+
+      echo "ai.shell test vector — expecting: $expected"
+
+      # Claude: settings.json `env.CLAUDE_CODE_SHELL`. It does NOT read SHELL.
+      # `.claude/settings.json` is a `files.*` artifact written on SHELL ENTRY,
+      # so running this check alone would read a stale (or absent) file and
+      # report a delivery failure that is really a staleness failure. The task
+      # declares an edge on `devenv:files` for exactly that reason.
+      settings="$root/.claude/settings.json"
+      if [ -e "$settings" ]; then
+        got="$(jq -r '.env.CLAUDE_CODE_SHELL // ""' "$settings")"
+        if [ "$got" = "$expected" ]; then pass claude "CLAUDE_CODE_SHELL in settings.json"
+        else fail claude "settings.json CLAUDE_CODE_SHELL='$got'"; fi
+      else
+        fail claude "no settings.json at $settings"
+      fi
+
+      # Codex and Kiro: SHELL baked into the launcher wrapper.
+      #
+      # BOTH quoting forms must be accepted. makeWrapper's `--set` emits
+      # `SHELL='<path>'`; Kiro's hand-written wrapper builds its exports with
+      # `escapeShellArg`, which leaves a quote-free store path bare. Matching
+      # only the quoted form made this report a false FAILURE against a Kiro
+      # wrapper that was carrying the value correctly.
+      has_shell() {
+        grep -Fq -- "SHELL='$expected'" "$1" || grep -Fq -- "SHELL=$expected" "$1"
+      }
+
+      for pair in "codex:codex" "kiro:kiro-cli"; do
+        name="''${pair%%:*}"; bin="''${pair##*:}"
+        path="$(command -v "$bin" 2>/dev/null || true)"
+        if [ -z "$path" ]; then fail "$name" "$bin not on PATH"; continue; fi
+        if has_shell "$path"; then pass "$name" "SHELL baked into $bin wrapper"
+        else fail "$name" "$bin wrapper does not carry SHELL=$expected"; fi
+      done
+
+      # Copilot: excluded on purpose. Cross-checked against GIT_SSH_COMMAND so
+      # a missing wrapper cannot masquerade as a clean exclusion.
+      cop="$(command -v copilot 2>/dev/null || true)"
+      if [ -z "$cop" ]; then
+        fail copilot "copilot not on PATH"
+      elif ! grep -Fq -- 'GIT_SSH_COMMAND' "$cop"; then
+        fail copilot "wrapper carries no module env at all — cannot distinguish exclusion from failure"
+      elif has_shell "$cop"; then
+        fail copilot "carries SHELL, but Copilot has no shell mapping (should be excluded)"
+      else
+        pass copilot "correctly excluded (wrapper live, no SHELL)"
+      fi
+
+      [ "$rc" -eq 0 ] || { echo "ai.shell test vector FAILED" >&2; exit 1; }
+      echo "ai.shell test vector passed"
+    '';
+  };
 in {
   imports = [
     ./lib/ai/sharedOptions.nix
@@ -198,6 +282,11 @@ in {
       nixd
       taplo
     ]
+    # On PATH so `verify-ai-shell` is runnable by name in a worktree, which is
+    # the point of a test vector — a check nobody can invoke does not get run.
+    # Gated to !CI only because CI reaches it through `enterTest`'s absolute
+    # store path and needs nothing on PATH.
+    ++ lib.optionals (!isCI) [verifyAiShell]
     ++ [
       # Overlay packages — available via pkgs.ai.* after overlay
       pkgs.ai.agnix
@@ -205,6 +294,23 @@ in {
 
   # ── Unified AI Config ─────────────────────────────────────────────────
   ai = {
+    # Every harness executes its commands under nix bash rather than the
+    # login shell. zsh's glob engine is superlinear in candidate entries
+    # scanned for a multi-component pattern, so a routine `/nix/store/*/bin`
+    # from an agent has taken this machine into a global OOM; bash is ~185x
+    # cheaper on the identical glob.
+    #
+    # A package, not a path: the store path is guaranteed to exist at
+    # activation and is GC-rooted by the generation referencing it. That
+    # matters because the runtimes fail QUIETLY otherwise — Claude silently
+    # resolves its own bash and Codex falls back to the password-database
+    # shell, which here is the very shell being moved away from.
+    #
+    # Copilot and Kimchi have no `shell` option (their selection is
+    # unestablished), so this root value simply does not reach them. Verified
+    # per runtime by `ai:shell:verify` — see the task below.
+    shell = pkgs.bash;
+
     claude.enable = true;
     codex = {
       enable = true;
@@ -542,6 +648,8 @@ in {
   # ── Validation ─────────────────────────────────────────────────────────
   enterTest = ''
     echo "Validating devenv configuration..."
+    # Per-runtime ai.shell delivery, against the real artifacts on PATH.
+    ${lib.getExe verifyAiShell}
     # Codex must inject no ARGV: a reintroduced `--profile` would silently take
     # the locked-out beta permission model back with it. That is what this
     # guard has always been protecting.
@@ -682,6 +790,20 @@ in {
       # commit. Keeping the shared dir + a dynamic config isolates the
       # only thing that actually diverges (the prek config) without
       # touching branchless.
+      # Hand-run the same per-runtime ai.shell check `devenv test` runs, so a
+      # developer can verify delivery in a worktree without the full suite.
+      "ai:shell:verify" = {
+        description = "Verify ai.shell reaches each runtime in this worktree";
+        # Claude's arm reads a `files.*` artifact, which exists only after
+        # materialization — without this edge the task fails on staleness and
+        # blames delivery.
+        after = ["devenv:files"];
+        exec = ''
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          exec ${lib.getExe verifyAiShell}
+        '';
+      };
       "hooks:isolate-config" = {
         description = "Make prek hooks resolve their config per-worktree (no-cascade)";
         after = ["devenv:git-hooks:install"];

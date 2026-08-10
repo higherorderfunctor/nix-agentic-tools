@@ -344,6 +344,7 @@ subkeys
 subshell
 subshells
 substituters
+superlinear
 supersets
 sweepability
 sweepable
