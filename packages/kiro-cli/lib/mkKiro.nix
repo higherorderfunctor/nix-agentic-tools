@@ -978,11 +978,38 @@
       ${pkgs.coreutils}/bin/rm -f "$RENDERED"
     )
   '';
+
+  # `ai.shell` / `ai.kiro.shell` → `SHELL` in Kiro's own process
+  # environment. Kiro's v3 engine selects its command shell with
+  # `process.env.SHELL || "/bin/sh"`, so `SHELL` is the whole knob —
+  # there is no Kiro-specific variable and no config key. (`KIRO_CHAT_SHELL`
+  # exists only in the Rust binary and is absent from the v3 JS bundle,
+  # and the wrapper forces `--v3`, so it does not apply. Recorded so it is
+  # not re-chased.)
+  #
+  # Contributed as an `ai.kiro.environmentVariables` DEFINITION rather than
+  # injected at the wrapper call site, so it rides the delivery each backend
+  # already has — HM bakes exports into the symlinkJoin wrapper, devenv puts
+  # non-secret vars in the shell `env` attrset — instead of adding a third
+  # path that only this option uses. Not circular: the definition depends on
+  # `resolvedShell` alone, never on `mergedEnvironmentVariables`.
+  #
+  # mkDefault so an explicit `ai.kiro.environmentVariables.SHELL` still wins.
+  # Note that `||` is an unset-or-empty fallback, so unlike Claude an
+  # unusable path here fails loudly at spawn rather than being ignored.
+  shellEnvironment = resolvedShell:
+    lib.mkIf (resolvedShell != null) {
+      ai.kiro.environmentVariables.SHELL =
+        lib.mkDefault (lib.getExe resolvedShell);
+    };
 in
   lib.ai.app.mkAiApp {
     # Carried as DATA, not a module argument — see mkAiApp.nix.
     inherit pkgs;
     name = "kiro";
+    # Honest: both backend callbacks consume `resolvedShell` via
+    # `shellEnvironment` below. See mkAiApp.nix's record-shape note.
+    supportsShell = true;
     transformers.markdown = lib.ai.transformers.kiro;
     defaults = {
       package = pkgs.ai.kiro-cli;
@@ -1475,6 +1502,7 @@ in
         mergedRules,
         mergedLspServers,
         mergedEnvironmentVariables,
+        resolvedShell,
         topContext,
         ...
       }: let
@@ -1523,6 +1551,7 @@ in
             # Package installation — wrapped with symlinkJoin when env
             # vars are configured. Matches the legacy wrapper shape.
             {home.packages = [kiroPackage];}
+            (shellEnvironment resolvedShell)
             # Per-turn workflow reminder, contributed as an ordinary typed hook
             # record so it rides the existing envelope writer rather than
             # adding a second hook path. Defining `ai.kiro.hooks` here and
@@ -1679,6 +1708,7 @@ in
         mergedRules,
         mergedLspServers,
         mergedEnvironmentVariables,
+        resolvedShell,
         topContext,
         ...
       }: let
@@ -1726,6 +1756,7 @@ in
             # cat the decrypted file at launch, not bake a static value) both
             # need the wrapper, so we reuse the shared wrapper with an empty
             # static env set.
+            (shellEnvironment resolvedShell)
             {
               packages = [
                 (wrapKiroPackage {

@@ -9,6 +9,24 @@
   sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
   codexExtracted = builtins.fromJSON (builtins.readFile ../../../overlays/chatgpt-codex-extracted.json);
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+  # Launcher wrapper — see ./wrapPackage.nix for why Codex needs one at all.
+  wrapCodexPackage = import ./wrapPackage.nix {inherit lib pkgs;};
+
+  # `ai.shell` / `ai.codex.shell` → `SHELL` on Codex's own process.
+  #
+  # Deliberately NOT `mergedEnvironmentVariables`. Codex has no
+  # `environmentVariables` option, so that merged value is the ROOT
+  # `ai.environmentVariables` pool alone — a pool whose contract is
+  # "Kiro and Copilot only". Feeding it to this wrapper would silently
+  # start fanning that pool out to Codex, which is a different change
+  # than the one this option makes. Only the shell goes through here.
+  codexPackageFor = cfg: resolvedShell:
+    wrapCodexPackage {
+      inherit (cfg) package;
+      environmentVariables =
+        lib.optionalAttrs (resolvedShell != null)
+        {SHELL = lib.getExe resolvedShell;};
+    };
   jsonFormat = pkgs.formats.json {};
   tomlReconciler = ../../../lib/ai/reconcile-toml.py;
   tomlFormat = pkgs.formats.toml {};
@@ -824,6 +842,9 @@ in
     # Carried as DATA, not a module argument — see mkAiApp.nix.
     inherit pkgs;
     name = "codex";
+    # Honest: both backend callbacks consume `resolvedShell` via
+    # `codexPackageFor` above. See mkAiApp.nix's record-shape note.
+    supportsShell = true;
     transformers.markdown = lib.ai.transformers.agentsmd;
     defaults.package = pkgs.ai.chatgpt-codex;
 
@@ -959,6 +980,7 @@ in
       mergedServers,
       mergedSkills,
       mergedAgents,
+      resolvedShell,
       topContext,
       topHooks,
       topSettings,
@@ -1042,7 +1064,7 @@ in
             "${cfg.configDir}/hooks.json".source = jsonFormat.generate "codex-hooks.json" {hooks = renderHooks effectiveHooks;};
           })
         ];
-        packages = [cfg.package];
+        packages = [(codexPackageFor cfg resolvedShell)];
       };
     };
 
@@ -1054,6 +1076,7 @@ in
       mergedServers,
       mergedSkills,
       mergedAgents,
+      resolvedShell,
       topContext,
       topHooks,
       topSettings,
@@ -1135,7 +1158,7 @@ in
           ".codex/config.toml".source = tomlFormat.generate "codex-project-config.toml" settings;
         })
       ];
-      packages = [cfg.package];
+      packages = [(codexPackageFor cfg resolvedShell)];
       tasks."ai:codex:materialize-profiles" = {
         exec = ''
           set -euETo pipefail

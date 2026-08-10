@@ -49,6 +49,7 @@ chafa
 chonk
 clicolor
 clis
+cmdbuilder
 codemod
 codepaths
 codesign
@@ -122,6 +123,7 @@ getkimchi
 getpid
 gitbook
 gitfile
+githubcopilot
 gitref
 gitrevise
 glab

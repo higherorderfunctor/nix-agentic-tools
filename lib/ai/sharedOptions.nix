@@ -269,6 +269,38 @@ in {
       '';
     };
 
+    shell = lib.mkOption {
+      type = lib.types.nullOr lib.types.package;
+      default = null;
+      example = lib.literalExpression "pkgs.bash";
+      description = ''
+        Shell each enabled AI app uses to execute the commands it runs.
+        `null` (the default) does not touch the shell, so every existing
+        consumer keeps current behavior and opting in is explicit.
+        Override per app with `ai.<name>.shell`; a non-null per-app value
+        wins, `null` inherits this one.
+
+        Fans out to **Claude, Codex and Kiro only**, through three different
+        mechanisms — Claude reads `CLAUDE_CODE_SHELL` from its settings file,
+        while Codex and Kiro read `SHELL` from their own process environment
+        and receive it through a launcher wrapper. Copilot and Kimchi are
+        deliberately excluded rather than silently ignored: neither one's
+        shell selection has been established, so `ai.copilot.shell` and
+        `ai.kimchi.shell` do not exist and setting either is an eval error.
+
+        Takes a **package, not a path**, and that is load-bearing. Every
+        runtime here falls back when the configured shell is unusable, and
+        two of them do it without a usable diagnostic: Claude silently
+        resolves its own bash (measured — it ignores even an explicit
+        `SHELL`), and Codex falls back to the *password-database* shell,
+        which is exactly the shell an operator is likely trying to move off.
+        A package is guaranteed to exist in the store at activation and is
+        GC-rooted by the generation that references it, so that entire class
+        of silent no-op is eliminated by construction instead of by a runtime
+        check none of these runtimes performs.
+      '';
+    };
+
     skills = lib.mkOption {
       type = lib.types.attrsOf lib.types.path;
       default = {};

@@ -142,11 +142,39 @@
       }
     ];
   };
+
+  # `ai.shell` / `ai.claude.shell` → settings.json `env.CLAUDE_CODE_SHELL`.
+  # Claude is the one runtime here with a DEDICATED variable; it does not
+  # read `SHELL` for this (measured: an explicit `SHELL=/usr/bin/zsh` is
+  # ignored), which is exactly why the shared `ai.environmentVariables`
+  # pool cannot implement this option and a typed one is needed.
+  #
+  # `env` is not a typed settings key — it rides the freeform JSON tail —
+  # so this composes with a consumer's other `settings.env` entries rather
+  # than replacing the attrset. mkDefault keeps an explicit
+  # `ai.claude.settings.env.CLAUDE_CODE_SHELL` winning over the option.
+  #
+  # NOTE for anyone debugging a shell that did not take effect: Claude
+  # SILENTLY falls back when the path is not executable — no warning, exit
+  # 0, and it resolves its own bash instead. A package-typed option makes
+  # that unreachable through this path, but a hand-written settings string
+  # can still hit it.
+  #
+  # Identical on both backends because both write the same settings tree,
+  # so it is defined once here rather than duplicated per callback.
+  shellSettings = resolvedShell:
+    lib.mkIf (resolvedShell != null) {
+      ai.claude.settings.env.CLAUDE_CODE_SHELL =
+        lib.mkDefault (lib.getExe resolvedShell);
+    };
 in
   lib.ai.app.mkAiApp {
     # Carried as DATA, not a module argument — see mkAiApp.nix.
     inherit pkgs;
     name = "claude";
+    # Honest: both backend callbacks consume `resolvedShell` via
+    # `shellSettings` above. See mkAiApp.nix's record-shape note.
+    supportsShell = true;
     transformers.markdown = lib.ai.transformers.claude;
     defaults = {
       package = pkgs.ai.claude-code;
@@ -684,6 +712,7 @@ in
         mergedRules,
         mergedLspServers,
         mergedAgents,
+        resolvedShell,
         topContext,
         topHooks,
         topSettings,
@@ -724,6 +753,7 @@ in
           (lib.mkIf (topSettings.reasoningEffort != null) {
             ai.claude.settings.effortLevel = lib.mkDefault topSettings.reasoningEffort;
           })
+          (shellSettings resolvedShell)
           # L2b → L3: expand `ai.claude.agentsDir` into per-CLI
           # `ai.claude.agents`. mkDefault lets explicit
           # `ai.claude.agents.<name>` entries win within this layer;
@@ -892,6 +922,7 @@ in
         mergedInstructions,
         mergedSkills,
         mergedRules,
+        resolvedShell,
         topContext,
         topHooks,
         topSettings,
@@ -949,6 +980,7 @@ in
           (lib.mkIf (topSettings.reasoningEffort != null) {
             ai.claude.settings.effortLevel = lib.mkDefault topSettings.reasoningEffort;
           })
+          (shellSettings resolvedShell)
           # L2b → L3: expand `ai.claude.hookScriptsDir` into
           # `ai.claude.hookScripts` (parity with HM side). The devenv
           # factory merges `cfg.hookScripts` into `claude.code.hooks`

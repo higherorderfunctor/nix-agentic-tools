@@ -165,6 +165,35 @@
     })
   proxiedServers;
 
+  # Opt-in, per app record. An app earns `ai.<name>.shell` only by
+  # declaring `supportsShell = true`, which means it actually maps the
+  # value onto a knob its runtime reads. Apps that do not (Copilot,
+  # Kimchi — neither runtime's shell selection has been established)
+  # get NO option at all, so setting one is an "option does not exist"
+  # eval error rather than a value that evaluates cleanly and is then
+  # dropped on the floor. The repo rule is that a surface without a
+  # lossless native mapping is an explicit exclusion, not a silent
+  # no-op.
+  #
+  # Reading it off the RECORD keeps it a build-time parameter, in the
+  # same category as `backend` above: it forces neither `config` nor
+  # the factory's `pkgs`, so it cannot reintroduce the `_module.args`
+  # recursion documented against `proxyIsSupported` below.
+  supportsShell = appRecord.supportsShell or false;
+
+  # Override-wins, NOT collision-as-failure — see the contrast note on
+  # `resolveOverride` in lib/ai/ai-common.nix. Left null when the app
+  # opts out, so a callback that ignores it cannot accidentally emit a
+  # root-level shell the runtime never reads.
+  resolvedShell =
+    if supportsShell
+    then
+      aiCommon.resolveOverride {
+        topValue = config.ai.shell;
+        cliValue = cfg.shell or null;
+      }
+    else null;
+
   mergedInstructions = config.ai.instructions ++ cfg.instructions;
   mergedSkills = skillsMerge.merged;
   mergedRules = rulesMerge.merged;
@@ -187,7 +216,7 @@
   # options — e.g. the devenv materializer's conditional `devenv:files`
   # task edge needs `config.files != {}`.
   customConfig = backendConfigFn {
-    inherit cfg config mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables mergedAgents topContext topHooks topSettings;
+    inherit cfg config mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables mergedAgents resolvedShell topContext topHooks topSettings;
   };
 in {
   options.ai.${appRecord.name} =
@@ -241,6 +270,20 @@ in {
           immediate subdirectory becomes one entry in
           `ai.${appRecord.name}.skills` keyed by the subdir name.
           Accepts a path literal or `{ path, filter? }`.
+        '';
+      };
+    }
+    # Declared ONLY for apps that map it onto a knob their runtime
+    # actually reads — see `supportsShell` above.
+    // lib.optionalAttrs supportsShell {
+      shell = lib.mkOption {
+        type = lib.types.nullOr lib.types.package;
+        default = null;
+        example = lib.literalExpression "pkgs.bash";
+        description = ''
+          Shell ${appRecord.name} uses to execute the commands it runs.
+          `null` (the default) inherits `ai.shell`; a non-null value here
+          wins over it. With both null the shell is left untouched.
         '';
       };
     }

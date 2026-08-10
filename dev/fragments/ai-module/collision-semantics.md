@@ -1,6 +1,13 @@
 ## ai.\* Collision Semantics
 
-> **Last verified:** 2026-08-04 (commit pending — kiro's `agents` is still the
+> **Last verified:** 2026-08-10 (commit pending — TWO corrections. The call site
+> was never `hmTransform.nix` + `devenvTransform.nix`; both are 16-line
+> re-exports of `mkBackendTransform.nix`, which is where the merge AND the
+> per-CLI baseline option surface actually live, so step 2 of the checklist
+> pointed at files that declare nothing. And `ai.shell` now exists as a
+> deliberate scalar EXCEPTION resolving override-wins rather than
+> collision-as-failure — recorded here so it is not "fixed" into the covered
+> pools table). Prior: 2026-08-04 (commit pending — kiro's `agents` is still the
 > CLI-specific-shape exemplar, but it is a typed record now rather than raw
 > JSON). Prior: 2026-08-01 (commit pending — distinguishes portable hooks, whose
 > per-event matcher-group lists intentionally append, from key-identity pools).
@@ -31,6 +38,13 @@ Applies to every attrset-shaped shared pool in `ai.*`:
 `ai.instructions` is a list, not an attrset, so list concat stays as-is.
 `ai.context` is single-valued.
 
+`ai.shell` is the deliberate SCALAR exception and resolves the other way —
+per-runtime silently overrides the root, via `resolveOverride` rather than
+`mergeWithCollisionCheck`. A pool key names an independent entry, so overriding
+one loses data; a nullable scalar has nothing to lose, and making the pair
+collide would leave no way to express "this default, except here". See
+`shell-option.md`, and do not "fix" it into the table above.
+
 `ai.hooks` is the deliberate attrset exception: event keys identify additive
 lifecycle streams, not replaceable entries. For a shared and runtime-specific
 definition of the same event, matcher-group lists concatenate in shared-first
@@ -39,8 +53,12 @@ intersection; runtime-only events stay under `ai.<cli>.hooks`.
 
 ### Implementation
 
-`lib.ai.mergeWithCollisionCheck` in `lib/ai/ai-common.nix`. Call site in
-`lib/ai/app/hmTransform.nix` and `devenvTransform.nix`:
+`lib.ai.mergeWithCollisionCheck` in `lib/ai/ai-common.nix`. The call site is
+`lib/ai/app/mkBackendTransform.nix` — **not** `hmTransform.nix` /
+`devenvTransform.nix`, which this fragment claimed until 2026-08-10. Those two
+are 16-line files that each `import ./mkBackendTransform.nix` with a differing
+`backend` key and declare nothing themselves, so the merge (and the per-CLI
+baseline option surface, below) is written once and shared:
 
 ```nix
 mergeCheck = poolName: topPool: cliPool:
@@ -72,9 +90,10 @@ delete the duplicate.
 
 1. Declare `ai.<pool>` in `lib/ai/sharedOptions.nix` (attrset shape).
 2. Declare `ai.<cli>.<pool>` in the mkAiApp baseline
-   (`lib/ai/app/hmTransform.nix` + `devenvTransform.nix`) OR in the per-CLI
-   factory (for CLI-specific shape, like kiro's `agents`, whose typed record
-   models Kiro's own v3 agent schema rather than the portable one).
+   (`lib/ai/app/mkBackendTransform.nix`, in the `options.ai.${appRecord.name}`
+   attrset — ONE declaration serves both backends and every app) OR in the
+   per-CLI factory (for CLI-specific shape, like kiro's `agents`, whose typed
+   record models Kiro's own v3 agent schema rather than the portable one).
 3. Add `<pool>Merge = mergeCheck "<pool>" config.ai.<pool> cfg.<pool>;` to the
    transform.
 4. Append `<pool>Merge.assertions` to `collisionAssertions`.
