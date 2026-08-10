@@ -35,10 +35,47 @@
   # `[]` sorts to `[]`, so the default derivation is untouched.
   canonFeatures = fs: ourPkgs.lib.sort (a: b: a < b) (ourPkgs.lib.unique fs);
 
+  # nixpkgs SPLIT this package (f13ff45a, 2026-08): the real `mkDerivation`
+  # moved to `kiro-cli-unwrapped`, and `kiro-cli` became a `symlinkJoin` of
+  # per-command `buildFHSEnv` sandboxes around it — upstream's fix for the TUI
+  # extracting a generic-glibc `bun` at runtime, which an FHS root satisfies
+  # without patching the extracted asset.
+  #
+  # `overrideAttrs` on that join is a SILENT no-op for everything this overlay
+  # exists to do, which is why the base has to be re-pointed rather than the
+  # symptom patched:
+  #
+  #   * `src` / `version` — a `symlinkJoin` has neither, so our nightly pin is
+  #     simply dropped and consumers get whatever nixpkgs pinned;
+  #   * `postFixup` — stdenv returns from `genericBuild` as soon as it sees a
+  #     `buildCommand`, so `fixupPhase` never runs and the TERM default, the
+  #     darwin argv0 fix and the rollout patch all evaporate.
+  #
+  # Measured 2026-08-10 under that pin: `.#kiro-cli` produced upstream's 2.16.1
+  # with no wrappers while `kiro-cli-sources.json` said 2.16.2, and the build
+  # stayed GREEN. The only symptom anywhere was `passthru.extracted` failing to
+  # find a binary — and it misreported that as a hook-trigger vocabulary change.
+  #
+  # So: override the derivation that HAS a `src`, then hand the result back to
+  # upstream's wrapper via `.override`. Every upstream packaging decision is
+  # preserved (the FHS sandbox included) and ours are restored on top. Adopting
+  # the wrapper is deliberate — silently opting out of an upstream RUNTIME fix
+  # while still calling the attribute `kiro-cli` is the kind of invisible
+  # divergence this repo's overlay fragments exist to prevent.
+  #
+  # Feature-detected on the ATTRIBUTE, never gated on a nixpkgs version, so one
+  # expression is correct on both sides of the split and the branch retires
+  # itself when the floor moves past it.
+  hasUnwrapped = ourPkgs ? kiro-cli-unwrapped;
+  basePackage =
+    if hasUnwrapped
+    then ourPkgs.kiro-cli-unwrapped
+    else ourPkgs.kiro-cli;
+
   mkKiroCli = rawFeatures: let
     rolloutFeatures = canonFeatures rawFeatures;
-  in
-    ourPkgs.kiro-cli.overrideAttrs (finalAttrs: attrs:
+
+    pinned = basePackage.overrideAttrs (finalAttrs: attrs:
       {
         inherit (sources) version;
         src = fetchurl {inherit (platformSrc) url hash;};
@@ -120,11 +157,18 @@
             # shape ({hookTriggers, documentedAbsent, rolloutFeatures}). IFD-safe:
             # consumed ONLY by `nix build` (drift check + update script), never
             # readFile'd at eval.
+            #
+            # `finalAttrs.finalPackage` is `pinned` — the derivation that CARRIES
+            # the binaries — and never the exported wrapper, whose `$out/bin`
+            # holds only sandbox launchers under the split described above.
+            # It is a package ROOT, not a file: the chat binary is resolved
+            # under it by CONTENT inside the builder, so no wrapper name appears
+            # anywhere on this path and the eval-time IFD profile is unchanged.
             extracted = ourPkgs.runCommandLocal "kiro-cli-extracted.json" {} (
               vu.mkKiroExtract {
-                bin = "${finalAttrs.finalPackage}/bin/.kiro-cli-chat-wrapped";
-                pkgs = ourPkgs;
                 dest = "$out";
+                pkgs = ourPkgs;
+                root = "${finalAttrs.finalPackage}";
               }
             );
 
@@ -152,5 +196,59 @@
       // ourPkgs.lib.optionalAttrs (rolloutFeatures != []) {
         postInstallCheck = (attrs.postInstallCheck or "") + vu.kiroRolloutVerify;
       });
+  in
+    if hasUnwrapped
+    then
+      # Re-wrap through upstream's own expression rather than reimplementing it,
+      # so the FHS sandbox (and whatever upstream adds to that wrapper next)
+      # comes along for free.
+      #
+      # `passthru` is NOT a derivation input, so re-attaching ours to the join
+      # moves neither `drvPath` nor `outPath`. Merge on top of upstream's rather
+      # than replacing it: the join carries `unwrapped` and `tests`, and
+      # dropping `unwrapped` would take away the only supported route from the
+      # public attribute back to the real binaries.
+      (ourPkgs.kiro-cli.override {kiro-cli-unwrapped = pinned;}).overrideAttrs
+      (joinAttrs:
+        {
+          # `unwrapped` is re-asserted rather than merely inherited because
+          # `hasUnwrapped` is an ATTRIBUTE-level test and the two platforms
+          # compose differently underneath it. On linux upstream's `kiro-cli`
+          # is a symlinkJoin whose passthru already carries `unwrapped`; on
+          # darwin it is `kiro-cli-unwrapped.overrideAttrs {pname = …;}`, which
+          # carries no such attr. Pinning it here makes the route from the
+          # public attribute back to the real binaries hold on BOTH platforms —
+          # load-bearing, because the locator's own failure text tells the
+          # reader to check `passthru.unwrapped`, and advice that resolves to
+          # nothing on darwin is worse than no advice.
+          passthru =
+            (joinAttrs.passthru or {})
+            // pinned.passthru
+            // {unwrapped = pinned;};
+        }
+        # `version` is REQUIRED where it is absent, not decoration:
+        # `ensureUnfreeCheck` in overlays/default.nix rebuilds every unfree
+        # package as `final.symlinkJoin {inherit (drv) name version; …}`, so a
+        # wrapper that does not surface the attr fails the guard outright with
+        # `attribute 'version' missing`. Upstream's linux join derives
+        # `name = "kiro-cli-${version}"` and stops there.
+        #
+        # The pre-split overlay satisfied this BY ACCIDENT — its `version`
+        # override was one of the attrs the join silently ignored, but it still
+        # landed on the attrset the guard reads.
+        #
+        # CONDITIONAL on the attr being missing, because darwin's post-split
+        # `kiro-cli` already inherits `version` from `pinned`. Re-asserting it
+        # there is a no-op that trips nixpkgs' newer
+        # "overridden with `version` but not `src`" lint — twice per eval, on
+        # the REQUIRED `build (aarch64-darwin, macos-latest)` leg, the moment
+        # the nixpkgs bump lands.
+        // ourPkgs.lib.optionalAttrs (!(joinAttrs ? version)) {
+          inherit (sources) version;
+        })
+    # Pre-split nixpkgs: `kiro-cli` IS the derivation carrying the binaries, so
+    # there is nothing to re-wrap and this is byte-identical to what shipped
+    # before the split was accounted for.
+    else pinned;
 in
   mkKiroCli []

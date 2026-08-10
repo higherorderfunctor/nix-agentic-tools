@@ -94,8 +94,22 @@ ourPkgs.<package>.overrideAttrs (_: {
 })
 ```
 
-This pattern means upstream nixpkgs changes (new dependencies, build fixes) are
-picked up automatically on nixpkgs bumps.
+Upstream nixpkgs changes to that derivation (new dependencies, build fixes) are
+picked up on nixpkgs bumps.
+
+**But only while `pkgs.<name>` remains the derivation carrying `src`.** This
+pattern degrades to a SILENT no-op — not an error — the moment upstream
+restructures the attribute out from under it. nixpkgs f13ff45a split `kiro-cli`
+into `kiro-cli-unwrapped` plus a `symlinkJoin` of `buildFHSEnv` sandboxes; the
+join has no `src` and no `version`, and a `buildCommand` derivation never
+reaches `fixupPhase`, so the pin AND the `postFixup` both evaporated while the
+build stayed green. `overlays/kiro-cli.nix` therefore feature-detects
+`ourPkgs ? kiro-cli-unwrapped`, overrides the unwrapped derivation, and hands
+the result back to upstream's wrapper via `.override`.
+
+Read the "When the attribute stops being the derivation" section of the
+overlay-pattern fragment before adding another `overrideAttrs` package — it
+carries the two commands that detect this class.
 
 ### Building and Updating
 

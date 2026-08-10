@@ -1,30 +1,36 @@
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-08-04 (commit pending — the pnpm patched-dependency
-> guidance below said to "make the minimal lock edit", and a minimal edit
-> expressed as HUNKS is what held oxlint back in every sweep once upstream
-> reshuffled its peer variants. Records that the metadata is applied by key in
-> `postPatch` instead, and that a patch conflict surfaces as nix-update's
-> "failed to retrieve hash" rather than as anything naming a patch). Prior:
-> 2026-08-03 (commit pending — records Oxlint's source-before-fetcher pattern
-> for pnpm patched dependencies: patch the workspace metadata and lock before
-> `fetchPnpmDeps` reads them, keeping a sandboxed dependency fix out of
-> workflow-wide host policy). Prior: 2026-08-03 (commit pending — moves glab and
-> its committed extracted sidecar together from `overlays/generic/` to
-> `overlays/dev-tools/`, preserving the eval-pure read and regeneration loop).
-> Prior: 2026-08-02 (commit pending — distinguishes Codex's new human-reviewed
-> reverse-coverage gate from generated-sidecar drift and shape checks: update
-> automation may refresh extracted facts but cannot classify a new command,
-> flag, field, maturity, or config seam). Prior: 2026-08-01 (commit pending —
-> documents the sidecar SELF-HEAL loop as a loop: which half is the self-heal
-> and which the backstop, that a red drift check reports a MECHANISM failure
-> rather than a stale file, that it fires on the version-bump path ONLY so an
-> edited extractor does not self-heal, how it differs from the
-> `fix_sidecar_hashes` self-heal, and four debugging entry points. Names `glab`
-> as the fourth extracted package and records that all four now share
-> `vu.mkExtractRegen`; glab had no regeneration at all and proved the latency on
-> PR #621). Prior: 2026-08-01 (Codex joins the extracted sidecar pipeline with
-> recursive Clap help, feature-list, and bundled-model probes plus
+> **Last verified:** 2026-08-10 (commit pending — adds the LOCATE-vs-PROBE split
+> every binary-probing extractor now owes its reader. `mkKiroExtract` hardcoded
+> `bin/.kiro-cli-chat-wrapped`; when nixpkgs f13ff45a dissolved that name,
+> twelve greps failed with "No such file or directory" and the build announced
+> "upstream changed the hook-trigger vocabulary". The target is now resolved by
+> CONTENT inside the builder through the shared `vu.kiroChatLocatorPy`, and a
+> location failure can no longer be spelled as a content failure). Prior:
+> 2026-08-04 (commit pending — the pnpm patched-dependency guidance below said
+> to "make the minimal lock edit", and a minimal edit expressed as HUNKS is what
+> held oxlint back in every sweep once upstream reshuffled its peer variants.
+> Records that the metadata is applied by key in `postPatch` instead, and that a
+> patch conflict surfaces as nix-update's "failed to retrieve hash" rather than
+> as anything naming a patch). Prior: 2026-08-03 (commit pending — records
+> Oxlint's source-before-fetcher pattern for pnpm patched dependencies: patch
+> the workspace metadata and lock before `fetchPnpmDeps` reads them, keeping a
+> sandboxed dependency fix out of workflow-wide host policy). Prior: 2026-08-03
+> (commit pending — moves glab and its committed extracted sidecar together from
+> `overlays/generic/` to `overlays/dev-tools/`, preserving the eval-pure read
+> and regeneration loop). Prior: 2026-08-02 (commit pending — distinguishes
+> Codex's new human-reviewed reverse-coverage gate from generated-sidecar drift
+> and shape checks: update automation may refresh extracted facts but cannot
+> classify a new command, flag, field, maturity, or config seam). Prior:
+> 2026-08-01 (commit pending — documents the sidecar SELF-HEAL loop as a loop:
+> which half is the self-heal and which the backstop, that a red drift check
+> reports a MECHANISM failure rather than a stale file, that it fires on the
+> version-bump path ONLY so an edited extractor does not self-heal, how it
+> differs from the `fix_sidecar_hashes` self-heal, and four debugging entry
+> points. Names `glab` as the fourth extracted package and records that all four
+> now share `vu.mkExtractRegen`; glab had no regeneration at all and proved the
+> latency on PR #621). Prior: 2026-08-01 (Codex joins the extracted sidecar
+> pipeline with recursive Clap help, feature-list, and bundled-model probes plus
 > category-specific shape assertions). Prior: 2026-07-25 (the warm composite now
 > forces `drvPath` instead of `version`, so sidecar-versioned packages are
 > covered; also corrects the claim that the check job's `nix flake check`
@@ -264,6 +270,52 @@ distinct match; the model catalog requires an id from each of the opus / sonnet
 least 20 commands, asserts the exact sandbox and non-deprecated approval enums,
 and rejects empty feature/model results. When you add a key or category, add its
 shape assertion in the same commit.
+
+#### Separate LOCATING the artifact from PROBING it — they are different bugs
+
+A shape assertion only helps once you are reading the right file. The step
+before it — finding the binary at all — has its own failure mode, and it is the
+one that gets misdiagnosed, because both failures surface as "the anchors
+matched nothing".
+
+`mkKiroExtract` took `bin = "${finalPackage}/bin/.kiro-cli-chat-wrapped"`. That
+name is manufactured by `wrapProgram`, which renames the real ELF and appends
+`_` on each collision, so it was already a name nobody owns. nixpkgs f13ff45a
+dissolved it entirely by splitting the package (overlay-pattern fragment), and
+the resulting build said:
+
+```
+grep: /nix/store/…/bin/.kiro-cli-chat-wrapped: No such file or directory   (x12)
+kiro-extract: no documented trigger present in the binary
+              (upstream changed the hook-trigger vocabulary)
+```
+
+**Every word after the greps was false.** Nothing was probed; the vocabulary was
+never consulted. The trailing `|| true` that made "grep found no match" a
+tolerated outcome also made "grep could not open the file" one. Two rules fall
+out, and they apply to any extractor that probes a packaged artifact:
+
+- **Locate by CONTENT, in the builder.** `vu.kiroChatLocatorPy` is the single
+  locate rule, shared by the extractor and the rollout patcher so the probe and
+  the patch cannot disagree about which file they mean. It anchors on the
+  rollout-manifest key AND on a native-executable magic number — the second
+  anchor is what stops a ~400-byte shell wrapper that merely mentions the key
+  from being selected, which would make every trigger probe come up empty and
+  fail for an invented reason. Resolving in the builder rather than at eval also
+  keeps the IFD profile unchanged: `passthru.extracted` is still consumed only
+  by `nix build`.
+- **Classify the tool's exit status; never blanket-tolerate it.** `grep` exits 1
+  for "no match" (a real, expected verdict here — it is what populates
+  `documentedAbsent`) and 2 for "could not read the file". Tolerate 1, treat 2
+  as fatal, and say in the message which of the two you are reporting. Every
+  failure message on the locate path now states that it is a LOCATION failure
+  and that nothing was probed.
+
+The general form: **an absent anchor and an unreadable artifact must never share
+a message.** They have different fixes — one is "re-derive the regex against the
+binary", the other is "the package layout moved" — and a build that names the
+wrong one sends the next session hunting upstream for a change that never
+happened.
 
 Codex additionally carries a different kind of gate:
 `checks/chatgpt-codex-coverage.nix` compares the generated vocabulary with the

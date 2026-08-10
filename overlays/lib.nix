@@ -493,6 +493,139 @@ rec {
       '{launchEffortPins: $pins, effortLevels: $levels, settingsBooleanKeys: $boolKeys, hookEvents: $hookEvents, models: $models}' > "${dest}"
   '';
 
+  # SINGLE definition of "which file is the kiro chat binary", shared by the
+  # read-only extractor (`mkKiroExtract`) and the in-place patcher
+  # (`mkKiroRolloutPatch`). Emitted as Python source rather than a helper
+  # module so both scripts can interpolate it and there is exactly one
+  # locate rule in the tree; a second copy is precisely how the probe and the
+  # patch would come to disagree about which file they are talking about.
+  #
+  # Locating by CONTENT rather than by filename is deliberate and load-bearing.
+  # `wrapProgram` renames the real ELF (`kiro-cli-chat` ->
+  # `.kiro-cli-chat-wrapped` -> ...`_`) and this repo wraps it a second time, so
+  # any hard-coded name is one nixpkgs change away from pointing at nothing.
+  # That is not hypothetical: `passthru.extracted` DID hard-code
+  # `bin/.kiro-cli-chat-wrapped`, and nixpkgs f13ff45a dissolved the name
+  # entirely by splitting the package (see overlays/kiro-cli.nix).
+  #
+  # TWO anchors, and both are required:
+  #   * the rollout-manifest key, which only the chat binary carries — measured
+  #     2026-08-10 on 2.16.2, where it appears 32 times in the ~556 MB chat ELF
+  #     and ZERO times in the launcher or the terminal binary;
+  #   * a native-executable magic number, so a small shell wrapper (or any other
+  #     file that merely mentions the key) can never be selected in its place.
+  #
+  # The magic check is what stops "found something" from being mistaken for
+  # "found the ELF". Selecting a ~400-byte wrapper would make every trigger
+  # probe below come up empty and report a vocabulary change that did not
+  # happen — the exact misdiagnosis this locator exists to prevent.
+  kiroChatLocatorPy = ''
+    import mmap
+    import os
+
+    KIRO_MANIFEST_MARKER = b'"treatment_percent"'
+
+    # ELF (Linux) plus every Mach-O flavour a darwin .app bundle can carry:
+    # thin and fat, 32- and 64-bit, both byte orders.
+    KIRO_EXEC_MAGIC = (
+        b"\x7fELF",
+        b"\xfe\xed\xfa\xce",
+        b"\xce\xfa\xed\xfe",
+        b"\xfe\xed\xfa\xcf",
+        b"\xcf\xfa\xed\xfe",
+        b"\xca\xfe\xba\xbe",
+        b"\xbe\xba\xfe\xca",
+        b"\xca\xfe\xba\xbf",
+        b"\xbf\xba\xfe\xca",
+    )
+
+
+    def kiro_chat_binaries(root):
+        """Every real native executable under `root` carrying the manifest."""
+        found = []
+        for dirpath, _dirs, filenames in os.walk(root):
+            for filename in sorted(filenames):
+                path = os.path.join(dirpath, filename)
+                # Symlinks are skipped rather than resolved. On darwin nixpkgs
+                # installs the real Mach-O under
+                # "$out/Applications/Kiro CLI.app/Contents/MacOS/" and leaves
+                # "$out/bin/*" as symlinks into it, so following them would
+                # report one binary twice and turn a healthy tree into an
+                # ambiguity error.
+                if os.path.islink(path) or not os.path.isfile(path):
+                    continue
+                if os.path.getsize(path) < 4:
+                    continue
+                with open(path, "rb") as handle:
+                    if not handle.read(4).startswith(KIRO_EXEC_MAGIC):
+                        continue
+                    # mmap for the same reason the patcher uses it: the target
+                    # is a ~556 MB binary and read() would peak that much RSS
+                    # on a builder to look for a few hundred bytes. `find`
+                    # scans the mapping through the buffer protocol, so nothing
+                    # is materialized.
+                    with mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ) as mapped:
+                        if mapped.find(KIRO_MANIFEST_MARKER) != -1:
+                            found.append(path)
+        return found
+  '';
+
+  # Resolve the ONE kiro chat binary under a package root, printing its path.
+  #
+  # Every failure here is phrased as a LOCATION failure and says so explicitly,
+  # because the caller's next step reports a content failure and the two used to
+  # be indistinguishable: when the hard-coded path vanished under nixpkgs
+  # f13ff45a, twelve greps failed with "No such file or directory" and the build
+  # announced "upstream changed the hook-trigger vocabulary". A missing binary
+  # and a changed binary are different bugs with different fixes; do not let
+  # these messages drift back together.
+  kiroLocateChatScript = pkgs:
+    pkgs.writeText "kiro-locate-chat-binary.py" ''
+      ${kiroChatLocatorPy}
+      import sys
+
+      root = sys.argv[1]
+
+      if not os.path.isdir(root):
+          sys.stderr.write(
+              "kiro-locate: cannot locate the kiro chat binary - %r is not a "
+              "directory, so nothing was searched. This is a LOCATION failure "
+              "(bad root, or the package layout moved); the hook-trigger "
+              "vocabulary was never probed.\n" % root
+          )
+          sys.exit(1)
+
+      matches = kiro_chat_binaries(root)
+
+      if not matches:
+          sys.stderr.write(
+              "kiro-locate: cannot locate the kiro chat binary - no native "
+              "executable under %r carries the rollout manifest. This is a "
+              "LOCATION failure, NOT a hook-trigger vocabulary change: nothing "
+              "was probed. Either the root points at a wrapper-only output "
+              "(nixpkgs moved the real binaries to a separate derivation - "
+              "check `passthru.unwrapped`), or upstream stopped shipping the "
+              "manifest in the chat binary.\n" % root
+          )
+          sys.exit(1)
+
+      if len(matches) > 1:
+          # Deliberately fatal. The extract describes ONE binary, and silently
+          # picking from several would emit a sidecar whose provenance nobody
+          # can name - the failure mode the shape assertions elsewhere in this
+          # file exist to prevent.
+          sys.stderr.write(
+              "kiro-locate: ambiguous - %d native executables under %r carry "
+              "the rollout manifest, and the extract must describe exactly "
+              "one. This is a LOCATION failure, NOT a hook-trigger vocabulary "
+              "change: nothing was probed.\n%s\n"
+              % (len(matches), root, "\n".join("  " + m for m in matches))
+          )
+          sys.exit(1)
+
+      sys.stdout.write(matches[0])
+    '';
+
   # Kiro hook triggers — the northbound soft-enum `knownTriggers`. Unlike Claude,
   # Kiro has NO clean extract-all anchor: its PascalCase trigger names are polluted
   # by the camelCase `ChatTriggerType` telemetry enum + unrelated tokens, so a
@@ -503,10 +636,16 @@ rec {
   # hook-trigger shape change), mirroring mkClaudeExtract's guards. A brand-new
   # trigger absent from the candidate universe is invisible here — the impure
   # docs-diff (deferred) covers that; grow `candidates` from the docs on a new one.
-  #   bin:  absolute path to the kiro chat binary (`.kiro-cli-chat-wrapped`).
-  #   pkgs: nixpkgs set (gnugrep, coreutils, jq, python3 — python3 drives the
-  #         rollout-manifest extraction, which is not expressible as a
-  #         line-oriented grep because the entries span newlines).
+  #   root: store path of the derivation that CARRIES the kiro binaries — its
+  #         `$out`, never a path inside `bin/`. The chat binary is resolved
+  #         under it by CONTENT, inside the builder, by `kiroLocateChatScript`;
+  #         nothing about the wrapper naming is assumed. Pass the UNWRAPPED
+  #         derivation where nixpkgs splits one out, since a wrapper-only output
+  #         carries no binary to probe.
+  #   pkgs: nixpkgs set (gnugrep, coreutils, jq, python3 — python3 drives both
+  #         the content-based locate and the rollout-manifest extraction, the
+  #         latter not being expressible as a line-oriented grep because the
+  #         entries span newlines).
   #   dest: output path (default "/dev/stdout"; pass "$out" in runCommand).
   # Reads the rollout manifest the kiro chat binary carries in rodata and emits
   # its feature NAMES as a JSON array. Genuinely extracted, never curated: the
@@ -548,8 +687,8 @@ rec {
     '';
 
   mkKiroExtract = {
-    bin,
     pkgs,
+    root,
     dest ? "/dev/stdout",
   }: ''
     set -euETo pipefail
@@ -557,22 +696,47 @@ rec {
     grep="${pkgs.gnugrep}/bin/grep"
     jq="${pkgs.jq}/bin/jq"
     sort="${pkgs.coreutils}/bin/sort"
-    wc="${pkgs.coreutils}/bin/wc"
-    tr="${pkgs.coreutils}/bin/tr"
     python3="${pkgs.python3}/bin/python3"
 
-    # Documented v2+v3 trigger universe: Jun-5 docs (5) + v3 docs (11) + the v2
-    # `AgentSpawn` name (v3 maps it -> SessionStart). Alphabetical; grow from docs.
+    # STEP 1 — LOCATE. Resolved by content in the builder, so eval does no
+    # filesystem guessing and the IFD profile is unchanged. Its own failures are
+    # phrased as location failures and are not reachable from step 2's message.
+    kiroChatBin=$("$python3" ${kiroLocateChatScript pkgs} "${root}")
+
+    # Belt and braces, and NOT redundant: it fires before the probe loop, so a
+    # path that is somehow unreadable is reported as such instead of turning
+    # every grep below into a false "trigger absent" verdict.
+    if [ ! -f "$kiroChatBin" ] || [ ! -r "$kiroChatBin" ]; then
+      echo "kiro-extract: located chat binary '$kiroChatBin' is missing or unreadable; nothing was probed (LOCATION failure, not a vocabulary change)" >&2
+      exit 1
+    fi
+
+    # STEP 2 — PROBE. Documented v2+v3 trigger universe: Jun-5 docs (5) + v3
+    # docs (11) + the v2 `AgentSpawn` name (v3 maps it -> SessionStart).
+    # Alphabetical; grow from docs.
     candidates=(AgentSpawn Manual PostFileCreate PostFileDelete PostFileSave PostTaskExec PostToolUse PreTaskExec PreToolUse SessionStart Stop UserPromptSubmit)
 
     present=()
     absent=()
     for t in "''${candidates[@]}"; do
-      n=$({ "$grep" -aoF "$t" "${bin}" || true; } | "$wc" -l | "$tr" -d ' ')
-      if [ "$n" -gt 0 ]; then present+=("$t"); else absent+=("$t"); fi
+      # Status is captured and CLASSIFIED rather than swallowed. grep exits 1
+      # for "no match" — the documented-absent case this loop is built around —
+      # and 2 for "could not read the file". The old `|| true` collapsed the two
+      # into "absent", so twelve unreadable-file errors presented as an empty
+      # trigger vocabulary. Tolerate 1; never tolerate 2.
+      kiroGrepStatus=0
+      "$grep" -qaF -e "$t" "$kiroChatBin" || kiroGrepStatus=$?
+      case "$kiroGrepStatus" in
+        0) present+=("$t") ;;
+        1) absent+=("$t") ;;
+        *)
+          echo "kiro-extract: grep exited $kiroGrepStatus reading '$kiroChatBin' while probing trigger '$t' — the binary could not be read, so no conclusion about the trigger vocabulary is possible" >&2
+          exit 1
+          ;;
+      esac
     done
     if [ "''${#present[@]}" -lt 1 ]; then
-      echo "kiro-extract: no documented trigger present in the binary (upstream changed the hook-trigger vocabulary)" >&2
+      echo "kiro-extract: no documented trigger present in '$kiroChatBin' (the binary was read successfully, so upstream changed the hook-trigger vocabulary)" >&2
       exit 1
     fi
 
@@ -582,7 +746,7 @@ rec {
     else
       documentedAbsentJson='[]'
     fi
-    rolloutFeaturesJson=$("$python3" ${kiroRolloutExtractScript pkgs} "${bin}")
+    rolloutFeaturesJson=$("$python3" ${kiroRolloutExtractScript pkgs} "$kiroChatBin")
 
     "$jq" -n --argjson hookTriggers "$hookTriggersJson" --argjson documentedAbsent "$documentedAbsentJson" \
       --argjson rolloutFeatures "$rolloutFeaturesJson" \
@@ -598,11 +762,12 @@ rec {
   # `description` field is unused by the gating logic, so it serves as the
   # padding reservoir — shrink or grow it to absorb the delta exactly.
   #
-  # Locating the target by CONTENT rather than by filename is deliberate:
-  # `wrapProgram` renames the real ELF (`kiro-cli-chat` ->
-  # `.kiro-cli-chat-wrapped` -> ...`_`) and this repo wraps it a second time,
-  # so any hard-coded name is one nixpkgs change away from silently patching
-  # nothing.
+  # Locating the target by CONTENT rather than by filename is deliberate, and
+  # the rule now lives ONCE in `kiroChatLocatorPy` — shared with
+  # `mkKiroExtract`, which used to hard-code `bin/.kiro-cli-chat-wrapped` and
+  # broke exactly as this comment predicted. Both consumers must agree on which
+  # file is "the kiro chat binary"; a second copy of the walk is how they would
+  # stop agreeing.
   #
   # Fails LOUD on any drift: a feature whose entry is absent, or whose entry
   # count does not equal the number of sites patched, aborts the build. A
@@ -613,7 +778,9 @@ rec {
     pkgs,
   }: let
     script = pkgs.writeText "kiro-rollout-patch.py" ''
-      import mmap, os, re, sys
+      ${kiroChatLocatorPy}
+      import re
+      import sys
 
       # De-duplicated, order preserved. The module already calls lib.unique,
       # but this helper is callable on its own, and a repeated feature would
@@ -622,7 +789,6 @@ rec {
       # harmless — that count is the drift signal).
       features = list(dict.fromkeys(f for f in sys.argv[1].split(",") if f))
       root = sys.argv[2]
-      MARKER = b'"treatment_percent"'
 
       def entry_re(name):
           n = re.escape(name.encode())
@@ -660,55 +826,49 @@ rec {
       # writes back only the dirtied pages. `re` operates on the mmap
       # directly via the buffer protocol, so nothing is materialized.
       totals = dict((f, 0) for f in features)
-      found_manifest = False
-      patched_paths = []
 
-      for dirpath, _dirs, filenames in os.walk(root):
-          for fn in sorted(filenames):
-              path = os.path.join(dirpath, fn)
-              if os.path.islink(path) or not os.path.isfile(path):
-                  continue
-              mode = os.stat(path).st_mode
-              if os.path.getsize(path) == 0:
-                  continue
-              # ACCESS_WRITE needs the descriptor opened r+b, so the mode is
-              # widened first and restored below whether or not we wrote.
-              os.chmod(path, mode | 0o200)
-              try:
-                  with open(path, "r+b") as fh:
-                      with mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_WRITE) as mm:
-                          if mm.find(MARKER) == -1:
-                              continue
-                          found_manifest = True
-                          patched_paths.append(path)
-                          for name in features:
-                              key = rb'"' + re.escape(name.encode()) + rb'": \{'
-                              sites = len(re.findall(key, mm))
-                              hits = list(entry_re(name).finditer(mm))
-                              if len(hits) != sites:
-                                  sys.stderr.write(
-                                      "kiro-rollout: %r appears %d time(s) in %s but "
-                                      "only %d matched the expected entry shape. "
-                                      "Refusing to half-patch.\n"
-                                      % (name, sites, path, len(hits))
-                                  )
-                                  sys.exit(1)
-                              for m in hits:
-                                  mm[m.start():m.end()] = replacement(
-                                      name, m.end() - m.start()
-                                  )
-                                  totals[name] += 1
-                          mm.flush()
-              finally:
-                  os.chmod(path, mode)
+      # Located up front, read-only, by the SHARED rule. Two consequences worth
+      # keeping: the "which file" question has one answer in this tree, and the
+      # write-mode widening below now touches only the files actually being
+      # patched instead of every file in the output.
+      patched_paths = kiro_chat_binaries(root)
 
-      if not found_manifest:
+      if not patched_paths:
           sys.stderr.write(
               "kiro-rollout: no file under %s carries a rollout manifest. The "
               "binary layout changed; re-locate it before shipping an unlock.\n"
               % root
           )
           sys.exit(1)
+
+      for path in patched_paths:
+          mode = os.stat(path).st_mode
+          # ACCESS_WRITE needs the descriptor opened r+b, so the mode is
+          # widened first and restored below whether or not we wrote.
+          os.chmod(path, mode | 0o200)
+          try:
+              with open(path, "r+b") as fh:
+                  with mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_WRITE) as mm:
+                      for name in features:
+                          key = rb'"' + re.escape(name.encode()) + rb'": \{'
+                          sites = len(re.findall(key, mm))
+                          hits = list(entry_re(name).finditer(mm))
+                          if len(hits) != sites:
+                              sys.stderr.write(
+                                  "kiro-rollout: %r appears %d time(s) in %s but "
+                                  "only %d matched the expected entry shape. "
+                                  "Refusing to half-patch.\n"
+                                  % (name, sites, path, len(hits))
+                              )
+                              sys.exit(1)
+                          for m in hits:
+                              mm[m.start():m.end()] = replacement(
+                                  name, m.end() - m.start()
+                              )
+                              totals[name] += 1
+                      mm.flush()
+          finally:
+              os.chmod(path, mode)
 
       for name in features:
           if totals[name] == 0:

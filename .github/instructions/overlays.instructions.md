@@ -7,37 +7,44 @@ applyTo: "overlays/*.nix,overlays/**/*.nix"
 
 ## Overlay Cache-Hit Parity
 
-> **Last verified:** 2026-08-05 (commit pending — records that a consumer's
-> `inputs.nixpkgs.follows` defeats `ourPkgs` BY CONSTRUCTION, since it rewrites
-> the input rather than the overlay argument, and that its cost is not merely
-> the documented cache miss: measured on a real consumer, a followed April 2026
-> nixpkgs FAILED the `glab` build outright on the Go floor. Do not "fix"
-> `ourPkgs` for this — `checks/cache-hit-parity.nix` already asserts the drift).
-> Prior: 2026-08-03 (commit pending — annotates Semble's unchanged upstream
-> derivation and git-branchless's passthru with their flake-input update owners
-> without moving either derivation). Prior: 2026-08-03 (commit pending — patches
-> Oxlint's `@napi-rs/cli` dependency in its pnpm-fetched source rather than
-> admitting Darwin's `/bin/ps` into the sandbox; both fetch and build use pnpm
-> 11 from pinned `ourPkgs`, matching upstream's major). Prior: 2026-08-03
-> (commit pending — nests every binary-package group under `pkgs.ai`, moves `gh`
-> and `glab` into `ai.devTools`, and updates the consumer-path registry without
-> changing any derivation). Prior: 2026-08-03 (commit pending — relocates the
-> two repo-local auto-memory source trees beside their overlay derivations
-> without changing package inputs or cache-hit semantics). Prior: 2026-08-03
-> (commit pending — adds a positive control that substitutes the overlay's own
-> `inputs.nixpkgs` the way a consumer's `follows` directive does, proving that
-> unsupported configuration drifts from the cache-published `fblog` path).
-> Prior: 2026-08-02 (commit pending — adds the pinned external Semble exception:
-> direct upstream selection preserves Numtide's derivation, while a plain meta
-> overlay exposes the MCP role without forking the build). Prior: 2026-07-25
-> (commit pending — the worked example moved off `git-branchless`, which had not
-> carried this shape for a long time, onto `git-absorb`, which does; also
-> corrects the new-package signature, the namespacing in the manual verification
-> snippet, and the pure-binary-fetch package list). If you touch any
-> `overlays/<name>.nix` overlay file or the overlay composition machinery and
-> this fragment isn't updated in the same commit, stop and fix it. Regressions
-> are gated by the `checks.cache-hit-parity` flake check (see "Verification"
-> below).
+> **Last verified:** 2026-08-10 (commit pending — `overlays/kiro-cli.nix` is no
+> longer a plain `overrideAttrs`, so the "pure binary-fetch" example below is
+> re-pointed. nixpkgs f13ff45a split the package, and the overlay now overrides
+> `kiro-cli-unwrapped` and re-composes upstream's wrapper with `.override`.
+> Parity is UNAFFECTED and the reason is worth stating: both sides of the parity
+> check import `inputs.nixpkgs`, so the `ourPkgs ? kiro-cli-unwrapped`
+> feature-detection resolves the same way on both and cannot itself drift — see
+> the overlay-pattern fragment for the seam). Prior: 2026-08-05 (commit pending
+> — records that a consumer's `inputs.nixpkgs.follows` defeats `ourPkgs` BY
+> CONSTRUCTION, since it rewrites the input rather than the overlay argument,
+> and that its cost is not merely the documented cache miss: measured on a real
+> consumer, a followed April 2026 nixpkgs FAILED the `glab` build outright on
+> the Go floor. Do not "fix" `ourPkgs` for this — `checks/cache-hit-parity.nix`
+> already asserts the drift). Prior: 2026-08-03 (commit pending — annotates
+> Semble's unchanged upstream derivation and git-branchless's passthru with
+> their flake-input update owners without moving either derivation). Prior:
+> 2026-08-03 (commit pending — patches Oxlint's `@napi-rs/cli` dependency in its
+> pnpm-fetched source rather than admitting Darwin's `/bin/ps` into the sandbox;
+> both fetch and build use pnpm 11 from pinned `ourPkgs`, matching upstream's
+> major). Prior: 2026-08-03 (commit pending — nests every binary-package group
+> under `pkgs.ai`, moves `gh` and `glab` into `ai.devTools`, and updates the
+> consumer-path registry without changing any derivation). Prior: 2026-08-03
+> (commit pending — relocates the two repo-local auto-memory source trees beside
+> their overlay derivations without changing package inputs or cache-hit
+> semantics). Prior: 2026-08-03 (commit pending — adds a positive control that
+> substitutes the overlay's own `inputs.nixpkgs` the way a consumer's `follows`
+> directive does, proving that unsupported configuration drifts from the
+> cache-published `fblog` path). Prior: 2026-08-02 (commit pending — adds the
+> pinned external Semble exception: direct upstream selection preserves
+> Numtide's derivation, while a plain meta overlay exposes the MCP role without
+> forking the build). Prior: 2026-07-25 (commit pending — the worked example
+> moved off `git-branchless`, which had not carried this shape for a long time,
+> onto `git-absorb`, which does; also corrects the new-package signature, the
+> namespacing in the manual verification snippet, and the pure-binary-fetch
+> package list). If you touch any `overlays/<name>.nix` overlay file or the
+> overlay composition machinery and this fragment isn't updated in the same
+> commit, stop and fix it. Regressions are gated by the
+> `checks.cache-hit-parity` flake check (see "Verification" below).
 
 ### The rule
 
@@ -325,11 +332,23 @@ needs `ourPkgs`.
 
 **Pure binary-fetch packages** (no build, just an `overrideAttrs` that swaps
 `src`/`version`) still route through `ourPkgs` to keep the starting derivation
-tied to this repo's nixpkgs pin. `overlays/kiro-cli.nix` is the current example
-of exactly that shape, and it is covered by the `checks.cache-hit-parity` flake
-check. `copilot-cli` and `kiro-gateway` also ship prebuilt binaries, but they
-are standalone `mkDerivation`s rather than `overrideAttrs` — that is the next
-paragraph, not this one.
+tied to this repo's nixpkgs pin. `copilot-cli` and `kiro-gateway` also ship
+prebuilt binaries, but they are standalone `mkDerivation`s rather than
+`overrideAttrs` — that is the next paragraph, not this one.
+
+`overlays/kiro-cli.nix` used to head that list and no longer matches it: since
+nixpkgs split the package, it overrides `ourPkgs.kiro-cli-unwrapped` and then
+re-composes upstream's FHS wrapper with
+`ourPkgs.kiro-cli.override {kiro-cli-unwrapped = pinned;}` (overlay-pattern
+fragment, "When the attribute stops being the derivation"). **Parity is
+unchanged and it is worth knowing why the extra branch cannot break it:** the
+`ourPkgs ? kiro-cli-unwrapped` feature-detection reads `inputs.nixpkgs`, which
+is the same pkgs set on BOTH sides of the parity check, so the two evaluations
+always take the same branch. A detection keyed on `final`/`prev` would not have
+that property — it would resolve against the consumer's pin and could take
+different branches on the two sides, which is drift by construction. Keep
+feature-detection on `ourPkgs`. The package remains covered by
+`checks.cache-hit-parity`.
 
 **Standalone variant.** When upstream's attrs become incompatible with the
 artifact we want to ship (different `sourceRoot`, `installPhase`, `buildInputs`,
@@ -350,31 +369,37 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-08-04 (commit pending — the pnpm patched-dependency
-> guidance below said to "make the minimal lock edit", and a minimal edit
-> expressed as HUNKS is what held oxlint back in every sweep once upstream
-> reshuffled its peer variants. Records that the metadata is applied by key in
-> `postPatch` instead, and that a patch conflict surfaces as nix-update's
-> "failed to retrieve hash" rather than as anything naming a patch). Prior:
-> 2026-08-03 (commit pending — records Oxlint's source-before-fetcher pattern
-> for pnpm patched dependencies: patch the workspace metadata and lock before
-> `fetchPnpmDeps` reads them, keeping a sandboxed dependency fix out of
-> workflow-wide host policy). Prior: 2026-08-03 (commit pending — moves glab and
-> its committed extracted sidecar together from `overlays/generic/` to
-> `overlays/dev-tools/`, preserving the eval-pure read and regeneration loop).
-> Prior: 2026-08-02 (commit pending — distinguishes Codex's new human-reviewed
-> reverse-coverage gate from generated-sidecar drift and shape checks: update
-> automation may refresh extracted facts but cannot classify a new command,
-> flag, field, maturity, or config seam). Prior: 2026-08-01 (commit pending —
-> documents the sidecar SELF-HEAL loop as a loop: which half is the self-heal
-> and which the backstop, that a red drift check reports a MECHANISM failure
-> rather than a stale file, that it fires on the version-bump path ONLY so an
-> edited extractor does not self-heal, how it differs from the
-> `fix_sidecar_hashes` self-heal, and four debugging entry points. Names `glab`
-> as the fourth extracted package and records that all four now share
-> `vu.mkExtractRegen`; glab had no regeneration at all and proved the latency on
-> PR #621). Prior: 2026-08-01 (Codex joins the extracted sidecar pipeline with
-> recursive Clap help, feature-list, and bundled-model probes plus
+> **Last verified:** 2026-08-10 (commit pending — adds the LOCATE-vs-PROBE split
+> every binary-probing extractor now owes its reader. `mkKiroExtract` hardcoded
+> `bin/.kiro-cli-chat-wrapped`; when nixpkgs f13ff45a dissolved that name,
+> twelve greps failed with "No such file or directory" and the build announced
+> "upstream changed the hook-trigger vocabulary". The target is now resolved by
+> CONTENT inside the builder through the shared `vu.kiroChatLocatorPy`, and a
+> location failure can no longer be spelled as a content failure). Prior:
+> 2026-08-04 (commit pending — the pnpm patched-dependency guidance below said
+> to "make the minimal lock edit", and a minimal edit expressed as HUNKS is what
+> held oxlint back in every sweep once upstream reshuffled its peer variants.
+> Records that the metadata is applied by key in `postPatch` instead, and that a
+> patch conflict surfaces as nix-update's "failed to retrieve hash" rather than
+> as anything naming a patch). Prior: 2026-08-03 (commit pending — records
+> Oxlint's source-before-fetcher pattern for pnpm patched dependencies: patch
+> the workspace metadata and lock before `fetchPnpmDeps` reads them, keeping a
+> sandboxed dependency fix out of workflow-wide host policy). Prior: 2026-08-03
+> (commit pending — moves glab and its committed extracted sidecar together from
+> `overlays/generic/` to `overlays/dev-tools/`, preserving the eval-pure read
+> and regeneration loop). Prior: 2026-08-02 (commit pending — distinguishes
+> Codex's new human-reviewed reverse-coverage gate from generated-sidecar drift
+> and shape checks: update automation may refresh extracted facts but cannot
+> classify a new command, flag, field, maturity, or config seam). Prior:
+> 2026-08-01 (commit pending — documents the sidecar SELF-HEAL loop as a loop:
+> which half is the self-heal and which the backstop, that a red drift check
+> reports a MECHANISM failure rather than a stale file, that it fires on the
+> version-bump path ONLY so an edited extractor does not self-heal, how it
+> differs from the `fix_sidecar_hashes` self-heal, and four debugging entry
+> points. Names `glab` as the fourth extracted package and records that all four
+> now share `vu.mkExtractRegen`; glab had no regeneration at all and proved the
+> latency on PR #621). Prior: 2026-08-01 (Codex joins the extracted sidecar
+> pipeline with recursive Clap help, feature-list, and bundled-model probes plus
 > category-specific shape assertions). Prior: 2026-07-25 (the warm composite now
 > forces `drvPath` instead of `version`, so sidecar-versioned packages are
 > covered; also corrects the claim that the check job's `nix flake check`
@@ -615,6 +640,52 @@ least 20 commands, asserts the exact sandbox and non-deprecated approval enums,
 and rejects empty feature/model results. When you add a key or category, add its
 shape assertion in the same commit.
 
+#### Separate LOCATING the artifact from PROBING it — they are different bugs
+
+A shape assertion only helps once you are reading the right file. The step
+before it — finding the binary at all — has its own failure mode, and it is the
+one that gets misdiagnosed, because both failures surface as "the anchors
+matched nothing".
+
+`mkKiroExtract` took `bin = "${finalPackage}/bin/.kiro-cli-chat-wrapped"`. That
+name is manufactured by `wrapProgram`, which renames the real ELF and appends
+`_` on each collision, so it was already a name nobody owns. nixpkgs f13ff45a
+dissolved it entirely by splitting the package (overlay-pattern fragment), and
+the resulting build said:
+
+```
+grep: /nix/store/…/bin/.kiro-cli-chat-wrapped: No such file or directory   (x12)
+kiro-extract: no documented trigger present in the binary
+              (upstream changed the hook-trigger vocabulary)
+```
+
+**Every word after the greps was false.** Nothing was probed; the vocabulary was
+never consulted. The trailing `|| true` that made "grep found no match" a
+tolerated outcome also made "grep could not open the file" one. Two rules fall
+out, and they apply to any extractor that probes a packaged artifact:
+
+- **Locate by CONTENT, in the builder.** `vu.kiroChatLocatorPy` is the single
+  locate rule, shared by the extractor and the rollout patcher so the probe and
+  the patch cannot disagree about which file they mean. It anchors on the
+  rollout-manifest key AND on a native-executable magic number — the second
+  anchor is what stops a ~400-byte shell wrapper that merely mentions the key
+  from being selected, which would make every trigger probe come up empty and
+  fail for an invented reason. Resolving in the builder rather than at eval also
+  keeps the IFD profile unchanged: `passthru.extracted` is still consumed only
+  by `nix build`.
+- **Classify the tool's exit status; never blanket-tolerate it.** `grep` exits 1
+  for "no match" (a real, expected verdict here — it is what populates
+  `documentedAbsent`) and 2 for "could not read the file". Tolerate 1, treat 2
+  as fatal, and say in the message which of the two you are reporting. Every
+  failure message on the locate path now states that it is a LOCATION failure
+  and that nothing was probed.
+
+The general form: **an absent anchor and an unreadable artifact must never share
+a message.** They have different fixes — one is "re-derive the regex against the
+binary", the other is "the package layout moved" — and a build that names the
+wrong one sends the next session hunting upstream for a change that never
+happened.
+
 Codex additionally carries a different kind of gate:
 `checks/chatgpt-codex-coverage.nix` compares the generated vocabulary with the
 human-authored categorical partition in
@@ -687,26 +758,35 @@ feature maturities, and config-key extraction fail closed.
 
 ## Overlay Grouping under `pkgs.ai`
 
-> **Last verified:** 2026-08-05 (commit pending — the Go toolchain floor is now
-> DERIVED from the pinned source's go.mod rather than hand-written, is carried
-> by ALL SEVEN Go packages rather than two, and is reached through the new
-> `vu.mkGoBuilder`; adds `checks/go-floor-drift.nix` as the loud half and
-> records that the toolchain is a BUILDER argument only `.override` can reach.
-> Measured: `gh` had ALREADY silently required Go >= 1.26.5, so it was the next
-> package to break after `glab`). Prior: 2026-08-03 (commit pending — records
-> the property used to associate versioned derivations with a flake-input update
-> owner or a reasoned local-source exemption). Prior: 2026-08-03 (commit pending
-> — makes `pkgs.ai` the single binary-package namespace, retains `generic` as a
-> temporary nested bucket, and moves the two forge CLIs into `ai.devTools`).
-> Prior: 2026-08-03 (commit pending — makes overlay-owned local implementation
-> sources a boundary invariant and relocates the auto-memory helper and
-> distiller sources accordingly). Prior: 2026-08-02 (commit pending — adds
-> Semble's direct external-flake derivation pattern and identity-preserving MCP
-> role). Prior: 2026-08-01 (commit pending — records that `glab`'s
-> `extraExtract` also regenerates its `passthru.extracted` sidecar, via the new
-> shared `vu.mkExtractRegen`, and that glab is the one extracted package where
-> the fixer-then-extract ORDER is forced. It had NO regeneration at all until
-> now, which nothing caught until its first version bump reddened
+> **Last verified:** 2026-08-10 (commit pending — adds the third override-seam
+> failure mode, measured on `kiro-cli`: the attribute you are overriding stops
+> being a derivation at all. nixpkgs f13ff45a split it into `kiro-cli-unwrapped`
+> plus a `symlinkJoin` of `buildFHSEnv` sandboxes, and `overrideAttrs` on that
+> join silently dropped our `src`, `version` AND `postFixup` while the build
+> stayed green. Unlike the `extendMkDerivation` cases below, NO seam on the
+> public attribute can fix it — the base has to be re-pointed at the derivation
+> that still owns a `src`. Also retires this section's claim that a thin
+> `overrideAttrs` picks upstream changes up "automatically"). Prior: 2026-08-05
+> (commit pending — the Go toolchain floor is now DERIVED from the pinned
+> source's go.mod rather than hand-written, is carried by ALL SEVEN Go packages
+> rather than two, and is reached through the new `vu.mkGoBuilder`; adds
+> `checks/go-floor-drift.nix` as the loud half and records that the toolchain is
+> a BUILDER argument only `.override` can reach. Measured: `gh` had ALREADY
+> silently required Go >= 1.26.5, so it was the next package to break after
+> `glab`). Prior: 2026-08-03 (commit pending — records the property used to
+> associate versioned derivations with a flake-input update owner or a reasoned
+> local-source exemption). Prior: 2026-08-03 (commit pending — makes `pkgs.ai`
+> the single binary-package namespace, retains `generic` as a temporary nested
+> bucket, and moves the two forge CLIs into `ai.devTools`). Prior: 2026-08-03
+> (commit pending — makes overlay-owned local implementation sources a boundary
+> invariant and relocates the auto-memory helper and distiller sources
+> accordingly). Prior: 2026-08-02 (commit pending — adds Semble's direct
+> external-flake derivation pattern and identity-preserving MCP role). Prior:
+> 2026-08-01 (commit pending — records that `glab`'s `extraExtract` also
+> regenerates its `passthru.extracted` sidecar, via the new shared
+> `vu.mkExtractRegen`, and that glab is the one extracted package where the
+> fixer-then-extract ORDER is forced. It had NO regeneration at all until now,
+> which nothing caught until its first version bump reddened
 > `checks.<system>.glab-extracted` on PR #621). Prior: 2026-07-28 — the commit
 > adding THAT line lands `glab`: the first Go package whose SRC hash also lives
 > in the sidecar (`vu.mkGoSrcVendorFix`), the first GitLab-hosted version check
@@ -925,6 +1005,77 @@ One trap in the git-absorb spelling:
 `rustPlatform` argument with a one-key attrset. It is safe there only because
 nixpkgs' `git-absorb` expression reads nothing else off `rustPlatform`. Check
 the package's argument list before copying that shape.
+
+### When the attribute stops being the derivation
+
+The two sections above both assume `pkgs.<name>` IS the derivation carrying
+`src` — they only disagree about which seam reaches an attr. A third failure
+mode breaks that assumption outright: upstream splits the package and leaves the
+public name pointing at a **wrapper**.
+
+nixpkgs f13ff45a (2026-08) did exactly that to `kiro-cli`. The real
+`mkDerivation` moved to `kiro-cli-unwrapped`, and `kiro-cli` became a
+`symlinkJoin` over three `buildFHSEnv` sandboxes (upstream's fix for the TUI
+extracting a generic-glibc `bun` at runtime). Our overlay kept calling
+`ourPkgs.kiro-cli.overrideAttrs`, and **everything it set became a no-op**:
+
+- `src` / `version` — a `symlinkJoin` has neither attr, so the nightly pin was
+  simply discarded. Measured 2026-08-10: `.#kiro-cli` produced upstream's
+  **2.16.1** while `kiro-cli-sources.json` said **2.16.2**.
+- `postFixup` — stdenv returns from `genericBuild` the moment it sees a
+  `buildCommand`, so `fixupPhase` never runs. The TERM default, the darwin argv0
+  fix and the rollout patch all vanished.
+
+**The build stayed GREEN through all of it.** No seam on the public attribute
+could have helped: `.override` reaches the wrapper's arguments, not the
+unwrapped derivation's attrs, and `overrideAttrs` reaches a derivation that has
+nothing we wanted to change. The fix is to re-point the BASE:
+
+```nix
+# overlays/kiro-cli.nix
+hasUnwrapped = ourPkgs ? kiro-cli-unwrapped;
+basePackage =
+  if hasUnwrapped then ourPkgs.kiro-cli-unwrapped else ourPkgs.kiro-cli;
+# … pinned = basePackage.overrideAttrs (…) …
+# then hand it back to upstream's wrapper, preserving the FHS sandbox:
+ourPkgs.kiro-cli.override {kiro-cli-unwrapped = pinned;}
+```
+
+Three properties of that shape are deliberate:
+
+- **Feature-detect the ATTRIBUTE, never gate on a nixpkgs version.** One
+  expression stays correct on both sides of the split, and the branch retires
+  itself when the pin floor moves past it. A version gate would need a human to
+  notice and delete it.
+- **Re-wrap through upstream's own expression** rather than exporting the
+  unwrapped derivation directly. Silently opting out of an upstream RUNTIME fix
+  while still publishing the attribute under its normal name is the invisible
+  divergence this fragment family exists to prevent — and re-wrapping means
+  whatever upstream adds to that wrapper next comes along for free.
+- **Merge `passthru` onto the wrapper, do not replace it.** `passthru` is not a
+  derivation input, so re-attaching ours moves neither `drvPath` nor `outPath`,
+  and the join's `unwrapped` key is the only supported route from the public
+  attribute back to the real binaries.
+
+**How to detect this class before it costs a release.** A silent-drop split
+produces no error anywhere; the only tell is that the package's own facts stop
+matching its sidecar. Two cheap probes:
+
+```bash
+# Does the exported version still match the pin we wrote?
+nix eval --raw .#kiro-cli.version
+jq -r .version overlays/kiro-cli-sources.json
+
+# Did our postFixup actually run? (no wrappers => fixupPhase never happened)
+ls -a "$(nix build .#kiro-cli --no-link --print-out-paths)/bin"
+```
+
+The derived lesson generalizes past kiro: **a thin `overrideAttrs` does NOT
+"pick up upstream changes automatically" — it picks up upstream changes to the
+attribute it was written against.** When upstream restructures which attribute
+that is, a thin override degrades to a no-op rather than to an error. Anything
+downstream that reads the package's own binaries (`passthru.extracted` here)
+should therefore locate them by content, not by a name the wrapper chain owns.
 
 ### Sidecar or inline: what actually decides it
 

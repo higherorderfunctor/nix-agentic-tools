@@ -1,17 +1,25 @@
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-08-05 (commit pending — the wrapper now also exports
-> `KIRO_KAS_SERVER_PATH` when `ai.kiro.identity` is set, which is the first
-> thing it injects that is NOT argv and the first that can fail without aborting
-> the launch. Recorded because the two existing injections are both argv and
-> both infallible, so "what the wrapper does" no longer means "what flags it
-> adds"). Prior: 2026-08-04 (commit pending — the PATH-resolution claim below is
-> now **Linux-scoped**, and treating it as general is what made the darwin
-> workflows outage expensive: on darwin the launcher locates `kiro-cli-chat` by
-> argv[0]-relative `.app` BUNDLE DISCOVERY and never consults PATH — a decoy
-> first on PATH is never invoked there, while the same decoy IS invoked on
-> Linux. wrapProgram's `--inherit-argv0` therefore broke discovery and every
-> session silently fell back to the DMG's unpatched
+> **Last verified:** 2026-08-10 (commit pending — records that on a post-split
+> nixpkgs (f13ff45a and later) Linux gains a THIRD layer below the two wrappers
+> here: `pkgs.ai.kiro-cli` is a `symlinkJoin` of `buildFHSEnv` sandboxes and
+> `$out/bin/*` are bubblewrap launchers, not our wrapProgram shims. The argv
+> contract itself is unchanged — flags still pass through — but the Linux
+> PATH-resolution measurement below was taken on the pre-split layout and has
+> NOT been re-run inside the sandbox, so treat it as unverified there rather
+> than as known-good. Darwin is untouched: upstream hands back the unwrapped
+> derivation and no FHS layer exists). Prior: 2026-08-05 (commit pending — the
+> wrapper now also exports `KIRO_KAS_SERVER_PATH` when `ai.kiro.identity` is
+> set, which is the first thing it injects that is NOT argv and the first that
+> can fail without aborting the launch. Recorded because the two existing
+> injections are both argv and both infallible, so "what the wrapper does" no
+> longer means "what flags it adds"). Prior: 2026-08-04 (commit pending — the
+> PATH-resolution claim below is now **Linux-scoped**, and treating it as
+> general is what made the darwin workflows outage expensive: on darwin the
+> launcher locates `kiro-cli-chat` by argv[0]-relative `.app` BUNDLE DISCOVERY
+> and never consults PATH — a decoy first on PATH is never invoked there, while
+> the same decoy IS invoked on Linux. wrapProgram's `--inherit-argv0` therefore
+> broke discovery and every session silently fell back to the DMG's unpatched
 > `~/.local/bin/kiro-cli-chat`. Fixed in `overlays/kiro-cli.nix` with a
 > darwin-only trailing `--argv0` naming the bundle path — measured working on
 > hardware, including the trap that a SYMLINK to the .app binary still fails
@@ -173,11 +181,22 @@ Bundle mechanics live in `packages/kiro-cli/lib/identityBundle.nix`.
 
 ## THE TWO WRAPPERS COMPOSE — reason about the chain, not the binaries
 
+> **Linux gained a third layer on post-split nixpkgs.** Since f13ff45a,
+> `pkgs.ai.kiro-cli` is a `symlinkJoin` over per-command `buildFHSEnv`
+> sandboxes, so `$out/bin/kiro-cli` is a bubblewrap launcher that execs the real
+> binary inside an FHS root — our wrapProgram shims now live one level down, on
+> `passthru.unwrapped`. Flags and environment still pass straight through, so
+> the argv contract in this document holds. The PATH measurement immediately
+> below, however, was taken on the pre-split layout: whether a host-PATH decoy
+> is still reachable from inside the sandbox has NOT been measured. Re-run the
+> probe there before relying on it. Darwin is unaffected — upstream returns the
+> unwrapped derivation and builds no FHS layer.
+
 **On Linux, `kiro-cli` resolves `kiro-cli-chat` through `PATH`, not from its own
 store directory.** Proof: drop the wrapped bin dir from `PATH` and the launcher
 fails with `No such file or directory (os error 2)` rather than falling back;
 and a decoy `kiro-cli-chat` placed first on `PATH` IS invoked (measured
-2026-08-04, store 2.16.0).
+2026-08-04, store 2.16.0, pre-split layout).
 
 ### darwin resolves by argv[0] bundle discovery, and PATH is never consulted
 
