@@ -5,7 +5,7 @@
 {
   instructions = {
     disposition = "The module intentionally ships CLI guidance; the MCP server contributes its tool guidance at session start.";
-    reviewedHash = "f62ea5645238136c0ffe8a7e19e944e4b5378f3034c11c33c33f23a534d13ebe";
+    reviewedHash = "612e9f994b07ea51deb2fbe21ef74e3a336b5bf3d33605b985498c5036ee2b3f";
   };
   templates = {
     "claude.md" = {
