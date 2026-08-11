@@ -1,6 +1,6 @@
 {
-  "version": "1.112.0",
-  "srcHash": "sha256-SbkNF2FksxlRHfGSSp6GBsBMw68nnyeOZS5y6sLGIHM=",
-  "vendorHash": "sha256-kWcd5cyrOqb+QeEMbNYwtGkxsXRVV0Ebz3hKv94dwcM=",
+  "version": "1.113.0",
+  "srcHash": "sha256-+466nlhbypEcljggmOLEl2Zdh0Ddu6g3rVIArre2+SA=",
+  "vendorHash": "sha256-WOpWNVSt9ePLnVX9qculwSR9F4YFI8uLD2PD44L0fGs=",
   "goFloor": "1.26.5"
 }
