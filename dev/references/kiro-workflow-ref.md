@@ -31,6 +31,20 @@ review produced was a hedge, and the hedge was also wrong, in the other
 direction. A measurement costing one unauthenticated ACP call settled it. Prefer
 that to arguing about how strongly to word a claim.
 
+**Revised 2026-08-11** against **KAS 2.16.1**, correcting the `fileCheck`
+containment mechanic in three places: declared inputs are substituted BEFORE the
+leading-template test, `firstRef === 0` is not the check's only skip, and
+whether an out-of-root path fails loudly at launch or silently at evaluation
+depends on which branch it takes rather than on the CLI version. See trap 3 and
+rule 4.
+
+**If you are holding a COPY of this file, compare that date against yours.**
+This document is `dev/`-scoped and has no export path, so nothing propagates a
+correction into a vendored copy. That matters more than usual for this
+particular revision: a copy predating it teaches that a leading template evades
+containment validation, which is the failure mode the revision exists to
+correct. Refresh a stale copy rather than trusting it.
+
 So: **§8 is the list of things known to be unknown. Everything outside §8 should
 be read as confident-but-unverified rather than established** — the prose runs
 at one register throughout while the evidence underneath it varies a lot, which
