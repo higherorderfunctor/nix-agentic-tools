@@ -36,11 +36,37 @@ fi
 # Bundle resolution
 # ---------------------------------------------------------------------------
 
-# Resolve the live KAS bundle by the CLI's own version, asserting exactly one
-# match. Several engine versions accumulate side by side and a naive glob picks
-# the wrong one silently: lexical-FIRST selects a bundle six releases behind,
-# while lexical-last and newest-by-mtime happen to be correct today, which is
-# what makes the naive form dangerous rather than merely wrong.
+# Version-ordered "<=", via `sort -V`. Factored out because the selection below
+# needs it twice, and an inline `sort -V | head -1` comparison reads as an
+# accident at each site rather than as a deliberate ordering.
+_kiro_ver_le() {
+  [ "$(printf '%s\n%s\n' "$1" "$2" | LC_ALL=C sort -V | head -n1)" = "$1" ]
+}
+
+# Resolve the live KAS bundle: the highest bundle version NOT EXCEEDING the
+# CLI's own version, asserting exactly one match at that version. Several engine
+# versions accumulate side by side and a naive glob picks the wrong one
+# silently: lexical-FIRST selects a bundle six releases behind, while
+# lexical-last and newest-by-mtime happen to be correct today, which is what
+# makes the naive form dangerous rather than merely wrong.
+#
+# EXACT match on the CLI version is equally wrong, and was the bug here until
+# 2026-08-11: the embedded engine LAGS the CLI, so `kas/${ver}-*/` matched
+# NOTHING on a host running CLI 2.16.2 with the newest bundle at 2.16.1. This
+# function then returned 1, and `workflows/self-test-validate.sh` section 7
+# reported UNVERIFIED and skipped all seven drift comparisons -- a state that
+# reads almost identically to a clean run in the summary line, since UNVERIFIED
+# is counted separately from failures and the run still says PASS.
+#
+# Scope note, so this is not oversold: section 7 compares ENUM MEMBERS and
+# NUMERIC CEILINGS only. It would not have caught a change in engine control
+# flow (the containment check's own logic is not among the compared constants),
+# so restoring it is not a fix for that class of drift -- it is a fix for the
+# class it already covered silently lapsing. Widening it to cover control flow
+# is a separate, unstarted piece of work.
+#
+# `packages/kiro-cli/lib/workflowReminder.nix` already resolves the bundle by
+# this same highest-not-exceeding rule; keep the two in step.
 #
 # Prints "<kasid>\t<bundle-path>".
 kiro_resolve_bundle() {
@@ -51,15 +77,41 @@ kiro_resolve_bundle() {
   local nullglob_was_set=0
   shopt -q nullglob && nullglob_was_set=1
   shopt -s nullglob
-  kasdirs=("$HOME/.local/share/kiro-cli/kas/${ver}-"*/)
+  kasdirs=("$HOME/.local/share/kiro-cli/kas/"*/)
   [ "$nullglob_was_set" -eq 1 ] || shopt -u nullglob
 
-  if [ "${#kasdirs[@]}" -ne 1 ]; then
-    echo "ambiguous engine bundle for ${ver} - refuse (found ${#kasdirs[@]})" >&2
+  local d name best_ver=""
+  for d in "${kasdirs[@]}"; do
+    name="$(basename "${d%/}")"
+    if _kiro_ver_le "${name%%-*}" "$ver"; then
+      if [ -z "$best_ver" ] || _kiro_ver_le "$best_ver" "${name%%-*}"; then
+        best_ver="${name%%-*}"
+      fi
+    fi
+  done
+
+  if [ -z "$best_ver" ]; then
+    echo "no engine bundle at or below ${ver} - refuse (found ${#kasdirs[@]} total)" >&2
     return 1
   fi
 
-  kas="${kasdirs[0]}"
+  # Ambiguity stays a refusal: two hashes for one version means the caller
+  # cannot know which was read, and a drift check against the wrong bundle is
+  # worse than no drift check at all.
+  local -a matched=()
+  for d in "${kasdirs[@]}"; do
+    name="$(basename "${d%/}")"
+    if [ "${name%%-*}" = "$best_ver" ]; then
+      matched+=("$d")
+    fi
+  done
+
+  if [ "${#matched[@]}" -ne 1 ]; then
+    echo "ambiguous engine bundle for ${best_ver} - refuse (found ${#matched[@]})" >&2
+    return 1
+  fi
+
+  kas="${matched[0]}"
   bundle="${kas}node_modules/@kiro/agent/dist/server/acp-server.js"
   if [ ! -f "$bundle" ]; then
     echo "engine bundle missing at ${bundle}" >&2
@@ -146,6 +198,7 @@ kiro_assert_under_scratch() {
     echo "refusing: scratch root '${scratch_root}' is unsafe" >&2
     return 1
     ;;
+  *) ;;
   esac
 }
 
