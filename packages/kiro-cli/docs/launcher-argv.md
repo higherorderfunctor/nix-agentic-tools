@@ -1,8 +1,15 @@
 # kiro-cli wrapper: the argv contract
 
-> **Last verified:** 2026-08-10 (commit pending — records that on a post-split
-> nixpkgs (f13ff45a and later) Linux gains a THIRD layer below the two wrappers
-> here: `pkgs.ai.kiro-cli` is a `symlinkJoin` of `buildFHSEnv` sandboxes and
+> **Last verified:** 2026-08-11 (commit pending — the sandbox's effect on PATH
+> resolution is no longer unverified, so the prior entry's "treat it as
+> unverified there" is retired: PATH is **preserved** inside, and a decoy still
+> resolves provided it sits outside a shadowed directory and can load its
+> libraries. The bind rule, the shadowed set, the silent-substitution hazard and
+> the loader trap are their own concern and now live in
+> [`fhs-sandbox.md`](fhs-sandbox.md); this document stays about argv). Prior:
+> 2026-08-10 (commit pending — records that on a post-split nixpkgs (f13ff45a
+> and later) Linux gains a THIRD layer below the two wrappers here:
+> `pkgs.ai.kiro-cli` is a `symlinkJoin` of `buildFHSEnv` sandboxes and
 > `$out/bin/*` are bubblewrap launchers, not our wrapProgram shims. The argv
 > contract itself is unchanged — flags still pass through — but the Linux
 > PATH-resolution measurement below was taken on the pre-split layout and has
@@ -187,10 +194,15 @@ Bundle mechanics live in `packages/kiro-cli/lib/identityBundle.nix`.
 > binary inside an FHS root — our wrapProgram shims now live one level down, on
 > `passthru.unwrapped`. Flags and environment still pass straight through, so
 > the argv contract in this document holds. The PATH measurement immediately
-> below, however, was taken on the pre-split layout: whether a host-PATH decoy
-> is still reachable from inside the sandbox has NOT been measured. Re-run the
-> probe there before relying on it. Darwin is unaffected — upstream returns the
-> unwrapped derivation and builds no FHS layer.
+> below was taken on the pre-split layout, and the sandbox half of it is now
+> settled: PATH is **preserved** inside (measured 2026-08-11 — `/etc/profile`
+> PREPENDS `/run/wrappers/bin:/usr/bin:/usr/sbin` and nothing passes
+> `--clearenv`), so a decoy still resolves — but only if it sits outside a
+> shadowed directory and can load its libraries. A decoy under `$HOME` is
+> reachable; one in `/usr/local/bin` is not, because that path does not exist in
+> the sandbox at all. See [`fhs-sandbox.md`](fhs-sandbox.md) for the bind rule,
+> the shadowed set, and the loader trap. Darwin is unaffected — upstream returns
+> the unwrapped derivation and builds no FHS layer.
 
 **On Linux, `kiro-cli` resolves `kiro-cli-chat` through `PATH`, not from its own
 store directory.** Proof: drop the wrapped bin dir from `PATH` and the launcher

@@ -37,6 +37,7 @@ brocode
 btop
 bubblewrap
 burndown
+bwrap
 cachix
 caddy
 caddyfile
@@ -47,6 +48,7 @@ cavira
 cclsp
 chafa
 chonk
+clearenv
 clicolor
 clis
 cmdbuilder
@@ -110,6 +112,7 @@ fcli
 fetchgit
 fetchurl
 fetchzip
+fhsenv
 fileset
 findutils
 fixpoint
@@ -131,6 +134,7 @@ glpat
 gluetun
 gnugrep
 gnused
+gnutar
 GOARCH
 gocache
 godebug
@@ -183,9 +187,12 @@ libexec
 libgit
 libsecret
 libsets
+libstdc
+libx
 licence
 lifecycles
 lintable
+linuxbrew
 listdir
 livelink
 livelock
@@ -209,6 +216,7 @@ misattributes
 miscited
 modelcontextprotocol
 mojibake
+mountpoint
 mtimes
 mystor
 napi
@@ -225,9 +233,12 @@ nixdoc
 nixos
 nixpkgs
 nixvim
+nodev
 nohup
 nomic
 northstar
+nosuid
+nrfutil
 nullary
 nullglob
 numtide
@@ -305,6 +316,7 @@ revwalk
 rnix
 rodata
 rollup
+rootfs
 rsbuild
 rspack
 rulesdir
@@ -346,6 +358,7 @@ subshells
 substituters
 superlinear
 supersets
+swapfile
 sweepability
 sweepable
 sympy
@@ -395,6 +408,7 @@ upgrader
 upgraders
 uppercased
 usebruno
+userns
 valkey
 vendorhash
 watchlist
