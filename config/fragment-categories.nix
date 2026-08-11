@@ -202,6 +202,11 @@ _: {
       sources = [
         {
           location = "package";
+          name = "fhs-sandbox";
+          dir = "kiro-cli";
+        }
+        {
+          location = "package";
           name = "launcher-argv";
           dir = "kiro-cli";
         }

@@ -26,7 +26,7 @@
   "overrides": [
     {
       "dictionaries": ["python", "node", "npm", "rust"],
-      "filename": ["**/*.nix", "**/*.md"]
+      "filename": ["**/*.md", "**/*.nix", "**/*.sh"]
     }
   ],
   "version": "0.2"

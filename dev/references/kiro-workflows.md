@@ -360,6 +360,35 @@ with no silent fallback to another model (§10).
 
 #### The interpolated-path blind spot (Measured)
 
+**QUALIFIED 2026-08-11 by an engine-source read (`containmentErrorsForPaths`,
+KAS 2.16.1).** The rows below are all reproducible, but the mechanism stated
+above them is missing its first step, and that omission makes row 5 read as a
+general rule when it is a conditional one. **Declared inputs are substituted
+BEFORE the template test**, not after:
+
+```js
+const effectivePath = inputs !== void 0 ? resolveDeclaredInputRefs(rawPath, inputs) : rawPath;
+const firstRef = effectivePath.indexOf("{{");
+if (firstRef === 0) { continue; }                 // still templated -> skipped
+if (firstRef === -1) { /* literal -> resolve, isWithinAllowedRoots, throw */ }
+/* otherwise: the literal-prefix test this section infers */
+```
+
+So a leading `{{…}}` skips validation **only when it is not a declared input**
+(or has no value to substitute). When it IS declared, substitution makes the
+path fully literal, `firstRef === -1`, and it is containment-checked like any
+other absolute path. Measured against a live rejection of
+`{{worktree_path}}/.agents/tasks/…/rebase3-review.json` — a declared input,
+hence checked, and the error quoted the RESOLVED sibling-worktree path. Row 5's
+`{{workdir}}` evidently was not substituted in that probe, which is why the two
+observations disagree without either being wrong.
+
+The practical rule is the one that survives both: **do not put a template in
+`fileCheck.path` at all.** Whether it is validated depends on the input set,
+which the definition itself cannot see — which is exactly the reasoning
+`E-FILE-CHECK-PATH-TEMPLATE` in `fixtures/kiro-primitives/workflows/contract.jq`
+already encodes. That rule needs no change.
+
 The `fileCheck` workspace-root check behaves as a **prefix test on literal
 text**: the literal prefix running up to the first template reference is
 resolved and tested against the roots. A path whose template comes first leaves
@@ -397,6 +426,17 @@ the only escape hatch mentioned anywhere in the surface:
 the `watch` handler docs also treat it as an allowed root for `prRef`
 resolution. Nothing in the agent-facing tool surface sets it, so treat it as
 read-only context rather than a lever.
+
+**Nor does the TUI set it, which is why no Nix option can deliver one.**
+Measured 2026-08-11 in the v3 bundle: the root set is built as
+`[options.workspacePath, ...options.additionalDirectories ?? []]`, and `tui.js`
+calls `newSession({cwd: process.cwd(), mcpServers: [], …})` with the field
+absent — so under the TUI the allowed-root set is exactly `[cwd]`. Only an ACP
+client can populate the second slot. That closes off the shape this repo reaches
+for by reflex, the `_integration_writable_roots` pattern Codex uses
+(`packages/chatgpt-codex/lib/mkCodex.nix`): there is no config file to write the
+roots into and no launcher flag to inject them through. Under the TUI the launch
+directory is the only lever there is.
 
 Validating the _agent_ side is no better covered, and it fails in a shape worth
 knowing before you build a pre-flight on it: `kiro-cli agent validate` exits 0

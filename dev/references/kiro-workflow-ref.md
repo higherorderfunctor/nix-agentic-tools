@@ -31,6 +31,20 @@ review produced was a hedge, and the hedge was also wrong, in the other
 direction. A measurement costing one unauthenticated ACP call settled it. Prefer
 that to arguing about how strongly to word a claim.
 
+**Revised 2026-08-11** against **KAS 2.16.1**, correcting the `fileCheck`
+containment mechanic in three places: declared inputs are substituted BEFORE the
+leading-template test, `firstRef === 0` is not the check's only skip, and
+whether an out-of-root path fails loudly at launch or silently at evaluation
+depends on which branch it takes rather than on the CLI version. See trap 3 and
+rule 4.
+
+**If you are holding a COPY of this file, compare that date against yours.**
+This document is `dev/`-scoped and has no export path, so nothing propagates a
+correction into a vendored copy. That matters more than usual for this
+particular revision: a copy predating it teaches that a leading template evades
+containment validation, which is the failure mode the revision exists to
+correct. Refresh a stale copy rather than trusting it.
+
 So: **§8 is the list of things known to be unknown. Everything outside §8 should
 be read as confident-but-unverified rather than established** — the prose runs
 at one register throughout while the evidence underneath it varies a lot, which
@@ -1487,12 +1501,12 @@ invocation.
 **3. Four authoring traps the engine accepts silently** (`contract.jq`, each
 quoting the engine function it derives from):
 
-| Trap                                  | What actually happens                                                                                                                                              |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `jsonPath` is **not** JSONPath        | the engine does `split(".")` then property access. `"$.drained"` reads a property literally named `$`, resolves undefined, loop never stops                        |
-| an **array**-valued `fileCheck.value` | means "any of these candidates" — `value.some(c => deepEqual(resolved, c))` — not "match this array"                                                               |
-| a **templated** `fileCheck.path`      | the load-time containment check does `if (indexOf("{{") === 0) continue;` — a path _starting_ with a template skips validation entirely and can only fail mid-loop |
-| a `repeat` with **neither** stop form | accepted. The only stop-form rule concerns defining _both_. Such a loop runs to `maxIterations` with nothing reporting why                                         |
+| Trap                                  | What actually happens                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `jsonPath` is **not** JSONPath        | the engine does `split(".")` then property access. `"$.drained"` reads a property literally named `$`, resolves undefined, loop never stops                                                                                                                                                                                                          |
+| an **array**-valued `fileCheck.value` | means "any of these candidates" — `value.some(c => deepEqual(resolved, c))` — not "match this array"                                                                                                                                                                                                                                                 |
+| a **templated** `fileCheck.path`      | the load-time containment check does `if (indexOf("{{") === 0) continue;` — but only AFTER declared inputs are substituted. A leading template that is NOT a declared input skips validation entirely and can only fail mid-loop; one that IS declared resolves to a literal path first and is containment-checked like any other, failing at LAUNCH |
+| a `repeat` with **neither** stop form | accepted. The only stop-form rule concerns defining _both_. Such a loop runs to `maxIterations` with nothing reporting why                                                                                                                                                                                                                           |
 
 That third row resolves something the ledger could only infer. From five probe
 rows it deduced "prefix resolution" and flagged one untried case —
@@ -1501,12 +1515,56 @@ escape. The engine source settles it: `firstRef === 0` is the _only_ skip, so
 that path is containment-checked and rejected. The escape is specifically a
 **parameterized root**, not interpolation in general.
 
-**4. Stop-condition state must live inside the repository.** A `fileCheck` path
-outside the workspace roots evaluates to `false` **permanently**, with no error,
-so the loop burns every iteration it has. Never `/tmp`. And `stopWhen`'s
-`"{{id.output}} contains <text>"` form matches against _captured output_, so it
-inherits the empty-capture hazard wholesale — under a cheap model the condition
-can never match and the loop silently runs to `maxIterations` (ledger §7.6).
+**Two corrections to that paragraph, from re-reading `containmentErrorsForPaths`
+in KAS 2.16.1 on 2026-08-11.**
+
+First, `firstRef === 0` is **not** the only skip. The template-later branch
+carries two more, and both are silent:
+
+```js
+if (lastSep === -1) { continue; }              // literal head has no separator
+if (!path17.isAbsolute(prefix)) { continue; }  // the literal prefix is relative
+```
+
+So `foo{{x}}/bar` is unchecked because its prefix is relative, not because of
+anything to do with roots. The escape set is wider than "parameterized root".
+
+Second, the escape is conditional on the leading reference being **undeclared**.
+`effectivePath` is `resolveDeclaredInputRefs(rawPath, inputs)`, so a leading
+`{{…}}` that IS a declared input has already been substituted by the time
+`firstRef` is computed — the path is then fully literal, takes the
+`firstRef === -1` branch, and is containment-checked. Measured against a live
+launch rejection of `{{worktree_path}}/.agents/tasks/…/rebase3-review.json`,
+whose error quoted the resolved sibling-worktree path.
+
+That resolves the ledger's disagreement with this section rather than
+overturning either: both are right, for different input sets. It also means a
+definition can launch clean on one input set and be refused on another with no
+edit at all, which is the strongest argument for `E-FILE-CHECK-PATH-TEMPLATE`
+rejecting every templated path regardless.
+
+**4. Stop-condition state must live inside the repository.** Which of two
+failure modes you get is decided by the branch above, not by the CLI version. A
+path the containment check actually **reaches** — fully literal, or made literal
+by declared-input substitution — fails the run at LAUNCH with
+`WorkflowFileCheckPathOutsideWorkspaceError`, naming both the resolved path and
+the allowed roots. A path that **skips** that check reaches evaluation instead,
+where it evaluates to `false` **permanently**, with no error, so the loop burns
+every iteration it has. Never `/tmp`.
+
+Write the path **relative**: it resolves against the workspace root by
+construction, and step agents' cwd is that same root, so the writing step and
+the check agree without any interpolation. The vendor's bundled
+`workflows_default` steering instructs the opposite — interpolate an absolute
+`{{worktree_path}}/…` — and that is wrong whenever worktrees are SIBLINGS of the
+checkout rather than subdirectories of it, which is this repo's own worktree
+convention. This is why `packages/kiro-cli/lib/workflowReminder.nix` carries a
+correcting paragraph rather than a pointer: msg0 is frozen, so the bad
+instruction cannot be edited out, only contradicted later in context. And
+`stopWhen`'s `"{{id.output}} contains <text>"` form matches against _captured
+output_, so it inherits the empty-capture hazard wholesale — under a cheap model
+the condition can never match and the loop silently runs to `maxIterations`
+(ledger §7.6).
 
 ### Small things that save a run
 

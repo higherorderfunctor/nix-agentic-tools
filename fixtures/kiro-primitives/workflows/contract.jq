@@ -218,6 +218,33 @@ def jsonpath_errors($where):
 # mid-run, from inside a loop. The bundled `ralph` recipe does exactly this
 # (`path: "{{prd_path}}"`), so this rule is stricter than the vendor's own
 # recipes on purpose: a fixture must be verifiable before it is launched.
+#
+# SHARPENED 2026-08-11 against KAS 2.16.1. The skip above is intact and this
+# rule stands, but "still begins with a template marker after input
+# substitution" is doing more work than it looks. `effectivePath` is
+# `resolveDeclaredInputRefs(rawPath, inputs)`, so whether a LEADING `{{…}}`
+# survives to be skipped depends on whether it is a DECLARED INPUT:
+#
+#   declared   -> substituted, path is literal, `firstRef === -1`, containment
+#                 IS checked, and an out-of-root result fails at LAUNCH
+#                 (WorkflowFileCheckPathOutsideWorkspaceError)
+#   undeclared -> survives as `{{…}}`, `firstRef === 0`, skipped, and the loop
+#                 silently never terminates
+#
+# So a templated path is not reliably unchecked NOR reliably checked -- it is
+# whichever the run's input set makes it, which the definition cannot see. That
+# is a strictly better reason to reject all of them than the original "unchecked
+# at author time", and it is why `code_basis` stays "policy": this rejects more
+# than the engine does, on purpose. Measured from a live launch rejection of
+# `{{worktree_path}}/…` (a declared input) alongside the ledger's own probe of
+# an undeclared `{{workdir}}/…` that passed -- two observations that look
+# contradictory until substitution order explains both.
+#
+# Note also that `firstRef === 0` is NOT the engine's only skip: the
+# template-later branch additionally does `if (lastSep === -1) continue;` and
+# `if (!path.isAbsolute(prefix)) continue;`. A plain relative path resolves
+# against the workspace root by construction and cannot drift, which is what
+# `E-FILE-CHECK-PATH-ABSOLUTE` below has always said.
 # ---------------------------------------------------------------------------
 
 def file_check_path_errors($where):
@@ -228,10 +255,16 @@ def file_check_path_errors($where):
   else
     (if (contains("{{") or contains("}}"))
      then [err("E-FILE-CHECK-PATH-TEMPLATE"; $where;
-               "fileCheck.path " + tojson + " is templated. The load-time containment check "
-               + "SKIPS any path still beginning with '{{' after input substitution, so a "
-               + "templated path is never validated at author time and can only fail at "
-               + "evaluation time, mid-loop. Write the literal relative path instead.")]
+               "fileCheck.path " + tojson + " is templated, so whether the engine validates it "
+               + "at all depends on the run's inputs, which this definition cannot pin down. A "
+               + "reference that IS a declared input is substituted before the containment "
+               + "check, so the run is REJECTED AT LAUNCH if the result lands outside the "
+               + "workspace roots -- which is what happens when the interpolated root is a "
+               + "worktree SIBLING of the checkout rather than a subdirectory of it. A "
+               + "reference that is NOT declared survives as a template, skips the check "
+               + "entirely, and the loop instead never terminates. Write the literal relative "
+               + "path instead: it resolves against the workspace root by construction, and "
+               + "step agents' cwd is that same root, so the writing step and the check agree.")]
      else []
      end)
     + (if startswith("/")

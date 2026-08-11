@@ -36,37 +36,99 @@ fi
 # Bundle resolution
 # ---------------------------------------------------------------------------
 
-# Resolve the live KAS bundle by the CLI's own version, asserting exactly one
-# match. Several engine versions accumulate side by side and a naive glob picks
-# the wrong one silently: lexical-FIRST selects a bundle six releases behind,
-# while lexical-last and newest-by-mtime happen to be correct today, which is
-# what makes the naive form dangerous rather than merely wrong.
+# Pick the bundle directory NAME: highest version not exceeding the CLI version,
+# refusing on a tie. Prints the name, or exits non-zero having explained itself.
+#
+# The comparison is python, deliberately NOT `sort -V`. `sort -V` is a GNU
+# extension and BSD/macOS sort rejects it outright ("illegal option -- V"), and
+# these fixtures are meant to be run directly on a developer machine, darwin
+# included. `packages/kiro-cli/lib/identityBundle.nix` reached the same
+# conclusion for this same lookup and says so in as many words; this mirrors its
+# algorithm rather than inventing a second one.
+#
+# Not extracted into a shared helper on purpose: that file is Nix-embedded and
+# this harness must run with no Nix in the picture. The duplication is the price
+# of running standalone -- if you change one, change the other.
+_kiro_pick_bundle_dir() {
+  python3 -c '
+import os, sys
+root, cli = sys.argv[1], sys.argv[2]
+
+
+def key(v):
+    return tuple(int(p) if p.isdigit() else -1 for p in v.split("."))
+
+
+try:
+    names = os.listdir(root)
+except OSError:
+    sys.stderr.write("no bundle root at %s\n" % root)
+    sys.exit(1)
+candidates = []
+for n in names:
+    if not os.path.isdir(os.path.join(root, n)) or "-" not in n:
+        continue
+    ver = n.split("-", 1)[0]
+    if key(ver) <= key(cli):
+        candidates.append((key(ver), n))
+if not candidates:
+    sys.stderr.write("no engine bundle at or below %s in %s\n" % (cli, root))
+    sys.exit(1)
+best = max(candidates)[0]
+tied = sorted(n for k, n in candidates if k == best)
+# Ambiguity stays a refusal: two hashes at one version means the caller cannot
+# know which was read, and a drift check against the wrong bundle is worse than
+# no drift check at all.
+if len(tied) != 1:
+    sys.stderr.write("ambiguous engine bundle: %d dirs at the same version\n" % len(tied))
+    sys.exit(1)
+sys.stdout.write(tied[0])
+' "$1" "$2"
+}
+
+# Resolve the live KAS bundle: the highest bundle version NOT EXCEEDING the
+# CLI's own version, asserting exactly one match at that version. Several engine
+# versions accumulate side by side and a naive glob picks the wrong one
+# silently: lexical-FIRST selects a bundle six releases behind, while
+# lexical-last and newest-by-mtime happen to be correct today, which is what
+# makes the naive form dangerous rather than merely wrong.
+#
+# EXACT match on the CLI version is equally wrong, and was the bug here until
+# 2026-08-11: the embedded engine LAGS the CLI, so `kas/${ver}-*/` matched
+# NOTHING on a host running CLI 2.16.2 with the newest bundle at 2.16.1. This
+# function then returned 1, and `workflows/self-test-validate.sh` section 7
+# reported UNVERIFIED and skipped all seven drift comparisons -- a state that
+# reads almost identically to a clean run in the summary line, since UNVERIFIED
+# is counted separately from failures and the run still says PASS.
+#
+# Scope note, so this is not oversold: section 7 compares ENUM MEMBERS and
+# NUMERIC CEILINGS only. It would not have caught a change in engine control
+# flow (the containment check's own logic is not among the compared constants),
+# so restoring it is not a fix for that class of drift -- it is a fix for the
+# class it already covered silently lapsing. Widening it to cover control flow
+# is a separate, unstarted piece of work.
+#
+# `packages/kiro-cli/lib/{identityBundle,workflowReminder}.nix` resolve the
+# bundle by this same highest-not-exceeding rule; keep all three in step.
 #
 # Prints "<kasid>\t<bundle-path>".
 kiro_resolve_bundle() {
-  local ver kas bundle
+  local ver root name bundle
   ver="$(kiro-cli --version | awk '{print $NF}')"
+  root="$HOME/.local/share/kiro-cli/kas"
 
-  local -a kasdirs=()
-  local nullglob_was_set=0
-  shopt -q nullglob && nullglob_was_set=1
-  shopt -s nullglob
-  kasdirs=("$HOME/.local/share/kiro-cli/kas/${ver}-"*/)
-  [ "$nullglob_was_set" -eq 1 ] || shopt -u nullglob
-
-  if [ "${#kasdirs[@]}" -ne 1 ]; then
-    echo "ambiguous engine bundle for ${ver} - refuse (found ${#kasdirs[@]})" >&2
+  if ! name="$(_kiro_pick_bundle_dir "$root" "$ver")"; then
+    echo "refusing: no unambiguous engine bundle for CLI ${ver}" >&2
     return 1
   fi
 
-  kas="${kasdirs[0]}"
-  bundle="${kas}node_modules/@kiro/agent/dist/server/acp-server.js"
+  bundle="$root/$name/node_modules/@kiro/agent/dist/server/acp-server.js"
   if [ ! -f "$bundle" ]; then
     echo "engine bundle missing at ${bundle}" >&2
     return 1
   fi
 
-  printf '%s\t%s\n' "$(basename "${kas%/}")" "$bundle"
+  printf '%s\t%s\n' "$name" "$bundle"
 }
 
 # ---------------------------------------------------------------------------
@@ -146,6 +208,7 @@ kiro_assert_under_scratch() {
     echo "refusing: scratch root '${scratch_root}' is unsafe" >&2
     return 1
     ;;
+  *) ;;
   esac
 }
 
