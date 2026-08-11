@@ -36,11 +36,54 @@ fi
 # Bundle resolution
 # ---------------------------------------------------------------------------
 
-# Version-ordered "<=", via `sort -V`. Factored out because the selection below
-# needs it twice, and an inline `sort -V | head -1` comparison reads as an
-# accident at each site rather than as a deliberate ordering.
-_kiro_ver_le() {
-  [ "$(printf '%s\n%s\n' "$1" "$2" | LC_ALL=C sort -V | head -n1)" = "$1" ]
+# Pick the bundle directory NAME: highest version not exceeding the CLI version,
+# refusing on a tie. Prints the name, or exits non-zero having explained itself.
+#
+# The comparison is python, deliberately NOT `sort -V`. `sort -V` is a GNU
+# extension and BSD/macOS sort rejects it outright ("illegal option -- V"), and
+# these fixtures are meant to be run directly on a developer machine, darwin
+# included. `packages/kiro-cli/lib/identityBundle.nix` reached the same
+# conclusion for this same lookup and says so in as many words; this mirrors its
+# algorithm rather than inventing a second one.
+#
+# Not extracted into a shared helper on purpose: that file is Nix-embedded and
+# this harness must run with no Nix in the picture. The duplication is the price
+# of running standalone -- if you change one, change the other.
+_kiro_pick_bundle_dir() {
+  python3 -c '
+import os, sys
+root, cli = sys.argv[1], sys.argv[2]
+
+
+def key(v):
+    return tuple(int(p) if p.isdigit() else -1 for p in v.split("."))
+
+
+try:
+    names = os.listdir(root)
+except OSError:
+    sys.stderr.write("no bundle root at %s\n" % root)
+    sys.exit(1)
+candidates = []
+for n in names:
+    if not os.path.isdir(os.path.join(root, n)) or "-" not in n:
+        continue
+    ver = n.split("-", 1)[0]
+    if key(ver) <= key(cli):
+        candidates.append((key(ver), n))
+if not candidates:
+    sys.stderr.write("no engine bundle at or below %s in %s\n" % (cli, root))
+    sys.exit(1)
+best = max(candidates)[0]
+tied = sorted(n for k, n in candidates if k == best)
+# Ambiguity stays a refusal: two hashes at one version means the caller cannot
+# know which was read, and a drift check against the wrong bundle is worse than
+# no drift check at all.
+if len(tied) != 1:
+    sys.stderr.write("ambiguous engine bundle: %d dirs at the same version\n" % len(tied))
+    sys.exit(1)
+sys.stdout.write(tied[0])
+' "$1" "$2"
 }
 
 # Resolve the live KAS bundle: the highest bundle version NOT EXCEEDING the
@@ -65,60 +108,27 @@ _kiro_ver_le() {
 # class it already covered silently lapsing. Widening it to cover control flow
 # is a separate, unstarted piece of work.
 #
-# `packages/kiro-cli/lib/workflowReminder.nix` already resolves the bundle by
-# this same highest-not-exceeding rule; keep the two in step.
+# `packages/kiro-cli/lib/{identityBundle,workflowReminder}.nix` resolve the
+# bundle by this same highest-not-exceeding rule; keep all three in step.
 #
 # Prints "<kasid>\t<bundle-path>".
 kiro_resolve_bundle() {
-  local ver kas bundle
+  local ver root name bundle
   ver="$(kiro-cli --version | awk '{print $NF}')"
+  root="$HOME/.local/share/kiro-cli/kas"
 
-  local -a kasdirs=()
-  local nullglob_was_set=0
-  shopt -q nullglob && nullglob_was_set=1
-  shopt -s nullglob
-  kasdirs=("$HOME/.local/share/kiro-cli/kas/"*/)
-  [ "$nullglob_was_set" -eq 1 ] || shopt -u nullglob
-
-  local d name best_ver=""
-  for d in "${kasdirs[@]}"; do
-    name="$(basename "${d%/}")"
-    if _kiro_ver_le "${name%%-*}" "$ver"; then
-      if [ -z "$best_ver" ] || _kiro_ver_le "$best_ver" "${name%%-*}"; then
-        best_ver="${name%%-*}"
-      fi
-    fi
-  done
-
-  if [ -z "$best_ver" ]; then
-    echo "no engine bundle at or below ${ver} - refuse (found ${#kasdirs[@]} total)" >&2
+  if ! name="$(_kiro_pick_bundle_dir "$root" "$ver")"; then
+    echo "refusing: no unambiguous engine bundle for CLI ${ver}" >&2
     return 1
   fi
 
-  # Ambiguity stays a refusal: two hashes for one version means the caller
-  # cannot know which was read, and a drift check against the wrong bundle is
-  # worse than no drift check at all.
-  local -a matched=()
-  for d in "${kasdirs[@]}"; do
-    name="$(basename "${d%/}")"
-    if [ "${name%%-*}" = "$best_ver" ]; then
-      matched+=("$d")
-    fi
-  done
-
-  if [ "${#matched[@]}" -ne 1 ]; then
-    echo "ambiguous engine bundle for ${best_ver} - refuse (found ${#matched[@]})" >&2
-    return 1
-  fi
-
-  kas="${matched[0]}"
-  bundle="${kas}node_modules/@kiro/agent/dist/server/acp-server.js"
+  bundle="$root/$name/node_modules/@kiro/agent/dist/server/acp-server.js"
   if [ ! -f "$bundle" ]; then
     echo "engine bundle missing at ${bundle}" >&2
     return 1
   fi
 
-  printf '%s\t%s\n' "$(basename "${kas%/}")" "$bundle"
+  printf '%s\t%s\n' "$name" "$bundle"
 }
 
 # ---------------------------------------------------------------------------
