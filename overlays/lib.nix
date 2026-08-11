@@ -1567,6 +1567,15 @@ rec {
     # {url, hash} entry per platform. Identical in both modes — the two
     # flows differ only in whether they reach it and what they do with
     # the result — so it is bound once rather than duplicated.
+    # A URL containing %20 yields an illegal store name, so nix-prefetch-url
+    # needs an explicit --name. Shared by the primary asset and every
+    # extraAsset: this was duplicated once and the copies immediately drifted,
+    # leaving extra assets able to fail on a URL the primary handled fine.
+    prefetchNameArg = name: url:
+      if builtins.match ".*%20.*" url != null
+      then "--name ${name}-prefetch"
+      else "";
+
     buildCandidate = ''
       tmp=$(${pkgs.coreutils}/bin/mktemp)
       ${pkgs.jq}/bin/jq -n --arg v "$latest" '{version: $v}' > "$tmp"
@@ -1576,11 +1585,7 @@ rec {
           # valid identifier char (e.g. "..._''${ver}_amd64.deb" would
           # otherwise expand the undefined "$latest_amd64").
           url = mkUrl "\${latest}";
-          # URLs with %20 need --name to avoid an illegal store name
-          nameArg =
-            if builtins.match ".*%20.*" url != null
-            then "--name ${pname}-prefetch"
-            else "";
+          nameArg = prefetchNameArg pname url;
           unpackArg =
             if unpack
             then "--unpack"
@@ -1601,9 +1606,12 @@ rec {
                 then ""
                 else let
                   assetUrl = (builtins.getAttr system assetPlatforms) "\${latest}";
+                  # Distinct from the primary's name so two prefetches in one
+                  # run cannot be confused for each other in the store.
+                  assetNameArg = prefetchNameArg "${pname}-${assetName}" assetUrl;
                 in ''
                   asset_url="${assetUrl}"
-                  asset_prefetched=$(${pkgs.nix}/bin/nix-prefetch-url --type sha256 ${unpackArg} "$asset_url")
+                  asset_prefetched=$(${pkgs.nix}/bin/nix-prefetch-url --type sha256 ${unpackArg} ${assetNameArg} "$asset_url")
                   asset_hash=$(${pkgs.nix}/bin/nix hash convert --to sri --hash-algo sha256 "$asset_prefetched")
                   ${pkgs.jq}/bin/jq --arg sys "${system}" --arg n "${assetName}" \
                     --arg u "$asset_url" --arg h "$asset_hash" \
