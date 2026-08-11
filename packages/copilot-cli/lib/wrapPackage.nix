@@ -1,11 +1,13 @@
 # Wrap copilot-cli so it reads the MCP config the module renders — shared by
 # BOTH backends (DRY). Returns the raw package when nothing needs wrapping.
 #
-# `environmentVariables` are baked as `--set` args only when the backend has no
-# native export path — HM passes them here (symlinkJoin is its only export
-# mechanism); devenv passes `{}` because it exports via its native `env`
-# attrset, but STILL needs the flag injection, because Copilot reads MCP config
-# from `$HOME/.copilot/mcp-config.json` and from whatever
+# `environmentVariables` are baked as `--set` args on BOTH backends. devenv
+# used to pass `{}` and export through its native `env` attrset instead; that
+# wrote the PROJECT SHELL, handing every variable to the developer's own
+# session, so it was retired on 2026-08-10.
+#
+# devenv independently needs the flag injection regardless, because Copilot
+# reads MCP config from `$HOME/.copilot/mcp-config.json` and from whatever
 # `--additional-mcp-config` points at, and NOTHING project-local. See
 # dev/fragments/ai-clis/copilot-config-delivery.md for the syscall trace.
 #

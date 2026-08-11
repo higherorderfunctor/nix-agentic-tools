@@ -343,6 +343,29 @@ in {
     };
   });
 
+  # ── Scalar override resolution ──────────────────────────────────
+  # DELIBERATELY the opposite of `mergeWithCollisionCheck` below.
+  #
+  # Every attrset-shaped `ai.*` pool treats a shared/per-CLI duplicate
+  # as a FAILURE, because each key names an independent entry and a
+  # silent override loses one of them. A nullable SCALAR has no such
+  # identity to lose: `ai.<cli>.shell` is not a second entry competing
+  # with `ai.shell`, it is the same knob at a narrower scope. Making
+  # that pair collide would leave no way to express "this default,
+  # except here" — which is the entire point of the option.
+  #
+  # So: a non-null per-CLI value wins, `null` inherits the root, and
+  # `null` at both levels means "not configured" rather than "empty".
+  # Kept as a named helper rather than an inline `if` at each call
+  # site so the semantic is stated once and greps as a unit.
+  resolveOverride = {
+    topValue,
+    cliValue,
+  }:
+    if cliValue != null
+    then cliValue
+    else topValue;
+
   # ── Collision-as-failure pool merge ─────────────────────────────
   # Merge two attrset pools and surface duplicate keys as NixOS
   # module assertions. The shared `ai.*` pools (rules, skills,

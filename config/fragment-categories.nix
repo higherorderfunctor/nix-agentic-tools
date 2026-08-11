@@ -62,6 +62,10 @@ _: {
     ai-module = {
       scopes = [
         "lib/ai/agent.nix"
+        # Home of both merge helpers these fragments describe
+        # (mergeWithCollisionCheck, resolveOverride) — previously
+        # unscoped, so editing them loaded no guidance.
+        "lib/ai/ai-common.nix"
         "lib/ai/app/**"
         "lib/ai/default.nix"
         "lib/ai/hooks.nix"
@@ -77,6 +81,7 @@ _: {
         "collision-semantics"
         "dir-helpers"
         "layered-fanout"
+        "shell-option"
       ];
     };
     # ai-skills: uniform delegation pattern (all branches go through

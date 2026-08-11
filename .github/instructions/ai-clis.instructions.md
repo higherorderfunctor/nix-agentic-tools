@@ -105,8 +105,14 @@ already shipped as bugs on the HM side:
 - `@` marks the value a FILE PATH. Without it the CLI parses the path string as
   JSON and every session dies at startup.
 
-The wrapper is built only when `mergedServers != {}`, so an MCP-less project
-keeps the bare package.
+The wrapper is built when there is EITHER an MCP config to point at or an
+environment variable to bake — `mergedServers != {}` was the only trigger until
+2026-08-10, when `environmentVariables` moved off devenv's project-shell `env`
+attrset and onto the wrapper on both backends. On devenv the env arm is
+effectively always live, because the default-on `gitSshConfigWorkaround`
+contributes `GIT_SSH_COMMAND` there (devenv has no `programs.git`), so an
+MCP-less devenv project no longer keeps the bare package. Home Manager still
+does, since it states that default in Git's own config instead.
 
 ### Why `lsp-config.json` and `settings.json` are written but not delivered
 

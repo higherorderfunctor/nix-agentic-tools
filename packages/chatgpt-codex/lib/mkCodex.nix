@@ -9,6 +9,34 @@
   sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
   codexExtracted = builtins.fromJSON (builtins.readFile ../../../overlays/chatgpt-codex-extracted.json);
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
+  # Launcher wrapper — see ./wrapPackage.nix for why Codex needs one at all.
+  wrapCodexPackage = import ./wrapPackage.nix {inherit lib pkgs;};
+
+  # Everything destined for Codex's own process environment: the merged
+  # `environmentVariables` pool plus `ai.shell`. Codex reads `SHELL` from its
+  # process environment and has no config key for it — `shell_environment_policy`
+  # governs what SPAWNED commands inherit, which is a different thing.
+  #
+  # Ordering is the contract, and it is the same one Claude and Kiro use:
+  # module-contributed defaults first, the consumer's own pool LAST, so an
+  # explicit `environmentVariables.SHELL` wins.
+  #
+  # This previously applied `resolvedShell` last, on the reasoning that the
+  # typed option is the more specific surface. That was defensible in
+  # isolation and wrong in aggregate: Claude (`settings.env`, mkDefault) and
+  # Kiro both let the explicit entry win, so the same two-key config resolved
+  # differently depending on which runtime the consumer happened to name.
+  # One rule everywhere beats a better rule in one place.
+  codexPackageFor = cfg: moduleEnvironmentVariables: mergedEnvironmentVariables: resolvedShell:
+    wrapCodexPackage {
+      inherit (cfg) package;
+      environmentVariables =
+        moduleEnvironmentVariables
+        // lib.optionalAttrs (resolvedShell != null) {
+          SHELL = lib.getExe resolvedShell;
+        }
+        // mergedEnvironmentVariables;
+    };
   jsonFormat = pkgs.formats.json {};
   tomlReconciler = ../../../lib/ai/reconcile-toml.py;
   tomlFormat = pkgs.formats.toml {};
@@ -824,10 +852,23 @@ in
     # Carried as DATA, not a module argument — see mkAiApp.nix.
     inherit pkgs;
     name = "codex";
+    # Honest: both backend callbacks consume `resolvedShell` via
+    # `codexPackageFor` above. See mkAiApp.nix's record-shape note.
+    supportsShell = true;
     transformers.markdown = lib.ai.transformers.agentsmd;
     defaults.package = pkgs.ai.chatgpt-codex;
 
     options = {
+      # Baked into the launcher wrapper (./wrapPackage.nix), so the value
+      # lands on Codex's own process and the commands it spawns — never in
+      # the project shell or the user's session. Codex has no config-file
+      # surface for its process environment; `shell_environment_policy`
+      # filters what SPAWNED commands inherit, which is a different thing.
+      environmentVariables = lib.mkOption {
+        type = lib.types.attrsOf lib.types.str;
+        default = {};
+        description = "Environment variables baked into the codex launcher wrapper. Scoped to the Codex process and the commands it spawns; never exported into the project shell.";
+      };
       configDir = lib.mkOption {
         type = lib.types.addCheck lib.types.str (value:
           value
@@ -959,6 +1000,9 @@ in
       mergedServers,
       mergedSkills,
       mergedAgents,
+      mergedEnvironmentVariables,
+      moduleEnvironmentVariables,
+      resolvedShell,
       topContext,
       topHooks,
       topSettings,
@@ -1042,7 +1086,7 @@ in
             "${cfg.configDir}/hooks.json".source = jsonFormat.generate "codex-hooks.json" {hooks = renderHooks effectiveHooks;};
           })
         ];
-        packages = [cfg.package];
+        packages = [(codexPackageFor cfg moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell)];
       };
     };
 
@@ -1054,6 +1098,9 @@ in
       mergedServers,
       mergedSkills,
       mergedAgents,
+      mergedEnvironmentVariables,
+      moduleEnvironmentVariables,
+      resolvedShell,
       topContext,
       topHooks,
       topSettings,
@@ -1135,7 +1182,7 @@ in
           ".codex/config.toml".source = tomlFormat.generate "codex-project-config.toml" settings;
         })
       ];
-      packages = [cfg.package];
+      packages = [(codexPackageFor cfg moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell)];
       tasks."ai:codex:materialize-profiles" = {
         exec = ''
           set -euETo pipefail

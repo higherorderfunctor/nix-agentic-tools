@@ -1,11 +1,11 @@
 # Wrap kiro-cli so it launches the way the config asks — shared by BOTH backends
 # (DRY). Returns the raw package when nothing needs wrapping.
 #
-# `environmentVariables` are baked as `export`s only when the backend has no
-# native export path — HM passes them here (symlinkJoin is its only export
-# mechanism); devenv passes `{}` because it exports via its native `env`
-# attrset, but STILL needs the flag injection so `devenv shell` launches the v3
-# TUI exactly like HM does.
+# `environmentVariables` are baked as `export`s on BOTH backends. devenv used
+# to pass `{}` here and export through its native `env` attrset instead; that
+# wrote the PROJECT SHELL, handing every variable to the developer's own
+# session, so it was retired on 2026-08-10. devenv also still needs the flag
+# injection so `devenv shell` launches the v3 TUI exactly like HM does.
 #
 # ── The argv contract ──────────────────────────────────────────────────────
 # `--v3` is a LAUNCHER-GLOBAL option, so it is injected BEFORE any subcommand.

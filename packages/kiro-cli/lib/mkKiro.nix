@@ -978,11 +978,49 @@
       ${pkgs.coreutils}/bin/rm -f "$RENDERED"
     )
   '';
+
+  # `ai.shell` / `ai.kiro.shell` → `SHELL` in Kiro's own process
+  # environment. Kiro's v3 engine selects its command shell with
+  # `process.env.SHELL || "/bin/sh"`, so `SHELL` is the whole knob —
+  # there is no Kiro-specific variable and no config key. (`KIRO_CHAT_SHELL`
+  # exists only in the Rust binary and is absent from the v3 JS bundle,
+  # and the wrapper forces `--v3`, so it does not apply. Recorded so it is
+  # not re-chased.)
+  #
+  # Everything bound for Kiro's own process environment, merged at the wrapper
+  # call site in ONE place so both backends agree.
+  #
+  # It is deliberately NOT contributed as an `ai.kiro.environmentVariables`
+  # definition, which is what it was until the collision semantics were
+  # re-read: that pool is collision-checked against `ai.environmentVariables`
+  # by KEY PRESENCE, so a module default for `SHELL` there turns a consumer's
+  # own `ai.environmentVariables.SHELL` into a hard eval error rather than an
+  # override. See `_sandboxSafeSshCommand` in lib/ai/sharedOptions.nix.
+  #
+  # Ordering is the contract: module defaults first, consumer pool last, so an
+  # explicit entry wins. Codex and Claude resolve the same way.
+  #
+  # Kiro selects its shell with `process.env.SHELL || "/bin/sh"`; `||` is an
+  # unset-or-empty fallback, so unlike Claude an unusable path here fails
+  # loudly at spawn rather than being silently ignored.
+  kiroEnvironment = {
+    moduleEnvironmentVariables,
+    mergedEnvironmentVariables,
+    resolvedShell,
+  }:
+    moduleEnvironmentVariables
+    // lib.optionalAttrs (resolvedShell != null) {
+      SHELL = lib.getExe resolvedShell;
+    }
+    // mergedEnvironmentVariables;
 in
   lib.ai.app.mkAiApp {
     # Carried as DATA, not a module argument — see mkAiApp.nix.
     inherit pkgs;
     name = "kiro";
+    # Honest: both backend callbacks consume `resolvedShell` via
+    # `kiroEnvironment` below. See mkAiApp.nix's record-shape note.
+    supportsShell = true;
     transformers.markdown = lib.ai.transformers.kiro;
     defaults = {
       package = pkgs.ai.kiro-cli;
@@ -1265,12 +1303,14 @@ in
         description = "Typed LSP server definitions; translated via `mkLspConfig` into settings/lsp.json on emission.";
       };
       # Env vars exported when launching kiro. In HM they're baked into
-      # the symlinkJoin wrapper; in devenv they populate the native
-      # `env` attrset. `attrsOf str` — matching the legacy surface.
+      # Baked into the symlinkJoin launcher on BOTH backends. devenv used to
+      # populate its native `env` attrset instead, which exported them into
+      # the project shell rather than into Kiro. `attrsOf str` — matching the
+      # legacy surface.
       environmentVariables = lib.mkOption {
         type = lib.types.attrsOf lib.types.str;
         default = {};
-        description = "Environment variables exported when launching kiro (HM: via wrapper; devenv: via native env).";
+        description = "Environment variables baked into the kiro launcher wrapper. Scoped to the Kiro process and the commands it spawns; never exported into the project shell.";
       };
       # V3 next-gen agent — appends `--v3` to the top-level `kiro-cli`
       # launcher. The granular `--agent-engine`/`--mode` flags live ONLY on the
@@ -1475,6 +1515,8 @@ in
         mergedRules,
         mergedLspServers,
         mergedEnvironmentVariables,
+        moduleEnvironmentVariables,
+        resolvedShell,
         topContext,
         ...
       }: let
@@ -1504,7 +1546,7 @@ in
         kiroPackage = wrapKiroPackage {
           inherit (cfg) v3 trustedMcpTools;
           package = resolvePackage cfg;
-          environmentVariables = mergedEnvironmentVariables;
+          environmentVariables = kiroEnvironment {inherit moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell;};
           inherit (kiroSecrets) secretEnv;
           identityMaterializer = resolveIdentityMaterializer cfg;
         };
@@ -1679,6 +1721,8 @@ in
         mergedRules,
         mergedLspServers,
         mergedEnvironmentVariables,
+        moduleEnvironmentVariables,
+        resolvedShell,
         topContext,
         ...
       }: let
@@ -1724,14 +1768,19 @@ in
             # (below), not through the wrapper. But the `--v3`/`--trust-tools`
             # flag injection AND runtime SECRET-env injection (secretEnv must
             # cat the decrypted file at launch, not bake a static value) both
-            # need the wrapper, so we reuse the shared wrapper with an empty
-            # static env set.
+            # need the wrapper — and since 2026-08-10 so does the static env,
+            # which is baked here rather than exported into the project shell.
             {
               packages = [
                 (wrapKiroPackage {
                   inherit (cfg) v3 trustedMcpTools;
                   package = resolvePackage cfg;
-                  environmentVariables = {};
+                  # Baked into the launcher, NOT devenv's `env` attrset. This
+                  # module does not write the project shell's environment —
+                  # devenv/Nix is the config path, and a variable exported
+                  # shell-wide reaches the developer's own session and every
+                  # other process in it, not just Kiro.
+                  environmentVariables = kiroEnvironment {inherit moduleEnvironmentVariables mergedEnvironmentVariables resolvedShell;};
                   inherit (kiroSecrets) secretEnv;
                   identityMaterializer = resolveIdentityMaterializer cfg;
                 })
@@ -1744,11 +1793,15 @@ in
             # Shared assertions (see mkAssertions): exclusive inline/dir
             # pairs, hook-name charset, steering-entry guards.
             {assertions = mkAssertions cfg;}
-            # Environment variables — devenv has a native `env` attrset
-            # so no wrapper is required.
-            (lib.mkIf (mergedEnvironmentVariables != {}) {
-              env = lib.mapAttrs (_: lib.mkDefault) mergedEnvironmentVariables;
-            })
+            # Environment variables ride the launcher wrapper above, exactly
+            # as they do under Home Manager. They used to be written into
+            # devenv's native `env` attrset instead ("no wrapper is
+            # required"), which was true of the mechanism and wrong about the
+            # scope: that exports into the project shell, so every variable
+            # here also reached the developer's interactive session. `SHELL`
+            # made the difference concrete — it changes what tmux, editors and
+            # anything else spawning `$SHELL` do — but the leak was never
+            # specific to it.
             # settings/lsp.json — typed LSP server definitions.
             (lib.mkIf (mergedLspServers != {}) {
               files."${cfg.configDir}/settings/lsp.json".text =

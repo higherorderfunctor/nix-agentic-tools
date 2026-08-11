@@ -9,8 +9,8 @@
 # project directory, and skills routing to that same project directory.
 #
 # Fanout absorbed in Task 4b (A3 gap-fill): lspServers typed LSP
-# config write, environmentVariables fed into the HM symlinkJoin
-# wrapper (export) and the devenv `env` blob, agents + agentsDir
+# config write, environmentVariables fed into the symlinkJoin wrapper on both
+# backends (devenv's `env` blob was retired 2026-08-10), agents + agentsDir
 # option pair writing under `${configDir}/agents/`, and the HM
 # symlinkJoin wrapper that injects `--additional-mcp-config` so the
 # rendered mcp-config.json actually gets loaded by the copilot
@@ -90,14 +90,14 @@ lib.ai.app.mkAiApp {
       default = {};
       description = "Typed LSP server definitions; translated via `mkCopilotLspConfig` into lsp-config.json on emission (adds fileExtensions mapping).";
     };
-    # Env vars exported when launching copilot. In HM they're baked
-    # into the symlinkJoin wrapper's `export FOO=bar` lines; in
-    # devenv they populate the native `env` attrset. `attrsOf str` —
-    # matching the legacy surface exactly.
+    # Baked into the symlinkJoin wrapper on BOTH backends. devenv used to
+    # populate its native `env` attrset instead, which exported them into the
+    # project shell rather than into Copilot. `attrsOf str` — matching the
+    # legacy surface exactly.
     environmentVariables = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
       default = {};
-      description = "Environment variables exported when launching copilot (HM: via wrapper; devenv: via native env).";
+      description = "Environment variables baked into the copilot launcher wrapper. Scoped to the Copilot process and the commands it spawns; never exported into the project shell.";
     };
     # Inline agent markdown content. Written under
     # `<configDir>/agents/<name>.md` in HM and
@@ -141,6 +141,7 @@ lib.ai.app.mkAiApp {
       mergedRules,
       mergedLspServers,
       mergedEnvironmentVariables,
+      moduleEnvironmentVariables,
       mergedAgents,
       topContext,
       ...
@@ -195,7 +196,7 @@ lib.ai.app.mkAiApp {
         inherit (cfg) package configDir;
         rootVar = "HOME";
         mcp = mergedServers != {};
-        environmentVariables = mergedEnvironmentVariables;
+        environmentVariables = moduleEnvironmentVariables // mergedEnvironmentVariables;
       };
       dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
       wrapCopilotPackage = import ./wrapPackage.nix {inherit lib pkgs;};
@@ -391,6 +392,7 @@ lib.ai.app.mkAiApp {
       mergedRules,
       mergedLspServers,
       mergedEnvironmentVariables,
+      moduleEnvironmentVariables,
       mergedAgents,
       topContext,
       ...
@@ -420,14 +422,19 @@ lib.ai.app.mkAiApp {
       # and dev/fragments/ai-clis/copilot-config-delivery.md for the measured
       # discovery behavior and the rejected COPILOT_HOME alternative.
       #
-      # `environmentVariables` is deliberately NOT passed: devenv exports via
-      # its native `env` attrset (see the merge below), so the only reason this
-      # backend wraps at all is the flag. That asymmetry with HM is the whole
-      # reason the helper takes both as separate inputs.
+      # `environmentVariables` IS passed, same as Home Manager. It used to be
+      # withheld here because devenv exports through its native `env` attrset
+      # — but that writes the PROJECT SHELL, so every variable also reached
+      # the developer's interactive session and everything else running in it.
+      # This module does not write the shell environment; devenv/Nix is the
+      # config path, and process scope is the wrapper's job on both backends.
+      # The helper still takes both inputs separately because MCP wrapping and
+      # env wrapping are independently triggered.
       copilotPackage = wrapCopilotPackage {
         inherit (cfg) package configDir;
         rootVar = "DEVENV_ROOT";
         mcp = mergedServers != {};
+        environmentVariables = moduleEnvironmentVariables // mergedEnvironmentVariables;
       };
     in
       lib.mkMerge [
@@ -461,12 +468,11 @@ lib.ai.app.mkAiApp {
         {packages = [copilotPackage];}
         # agents + agentsDir are no longer mutually exclusive
         # (parity with HM side).
-        # Environment variables — devenv has a native `env` attrset
-        # so no wrapper is required. `mkDefault` lets consumers
-        # override per-project via explicit `env.FOO = ...`.
-        (lib.mkIf (mergedEnvironmentVariables != {}) {
-          env = lib.mapAttrs (_: lib.mkDefault) mergedEnvironmentVariables;
-        })
+        # Environment variables ride `copilotPackage`'s wrapper above (see the
+        # note there). The previous `env = …` write put them in the project
+        # shell, which also handed them to the developer's own session; the
+        # per-project escape hatch it enabled (`env.FOO = …`) is deliberately
+        # gone, because devenv/Nix is the only config path here.
         # lsp-config.json — INERT at project scope. Copilot opens
         # `$HOME/.copilot/lsp-config.json` and nothing project-local, and
         # unlike MCP there is no `--additional-lsp-config` to point it here

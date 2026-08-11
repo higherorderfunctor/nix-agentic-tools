@@ -30,6 +30,7 @@
       "ai.codex.configDir"
       "ai.codex.context"
       "ai.codex.enable"
+      "ai.codex.environmentVariables"
       "ai.codex.execpolicyRules"
       "ai.codex.hooks"
       "ai.codex.instructions"
@@ -40,6 +41,7 @@
       "ai.codex.rules"
       "ai.codex.rulesDir"
       "ai.codex.settings"
+      "ai.codex.shell"
       "ai.codex.skills"
       "ai.codex.skillsDir"
     ]
@@ -56,6 +58,10 @@
     "ai.mcpServers"
     "ai.rules"
     "ai.rulesDir"
+    # Its whole contract is which runtimes it reaches, and Codex is the one
+    # that needed a launcher wrapper built to receive it — a description that
+    # stops naming Codex has stopped being true.
+    "ai.shell"
     "ai.skills"
     "ai.skillsDir"
   ];
