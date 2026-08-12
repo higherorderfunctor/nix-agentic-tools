@@ -38,7 +38,7 @@ for dir in /*; do
 done
 ```
 
-`ignored_set` is the the rootfs top level — exactly
+`ignored_set` is the rootfs top level — exactly
 `bin etc lib lib32 lib64 libexec nix-support sbin usr` — plus a hardcoded
 `/nix /dev /proc /etc`. Everything else is bound **read-write** at the same
 path: `/home`, `/opt`, `/var`, `/tmp`, `/snap`, `/mnt`, `/srv`, `/root`, all
