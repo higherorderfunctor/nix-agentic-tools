@@ -169,6 +169,7 @@ ints
 isaacphi
 isready
 jandedobbeleer
+journalctl
 journaled
 kagi
 kagiapi
@@ -225,6 +226,7 @@ neighbour
 neighbouring
 neighbours
 netlink
+netrc
 newfstatat
 niks
 nixbuild
@@ -265,6 +267,7 @@ partialclone
 passteque
 passthroughs
 passthru
+passwordless
 pasteable
 Patchelf
 pathlib
@@ -395,6 +398,7 @@ unhide
 unparameterized
 unparseable
 unrebased
+unredacted
 unresumable
 unreviewed
 unscanned

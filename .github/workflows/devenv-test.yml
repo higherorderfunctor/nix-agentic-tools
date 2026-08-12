@@ -131,7 +131,8 @@ jobs:
       # store at save time is roughly: nix + flake inputs + IFD sources
       # + the CI-lean devenv shell closure (~2GB, see devenv.nix) —
       # about 4G; 5G leaves headroom without hoarding the budget.
-      - if: steps.scope.outputs.needed == 'true'
+      - id: nix-cache
+        if: steps.scope.outputs.needed == 'true'
         uses: nix-community/cache-nix-action@v7.0.2
         with:
           gc-max-store-size-linux: 5G
@@ -154,6 +155,155 @@ jobs:
         with:
           systems: x86_64-linux
 
+      # Telemetry for issue #821 — NOT a fix, and deliberately not one.
+      #
+      # This job intermittently dies during devenv's "Configuring shell"
+      # phase with `error: path '/nix/store/...-references' is not valid`,
+      # naming the store copy of packages/stacked-workflows/references
+      # that packages/stacked-workflows/overlay.nix interpolates. The
+      # failure happens during EVALUATION, before any builder starts, so
+      # nothing a builder could echo can observe it. Three hypotheses are
+      # live and nobody has evidence to pick one: a devenv embedded-C-Nix
+      # / eval-cache defect, an interaction with the /nix store restored
+      # by the cache step above, and a lower-level store-registration
+      # race.
+      #
+      # So the next occurrence has to leave enough behind to discriminate
+      # between them. The three steps below record run context BEFORE
+      # devenv runs, run devenv under its native structured trace sink,
+      # and — on any NON-SUCCESS outcome — take a compact forensic
+      # snapshot. All of it lands in one short-retention artifact that is
+      # uploaded on SUCCESS TOO: a trace of a failing run is
+      # uninterpretable with no passing control to diff it against.
+      #
+      # What is deliberately NOT here, because #821 rules each out:
+      # `--no-eval-cache` as a standing flag (it would destroy the single
+      # most informative datum — whether the failing run was a devenv
+      # eval-cache hit or miss), `--max-jobs 1` (the error precedes
+      # parallel builders entirely), any retry-until-green loop, and
+      # uploads of either the store itself (size) or devenv's eval-cache
+      # SQLite database (it can capture environment inputs). The
+      # eval-cache probes below record file METADATA only.
+      #
+      # Every step here stays gated on steps.scope.outputs.needed,
+      # including the non-success one — a bare status function would also
+      # be true for a job that failed before the scope gate resolved.
+      #
+      # The snapshot step's gate is `failure() || cancelled()`, not
+      # `failure()` alone. `failure()` is FALSE on a cancellation, and a
+      # cancellation is a live shape for this bug: the job's own
+      # timeout-minutes note above records a real one (`update/serena`,
+      # ~46m, killed at 45m05s), and an eval that wedges into the 60m
+      # ceiling would be cancelled rather than failed. With `failure()`
+      # only, the artifact still uploads (`always()`) and the run reads as
+      # "telemetry collected" with the live state missing — the single
+      # worst outcome for a bug that only shows up intermittently.
+      #
+      # The telemetry directory is spelled ONCE, here, and published to
+      # later steps through $GITHUB_ENV. It cannot be a job- or
+      # workflow-level `env:` even though that would be the obvious home:
+      # the `runner` context (and so `runner.temp`) is unavailable in
+      # both, per GitHub's context-availability table. $GITHUB_ENV is the
+      # earliest point RUNNER_TEMP is resolvable, and the value reaches
+      # the upload step's `path:` as `env.DEVENV_TELEMETRY_DIR`.
+      - name: Record telemetry run context
+        if: steps.scope.outputs.needed == 'true'
+        env:
+          CACHE_HIT: ${{ steps.nix-cache.outputs.hit }}
+          CACHE_HIT_FIRST_MATCH: ${{ steps.nix-cache.outputs.hit-first-match }}
+          CACHE_HIT_PRIMARY_KEY: ${{ steps.nix-cache.outputs.hit-primary-key }}
+          CACHE_PRIMARY_KEY: ${{ steps.nix-cache.outputs.primary-key }}
+          CACHE_RESTORED_KEY: ${{ steps.nix-cache.outputs.restored-key }}
+          CACHE_RESTORED_KEYS: ${{ steps.nix-cache.outputs.restored-keys }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+
+          # Written on EVERY run, not just failures. #821's "next useful
+          # outcome" is a comparison, and the cache-restore outcome is the
+          # datum most likely to separate the restored-store hypothesis
+          # from the other two — it is worthless recorded only on the runs
+          # that broke.
+          #
+          # SOLE definition of the telemetry directory. Later steps read
+          # $DEVENV_TELEMETRY_DIR from the environment and the upload step
+          # reads env.DEVENV_TELEMETRY_DIR, so the literal appears once in
+          # this file and `mkdir -p` runs once in the job.
+          telemetry="${RUNNER_TEMP}/devenv-telemetry"
+          mkdir -p "$telemetry"
+          echo "DEVENV_TELEMETRY_DIR=${telemetry}" >> "$GITHUB_ENV"
+
+          # `nix run` resolves devenv from flake.lock; devenv.yaml pins the
+          # module framework separately. Read both revs out of the lockfiles
+          # rather than shelling out to `devenv version`, which would pay for
+          # a second evaluation before the one under investigation.
+          devenv_cli_rev="$(jq -r '.nodes.devenv.locked.rev // "unknown"' flake.lock)"
+          devenv_mod_rev="$(jq -r '.nodes.devenv.locked.rev // "unknown"' devenv.lock)"
+
+          # Assigned, not inlined into the `echo` below. A command
+          # substitution that fails inside `echo "k=$(...)"` CANNOT fail the
+          # echo — not even under inherit_errexit — so the field would
+          # silently record 0 and read as "the store was empty" rather than
+          # "the probe broke". Measured: the inline form continues with
+          # `store_entry_count=0` and rc=0; this form aborts the step.
+          store_entry_count="$(find /nix/store -maxdepth 1 -mindepth 1 | wc -l)"
+
+          {
+            echo "github_run_id=${GITHUB_RUN_ID}"
+            echo "github_run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "github_event_name=${GITHUB_EVENT_NAME}"
+            echo "github_ref=${GITHUB_REF}"
+            echo "github_sha=${GITHUB_SHA}"
+            echo "runner_os=${RUNNER_OS}"
+            echo "runner_arch=${RUNNER_ARCH}"
+            echo "nix_version=$(nix --version)"
+            echo "devenv_cli_rev=${devenv_cli_rev}"
+            echo "devenv_module_rev=${devenv_mod_rev}"
+            echo "cache_primary_key=${CACHE_PRIMARY_KEY}"
+            echo "cache_hit=${CACHE_HIT}"
+            echo "cache_hit_primary_key=${CACHE_HIT_PRIMARY_KEY}"
+            echo "cache_hit_first_match=${CACHE_HIT_FIRST_MATCH}"
+            echo "cache_restored_key=${CACHE_RESTORED_KEY}"
+            echo "cache_restored_keys=${CACHE_RESTORED_KEYS}"
+            # Cheap fingerprint of what the cache restore actually put on
+            # disk, for diffing a failing run against a passing one. A `du`
+            # would be more informative and costs minutes; this costs a
+            # readdir.
+            echo "store_entry_count=${store_entry_count}"
+          } > "${telemetry}/run-context.txt"
+
+          # devenv's eval cache, sampled BEFORE `devenv test` runs.
+          #
+          # It has to be sampled here to mean anything. The forensic step
+          # below runs only after `devenv test` has already created these
+          # directories, so "does the eval cache exist" measured there is a
+          # constant, not the hit/miss signal #821 asks for. Sampled here it
+          # is a real control — and what it is expected to show is ABSENCE:
+          # `.devenv/` is gitignored so a fresh checkout never carries one,
+          # and the cache step above restores /nix ONLY (no `paths:` input,
+          # so nothing puts `.devenv` or ~/.cache/devenv back). In other
+          # words the devenv eval cache is structurally COLD in this job on
+          # every run, which is itself a finding: it rules the eval-cache
+          # hypothesis down to a within-run effect and means the failure
+          # cannot be a stale cache carried across runs. A sample that ever
+          # comes back non-empty falsifies that and is the more interesting
+          # outcome.
+          #
+          # METADATA ONLY, same rule as the post-run probe: #821 forbids
+          # uploading the cache database itself because it can capture
+          # environment inputs. `find -printf` reports mode, owner, size and
+          # mtime and never opens a file. `|| :` because both paths being
+          # absent is the EXPECTED result and makes `find` exit non-zero.
+          find .devenv "${HOME}/.cache/devenv" -maxdepth 2 \
+            -printf '%M %u %s %TY-%Tm-%TdT%TH:%TM:%TS %p\n' \
+            > "${telemetry}/devenv-eval-cache-pre.txt" 2>&1 || :
+
+          echo "::group::telemetry run context"
+          cat "${telemetry}/run-context.txt"
+          echo "-- devenv eval cache before the run (expected: absent) --"
+          cat "${telemetry}/devenv-eval-cache-pre.txt"
+          echo "::endgroup::"
+
       # The devenv CLI resolves from THIS flake's pinned `devenv`
       # input — the same rev devenv.yaml pins for the module framework —
       # so CI exercises the version the repo actually pins (a bare
@@ -162,6 +312,452 @@ jobs:
       # fetching the devenv CLI (that flake's own nixConfig); devenv's
       # INTERNAL builds read the system nix.conf the cachix-action step
       # writes, not this flake's nixConfig.
+      #
+      # Flags added for #821 (verified against the pinned CLI's own
+      # --help, devenv 2.2.2): `--no-tui` because the interactive TUI
+      # rewrites lines and would make the captured log unreadable;
+      # `--verbose` for devenv's debug logs; `--trace-to json:file:...`
+      # for its native structured trace sink, which is the only view of
+      # the evaluation the error message itself does not give. All three
+      # are global options and parse either side of the subcommand; they
+      # go before `test` to match the CLI's own `devenv [OPTIONS]
+      # <COMMAND>` usage.
+      #
+      # `--verbose` raises the log's noise floor by an unmeasured amount,
+      # which is why the snapshot step below tiers its store-path parse
+      # instead of pooling every pattern: debug lines mentioning store
+      # paths now vastly outnumber the one line that names the offender.
       - name: Run devenv test
         if: steps.scope.outputs.needed == 'true'
-        run: nix run --inputs-from . devenv -- test
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+
+          telemetry="$DEVENV_TELEMETRY_DIR"
+
+          # The trace JSON is NEVER streamed — it goes to the artifact and
+          # nowhere else. The human-readable log still streams, inside a
+          # collapsed group, because `--verbose` makes it thousands of
+          # lines and an ungrouped dump would bury the failure rather than
+          # surface it.
+          #
+          # Be honest about what the group costs, because it is easy to
+          # over-claim: `::group::` renders COLLAPSED, and a failing step
+          # auto-expands the STEP, not the groups nested inside it. So the
+          # streamed copy is a CONVENIENCE that costs one click, not the
+          # primary read path — the artifact is canonical. The error lines
+          # are therefore re-emitted OUTSIDE the group on failure, so the
+          # thing a human opened the run to read is visible with nothing
+          # to expand.
+          status=0
+          echo "::group::devenv test (verbose; canonical copy in the run's telemetry artifact)"
+          nix run --inputs-from . devenv -- \
+            --no-tui \
+            --trace-to "json:file:${telemetry}/devenv-trace.json" \
+            --verbose \
+            test 2>&1 | tee "${telemetry}/devenv-test.log" || status=$?
+          echo "::endgroup::"
+
+          if [ "$status" -ne 0 ]; then
+            echo "devenv test failed (exit ${status}) — error lines from the log:"
+            # Bounded, and `|| :` because a log with NO `error:` line is a
+            # real outcome (a crash or cancellation before devenv printed
+            # one). A missing excerpt must not mask the exit status below.
+            grep -nE "error:" "${telemetry}/devenv-test.log" | tail -n 40 || :
+          fi
+
+          exit "$status"
+
+      - name: Capture forensic snapshot
+        # env.DEVENV_TELEMETRY_DIR is empty only if the run-context step
+        # never completed — reachable, because a failure or cancellation
+        # DURING or BEFORE that step lands here with nothing published and
+        # nothing to snapshot. Same guard the upload step carries, for the
+        # same reason: telemetry must not add a red step of its own, least
+        # of all one whose message is about telemetry rather than about
+        # #821.
+        if:
+          (failure() || cancelled()) && steps.scope.outputs.needed == 'true' &&
+          env.DEVENV_TELEMETRY_DIR != ''
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+
+          # In-script backstop for the same condition the `if:` guards.
+          # SKIP, never fail: re-spelling the path here would defeat the
+          # single-definition rule above, and an unset value can only mean
+          # the run-context step never completed — in which case there is
+          # nothing to snapshot and exiting 0 with a clear line beats both
+          # an `unbound variable` trace and the `:?` abort this replaces.
+          if [ -z "${DEVENV_TELEMETRY_DIR:-}" ]; then
+            echo "DEVENV_TELEMETRY_DIR unset: the run-context step never" \
+              "published it, so there is nothing to snapshot — skipping."
+            exit 0
+          fi
+          telemetry="$DEVENV_TELEMETRY_DIR"
+          snapshot="${telemetry}/forensics"
+          log="${telemetry}/devenv-test.log"
+          mkdir -p "$snapshot"
+
+          # Strict mode is the house rule for CI `run:` blocks and it stays
+          # — but a forensic snapshot must not abort on its first non-zero
+          # probe. An unregistered store path is EXACTLY the condition this
+          # step exists to record, and the strict `nix-store
+          # --check-validity` probe below exits non-zero on precisely that.
+          # Every probe therefore runs through `probe`, which turns the exit
+          # status into DATA (an `[exit N]` trailer in the probe's own file)
+          # instead of letting errexit eat the rest of the snapshot. The
+          # header still guards this step's OWN control flow: an unset
+          # variable or a broken pipeline here is a bug in the telemetry,
+          # not evidence about #821.
+          #
+          # Every probe is also time-bounded, twice over: by its own
+          # per-probe ceiling AND by one wall-clock budget that governs the
+          # WHOLE snapshot — the candidate loop below and the fixed probes
+          # after it alike. This step now runs on CANCELLATION too, and the
+          # shape that gets cancelled is a hang — so the probes most worth
+          # having are exactly the ones at risk of hanging themselves
+          # (anything touching the nix daemon, and the `devenv version`
+          # probe, which pays for an evaluation). GitHub does not document
+          # how long a cancelled job may keep running cleanup steps, so an
+          # unbounded snapshot could eat the whole window. A probe that
+          # trips its bound records `[exit 124]`, which is itself a finding
+          # — "the daemon did not answer" is exactly the kind of evidence
+          # #821 wants, and it is strictly better than the probe never
+          # running.
+          #
+          # A per-phase deadline alone is not enough, and the earlier form
+          # proved it: it bounded only the candidate loop, checked only at
+          # the TOP of an iteration (so one iteration could overshoot by
+          # five full probe timeouts), and left the ten fixed probes
+          # unbounded in aggregate. Measured against all-hanging stubs,
+          # with a 3s per-probe ceiling standing in for 60s and a 3s budget
+          # for 180s: the step ran 45s — 15 probes each riding its full
+          # ceiling, i.e. ~15 minutes at the real numbers, which is exactly
+          # the "do not eat the whole window" property the budget exists to
+          # provide. The same measurement now returns in 3s with 13 probes
+          # recorded as skipped.
+          snapshot_deadline=$((SECONDS + 180))
+          # `probe` clamps against THIS one, and it moves: the candidate
+          # loop runs against a sub-deadline so a pathological candidate
+          # list cannot starve the fixed probes that follow, then it is
+          # handed the rest of the budget. Those fixed probes characterize
+          # the MACHINE and are the last thing worth losing.
+          probe_deadline=$((SECONDS + 120))
+          probe_timeout=60
+          probes_truncated=no
+          probe() {
+            local name=$1
+            shift
+            local out="${snapshot}/${name}.txt"
+            local rc=0
+            # Whichever is smaller, the per-probe ceiling or the time left
+            # in the budget — so no probe can overshoot the deadline it is
+            # running inside, wherever in the snapshot it sits.
+            local budget=$((probe_deadline - SECONDS))
+            printf '$ %s\n\n' "$*" > "$out"
+            if [ "$budget" -le 0 ]; then
+              # Recorded, not silently omitted: a probe file that says why
+              # it is empty is evidence; a missing file is ambiguous.
+              probes_truncated=yes
+              printf '\n[skipped: snapshot time budget exhausted]\n' >> "$out"
+              echo "probe ${name}: skipped (time budget exhausted)"
+              return 0
+            fi
+            if [ "$budget" -gt "$probe_timeout" ]; then
+              budget=$probe_timeout
+            fi
+            timeout "$budget" "$@" >> "$out" 2>&1 || rc=$?
+            printf '\n[exit %d]\n' "$rc" >> "$out"
+            echo "probe ${name}: exit ${rc}"
+          }
+
+          # GitHub masks registered secrets in the live log but NOT inside
+          # uploaded artifacts, and Nix config can carry credentials. Blank
+          # the VALUE of any setting whose NAME contains one of the markers
+          # below; the key stays visible so the snapshot still shows which
+          # credential settings were in effect. Today neither the cachix
+          # nor the install-nix step passes a token, so this is
+          # future-proofing rather than an active leak.
+          #
+          # What each marker actually catches, stated precisely because the
+          # distinction is easy to get wrong: `access-tokens` and
+          # `auth`/`password` settings hold the CREDENTIAL ITSELF, so those
+          # are the exposure case. `netrc-file` and `secret-key-files` hold
+          # a PATH — leaking one discloses layout, not a secret. `netrc` is
+          # in the alternation for that second reason and had to be added
+          # explicitly: nothing else in the list matches `netrc-file`, so
+          # it previously survived verbatim (`secret-key-files` was already
+          # covered, by `secret`). Markers are alphabetical.
+          #
+          # A FUNCTION, called immediately after each config capture,
+          # because this used to be a terminal sweep at the end of the step
+          # and that is defeated by the very path the `cancelled()` gate
+          # added: the step can be killed mid-flight while up to ten
+          # 60s-bounded probes still stand between the capture and the
+          # sweep, and the upload step is `always()`. Measured with a stub
+          # `nix config show` emitting `access-tokens =
+          # github.com=ghp_...` and a `nix store info` that hangs, SIGKILLed
+          # 4s in: the terminal-sweep form left the token readable in
+          # forensics/nix-config.txt. Redacting per capture shrinks that
+          # window from minutes to the ~3ms between the probe returning
+          # and `sed -i` finishing — measured, not estimated, and still
+          # observable on disk by a tight polling watcher. It is a
+          # narrowing, not an elimination; closing it entirely would mean
+          # redacting inside `probe`, which would make the captured exit
+          # status `sed`'s and destroy the `[exit N]` signal.
+          redact_config() {
+            local out="${snapshot}/${1}.txt"
+            [ -f "$out" ] || return 0
+            sed -i -E \
+              's/^([^ =]*(auth|netrc|password|secret|token)[^ =]*)([ \t]*=[ \t]*).*/\1\3<redacted>/I' \
+              "$out"
+          }
+
+          # Why this snapshot exists at all, recorded IN the snapshot: on a
+          # cancellation there is no failing step to point at, so without
+          # this an analyst cannot tell a cancelled run from a failed one
+          # after download.
+          log_present=no
+          if [ -s "$log" ]; then
+            log_present=yes
+          fi
+          {
+            echo "job_status=${JOB_STATUS}"
+            echo "devenv_log_present=${log_present}"
+          } > "${snapshot}/snapshot-reason.txt"
+
+          # Parse the offending store path out of the captured log rather
+          # than hardcoding lww9xd5j...-references from the two observed
+          # failures. That hash is the content hash of this repo's
+          # packages/stacked-workflows/references tree and changes the
+          # moment that tree does; a different local source is free to fail
+          # next time and the snapshot still has to point at the right path.
+          #
+          # The parse is TIERED by signature strength, and each tier is
+          # tried alone. Pooling the patterns and running the result
+          # through `sort -u | head` — the obvious spelling — silently
+          # drops the answer: `sort` orders by store HASH, which is random
+          # and completely uncorrelated with relevance, so `head` then
+          # keeps the ten lexicographically-first hashes. Measured against
+          # a synthetic log of 15 `does not exist` noise lines plus the
+          # real `error: path '/nix/store/lww9xd5j...-references' is not
+          # valid`, the pooled form emitted ten noise paths and DROPPED the
+          # real one, and the step still reported success. `--verbose`
+          # (added above) makes that noise floor worse, not better.
+          #
+          # Ordering: `is not valid` is the exact #821 signature and gets a
+          # tier to itself; the weaker existence patterns come next; a bare
+          # `error:` is the last-resort fallback. Fall through only when a
+          # tier yields NOTHING, so a strong match is never diluted.
+          candidates="${snapshot}/store-path-candidates.txt"
+          matched_tier=none
+          : > "$candidates"
+
+          # `awk '!seen[$0]++'` de-duplicates while preserving
+          # FIRST-OCCURRENCE order, which is the order the log reported the
+          # paths in — the closest thing to a relevance ranking available.
+          # The cap is 200, not 10: each probe below is microseconds, so a
+          # tight cap buys nothing and can discard the very path this
+          # snapshot exists to characterize. It survives only to stop a
+          # pathological log from spawning unbounded probes.
+          extract_store_paths() {
+            grep -E "$1" "$log" \
+              | grep -oE "/nix/store/[0-9a-z]{32}-[A-Za-z0-9+._?=-]*" \
+              | awk '!seen[$0]++' \
+              | head -n 200 \
+              || :
+          }
+
+          if [ -s "$log" ]; then
+            for tier_pattern in \
+              'is not valid' \
+              'does not exist|No such file or directory' \
+              'error:'; do
+              extract_store_paths "$tier_pattern" > "$candidates"
+              if [ -s "$candidates" ]; then
+                matched_tier="$tier_pattern"
+                break
+              fi
+            done
+          fi
+
+          echo "matched_store_path_tier=${matched_tier}" \
+            >> "${snapshot}/snapshot-reason.txt"
+
+          echo "::group::store path candidates parsed from the devenv log"
+          if [ -s "$candidates" ]; then
+            echo "matched tier: ${matched_tier}"
+            cat "$candidates"
+          else
+            # Say so explicitly, in the artifact as well as the log. An
+            # empty candidates file is ambiguous on its own — it reads like
+            # "the paths were checked and were fine" when it actually means
+            # "no tier matched", which is the normal state on a
+            # cancellation with no error line yet.
+            echo "no store-path candidates: no tier matched the captured log"
+            echo "(log present: ${log_present}; job status: ${JOB_STATUS})"
+          fi
+          echo "::endgroup::"
+
+          # The candidate cap bounds the RECORD; the deadline declared with
+          # `probe` above bounds the WORK. Recording 200 candidates is
+          # right for the artifact — it should list everything the tier
+          # matched — but it must not become 200 x 5 units of work. The
+          # scenario that produces a cancellation is a wedged nix daemon,
+          # in which every probe rides its full timeout, and 1000 probes x
+          # 60s is over sixteen hours. Paths past the deadline stay listed
+          # in store-path-candidates.txt, just not probed, and
+          # snapshot-reason.txt records both how many were reached and that
+          # truncation happened — so a truncated snapshot is legible as
+          # truncated rather than looking like a short candidate list.
+          #
+          # This top-of-iteration check is now an optimization, not the
+          # bound: it stops the loop writing five `[skipped]` files per
+          # remaining candidate. `probe` enforces the deadline itself, so a
+          # candidate that starts just inside it can no longer overshoot by
+          # a whole iteration.
+          index=0
+          while IFS= read -r store_path; do
+            [ -n "$store_path" ] || continue
+            if [ "$SECONDS" -ge "$probe_deadline" ]; then
+              probes_truncated=yes
+              break
+            fi
+            index=$((index + 1))
+            # Each probe file opens with the command it ran, full path
+            # included, so a bare `pathN-*.txt` name is still self-describing.
+            probe "path${index}-ls" ls -ld -- "$store_path"
+            # STRICT first, and it is the only probe here whose EXIT STATUS
+            # discriminates. Measured on nix 2.34.4 against an invalid path:
+            # bare `--check-validity` prints `error: path '...' is not
+            # valid` and exits 1, while `--check-validity --print-invalid`
+            # prints the path and exits 0 — the same 0 a valid path gives.
+            # `nix path-info --json` is likewise exit 0 with
+            # `{"<path>":null}`. So the two informative probes below are
+            # kept for their OUTPUT, and this one carries the signal an
+            # analyst scanning `[exit N]` trailers will actually read.
+            probe "path${index}-check-validity-strict" \
+              nix-store --check-validity "$store_path"
+            probe "path${index}-check-validity-print-invalid" \
+              nix-store --check-validity --print-invalid "$store_path"
+            # Kept as plain `--json` on purpose. nix 2.34.4 warns
+            # `'--json' without '--json-format' is deprecated; please
+            # specify '--json-format 1' or '--json-format 2'. This will
+            # become an error in a future release.` — expect that line in
+            # the probe output, it is not a symptom of #821. Adding the
+            # flag now would make the probe fail outright on any older nix
+            # that predates `--json-format`, which is the worse trade for
+            # telemetry that has to run wherever the bug shows up; revisit
+            # when the warning becomes an error.
+            probe "path${index}-path-info" nix path-info --json "$store_path"
+            probe "path${index}-store-verify" \
+              nix store verify --no-trust "$store_path"
+          done < "$candidates"
+
+          echo "probed_candidates=${index}" \
+            >> "${snapshot}/snapshot-reason.txt"
+
+          # Candidate loop done — hand the rest of the snapshot budget to
+          # the fixed probes below.
+          probe_deadline=$snapshot_deadline
+
+          probe nix-version nix --version
+          # Each config capture is redacted IMMEDIATELY, before the next
+          # probe runs, so no unredacted window survives a mid-flight kill.
+          probe nix-config nix config show
+          redact_config nix-config
+          probe nix-conf-file cat /etc/nix/nix.conf
+          redact_config nix-conf-file
+          probe nix-store-info nix store info
+          probe nix-db-metadata ls -la /nix/var/nix/db
+          probe devenv-version nix run --inputs-from . devenv -- version
+          probe disk-usage df -h
+          probe inode-usage df -i
+          # `sudo -n`, not bare `sudo`: GitHub's runners are passwordless, but
+          # a probe that ever waits on a password prompt would burn the job's
+          # 60m ceiling instead of failing in a millisecond.
+          probe nix-daemon-journal \
+            sudo -n journalctl --no-pager --unit nix-daemon --lines 2000
+          # POST-run companion to devenv-eval-cache-pre.txt, which the
+          # run-context step writes BEFORE devenv runs. Read the two
+          # together or neither means anything: by the time this step runs,
+          # `devenv test` has already created these directories, so this
+          # sample alone cannot say whether the cache pre-existed — it is
+          # a constant, not a hit/miss signal. What it does add is what the
+          # run WROTE (sizes and mtimes), which against the pre-run sample
+          # gives the delta.
+          #
+          # METADATA ONLY, same as the pre-run sample: #821 forbids
+          # uploading the eval-cache database because it can capture
+          # environment inputs; `find -printf` reports mode, owner, size
+          # and mtime and never opens a file.
+          probe devenv-cache-metadata-post \
+            find .devenv "${HOME}/.cache/devenv" -maxdepth 2 \
+            -printf '%M %u %s %TY-%Tm-%TdT%TH:%TM:%TS %p\n'
+
+          # Belt and braces only. The per-capture calls above are the fix;
+          # this re-sweep exists so a config probe added later without its
+          # paired `redact_config` call is still redacted before upload.
+          # `redact_config` is idempotent — a value already blanked has no
+          # marker left in it to match a second time.
+          for config_probe in nix-config nix-conf-file; do
+            redact_config "$config_probe"
+          done
+
+          # LAST, so it covers truncation wherever it happened — the
+          # candidate loop or any of the fixed probes above. Written at the
+          # end for the same reason the redaction is NOT: this is a summary
+          # of the whole step, and a snapshot killed before it simply has
+          # no summary, which costs nothing.
+          echo "probes_truncated=${probes_truncated}" \
+            >> "${snapshot}/snapshot-reason.txt"
+
+      # Retained on SUCCESS as well as failure, deliberately: #821 is
+      # explicit that a failure-only trace cannot be meaningfully compared
+      # to anything, and the whole point of this telemetry is the diff
+      # between a run that broke and one that did not.
+      #
+      # 7 days is the "short retention" the issue asks for — long enough to
+      # survive a weekend before someone reads the run, short enough that
+      # an always-on artifact never becomes a storage line item.
+      #
+      # The name carries run id AND attempt because upload-artifact refuses
+      # to overwrite a name that already exists within a run: re-running a
+      # failed attempt would otherwise fail to upload the very evidence the
+      # re-run exists to collect.
+      #
+      # A downloaded artifact self-identifies: `forensics/` exists only on
+      # the NON-SUCCESS path, so its presence marks the failing (or
+      # cancelled) member of a pass/fail pair without cross-referencing the
+      # run in the UI, and `forensics/snapshot-reason.txt` says which of
+      # the two it was.
+      #
+      # Pinned to v7, not v4, and the major matters here: v4 runs on
+      # `node20` and would be the ONLY node20 JS action in this workflow —
+      # checkout@v6, cachix-action@v17 and cache-nix-action@v7.0.2 are all
+      # node24. ci.yml and update.yml paper over their own node20 actions
+      # with a workflow-level FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 shim; this
+      # workflow has none and should not grow one to keep a stale action
+      # alive. v7.0.1's `runs.using` was read before switching, and every
+      # input used below exists unchanged in it.
+      - name: Upload devenv telemetry
+        # env.DEVENV_TELEMETRY_DIR is empty only if the run-context step
+        # never completed, in which case `path:` would be empty and the
+        # upload would fail — telemetry must not be able to add a red step
+        # of its own, so skip instead.
+        if:
+          always() && steps.scope.outputs.needed == 'true' &&
+          env.DEVENV_TELEMETRY_DIR != ''
+        uses: actions/upload-artifact@v7
+        with:
+          # `warn`, never `error`: telemetry must not be able to turn a
+          # green run red. If the devenv step never got far enough to write
+          # anything, that is a fact about the run, not a failure of this
+          # step.
+          if-no-files-found: warn
+          name: devenv-telemetry-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.DEVENV_TELEMETRY_DIR }}
+          retention-days: 7

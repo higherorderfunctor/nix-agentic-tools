@@ -7,32 +7,42 @@ applyTo: ".github/workflows/devenv-test.yml,devenv.nix,lib/ai/hm-helpers.nix,pac
 
 # CI-lean closure taxonomy
 
-> **Last verified:** 2026-08-05 (commit pending — the repo-aware Codex wrapper
-> and the `nix-agentic-tools` permission profile are both DELETED; this shell
-> converges on the legacy `workspace-write` sandbox that every other repository
-> the maintainer runs already uses, and the beta permission model is locked out
-> at the factory. Two measured facts drove it, both from `codex sandbox` on
-> 0.146.1 with no model in the loop: the profile denied `~/.cache/nix` while the
-> identical grant was live everywhere else, and it ALLOWED the primary
-> checkout's working tree, which is the opposite of what its own comment
-> claimed). Prior: 2026-08-05 (commit pending — records that `devenv-test`
-> remains always-reporting but is no longer required by branch protection; the
-> path-filter constraint is therefore optional rather than load-bearing). Prior:
-> 2026-08-03 (commit pending — makes `devenv-test` an always-reporting required
-> context while preserving the cold closure only for relevant paths). Prior:
-> 2026-08-03 (commit pending — updates the consumer-export taxonomy after dev
-> tools move beneath `pkgs.ai.devTools`; shell membership is unchanged). Prior:
-> 2026-08-02 (commit pending — the repo's beta Codex permission profile
-> explicitly grants the user-global Semble cache because beta profiles do not
-> compose with the legacy user sandbox table). Prior: 2026-08-02 (commit pending
-> — the repo-aware Codex wrapper now distinguishes runtime commands from
-> administrative commands before injecting the worktree root and named profile;
-> an argv-probe build lets enterTest verify runtime injection (including `apply`
-> and `exec-server`) and doctor pass-through exactly). Prior: 2026-08-02 (PR
-> #698 — introduced the wrapper and verified PATH precedence plus explicit-flag
-> idempotence). Prior: 2026-07-22 (PR #439). If you change what `devenv.nix`
-> puts in the shell, which factories install CLI wrappers, or the
-> `devenv-test.yml` cache wiring, re-verify this and bump the marker.
+> **Last verified:** 2026-08-12 (commit pending — the job now carries always-on
+> telemetry for issue #821's intermittent local-source store-path failure. The
+> closure taxonomy below is untouched: nothing was added to the shell, and the
+> cache key, prefix fallback and `gc-max-store-size-linux` bound are all
+> unchanged. The new section at the end records only the ONE fact about that
+> telemetry that is invisible from the code — the cache step now carries
+> `id: nix-cache` because a later step reads its restore outputs. Every other
+> rationale is commented at its own site in `devenv-test.yml` and is
+> deliberately NOT restated here; a fragment that duplicates a comment is a
+> second copy to keep true). Prior: 2026-08-05 (commit pending — the repo-aware
+> Codex wrapper and the `nix-agentic-tools` permission profile are both DELETED;
+> this shell converges on the legacy `workspace-write` sandbox that every other
+> repository the maintainer runs already uses, and the beta permission model is
+> locked out at the factory. Two measured facts drove it, both from
+> `codex sandbox` on 0.146.1 with no model in the loop: the profile denied
+> `~/.cache/nix` while the identical grant was live everywhere else, and it
+> ALLOWED the primary checkout's working tree, which is the opposite of what its
+> own comment claimed). Prior: 2026-08-05 (commit pending — records that
+> `devenv-test` remains always-reporting but is no longer required by branch
+> protection; the path-filter constraint is therefore optional rather than
+> load-bearing). Prior: 2026-08-03 (commit pending — makes `devenv-test` an
+> always-reporting required context while preserving the cold closure only for
+> relevant paths). Prior: 2026-08-03 (commit pending — updates the
+> consumer-export taxonomy after dev tools move beneath `pkgs.ai.devTools`;
+> shell membership is unchanged). Prior: 2026-08-02 (commit pending — the repo's
+> beta Codex permission profile explicitly grants the user-global Semble cache
+> because beta profiles do not compose with the legacy user sandbox table).
+> Prior: 2026-08-02 (commit pending — the repo-aware Codex wrapper now
+> distinguishes runtime commands from administrative commands before injecting
+> the worktree root and named profile; an argv-probe build lets enterTest verify
+> runtime injection (including `apply` and `exec-server`) and doctor
+> pass-through exactly). Prior: 2026-08-02 (PR #698 — introduced the wrapper and
+> verified PATH precedence plus explicit-flag idempotence). Prior: 2026-07-22
+> (PR #439). If you change what `devenv.nix` puts in the shell, which factories
+> install CLI wrappers, or the `devenv-test.yml` cache wiring, re-verify this
+> and bump the marker.
 
 The `devenv-test` CI gate (`.github/workflows/devenv-test.yml`) runs
 `devenv test` on ephemeral runners, so **everything in the shell closure is
@@ -121,6 +131,29 @@ that all four roots are present.
 Two proofs to preserve when touching the gates: with `CI` unset the shell must
 rebuild to the **identical store path** (local behavior unchanged — compare
 `devenv shell` store paths pre/post), and `CI=1 devenv test` must stay green.
+
+## The job also carries always-on #821 telemetry
+
+`devenv-test.yml` records a run-context file before `devenv test`, runs devenv
+with `--no-tui --trace-to json:file:… --verbose`, takes a forensic snapshot on
+any non-success outcome, and uploads all of it as one 7-day artifact. It is
+diagnostics for issue #821 (an intermittent
+`path '/nix/store/…-references' is not valid` during shell configuration), not a
+fix, and it changes nothing about the shell closure.
+
+Why each individual choice is the way it is — uploading on success, the compound
+scope gate, the cancellation arm on the snapshot's `if:`, the strict-mode header
+alongside a `probe` helper that turns exit status into data, the tiered
+store-path parse — is commented at the site in `devenv-test.yml`. Read it there;
+it is not restated here.
+
+One coupling is invisible from either end, which is the only reason it is
+written down at all: **the cache step's `id: nix-cache` is load-bearing.** The
+run-context step reads that step's restore outputs, and nothing at the cache
+step hints that anything depends on its id. Removing or renaming it blanks those
+fields silently — the run-context file still writes, with empty values. (Which
+outputs, specifically, is left to the workflow: enumerating them here is how
+this paragraph would rot the next time one is added.)
 
 <!-- Fragment: dev/fragments/devenv/files-internals.md -->
 
