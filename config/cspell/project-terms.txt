@@ -169,6 +169,7 @@ ints
 isaacphi
 isready
 jandedobbeleer
+journalctl
 journaled
 kagi
 kagiapi

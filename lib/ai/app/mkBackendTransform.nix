@@ -124,10 +124,34 @@
     builtins.attrNames
     (lib.filterAttrs (_: srv: (srv.url or null) == null) proxiedServers);
 
+  # A proxied server's TOP-LEVEL `headers` are the CLIENT's, and the
+  # client entry is an unauthenticated loopback url — so a credential
+  # there would be written into the client's config, which is the exact
+  # thing the proxy exists to prevent. Injected credentials belong in
+  # `proxy.headers`.
+  #
+  # This is also the migration message. Before 2026-08-13 top-level
+  # credential headers were ABSORBED into the daemon when `proxy.enable`
+  # was set; anything written against that shape must move. Failing loudly
+  # is deliberate — silently absorbing them is what made one key mean two
+  # things, and silently passing them through would leak.
+  proxiedWithCredentialHeaders =
+    builtins.attrNames
+    (lib.filterAttrs
+      (_: srv:
+        builtins.any
+        (v: builtins.isAttrs v && (v ? file || v ? helper))
+        (builtins.attrValues (srv.headers or {})))
+      proxiedServers);
+
   proxyAssertions = [
     {
       assertion = proxiedWithoutUrl == [];
       message = "ai.${appRecord.name}.mcpServers: ${lib.concatStringsSep ", " proxiedWithoutUrl} set `proxy.enable` but no `url`. The proxy forwards to that url, so there is nothing to proxy to — set `url` (a plain string or a credential), or drop `proxy.enable`.";
+    }
+    {
+      assertion = proxiedWithCredentialHeaders == [];
+      message = "ai.${appRecord.name}.mcpServers: ${lib.concatStringsSep ", " proxiedWithCredentialHeaders} set `proxy.enable` and put a CREDENTIAL in the server's top-level `headers`. On a proxied server those are the CLIENT's headers and are written into its config, which would hand it the credential the proxy exists to withhold. Move them to `proxy.headers`, where the daemon injects them and no client ever sees the value. (Top-level `headers` used to be absorbed into the daemon automatically; that behavior was removed so the key means one thing.)";
     }
     {
       assertion = appRecord.pkgs != null || proxiedServers == {};
@@ -156,6 +180,13 @@
         ExecStart = "${mcpProxy.startScriptFor spec}";
         Restart = "on-failure";
         RestartSec = 5;
+        # Per-server attribution in the journal. Without this the visible
+        # identifier is the ExecStart store basename — the server name
+        # behind a 32-char hash that CHANGES ON EVERY REBUILD. That is
+        # load-bearing rather than cosmetic: the logs carry no request
+        # headers at all (see mcpProxy.nix), so the unit is the only thing
+        # that says which proxy a line came from.
+        SyslogIdentifier = "mcp-proxy-${name}";
         # The decrypted values live only here and in the process's own
         # memory: /proc/<pid>/environ is 0400, while /proc/<pid>/cmdline
         # is world-readable — which is why nothing is passed as argv.

@@ -287,6 +287,47 @@ in {
               and a silent loopback collision is a bad failure mode.
             '';
           };
+          headers = lib.mkOption {
+            type = lib.types.attrsOf (lib.types.nullOr secretValue);
+            default = {};
+            description = ''
+              Headers the PROXY DAEMON applies on the way upstream. Three
+              value shapes:
+
+              - a credential (`{ file | helper; prefix?; suffix?; var?; }`)
+                — read from its `file`, or produced by its `helper`, when
+                the daemon starts.
+
+                The SECRET VALUE never reaches the client, the Nix store,
+                argv, or the journal. What lands in the store-backed
+                Caddyfile is a `{$VAR}` PLACEHOLDER, wrapped in any
+                `prefix`/`suffix`, which Caddy substitutes from the
+                daemon's environment while parsing its config. The
+                distinction matters: the rendered header line is public,
+                the value it resolves to is not.
+              - a plain string — injected literally.
+              - `null` — DELETED, so a header the client sent does not
+                reach the upstream.
+
+              This is separate from the server's top-level `headers` on
+              purpose, and the split is the whole interface: top-level
+              `headers` are what the CLIENT sends, these are what the
+              PROXY injects. Before 2026-08-13 the top-level ones were
+              absorbed into the daemon whenever `proxy.enable` was set, so
+              a single key meant two different things depending on a
+              sibling flag.
+
+              A credential in the server's top-level `headers` on a
+              proxied server is an ERROR rather than an absorption — it
+              would be handed to the client, which is exactly what the
+              proxy exists to prevent.
+
+              NOTE the daemon is shared: it is an unauthenticated loopback
+              endpoint, so anything injected here is applied to every
+              local client that reaches the port, not just the one you had
+              in mind.
+            '';
+          };
         };
       });
       default = null;

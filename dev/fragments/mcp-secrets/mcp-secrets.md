@@ -1,6 +1,19 @@
 ## SOPS-Injectable Remote HTTP MCP Servers
 
-> **Last verified:** 2026-08-06 (commit pending — adds the LOCAL
+> **Last verified:** 2026-08-13 (commit pending — the proxy was writing every
+> injected credential to the systemd journal in CLEARTEXT, because Caddy's
+> reverse_proxy error logs embed the whole request header map and its built-in
+> `log_credentials` covers only Authorization/Cookie, never the custom auth
+> headers this proxy exists to inject. Measured on live units: 35 journal lines
+> carrying a gateway API key. Fixed by dropping the WHOLE header map rather than
+> naming secret fields — a per-field list is a denylist that fails open, and
+> abandoning it also deleted the canonical-casing trap it required. Attribution
+> moves to an explicit per-unit `SyslogIdentifier`. SPLITS the header surface:
+> `<server>.headers` are the CLIENT's and asserted credential-free,
+> `proxy.headers` are what the daemon injects, with `null` meaning delete;
+> absorption is gone. Records that client-identity masking was tried on
+> 2026-08-12 and REMOVED — the headers are undici defaults, not harness
+> markers). Prior: 2026-08-06 (commit pending — adds the LOCAL
 > CREDENTIAL-INJECTING PROXY (`proxy.enable`, `lib/ai/mcpProxy.nix`), which
 > retires the per-binary scope mismatch below for any server that opts in: the
 > credential moves into a systemd user daemon and the client gets an
@@ -51,12 +64,19 @@ those ecosystems can consume it.
 
 **Where the secret is, and is not** — the measurement that decides the design:
 
-| Location                  | Mode   | Secret there?                |
-| ------------------------- | ------ | ---------------------------- |
-| `/proc/<pid>/environ`     | `0400` | yes                          |
-| `/proc/<pid>/cmdline`     | `0444` | **never**                    |
-| the Caddyfile (Nix store) | `0444` | never — `{$VAR}` tokens only |
-| `mcp.json`                | varies | never                        |
+| Location                  | Mode   | Secret there?                     |
+| ------------------------- | ------ | --------------------------------- |
+| `/proc/<pid>/environ`     | `0400` | yes                               |
+| `/proc/<pid>/cmdline`     | `0444` | **never**                         |
+| the Caddyfile (Nix store) | `0444` | never — `{$VAR}` tokens only      |
+| `mcp.json`                | varies | never                             |
+| the systemd journal       | varies | never — but only since 2026-08-13 |
+
+That last row is the one this table originally missed, and it was wrong for the
+whole life of the feature — see the journal section below. Treat any NEW sink (a
+log, a metric label, an error message) as guilty until measured; the four rows
+above were each reasoned about deliberately, and the journal still got through
+because nothing in the design put a credential there on purpose.
 
 **`$(cat …)` does NOT keep a secret out of argv.** The shell expands command
 substitution BEFORE `execve()`, so the kernel stores the literal value and any
@@ -94,9 +114,31 @@ It fails CLOSED, deliberately differing from the launcher wrapper below: an
 empty or unreadable secret exits 1 naming the variable and the file, rather than
 starting a proxy that would answer every client with the upstream's 401.
 
+### Two header surfaces, and which one is which
+
+Since 2026-08-13 the two are SPLIT, and the split is the whole interface:
+
+| Where              | Means                            | May hold a credential? |
+| ------------------ | -------------------------------- | ---------------------- |
+| `<server>.headers` | what the CLIENT sends            | **no — asserts**       |
+| `proxy.headers`    | what the DAEMON injects upstream | yes, that is the point |
+
+`proxy.headers` takes three value shapes: a credential (read from its file at
+daemon start and injected), a plain string (injected literally), or **`null`**
+(DELETED, so a header the client sent never reaches the upstream).
+
+Before this, `<server>.headers` were ABSORBED into the daemon whenever
+`proxy.enable` was set — so one key meant "the client sends this" normally and
+"the proxy injects this" when a sibling flag was on. That is reversed. A
+credential left in `<server>.headers` on a proxied server is now a hard
+assertion naming `proxy.headers`, not an absorption: those headers are written
+into the client's config, so passing one through would hand the client the very
+credential the proxy exists to withhold. The assertion doubles as the migration
+message for config written against the old shape.
+
 **The upstream request is byte-identical to the un-proxied one**, plus the
-injected credentials and nothing else. That is a deliberate property, not a
-happy accident, and it took two fixes beyond the obvious one:
+injected `proxy.headers`. Removing the proxy's own fingerprint is a CORRECTNESS
+concern. It took two fixes beyond the obvious one:
 
 - Caddy adds `X-Forwarded-For/Host/Proto` **and `Via: 1.1 Caddy`**. Removing the
   X-Forwarded trio alone leaves `Via` behind — measured, and easy to miss
@@ -111,13 +153,100 @@ Why bother: a proxy-shaped request can trip WAF rules, change how an upstream
 derives client identity, and leaks the loopback address and port. It is also one
 more thing to rule out when debugging a remote 4xx.
 
-Verified end-to-end 2026-08-06 against a local fake upstream, by DIFFING the
-header set the upstream received directly against the set it received through
-the proxy: the only difference is the three injected credential headers, with
-nothing added and nothing dropped. Also verified: an upstream URL carrying a
-path is rewritten correctly, responses streamed incrementally with compression
-off (four chunks 0.5 s apart, not buffered), argv clean, and both failure modes
-loud.
+### Masking the CLIENT was tried and REMOVED — do not re-derive it
+
+On 2026-08-12 the proxy also normalized the client: `User-Agent` replaced with
+`mcp-client/1.0`, and `Accept-Language` + `Sec-Fetch-Mode` deleted, on the
+reasoning that a shared daemon should not tell the upstream which agent harness
+is behind it. **It was removed the next day.** The reasoning was wrong in three
+independent ways, each measured:
+
+- **Those headers do not identify a harness.** A plain `node -e 'fetch(...)'`
+  with no MCP SDK and no harness sends `user-agent: node`, `accept-language: *`,
+  `sec-fetch-mode: cors`, `accept-encoding: gzip, deflate` — byte-identical to
+  what a live Kiro sent through the proxy. They are undici defaults. **Kiro sets
+  no User-Agent at all**, so there is no "Kiro user agent" to leak or to expect.
+- **The traffic is identifiable as MCP regardless.** The same requests carry
+  `Mcp-Protocol-Version`, which the SDK adds and the transport REQUIRES. It
+  cannot be stripped, so masking cannot achieve the goal it was reaching for.
+- **Normalizing made the request MORE distinctive, not less.** Traffic that
+  looked like any Node process became the only sender emitting `mcp-client/1.0`
+  with no `Sec-Fetch-Mode` — a header set no ordinary Node client produces, and
+  one that reads as deliberately sanitized.
+
+The MECHANISM survives and costs nothing: `proxy.headers."User-Agent" = "…"` and
+`proxy.headers."Accept-Language" = null` are ordinary entries. What was removed
+is doing it BY DEFAULT. If a harness ever does start announcing itself (watch
+for a `User-Agent` that is not `node`), that is one config line, not a redesign.
+
+`module-mcp-proxy-caddyfile-has-no-secrets` asserts the absence NEGATIVELY, so a
+reintroduction has to argue with this section first.
+
+Verified end-to-end 2026-08-12 by running the GENERATED Caddyfile against a
+local fake upstream: no `Via`, no `X-Forwarded-*`, the injected credentials
+present, and the client's own headers passed through untouched. Also verified:
+an upstream URL carrying a path is rewritten correctly, responses streamed
+incrementally with compression off, argv clean, and both failure modes loud.
+
+### The journal is a secret sink, and Caddy will not save you
+
+**Caddy's `reverse_proxy` ERROR logs embed the WHOLE request header map**, so
+every injected credential lands in the systemd journal in cleartext unless it is
+filtered out. Caddy's built-in `log_credentials` (default false) redacts ONLY
+`Authorization`, `Cookie`, `Set-Cookie` and `Proxy-Authorization` — and this
+proxy injects none of those. It injects CUSTOM auth headers, which are logged
+verbatim.
+
+Measured 2026-08-12 on a live pair of units: 35 journal lines carrying a gateway
+API key, on a persistent journal, dating to the day the units first started.
+This falsified the `Where the secret is, and is not` table above, which listed
+environ / argv / Caddyfile / mcp.json and did not contemplate the journal.
+
+The fix drops the **WHOLE HEADER MAP** — `request>headers delete` in Caddy's
+`filter` encoder, wrapping console — and never names a secret field.
+
+**That distinction is the point, and the first attempt got it wrong.** The
+original fix emitted one `delete` per credential-bearing header. It worked, and
+it was still the wrong shape: a per-field list is a DENYLIST, correct only for
+the credentials someone remembered to enumerate, and it fails OPEN on anything
+new — a header added later, one whose name is computed, or one a future Caddy
+starts emitting. Dropping the map fails CLOSED. Measured: a credential header
+that no rule mentioned did not appear in the log.
+
+It also deleted an entire sub-problem. The per-field version needed Go's
+CANONICAL header casing in the field path, and getting that wrong failed
+SILENTLY — `request>headers>X-ACME-API-Key` (the operator's own spelling)
+parses, Caddy starts, and the value still reaches the journal; only
+`request>headers>X-Acme-Api-Key` redacts. That trap, the canonicalization helper
+it required, and the hostile-cased fixture guarding it all stopped existing when
+the map went wholesale. **If you are ever tempted back to per-field redaction,
+that is the cost.**
+
+The drop is UNCONDITIONAL, even for a proxy injecting no credential. A
+conditional would make the safe posture depend on the server's shape, so adding
+a credential to an existing server would silently flip logging from safe to
+leaky.
+
+**Everything used for debugging survives**: `upstream`, `duration`, `remote_ip`,
+`proto`, `method`, `host`, `uri`, and the error. Only headers go.
+
+**Per-server attribution comes from the UNIT, not from a logged header.** There
+is one `mcp-proxy-<name>.service` per server, and each sets an explicit
+`SyslogIdentifier`. Without it the visible identifier is the ExecStart store
+basename — the server name behind a 32-char hash that changes on every rebuild.
+`journalctl --user -u mcp-proxy-jira` is how you tell two proxies apart.
+
+**Reproducing the leak needs the right failure.** A dead upstream
+(`connection refused`) logs an error with NO headers and reads as "no leak".
+Only the mid-stream abort path carries them
+(`WARN … aborting with incomplete response`); reproduce it with an SSE upstream
+that streams slowly plus a client that disconnects early.
+
+**Still in the journal by design:** the upstream HOST, via the `upstream` and
+`request>host` fields — so a `url` marked as a credential still has its hostname
+logged. That is deliberate (it is the single most useful field when debugging a
+remote 4xx) and is a hostname, not a bearer token, but it is worth knowing
+before treating a secret `url` as fully hidden.
 
 SCOPE — Home Manager on Linux only. devenv (process-compose) and Darwin
 (launchd) are deferred and **explicitly not WONTFIX**; the devenv transform
