@@ -71,15 +71,73 @@ rather than the GitHub API, so it needs no token and cannot be rate-limited;
 prefer it over a hand-rolled `curl … api.github.com | jq -r .tag_name` version
 check.
 
-### Patched Kiro variants stay local
+### Patched Kiro variants stay local — TWO credentialed paths, not one
 
 `pkgs.ai.kiro-cli-workflows` exposes the same derivation selected by
-`ai.kiro.unlockedRolloutFeatures = ["workflows"]`, but CI deliberately excludes
-it from the cache-writing all-packages build. A separate Linux/Darwin job builds
-it with no Cachix credentials and with the project Cachix substituter removed.
-This preserves platform coverage for the rollout-manifest patch without
-distributing the resulting proprietary binary; opt-in consumers realize the
-patched derivation locally from Kiro's upstream release.
+`ai.kiro.unlockedRolloutFeatures = ["workflows"]`. It must never reach the
+public cache: it is a MODIFIED proprietary binary, and republishing one is a
+different act from mirroring the vendor's own build.
+
+**Excluding it from `ci.yml`'s build job is necessary and NOT sufficient.** That
+was the whole mitigation from #665 (2026-08-01), and the patched 2.17.0 binary
+was live in the public cache on 2026-08-12 anyway — eleven days later, so
+`ci.yml` provably was not the source. Two jobs hold `CACHIX_AUTH_TOKEN`, and
+only one of them was covered:
+
+| job                    | builds patched?                 | pushes?                        |
+| ---------------------- | ------------------------------- | ------------------------------ |
+| `ci.yml` build         | no — `--select removeAttrs`     | yes (token)                    |
+| `update.yml` sweep     | **yes — `verify_all_packages`** | yes (token) → **`pushFilter`** |
+| `kiro-workflows-local` | yes                             | no token                       |
+| `ci.yml` test          | no                              | no token                       |
+
+`verify_all_packages` (`dev/scripts/update-common.sh`) builds `.#packages.<sys>`
+with **no `--select`**, on every input bump. That is deliberate and stays:
+`postInstallCheck` runs `kiro-cli-chat --version`, so the build is a genuine
+runtime smoke test of the patch, and `doInstallCheck` is already true upstream
+so the phase really executes. The fix is therefore at the PUSH, not the build —
+`pushFilter: "kiro-cli"` on that job's `cachix-action`.
+
+**The generalizable lesson: `cachix-action` with a token runs a watch-store
+daemon that pushes every path realized in the job.** Reasoning about which
+_command_ builds what tells you nothing about what gets published. Audit by job
+credential, not by build invocation.
+
+Three supporting properties:
+
+- **`pushFilter` drops ALL kiro, not just the patched variant.** Nothing is lost
+  — `ci.yml` publishes the unpatched package on merge — and it covers the layers
+  naming cannot reach (below).
+- **Patched derivations are RENAMED so a leak is self-identifying.** Both
+  variants used to be `kiro-cli-unwrapped-<version>`, differing only by store
+  hash, which is exactly why one sat unnoticed in a cache listing. The patched
+  build is now `kiro-cli-unwrapped-rollout-<features>-<version>`, gated inside
+  `optionalAttrs (rolloutFeatures != [])` so the default derivation is
+  untouched. Darwin needs the rename re-applied in the OUTER `overrideAttrs`,
+  because upstream's `kiro-cli-unwrapped.overrideAttrs {pname = "kiro-cli";}`
+  clobbers it otherwise.
+- **The rename cannot reach the linux FHS intermediates.** Upstream hardcodes
+  `pname = executableName` per `buildFHSEnv` and `name = "kiro-cli-${version}"`
+  for the join, consulting `kiro-cli-unwrapped.pname` nowhere, so `-bwrap` /
+  `-fhsenv-rootfs` are identical strings for both variants. They carry no
+  proprietary bytes and are inert without the unwrapped path — but it is why the
+  filter is blunt rather than surgical.
+
+Both knobs are configuration, so `ci.yml`'s "Assert the patched output is not
+published" step asserts the OUTCOME: it walks the patched closure and fails if
+any kiro path answers 200 from the cache. It opens with a positive control
+against `nix-cache-info`, because every assertion in it is "not 200" and a
+typo'd host would satisfy all of them — a tripwire that can only pass is worse
+than none.
+
+Sources are filtered too, and gain explicit versioned names
+(`kiro-cli-source-<version>-<system>.<ext>`). They were unversioned
+(`kirocli-x86_64-linux.tar.gz`, and darwin's `Kiro%20CLI.dmg` landing as
+`Kiro-20CLI.dmg` once nix strips the illegal `%`), so a 647 MiB blob could not
+be attributed to a release. Caching them bought nothing regardless: the version
+comes from the committed sidecar, not IFD, so **eval never needs the source and
+nix fetches `src` only when it must BUILD** — anyone with a cache hit never
+touches it, and anyone without is building from source anyway.
 
 ### The overrideAttrs Pattern
 

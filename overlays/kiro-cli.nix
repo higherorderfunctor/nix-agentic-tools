@@ -18,6 +18,14 @@
 
   sources = builtins.fromJSON (builtins.readFile ./kiro-cli-sources.json);
   platformSrc = sources.${system} or (throw "kiro-cli: unsupported system ${system}");
+
+  # Derived from the URL rather than branched on the platform, so a future
+  # third platform picks up whichever archive form it publishes instead of
+  # silently inheriting the linux suffix.
+  srcExt =
+    if ourPkgs.lib.hasSuffix ".dmg" platformSrc.url
+    then "dmg"
+    else "tar.gz";
   # Parameterized on the rollout features to unlock, and self-referential via
   # `passthru.withRolloutFeatures`, so a consumer asks for a variant without
   # reaching into the overlay.
@@ -75,10 +83,33 @@
   mkKiroCli = rawFeatures: let
     rolloutFeatures = canonFeatures rawFeatures;
 
+    # Name infix that makes a PATCHED build self-identifying. Both variants
+    # were named `kiro-cli-unwrapped-<version>` and differed only by store
+    # hash, so a leaked patched binary was indistinguishable from the stock
+    # one in a cache listing — which is exactly how one sat unnoticed in the
+    # public cache. Derived from the canonicalized feature list, so it names
+    # WHICH features were unlocked rather than merely asserting "patched".
+    #
+    # Consumed only inside `optionalAttrs (rolloutFeatures != [])` blocks:
+    # renaming the DEFAULT derivation would fork its drvPath for every
+    # consumer and cost the cache hit the `[]` path exists to preserve.
+    rolloutSuffix = "rollout-" + ourPkgs.lib.concatStringsSep "-" rolloutFeatures;
+
     pinned = basePackage.overrideAttrs (finalAttrs: attrs:
       {
         inherit (sources) version;
-        src = fetchurl {inherit (platformSrc) url hash;};
+        # An explicit `name` is the only way these are identifiable in a store
+        # or cache listing. The URL basenames carry NO version, and darwin's
+        # `Kiro%20CLI.dmg` reaches the store as `Kiro-20CLI.dmg` once nix drops
+        # the illegal `%` — so a 647 MiB blob is unattributable to a release.
+        #
+        # A fixed-output path embeds the NAME, so adopting this moves the src
+        # path and therefore every output built from it. That churn is paid
+        # ONCE, and the next version bump would have rebuilt them anyway.
+        src = fetchurl {
+          inherit (platformSrc) url hash;
+          name = "kiro-cli-source-${sources.version}-${system}.${srcExt}";
+        };
 
         nativeBuildInputs = (attrs.nativeBuildInputs or []) ++ [makeWrapper];
 
@@ -194,6 +225,15 @@
       # change. Diffing `.#kiro-cli.drvPath` against origin/main is what caught
       # it, and is the check to re-run when touching this attrset.
       // ourPkgs.lib.optionalAttrs (rolloutFeatures != []) {
+        # This is the 621 MiB proprietary ELF — the derivation the rollout
+        # patch actually rewrites, and the one whose leak prompted this. It
+        # is also the ONLY layer the rename reaches on linux: upstream's
+        # wrapper hardcodes `pname = executableName` for each `buildFHSEnv`
+        # and `name = "kiro-cli-${version}"` for the join, consulting
+        # `kiro-cli-unwrapped.pname` nowhere. The `-bwrap` / `-fhsenv-rootfs`
+        # intermediates therefore keep stock names for both variants; they
+        # carry no proprietary bytes and are inert without this path.
+        pname = "${attrs.pname or "kiro-cli-unwrapped"}-${rolloutSuffix}";
         postInstallCheck = (attrs.postInstallCheck or "") + vu.kiroRolloutVerify;
       });
   in
@@ -245,7 +285,26 @@
         # the nixpkgs bump lands.
         // ourPkgs.lib.optionalAttrs (!(joinAttrs ? version)) {
           inherit (sources) version;
-        })
+        }
+        # Rename the EXPORTED package too, so a patched build is identifiable
+        # at the attribute consumers install — not only at the unwrapped layer
+        # underneath it. `ensureUnfreeCheck` does
+        # `symlinkJoin {inherit (drv) name version;}`, so the guard wrapper
+        # inherits this for free.
+        #
+        # PLATFORM-BRANCHED because the two shapes are named by different
+        # keys, and setting the wrong one is a SILENT no-op rather than an
+        # error. On linux this is upstream's `symlinkJoin`, named by `name`
+        # (it has no `pname`). On darwin it is
+        # `kiro-cli-unwrapped.overrideAttrs {pname = "kiro-cli";}` — whose
+        # hardcoded `pname` would otherwise CLOBBER the rename applied to
+        # `pinned` above, leaving darwin's 1.22 GiB output indistinguishable.
+        # Ours runs last, so it wins.
+        // ourPkgs.lib.optionalAttrs (rolloutFeatures != []) (
+          if ourPkgs.stdenv.hostPlatform.isDarwin
+          then {pname = "kiro-cli-${rolloutSuffix}";}
+          else {name = "kiro-cli-${rolloutSuffix}-${sources.version}";}
+        ))
     # Pre-split nixpkgs: `kiro-cli` IS the derivation carrying the binaries, so
     # there is nothing to re-wrap and this is byte-identical to what shipped
     # before the split was accounted for.

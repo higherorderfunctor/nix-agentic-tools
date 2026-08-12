@@ -64,6 +64,33 @@ jobs:
         with:
           name: nix-agentic-tools
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          # This job must publish NO kiro paths at all.
+          #
+          # `verify_all_packages` (dev/scripts/update-common.sh) builds the
+          # WHOLE package set on every input bump, with no `--select` filter —
+          # deliberately, because the patched build runs the patched binary
+          # (`postInstallCheck` -> `kiro-cli-chat --version`) and that smoke
+          # test is the point. But cachix-action's watch-store daemon pushes
+          # EVERY path realized in the job, so that verification was silently
+          # publishing the patched proprietary binary. ci.yml's `--select
+          # removeAttrs` never covered this path; measured 2026-08-12 with the
+          # patched 2.17.0 unwrapped output live in the public cache, eleven
+          # days after #665 supposedly made it local-only.
+          #
+          # Filtering ALL kiro rather than just the patched variant is
+          # deliberate on two counts. Nothing is lost: ci.yml's build job is
+          # what publishes the unpatched package on merge, so this job never
+          # needed to publish any of it. And it covers the layers the rename
+          # cannot reach — upstream hardcodes the `-bwrap` / `-fhsenv-rootfs`
+          # names, so those are identical strings for both variants and a
+          # surgical regex could not separate them.
+          #
+          # Keep this in sync with ci.yml's "Assert the patched output is not
+          # published" step, the tripwire that fails if a patched path becomes
+          # fetchable anyway. It lives in ci.yml rather than in a flake check
+          # because a check derivation is sandboxed and cannot reach the
+          # network to ask the cache anything.
+          pushFilter: "kiro-cli"
 
       # Resolves the bot's numeric user ID at run time rather than
       # hardcoding it, same as docs.yml. The previous address omitted the

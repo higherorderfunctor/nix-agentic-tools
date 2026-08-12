@@ -28,6 +28,7 @@ autostash
 autoupdater
 avifenesh
 backgrounded
+basenames
 bashisms
 bashpid
 berberman
@@ -323,6 +324,7 @@ rulesdir
 rumdl
 rustc
 sadjow
+sandboxed
 sarif
 scriptable
 sdiehl
