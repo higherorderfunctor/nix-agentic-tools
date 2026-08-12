@@ -251,11 +251,20 @@ daemon that pushes every path realized in the job.** Reasoning about which
 _command_ builds what tells you nothing about what gets published. Audit by job
 credential, not by build invocation.
 
-Three supporting properties:
+Supporting properties:
 
+- **`pushFilter` EXCLUDES matching paths** — cachix-action's `action.yml` says
+  "Regular expression to exclude derivations from being pushed". It reads like
+  an allow-list and has already been misread as one in review; inverting it
+  would publish ONLY kiro. It is also ignored outright if `pathsToPush` is set.
 - **`pushFilter` drops ALL kiro, not just the patched variant.** Nothing is lost
   — `ci.yml` publishes the unpatched package on merge — and it covers the layers
   naming cannot reach (below).
+- **It is not a guarantee on its own**: "paths may still be pushed if they are
+  part of another path's closure". Nothing outside the kiro closure depends on
+  the patched output today and every layer inside it matches the regex, so it
+  holds — but that is a property of the current graph, and it fails silently.
+  The tripwire below is the actual guarantee.
 - **Patched derivations are RENAMED so a leak is self-identifying.** Both
   variants used to be `kiro-cli-unwrapped-<version>`, differing only by store
   hash, which is exactly why one sat unnoticed in a cache listing. The patched

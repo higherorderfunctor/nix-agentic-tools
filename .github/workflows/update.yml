@@ -85,11 +85,26 @@ jobs:
           # names, so those are identical strings for both variants and a
           # surgical regex could not separate them.
           #
-          # Keep this in sync with ci.yml's "Assert the patched output is not
-          # published" step, the tripwire that fails if a patched path becomes
-          # fetchable anyway. It lives in ci.yml rather than in a flake check
-          # because a check derivation is sandboxed and cannot reach the
-          # network to ask the cache anything.
+          # `pushFilter` EXCLUDES matching paths — cachix-action's action.yml:
+          # "Regular expression to exclude derivations from being pushed".
+          # Worth stating because it reads like an allow-list and a reviewer
+          # already misread it that way; inverting it would publish ONLY kiro,
+          # which is the exact opposite of the intent.
+          #
+          # Its own documented limitation is why this is not the whole fix:
+          # "paths may still be pushed if they are part of another path's
+          # closure". Nothing outside the kiro closure depends on the patched
+          # output today, and every layer inside it matches this regex, so the
+          # filter holds — but that is a property of the current graph, not a
+          # guarantee from the filter. It is also silent if it ever stops
+          # holding. Note too that `pushFilter` is IGNORED entirely if
+          # `pathsToPush` is ever set on this step.
+          #
+          # So ci.yml's "Assert the patched output is not published" step is
+          # the actual guarantee: it asks the cache whether the patched closure
+          # is fetchable and fails if it is. Keep the two in sync. It lives in
+          # ci.yml rather than a flake check because a check derivation is
+          # sandboxed and cannot reach the network to ask the cache anything.
           pushFilter: "kiro-cli"
 
       # Resolves the bot's numeric user ID at run time rather than
