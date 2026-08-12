@@ -93,8 +93,11 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
     [`packages/kiro-cli/docs/launcher-argv.md`](packages/kiro-cli/docs/launcher-argv.md)
 
 - **`markdown-formatting`**
-  - Match: `**/*.md`, `checks/split-code-spans.nix`,
-    `checks/split-code-spans.py`, `treefmt.nix`
+  - Match: `**/*.md`, `checks/doubled-words-fixtures.nix`,
+    `checks/doubled-words-fixtures.py`, `checks/doubled-words.nix`,
+    `checks/doubled-words.py`, `checks/fixtures/doubled-words/**`,
+    `checks/markdown-scan.nix`, `checks/markdown-scanners.nix`,
+    `checks/split-code-spans.nix`, `checks/split-code-spans.py`, `treefmt.nix`
   - Read:
     [`dev/fragments/markdown-formatting/markdown-formatting.md`](dev/fragments/markdown-formatting/markdown-formatting.md)
 

@@ -219,10 +219,20 @@ _: {
     # the only real control, so this has to load on any markdown edit
     # rather than only when the formatter config is touched. The config
     # paths are listed too, for whoever reconsiders `proseWrap` or the
-    # formatter choice.
+    # formatter choice, along with both prose scanners and the
+    # `markdown-scan.nix` file set they share — the reflow this fragment
+    # documents is what forces the doubled-word scan to look across a
+    # newline, so the two cannot be reasoned about separately.
     markdown-formatting = {
       scopes = [
         "**/*.md"
+        "checks/doubled-words-fixtures.nix"
+        "checks/doubled-words-fixtures.py"
+        "checks/doubled-words.nix"
+        "checks/doubled-words.py"
+        "checks/fixtures/doubled-words/**"
+        "checks/markdown-scan.nix"
+        "checks/markdown-scanners.nix"
         "checks/split-code-spans.nix"
         "checks/split-code-spans.py"
         "treefmt.nix"

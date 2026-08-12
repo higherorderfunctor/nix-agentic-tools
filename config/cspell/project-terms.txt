@@ -31,7 +31,10 @@ backgrounded
 bashisms
 bashpid
 berberman
+bigram
+bigrams
 bitemporality
+blockquotes
 boehm
 brocode
 btop
@@ -70,6 +73,8 @@ crystallise
 cuda
 customisation
 deadnix
+dedented
+dedents
 dedup
 deprioritized
 derefs
@@ -298,6 +303,7 @@ readabilipy
 reauthor
 rebuildable
 recharacterize
+recognised
 reflog
 reftable
 regen
@@ -332,6 +338,7 @@ serena
 serialised
 serialising
 sess
+setext
 shellharden
 shortrev
 sigmask
@@ -343,6 +350,7 @@ skillsdir
 slurpfile
 smartlog
 sourcepath
+sourcepos
 sparfenyuk
 srcs
 sshsign
@@ -350,6 +358,7 @@ starlark
 startswith
 statix
 stdenv
+stopword
 streamable
 subdirs
 subkeys

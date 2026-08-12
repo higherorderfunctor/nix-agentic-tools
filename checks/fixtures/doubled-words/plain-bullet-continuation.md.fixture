@@ -1,0 +1,19 @@
+<!-- FIXTURE
+proves: an ordinary bullet's continuation is prose at 2 columns, and a
+NESTED bullet's continuation is prose at 4 — the exact column a flat
+`^ {4,}` indented-code rule reads as code. Measuring indentation from the
+enclosing item's content column instead of from column zero is what keeps
+the second one scannable; that flat rule blanked 1195 lines of prose like
+it across this repo.
+expect: 14 "and and"
+expect: 18 "the the"
+-->
+
+# Bullet continuations
+
+- A top-level bullet whose text wraps onto a second line and and repeats a
+  word there.
+
+- An outer bullet.
+  - A nested bullet whose continuation lands at four columns, where the
+    the doubling used to vanish.

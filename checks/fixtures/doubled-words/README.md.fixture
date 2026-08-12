@@ -1,0 +1,39 @@
+<!-- FIXTURE
+proves: nothing about the scanner. This file documents the directory and is
+deliberately clean, which pins the runner's other end: a fixture declaring
+`expect: none` is still parsed, scanned and reported.
+
+Note it carries no literal HTML-comment terminator in its prose. The header
+parser stops at the first one, so a fixture that quotes the delimiter
+inside its own header truncates the parse and loses its expectations —
+measured while writing this file.
+
+WHY THE `.md.fixture` EXTENSION, NOT `.md`. These files carry doubled words
+on purpose. `checks/markdown-scan.nix` scans every tracked `.md` in the
+tree — `checks/fixtures/kiro-steering/alpha.md` and six of its neighbours
+are in that corpus today, measured — so a `.md` fixture here would fail the
+very check it exists to test. Prettier would also reflow it and destroy the
+exact indentation these fixtures encode. Both problems disappear if the
+files simply are not `.md`: `find -name '*.md'` does not match them, and no
+treefmt formatter claims `.fixture`. The alternative was three new
+exclusion entries — the scan's `find`, treefmt's globs, and whatever comes
+next — that a future reader has to keep in step; this way there is nothing
+to keep in step.
+
+HOW TO ADD ONE. Open with a FIXTURE header comment stating what the fixture
+proves, then one `expect:` line per hit, `expect: <line> "<bigram>"`, or
+`expect: none`. Line numbers are 1-based and count the header, so re-check
+them after editing anything above the hit. Every fixture that expects NO
+hit from some construct must also carry a control doubling in plain prose
+that IS expected — otherwise the fixture passes just as happily when the
+scanner never reads the file.
+expect: none
+-->
+
+# doubled-words fixtures
+
+Run these with `checks/doubled-words-fixtures.nix`, which feeds this
+directory to `doubled_words_fixtures.py` in the shared scanner store
+directory. By hand, from a checkout:
+
+    python3 checks/doubled-words-fixtures.py checks/fixtures/doubled-words

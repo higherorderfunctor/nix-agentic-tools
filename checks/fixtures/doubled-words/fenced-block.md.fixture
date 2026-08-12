@@ -1,0 +1,19 @@
+<!-- FIXTURE
+proves: a fenced block's body is not prose. The body repeats a word that
+would be reported in any paragraph, so its absence from the expectations
+is the assertion. The paragraph after the closing fence is the positive
+control that the file was scanned at all.
+expect: 19 "the the"
+-->
+
+# Fenced block
+
+```bash
+echo the the
+```
+
+~~~
+a tilde fence closes on tildes, and the the here is not prose either
+~~~
+
+Prose after both fences, where the the doubling must be reported.

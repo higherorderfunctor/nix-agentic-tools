@@ -69,8 +69,70 @@ while missing entire directories it never scanned. The correct rule found
 import re
 import sys
 
-FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})")
-INDENTED = re.compile(r"^( {4,}|\t)")
+FENCE_MARK = re.compile(r"^(`{3,}|~{3,})")
+LEADING_WS = re.compile(r"^[ \t]*")
+# A list marker must be followed by whitespace or end the line; `---` is a
+# thematic break, not a bullet with two more dashes after it.
+LIST_MARKER = re.compile(r"^[ \t]*([-*+]|[0-9]{1,9}[.)])(?:([ \t]+)|$)")
+# A GFM task-list checkbox. Strict CommonMark has no such construct and puts
+# the item's content at `[`, but prettier — the formatter that actually
+# produces this repo's wrapping — indents a task item's continuation lines
+# past the checkbox. See `_list_content_column` for why using the spec column
+# here fails OPEN.
+TASK_MARKER = re.compile(r"\[[ xX]\][ \t]+")
+
+
+def _column(prefix):
+    """Column reached after PREFIX, with tab stops of 4 (the CommonMark rule)."""
+    column = 0
+    for char in prefix:
+        column += 4 - (column % 4) if char == "\t" else 1
+    return column
+
+
+def _list_content_column(line):
+    """Content column of the list item LINE opens, or None if it opens none.
+
+    CommonMark puts an item's content at the column after its marker plus
+    the following whitespace — except that 5+ spaces means the content is
+    itself an indented code block, in which case the content column is the
+    marker plus one. An empty item (`-` alone) is the same one-space case.
+
+    A GFM TASK-LIST CHECKBOX COUNTS AS PART OF THE MARKER, which is a
+    DELIBERATE DEPARTURE FROM THE SPEC and the only one here. Strict
+    CommonMark knows no checkbox: `- [ ] text` is a bullet whose content
+    starts at column 2 and whose `[ ]` is ordinary paragraph text. But the
+    column that matters is the one PRETTIER produces, and prettier indents a
+    task item's continuation lines past the checkbox, to column 6:
+
+        - [ ] **Step 1:** a description long enough to wrap onto
+              a second line
+
+    Reading the spec column (2) there makes the continuation 6 - 2 = 4
+    columns past content, so it is blanked as indented code — prose deleted
+    from the scan, which FAILS OPEN. Reading 6 keeps it. The two errors are
+    not symmetric: too high a content column merely scans a little code as
+    prose (a visible false positive), too low deletes prose silently.
+
+    CommonMark itself never makes that continuation code either, by a
+    different rule — an indented chunk cannot interrupt an open paragraph —
+    which this stripper does not model. Confirmed against pandoc: neither
+    `-f commonmark` nor `-f gfm` yields a CodeBlock for the shape above.
+    """
+    match = LIST_MARKER.match(line)
+    if not match:
+        return None
+    marker_end = _column(line[: match.end(1)])
+    spaces = match.group(2)
+    if not spaces:
+        return marker_end + 1
+    width = _column(line[: match.end(2)]) - marker_end
+    if width > 4:
+        return marker_end + 1
+    checkbox = TASK_MARKER.match(line, match.end(2))
+    if checkbox:
+        return _column(line[: checkbox.end()])
+    return marker_end + width
 
 
 def strip_code_blocks(lines):
@@ -79,26 +141,106 @@ def strip_code_blocks(lines):
     A newline inside a fenced block is content, not a defect, so those
     regions must not be scanned. Lines are replaced rather than removed so
     reported line numbers still match the file.
+
+    BOTH KINDS OF BLOCK ARE MEASURED RELATIVE TO THE ENCLOSING LIST ITEM,
+    not to column zero, and getting that wrong fails OPEN — it deletes prose
+    from the scan, so a defect inside the deleted text is reported as a
+    clean file rather than as a skipped one.
+
+    The flat `^ {4,}` rule this replaces blanked 1467 non-fenced, non-blank
+    lines across 61 of the 220 scanned files. 1405 of them, in 51 files,
+    are no longer blanked — 1361 ORDINARY PROSE plus 44 YAML frontmatter
+    by the same oracle, and 0 code. `proseWrap = "always"` wraps a nested
+    bullet's continuation lines to exactly four columns — and a task
+    item's to six — and CommonMark's indented-code rule does not apply
+    inside a list item, so that text is prose by the same spec the rest of
+    the scan follows.
+
+    The 62 lines still blanked, in 14 files, were CLASSIFIED RATHER THAN
+    ASSUMED: each file was parsed with `pandoc -f commonmark+sourcepos -t
+    json` and every CodeBlock's source range compared against them. 34 fall
+    inside a code block, 16 of those being the body of a fence opened at
+    column 4 that the flat rule blanked only by accident. The other 28 are
+    YAML frontmatter, which this stripper does not model and which is not
+    rendered prose either way. ZERO are prose.
+
+    THAT LAST FIGURE IS THE ONE TO RE-DERIVE, NEVER TO TRUST. An earlier
+    revision of this docstring asserted the residual was "genuine indented
+    code" on no evidence at all. Running the oracle against it showed 210 of
+    the 272 lines it then described — the same set `TASK_MARKER` has since
+    cut to 62 — were prose, every one a GFM task-list continuation. The
+    claim was wrong in the fail-open direction, and no corpus count could
+    have shown it:
+    the residual shrinks either by fixing the rule or by deleting more
+    prose, and both look like progress. Re-run the oracle before editing
+    any number here, and see checks/doubled-words-fixtures.nix for the
+    fixtures that pin the shapes a corpus count cannot.
+
+    The same offset governs FENCES, and skipping that half would be worse
+    than the bug it fixes: a fence opened inside a nested item starts at
+    column 4, `^ {0,3}` never sees it, and the whole fenced body would
+    become "prose" the moment indented code stopped catching it by
+    accident. So a stack of open list items' content columns is carried and
+    both rules are applied at `column - content_column_of_innermost_item`.
+
+    NOT MODELLED, none of which can move an item's content column — the one
+    quantity this needs to be right about: blockquote containers (a
+    `>`-prefixed fence opener matches nothing here, and doubled_words
+    strips `>` only AFTER this has run, so quoted code reaches it as
+    prose), setext headings, link reference definitions, and YAML
+    frontmatter (an indented mapping inside it is blanked as if it were
+    code — harmless, since frontmatter is not rendered prose, and it is
+    where 28 of the 62 residual lines above come from).
     """
     out, i, n = [], 0, len(lines)
+    stack = []  # content columns of the open list items, outermost first
+    blank_before = True  # a list item stays open across the blank lines in it
     while i < n:
-        opener = FENCE_OPEN.match(lines[i])
-        if opener:
+        line = lines[i]
+        if not line.strip():
+            out.append(line)
+            blank_before = True
+            i += 1
+            continue
+        whitespace = LEADING_WS.match(line).group(0)
+        indent = _column(whitespace)
+        content = _list_content_column(line)
+        # Leave the items this line is still inside. A line dedented out of
+        # an item closes it, EXCEPT as a lazy paragraph continuation — which
+        # a new list marker never is, so a marker always pops.
+        while stack and indent < stack[-1] and (blank_before or content is not None):
+            stack.pop()
+        base = stack[-1] if stack else 0
+        opener = FENCE_MARK.match(line[len(whitespace) :])
+        if indent - base <= 3 and opener:
             marker = opener.group(1)
             char, length = marker[0], len(marker)
             # A fence closes on a run of the SAME character, at least as
-            # long as the opener, alone on its line.
-            closer = re.compile(r"^ {0,3}" + re.escape(char) + "{" + str(length) + r",}\s*$")
+            # long as the opener, alone on its line. Its own indent is
+            # bounded relative to the same content column the opener was.
+            closer = re.compile(r"^[ \t]*" + re.escape(char) + "{" + str(length) + r",}\s*$")
             out.append("")
             i += 1
             while i < n:
-                done = closer.match(lines[i])
+                done = closer.match(lines[i]) and _column(LEADING_WS.match(lines[i]).group(0)) - base <= 3
                 out.append("")
                 i += 1
                 if done:
                     break
+            blank_before = False
             continue
-        out.append("" if INDENTED.match(lines[i]) else lines[i])
+        if indent - base >= 4:
+            # An indented code block runs until a non-blank line dedents
+            # back inside the item's content column. Blank lines inside it
+            # stay blank either way, so they need no special case.
+            out.append("")
+            blank_before = False
+            i += 1
+            continue
+        if content is not None:
+            stack.append(content)
+        out.append(line)
+        blank_before = False
         i += 1
     return out
 
@@ -125,7 +267,28 @@ def scan(path):
             yield text.count("\n", 0, offset) + 1, " ".join(content.split())
 
 
+def no_files(name):
+    """Fail a scan that received no files. Shared by every scanner here.
+
+    A prose scanner asked to scan nothing prints "no findings in 0 files"
+    and exits 0, and that is indistinguishable from a clean run of the real
+    corpus. checks/markdown-scan.nix already refuses to invoke a scanner
+    with an empty file list — but that guard protects the CALLER, not the
+    scanner, and the second caller (a prek mirror is the obvious one) would
+    reintroduce the hole. Keeping it here as well makes the invariant
+    travel with the scanner. Belt and braces on purpose.
+    """
+    print(f"ERROR: {name} was invoked with no files to scan.", file=sys.stderr)
+    print("A scan of nothing is not a pass. Whoever calls this scanner is", file=sys.stderr)
+    print("responsible for the file list; see checks/markdown-scan.nix for", file=sys.stderr)
+    print("the one that exists, and why `xargs -r` was not enough.", file=sys.stderr)
+    return 1
+
+
 def main(paths):
+    if not paths:
+        return no_files("split-code-spans")
+
     hits = [(p, line, body) for p in paths for line, body in scan(p)]
     if not hits:
         print(f"No split inline code spans found in {len(paths)} markdown files.")

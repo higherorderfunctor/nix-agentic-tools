@@ -1,0 +1,20 @@
+<!-- FIXTURE
+proves: the 80-column reflow puts roughly half of this defect class across
+a newline, so the boundary pair — last token of one line against the first
+token of the next — is scanned as well as every same-line pair. Also pins
+the two shapes that are NOT a boundary pair, both of which a looser rule
+would report: a sentence break between the two words, and a bullet marker
+opening a new block between them.
+expect: 13 "the the"
+-->
+
+# Cross-line
+
+To measure what the launcher forwards, put the
+the wrapper first on PATH and read the argv it prints.
+
+A sentence that ends on that day.
+Day one was uneventful, so this is not a pair.
+
+- A bullet ending in the
+- the next bullet opens a block, so this is not a pair either.

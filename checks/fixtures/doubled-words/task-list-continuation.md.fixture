@@ -1,0 +1,19 @@
+<!-- FIXTURE
+proves: a GFM task item's continuation line is PROSE. Prettier indents it
+past the checkbox, to column 6, while strict CommonMark puts the item's
+content column at 2 — and 6 - 2 = 4, which is exactly the indented-code
+threshold. Reading the spec column here deletes the continuation from the
+scan and reports the file clean, so this is the fail-open regression that
+`TASK_MARKER` in checks/split-code-spans.py exists to prevent. Both
+checkbox states are covered because they are separate marker shapes.
+expect: 16 "the the"
+expect: 19 "in in"
+-->
+
+# Task-list continuation
+
+- [ ] **Step 1:** a description long enough that prettier wraps it onto
+      a second line, where the the doubling lives.
+
+- [x] A checked item wraps its continuation the same way, and a pair can
+      land in in the middle of it.
