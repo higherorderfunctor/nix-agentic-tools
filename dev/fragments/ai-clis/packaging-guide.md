@@ -84,12 +84,12 @@ was live in the public cache on 2026-08-12 anyway — eleven days later, so
 `ci.yml` provably was not the source. Two jobs hold `CACHIX_AUTH_TOKEN`, and
 only one of them was covered:
 
-| job                    | builds patched?                 | pushes?                        |
-| ---------------------- | ------------------------------- | ------------------------------ |
-| `ci.yml` build         | no — `--select removeAttrs`     | yes (token)                    |
-| `update.yml` sweep     | **yes — `verify_all_packages`** | yes (token) → **`pushFilter`** |
-| `kiro-workflows-local` | yes                             | no token                       |
-| `ci.yml` test          | no                              | no token                       |
+| job                | builds patched?                 | pushes?                        |
+| ------------------ | ------------------------------- | ------------------------------ |
+| `ci.yml` build     | no — `--select removeAttrs`     | yes (token)                    |
+| `update.yml` sweep | **yes — `verify_all_packages`** | yes (token) → **`pushFilter`** |
+| `kiro-patched`     | yes                             | no token                       |
+| `ci.yml` test      | no                              | no token                       |
 
 `verify_all_packages` (`dev/scripts/update-common.sh`) builds `.#packages.<sys>`
 with **no `--select`**, on every input bump. That is deliberate and stays:
@@ -132,12 +132,37 @@ Supporting properties:
   proprietary bytes and are inert without the unwrapped path — but it is why the
   filter is blunt rather than surgical.
 
-Both knobs are configuration, so `ci.yml`'s "Assert the patched output is not
-published" step asserts the OUTCOME: it walks the patched closure and fails if
-any kiro path answers 200 from the cache. It opens with a positive control
-against `nix-cache-info`, because every assertion in it is "not 200" and a
-typo'd host would satisfy all of them — a tripwire that can only pass is worse
-than none.
+Both knobs are configuration, so the `kiro-patched` job's "Assert the patched
+output is not published" step asserts the OUTCOME: it fails if any kiro path
+answers 200 from the cache. It opens with a positive control against
+`nix-cache-info`, because every assertion in it is "not 200" and a typo'd host
+would satisfy all of them — a tripwire that can only pass is worse than none.
+
+Getting that step right took three wrong versions, and each failure mode is
+worth keeping because none is specific to Kiro:
+
+- **Assert only on the patched-UNIQUE paths.** Walking the whole patched closure
+  reports six false leaks. The `-init` scripts and `-fhsenv-profile` trees do
+  not depend on the binary's CONTENT, so they are byte-identical across both
+  variants, share a store path, and are published legitimately with the
+  unpatched package. Subtract the unpatched closure first. A patched-specific
+  path cannot appear in the base derivation tree, so the subtraction cannot
+  over-exclude.
+- **`nix derivation show`'s `.outputs[].path` changes shape by nix version** —
+  `/nix/store/xxx-name` on 2.34.4, bare `xxx-name` on 2.35.1. A full-path
+  comparison matched NOTHING on the runner while passing locally. Compare
+  BASENAMES (`s|.*/||`) so both shapes normalize. This is the general trap:
+  local nix and runner nix are different versions, so any jq over nix JSON needs
+  verifying under both.
+- **An emptiness guard is not enough.** That schema change produced a large,
+  well-formed, entirely useless list which `[ -z ]` accepted. The guard also
+  requires the enumeration to contain a kiro path, so the next shape change is
+  one loud line instead of six false leak reports.
+- **`printf … | grep -q` under `pipefail` inverts a successful match.**
+  `grep -q` exits on the first hit, `printf` takes SIGPIPE (141), and pipefail
+  reports 141 for the pipeline. It is SIZE-dependent — invisible below the ~64
+  KiB pipe buffer, reproducible at the real ~95 KB — so a small fixture
+  "verifies" it wrongly. The test is pure-bash for that reason.
 
 Sources are filtered too, and gain explicit versioned names
 (`kiro-cli-source-<version>-<system>.<ext>`). They were unversioned
