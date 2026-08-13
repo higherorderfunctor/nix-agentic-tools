@@ -167,7 +167,18 @@ jobs:
   # cachix-action, and the command overrides the flake's substituters so a
   # previously uploaded patched output cannot turn this into a cache-hit-only
   # test. Consumers who opt into the unlock apply the patch locally too.
-  kiro-workflows-local:
+  #
+  # Named for what it ASSERTS, not where it runs. It was `kiro-workflows-local`
+  # and that read as "runs on your machine" — it never did; "local" meant the
+  # artifact stays local. Renaming it changes the status-check CONTEXT, so the
+  # branch ruleset's required-checks list has to move with it.
+  #
+  # ALWAYS-REPORTING, deliberately: the JOB always runs and the expensive steps
+  # are gated on `steps.scope.outputs.needed`, matching devenv-test. A required
+  # check that is genuinely SKIPPED never reports a conclusion, and GitHub
+  # blocks the PR forever waiting for it — so "make it required" and "skip it
+  # when irrelevant" can only coexist in this shape.
+  kiro-patched:
     strategy:
       fail-fast: false
       matrix:
@@ -181,14 +192,61 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - if: runner.os == 'macOS'
+      # Only inputs that can move `kiro-cli-workflows`'s store path. A
+      # context7-mcp bump touches `overlays/mcp-servers/` and cannot, so it
+      # should not pay for a 621 MiB build on two runners.
+      #
+      # `flake.lock` is the nixpkgs axis (stdenv/bash moving is exactly what
+      # forks these outputs); `overlays/lib.nix` carries mkKiroRolloutPatch,
+      # kiroRolloutVerify and the chat locator; `overlays/default.nix` carries
+      # the unfree guard that wraps the output. Deliberately NOT
+      # `packages/kiro-cli/**` — that is the HM/devenv module, which no flake
+      # package derivation reads.
+      - name: Scope
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+
+          needed=true
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            needed=false
+            changed_files="$(
+              gh api --paginate \
+                "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+                --jq '.[].filename'
+            )"
+
+            while IFS= read -r changed_file; do
+              case "$changed_file" in
+                .github/actions/warm-ifd/* | \
+                  .github/workflows/ci.yml | \
+                  flake.lock | \
+                  flake.nix | \
+                  overlays/default.nix | \
+                  overlays/kiro-cli* | \
+                  overlays/lib.nix)
+                  needed=true
+                  break
+                  ;;
+              esac
+            done <<< "$changed_files"
+          fi
+
+          echo "needed=${needed}" >> "$GITHUB_OUTPUT"
+          echo "patched Kiro validation needed: ${needed}"
+
+      - if: steps.scope.outputs.needed == 'true' && runner.os == 'macOS'
         uses: nixbuild/nix-quick-install-action@v35
         with:
           nix_version: "2.34.7"
           nix_conf: |
             accept-flake-config = true
 
-      - if: runner.os != 'macOS'
+      - if: steps.scope.outputs.needed == 'true' && runner.os != 'macOS'
         uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
@@ -198,16 +256,167 @@ jobs:
       # Cachix credentials and does not build the patched Kiro output; the
       # build below still removes the project cache from its substituters.
       - name: Warm IFD sources (retry, best-effort)
+        if: steps.scope.outputs.needed == 'true'
         uses: ./.github/actions/warm-ifd
         with:
           systems: ${{ matrix.system }}
 
-      - name: Build patched Kiro locally
+      - name: Build patched Kiro without the project cache
+        id: build-patched
+        if: steps.scope.outputs.needed == 'true'
         run: |
-          nix build ".#packages.${{ matrix.system }}.kiro-cli-workflows" \
-            --no-link \
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+          out="$(nix build ".#packages.${{ matrix.system }}.kiro-cli-workflows" \
+            --no-link --print-out-paths \
             --option extra-substituters "" \
-            --option substituters "https://cache.nixos.org https://devenv.cachix.org"
+            --option substituters "https://cache.nixos.org https://devenv.cachix.org")"
+          printf 'out=%s\n' "$out" >> "$GITHUB_OUTPUT"
+
+      # TRIPWIRE. The exclusion above and update.yml's pushFilter are both
+      # configuration, and this repo already learned that a mitigation with an
+      # unwatched hole reads exactly like a working one: #665 excluded this
+      # attribute from the cache-writing build and the patched binary was
+      # published anyway for eleven days, through update.yml's whole-package-set
+      # verification build. So assert the OUTCOME rather than trusting either
+      # knob — ask the cache directly whether the patched closure is fetchable.
+      #
+      # This runs here because the job already has the paths and needs no
+      # credentials (a narinfo GET is public), and because a `nix flake check`
+      # derivation is sandboxed and cannot reach the network at all.
+      - name: Assert the patched output is not published
+        if: steps.scope.outputs.needed == 'true'
+        env:
+          OUT: ${{ steps.build-patched.outputs.out }}
+          CACHE: https://nix-agentic-tools.cachix.org
+          SYSTEM: ${{ matrix.system }}
+        run: |
+          set -euETo pipefail
+          shopt -s inherit_errexit 2>/dev/null || :
+
+          # Positive control FIRST. Every assertion below is "the answer was
+          # not 200", which a typo'd host would satisfy unconditionally — a
+          # tripwire that can only pass is worse than none. The cache-info
+          # endpoint is always 200 for a live cache and, unlike any store
+          # path, does not go missing right after a version bump.
+          if ! curl --fail --silent --show-error "$CACHE/nix-cache-info" >/dev/null; then
+            echo "::error::positive control failed: $CACHE is unreachable, so the" \
+                 "checks below prove nothing"
+            exit 1
+          fi
+
+          # Assert only on paths UNIQUE to the patched closure. Some FHS
+          # scaffolding — the `-init` scripts and `-fhsenv-profile` trees — does
+          # not depend on the binary's CONTENT, so it is byte-identical for both
+          # variants and shares one store path, which the build job publishes
+          # legitimately as part of the unpatched package. Walking the whole
+          # closure therefore reported six such paths as leaks on linux (darwin
+          # has no FHS layer, so it passed and hid the bug). Those carry no
+          # patched bytes; flagging them would train the reader to ignore this
+          # step, which is worse than not having it.
+          #
+          # `nix derivation show -r` is eval-only — it reads each derivation's
+          # DECLARED output paths without building or substituting the 621 MiB
+          # unpatched closure onto the runner.
+          # Compare BASENAMES, not full paths. `nix derivation show` changed
+          # what `.outputs[].path` returns between the version used locally and
+          # the one on the runner:
+          #
+          #   nix 2.34.4  /nix/store/ci1dlr8x…-coreutils-9.11
+          #   nix 2.35.1  ci1dlr8x…-coreutils-9.11
+          #
+          # so a full-path comparison silently matched NOTHING on CI while
+          # passing locally, and every shared path was reported as a leak. The
+          # store hash plus name identifies the path either way, so normalizing
+          # both sides with `s|.*/||` is correct under both and cannot drift
+          # again on this axis. `// empty` drops the one null that schema also
+          # produces for outputs carrying no path.
+          base_names="$(
+            nix derivation show -r ".#packages.${SYSTEM}.kiro-cli" \
+              | jq -r '(.derivations // .) | to_entries[].value.outputs[]?.path // empty' \
+              | sed 's|.*/||' \
+              | sort -u
+          )"
+          nl=$'\n'
+          base_nl="${nl}${base_names}${nl}"
+
+          # Fail CLOSED on an unusable base set. Emptiness is not the only way
+          # this breaks — the schema change above yielded a large, well-formed,
+          # entirely USELESS list, which a `-z` test happily accepted. Requiring
+          # a kiro entry is what actually proves the enumeration describes the
+          # package under test, and it turns the next such drift into one loud
+          # line instead of six false leak reports.
+          if [ -z "$base_names" ]; then
+            echo "::error::could not enumerate the unpatched closure — refusing to" \
+                 "assert, since every patched path would look unique and pass"
+            exit 1
+          fi
+          case "$base_nl" in
+            *kiro*) ;;
+            *)
+              echo "::error::the unpatched closure enumerated paths but none named" \
+                   '*kiro* — "nix derivation show" output shape probably changed' \
+                   "again. Refusing to assert."
+              exit 1
+              ;;
+          esac
+
+          published=0
+          while read -r path; do
+            name="${path##*/}"
+            case "$name" in *kiro*) ;; *) continue ;; esac
+            # Pure-bash membership test, NOT `printf … | grep -qxF`. That
+            # spelling fails here in the direction that matters: `grep -q`
+            # exits on the first match, `printf` is then still writing, takes
+            # SIGPIPE (141), and `pipefail` reports 141 for the pipeline — so a
+            # SUCCESSFUL match reads as FALSE, every shared path falls through
+            # to being asserted, and the step reports six leaks that are not
+            # leaks.
+            #
+            # It is SIZE-DEPENDENT, which is what makes it easy to "fix" and
+            # re-break: below the ~64 KiB pipe buffer `printf` finishes before
+            # `grep` exits, no SIGPIPE occurs, and the bug is invisible. This
+            # closure is ~95 KB across ~1730 paths, so it is over the line.
+            # Two synthetic repros at 2 lines and at 35 KB both PASSED before
+            # the real list reproduced it — do not test this with a small
+            # fixture. (Under `pipefail` only; an ad-hoc shell without it also
+            # hides the bug.)
+            #
+            # A `<<<` herestring would fix it too; this also avoids forking a
+            # grep per path.
+            case "$base_nl" in
+              *"${nl}${name}${nl}"*)
+                echo "shared with the unpatched closure, not asserted: $name"
+                continue
+                ;;
+            esac
+            hash="${name%%-*}"
+            code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              "$CACHE/${hash}.narinfo")"
+            # Only 404 proves absence. A transient failure reports 000 and a
+            # 5xx reports the upstream error, and treating either as "not 200"
+            # would let the tripwire pass without having asked anything — the
+            # same can-only-pass failure the positive control above guards.
+            case "$code" in
+              404) echo "ok (absent): $name" ;;
+              200)
+                echo "::error::patched Kiro path is PUBLISHED: $path"
+                published=$((published + 1))
+                ;;
+              *)
+                echo "::error::inconclusive HTTP $code for $name — treating as failure"
+                published=$((published + 1))
+                ;;
+            esac
+          done < <(nix path-info --recursive "$OUT")
+
+          if [ "$published" -ne 0 ]; then
+            echo "::error::${published} patched path(s) failed the not-published" \
+                 "assertion against $CACHE (published, or inconclusive — see above)." \
+                 "Check update.yml's pushFilter and ci.yml's --select removeAttrs."
+            exit 1
+          fi
+          echo "No patched Kiro path is fetchable from $CACHE."
 
   # Validation entrypoint: `nix flake check` is the single source of
   # truth for repo health (structural eval checks + formatting hard

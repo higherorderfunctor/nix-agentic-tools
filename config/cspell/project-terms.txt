@@ -28,6 +28,7 @@ autostash
 autoupdater
 avifenesh
 backgrounded
+basenames
 bashisms
 bashpid
 berberman
@@ -154,6 +155,7 @@ GOWORK
 gpgsign
 headlessly
 heredocs
+herestring
 higherorderfunctor
 hitl
 hnsw
@@ -317,6 +319,7 @@ reparent
 replayable
 repoint
 reprioritize
+repros
 rerere
 revertibility
 revset
@@ -332,6 +335,7 @@ rulesdir
 rumdl
 rustc
 sadjow
+sandboxed
 sarif
 scriptable
 sdiehl
