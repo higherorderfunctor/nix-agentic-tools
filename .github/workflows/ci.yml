@@ -328,15 +328,41 @@ jobs:
                  "assert, since every patched path would look unique and pass"
             exit 1
           fi
+          # Newline-delimited with sentinel newlines at both ends, so the
+          # membership test below can be a pure-bash substring match on whole
+          # lines. See the comment at that test for why it is not a grep.
+          nl=$'\n'
+          base_nl="${nl}${base_paths}${nl}"
 
           published=0
           while read -r path; do
             name="${path##*/}"
             case "$name" in *kiro*) ;; *) continue ;; esac
-            if printf '%s\n' "$base_paths" | command grep -qxF "$path"; then
-              echo "shared with the unpatched closure, not asserted: $name"
-              continue
-            fi
+            # Pure-bash membership test, NOT `printf … | grep -qxF`. That
+            # spelling fails here in the direction that matters: `grep -q`
+            # exits on the first match, `printf` is then still writing, takes
+            # SIGPIPE (141), and `pipefail` reports 141 for the pipeline — so a
+            # SUCCESSFUL match reads as FALSE, every shared path falls through
+            # to being asserted, and the step reports six leaks that are not
+            # leaks.
+            #
+            # It is SIZE-DEPENDENT, which is what makes it easy to "fix" and
+            # re-break: below the ~64 KiB pipe buffer `printf` finishes before
+            # `grep` exits, no SIGPIPE occurs, and the bug is invisible. This
+            # closure is ~95 KB across ~1730 paths, so it is over the line.
+            # Two synthetic repros at 2 lines and at 35 KB both PASSED before
+            # the real list reproduced it — do not test this with a small
+            # fixture. (Under `pipefail` only; an ad-hoc shell without it also
+            # hides the bug.)
+            #
+            # A `<<<` herestring would fix it too; this also avoids forking a
+            # grep per path.
+            case "$base_nl" in
+              *"${nl}${path}${nl}"*)
+                echo "shared with the unpatched closure, not asserted: $name"
+                continue
+                ;;
+            esac
             hash="${name%%-*}"
             code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
               "$CACHE/${hash}.narinfo")"

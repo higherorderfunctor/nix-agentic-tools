@@ -150,6 +150,7 @@ GOWORK
 gpgsign
 headlessly
 heredocs
+herestring
 higherorderfunctor
 hitl
 hnsw
@@ -309,6 +310,7 @@ reparent
 replayable
 repoint
 reprioritize
+repros
 rerere
 revertibility
 revset
