@@ -35,13 +35,44 @@
 # value exists only in the daemon's memory and environment.
 #
 # The upstream request is BYTE-IDENTICAL to the un-proxied one plus the
-# injected credentials — see `strippedHopHeaders` for what that costs and
-# for the one header a header rule cannot reach. Verified end-to-end
-# against a local fake upstream by diffing the header set received
-# directly against the set received through the proxy: only the injected
-# credentials differ, nothing added, nothing dropped. Also verified —
-# an upstream URL carrying a path rewritten correctly, responses streamed incrementally
-# (`flush_interval -1`), argv clean, both failure modes loud.
+# injected `proxy.headers` — see `strippedHopHeaders` for what that costs
+# and for the one header a header rule cannot reach.
+#
+# The proxy adds no identity of its own and erases none of the client's.
+# A 2026-08-12 experiment did the latter — normalizing `User-Agent` and
+# deleting two undici artifacts — and was REMOVED the next day after
+# measurement killed the rationale. Do not reintroduce it without new
+# evidence; the reasoning is recorded in
+# dev/fragments/mcp-secrets/mcp-secrets.md so it does not get re-derived
+# from the same wrong intuition.
+#
+# Verified end-to-end against a local fake upstream: an upstream URL
+# carrying a path is rewritten correctly, responses stream incrementally
+# (`flush_interval -1`), argv is clean, both failure modes are loud.
+#
+# ── The journal is a secret sink, and Caddy will not save you ──────────
+# Caddy's `reverse_proxy` ERROR logs embed the WHOLE request header map,
+# so every credential injected below lands in the systemd journal in
+# cleartext unless the log is filtered. Caddy's built-in `log_credentials`
+# (default false) redacts ONLY `Authorization`, `Cookie`, `Set-Cookie`
+# and `Proxy-Authorization` — this proxy injects none of those, it
+# injects CUSTOM auth headers, which are logged verbatim. Measured
+# 2026-08-12 on a live pair of units: 35 journal lines carrying a gateway
+# API key, on a persistent journal, dating to the day they first started.
+#
+# The fix DROPS THE WHOLE HEADER MAP (`request>headers delete`) rather
+# than naming the secret fields, and that distinction is the point. A
+# per-field list is a denylist: correct only for the credentials someone
+# remembered to enumerate, and it fails OPEN on anything new — a header
+# added later, one whose name is computed, or one a future Caddy starts
+# emitting. Dropping the map fails CLOSED. Measured: a credential header
+# that no rule mentioned did not appear in the log.
+#
+# Per-server attribution therefore does NOT come from a logged header. It
+# comes from the unit — one `mcp-proxy-<name>.service` per server, with an
+# explicit `SyslogIdentifier` so an unfiltered `journalctl` shows a stable
+# name rather than the ExecStart store hash. Use
+# `journalctl --user -u mcp-proxy-<name>` to tell two proxies apart.
 #
 # ── Scope ─────────────────────────────────────────────────────────────
 # Home Manager on Linux only. devenv parity (process-compose) and Darwin
@@ -85,6 +116,16 @@
   # upstream sees byte-identical requests to what the client sent direct
   # (plus the injected credentials, which is the whole point).
   #
+  # Note the scope: this list hides the PROXY, not the client. Deleting
+  # what the CLIENT sends is a different question with a different answer
+  # — it was tried on 2026-08-12 and removed, because the headers in
+  # question (`User-Agent: node`, `Accept-Language: *`,
+  # `Sec-Fetch-Mode: cors`) are undici defaults identifying Node rather
+  # than any harness, while `Mcp-Protocol-Version` gives the traffic away
+  # regardless and cannot be removed. Stripping them produced a header
+  # set no ordinary Node client sends, which is more distinctive, not
+  # less. Do not add client headers to this list.
+  #
   # Not cosmetic. These announce a proxy hop to the far end: they can
   # trip WAF rules, change how an upstream derives a client identity, and
   # they leak the loopback address and port the client actually used.
@@ -125,13 +166,27 @@
   proxiedServers = servers: filterAttrs (_: isProxied) servers;
 
   # ── Client-facing entry ─────────────────────────────────────────────
-  # Everything that could carry a secret is dropped. `timeout` survives:
-  # it is client behavior, not a credential, and some upstreams are slow on
-  # large result sets.
+  # The real `url` is replaced by the loopback one, so no credential url
+  # reaches the client. `timeout` survives: it is client behavior, not a
+  # credential, and some upstreams are slow on large result sets.
+  #
+  # Server-level `headers` DO reach the client, and that is the point of
+  # the split: since 2026-08-13 they mean exactly one thing — what the
+  # CLIENT sends — while everything the proxy injects lives under
+  # `proxy.headers`. Passing them through is what makes the two
+  # non-overlapping instead of one key with two meanings.
+  #
+  # They cannot carry a secret: `mkBackendTransform` asserts that a
+  # proxied server's top-level `headers` are all plain strings, precisely
+  # so this line is safe. If that assertion is ever relaxed, this becomes
+  # a credential leak to the client and the whole proxy is pointless.
   clientEntry = _name: srv:
     {
       type = "http";
       url = "http://${srv.proxy.host}:${toString srv.proxy.port}/";
+    }
+    // lib.optionalAttrs ((srv.headers or {}) != {}) {
+      inherit (srv) headers;
     }
     // lib.optionalAttrs ((srv.timeout or null) != null) {
       inherit (srv) timeout;
@@ -174,10 +229,23 @@
   # so is unknown at eval time. Caddy's `reverse_proxy` accepts a scheme
   # and host in its upstream but NOT a path, which is why the split plus
   # a `rewrite` is needed at all.
+  #
+  # Headers come from `srv.proxy.headers` — what the DAEMON injects —
+  # never from `srv.headers`, which is the client's own config. Before
+  # 2026-08-13 the top-level `headers` were absorbed here when
+  # `proxy.enable` was set, so one key meant "the client sends this"
+  # normally and "the proxy injects this" when a sibling flag was on.
+  # That is reversed; do not reinstate the absorption.
+  #
+  # A null VALUE is a deletion rather than an injection, so it is filtered
+  # out here and emitted as `header_up -<name>` instead.
   specFor = serverName: srv: let
     url = srv.url or null;
     urlCred = isCredential url;
-    headerResults = mapAttrs (h: renderValue serverName h) (srv.headers or {});
+    declared = srv.proxy.headers or {};
+    headerResults =
+      mapAttrs (h: renderValue serverName h)
+      (filterAttrs (_: v: v != null) declared);
   in {
     name = serverName;
     inherit (srv.proxy) host port;
@@ -207,6 +275,10 @@
     headerSecrets =
       foldl' (acc: r: acc // r.secrets) {}
       (builtins.attrValues headerResults);
+
+    # Headers the operator set to null: forwarded as deletions so a client
+    # header can be dropped before it reaches the upstream.
+    deletedHeaders = builtins.attrNames (filterAttrs (_: v: v == null) declared);
   };
 
   # ── Caddyfile ───────────────────────────────────────────────────────
@@ -233,29 +305,59 @@
   # `rewrite *` sends EVERY client path to the upstream's path. That is
   # correct for MCP streamable HTTP, which is a single endpoint, and it
   # is why the loopback url handed to clients is a bare `/`.
+  # The global log block. `request>headers delete` removes the ENTIRE
+  # header map from every log entry — see the header comment for why this
+  # is a whole-map drop rather than a list of secret field names.
+  #
+  # It is unconditional even for a proxy that injects no credential. A
+  # conditional here would mean the safe posture depended on the server's
+  # shape, so adding a credential to an existing server would silently
+  # switch logging from safe to leaky. Constant beats clever.
+  #
+  # Everything actually used for debugging survives: upstream, duration,
+  # remote_ip, proto, method, host, uri, and the error itself. Only the
+  # headers go. Measured against the abort path that produced the leak.
+  logBlock = concatStringsSep "\n" [
+    "\tlog {"
+    "\t\toutput stderr"
+    "\t\tformat filter {"
+    "\t\t\twrap console"
+    "\t\t\tfields {"
+    "\t\t\t\trequest>headers delete"
+    "\t\t\t}"
+    "\t\t}"
+    "\t}"
+  ];
+
+  # Assembled as a line LIST rather than interpolated into the indented
+  # string, so an empty header set cannot leave a stray blank line in the
+  # emitted config.
+  reverseProxyBody = spec:
+    concatStringsSep "\n" (
+      (mapAttrsToList (h: v: "\t\theader_up ${h} \"${v}\"") spec.headers)
+      ++ (map (h: "\t\theader_up -${h}") spec.deletedHeaders)
+      ++ (map (h: "\t\theader_up -${h}") strippedHopHeaders)
+      ++ [
+        "\t\tflush_interval -1"
+        "\t\ttransport http {"
+        "\t\t\tcompression off"
+        "\t\t}"
+      ]
+    );
+
   caddyfileFor = spec:
     pkgs.writeText "mcp-proxy-${spec.name}-Caddyfile" ''
       {
       	admin off
       	auto_https off
-      	log {
-      		output stderr
-      		format console
-      	}
+      ${logBlock}
       }
 
       :${toString spec.port} {
       	bind ${spec.host}
       	rewrite * ${envRef spec.pathVar}
       	reverse_proxy ${envRef spec.originVar} {
-      ${concatStringsSep "\n" (mapAttrsToList
-        (h: v: "\t\theader_up ${h} \"${v}\"")
-        spec.headers)}
-      ${concatStringsSep "\n" (map (h: "\t\theader_up -${h}") strippedHopHeaders)}
-      		flush_interval -1
-      		transport http {
-      			compression off
-      		}
+      ${reverseProxyBody spec}
       	}
       }
     '';

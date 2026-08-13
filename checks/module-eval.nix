@@ -39,18 +39,22 @@
     type = "http";
     url.file = "/run/secrets/upstream-url";
     timeout = 300000;
-    headers = {
-      "X-Api-Key" = {
-        file = "/run/secrets/api-key";
-        prefix = "Bearer ";
-      };
-      "X-Route" = "primary";
-      "X-Service-Token".file = "/run/secrets/service-token";
-    };
     proxy = {
       enable = true;
       host = "127.0.0.1";
       port = 9501;
+      headers = {
+        "X-Api-Key" = {
+          file = "/run/secrets/api-key";
+          prefix = "Bearer ";
+        };
+        "X-Route" = "primary";
+        "X-Service-Token".file = "/run/secrets/service-token";
+        # Null is a DELETION — the client sent it, the upstream must not
+        # see it. Included in the shared fixture so every Caddyfile
+        # assertion below exercises the third value shape.
+        "X-Drop-Me" = null;
+      };
     };
   };
   renderedMcpJson = servers:
@@ -4215,10 +4219,35 @@ in {
       && entry.type == "http"
       # `timeout` is client behavior, not a credential — it must survive.
       && entry.timeout == 300000
+      # The fixture declares its credentials under `proxy.headers`, which
+      # the daemon injects and the client never sees. Nothing from there
+      # may appear in the entry.
       && !(entry ? headers)
       && !(lib.hasInfix "/run/secrets" json)
       && !(lib.hasInfix "Bearer" json)
       && !(lib.hasInfix "env:" json)
+      && !(lib.hasInfix "X-Api-Key" json)
+      && !(lib.hasInfix "X-Service-Token" json)
+  );
+
+  # Top-level `headers` on a proxied server are the CLIENT's and DO reach
+  # it — that is the half of the split which makes the two keys mean
+  # different things instead of one key meaning two. Dropping them here
+  # would be a silent no-op on config the operator wrote.
+  #
+  # Safe only because `mkBackendTransform` asserts they carry no
+  # credential; that assertion is tested separately below.
+  module-mcp-proxy-client-entry-keeps-client-headers = mkTest "mcp-proxy-client-entry-keeps-client-headers" (
+    let
+      entry = mcpProxyLib.clientEntry "example" (proxySampleServer
+        // {
+          headers."X-Client-Sent" = "yes";
+        });
+    in
+      entry.headers."X-Client-Sent"
+      == "yes"
+      # ... and still nothing the daemon injects.
+      && !(lib.hasInfix "X-Api-Key" (builtins.toJSON entry))
   );
 
   # The Caddyfile lands in the WORLD-READABLE Nix store, so it may carry
@@ -4248,13 +4277,24 @@ in {
       && lib.hasInfix ''header_up X-Route "primary"'' cf
       # Streaming: without this, SSE responses buffer to the end.
       && lib.hasInfix "flush_interval -1" cf
-      # Byte-identical upstream request: Caddy adds these four on its own
-      # and they must be deleted, not merely overwritten. Measured — the
-      # `Via` header is NOT covered by dropping the X-Forwarded-* trio.
+      # Caddy adds these four on its own and they must be deleted, not
+      # merely overwritten. Measured — the `Via` header is NOT covered by
+      # dropping the X-Forwarded-* trio.
       && lib.hasInfix "header_up -Via" cf
       && lib.hasInfix "header_up -X-Forwarded-For" cf
       && lib.hasInfix "header_up -X-Forwarded-Host" cf
       && lib.hasInfix "header_up -X-Forwarded-Proto" cf
+      # A null `proxy.headers` value is a DELETION, not an injection.
+      && lib.hasInfix "header_up -X-Drop-Me" cf
+      && !(lib.hasInfix ''header_up X-Drop-Me "'' cf)
+      # The proxy must NOT touch the client's identity. These were added
+      # 2026-08-12 and removed 2026-08-13 after measurement: the headers
+      # are undici defaults identifying Node, not a harness, and stripping
+      # them made the request MORE distinctive. Asserted negatively so a
+      # reintroduction has to argue with this comment first.
+      && !(lib.hasInfix "header_up User-Agent" cf)
+      && !(lib.hasInfix "header_up -Accept-Language" cf)
+      && !(lib.hasInfix "header_up -Sec-Fetch-Mode" cf)
       # Go's transport adds `Accept-Encoding: gzip` below the header
       # layer, so no `header_up -` can reach it; only turning transport
       # compression off keeps the request identical to the client's.
@@ -4262,6 +4302,139 @@ in {
       && !(lib.hasInfix "/run/secrets" cf)
       # The escape regression: an unexpanded Nix interpolation token.
       && !(lib.hasInfix "{\${" cf)
+  );
+
+  # Caddy's reverse_proxy ERROR logs embed the whole request header map,
+  # and its built-in `log_credentials` covers only Authorization/Cookie —
+  # never the custom auth headers this proxy injects. Measured 2026-08-12:
+  # 35 journal lines carrying a live gateway API key.
+  #
+  # The fix drops the WHOLE MAP rather than naming secret fields. Asserted
+  # that way on purpose: a per-field list is a denylist that fails OPEN on
+  # any header nobody enumerated, so a test pinning field names would bless
+  # exactly the shape being avoided.
+  module-mcp-proxy-log-drops-whole-header-map = mkTest "mcp-proxy-log-drops-whole-header-map" (
+    let
+      cf = builtins.readFile (mcpProxyLib.caddyfileFor (mcpProxyLib.specFor "example" proxySampleServer));
+    in
+      lib.hasInfix "format filter" cf
+      && lib.hasInfix "request>headers delete" cf
+      # No per-field redaction anywhere — that is the regression.
+      && !(lib.hasInfix "request>headers>" cf)
+  );
+
+  # Unconditional: a proxy injecting no credential still drops headers. A
+  # conditional filter would make the safe posture depend on the server's
+  # shape, so ADDING a credential later would silently flip logging from
+  # safe to leaky — the failure mode being designed out.
+  module-mcp-proxy-log-drop-is-unconditional = mkTest "mcp-proxy-log-drop-is-unconditional" (
+    let
+      cf = builtins.readFile (mcpProxyLib.caddyfileFor (mcpProxyLib.specFor "example" {
+        type = "http";
+        url = "https://example.invalid/mcp";
+        proxy = {
+          enable = true;
+          host = "127.0.0.1";
+          port = 9501;
+        };
+      }));
+    in
+      lib.hasInfix "request>headers delete" cf
+      && !(lib.hasInfix "format console" cf)
+  );
+
+  # A credential in a PROXIED server's top-level `headers` must be a hard
+  # error, not an absorption. Those headers go to the client, so absorbing
+  # them silently (the pre-2026-08-13 behavior) made one key mean two
+  # things, and passing them through would hand the client the credential
+  # the proxy exists to withhold. The assertion is also the migration
+  # message for config written against the old shape.
+  module-mcp-proxy-credential-in-client-headers-throws = mkTest "mcp-proxy-credential-in-client-headers-throws" (
+    let
+      result =
+        builtins.tryEval
+        (evalHm {
+          ai.kiro = {
+            enable = true;
+            mcpServers.jira = {
+              type = "http";
+              url.file = "/run/secrets/jira-url";
+              # WRONG on purpose: belongs under proxy.headers.
+              headers."X-Jira-Token".file = "/run/secrets/service-token";
+              proxy = {
+                enable = true;
+                port = 9501;
+              };
+            };
+          };
+        })
+      .config.assertions;
+      failed =
+        if result.success
+        then builtins.filter (a: !a.assertion) result.value
+        else [];
+    in
+      # Require the eval to SUCCEED and the failing assertion to be OURS.
+      #
+      # Accepting a throw here instead (`!result.success || …`) is what
+      # this originally did, and it was wrong: `evalHm` returns
+      # `config.assertions` WITHOUT checking them, so a failed assertion
+      # never throws — the throw branch could only ever be reached by an
+      # unrelated evaluation error, which it would then silently convert
+      # into a pass. `tryEval` stays only so such an error surfaces as a
+      # test failure rather than as an eval crash.
+      result.success
+      && builtins.any (a: lib.hasInfix "proxy.headers" a.message) failed
+  );
+
+  # A plain-string header on a proxied server is NOT a credential and must
+  # keep working — the guard above has to reject secrets without rejecting
+  # ordinary client config.
+  module-mcp-proxy-literal-client-headers-allowed = mkTest "mcp-proxy-literal-client-headers-allowed" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          mcpServers.jira = {
+            type = "http";
+            url.file = "/run/secrets/jira-url";
+            headers."X-Client-Sent" = "yes";
+            proxy = {
+              enable = true;
+              port = 9501;
+              headers."X-Jira-Token".file = "/run/secrets/service-token";
+            };
+          };
+        };
+      };
+      failed = builtins.filter (a: !a.assertion) result.config.assertions;
+    in
+      builtins.all (a: !(lib.hasInfix "proxy.headers" a.message)) failed
+  );
+
+  # With no request headers in the logs, the UNIT is the only thing that
+  # says which proxy a line came from. Without an explicit identifier the
+  # visible one is the ExecStart store basename, whose hash changes on
+  # every rebuild.
+  module-mcp-proxy-unit-has-stable-syslog-identifier = mkTest "mcp-proxy-unit-has-stable-syslog-identifier" (
+    let
+      result = evalHm {
+        ai.kiro = {
+          enable = true;
+          mcpServers.jira = {
+            type = "http";
+            url.file = "/run/secrets/jira-url";
+            proxy = {
+              enable = true;
+              port = 9501;
+              headers."X-Jira-Token".file = "/run/secrets/service-token";
+            };
+          };
+        };
+      };
+      svc = result.config.systemd.user.services.mcp-proxy-jira.Service;
+    in
+      svc.SyslogIdentifier == "mcp-proxy-jira"
   );
 
   # Secrets must be read at RUNTIME from their files and never appear in
