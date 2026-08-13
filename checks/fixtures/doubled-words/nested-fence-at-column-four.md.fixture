@@ -1,0 +1,22 @@
+<!-- FIXTURE
+proves: a fence OPENED AT COLUMN 4, inside a nested list item, is still
+recognised as a fence. `^ {0,3}` never sees that opener, so under the flat
+rule the body was blanked only by accident — by the indented-code rule
+that also ate the prose around it. Make indented code list-relative
+without doing the same for fences and this body becomes "prose" the moment
+the accident stops. The trailing line inside the same item is the positive
+control: it sits at the identical column and IS prose.
+expect: 22 "the the"
+-->
+
+# Fence inside a nested item
+
+- Outer item.
+  - Inner item, whose content column is 4.
+
+    ```bash
+    echo the the
+    ```
+
+    Prose inside the same inner item, at the same column as the fence,
+    where the the doubling must be reported.

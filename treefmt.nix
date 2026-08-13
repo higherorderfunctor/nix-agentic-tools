@@ -125,8 +125,10 @@
     # identifiers when it repairs them (measured: `KIRO_KAS_NODE_PATH`
     # came out `KIRO*KAS_NODE_PATH`), which breaks exact-identifier
     # search — the directory's whole purpose. cspell already ignores
-    # `docs/**`; checks/split-code-spans.nix carries the matching
-    # scan exclusion.
+    # `docs/**`; checks/markdown-scan.nix carries the matching scan
+    # exclusion for BOTH prose scanners (split-code-spans and
+    # doubled-words) — it used to live in checks/split-code-spans.nix
+    # and moved when the second scanner started sharing the file set.
     "docs/plans/kiro-v3-research-raw/**"
   ];
 }

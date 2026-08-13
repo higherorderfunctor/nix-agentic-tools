@@ -15,7 +15,7 @@ exception: `notes/kiro-primitive-fixtures-plan.md` was lightly edited on import
 (private references removed, provenance header added) because its §6a defines
 the F1-F8 phase-2 items the rest of the corpus cites. The directory is excluded
 from repository formatting and markdown lints (see `treefmt.nix` and
-`checks/split-code-spans.nix`): the ungroomed sources carry markdown defects
+`checks/markdown-scan.nix`): the ungroomed sources carry markdown defects
 that reformatting "repairs" by mangling identifiers, and exact identifiers are
 what semantic retrieval needs to hit.
 

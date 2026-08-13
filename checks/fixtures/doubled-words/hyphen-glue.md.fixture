@@ -1,0 +1,21 @@
+<!-- FIXTURE
+proves: the tail or head of a hyphenated compound is not a standalone
+word, so `opt-in in`, `in in-memory` and a cross-line `next-keyed` against
+`keyed` are all refused. One rule, three shapes, and the third costs real
+recall: a genuine doubling whose first copy ends a hyphenated compound
+goes unreported. That is the deliberate trade `_GLUE` makes — see the
+Scope section of the doubled-words docstring — not a gap to file. The
+closing paragraph is the positive control.
+expect: 21 "the the"
+-->
+
+# Hyphen glue
+
+A per-turn opt-in in both versions is one word followed by another.
+
+The flag is in in-memory mode, which is not a doubling either.
+
+The record is next-keyed
+keyed by the tail of that identifier, which this scan refuses.
+
+Ordinary prose, where the the doubling must be reported.

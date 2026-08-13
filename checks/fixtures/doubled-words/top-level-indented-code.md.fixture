@@ -1,0 +1,21 @@
+<!-- FIXTURE
+proves: a genuinely indented code block at TOP level is still blanked.
+Repetition inside code is routinely correct — this repo's own kiro wrapper
+carries `--bind /usr/local /usr/local` — so scanning it would be a
+tokenization bug, not a finding. The `echo` line is the discriminating
+case: it is a doubling the scanner WOULD report anywhere else, so its
+absence from the expectations is what proves the block was blanked. The
+closing paragraph is the positive control; without it this fixture would
+pass just as happily if the scanner never opened the file.
+expect: 20 "the the"
+-->
+
+# Indented code at top level
+
+An ordinary paragraph, then a blank line, then four columns of code:
+
+    kiro --bind /usr/local /usr/local --bind /run /run
+    echo the the
+
+This closing paragraph is ordinary prose, and the the doubling in it must
+be reported.
