@@ -15,12 +15,12 @@
   vu = import ../lib.nix;
   tsgolint = import ./tsgolint.nix {inherit inputs final;};
 
-  rev = "625401da4335f9f8b0a9f6370a46c090ea9475f1";
+  rev = "e76632d9a0e599094549066492ecacc39a3a3ef2";
   unpatchedSrc = ourPkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "oxc";
     inherit rev;
-    hash = "sha256-1Dua6ylNl7kTLAeRT7Rm+dwU2zDBuIZr6Hq6SfwyGpY=";
+    hash = "sha256-5hFnaUTviHnBW867XTCFk5AENczSn/lGHwUJtoYcdYY=";
   };
   # @napi-rs/cli's filesystem reconciliation probes a process incarnation with
   # execFile(/bin/ps) on Darwin. Node can reject that spawn synchronously under
