@@ -117,10 +117,11 @@ matching `api_key|secret|token|password` are **refused** on a git-tracked
 ## Init residue and the pure-data-engine posture
 
 `bd init` self-wires: it writes an AGENTS.md, installs git hooks, and writes
-`.beads/.gitignore`. It also runs `git init` + an initial commit +
-`git config beads.role` **even with `--skip-hooks`** `[measured @1.1.0]` —
-suppressing that requires the `no-git-ops` config, an out-of-tree DB, or
-`--stealth`. The disable surface:
+`.beads/.gitignore`. It reportedly also runs `git init` + an initial commit +
+`git config beads.role` **even with `--skip-hooks`** `[unverified]` — carried
+from research whose measurement record cannot be vouched for, so probe it before
+relying on it; if true, suppressing it requires the `no-git-ops` config, an
+out-of-tree DB, or `--stealth`. The disable surface:
 
 - `--quiet --skip-agents --skip-hooks` — suppress the individual writes;
   `--stealth` = all three plus `no-git-ops: true`. `[upstream]`

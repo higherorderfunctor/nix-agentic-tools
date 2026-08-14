@@ -365,9 +365,10 @@ session against the phase 2 package. Feeds noted.
   types; `--defer` release-flip with `no-git-ops` + auto-commit preconditions on
   an out-of-repo DB; the env-unset fallback (does `bd` without `BEADS_DIR`
   actually reach the repo, and does the failsafe `no-git-ops` placement hold);
-  timer-gate batch semantics; Dolt session-branches as an isolation mechanism;
-  the FULLTEXT ID-tokenization hazard. → `docs/beads/bd-reference.md` unverified
-  tags.
+  whether `bd init --skip-hooks` really still runs `git init` + commit +
+  `git config beads.role`; timer-gate batch semantics; Dolt session-branches as
+  an isolation mechanism; the FULLTEXT ID-tokenization hazard. →
+  `docs/beads/bd-reference.md` unverified tags.
 - **PB11** — version-skew guard: does an older bd actually refuse a newer-schema
   DB, and with what error? → the one-flake-owns-the-version rule.
 - **PB12** — beads-mcp env surface at the pinned version: confirm which of
