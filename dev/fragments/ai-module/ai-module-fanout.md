@@ -498,14 +498,34 @@ apply only to the legacy workspace-write settings. Named permission profiles
 remain explicit security boundaries and must declare equivalent paths
 themselves.
 
-**Worked example — stacked-workflows skills.** Because an `ai.skills` value set
-in one backend is invisible to the other, the stacked-workflows package
-contributes its `stack-*` skills from BOTH backend modules: the HM module
-installs them user-global (`~/.claude/skills/stack-*`, ...) and the devenv
-module installs them project-local — two separate, deliberate contributions, one
-per eval. A 2026-04 bug drove the lesson home: the skills were contributed from
-ONLY the HM module while a shared devenv pool was expected to "pick them up", so
-devenv consumers saw nothing while the HM contribution alone reached personal
-scope. It was first scoped to the devenv module (commit `940ec54c`); the current
-design re-adds the HM contribution as its own explicit, user-global emission, so
-both backends now contribute (each via `lib/ai/mkSkillPackageModule`).
+**Worked example — stacked-workflows skills.** Because a skills value set in one
+backend is invisible to the other, the stacked-workflows package contributes its
+`stack-*` skills from BOTH backend modules: the HM module installs them
+user-global (`~/.claude/skills/stack-*`, ...) and the devenv module installs
+them project-local — two separate, deliberate contributions, one per eval. A
+2026-04 bug drove the lesson home: the skills were contributed from ONLY the HM
+module while a shared devenv pool was expected to "pick them up", so devenv
+consumers saw nothing while the HM contribution alone reached personal scope. It
+was first scoped to the devenv module (commit `940ec54c`); the current design
+re-adds the HM contribution as its own explicit, user-global emission, so both
+backends now contribute (each via `lib/ai/mkSkillPackageModule`).
+
+**Both contributions land PER RUNTIME, not on the root pool** — since 2026-08-14
+the factory writes `ai.<runtime>.skills` and `ai.<runtime>.instructions` for
+every runtime whose module is present in the evaluation, filtered by
+`lib.hasAttrByPath ["ai" name "skills"] options`. Root `ai.skills` is ADDITIVE
+and cannot be retracted per runtime, so a root write would make a consumer's
+future per-runtime negation evaluate cleanly and silently do nothing. The
+provenance guard in `checks/module-eval.nix` enforces this: it reads each root
+option's `definitionsWithLocations` and fails when a definition came from a file
+inside this flake. The one exemption is `sharedOptions.nix` itself, which
+declares those options and so has nowhere else to expand its L1→L2 Dir reshape
+to.
+
+Two consequences to know before changing it. The consumer's override key is now
+`ai.<runtime>.skills.<name>` — a root `ai.skills.<same-name>` is a hard
+collision, not an override, because `intersectAttrs` is priority-blind (see
+`collision-semantics.md`). And always-loaded instruction ORDER flipped: the
+router instruction moved from the left operand of
+`config.ai.instructions ++ cfg.instructions` to the right, so it now renders
+after a consumer's own root instructions rather than before them.

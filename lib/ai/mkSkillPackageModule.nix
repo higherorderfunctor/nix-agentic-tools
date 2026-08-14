@@ -1,11 +1,15 @@
 # Factory for a skill-packaging module.
 #
 # Declares `<name>.enable` and, when enabled, contributes skills (and optionally
-# a router instruction) to the cross-ecosystem `ai.*` pools. Both backends of a
-# skill package — the home-manager (user-global) module and the devenv
-# (project-local) module — share this exact shape. The `ai.*` pools are
-# per-`evalModules`, so each backend imports its OWN instance of this factory;
-# an HM contribution is invisible to the devenv eval and vice-versa.
+# a router instruction) to the PER-RUNTIME `ai.<runtime>.*` pools of every
+# runtime present in the evaluation — never to the root `ai.*` pools. See
+# "Contributions land PER RUNTIME" below for why that distinction is load-
+# bearing rather than stylistic.
+#
+# Both backends of a skill package — the home-manager (user-global) module and
+# the devenv (project-local) module — share this exact shape. The `ai.*` pools
+# are per-`evalModules`, so each backend imports its OWN instance of this
+# factory; an HM contribution is invisible to the devenv eval and vice-versa.
 #
 # The returned value IS a module (a function of the standard module args), so a
 # backend's `modules/<backend>/default.nix` can be:
@@ -39,21 +43,76 @@
 #                       run by hand, so "check for a skill first" has to be
 #                       unconditional.
 #
-# Each skill value is wrapped in `lib.mkDefault` so a consumer can override an
-# individual key at normal priority.
+# ── Contributions land PER RUNTIME, never on the root pool ──
+#
+# Each skill value is wrapped in `lib.mkDefault`, so a consumer can override an
+# individual key at normal priority. The key to override is
+# `ai.<runtime>.skills.<name>` — NOT `ai.skills.<name>`, which is a hard
+# evaluation error rather than an override. That is worth stating plainly
+# because the failure is counter-intuitive: `mergeWithCollisionCheck`
+# (lib/ai/ai-common.nix) decides collisions with `builtins.intersectAttrs`,
+# which sees KEY PRESENCE and knows nothing about priorities. A consumer's
+# root `mkForce` therefore does not outrank this module's `mkDefault`; it
+# collides with it, and the assertion fires outside every `mkIf`, so it fires
+# even for runtimes that are merely imported.
+#
+# Writing the ROOT pool is what this module used to do, and it is banned by
+# the provenance guard in `checks/module-eval.nix`. The reason is not
+# tidiness: root pools are
+# ADDITIVE and cannot be retracted per runtime, so once per-runtime negation
+# exists, a root contribution makes a consumer's negation evaluate perfectly
+# cleanly and silently fail to negate anything.
+#
+# ── Two consequences of the move, both deliberate ──
+#
+# 1. ALWAYS-LOADED INSTRUCTION ORDER FLIPS. `mkBackendTransform.nix` composes
+#    `config.ai.instructions ++ cfg.instructions`, so a contribution that used
+#    to sit in the left operand now sits in the right one: this package's
+#    router instruction now renders AFTER a consumer's own root instructions
+#    rather than before them. Accepted — a routing rule's position inside the
+#    always-loaded block carries no semantics, and no ordering contract is
+#    stated anywhere for that pool.
+#
+# 2. THE WRITE IS GATED ON OPTION PRESENCE. A per-runtime write requires that
+#    runtime's module to be in the SAME evaluation, and nothing guarantees it:
+#    `flake.nix` collects every facet so the published module set has all five,
+#    but a consumer importing modules individually may have fewer, and the
+#    repo's own `devenv.nix` imports four of the five runtime modules (kimchi
+#    is absent). Writing an undeclared option is an eval error, so the fanout
+#    is filtered by what is actually declared.
 spec: {
   config,
   lib,
+  options,
   pkgs,
   ...
 }: let
   cfg = config.${spec.name};
   moduleArgs = {inherit config lib pkgs;};
+
+  skillEntries = lib.mapAttrs (_: lib.mkDefault) (spec.skills moduleArgs);
+  instructionEntries = lib.optionals (spec ? instructions) (spec.instructions moduleArgs);
+
+  # Runtimes whose per-runtime pools exist in THIS evaluation. Probing
+  # `options` rather than a hardcoded list keeps the module honest about what
+  # it can actually write to; the same shape is used by
+  # `lib/ai/sharedOptions.nix` to detect Home Manager's Git surface.
+  #
+  # Safe against the `_module.args` recursion that this repo has hit before:
+  # the per-runtime `skills` / `instructions` options come from the shared
+  # baseline in `lib/ai/app/mkBackendTransform.nix`, which derives its option
+  # surface from the app RECORD at build time and never reads `config`.
+  presentRuntimes =
+    lib.filter
+    (runtime: lib.hasAttrByPath ["ai" runtime "skills"] options)
+    (import ./runtimes.nix);
 in {
   options.${spec.name}.enable = lib.mkEnableOption spec.enableDescription;
 
   config = lib.mkIf cfg.enable {
-    ai.skills = lib.mapAttrs (_: lib.mkDefault) (spec.skills moduleArgs);
-    ai.instructions = lib.optionals (spec ? instructions) (spec.instructions moduleArgs);
+    ai = lib.genAttrs presentRuntimes (_runtime: {
+      skills = skillEntries;
+      instructions = instructionEntries;
+    });
   };
 }

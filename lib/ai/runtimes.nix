@@ -2,17 +2,23 @@
 #
 # PLAIN DATA ON PURPOSE. No module, no function, no arguments: `import` it and
 # you have the list. That shape is a hard requirement rather than a style
-# choice, because the three consumers have nothing in common to pass it —
+# choice, because the four consumers have nothing in common to pass it —
 #
-#   - lib/ai/sharedOptions.nix is a bare Home Manager / devenv module a
-#     CONSUMER imports directly into their own evaluation. It has module args
-#     and nothing else: no `self`, no flake context, no `pkgs` at the point of
-#     use. This is what rules out the `cacheHitParityTargets` shape
+#   - lib/ai/sharedOptions.nix is a bare Home Manager / devenv module, and
+#     lib/ai/mkSkillPackageModule.nix is a factory whose RESULT is one. Either
+#     way the code runs inside a CONSUMER's own evaluation, with module args and
+#     no flake context — in particular no `self`. That is what rules out the
+#     `cacheHitParityTargets` shape
 #     (config/cache-hit-parity-targets.nix + lib/checks.nix merged by
 #     `lib.evalModules` in flake.nix), which is reachable only as
 #     `self.cacheHitParityTargets`.
 #   - checks/options-doc.nix needs it inside a derivation's shell string.
 #   - checks/module-eval.nix needs it in a plain `let`.
+#
+# (Both modules DO receive `pkgs` as a module argument; the missing thing is
+# flake context, not package set. An earlier draft of this comment said "no
+# `pkgs` at the point of use", which is simply wrong — sharedOptions.nix builds
+# a `writeShellApplication` from it nine lines later.)
 #
 # It is deliberately NOT re-exported through lib/ai/default.nix. That barrel is
 # the published `nat.lib.ai.*` API; this list is an internal invariant, and
@@ -21,7 +27,7 @@
 #
 # ── Adding or removing a runtime ──
 #
-# Change this list and all three consumers follow. None of them holds a
+# Change this list and all four consumers follow. None of them holds a
 # narrower view, and none needs a per-consumer filter.
 #
 # That was an open question rather than an assumption. checks/options-doc.nix
@@ -43,9 +49,17 @@
 #   packages/semble/modules/common.nix:22       — ["claude" "codex" "kiro"]
 #
 # Widening those to five would newly fan semble into ai.copilot.* and
-# ai.kimchi.*, which checks/module-eval.nix asserts against directly. Ask
-# whether a list means "every runtime" or "the runtimes this feature
-# supports" before pointing it here.
+# ai.kimchi.*. The `semble-umbrella-fanout` test in `checks/module-eval.nix`
+# asserts directly against the COPILOT half (`!(cfg.ai.copilot.mcpServers ?
+# semble)` and the matching `agents` assertion), so that arm fails loudly; the
+# kimchi arm has no such assertion and would simply start emitting. Ask if a list
+# means "every runtime" or "the runtimes this feature supports" before pointing
+# it here.
+#
+# (Cited by TEST NAME, not line number. An earlier revision of this comment
+# cited `module-eval.nix:2641-2642`, and adding the provenance guard above it
+# shifted the assertion to :2706 — a line cite into a 9800-line file rots on
+# any edit anywhere above it.)
 #
 # Sorted alphabetically, per the repo's ordering standard.
 [

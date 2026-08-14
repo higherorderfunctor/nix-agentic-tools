@@ -288,7 +288,7 @@ instruction building.
 <!-- prettier-ignore -->
 | Feature | Without Nix | Home-Manager | DevEnv |
 |---------|-------------|--------------|--------|
-| Stacked workflow skills | Copy skills/ | `stacked-workflows.enable` | `ai.skills.*` |
+| Stacked workflow skills | Copy skills/ | `stacked-workflows.enable` | `stacked-workflows.enable` |
 | MCP server packages | Install manually | `nix build .#<server>` | `nix build .#<server>` |
 | Unified MCP config | Manual native config | `ai.mcpServers.*` (all four CLIs) | `ai.mcpServers.*` (all four CLIs) |
 | Typed MCP settings | N/A | Shared schema + native extensions | Shared schema + native extensions |

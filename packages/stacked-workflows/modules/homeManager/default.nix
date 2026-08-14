@@ -3,10 +3,13 @@
 # The skills + skill-routing fanout is delegated to the shared skill-packaging
 # factory (lib/ai/mkSkillPackageModule), imported below: `stacked-workflows.enable
 # = true` fans the unprefixed stack-* skills and the skill-routing instruction
-# into the cross-ecosystem `ai.*` pools, so each enabled ecosystem installs them
+# into the PER-RUNTIME `ai.<runtime>.{skills,instructions}` pools of every
+# runtime present in the evaluation, so each enabled ecosystem installs them
 # user-global (~/.claude/skills, ~/.kiro/skills, ~/.claude/CLAUDE.md,
-# ~/.kiro/steering/, ...). The `ai.skills` pool is per-`evalModules`, so this
-# HM-scope contribution is independent of the devenv module's.
+# ~/.kiro/steering/, ...). NOT the root `ai.skills` pool — a root write is
+# additive and cannot be retracted per runtime; see the factory's header. Those
+# pools are per-`evalModules`, so this HM-scope contribution is independent of
+# the devenv module's.
 #
 # On TOP of the factory, this module adds the HM-only `gitPreset` option (the
 # git-config presets have no devenv analogue). Skill sources are the deref'd,

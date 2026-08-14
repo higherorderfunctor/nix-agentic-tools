@@ -1,20 +1,26 @@
 ## ai.\* Collision Semantics
 
-> **Last verified:** 2026-08-10 (commit pending — TWO corrections. The call site
-> was never `hmTransform.nix` + `devenvTransform.nix`; both are 16-line
-> re-exports of `mkBackendTransform.nix`, which is where the merge AND the
-> per-CLI baseline option surface actually live, so step 2 of the checklist
-> pointed at files that declare nothing. And `ai.shell` now exists as a
-> deliberate scalar EXCEPTION resolving override-wins rather than
-> collision-as-failure — recorded here so it is not "fixed" into the covered
-> pools table). Prior: 2026-08-04 (commit pending — kiro's `agents` is still the
-> CLI-specific-shape exemplar, but it is a typed record now rather than raw
-> JSON). Prior: 2026-08-01 (commit pending — distinguishes portable hooks, whose
-> per-event matcher-group lists intentionally append, from key-identity pools).
-> Prior: 2026-04-21 (commit pending — refactor of ai-factory-collision plan
-> §3.2). If you add a new shared pool to `ai.*` or change how pools are merged
-> across the L2↔L3 boundary and this fragment isn't updated in the same commit,
-> stop and fix it.
+> **Last verified:** 2026-08-14 (commit pending — records where a MODULE may
+> contribute, now that `lib/ai/mkSkillPackageModule.nix` writes the per-CLI
+> pools. That looks like the exact shape `shell-option.md` bans, and the
+> discriminator — always-on default versus opt-in behind an explicit enable — is
+> written down in the new section below because the ban's reasoning does not
+> carry across it. Also records the provenance guard, which makes the root-write
+> prohibition structural rather than reviewed-for). Prior: 2026-08-10 (commit
+> pending — TWO corrections. The call site was never `hmTransform.nix` +
+> `devenvTransform.nix`; both are 16-line re-exports of
+> `mkBackendTransform.nix`, which is where the merge AND the per-CLI baseline
+> option surface actually live, so step 2 of the checklist pointed at files that
+> declare nothing. And `ai.shell` now exists as a deliberate scalar EXCEPTION
+> resolving override-wins rather than collision-as-failure — recorded here so it
+> is not "fixed" into the covered pools table). Prior: 2026-08-04 (commit
+> pending — kiro's `agents` is still the CLI-specific-shape exemplar, but it is
+> a typed record now rather than raw JSON). Prior: 2026-08-01 (commit pending —
+> distinguishes portable hooks, whose per-event matcher-group lists
+> intentionally append, from key-identity pools). Prior: 2026-04-21 (commit
+> pending — refactor of ai-factory-collision plan §3.2). If you add a new shared
+> pool to `ai.*` or change how pools are merged across the L2↔L3 boundary and
+> this fragment isn't updated in the same commit, stop and fix it.
 
 ### Rule
 
@@ -23,6 +29,45 @@ silent override. The factory used to merge the top-level pool with the per-CLI
 pool via `config.ai.<pool> // cfg.<pool>`, letting a later per-CLI contribution
 silently overwrite a same-name top-level entry. User directive: "mixing and
 collision should be a failure. we don't merge over keys."
+
+### Where a MODULE in this repo may contribute
+
+Consumers write whichever level they like. This repo's own modules may not: they
+write `ai.<cli>.<pool>` and **never** the root `ai.<pool>`, enforced by the
+provenance guard in `checks/module-eval.nix` (`rootPoolViolations`), which reads
+each root option's `definitionsWithLocations` and fails when a definition came
+from a file inside this flake. A consumer's inline config reports
+`<unknown-file>` and is therefore always allowed — the root level is theirs.
+
+The reason is not symmetry. Root pools are ADDITIVE and cannot be retracted per
+runtime, so once per-runtime negation exists a root contribution makes a
+consumer's negation evaluate perfectly cleanly and silently fail to negate
+anything. No error, no warning, and no visible difference except the feature
+they turned off still being on.
+
+**This is in tension with `shell-option.md`'s "a module must NEVER contribute
+into `ai.<cli>.environmentVariables`", and the tension is real rather than a
+contradiction.** Both statements are about the same mechanism: `intersectAttrs`
+compares KEY PRESENCE and cannot see `mkDefault`, so a module contribution to a
+per-CLI pool turns a consumer's same-key root entry into a hard eval failure
+rather than yielding to it. The discriminator is **who pays**:
+
+| module contribution                                         | reaches                  | a consumer's same-key root write                                            |
+| ----------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------- |
+| always-on default (`gitSshConfigWorkaround`)                | every consumer, unasked  | explodes on config nobody opted into — BANNED                               |
+| opt-in behind an explicit `enable` (`mkSkillPackageModule`) | only consumers who asked | explodes on config that consumer chose — ACCEPTED, documented at the option |
+
+An always-on default that collides is a trap: the consumer never asked for the
+contribution and the error names a pool they never wrote. An opt-in package's
+contribution is something the consumer switched on deliberately, so trading the
+root override for a per-runtime one (`ai.<runtime>.skills.<name>`) is a
+documented interface, not an ambush. `lib/ai/mkSkillPackageModule.nix` states
+that override key in its header; if you move a module's writes per-CLI, state it
+in yours too.
+
+`ai.instructions` is asymmetric here and it matters: it is a LIST that
+concatenates with no collision check, while `skills` is an attrset that is
+collision-checked. Two writes on adjacent lines can carry different risk.
 
 ### Covered pools
 
