@@ -45,9 +45,22 @@ const PositiveNumber = Schema.Number.pipe(Schema.positive());
  * property walk. `"$.drained"` therefore reads a property literally named
  * `$`, resolves undefined, and the loop never stops — silently, forever.
  *
- * Rejecting the JSONPath spellings is a POLICY choice (a property really
- * named `$` is legal JSON and the engine would read it), but it is the single
- * most expensive typo in this format.
+ * This is a HARD rejection at DECODE time, not a `policy`-basis diagnostic.
+ * The distinction matters because the two behave differently: a policy
+ * diagnostic is advisory and `validate(..., { strict: false })` tolerates it,
+ * whereas this fails `decodeWorkflow` outright and no option relaxes it.
+ *
+ * It is therefore one of the few places this schema is deliberately STRICTER
+ * than the engine. The rule governing that, shared with the Nix port's
+ * strictness ledger:
+ *
+ *   be stricter than the engine only where the engine's acceptance is a
+ *   SILENT failure — something that parses, runs, and then never does what
+ *   it says.
+ *
+ * `"$.drained"` qualifies: legal JSON, accepted by the engine, and it hangs
+ * the loop forever without an error. A property genuinely named `$` is the
+ * price, and no vendor recipe uses one.
  */
 const JsonPath = NonEmptyString.pipe(
   Schema.filter(

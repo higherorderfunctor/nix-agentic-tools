@@ -304,6 +304,28 @@ export const analyze = (workflow: Workflow): Analysis => {
       );
       continue;
     }
+    if (
+      parsed.form === "contains" &&
+      (parsed.template.includes("{") || parsed.template.includes("}"))
+    ) {
+      // The engine's reference grammar is `[^{}]`, so a braced expression can
+      // never match it — but `parseStopWhen` slices on the first `}}` rather
+      // than using that regex, so the stopWhen still PARSES. The expression
+      // then classifies as a BARE reference, which is never an error and
+      // resolves to literal text, so the condition compares that literal
+      // against the needle forever.
+      //
+      // The Nix port refuses this outright, because its AUTHORED shape takes
+      // the expression as its own field and can reject it before the string
+      // is ever built. Here the input is the already-assembled wire string
+      // from a file the engine will happily run, so it is a policy diagnostic
+      // rather than a decode failure. Same defect, different direction.
+      pol(
+        "W-STOP-WHEN-TEMPLATE-BRACES",
+        e.id,
+        `repeat '${e.id}' has a stopWhen template '{{${parsed.template}}}' containing a brace; the engine's reference grammar excludes braces, so it resolves as literal text and the condition can never match`,
+      );
+    }
     if (parsed.form === "watchTerminal" && !watchIds.has(parsed.watchId)) {
       err(
         "E-STOP-WHEN-WATCH-ID",
