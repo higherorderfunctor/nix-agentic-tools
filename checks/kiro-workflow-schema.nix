@@ -1,0 +1,457 @@
+# Eval-time conformance gate for the Kiro workflow typed schema
+# (packages/kiro-cli/lib/workflow/).
+#
+# Three kinds of assertion, and all three are load-bearing:
+#
+#   ACCEPT   a definition the engine accepts must evaluate. Rejecting what
+#            the engine runs is as much a bug as the reverse, and it is the
+#            failure mode a hand-written schema falls into by default.
+#   REJECT   a definition the engine refuses must fail to evaluate. Uses
+#            `tryEval` + `deepSeq`; the deepSeq is load-bearing, because a
+#            submodule type error only surfaces when the value is FORCED and
+#            a shallow tryEval passes silently.
+#   VENDOR   the seven recipes inlined in the engine bundle must parse,
+#            type-check, analyze clean of engine-basis errors, and RENDER
+#            BACK byte-identically. The engine self-validates these at module
+#            init, so any of them failing here proves the schema wrong rather
+#            than the recipe wrong. This is the strongest signal available
+#            without a live engine.
+#
+# A tryEval-based reject harness needs its own positive control, because
+# "threw for the reason I meant" and "threw for an unrelated reason" are
+# indistinguishable. `accept-baseline` is that control: it is the same shape
+# every reject case mutates, so if it ever stops evaluating, every REJECT
+# below becomes vacuous and this check says so.
+{
+  lib,
+  pkgs,
+  ...
+}: let
+  W = import ../packages/kiro-cli/lib/workflow {inherit lib;};
+
+  eval = wf:
+    (lib.evalModules {
+      modules = [
+        {options.workflow = lib.mkOption {type = W.types.workflowType;};}
+        {workflow = wf;}
+      ];
+    })
+    .config
+    .workflow;
+
+  forces = wf: (builtins.tryEval (builtins.deepSeq (eval wf) true)).success;
+
+  mkTest = name: assertion:
+    pkgs.runCommand "kiro-workflow-${name}" {} ''
+      ${
+        if assertion
+        then ''echo "PASS: ${name}" > $out''
+        else throw "FAIL: ${name}"
+      }
+    '';
+
+  accept = name: wf: mkTest "accept-${name}" (forces wf);
+  reject = name: wf: mkTest "reject-${name}" (!(forces wf));
+
+  codesOf = wf: map (d: d.code) (W.analyze.analyze (eval wf)).diagnostics;
+  emits = name: wf: code: mkTest "emits-${name}" (lib.elem code (codesOf wf));
+  silentOn = name: wf: code: mkTest "silent-${name}" (!(lib.elem code (codesOf wf)));
+
+  step = id: extra: {
+    step =
+      {
+        inherit id;
+        agent = "ag";
+        prompt = "p";
+      }
+      // extra;
+  };
+  wrap = steps: {
+    name = "w";
+    inherit steps;
+  };
+  baseline = wrap [(step "a" {})];
+
+  # ── vendor corpus ─────────────────────────────────────────────────────────
+  vendorDir = ./fixtures/kiro-workflows/vendor;
+  vendorNames = lib.attrNames (builtins.readDir vendorDir);
+
+  vendorTests = lib.listToAttrs (map (
+      entry: let
+        stem = lib.removeSuffix ".workflow.json" entry;
+        raw = builtins.fromJSON (builtins.readFile (vendorDir + "/${entry}"));
+        authored = eval (W.parse.fromAttrs raw);
+        analysis = W.analyze.analyze authored;
+        # `planRevision` is machine state the authored shape deliberately has
+        # no option for, so it is excluded from the round-trip comparison
+        # rather than carried.
+        expected = lib.filterAttrs (n: _: n != "planRevision") raw;
+      in
+        lib.nameValuePair "kiro-workflow-vendor-${stem}"
+        (mkTest "vendor-${stem}" (
+          analysis.engineErrors == [] && W.render.toAttrs authored == expected
+        ))
+    )
+    vendorNames);
+in
+  vendorTests
+  // {
+    # The positive control. If this fails, every reject case below is vacuous.
+    kiro-workflow-accept-baseline = accept "baseline" baseline;
+
+    # ── ACCEPT: things the engine permits and a naive schema would refuse ───
+    #
+    # Every one of these was a real temptation to over-constrain.
+    kiro-workflow-accept-repeat-no-stop-form =
+      accept "repeat-no-stop-form"
+      (wrap [
+        {
+          repeat = {
+            id = "r";
+            maxIterations = 3;
+            onMaxIterations = "abort";
+            steps = [(step "s" {})];
+          };
+        }
+      ]);
+    kiro-workflow-accept-max-iterations-at-ceiling =
+      accept "max-iterations-at-ceiling"
+      (wrap [
+        {
+          repeat = {
+            id = "r";
+            maxIterations = 1000;
+            onMaxIterations = "abort";
+            steps = [(step "s" {})];
+          };
+        }
+      ]);
+    kiro-workflow-accept-nested-repeats =
+      accept "nested-repeats"
+      (wrap [
+        {
+          repeat = {
+            id = "outer";
+            maxIterations = 2;
+            onMaxIterations = "abort";
+            steps = [
+              {
+                repeat = {
+                  id = "inner";
+                  maxIterations = 2;
+                  onMaxIterations = "abort";
+                  steps = [(step "s" {})];
+                };
+              }
+            ];
+          };
+        }
+      ]);
+    kiro-workflow-accept-empty-id = accept "empty-id" (wrap [(step "" {})]);
+    kiro-workflow-accept-empty-prompt = accept "empty-prompt" (wrap [
+      {
+        step = {
+          id = "a";
+          agent = "ag";
+          prompt = "";
+        };
+      }
+    ]);
+
+    # ── REJECT: per-node type rules ────────────────────────────────────────
+    kiro-workflow-reject-two-tags =
+      reject "two-tags"
+      (wrap [
+        {
+          step = {
+            id = "a";
+            agent = "ag";
+            prompt = "p";
+          };
+          sequence = {
+            id = "s";
+            steps = [];
+          };
+        }
+      ]);
+    kiro-workflow-reject-unknown-tag = reject "unknown-tag" (wrap [{fanout = {id = "a";};}]);
+    kiro-workflow-reject-step-missing-prompt = reject "step-missing-prompt" (wrap [
+      {
+        step = {
+          id = "a";
+          agent = "ag";
+        };
+      }
+    ]);
+    kiro-workflow-reject-removed-input-field =
+      reject "removed-input-field"
+      (wrap [
+        {
+          step = {
+            id = "a";
+            agent = "ag";
+            prompt = "p";
+            input = "x";
+          };
+        }
+      ]);
+    kiro-workflow-reject-max-iterations-zero =
+      reject "max-iterations-zero"
+      (wrap [
+        {
+          repeat = {
+            id = "r";
+            maxIterations = 0;
+            onMaxIterations = "abort";
+            steps = [];
+          };
+        }
+      ]);
+    kiro-workflow-reject-max-iterations-over-ceiling =
+      reject "max-iterations-over-ceiling"
+      (wrap [
+        {
+          repeat = {
+            id = "r";
+            maxIterations = 1001;
+            onMaxIterations = "abort";
+            steps = [];
+          };
+        }
+      ]);
+    kiro-workflow-reject-max-iterations-fractional =
+      reject "max-iterations-fractional"
+      (wrap [
+        {
+          repeat = {
+            id = "r";
+            maxIterations = 2.5;
+            onMaxIterations = "abort";
+            steps = [];
+          };
+        }
+      ]);
+    kiro-workflow-reject-unknown-on-max-iterations =
+      reject "unknown-on-max-iterations"
+      (wrap [
+        {
+          repeat = {
+            id = "r";
+            maxIterations = 2;
+            onMaxIterations = "stop";
+            steps = [];
+          };
+        }
+      ]);
+    kiro-workflow-reject-unknown-join-policy =
+      reject "unknown-join-policy"
+      (wrap [
+        {
+          parallel = {
+            id = "p";
+            joinPolicy = "first";
+            branches = [];
+          };
+        }
+      ]);
+    kiro-workflow-reject-both-stop-forms =
+      reject "both-stop-forms"
+      (wrap [
+        {
+          repeat = {
+            id = "r";
+            maxIterations = 2;
+            onMaxIterations = "abort";
+            steps = [];
+            stop = {
+              condition.containsText = "x";
+              when.watchTerminal = "w";
+            };
+          };
+        }
+      ]);
+    kiro-workflow-reject-empty-stop-condition = reject "empty-stop-condition" (wrap [(step "a" {completion = {};})]);
+    kiro-workflow-reject-jsonpath-dollar =
+      reject "jsonpath-dollar"
+      (wrap [
+        (step "a" {
+          completion.fileCheck = {
+            path = "p.json";
+            jsonPath = ["$.drained"];
+            value = true;
+          };
+        })
+      ]);
+    kiro-workflow-reject-jsonpath-empty =
+      reject "jsonpath-empty"
+      (wrap [
+        (step "a" {
+          completion.fileCheck = {
+            path = "p.json";
+            jsonPath = [];
+            value = true;
+          };
+        })
+      ]);
+    kiro-workflow-reject-unknown-completion-signal =
+      reject "unknown-completion-signal"
+      (wrap [(step "a" {completion.completionSignal = "done";})]);
+    kiro-workflow-reject-unknown-watch-handler =
+      reject "unknown-watch-handler"
+      (wrap [
+        {
+          watch = {
+            id = "w";
+            watcher.gitlab-mr = {};
+          };
+        }
+      ]);
+    kiro-workflow-reject-watch-without-ref =
+      reject "watch-without-ref"
+      (wrap [
+        {
+          watch = {
+            id = "w";
+            watcher.github-pr = {};
+          };
+        }
+      ]);
+    kiro-workflow-reject-poll-interval-below-minimum =
+      reject "poll-interval-below-minimum"
+      (wrap [
+        {
+          watch = {
+            id = "w";
+            watcher.github-pr = {
+              prRef = "pr.json";
+              pollIntervalSec = 5;
+            };
+          };
+        }
+      ]);
+    kiro-workflow-reject-malformed-cr-id =
+      reject "malformed-cr-id"
+      (wrap [
+        {
+          watch = {
+            id = "w";
+            watcher.crux-cr = {crId = "123";};
+          };
+        }
+      ]);
+    kiro-workflow-reject-dotted-watch-reference =
+      reject "dotted-watch-reference"
+      (wrap [
+        {
+          repeat = {
+            id = "r";
+            maxIterations = 2;
+            onMaxIterations = "abort";
+            steps = [];
+            stop.when.watchTerminal = "a.b";
+          };
+        }
+      ]);
+
+    # ── Tree-level diagnostics ─────────────────────────────────────────────
+    kiro-workflow-emits-step-cap =
+      emits "step-cap" (wrap (map (i: step "s${toString i}" {}) (lib.range 1 21))) "E-STEP-NODES-MAX";
+    kiro-workflow-silent-at-step-cap =
+      silentOn "at-step-cap" (wrap (map (i: step "s${toString i}" {}) (lib.range 1 20))) "E-STEP-NODES-MAX";
+    kiro-workflow-emits-nesting-depth =
+      emits "nesting-depth"
+      (wrap [
+        (lib.foldl' (inner: i: {
+          sequence = {
+            id = "d${toString i}";
+            steps = [inner];
+          };
+        }) (step "leaf" {}) (lib.range 1 8))
+      ]) "E-NESTING-DEPTH";
+    kiro-workflow-emits-duplicate-id =
+      emits "duplicate-id" (wrap [(step "a" {}) (step "a" {})]) "E-NODE-DUPLICATE-ID";
+    kiro-workflow-emits-interactive-in-parallel =
+      emits "interactive-in-parallel"
+      (wrap [
+        {
+          parallel = {
+            id = "p";
+            joinPolicy = "allSettled";
+            branches = [(step "a" {completion.containsText = "x";})];
+          };
+        }
+      ])
+      "E-INTERACTIVE-STEP-IN-PARALLEL";
+    kiro-workflow-emits-dangling-watch =
+      emits "dangling-watch"
+      (wrap [
+        {
+          repeat = {
+            id = "r";
+            maxIterations = 2;
+            onMaxIterations = "abort";
+            stop.when.watchTerminal = "nope";
+            steps = [(step "s" {})];
+          };
+        }
+      ])
+      "E-STOP-WHEN-WATCH-ID";
+    kiro-workflow-emits-unknown-template-ref =
+      emits "unknown-template-ref" (wrap [(step "a" {prompt = "see {{ghost.output}}";})]) "E-TEMPLATE-REF-UNKNOWN";
+    kiro-workflow-emits-backward-template-ref =
+      emits "backward-template-ref" (wrap [(step "a" {prompt = "see {{b.output}}";}) (step "b" {})]) "E-TEMPLATE-REF-NOT-PRECEDING";
+    kiro-workflow-emits-cross-branch-template-ref =
+      emits "cross-branch-template-ref"
+      (wrap [
+        {
+          parallel = {
+            id = "p";
+            joinPolicy = "allSettled";
+            branches = [(step "l" {}) (step "r" {prompt = "see {{l.output}}";})];
+          };
+        }
+      ])
+      "E-TEMPLATE-REF-NOT-PRECEDING";
+    kiro-workflow-emits-non-producer-ref =
+      emits "non-producer-ref"
+      (wrap [(step "a" {captureOutput = false;}) (step "b" {prompt = "see {{a.output}}";})])
+      "E-TEMPLATE-REF-NOT-PRODUCER";
+    kiro-workflow-emits-stranded-verify =
+      emits "stranded-verify"
+      (wrap [
+        {
+          parallel = {
+            id = "p";
+            joinPolicy = "allSettled";
+            branches = [
+              {
+                repeat = {
+                  id = "r";
+                  maxIterations = 2;
+                  onMaxIterations = "abort";
+                  steps = [(step "s" {})];
+                };
+              }
+            ];
+          };
+        }
+        (step "verify" {})
+      ]) "W-ABORT-BRANCH-STRANDS-DOWNSTREAM";
+
+    # A step inside a parallel IS referenceable by a later sibling of the
+    # whole parallel — divergence happens at the ordered segment, not the
+    # concurrent one. This is the aggregation-after-fan-out shape, and a
+    # `precedes` that got it wrong would silently break every real workflow.
+    kiro-workflow-silent-aggregate-after-fanout =
+      silentOn "aggregate-after-fanout"
+      (wrap [
+        {
+          parallel = {
+            id = "p";
+            joinPolicy = "allSettled";
+            branches = [(step "l" {}) (step "r" {})];
+          };
+        }
+        (step "fold" {prompt = "see {{l.output}} and {{r.output}}";})
+      ]) "E-TEMPLATE-REF-NOT-PRECEDING";
+  }
