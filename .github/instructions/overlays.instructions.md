@@ -369,8 +369,17 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-08-10 (commit pending — adds the LOCATE-vs-PROBE split
-> every binary-probing extractor now owes its reader. `mkKiroExtract` hardcoded
+> **Last verified:** 2026-08-14 (commit pending — records the blocker that kept
+> oxlint held back on EVERY sweep for ten days and was invisible because it
+> spells itself exactly like a patch conflict: an `applyPatches` src cannot be
+> re-hashed by nix-update at all, since `outputHash = ""` forces flat hashing
+> over a directory, so its update row needs `--no-src`. Measured on the
+> 2026-08-08 sweep, where the patch applied cleanly and the run still died. Also
+> records how to regenerate the pnpm patch file when upstream repins the
+> dependency, that `patchHash` is a plain sha256 of that file, and that
+> `pnpm patch-commit` emits content-free stanzas needing removal). Prior:
+> 2026-08-10 (commit pending — adds the LOCATE-vs-PROBE split every
+> binary-probing extractor now owes its reader. `mkKiroExtract` hardcoded
 > `bin/.kiro-cli-chat-wrapped`; when nixpkgs f13ff45a dissolved that name,
 > twelve greps failed with "No such file or directory" and the build announced
 > "upstream changed the hook-trigger vocabulary". The target is now resolved by
@@ -716,6 +725,26 @@ feature maturities, and config-key extraction fail closed.
   dependency selections. Make the minimal lock edit, then prove it with
   `pnpm install --frozen-lockfile` using the exact pnpm selected by the Nix
   fetcher. Oxlint's `@napi-rs/cli` patch is the reference implementation.
+- **Regenerating the patch when upstream repins the dependency** — the one
+  change the awk deliberately fails loud on. Do it with real pnpm, in a
+  throwaway project depending on the new version, rather than by hand-editing
+  hunks: `pnpm patch <pkg>@<ver> --edit-dir <dir>`, edit,
+  `pnpm patch-commit <dir>`. Three mechanics are not guessable from the result:
+  - **`patchHash` is a plain `sha256sum` of the pnpm patch file's bytes.**
+    Nothing derives it from the dependency; it moves only when that file does,
+    which is why the awk can stamp it by key. Verify against the current pin
+    before trusting a regenerated one — the 3.8.2 file hashes to the committed
+    `0a540bf5…`.
+  - **`patch-commit` emits content-free stanzas that must be stripped.** For
+    `@napi-rs/cli@3.8.6` it produced 37 `deleted file mode` entries for
+    `__tests__` paths that exist in both the tarball and the edit dir, alongside
+    the 2 real file diffs. Keep only stanzas containing an `@@` hunk. Left in,
+    they are 37 more positional things to break on the next repin, for no
+    behavioral change.
+  - **Prove it end to end, not by eye.** Point the scratch lock at the stripped
+    file's hash, `pnpm install --frozen-lockfile`, and read the patched line out
+    of `node_modules/.pnpm/<pkg>@<ver>_patch_hash=…/`. A patch that parses is
+    not a patch that applied.
 - **Apply that metadata BY KEY in `postPatch`, never as lock hunks.** The patch
   FILE is a new file and never conflicts, but the workspace and lock entries
   pointing pnpm at it track upstream's peer resolution, which reshuffles on its
@@ -728,12 +757,35 @@ feature maturities, and config-key extraction fail closed.
   asserts loudly on the change that IS a judgement call — the dependency moving
   off the pinned version, which invalidates both the patch target and the patch
   hash.
-- **A patch conflict presents two layers from its cause.** `applyPatches` dying
-  in `patchPhase` means `nix-build` never emits a hash mismatch, so nix-update
-  reports `failed to retrieve hash when trying to update <pkg>.src` and the
-  sweep records `HELD BACK: <pkg> (nix-update or build failed)`. Neither names a
+- **An `applyPatches` src needs `--no-src` on its nix-update row, or the sweep
+  can never bump it.** nix-update re-derives a src hash by rebuilding `pkg.src`
+  with `outputHash = ""`, which forces FLAT hashing; an `applyPatches` output is
+  a DIRECTORY, so that build ALWAYS fails with
+  `should be a non-executable regular file since recursive hashing is not enabled`
+  — regardless of the patch, the rev, or anything upstream did. It aborts
+  `update()` before `update_dependency_hashes` runs, so neither `cargoDeps` nor
+  `pnpmDeps` is ever touched. The rev-bump pre-step already wrote the src hash,
+  so nothing is lost by skipping that pass. This is a property of the SHAPE of
+  `src`, so it applies the moment a package moves from a plain fetcher to
+  `applyPatches` — oxlint made that move on 2026-08-04 and did not bump once in
+  the following ten days.
+- **A patch conflict presents two layers from its cause — and it is not the only
+  thing that spells itself that way.** `applyPatches` dying in `patchPhase`
+  means `nix-build` never emits a hash mismatch, so nix-update reports
+  `failed to retrieve hash when trying to update <pkg>.src` and the sweep
+  records `HELD BACK: <pkg> (nix-update or build failed)`. Neither names a
   patch. The real `Hunk #N FAILED` lines are in the
   `--- nix stderr (last 20 lines) ---` tail in the update job log.
+
+  **Read that tail before concluding anything**, because the `--no-src` failure
+  above produces the IDENTICAL top-level sentence, and the two can stack. On the
+  2026-08-08 sweep oxlint's patch applied cleanly — the log even says
+  `patch_hash stamped on 8 importer + 2 snapshot entries` — and the run still
+  died on the flat-hash error underneath. By 2026-08-12 upstream had moved the
+  catalog pin and the awk assertion fired FIRST, so the visible reason changed
+  while the older blocker sat unfixed behind it. Fixing only the reason the
+  latest log names leaves the package held back with a fresh-looking message.
+
 - If a new overlay uses `vu.mkVersion` with a `readFile`-based version
   extractor, its source must be fetchable at eval time. The warm step handles
   this automatically for CI.

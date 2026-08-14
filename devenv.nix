@@ -500,7 +500,21 @@ in {
         # non-zero on that. Authored prose in the same tree stays checked.
         "^fixtures/kiro-primitives/evidence/"
         "^fixtures/kiro-primitives/records/"
-        "^overlays/chatgpt-codex-extracted\.json$"
+        # `\\.` and not `\.`: these are Nix double-quoted strings, where a
+        # backslash before a non-escape character is DROPPED, so `\.patch$`
+        # reaches cspell as `.patch$` — a regex whose `.` matches any
+        # character, quietly excluding every path ending in "patch". Measured:
+        # `nix eval --expr '".*\.patch$"'` prints `.*.patch$`. The `.lock` and
+        # `-package-lock.json` rows above already double it; the codex row did
+        # not, and is corrected here.
+        "^overlays/chatgpt-codex-extracted\\.json$"
+        # Patch files are verbatim third-party code plus git blob hashes; no
+        # token in one is authored here. They were never deliberately checked
+        # — oxlint's napi-rs patch merely happened to carry an index hash
+        # containing a digit, and regenerating it against a newer dependency
+        # produced an all-letter one that cspell reads as a misspelled word.
+        # Excluded in both places for the reason given above.
+        ".*\\.patch$"
       ];
     };
     # Re-stage files modified by formatters (treefmt, shfmt, etc.)
