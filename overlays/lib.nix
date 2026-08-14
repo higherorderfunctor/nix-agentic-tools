@@ -345,6 +345,20 @@ rec {
     sed="${pkgs.gnused}/bin/sed"
     sort="${pkgs.coreutils}/bin/sort"
 
+    # Establish READABILITY once, before any anchor runs. Every guard below
+    # tolerates a grep exit of 1 ("no match") because that is a real verdict
+    # each one turns into its own diagnostic — but grep also exits 2 when it
+    # cannot READ the file, and a blanket `|| true` collapses the two into one
+    # outcome. That is exactly how mkKiroExtract once announced a hook-trigger
+    # vocabulary change for a binary it had never opened (see the ifd-patterns
+    # fragment, "Separate LOCATING the artifact from PROBING it"). Checking the
+    # single fixed path up front means the `|| true`s below can only ever be
+    # hiding an absent anchor, which is what they are for.
+    if [ ! -r "${bin}" ]; then
+      echo "claude-extract: cannot read ${bin} — this is a LOCATION failure, nothing was probed (the package layout moved)" >&2
+      exit 1
+    fi
+
     pins=$("$grep" -aoE 'unpin[A-Za-z0-9]+LaunchEffort' "${bin}" | "$sort" -u || true)
     if [ -z "$pins" ]; then
       echo "claude-extract: no unpin*LaunchEffort keys found (upstream renamed the launch-pin mechanism)" >&2
@@ -367,8 +381,15 @@ rec {
     # `[…]` payload, which is what is actually extracted, so the array
     # literal keeps doing the validating regardless of which form
     # matched.
+    #
+    # The trailing `|| true` is load-bearing and was MISSING here, which is
+    # why 2.1.232 failed with a bare `builder failed with exit code 1` and no
+    # claude-extract line at all: a zero-match pipeline exits 1, pipefail
+    # promotes it, and errexit killed the script AT THE ASSIGNMENT — so the
+    # matchCount branch below, and its diagnostic, were unreachable in exactly
+    # the case they exist for. Every other guard here already had it.
     levels=$("$grep" -aoE 'effortLevel:[A-Za-z_$][A-Za-z0-9_$]*(\.enum)?\(\[[^]]*\]\)' "${bin}" \
-      | "$grep" -oE '\[[^]]*\]' | "$sort" -u)
+      | "$grep" -oE '\[[^]]*\]' | "$sort" -u || true)
     matchCount=$(printf '%s\n' "$levels" | "$grep" -c . || true)
     if [ "$matchCount" -ne 1 ]; then
       echo "claude-extract: effort enum matched $matchCount distinct level arrays (expected 1; upstream changed the validator)" >&2
@@ -434,9 +455,13 @@ rec {
       fi
     done
 
-    # `[.]` rather than a backslash escape: Nix indented strings pass `\`
-    # through literally, so an escaped dot here would reach bash as two
-    # characters and stop matching the old `<ns>.boolean` spelling.
+    # The captured token is used as an ERE below, and the old form carries a
+    # dot (`w.boolean`). Quote it as `[.]` rather than `\.`: the escape would
+    # have to survive Nix -> bash -> sed's REPLACEMENT text -> ERE, and each
+    # layer treats backslashes differently. A bracket expression means the
+    # same thing to the regex engine and nothing to any layer above it.
+    # (Literal `\.` written directly in a pattern, as the anchors above do, is
+    # unaffected — that goes through no substitution.)
     boolCtorRe=$(printf '%s' "$boolCtor" | "$sed" -e 's/[.]/[.]/g')
     ctorKeys=$("$grep" -aoE '[A-Za-z_$][A-Za-z0-9_$]*:'"$boolCtorRe"'\(\)\.optional\(\)' "${bin}" \
       | "$sed" -E 's/:.*$//' | "$sort" -u | "$grep" -c . || true)
