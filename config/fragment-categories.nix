@@ -61,6 +61,10 @@ _: {
     # options barrel (lib/ai/sharedOptions.nix).
     ai-module = {
       scopes = [
+        # Home of the provenance guard enforcing the root-write prohibition
+        # (`rootPoolViolations`). Editing it without the fanout and collision
+        # fragments loaded is how the rule gets "simplified" back out.
+        "checks/module-eval.nix"
         "lib/ai/agent.nix"
         # Home of both merge helpers these fragments describe
         # (mergeWithCollisionCheck, resolveOverride) — previously
@@ -69,6 +73,12 @@ _: {
         "lib/ai/app/**"
         "lib/ai/default.nix"
         "lib/ai/hooks.nix"
+        # The one factory that contributes to the pools from inside this repo,
+        # so it is exactly where collision-semantics' "where a MODULE may
+        # contribute" rule has to be read before editing. Previously unscoped.
+        "lib/ai/mkSkillPackageModule.nix"
+        # The runtime registry that file and sharedOptions.nix share.
+        "lib/ai/runtimes.nix"
         "lib/ai/sharedOptions.nix"
         "packages/*/lib/mk*.nix"
         "packages/chatgpt-codex/modules/**"

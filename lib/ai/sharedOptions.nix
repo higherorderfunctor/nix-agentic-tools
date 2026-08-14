@@ -16,7 +16,7 @@
   agent = import ./agent.nix {inherit lib;};
   dirHelpers = import ./dir-helpers.nix {inherit lib;};
   hooks = import ./hooks.nix {inherit lib;};
-  harnessNames = ["claude" "codex" "copilot" "kimchi" "kiro"];
+  harnessNames = import ./runtimes.nix;
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
   hasHomeManagerGit = lib.hasAttrByPath ["programs" "git" "settings"] options;
 
@@ -363,6 +363,16 @@ in {
   # layer only reshapes the L1 Dir option into L2 per-file entries.
   config = lib.mkMerge [
     {
+      # THE one sanctioned root-pool write in this repo. Every other module
+      # writes `ai.<runtime>.<pool>`, enforced by the provenance guard in
+      # `checks/module-eval.nix` (`rootPoolViolations`), which allowlists this
+      # FILE — see `rootPoolAllowedFiles` there.
+      #
+      # It is legitimate because the DESTINATION is the root pool by
+      # definition: `ai.rulesDir` is itself a ROOT option, so expanding it onto
+      # any per-runtime pool would silently relocate a consumer's own
+      # declaration to a level they never wrote. This module declares those
+      # options, so it is the one place with nowhere else to expand to.
       ai = {
         rules = lib.mkIf (config.ai.rulesDir != null) (
           lib.mapAttrs (_: lib.mkDefault) (dirHelpers.rulesFromDir config.ai.rulesDir)

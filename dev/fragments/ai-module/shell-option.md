@@ -133,16 +133,30 @@ three runtimes demonstrably do not perform.
   depending on which runtime the consumer named. Guarded by
   `module-ai-shell-explicit-env-beats-typed-{codex,kiro}`; change them together
   or not at all.
-- **A module must NEVER contribute into `ai.<cli>.environmentVariables`.** That
-  pool is collision-checked against `ai.environmentVariables` by
-  `builtins.intersectAttrs` — KEY PRESENCE, with no awareness of `mkDefault`. So
-  a module default there does not "yield" to a consumer's entry for the same
-  key, it turns that config into a hard eval failure naming a pool the consumer
-  never wrote, and it fires even for merely-imported harnesses because
-  `collisionAssertions` sits outside `mkIf cfg.enable`. Both `ai.shell` and
-  `gitSshConfigWorkaround` shipped this bug for one commit. Module contributions
-  ride `ai._sandboxSafeSshCommand` / the `resolvedShell` callback argument and
-  are merged at the wrapper call site instead.
+- **An ALWAYS-ON module default must never contribute into
+  `ai.<cli>.environmentVariables`.** That pool is collision-checked against
+  `ai.environmentVariables` by `builtins.intersectAttrs` — KEY PRESENCE, with no
+  awareness of `mkDefault`. So a module default there does not "yield" to a
+  consumer's entry for the same key, it turns that config into a hard eval
+  failure naming a pool the consumer never wrote, and it fires even for
+  merely-imported harnesses because `collisionAssertions` sits outside
+  `mkIf cfg.enable`. Both `ai.shell` and `gitSshConfigWorkaround` shipped this
+  bug for one commit. Module contributions ride `ai._sandboxSafeSshCommand` /
+  the `resolvedShell` callback argument and are merged at the wrapper call site
+  instead.
+
+  **Read the "always-on" qualifier — it was added 2026-08-14 and it is
+  load-bearing.** The rule used to read "a module must NEVER contribute into
+  `ai.<cli>.environmentVariables`", and generalizing that wording to every
+  collision-checked pool would now be wrong: `lib/ai/mkSkillPackageModule.nix`
+  deliberately writes `ai.<runtime>.skills` and `ai.<runtime>.instructions`,
+  because writing the ROOT pool instead is what the provenance guard in
+  `checks/module-eval.nix` bans. What makes that safe and this unsafe is not the
+  pool, it is whether the consumer asked: `gitSshConfigWorkaround` reaches every
+  consumer unasked, while a skill package contributes only after an explicit
+  `<name>.enable = true`. See `collision-semantics.md` §"Where a MODULE in this
+  repo may contribute" for the full discriminator.
+
 - **`shell_environment_policy` is not the Codex knob.** It filters what SPAWNED
   commands inherit; writing the shell there configures the children, not Codex.
 - **`KIRO_CHAT_SHELL` is a dead end.** It exists only in Kiro's Rust binary, is

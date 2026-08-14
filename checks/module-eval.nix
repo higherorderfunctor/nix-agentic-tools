@@ -17,6 +17,11 @@
   # under `lib.ai.*`. No top-level `lib.<helper>` exports exist.
   mcpLib = import ./../lib/mcp.nix {inherit lib;};
   aiBase = import ./../lib/ai {inherit lib;};
+  # The runtime registry, shared with lib/ai/sharedOptions.nix and
+  # checks/options-doc.nix. Importing it rather than restating the five names
+  # is what makes the tests below GROW when a sixth runtime lands: a hardcoded
+  # list would keep passing while silently not covering the newcomer.
+  harnessNames = import ./../lib/ai/runtimes.nix;
   codexExtracted = builtins.fromJSON (builtins.readFile ../overlays/chatgpt-codex-extracted.json);
   tomlFormat = pkgs.formats.toml {};
   # Generic idempotent-flag helper shared with mkKiro's wrapper (lib/idempotentFlags.nix).
@@ -479,6 +484,134 @@
     builtins.any (lib.hasInfix "claude-delegation-clamp") (handlerCommands blocks);
   hasGuardHook = blocks:
     builtins.any (lib.hasInfix "claude-memory-collision-guard") (handlerCommands blocks);
+
+  # ── The A1 backstop: no module in THIS repo may define a ROOT ai.* option ──
+  #
+  # THE RULE: a root `ai.*` option may be defined only by the module that
+  # DECLARES it. Every other module here writes `ai.<runtime>.<option>`; the
+  # root level belongs to consumers.
+  #
+  # Root options are ADDITIVE and cannot be retracted per runtime. Once
+  # per-runtime negation ships, a contribution this repo made at the root level
+  # makes a consumer's negation evaluate perfectly cleanly and do nothing — no
+  # error, no warning, and no visible difference except the feature they turned
+  # off still being on. That silence is why this is enforced, not reviewed for.
+  #
+  # ── Why PROVENANCE and not a source scan ──
+  #
+  # The design record (plan §A1) specified a regex scan over `lib/**` and
+  # `packages/*/modules/**`, and rejected provenance in one line: "an inline
+  # module reports `<unknown-file>`, indistinguishable from a consumer's inline
+  # config". True, and it points the WRONG WAY — `<unknown-file>` IS the
+  # consumer, and the consumer is exactly who may write root options.
+  #
+  # A scan was built first and measured to miss whole classes of write, among
+  # them shapes this repo itself uses: `config.ai.<pool> = …`; a value moved to
+  # the next line, which is what alejandra emits for long assignments; and the
+  # interpolated `ai.<runtime>.<pool>` form used by `mkBackendTransform.nix` and
+  # `packages/semble/modules/common.nix`. Dynamic construction (`lib.genAttrs`,
+  # `builtins.listToAttrs`) is UNDECIDABLE in a regex — a permanent hole rather
+  # than a fixable bug. All of it is caught here for free, because this runs
+  # AFTER evaluation: by then there is no syntax left, only definitions and the
+  # files they came from.
+  #
+  # ── Why "not the declaring module" rather than a file allowlist ──
+  #
+  # An option's DEFAULT is itself a definition, attributed to the file that
+  # DECLARED the option. Measured: an option declared in a file and never
+  # written still reports one definition, blamed on that file. A hardcoded
+  # allowlist of `sharedOptions.nix` therefore did not exempt what its comment
+  # claimed — it masked the synthetic default-definitions, and it would have
+  # reported a root option declared in any OTHER file as a violation purely for
+  # having a default.
+  #
+  # Comparing against `opt.declarations` fixes both. It exempts the declaring
+  # module — which is what legitimately defines the `ai.rulesDir` L1→L2 reshape,
+  # since `ai.rulesDir` is itself a ROOT option with nowhere else to expand to —
+  # and needs no maintenance when options move. Consequence to accept: a module
+  # that both declares and defines a root option is exempt. Declaring one
+  # outside `sharedOptions.nix` would already fail `checks/options-doc.nix`'s
+  # cross-backend parity gate, so that is not a quiet path.
+  #
+  # ── The real cost: reachability ──
+  #
+  # A definition suppressed by `mkIf false` is DROPPED from the definition list
+  # entirely. Measured — it is NOT relabelled to `<unknown-file>`; that entry,
+  # when it appears, is the option's default. So this sees only code paths the
+  # evaluated config reaches, which the deleted text scan did not depend on.
+  #
+  # `rootPoolProbeConfig` is therefore load-bearing rather than a convenience:
+  # every per-CLI config callback is wrapped in `lib.mkIf cfg.enable`
+  # (`lib/ai/app/mkBackendTransform.nix`), so without the runtime enables this
+  # guard would evaluate a tree in which the ENTIRE fanout body contributes
+  # nothing — the largest and likeliest home for a root write, invisible. The
+  # runtimes come from the shared registry so a sixth is covered the day it
+  # lands; the skill packages are named because they gate on their own flags.
+  #
+  # Verified by mutation, not by reading: a root write gated on
+  # `config.ai.claude.enable` is reported with these enables and vanishes
+  # without them.
+  #
+  # Second, smaller cost: `definitionsWithLocations` is post-`filterOverrides`,
+  # so if some definition wins on PRIORITY (a `mkForce` anywhere) the losing
+  # definitions — possibly including a repo root write — drop off the list. That
+  # cannot produce the silent-negation bug this guard exists to prevent, since a
+  # filtered-out definition contributes nothing to the value either; it only
+  # means the reported violation LIST can be incomplete when two definitions of
+  # one option disagree on priority.
+  #
+  # This check is a stopgap. §A1's own preferred answer is a factory that
+  # generates both levels from one spec and makes the fanout structural; when
+  # that lands, a root write can no longer be expressed and this can go.
+  rootPoolSrcRoot = toString ./..;
+
+  rootPoolProbeConfig = {
+    ai = lib.genAttrs harnessNames (_: {enable = true;});
+    living-workflow.enable = true;
+    stacked-workflows.enable = true;
+  };
+
+  rootPoolViolations = evaluated: let
+    isOurs = file: lib.hasPrefix rootPoolSrcRoot (toString file);
+    # `options.ai` holds root options alongside per-runtime GROUPS (ai.claude
+    # and friends), which are plain attrsets rather than options. `isOption`
+    # selects exactly the root surface, and with NO hardcoded pool list — a pool
+    # added to sharedOptions.nix is covered the day it is declared, which the
+    # scan's hand-maintained alternation was not.
+    #
+    # Limitation, stated because it is otherwise invisible: this walks ONE
+    # level. A root option nested under a non-option attrset would not be seen.
+    # None exists today — every member of `options.ai` is either an option or a
+    # per-runtime group.
+    rootOptions = lib.filterAttrs (_: lib.isOption) evaluated.options.ai;
+    foreignDefs = name: opt: let
+      declaredIn = map toString (opt.declarations or []);
+      foreign = d: isOurs d.file && !(lib.elem (toString d.file) declaredIn);
+    in
+      map (d: "ai.${name} <- ${toString d.file}")
+      (lib.filter foreign (opt.definitionsWithLocations or []));
+  in
+    lib.concatLists (lib.mapAttrsToList foreignDefs rootOptions);
+
+  # Throws with the offending option/file pairs rather than a bare "FAIL",
+  # because the whole value of this check is telling the next author WHERE. The
+  # diagnostic names the module that CONTRIBUTED the definition, which for a
+  # factory-produced module is the caller that imported it, not the factory.
+  rootPoolClean = backend: evaluated: let
+    violations = rootPoolViolations evaluated;
+  in
+    violations
+    == []
+    || throw ''
+      Root ai.* option defined by a module in this repo (${backend}):
+
+        ${builtins.concatStringsSep "\n  " violations}
+
+      Root options are ADDITIVE and cannot be retracted per runtime, so this
+      makes a consumer's per-runtime negation evaluate clean and silently do
+      nothing. Write ai.<runtime>.<option> instead, gated on
+      `lib.hasAttrByPath ["ai" name "<option>"] options`.
+    '';
 in {
   # ── Kiro launcher wrapper: flag injection ────────────────────────
   # Launcher-GLOBAL options are PREPENDED — appended after a subcommand,
@@ -639,9 +772,104 @@ in {
       )
   );
 
+  # ── A1 backstop: no repo module defines a ROOT ai.* option ──
+  #
+  # One per backend, because the pools are per-`evalModules`: an HM
+  # contribution is invisible to the devenv evaluation and vice versa, so a
+  # single-backend guard would miss half the tree.
+  module-ai-no-root-pool-writes-hm = mkTest "ai-no-root-pool-writes-hm" (
+    rootPoolClean "home-manager" (evalHm rootPoolProbeConfig)
+  );
+
+  module-ai-no-root-pool-writes-devenv = mkTest "ai-no-root-pool-writes-devenv" (
+    rootPoolClean "devenv" (evalDevenv rootPoolProbeConfig)
+  );
+
+  # POSITIVE CONTROL. The two guards above pass by finding NOTHING, so a guard
+  # that detected nothing at all would look identical to a clean tree. This
+  # evaluates a fixture that really does write a root pool and requires the
+  # guard to name it — and it goes through `rootPoolClean`, not just
+  # `rootPoolViolations`, so the throw path is covered too rather than only the
+  # detection path. Delete these three as a set or not at all.
+  #
+  # Scoped to `sharedOptions.nix` plus the fixture: that module declares every
+  # root `ai.*` option, so it is the whole surface under test, and a two-module
+  # evaluation cannot pass for an unrelated reason.
+  module-ai-root-pool-guard-fires = mkTest "ai-root-pool-guard-fires" (
+    let
+      probe = lib.evalModules {
+        specialArgs = {
+          lib = hmLib;
+          pkgs = pkgs // {ai = aiStubs;};
+        };
+        modules = [
+          ./../lib/ai/sharedOptions.nix
+          ./fixtures/root-pool-writer.nix
+        ];
+      };
+      violations = rootPoolViolations probe;
+      # The guard must name THIS option and THIS file — not merely return
+      # something non-empty, which a constant would also satisfy.
+      named =
+        builtins.length violations
+        == 1
+        && lib.hasInfix "ai.skills" (builtins.head violations)
+        && lib.hasInfix "root-pool-writer.nix" (builtins.head violations);
+      # And `rootPoolClean` must actually throw on that input. `tryEval` cannot
+      # catch a `throw` raised while building the message, so force it.
+      threw = !(builtins.tryEval (rootPoolClean "probe" probe)).success;
+    in
+      named && threw
+  );
+
+  # The option-presence gate in `lib/ai/mkSkillPackageModule.nix` is what lets a
+  # consumer import a skill package WITHOUT importing all five runtime modules.
+  #
+  # Read how this test fails, because it is not the assertion below. Writing an
+  # undeclared option is an EVALUATION error, so deleting the gate does not make
+  # the boolean false — it aborts the evaluation with "The option `ai.codex'
+  # does not exist" (measured). The assertion only confirms the write landed on
+  # the one runtime that IS declared; the gate's coverage comes from the
+  # evaluation completing at all.
+  #
+  # Declaring exactly one runtime is what creates that sensitivity, and it is
+  # why this cannot be folded into the full-tree tests: `evalHm`/`evalDevenv`
+  # import every runtime, so every option exists there and an ungated write
+  # would evaluate cleanly and pass unnoticed.
+  module-skill-package-gates-on-option-presence = mkTest "skill-package-gates-on-option-presence" (
+    let
+      onlyClaude = lib.evalModules {
+        specialArgs = {
+          lib = hmLib;
+          pkgs = pkgs // {ai = aiStubs;};
+        };
+        modules = [
+          {
+            options.ai.claude = {
+              instructions = lib.mkOption {
+                type = lib.types.listOf lib.types.attrs;
+                default = [];
+              };
+              skills = lib.mkOption {
+                type = lib.types.attrsOf lib.types.path;
+                default = {};
+              };
+            };
+          }
+          (import ./../lib/ai/mkSkillPackageModule.nix {
+            name = "probe-package";
+            enableDescription = "presence-gate probe";
+            skills = _: {probe-skill = ./fixtures;};
+          })
+          {probe-package.enable = true;}
+        ];
+      };
+    in
+      onlyClaude.config.ai.claude.skills ? probe-skill
+  );
+
   module-ai-git-ssh-default-follows-harnesses = mkTest "ai-git-ssh-default-follows-harnesses" (
     let
-      harnessNames = ["claude" "codex" "copilot" "kimchi" "kiro"];
       # devenv has no `programs.git`, so the workaround travels the INTERNAL
       # channel (`ai._sandboxSafeSshCommand`) and each factory merges it into
       # its launcher wrapper. It is deliberately neither a project-shell write
@@ -7273,56 +7501,71 @@ in {
       !(result.config.stacked-workflows.enable or true)
   );
 
-  # Devenv scope: enable -> ai.skills gets the unprefixed stack-* skills
-  # (each enabled CLI fans them out at project-local scope).
+  # ── Where these contributions land ────────────────────────────────────
+  #
+  # The skill packages write the PER-RUNTIME pools (`ai.<runtime>.skills`,
+  # `ai.<runtime>.instructions`), never the root ones. The tests below assert
+  # both halves of that, and the second half is the one worth having: a root
+  # pool is ADDITIVE and cannot be retracted per runtime, so a regression that
+  # moved these writes back to the root would still deliver every skill to
+  # every runtime and pass a presence-only test.
+  #
+  # They iterate `harnessNames` (the shared registry) rather than sampling one
+  # runtime, so a sixth runtime is covered the day it is added.
+
+  # Devenv scope: enable -> every runtime's pool gets the unprefixed stack-*
+  # skills, and the root pool gets none of them.
   module-sws-devenv-enable-sets-ai-skills = mkTest "sws-devenv-enable-sets-ai-skills" (
     let
       result = evalDevenv {stacked-workflows.enable = true;};
-      inherit (result.config.ai) skills;
+      expected = ["stack-fix" "stack-plan" "stack-split" "stack-submit" "stack-summary" "stack-test"];
+      runtimeHasAll = runtime:
+        lib.all (skill: result.config.ai.${runtime}.skills ? ${skill}) expected;
     in
-      skills ? stack-fix
-      && skills ? stack-plan
-      && skills ? stack-split
-      && skills ? stack-submit
-      && skills ? stack-summary
-      && skills ? stack-test
+      lib.all runtimeHasAll harnessNames
+      && !(result.config.ai.skills ? stack-fix)
   );
 
-  # Devenv scope: instructions landed in the devenv pool.
+  # Devenv scope: the router instruction landed in every runtime's pool, once
+  # each, and not in the root pool.
   module-sws-devenv-enable-sets-ai-instructions = mkTest "sws-devenv-enable-sets-ai-instructions" (
     let
       result = evalDevenv {stacked-workflows.enable = true;};
-      inherit (result.config.ai) instructions;
-      swsEntries = builtins.filter (i: (i.name or "") == "stacked-workflows") instructions;
+      swsEntries = instructions:
+        builtins.filter (i: (i.name or "") == "stacked-workflows") instructions;
+      runtimeHasOne = runtime:
+        builtins.length (swsEntries result.config.ai.${runtime}.instructions) == 1;
     in
-      builtins.length swsEntries == 1
+      lib.all runtimeHasOne harnessNames
+      && swsEntries result.config.ai.instructions == []
   );
 
-  # HM (user-global) scope: enable -> ai.skills gets the unprefixed stack-*
-  # skills, so each enabled CLI installs them to ~/.claude/skills etc. This
-  # is the scope-revert (previously the HM module was git-config only).
+  # HM (user-global) scope: enable -> every runtime's pool gets the unprefixed
+  # stack-* skills, so each enabled CLI installs them to ~/.claude/skills etc.
+  # This is the scope-revert (previously the HM module was git-config only).
   module-sws-hm-enable-sets-ai-skills = mkTest "sws-hm-enable-sets-ai-skills" (
     let
       result = evalHm {stacked-workflows.enable = true;};
-      inherit (result.config.ai) skills;
+      expected = ["stack-fix" "stack-plan" "stack-split" "stack-submit" "stack-summary" "stack-test"];
+      runtimeHasAll = runtime:
+        lib.all (skill: result.config.ai.${runtime}.skills ? ${skill}) expected;
     in
-      skills ? stack-fix
-      && skills ? stack-plan
-      && skills ? stack-split
-      && skills ? stack-submit
-      && skills ? stack-summary
-      && skills ? stack-test
+      lib.all runtimeHasAll harnessNames
+      && !(result.config.ai.skills ? stack-fix)
   );
 
   # HM (user-global) scope: enable -> the skill-routing instruction lands in
-  # ai.instructions (-> ~/.claude/CLAUDE.md, ~/.kiro/steering/, ...).
+  # every runtime's pool (-> ~/.claude/CLAUDE.md, ~/.kiro/steering/, ...).
   module-sws-hm-enable-sets-ai-instructions = mkTest "sws-hm-enable-sets-ai-instructions" (
     let
       result = evalHm {stacked-workflows.enable = true;};
-      inherit (result.config.ai) instructions;
-      swsEntries = builtins.filter (i: (i.name or "") == "stacked-workflows") instructions;
+      swsEntries = instructions:
+        builtins.filter (i: (i.name or "") == "stacked-workflows") instructions;
+      runtimeHasOne = runtime:
+        builtins.length (swsEntries result.config.ai.${runtime}.instructions) == 1;
     in
-      builtins.length swsEntries == 1
+      lib.all runtimeHasOne harnessNames
+      && swsEntries result.config.ai.instructions == []
   );
 
   # Git config applies when preset is "minimal".
@@ -7380,7 +7623,7 @@ in {
   module-sws-skill-references-resolve = mkTest "sws-skill-references-resolve" (
     let
       result = evalDevenv {stacked-workflows.enable = true;};
-      skillPath = result.config.ai.skills.stack-fix;
+      skillPath = result.config.ai.claude.skills.stack-fix;
     in
       builtins.pathExists "${skillPath}/SKILL.md"
       && builtins.pathExists "${skillPath}/references/git-absorb.md"
@@ -7404,8 +7647,10 @@ in {
       !(result.config.living-workflow.enable or true)
   );
 
-  # HM (primary): enable -> ai.skills.living-workflow -> upstream
-  # programs.claude-code.skills.living-workflow (end-to-end fanout).
+  # HM (primary): enable -> ai.<runtime>.skills.living-workflow -> upstream
+  # programs.claude-code.skills.living-workflow (end-to-end fanout). This is the
+  # test that proves the per-runtime write still REACHES emission; the pool
+  # assertions above only prove where the value landed.
   module-living-workflow-hm-enable-sets-skill = mkTest "living-workflow-hm-enable-sets-skill" (
     let
       result = evalHm {
@@ -7433,22 +7678,29 @@ in {
       && !(files ? ".kiro/skills/living-workflow/SKILL.md")
   );
 
-  # Devenv parity: enable in the devenv module contributes to ai.skills too
-  # (config-parity rule; separate eval from HM).
+  # Devenv parity: enable in the devenv module contributes the skill to every
+  # runtime's pool too (config-parity rule; separate eval from HM), and leaves
+  # the root pool alone.
   module-living-workflow-devenv-enable-sets-skill = mkTest "living-workflow-devenv-enable-sets-skill" (
     let
       result = evalDevenv {living-workflow.enable = true;};
     in
-      result.config.ai.skills ? living-workflow
+      lib.all (runtime: result.config.ai.${runtime}.skills ? living-workflow) harnessNames
+      && !(result.config.ai.skills ? living-workflow)
   );
 
   # Disabled -> absent: with living-workflow off, no living-workflow skill is
   # contributed even when an ecosystem is enabled.
+  #
+  # This asserts the PER-RUNTIME pools specifically. Pointing it at the root
+  # pool would make it vacuous now that nothing writes there — it would pass
+  # for a module that was deleted outright as readily as for one that is
+  # correctly gated on `enable`.
   module-living-workflow-disabled-no-skill = mkTest "living-workflow-disabled-no-skill" (
     let
       result = evalHm {ai.kiro.enable = true;};
     in
-      !(result.config.ai.skills ? living-workflow)
+      lib.all (runtime: !(result.config.ai.${runtime}.skills ? living-workflow)) harnessNames
   );
 
   # ── services.mcp-servers module ──────────────────────────────────

@@ -18,7 +18,10 @@ Each skill's own description states which operations it covers.
 
 ## Stacked Workflows Development
 
-> **Last verified:** 2026-08-02 (commit pending — Codex now receives the shared
+> **Last verified:** 2026-08-14 (commit pending — the contributions land on the
+> PER-RUNTIME pools now, not the root ones, so the consumer override key moved
+> to `ai.<runtime>.skills.<name>` and a root write is a collision rather than an
+> override). Prior: 2026-08-02 (commit pending — Codex now receives the shared
 > stacked-workflow skills and routing instruction through the same explicit HM
 > and devenv pool contributions as the other enabled AI CLIs).
 
@@ -51,12 +54,19 @@ Two preset levels are exported via `lib.gitConfig` (essential aliases) and
 ### Skills + Skill-Routing Rule
 
 `stacked-workflows.enable = true` fans the (unprefixed) `stack-*` skills and the
-skill-routing instruction into the cross-ecosystem `ai.skills` /
-`ai.instructions` pools, so each enabled AI CLI (Claude, Codex, Copilot, Kiro)
-installs them at its native path. Both backend modules delegate to the shared
-`lib/ai/mkSkillPackageModule` factory; the `ai.skills` pool is
+skill-routing instruction into the PER-RUNTIME `ai.<runtime>.skills` /
+`ai.<runtime>.instructions` pools of every runtime present in the evaluation, so
+each enabled AI CLI installs them at its native path. Both backend modules
+delegate to the shared `lib/ai/mkSkillPackageModule` factory; those pools are
 per-`evalModules`, so the HM (user-global) and devenv (project-local)
 contributions are independent.
+
+It writes the per-runtime pools rather than root `ai.skills` because a root pool
+is additive and cannot be retracted per runtime — the provenance guard in
+`checks/module-eval.nix` enforces that. **The practical consequence for a
+consumer: override an individual skill at `ai.<runtime>.skills.<name>`, not at
+`ai.skills.<name>`.** The latter is now a hard collision rather than an
+override, because the merge compares key presence and cannot see `mkDefault`.
 
 ### Building and Testing
 

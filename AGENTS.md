@@ -31,11 +31,12 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
     [`dev/fragments/ai-clis/packaging-guide.md`](dev/fragments/ai-clis/packaging-guide.md)
 
 - **`ai-module`**
-  - Match: `lib/ai/agent.nix`, `lib/ai/ai-common.nix`, `lib/ai/app/**`,
-    `lib/ai/default.nix`, `lib/ai/hooks.nix`, `lib/ai/sharedOptions.nix`,
-    `packages/*/lib/mk*.nix`, `packages/chatgpt-codex/modules/**`,
-    `packages/claude-code/modules/**`, `packages/copilot-cli/modules/**`,
-    `packages/kiro-cli/modules/**`
+  - Match: `checks/module-eval.nix`, `lib/ai/agent.nix`, `lib/ai/ai-common.nix`,
+    `lib/ai/app/**`, `lib/ai/default.nix`, `lib/ai/hooks.nix`,
+    `lib/ai/mkSkillPackageModule.nix`, `lib/ai/runtimes.nix`,
+    `lib/ai/sharedOptions.nix`, `packages/*/lib/mk*.nix`,
+    `packages/chatgpt-codex/modules/**`, `packages/claude-code/modules/**`,
+    `packages/copilot-cli/modules/**`, `packages/kiro-cli/modules/**`
   - Read:
     [`dev/fragments/ai-module/ai-module-fanout.md`](dev/fragments/ai-module/ai-module-fanout.md),
     [`dev/fragments/ai-module/collision-semantics.md`](dev/fragments/ai-module/collision-semantics.md),

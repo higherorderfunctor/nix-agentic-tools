@@ -44,18 +44,18 @@ this workstream, placed late by agent judgement — this **supersedes** A1's
 "Recommendation for the operator (not a decision): fold in the 2-line pool fix,
 defer the namespace move", written before that sign-off.
 
-| #   | PR                                                                                                                                                                                    | Gated by |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| 1   | Pool-write fix (`lib/ai/mkSkillPackageModule.nix:56-57`) + unify the three runtime enumerations into one registry; **build** the A1 backstop over `lib/**`                            | —        |
-| 2   | #920 Copilot HM path (2 literals + 4 assertions)                                                                                                                                      | —        |
-| 3   | Per-pool-per-runtime capability gating, generalizing `supportsShell`. **Does NOT drop `ai.kimchi.rules`/`rulesDir`** — mark kimchi a rules CONSUMER, because A3a makes it one in PR 5 | 1        |
-| 4   | Settings split — `nativeSettings`, `_integration_*` internal                                                                                                                          | —        |
-| 5   | Retire `instructions` → keyed `rules`, incl. level-stamping for order                                                                                                                 | 2, 3     |
-| 6   | Pool negation `attrsOf (nullOr …)` + net-new package-vs-package check                                                                                                                 | 5        |
-| 7a  | Delete semble `runtimes` (self-contained)                                                                                                                                             | —        |
-| 7b  | `ai.programs.*` factory + semble relocation — ATOMIC with the parity-test rewrite and the `expectedCodexRoots` fixture                                                                | 1, 3, 7a |
-| 8   | Namespace move: `stacked-workflows` / `living-workflow` + its `gitPreset` parity fix                                                                                                  | 7b       |
-| 9   | semble #858 re-implementation                                                                                                                                                         | 7b, 8    |
+| #   | PR                                                                                                                                                                                                      | Gated by |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| 1   | Pool-write fix (`lib/ai/mkSkillPackageModule.nix:56-57`) + unify the three runtime enumerations into one registry; **build** the A1 backstop (shipped as a provenance guard, not the scan A1 described) | —        |
+| 2   | #920 Copilot HM path (2 literals + 4 assertions)                                                                                                                                                        | —        |
+| 3   | Per-pool-per-runtime capability gating, generalizing `supportsShell`. **Does NOT drop `ai.kimchi.rules`/`rulesDir`** — mark kimchi a rules CONSUMER, because A3a makes it one in PR 5                   | 1        |
+| 4   | Settings split — `nativeSettings`, `_integration_*` internal                                                                                                                                            | —        |
+| 5   | Retire `instructions` → keyed `rules`, incl. level-stamping for order                                                                                                                                   | 2, 3     |
+| 6   | Pool negation `attrsOf (nullOr …)` + net-new package-vs-package check                                                                                                                                   | 5        |
+| 7a  | Delete semble `runtimes` (self-contained)                                                                                                                                                               | —        |
+| 7b  | `ai.programs.*` factory + semble relocation — ATOMIC with the parity-test rewrite and the `expectedCodexRoots` fixture                                                                                  | 1, 3, 7a |
+| 8   | Namespace move: `stacked-workflows` / `living-workflow` + its `gitPreset` parity fix                                                                                                                    | 7b       |
+| 9   | semble #858 re-implementation                                                                                                                                                                           | 7b, 8    |
 
 Hard constraints behind the shape:
 
@@ -256,20 +256,38 @@ are additive and cannot be retracted per runtime, so a root write makes
 per-runtime negation silently fail to negate.
 
 A structural check is REQUIRED as a backstop, and **no such check exists today**
-— `checks/` contains no root-pool scan and `flake.nix` registers none. PR 1 must
-CREATE `checks/<name>.nix` and register it in the flake's checks fold
-(~`flake.nix:238-265`); the word "widen" used earlier was wrong, and the rule
-reads "build, scoped to `lib/**` and `packages/*/modules/**`". No file in that
-scope may assign a root `ai.<pool>` outside an `ai.${runtime}` path.
+— `checks/` contains no root-pool scan and `flake.nix` registers none.
 
-Two measured facts constrain the regex: it must **exempt**
-`lib/ai/sharedOptions.nix:364-377`, whose `config = lib.mkMerge [{ai = {…};}]`
-is the legitimate L1→L2 Dir reshape; and it must match that **nested**
-`ai = { <pool> =` form as well as line-anchored `ai.<pool> =`, since both are
-live in the tree. Follow `checks/bare-commands.nix` for structure and for its
-rule that every filter be measured against the corpus before it is trusted. A
-new untracked file is invisible to `nix flake check` — `git add` it before
-verifying.
+> **AMENDED BY IMPLEMENTATION, PR 1 (operator-approved).** The two paragraphs
+> that followed here prescribed a **regex SOURCE SCAN** and constrained its
+> patterns. **That is retired — do not build it, and do not re-derive it from
+> this section.** The shipped backstop is a PROVENANCE guard
+> (`rootPoolViolations` in `checks/module-eval.nix`): it reads each root
+> option's `definitionsWithLocations` and fails when a definition originates
+> from a file inside this flake, other than the module that DECLARES that
+> option.
+>
+> The scan was built first, then measured to miss whole classes of write —
+> including shapes this repo itself uses (`config.ai.<pool> = …`, a value moved
+> to the next line, the interpolated `ai.${runtime}.<pool>` form) — and dynamic
+> construction is undecidable in a regex, so that hole was permanent.
+>
+> **A1's one-line rejection of provenance was the error, and it is worth naming
+> because it reads as decisive:** "an inline module reports `<unknown-file>`,
+> indistinguishable from a consumer's inline config." True, and it points the
+> WRONG WAY — `<unknown-file>` IS the consumer, and the consumer is exactly who
+> is ALLOWED to write root options.
+>
+> Two measured facts the original text could not have known: an option's DEFAULT
+> is itself a definition attributed to the DECLARING file (so a file allowlist
+> masks defaults rather than reshape writes, which is why the rule compares
+> against `opt.declarations`), and a definition suppressed by `mkIf false` is
+> DROPPED entirely — so the guard sees only code paths its probe config reaches,
+> and enabling every runtime in that config is load-bearing rather than
+> cosmetic.
+>
+> A1's own preferred answer — "prefer a factory that … makes the fanout
+> structural" — still stands, and PR 7b is what retires this guard for good.
 
 Runtime provenance guards leak — an inline module reports `<unknown-file>`,
 indistinguishable from a consumer's inline config — so prefer a factory that
