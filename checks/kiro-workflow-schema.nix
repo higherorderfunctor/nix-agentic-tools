@@ -339,6 +339,72 @@ in
           };
         }
       ]);
+    # The engine's watch-id rule is `non-empty, no '.', no whitespace`, plus a
+    # whole-string `{{`/`}}` test. A LONE brace passes all of that, so the type
+    # must accept it — an earlier version rejected any brace and was stricter
+    # than the engine for no benefit.
+    kiro-workflow-accept-lone-brace-watch-id =
+      accept "lone-brace-watch-id"
+      {
+        name = "w";
+        steps = [
+          {
+            watch = {
+              id = "a{b";
+              watcher.github-pr = {prRef = "pr.json";};
+            };
+          }
+          {
+            repeat = {
+              id = "r";
+              maxIterations = 2;
+              onMaxIterations = "abort";
+              stop.when.watchTerminal = "a{b";
+              steps = [(step "s" {})];
+            };
+          }
+        ];
+      };
+    kiro-workflow-reject-doubled-brace-watch-id =
+      reject "doubled-brace-watch-id"
+      {
+        name = "w";
+        steps = [
+          {
+            watch = {
+              id = "a{{b";
+              watcher.github-pr = {prRef = "pr.json";};
+            };
+          }
+          {
+            repeat = {
+              id = "r";
+              maxIterations = 2;
+              onMaxIterations = "abort";
+              stop.when.watchTerminal = "a{{b";
+              steps = [(step "s" {})];
+            };
+          }
+        ];
+      };
+    # A braced expression parses but classifies as a BARE reference, so the
+    # condition silently never matches. Refused at type level.
+    kiro-workflow-reject-braced-contains-template =
+      reject "braced-contains-template"
+      (wrap [
+        {
+          repeat = {
+            id = "r";
+            maxIterations = 2;
+            onMaxIterations = "abort";
+            stop.when.contains = {
+              template = "a{b";
+              text = "DONE";
+            };
+            steps = [(step "s" {})];
+          };
+        }
+      ]);
     kiro-workflow-reject-dotted-watch-reference =
       reject "dotted-watch-reference"
       (wrap [
