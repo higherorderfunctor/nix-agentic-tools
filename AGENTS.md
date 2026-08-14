@@ -94,7 +94,8 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
 
 - **`kiro-wrapper`**
   - Match: `checks/kiro-wrapper-argv.nix`, `lib/idempotentFlags.nix`,
-    `overlays/kiro-cli.nix`, `packages/kiro-cli/lib/**`
+    `overlays/kiro-cli.nix`, `packages/kiro-cli/lib/*.nix`,
+    `packages/kiro-cli/lib/*.py`
   - Read:
     [`packages/kiro-cli/docs/fhs-sandbox.md`](packages/kiro-cli/docs/fhs-sandbox.md),
     [`packages/kiro-cli/docs/launcher-argv.md`](packages/kiro-cli/docs/launcher-argv.md)
