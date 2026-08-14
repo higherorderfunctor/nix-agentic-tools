@@ -324,6 +324,11 @@ rec {
   # bump converts a future silent drop into a loud update-pipeline (and
   # `nix flake check` drift-check) failure. See mkClaude.nix for the option
   # surface and docs/plans/ultracode-typed-options-and-meta-option.md § 3.
+  #
+  # Note that this guard alone is the reason those three keys are named
+  # here at all: the emitted `settingsBooleanKeys` array is the input list
+  # echoed back, never a discovery. It exists so the sidecar records WHICH
+  # keys the build asserted, not to tell a consumer anything new.
   #   bin:  absolute path to the claude binary.
   #   pkgs: nixpkgs set (gnugrep, gnused, coreutils, jq).
   #   dest: output path (default "/dev/stdout"; pass "$out" in runCommand).
@@ -340,6 +345,20 @@ rec {
     sed="${pkgs.gnused}/bin/sed"
     sort="${pkgs.coreutils}/bin/sort"
 
+    # Establish READABILITY once, before any anchor runs. Every guard below
+    # tolerates a grep exit of 1 ("no match") because that is a real verdict
+    # each one turns into its own diagnostic — but grep also exits 2 when it
+    # cannot READ the file, and a blanket `|| true` collapses the two into one
+    # outcome. That is exactly how mkKiroExtract once announced a hook-trigger
+    # vocabulary change for a binary it had never opened (see the ifd-patterns
+    # fragment, "Separate LOCATING the artifact from PROBING it"). Checking the
+    # single fixed path up front means the `|| true`s below can only ever be
+    # hiding an absent anchor, which is what they are for.
+    if [ ! -r "${bin}" ]; then
+      echo "claude-extract: cannot read ${bin} — this is a LOCATION failure, nothing was probed (the package layout moved)" >&2
+      exit 1
+    fi
+
     pins=$("$grep" -aoE 'unpin[A-Za-z0-9]+LaunchEffort' "${bin}" | "$sort" -u || true)
     if [ -z "$pins" ]; then
       echo "claude-extract: no unpin*LaunchEffort keys found (upstream renamed the launch-pin mechanism)" >&2
@@ -352,8 +371,25 @@ rec {
     # `effortLevel:` prefix + the enum literal instead of a fixed token.
     # Extract the level array; require exactly one DISTINCT match so an
     # upstream shape change still fails loud.
-    levels=$("$grep" -aoE 'effortLevel:[A-Za-z_$][A-Za-z0-9_$]*\.enum\(\[[^]]*\]\)' "${bin}" \
-      | "$grep" -oE '\[[^]]*\]' | "$sort" -u)
+    #
+    # 2.1.232 changed the SHAPE as well as the spelling: the settings
+    # schema moved off namespaced method constructors onto bare
+    # standalone factories, so `effortLevel:w.enum([…])` became
+    # `effortLevel:Or([…])` (and `at()` for number, `B()` for string,
+    # `jt()` for boolean — the zod-mini calling convention). The
+    # `.enum` segment is therefore OPTIONAL. Both forms carry the same
+    # `[…]` payload, which is what is actually extracted, so the array
+    # literal keeps doing the validating regardless of which form
+    # matched.
+    #
+    # The trailing `|| true` is load-bearing and was MISSING here, which is
+    # why 2.1.232 failed with a bare `builder failed with exit code 1` and no
+    # claude-extract line at all: a zero-match pipeline exits 1, pipefail
+    # promotes it, and errexit killed the script AT THE ASSIGNMENT — so the
+    # matchCount branch below, and its diagnostic, were unreachable in exactly
+    # the case they exist for. Every other guard here already had it.
+    levels=$("$grep" -aoE 'effortLevel:[A-Za-z_$][A-Za-z0-9_$]*(\.enum)?\(\[[^]]*\]\)' "${bin}" \
+      | "$grep" -oE '\[[^]]*\]' | "$sort" -u || true)
     matchCount=$(printf '%s\n' "$levels" | "$grep" -c . || true)
     if [ "$matchCount" -ne 1 ]; then
       echo "claude-extract: effort enum matched $matchCount distinct level arrays (expected 1; upstream changed the validator)" >&2
@@ -361,27 +397,91 @@ rec {
     fi
 
     # Guard the workflow/ultracode boolean settings keys. Each is registered
-    # in the settings schema as `<key>:<ident>.boolean()`. The minifier
-    # identifier is rebuilt every release (2.1.202 emitted `A`), so match ANY
-    # identifier and key on the `<key>:` prefix + `.boolean()` literal. Unlike
-    # the effort enum above — which strips to the `[...]` array payload so
-    # repeated occurrences collapse — a boolean key has no payload to validate
-    # AND can appear MORE THAN ONCE (2.1.202 emits `ultracode:<ident>.boolean()`
-    # twice, sharing an identifier only by coincidence). So we must NOT dedup on
-    # the ident-bearing string: check PRESENCE (>= 1 raw match), not
-    # exactly-one-distinct — otherwise a future re-minification that splits the
-    # two idents apart would fail this guard spuriously (keyCount 2 != 1). The
-    # trailing `|| true` keeps the zero-match case from aborting at the
-    # assignment (pipefail + inherit_errexit) so the not-found branch is
+    # in the settings schema as `<key>:<ctor>().optional()`.
+    #
+    # TWO constructor spellings are live, and the second one is why this guard
+    # can no longer be a presence check. Through 2.1.222 it was a namespaced
+    # METHOD naming its own type — `ultracode:w.boolean()` — so the anchor
+    # validated the type for free. 2.1.232 moved the whole settings schema onto
+    # bare standalone factories, and `ultracode:jt()` names nothing: `jt()` is
+    # indistinguishable at the call site from `B()` (string) or `at()` (number).
+    # The minified identifier is also rebuilt every release (2.1.202 emitted
+    # `A`), so it cannot be pinned either. Match ANY identifier with an
+    # OPTIONAL `.boolean` segment, and recover the type assertion by SHAPE.
+    #
+    # Presence alone would be worthless here — a dead anchor that still matches
+    # SOMETHING is exactly how the model-catalog grep rotted for 12 releases
+    # (see the comment on catalogIds below). Two assertions restore it without
+    # depending on any OTHER key's name, which would just move the fragility:
+    #
+    #   * each key must resolve to exactly ONE distinct constructor token, and
+    #     all three must resolve to the SAME token. Retyping a single key
+    #     breaks this. Deduping on the CONSTRUCTOR rather than on the whole
+    #     ident-bearing match is also what makes repeated registrations
+    #     harmless — 2.1.202 emitted `ultracode:<ident>.boolean()` twice.
+    #   * that shared token must register at least 50 settings keys, proving it
+    #     is the schema's boolean workhorse and not an ad-hoc call that happens
+    #     to sit after one of these names. Measured: 235 distinct keys at
+    #     2.1.222 (`w.boolean`), 265 at 2.1.232 (`jt`) — the floor is a fifth
+    #     of that, so a re-minification that splits booleans across a couple of
+    #     aliases still passes.
+    #
+    # Anchoring on the trailing `.optional()` is what makes the bare form
+    # specific enough to key on at all: every settings-schema entry carries it,
+    # and requiring it excludes the many unrelated `<ident>:<ident>()` sites in
+    # minified code. The leading character class stops a longer key that merely
+    # ENDS in one of these three names from matching.
+    #
+    # Every `|| true` below keeps a zero-match case from aborting at the
+    # assignment (pipefail + inherit_errexit) so the not-found branch stays
     # reachable and fails loud with its own message.
     boolKeys=(ultracode enableWorkflows workflowKeywordTriggerEnabled)
+    boolCtor=""
+    boolCtorKey=""
     for key in "''${boolKeys[@]}"; do
-      keyHits=$("$grep" -aoE "$key"':[A-Za-z_$][A-Za-z0-9_$]*\.boolean\(\)' "${bin}" | "$grep" -c . || true)
-      if [ "$keyHits" -lt 1 ]; then
-        echo "claude-extract: settings key '$key' not found as a boolean-schema registration (upstream renamed/removed it or changed the schema)" >&2
+      keyCtors=$("$grep" -aoE '(^|[^A-Za-z0-9_$])'"$key"':[A-Za-z_$][A-Za-z0-9_$]*(\.boolean)?\(\)\.optional\(\)' "${bin}" \
+        | "$sed" -E 's/^.*'"$key"'://; s/\(\)\.optional\(\)$//' | "$sort" -u || true)
+      ctorCount=$(printf '%s\n' "$keyCtors" | "$grep" -c . || true)
+      if [ "$ctorCount" -ne 1 ]; then
+        echo "claude-extract: settings key '$key' matched $ctorCount distinct schema constructors (expected 1; upstream renamed/removed the key or reshaped the settings schema)" >&2
+        exit 1
+      fi
+      if [ -z "$boolCtor" ]; then
+        boolCtor="$keyCtors"
+        boolCtorKey="$key"
+      elif [ "$keyCtors" != "$boolCtor" ]; then
+        echo "claude-extract: settings key '$key' is registered with constructor '$keyCtors' but '$boolCtorKey' uses '$boolCtor' — one of them was retyped" >&2
         exit 1
       fi
     done
+
+    # The captured token is used as an ERE below, so every character in it
+    # that the regex engine treats specially has to be neutralized. The
+    # capture above admits exactly TWO such characters — `$`, from the
+    # identifier class `[A-Za-z_$][A-Za-z0-9_$]*` that a minifier really does
+    # use, and `.`, from the old `<ns>.boolean` form. Keep this set in sync
+    # with that class; anything it starts admitting has to be added here.
+    #
+    # `$` is the dangerous one and it fails SILENTLY in the wrong direction:
+    # left bare it is an end-of-line anchor, so a ctor minified to something
+    # like `A$` matches nothing, `ctorKeys` comes out 0, and the build blames
+    # the schema for not having a shared boolean factory — a held-back package
+    # with a confidently wrong diagnosis, which is the exact failure mode this
+    # extractor exists to avoid.
+    #
+    # Bracket them rather than backslash-escaping: the escape would have to
+    # survive Nix -> bash -> sed's REPLACEMENT text -> ERE, and each layer
+    # treats backslashes differently, while `[x]` means the same thing to the
+    # regex engine and nothing to any layer above it. (Literal `\.` written
+    # directly in a pattern, as the anchors above do, is unaffected — that
+    # goes through no substitution.)
+    boolCtorRe=$(printf '%s' "$boolCtor" | "$sed" -e 's/[.$]/[&]/g')
+    ctorKeys=$("$grep" -aoE '[A-Za-z_$][A-Za-z0-9_$]*:'"$boolCtorRe"'\(\)\.optional\(\)' "${bin}" \
+      | "$sed" -E 's/:.*$//' | "$sort" -u | "$grep" -c . || true)
+    if [ "$ctorKeys" -lt 50 ]; then
+      echo "claude-extract: constructor '$boolCtor' registers only $ctorKeys settings keys (expected >= 50) — it is not the schema's shared boolean factory, so the guarded keys are not provably booleans" >&2
+      exit 1
+    fi
 
     # Hook events — the northbound soft-enum `knownEvents`. Grep every flat array
     # literal containing the "PreToolUse" token (the canonical first hook event),

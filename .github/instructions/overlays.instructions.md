@@ -369,8 +369,19 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-08-14 (commit pending — records the blocker that kept
-> oxlint held back on EVERY sweep for ten days and was invisible because it
+> **Last verified:** 2026-08-14 (commit pending — records that an anchor can
+> lose its TYPE information without losing its match. claude-code 2.1.232 moved
+> its settings schema onto bare zod-mini factories, so `ultracode:w.boolean()`
+> became `ultracode:jt()` and the guard's whole type assertion lived in the
+> `.boolean` token it no longer has. Relaxing the regex would have kept the
+> match and silently demoted the guard to a presence check, so the type is now
+> re-derived by constructor quorum. The effort enum needed only an optional
+> `.enum` segment because it validates through its extracted payload. Also
+> records why that failure was diagnostically silent: the effort enum was the
+> one assignment without a trailing `|| true`, so errexit killed the script
+> before its own guard could speak — a guard's message is worthless if the guard
+> is unreachable). Prior: 2026-08-14 (commit d8a72e1b — records the blocker that
+> kept oxlint held back on EVERY sweep for ten days and was invisible because it
 > spells itself exactly like a patch conflict: an `applyPatches` src cannot be
 > re-hashed by nix-update at all, since `outputHash = ""` forces flat hashing
 > over a directory, so its update row needs `--no-src`. Measured on the
@@ -648,6 +659,62 @@ distinct match; the model catalog requires an id from each of the opus / sonnet
 least 20 commands, asserts the exact sandbox and non-deprecated approval enums,
 and rejects empty feature/model results. When you add a key or category, add its
 shape assertion in the same commit.
+
+#### An anchor can lose its TYPE information without losing its match
+
+The shape assertions above all assume the anchor still says what it captured.
+Some of them said it only because upstream's minifier happened to keep a method
+name, and that is not a property you own.
+
+claude-code 2.1.232 moved its whole settings schema off namespaced method
+constructors onto bare standalone factories — the zod-mini calling convention.
+Every registration changed shape, not merely spelling:
+
+```text
+2.1.222  effortLevel:w.enum(["low","medium","high","xhigh"])   ultracode:w.boolean()
+2.1.232  effortLevel:Or(["low","medium","high","xhigh"])       ultracode:jt()
+```
+
+Both anchors went to ZERO matches, so this one failed loud and held the package
+back — the good outcome, and the reason the sweep surfaced it at all. But the
+two halves need DIFFERENT repairs, and only one of them is a regex edit:
+
+- **The effort enum was fine.** It extracts the `[…]` payload, and the payload
+  is identical in both forms, so making the `.enum` segment optional restores it
+  with no loss. An anchor that validates through its PAYLOAD survives a
+  calling-convention change.
+- **The boolean guard was not.** It validated the type for free, out of the
+  literal token `.boolean`. In the bare form `jt()` names nothing — it is
+  indistinguishable at the call site from `B()` (string) or `at()` (number) — so
+  the obvious repair, relaxing the anchor to `<key>:<ident>()`, silently demotes
+  a type assertion to a presence check. That is the model-catalog failure mode
+  arriving by a different road: the anchor keeps matching, and what it PROVES
+  quietly drops to nothing.
+
+The type is recovered by QUORUM instead, which needs no other key's name and no
+minified identifier: capture the constructor token per guarded key, require all
+of them to resolve to exactly one and the SAME one, then require that token to
+register at least 50 settings keys — measured 235 at 2.1.222 (`w.boolean`) and
+265 at 2.1.232 (`jt`), so the floor is a fifth of observed. A shared factory
+used by hundreds of settings keys IS the boolean one; an ad-hoc call that
+happens to follow one of these names is not.
+
+The generalizable rule: **when an anchor stops matching, ask what it was
+PROVING, not just what it was matching.** Restoring the match is the easy half
+and can look complete while the assertion underneath is gone. Prefer anchors
+that validate through an extracted payload; where the only evidence was a name
+upstream chose, re-derive it from a property of the corpus.
+
+**A guard's diagnostic is only useful if the guard is REACHABLE.** The effort
+enum's assignment was the one in `mkClaudeExtract` without a trailing `|| true`,
+so a zero-match pipeline exited 1, `pipefail` promoted it, and `errexit` killed
+the script at the assignment — the `matchCount` branch and its message were
+unreachable in precisely the case they exist for. That is why 2.1.232 surfaced
+as a bare `builder failed with exit code 1` with no `claude-extract:` line
+anywhere, and it is worth checking on every extractor: under
+`set -euETo pipefail` + `inherit_errexit`, `var=$(cmd | cmd)` is FATAL, not
+falsy. Pair each `|| true` with a single up-front readability check on the
+probed path, so "no match" stays the only thing it can hide.
 
 #### Separate LOCATING the artifact from PROBING it — they are different bugs
 
