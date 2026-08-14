@@ -18,6 +18,10 @@ semble search "database host port" ./my-project --content config
 semble search "authentication" ./my-project --content all
 ```
 
+Through the MCP tools, pass a `content` field instead of the flag — `"docs"`,
+`"config"` or `"all"`. The server indexes code only unless told otherwise, so
+set `content` explicitly whenever the answer is not in source.
+
 Use `semble find-related` to discover code similar to a known location. Pass the
 `file_path` and `line` from a prior search result:
 
@@ -31,11 +35,12 @@ The path defaults to the current directory when omitted; Git URLs are accepted.
 
 1. Start with `semble search` to find relevant chunks. The index is built and
    cached automatically.
-2. Use `--content docs` for documentation, `--content config` for configuration
-   files, or `--content all` for everything.
+2. To reach beyond code, set the MCP `content` field — or pass `--content` on
+   the CLI — to `docs`, `config`, or `all`.
 3. Navigate directly to the returned file and line. Do not re-search or grep for
    the same content.
 4. Optionally use `semble find-related` with a promising result's `file_path`
-   and `line` to discover related implementations.
+   and `line` to discover related implementations. It takes the same `content`
+   selection.
 5. Use grep only when you need every occurrence of a literal string across the
    whole repository, such as all callers of a renamed function.
