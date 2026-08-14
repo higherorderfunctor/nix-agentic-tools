@@ -200,7 +200,7 @@ Two traps fall out of that table:
 - **Semble targeting kimchi would be an evaluation error**, not a degradation:
   no `ai.kimchi.agents` option exists to write to.
 
-### A1b. #921's fail-versus-degrade line is mostly an artifact — OPEN
+### A1b. Fail versus degrade — RATIFIED 2026-08-14
 
 #921 carries a line no human ratified: "an unsupported _capability the user
 explicitly asked for_ fails; an unsupported _portable default fanning out_
@@ -241,11 +241,14 @@ portable surface. The workable axis is the **signal level**, not fatality:
   the one case option-level filtering structurally cannot express, because the
   option exists and the value is legal.
 
-Proposed replacement for the unratified line: **drop silently only when dropping
-removes capability; surface by default when dropping makes the result more
-permissive than asked; fail only on relational constraints across pools.**
+The ratified rule: **drop silently only when dropping removes capability;
+surface by default when dropping makes the result more permissive than asked;
+fail only on relational constraints across pools.**
 
-Status: proposed, **not ratified**. Do not implement the original line.
+Ratified 2026-08-14 and written into #921, replacing the LLM-authored line. The
+old wording — "an unsupported capability the user explicitly asked for fails; an
+unsupported portable default fanning out degrades" — is retired; do not
+implement it.
 
 ### A2. Negation and per-runtime override
 
