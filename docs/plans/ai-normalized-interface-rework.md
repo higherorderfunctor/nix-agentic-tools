@@ -52,6 +52,14 @@ Version targeting: semble options are tied to the overlay, so the design targets
 0.5.5 rather than the pinned 0.5.4. This makes the semble work depend on the
 0.5.5 bump landing.
 
+Decided 2026-08-14, after the verification pass:
+
+- **The factory gates per-pool-per-runtime**, not per-runtime. Detail in A1a.
+- **The "every artifact lands in a per-runtime option" rule is a follow-up PR**,
+  folding only two cheap items into this rework. Detail in A5a.
+- **The pre-relocation semble working tree is discarded**, preserved only as an
+  archive ref. Detail in B7.
+
 ### Refuted by the 2026-08-14 verification pass
 
 **R1 — "Absorb `lib/fragments.nix`'s existing `priority`; only the DEFAULT is
@@ -151,8 +159,22 @@ itself, and that registry becomes the substrate #921 wants for capability
 declaration.
 
 **Generating for all five runtimes produces dead options for four of them**, so
-the gate must be **per-pool-per-runtime**, not a per-runtime allow-list. Kimchi
-census, which the previous draft omitted entirely:
+the gate is **per-pool-per-runtime**, not a per-runtime allow-list — decided
+2026-08-14. The factory generates for every runtime, but each **pool** is
+declared only where that runtime actually consumes it.
+
+Two consequences worth stating, because they are the reason this option was
+chosen over the cheaper ones:
+
+- It **removes** today's declared-and-dead `ai.kimchi.rules` / `rulesDir` rather
+  than adding more of the same. That is a live bug fixed as a side effect, not
+  new surface.
+- It **is** the capability substrate #921 asks for. The same per-pool-per-
+  runtime data that decides whether to declare an option can drive #921's
+  degradation report and the native-landing-key declaration A5 needs. Building
+  it once serves three consumers.
+
+Kimchi census, which the previous draft omitted entirely:
 
 | pool                    | kimchi      |
 | ----------------------- | ----------- |
@@ -177,6 +199,53 @@ Two traps fall out of that table:
   exactly what #921 exists to stop, already in the tree.
 - **Semble targeting kimchi would be an evaluation error**, not a degradation:
   no `ai.kimchi.agents` option exists to write to.
+
+### A1b. #921's fail-versus-degrade line is mostly an artifact — OPEN
+
+#921 carries a line no human ratified: "an unsupported _capability the user
+explicitly asked for_ fails; an unsupported _portable default fanning out_
+degrades." Working it against the per-pool-per-runtime gate decided in A1a shows
+most of it dissolving.
+
+**The "explicitly asked for" arm collapses into the module system.** Once a pool
+is declared only where the runtime consumes it, writing
+`ai.claude.programs.semble.mcp.rootExposure` on a runtime that cannot isolate is
+not a policy failure — the option does not exist, and Nix raises its own
+unknown-option error. That is already loud, already free, and needs no rule.
+
+So the only surface where a rule is still needed is the **root** one, and there
+"degrade" is not uniformly safe. The discriminator is not explicit-versus-
+default; it is **what direction the drop moves you**:
+
+| root value dropped at a runtime             | effect of dropping it                         | safe to degrade?                    |
+| ------------------------------------------- | --------------------------------------------- | ----------------------------------- |
+| `ai.skills.<k>` on a runtime with no skills | the skill is absent                           | yes — reduces capability            |
+| `ai.agents.<k>.tools` on Codex              | the agent runs **unrestricted**               | **no** — more permissive than asked |
+| `rootExposure = false` on Claude            | the server **is** exposed to the root session | **no** — inverts the intent         |
+
+Both of #921's and #919's motivating cases are the same shape: a **restriction**
+that, when dropped, yields a **more permissive** result. That is why the two
+issues looked like opposite policies — they are not; they are one rule seen from
+two sides.
+
+Making those two cases hard failures is not workable either, because a root
+`ai.agents.<k>.tools` that fails on Codex means no portable agent can ever carry
+a tool allowlist across a runtime set including Codex, which defeats the
+portable surface. The workable axis is the **signal level**, not fatality:
+
+- drop **reduces** capability → silent; visible in #921's opt-in report;
+- drop **increases** permissiveness → surfaced by default, because silence there
+  is a security-shaped surprise, not a convenience;
+- combination is **incoherent across pools** (e.g. `rootExposure = false` with
+  no MCP-backed agent to claim the server) → assertion, genuine failure. This is
+  the one case option-level filtering structurally cannot express, because the
+  option exists and the value is legal.
+
+Proposed replacement for the unratified line: **drop silently only when dropping
+removes capability; surface by default when dropping makes the result more
+permissive than asked; fail only on relational constraints across pools.**
+
+Status: proposed, **not ratified**. Do not implement the original line.
 
 ### A2. Negation and per-runtime override
 
@@ -419,8 +488,8 @@ costs work.
 
 ### A5a. Scope call — "every generated artifact lands in a per-runtime option"
 
-**Recommendation: follow-up PR, not this rework.** The claimed dependency was
-refuted (R2), so nothing in B7″ or B10 blocks on it.
+**Decided 2026-08-14: follow-up PR, not this rework.** The claimed dependency
+was refuted (R2), so nothing in B7″ or B10 blocks on it.
 
 Sizing, measured: **23 new options** under a pragmatic rule (claude 4, codex 5,
 copilot 6, kimchi 3, kiro 5), or roughly **40** under the previous draft's
@@ -438,6 +507,13 @@ has no handle at all today.
 Fold into **this** rework only the two cheap items: de-internalize
 `ai.kiro.steeringFiles`, and promote `mkHookEntries` to an `ai.kiro.hookFiles`
 option.
+
+Consequence to accept knowingly: until the follow-up lands, **B7″ overrides work
+at file granularity only.** A user can `mkForce` a whole `.mcp.json` or
+`mcp.json`, but cannot override one server key inside it on Copilot, Kiro or
+Kimchi, because `builtins.toJSON` has already collapsed the structure by the
+time the module system sees a string. Claude is the exception — it has a real
+keyed option, upstream's `programs.claude-code.mcpServers`.
 
 ## Part B — semble #858 on top
 
@@ -586,6 +662,17 @@ favour of the generalized mechanism.
 this runtime" under A3.
 
 ### B7. Code written but not yet reworked
+
+**Status 2026-08-14: the working tree was discarded and the branch reset to
+`c5475438`.** The branch had zero commits, so all of it was unbacked
+working-tree state; it now exists only as the archive ref below, which is pushed
+to origin. Recover a file with
+`git checkout archive/semble-content-routing-pre-relocation -- <path>`.
+
+`contentScope.nix` and the two prompt markdown files are relocation-independent
+and can come back verbatim. `modules/options.nix` and `modules/common.nix` are
+the parts that need genuine rework, since they encode the pre-relocation
+`semble.*` prefix and the four `runtimes` selectors that A1 deletes.
 
 Archived at `archive/semble-content-routing-pre-relocation` (566 lines across 9
 files) so it cannot be lost: `contentScope.nix` (new, unit-verified),
