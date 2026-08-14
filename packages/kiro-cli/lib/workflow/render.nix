@@ -31,8 +31,12 @@
   inherit (builtins) attrNames head;
   inherit (lib) concatStringsSep filterAttrs optionalAttrs;
 
-  # Drop nulls and empty collections. `captureOutput = false` must survive,
-  # so this tests for null explicitly rather than for truthiness.
+  # Drop nulls ONLY. `captureOutput = false` must survive, so this tests for
+  # null explicitly rather than for truthiness.
+  #
+  # Empty collections are NOT dropped here — the two that need dropping
+  # (`artifacts`, `inputs`) default to `{}` rather than to null, so they are
+  # gated at their call sites with `optionalAttrs` instead.
   prune = filterAttrs (_: v: v != null);
 
   tagOf = attrs: head (attrNames attrs);

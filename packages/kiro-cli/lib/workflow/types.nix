@@ -159,10 +159,20 @@
           skips the containment check instead evaluates false FOREVER, with
           no error, burning every iteration the loop has.
 
-          A leading `{{template}}` is what skips that check. `render.nix`
-          rejects a templated path outright rather than reproducing the
-          engine's conditional behavior, which depends on whether the
-          reference happens to be a declared input.
+          A leading `{{template}}` is what skips that check. A templated path
+          is nevertheless ACCEPTED here and rendered through unchanged —
+          `analyze.nix` flags it as the `policy`-basis lint
+          `W-FILE-CHECK-PATH-UNSAFE` instead.
+
+          Accepting it is forced, not a preference: the vendor's own
+          `feature-pipeline` and `ralph` recipes both ship templated
+          `fileCheck` paths, so rejecting them would reject a corpus the
+          engine self-validates. Whether the engine reaches the containment
+          check at all depends on whether the leading reference happens to be
+          a DECLARED input — a declared one is substituted first and then
+          checked, an undeclared one skips validation entirely — which is
+          exactly the kind of run-dependent behavior a static schema should
+          warn about rather than pretend to decide.
         '';
       };
       jsonPath = mkOption {
