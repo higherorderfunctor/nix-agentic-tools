@@ -48,6 +48,36 @@
 # Anything needing the live filesystem, the agent registry, or the server's
 # model catalog is not statically checkable at all and is reported as a
 # documented gap rather than guessed at.
+#
+# ── Strictness ledger: where this type is stricter than the engine ──────────
+#
+# The default posture is engine fidelity, because rejecting a definition the
+# engine RUNS is as much a bug as accepting one it refuses. These types are
+# deliberately stricter in a few places, and the rule deciding when that is
+# warranted is narrow:
+#
+#   be stricter than the engine only where the engine's acceptance is a
+#   SILENT failure — something that parses, runs, and then never does what
+#   it says.
+#
+# The whole set, so the property stays auditable:
+#
+#   fileCheck.jsonPath   a segment LIST, and segments reject '$', '*' and
+#                        brackets. `"$.drained"` is accepted by the engine and
+#                        reads a property literally named `$`, resolving
+#                        undefined so the loop never stops.
+#   stop.when.contains.template
+#                        rejects braces. A brace makes the expression classify
+#                        as a BARE reference, which is never an error and is
+#                        left as literal text — so the condition silently never
+#                        matches.
+#   agent / name / prompt-bearing strings
+#                        `nonEmptyStr` where the engine allows `""`. An empty
+#                        agent name resolves to nothing at launch.
+#
+# Everything else tracks the engine exactly, including cases where that means
+# accepting something ugly — see `watchIdRef`, which permits a lone brace
+# because the engine does and because such an id still resolves.
 {lib}: let
   inherit (lib) mkOption types;
 
@@ -93,13 +123,42 @@
 
   nonEmptyStr = types.addCheck types.str (s: s != "") // {description = "non-empty string";};
 
-  # `parseStopWhen` rejects a watch id containing '.', whitespace, or braces.
-  # An id violating this is legal on the node and merely unreferenceable, so
-  # the check belongs on the REFERENCE, not on the definition.
+  # `parseStopWhen` rejects a watch id that is empty, contains '.', or contains
+  # whitespace. An id violating this is legal ON THE NODE and merely
+  # unreferenceable, so the check belongs on the REFERENCE, not the definition.
+  #
+  # It does NOT reject a lone brace, and neither do we. Re-read from the
+  # bundle: the only brace rule is a whole-string `includes("{{")` /
+  # `includes("}}")` test that runs before the suffix check, so `a{b.terminal`
+  # parses and resolves fine against a node whose id is `a{b`. An earlier
+  # version of this check rejected any brace and was therefore stricter than
+  # the engine for no benefit — see the strictness ledger below for the rule
+  # that decides when being stricter IS warranted.
   watchIdRef =
     types.addCheck types.str
-    (s: s != "" && !(lib.hasInfix "." s) && (builtins.match ".*[[:space:]{}].*" s == null))
-    // {description = "watch id referenceable from stopWhen (no '.', whitespace or braces)";};
+    (s:
+      s
+      != ""
+      && !(lib.hasInfix "." s)
+      && !(lib.hasInfix "{{" s)
+      && !(lib.hasInfix "}}" s)
+      && builtins.match ".*[[:space:]].*" s == null)
+    // {description = "watch id referenceable from stopWhen (non-empty, no '.', no whitespace, no '{{' or '}}')";};
+
+  # A `{{...}}` reference expression, WITHOUT its delimiters.
+  #
+  # Braces are rejected: the engine's reference grammar is
+  # `\{\{\s*([^{}]+?)\s*\}\}`, so an expression containing one can never
+  # match it. In a stopWhen the string still PARSES — `parseStopWhen` slices on
+  # the first `}}` rather than using that regex — and the expression then
+  # classifies as a BARE reference, which is never an error and resolves to
+  # literal text. So `{{a{b}} contains DONE` compares the literal string
+  # `{{a{b}}` against the needle forever. Silent, so it is refused here; see
+  # the strictness ledger at the top of this file.
+  referenceExpr =
+    types.addCheck types.str
+    (s: s != "" && !(lib.hasInfix "{" s) && !(lib.hasInfix "}" s))
+    // {description = "reference expression without braces (they are added at render time)";};
 
   # `jsonPath` is NOT JSONPath. The engine does `split(".")` then a plain
   # property walk, so "$.drained" reads a property literally named "$",
@@ -109,9 +168,17 @@
   # Segments are additionally constrained so the list form cannot smuggle the
   # string form back in: a segment holding a '.' would render into two
   # segments, and '$' / brackets / wildcards are the JSONPath spellings that
-  # silently resolve to undefined. That last part is a POLICY choice — a
-  # property really named "$" is legal JSON and the engine would read it —
-  # but it is the single most expensive typo in this format.
+  # silently resolve to undefined.
+  #
+  # That last part is a HARD rejection at type level, not a `policy`-basis
+  # lint — a definition using it does not evaluate at all, and no `strict`
+  # toggle relaxes it. Saying "policy" here would be wrong twice over: in this
+  # codebase `policy` names an advisory the analyzer emits and the engine
+  # accepts, and this is neither advisory nor analyzer-side. It is one of the
+  # three deliberate stricter-than-engine rules listed in the strictness
+  # ledger at the top of this file, and it is there because `"$.drained"` is
+  # the single most expensive typo in this format: legal JSON, accepted by the
+  # engine, and it hangs the loop forever without an error.
   # Spelled out as predicates rather than one regex on purpose. Nix regexes
   # are POSIX ERE, where a backslash inside a bracket expression is a LITERAL
   # backslash rather than an escape — so `[^.$*\[\]]+` does not mean what it
@@ -264,7 +331,7 @@
       type = types.submodule {
         options = {
           template = mkOption {
-            type = nonEmptyStr;
+            type = referenceExpr;
             example = "reviewer.output";
             description = ''
               Reference expression WITHOUT the braces — they are added at
@@ -301,7 +368,18 @@
     pollIntervalSec = mkOption {
       type = types.nullOr pollIntervalSec;
       default = null;
-      description = "Poll interval. Omitted or below the minimum falls back to ${toString engine.watch.defaultPollIntervalSec}s.";
+      description = ''
+        Poll interval. OMITTING it falls back to
+        ${toString engine.watch.defaultPollIntervalSec}s; supplying a value
+        below ${toString engine.watch.minPollIntervalSec}s is a hard error,
+        not a clamp, so the type refuses it here rather than letting the run
+        fail at watch-config validation.
+
+        (`resolvePollIntervalSec` does carry a `>= minimum` guard that looks
+        like a fallback, but its own comment notes the case is already
+        enforced by `validateConfig`, which throws — so that branch is
+        unreachable for a below-minimum value.)
+      '';
     };
     commandTimeoutSec = mkOption {
       type = types.nullOr types.numbers.positive;
