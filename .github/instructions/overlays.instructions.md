@@ -369,46 +369,54 @@ changes mechanism away from the universal-node layout we forked against.
 
 ## IFD Patterns and Gotchas
 
-> **Last verified:** 2026-08-14 (commit pending — records the blocker that kept
-> oxlint held back on EVERY sweep for ten days and was invisible because it
-> spells itself exactly like a patch conflict: an `applyPatches` src cannot be
-> re-hashed by nix-update at all, since `outputHash = ""` forces flat hashing
-> over a directory, so its update row needs `--no-src`. Measured on the
-> 2026-08-08 sweep, where the patch applied cleanly and the run still died. Also
-> records how to regenerate the pnpm patch file when upstream repins the
-> dependency, that `patchHash` is a plain sha256 of that file, and that
-> `pnpm patch-commit` emits content-free stanzas needing removal). Prior:
-> 2026-08-10 (commit pending — adds the LOCATE-vs-PROBE split every
-> binary-probing extractor now owes its reader. `mkKiroExtract` hardcoded
-> `bin/.kiro-cli-chat-wrapped`; when nixpkgs f13ff45a dissolved that name,
-> twelve greps failed with "No such file or directory" and the build announced
-> "upstream changed the hook-trigger vocabulary". The target is now resolved by
-> CONTENT inside the builder through the shared `vu.kiroChatLocatorPy`, and a
-> location failure can no longer be spelled as a content failure). Prior:
-> 2026-08-04 (commit pending — the pnpm patched-dependency guidance below said
-> to "make the minimal lock edit", and a minimal edit expressed as HUNKS is what
-> held oxlint back in every sweep once upstream reshuffled its peer variants.
-> Records that the metadata is applied by key in `postPatch` instead, and that a
-> patch conflict surfaces as nix-update's "failed to retrieve hash" rather than
-> as anything naming a patch). Prior: 2026-08-03 (commit pending — records
-> Oxlint's source-before-fetcher pattern for pnpm patched dependencies: patch
-> the workspace metadata and lock before `fetchPnpmDeps` reads them, keeping a
-> sandboxed dependency fix out of workflow-wide host policy). Prior: 2026-08-03
-> (commit pending — moves glab and its committed extracted sidecar together from
-> `overlays/generic/` to `overlays/dev-tools/`, preserving the eval-pure read
-> and regeneration loop). Prior: 2026-08-02 (commit pending — distinguishes
-> Codex's new human-reviewed reverse-coverage gate from generated-sidecar drift
-> and shape checks: update automation may refresh extracted facts but cannot
-> classify a new command, flag, field, maturity, or config seam). Prior:
-> 2026-08-01 (commit pending — documents the sidecar SELF-HEAL loop as a loop:
-> which half is the self-heal and which the backstop, that a red drift check
-> reports a MECHANISM failure rather than a stale file, that it fires on the
-> version-bump path ONLY so an edited extractor does not self-heal, how it
-> differs from the `fix_sidecar_hashes` self-heal, and four debugging entry
-> points. Names `glab` as the fourth extracted package and records that all four
-> now share `vu.mkExtractRegen`; glab had no regeneration at all and proved the
-> latency on PR #621). Prior: 2026-08-01 (Codex joins the extracted sidecar
-> pipeline with recursive Clap help, feature-list, and bundled-model probes plus
+> **Last verified:** 2026-08-14 (commit pending — records that an anchor can
+> lose its TYPE information without losing its match. claude-code 2.1.232 moved
+> its settings schema onto bare zod-mini factories, so `ultracode:w.boolean()`
+> became `ultracode:jt()` and the guard's whole type assertion lived in the
+> `.boolean` token it no longer has. Relaxing the regex would have kept the
+> match and silently demoted the guard to a presence check, so the type is now
+> re-derived by constructor quorum. The effort enum needed only an optional
+> `.enum` segment because it validates through its extracted payload). Prior:
+> 2026-08-14 (commit d8a72e1b — records the blocker that kept oxlint held back
+> on EVERY sweep for ten days and was invisible because it spells itself exactly
+> like a patch conflict: an `applyPatches` src cannot be re-hashed by nix-update
+> at all, since `outputHash = ""` forces flat hashing over a directory, so its
+> update row needs `--no-src`. Measured on the 2026-08-08 sweep, where the patch
+> applied cleanly and the run still died. Also records how to regenerate the
+> pnpm patch file when upstream repins the dependency, that `patchHash` is a
+> plain sha256 of that file, and that `pnpm patch-commit` emits content-free
+> stanzas needing removal). Prior: 2026-08-10 (commit pending — adds the
+> LOCATE-vs-PROBE split every binary-probing extractor now owes its reader.
+> `mkKiroExtract` hardcoded `bin/.kiro-cli-chat-wrapped`; when nixpkgs f13ff45a
+> dissolved that name, twelve greps failed with "No such file or directory" and
+> the build announced "upstream changed the hook-trigger vocabulary". The target
+> is now resolved by CONTENT inside the builder through the shared
+> `vu.kiroChatLocatorPy`, and a location failure can no longer be spelled as a
+> content failure). Prior: 2026-08-04 (commit pending — the pnpm
+> patched-dependency guidance below said to "make the minimal lock edit", and a
+> minimal edit expressed as HUNKS is what held oxlint back in every sweep once
+> upstream reshuffled its peer variants. Records that the metadata is applied by
+> key in `postPatch` instead, and that a patch conflict surfaces as nix-update's
+> "failed to retrieve hash" rather than as anything naming a patch). Prior:
+> 2026-08-03 (commit pending — records Oxlint's source-before-fetcher pattern
+> for pnpm patched dependencies: patch the workspace metadata and lock before
+> `fetchPnpmDeps` reads them, keeping a sandboxed dependency fix out of
+> workflow-wide host policy). Prior: 2026-08-03 (commit pending — moves glab and
+> its committed extracted sidecar together from `overlays/generic/` to
+> `overlays/dev-tools/`, preserving the eval-pure read and regeneration loop).
+> Prior: 2026-08-02 (commit pending — distinguishes Codex's new human-reviewed
+> reverse-coverage gate from generated-sidecar drift and shape checks: update
+> automation may refresh extracted facts but cannot classify a new command,
+> flag, field, maturity, or config seam). Prior: 2026-08-01 (commit pending —
+> documents the sidecar SELF-HEAL loop as a loop: which half is the self-heal
+> and which the backstop, that a red drift check reports a MECHANISM failure
+> rather than a stale file, that it fires on the version-bump path ONLY so an
+> edited extractor does not self-heal, how it differs from the
+> `fix_sidecar_hashes` self-heal, and four debugging entry points. Names `glab`
+> as the fourth extracted package and records that all four now share
+> `vu.mkExtractRegen`; glab had no regeneration at all and proved the latency on
+> PR #621). Prior: 2026-08-01 (Codex joins the extracted sidecar pipeline with
+> recursive Clap help, feature-list, and bundled-model probes plus
 > category-specific shape assertions). Prior: 2026-07-25 (the warm composite now
 > forces `drvPath` instead of `version`, so sidecar-versioned packages are
 > covered; also corrects the claim that the check job's `nix flake check`
@@ -648,6 +656,51 @@ distinct match; the model catalog requires an id from each of the opus / sonnet
 least 20 commands, asserts the exact sandbox and non-deprecated approval enums,
 and rejects empty feature/model results. When you add a key or category, add its
 shape assertion in the same commit.
+
+#### An anchor can lose its TYPE information without losing its match
+
+The shape assertions above all assume the anchor still says what it captured.
+Some of them said it only because upstream's minifier happened to keep a method
+name, and that is not a property you own.
+
+claude-code 2.1.232 moved its whole settings schema off namespaced method
+constructors onto bare standalone factories — the zod-mini calling convention.
+Every registration changed shape, not merely spelling:
+
+```text
+2.1.222  effortLevel:w.enum(["low","medium","high","xhigh"])   ultracode:w.boolean()
+2.1.232  effortLevel:Or(["low","medium","high","xhigh"])       ultracode:jt()
+```
+
+Both anchors went to ZERO matches, so this one failed loud and held the package
+back — the good outcome, and the reason the sweep surfaced it at all. But the
+two halves need DIFFERENT repairs, and only one of them is a regex edit:
+
+- **The effort enum was fine.** It extracts the `[…]` payload, and the payload
+  is identical in both forms, so making the `.enum` segment optional restores it
+  with no loss. An anchor that validates through its PAYLOAD survives a
+  calling-convention change.
+- **The boolean guard was not.** It validated the type for free, out of the
+  literal token `.boolean`. In the bare form `jt()` names nothing — it is
+  indistinguishable at the call site from `B()` (string) or `at()` (number) — so
+  the obvious repair, relaxing the anchor to `<key>:<ident>()`, silently demotes
+  a type assertion to a presence check. That is the model-catalog failure mode
+  arriving by a different road: the anchor keeps matching, and what it PROVES
+  quietly drops to nothing.
+
+The type is recovered by QUORUM instead, which needs no other key's name and no
+minified identifier: capture the constructor token per guarded key, require all
+of them to resolve to exactly one and the SAME one, then require that token to
+register at least 50 settings keys — measured 235 at 2.1.222 (`w.boolean`) and
+265 at 2.1.232 (`jt`), so the floor is a fifth of observed. A shared factory
+used by hundreds of settings keys IS the boolean one; an ad-hoc call that
+happens to follow one of these names is not.
+
+The generalizable rule: **when an anchor stops matching, ask what it was
+PROVING, not just what it was matching.** Restoring the match is the easy half
+and can look complete while the assertion underneath is gone. Prefer anchors
+that validate through an extracted payload; where the only evidence was a name
+upstream chose, re-derive it from a property of the corpus.
 
 #### Separate LOCATING the artifact from PROBING it — they are different bugs
 
