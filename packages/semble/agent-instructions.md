@@ -18,9 +18,10 @@ semble search "database host port" ./my-project --content config
 semble search "authentication" ./my-project --content all
 ```
 
-Through the MCP tools, pass a `content` field instead of the flag — `"docs"`,
-`"config"` or `"all"`. The server indexes code only unless told otherwise, so
-set `content` explicitly whenever the answer is not in source.
+Through the MCP tools, pass a `content` field instead of the flag — `"code"`,
+`"docs"`, `"config"` or `"all"`. It replaces the server's configured default for
+that one call, so set it explicitly whenever the answer may lie outside what the
+server indexes by default.
 
 Use `semble find-related` to discover code similar to a known location. Pass the
 `file_path` and `line` from a prior search result:
@@ -35,8 +36,9 @@ The path defaults to the current directory when omitted; Git URLs are accepted.
 
 1. Start with `semble search` to find relevant chunks. The index is built and
    cached automatically.
-2. To reach beyond code, set the MCP `content` field — or pass `--content` on
-   the CLI — to `docs`, `config`, or `all`.
+2. Set the MCP `content` field — or pass `--content` on the CLI — to `code`,
+   `docs`, `config`, or `all` when the target content differs from the server's
+   default.
 3. Navigate directly to the returned file and line. Do not re-search or grep for
    the same content.
 4. Optionally use `semble find-related` with a promising result's `file_path`
