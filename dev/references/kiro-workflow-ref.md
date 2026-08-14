@@ -38,6 +38,36 @@ whether an out-of-root path fails loudly at launch or silently at evaluation
 depends on which branch it takes rather than on the CLI version. See trap 3 and
 rule 4.
 
+**Revised 2026-08-14** against **KAS 2.18.0**, by reading the engine's Zod
+schema and `src/workflow/validate.ts` directly rather than by re-reading this
+document. Four claims were REFUTED and are corrected in place:
+
+- the step-level **`input` field no longer exists** — `prompt` is required, and
+  a step carrying `input` is now rejected loudly. This document asserted the old
+  rule in three places (§1 node table, §3 channel table, §4 validation), all now
+  fixed. This is the correction most likely to have been copied into a schema,
+  because it reads as a harmless alternative rather than a removal.
+- **`watch.config` is optional**, not required, and **`idleTimeoutSec` exists**
+  and was absent from the node table entirely.
+- **a `repeat` may define NEITHER stop form** — only defining both is refused.
+  The vendor's own `autoresearch` recipe ships with neither.
+- **there is a nesting-depth cap of 8**, which this document never recorded.
+  Only the 20-step cap was known.
+
+Two rules were ADDED that no prior note carried: the only node-**orientation**
+rule in the engine (a step declaring `completion` may not appear beneath a
+`parallel`, checked against any ancestor), and the load-time template-reference
+ordering rules. Nested repeats and nested parallels are both LEGAL — a natural
+guess to the contrary is wrong.
+
+The corrections above were made by reading the shipped engine, so they are the
+one part of this document that is measured rather than synthesized. The seven
+vendor recipes inlined in the bundle are now checked in under
+`checks/fixtures/kiro-workflows/vendor/`, and the constants — with the resolver
+for re-deriving them on a version bump — under
+`packages/kiro-cli/lib/workflow/engine-limits.json`. Re-derive on every kiro-cli
+bump; the constants are the durable part, byte offsets are not.
+
 **If you are holding a COPY of this file, compare that date against yours.**
 This document is `dev/`-scoped and has no export path, so nothing propagates a
 correction into a vendored copy. That matters more than usual for this
@@ -165,19 +195,39 @@ sourced to a code read. §2 has the worked case.
 A workflow is one JSON object:
 
 ```
-{ name, description?, inputs?, modelId?, effortLevel?, steps[] }
+{ name, description?, inputs?, modelId?, effortLevel?, planRevision?, steps[] }
 ```
 
-with five node types, and that is the entire scheduling vocabulary
-(R-workflow-5, quoting the engine's own enums):
+`planRevision` is an optional non-negative int that a hand-authored file must
+**omit** — the runner stamps it 0 at creation and it is a pairing token between
+`workflow-state.json` and `workflow-definition.json`, not authored input.
 
-| type       | required                                                   | notes                                              |
-| ---------- | ---------------------------------------------------------- | -------------------------------------------------- |
-| `step`     | `id`, `agent`, and at least one of `prompt` / `input`      | the only node that runs an agent                   |
-| `sequence` | `id`, `steps`                                              | ordered                                            |
-| `parallel` | `id`, `branches`, `joinPolicy`                             | `all` \| `allSettled` \| `any`                     |
-| `repeat`   | `id`, `steps`, `maxIterations` (1–1000), `onMaxIterations` | `abort` \| `continue` \| `pause`; plus a stop form |
-| `watch`    | `id`, `handler`, `config`                                  | non-LLM polling: `github-pr`, `crux-cr`            |
+With five node types, and that is the entire scheduling vocabulary. **The table
+below was re-derived from the KAS 2.18.0 Zod schema on 2026-08-14** and three of
+its rows changed; see the revision note at the top of this file.
+
+| type       | required                                                   | optional                                                             | notes                                   |
+| ---------- | ---------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------- |
+| `step`     | `id`, `agent`, `prompt`                                    | `artifacts`, `captureOutput`, `completion`, `modelId`, `effortLevel` | the only node that runs an agent        |
+| `sequence` | `id`, `steps`                                              | —                                                                    | ordered                                 |
+| `parallel` | `id`, `branches`, `joinPolicy`                             | —                                                                    | `all` \| `allSettled` \| `any`          |
+| `repeat`   | `id`, `steps`, `maxIterations` (1–1000), `onMaxIterations` | at MOST one of `stopCondition` / `stopWhen` (neither is legal)       | `abort` \| `continue` \| `pause`        |
+| `watch`    | `id`, `handler`                                            | `config`, `idleTimeoutSec`                                           | non-LLM polling: `github-pr`, `crux-cr` |
+
+Three corrections to the row above, all measured against the shipped bundle:
+
+- **`prompt` is REQUIRED and `input` no longer exists.** The step-level `input`
+  field was removed and the schema now rejects it loudly with a migration
+  message (`removedLegacyInputField`). The old "at least one of `prompt` /
+  `input`" refinement is gone. §3 and §4 of this document repeated that claim
+  and are corrected in place.
+- **`watch.config` is OPTIONAL, not required**, and `idleTimeoutSec` exists and
+  was missing here entirely. Omitting `idleTimeoutSec` means the watch polls
+  FOREVER, bounded only by the enclosing repeat.
+- **A `repeat` may define NEITHER stop form.** The engine rejects only defining
+  _both_. Both vendor authoring documents claim exactly one is required, and the
+  vendor's own `autoresearch` recipe ships with neither — so a schema enforcing
+  "exactly one" rejects a vendor-canonical recipe.
 
 There are **four** launch forms, not three — the ledger's §4.1 covers only the
 `workflowPath` ones, but `run_workflow`'s own description says "Provide exactly
@@ -417,17 +467,23 @@ engine and drives the calling step's own lifecycle (§2). Everything moves
 through one of four places, and choosing between them is most of workflow
 design:
 
-| Channel                | Shape                                | Good for                                      |
-| ---------------------- | ------------------------------------ | --------------------------------------------- |
-| **`prompt` templates** | `{{<id>.output}}` inside prompt text | short verdicts, small structured text         |
-| **the `input` field**  | `"input": "{{watch_id.output}}"`     | piping one node's output in as the whole task |
-| **Artifacts**          | `{{artifacts.<name>}}` → a path      | anything large; passing an absolute location  |
-| **The filesystem**     | the agents just read and write it    | loops, queues, accumulating state             |
+| Channel                | Shape                                | Good for                                     |
+| ---------------------- | ------------------------------------ | -------------------------------------------- |
+| **`prompt` templates** | `{{<id>.output}}` inside prompt text | short verdicts, small structured text        |
+| **Artifacts**          | `{{artifacts.<name>}}` → a path      | anything large; passing an absolute location |
+| **The filesystem**     | the agents just read and write it    | loops, queues, accumulating state            |
 
-`input` is easy to miss and is a distinct field, not a prompt convention: **it
-takes precedence over `prompt`** when both are set, and its documented purpose
-is piping a `watch` payload into the following step (ledger §3.1). A `step`
-needs at least one of the two.
+**A fourth row used to sit here and has been deleted: the step-level `input`
+field.** It was real at KAS 2.15.1, where it took precedence over `prompt` and
+existed to pipe a `watch` payload into the following step. It has since been
+REMOVED, and the schema now rejects any step carrying it with a migration
+message naming the template system as its replacement. A `step` requires
+`prompt` and nothing else. Piping a watch payload is now `{{<watch_id>.output}}`
+inside the prompt like any other reference.
+
+This correction matters more than most, because the removed field was asserted
+in three separate places in this document and would have been copied straight
+into a schema. Verified against the KAS 2.18.0 Zod on 2026-08-14.
 
 The fourth row is not a workaround — it is the **shipped idiom**, and the
 bundled recipes use it.
@@ -958,9 +1014,13 @@ three.
 ### What validation catches, and what it does not
 
 `validate_workflow` **does** check schema conformance, the caps in §5, that
-every step has `prompt` or `input`, that a `repeat` does not define both stop
-forms, that `stopWhen` watch references resolve, the ordering rules in §3, and
-that `fileCheck` paths are not provably outside the workspace roots.
+every step has `prompt` (the `input` alternative is gone — see §3), that a step
+declaring `completion` does not sit beneath a `parallel`, that node ids are
+unique across the whole tree, that nesting stays within **8** levels, that every
+`{{…}}` reference names a producer that runs strictly earlier, that a `repeat`
+does not define both stop forms, that `stopWhen` watch references resolve, the
+ordering rules in §3, and that `fileCheck` paths are not provably outside the
+workspace roots.
 
 It does **not** check agent names, watch handler configs, `modelId`,
 `effortLevel`, or bare `{{identifier}}` references. A `watch` node with a

@@ -1,0 +1,58 @@
+{
+  "description": "Reviews a change with two independent semantic reviewers in parallel on different models (Claude Fable 5 and GPT 5.6 Sol, both at xhigh effort), each writing its own review without seeing the other's to avoid bias, then a wf-coder aggregator (Claude Fable 5, xhigh) merges the two into a single issues-only final report grouped by Severity and sorted highest-to-lowest by combined importance/confidence (each issue: User impact / Issue / Recommendation, deduped across reviewers). A leading setup step creates a fresh timestamped run folder so every run is isolated (no overwrites, and no stale files from a previous run to bias a reviewer or the aggregator); the timestamp is generated once and shared with all steps via captured output. Inputs: 'target' (what to review: a GitHub PR URL or owner/repo#N, a CRUX/Amazon code-review link or CR-id, or a local git branch name / 'uncommitted' / 'staged') and 'workdir' (absolute path of the repo/workspace to review in and the anchor for output files; if empty the setup step falls back to the current workspace root). Artifacts are written under <workdir>/.agents/reviews/semantic-review-multi-model/<yyyy-mm-dd_HH-MM-SS>/ (review-fable-5.md, review-gpt-5.6-sol.md, final-report.md). Each reviewer self-checks that it actually has the semantic_reviewer process/format loaded and pauses via send_message('warning') if not. The semantic_reviewer and wf-coder agents are bundled, so this recipe is runnable in any workspace.",
+  "inputs": {
+    "target": "prompt",
+    "workdir": "string"
+  },
+  "name": "semantic-review-multi-model",
+  "steps": [
+    {
+      "agent": "wf-coder",
+      "captureOutput": true,
+      "effortLevel": "low",
+      "id": "setup",
+      "prompt": "You are the setup step for a multi-model code review run. Do ONLY this, nothing else:\n1. Determine the base directory: if {{workdir}} is a non-empty absolute path, use it; otherwise use the current workspace root (an absolute path).\n2. Compute a run timestamp string in the format YYYY-MM-DD_HH-MM-SS (e.g. `date +%Y-%m-%d_%H-%M-%S`).\n3. Create the directory <base>/.agents/reviews/semantic-review-multi-model/<timestamp>/ with `mkdir -p`.\n\nYour ENTIRE final response MUST be exactly that absolute directory path and NOTHING else - no prose, no quotes, no backticks, no trailing slash, no trailing punctuation or newline commentary. Later steps consume this exact string as the run directory.",
+      "type": "step"
+    },
+    {
+      "branches": [
+        {
+          "agent": "semantic_reviewer",
+          "artifacts": {
+            "review_fable": "{{setup.output}}/review-fable-5.md"
+          },
+          "effortLevel": "xhigh",
+          "id": "review-fable",
+          "modelId": "claude-fable-5",
+          "prompt": "SELF-CHECK GATE (do this FIRST before anything else): Confirm you actually have the semantic_reviewer review process and output format loaded in your context (a behavioral/narrative review with a Summary, a High-level view organized by concern rather than by file, and Details sections). If you do NOT have these instructions, do NOT improvise: call send_message with severity \"warning\" saying you lack the semantic_reviewer instructions and are pausing so the user can debug, then stop and do no further work. Only proceed if you genuinely have them.\n\nRUN DIRECTORY: {{setup.output}} (trim any surrounding whitespace or quotes). All your output goes inside this directory.\n\nTARGET: {{target}} identifies what to review. Working directory for git/tooling: {{workdir}} (if empty, use the current workspace root). Determine the target type and obtain the FULL diff plus any existing review comments:\n- GitHub PR (a github.com/.../pull/N URL, or \"owner/repo#N\"): use `gh pr diff <target>` and `gh pr view <target> --comments`.\n- CRUX / Amazon code review (a code.amazon.com/reviews/CR-XXXXXXX URL or a \"CR-XXXXXXX\" id): use the internal code-review tooling to fetch the CR's diff and comments.\n- Local git branch or working-tree changes (a branch name, or \"local\"/\"uncommitted\"/\"staged\"): in the repo at the working directory run `git -C <workdir> diff <base>...<branch>` (base = the repo's main/mainline) for a branch, or `git -C <workdir> diff` / `git -C <workdir> diff --staged` for uncommitted/staged changes.\nIf you cannot obtain a diff for {{target}}, call send_message with severity \"error\" explaining why, and stop.\n\nPerform the FULL, typical semantic_reviewer review with every standard section: Summary, High-level view (narrative organized by concern, not by file), and Details. Do not skip or shorten sections.\n\nWrite your complete review to {{setup.output}}/review-fable-5.md .\n\nANTI-BIAS: Do NOT read, open, cat, or reference the other reviewer's file. Specifically do NOT read {{setup.output}}/review-gpt-5.6-sol.md. Only write your own file.\n\nWhen finished, call send_message with severity \"success\" and a one-sentence summary noting where your review was written.",
+          "type": "step"
+        },
+        {
+          "agent": "semantic_reviewer",
+          "artifacts": {
+            "review_gpt": "{{setup.output}}/review-gpt-5.6-sol.md"
+          },
+          "effortLevel": "xhigh",
+          "id": "review-gpt",
+          "modelId": "gpt-5.6-sol",
+          "prompt": "SELF-CHECK GATE (do this FIRST before anything else): Confirm you actually have the semantic_reviewer review process and output format loaded in your context (a behavioral/narrative review with a Summary, a High-level view organized by concern rather than by file, and Details sections). If you do NOT have these instructions, do NOT improvise: call send_message with severity \"warning\" saying you lack the semantic_reviewer instructions and are pausing so the user can debug, then stop and do no further work. Only proceed if you genuinely have them.\n\nRUN DIRECTORY: {{setup.output}} (trim any surrounding whitespace or quotes). All your output goes inside this directory.\n\nTARGET: {{target}} identifies what to review. Working directory for git/tooling: {{workdir}} (if empty, use the current workspace root). Determine the target type and obtain the FULL diff plus any existing review comments:\n- GitHub PR (a github.com/.../pull/N URL, or \"owner/repo#N\"): use `gh pr diff <target>` and `gh pr view <target> --comments`.\n- CRUX / Amazon code review (a code.amazon.com/reviews/CR-XXXXXXX URL or a \"CR-XXXXXXX\" id): use the internal code-review tooling to fetch the CR's diff and comments.\n- Local git branch or working-tree changes (a branch name, or \"local\"/\"uncommitted\"/\"staged\"): in the repo at the working directory run `git -C <workdir> diff <base>...<branch>` (base = the repo's main/mainline) for a branch, or `git -C <workdir> diff` / `git -C <workdir> diff --staged` for uncommitted/staged changes.\nIf you cannot obtain a diff for {{target}}, call send_message with severity \"error\" explaining why, and stop.\n\nPerform the FULL, typical semantic_reviewer review with every standard section: Summary, High-level view (narrative organized by concern, not by file), and Details. Do not skip or shorten sections.\n\nWrite your complete review to {{setup.output}}/review-gpt-5.6-sol.md .\n\nANTI-BIAS: Do NOT read, open, cat, or reference the other reviewer's file. Specifically do NOT read {{setup.output}}/review-fable-5.md. Only write your own file.\n\nWhen finished, call send_message with severity \"success\" and a one-sentence summary noting where your review was written.",
+          "type": "step"
+        }
+      ],
+      "id": "reviews",
+      "joinPolicy": "all",
+      "type": "parallel"
+    },
+    {
+      "agent": "wf-coder",
+      "artifacts": {
+        "final_report": "{{setup.output}}/final-report.md"
+      },
+      "effortLevel": "xhigh",
+      "id": "aggregate",
+      "modelId": "claude-fable-5",
+      "prompt": "RUN DIRECTORY: {{setup.output}} (trim any surrounding whitespace or quotes). Two independent semantic reviews of {{target}} exist inside it: {{setup.output}}/review-fable-5.md and {{setup.output}}/review-gpt-5.6-sol.md. Read BOTH files fully.\n\nProduce a single consolidated FINAL report and write it to {{setup.output}}/final-report.md (overwrite it if it exists).\n\nFORMAT (follow exactly):\n- One H1 title line: `# Final consolidated issues report — <short description of the change> ({{target}})`.\n- Then ONE line only: `Issues are sorted from highest to lowest combined importance/confidence.` Then a `---` separator. Do NOT write any other intro, preamble, summary, praise, or high-level narrative.\n- Then one section per issue as an H2 heading `## N. <short issue title>`.\n- Immediately under each heading, a bold severity line: `**Severity: High**` (or Medium / Low). If two or more issues are closely related, append a cluster note on the same line, e.g. `**Severity: Medium** · *(cluster: <theme> — see also #X)*`.\n- Then exactly three labeled bullet points: `- **User impact:** ...` (the real user-facing consequence), `- **Issue:** ...` (the concrete problem, with file/function references), `- **Recommendation:** ...` (how to fix it).\n- Do NOT include any per-issue reviewer attribution or confidence tags (no model names, no confirmed/likely/possible labels). That information should only influence the severity and the sort order, not appear in the text.\n\nDe-duplicate issues raised by both reviewers by merging them into one entry. When both reviewers independently raised the same issue, treat that as higher confidence and rank it higher. Assign each issue a Severity (High/Medium/Low) based on user impact and blast radius, and sort ALL issues from HIGHEST to LOWEST combined importance/confidence, numbering them 1..N in that order.\n\nWhen done, call send_message with severity \"success\" summarizing that the final report was written and its path.",
+      "type": "step"
+    }
+  ]
+}

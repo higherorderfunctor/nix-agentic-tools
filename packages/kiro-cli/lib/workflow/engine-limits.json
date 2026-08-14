@@ -1,0 +1,57 @@
+{
+  "_comment": [
+    "Engine constants for the Kiro workflow definition format, read verbatim",
+    "out of the shipped KAS bundle. THIS FILE IS THE SINGLE SOURCE OF TRUTH:",
+    "the Nix option types and the Effect-TS schema both consume it, so the two",
+    "deliverables cannot drift apart from each other. They can still drift from",
+    "the ENGINE — see verifiedAgainst, and re-derive on every kiro-cli bump.",
+    "",
+    "Re-derivation (bash, not zsh - `shopt` is not a zsh builtin):",
+    "  ver=$(kiro-cli --version | awk '{print $NF}')",
+    "  shopt -s nullglob",
+    "  kasdirs=( \"$HOME/.local/share/kiro-cli/kas/${ver}-\"*/ )",
+    "  [ \"${#kasdirs[@]}\" -eq 1 ] || { echo refuse; exit 1; }",
+    "  b=\"${kasdirs[0]}node_modules/@kiro/agent/dist/server/acp-server.js\"",
+    "  command grep -boF 'DEFAULT_MAX_STEP_NODES' \"$b\"",
+    "The bundle is ~21 MB. Never cat it; use byte-offset windows only."
+  ],
+
+  "verifiedAgainst": {
+    "kiroCli": "2.18.0",
+    "kas": "2.18.0-2c36eec519a4981ce7c7830eb8984008955d1edf4660f05f9b7c2c20882c864d",
+    "date": "2026-08-14",
+    "sources": {
+      "shape": "../acp-type-covenant/dist/capabilities/workflow/types.js @ byte ~818000",
+      "limits": "src/workflow/validate.ts @ byte ~17952820",
+      "stopWhen": "src/workflow/validate.ts parseStopWhen",
+      "templates": "src/workflow/template.ts classifyTemplateReference",
+      "watchHandlers": "watch-handler-registry, exposed as _kiro/workflow/listWatchHandlers"
+    }
+  },
+
+  "limits": {
+    "maxNestingDepth": 8,
+    "maxStepNodes": 20,
+    "maxRepeatIterations": 1000,
+    "workflowActionReasonMaxLength": 500
+  },
+
+  "enums": {
+    "nodeType": ["parallel", "repeat", "sequence", "step", "watch"],
+    "joinPolicy": ["all", "allSettled", "any"],
+    "onMaxIterations": ["abort", "continue", "pause"],
+    "completionSignal": ["error", "need_input", "success"],
+    "watchHandler": ["crux-cr", "github-pr"],
+    "sendMessageSeverity": ["error", "info", "success", "warning"]
+  },
+
+  "watch": {
+    "defaultPollIntervalSec": 60,
+    "minPollIntervalSec": 30
+  },
+
+  "file": {
+    "suffix": ".workflow.json",
+    "workspaceDir": ".kiro/workflows"
+  }
+}

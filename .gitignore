@@ -70,3 +70,10 @@ docs/src/
 
 # Local private working area (untracked journals, assessments, scratch)
 /private/
+
+# Node deps for packages/kiro-cli/schema, installed on demand by the manual
+# check documented in that package's README. Nothing in the flake builds them.
+# The rule lives here at the base of the stack rather than beside the package:
+# the directory exists in the worktree whichever branch is checked out, so a
+# sibling branch that does not carry the package would otherwise stage it.
+node_modules/

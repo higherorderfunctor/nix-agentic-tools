@@ -412,6 +412,8 @@ unparameterized
 unparseable
 unrebased
 unredacted
+unreferenceable
+unrepresentable
 unresumable
 unreviewed
 unscanned
