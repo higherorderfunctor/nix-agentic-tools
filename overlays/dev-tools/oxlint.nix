@@ -15,23 +15,25 @@
   vu = import ../lib.nix;
   tsgolint = import ./tsgolint.nix {inherit inputs final;};
 
-  rev = "9c8c5e521b97f4ef08af75fab11d6a065bdc8ae4";
+  rev = "ce35d47499c88ed94cc9dc7a7e351b37ec856539";
   unpatchedSrc = ourPkgs.fetchFromGitHub {
     owner = "oxc-project";
     repo = "oxc";
     inherit rev;
-    hash = "sha256-EIlFBCkMBAESeK2cW/sKUYp3WRkW6LwSOi77ZryWK0Q=";
+    hash = "sha256-ujLUav9JLv9XH4kZU2I1SapIfo8F4DMRWeVVs8iecvg=";
   };
-  # @napi-rs/cli 3.8.2's filesystem reconciliation probes a process
-  # incarnation with execFile(/bin/ps) on Darwin. Node can reject that spawn
-  # synchronously under Nix's Seatbelt profile, before the callback's existing
-  # error fallback runs. Patch the dependency through pnpm's native
-  # patchedDependencies mechanism so every peer variant gets the same fix and
-  # the dependency layer owns it; do not admit a host executable into the
-  # build. The fetcher FOD still holds the original registry bytes rather than
-  # prepatched content; pnpm applies this patch while materializing its virtual
-  # store. A failed probe still resolves to null, preserving napi-rs's
-  # fail-closed stale-lock behavior. Drop this when the catch ships upstream.
+  # @napi-rs/cli's filesystem reconciliation probes a process incarnation with
+  # execFile(/bin/ps) on Darwin. Node can reject that spawn synchronously under
+  # Nix's Seatbelt profile, before the callback's existing error fallback runs.
+  # Patch the dependency through pnpm's native patchedDependencies mechanism so
+  # every peer variant gets the same fix and the dependency layer owns it; do
+  # not admit a host executable into the build. The fetcher FOD still holds the
+  # original registry bytes rather than prepatched content; pnpm applies this
+  # patch while materializing its virtual store. A failed probe still resolves
+  # to null, preserving napi-rs's fail-closed stale-lock behavior. Drop this
+  # when the catch ships upstream — re-read `executeProcessIncarnationCommand`
+  # in `dist/cli.js` on each repin rather than assuming; it was still uncaught
+  # in 3.8.6.
   #
   # The patch file itself is added as a NEW file, which never conflicts. The
   # workspace/lock metadata that points pnpm at it is applied by key in
@@ -39,13 +41,21 @@
   # resolution, which reshuffles on its own schedule, and a positional diff
   # turns every reshuffle into a held-back sweep needing hand-realigned hunks.
   # See oxlint-pnpm-patch-meta.awk for what stays loud.
+  #
+  # All three fields below move TOGETHER on an upstream repin, and the awk's
+  # catalog assertion is what forces that. Regenerate with real pnpm — `pnpm
+  # patch @napi-rs/cli@<ver>` then `patch-commit`, stripping the content-free
+  # `deleted file mode` stanzas it emits — and prove the result with a
+  # `pnpm install --frozen-lockfile` before landing it. The ifd-patterns
+  # fragment carries the full loop.
   napi = {
     pkg = "@napi-rs/cli";
-    version = "3.8.2";
-    patchPath = "patches/@napi-rs__cli@3.8.2.patch";
-    # pnpm derives this from the patch file's CONTENT, so it moves only when
-    # that file does — not when upstream's lock does.
-    patchHash = "0a540bf50518a292968b0a30583dfbf30d0da4b6871988ed5d2829780fb294ad";
+    version = "3.8.6";
+    patchPath = "patches/@napi-rs__cli@3.8.6.patch";
+    # pnpm derives this from the patch file's CONTENT — a plain sha256 of its
+    # bytes — so it moves only when that file does, not when upstream's lock
+    # does.
+    patchHash = "d6d478f3b84607df7e4453132b48893a86b679e22a0df6151173305350e2c269";
   };
   src = ourPkgs.applyPatches {
     src = unpatchedSrc;
@@ -63,7 +73,7 @@
   };
   version = vu.mkVersion {
     # upstream: readCargoVersion @ apps/oxlint/Cargo.toml
-    upstream = "1.77.0";
+    upstream = "1.78.0";
     inherit rev;
   };
 in
@@ -71,13 +81,13 @@ in
     inherit version src;
     cargoDeps = ourPkgs.rustPlatform.fetchCargoVendor {
       inherit (finalAttrs) pname version src;
-      hash = "sha256-AJHfTJe1oyflsjqx128FfZJlqVH1hX2ityAoR9E3rXM=";
+      hash = "sha256-bZdrNvt0Tt83qyCwUPBuLuXPKHfm5QaJ1XdQZY+bZUI=";
     };
     pnpmDeps = ourPkgs.fetchPnpmDeps {
       inherit (finalAttrs) pname version src;
       pnpm = ourPkgs.pnpm_11;
       fetcherVersion = 4;
-      hash = "sha256-JRdVGRAFSXqyFnH2QO1/JSpCYwnEECi9EWlKYzrGCdA=";
+      hash = "sha256-1n1JoLTX6esIkQxRsLtc+7BU7ueC+L9nDdQJopgRqhE=";
     };
     # Oxc declares pnpm 11.17.0. Replace nixpkgs Oxlint's pnpm 10 build input
     # as well as its dependency fetcher so both phases use the upstream major.

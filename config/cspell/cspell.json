@@ -10,6 +10,7 @@
   ],
   "ignorePaths": [
     "*.lock",
+    "*.patch",
     "*.png",
     ".direnv",
     ".git",

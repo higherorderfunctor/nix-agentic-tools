@@ -84,12 +84,28 @@ _: {
       git = "https://github.com/CaviraOSS/OpenMemory.git";
     };
     # oxlint overrides three hashes: src, cargoDeps (fetchCargoVendor), pnpmDeps
-    # (fetchPnpmDeps). Validated 2026-07-21: one `nix-update --version skip` pass
-    # re-derives all three to their distinct correct values (each via its own
-    # `outputHash=""` build), so the standard main-tracking flow works.
+    # (fetchPnpmDeps). The rev-bump pre-step writes the src hash itself, and
+    # `--no-src` is REQUIRED so nix-update does not then try to re-derive it.
+    #
+    # Since 2026-08-04 `src` is an `applyPatches` over the fetch, not the fetch
+    # itself (it carries the pnpm patched-dependency metadata that
+    # `fetchPnpmDeps` must see). nix-update re-derives a src hash by rebuilding
+    # `pkg.src` with `outputHash = ""`, which forces FLAT hashing — and an
+    # `applyPatches` output is a DIRECTORY, so the build always dies with
+    # `should be a non-executable regular file since recursive hashing is not
+    # enabled`. That aborts the run before either dependency hash is touched, so
+    # oxlint was held back on EVERY sweep for ten days. `--no-src` skips exactly
+    # that pass and leaves `update_dependency_hashes` to do the work we need.
+    #
+    # The failure was invisible because nix-update reports it as
+    # `failed to retrieve hash when trying to update oxlint.src` — the same
+    # sentence a patch conflict produces. Measured on the 2026-08-08 sweep, where
+    # the patch applied cleanly (`patch_hash stamped on 8 importer + 2 snapshot
+    # entries`) and the run still failed on this. Do not read that message as
+    # naming a patch problem; check for this one too.
     oxlint = {
       file = "overlays/dev-tools/oxlint.nix";
-      flags = ["--version" "skip"];
+      flags = ["--version" "skip" "--no-src"];
       git = "https://github.com/oxc-project/oxc.git";
     };
     sympy-mcp = {

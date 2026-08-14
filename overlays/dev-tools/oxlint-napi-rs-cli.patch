@@ -1,14 +1,17 @@
-diff --git a/patches/@napi-rs__cli@3.8.2.patch b/patches/@napi-rs__cli@3.8.2.patch
+diff --git a/patches/@napi-rs__cli@3.8.6.patch b/patches/@napi-rs__cli@3.8.6.patch
 new file mode 100644
-index 0000000..7b8d391
+index 0000000..facaffb
 --- /dev/null
-+++ b/patches/@napi-rs__cli@3.8.2.patch
-@@ -0,0 +1,78 @@
++++ b/patches/@napi-rs__cli@3.8.6.patch
+@@ -0,0 +1,90 @@
 +diff --git a/dist/cli.js b/dist/cli.js
-+index 89962573dd6f1cafe6384425f064fcff844f332a..e581a85198c25f476e521a43aa176debf7fe7613 100755
++index ebd25a97ef15895ec89ef026cc1b091fa204cd61..34ceb953d0c9b57543d67d5b8f37e374019ed213 100755
 +--- a/dist/cli.js
 ++++ b/dist/cli.js
-+@@ -1654,12 +1654,16 @@ function executeProcessIncarnationCommand(command, args, env = process.env) {
++@@ -1651,18 +1651,22 @@ async function readPosixProcessIncarnation(pid) {
++ }
++ function executeProcessIncarnationCommand(command, args, env = process.env) {
++ 	return new Promise((resolveCommand) => {
 +-		execFile(command, args, {
 +-			encoding: "utf8",
 +-			env,
@@ -37,11 +40,17 @@ index 0000000..7b8d391
 ++		} catch {
 ++			resolveCommand(null);
 ++		}
++ 	});
++ }
++ function assertReconciliationLockAcquisitionTimeRemaining(acquisitionDeadline, key) {
 +diff --git a/src/utils/misc.ts b/src/utils/misc.ts
 +index 0a47af67779a6fd6917e6f0e0f57509c2484f722..a451181686ae610a33634ce921eeecbd129e2c54 100644
 +--- a/src/utils/misc.ts
 ++++ b/src/utils/misc.ts
-+@@ -3690,18 +3690,22 @@ function executeProcessIncarnationCommand(
++@@ -3687,24 +3687,28 @@ function executeProcessIncarnationCommand(
++   env: NodeJS.ProcessEnv = process.env,
++ ): Promise<string | null> {
++   return new Promise((resolveCommand) => {
 +-    execFile(
 +-      command,
 +-      args,
@@ -82,3 +91,6 @@ index 0000000..7b8d391
 ++    } catch {
 ++      resolveCommand(null)
 ++    }
++   })
++ }
++ 

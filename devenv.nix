@@ -501,6 +501,13 @@ in {
         "^fixtures/kiro-primitives/evidence/"
         "^fixtures/kiro-primitives/records/"
         "^overlays/chatgpt-codex-extracted\.json$"
+        # Patch files are verbatim third-party code plus git blob hashes; no
+        # token in one is authored here. They were never deliberately checked
+        # — oxlint's napi-rs patch merely happened to carry an index hash
+        # containing a digit, and regenerating it against a newer dependency
+        # produced an all-letter one that cspell reads as a misspelled word.
+        # Excluded in both places for the reason given above.
+        ".*\.patch$"
       ];
     };
     # Re-stage files modified by formatters (treefmt, shfmt, etc.)
