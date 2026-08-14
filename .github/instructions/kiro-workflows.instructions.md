@@ -56,9 +56,10 @@ per-variant field optional and defers shape to an assertion, which is the
 failure mode this file exists to prevent. `attrTag` gets exactly-one-variant and
 per-variant required fields at TYPE level.
 
-`parse.nix` is the inverse, so existing `.kiro/workflows/*.json` can be checked
-and so parse -> render round-trips are testable. The vendor corpus round-trips
-byte-identically; that property is what proves the divergence is faithful.
+`parse.nix` is the inverse, so existing `.kiro/workflows/*.workflow.json` can be
+checked and so parse -> render round-trips are testable. The vendor corpus
+round-trips byte-identically; that property is what proves the divergence is
+faithful.
 
 ## The `basis` taxonomy
 

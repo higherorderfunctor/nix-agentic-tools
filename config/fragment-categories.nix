@@ -183,12 +183,19 @@ _: {
       ];
     };
     # kiro-workflows: the typed schema for the Kiro workflow definition
-    # format, in Nix and in Effect-TS. Split out of `kiro-wrapper` (which
-    # scopes all of packages/kiro-cli/lib/**) for the reason that category's
-    # own header gives: an edit to the workflow schema should load the schema
-    # rule, not the launcher argv contract. Scoped to both implementations,
-    # the shared constants, the conformance check and its vendor fixtures,
-    # since they have to move together.
+    # format, in Nix and in Effect-TS. Split out of `kiro-wrapper` for the
+    # reason that category's own header gives: an edit to the workflow schema
+    # should load the schema rule, not the launcher argv contract.
+    #
+    # That split is only real because `kiro-wrapper` was narrowed from
+    # `packages/kiro-cli/lib/**` to the file extensions directly under lib/ in
+    # the same change. Left as `lib/**` it would still match `lib/workflow/`
+    # and BOTH categories would load — the overlap, not the routing, is what
+    # costs context. If a future edit widens that scope back, this category
+    # silently stops paying for itself.
+    #
+    # Scoped to both implementations, the shared constants, the conformance
+    # check and its vendor fixtures, since they have to move together.
     kiro-workflows = {
       scopes = [
         "checks/fixtures/kiro-workflows/**"
@@ -219,7 +226,14 @@ _: {
         # The overlay's wrapProgram calls carry the darwin argv0
         # bundle-discovery fix, which is part of this argv contract.
         "overlays/kiro-cli.nix"
-        "packages/kiro-cli/lib/**"
+        # Enumerated by extension rather than `lib/**` so the `lib/workflow/`
+        # subdirectory falls to `kiro-workflows` ALONE. With `lib/**` both
+        # categories matched, and an edit to the workflow schema still loaded
+        # the launcher argv contract — which is the cost the split exists to
+        # avoid. Coverage is otherwise unchanged: every file directly under
+        # lib/ is a .nix or .py.
+        "packages/kiro-cli/lib/*.nix"
+        "packages/kiro-cli/lib/*.py"
       ];
       sources = [
         {
