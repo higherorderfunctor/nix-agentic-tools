@@ -19,13 +19,17 @@
 > `packages/semble/lib/templateCoverage.nix` (#901). Those are the citations to
 > re-read; the rest were spot-checked against untouched files.
 
-> **Live working state lives OUTSIDE this document.** Merge order, operator
-> permissions, open decisions and everything not yet settled are in
-> `private/ai-rework-open-decisions.md` in the operator's PRIMARY checkout —
-> gitignored (`.gitignore:72`), so it exists only there, never in a worktree and
-> never in a clone. **Read it before acting on anything here.** If you cannot
-> find it, say so rather than proceeding: this document is the design record,
-> not the current state.
+> **This document stands alone as the design record.** Every decision below is
+> stated here with its evidence; nothing in it depends on a file outside the
+> repository.
+>
+> **Operator-local addendum — useful, not required.** Live working state (merge
+> order, in-flight PR status, open questions) is tracked separately in
+> `private/ai-rework-open-decisions.md`, which is gitignored (`.gitignore:72`)
+> and so exists only in the operator's own checkout. An agent session running
+> there should read it for current status. **If that file is absent you are in a
+> clone or a worktree, which is expected and fine** — read on, and treat what
+> follows as design rationale rather than a status report.
 
 Sequencing: the `ai.*` rework lands first, in several PRs; semble #858 is
 re-implemented on top. No back-compat requirement — a single consumer, who will
@@ -42,7 +46,7 @@ defer the namespace move", written before that sign-off.
 
 | #   | PR                                                                                                                                                                                    | Gated by |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| 1   | Pool-write fix (`mkSkillPackageModule:56-57`) + unify the three runtime enumerations into one registry; **build** the A1 backstop over `lib/**`                                       | —        |
+| 1   | Pool-write fix (`lib/ai/mkSkillPackageModule.nix:56-57`) + unify the three runtime enumerations into one registry; **build** the A1 backstop over `lib/**`                            | —        |
 | 2   | #920 Copilot HM path (2 literals + 4 assertions)                                                                                                                                      | —        |
 | 3   | Per-pool-per-runtime capability gating, generalizing `supportsShell`. **Does NOT drop `ai.kimchi.rules`/`rulesDir`** — mark kimchi a rules CONSUMER, because A3a makes it one in PR 5 | 1        |
 | 4   | Settings split — `nativeSettings`, `_integration_*` internal                                                                                                                          | —        |
@@ -1084,9 +1088,11 @@ none point at a missing file.** The two corrections are applied above:
   `:1038`.
 - `mkMcpServer.nix:20` is the **block head**; the `eval.config` return is `:36`.
 
-Three citations lack a directory path (`mkSkillPackageModule.nix:56-57`,
-`layered-fanout.md:96`, `ai-module-fanout.md:172-190`) though their content
-verifies; the first is `lib/ai/mkSkillPackageModule.nix`.
+Three citations lacked a directory path and are now qualified — the first is
+`lib/ai/mkSkillPackageModule.nix:56-57`. Originally recorded as
+(`mkSkillPackageModule.nix:56-57`, `layered-fanout.md:96`,
+`ai-module-fanout.md:172-190`) though their content verifies; the first is
+`lib/ai/mkSkillPackageModule.nix`.
 
 The one internal contradiction the self-audit caught — A1a versus A0 on the
 runtime registry — is recorded as **R6** and fixed in place. It was exactly the
