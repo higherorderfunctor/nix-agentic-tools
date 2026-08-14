@@ -98,11 +98,18 @@ jobs:
       # UNDER TESTING since 2026-08-14. Settled once BOTH hold — then delete
       # this paragraph and prune the now-unused nix-quick-install-action grant
       # from the Actions allowlist:
-      #   1. a darwin `build` run carrying nix-eval-jobs >= 2.35 completes
-      #      with zero "exclusive access to the Nix store" lines, and
-      #   2. a darwin `build` run has actually BUILT under `max-jobs = auto`
-      #      without OOM (a `--skip-cached` run that builds nothing does not
-      #      count; check for `builds: 0` before believing a green run).
+      #   1. DONE 2026-08-14. A darwin `build` run carrying nix-eval-jobs
+      #      >= 2.35 completes with zero "exclusive access to the Nix store"
+      #      lines. Measured on run 31851183832 (throwaway branch
+      #      test/installer-verify = PR #933's nix-fast-build 49143a96 with
+      #      this installer swap on top): nix-eval-jobs-2.35.0, 0 lock lines,
+      #      3m51s, against two 60m kills on the same input beforehand.
+      #   2. OPEN. A darwin `build` run has actually BUILT under
+      #      `max-jobs = auto` without OOM. Run 31851183832 does NOT discharge
+      #      this — it logged `builds: 0, cachix: 0`, i.e. every path was
+      #      substituted. A `--skip-cached` run that builds nothing proves
+      #      nothing here, so check the `builds:` counter before believing a
+      #      green run.
       # The open unknown is that max-jobs goes 1 -> auto (3 here):
       # install-nix.sh writes `max-jobs = auto` where quick-install wrote
       # none, so nix's default of 1 applied, and nix-fast-build sizes BOTH its
