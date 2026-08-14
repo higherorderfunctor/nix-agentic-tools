@@ -13,11 +13,56 @@
 > own findings — see R6 — so treat nothing here as settled because a verifier
 > said so; treat it as settled because a quoted line says so.
 
+> **Re-anchor before trusting a citation.** Main moved `0fe1f1fd` → `2fe3ec4a`
+> on 2026-08-14. Two cited files changed in that window —
+> `packages/semble/agent-instructions.md` (#928) and
+> `packages/semble/lib/templateCoverage.nix` (#901). Those are the citations to
+> re-read; the rest were spot-checked against untouched files.
+
+> **Live working state lives OUTSIDE this document.** Merge order, operator
+> permissions, open decisions and everything not yet settled are in
+> `private/ai-rework-open-decisions.md` in the operator's PRIMARY checkout —
+> gitignored (`.gitignore:72`), so it exists only there, never in a worktree and
+> never in a clone. **Read it before acting on anything here.** If you cannot
+> find it, say so rather than proceeding: this document is the design record,
+> not the current state.
+
 Sequencing: the `ai.*` rework lands first, in several PRs; semble #858 is
 re-implemented on top. No back-compat requirement — a single consumer, who will
 wait for the whole stack.
 
 `docs/plan.md` is the tracked backlog and is out of scope for this document.
+
+## PR sequence — signed off by the operator 2026-08-14
+
+Operator: "you own order, so signed off on." The namespace move IS in scope for
+this workstream, placed late by agent judgement — this **supersedes** A1's
+"Recommendation for the operator (not a decision): fold in the 2-line pool fix,
+defer the namespace move", written before that sign-off.
+
+| #   | PR                                                                                                                                                                                    | Gated by |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| 1   | Pool-write fix (`mkSkillPackageModule:56-57`) + unify the three runtime enumerations into one registry; **build** the A1 backstop over `lib/**`                                       | —        |
+| 2   | #920 Copilot HM path (2 literals + 4 assertions)                                                                                                                                      | —        |
+| 3   | Per-pool-per-runtime capability gating, generalizing `supportsShell`. **Does NOT drop `ai.kimchi.rules`/`rulesDir`** — mark kimchi a rules CONSUMER, because A3a makes it one in PR 5 | 1        |
+| 4   | Settings split — `nativeSettings`, `_integration_*` internal                                                                                                                          | —        |
+| 5   | Retire `instructions` → keyed `rules`, incl. level-stamping for order                                                                                                                 | 2, 3     |
+| 6   | Pool negation `attrsOf (nullOr …)` + net-new package-vs-package check                                                                                                                 | 5        |
+| 7a  | Delete semble `runtimes` (self-contained)                                                                                                                                             | —        |
+| 7b  | `ai.programs.*` factory + semble relocation — ATOMIC with the parity-test rewrite and the `expectedCodexRoots` fixture                                                                | 1, 3, 7a |
+| 8   | Namespace move: `stacked-workflows` / `living-workflow` + its `gitPreset` parity fix                                                                                                  | 7b       |
+| 9   | semble #858 re-implementation                                                                                                                                                         | 7b, 8    |
+
+Hard constraints behind the shape:
+
+- **5 cannot be split** — `checks/options-doc.nix` hard-codes option names, so
+  there is no green intermediate state.
+- **5 must follow 2**, or it migrates Copilot HM content into the dead file.
+- **5 must follow 3** because **3 is what establishes kimchi's rules pool.** An
+  earlier gloss — "or kimchi loses its only always-on surface" — had the
+  causality backwards: dropping the option in 3 is what would cause that loss,
+  not prevent it. Kimchi's rules option is live-but-unemitted for exactly one
+  PR.
 
 ## Tree-qualification rule for citations
 
@@ -163,8 +208,13 @@ second pattern.
 
 ### Open, with evidence now in hand
 
-1. **The 0.5.5 bump must land first, and its CI is red for a reason that is
-   itself a design decision.** Detail in B0.
+1. ~~The 0.5.5 bump must land first~~ — **DISCHARGED 2026-08-14.** #901 merged
+   (`5497b5c6`); `reviewedHash` is `8305b33d…` on main; `test` went fully green,
+   so the ~19 checks the eval-time throw had been masking all ran, including
+   `semble-templates-extracted` — it really was one hash away, now proven rather
+   than assumed. B0's prose action (teach the MCP `content` field in
+   `packages/semble/agent-instructions.md`) landed as #928 (`2fe3ec4a`). **Read
+   B0 below as recorded reasoning, not as outstanding work.**
 2. **The runtime registry exists three times over** and the factory must unify
    them. Detail in A1a. (This item previously read "does not exist yet" and was
    false — see R6.)
@@ -201,12 +251,25 @@ avoids `ai.<pkg>` colliding with `ai.<runtime>`.
 are additive and cannot be retracted per runtime, so a root write makes
 per-runtime negation silently fail to negate.
 
-A structural check enforces it as a backstop: no file under
-`packages/*/modules/**` may assign a root `ai.<pool>` outside an `ai.${runtime}`
-path. Runtime provenance guards leak — an inline module reports
-`<unknown-file>`, indistinguishable from a consumer's inline config — so prefer
-a factory that generates both levels from one spec and makes the fanout
-structural.
+A structural check is REQUIRED as a backstop, and **no such check exists today**
+— `checks/` contains no root-pool scan and `flake.nix` registers none. PR 1 must
+CREATE `checks/<name>.nix` and register it in the flake's checks fold
+(~`flake.nix:238-265`); the word "widen" used earlier was wrong, and the rule
+reads "build, scoped to `lib/**` and `packages/*/modules/**`". No file in that
+scope may assign a root `ai.<pool>` outside an `ai.${runtime}` path.
+
+Two measured facts constrain the regex: it must **exempt**
+`lib/ai/sharedOptions.nix:364-377`, whose `config = lib.mkMerge [{ai = {…};}]`
+is the legitimate L1→L2 Dir reshape; and it must match that **nested**
+`ai = { <pool> =` form as well as line-anchored `ai.<pool> =`, since both are
+live in the tree. Follow `checks/bare-commands.nix` for structure and for its
+rule that every filter be measured against the corpus before it is trusted. A
+new untracked file is invisible to `nix flake check` — `git add` it before
+verifying.
+
+Runtime provenance guards leak — an inline module reports `<unknown-file>`,
+indistinguishable from a consumer's inline config — so prefer a factory that
+generates both levels from one spec and makes the fanout structural.
 
 **Scope hazard — sized 2026-08-14.** `lib/ai/mkSkillPackageModule.nix:56-57`
 writes root `ai.skills` and `ai.instructions`, which A1 bans. Those two lines
@@ -217,8 +280,23 @@ The hazard is real but far smaller than the earlier wording implied, and it is
 
 - The per-runtime equivalents (`ai.<runtime>.skills`,
   `ai.<runtime>.instructions`) **already exist for all five runtimes with
-  byte-identical types**, so fixing the writes declares no new options and costs
-  **2 changed lines**, plus the shared runtime registry A1a builds anyway.
+  byte-identical types**, so fixing the writes declares no new options.
+- **But the "2 changed lines" sizing is wrong in kind, not degree.** Once the
+  package writes `ai.<runtime>.skills`, a consumer's root `ai.skills.<same-key>`
+  stops being an override and becomes a hard `mergeWithCollisionCheck` failure
+  (`lib/ai/ai-common.nix:405-419`), because `intersectAttrs` is
+  **priority-blind** — stated in prose at `lib/ai/sharedOptions.nix:397-400` and
+  already pinned by `checks/module-eval.nix:8735-8748`. That breaks the
+  `mkDefault` override promise written at
+  `lib/ai/mkSkillPackageModule.nix:42-43`, which must be rewritten to say the
+  override key is now `ai.<runtime>.skills.<name>`.
+- It also **flips always-loaded instruction ORDER**
+  (`lib/ai/app/mkBackendTransform.nix:241` concatenates root-first), and a
+  per-runtime write requires that runtime's module to be PRESENT in the eval —
+  `devenv.nix:224-238` imports four of five. Gate on
+  `lib.hasAttrByPath ["ai" name "skills"] options` (the shape
+  `lib/ai/sharedOptions.nix:21` already uses) and add `options` to
+  `mkSkillPackageModule`'s formals.
 - **A1's proposed backstop check would never catch it.** That check is scoped to
   `packages/*/modules/**`, and the one violation in the tree lives in `lib/ai/`.
   Widen the scope or the check is theatre.
@@ -245,7 +323,13 @@ and contradicted A0. There are **three** hardcoded enumerations:
 
 - `lib/ai/sharedOptions.nix:19` — `harnessNames`, production, the one A0 already
   names as drift;
-- `checks/options-doc.nix:114` — a third enumeration inside a check;
+- `checks/options-doc.nix:114` — a **FOUR**-element list,
+  `["claude" "codex" "copilot" "kiro"]`, deliberately WITHOUT kimchi.
+  Substituting the five-element registry here adds two new grep assertions for
+  `ai\.kimchi\.enable` against the HM and devenv CommonMark renderings. Whether
+  those pass is **UNMEASURED** — verify before substituting, and if kimchi is
+  excluded on purpose the registry needs a per-consumer filter rather than a raw
+  list. "Unify the three" is therefore not a substitution;
 - `checks/module-eval.nix:644` — a test fixture.
 
 `lib/ai/apps/default.nix` is an empty stub filled by a barrel fold, so there is
@@ -433,7 +517,10 @@ picked the wrong survivor here.
 - B10 depends on A3, because `ai.instructions` is a list rather than a keyed
   pool (`lib/ai/app/mkBackendTransform.nix:241`) and a list has no key to null
   out.
-- B7″ depends on the scope call in A5a.
+- B7″ does **not** block on A5a (see R2). A5a only decides B7″'s GRANULARITY:
+  with the follow-up deferred, B7″ holds at file granularity for every runtime
+  today and needs no new work; key-granularity override is what the follow-up
+  buys.
 
 ### A3. Retire `instructions`, keep keyed `rules`
 
@@ -584,8 +671,10 @@ Three rules fall out:
   module models — `ai.claude.plugins`, `ai.kiro.identity`, `ai.codex.profiles`,
   `ai.kiro.mcpWriteMode` — are not freeform passthrough and do not migrate. The
   split is three-way: normalized, typed-native, freeform-native.
-- **Normalized layers translate; native layers emit.** The boundary guard sits
-  exactly at the translate-to-emit seam.
+- **Normalized layers translate; native layers emit.** The translate-to-emit
+  seam is where derived and user-authored values meet — but there is **no custom
+  guard** there. Per B7″ and A5, the module renders at `mkDefault` and the
+  standard Nix option merge arbitrates, at FILE granularity.
 - The immediate payoff is naming, not capability. Per-runtime suppression
   already works by writing the native key.
 
