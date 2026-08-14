@@ -1,9 +1,9 @@
 # Beads ecosystem — dedup, indexing, and session-linking prior art
 
 > **Last verified:** 2026-08-14, from the upstream community-tools and
-> related-projects docs, plus the emBEADings README at the version noted (the
-> other projects are described from upstream's docs, not their own READMEs).
-> Companions: `bd-reference.md`, `dolt-git-remotes.md`. Decisions land in
+> related-projects docs, plus the emBEADings README (the other projects are
+> described from upstream's docs, not their own READMEs). Companions:
+> `bd-reference.md`, `dolt-git-remotes.md`. Decisions land in
 > `docs/plans/beads-package-and-options.md`.
 
 ## The verdict that frames everything
@@ -19,7 +19,7 @@ moot and the gate is the fix.
 
 ## Dedup and indexing
 
-- **emBEADings** (`DyrtyJax/embeadings`, v0.4.2, MIT, Python ≥3.11, PyPI) — the
+- **emBEADings** (`DyrtyJax/embeadings`, v0.4.3, MIT, Python ≥3.11, PyPI) — the
   integration exists. Read-only coordination CLI for beads + Linear:
   - Reads via allowlisted `bd --readonly ... --json`; **zero tracker writes** by
     contract.
@@ -37,10 +37,10 @@ moot and the gate is the fix.
     in one repo; 17/20 top-packet pairs "contextually useful" on an 8,143-issue
     corpus converted from the Ruff issue tracker (precision-on-shortlist,
     explicitly not recall).
-  - Caveats: 1 star, single maintainer, technical preview; the agent-CLI plugins
-    (Codex, Claude Code) are local-preview only — no marketplace, no write
-    authority; the static model is the quality ceiling — the first swap
-    candidate if paraphrase quality is the point.
+  - Caveats: single-digit stars, single maintainer, technical preview; the
+    agent-CLI plugins (Codex, Claude Code) are local-preview only — no
+    marketplace, no write authority; the static model is the quality ceiling —
+    the first swap candidate if paraphrase quality is the point.
 - **`bd duplicates`** — native exact-dedup floor (content hash), covered in
   `bd-reference.md`. Do not rebuild it.
 - **Dolt FULLTEXT** — the middle option between exact hash and semantic:

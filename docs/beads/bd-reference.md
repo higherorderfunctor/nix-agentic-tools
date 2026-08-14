@@ -28,8 +28,9 @@ a Dolt remote. Old closed issues can be compacted ("memory decay") via
 
 There is **no pluggable storage backend** — beads embeds Dolt specifically; the
 MySQL dialect is an implementation detail that only surfaces through `bd sql`.
-Doltgres (the Postgres-flavored build, 1.0 in 2026-06) shares the storage
-engine, but dialect preference should not drive any decision here. `[upstream]`
+Doltgres (the Postgres-flavored build; 1.0 announced 2026-06, released 2026-08)
+shares the storage engine, but dialect preference should not drive any decision
+here. `[upstream]`
 
 The intended usage pattern includes `bd remember` for persistent project memory,
 explicitly replacing MEMORY.md-style files — so a beads DB accumulates design
@@ -45,8 +46,10 @@ design-doc corpus than an issue tracker (see `dolt-git-remotes.md`).
 - **nixpkgs**: `beads` **1.0.3** on nixos-unstable (`pkgs/by-name/be/beads/`),
   absent from the 25.11 release. `buildGoModule`, `subPackages = ["cmd/bd"]`,
   `buildInputs = [icu]`, MIT, `mainProgram = "bd"`, and a `postInstall` that
-  wraps `dolt` onto `bd`'s PATH. One test is skipped
-  (`TestCheckMetadataVersionTracking`). `[upstream]`
+  wraps `dolt` onto `bd`'s PATH. One test is skipped everywhere
+  (`TestCheckMetadataVersionTracking`), a second on Darwin
+  (`TestCleanupMergeArtifacts_CommandInjectionPrevention`), and the recipe sets
+  `__darwinAllowLocalNetworking`. `[upstream]`
 - **Upstream flake**: pins `nixos-25.11`, requires `buildGo126Module`, exposes
   `beads-unwrapped` via `overlays.default` with a documented `vendorHash`
   override recipe. Its wrapper adds shell completions and sets
@@ -59,8 +62,8 @@ design-doc corpus than an issue tracker (see `dolt-git-remotes.md`).
   ships `beads-rust` (an unrelated single-maintainer Rust reimplementation) and
   `beads-viewer`. `[upstream]`
 - **dolt**: a separate binary, required for the server modes;
-  `bd dolt push/pull` shells out to it. nixpkgs carries it (2.1.4 at this repo's
-  current pin; Apache-2.0). `[upstream]`
+  `bd dolt push/pull` shells out to it. nixpkgs carries it (2.2.3 at this repo's
+  2026-08 pin; Apache-2.0). `[upstream]`
 - **Compilation**: `bd` is plain Go. The nixpkgs and llm-agents derivations
   build with cgo/ICU (verified at the date above); the upstream flake's own
   derivation was earlier recorded as a pure-Go build (`gms_pure_go` tag, no cgo)
@@ -85,9 +88,9 @@ Two config systems with a hard split:
   `<repo>/.beads/config.yaml` → `$BEADS_DIR/config.yaml`; a
   `.beads/config.local.yaml` is merged last (machine-local, uncommitted).
   Overall precedence: flags → env → YAML → defaults. Declarable namespaces:
-  `routing.*`, `sync.*`, `git.*`, `directory.*`, `repos.*`,
-  `external_projects.*`, `validation.*`, `hierarchy.*`, `ai.*`, `backup.*`,
-  `export.*`, `dolt.*`, `federation.*`, `metrics.*`, `list.*`, plus named
+  `ai.*`, `backup.*`, `directory.*`, `dolt.*`, `export.*`,
+  `external_projects.*`, `federation.*`, `git.*`, `hierarchy.*`, `list.*`,
+  `metrics.*`, `repos.*`, `routing.*`, `sync.*`, `validation.*`, plus named
   scalars. Storage mode, ports, shared-server, hydration, routing, validation
   strictness, and metrics-off are all YAML-declarable. `[upstream]`
 - **Database config.** Project-level state (external-tracker credentials, status
@@ -123,8 +126,11 @@ suppressing that requires the `no-git-ops` config, an out-of-tree DB, or
   `--stealth` = all three plus `no-git-ops: true`. `[upstream]`
 - `bd onboard` **prints** the agent-instructions snippet instead of writing it,
   which is what makes declarative placement possible. `[upstream]`
-- `bd setup` targets `codex`, `factory`, `claude`, `mux`, `cursor` — **no
-  kiro**. `[upstream]`
+- `bd setup` at **v1.1.2** (the pinned stable line) has **no kiro target**;
+  upstream added `bd setup kiro` by v1.2.1, whose target list is much longer
+  (cursor, claude, copilot, gemini, aider, factory, codex, mux, opencode, junie,
+  kiro, windsurf, cody, kilocode). Version-scope any claim about setup targets.
+  `[upstream]`
 - Git hooks, when wanted at all, are thin shims calling `bd hooks run <name>`; a
   declarative hook manager can invoke that directly and skip bd's installer.
   `[upstream]`
@@ -227,9 +233,9 @@ Three native tiers `[upstream]`:
 
 1. **`bd search`** — title+ID by default, ID-like queries take a fast
    exact/prefix path; rich flag set (`--desc-contains`, `--notes-contains`,
-   `--label`/`--label-any`, `--type`, `--priority-min/max`, created/updated/
-   closed date bounds, `--metadata-field k=v`, `--has-metadata-key`, `--sort`,
-   `--status all`).
+   `--label`/`--label-any`, `--type`, `--priority-min/max`, date bounds on
+   created/updated/closed, `--metadata-field k=v`, `--has-metadata-key`,
+   `--sort`, `--status all`).
 2. **`bd query`** — a DSL with comparison operators, `AND OR NOT`, parens, ~20
    fields including contains-matching on title/description/notes, ID wildcards,
    and relative/natural dates; `--parse-only` dumps the AST.
@@ -304,6 +310,11 @@ All items in this section are `[measured @1.1.0]` unless marked otherwise.
 - **Memory features**: `bd remember` / `bd prime` exist (`bd prime --hook-json`
   is the session-start shape); `bd comment` appends to a threaded per-issue
   event log.
+- **Carried from research, entirely `[unverified]`**: custom issue types (a
+  `bd types` command reportedly lists them; a reported 2026-03 defect had
+  `bd update` accepting a type `bd create` rejected), and _formulas/molecules_ —
+  templated subgraphs of issues stamped when "poured", with no known
+  post-instantiation re-validation. Probe before relying on either.
 
 ## beads-mcp
 

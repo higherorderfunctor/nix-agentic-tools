@@ -54,13 +54,13 @@ factory instead. Concretely:
 
 ## Phases and gating
 
-| Phase | Deliverable                                        | Gated by                                          |
-| ----- | -------------------------------------------------- | ------------------------------------------------- |
-| 1     | This document set                                  | —                                                 |
-| 2     | `overlays/dev-tools/beads.nix` + registrations     | OD-P1/OD-P2 veto window (defaults proposed below) |
-| 2b    | `overlays/mcp-servers/beads-mcp.nix`               | OD-P3 (timing); technically unblocked             |
-| 3     | `packages/beads/` HM + devenv + lib option surface | rework PR 7b (naming), OD-M1..M5, probes          |
-| 3b    | Git-ref Dolt remote options + checkpoint workflow  | OD-M4; encrypted variants additionally OD-D1      |
+| Phase | Deliverable                                        | Gated by                                                |
+| ----- | -------------------------------------------------- | ------------------------------------------------------- |
+| 1     | This document set                                  | —                                                       |
+| 2     | `overlays/dev-tools/beads.nix` + registrations     | OD-P1/OD-P2/OD-P4 veto window (defaults proposed below) |
+| 2b    | `overlays/mcp-servers/beads-mcp.nix`               | OD-P3 (timing); technically unblocked                   |
+| 3     | `packages/beads/` HM + devenv + lib option surface | rework PR 7b (naming), OD-M1..M5, probes                |
+| 3b    | Git-ref Dolt remote options + checkpoint workflow  | OD-M4; encrypted variants additionally OD-D1            |
 
 Phase 3's namespace question is deliberately deferred: the in-flight `ai.*`
 rework (`docs/plans/ai-normalized-interface-rework.md`, PR sequence signed off
@@ -74,7 +74,7 @@ namespace that PR 8 would then have to migrate. Surfaces can be _designed_ now
 Verified 2026-08-14: this repo's pinned nixpkgs already carries `beads` 1.0.3
 (`pkgs/by-name/be/beads/package.nix` — buildGoModule, ICU, MIT,
 `mainProgram = "bd"`, and a `postInstall` wrapping `dolt` onto PATH) and `dolt`
-(2.1.4 at the pin, Apache-2.0). So the overlay is a **thin override of
+(2.2.3 at the 2026-08 pin, Apache-2.0). So the overlay is a **thin override of
 `ourPkgs.beads`** in the `gh` shape (`overlays/dev-tools/gh.nix` is the template
 — Go, sidecar, grouped subtree), not a fresh derivation:
 
@@ -90,19 +90,28 @@ Verified 2026-08-14: this repo's pinned nixpkgs already carries `beads` 1.0.3
   `vu.ghArchiveUpdateScript { repo = "gastownhall/beads"; sourcesFile = …; extraExtract = fixVendorHash + fixGoFloor; }`
   (hash fixer first). Release-tracking mode, which also solves the version-pick:
   the sweep follows **stable releases** (v1.1.2 at the verify date) and never
-  the v1.2.x prereleases that `llm-agents.nix` currently pins.
+  the v1.2.x prereleases that `llm-agents.nix` currently pins. Bootstrap: the
+  overlay reads the sidecar at eval time with no fallback for `version`/`src`,
+  so commit a minimal seed sidecar first (placeholder hashes are fine —
+  `vendorHash` falls back through the fixer), run the update script once to
+  prefetch the real hashes and let `fixVendorHash`/`fixGoFloor` restore the
+  derived keys, then commit the regenerated file. Hashes come from tooling,
+  never hand-pasted.
 - The dolt PATH wrap is **inherited from the nixpkgs recipe** — verify at the
   pinned rev during implementation and do not add a second `wrapProgram`
   (double-wrapping is the trap; check with
   `ls -a $(nix build .#beads --no-link --print-out-paths)/bin` for a single
-  `.bd-wrapped`).
-- Registrations, all alphabetically placed: `overlays/default.nix`
-  (`devToolDrvs`), `config/update-targets.nix` (binary row,
-  `--override-filename overlays/dev-tools/beads.nix`),
+  `.bd-wrapped`). If OD-P2's telemetry bake is accepted, the mechanism is to
+  **replace `postInstall` wholesale** with one `wrapProgram` call carrying both
+  the dolt `--prefix PATH` and the `--set-default` flags — extending the
+  inherited wrap in place, never appending a second one.
+- Registrations, all alphabetically placed within their files:
   `config/cache-hit-parity-targets.nix`
-  (`consumerPath = ["ai" "devTools" "beads"]`), `overlays/README.md`
-  (hand-maintained index), `dev/data.nix` (`devToolDescriptions` — root README
-  is generated; regenerate via `devenv tasks run --mode before generate:all`).
+  (`consumerPath = ["ai" "devTools" "beads"]`), `config/update-targets.nix`
+  (binary row, `--override-filename overlays/dev-tools/beads.nix`),
+  `dev/data.nix` (`devToolDescriptions` — root README is generated; regenerate
+  via `devenv tasks run --mode before generate:all`), `overlays/README.md`
+  (hand-maintained index), `overlays/default.nix` (`devToolDrvs`).
 - cgo note: upstream needs ICU (`go-icu-regex` ships no `#cgo pkg-config:`
   line); the nixpkgs recipe already handles this on Linux — Darwin behavior is a
   CI question, not a local claim.
@@ -118,14 +127,20 @@ no parser toolchain in any inspected derivation.
 The official MCP server is Python (fastmcp, PyPI `beads-mcp`, versioned in
 lockstep with bd) and shells out to `bd`. Package under
 `overlays/mcp-servers/beads-mcp.nix` on the existing Python template
-(`sympy-mcp.nix`), baking `BEADS_PATH` to the overlay's `bd`. Version rule: pick
-the beads-mcp release paired with the pinned stable bd line (1.1.x at the verify
-date); if PyPI carries only prerelease-lockstep versions, accept the skew
-consciously — beads-mcp shells out to whatever `bd` it is given, so bd's own
-schema guard is the real boundary (PB12 verifies). Its env surface (`BEADS_DIR`
-supported, `BEADS_DB` deprecated — note this _refutes_ older research; see
-`docs/beads/bd-reference.md`) must be re-verified at the pinned version when the
-module wires the env block (PB12).
+(`sympy-mcp.nix` for build shape only — its main-tracking update row does NOT
+transfer), baking `BEADS_PATH` to the overlay's `bd`. **Version tracking:**
+beads-mcp lives in the same `gastownhall/beads` monorepo
+(`integrations/beads-mcp/`), so build it **from the bd sidecar's pinned source
+tag** — one source of truth, the same stable line as bd, no second
+update-targets row following main. Whether `update-targets-parity` demands a row
+anyway is an implementation detail to settle in 2b; if it does, the row must be
+a no-op deferring to the bd sidecar. Registrations mirror phase 2's list with
+the mcp-servers group spellings
+(`consumerPath = ["ai" "mcpServers" "beads-mcp"]`, `mcpServerDrvs`,
+`mcpServerDescriptions`). bd-version skew is bounded by bd's own schema guard
+(PB12 verifies). Its env surface (`BEADS_DIR` supported, `BEADS_DB` deprecated —
+note this _refutes_ older research; see `docs/beads/bd-reference.md`) must be
+re-verified at the pinned version when the module wires the env block (PB12).
 
 ## Phase 3 — the option surface (gated)
 
@@ -135,19 +150,19 @@ applies (every surface expressible in all three methods or recorded as an
 explicit exclusion). Surface bindings, verified against the current tree
 2026-08-14 (line numbers will drift; re-verify at build time):
 
-| beads surface        | factory mechanism today                                                                                                                                                                                                                                                                                                                 |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bd` on PATH         | raw `home.packages` / devenv `packages` — no `ai.*` option exists (known gap)                                                                                                                                                                                                                                                           |
-| beads-mcp            | `ai.mcpServers.beads` (`lib/ai/sharedOptions.nix:65`) with the server's own `env` block (`lib/ai/mcpServer/commonSchema.nix:169`); fans out to all runtimes including Codex                                                                                                                                                             |
-| session-start prime  | portable `ai.hooks` (`lib/ai/sharedOptions.nix:221`, Claude+Codex) or `ai.claude.hooks.SessionStart` (`packages/claude-code/lib/mkClaude.nix:577`); Kiro via `ai.kiro.hooks` **UserPromptSubmit** (`packages/kiro-cli/lib/mkKiro.nix:1457`) — Kiro SessionStart cannot inject context; Copilot has no hook surface (explicit exclusion) |
-| timer-gate check     | same hook surfaces as prime (`bd gate check`)                                                                                                                                                                                                                                                                                           |
-| onboard snippet      | `ai.rules` keyed entry (`lib/ai/sharedOptions.nix:92`) — prefer over `ai.instructions`, which the rework retires in its PR 5                                                                                                                                                                                                            |
-| skill                | `ai.skills` (`lib/ai/sharedOptions.nix:328`) contributed via `lib/ai/mkSkillPackageModule.nix`                                                                                                                                                                                                                                          |
-| env / telemetry-off  | `ai.environmentVariables` (`lib/ai/sharedOptions.nix:254` — Codex, Copilot, Kimchi, Kiro) **plus** `ai.claude.settings.env` (Claude is excluded from the shared pool)                                                                                                                                                                   |
-| permissions          | `ai.claude.settings.permissions.allow = ["Bash(bd:*)"]` (freeform) + `ai.kiro.permissions` (typed, `packages/kiro-cli/lib/mkKiro.nix:1355`, HM-only)                                                                                                                                                                                    |
-| project config files | devenv `files.*` for `.beads/config.yaml` + `.beads/config.local.yaml`; HM `home.file`/`xdg` for `~/.config/bd/config.yaml`                                                                                                                                                                                                             |
-| Dolt credentials     | 0600 INI at `~/.config/beads/credentials` from the repo's existing credential patterns (`lib/mcp.nix`); prefer the `BEADS_DOLT_PASSWORD` env path; never in the store                                                                                                                                                                   |
-| shared-server unit   | **no reusable surface** — `services.mcp-servers` is MCP-specific and HM-only; a Dolt `sql-server` needs its own HM systemd-user unit plus a devenv `processes` counterpart (asymmetric primitives; parity note required)                                                                                                                |
+| beads surface        | factory mechanism today                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `bd` on PATH         | raw `home.packages` — no `ai.*` option exists (known gap). devenv delivers **config only** where a machine-wide bd exists; a devenv-only consumer must source bd from this same pinned flake, never a second pin (see the one-flake invariant below)                                                                                                                                                                                                                                       |
+| beads-mcp            | `ai.mcpServers.beads` (`lib/ai/sharedOptions.nix:65`) with the server's own `env` block (`lib/ai/mcpServer/commonSchema.nix:169`); fans out to all runtimes including Codex                                                                                                                                                                                                                                                                                                                |
+| session-start prime  | portable `ai.hooks` (`lib/ai/sharedOptions.nix:221`, Claude+Codex) or `ai.claude.hooks.SessionStart` (`packages/claude-code/lib/mkClaude.nix:577`); Kiro via `ai.kiro.hooks` **UserPromptSubmit** (`packages/kiro-cli/lib/mkKiro.nix:1457`) — Kiro SessionStart cannot inject context; Copilot and Kimchi have no factory hook surface (explicit exclusions)                                                                                                                               |
+| timer-gate check     | same hook surfaces as prime (`bd gate check`)                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| onboard snippet      | `ai.rules` keyed entry (`lib/ai/sharedOptions.nix:92`) — prefer over `ai.instructions`, which the rework retires in its PR 5                                                                                                                                                                                                                                                                                                                                                               |
+| skill                | `ai.skills` (`lib/ai/sharedOptions.nix:328`) contributed via `lib/ai/mkSkillPackageModule.nix`                                                                                                                                                                                                                                                                                                                                                                                             |
+| env / telemetry-off  | `ai.environmentVariables` (`lib/ai/sharedOptions.nix:254` — Codex, Copilot, Kimchi, Kiro) **plus** `ai.claude.settings.env` (Claude is excluded from the shared pool)                                                                                                                                                                                                                                                                                                                      |
+| permissions          | `ai.claude.settings.permissions.allow = ["Bash(bd:*)"]` (freeform) + `ai.kiro.permissions` (typed, `packages/kiro-cli/lib/mkKiro.nix:1355`, HM-only); Codex, Copilot, and Kimchi have no factory permission surface today (explicit exclusions — revisit under the rework's per-pool gating)                                                                                                                                                                                               |
+| project config files | devenv `files.*` for `.beads/config.yaml` + `.beads/config.local.yaml`; HM `home.file`/`xdg` for `~/.config/bd/config.yaml`                                                                                                                                                                                                                                                                                                                                                                |
+| Dolt credentials     | 0600 INI at `~/.config/beads/credentials` from the repo's existing credential patterns (`lib/mcp.nix`); prefer the `BEADS_DOLT_PASSWORD` env path; never in the store. **Never put secrets in bd's database-level config** (`bd config set`) — DB config replicates verbatim to the remote on every `bd dolt push`                                                                                                                                                                         |
+| shared-server unit   | **no reusable surface** — `services.mcp-servers` is MCP-specific and HM-only; a Dolt `sql-server` needs its own HM systemd-user unit plus a devenv `processes` counterpart (asymmetric primitives; parity note required). Unit requirements: **loopback-only bind by default** (mirror `lib/ai/mcpServer/serviceSchema.nix`'s `127.0.0.1` posture), pin the server's auth defaults explicitly, and take `dolt` from the same pinned nixpkgs the wrap uses — one dolt provenance everywhere |
 
 Cross-cutting invariants the modules must encode:
 
@@ -174,6 +189,11 @@ Cross-cutting invariants the modules must encode:
   workflow — from HM options alone; devenv adds per-project identity and
   assertions on top, and anything devenv-only beyond that is an explicit
   exclusion with a recorded reason.
+- **Until phase 3b lands a remote, every DB is a single local copy** of what the
+  reference calls a design-doc corpus, and a true backup is only `bd backup` /
+  `bd dolt push`. Adopting phase 3 early means accepting that window; the
+  interim stopgap is a scheduled `bd export --all` (lossy-but-usable, documented
+  in the reference).
 
 ### Phase 3b — git-ref-backed Dolt remote and checkpoint workflow
 
@@ -181,8 +201,11 @@ Cross-cutting invariants the modules must encode:
 the custom ref `refs/dolt/data` — one remote and credential for code and
 work-state, invisible to normal git operations (mechanics and CAS guarantees:
 `docs/beads/dolt-git-remotes.md`). The option surface should declare, per DB:
-the remote URL, and a **push/checkpoint policy** (manual only / on session end /
-coupled to the OD-M4 checkpoint cadence). Two facts shape the design:
+the remote URL, a **push/checkpoint policy** (manual only / on session end /
+coupled to the OD-M4 checkpoint cadence), and a **pull posture** — the
+divergent-history pull behavior is uncharacterized (see the companion's
+experiment list), so multi-machine designs must not assume pulls are
+conflict-free. Two facts shape the design:
 
 - Issue state on a git ref is **not** branch-visible — no issue diffs in code
   review, ever. The options must not pretend otherwise.
@@ -194,7 +217,9 @@ Encrypted remote variants (gcrypt, crypt-mounts, self-hosted) are researched in
 `docs/beads/dolt-git-remotes.md` but **deferred** behind the threat-model
 decision (OD-D1) and the CAS experiments listed there — the gcrypt path in
 particular is plausibly incompatible with Dolt's concurrency guarantee and must
-not be offered as an option until proven.
+not be offered as an option until proven. **Until OD-D1 is answered, configuring
+any third-party remote means plaintext work-state on that host — that is the
+recorded pre-OD-D1 default, a conscious accept and not an oversight.**
 
 ## Resolved — do not re-derive
 
@@ -222,18 +247,28 @@ Grouped by what each decision blocks; everything not blocking a phase stays
 deferred until its "needed by" moment. Owner **operator** = needs a human
 ruling; owner **measure** = a probe or experiment settles it.
 
-### Blocking phase 2 (veto window — defaults proposed, will proceed)
+### Blocking phase 2 (veto window — defaults proposed, will proceed; the window is review of this PR and closes on its merge)
 
 - **OD-P1** (operator veto): overlay defaults as specified above — dev-tools
   group, thin nixpkgs override, stable-release tracking. Proceeds as designed
   absent an objection.
-- **OD-P2** (operator veto): bake telemetry-off into the overlay wrapper
-  (`--set-default BD_DISABLE_METRICS=1 BD_DISABLE_EVENT_FLUSH=1`) so the
-  guarantee exists below the module layer; module env still declares it for the
-  MCP/hook consumers. Default: yes.
+- **OD-P2** (operator veto): bake telemetry-off into the overlay wrapper —
+  `--set-default BD_DISABLE_METRICS 1 --set-default BD_DISABLE_EVENT_FLUSH 1`
+  (makeWrapper takes VAR VALUE pairs, one pair per flag; compare `gh.nix`'s
+  `--set-default GH_TELEMETRY false`) — so the guarantee exists below the module
+  layer; delivered by replacing the inherited `postInstall` with one extended
+  `wrapProgram` call (see the phase 2 dolt-wrap bullet); module env still
+  declares it for the MCP/hook consumers. Default: yes.
 - **OD-P3** (operator): phase 2b timing — package beads-mcp alongside the
   overlay, or defer to phase 3 when its env block gets designed. Default:
   alongside (it is cheap and unblocks MCP experiments).
+- **OD-P4** (operator veto): sweep posture versus schema migrations. The 4x/day
+  sidecar sweep lands bd bumps unattended, but the reference records that
+  crossing a schema migration on a shared DB is a manual multi-clone ceremony
+  and that an older bd refuses a newer-schema DB — an unattended bump is a
+  one-way door once DBs exist. Default: sweep freely through phase 2 (no DBs
+  exist yet); **before phase 3 ships**, revisit with PB13's findings and pick
+  between migration-aware sweep handling and pinned manual bumps.
 
 ### Blocking phase 3 (module design)
 
@@ -246,7 +281,10 @@ ruling; owner **measure** = a probe or experiment settles it.
   clone-scoped (repo-invisible, survives worktree teardown, suits tracking repos
   you do not own) vs project-local `.beads/` (team-shareable,
   upstream-conventional). Both remain expressible as option values; this picks
-  the default.
+  the default. Sharp edge of the XDG default: identity is keyed to the clone
+  path, so **moving or renaming the clone silently orphans the DB** — bd
+  resolves a fresh empty workspace with no error. The decision input must
+  include a relink/migration note (or `bd where`-based detection) for that case.
 - **OD-M3** (operator + measure): default storage mode — embedded
   (single-writer; disqualified the moment two worktree sessions write
   concurrently) vs shared-server (one user-level Dolt server, per-project
@@ -257,7 +295,9 @@ ruling; owner **measure** = a probe or experiment settles it.
   grooming operations, periodic. Blocks the server-mode option surface and phase
   3b's history claims. Input: PB8.
 - **OD-M5** (operator): host platform assumption for the server unit —
-  systemd-user only, or launchd parity too. Decides the HM unit form.
+  systemd-user only, or launchd parity too. Decides the HM unit form. Whatever
+  the platform, the unit binds loopback-only by default and pins auth (see the
+  shared-server row).
 - **OD-M6** (operator, deferred until rework PR 7b lands — this is the table's
   naming gate): option namespace — land as `ai.programs.beads` once PR 7b
   exists; only if phase 3 must ship earlier does a standalone `beads.*`
@@ -277,9 +317,19 @@ ruling; owner **measure** = a probe or experiment settles it.
 - **OD-D4** (measure): structure enforcement for formula-stamped subgraphs
   (beads _formulas_ stamp templated subgraphs of issues when "poured"; whether
   the stamped structure is re-validated afterwards is unverified). Input: PB6.
-- **OD-D5** (operator): Kiro integration depth — upstream `bd setup` has no kiro
-  target, so Kiro wiring is hand-rolled steering + hooks; decide how far past
-  the MVP bar to go.
+- **OD-D5** (operator): Kiro integration depth. At the pinned stable v1.1.2,
+  `bd setup` has no kiro target; upstream added `bd setup kiro` by v1.2.1 — but
+  the pure-data-engine discipline hand-rolls Kiro wiring (steering + hooks)
+  regardless, by repo policy rather than for lack of an upstream target. Decide
+  how far past the MVP bar to go.
+- **OD-D6** (operator): teardown and data lifecycle. Disabling the modules
+  leaves residue nothing currently cleans up: the shared-server data dir
+  (`~/.beads/shared-server/`, every project's DB), project `.beads/` and
+  out-of-repo XDG workspaces, the 0600 credentials INI, and — hardest to
+  rediscover — `refs/dolt/data` parked on git remotes, invisible to normal git
+  operations by design. Also the retention posture (`bd admin compact` + Dolt
+  GC) at the module level. Decide per surface what the modules clean up versus
+  document as manual.
 
 ## Probe queue
 
@@ -296,9 +346,10 @@ session against the phase 2 package. Feeds noted.
   correct main-repo workspace reported? → devenv assertion viability.
 - **PB4** — `bd config show --json`: provenance field shape stable and
   parseable? → the intended-versus-effective assertion task.
-- **PB5** — custom issue types: `bd create -t <custom>` accepted? (A 2026-03
-  defect had `bd types` listing and `bd update` accepting a type that
-  `bd create` rejected.) → taxonomy expressibility.
+- **PB5** — custom issue types: `bd create -t <custom>` accepted? (Premise is
+  carried, unverified research: a reported 2026-03 defect had `bd types` listing
+  and `bd update` accepting a type that `bd create` rejected — see the
+  reference's carried-unverified list.) → taxonomy expressibility.
 - **PB6** — formula enforcement: pour a formula, create a bare violating child
   under the stamped epic — accepted? → OD-D4.
 - **PB7** — daemon existence: observe processes around bd invocations;
@@ -319,19 +370,32 @@ session against the phase 2 package. Feeds noted.
   tags.
 - **PB11** — version-skew guard: does an older bd actually refuse a newer-schema
   DB, and with what error? → the one-flake-owns-the-version rule.
-- **PB12** — beads-mcp env surface at the pinned PyPI version: confirm which of
+- **PB12** — beads-mcp env surface at the pinned version: confirm which of
   `BEADS_DIR`/`BEADS_DB`/`BEADS_WORKING_DIR` the server reads and their
   precedence, and the bd-version-skew tolerance of a non-lockstep pairing. →
   phase 2b env block, R3.
-- **Remote experiments** — the six CAS/encryption experiments in
-  `docs/beads/dolt-git-remotes.md` (gcrypt race first). → phase 3b encrypted
-  variants.
+- **PB13** — migration and rollback: what `bd migrate` actually does, whether
+  any downgrade path exists, and whether `bd export --all` → fresh init →
+  `bd import` recovers across a schema-version boundary. → OD-P4, the
+  one-way-door risk.
+- **PB14** — dolt hygiene: does the pinned `dolt` emit metrics/events by default
+  and what disables them (dolt historically ships DoltHub usage metrics with its
+  own off switch); and bd's tolerance for dolt version skew (wrap vs server unit
+  must share one provenance either way). → OD-P2's guarantee actually holding,
+  the shared-server unit design.
+- **Remote experiments** — the CAS/encryption experiments in
+  `docs/beads/dolt-git-remotes.md` (the cheap URL-passthrough check first — it
+  is a prerequisite of the gcrypt race — then the race, then the rest). → phase
+  3b.
 
 ## Validation (phases 2–3)
 
 - `nix build .#beads --max-jobs 1` and inspect `bin/` for exactly one wrapped
-  `bd` (`.bd-wrapped` present, no double wrap); `bd --version` matches the
-  sidecar.
+  `bd` (`.bd-wrapped` present, no double wrap — the OD-P2 bake extends the one
+  wrap in place, so the count stays one); `bd --version` matches the sidecar. If
+  OD-P2 landed, also assert the baked env: run the wrapped `bd` under `env -i`
+  and confirm both telemetry variables are set (the wrap-count check alone
+  cannot catch a mis-spelled `--set-default`).
 - `nix flake check` — structural gates (`update-targets-parity`,
   `cache-hit-parity`, `go-floor-drift` via `passthru.goFloor`) all discover the
   new package without manual test edits.

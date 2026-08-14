@@ -34,6 +34,12 @@ encryption — if work-state timing is sensitive, that constrains the option set
 further. And the answer may differ per repository — the remote is per-database
 config, so a mixed posture is legitimate.
 
+One categorical exposure holds regardless of the model chosen: beads
+database-level config (set via `bd config set`, and capable of holding
+external-tracker credentials) **replicates verbatim with `bd dolt push`**.
+Secrets must never enter DB config on any remote-backed database — use the
+env/INI credential paths only (see `bd-reference.md`).
+
 ## Dolt remote types
 
 Four categories:
@@ -224,6 +230,8 @@ Ordered by how much they collapse the option space:
    path out), clean failure (acceptable), working retry (the assumption was
    wrong and the gcrypt path opens up). **Silent data loss is the outcome to
    rule out**; this single test decides whether "git + e2ee" is viable at all.
+   Experiment 2 is an embedded prerequisite: if `bd` rejects or rewrites
+   `gcrypt::` URLs, this experiment cannot run unpatched — run 2 first.
 2. **Does beads pass remote URLs through unmodified?** If `bd` validates or
    rewrites remote URLs, custom schemes may need a patch. Check before investing
    in either encrypted path.
@@ -239,6 +247,13 @@ Ordered by how much they collapse the option space:
 6. **Key-management dry run.** Multi-machine key distribution and a documented
    recovery path, tested by restoring from ciphertext on a clean machine —
    **before** the DB carries anything valuable.
+7. **Divergent-history pull.** This document covers push-side atomicity
+   exhaustively, but the multi-machine story equally depends on `bd dolt pull`
+   when local and remote Dolt histories have both advanced — the normal case for
+   a two-machine setup. Characterize the conflict shape: does bd surface it,
+   auto-merge cell-level, or fail-and-park, and is any outcome lossy?
+   (Federation's `--strategy ours|theirs` is a different, wrong altitude — do
+   not read its semantics into plain `bd dolt pull`.)
 
 ## Known failure modes to design against
 
