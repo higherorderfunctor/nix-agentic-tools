@@ -1,11 +1,17 @@
 # `ai.*` normalized-interface rework, then semble #858 on top
 
-> **Last verified:** 2026-08-14 against `main` at `c5475438`, by a twelve-agent
-> verification pass over the preceding design session's working notes. Every
-> `file:line` below was re-read at that commit unless the row says otherwise.
-> Four items the previous draft listed as DECIDED or RESOLVED were refuted by
-> that pass and are marked **REFUTED** in place — do not re-derive them from the
-> older wording.
+> **Last verified:** 2026-08-14 against `main` at `0fe1f1fd`, by two
+> verification passes (twelve agents, then seven) over the preceding design
+> session's working notes. Every `file:line` below was re-read; 65 of 67 resolve
+> exactly and the two imprecise ones are corrected in place. Main moved from
+> `c5475438` during the session, but the six intervening commits touch only
+> lockfiles and two overlay files, so no citation needed re-anchoring.
+>
+> **Items previously marked DECIDED or RESOLVED that were refuted: seven.** Four
+> by the first pass (R1-R4) and three by the second (R5-R7). Do not re-derive
+> them from older wording. The second pass also refuted one of the FIRST pass's
+> own findings — see R6 — so treat nothing here as settled because a verifier
+> said so; treat it as settled because a quoted line says so.
 
 Sequencing: the `ai.*` rework lands first, in several PRs; semble #858 is
 re-implemented on top. No back-compat requirement — a single consumer, who will
@@ -44,9 +50,11 @@ shallow replace is the intended semantic rather than a limitation.
 Two packages claiming one key: fail, at both root and per-runtime (B8/B9).
 Level-versus-level replaces; package-versus-package fails.
 
-`semble.mcp.content` default stays `["code"]` — upstream's own default, emits no
-argument, and at 0.5.5 a per-call `content` builds a separate cached index per
-content set, so defaulting broad multiplies indexes.
+`semble.mcp.content` default stays `["code"]`. **The decision stands; its stated
+rationale was wrong twice and is replaced — see R5.** The correct reason is that
+0.5.5 scopes the ON-DISK index directory by content set, and `["code"]` is the
+one value that short-circuits to the legacy bare `index` directory, so it shares
+an index with ordinary CLI usage instead of building a second copy.
 
 Version targeting: semble options are tied to the overlay, so the design targets
 0.5.5 rather than the pinned 0.5.4. This makes the semble work depend on the
@@ -97,12 +105,69 @@ below to match, and its "fail on collision" arm is withdrawn.
 None of these four appeared in the previous draft's own "asserted then refuted"
 list. That list was not the safety net it looked like; this section replaces it.
 
+**R5 — the `semble.mcp.content = ["code"]` rationale was wrong, twice.** The
+decision survives; only the reasoning changes.
+
+The original wording — "a per-call `content` builds a separate cached index per
+content set, so defaulting broad multiplies indexes" — is **refuted**, because
+the per-call selection REPLACES the server default rather than unioning with it
+(`src/semble/mcp.py:44-52` at tag `v0.5.5`). Measured by executing upstream's
+own `_resolve_content_selection` and `_compute_cache_key`: a `["code"]` default
+and an `["all"]` default both yield exactly **4** distinct in-memory cache keys.
+The only default that adds a variant is a MULTI-VALUE non-`all` one
+(`["code","docs"]` → 5) — which is precisely the shape this plan's own decision
+to make `content` a list newly enables, against a global 10-slot LRU
+(`mcp.py:28`, `:287-289`).
+
+The replacement rationale offered by that same pass — "a broad default just
+makes the default index bigger" — is true but not decisive. **The decisive fact
+is a SECOND cache neither earlier reading looked at.** 0.5.5 scopes the on-disk
+index DIRECTORY by content set, where 0.5.4 had a single bare `index`:
+
+```
+# src/semble/cache.py @ v0.5.5
+def find_index_from_cache_folder(path: str, content: Sequence[ContentType] = (ContentType.CODE,)) -> Path:
+    cache_dir = resolve_cache_folder() / cache_key(path)
+    scope = "-".join(sorted({content_type.value for content_type in content}))
+    return cache_dir / ("index" if scope == ContentType.CODE.value else f"index-{scope}")
+```
+
+`["code"]` is the ONE value that resolves to the legacy `index` directory. Every
+other value writes a separate `index-<scope>` tree. So the narrow default shares
+an on-disk index with ordinary `semble` CLI usage, and any other default builds
+and stores a second copy. That is the argument to record.
+
+**R6 — "the runtime registry does not exist yet" is FALSE, and contradicted this
+document's own A0.** `lib/ai/sharedOptions.nix:19` is a literal five-element
+PRODUCTION list:
+
+```nix
+harnessNames = ["claude" "codex" "copilot" "kimchi" "kiro"];
+```
+
+A0 already cites that exact line as where the code "hardcodes the runtime
+registry" — thirty lines before A1a claimed no registry exists. This is the same
+class of self-contradiction this document audits its predecessor for. A third
+enumeration lives at `checks/options-doc.nix:114`. The real problem is not
+absence but **duplication**: three hardcoded lists, no shared one. See A1a.
+
+**R7 — per-pool-per-runtime gating is NOT new; it already ships.**
+`lib/ai/app/mkBackendTransform.nix:199-213` and `:322-332` declare
+`ai.<name>.shell` only when the app record sets `supportsShell = true`, and
+`dev/fragments/ai-module/shell-option.md` states the identical policy as a
+standing house rule: "a surface without a lossless native mapping is an explicit
+exclusion, not a silent no-op", with an unsupported runtime giving an "option
+does not exist" eval error. That is exactly the mechanism ratified in A1a and
+exactly the collapse A1b predicts. Follow `supportsShell`; do not invent a
+second pattern.
+
 ### Open, with evidence now in hand
 
 1. **The 0.5.5 bump must land first, and its CI is red for a reason that is
    itself a design decision.** Detail in B0.
-2. **The runtime registry does not exist yet** and the factory must introduce
-   it. Detail in A1a.
+2. **The runtime registry exists three times over** and the factory must unify
+   them. Detail in A1a. (This item previously read "does not exist yet" and was
+   false — see R6.)
 3. **#920 must land before A3.** Detail in A3b.
 
 ## Part A — the `ai.*` normalized interface
@@ -143,20 +208,52 @@ path. Runtime provenance guards leak — an inline module reports
 a factory that generates both levels from one spec and makes the fanout
 structural.
 
-**Scope hazard, previously unassessed:** the decision to also move
-`stacked-workflows` and `living-workflow` onto `ai.programs.*` collides with
-this rule. `mkSkillPackageModule.nix:56-57` writes root pools today, which A1
-bans. That migration is therefore not a rename; budget it as real work or defer
-it out of this rework.
+**Scope hazard — sized 2026-08-14.** `lib/ai/mkSkillPackageModule.nix:56-57`
+writes root `ai.skills` and `ai.instructions`, which A1 bans. Those two lines
+are the **only** root-pool assignments anywhere in `packages/` or `lib/`.
 
-### A1a. There is no runtime registry to generate against
+The hazard is real but far smaller than the earlier wording implied, and it is
+**separable** from the namespace move it was attached to:
 
-The factory needs a list of runtimes, and the repo does not have one.
-`lib/ai/apps/default.nix` is an empty stub filled by a barrel fold, and the only
-literal five-element list in the tree is a **test fixture**
-(`checks/module-eval.nix:644`). So the factory must introduce the registry
-itself, and that registry becomes the substrate #921 wants for capability
-declaration.
+- The per-runtime equivalents (`ai.<runtime>.skills`,
+  `ai.<runtime>.instructions`) **already exist for all five runtimes with
+  byte-identical types**, so fixing the writes declares no new options and costs
+  **2 changed lines**, plus the shared runtime registry A1a builds anyway.
+- **A1's proposed backstop check would never catch it.** That check is scoped to
+  `packages/*/modules/**`, and the one violation in the tree lives in `lib/ai/`.
+  Widen the scope or the check is theatre.
+- **The namespace move cannot be a pure rename.** `checks/options-doc.nix` diffs
+  every option starting with `ai.` for exact HM/devenv name and type parity, so
+  `stacked-workflows.gitPreset` — HM-only today — fails that check the moment it
+  moves under `ai.programs.*`. Its emission into `programs.git.settings` would
+  also turn A0's "one real drift" into two.
+- **Does leaving the writes as-is actually hurt?** Only once per-runtime
+  negation ships: with `ai.<runtime>.programs.<pkg>` declared per B4, a root
+  write means the negation evaluates clean and does nothing, silently. And
+  stacked-workflows' `ai.instructions` stays unretractable per runtime even
+  after B10, because B10 needs a key and that pool is a list until A3 lands.
+
+Note also that this document never actually decided the move — it appeared on
+one line, inside this hazard note, ending unresolved. **Recommendation for the
+operator (not a decision): fold in the 2-line pool fix, defer the namespace
+move.**
+
+### A1a. The runtime registry exists three times — unify, do not invent
+
+Corrected 2026-08-14 (R6). The earlier claim that no registry exists was wrong
+and contradicted A0. There are **three** hardcoded enumerations:
+
+- `lib/ai/sharedOptions.nix:19` — `harnessNames`, production, the one A0 already
+  names as drift;
+- `checks/options-doc.nix:114` — a third enumeration inside a check;
+- `checks/module-eval.nix:644` — a test fixture.
+
+`lib/ai/apps/default.nix` is an empty stub filled by a barrel fold, so there is
+no single canonical list. The factory's job is therefore to **unify these three
+into one shared registry**, not to introduce a first one — and folding
+`sharedOptions.nix:19` into it also retires half of A0's documented drift.
+
+That registry becomes the substrate #921 wants for capability declaration.
 
 **Generating for all five runtimes produces dead options for four of them**, so
 the gate is **per-pool-per-runtime**, not a per-runtime allow-list — decided
@@ -212,6 +309,24 @@ is declared only where the runtime consumes it, writing
 `ai.claude.programs.semble.mcp.rootExposure` on a runtime that cannot isolate is
 not a policy failure — the option does not exist, and Nix raises its own
 unknown-option error. That is already loud, already free, and needs no rule.
+
+**This is not speculative — the repo already does it** (R7). `ai.shell` is
+declared only when the app record sets `supportsShell = true`
+(`lib/ai/app/mkBackendTransform.nix:199-213`, `:322-332`), and
+`dev/fragments/ai-module/shell-option.md` records the identical policy as a
+standing house rule:
+
+> Apps that do not opt in get no option at all, so setting one is an "option
+> does not exist" eval error rather than a value that evaluates cleanly and is
+> dropped. This is the repo's standing rule that a surface without a lossless
+> native mapping is an explicit exclusion, not a silent no-op.
+
+So A1a and this section are generalizing an existing, documented mechanism from
+one scalar to every pool. Reuse `supportsShell`'s shape rather than designing a
+second one, and note its deliberate constraint: the flag is read off the app
+RECORD, keeping it a build-time parameter that forces neither `config` nor
+`pkgs`, which is what stops it reintroducing the `_module.args` recursion
+documented against `proxyIsSupported`.
 
 So the only surface where a rule is still needed is the **root** one, and there
 "degrade" is not uniformly safe. The discriminator is not explicit-versus-
@@ -421,6 +536,36 @@ own change, and the tests must change with it.
 Manager content _from a live file into the dead one_, converting a
 partly-working surface into a fully-dead one.
 
+#### Sized 2026-08-14 — smaller than this section implied, and it is ONE PR
+
+The HM and devenv emission blocks are **byte-identical** apart from `home.file`
+vs `files` and the path prefix, so there is no structural divergence to
+reconcile. The fix is **two string literals** in `mkCopilot.nix` (`:281`,
+`:294`) plus **four one-line accessor changes** in `checks/module-eval.nix`
+(`:3584`, `:4826`, `:6112`, `:7805`).
+
+Two findings change how it should be written:
+
+- **`${cfg.configDir}/instructions/` is only correct while `configDir` is
+  `.copilot`.** The option is user-settable, there is no instructions equivalent
+  of `--additional-mcp-config`, and the wrapper does not set `COPILOT_HOME`. So
+  the fix needs either an assertion pinning `configDir`, or delivery through
+  `COPILOT_CUSTOM_INSTRUCTIONS_DIRS` — which was measured working across three
+  separate directory layouts.
+- **The always-on collapse is NOT user-tier-specific, so A3 is not made lossy by
+  it.** Measured against copilot-cli 1.0.79's assembled system prompt: every
+  universal-`applyTo` file is concatenated into one undelimited run with its raw
+  YAML frontmatter injected as prose — and the project tier this plan called
+  "correct" already behaves identically today. Scoped rules keep full per-file
+  identity via the `| Pattern | File Path | Description |` index row. **A3b's
+  sequencing still holds**, for the simpler reason that a dead file is worse
+  than a live one.
+
+`description` already exists on both `instructionModule` and `ruleModule` and is
+already forwarded by `mkRenderer`; only the Copilot transformer discards it.
+Wiring it is ~5 lines and — verified — does not churn the 19 generated
+projections.
+
 ### A4. Settings split
 
 Three things share `ai.<runtime>.settings` today: user native passthrough
@@ -548,6 +693,43 @@ argument**, where 0.5.4 exposed content selection only as a CLI flag.
 Corroborated against the live 0.5.4 server, whose `search` schema is
 `{query, repo, top_k, max_snippet_lines}` with no `content` field.
 
+#### The review the gate is asking for — answered
+
+The recorded disposition is "the module intentionally ships CLI guidance; the
+MCP server contributes its tool guidance at session start." That delegation was
+tested directly, and **it does not hold**:
+
+- the server's session-start `instructions` string is **byte-identical across
+  0.5.4 and 0.5.5** and never mentions content selection at all;
+- the `content` parameter descriptions are bare one-liners — "Content to search.
+  Defaults to the MCP server's configured content." and "Content containing the
+  related file. Defaults to the MCP server configuration."
+
+So there is no channel by which the MCP server teaches an agent that per-call
+content selection exists, beyond the enum appearing in a JSON schema. **Prose
+guidance is therefore needed**, and `packages/semble/agent-instructions.md`
+should teach the MCP `content` field alongside the CLI flag.
+
+This matters more than a documentation nicety because of R5: `["code"]` is
+deliberately narrow, and its narrowness is only cheap if the model widens per
+call. The design depends on a behaviour nothing currently teaches.
+
+Landing mechanics (measured, and they differ per file):
+
+- `agent-instructions.md` is under **no hash gate**. Its only consumers are a
+  Nix _path_ reference (`packages/semble/lib/integrations.nix:4`) and four
+  **path-equality** assertions (`checks/module-eval.nix:2624`, `:2689`, `:2692`,
+  `:2700`). Editing its bytes moves nothing, so it can land on `main`
+  independently of the bump, at any time.
+- `disposition` strings are free prose — `checks/semble-templates.nix:76` checks
+  only that the key exists.
+- `reviewedHash` must move **atomically with the snapshot**, so it belongs on
+  the bump branch. That is safe: `.github/workflows/update.yml:358-404` detects
+  non-bot commits and **refuses** the force-push at `:407`, keeping the PR
+  alive. Precedent: PR #825, where a human commit sat directly on the bot's on
+  this same branch. **But once a human commit lands there the sweep never
+  rebases it again**, so land it promptly or it rots.
+
 ### B1. Upstream re-scope
 
 - 0.5.5 adds a per-call `content` to both MCP tools; 0.5.4 has none.
@@ -558,10 +740,32 @@ Corroborated against the live 0.5.4 server, whose `search` schema is
   `content` becomes a list, with the scalar coerced. MCP routing guidance is
   dropped along with the topology.
 
-**Caveat carried forward:** these upstream measurements and the 0.5.5 cache-key
-claim were made by the previous session and were **not** re-audited by the
-verification pass, despite four decided items resting on them. Re-measure before
-implementing B1.
+**Audited 2026-08-14 — the caveat is discharged.** These were re-measured
+against upstream Python source at tag `v0.5.5` and by executing the pinned 0.5.4
+package out of the store. Results:
+
+- `nargs="+"`, the four choices, and the `["code"]` default: **CONFIRMED** at
+  both versions.
+- bare `--content` exiting non-zero: **CONFIRMED**.
+- `all` + scoped collapsing to all: **CONFIRMED**.
+- duplicates: **PARTIAL** — they are inert everywhere that matters, but they are
+  NOT normalised at the parse layer and survive into on-disk metadata. Rejecting
+  them remains right; the stated reason ("upstream normalises them away") is
+  imprecise.
+- the cache-key claim: see **R5** — mechanism real, conclusion refuted,
+  rationale replaced.
+
+**No build is required to settle any 0.5.5 question.** The pinned bump builds
+semble from `fetchFromGitHub` at tag `v0.5.5` with **zero patch phases**, so
+reading the tag IS reading the artifact the bump produces. Control: for 0.5.4
+the tag source is byte-identical to the realised store source (`mcp.py` and
+`cli.py` both diff clean). Residual risk is limited to the `fetchFromGitHub`
+hash, which CI catches.
+
+**Correction to the option shape.** The 0.5.5 per-call MCP `content` is a SCALAR
+`Literal["code","docs","config","all"]`, not a list (`src/semble/mcp.py:87-90`,
+`:127-130`). "`content` becomes a list" applies to the **server flag only**. Do
+not model the per-call field as a list.
 
 Validation rules:
 
@@ -622,11 +826,32 @@ drops it for Codex is `lib/ai/agent.nix:50-56` (`renderCodex`), reached from
 `includeMcpJson` defaulting false means today's Kiro semble agent cannot call
 the semble MCP server at all.
 
-**Codex per-agent `mcp_servers` remains unverified**, and the previous draft
-under-stated it: the destination directory `<configDir>/agents/` is _itself_
-unverified — no `$CODEX_HOME/agents` literal exists in the binary — so "the file
-is written correctly" carries a second untested premise. The file's content
-shape is corroborated against codex 0.147.0's agent-role validator.
+**Codex per-agent `mcp_servers` is SETTLED at the config-schema level**
+(2026-08-14), retiring the long-standing OFF-RAMP item — with one honest
+residual.
+
+Codex 0.147.0's agent-role deserializer uses `deny_unknown_fields`, which makes
+the test discriminating rather than an absence-of-error read:
+
+- an unknown key returns `unknown field`;
+- `mcp_servers = "not-a-table"` returns
+  `invalid type: string "not-a-table", expected a map` — **positive proof the
+  key is in the schema**, not mere silence;
+- a well-formed table parses clean, and the block is **agent-scoped**:
+  `codex mcp list --json` stays `[]`.
+
+The destination directory is confirmed at **syscall level** for both backends,
+retiring the second untested premise. One precondition the plan did not state:
+devenv's `.codex/agents/` is read only when the **project is trusted**.
+
+**Residual, to be worded like B5's Kiro caveat rather than closed outright:**
+consumption is proven at the config-schema level; runtime tool exposure during
+an actual subagent turn stays auth-blocked and is NOT proven.
+
+**Trap for whoever tests this next:** `codex debug prompt-input` and
+`codex doctor` both report **clean for an agent file that is outright
+unparseable**. Only `codex exec` is a valid oracle here.
+
 `ai.codex.profiles` does **not** moot the question: `--profile` layering is
 confirmed upstream, but the option is hard-locked by
 `assertion = profiles == {}` (`packages/chatgpt-codex/lib/mkCodex.nix:606`) and
@@ -683,12 +908,29 @@ files) so it cannot be lost: `contentScope.nix` (new, unit-verified),
 the `cli-instructions.md` rename, `mcp-agent-instructions.md`,
 `checks/semble-mcp-surface.py`, and the `checks/semble-templates.nix` gate swap.
 
-**Known trap for the tests:** the `checks/module-eval.nix:2655-2668` parity test
-does `lib.mapAttrs (_: o: o.type.description)` one level deep. A nested option
-group has no `.type` and throws, aborting the whole checks attrset. Make it
-recurse with `lib.isOption`. Separately, `checks/module-eval.nix:2661` reads
-`options.semble.runtimes`, so deleting that option breaks the parity test
-independently of the nesting trap.
+**Known trap for the tests — corrected and re-sized 2026-08-14.** The
+`checks/module-eval.nix:2655-2668` parity test does
+`lib.mapAttrs (_: o: o.type.description)` one level deep, and a nested option
+group has no `.type` and throws. Two corrections to the earlier wording:
+
+- **The trap is LATENT, not live.** Every option group is flat at `c5475438`, so
+  it fires only if the rework introduces nesting — which it will.
+- **"Aborting the whole checks attrset" is WRONG.** Attribute values are
+  independently lazy; a sibling check still evaluates. Verified.
+- **`lib.isOption` recursion alone does NOT fix it.** There is no expected-value
+  fixture to restructure, but the hard-coded six-key enumeration at `:2658-2665`
+  still names the deleted option and still roots at `evaluated.options.semble`.
+  Recursion also stops at submodule boundaries, where the repo's own `:2717`
+  uses `getSubOptions` — follow that.
+
+Blast radius: 12 semble tests in one 371-line block; 6 touched by the `runtimes`
+deletion alone; 1 (`module-semble-runtime-selection`, `:2541-2571`) deleted
+outright; 11 touched by the relocation. Plus 3 other checks, 5 `common.nix`
+constructs, and 3 doc surfaces.
+
+**Packaging:** the `runtimes` deletion is one self-contained PR. The relocation
+must land **atomically** with the parity-test rewrite and the options-doc
+fixture, because CI is red between any two of the three.
 
 ### B8. Surfaces that must change with semble
 
@@ -702,8 +944,12 @@ outputs.
 
 ## Findings to bank separately
 
-- Fragment-versus-fragment contradiction on root emission:
-  `layered-fanout.md:96` versus `ai-module-fanout.md:172-190`.
+- ~~Fragment-versus-fragment contradiction on root emission~~ — **WITHDRAWN
+  2026-08-14.** There is no contradiction. Reading `layered-fanout.md:97-99`
+  scopes that pitfall to FILE emission (`home.file.*` / `files.*`), while
+  `lib/ai/sharedOptions.nix:391` is an OPTION write. A0 above still describes
+  the Git-SSH root emission as real drift on its own merits, but stop citing a
+  fragment conflict that does not exist.
 - Eight files under `lib/ai/` match no architecture category, including
   `lib/ai/dir-helpers.nix` — the file `dir-helpers.md` documents by name.
 - `services.mcp-servers` is root-scoped into a vacuum: `mcpConfig` is
@@ -737,8 +983,24 @@ outputs.
 
 ## Citation audit result
 
-52 `file:line` citations were extracted from the previous draft and checked
-against `c5475438`: **48 resolve exactly, 3 are imprecise** (block-head or
-adjacent-comment rather than the named construct), **1 was wrong** — the
-`common.nix:227` case that motivated the tree-qualification rule at the top of
-this document.
+**Previous draft**, 52 citations against `c5475438`: 48 exact, 3 imprecise, 1
+wrong — the `common.nix:227` case that motivated the tree-qualification rule at
+the top of this document.
+
+**This document**, 67 unique citations re-audited 2026-08-14: **65 resolve to
+exactly the named construct, 2 are imprecise by one line, none are wrong and
+none point at a missing file.** The two corrections are applied above:
+
+- `mkCodex.nix:1039` is the assertion **message**; the assertion itself is
+  `:1038`.
+- `mkMcpServer.nix:20` is the **block head**; the `eval.config` return is `:36`.
+
+Three citations lack a directory path (`mkSkillPackageModule.nix:56-57`,
+`layered-fanout.md:96`, `ai-module-fanout.md:172-190`) though their content
+verifies; the first is `lib/ai/mkSkillPackageModule.nix`.
+
+The one internal contradiction the self-audit caught — A1a versus A0 on the
+runtime registry — is recorded as **R6** and fixed in place. It was exactly the
+class of error this document audits its predecessor for, which is the argument
+for re-running this audit against any future revision rather than trusting that
+a careful author avoids it.
