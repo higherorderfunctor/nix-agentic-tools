@@ -106,6 +106,7 @@ envrc
 envsubst
 epistemics
 esbuild
+etime
 execpolicy
 execve
 extensionless

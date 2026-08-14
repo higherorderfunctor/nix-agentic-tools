@@ -42,56 +42,89 @@ jobs:
       - uses: actions/checkout@v6
 
       # ONE installer for both legs: cachix/install-nix-action, the upstream
-      # MULTI-USER installer. On darwin that is a deliberate wall-clock
-      # regression bought to kill a hang, and it is UNDER TESTING — see the
-      # re-check list below before treating it as settled.
+      # MULTI-USER installer. On darwin it costs ~26s of wall clock and buys
+      # the removal of a 60-minute hang.
       #
       # WHY darwin left nixbuild/nix-quick-install-action: that action installs
       # a single-user /nix owned by the runner, so every nix process opens
       # LocalStore directly and contends on the store big-lock. It also pins
       # nix 2.34.7, so the DB it creates never carries the
       # 20260309-drop-redundant-indexreferrer migration that nix >= 2.35 adds
-      # (local-store.cc:638). The first 2.35 process to open that store —
-      # nix-fast-build's own bundled nix — therefore requests the EXCLUSIVE
-      # big-lock (local-store.cc:341-343, logging "waiting for exclusive
-      # access to the Nix store..."). Cachix's daemon holds a SHARED lock for
-      # its whole lifetime and that exclusive request has NO timeout, so
-      # whichever side loses the start-up race hangs until the 60m ceiling.
-      # Hit twice on PR #933 (runs 31801539425, 31830042311), both killed at
-      # 1h00m with orphaned nix-eval-jobs and cachix processes.
+      # (local-store.cc:638 at 2.35.2 — already :652 on master, so re-locate
+      # it by NAME, not by line). nix-eval-jobs, which nix-fast-build puts on
+      # PATH beside the nix it links against, then opens that store, finds the
+      # migration missing and requests the EXCLUSIVE big-lock
+      # (local-store.cc:342 at 2.35.2; the "waiting for exclusive access to
+      # the Nix store..." string it logs lives at :269). A long-lived cachix
+      # daemon already holds a SHARED lock, and the exclusive request has NO
+      # timeout, so nix-eval-jobs blocks until the 60m ceiling. Hit twice on
+      # PR #933 (runs 31801539425, 31830042311), both killed at 1h00m with
+      # nix-eval-jobs and cachix left as orphans.
       #
-      # The daemon install closes it twice over: clients resolve to
-      # UDSRemoteStore and never take the big-lock at all, and install-nix.sh
-      # pins nix 2.35.2, so the DB is created with the migration applied.
+      # DETERMINISTIC given the skew, not an unlucky race — do not read the
+      # two hits as "rare". cachix-action is an earlier step, so its daemon is
+      # always up first; and a 2.35 nix that DID get there first would hold
+      # the lock for one `drop index if exists IndexReferrer` and downgrade
+      # straight back to a read lock. Only the exclusive requester can hang.
       #
-      # COST, measured here: install-nix-action medians 31s on macos-latest vs
-      # 4s on ubuntu (n=23 each, pre-2026-07-21); nix-quick-install's median
-      # was 5s on macos-latest (n=8, range 2-10s). darwin pays ~26s. It
-      # cannot be tuned away in place — install-nix.sh already passes
-      # --daemon-user-count $(cpu_count * 2), so NIX_USER_COUNT is a no-op.
-      # Both installers carve an APFS volume for /nix; the comment that used to
-      # sit here claimed quick-install reused "the same volume" and that was
-      # wrong. The real difference is build-user and launchd provisioning.
+      # The skew is also NOT ours to control. `nix run --inputs-from .
+      # nix-fast-build` does not apply flake.nix's
+      # `nix-fast-build.inputs.nixpkgs.follows`, so the >= 2.35 nix rides in on
+      # nix-fast-build's OWN flake.lock. PR #933 bumps nix-fast-build alone —
+      # nixpkgs untouched — and that by itself moved nix-eval-jobs
+      # 2.34.3 -> 2.35.0. The hazard therefore re-arms on any future
+      # nix-fast-build bump: do NOT revert darwin to nix-quick-install-action
+      # to reclaim the ~26s.
       #
-      # UNDER TESTING — do not mark settled without re-checking:
-      #   - max-jobs goes 1 -> auto (3 here). install-nix.sh writes
-      #     `max-jobs = auto`; quick-install wrote none, so nix's default of 1
-      #     applied. nix-fast-build sizes its build pool straight from it, and
-      #     warm-ifd's eval alone peaks near 3.8 GB RSS on a 3-core / 7 GB
-      #     runner. This is a bigger unknown than the 31s. If runs get slower
-      #     or OOM, pin `max-jobs = 1` below before blaming the installer.
-      #   - always-allow-substitutes = true is new on darwin, which changes
-      #     which paths this leg ends up pushing to cachix.
-      #   - @v31 is a MOVING tag: nix went 2.34.7 -> 2.35.2 under it in four
-      #     months. Re-pin with install_url if that ever bites.
-      #   - the 31s baseline predates the current runner image and has not been
-      #     re-measured since the swap back.
+      # The daemon install closes it twice over and the first half is
+      # version-independent: under a daemon only the daemon opens LocalStore,
+      # so no client requests the big-lock whatever nix-fast-build ships next;
+      # and install-nix.sh pins nix 2.35.2, so the DB is born with the
+      # migration applied. Pinning `nix_version` on the old action would have
+      # closed only the second half, and was not on offer anyway — that
+      # action's newest release (v35, 2026-06-17) publishes no asset above
+      # nix-2.34.7 on any platform.
+      #
+      # COST, measured: install-nix-action medians 31s on macos-latest (n=23,
+      # pre-2026-07-21) against a 5s median for nix-quick-install (n=8, range
+      # 2-10s); post-swap it measured 33s here and 29s on kiro-patched (run
+      # 31837837510). It cannot be tuned away in place — install-nix.sh
+      # already passes --daemon-user-count $(cpu_count * 2), so NIX_USER_COUNT
+      # is a no-op. Both installers carve an APFS volume for /nix: the real
+      # difference is build-user and launchd provisioning, NOT the volume (an
+      # earlier version of this comment claimed otherwise; it was checked and
+      # is false).
+      #
+      # UNDER TESTING since 2026-08-14. Settled once BOTH hold — then delete
+      # this paragraph and prune the now-unused nix-quick-install-action grant
+      # from the Actions allowlist:
+      #   1. a darwin `build` run carrying nix-eval-jobs >= 2.35 completes
+      #      with zero "exclusive access to the Nix store" lines, and
+      #   2. a darwin `build` run has actually BUILT under `max-jobs = auto`
+      #      without OOM (a `--skip-cached` run that builds nothing does not
+      #      count; check for `builds: 0` before believing a green run).
+      # The open unknown is that max-jobs goes 1 -> auto (3 here):
+      # install-nix.sh writes `max-jobs = auto` where quick-install wrote
+      # none, so nix's default of 1 applied, and nix-fast-build sizes BOTH its
+      # build pool and its cachix upload pool from it. Peak RSS under
+      # concurrency is UNMEASURED on this runner — the 3.8 GB figure in
+      # dev/fragments/overlays/ifd-patterns.md is an aarch64-darwin eval on a
+      # LINUX host. If darwin slows or OOMs, add `max-jobs = 1` GUARDED BY
+      # runner.os: this step now serves both legs and x86_64-linux has always
+      # run `auto`. Also new on darwin is `always-allow-substitutes = true`,
+      # which changes which paths this leg pushes to cachix.
       - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             accept-flake-config = true
             extra-substituters = https://cache.numtide.com
             extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
+
+      - uses: ./.github/actions/assert-nix-config
+        with:
+          require: |
+            ^substituters =.*cache\.numtide\.com
+            ^accept-flake-config = true
 
       - uses: cachix/cachix-action@v17
         with:
@@ -140,6 +173,36 @@ jobs:
             --skip-cached \
             --cachix-cache nix-agentic-tools \
             --no-link
+
+      # Diagnostic dump — runs on success/fail/cancel/timeout, same shape as
+      # update.yml's. The big-lock deadlock this job's installer choice exists
+      # to prevent left exactly ONE line of evidence ("waiting for exclusive
+      # access to the Nix store...") and then 56 minutes of silence, so
+      # diagnosing it meant reconstructing the process tree from GitHub's
+      # orphan-reaper output. Capture that state directly instead. It is also
+      # the tell for a RETURN of the hazard from a direction we do not
+      # control: nix-eval-jobs's version comes from nix-fast-build's own
+      # flake.lock, so print it.
+      #
+      # `set +e` is deliberate and matches update.yml: a diagnostic that can
+      # fail is a diagnostic that masks the failure it was added to explain.
+      - name: Diagnostic dump
+        if: always()
+        run: |
+          set +e
+          echo "::group::nix / cachix processes"
+          ps -Ao pid,ppid,etime,command | command grep -E 'nix|cachix' | command grep -v grep
+          echo "::endgroup::"
+          echo "::group::versions in play"
+          nix --version
+          command -v nix-eval-jobs >/dev/null && nix-eval-jobs --version
+          echo "::endgroup::"
+          echo "::group::store lock holders"
+          command -v lsof >/dev/null && lsof /nix/var/nix/db/big-lock
+          echo "::endgroup::"
+          echo "::group::nix config"
+          nix config show
+          echo "::endgroup::"
 
       # Semble intentionally keeps Numtide's derivation identity, so package
       # builds substitute it from cache.numtide.com. On authenticated main
@@ -252,25 +315,35 @@ jobs:
       # Same single installer as the `build` job — see the long note there for
       # the deadlock that drove darwin off nix-quick-install-action.
       #
-      # This job never deadlocked and could have kept the fast installer: it
-      # installs no cachix-action, so nothing holds a shared big-lock while
-      # `nix build` runs, which is why its darwin leg passed in 2m40s inside
-      # the very runs where `build` hung. It moves anyway so there is ONE
-      # macOS installer story rather than two, and so darwin stops running a
-      # different nix (2.34.7) than every other leg (2.35.2) — that skew is
-      # what made the hang possible in the first place.
+      # This job never deadlocked and could have kept the fast installer,
+      # which is why its darwin leg passed in 2m40s inside the very runs where
+      # `build` hung. The governing rule is NOT "it installs no cachix-action"
+      # — state it on the real axis: no long-lived process holds the Nix store
+      # open while this job's `nix build` runs. cachix-action is one way to
+      # get such a process; `--cachix-cache` is another, because nix-fast-build
+      # spawns its OWN cachix daemon (the hung `build` job had two, on
+      # different sockets). Adding either to this job re-arms the hang.
       #
-      # UNDER TESTING, and this is the leg to watch: its darwin builds have
-      # never run under a multi-user daemon, so they move from running as
-      # `runner` to `_nixbld*`. The ad-hoc codesign-then-exec assertion in
-      # overlays/lib.nix should not care — `--sign -` needs no keychain and
-      # Mach-O validity is not uid-dependent — but that is inference, not
-      # measurement, on a required check.
+      # It moves anyway so there is ONE macOS installer story rather than two,
+      # and so darwin stops running a different nix (2.34.7) from every other
+      # leg (2.35.2) — that skew is what made the hang possible at all.
+      #
+      # Its darwin builds had never run under a multi-user daemon before this
+      # change, moving from `runner` to `_nixbld*`, which put the ad-hoc
+      # codesign-then-exec assertion in overlays/lib.nix at risk on a required
+      # check. That is now measured, not inferred: run 31837837510 built
+      # kiro-cli-rollout-workflows locally under `_nixbld*` and passed.
       - if: steps.scope.outputs.needed == 'true'
         uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             accept-flake-config = true
+
+      - if: steps.scope.outputs.needed == 'true'
+        uses: ./.github/actions/assert-nix-config
+        with:
+          require: |
+            ^accept-flake-config = true
 
       # This only realizes the IFD sources used during evaluation. It has no
       # Cachix credentials and does not build the patched Kiro output; the
