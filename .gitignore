@@ -70,3 +70,8 @@ docs/src/
 
 # Local private working area (untracked journals, assessments, scratch)
 /private/
+
+# Node deps for packages/kiro-cli/schema, installed on demand by the manual
+# check documented in that package's README. Nothing in the flake builds it,
+# so the tree must never carry them.
+node_modules/
