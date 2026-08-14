@@ -4,8 +4,8 @@
 # remains correct.
 {
   instructions = {
-    disposition = "The module intentionally ships CLI guidance; the MCP server contributes its tool guidance at session start.";
-    reviewedHash = "612e9f994b07ea51deb2fbe21ef74e3a336b5bf3d33605b985498c5036ee2b3f";
+    disposition = "The module ships CLI guidance and, from 0.5.5, also teaches the MCP content field: the server's session-start instructions never mention content selection and its tool parameter descriptions are bare, so prose is the only channel that teaches it.";
+    reviewedHash = "8305b33df22b54d3db3fa74601e3afbdacd9561d374d287e3c6f0f9d1ae1b6b1";
   };
   templates = {
     "claude.md" = {
