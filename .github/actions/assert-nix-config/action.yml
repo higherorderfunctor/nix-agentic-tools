@@ -13,7 +13,11 @@ description: >-
   what preserves that property.
 
   Same doctrine as the cache positive control in ci.yml: a step that can only
-  pass is worse than no step at all.
+  pass is worse than no step at all. So this one was checked against its own
+  rule on 2026-08-14 — an absent substituter exits 1, a present one exits 0, and
+  a key present with the WRONG value (`accept-flake-config = false`) exits 1.
+  That last case is the point: it matches on values, not key names, so a config
+  written with the setting disabled still fails.
 
 inputs:
   require:
