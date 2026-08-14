@@ -17,6 +17,11 @@
   # under `lib.ai.*`. No top-level `lib.<helper>` exports exist.
   mcpLib = import ./../lib/mcp.nix {inherit lib;};
   aiBase = import ./../lib/ai {inherit lib;};
+  # The runtime registry, shared with lib/ai/sharedOptions.nix and
+  # checks/options-doc.nix. Importing it rather than restating the five names
+  # is what makes the tests below GROW when a sixth runtime lands: a hardcoded
+  # list would keep passing while silently not covering the newcomer.
+  harnessNames = import ./../lib/ai/runtimes.nix;
   codexExtracted = builtins.fromJSON (builtins.readFile ../overlays/chatgpt-codex-extracted.json);
   tomlFormat = pkgs.formats.toml {};
   # Generic idempotent-flag helper shared with mkKiro's wrapper (lib/idempotentFlags.nix).
@@ -641,7 +646,6 @@ in {
 
   module-ai-git-ssh-default-follows-harnesses = mkTest "ai-git-ssh-default-follows-harnesses" (
     let
-      harnessNames = ["claude" "codex" "copilot" "kimchi" "kiro"];
       # devenv has no `programs.git`, so the workaround travels the INTERNAL
       # channel (`ai._sandboxSafeSshCommand`) and each factory merges it into
       # its launcher wrapper. It is deliberately neither a project-shell write

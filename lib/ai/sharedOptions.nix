@@ -16,7 +16,7 @@
   agent = import ./agent.nix {inherit lib;};
   dirHelpers = import ./dir-helpers.nix {inherit lib;};
   hooks = import ./hooks.nix {inherit lib;};
-  harnessNames = ["claude" "codex" "copilot" "kimchi" "kiro"];
+  harnessNames = import ./runtimes.nix;
   anyHarnessEnabled = lib.any (name: lib.attrByPath ["ai" name "enable"] false config) harnessNames;
   hasHomeManagerGit = lib.hasAttrByPath ["programs" "git" "settings"] options;
 

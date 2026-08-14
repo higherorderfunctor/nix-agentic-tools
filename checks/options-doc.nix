@@ -22,6 +22,12 @@
   self,
 }: let
   docs = import ../lib/options-doc.nix {inherit lib pkgs self;};
+  # The shared runtime registry. This site used to hardcode a FOUR-element list
+  # without kimchi, which was a coverage gap rather than an exclusion: kimchi's
+  # HM and devenv facets predate this check by about six weeks, and nothing
+  # here ever mentioned it. Adding it is a strict tightening — both assertions
+  # were measured passing before the substitution.
+  runtimes = import ../lib/ai/runtimes.nix;
   devenvJson = "${docs.devenvOptionsDoc.optionsJSON}/share/doc/nixos/options.json";
   hmJson = "${docs.hmOptionsDoc.optionsJSON}/share/doc/nixos/options.json";
   expectedCodexRoots = pkgs.writeText "expected-codex-option-roots" (
@@ -109,9 +115,10 @@ in {
     # parity alone would let a broken markdown generator remain dormant after
     # the doc-site removal. nixos-render-docs escapes dots in option headings.
     ${lib.concatMapStringsSep "\n" (app: ''
-      "$grep" -Fq 'ai\.${app}\.enable' "${docs.hmOptionsDoc.optionsCommonMark}"
-      "$grep" -Fq 'ai\.${app}\.enable' "${docs.devenvOptionsDoc.optionsCommonMark}"
-    '') ["claude" "codex" "copilot" "kiro"]}
+        "$grep" -Fq 'ai\.${app}\.enable' "${docs.hmOptionsDoc.optionsCommonMark}"
+        "$grep" -Fq 'ai\.${app}\.enable' "${docs.devenvOptionsDoc.optionsCommonMark}"
+      '')
+      runtimes}
 
     ${lib.concatMapStringsSep "\n" (name: ''
         "$jq" --exit-status --arg name "${name}" \
