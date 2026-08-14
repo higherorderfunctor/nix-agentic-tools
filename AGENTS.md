@@ -85,6 +85,13 @@ documents are authoritative for content. Do not edit generated `.claude/rules/`,
   - Read:
     [`packages/kiro-cli/docs/kiro-auto-memory.md`](packages/kiro-cli/docs/kiro-auto-memory.md)
 
+- **`kiro-workflows`**
+  - Match: `checks/fixtures/kiro-workflows/**`,
+    `checks/kiro-workflow-schema.nix`, `packages/kiro-cli/lib/workflow/**`,
+    `packages/kiro-cli/schema/**`
+  - Read:
+    [`packages/kiro-cli/docs/kiro-workflow-schema.md`](packages/kiro-cli/docs/kiro-workflow-schema.md)
+
 - **`kiro-wrapper`**
   - Match: `checks/kiro-wrapper-argv.nix`, `lib/idempotentFlags.nix`,
     `overlays/kiro-cli.nix`, `packages/kiro-cli/lib/**`
