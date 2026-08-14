@@ -439,6 +439,26 @@ describe("analyze: whole-tree rules", () => {
     expect(codesOf(bad)).toContain("E-ARTIFACT-REF-NOT-PRECEDING");
   });
 
+  test("W-STOP-WHEN-TEMPLATE-BRACES — parses, but can never match", () => {
+    const mk = (template: string) =>
+      withSteps([
+        {
+          type: "repeat",
+          id: "r",
+          maxIterations: 2,
+          onMaxIterations: "abort",
+          stopWhen: `{{${template}}} contains DONE`,
+          steps: [step("s")],
+        },
+      ]);
+    expect(codesOf(mk("a{b"))).toContain("W-STOP-WHEN-TEMPLATE-BRACES");
+    // A brace-free template is clean; `s` is a producing step inside the body,
+    // which a repeat's stop context may reference.
+    expect(codesOf(mk("s.output"))).not.toContain(
+      "W-STOP-WHEN-TEMPLATE-BRACES",
+    );
+  });
+
   test("W-ABORT-BRANCH-STRANDS-DOWNSTREAM catches the measured stranded-verify defect", () => {
     expect(
       codesOf(
