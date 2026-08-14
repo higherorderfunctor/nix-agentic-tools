@@ -41,42 +41,52 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      # Split the installer by OS. cachix/install-nix-action runs the
-      # upstream multi-user installer, which medians 31s on macos-latest
-      # vs 4s on ubuntu (n=23 runs each): it carves an APFS volume for
-      # /nix, provisions build users, and loads a launchd daemon. That
-      # gap is real wall clock whenever this leg is the critical path,
-      # and it cannot be tuned away in place — install-nix.sh already
-      # passes --daemon-user-count $(cpu_count * 2), so the usual
-      # NIX_USER_COUNT knob is a no-op here.
+      # ONE installer for both legs: cachix/install-nix-action, the upstream
+      # MULTI-USER installer. On darwin that is a deliberate wall-clock
+      # regression bought to kill a hang, and it is UNDER TESTING — see the
+      # re-check list below before treating it as settled.
       #
-      # nix-quick-install-action unpacks a prebuilt store archive into a
-      # single-user /nix owned by the runner user: same volume, none of
-      # the user/daemon provisioning. Verified at v35: composite action
-      # (no Node runtime), and nix-2.34.7-aarch64-darwin.tar.zstd is
-      # published, so the pinned version resolves.
+      # WHY darwin left nixbuild/nix-quick-install-action: that action installs
+      # a single-user /nix owned by the runner, so every nix process opens
+      # LocalStore directly and contends on the store big-lock. It also pins
+      # nix 2.34.7, so the DB it creates never carries the
+      # 20260309-drop-redundant-indexreferrer migration that nix >= 2.35 adds
+      # (local-store.cc:638). The first 2.35 process to open that store —
+      # nix-fast-build's own bundled nix — therefore requests the EXCLUSIVE
+      # big-lock (local-store.cc:341-343, logging "waiting for exclusive
+      # access to the Nix store..."). Cachix's daemon holds a SHARED lock for
+      # its whole lifetime and that exclusive request has NO timeout, so
+      # whichever side loses the start-up race hangs until the 60m ceiling.
+      # Hit twice on PR #933 (runs 31801539425, 31830042311), both killed at
+      # 1h00m with orphaned nix-eval-jobs and cachix processes.
       #
-      # darwin ONLY. The ubuntu legs install in 4s, so switching them
-      # would buy ~2s while giving up the multi-user build sandbox that
-      # is on by default there (macOS has it off regardless, so the
-      # darwin leg forfeits nothing real).
+      # The daemon install closes it twice over: clients resolve to
+      # UDSRemoteStore and never take the big-lock at all, and install-nix.sh
+      # pins nix 2.35.2, so the DB is created with the migration applied.
       #
-      # nix_conf REPLACES ~/.config/nix/nix.conf, but the action appends
-      # its flake defaults AFTER writing it (nix-quick-install.sh:98-119),
-      # so accept-flake-config cannot be clobbered. It is repeated here
-      # anyway so both legs read identically; duplicate nix.conf keys are
-      # last-wins, not an error.
-      - if: runner.os == 'macOS'
-        uses: nixbuild/nix-quick-install-action@v35
-        with:
-          nix_version: "2.34.7"
-          nix_conf: |
-            accept-flake-config = true
-            extra-substituters = https://cache.numtide.com
-            extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
-
-      - if: runner.os != 'macOS'
-        uses: cachix/install-nix-action@v31
+      # COST, measured here: install-nix-action medians 31s on macos-latest vs
+      # 4s on ubuntu (n=23 each, pre-2026-07-21); nix-quick-install's median
+      # was 5s on macos-latest (n=8, range 2-10s). darwin pays ~26s. It
+      # cannot be tuned away in place — install-nix.sh already passes
+      # --daemon-user-count $(cpu_count * 2), so NIX_USER_COUNT is a no-op.
+      # Both installers carve an APFS volume for /nix; the comment that used to
+      # sit here claimed quick-install reused "the same volume" and that was
+      # wrong. The real difference is build-user and launchd provisioning.
+      #
+      # UNDER TESTING — do not mark settled without re-checking:
+      #   - max-jobs goes 1 -> auto (3 here). install-nix.sh writes
+      #     `max-jobs = auto`; quick-install wrote none, so nix's default of 1
+      #     applied. nix-fast-build sizes its build pool straight from it, and
+      #     warm-ifd's eval alone peaks near 3.8 GB RSS on a 3-core / 7 GB
+      #     runner. This is a bigger unknown than the 31s. If runs get slower
+      #     or OOM, pin `max-jobs = 1` below before blaming the installer.
+      #   - always-allow-substitutes = true is new on darwin, which changes
+      #     which paths this leg ends up pushing to cachix.
+      #   - @v31 is a MOVING tag: nix went 2.34.7 -> 2.35.2 under it in four
+      #     months. Re-pin with install_url if that ever bites.
+      #   - the 31s baseline predates the current runner image and has not been
+      #     re-measured since the swap back.
+      - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             accept-flake-config = true
@@ -239,14 +249,24 @@ jobs:
           echo "needed=${needed}" >> "$GITHUB_OUTPUT"
           echo "patched Kiro validation needed: ${needed}"
 
-      - if: steps.scope.outputs.needed == 'true' && runner.os == 'macOS'
-        uses: nixbuild/nix-quick-install-action@v35
-        with:
-          nix_version: "2.34.7"
-          nix_conf: |
-            accept-flake-config = true
-
-      - if: steps.scope.outputs.needed == 'true' && runner.os != 'macOS'
+      # Same single installer as the `build` job — see the long note there for
+      # the deadlock that drove darwin off nix-quick-install-action.
+      #
+      # This job never deadlocked and could have kept the fast installer: it
+      # installs no cachix-action, so nothing holds a shared big-lock while
+      # `nix build` runs, which is why its darwin leg passed in 2m40s inside
+      # the very runs where `build` hung. It moves anyway so there is ONE
+      # macOS installer story rather than two, and so darwin stops running a
+      # different nix (2.34.7) than every other leg (2.35.2) — that skew is
+      # what made the hang possible in the first place.
+      #
+      # UNDER TESTING, and this is the leg to watch: its darwin builds have
+      # never run under a multi-user daemon, so they move from running as
+      # `runner` to `_nixbld*`. The ad-hoc codesign-then-exec assertion in
+      # overlays/lib.nix should not care — `--sign -` needs no keychain and
+      # Mach-O validity is not uid-dependent — but that is inference, not
+      # measurement, on a required check.
+      - if: steps.scope.outputs.needed == 'true'
         uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |

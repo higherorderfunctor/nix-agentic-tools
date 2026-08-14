@@ -169,6 +169,7 @@ hsjobeki
 idempotently
 idents
 indexedlog
+indexreferrer
 inferera
 inlines
 inspectable
@@ -236,6 +237,7 @@ netlink
 netrc
 newfstatat
 niks
+nixbld
 nixbuild
 nixd
 nixdoc
