@@ -182,6 +182,28 @@ _: {
         }
       ];
     };
+    # kiro-workflows: the typed schema for the Kiro workflow definition
+    # format, in Nix and in Effect-TS. Split out of `kiro-wrapper` (which
+    # scopes all of packages/kiro-cli/lib/**) for the reason that category's
+    # own header gives: an edit to the workflow schema should load the schema
+    # rule, not the launcher argv contract. Scoped to both implementations,
+    # the shared constants, the conformance check and its vendor fixtures,
+    # since they have to move together.
+    kiro-workflows = {
+      scopes = [
+        "checks/fixtures/kiro-workflows/**"
+        "checks/kiro-workflow-schema.nix"
+        "packages/kiro-cli/lib/workflow/**"
+        "packages/kiro-cli/schema/**"
+      ];
+      sources = [
+        {
+          location = "package";
+          name = "kiro-workflow-schema";
+          dir = "kiro-cli";
+        }
+      ];
+    };
     # kiro-wrapper: the argv contract of the generated kiro-cli launcher /
     # chat wrappers — which subcommands accept `--tui`/`--v3`/`--trust-tools`,
     # why the appends are gated rather than unconditional, and how to

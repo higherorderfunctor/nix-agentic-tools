@@ -38,6 +38,37 @@ whether an out-of-root path fails loudly at launch or silently at evaluation
 depends on which branch it takes rather than on the CLI version. See trap 3 and
 rule 4.
 
+**Revised 2026-08-14** against **KAS 2.18.0**, by reading the engine's Zod
+schema and `src/workflow/validate.ts` directly rather than by re-reading this
+document. Four claims were REFUTED and are corrected in place:
+
+- the step-level **`input` field no longer exists** — `prompt` is required, and
+  a step carrying `input` is now rejected loudly. This document asserted the old
+  rule in three places (§1 node table, §3 channel table, §4 validation), all now
+  fixed. This is the correction most likely to have been copied into a schema,
+  because it reads as a harmless alternative rather than a removal.
+- **`watch.config` is optional**, not required, and **`idleTimeoutSec` exists**
+  and was absent from the node table entirely.
+- **a `repeat` may define NEITHER stop form** — only defining both is refused.
+  The vendor's own `autoresearch` recipe ships with neither.
+- **there is a nesting-depth cap of 8**, which this document never recorded.
+  Only the 20-step cap was known.
+
+Two rules were ADDED that no prior note carried: the only node-**orientation**
+rule in the engine (a step declaring `completion` may not appear beneath a
+`parallel`, checked against any ancestor), and the load-time template-reference
+ordering rules. Nested repeats and nested parallels are both LEGAL — a natural
+guess to the contrary is wrong.
+
+This revision also lands two artifacts that encode all of the above as
+executable contract, so the next reader can run it rather than trust it:
+`packages/kiro-cli/lib/workflow/` (Nix option types + tree analyzer + a
+wire-JSON parser/renderer) and `packages/kiro-cli/schema/` (Effect `Schema`,
+with the tree rules additionally enforced at TypeScript compile time). Both are
+checked against the seven vendor recipes inlined in the engine bundle, which
+round-trip byte-identically. Design notes and the traps are in
+`packages/kiro-cli/docs/kiro-workflow-schema.md`.
+
 **If you are holding a COPY of this file, compare that date against yours.**
 This document is `dev/`-scoped and has no export path, so nothing propagates a
 correction into a vendored copy. That matters more than usual for this
@@ -165,19 +196,39 @@ sourced to a code read. §2 has the worked case.
 A workflow is one JSON object:
 
 ```
-{ name, description?, inputs?, modelId?, effortLevel?, steps[] }
+{ name, description?, inputs?, modelId?, effortLevel?, planRevision?, steps[] }
 ```
 
-with five node types, and that is the entire scheduling vocabulary
-(R-workflow-5, quoting the engine's own enums):
+`planRevision` is an optional non-negative int that a hand-authored file must
+**omit** — the runner stamps it 0 at creation and it is a pairing token between
+`workflow-state.json` and `workflow-definition.json`, not authored input.
 
-| type       | required                                                   | notes                                              |
-| ---------- | ---------------------------------------------------------- | -------------------------------------------------- |
-| `step`     | `id`, `agent`, and at least one of `prompt` / `input`      | the only node that runs an agent                   |
-| `sequence` | `id`, `steps`                                              | ordered                                            |
-| `parallel` | `id`, `branches`, `joinPolicy`                             | `all` \| `allSettled` \| `any`                     |
-| `repeat`   | `id`, `steps`, `maxIterations` (1–1000), `onMaxIterations` | `abort` \| `continue` \| `pause`; plus a stop form |
-| `watch`    | `id`, `handler`, `config`                                  | non-LLM polling: `github-pr`, `crux-cr`            |
+With five node types, and that is the entire scheduling vocabulary. **The table
+below was re-derived from the KAS 2.18.0 Zod schema on 2026-08-14** and three of
+its rows changed; see the revision note at the top of this file.
+
+| type       | required                                                   | optional                                                             | notes                                   |
+| ---------- | ---------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------- |
+| `step`     | `id`, `agent`, `prompt`                                    | `artifacts`, `captureOutput`, `completion`, `modelId`, `effortLevel` | the only node that runs an agent        |
+| `sequence` | `id`, `steps`                                              | —                                                                    | ordered                                 |
+| `parallel` | `id`, `branches`, `joinPolicy`                             | —                                                                    | `all` \| `allSettled` \| `any`          |
+| `repeat`   | `id`, `steps`, `maxIterations` (1–1000), `onMaxIterations` | `stopCondition` XOR `stopWhen`                                       | `abort` \| `continue` \| `pause`        |
+| `watch`    | `id`, `handler`                                            | `config`, `idleTimeoutSec`                                           | non-LLM polling: `github-pr`, `crux-cr` |
+
+Three corrections to the row above, all measured against the shipped bundle:
+
+- **`prompt` is REQUIRED and `input` no longer exists.** The step-level `input`
+  field was removed and the schema now rejects it loudly with a migration
+  message (`removedLegacyInputField`). The old "at least one of `prompt` /
+  `input`" refinement is gone. §3 and §4 of this document repeated that claim
+  and are corrected in place.
+- **`watch.config` is OPTIONAL, not required**, and `idleTimeoutSec` exists and
+  was missing here entirely. Omitting `idleTimeoutSec` means the watch polls
+  FOREVER, bounded only by the enclosing repeat.
+- **A `repeat` may define NEITHER stop form.** The engine rejects only defining
+  _both_. Both vendor authoring documents claim exactly one is required, and the
+  vendor's own `autoresearch` recipe ships with neither — so a schema enforcing
+  "exactly one" rejects a vendor-canonical recipe.
 
 There are **four** launch forms, not three — the ledger's §4.1 covers only the
 `workflowPath` ones, but `run_workflow`'s own description says "Provide exactly
@@ -417,17 +468,23 @@ engine and drives the calling step's own lifecycle (§2). Everything moves
 through one of four places, and choosing between them is most of workflow
 design:
 
-| Channel                | Shape                                | Good for                                      |
-| ---------------------- | ------------------------------------ | --------------------------------------------- |
-| **`prompt` templates** | `{{<id>.output}}` inside prompt text | short verdicts, small structured text         |
-| **the `input` field**  | `"input": "{{watch_id.output}}"`     | piping one node's output in as the whole task |
-| **Artifacts**          | `{{artifacts.<name>}}` → a path      | anything large; passing an absolute location  |
-| **The filesystem**     | the agents just read and write it    | loops, queues, accumulating state             |
+| Channel                | Shape                                | Good for                                     |
+| ---------------------- | ------------------------------------ | -------------------------------------------- |
+| **`prompt` templates** | `{{<id>.output}}` inside prompt text | short verdicts, small structured text        |
+| **Artifacts**          | `{{artifacts.<name>}}` → a path      | anything large; passing an absolute location |
+| **The filesystem**     | the agents just read and write it    | loops, queues, accumulating state            |
 
-`input` is easy to miss and is a distinct field, not a prompt convention: **it
-takes precedence over `prompt`** when both are set, and its documented purpose
-is piping a `watch` payload into the following step (ledger §3.1). A `step`
-needs at least one of the two.
+**A fourth row used to sit here and has been deleted: the step-level `input`
+field.** It was real at KAS 2.15.1, where it took precedence over `prompt` and
+existed to pipe a `watch` payload into the following step. It has since been
+REMOVED, and the schema now rejects any step carrying it with a migration
+message naming the template system as its replacement. A `step` requires
+`prompt` and nothing else. Piping a watch payload is now `{{<watch_id>.output}}`
+inside the prompt like any other reference.
+
+This correction matters more than most, because the removed field was asserted
+in three separate places in this document and would have been copied straight
+into a schema. Verified against the KAS 2.18.0 Zod on 2026-08-14.
 
 The fourth row is not a workaround — it is the **shipped idiom**, and the
 bundled recipes use it.
@@ -958,9 +1015,13 @@ three.
 ### What validation catches, and what it does not
 
 `validate_workflow` **does** check schema conformance, the caps in §5, that
-every step has `prompt` or `input`, that a `repeat` does not define both stop
-forms, that `stopWhen` watch references resolve, the ordering rules in §3, and
-that `fileCheck` paths are not provably outside the workspace roots.
+every step has `prompt` (the `input` alternative is gone — see §3), that a step
+declaring `completion` does not sit beneath a `parallel`, that node ids are
+unique across the whole tree, that nesting stays within **8** levels, that every
+`{{…}}` reference names a producer that runs strictly earlier, that a `repeat`
+does not define both stop forms, that `stopWhen` watch references resolve, the
+ordering rules in §3, and that `fileCheck` paths are not provably outside the
+workspace roots.
 
 It does **not** check agent names, watch handler configs, `modelId`,
 `effortLevel`, or bare `{{identifier}}` references. A `watch` node with a
@@ -1616,6 +1677,38 @@ would change a concrete design.
 | R-16 | What does the viewer's `s steer` actually do to the selected node — inject a user message into that node's session, queue one for the whole run, or something else? And does it reset the 300-turn counter (R-limits-1)?                                                               | Steer a node mid-run with a distinctive token, then read that node's captured output and its siblings' for the token. Sibling containment answers the addressing question; `inspect_workflow` iteration counts answer the budget one.                                                     |
 | R-17 | What else does the TUI expose that the other two surfaces do not? The viewer alone shows `Tab agents`, `l stack`, and per-node output panes that appear nowhere in the research.                                                                                                       | Drive the TUI once with the feature unlocked and enumerate every binding and view, the way the ledger's §3.5 enumerated the agent roster. The surface is currently undocumented here.                                                                                                     |
 | R-18 | What total concurrency does a delegating workflow actually reach? Arithmetic says 20 step nodes x 5 permits = ~100 leaves at one delegating tier, but composition was only ever measured at n=2 dispatchers, and the overhead law suggests the economics break before the engine does. | Scale the peak-overlap sweep: 4, then 8, then 16 delegating steps, each dispatching 5 marker leaves, one run each. Read peak simultaneous leaf windows and wall-clock per leaf. Stop when wall-clock per leaf stops improving — that number, not the engine's ceiling, is the usable one. |
+
+### P-rows — measurement debt from the typed schema (2026-08-14)
+
+Opened by the first-generation pass that produced
+`packages/kiro-cli/lib/workflow/` and `packages/kiro-cli/schema/`. Every row
+here is a place where the schema encodes a **code-read**, not a measurement, so
+a probe would either confirm it or find a real defect in the artifacts.
+
+Ordered by value-per-cost. The first four are the ones worth doing; the rest are
+recorded so they are not rediscovered.
+
+| #    | Question the schema currently guesses at                                                                                                                                                                                                                                                                                                     | The one measurement                                                                                                                                                                                                                                                                                                                          | Cost                          |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| P-01 | **Does a store-symlinked `.workflow.json` really refuse to launch?** The highest-stakes row for a Nix generator: discovery stats (follows symlinks) while launch resolves through realpath, so they disagree by construction — but only the code was read. If confirmed, `home.file.<…>.text` is permanently the wrong delivery mechanism.   | In a scratch workspace `W`: write a valid definition to `/tmp/x.workflow.json`, then `ln -s` it into `W/.kiro/workflows/`. `listRecipes` should list it; `_kiro/workflow/new` on that path should throw "outside the allowed workspace roots". Repeat with a real file, and with a symlink whose target is inside `W`, to isolate the cause. | One ACP session, no model.    |
+| P-02 | **Is `input` really rejected now, and `prompt` really required?** Four documents disagreed about this and the schema follows the 2.18.0 Zod. A wrong call here rejects every definition a user already has.                                                                                                                                  | Three `validate_workflow` calls on a one-step definition: `prompt` only; `input` only; both. Validation executes nothing, so all three are free. Capture the verbatim rejections.                                                                                                                                                            | Free — no run, no model.      |
+| P-03 | **Are the caps still 20 / 8 / 1000 on the next CLI bump?** They are `DEFAULT_*` constants with no caller override anywhere in the bundle today, but that is exactly the kind of thing a release moves.                                                                                                                                       | Re-run the resolver in `packages/kiro-cli/lib/workflow/engine-limits.json` and grep the three identifiers. Wire it into the 4x/day update sweep so a bump reports instead of silently drifting.                                                                                                                                              | Free, and can be automated.   |
+| P-04 | **Does a `stopWhen` naming a watch OUTSIDE its repeat behave usefully?** The validator checks set membership with no lineage requirement, so it validates — and a completed watch's `watchTerminal` persists in the tree, which suggests the loop exits after one iteration. If so this deserves a policy lint the schema does not yet have. | One run: a top-level `watch` sibling BEFORE a `repeat` whose `stopWhen` names it. Count iteration wrappers: 1 means the hazard is real.                                                                                                                                                                                                      | One run.                      |
+| P-05 | **Does the stale-`watchTerminal` hazard fire for a repeat nested in a repeat?** Same mechanism, worse consequence: the inner loop would run zero effective iterations on every outer iteration after the first.                                                                                                                              | Outer repeat (3 iterations) containing a watch that goes terminal plus an inner repeat stopping on it. Read the persisted state and count inner iterations per outer iteration.                                                                                                                                                              | One run.                      |
+| P-06 | **Is `stopCondition.completionSignal` honored at runtime?** Vendor-real (the `goal` recipe uses it verbatim) but absent from both vendor authoring documents, and no run has ever confirmed the engine acts on it. Still open from R-10.                                                                                                     | A `repeat` at `maxIterations: 3` whose step signals `success` and writes a numbered marker. One iteration means honored; three means accepted-and-ignored.                                                                                                                                                                                   | One run, one trivial agent.   |
+| P-07 | **Does a `warning`-paused step inside a `parallel` ever resume?** The validator blocks only the JSON-declarable interactive form (`completion`); a prompt-level `send_message` pause is invisible to any static check and routes through the same park path. If it cannot resume, the schema should lint prompts too.                        | Parallel with two branches: A pauses immediately, B sleeps 60s. Reply on A's session while B runs and grep the log for `workflow.resumeStepWithMessage.run_loop_still_alive`.                                                                                                                                                                | One run.                      |
+| P-08 | **Does human steering text actually reach a resumed step's context?** The one recorded run produced `WAIVED/none`, which is equally consistent with "text never arrived" and "nobody typed one".                                                                                                                                             | Re-run the existing demo at `pace=1` and resume with the literal message `release word: banana`. `{"verdict":"GO","word":"banana"}` proves delivery. Delete the run directory first — its fixed path means stale markers pre-satisfy the stop conditions.                                                                                    | One run, one keypress.        |
+| P-09 | **Should template references be checked at TypeScript compile time?** Deliberately left out: parsing every prompt with template-literal types costs unboundedly in the size of the PROSE, not the graph. Whether that cost is real at workflow scale was reasoned about, not measured.                                                       | Add the walker behind a flag and time `tsc` on the seven vendor recipes versus without. If the delta is small, promote it.                                                                                                                                                                                                                   | An afternoon, no engine.      |
+| P-10 | **Is `handler` genuinely a closed set of two?** `extraWatchHandlers` is a documented test-harness injection point that defaults to empty, but only the library's option plumbing was read, not the CLI host that constructs it. A static union would wrongly reject a third handler.                                                         | `_kiro/workflow/listWatchHandlers` over the unauthenticated ACP driver returns the ids AND each config schema as JSON Schema 7 — which also cross-checks the two config shapes the schema encodes.                                                                                                                                           | One unauthenticated ACP call. |
+| P-11 | **What is this profile's real model catalog and per-model effort set?** Both fields are deliberately bare strings because the catalog is fetched at runtime and the compiled-in default is empty. If the catalog turned out stable, a warn-list would be worth having.                                                                       | Capture one session's `config_option_update`: `options[].value` gives the ids, `options[]._meta.kiro.effortLevels` the per-model sets. Diff across two auth profiles to see whether it varies at all.                                                                                                                                        | One session.                  |
+| P-12 | **Is a top-level `"$schema"` key really harmless?** Derived from zod v3's strip-by-default plus the absence of `.strict()`, which is sound but not executed. If harmless, the generator should emit one for editor completion.                                                                                                               | Add `"$schema"` to a known-good recipe, confirm `listRecipes` reports no validation error, then launch it and read the persisted `workflow-definition.json` — the key should be absent, proving strip rather than passthrough.                                                                                                               | Free.                         |
+
+**Two things the schema deliberately does NOT encode**, recorded so the gap is a
+decision rather than an oversight. Agent names cannot be resolved statically
+(the registry is on disk and the engine's own two tiers disagree about unknown
+names). `fileCheck` path containment cannot be decided from the JSON at all —
+`isWithinAllowedRoots` resolves symlinks on the live filesystem. Both surface as
+`policy` lints instead of errors.
 
 ### Closed by measurement
 
