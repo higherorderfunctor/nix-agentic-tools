@@ -13,6 +13,7 @@
     "*.png",
     ".direnv",
     ".git",
+    "checks/fixtures/kiro-workflows/**",
     "config/cspell",
     "docs/**",
     "fixtures/kiro-primitives/evidence/**",
