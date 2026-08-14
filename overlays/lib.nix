@@ -455,14 +455,27 @@ rec {
       fi
     done
 
-    # The captured token is used as an ERE below, and the old form carries a
-    # dot (`w.boolean`). Quote it as `[.]` rather than `\.`: the escape would
-    # have to survive Nix -> bash -> sed's REPLACEMENT text -> ERE, and each
-    # layer treats backslashes differently. A bracket expression means the
-    # same thing to the regex engine and nothing to any layer above it.
-    # (Literal `\.` written directly in a pattern, as the anchors above do, is
-    # unaffected — that goes through no substitution.)
-    boolCtorRe=$(printf '%s' "$boolCtor" | "$sed" -e 's/[.]/[.]/g')
+    # The captured token is used as an ERE below, so every character in it
+    # that the regex engine treats specially has to be neutralized. The
+    # capture above admits exactly TWO such characters — `$`, from the
+    # identifier class `[A-Za-z_$][A-Za-z0-9_$]*` that a minifier really does
+    # use, and `.`, from the old `<ns>.boolean` form. Keep this set in sync
+    # with that class; anything it starts admitting has to be added here.
+    #
+    # `$` is the dangerous one and it fails SILENTLY in the wrong direction:
+    # left bare it is an end-of-line anchor, so a ctor minified to something
+    # like `A$` matches nothing, `ctorKeys` comes out 0, and the build blames
+    # the schema for not having a shared boolean factory — a held-back package
+    # with a confidently wrong diagnosis, which is the exact failure mode this
+    # extractor exists to avoid.
+    #
+    # Bracket them rather than backslash-escaping: the escape would have to
+    # survive Nix -> bash -> sed's REPLACEMENT text -> ERE, and each layer
+    # treats backslashes differently, while `[x]` means the same thing to the
+    # regex engine and nothing to any layer above it. (Literal `\.` written
+    # directly in a pattern, as the anchors above do, is unaffected — that
+    # goes through no substitution.)
+    boolCtorRe=$(printf '%s' "$boolCtor" | "$sed" -e 's/[.$]/[&]/g')
     ctorKeys=$("$grep" -aoE '[A-Za-z_$][A-Za-z0-9_$]*:'"$boolCtorRe"'\(\)\.optional\(\)' "${bin}" \
       | "$sed" -E 's/:.*$//' | "$sort" -u | "$grep" -c . || true)
     if [ "$ctorKeys" -lt 50 ]; then
