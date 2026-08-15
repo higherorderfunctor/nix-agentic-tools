@@ -199,9 +199,17 @@ in rec {
           + "${toString limits.maxNestingDepth}")
     ) (filter (e: length e.lineage > limits.maxNestingDepth) entries);
 
-    # The engine emits when it reaches an id's SECOND occurrence, once per id.
-    # This is observably different from grouping duplicates by first occurrence
-    # for interleaved ids such as [a b b a].
+    # The engine emits when it REACHES an id it has already seen, so the first
+    # emission for an id lands at that id's second occurrence. That is what
+    # fixes the ORDER, and it is observably different from grouping duplicates
+    # by first occurrence for interleaved ids such as [a b b a].
+    #
+    # It emits once per OCCURRENCE, though, not once per id: `walkNode` only
+    # adds to `allNodeIds` on the miss, so `[a a a]` yields TWO engine errors.
+    # This collapses them to one, because the engine's message carries no
+    # positional information (`Duplicate node id 'a' in workflow; ids must be
+    # unique.`) and the second copy is therefore byte-identical to the first.
+    # The Effect port collapses identically, so the two agree.
     dupDiags =
       (lib.foldl' (
           acc: e:
