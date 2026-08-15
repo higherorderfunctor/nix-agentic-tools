@@ -296,6 +296,7 @@ describe("stopWhen grammar — exactly two shapes parse", () => {
     ["a.output contains X", "left side is not a template"],
     ["prefix {{a.output}}.terminal", "template not at offset 0"],
     ["{{a.output contains X", "unclosed template"],
+    ["wait\u00a0for\u00a0it.terminal", "Unicode whitespace in watch id"],
   ])("%s is rejected (%s)", (input) => {
     expect(typeof parseStopWhen(input)).toBe("string");
   });
@@ -617,6 +618,42 @@ describe("analyze: whole-tree rules", () => {
     expect(codesOf(mk("s.output"))).not.toContain(
       "W-STOP-WHEN-TEMPLATE-BRACES",
     );
+  });
+
+  test("empty and whitespace stopWhen templates stay literal forever", () => {
+    const mk = (template: string) =>
+      withSteps([
+        {
+          type: "repeat",
+          id: "r",
+          maxIterations: 2,
+          onMaxIterations: "abort",
+          stopWhen: `{{${template}}} contains DONE`,
+          steps: [step("s")],
+        },
+      ]);
+    for (const template of ["", " ", "\u00a0"]) {
+      expect(codesOf(mk(template))).toContain("W-STOP-WHEN-LITERAL-TEMPLATE");
+    }
+  });
+
+  test("bare stopWhen templates must name a declared input", () => {
+    const mk = (declared: boolean) => ({
+      name: "w",
+      inputs: declared ? { target: "string" } : {},
+      steps: [
+        {
+          type: "repeat",
+          id: "r",
+          maxIterations: 2,
+          onMaxIterations: "abort",
+          stopWhen: "{{target}} contains DONE",
+          steps: [step("s")],
+        },
+      ],
+    });
+    expect(codesOf(mk(false))).toContain("W-UNDECLARED-INPUT-REF");
+    expect(codesOf(mk(true))).not.toContain("W-UNDECLARED-INPUT-REF");
   });
 
   test("W-ABORT-BRANCH-STRANDS-DOWNSTREAM catches the measured stranded-verify defect", () => {
