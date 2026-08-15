@@ -394,6 +394,30 @@ in
           };
         })
       ]);
+    # The wire spelling of the same rule, and the one the engine really does
+    # accept: `".."` filters to no segments at all, so `walkJsonPath` leaves
+    # the cursor at the document root and the check deep-equals the whole
+    # parsed file. `parse-normalizes-jsonpath-empty-segments` is the
+    # shape-matched control — same import path, same fileCheck, one surviving
+    # segment.
+    kiro-workflow-reject-jsonpath-all-empty-on-wire =
+      reject "jsonpath-all-empty-on-wire"
+      (W.parse.fromAttrs {
+        name = "w";
+        steps = [
+          {
+            type = "step";
+            id = "a";
+            agent = "ag";
+            prompt = "p";
+            completion.fileCheck = {
+              path = "p.json";
+              jsonPath = "..";
+              value = true;
+            };
+          }
+        ];
+      });
     kiro-workflow-reject-unknown-completion-signal =
       reject "unknown-completion-signal"
       (wrap [(step "a" {completion.completionSignal = "done";})]);

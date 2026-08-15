@@ -58,11 +58,18 @@
 # failure; some move a guaranteed later throw to authoring time; `name` is a
 # deliberate label-quality guardrail. This is the complete current set:
 #
-#   fileCheck.jsonPath   a segment LIST; the first segment rejects a LEADING
-#                        '$', and every segment rejects '*' or brackets.
-#                        `"$.drained"` is accepted by the engine and reads a
-#                        property literally named `$`, resolving undefined so
-#                        the loop never stops.
+#   fileCheck.jsonPath   a NON-EMPTY segment LIST; the first segment rejects a
+#                        LEADING '$', and every segment rejects '*' or
+#                        brackets. Two engine-accepted spellings are refused
+#                        here, and both are the same silent forever-false
+#                        condition. `"$.drained"` reads a property literally
+#                        named `$`, which resolves undefined so the loop never
+#                        stops. An ALL-EMPTY path (`""`, `"."`, `".."`) is
+#                        engine-legal too — `walkJsonPath` filters empty
+#                        segments, so the cursor never leaves the document
+#                        root and the check deep-equals the WHOLE parsed file
+#                        against `value`, which is not what any author means
+#                        by a property check.
 #   fileCheck.value      required here although the engine's `z.unknown()` key
 #                        accepts omission; omission makes the intended target
 #                        impossible to distinguish from an explicit undefined.
@@ -238,6 +245,10 @@
     // {description = "property name (no '.', '*' or brackets — this is NOT JSONPath)";};
 
   # addCheck IS correct here — a list definition is its own final value.
+  #
+  # `xs != []` is the all-empty rule from the ledger. `parse.nix` drops empty
+  # wire segments, so `""`, `"."` and `".."` all arrive here as `[]`; the
+  # engine walks that to the document root and compares the whole file.
   jsonPathType =
     types.addCheck (types.listOf jsonPathSegment) (xs: xs != [] && !(lib.hasPrefix "$" (builtins.head xs)))
     // {description = "non-empty list of property-name segments whose first segment does not start with '$', joined with '.' at render time";};
