@@ -177,6 +177,7 @@ in
         }
       ]);
     kiro-workflow-accept-empty-id = accept "empty-id" (wrap [(step "" {})]);
+    kiro-workflow-accept-empty-description = accept "empty-description" (baseline // {description = "";});
     kiro-workflow-accept-empty-prompt = accept "empty-prompt" (wrap [
       {
         step = {
@@ -186,6 +187,29 @@ in
         };
       }
     ]);
+    kiro-workflow-parse-normalizes-jsonpath-empty-segments = mkTest "parse-normalizes-jsonpath-empty-segments" (
+      let
+        parsed = eval (W.parse.fromAttrs {
+          name = "w";
+          steps = [
+            {
+              type = "step";
+              id = "a";
+              agent = "ag";
+              prompt = "p";
+              completion.fileCheck = {
+                path = "state.json";
+                jsonPath = ".state..done.";
+                value = true;
+              };
+            }
+          ];
+        });
+        parsedPath = (builtins.elemAt parsed.steps 0).step.completion.fileCheck.jsonPath;
+        renderedPath = (builtins.elemAt (W.render.toAttrs parsed).steps 0).completion.fileCheck.jsonPath;
+      in
+        parsedPath == ["state" "done"] && renderedPath == "state.done"
+    );
 
     # ── REJECT: per-node type rules ────────────────────────────────────────
     kiro-workflow-reject-two-tags =
@@ -365,6 +389,19 @@ in
           watch = {
             id = "w";
             watcher.crux-cr = {crId = "123";};
+          };
+        }
+      ]);
+    kiro-workflow-accept-empty-cr-id-with-cr-ref =
+      accept "empty-cr-id-with-cr-ref"
+      (wrap [
+        {
+          watch = {
+            id = "w";
+            watcher.crux-cr = {
+              crId = "";
+              crRef = "cr.json";
+            };
           };
         }
       ]);
