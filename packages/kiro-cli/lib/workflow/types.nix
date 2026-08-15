@@ -74,12 +74,22 @@
 #                        or unusable labels.
 #   crux-cr.crId         a NON-EMPTY value must match `^CR-[0-9]+$`, moving the
 #                        poll-time `assertValidCrId` throw to authoring time.
+#   stop.when.contains.template
+#                        rejects `{{` and `}}`, which `render.nix` supplies.
+#                        An authored copy either makes the rendered stopWhen
+#                        unparseable — `"{{p.output}}"` renders
+#                        `{{{{p.output}}}} contains DONE`, which the engine
+#                        REFUSES TO LOAD — or silently re-partitions the
+#                        expression so the authored `text` is not the literal
+#                        compared. A LONE brace is still accepted, because the
+#                        engine loads it and it only resolves literally; that
+#                        stays the `W-STOP-WHEN-TEMPLATE-BRACES` lint.
 #   integral Nix ints    `maxIterations` rejects an integral-valued Nix float
 #                        that JavaScript's `Number.isInteger` would accept.
 #
 # `prompt` and `description` deliberately remain plain strings. A stopWhen
-# contains-expression is also accepted verbatim and linted by analyze.nix when
-# it would resolve as literal text forever.
+# contains-expression is otherwise accepted verbatim and linted by analyze.nix
+# when it would resolve as literal text forever.
 {lib}: let
   inherit (lib) mkOption types;
 
@@ -147,13 +157,34 @@
       && !(syntax.hasJsWhitespace s))
     // {description = "watch id referenceable from stopWhen (non-empty, no '.', no whitespace, no '{{' or '}}')";};
 
-  # A `{{...}}` reference expression, WITHOUT its delimiters.
+  # A `{{...}}` reference expression, WITHOUT its delimiters — `render.nix`
+  # adds them, which is what pins the template to offset 0.
   #
-  # Kept as a string for engine fidelity. Empty, braced, and undeclared bare
-  # expressions parse and run but resolve as literal text forever; analyze.nix
-  # emits policy diagnostics for those cases rather than making wire import
-  # throw at the option boundary.
-  referenceExpr = types.str;
+  # A LONE brace is ACCEPTED, for engine fidelity: `parseStopWhen` slices on
+  # the first `}}` rather than applying the reference regex, so
+  # `{{a{b}} contains DONE` loads and merely resolves as literal text forever.
+  # Empty and undeclared bare expressions behave the same way. All three are
+  # `policy`-basis lints in analyze.nix, not option-boundary throws.
+  #
+  # A `{{` or `}}` is REFUSED, because the render step already owns those two
+  # delimiters and an authored copy re-enters the grammar it is being wrapped
+  # into. The natural mistake is pasting the wire spelling into a field that
+  # wraps: `template = "{{p.output}}"` renders
+  # `{{{{p.output}}}} contains DONE`, whose first `}}` sits at offset 12, so
+  # the remainder is `}} contains DONE`, which fails the ` contains ` test and
+  # the engine REFUSES TO LOAD the definition. Where a delimiter does not
+  # hard-fail the load it re-partitions the expression instead — a template of
+  # `a}} contains b` renders wire the engine reads as literal `b}} contains
+  # DONE`, so the authored `text` field is not what gets compared. Either way
+  # the authored value is not the one that runs.
+  #
+  # This port's own `parse.nix` is the cheapest proof: without this rule
+  # `render.nix` emits stopWhen strings the wire parser sitting beside it
+  # throws on.
+  referenceExpr =
+    types.addCheck types.str
+    (s: !(lib.hasInfix "{{" s) && !(lib.hasInfix "}}" s))
+    // {description = "reference expression carrying neither '{{' nor '}}' (render.nix adds the delimiters)";};
 
   # `jsonPath` is NOT JSONPath. The engine does `split(".")` then a plain
   # property walk, so "$.drained" reads a property literally named "$",
