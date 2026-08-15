@@ -211,10 +211,16 @@
   # toggle relaxes it. Saying "policy" here would be wrong twice over: in this
   # codebase `policy` names an advisory the analyzer emits and the engine
   # accepts, and this is neither advisory nor analyzer-side. It is one of the
-  # three deliberate stricter-than-engine rules listed in the strictness
-  # ledger at the top of this file, and it is there because `"$.drained"` is
-  # the single most expensive typo in this format: legal JSON, accepted by the
-  # engine, and it hangs the loop forever without an error.
+  # deliberate stricter-than-engine rules listed in the strictness ledger at
+  # the top of this file, and it is there because `"$.drained"` is the single
+  # most expensive typo in this format: legal JSON, accepted by the engine,
+  # and it hangs the loop forever without an error.
+  #
+  # Uncounted on purpose. This sentence used to say "one of the THREE", which
+  # was true only against the ledger as it stood when it was written; the
+  # ledger has grown twice since and the count went stale both times without
+  # anything catching it. A cross-reference that names the list does not need
+  # to also size it.
   # Spelled out as predicates rather than one regex on purpose. Nix regexes
   # are POSIX ERE, where a backslash inside a bracket expression is a LITERAL
   # backslash rather than an escape — so `[^.$*\[\]]+` does not mean what it
