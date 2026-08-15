@@ -1,6 +1,13 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-08-14 (commit pending — TWO corrections. (1) The
+> **Last verified:** 2026-08-15 (commit pending — adds the adversarial
+> subagent-review protocol that SUBSTITUTES for the Copilot loop while its quota
+> is exhausted, roughly two weeks from 2026-08-15. Written because an agent
+> cannot review its own output, and because the operator had been having to ask
+> for an independent reviewer by hand each time. Includes the refuter+defender
+> pairing and the never-self-adjudicate rule, both of which exist because
+> refute-by-default on your own work is a second discard filter rather than a
+> check). Prior: 2026-08-14 (commit pending — TWO corrections. (1) The
 > required-status-check list said FOUR; there are SIX, both `kiro-patched`
 > contexts having been promoted 2026-08-13 with PR #895. This file was wrong in
 > two places, `ci-update-workflow.md` was wrong in two more, and
@@ -124,6 +131,79 @@ threads must be resolved, an unaddressed Copilot comment holds the PR — a bot
 `update/*` PR included, which is the intended trade: nothing auto-merges while a
 reviewer has an open question on it. A stalled update PR is not lost; the next
 4x/day sweep rebuilds and re-arms it.
+
+### When Copilot is unavailable, YOU are not the reviewer — a subagent is
+
+> **Standing as of 2026-08-15.** Copilot's quota is exhausted for roughly two
+> weeks, so the automatic review below produces nothing. **This section is the
+> substitute, and it is not optional while that holds.** It is also the right
+> shape whenever the automatic review is absent for any other reason: a draft PR
+> that never flipped, a re-request that no-ops, a repo without the rule.
+
+**An agent cannot review its own output.** Reading back your own diff produces
+agreement, because the same reasoning that wrote the code evaluates it. The
+substitute is not "read it more carefully" — it is **dispatching an independent
+reviewer that never saw you write it.**
+
+So when there is no automatic review, run this before marking a PR ready:
+
+1. **Finders, in a subagent, one per lens.** Give each an explicit lens (factual
+   accuracy / reasoning and scope / document or code integrity / security) and
+   the standing instruction that **the PR body is an argument, not evidence**,
+   and that its confident tone is not a signal. Tell them plainly that the
+   author is orchestrating the review and cannot be deferred to.
+2. **Contest every finding TWICE — refute AND defend.** A refuter alone is a
+   second discard filter stacked on an author who was already grading their own
+   work, so the dismissal rate goes up for reasons that have nothing to do with
+   the code. Pair every refuter with a DEFENDER whose job is to argue the
+   finding is real, and who may not concede merely because a fix is awkward.
+3. **Never self-adjudicate a split.** Where refuter and defender disagree,
+   SURFACE the disagreement to the operator with both arguments. Resolving it
+   yourself reintroduces exactly the bias the whole structure exists to remove.
+4. **Fix what survives, and say what did not.** Report dismissed findings by
+   title and count — a review that reports only confirmed findings is
+   indistinguishable from one that found nothing.
+
+#### Sizing — STANDARD by default, thorough only when asked
+
+**The cost blows up in the CONTEST phase, not the finders.** Finders are bounded
+by however many lenses you pick. Findings are NOT bounded, and a refute+defend
+pair per finding is `2 × findings`. Measured on a 94-line docs PR: 3 lenses
+produced ~28 findings, so the run cost **59 agents** — the finders were 3 of
+them. A verbose finder triples the bill. Bound the contest phase first, and only
+then think about lenses.
+
+**STANDARD — the default, target 5-9 agents total:**
+
+1. **2-3 finders, on a CHEAPER MODEL (Sonnet).** Finder work is mechanical: open
+   the cited line, check whether it says what the PR claims. Reserve the strong
+   model for contest and synthesis, where judgement actually decides something.
+2. **Deduplicate before contesting.** Several lenses over one diff overlap
+   heavily, and contesting the same defect three times is pure waste.
+3. **Triage by severity.** Contest BLOCKER and SHOULD-FIX. NITs are REPORTED,
+   not litigated.
+4. **Batch the contest** — one agent takes ~5 findings, not one agent each.
+5. **Two-agent refute/defend for BLOCKERs only.** Below that, a single agent
+   argues both sides and returns a verdict plus the strongest counter-argument.
+   That is weaker — one context means correlated errors — which is precisely why
+   the genuine blockers keep the two-agent treatment.
+
+**THOROUGH — only when the operator asks.** Per-finding refute/defend on
+everything, more lenses, strong model throughout. Still deduplicate, and still
+cap the total: an uncapped fan-out has no terminus.
+
+**Scale lenses with BLAST RADIUS, not diff size.** A thirty-line change to a
+shared `lib/` file earns more than a thousand-line docs PR; a fragment edit
+warrants one or two.
+
+**Do not ask which tier to use per PR.** Standard is the default and the
+operator says "thorough" when they want it — asking is friction paid on every
+review.
+
+**Do not skip this because the change is "just docs".** The failure this repo
+actually experienced was a design document whose PR sequence sent a later
+session to build the wrong thing for a day. Prose that directs future work has a
+blast radius; treat it like code.
 
 ### Copilot review: ALWAYS read the suppressed-comments block
 
