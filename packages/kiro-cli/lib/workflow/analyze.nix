@@ -507,6 +507,27 @@ in rec {
             }
         )
         entries);
+      # `unsafePath` is a SHAPE test, and it is NOT the engine's containment
+      # rule. Measured against `containmentErrorsForPaths` (acp-server.js
+      # @17961753): the engine pushes WorkflowFileCheckPathOutsideWorkspaceError
+      # only when the RESOLVED path lands outside the allowed roots. It skips
+      # the check entirely when the path opens with `{{`, when the literal head
+      # before the first reference is relative, and when the session supplied no
+      # workspace roots at all. Reaching the check is not a failure; an absolute
+      # path INSIDE the workspace passes it.
+      #
+      # So this lint over-reports by construction, and by how much is measured
+      # rather than guessed: it fires on 4 of 4 fileCheck paths in the vendor
+      # corpus (./checks/fixtures/kiro-workflows/vendor — `feature-pipeline` x3,
+      # `ralph` x1, every one of them templated). That is a 100% false-positive
+      # rate against the only real corpus there is.
+      #
+      # Whether it should therefore change basis/severity, or narrow to the
+      # genuinely escaping shape, is KWS-023 / KWS-041 — an OPEN OPERATOR
+      # DECISION, because deciding it needs analyzer context that does not exist
+      # here: workspace roots, `additionalDirectories`, and the declared inputs
+      # the engine substitutes before resolving. Until that lands, the message
+      # below must claim only what this file can actually know.
       unsafePath = p:
         lib.hasInfix "{{" p
         || lib.hasPrefix "/" p
@@ -520,9 +541,11 @@ in rec {
       (filter (c: builtins.isList c.fc.value) checks)
       ++ map (c:
         pol "W-FILE-CHECK-PATH-UNSAFE" c.where
-        ("'${c.id}' fileCheck.path '${c.fc.path}' is templated, absolute, tilde-prefixed or escaping. "
-          + "A path the containment check REACHES fails the run at LAUNCH; one that SKIPS it evaluates "
-          + "false forever with no error, burning every iteration. Keep it a plain relative path."))
+        ("'${c.id}' fileCheck.path '${c.fc.path}' is templated, absolute, tilde-prefixed, or carries a "
+          + "'..' segment. This analyzer has no workspace roots, no `additionalDirectories` and no "
+          + "filesystem, so it cannot resolve the path or tell where it lands; the engine refuses a "
+          + "fileCheck path only when the RESOLVED path is outside the allowed roots. Flagged as a "
+          + "shape worth a human look, not as a predicted failure."))
       (filter (c: unsafePath c.fc.path) checks);
 
     # Measured, not theorized: a parallel is marked failed if ANY branch
