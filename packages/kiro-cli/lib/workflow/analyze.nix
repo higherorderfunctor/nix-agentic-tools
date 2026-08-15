@@ -476,7 +476,7 @@ in rec {
               )
               (pol "W-STOP-CONDITION-SIGNAL-FIRST" e.where
                 ("step '${e.id}' sets completionSignal alongside another stop form; the signal is tested "
-                  + "FIRST and returns, making the others dead"))
+                  + "first and may bypass the others when it matches"))
             )
         )
         entries)

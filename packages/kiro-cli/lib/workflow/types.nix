@@ -35,10 +35,11 @@
 #   * an unknown variant is a type error, naming the legal tags
 # Verified by evaluation, not by reading: all four rejections fire.
 #
-# `attrTag` has no prior art in this repo and recursive `lib.types` has none
-# either. Nix `let` bindings are recursive, so `nodeType` referring to itself
-# through `listOf` resolves lazily; this was smoke-tested before the file was
-# written rather than assumed.
+# `attrTag` is already the repository convention for mutually exclusive
+# credential and secret alternatives (`lib/credentials.nix`). Recursive use of
+# it has no prior art here: Nix `let` bindings are recursive, so `nodeType`
+# referring to itself through `listOf` resolves lazily; this was smoke-tested
+# before the file was written rather than assumed.
 #
 # ── What this file CANNOT enforce ───────────────────────────────────────────
 #
@@ -57,10 +58,11 @@
 # failure; some move a guaranteed later throw to authoring time; `name` is a
 # deliberate label-quality guardrail. This is the complete current set:
 #
-#   fileCheck.jsonPath   a segment LIST; segments reject a LEADING '$', plus
-#                        any '*' or bracket. `"$.drained"` is accepted by the
-#                        engine and reads a property literally named `$`,
-#                        resolving undefined so the loop never stops.
+#   fileCheck.jsonPath   a segment LIST; the first segment rejects a LEADING
+#                        '$', and every segment rejects '*' or brackets.
+#                        `"$.drained"` is accepted by the engine and reads a
+#                        property literally named `$`, resolving undefined so
+#                        the loop never stops.
 #   fileCheck.value      required here although the engine's `z.unknown()` key
 #                        accepts omission; omission makes the intended target
 #                        impossible to distinguish from an explicit undefined.
@@ -87,15 +89,14 @@
 
   # ── Cross-field invariants on submodules need `apply`, not the type ──────
   #
-  # This cost two wrong attempts and is worth writing down, because both
-  # failures are SILENT — the constraint evaluates as a no-op and the test
-  # that should have caught it passes.
+  # This cost two wrong attempts and is worth writing down.
   #
-  #   `lib.types.addCheck` hooks `check`, which the module system calls on
-  #   each RAW definition. For a scalar or a list that is the final value, so
-  #   addCheck is correct there. For a SUBMODULE it is the attrset the user
-  #   literally wrote, before defaults are applied — so a cross-field
-  #   predicate sees `{}` and passes.
+  #   `lib.types.addCheck` hooks `check`, which the module system calls on each
+  #   raw definition. When a submodule is an option's own type (including
+  #   through nullOr/listOf), `fixupOptionType` rebuilds it and discards that
+  #   check. Inside an `attrTag` member it instead runs against the raw,
+  #   pre-default attrset. Neither position provides the merged value needed
+  #   for a reliable cross-field invariant.
   #
   #   Overriding `merge` does not help either: for a submodule the module
   #   system evaluates the nested option tree and never calls `type.merge` at
@@ -161,8 +162,9 @@
   #
   # Segments are additionally constrained so the list form cannot smuggle the
   # string form back in: a segment holding a '.' would render into two
-  # segments, and '$' / brackets / wildcards are the JSONPath spellings that
-  # silently resolve to undefined.
+  # segments, and brackets / wildcards are JSONPath spellings that silently
+  # resolve to undefined. '$' is rejected only at the path head; in a later
+  # segment it is an ordinary property-name prefix to the engine.
   #
   # That last part is a HARD rejection at type level, not a `policy`-basis
   # lint — a definition using it does not evaluate at all, and no `strict`
@@ -186,14 +188,13 @@
       && !(lib.hasInfix "." s)
       && !(lib.hasInfix "*" s)
       && !(lib.hasInfix "[" s)
-      && !(lib.hasInfix "]" s)
-      && !(lib.hasPrefix "$" s))
-    // {description = "property name (no '.', '*' or brackets, and no leading '$' — this is NOT JSONPath)";};
+      && !(lib.hasInfix "]" s))
+    // {description = "property name (no '.', '*' or brackets — this is NOT JSONPath)";};
 
   # addCheck IS correct here — a list definition is its own final value.
   jsonPathType =
-    types.addCheck (types.listOf jsonPathSegment) (xs: xs != [])
-    // {description = "non-empty list of property-name segments, joined with '.' at render time";};
+    types.addCheck (types.listOf jsonPathSegment) (xs: xs != [] && !(lib.hasPrefix "$" (builtins.head xs)))
+    // {description = "non-empty list of property-name segments whose first segment does not start with '$', joined with '.' at render time";};
 
   # Positive integer, exclusive of zero. The engine's `.int().positive()`.
   positiveInt = types.ints.between 1 limits.maxRepeatIterations;
@@ -228,11 +229,11 @@
           Accepting it is forced, not a preference: the vendor's own
           `feature-pipeline` and `ralph` recipes both ship templated
           `fileCheck` paths, so rejecting them would reject a corpus the
-          engine self-validates. Whether the engine reaches the containment
-          check at all depends on whether the leading reference happens to be
-          a DECLARED input — a declared one is substituted first and then
-          checked, an undeclared one skips validation entirely — which is
-          exactly the kind of run-dependent behavior a static schema should
+          engine ships and shape-parses. Whether the engine reaches the
+          containment check at all depends on whether the leading reference
+          happens to be a DECLARED input — a declared one is substituted first
+          and then checked, an undeclared one skips validation entirely — which
+          is exactly the kind of run-dependent behavior a static schema should
           warn about rather than pretend to decide.
         '';
       };
@@ -242,8 +243,9 @@
         description = ''
           Property path as SEGMENTS, joined with '.' at render time.
 
-          Not JSONPath — no '$', no brackets, no wildcards. `["drained"]`
-          renders to `"drained"`, `["state" "done"]` to `"state.done"`.
+          Not JSONPath — no leading '$' on the path, and no brackets or
+          wildcards in any segment. `["drained"]` renders to `"drained"`,
+          `["state" "$value"]` to `"state.$value"`.
         '';
       };
       value = mkOption {
@@ -468,10 +470,9 @@
               REQUIRED. The engine tests only `=== undefined`, so an empty
               string passes both the schema and the validator.
 
-              The step-level `input` field was REMOVED and is now rejected
-              loudly. There is no option for it here, and `analyze.nix`
-              carries a targeted diagnostic because two of this repo's own
-              reference documents still teach it.
+              The step-level `input` field was REMOVED and is rejected loudly
+              by both the authored option type and the wire parser. There is no
+              option for it here; it cannot reach `analyze.nix`.
             '';
           };
           artifacts = mkOption {
