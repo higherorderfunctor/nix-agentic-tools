@@ -10,12 +10,20 @@
 #            `tryEval` + `deepSeq`; the deepSeq is load-bearing, because a
 #            submodule type error only surfaces when the value is FORCED and
 #            a shallow tryEval passes silently.
-#   VENDOR   the seven recipes inlined in the engine bundle must parse,
-#            type-check, analyze clean of engine-basis errors, and RENDER
-#            BACK byte-identically. The engine shape-parses these at module init
+#   VENDOR   the seven recipes inlined in the engine bundle must be
+#            EXPRESSIBLE in this schema: each one must read into the authored
+#            shape, force clean through the option types, and analyze clean of
+#            engine-basis errors. The engine shape-parses these at module init
 #            but does not structurally analyze them until launch. They are the
 #            highest-fidelity corpus available, but a failure warrants checking
 #            both the local rule and the vendor recipe.
+#
+# The wire reader those recipes go through — `packages/kiro-cli/lib/workflow/
+# parse.nix` — is TEST-ONLY SCAFFOLDING and is imported by path below, because
+# the library barrel deliberately does not export it. Authoring runs one way
+# (authored attrset -> wire JSON); nothing in this repo consumes the wire
+# format, and nothing here asserts that reading a recipe and rendering it back
+# reproduces the file it came from.
 #
 # A tryEval-based reject harness needs shape-matched positive controls, because
 # "threw for the reason I meant" and "threw for an unrelated reason" are
@@ -28,6 +36,10 @@
   ...
 }: let
   W = import ../packages/kiro-cli/lib/workflow {inherit lib;};
+
+  # Test-only scaffolding, imported by path rather than through the barrel —
+  # see the header. This is the ONLY consumer of it in the repository.
+  parse = import ../packages/kiro-cli/lib/workflow/parse.nix {inherit lib;};
 
   eval = wf:
     (lib.evalModules {
@@ -106,16 +118,21 @@
       entry: let
         stem = lib.removeSuffix ".workflow.json" entry;
         raw = builtins.fromJSON (builtins.readFile (vendorDir + "/${entry}"));
-        authored = eval (W.parse.fromAttrs raw);
+        authored = eval (parse.fromAttrs raw);
         analysis = W.analyze.analyze authored;
-        # `planRevision` is machine state the authored shape deliberately has
-        # no option for, so it is excluded from the round-trip comparison
-        # rather than carried.
-        expected = lib.filterAttrs (n: _: n != "planRevision") raw;
       in
         lib.nameValuePair "kiro-workflow-vendor-${stem}"
         (mkTest "vendor-${stem}" (
-          analysis.engineErrors == [] && W.render.toAttrs authored == expected
+          # Two things, and both are about the SCHEMA rather than about bytes:
+          # the recipe is expressible in the option types (the deepSeq is what
+          # forces every leaf — a submodule type error is invisible until the
+          # value is forced), and it carries no engine-basis error. Rendering is
+          # forced as well, so a render throw on real vendor input is caught
+          # here; the rendered value is NOT compared against the file, because
+          # reproducing the input is not a property this schema offers.
+          builtins.deepSeq authored
+          (builtins.deepSeq (W.render.toAttrs authored)
+            (analysis.engineErrors == []))
         ))
     )
     vendorNames);
@@ -213,7 +230,7 @@ in
     ]);
     kiro-workflow-parse-normalizes-jsonpath-empty-segments = mkTest "parse-normalizes-jsonpath-empty-segments" (
       let
-        parsed = eval (W.parse.fromAttrs {
+        parsed = eval (parse.fromAttrs {
           name = "w";
           steps = [
             {
@@ -283,7 +300,7 @@ in
           };
         }
       ]);
-    kiro-workflow-reject-removed-input-field-on-wire = mkTest "reject-removed-input-field-on-wire" (!(builtins.tryEval (builtins.deepSeq (W.parse.fromAttrs {
+    kiro-workflow-reject-removed-input-field-on-wire = mkTest "reject-removed-input-field-on-wire" (!(builtins.tryEval (builtins.deepSeq (parse.fromAttrs {
         name = "w";
         steps = [
           {
@@ -402,7 +419,7 @@ in
     # segment.
     kiro-workflow-reject-jsonpath-all-empty-on-wire =
       reject "jsonpath-all-empty-on-wire"
-      (W.parse.fromAttrs {
+      (parse.fromAttrs {
         name = "w";
         steps = [
           {
@@ -568,7 +585,7 @@ in
       ]);
     kiro-workflow-reject-unicode-whitespace-watch-wire =
       reject "unicode-whitespace-watch-wire"
-      (W.parse.fromAttrs {
+      (parse.fromAttrs {
         name = "w";
         steps = [
           {
@@ -713,7 +730,7 @@ in
     kiro-workflow-reject-stop-when-template-close-delimiter =
       reject "stop-when-template-close-delimiter"
       (stopWhenTemplate "p.output}}");
-    # The rule exists because this port's own wire parser throws on this port's
+    # The rule exists because this port's own wire reader throws on this port's
     # own rendered output. Rendering has to be done on a hand-built attrset,
     # since the option type is what now refuses the authored value.
     kiro-workflow-render-of-braced-stop-when-template-is-unparseable = mkTest "render-of-braced-stop-when-template-is-unparseable" (
@@ -727,7 +744,7 @@ in
       in
         wire
         == "{{{{p.output}}}} contains DONE"
-        && !(builtins.tryEval (builtins.deepSeq (W.parse.parseStopWhen "probe" wire) true)).success
+        && !(builtins.tryEval (builtins.deepSeq (parse.parseStopWhen "probe" wire) true)).success
     );
     kiro-workflow-stop-when-bare-input-references = mkTest "stop-when-bare-input-references" (
       let

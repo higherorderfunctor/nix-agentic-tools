@@ -1,26 +1,21 @@
-# Import an engine-shaped `.workflow.json` into the authored shape.
+# Read an engine-shaped `.workflow.json` into the authored shape.
 #
-# The inverse of ./render.nix. Two reasons this exists rather than the schema
-# just accepting the wire shape directly:
+# TEST-ONLY SCAFFOLDING, and deliberately not part of the public surface:
+# ./default.nix does not export it, and `checks/kiro-workflow-schema.nix`
+# imports this file by path. Authoring runs ONE WAY — authored attrset ->
+# ./render.nix -> wire JSON — and nothing in this repo consumes the wire
+# format, so a wire reader has no consumer to serve.
 #
-#   1. It lets the Nix analyzer check definitions that ALREADY EXIST — the
-#      hand-written ones under `.kiro/workflows/`, and the seven vendor
-#      recipes inlined in the engine bundle, which are the highest-fidelity
-#      conformance corpus available. The engine shape-parses them at module
-#      init but does not run its structural analyzer until launch.
-#   2. `parse` then `render` must round-trip SEMANTICALLY. That property is
-#      what proves the authored/wire divergence is a faithful re-encoding
-#      rather than a lossy one, and it is tested rather than asserted.
+# It exists for one reason. The seven vendor recipes inlined in the engine
+# bundle are the highest-fidelity conformance corpus available, and reading
+# them is the only way to show these option types can express them. The engine
+# shape-parses those recipes at module init but does not run its structural
+# analyzer until launch, so analyzing them here is new coverage rather than a
+# re-run of the engine's own work.
 #
-#      The qualifier is load-bearing, not hedging. `parseFileCheck` drops
-#      empty `jsonPath` segments, which makes `parse` deliberately
-#      NON-INJECTIVE: `state..done` and `.done` come back as `state.done` and
-#      `done`, so `render (parse wire) == wire` is false for any wire path
-#      carrying a redundant dot. The engine filters identically in
-#      `walkJsonPath` (`split(".").filter(s => s.length > 0)`), so the
-#      normalized path addresses the very same property and only the spelling
-#      is lost. Pinned by the check
-#      `kiro-workflow-parse-normalizes-jsonpath-empty-segments`.
+# It is NOT the inverse of ./render.nix and is not meant to be. Several wire
+# spellings read back as one authored value (see `parseFileCheck`), and nothing
+# asserts that rendering the result reproduces the input.
 #
 # This is a TOTAL function on well-formed input and throws loudly otherwise.
 # It deliberately does NOT validate — feed the result through
@@ -74,11 +69,11 @@
     # The wire form is a '.'-separated property walk; the authored form is the
     # segment list that makes the JSONPath spelling unrepresentable.
     #
-    # The filter is what makes this function non-injective — see the round-trip
-    # note in the file header. An empty segment is a redundant dot the engine
-    # itself discards, so dropping it on import is the normalization, not a
-    # loss; an ALL-empty path collapses to `[]`, which `jsonPathType` then
-    # refuses (a listed stricter-than-engine rule).
+    # The filter is what makes this function non-injective — see the header.
+    # An empty segment is a redundant dot the engine itself discards, so
+    # dropping it on import is the normalization, not a loss; an ALL-empty path
+    # collapses to `[]`, which `jsonPathType` then refuses (a listed
+    # stricter-than-engine rule).
     jsonPath = lib.filter (segment: segment != "") (splitString "." fc.jsonPath);
   };
 
@@ -150,7 +145,7 @@ in rec {
   #
   # `planRevision` is dropped rather than carried: the runner overwrites it
   # with 0 at creation, so it is machine state that happens to live in the
-  # same file, and round-tripping it would reintroduce a field the authored
+  # same file, and carrying it through would reintroduce a field the authored
   # shape deliberately has no option for.
   fromAttrs = w:
     {
