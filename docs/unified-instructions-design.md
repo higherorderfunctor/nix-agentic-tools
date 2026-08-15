@@ -407,8 +407,8 @@ forced through Markdown. Their current disposition is:
 - **Codex `AGENTS.override.md`** — wins over AGENTS.md. Same story as local —
   could expose via `ai.codex.overrideContext` if ever needed.
 - **Codex fallback filenames** — configure discovery through the native
-  `ai.codex.settings.project_doc_fallback_filenames` escape hatch; do not copy
-  fallback content into generated AGENTS.md.
+  `ai.codex.nativeSettings.project_doc_fallback_filenames` escape hatch; do not
+  copy fallback content into generated AGENTS.md.
 - **Codex hierarchical project AGENTS.md** (walk-down from root to cwd, one per
   directory) — distinct from the dir-of-files model and needs its own treatment
   if we want to surface it.

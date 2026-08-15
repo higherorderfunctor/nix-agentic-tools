@@ -1,8 +1,10 @@
 # Codex 0.146.0 reverse extraction-to-Nix coverage audit
 
-> Last verified: 2026-08-02 against `pkgs.ai.chatgpt-codex` 0.146.0, its
-> committed extracted sidecar, and the current official OpenAI Codex manual
-> (commit pending — CX-013).
+> Last verified: 2026-08-15 against the current option namespace (the reverse
+> coverage mechanism and extracted dispositions are unchanged; Codex-shaped keys
+> now live under `ai.codex.nativeSettings`). Prior: 2026-08-02 against
+> `pkgs.ai.chatgpt-codex` 0.146.0, its committed extracted sidecar, and the
+> current official OpenAI Codex manual (commit pending — CX-013).
 
 ## Purpose
 
@@ -63,9 +65,9 @@ receiving a false universal configuration meaning.
 
 | Extracted fact                          | Nix use                                                                                                                                                      |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `--ask-for-approval.acceptedValues`     | Typed preset branch of `ai.codex.settings.approval_policy`; now read directly instead of duplicating the three values                                        |
-| `--sandbox.acceptedValues`              | Typed `ai.codex.settings.sandbox_mode`; now read directly instead of duplicating the three values                                                            |
-| Stable feature names                    | Generated typed children of `ai.codex.settings.features`                                                                                                     |
+| `--ask-for-approval.acceptedValues`     | Typed preset branch of `ai.codex.nativeSettings.approval_policy`; now read directly instead of duplicating the three values                                  |
+| `--sandbox.acceptedValues`              | Typed `ai.codex.nativeSettings.sandbox_mode`; now read directly instead of duplicating the three values                                                      |
+| Stable feature names                    | Generated typed children of `ai.codex.nativeSettings.features`                                                                                               |
 | Non-stable feature names                | Accepted through that table’s boolean freeform type; deprecated/removed names are never promoted to advertised options                                       |
 | Feature defaults                        | Provenance only; an absent Nix leaf deliberately lets the pinned binary choose its native default                                                            |
 | Union of model reasoning levels         | Typed `model_reasoning_effort` and `agents.default_subagent_reasoning_effort` enums                                                                          |

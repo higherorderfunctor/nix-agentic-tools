@@ -1,25 +1,24 @@
-## Per-runtime pool capability gating
+## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-08-15 (commit pending — generalizes the shell-only
-> `supportsShell` flag into each app record's `supportedPools` list. The same
-> record data now gates option declaration, root fanout, collision checks, and
-> shell resolution; Kimchi consequently loses its dead `rules`/`rulesDir`
-> options while root `ai.rules` still degrades silently for it). Prior:
-> 2026-08-14 (commit pending — the escape hatch at the end of the Copilot
-> section was half-wrong: at 1.0.80 the plain `@github/copilot` npm tarball is a
-> 24K loader shim, not readable JS. The readable app code is in the per-platform
-> dep — and, better, the SEA self-extracts a byte-identical copy on first run,
-> so no download is needed at all. The Copilot `ai.shell` gap itself is
-> UNCHANGED and still open). Prior: 2026-08-10 (commit pending — first landing
-> of `ai.shell`. If you add another nullable-scalar `ai.*` option, change which
-> runtimes consume this one, or touch `resolveOverride`, update this fragment in
-> the same commit.)
+> **Last verified:** 2026-08-15 (commit pending — `supportedPools` now gates all
+> normalized pool declarations and fanout, while the new normalized `settings`
+> surface is deliberately present on every runtime and resolves nullable fields
+> per runtime through the same override rule as `ai.shell`). Prior: 2026-08-14
+> (commit pending — the escape hatch at the end of the Copilot section was
+> half-wrong: at 1.0.80 the plain `@github/copilot` npm tarball is a 24K loader
+> shim, not readable JS. The readable app code is in the per-platform dep — and,
+> better, the SEA self-extracts a byte-identical copy on first run, so no
+> download is needed at all. The Copilot `ai.shell` gap itself is UNCHANGED and
+> still open). Prior: 2026-08-10 (commit pending — first landing of `ai.shell`.
+> If you add another nullable-scalar `ai.*` option, change which runtimes
+> consume this one, or touch `resolveOverride`, update this fragment in the same
+> commit.)
 
 ### One record is the capability source
 
-Every `mkAiApp` record declares the normalized pools its runtime actually
-consumes in `supportedPools`. `mkBackendTransform.nix` reads that build-time
-list in four places:
+Every `mkAiApp` record declares the normalized pools its runtime exposes in
+`supportedPools`. `mkBackendTransform.nix` reads that build-time list in four
+places:
 
 - only supported per-runtime pool options are declared;
 - only supported pools participate in shared/per-runtime collision checks;
@@ -37,26 +36,36 @@ category as `backend`. It forces neither `config` nor the factory's `pkgs`, so
 it cannot reintroduce the `_module.args` recursion documented against
 `proxyIsSupported`.
 
-A same-named native option does not imply normalized-pool support. For example,
-`ai.copilot.settings` remains Copilot's native freeform surface while Copilot
-does not consume normalized root `ai.settings`; only `supportedPools` governs
-the normalized fanout.
+A same-named native option does not imply normalized-pool support.
+Runtime-shaped passthrough now lives under `nativeSettings`, independently of
+the capability list. Normalized `settings` is the deliberate uniform exception:
+all five runtimes list it so the same closed schema is available at every
+runtime scope, even when a particular field currently has a lossless native
+lowering only for a subset such as Claude and Codex.
 
 ### `ai.shell` is deliberately NOT collision-as-failure
 
 Every attrset-shaped `ai.*` pool treats a shared/per-CLI duplicate key as an
-error — see `collision-semantics.md`. `ai.shell` is the **one exception**, and
-the exception is structural rather than a preference: a pool key names an
-independent entry, so silently overriding one loses data. A nullable scalar has
-nothing to lose. `ai.claude.shell` is not a second entry competing with
-`ai.shell`; it is the same knob at a narrower scope, and making the pair collide
-would leave no way to express "this default, except here" — the entire point of
-the option.
+error — see `collision-semantics.md`. `ai.shell` and each normalized
+`ai.settings` field are the exceptions, and the exception is structural rather
+than a preference: a pool key names an independent entry, so silently overriding
+one loses data. A nullable scalar has nothing to lose. `ai.claude.shell` is not
+a second entry competing with `ai.shell`; it is the same knob at a narrower
+scope, and making the pair collide would leave no way to express "this default,
+except here" — the entire point of the option.
 
 Resolution lives in `lib/ai/ai-common.nix:resolveOverride` (non-null per-CLI
 wins, `null` inherits the root, `null` at both levels means "not configured").
 Do not inline the `if` at call sites; the contrast with the merge helper beside
 it is the thing worth keeping easy to grep for.
+
+Normalized settings use that helper per field. For example,
+`ai.claude.settings.reasoningEffort = "low"` overrides a root
+`ai.settings.reasoningEffort = "high"` for Claude only; Codex still inherits
+`"high"`. A null runtime value inherits the root. This is distinct from
+`nativeSettings`, which carries runtime-shaped passthrough and typed-native keys
+and participates in native option-priority rules only after normalized values
+have been resolved.
 
 ### Shell is one capability entry
 
@@ -64,13 +73,13 @@ it is the thing worth keeping easy to grep for.
 only when `shell` appears in the app record's `supportedPools`. There is no
 sibling shell-specific capability flag.
 
-| runtime | knob                       | delivery                         |
-| ------- | -------------------------- | -------------------------------- |
-| Claude  | `CLAUDE_CODE_SHELL`        | `settings.env` → `settings.json` |
-| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`         |
-| Kiro    | `SHELL` (own process env)  | launcher wrapper `export`        |
-| Copilot | **unknown — verified gap** | excluded                         |
-| Kimchi  | unassessed                 | excluded                         |
+| runtime | knob                       | delivery                               |
+| ------- | -------------------------- | -------------------------------------- |
+| Claude  | `CLAUDE_CODE_SHELL`        | `nativeSettings.env` → `settings.json` |
+| Codex   | `SHELL` (own process env)  | launcher wrapper `--set`               |
+| Kiro    | `SHELL` (own process env)  | launcher wrapper `export`              |
+| Copilot | **unknown — verified gap** | excluded                               |
+| Kimchi  | unassessed                 | excluded                               |
 
 Four runtimes were asked for; five go through `mkAiApp`. Kimchi is easy to miss
 because the issue that requested this never mentioned it.
@@ -153,7 +162,7 @@ three runtimes demonstrably do not perform.
 - **`ai.environmentVariables` now reaches Codex too.** Codex gained an
   `environmentVariables` option when its wrapper was built, so the root pool
   fans out to Codex, Copilot, Kimchi and Kiro. Claude is still outside it — it
-  has no wrapper here and `settings.env` is its native equivalent.
+  has no wrapper here and `nativeSettings.env` is its native equivalent.
 - **One precedence rule, everywhere: module defaults merge UNDER the consumer's
   `environmentVariables`, so an explicit entry wins.** Codex briefly did the
   reverse — typed option last, on the reasoning that the typed surface is more

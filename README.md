@@ -303,7 +303,7 @@ instruction building.
 | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot) | Same; project-native paths |
 | Portable lifecycle hooks | Per-CLI config | `ai.hooks.*` (Claude + Codex) | Same |
 | LSP server config | Per-CLI config | `ai.lspServers.*` (Claude + Copilot + Kiro) | Same; Codex has no native LSP registry |
-| CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.settings.env` |
+| CLI process environment | Shell config | `ai.environmentVariables` (Codex + Copilot + Kimchi + Kiro) | Same; baked into each launcher wrapper, never the shell. Claude uses `ai.claude.nativeSettings.env` |
 | Command shell | Per-CLI config or `$SHELL` | `ai.shell` / `ai.<cli>.shell` (Claude + Codex + Kiro) | Same; takes a package. Copilot and Kimchi are explicit exclusions |
 | Fragment composition | N/A | `lib.ai.compose` | `lib.ai.compose` |
 
@@ -340,7 +340,7 @@ ai = {
   settings.reasoningEffort = "high";
 
   # Runtime-native escape hatch: model identifiers are not portable.
-  codex.settings.model = "gpt-5.6-sol";
+  codex.nativeSettings.model = "gpt-5.6-sol";
 };
 ```
 
@@ -359,13 +359,15 @@ effective `configDir`. A parent containing multiple worktrees remains an
 explicit consumer root.
 
 Codex's beta permission model — `ai.codex.profiles`,
-`ai.codex.settings.default_permissions`, and `ai.codex.settings.permissions` —
-is **locked out** and fails evaluation if set. Those layers do not inherit the
-automatic roots above; worse, Codex resolves a layer carrying them by overriding
-rather than merging the `sandbox_mode`/`sandbox_workspace_write` settings
-beneath it, silently dropping every writable root the lower layer granted. Nix
-cannot see across config layers to catch that, so the surface is closed until
-the layering can be made safe. Use `sandbox_mode` / `sandbox_workspace_write`.
+`ai.codex.nativeSettings.default_permissions`, and
+`ai.codex.nativeSettings.permissions` — is **locked out** and fails evaluation
+if set. Those layers do not inherit the automatic roots above; worse, Codex
+resolves a layer carrying them by overriding rather than merging the
+`sandbox_mode`/`sandbox_workspace_write` settings beneath it, silently dropping
+every writable root the lower layer granted. Nix cannot see across config layers
+to catch that, so the surface is closed until the layering can be made safe. Use
+`ai.codex.nativeSettings.sandbox_mode` /
+`ai.codex.nativeSettings.sandbox_workspace_write`.
 
 </details>
 
@@ -452,14 +454,16 @@ later activations. It does **not** use a read-only store symlink.
 Devenv owns `.codex/config.toml` statically because no project-local Codex
 writer has been observed. User-global trust remains outside the project: trust
 the repository once when Codex prompts, or declare
-`ai.codex.settings.projects."<absolute-path>".trust_level` through Home Manager.
-Devenv rejects that bootstrap-global setting because project config cannot grant
-the trust required to load itself.
+`ai.codex.nativeSettings.projects."<absolute-path>".trust_level` through Home
+Manager. Devenv rejects that bootstrap-global setting because project config
+cannot grant the trust required to load itself.
 
-Native-only settings remain under `ai.codex.settings`. Named whole-file layers
-(`ai.codex.profiles`) are typed and emit correctly in both backends but are
-**locked out** — see the sandbox section above for why. Native Starlark command
-policy uses `ai.codex.execpolicyRules` rather than Markdown `ai.rules`.
+Native-only settings remain under `ai.codex.nativeSettings`. Normalized settings
+live under `ai.codex.settings` and narrow `ai.settings` field by field. Named
+whole-file layers (`ai.codex.profiles`) are typed and emit correctly in both
+backends but are **locked out** — see the sandbox section above for why. Native
+Starlark command policy uses `ai.codex.execpolicyRules` rather than Markdown
+`ai.rules`.
 
 </details>
 

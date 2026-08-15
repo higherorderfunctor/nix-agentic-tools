@@ -41,6 +41,7 @@
       "ai.codex.hooks"
       "ai.codex.instructions"
       "ai.codex.mcpServers"
+      "ai.codex.nativeSettings"
       "ai.codex.package"
       "ai.codex.profiles"
       "ai.codex.projectDocMaxBytes"
@@ -110,6 +111,13 @@ in {
       | join(".")
     ' "${hmJson}" | "$sort" -u > actual-codex-option-roots
     "$diff" -u "${expectedCodexRoots}" actual-codex-option-roots
+
+    # Internal module-to-runtime channels must remain absent from both
+    # consumer-facing references even though they are declared symmetrically.
+    ! "$grep" -Fq '_integration_writable_roots' "${hmJson}"
+    ! "$grep" -Fq '_integration_writable_roots' "${devenvJson}"
+    ! "$grep" -Fq '_integration_writable_roots' "${docs.hmOptionsDoc.optionsCommonMark}"
+    ! "$grep" -Fq '_integration_writable_roots' "${docs.devenvOptionsDoc.optionsCommonMark}"
 
     # Exercise every runtime namespace in the CommonMark renderings too; JSON
     # parity alone would let a broken markdown generator remain dormant after

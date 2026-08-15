@@ -95,7 +95,7 @@
       '';
     };
   in {
-    filteredSettings = aiCommon.filterNulls cfg.settings;
+    filteredSettings = aiCommon.filterNulls cfg.nativeSettings;
     filteredHarnessSettings = aiCommon.filterNulls cfg.harnessSettings;
     allAgencyTexts = lib.filter (s: s != "") ([contextText] ++ instructionTexts);
     package =
@@ -113,6 +113,7 @@ in
       "environmentVariables"
       "instructions"
       "mcpServers"
+      "settings"
       "skills"
     ];
     transformers.markdown = lib.ai.transformers.agentsmd;
@@ -136,7 +137,7 @@ in
         description = "Config directory relative to HOME / devenv root.";
       };
 
-      settings = lib.mkOption {
+      nativeSettings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = (pkgs.formats.json {}).type;
           options = {

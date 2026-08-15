@@ -145,23 +145,18 @@ in {
     };
 
     settings = lib.mkOption {
-      type = lib.types.submodule {
-        options.reasoningEffort = lib.mkOption {
-          type = lib.types.nullOr (lib.types.enum ["high" "low" "medium" "xhigh"]);
-          default = null;
-          description = ''
-            Portable default reasoning effort fanned out to Claude
-            (`effortLevel`) and Codex (`model_reasoning_effort`). The enum is
-            their exact persisted semantic intersection. A per-app native
-            setting, including an explicit null, overrides this default.
-          '';
-        };
-      };
+      type = aiCommon.normalizedSettingsType;
       default = {};
       description = ''
         Typed settings whose values preserve the same meaning across multiple
-        AI runtimes. This deliberately excludes similarly named settings with
-        runtime-specific identifiers or lossy translations.
+        AI runtimes. Each `ai.<runtime>.settings` field narrows this root
+        default when non-null. The current `reasoningEffort` field lowers to
+        Claude `effortLevel` and Codex `model_reasoning_effort`; the enum is
+        their exact persisted semantic intersection. Set a runtime's native
+        key, including an explicit null, under
+        `ai.<runtime>.nativeSettings` to arbitrate against the derived default.
+        Runtime-specific identifiers and lossy translations are deliberately
+        excluded.
       '';
     };
 
@@ -274,7 +269,7 @@ in {
         Codex itself runs with.
 
         Claude does NOT consume this pool — it has no wrapper here, and
-        `ai.claude.settings.env` is its native equivalent (upstream writes
+        `ai.claude.nativeSettings.env` is its native equivalent (upstream writes
         it into `~/.claude/settings.json`).
       '';
     };

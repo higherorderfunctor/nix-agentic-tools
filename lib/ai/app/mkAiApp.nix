@@ -38,7 +38,7 @@
 # That attrset is assembled in exactly one place — `customConfig` in
 # `mkBackendTransform.nix` — and read it rather than trusting a list here.
 # It currently carries `cfg`, `config`, every `merged*` pool,
-# `resolvedShell`, `topContext`, `topHooks` and `topSettings`. This comment
+# `resolvedSettings`, `resolvedShell`, `topContext`, and `topHooks`. This comment
 # used to enumerate four of them and had silently drifted from the real
 # call, which is the failure mode a second copy of the list invites; every
 # callback takes `...` anyway, so a stale list here misleads without ever

@@ -2,13 +2,14 @@
 
 > **Last verified:** 2026-08-15 (commit pending — L2 root pools now cross into
 > L3 only for runtimes whose app record lists that pool in `supportedPools`;
-> unsupported root fanout degrades and the L2b/L3 options are absent). Prior:
-> 2026-08-01 (commit pending — records the portable hooks exception: per-event
-> matcher-group lists append instead of key-colliding, and agents may carry a
-> typed semantic record). Prior: 2026-04-21 (commit pending — refactor of
-> ai-factory-collision plan §4). If you add a new Dir option or change how
-> per-file Dir expansion fans through the layers, update this fragment in the
-> same commit.
+> unsupported root fanout degrades and the L2b/L3 options are absent. The closed
+> normalized `settings` schema is deliberately listed by all five runtimes even
+> when a particular field lowers only for a subset). Prior: 2026-08-01 (commit
+> pending — records the portable hooks exception: per-event matcher-group lists
+> append instead of key-colliding, and agents may carry a typed semantic
+> record). Prior: 2026-04-21 (commit pending — refactor of ai-factory-collision
+> plan §4). If you add a new Dir option or change how per-file Dir expansion
+> fans through the layers, update this fragment in the same commit.
 
 ### Canonical 4-layer shape
 
@@ -62,6 +63,11 @@
   before `ai.<cli>.hooks.<Event>` groups. This is intentional composition, not
   an attrset-entry collision; only the exact portable Claude/Codex event
   vocabulary is accepted at L2.
+- **Normalized settings are a uniform scalar-field surface.** Every runtime
+  declares the same closed `settings` submodule. Each field resolves root versus
+  per-runtime with `resolveOverride`; native lowering remains per-runtime and
+  may support only a subset of fields. Runtime-shaped passthrough is separate
+  under `nativeSettings` and is not a normalized pool.
 - **Dir helpers live in `lib.ai.*`**, not in the module layer. They're pure
   (`path → attrset`) and usable outside HM/devenv.
 - **Per-file emission only.** A Dir option never takes a destination dir over
@@ -89,6 +95,8 @@
    supported CLI handles it the same way) or in each per-CLI factory (if the
    shape differs).
 3. Add `X` to `supportedPools` only on app records whose callbacks consume it.
+   The uniform normalized `settings` schema is the explicit exception: every
+   runtime declares it, while each field's native lowering may be narrower.
 4. Add L4 emission in each supporting per-CLI factory's customConfig.
 5. Wire the L2↔L3 merge through mergeWithCollisionCheck in both transforms, or
    document and test the concern's intentional composition rule (hooks append

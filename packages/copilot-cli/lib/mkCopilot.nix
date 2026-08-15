@@ -54,6 +54,7 @@ lib.ai.app.mkAiApp {
     "lspServers"
     "mcpServers"
     "rules"
+    "settings"
     "skills"
   ];
   transformers.markdown = lib.ai.transformers.copilot;
@@ -105,7 +106,7 @@ lib.ai.app.mkAiApp {
     # integration, telemetry, typed model selection) is tracked in
     # docs/plan.md "Ideal architecture gate → Absorption backlog" under
     # the copilot-cli absorption item.
-    settings = lib.mkOption {
+    nativeSettings = lib.mkOption {
       type = lib.types.attrsOf lib.types.anything;
       default = {};
       description = "Freeform settings merged into ~/.config/github-copilot/settings.json (HM: via activation script; devenv: via static write).";
@@ -442,10 +443,10 @@ lib.ai.app.mkAiApp {
         # ai.copilot just for MCP/skills fanout don't clobber an
         # externally-managed settings.json. Matches upstream Claude HM
         # behavior. Devenv-side is unconditional (project-local).
-        (lib.mkIf (cfg.settings != {}) {
+        (lib.mkIf (cfg.nativeSettings != {}) {
           home.activation.copilotSettingsMerge = lib.hm.dag.entryAfter ["linkGeneration"] (helpers.mkSettingsActivationScript {
             configFile = "${cfg.configDir}/settings.json";
-            settingsJson = builtins.toJSON cfg.settings;
+            settingsJson = builtins.toJSON cfg.nativeSettings;
             jq = "${pkgs.jq}/bin/jq";
             inherit (pkgs) coreutils;
           });
@@ -672,7 +673,7 @@ lib.ai.app.mkAiApp {
         # stats a project-local settings.json. Kept for option parity.
         {
           files."${cfg.configDir}/settings.json".text =
-            builtins.toJSON cfg.settings;
+            builtins.toJSON cfg.nativeSettings;
         }
       ];
   };

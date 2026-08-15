@@ -60,8 +60,8 @@ in {
         wrappedGlab
       ];
     })
-    (lib.mkIf (cfg.enable && lib.hasAttrByPath ["ai" "codex" "settings"] options && config.ai.codex.enable) {
-      ai.codex.settings._integration_writable_roots = lib.mkAfter [effectiveConfigDir];
+    (lib.mkIf (cfg.enable && lib.hasAttrByPath ["ai" "codex" "internal"] options && config.ai.codex.enable) {
+      ai.codex.internal._integration_writable_roots = lib.mkAfter [effectiveConfigDir];
     })
     (lib.mkIf (cfg.enable && cfg.keyringSync.enable && pkgs.stdenv.isLinux) {
       # Activation records one attempt without touching the secret. The path

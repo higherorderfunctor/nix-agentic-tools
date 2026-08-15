@@ -1,15 +1,23 @@
 # Kimchi factory (mkKimchi)
 
 > **Last verified:** 2026-08-15 (commit pending — records Kimchi's normalized
-> pool capability census and the deliberate absence of rules). Prior: 2026-06-23
-> (commit pending). If you touch `packages/kimchi/lib/mkKimchi.nix`,
-> `packages/kimchi/modules/**`, or the Kimchi credential / wrapper handling and
-> this fragment isn't updated in the same commit, stop and fix it.
+> pool capability census and deliberate absence of rules; native JSON
+> passthrough moved to `ai.kimchi.nativeSettings`, while the uniform closed
+> `ai.kimchi.settings` surface does not change the two-file native lifecycle).
+> Prior: 2026-06-23 (commit pending). If you touch
+> `packages/kimchi/lib/mkKimchi.nix`, `packages/kimchi/modules/**`, or the
+> Kimchi credential / wrapper handling and this fragment isn't updated in the
+> same commit, stop and fix it.
 
 `packages/kimchi/lib/mkKimchi.nix` is an `lib.ai.app.mkAiApp` participant,
 closest in shape to `mkKiro` (dual config trees + activation-merge for the
 mutable tree). The HM and devenv modules are thin shims that apply `hmTransform`
 / `devenvTransform` to the record.
+
+The factory consumes Kimchi-shaped JSON from `ai.kimchi.nativeSettings`. The
+closed `ai.kimchi.settings` submodule is the shared normalized surface; a field
+may be present there before Kimchi has a lossless native lowering, in which case
+it remains declarative data rather than being guessed into either native file.
 
 ## Two config trees (the load-bearing fact)
 
@@ -31,10 +39,11 @@ write on devenv — never a raw symlink-to-store. The immutable parts (`mcp.json
 ## Normalized pool capability boundary
 
 The app record's `supportedPools` is exactly `context`, `environmentVariables`,
-`instructions`, `mcpServers`, and `skills`. Kimchi has no native path-scoped
-rules, portable agents, LSP, portable hooks, normalized settings, or
-shell-selection landing key. Those per-runtime normalized options are absent;
-root values for them remain valid and silently degrade for Kimchi.
+`instructions`, `mcpServers`, `settings`, and `skills`. Kimchi has no native
+path-scoped rules, portable agents, LSP, portable hooks, or shell-selection
+landing key. Those per-runtime normalized options are absent; root values for
+them remain valid and silently degrade for Kimchi. `settings` is the uniform
+closed normalized namespace; its current field has no Kimchi-native lowering.
 
 In particular, `ai.kimchi.rules` and `ai.kimchi.rulesDir` do not exist. Do not
 restore them in anticipation of future rules support: Kimchi's rules support is

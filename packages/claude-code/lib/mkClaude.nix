@@ -149,10 +149,10 @@
   # ignored), which is exactly why the shared `ai.environmentVariables`
   # pool cannot implement this option and a typed one is needed.
   #
-  # `env` is not a typed settings key — it rides the freeform JSON tail —
-  # so this composes with a consumer's other `settings.env` entries rather
+  # `env` is not a normalized settings key — it rides the native freeform
+  # JSON tail — so this composes with a consumer's other `nativeSettings.env` entries rather
   # than replacing the attrset. mkDefault keeps an explicit
-  # `ai.claude.settings.env.CLAUDE_CODE_SHELL` winning over the option.
+  # `ai.claude.nativeSettings.env.CLAUDE_CODE_SHELL` winning over the option.
   #
   # NOTE for anyone debugging a shell that did not take effect: Claude
   # SILENTLY falls back when the path is not executable — no warning, exit
@@ -167,7 +167,7 @@
   # into settings.json. Both the typed shell and the module-contributed
   # sandbox-safe SSH command ride it.
   #
-  # mkDefault keeps an explicit `ai.claude.settings.env.<KEY>` winning, which
+  # mkDefault keeps an explicit `ai.claude.nativeSettings.env.<KEY>` winning, which
   # is the same precedence the wrapper harnesses get by merging module
   # defaults UNDER the consumer's pool.
   shellSettings = {
@@ -176,11 +176,11 @@
   }:
     lib.mkMerge [
       (lib.mkIf (resolvedShell != null) {
-        ai.claude.settings.env.CLAUDE_CODE_SHELL =
+        ai.claude.nativeSettings.env.CLAUDE_CODE_SHELL =
           lib.mkDefault (lib.getExe resolvedShell);
       })
       {
-        ai.claude.settings.env =
+        ai.claude.nativeSettings.env =
           lib.mapAttrs (_: lib.mkDefault) moduleEnvironmentVariables;
       }
     ];
@@ -251,7 +251,7 @@ in
           }
         '';
       };
-      settings = lib.mkOption {
+      nativeSettings = lib.mkOption {
         type = lib.types.submodule {
           freeformType = (pkgs.formats.json {}).type;
           options = {
@@ -415,7 +415,7 @@ in
         (that is `settings.workflowKeywordTriggerEnabled`, orthogonal).
         When true, writes `settings.ultracode = true` (⚠ see caveat) and
         `settings.enableWorkflows = true` via mkDefault, so an explicit
-        `ai.claude.settings.*` still wins. Does NOT set effortLevel —
+        `ai.claude.nativeSettings.*` still wins. Does NOT set effortLevel —
         ultracode implies xhigh unconditionally.
 
         ⚠ CAVEAT: the `ultracode` settings key is UNDOCUMENTED and
@@ -742,7 +742,7 @@ in
         resolvedShell,
         topContext,
         topHooks,
-        topSettings,
+        resolvedSettings,
         ...
       }: let
         aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
@@ -777,8 +777,8 @@ in
         effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       in
         lib.mkMerge [
-          (lib.mkIf (topSettings.reasoningEffort != null) {
-            ai.claude.settings.effortLevel = lib.mkDefault topSettings.reasoningEffort;
+          (lib.mkIf (resolvedSettings.reasoningEffort != null) {
+            ai.claude.nativeSettings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
           })
           (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
           # L2b → L3: expand `ai.claude.agentsDir` into per-CLI
@@ -817,12 +817,12 @@ in
           # Meta option: ultracode on at every launch. Writes the
           # (undocumented, officially session-only) `ultracode` key plus the
           # `enableWorkflows` master toggle via mkDefault so an explicit
-          # `ai.claude.settings.*` still wins. This is the single place the
+          # `ai.claude.nativeSettings.*` still wins. This is the single place the
           # off-label `ultracode` key is written (its risk is disclosed in the
           # ultracodeOnLaunch description). No effortLevel — ultracode implies
           # xhigh. No workflowKeywordTriggerEnabled — orthogonal per-turn key.
           (lib.mkIf cfg.ultracodeOnLaunch {
-            ai.claude.settings = {
+            ai.claude.nativeSettings = {
               ultracode = lib.mkDefault true;
               enableWorkflows = lib.mkDefault true;
             };
@@ -830,7 +830,7 @@ in
           # Typed event map → programs.claude-code.settings.hooks (shared helper;
           # HM has no typed hook backend to ride, so we generate the JSON). A
           # separate mkMerge entry so it composes with the freeform
-          # `settings = filterNulls cfg.settings` write below — same-event lists
+          # `settings = filterNulls cfg.nativeSettings` write below — same-event lists
           # merge, so the legacy settings.hooks escape hatch and the typed map
           # coexist rather than clobber.
           (lib.mkIf (effectiveHooks != {}) {
@@ -863,7 +863,7 @@ in
               # receives `effortLevel = null` / `model = null`; arbitrary
               # non-typed keys (permissions, env, outputStyle, …) pass
               # through the submodule's freeform JSON type unchanged.
-              settings = aiCommon.filterNulls cfg.settings;
+              settings = aiCommon.filterNulls cfg.nativeSettings;
               # Render typed ai.mcpServers / ai.claude.mcpServers entries
               # into the freeform shape upstream's HM module expects.
               mcpServers = lib.mapAttrs (name: lib.ai.renderServer pkgs name) mergedServers;
@@ -953,7 +953,7 @@ in
         resolvedShell,
         topContext,
         topHooks,
-        topSettings,
+        resolvedSettings,
         ...
       }: let
         aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
@@ -981,7 +981,7 @@ in
           (effectiveContext != null && effectiveContext != "")
           || unnamedInstructions != [];
 
-        # Translate cfg.settings → backend surfaces.
+        # Translate cfg.nativeSettings → backend surfaces.
         #
         # - `hooks` is handled separately (the dedicated legacy escape-hatch
         #   write below routes it to settings.json.hooks, composing with the
@@ -1000,13 +1000,13 @@ in
         separatelyHandledSettingsKeys = ["hooks" "mcpServers"];
         gapSettings =
           aiCommon.filterNulls
-          (removeAttrs cfg.settings separatelyHandledSettingsKeys);
+          (removeAttrs cfg.nativeSettings separatelyHandledSettingsKeys);
         hasGapSettings = gapSettings != {};
         effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       in
         lib.mkMerge [
-          (lib.mkIf (topSettings.reasoningEffort != null) {
-            ai.claude.settings.effortLevel = lib.mkDefault topSettings.reasoningEffort;
+          (lib.mkIf (resolvedSettings.reasoningEffort != null) {
+            ai.claude.nativeSettings.effortLevel = lib.mkDefault resolvedSettings.reasoningEffort;
           })
           (shellSettings {inherit resolvedShell moduleEnvironmentVariables;})
           # L2b → L3: expand `ai.claude.hookScriptsDir` into
@@ -1035,11 +1035,11 @@ in
           # Meta option: ultracode on at every launch (parity with HM side).
           # Writes the (undocumented, officially session-only) `ultracode` key
           # plus the `enableWorkflows` master toggle via mkDefault so an
-          # explicit `ai.claude.settings.*` still wins. Flows through the
+          # explicit `ai.claude.nativeSettings.*` still wins. Flows through the
           # gap-write below into .claude/settings.json. Risk disclosed in the
           # ultracodeOnLaunch description.
           (lib.mkIf cfg.ultracodeOnLaunch {
-            ai.claude.settings = {
+            ai.claude.nativeSettings = {
               ultracode = lib.mkDefault true;
               enableWorkflows = lib.mkDefault true;
             };
@@ -1071,8 +1071,8 @@ in
           })
           # Legacy `settings.hooks` escape hatch → same settings.json.hooks,
           # verbatim (composes via the list merge, never clobbers).
-          (lib.mkIf ((cfg.settings.hooks or {}) != {}) {
-            files.".claude/settings.json".json.hooks = cfg.settings.hooks;
+          (lib.mkIf ((cfg.nativeSettings.hooks or {}) != {}) {
+            files.".claude/settings.json".json.hooks = cfg.nativeSettings.hooks;
           })
           # Script bodies → standalone hook files (greenfield; mirrors HM's
           # programs.claude-code.hooks path, which devenv's claude.code lacks).
@@ -1082,7 +1082,7 @@ in
               (name: body: lib.nameValuePair ".claude/hooks/${name}" {text = body;})
               cfg.hookScripts;
           })
-          # Gap write — everything in cfg.settings that upstream doesn't
+          # Gap write — everything in cfg.nativeSettings that upstream doesn't
           # already handle. Uses `.json` format so module-system merges
           # our attrs with upstream's hook-only write into a single
           # settings.json on disk.

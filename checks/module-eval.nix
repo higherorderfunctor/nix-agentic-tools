@@ -881,7 +881,7 @@ in {
         cfg = (evalDevenv (lib.setAttrByPath ["ai" name "enable"] true)).config;
       in
         if name == "claude"
-        then cfg.ai.claude.settings.env.GIT_SSH_COMMAND
+        then cfg.ai.claude.nativeSettings.env.GIT_SSH_COMMAND
         else cfg.ai._sandboxSafeSshCommand;
       commands =
         lib.concatMap (name: [
@@ -958,12 +958,12 @@ in {
       settings = {
         ai.codex = {
           enable = true;
-          settings.sandbox_mode = "workspace-write";
+          nativeSettings.sandbox_mode = "workspace-write";
         };
       };
-      hmRoots = (evalHm settings).config.ai.codex.settings.sandbox_workspace_write.writable_roots;
+      hmRoots = (hmCodexSettings (evalHm settings)).sandbox_workspace_write.writable_roots;
       rootsWithEnvironment = environment:
-        (evalDevenvWithGetEnv (name: environment.${name} or "") settings).config.ai.codex.settings.sandbox_workspace_write.writable_roots;
+        (evalDevenvWithGetEnv (name: environment.${name} or "") settings).config.files.".codex/config.toml".source.value.sandbox_workspace_write.writable_roots;
       devenvHomeRoots = rootsWithEnvironment {HOME = "/home/test";};
       devenvXdgRoots = rootsWithEnvironment {
         HOME = "/home/ignored";
@@ -982,9 +982,9 @@ in {
         (evalDevenv {
           ai.codex = {
             enable = true;
-            settings.sandbox_mode = "workspace-write";
+            nativeSettings.sandbox_mode = "workspace-write";
           };
-        }).config.ai.codex.settings.sandbox_workspace_write.writable_roots;
+        }).config.files.".codex/config.toml".source.value.sandbox_workspace_write.writable_roots;
     in
       builtins.deepSeq roots (builtins.elem "/tmp/devenv-root/.git" roots)
   );
@@ -1092,12 +1092,12 @@ in {
     let
       config.ai.codex = {
         enable = true;
-        settings.default_permissions = ":workspace";
+        nativeSettings.default_permissions = ":workspace";
       };
       rejects = evaluated:
         builtins.any (assertion:
           !assertion.assertion
-          && lib.hasInfix "ai.codex.settings.default_permissions is locked out" assertion.message)
+          && lib.hasInfix "ai.codex.nativeSettings.default_permissions is locked out" assertion.message)
         evaluated.config.assertions;
     in
       rejects (evalHm config) && rejects (evalDevenv config)
@@ -1107,12 +1107,12 @@ in {
     let
       config.ai.codex = {
         enable = true;
-        settings.permissions.project-edit.extends = ":workspace";
+        nativeSettings.permissions.project-edit.extends = ":workspace";
       };
       rejects = evaluated:
         builtins.any (assertion:
           !assertion.assertion
-          && lib.hasInfix "ai.codex.settings.permissions is locked out" assertion.message)
+          && lib.hasInfix "ai.codex.nativeSettings.permissions is locked out" assertion.message)
         evaluated.config.assertions;
     in
       rejects (evalHm config) && rejects (evalDevenv config)
@@ -1342,13 +1342,13 @@ in {
         ai = {
           codex = {
             enable = true;
-            settings.mcp_servers.native.command = "native";
+            nativeSettings.mcp_servers.native.command = "native";
           };
           mcpServers.shared.command = "shared";
         };
       };
     in
-      builtins.any (assertion: !assertion.assertion && lib.hasInfix "settings.mcp_servers" assertion.message) evaluated.config.assertions
+      builtins.any (assertion: !assertion.assertion && lib.hasInfix "nativeSettings.mcp_servers" assertion.message) evaluated.config.assertions
   );
 
   module-aggregate-reasoning-effort-hm-devenv-parity = mkTest "aggregate-reasoning-effort-hm-devenv-parity" (
@@ -1368,16 +1368,63 @@ in {
       && (devenv.config.files.".codex/config.toml".source.value.model_reasoning_effort or null) == "xhigh"
   );
 
+  module-runtime-reasoning-effort-overrides-root-only-for-that-runtime = mkTest "runtime-reasoning-effort-overrides-root-only-for-that-runtime" (
+    let
+      config.ai = {
+        claude = {
+          enable = true;
+          settings.reasoningEffort = "low";
+        };
+        codex.enable = true;
+        settings.reasoningEffort = "high";
+      };
+      hm = evalHm config;
+      devenv = evalDevenv config;
+    in
+      (hm.config.programs.claude-code.settings.effortLevel or null)
+      == "low"
+      && ((hmCodexSettings hm).model_reasoning_effort or null) == "high"
+      && (devenv.config.files.".claude/settings.json".json.effortLevel or null) == "low"
+      && (devenv.config.files.".codex/config.toml".source.value.model_reasoning_effort or null) == "high"
+  );
+
+  module-runtime-settings-exist-for-every-harness = mkTest "runtime-settings-exist-for-every-harness" (
+    let
+      config.ai = lib.genAttrs harnessNames (_: {
+        settings.reasoningEffort = "low";
+      });
+      hm = evalHm config;
+      devenv = evalDevenv config;
+    in
+      lib.all (runtime: hm.config.ai.${runtime}.settings.reasoningEffort == "low") harnessNames
+      && lib.all (runtime: devenv.config.ai.${runtime}.settings.reasoningEffort == "low") harnessNames
+  );
+
+  module-runtime-settings-reject-native-keys = mkTest "runtime-settings-reject-native-keys" (
+    let
+      rejects = evaluator: let
+        attempt = builtins.tryEval (let
+          result = evaluator {
+            ai.claude.settings.effortLevel = "high";
+          };
+        in
+          builtins.deepSeq result.config.ai.claude.settings true);
+      in
+        !attempt.success;
+    in
+      rejects evalHm && rejects evalDevenv
+  );
+
   module-aggregate-reasoning-effort-native-overrides-win = mkTest "aggregate-reasoning-effort-native-overrides-win" (
     let
       config.ai = {
         claude = {
           enable = true;
-          settings.effortLevel = "medium";
+          nativeSettings.effortLevel = "medium";
         };
         codex = {
           enable = true;
-          settings.model_reasoning_effort = null;
+          nativeSettings.model_reasoning_effort = null;
         };
         settings.reasoningEffort = "high";
       };
@@ -1395,7 +1442,7 @@ in {
     let
       config.ai.codex = {
         enable = true;
-        settings = {
+        nativeSettings = {
           features = {
             memories = true;
             speculative_future_flag = false;
@@ -1435,7 +1482,7 @@ in {
     activationV1 = codexSettingsActivation {
       ai.codex = {
         enable = true;
-        settings = {
+        nativeSettings = {
           features.memories = true;
           future_array = [
             {
@@ -1452,7 +1499,7 @@ in {
     activationV2 = codexSettingsActivation {
       ai.codex = {
         enable = true;
-        settings = {
+        nativeSettings = {
           model = "nix-model-v2";
           sandbox_mode = "read-only";
           shape.child = "table-v2";
@@ -1464,14 +1511,14 @@ in {
       ai.codex = {
         configDir = ".codex-malformed";
         enable = true;
-        settings.model = "must-not-land";
+        nativeSettings.model = "must-not-land";
       };
     };
     activationBadManifest = codexSettingsActivation {
       ai.codex = {
         configDir = ".codex-bad-manifest";
         enable = true;
-        settings.model = "manifest-guard";
+        nativeSettings.model = "manifest-guard";
       };
     };
   in
@@ -1622,7 +1669,7 @@ in {
     let
       config.ai.codex = {
         enable = true;
-        settings = {
+        nativeSettings = {
           allow_login_shell = false;
           approval_policy.granular = {
             mcp_elicitations = true;
@@ -1666,7 +1713,7 @@ in {
     evaluated = evalHm {
       ai.codex = {
         enable = true;
-        settings = {
+        nativeSettings = {
           approval_policy.granular = {
             request_permissions = false;
             sandbox_approval = true;
@@ -1697,7 +1744,7 @@ in {
         evaluated.config.assertions;
       config.ai.codex = {
         enable = true;
-        settings = {
+        nativeSettings = {
           default_permissions = ":workspace";
           sandbox_mode = "workspace-write";
         };
@@ -1711,7 +1758,7 @@ in {
     let
       config.ai.codex = {
         enable = true;
-        settings = {
+        nativeSettings = {
           permissions = {};
           sandbox_mode = "read-only";
         };
@@ -1726,7 +1773,7 @@ in {
     let
       config.ai.codex = {
         enable = true;
-        settings = {
+        nativeSettings = {
           default_permissions = "project-edit";
           permissions.project-edit = {
             description = "Project editing with API access.";
@@ -1767,7 +1814,7 @@ in {
     evaluated = evalHm {
       ai.codex = {
         enable = true;
-        settings = {
+        nativeSettings = {
           default_permissions = "project-edit";
           permissions.project-edit = {
             extends = ":workspace";
@@ -1940,7 +1987,7 @@ in {
     let
       config.ai.codex = {
         enable = true;
-        settings.projects."/home/test/project".trust_level = "trusted";
+        nativeSettings.projects."/home/test/project".trust_level = "trusted";
       };
       hm = evalHm config;
       devenv = evalDevenv config;
@@ -1956,7 +2003,7 @@ in {
     evaluated = evalHm {
       ai.codex = {
         enable = true;
-        settings = {
+        nativeSettings = {
           features.memories = true;
           model = "custom-provider/model";
           model_reasoning_effort = "high";
@@ -1980,7 +2027,7 @@ in {
           (hmCodexSettings (evalHm {
             ai.codex = {
               enable = true;
-              settings.${name} = value;
+              nativeSettings.${name} = value;
             };
           })))
         .success;
@@ -1989,7 +2036,7 @@ in {
           (hmCodexSettings (evalHm {
             ai.codex = {
               enable = true;
-              settings.features.${name} = value;
+              nativeSettings.features.${name} = value;
             };
           })))
         .success;
@@ -1998,7 +2045,7 @@ in {
           (hmCodexSettings (evalHm {
             ai.codex = {
               enable = true;
-              settings.permissions.test = lib.setAttrByPath path value;
+              nativeSettings.permissions.test = lib.setAttrByPath path value;
             };
           })))
         .success;
@@ -2043,7 +2090,7 @@ in {
       devenv = evalDevenv {
         ai.codex = {
           enable = true;
-          settings = {
+          nativeSettings = {
             model_provider = "custom";
             notify = ["notify-send"];
           };
@@ -2052,7 +2099,7 @@ in {
       hm = evalHm {
         ai.codex = {
           enable = true;
-          settings.model_provider = "custom";
+          nativeSettings.model_provider = "custom";
         };
       };
       failed = lib.findFirst (assertion: !assertion.assertion) null devenv.config.assertions;
@@ -2205,7 +2252,7 @@ in {
     let
       config.ai.codex = {
         enable = true;
-        settings.agents = {
+        nativeSettings.agents = {
           default_subagent_model = "worker-model";
           default_subagent_reasoning_effort = "high";
           enabled = true;
@@ -2278,13 +2325,13 @@ in {
         ai.codex = {
           enable = true;
           hooks.Stop = [{hooks = [{command = "validate";}];}];
-          settings.hooks.Stop = [{hooks = [{command = "legacy";}];}];
+          nativeSettings.hooks.Stop = [{hooks = [{command = "legacy";}];}];
         };
       };
     in
       builtins.any (assertion:
         !assertion.assertion
-        && lib.hasInfix "cannot be combined with ai.codex.settings.hooks" assertion.message)
+        && lib.hasInfix "cannot be combined with ai.codex.nativeSettings.hooks" assertion.message)
       result.config.assertions
   );
 
@@ -2579,7 +2626,7 @@ in {
       config = {
         ai.codex = {
           enable = true;
-          settings = {
+          nativeSettings = {
             sandbox_mode = "workspace-write";
             sandbox_workspace_write.writable_roots = ["/consumer-cache"];
           };
@@ -2596,11 +2643,12 @@ in {
             builtins.baseNameOf drv
           ))
         packages;
-      hm = (evalHm config).config;
+      hmEval = evalHm config;
+      hm = hmEval.config;
       devenv = (evalDevenv config).config;
       readOnly =
         (evalDevenv {
-          ai.codex.settings.sandbox_mode = "read-only";
+          ai.codex.nativeSettings.sandbox_mode = "read-only";
           semble = {
             enable = true;
             runtimes = ["codex"];
@@ -2608,7 +2656,7 @@ in {
         }).config;
       noCodex =
         (evalDevenv {
-          ai.codex.settings.sandbox_mode = "workspace-write";
+          ai.codex.nativeSettings.sandbox_mode = "workspace-write";
           semble = {
             enable = true;
             runtimes = ["claude"];
@@ -2616,7 +2664,7 @@ in {
         }).config;
       profileOnly =
         (evalDevenv {
-          ai.codex.settings = {
+          ai.codex.nativeSettings = {
             default_permissions = "project-edit";
             permissions.project-edit.description = "Project edit profile.";
           };
@@ -2627,20 +2675,20 @@ in {
         }).config;
     in
       builtins.all
-      (root: builtins.elem root hm.ai.codex.settings.sandbox_workspace_write.writable_roots)
+      (root: builtins.elem root (hmCodexSettings hmEval).sandbox_workspace_write.writable_roots)
       ["/consumer-cache" "/home/test/.cache/nix" "/home/test/.cache/semble"]
-      && builtins.length hm.ai.codex.settings.sandbox_workspace_write.writable_roots == 3
+      && builtins.length (hmCodexSettings hmEval).sandbox_workspace_write.writable_roots == 3
       && builtins.all
-      (root: builtins.elem root devenv.ai.codex.settings.sandbox_workspace_write.writable_roots)
+      (root: builtins.elem root devenv.files.".codex/config.toml".source.value.sandbox_workspace_write.writable_roots)
       ["/consumer-cache" "/tmp/devenv-root/.git" "/tmp/devenv-state/semble-cache"]
       # Both backends make their selected cache authoritative through the
       # launcher wrapper. Never through the surrounding shell: that would
       # export the value to the user's session and everything else in it.
       && hasWrappedSemble hm.home.packages
       && hasWrappedSemble devenv.packages
-      && readOnly.ai.codex.settings.sandbox_workspace_write == null
-      && noCodex.ai.codex.settings.sandbox_workspace_write == null
-      && profileOnly.ai.codex.settings.sandbox_workspace_write == null
+      && readOnly.ai.codex.nativeSettings.sandbox_workspace_write == null
+      && noCodex.ai.codex.nativeSettings.sandbox_workspace_write == null
+      && profileOnly.ai.codex.nativeSettings.sandbox_workspace_write == null
       && builtins.all (assertion: assertion.assertion) profileOnly.assertions
   );
 
@@ -3439,14 +3487,14 @@ in {
       base = {
         ai.codex = {
           enable = true;
-          settings.sandbox_mode = "workspace-write";
+          nativeSettings.sandbox_mode = "workspace-write";
         };
         glab = {
           enable = true;
           host.plain = "gitlab.example.com";
         };
       };
-      hm = (evalHm base).config;
+      hmEval = evalHm base;
       devenv =
         (evalDevenv (lib.recursiveUpdate base {
           glab.configDir = "/home/test/.config/glab-cli";
@@ -3454,10 +3502,10 @@ in {
     in
       builtins.elem
       "/home/test/.config/glab-cli"
-      hm.ai.codex.settings.sandbox_workspace_write.writable_roots
+      (hmCodexSettings hmEval).sandbox_workspace_write.writable_roots
       && builtins.elem
       "/home/test/.config/glab-cli"
-      devenv.ai.codex.settings.sandbox_workspace_write.writable_roots
+      devenv.files.".codex/config.toml".source.value.sandbox_workspace_write.writable_roots
   );
 
   # Runtime test of the preflight, with a STUB standing in for glab so the
@@ -4285,7 +4333,7 @@ in {
       result.config.programs.claude-code.enable or false
   );
 
-  # HM: ai.claude.settings.<key> reaches programs.claude-code.settings.<key>
+  # HM: ai.claude.nativeSettings.<key> reaches programs.claude-code.settings.<key>
   # via the transitional raw-inherit in mkClaude.nix. Regression guard for
   # the inherit; will update to assert translation semantics when HM migrates
   # to the devenv pattern.
@@ -4294,7 +4342,7 @@ in {
       result = evalHm {
         ai.claude = {
           enable = true;
-          settings = {
+          nativeSettings = {
             effortLevel = "medium";
             permissions.allow = ["Read"];
           };
@@ -4315,12 +4363,12 @@ in {
           ev = evalHm {
             ai.claude = {
               enable = true;
-              settings.effortLevel = "ultra";
+              nativeSettings.effortLevel = "ultra";
             };
           };
         in
-          builtins.deepSeq ev.config.ai.claude.settings.effortLevel
-          ev.config.ai.claude.settings.effortLevel
+          builtins.deepSeq ev.config.ai.claude.nativeSettings.effortLevel
+          ev.config.ai.claude.nativeSettings.effortLevel
       );
     in
       attempt.success == false
@@ -4332,7 +4380,7 @@ in {
       result = evalHm {
         ai.claude = {
           enable = true;
-          settings.effortLevel = "xhigh";
+          nativeSettings.effortLevel = "xhigh";
         };
       };
     in
@@ -4347,12 +4395,12 @@ in {
           ev = evalHm {
             ai.claude = {
               enable = true;
-              settings.tui = "curses";
+              nativeSettings.tui = "curses";
             };
           };
         in
-          builtins.deepSeq ev.config.ai.claude.settings.tui
-          ev.config.ai.claude.settings.tui
+          builtins.deepSeq ev.config.ai.claude.nativeSettings.tui
+          ev.config.ai.claude.nativeSettings.tui
       );
     in
       attempt.success == false
@@ -4364,7 +4412,7 @@ in {
       result = evalHm {
         ai.claude = {
           enable = true;
-          settings.tui = "fullscreen";
+          nativeSettings.tui = "fullscreen";
         };
       };
     in
@@ -4378,7 +4426,7 @@ in {
       result = evalHm {
         ai.claude = {
           enable = true;
-          settings.attribution.commit = false;
+          nativeSettings.attribution.commit = false;
         };
       };
     in
@@ -4391,7 +4439,7 @@ in {
       result = evalHm {
         ai.claude = {
           enable = true;
-          settings.attribution.pr = "Reviewed-by: me";
+          nativeSettings.attribution.pr = "Reviewed-by: me";
         };
       };
     in
@@ -4405,7 +4453,7 @@ in {
       result = evalHm {
         ai.claude = {
           enable = true;
-          settings.attribution.commit = true;
+          nativeSettings.attribution.commit = true;
         };
       };
       s = result.config.programs.claude-code.settings or {};
@@ -4436,7 +4484,7 @@ in {
       result = evalHm {
         ai.claude = {
           enable = true;
-          settings.enableWorkflows = true;
+          nativeSettings.enableWorkflows = true;
         };
       };
     in
@@ -4450,7 +4498,7 @@ in {
       result = evalHm {
         ai.claude = {
           enable = true;
-          settings.workflowKeywordTriggerEnabled = false;
+          nativeSettings.workflowKeywordTriggerEnabled = false;
         };
       };
       s = result.config.programs.claude-code.settings or {};
@@ -4474,7 +4522,7 @@ in {
       (s.ultracode or null) == true && (s.enableWorkflows or null) == true
   );
 
-  # Meta option uses mkDefault, so an explicit settings.ultracode = false
+  # Meta option uses mkDefault, so an explicit nativeSettings.ultracode = false
   # wins over ultracodeOnLaunch, and the false survives the null-filter.
   module-claude-hm-ultracode-on-launch-explicit-false-wins = mkTest "claude-hm-ultracode-on-launch-explicit-false-wins" (
     let
@@ -4482,7 +4530,7 @@ in {
         ai.claude = {
           enable = true;
           ultracodeOnLaunch = true;
-          settings.ultracode = false;
+          nativeSettings.ultracode = false;
         };
       };
       s = result.config.programs.claude-code.settings or {};
@@ -4513,7 +4561,7 @@ in {
       result = evalHm {
         ai.claude = {
           enable = true;
-          settings.model = "some-future-model";
+          nativeSettings.model = "some-future-model";
         };
       };
     in
@@ -4558,7 +4606,7 @@ in {
       result.config.claude.code.enable or false
   );
 
-  # Devenv: cfg.settings gap write — non-hook/non-mcpServers keys land
+  # Devenv: cfg.nativeSettings gap write — non-hook/non-mcpServers keys land
   # in files.".claude/settings.json".json. Module-system attrs merge with
   # upstream's hook write (not exercised here; upstream claude.code is
   # stubbed to `attrsOf anything`) produces a single settings.json on
@@ -4568,7 +4616,7 @@ in {
       result = evalDevenv {
         ai.claude = {
           enable = true;
-          settings.effortLevel = "medium";
+          nativeSettings.effortLevel = "medium";
         };
       };
       settingsFile = result.config.files.".claude/settings.json" or null;
@@ -4585,7 +4633,7 @@ in {
       result = evalDevenv {
         ai.claude = {
           enable = true;
-          settings.env.FOO = "bar";
+          nativeSettings.env.FOO = "bar";
         };
       };
       settingsFile = result.config.files.".claude/settings.json" or null;
@@ -4602,7 +4650,7 @@ in {
       result = evalDevenv {
         ai.claude = {
           enable = true;
-          settings.enableWorkflows = true;
+          nativeSettings.enableWorkflows = true;
         };
       };
       settingsFile = result.config.files.".claude/settings.json" or null;
@@ -4619,7 +4667,7 @@ in {
       result = evalDevenv {
         ai.claude = {
           enable = true;
-          settings.attribution.commit = false;
+          nativeSettings.attribution.commit = false;
         };
       };
       settingsFile = result.config.files.".claude/settings.json" or null;
@@ -4647,7 +4695,7 @@ in {
       && (settingsFile.json.enableWorkflows or null) == true
   );
 
-  # Devenv parity for the mkDefault override: an explicit settings.ultracode =
+  # Devenv parity for the mkDefault override: an explicit nativeSettings.ultracode =
   # false wins over ultracodeOnLaunch and survives the gap-write null-filter.
   module-claude-devenv-ultracode-on-launch-explicit-false-wins = mkTest "claude-devenv-ultracode-on-launch-explicit-false-wins" (
     let
@@ -4655,7 +4703,7 @@ in {
         ai.claude = {
           enable = true;
           ultracodeOnLaunch = true;
-          settings.ultracode = false;
+          nativeSettings.ultracode = false;
         };
       };
       settingsFile = result.config.files.".claude/settings.json" or null;
@@ -4666,7 +4714,7 @@ in {
       && settingsFile.json.ultracode == false
   );
 
-  # Devenv: the legacy `settings.hooks` escape hatch lowers verbatim into
+  # Devenv: the legacy `nativeSettings.hooks` escape hatch lowers verbatim into
   # files.".claude/settings.json".json.hooks — NOT claude.code.hooks anymore
   # (approach B). Composes with the typed event map via the formats.json merge.
   module-claude-devenv-settings-hooks-escape-hatch = mkTest "claude-devenv-settings-hooks-escape-hatch" (
@@ -4674,7 +4722,7 @@ in {
       result = evalDevenv {
         ai.claude = {
           enable = true;
-          settings.hooks.PreToolUse = [{matcher = "Bash";}];
+          nativeSettings.hooks.PreToolUse = [{matcher = "Bash";}];
         };
       };
       settingsHooks = ((result.config.files.".claude/settings.json" or {}).json or {}).hooks or {};
@@ -4685,7 +4733,7 @@ in {
       && !(upstreamHooks ? PreToolUse)
   );
 
-  # Devenv: empty ai.claude.settings produces no gap file (lib.mkIf
+  # Devenv: empty ai.claude.nativeSettings produces no gap file (lib.mkIf
   # gate on hasGapSettings).
   #
   # The heron_brook mitigation writes hooks into the same settings.json through
@@ -5358,7 +5406,7 @@ in {
     let
       result = evalHm {
         ai.copilot.enable = true;
-        ai.copilot.settings.model = "gpt-4";
+        ai.copilot.nativeSettings.model = "gpt-4";
       };
       activation = result.config.home.activation.copilotSettingsMerge or null;
     in
@@ -5940,7 +5988,7 @@ in {
       result = evalHm {
         ai.kiro = {
           enable = true;
-          settings.chat.defaultModel = "claude-sonnet-4";
+          nativeSettings.chat.defaultModel = "claude-sonnet-4";
         };
       };
       activation = result.config.home.activation.kiroSettingsMerge or null;
@@ -5957,7 +6005,7 @@ in {
       result = evalHm {
         ai.kiro = {
           enable = true;
-          settings.chat.defaultModel = "claude-opus-4.8";
+          nativeSettings.chat.defaultModel = "claude-opus-4.8";
         };
       };
       activation = result.config.home.activation.kiroSettingsMerge or null;
@@ -5971,7 +6019,7 @@ in {
       result = evalHm {
         ai.kiro = {
           enable = true;
-          settings.chat.defaultModel = "some-future-model";
+          nativeSettings.chat.defaultModel = "some-future-model";
         };
       };
       activation = result.config.home.activation.kiroSettingsMerge or null;
@@ -7573,7 +7621,7 @@ in {
       result = evalDevenv {
         ai.kiro = {
           enable = true;
-          settings.telemetry.enabled = false;
+          nativeSettings.telemetry.enabled = false;
         };
       };
       settingsFile = result.config.files.".kiro/settings/cli.json" or null;
@@ -9205,14 +9253,14 @@ in {
   );
 
   # Devenv: hookScripts → a `.claude/hooks/<name>` file; the legacy
-  # settings.hooks escape hatch → settings.json.hooks (verbatim). Neither feeds
+  # nativeSettings.hooks escape hatch → settings.json.hooks (verbatim). Neither feeds
   # claude.code.hooks anymore (approach B — the old type-invalid mis-feed is gone).
   module-claude-devenv-hookscripts-and-settings-split = mkTest "claude-devenv-hookscripts-and-settings-split" (
     let
       result = evalDevenv {
         ai.claude = {
           enable = true;
-          settings.hooks.from-settings = [{matcher = "X";}];
+          nativeSettings.hooks.from-settings = [{matcher = "X";}];
           hookScripts.from-top = "#!/usr/bin/env bash\necho from-top\n";
         };
       };
@@ -9753,7 +9801,7 @@ in {
         ai.shell = pkgs.bash;
         ai.claude = {
           enable = true;
-          settings.env.CLAUDE_CODE_SHELL = "/usr/bin/bash";
+          nativeSettings.env.CLAUDE_CODE_SHELL = "/usr/bin/bash";
         };
       };
       settings = result.config.programs.claude-code.settings or {};
@@ -10209,7 +10257,7 @@ in {
       result = evalDevenv {
         ai.kimchi = {
           enable = true;
-          settings.telemetry.enabled = false;
+          nativeSettings.telemetry.enabled = false;
         };
       };
       text = result.config.files.".config/kimchi/config.json".text;
@@ -10224,7 +10272,7 @@ in {
       result = evalHm {
         ai.kimchi = {
           enable = true;
-          settings.telemetry.enabled = false;
+          nativeSettings.telemetry.enabled = false;
         };
       };
     in

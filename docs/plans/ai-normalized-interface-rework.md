@@ -138,7 +138,7 @@ both depend on the option existing." REFUTED, and its motivating example is
 wrong.** B10 needs only null-filtering after `merged = topPool // cliPool`
 (`lib/ai/ai-common.nix:418`), because every emitter maps over the merged pool.
 Separately, the exemplar was backwards: Codex's derived `mcp_servers` does not
-pass through `ai.codex.settings` at all. It is a let-binding at
+pass through `ai.codex.nativeSettings` at all. It is a let-binding at
 `packages/chatgpt-codex/lib/mkCodex.nix:1015-1018`, and the option is **asserted
 mutually exclusive** with it at `:1038`. Claude's `.mcp.json`, the other
 exemplar, does pass through an option — upstream's

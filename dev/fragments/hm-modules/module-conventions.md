@@ -1,48 +1,52 @@
 ## HM Module Conventions
 
-> **Last verified:** 2026-08-14 (commit pending — Semble's shared module now
-> lowers grammar and path mappings identically through both facets, with one
-> package-identity cache guard and cache-location wrapper per backend; HM's XDG
-> cache remains authoritative on Darwin too). Prior: 2026-08-05 (commit pending
-> — the Codex named-profile delivery-path example is retained but
-> `ai.codex.profiles` is now LOCKED OUT and fails evaluation; the asymmetry it
-> teaches is still correct, the option is not usable). Prior: 2026-08-05 (commit
-> pending — glab's Linux Home Manager facet can queue one OS-keyring
-> synchronization per activation through a graphical-session path unit; the
-> shared option is an explicit devenv exclusion, and the ordinary wrapper stops
-> exporting the synchronized token). Prior: 2026-08-05 (commit pending — enabled
-> glab facets contribute their effective config directory to Codex's legacy
-> workspace-write sandbox; this follows backend defaults and explicit overrides
-> without coupling the standalone glab module to the AI module). Prior:
-> 2026-08-05 (commit pending — re-verifies these conventions while the managed
-> MCP module's bridge-host comment is generalized so adding Context7 to the
-> bridge set cannot stale a hardcoded server count). Prior: 2026-08-03 (commit
-> pending — glab's shared package default now follows its
-> `pkgs.ai.devTools.glab` namespace in both HM and devenv). Prior: 2026-08-02
-> (commit pending — Semble's shared activation condition delegates its Codex
-> cache grant to backend-native sinks; Home Manager appends the user XDG cache
-> path without enabling Codex or choosing its sandbox mode). Prior: 2026-08-02
-> (commit pending — Semble adds one shared HM and devenv option declaration plus
-> shared runtime-fanout logic; only the package installation sink differs).
-> Prior: 2026-08-02 (commit pending — Codex named profiles now use one typed
-> declaration across HM and devenv while each backend delivers the artifact at
-> its native scope: HM links user files and devenv materializes repo
-> declarations into the user-only profile lookup location with explicit
-> ownership). Prior: 2026-08-02 (commit pending — generated option references
-> now enforce exact flattened `ai.*` name/type parity across HM and devenv;
-> backend-only behavior stays discoverable and fails explicitly, as with Home
-> Manager rejecting project-only `ai.copilot.projectDir` overrides). Prior:
-> 2026-08-02 (commit 589fa37c — distinguishes ordinary JSON merge activation
-> from Codex's leaf-owned TOML reconciliation, whose manifest supplies removal
-> semantics while preserving native project-trust state). Prior: 2026-07-28
-> (commit pending — records the ONE-SHARED-DECLARATION form of the config-parity
-> rule, landed by `packages/glab` and asserted by
-> `module-glab-hm-devenv-option-parity`; prior 2026-07-21 was the repo-wide
-> activation reordering `entryAfter ["writeBoundary"]` → `["linkGeneration"]`;
-> earlier revisions added the activation script `exit` warning + Nix path type
-> strictness section). If you touch any `modules/<subdir>/default.nix` file, add
-> a new option, or change an assertion/activation pattern and this fragment
-> isn't updated in the same commit, stop and fix it.
+> **Last verified:** 2026-08-15 (commit pending — runtime-shaped config moved
+> from `ai.<runtime>.settings` to `nativeSettings`, the new closed `settings`
+> submodule is normalized across all runtimes, and Codex integration roots use a
+> hidden internal contribution channel). Prior: 2026-08-14 (commit pending —
+> Semble's shared module now lowers grammar and path mappings identically
+> through both facets, with one package-identity cache guard and cache-location
+> wrapper per backend; HM's XDG cache remains authoritative on Darwin too).
+> Prior: 2026-08-05 (commit pending — the Codex named-profile delivery-path
+> example is retained but `ai.codex.profiles` is now LOCKED OUT and fails
+> evaluation; the asymmetry it teaches is still correct, the option is not
+> usable). Prior: 2026-08-05 (commit pending — glab's Linux Home Manager facet
+> can queue one OS-keyring synchronization per activation through a
+> graphical-session path unit; the shared option is an explicit devenv
+> exclusion, and the ordinary wrapper stops exporting the synchronized token).
+> Prior: 2026-08-05 (commit pending — enabled glab facets contribute their
+> effective config directory to Codex's legacy workspace-write sandbox; this
+> follows backend defaults and explicit overrides without coupling the
+> standalone glab module to the AI module). Prior: 2026-08-05 (commit pending —
+> re-verifies these conventions while the managed MCP module's bridge-host
+> comment is generalized so adding Context7 to the bridge set cannot stale a
+> hardcoded server count). Prior: 2026-08-03 (commit pending — glab's shared
+> package default now follows its `pkgs.ai.devTools.glab` namespace in both HM
+> and devenv). Prior: 2026-08-02 (commit pending — Semble's shared activation
+> condition delegates its Codex cache grant to backend-native sinks; Home
+> Manager appends the user XDG cache path without enabling Codex or choosing its
+> sandbox mode). Prior: 2026-08-02 (commit pending — Semble adds one shared HM
+> and devenv option declaration plus shared runtime-fanout logic; only the
+> package installation sink differs). Prior: 2026-08-02 (commit pending — Codex
+> named profiles now use one typed declaration across HM and devenv while each
+> backend delivers the artifact at its native scope: HM links user files and
+> devenv materializes repo declarations into the user-only profile lookup
+> location with explicit ownership). Prior: 2026-08-02 (commit pending —
+> generated option references now enforce exact flattened `ai.*` name/type
+> parity across HM and devenv; backend-only behavior stays discoverable and
+> fails explicitly, as with Home Manager rejecting project-only
+> `ai.copilot.projectDir` overrides). Prior: 2026-08-02 (commit 589fa37c —
+> distinguishes ordinary JSON merge activation from Codex's leaf-owned TOML
+> reconciliation, whose manifest supplies removal semantics while preserving
+> native project-trust state). Prior: 2026-07-28 (commit pending — records the
+> ONE-SHARED-DECLARATION form of the config-parity rule, landed by
+> `packages/glab` and asserted by `module-glab-hm-devenv-option-parity`; prior
+> 2026-07-21 was the repo-wide activation reordering
+> `entryAfter ["writeBoundary"]` → `["linkGeneration"]`; earlier revisions added
+> the activation script `exit` warning + Nix path type strictness section). If
+> you touch any `modules/<subdir>/default.nix` file, add a new option, or change
+> an assertion/activation pattern and this fragment isn't updated in the same
+> commit, stop and fix it.
 
 These conventions are enforced by code review and the `checks/module-eval.nix`
 evaluation tests, not by the module system itself. Follow them when adding or
@@ -66,10 +70,13 @@ per-ecosystem submodule. They fan out to whichever ecosystems are enabled at
 `mkDefault` priority. Anything that's "one option, many destinations" lives
 flat.
 
-**Settings pattern: freeformType + typed subkeys.** When wrapping a CLI's
-settings.json, use `freeformType = jsonFormat.type` plus explicit `mkOption`
-declarations for known typed keys (e.g. `settings.model`, `settings.telemetry`).
-Unknown keys flow through freely; known keys get type-checked.
+**Keep normalized and native settings separate.** `ai.<runtime>.settings` is a
+closed normalized submodule shared by every runtime. Runtime-shaped passthrough
+belongs under `ai.<runtime>.nativeSettings`; when wrapping a CLI's native
+settings file, use `freeformType = jsonFormat.type` plus explicit `mkOption`
+declarations for known typed keys (for example, `nativeSettings.model` and
+`nativeSettings.telemetry`). Unknown native keys flow through freely; known keys
+get type-checked. Do not add runtime-native keys to normalized `settings`.
 
 **Defaults via `mkOption { default = ...; }`**, not `mkDefault` in the
 declaration. Reserve `mkDefault` for fanout values in the config block (so
@@ -179,10 +186,12 @@ pkgs.symlinkJoin {
 
 A standalone package module must remain importable without the umbrella AI
 module. Before contributing integration state such as a Codex writable root,
-test the destination option with `lib.hasAttrByPath ... options`, then gate on
-the relevant runtime enable. glab uses this pattern to contribute its effective
-`configDir`: Home Manager resolves its `null` default to
-`${config.xdg.configHome}/glab-cli`, while devenv uses its evaluated project
+test the destination container with `lib.hasAttrByPath ... options`, then gate
+on the relevant runtime enable. Such plumbing belongs under an internal, hidden
+option rather than either public settings surface; Codex uses
+`ai.codex.internal._integration_writable_roots`. glab uses this pattern to
+contribute its effective `configDir`: Home Manager resolves its `null` default
+to `${config.xdg.configHome}/glab-cli`, while devenv uses its evaluated project
 state default or the consumer's explicit override. The contribution configures
 an already-enabled Codex; it never enables Codex itself.
 
@@ -266,11 +275,11 @@ path; that would also fork authentication, sessions, logs, and caches.
 
 **HM settings writes are conditional; devenv writes are not.** The HM activation
 merge (copilot `copilotSettingsMerge`, kiro `kiroSettingsMerge`) is gated on
-non-empty settings — if the consumer enables the ecosystem just for MCP/skills
-fanout and doesn't set any `ai.<cli>.settings`, the activation script doesn't
-fire and an externally-managed settings file is left untouched. Matches upstream
-Claude HM behavior where `settings.json` is only written when
-`cfg.settings != {}`.
+non-empty native settings — if the consumer enables the ecosystem just for
+MCP/skills fanout and doesn't set any `ai.<cli>.nativeSettings`, the activation
+script doesn't fire and an externally-managed settings file is left untouched.
+Matches upstream Claude HM behavior where `settings.json` is only written when
+`cfg.nativeSettings != {}`.
 
 Codex user settings are the deliberate exception: its activation entry is always
 present while enabled. Empty desired settings plus no prior manifest is a strict

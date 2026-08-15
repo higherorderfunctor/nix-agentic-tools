@@ -1354,13 +1354,12 @@ don't get lost:
    see real failure modes from downstream users.
 
 7. **Layered option merge semantics for nested submodules**: `recursiveUpdate`
-   does deep merge for plain attrsets but may not respect submodule semantics
-   (e.g., `mkDefault` / `mkForce` priority). For most categories (`mcpServers`,
-   `skills`, `instructions`) this is fine because entries are independent. For
-   `settings` which is a submodule with nested fields, may need to use the
-   module system's own merge instead. **TODO: prototype both approaches and pick
-   the one that produces correct override behavior for
-   `ai.kiro.settings.model = ...; ai.settings.model = ...` collision.**
+   does deep merge for plain attrsets but does not preserve module priorities.
+   For independent keyed pools (`mcpServers`, `skills`, `instructions`) the
+   factory uses shape-specific composition. Normalized `settings` resolves each
+   nullable field explicitly through `resolveOverride`; runtime-shaped config is
+   separate under `nativeSettings` and uses the module system's native priority
+   merge. Do not reintroduce a recursive attrset merge between those surfaces.
 
 8. **MCP server pattern relationship to existing `services.mcp-servers`**: this
    repo already has a separate `modules/mcp-servers/` module that exposes

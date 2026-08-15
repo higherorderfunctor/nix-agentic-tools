@@ -197,7 +197,7 @@ in {
       # Uniform across backends now that the location is a plain value rather
       # than a round-trip through the shell environment.
       (lib.mkIf codexSelected {
-        ai.codex.settings._integration_writable_roots = lib.mkAfter [cacheDir];
+        ai.codex.internal._integration_writable_roots = lib.mkAfter [cacheDir];
       })
     ]
     ++ map runtimeConfig runtimes

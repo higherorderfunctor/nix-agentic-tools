@@ -1,16 +1,17 @@
 ## ai.\* Collision Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — collision checks now follow
-> each app record's `supportedPools`: unsupported root fanout degrades without a
-> collision assertion because the corresponding per-runtime option does not
-> exist). Prior: 2026-08-14 (commit pending — records where a MODULE may
-> contribute, now that `lib/ai/mkSkillPackageModule.nix` writes the per-CLI
-> pools. That looks like the exact shape `shell-option.md` bans, and the
-> discriminator — always-on default versus opt-in behind an explicit enable — is
-> written down in the new section below because the ban's reasoning does not
-> carry across it. Also records the provenance guard, which makes the root-write
-> prohibition structural rather than reviewed-for). Prior: 2026-08-10 (commit
-> pending — TWO corrections. The call site was never `hmTransform.nix` +
+> **Last verified:** 2026-08-15 (commit pending — collision checks follow each
+> app record's `supportedPools`, while normalized `ai.settings` is a
+> scalar-field exception: each nullable field resolves independently, with a
+> non-null per-runtime value overriding the root and null inheriting it). Prior:
+> 2026-08-14 (commit pending — records where a MODULE may contribute, now that
+> `lib/ai/mkSkillPackageModule.nix` writes the per-CLI pools. That looks like
+> the exact shape `shell-option.md` bans, and the discriminator — always-on
+> default versus opt-in behind an explicit enable — is written down in the new
+> section below because the ban's reasoning does not carry across it. Also
+> records the provenance guard, which makes the root-write prohibition
+> structural rather than reviewed-for). Prior: 2026-08-10 (commit pending — TWO
+> corrections. The call site was never `hmTransform.nix` +
 > `devenvTransform.nix`; both are 16-line re-exports of
 > `mkBackendTransform.nix`, which is where the merge AND the per-CLI baseline
 > option surface actually live, so step 2 of the checklist pointed at files that
@@ -90,12 +91,15 @@ Applies to every attrset-shaped shared pool in `ai.*`:
 `ai.instructions` is a list, not an attrset, so list concat stays as-is.
 `ai.context` is single-valued.
 
-`ai.shell` is the deliberate SCALAR exception and resolves the other way —
-per-runtime silently overrides the root, via `resolveOverride` rather than
-`mergeWithCollisionCheck`. A pool key names an independent entry, so overriding
+`ai.shell` and the fields in normalized `ai.settings` are deliberate SCALAR
+exceptions and resolve the other way — per-runtime silently overrides the root,
+via `resolveOverride` rather than `mergeWithCollisionCheck`. Resolution happens
+per field, so one runtime may override `reasoningEffort` without replacing any
+future normalized sibling. A pool key names an independent entry, so overriding
 one loses data; a nullable scalar has nothing to lose, and making the pair
 collide would leave no way to express "this default, except here". See
-`shell-option.md`, and do not "fix" it into the table above.
+`shell-option.md` for the same precedence rule, and do not "fix" either surface
+into the table above.
 
 `ai.hooks` is the deliberate attrset exception: event keys identify additive
 lifecycle streams, not replaceable entries. For a shared and runtime-specific
