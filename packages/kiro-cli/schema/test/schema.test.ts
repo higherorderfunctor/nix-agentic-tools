@@ -395,6 +395,26 @@ const step = (id: string, extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 
+/**
+ * A stop-context `fileCheck`. `path` is the only field `analyze` reads
+ * templates from, so it is the parameter; `jsonPath` and `value` are fixed at
+ * a shape the schema accepts.
+ */
+const fileCheck = (path: string, value: unknown = true) => ({
+  path,
+  jsonPath: "done",
+  value,
+});
+
+const repeatNode = (id: string, extra: Record<string, unknown> = {}) => ({
+  type: "repeat",
+  id,
+  maxIterations: 2,
+  onMaxIterations: "abort",
+  steps: [step(`${id}-body`)],
+  ...extra,
+});
+
 describe("analyze: whole-tree rules", () => {
   test("E-STEP-NODES-MAX at 21 steps, silent at 20", () => {
     const mk = (n: number) =>
@@ -616,11 +636,6 @@ describe("analyze: whole-tree rules", () => {
   });
 
   test("stop-context artifacts must be declared and visible", () => {
-    const fileCheck = (path: string) => ({
-      path,
-      jsonPath: "done",
-      value: true,
-    });
     const missing = withSteps([
       step("a", {
         completion: { fileCheck: fileCheck("{{artifacts.nope}}") },
@@ -759,5 +774,261 @@ describe("analyze: whole-tree rules", () => {
     ]);
     expect(validate(w).ok).toBe(true);
     expect(validate(w, { strict: true }).ok).toBe(false);
+  });
+});
+
+/**
+ * Positive-emission coverage for the codes the suite above never named.
+ *
+ * Every case here provokes exactly one named code, and where the rule has a
+ * boundary the SILENT control sits next to it — a positive fixture on its own
+ * cannot distinguish "the rule fires" from "the rule always fires", which is
+ * how a rule can be deleted outright with the suite still green.
+ */
+describe("analyze: {{previous.output}} rules", () => {
+  test("E-TEMPLATE-PREVIOUS-IN-PARALLEL — a branch has no guaranteed prior sibling", () => {
+    const inBranch = withSteps([
+      {
+        type: "parallel",
+        id: "p",
+        joinPolicy: "allSettled",
+        branches: [step("a", { prompt: "{{previous.output}}" })],
+      },
+    ]);
+    expect(codesOf(inBranch)).toContain("E-TEMPLATE-PREVIOUS-IN-PARALLEL");
+    // The two `previous` arms are exclusive: a branch is reported as a branch,
+    // not additionally as a missing producer.
+    expect(codesOf(inBranch)).not.toContain("E-TEMPLATE-PREVIOUS-NO-PRODUCER");
+    // Silent control — the same reference one level out, after a producer.
+    expect(
+      codesOf(
+        withSteps([step("q"), step("a", { prompt: "{{previous.output}}" })]),
+      ),
+    ).not.toContain("E-TEMPLATE-PREVIOUS-IN-PARALLEL");
+  });
+
+  test("E-TEMPLATE-PREVIOUS-NO-PRODUCER — an earlier sibling must also PRODUCE", () => {
+    const noSibling = withSteps([step("a", { prompt: "{{previous.output}}" })]);
+    const nonProducer = withSteps([
+      step("q", { captureOutput: false }),
+      step("a", { prompt: "{{previous.output}}" }),
+    ]);
+    const producer = withSteps([
+      step("q"),
+      step("a", { prompt: "{{previous.output}}" }),
+    ]);
+
+    expect(codesOf(noSibling)).toContain("E-TEMPLATE-PREVIOUS-NO-PRODUCER");
+    expect(codesOf(nonProducer)).toContain("E-TEMPLATE-PREVIOUS-NO-PRODUCER");
+    expect(codesOf(producer)).not.toContain("E-TEMPLATE-PREVIOUS-NO-PRODUCER");
+  });
+});
+
+describe("analyze: stop-context reference rules", () => {
+  const completionRef = (path: string) => ({
+    completion: { fileCheck: fileCheck(path) },
+  });
+
+  test("E-STOP-CONTEXT-PREVIOUS fires even where a producer really does precede", () => {
+    // This is the case the analyzer's own comment calls "never legal there",
+    // so a preceding producer must NOT rescue it.
+    expect(
+      codesOf(
+        withSteps([
+          step("q"),
+          step("a", completionRef("{{previous.output}}/report.json")),
+        ]),
+      ),
+    ).toContain("E-STOP-CONTEXT-PREVIOUS");
+    // Silent control — same shape, a named producer instead. The rule is about
+    // `previous`, not about stop contexts carrying references at all.
+    expect(
+      codesOf(
+        withSteps([
+          step("q"),
+          step("a", completionRef("{{q.output}}/report.json")),
+        ]),
+      ),
+    ).not.toContain("E-STOP-CONTEXT-PREVIOUS");
+  });
+
+  test("E-STOP-CONTEXT-PREVIOUS also covers the assembled stopWhen template", () => {
+    expect(
+      codesOf(
+        withSteps([
+          repeatNode("r", { stopWhen: "{{previous.output}} contains DONE" }),
+        ]),
+      ),
+    ).toContain("E-STOP-CONTEXT-PREVIOUS");
+  });
+
+  test("E-STOP-CONTEXT-REF-UNKNOWN names no node at all", () => {
+    expect(
+      codesOf(withSteps([step("a", completionRef("{{ghost.output}}"))])),
+    ).toContain("E-STOP-CONTEXT-REF-UNKNOWN");
+  });
+
+  test("E-STOP-CONTEXT-REF-NOT-PRODUCER — the node exists but captures nothing", () => {
+    expect(
+      codesOf(
+        withSteps([
+          step("q", { captureOutput: false }),
+          step("a", completionRef("{{q.output}}")),
+        ]),
+      ),
+    ).toContain("E-STOP-CONTEXT-REF-NOT-PRODUCER");
+  });
+
+  test("E-STOP-CONTEXT-REF-NOT-VISIBLE — later sibling only; self and own body are visible", () => {
+    const later = withSteps([
+      step("a", completionRef("{{b.output}}")),
+      step("b"),
+    ]);
+    const earlier = withSteps([
+      step("b"),
+      step("a", completionRef("{{b.output}}")),
+    ]);
+    const itself = withSteps([step("a", completionRef("{{a.output}}"))]);
+    const ownBody = withSteps([
+      repeatNode("r", {
+        stopCondition: { fileCheck: fileCheck("{{child.output}}") },
+        steps: [step("child")],
+      }),
+    ]);
+
+    expect(codesOf(later)).toContain("E-STOP-CONTEXT-REF-NOT-VISIBLE");
+    for (const visible of [earlier, itself, ownBody]) {
+      expect(codesOf(visible)).not.toContain("E-STOP-CONTEXT-REF-NOT-VISIBLE");
+    }
+  });
+});
+
+describe("analyze: policy lints", () => {
+  /**
+   * Three separate arms emit this one code, so all three are exercised — a
+   * fixture for one of them leaves the other two deletable.
+   */
+  const container = (kind: string, children: ReadonlyArray<unknown>) =>
+    kind === "repeat"
+      ? repeatNode("c", {
+          stopCondition: { containsText: "x" },
+          steps: children,
+        })
+      : kind === "sequence"
+        ? { type: "sequence", id: "c", steps: children }
+        : {
+            type: "parallel",
+            id: "c",
+            joinPolicy: "allSettled",
+            branches: children,
+          };
+
+  test.each([["repeat"], ["sequence"], ["parallel"]])(
+    "W-CONTAINER-EMPTY on an empty %s",
+    (kind) => {
+      expect(codesOf(withSteps([container(kind, [])]))).toContain(
+        "W-CONTAINER-EMPTY",
+      );
+      expect(codesOf(withSteps([container(kind, [step("a")])]))).not.toContain(
+        "W-CONTAINER-EMPTY",
+      );
+    },
+  );
+
+  test("W-REPEAT-NO-STOP-FORM — legal, but nothing reports why the loop ended", () => {
+    expect(codesOf(withSteps([repeatNode("r")]))).toContain(
+      "W-REPEAT-NO-STOP-FORM",
+    );
+    expect(
+      codesOf(
+        withSteps([
+          repeatNode("r", { stopCondition: { containsText: "DONE" } }),
+        ]),
+      ),
+    ).not.toContain("W-REPEAT-NO-STOP-FORM");
+    expect(
+      codesOf(
+        withSteps([
+          {
+            type: "watch",
+            id: "w",
+            handler: "github-pr",
+            config: { prRef: "pr.json" },
+          },
+          repeatNode("r", { stopWhen: "w.terminal" }),
+        ]),
+      ),
+    ).not.toContain("W-REPEAT-NO-STOP-FORM");
+  });
+
+  test("onMaxIterations lints: continue and pause warn, abort is silent", () => {
+    const codesFor = (onMaxIterations: string) =>
+      codesOf(
+        withSteps([
+          repeatNode("r", {
+            onMaxIterations,
+            stopCondition: { containsText: "DONE" },
+          }),
+        ]),
+      ).filter((code) => code.startsWith("W-ON-MAX-ITERATIONS-"));
+
+    expect(codesFor("continue")).toEqual(["W-ON-MAX-ITERATIONS-CONTINUE"]);
+    expect(codesFor("pause")).toEqual(["W-ON-MAX-ITERATIONS-PAUSE"]);
+    expect(codesFor("abort")).toEqual([]);
+  });
+
+  test("joinPolicy lints: any and all warn, allSettled is silent", () => {
+    const codesFor = (joinPolicy: string) =>
+      codesOf(
+        withSteps([
+          { type: "parallel", id: "p", joinPolicy, branches: [step("a")] },
+        ]),
+      ).filter((code) => code.startsWith("W-JOIN-POLICY-"));
+
+    expect(codesFor("any")).toEqual(["W-JOIN-POLICY-ANY"]);
+    expect(codesFor("all")).toEqual(["W-JOIN-POLICY-ALL"]);
+    expect(codesFor("allSettled")).toEqual([]);
+  });
+
+  test("W-FILE-CHECK-VALUE-ARRAY on both fileCheck sites; a scalar is silent", () => {
+    const onStep = (value: unknown) =>
+      withSteps([
+        step("a", { completion: { fileCheck: fileCheck("r.json", value) } }),
+      ]);
+    const onRepeat = (value: unknown) =>
+      withSteps([
+        repeatNode("r", {
+          stopCondition: { fileCheck: fileCheck("r.json", value) },
+        }),
+      ]);
+
+    expect(codesOf(onStep(["a", "b"]))).toContain("W-FILE-CHECK-VALUE-ARRAY");
+    expect(codesOf(onRepeat(["a", "b"]))).toContain("W-FILE-CHECK-VALUE-ARRAY");
+    expect(codesOf(onStep(true))).not.toContain("W-FILE-CHECK-VALUE-ARRAY");
+    expect(codesOf(onRepeat(true))).not.toContain("W-FILE-CHECK-VALUE-ARRAY");
+  });
+
+  test.each([
+    ["a templated", "{{setup.output}}/report.json"],
+    ["an absolute", "/srv/report.json"],
+    ["a tilde-prefixed", "~/report.json"],
+    ["an escaping", "../report.json"],
+  ])("W-FILE-CHECK-PATH-UNSAFE on %s path", (_label, path) => {
+    expect(
+      codesOf(
+        withSteps([step("a", { completion: { fileCheck: fileCheck(path) } })]),
+      ),
+    ).toContain("W-FILE-CHECK-PATH-UNSAFE");
+  });
+
+  test.each([
+    ["a plain relative path", "state/report.json"],
+    ["'..' inside a segment rather than as one", "state/a..b.json"],
+  ])("W-FILE-CHECK-PATH-UNSAFE is silent on %s", (_label, path) => {
+    expect(
+      codesOf(
+        withSteps([step("a", { completion: { fileCheck: fileCheck(path) } })]),
+      ),
+    ).not.toContain("W-FILE-CHECK-PATH-UNSAFE");
   });
 });
