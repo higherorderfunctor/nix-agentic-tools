@@ -189,9 +189,18 @@ in
     # Carried as DATA, not a module argument — see mkAiApp.nix.
     inherit pkgs;
     name = "claude";
-    # Honest: both backend callbacks consume `resolvedShell` via
-    # `shellSettings` above. See mkAiApp.nix's record-shape note.
-    supportsShell = true;
+    supportedPools = [
+      "agents"
+      "context"
+      "hooks"
+      "instructions"
+      "lspServers"
+      "mcpServers"
+      "rules"
+      "settings"
+      "shell"
+      "skills"
+    ];
     transformers.markdown = lib.ai.transformers.claude;
     defaults = {
       package = pkgs.ai.claude-code;

@@ -1,11 +1,15 @@
 # `ai.*` normalized-interface rework, then semble #858 on top
 
-> **Last verified:** 2026-08-14 against `main` at `0fe1f1fd`, by two
-> verification passes (twelve agents, then seven) over the preceding design
-> session's working notes. Every `file:line` below was re-read; 65 of 67 resolve
-> exactly and the two imprecise ones are corrected in place. Main moved from
-> `c5475438` during the session, but the six intervening commits touch only
-> lockfiles and two overlay files, so no citation needed re-anchoring.
+> **Last verified:** 2026-08-15 (commit pending — PR 3 now follows the later
+> execution brief: `supportedPools` generalizes the record capability gate,
+> Kimchi's dead rules options are removed, and boundary B0 records the
+> unsupported-root degradation contract). Prior: 2026-08-14 against `main` at
+> `0fe1f1fd`, by two verification passes (twelve agents, then seven) over the
+> preceding design session's working notes. Every `file:line` below was re-read;
+> 65 of 67 resolve exactly and the two imprecise ones are corrected in place.
+> Main moved from `c5475438` during the session, but the six intervening commits
+> touch only lockfiles and two overlay files, so no citation needed
+> re-anchoring.
 >
 > **Items previously marked DECIDED or RESOLVED that were refuted: seven.** Four
 > by the first pass (R1-R4) and three by the second (R5-R7). Do not re-derive
@@ -48,7 +52,7 @@ defer the namespace move", written before that sign-off.
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | 1   | Pool-write fix (`lib/ai/mkSkillPackageModule.nix:56-57`) + unify the three runtime enumerations into one registry; **build** the A1 backstop (shipped as a provenance guard, not the scan A1 described) | —        |
 | 2   | #920 Copilot HM path (2 literals + 4 assertions)                                                                                                                                                        | —        |
-| 3   | Per-pool-per-runtime capability gating, generalizing `supportsShell`. **Does NOT drop `ai.kimchi.rules`/`rulesDir`** — mark kimchi a rules CONSUMER, because A3a makes it one in PR 5                   | 1        |
+| 3   | Per-pool-per-runtime capability gating through app-record `supportedPools`; **drops `ai.kimchi.rules`/`rulesDir`** because Kimchi rules support is deliberately unimplemented                           | 1        |
 | 4   | Settings split — `nativeSettings`, `_integration_*` internal                                                                                                                                            | —        |
 | 5   | Retire `instructions` → keyed `rules`, incl. level-stamping for order                                                                                                                                   | 2, 3     |
 | 6   | Pool negation `attrsOf (nullOr …)` + net-new package-vs-package check                                                                                                                                   | 5        |
@@ -202,13 +206,13 @@ absence but **duplication**: three hardcoded lists, no shared one. See A1a.
 
 **R7 — per-pool-per-runtime gating is NOT new; it already ships.**
 `lib/ai/app/mkBackendTransform.nix:199-213` and `:322-332` declare
-`ai.<name>.shell` only when the app record sets `supportsShell = true`, and
-`dev/fragments/ai-module/shell-option.md` states the identical policy as a
+`ai.<name>.shell` only when the app record includes `shell` in `supportedPools`,
+and `dev/fragments/ai-module/shell-option.md` states the identical policy as a
 standing house rule: "a surface without a lossless native mapping is an explicit
 exclusion, not a silent no-op", with an unsupported runtime giving an "option
 does not exist" eval error. That is exactly the mechanism ratified in A1a and
-exactly the collapse A1b predicts. Follow `supportsShell`; do not invent a
-second pattern.
+exactly the collapse A1b predicts. Follow the record capability gate; do not
+invent a second pattern.
 
 ### Open, with evidence now in hand
 
@@ -417,7 +421,7 @@ not a policy failure — the option does not exist, and Nix raises its own
 unknown-option error. That is already loud, already free, and needs no rule.
 
 **This is not speculative — the repo already does it** (R7). `ai.shell` is
-declared only when the app record sets `supportsShell = true`
+declared only when the app record includes `shell` in `supportedPools`
 (`lib/ai/app/mkBackendTransform.nix:199-213`, `:322-332`), and
 `dev/fragments/ai-module/shell-option.md` records the identical policy as a
 standing house rule:
@@ -428,8 +432,7 @@ standing house rule:
 > native mapping is an explicit exclusion, not a silent no-op.
 
 So A1a and this section are generalizing an existing, documented mechanism from
-one scalar to every pool. Reuse `supportsShell`'s shape rather than designing a
-second one, and note its deliberate constraint: the flag is read off the app
+one scalar to every pool. The generalized `supportedPools` list stays on the app
 RECORD, keeping it a build-time parameter that forces neither `config` nor
 `pkgs`, which is what stops it reintroducing the `_module.args` recursion
 documented against `proxyIsSupported`.
@@ -512,6 +515,7 @@ stated reasoning · **H?** human-picked among options without a strong basis ·
 
 | #   | Boundary                                            | Unit    | Behavior                                                                                                                         | Prov |
 | --- | --------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| B0  | root pool → runtime lacking that pool               | pool    | silently degrades to the neutral value; the corresponding per-runtime option does not exist                                      | H    |
 | B1  | root pool ↔ per-runtime pool, SAME key              | entry   | per-runtime replaces root's entry, wholesale                                                                                     | H    |
 | B2  | root pool ↔ per-runtime pool, DIFFERENT key         | entry   | additive, both exist                                                                                                             | M    |
 | B3  | inside a pool entry (a server record's fields)      | field   | **never merges across levels — entries are atomic**                                                                              | H    |

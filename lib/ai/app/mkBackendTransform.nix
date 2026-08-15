@@ -20,6 +20,7 @@
 #     transformers;
 #     defaults ? {package};
 #     options ? {};            # shared across backends
+#     supportedPools ? [];      # normalized ai.* pools this runtime consumes
 #     <backend> ? {
 #       options ? {};          # backend-only option additions
 #       defaults ? {};         # backend-only default overrides
@@ -51,6 +52,8 @@
     inherit (appRecord) pkgs;
   };
   cfg = config.ai.${appRecord.name};
+  supportedPools = appRecord.supportedPools or [];
+  supportsPool = poolName: builtins.elem poolName supportedPools;
   # Collision-as-failure merges — shared ai.<pool> vs ai.<cli>.<pool>.
   # See lib/ai/ai-common.nix:mergeWithCollisionCheck. Assertions are
   # emitted through config.assertions below.
@@ -59,12 +62,20 @@
       inherit poolName topPool cliPool;
       cliName = appRecord.name;
     };
-  serversMerge = mergeCheck "mcpServers" config.ai.mcpServers cfg.mcpServers;
-  skillsMerge = mergeCheck "skills" config.ai.skills cfg.skills;
-  rulesMerge = mergeCheck "rules" config.ai.rules cfg.rules;
-  lspMerge = mergeCheck "lspServers" config.ai.lspServers (cfg.lspServers or {});
-  envMerge = mergeCheck "environmentVariables" config.ai.environmentVariables (cfg.environmentVariables or {});
-  agentsMerge = mergeCheck "agents" config.ai.agents (cfg.agents or {});
+  emptyMerge = {
+    assertions = [];
+    merged = {};
+  };
+  mergePool = poolName: topPool: cliPool:
+    if supportsPool poolName
+    then mergeCheck poolName topPool cliPool
+    else emptyMerge;
+  agentsMerge = mergePool "agents" config.ai.agents (cfg.agents or {});
+  envMerge = mergePool "environmentVariables" config.ai.environmentVariables (cfg.environmentVariables or {});
+  lspMerge = mergePool "lspServers" config.ai.lspServers (cfg.lspServers or {});
+  rulesMerge = mergePool "rules" config.ai.rules cfg.rules;
+  serversMerge = mergePool "mcpServers" config.ai.mcpServers cfg.mcpServers;
+  skillsMerge = mergePool "skills" config.ai.skills cfg.skills;
   collisionAssertions =
     serversMerge.assertions
     ++ skillsMerge.assertions
@@ -196,28 +207,22 @@
     })
   proxiedServers;
 
-  # Opt-in, per app record. An app earns `ai.<name>.shell` only by
-  # declaring `supportsShell = true`, which means it actually maps the
-  # value onto a knob its runtime reads. Apps that do not (Copilot,
-  # Kimchi — neither runtime's shell selection has been established)
-  # get NO option at all, so setting one is an "option does not exist"
-  # eval error rather than a value that evaluates cleanly and is then
-  # dropped on the floor. The repo rule is that a surface without a
-  # lossless native mapping is an explicit exclusion, not a silent
-  # no-op.
+  # One capability source per app record. A normalized pool is declared,
+  # collision-checked and fanned out only when the runtime consumes it.
+  # Unsupported per-runtime writes therefore get an "option does not exist"
+  # eval error, while unsupported root fanout deliberately degrades to the
+  # pool's neutral value.
   #
   # Reading it off the RECORD keeps it a build-time parameter, in the
   # same category as `backend` above: it forces neither `config` nor
   # the factory's `pkgs`, so it cannot reintroduce the `_module.args`
   # recursion documented against `proxyIsSupported` below.
-  supportsShell = appRecord.supportsShell or false;
-
   # Override-wins, NOT collision-as-failure — see the contrast note on
   # `resolveOverride` in lib/ai/ai-common.nix. Left null when the app
   # opts out, so a callback that ignores it cannot accidentally emit a
   # root-level shell the runtime never reads.
   resolvedShell =
-    if supportsShell
+    if supportsPool "shell"
     then
       aiCommon.resolveOverride {
         topValue = config.ai.shell;
@@ -238,15 +243,27 @@
     GIT_SSH_COMMAND = sandboxSshCommand;
   };
 
-  mergedInstructions = config.ai.instructions ++ cfg.instructions;
+  mergedInstructions =
+    if supportsPool "instructions"
+    then config.ai.instructions ++ cfg.instructions
+    else [];
   mergedSkills = skillsMerge.merged;
   mergedRules = rulesMerge.merged;
   mergedLspServers = lspMerge.merged;
   mergedEnvironmentVariables = envMerge.merged;
   mergedAgents = agentsMerge.merged;
-  topContext = config.ai.context;
-  topHooks = config.ai.hooks;
-  topSettings = config.ai.settings;
+  topContext =
+    if supportsPool "context"
+    then config.ai.context
+    else null;
+  topHooks =
+    if supportsPool "hooks"
+    then config.ai.hooks
+    else {};
+  topSettings =
+    if supportsPool "settings"
+    then config.ai.settings
+    else {};
 
   backendSpec = appRecord.${backend} or {};
   backendOptions = backendSpec.options or {};
@@ -271,6 +288,8 @@ in {
         default = package;
         description = "The ${appRecord.name} package.";
       };
+    }
+    // lib.optionalAttrs (supportsPool "mcpServers") {
       mcpServers = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submoduleWith {
           modules = [(import ../mcpServer/commonSchema.nix)];
@@ -278,11 +297,15 @@ in {
         default = {};
         description = "${appRecord.name}-specific MCP servers (merged with top-level ai.mcpServers; collisions fail).";
       };
+    }
+    // lib.optionalAttrs (supportsPool "instructions") {
       instructions = lib.mkOption {
         type = lib.types.listOf aiCommon.instructionModule;
         default = [];
         description = "${appRecord.name}-specific instructions (appended to top-level ai.instructions; Kiro supports an explicit inclusion mode).";
       };
+    }
+    // lib.optionalAttrs (supportsPool "rules") {
       rules = lib.mkOption {
         type = lib.types.attrsOf aiCommon.ruleModule;
         default = {};
@@ -301,6 +324,8 @@ in {
           still contribute to the same on-disk rules dir.
         '';
       };
+    }
+    // lib.optionalAttrs (supportsPool "skills") {
       skills = lib.mkOption {
         type = lib.types.attrsOf lib.types.path;
         default = {};
@@ -317,9 +342,7 @@ in {
         '';
       };
     }
-    # Declared ONLY for apps that map it onto a knob their runtime
-    # actually reads — see `supportsShell` above.
-    // lib.optionalAttrs supportsShell {
+    // lib.optionalAttrs (supportsPool "shell") {
       shell = lib.mkOption {
         type = lib.types.nullOr lib.types.package;
         default = null;
@@ -371,16 +394,16 @@ in {
     # still has visibility even when the CLI is disabled — the
     # actual on-disk emission is still gated by `cfg.enable` inside
     # the per-CLI factory's customConfig.
-    (lib.mkIf (cfg.rulesDir != null) {
+    (lib.optionalAttrs (supportsPool "rules") (lib.mkIf (cfg.rulesDir != null) {
       ai.${appRecord.name}.rules = lib.mapAttrs (_: lib.mkDefault) (
         dirHelpers.rulesFromDir cfg.rulesDir
       );
-    })
-    (lib.mkIf (cfg.skillsDir != null) {
+    }))
+    (lib.optionalAttrs (supportsPool "skills") (lib.mkIf (cfg.skillsDir != null) {
       ai.${appRecord.name}.skills = lib.mapAttrs (_: lib.mkDefault) (
         dirHelpers.skillsFromDir cfg.skillsDir
       );
-    })
+    }))
     (lib.mkIf cfg.enable customConfig)
   ];
 }

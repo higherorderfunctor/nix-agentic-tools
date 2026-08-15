@@ -7,7 +7,10 @@ applyTo: "checks/module-eval.nix,lib/ai/agent.nix,lib/ai/ai-common.nix,lib/ai/ap
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-14 (commit pending — Copilot's `ai.instructions` /
+> **Last verified:** 2026-08-15 (commit pending — every normalized pool now
+> crosses into a runtime only when that app record lists it in `supportedPools`;
+> unsupported root fanout degrades while the matching per-runtime option is
+> absent). Prior: 2026-08-14 (commit pending — Copilot's `ai.instructions` /
 > `ai.rules` destination is per-BACKEND and this entry named only one of them.
 > Home Manager wrote a hardcoded `.github/instructions/`, which resolves to
 > `$HOME/.github/instructions/` — a directory copilot-cli never reads — so every
@@ -123,10 +126,10 @@ applyTo: "checks/module-eval.nix,lib/ai/agent.nix,lib/ai/ai-common.nix,lib/ai/ap
 > this fragment isn't updated in the same commit, stop and fix it.
 
 The `ai.*` HM module provides a unified interface that fans out shared AI-CLI
-configuration to each enabled ecosystem (Claude, Codex, Copilot, Kiro). It is
-NOT a thin wrapper — the gating semantics, default-setting behavior, and fanout
-patterns are load-bearing and got bitten into production by a silent no-op bug.
-Read this fragment before changing the gating.
+configuration to each capable enabled ecosystem (Claude, Codex, Copilot, Kimchi,
+Kiro). It is NOT a thin wrapper — the gating semantics, default-setting
+behavior, and fanout patterns are load-bearing and got bitten into production by
+a silent no-op bug. Read this fragment before changing the gating.
 
 ### Codex extracted facts need reverse coverage
 
@@ -395,6 +398,21 @@ Cross-ecosystem scalar defaults and per-entry fanouts use `mkDefault` so per-CLI
 overrides take precedence. Collection pools use their documented collision or
 concatenation semantics instead.
 
+### Per-pool capability gate
+
+Every app record carries one `supportedPools` list. The shared transformer uses
+it for the per-runtime option schema, collision merge, callback fanout, and
+shell resolution. A per-runtime pool write that the runtime cannot consume is
+therefore an unknown-option error. A ROOT pool value stays portable and degrades
+to the neutral value for an incapable runtime.
+
+Kimchi is the sharp example: it supports `context`, `environmentVariables`,
+`instructions`, `mcpServers`, and `skills`, but not `rules`. Consequently root
+`ai.rules` remains valid when Kimchi is enabled, while `ai.kimchi.rules` and
+`ai.kimchi.rulesDir` do not exist. Capability tests pair every eval-failure
+assertion with a supported-runtime positive control so harness failure cannot
+masquerade as correct exclusion.
+
 ### Assertion semantics
 
 Fanout assertions live outside per-runtime enable gates so invalid shared data
@@ -558,7 +576,10 @@ after a consumer's own root instructions rather than before them.
 
 ## ai.\* Collision Semantics
 
-> **Last verified:** 2026-08-14 (commit pending — records where a MODULE may
+> **Last verified:** 2026-08-15 (commit pending — collision checks now follow
+> each app record's `supportedPools`: unsupported root fanout degrades without a
+> collision assertion because the corresponding per-runtime option does not
+> exist). Prior: 2026-08-14 (commit pending — records where a MODULE may
 > contribute, now that `lib/ai/mkSkillPackageModule.nix` writes the per-CLI
 > pools. That looks like the exact shape `shell-option.md` bans, and the
 > discriminator — always-on default versus opt-in behind an explicit enable — is
@@ -587,6 +608,10 @@ silent override. The factory used to merge the top-level pool with the per-CLI
 pool via `config.ai.<pool> // cfg.<pool>`, letting a later per-CLI contribution
 silently overwrite a same-name top-level entry. User directive: "mixing and
 collision should be a failure. we don't merge over keys."
+
+This rule applies only where a runtime supports the pool. Unsupported
+per-runtime options are absent, and root fanout to that runtime degrades before
+any merge or collision check.
 
 ### Where a MODULE in this repo may contribute
 
@@ -670,7 +695,7 @@ mergeCheck = poolName: topPool: cliPool:
     cliName = appRecord.name;
   };
 
-rulesMerge = mergeCheck "rules" config.ai.rules cfg.rules;
+rulesMerge = mergePool "rules" config.ai.rules cfg.rules;
 # ...
 collisionAssertions = rulesMerge.assertions ++ ... ;
 ```
@@ -694,14 +719,16 @@ delete the duplicate.
 1. Declare `ai.<pool>` in `lib/ai/sharedOptions.nix` (attrset shape).
 2. Declare `ai.<cli>.<pool>` in the mkAiApp baseline
    (`lib/ai/app/mkBackendTransform.nix`, in the `options.ai.${appRecord.name}`
-   attrset — ONE declaration serves both backends and every app) OR in the
-   per-CLI factory (for CLI-specific shape, like kiro's `agents`, whose typed
-   record models Kiro's own v3 agent schema rather than the portable one).
-3. Add `<pool>Merge = mergeCheck "<pool>" config.ai.<pool> cfg.<pool>;` to the
+   attrset, gated by `supportsPool`) OR in the per-CLI factory (for CLI-specific
+   shape, like kiro's `agents`, whose typed record models Kiro's own v3 agent
+   schema rather than the portable one).
+3. Add the pool to `supportedPools` for each app record that consumes it.
+4. Add `<pool>Merge = mergePool "<pool>" config.ai.<pool> cfg.<pool>;` to the
    transform.
-4. Append `<pool>Merge.assertions` to `collisionAssertions`.
-5. Set `merged<Pool> = <pool>Merge.merged;`.
-6. Add a collision test in `checks/module-eval.nix`.
+5. Append `<pool>Merge.assertions` to `collisionAssertions`.
+6. Set `merged<Pool> = <pool>Merge.merged;`.
+7. Add collision and supported/unsupported option tests in
+   `checks/module-eval.nix`.
 
 ### Pitfall
 
@@ -824,12 +851,15 @@ path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-08-01 (commit pending — records the portable hooks
-> exception: per-event matcher-group lists append instead of key-colliding, and
-> agents may carry a typed semantic record). Prior: 2026-04-21 (commit pending —
-> refactor of ai-factory-collision plan §4). If you add a new Dir option or
-> change how per-file Dir expansion fans through the layers, update this
-> fragment in the same commit.
+> **Last verified:** 2026-08-15 (commit pending — L2 root pools now cross into
+> L3 only for runtimes whose app record lists that pool in `supportedPools`;
+> unsupported root fanout degrades and the L2b/L3 options are absent). Prior:
+> 2026-08-01 (commit pending — records the portable hooks exception: per-event
+> matcher-group lists append instead of key-colliding, and agents may carry a
+> typed semantic record). Prior: 2026-04-21 (commit pending — refactor of
+> ai-factory-collision plan §4). If you add a new Dir option or change how
+> per-file Dir expansion fans through the layers, update this fragment in the
+> same commit.
 
 ### Canonical 4-layer shape
 
@@ -856,6 +886,7 @@ path types".
 ┌────────────────────────────────────────────────────────────┐
 │ L3: Per-CLI singles                                        │
 │   ai.<cli>.<X> = attrsOf <itemModule>                      │
+│   - exists only when the app record supports pool X        │
 │   - merged with L2 via mergeWithCollisionCheck             │
 │   - collision-as-failure at the L2↔L3 boundary             │
 └────────────────────────────────────────────────────────────┘
@@ -873,10 +904,11 @@ path types".
 
 - **Emission logic lives ONLY at L4.** L1/L2/L2b are pure fanout — they never
   touch `home.file.*` or `files.*`.
-- **Collision-as-failure at every layer boundary.** The mergeWithCollisionCheck
-  helper fires on the L2↔L3 boundary inside each CLI's transform. L1→L2 and
-  L2b→L3 use `mkDefault` so explicit entries within the same layer still win
-  (that's a fanout, not a cross-layer collision).
+- **Collision-as-failure at every supported layer boundary.** The
+  mergeWithCollisionCheck helper fires on each supported L2↔L3 boundary inside
+  the CLI's transform. Unsupported root fanout degrades before this boundary and
+  has no L3 option. L1→L2 and L2b→L3 use `mkDefault` so explicit entries within
+  the same layer still win (that's a fanout, not a cross-layer collision).
 - **List-valued lifecycle hooks append.** `ai.hooks.<Event>` matcher groups run
   before `ai.<cli>.hooks.<Event>` groups. This is intentional composition, not
   an attrset-entry collision; only the exact portable Claude/Codex event
@@ -907,13 +939,15 @@ path types".
 2. Add per-CLI L3 option `ai.<cli>.<X>` in the transform baseline (if every
    supported CLI handles it the same way) or in each per-CLI factory (if the
    shape differs).
-3. Add L4 emission in each per-CLI factory's customConfig.
-4. Wire the L2↔L3 merge through mergeWithCollisionCheck in both transforms, or
+3. Add `X` to `supportedPools` only on app records whose callbacks consume it.
+4. Add L4 emission in each supporting per-CLI factory's customConfig.
+5. Wire the L2↔L3 merge through mergeWithCollisionCheck in both transforms, or
    document and test the concern's intentional composition rule (hooks append
    per-event lists).
-5. (Optional) Add L1 option `ai.<X>Dir` + L1→L2 expansion.
-6. (Optional) Add per-CLI L2b option `ai.<cli>.<X>Dir` + L2b→L3 expansion.
-7. Add tests in `checks/module-eval.nix` for every new surface.
+6. (Optional) Add L1 option `ai.<X>Dir` + L1→L2 expansion.
+7. (Optional) Add per-CLI L2b option `ai.<cli>.<X>Dir` + L2b→L3 expansion.
+8. Add tests in `checks/module-eval.nix` for every new surface and at least one
+   unsupported-runtime unknown-option control.
 
 ### Pitfall
 
@@ -935,19 +969,51 @@ touch L1/L2b; emission stays stable.
 
 <!-- Fragment: dev/fragments/ai-module/shell-option.md -->
 
-## `ai.shell` — the one override-wins surface
+## Per-runtime pool capability gating
 
-> **Last verified:** 2026-08-14 (commit pending — the escape hatch at the end of
-> the Copilot section was half-wrong: at 1.0.80 the plain `@github/copilot` npm
-> tarball is a 24K loader shim, not readable JS. The readable app code is in the
-> per-platform dep — and, better, the SEA self-extracts a byte-identical copy on
-> first run, so no download is needed at all. The Copilot `ai.shell` gap itself
-> is UNCHANGED and still open). Prior: 2026-08-10 (commit pending — first
-> landing of `ai.shell`. If you add another nullable-scalar `ai.*` option,
-> change which runtimes consume this one, or touch `resolveOverride`, update
-> this fragment in the same commit.)
+> **Last verified:** 2026-08-15 (commit pending — generalizes the shell-only
+> `supportsShell` flag into each app record's `supportedPools` list. The same
+> record data now gates option declaration, root fanout, collision checks, and
+> shell resolution; Kimchi consequently loses its dead `rules`/`rulesDir`
+> options while root `ai.rules` still degrades silently for it). Prior:
+> 2026-08-14 (commit pending — the escape hatch at the end of the Copilot
+> section was half-wrong: at 1.0.80 the plain `@github/copilot` npm tarball is a
+> 24K loader shim, not readable JS. The readable app code is in the per-platform
+> dep — and, better, the SEA self-extracts a byte-identical copy on first run,
+> so no download is needed at all. The Copilot `ai.shell` gap itself is
+> UNCHANGED and still open). Prior: 2026-08-10 (commit pending — first landing
+> of `ai.shell`. If you add another nullable-scalar `ai.*` option, change which
+> runtimes consume this one, or touch `resolveOverride`, update this fragment in
+> the same commit.)
 
-### It is deliberately NOT collision-as-failure
+### One record is the capability source
+
+Every `mkAiApp` record declares the normalized pools its runtime actually
+consumes in `supportedPools`. `mkBackendTransform.nix` reads that build-time
+list in four places:
+
+- only supported per-runtime pool options are declared;
+- only supported pools participate in shared/per-runtime collision checks;
+- only supported root pools reach the backend callback; and
+- `shell` resolution runs only when `shell` is in the list.
+
+An unsupported per-runtime write is therefore an "option does not exist" eval
+error. An unsupported ROOT value is different: root `ai.*` is the portable
+surface, so its fanout degrades to the pool's neutral value for that runtime.
+For example, `ai.kimchi.rules` does not exist, while root `ai.rules` remains
+valid and simply does not reach Kimchi.
+
+The list is read off the RECORD, keeping it a build-time parameter in the same
+category as `backend`. It forces neither `config` nor the factory's `pkgs`, so
+it cannot reintroduce the `_module.args` recursion documented against
+`proxyIsSupported`.
+
+A same-named native option does not imply normalized-pool support. For example,
+`ai.copilot.settings` remains Copilot's native freeform surface while Copilot
+does not consume normalized root `ai.settings`; only `supportedPools` governs
+the normalized fanout.
+
+### `ai.shell` is deliberately NOT collision-as-failure
 
 Every attrset-shaped `ai.*` pool treats a shared/per-CLI duplicate key as an
 error — see `collision-semantics.md`. `ai.shell` is the **one exception**, and
@@ -963,19 +1029,11 @@ wins, `null` inherits the root, `null` at both levels means "not configured").
 Do not inline the `if` at call sites; the contrast with the merge helper beside
 it is the thing worth keeping easy to grep for.
 
-### Opt-in, because two of five runtimes cannot honor it
+### Shell is one capability entry
 
-`mkBackendTransform.nix` declares `ai.<name>.shell` **only** when the app record
-sets `supportsShell = true`, and computes `resolvedShell` for the backend
-callbacks. Apps that do not opt in get no option at all, so setting one is an
-"option does not exist" eval error rather than a value that evaluates cleanly
-and is dropped. This is the repo's standing rule that a surface without a
-lossless native mapping is an explicit exclusion, not a silent no-op.
-
-`supportsShell` is read off the RECORD, which keeps it a build-time parameter in
-the same category as `backend` — it forces neither `config` nor the factory's
-`pkgs`, so it cannot reintroduce the `_module.args` recursion documented against
-`proxyIsSupported`.
+`mkBackendTransform.nix` declares `ai.<name>.shell` and computes `resolvedShell`
+only when `shell` appears in the app record's `supportedPools`. There is no
+sibling shell-specific capability flag.
 
 | runtime | knob                       | delivery                         |
 | ------- | -------------------------- | -------------------------------- |
@@ -1150,3 +1208,7 @@ nix build .#checks.x86_64-linux.module-ai-shell-codex-hm-wrapper-carries-shell
 exclusion tests. Those assert an eval failure, which a broken harness satisfies
 for free; the control runs the identical `tryEval` shape against a supported
 runtime and requires success. Delete them as a set or not at all.
+
+The generalized gate has the same paired controls for Kimchi's removed `rules`
+and `rulesDir` options: `module-ai-rules{-dir,}-accepted-for-claude` and
+`module-ai-rules{-dir,}-excluded-for-kimchi`.

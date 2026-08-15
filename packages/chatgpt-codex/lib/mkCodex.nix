@@ -852,9 +852,18 @@ in
     # Carried as DATA, not a module argument — see mkAiApp.nix.
     inherit pkgs;
     name = "codex";
-    # Honest: both backend callbacks consume `resolvedShell` via
-    # `codexPackageFor` above. See mkAiApp.nix's record-shape note.
-    supportsShell = true;
+    supportedPools = [
+      "agents"
+      "context"
+      "environmentVariables"
+      "hooks"
+      "instructions"
+      "mcpServers"
+      "rules"
+      "settings"
+      "shell"
+      "skills"
+    ];
     transformers.markdown = lib.ai.transformers.agentsmd;
     defaults.package = pkgs.ai.chatgpt-codex;
 

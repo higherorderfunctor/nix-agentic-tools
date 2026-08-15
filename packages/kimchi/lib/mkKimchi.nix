@@ -108,6 +108,13 @@ in
     # Carried as DATA, not a module argument — see mkAiApp.nix.
     inherit pkgs;
     name = "kimchi";
+    supportedPools = [
+      "context"
+      "environmentVariables"
+      "instructions"
+      "mcpServers"
+      "skills"
+    ];
     transformers.markdown = lib.ai.transformers.agentsmd;
     defaults = {
       package = pkgs.ai.kimchi;

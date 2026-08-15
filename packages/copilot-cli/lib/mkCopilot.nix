@@ -46,6 +46,16 @@ lib.ai.app.mkAiApp {
   # Carried as DATA, not a module argument — see mkAiApp.nix.
   inherit pkgs;
   name = "copilot";
+  supportedPools = [
+    "agents"
+    "context"
+    "environmentVariables"
+    "instructions"
+    "lspServers"
+    "mcpServers"
+    "rules"
+    "skills"
+  ];
   transformers.markdown = lib.ai.transformers.copilot;
   defaults = {
     package = pkgs.ai.copilot-cli;

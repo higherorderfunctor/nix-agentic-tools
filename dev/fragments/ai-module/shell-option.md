@@ -1,16 +1,48 @@
-## `ai.shell` — the one override-wins surface
+## Per-runtime pool capability gating
 
-> **Last verified:** 2026-08-14 (commit pending — the escape hatch at the end of
-> the Copilot section was half-wrong: at 1.0.80 the plain `@github/copilot` npm
-> tarball is a 24K loader shim, not readable JS. The readable app code is in the
-> per-platform dep — and, better, the SEA self-extracts a byte-identical copy on
-> first run, so no download is needed at all. The Copilot `ai.shell` gap itself
-> is UNCHANGED and still open). Prior: 2026-08-10 (commit pending — first
-> landing of `ai.shell`. If you add another nullable-scalar `ai.*` option,
-> change which runtimes consume this one, or touch `resolveOverride`, update
-> this fragment in the same commit.)
+> **Last verified:** 2026-08-15 (commit pending — generalizes the shell-only
+> `supportsShell` flag into each app record's `supportedPools` list. The same
+> record data now gates option declaration, root fanout, collision checks, and
+> shell resolution; Kimchi consequently loses its dead `rules`/`rulesDir`
+> options while root `ai.rules` still degrades silently for it). Prior:
+> 2026-08-14 (commit pending — the escape hatch at the end of the Copilot
+> section was half-wrong: at 1.0.80 the plain `@github/copilot` npm tarball is a
+> 24K loader shim, not readable JS. The readable app code is in the per-platform
+> dep — and, better, the SEA self-extracts a byte-identical copy on first run,
+> so no download is needed at all. The Copilot `ai.shell` gap itself is
+> UNCHANGED and still open). Prior: 2026-08-10 (commit pending — first landing
+> of `ai.shell`. If you add another nullable-scalar `ai.*` option, change which
+> runtimes consume this one, or touch `resolveOverride`, update this fragment in
+> the same commit.)
 
-### It is deliberately NOT collision-as-failure
+### One record is the capability source
+
+Every `mkAiApp` record declares the normalized pools its runtime actually
+consumes in `supportedPools`. `mkBackendTransform.nix` reads that build-time
+list in four places:
+
+- only supported per-runtime pool options are declared;
+- only supported pools participate in shared/per-runtime collision checks;
+- only supported root pools reach the backend callback; and
+- `shell` resolution runs only when `shell` is in the list.
+
+An unsupported per-runtime write is therefore an "option does not exist" eval
+error. An unsupported ROOT value is different: root `ai.*` is the portable
+surface, so its fanout degrades to the pool's neutral value for that runtime.
+For example, `ai.kimchi.rules` does not exist, while root `ai.rules` remains
+valid and simply does not reach Kimchi.
+
+The list is read off the RECORD, keeping it a build-time parameter in the same
+category as `backend`. It forces neither `config` nor the factory's `pkgs`, so
+it cannot reintroduce the `_module.args` recursion documented against
+`proxyIsSupported`.
+
+A same-named native option does not imply normalized-pool support. For example,
+`ai.copilot.settings` remains Copilot's native freeform surface while Copilot
+does not consume normalized root `ai.settings`; only `supportedPools` governs
+the normalized fanout.
+
+### `ai.shell` is deliberately NOT collision-as-failure
 
 Every attrset-shaped `ai.*` pool treats a shared/per-CLI duplicate key as an
 error — see `collision-semantics.md`. `ai.shell` is the **one exception**, and
@@ -26,19 +58,11 @@ wins, `null` inherits the root, `null` at both levels means "not configured").
 Do not inline the `if` at call sites; the contrast with the merge helper beside
 it is the thing worth keeping easy to grep for.
 
-### Opt-in, because two of five runtimes cannot honor it
+### Shell is one capability entry
 
-`mkBackendTransform.nix` declares `ai.<name>.shell` **only** when the app record
-sets `supportsShell = true`, and computes `resolvedShell` for the backend
-callbacks. Apps that do not opt in get no option at all, so setting one is an
-"option does not exist" eval error rather than a value that evaluates cleanly
-and is dropped. This is the repo's standing rule that a surface without a
-lossless native mapping is an explicit exclusion, not a silent no-op.
-
-`supportsShell` is read off the RECORD, which keeps it a build-time parameter in
-the same category as `backend` — it forces neither `config` nor the factory's
-`pkgs`, so it cannot reintroduce the `_module.args` recursion documented against
-`proxyIsSupported`.
+`mkBackendTransform.nix` declares `ai.<name>.shell` and computes `resolvedShell`
+only when `shell` appears in the app record's `supportedPools`. There is no
+sibling shell-specific capability flag.
 
 | runtime | knob                       | delivery                         |
 | ------- | -------------------------- | -------------------------------- |
@@ -213,3 +237,7 @@ nix build .#checks.x86_64-linux.module-ai-shell-codex-hm-wrapper-carries-shell
 exclusion tests. Those assert an eval failure, which a broken harness satisfies
 for free; the control runs the identical `tryEval` shape against a supported
 runtime and requires success. Delete them as a set or not at all.
+
+The generalized gate has the same paired controls for Kimchi's removed `rules`
+and `rulesDir` options: `module-ai-rules{-dir,}-accepted-for-claude` and
+`module-ai-rules{-dir,}-excluded-for-kimchi`.
