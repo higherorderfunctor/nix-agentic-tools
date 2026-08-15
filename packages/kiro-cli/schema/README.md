@@ -85,7 +85,7 @@ CI `build` job — a real cost for a schema whose consumer is not yet decided.
 ```bash
 cd packages/kiro-cli/schema
 nix shell nixpkgs#bun -c bun install
-nix shell nixpkgs#bun -c bun test          # 78 runtime tests
+nix shell nixpkgs#bun -c bun test          # 80 runtime tests
 nix shell nixpkgs#typescript -c tsc --noEmit  # types + compile-time tests
 ```
 
@@ -105,8 +105,10 @@ definitions inlined in the engine bundle. The engine shape-parses them at module
 init but does not run its structural analyzer until launch. They are the
 highest-fidelity available corpus rather than an oracle: a failure warrants
 checking both the local rule and the vendor recipe. Both halves of this pair
-check against all seven; the Nix half additionally proves they round-trip
-through parse → render byte-identically.
+check against all seven. The Nix half additionally parses each recipe into its
+authored shape and renders it back, checking the result equals the original
+attribute set with `planRevision` dropped — runtime state the authored shape has
+no option for.
 
 They are also a useful map of what the vendor actually uses: no `sequence` node
 anywhere, no nested repeats, no nested parallels, max observed depth 3 against a
