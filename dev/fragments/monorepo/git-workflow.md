@@ -1,6 +1,13 @@
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-08-14 (commit pending — TWO corrections. (1) The
+> **Last verified:** 2026-08-15 (commit pending — adds the adversarial
+> subagent-review protocol that SUBSTITUTES for the Copilot loop while its quota
+> is exhausted, roughly two weeks from 2026-08-15. Written because an agent
+> cannot review its own output, and because the operator had been having to ask
+> for an independent reviewer by hand each time. Includes the refuter+defender
+> pairing and the never-self-adjudicate rule, both of which exist because
+> refute-by-default on your own work is a second discard filter rather than a
+> check). Prior: 2026-08-14 (commit pending — TWO corrections. (1) The
 > required-status-check list said FOUR; there are SIX, both `kiro-patched`
 > contexts having been promoted 2026-08-13 with PR #895. This file was wrong in
 > two places, `ci-update-workflow.md` was wrong in two more, and
@@ -124,6 +131,48 @@ threads must be resolved, an unaddressed Copilot comment holds the PR — a bot
 `update/*` PR included, which is the intended trade: nothing auto-merges while a
 reviewer has an open question on it. A stalled update PR is not lost; the next
 4x/day sweep rebuilds and re-arms it.
+
+### When Copilot is unavailable, YOU are not the reviewer — a subagent is
+
+> **Standing as of 2026-08-15.** Copilot's quota is exhausted for roughly two
+> weeks, so the automatic review below produces nothing. **This section is the
+> substitute, and it is not optional while that holds.** It is also the right
+> shape whenever the automatic review is absent for any other reason: a draft PR
+> that never flipped, a re-request that no-ops, a repo without the rule.
+
+**An agent cannot review its own output.** Reading back your own diff produces
+agreement, because the same reasoning that wrote the code evaluates it. The
+substitute is not "read it more carefully" — it is **dispatching an independent
+reviewer that never saw you write it.**
+
+So when there is no automatic review, run this before marking a PR ready:
+
+1. **Finders, in a subagent, one per lens.** Give each an explicit lens (factual
+   accuracy / reasoning and scope / document or code integrity / security) and
+   the standing instruction that **the PR body is an argument, not evidence**,
+   and that its confident tone is not a signal. Tell them plainly that the
+   author is orchestrating the review and cannot be deferred to.
+2. **Contest every finding TWICE — refute AND defend.** A refuter alone is a
+   second discard filter stacked on an author who was already grading their own
+   work, so the dismissal rate goes up for reasons that have nothing to do with
+   the code. Pair every refuter with a DEFENDER whose job is to argue the
+   finding is real, and who may not concede merely because a fix is awkward.
+3. **Never self-adjudicate a split.** Where refuter and defender disagree,
+   SURFACE the disagreement to the operator with both arguments. Resolving it
+   yourself reintroduces exactly the bias the whole structure exists to remove.
+4. **Fix what survives, and say what did not.** Report dismissed findings by
+   title and count — a review that reports only confirmed findings is
+   indistinguishable from one that found nothing.
+
+**Cheapest correct default:** three finder lenses plus the refute/defend pair
+per finding. Scale the finder count with blast radius, not with diff size — a
+thirty-line change to a shared `lib/` file earns more lenses than a
+thousand-line docs PR.
+
+**Do not skip this because the change is "just docs".** The failure this repo
+actually experienced was a design document whose PR sequence sent a later
+session to build the wrong thing for a day. Prose that directs future work has a
+blast radius; treat it like code.
 
 ### Copilot review: ALWAYS read the suppressed-comments block
 
