@@ -37,12 +37,67 @@ wait for the whole stack.
 
 `docs/plan.md` is the tracked backlog and is out of scope for this document.
 
-## PR sequence — signed off by the operator 2026-08-14
+## PR sequence — RE-DERIVED 2026-08-15 from the semble goal
 
-Operator: "you own order, so signed off on." The namespace move IS in scope for
-this workstream, placed late by agent judgement — this **supersedes** A1's
-"Recommendation for the operator (not a decision): fold in the 2-line pool fix,
-defer the namespace move", written before that sign-off.
+> **This replaces a nine-row sequence, and the reason it was replaced is the
+> most useful thing on this page.** The original table was a queue of tasks with
+> dependencies and **no per-row statement of why the row served #858**. That
+> made it executable without being auditable: a session handed "PR 2" could do
+> it perfectly while having no way to notice the row did not serve the goal.
+>
+> That is exactly what happened. #920 entered as row 2 with a hard "5 must
+> follow 2" gate that was never tested against the goal, and an implementation
+> session built it faithfully. The work was agreed and it shipped fine (#948) —
+> but it gated nothing, and the operator spotted the disconnect before the agent
+> did.
+>
+> **So every row below carries a why. A row that cannot state one in a sentence
+> does not belong in this workstream.**
+
+**The goal, stated from the issues rather than from this plan:** ship semble's
+#858 features — `content` as a validated list on one server, opt-in CLI
+instructions, and a typed named-agent with agent-scoped MCP — under the
+consumer-facing options surface the operator designed on 2026-08-14, namely
+`ai.programs.semble.*` for defaults and `ai.<runtime>.programs.semble.*` for
+per-runtime override, replacing semble's four bespoke `runtimes` selectors.
+**The `ai.*` rework is justified only insofar as it makes that surface
+expressible.**
+
+| #      | PR                                                                                                                                                                  | Why it serves #858                                                        | Gated by |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | -------- |
+| **P0** | ✅ MERGED `74964926` — per-runtime skill pools, `lib/ai/runtimes.nix`, provenance guard                                                                             | Prerequisite for P1's factory; also closed the registry-location question | —        |
+| **P1** | `ai.programs.*` factory + semble relocation — **ATOMIC** with the semble `runtimes` deletion, the `checks/module-eval.nix` parity rewrite, and `expectedCodexRoots` | **This IS the operator's designed surface.** Nothing else delivers it     | P0       |
+| **P2** | semble #858 itself                                                                                                                                                  | The goal                                                                  | P1       |
+| **P3** | Namespace move for `stacked-workflows` / `living-workflow` + `gitPreset` parity fix                                                                                 | Operator: "i do want to move the namespace by the end of this workstream" | P2       |
+
+P1 is atomic because CI is red between any two of its four parts. Do not split
+it, and in particular do not delete semble's `runtimes` selectors ahead of the
+factory that replaces them.
+
+### Moved OUT — real work, but not this workstream
+
+Each of these failed the "why does it serve #858" test. None is cancelled; they
+are unranked backlog until something asks for them.
+
+- **#920 / #948 (Copilot HM path)** — shipped anyway, correctly, and gates
+  nothing. See A3b. #920 stays OPEN for the product split, which is vetoed for
+  now.
+- **Per-pool-per-runtime capability gating** — belongs to #921.
+- **Settings split** — this plan's own A4 says the "payoff is naming, not
+  capability".
+- **Retire `instructions` → keyed `rules` (A3)** — blocked on the Codex
+  `AGENTS.md` cardinality measurement AND on the measured `ai.context`
+  string+path evaluation failure. Semble is the live path-valued contributor, so
+  this needs **re-design, not re-ordering**.
+- **Pool negation `attrsOf (nullOr …)` (B10)** — #858 never asks for it. What
+  #858 needs is B4 program-level override, which ships inside P1.
+
+### The original sign-off, for the record
+
+Operator, 2026-08-14: "you own order, so signed off on." That ratified the
+**ordering**, not the scope — which is the distinction the re-derivation turns
+on. The namespace move remains in scope by direct instruction ("deferring
+towards end, is fine"), which is why P3 survives while four other rows did not.
 
 | #   | PR                                                                                                                                                                                                      | Gated by |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
@@ -57,16 +112,27 @@ defer the namespace move", written before that sign-off.
 | 8   | Namespace move: `stacked-workflows` / `living-workflow` + its `gitPreset` parity fix                                                                                                                    | 7b       |
 | 9   | semble #858 re-implementation                                                                                                                                                                           | 7b, 8    |
 
-Hard constraints behind the shape:
+### The three "hard constraints" were audited 2026-08-15. None survived intact.
 
-- **5 cannot be split** — `checks/options-doc.nix` hard-codes option names, so
-  there is no green intermediate state.
-- **5 must follow 2**, or it migrates Copilot HM content into the dead file.
-- **5 must follow 3** because **3 is what establishes kimchi's rules pool.** An
-  earlier gloss — "or kimchi loses its only always-on surface" — had the
-  causality backwards: dropping the option in 3 is what would cause that loss,
-  not prevent it. Kimchi's rules option is live-but-unemitted for exactly one
-  PR.
+They are kept here as withdrawn rather than deleted, because each rested on a
+real observation and only the dependency was wrong — and because a future
+session that finds them missing may re-derive them.
+
+- ~~**5 cannot be split**~~ — **PARTIAL.** Only the DELETION commit is
+  unsplittable (`checks/options-doc.nix:42`, `:62` hard-code option names); the
+  enabling half is additive and green standalone.
+- ~~**5 must follow 2**~~ — **PARTIAL, and it was the row that caused the
+  detour.** The live→dead move is only _unnamed_ `ai.instructions` on Copilot
+  HM; named instructions and rules were already dead→dead. It never touched the
+  devenv arm, which is the github.com reviewer path and the only Copilot surface
+  the operator consumes. And it is dischargeable INSIDE A3 by the same
+  concat-into-the-live-file treatment §A3a already mandates for kimchi. See A3b.
+- ~~**5 must follow 3**~~ — **REFUTED.** §A3a already says resolve kimchi in the
+  SAME PR, so there was never a cross-PR dependency to enforce.
+
+All three governed a PR that has since moved out of the workstream, so nothing
+downstream depends on them. **Do not reinstate one without re-testing it against
+the goal** — that is the failure this section exists to prevent.
 
 ## Tree-qualification rule for citations
 
@@ -219,10 +285,20 @@ second pattern.
    than assumed. B0's prose action (teach the MCP `content` field in
    `packages/semble/agent-instructions.md`) landed as #928 (`2fe3ec4a`). **Read
    B0 below as recorded reasoning, not as outstanding work.**
-2. **The runtime registry exists three times over** and the factory must unify
-   them. Detail in A1a. (This item previously read "does not exist yet" and was
-   false — see R6.)
-3. **#920 must land before A3.** Detail in A3b.
+2. ~~The runtime registry exists three times over and the factory must unify
+   them~~ — **DISCHARGED 2026-08-15 by P0 (`74964926`).** `lib/ai/runtimes.nix`
+   is now the single source, deliberately PLAIN DATA so it can be imported from
+   a module, a derivation string and a test `let` alike; its header records why
+   the `cacheHitParityTargets` shape could not be used. All four consumers were
+   unified. **This also closed the open "where does the registry live"
+   decision.**
+3. ~~#920 must land before A3~~ — **REFUTED 2026-08-15.** It was never a gate;
+   see A3b and the withdrawn-constraints section above. #920's HM fix shipped
+   independently as #948 (`5089774c`).
+
+**Nothing in this list is outstanding.** Every owed decision was either closed
+by P0 or belonged to A3, which has moved out of the workstream. **P1 is
+unblocked.**
 
 ## Part A — the `ai.*` normalized interface
 
