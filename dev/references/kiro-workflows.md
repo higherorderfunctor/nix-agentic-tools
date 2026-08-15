@@ -204,9 +204,12 @@ Two `step` field details from the bundled spec that the tool schemas omit:
 - **`captureOutput` defaults to `true`.** Capture is on unless you set it to
   `false`; omitting the field keeps it on. Corroborated — a step that never
   declared the field still had its output captured (§3.3).
-- **`input` takes precedence over `prompt`** when both are set. It is the field
-  used to pipe a `watch` payload into the following step, as
-  `"input": "{{watch_id.output}}"`.
+- **The step-level `input` field is REMOVED.** It was real at KAS 2.15.1, where
+  it took precedence over `prompt` when both were set and was the field used to
+  pipe a `watch` payload into the following step. KAS 2.18.0 rejects any step
+  carrying it, with a migration message naming the template system as its
+  replacement; pipe a watch payload as `{{<watch_id>.output}}` inside the
+  `prompt` like any other reference.
 
 `joinPolicy` semantics, all three Measured (§7.7):
 
