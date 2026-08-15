@@ -29,6 +29,20 @@ const NonEmptyString = Schema.String.pipe(
 );
 
 /**
+ * The crux-cr id pattern, compiled once from the SHARED engine-limits.json.
+ *
+ * The json stores it UNANCHORED (`CR-[0-9]+`) because the two consumers anchor
+ * differently: Nix's `builtins.match` is whole-string by definition, so it uses
+ * the value verbatim, while here it has to be wrapped. Anchoring in the json
+ * would make Nix demand a literal `^`.
+ *
+ * It also spells the digit class `[0-9]` rather than `\d`. Those are the same
+ * set for a non-unicode JS regex, but only if you already know that — the
+ * explicit class is what makes the two ports legibly identical.
+ */
+const CR_ID_RE = new RegExp(`^${ENGINE.watch.crIdPattern}$`);
+
+/**
  * `maxIterations`. The engine's `.int().positive().max(1000)` — 1000 is
  * inclusive-legal and the vendor's own `autoresearch` recipe sits exactly
  * there, so an exclusive bound would reject a shipped recipe.
@@ -229,8 +243,8 @@ const CruxCrConfig = Schema.Struct({
       Schema.filter(
         (s) =>
           s.length === 0 ||
-          /^CR-\d+$/.test(s) ||
-          "a non-empty crId must match ^CR-[0-9]+$",
+          CR_ID_RE.test(s) ||
+          `a non-empty crId must match ^${ENGINE.watch.crIdPattern}$`,
       ),
     ),
   ),
