@@ -628,7 +628,7 @@ export const analyze = (workflow: Workflow): Analysis => {
       pol(
         "W-FILE-CHECK-PATH-UNSAFE",
         e.id,
-        `'${e.id}' fileCheck.path '${fc.path}' is templated, absolute, tilde-prefixed or escaping. Where it resolves is not decidable here: the engine substitutes declared input VALUES, joins against the workspace roots plus additionalDirectories, and resolves symlinks, and this analyzer has none of those. It refuses the run only when the resolved path lands OUTSIDE the allowed roots. Treat this as a shape worth a human look, not as a predicted failure.`,
+        `'${e.id}' fileCheck.path '${fc.path}' is templated, absolute, tilde-prefixed or escaping. Where it resolves is not decidable here: the engine substitutes declared input VALUES, joins a relative path against the PRIMARY root only, and resolves symlinks, and this analyzer has none of those. Containment is then tested against the full root list, which is where additionalDirectories applies — so the join and the containment test do not use the same set. It refuses the run only when the resolved path lands OUTSIDE the allowed roots. Treat this as a shape worth a human look, not as a predicted failure.`,
       );
     }
   }
