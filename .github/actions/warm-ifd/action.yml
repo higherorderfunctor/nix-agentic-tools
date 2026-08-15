@@ -51,8 +51,11 @@ runs:
         #
         # It is not free. Forcing every package through `derivationStrict`
         # measured 1.2s / 0.9 GB RSS -> 19.2s / 3.0 GB on x86_64-linux and
-        # 23.4s / 3.8 GB on aarch64-darwin (eval cache disabled, warm
-        # store, 2026-07-25). That is the cost of warming the
+        # 23.4s / 3.8 GB for the aarch64-darwin ATTRSET (eval cache
+        # disabled, warm store, 2026-07-25). Both figures were taken on a
+        # LINUX host — eval RSS has never been profiled on the macos
+        # runner, so do not cite 3.8 GB as a darwin-runner measurement.
+        # That is the cost of warming the
         # sidecar-versioned packages at all, and it is bounded eval work
         # the consuming job would do anyway.
         #

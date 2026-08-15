@@ -373,37 +373,51 @@ the repo before committing.
 
 ## Git Workflow — trunk-based, worktree-per-branch
 
-> **Last verified:** 2026-08-05 (commit pending — the Copilot TRIGGER MODEL was
-> wrong and is corrected: the automatic review fires once, on the PR becoming
-> ready for review, and a push NEVER triggers one. "Becomes ready" covers a PR
-> opened non-draft as well as a draft flipped later — measured on PR #801, which
-> was opened non-draft and got a queued reviewer run within seconds, so the
-> narrower "draft → ready transition" spelling is deliberately avoided as it
-> reads as excluding never-drafted PRs. The old "only ONCE in 5 pushes" datum
-> was not a flaky trigger — it was #644's ready transition landing on the same
-> push, with #640's four misses being correct behavior — so the advice to treat
-> re-requesting as the expected next step is dropped, along with any reason to
-> wait on a run that is never coming. Every review after the first is a paid
-> manual request, which is now stated where the round cap is. Also adds agent
-> memory to the shared-across-worktrees list: concurrent sessions share the
-> memory directory, neither sees the other's write, and a duplicate under a
-> different name is invisible to the wikilink graph). Prior: 2026-08-05 (commit
-> pending — "change" now EXPLICITLY includes untracked drafts and working docs:
-> authoring any repo-destined file in the primary checkout is a violation, with
-> a pre-flight `git rev-parse` check added to the worktree section. Driven by a
-> reference doc drafted in the primary checkout whose lint findings failed the
-> shared stop/commit hooks in every parallel session sharing that cwd). Prior:
-> 2026-08-05 (commit pending — `devenv-test` is NO LONGER a required check; the
-> ruleset now lists FOUR, verified by reading it back rather than by trusting
-> this file. It was made required on 2026-08-03 and demoted two days later as a
-> merge-blocking liability, risk accepted. The entry below that announced the
-> promotion is kept so the reversal is legible rather than looking like drift).
-> Prior: 2026-08-05 (commit pending — two corrections, both from operating the
-> loop on PR #766 and both making it silently unreliable when unknown. The
-> suppressed-block heading is NOT stable, so the documented
-> `sed -n '/low confidence/,$p'` matched nothing against a
-> `Suppressed comments (1)` block and nearly reported a real finding as a clean
-> round; the command now prints the whole body. And
+> **Last verified:** 2026-08-14 (commit pending — TWO corrections. (1) The
+> required-status-check list said FOUR; there are SIX, both `kiro-patched`
+> contexts having been promoted 2026-08-13 with PR #895. This file was wrong in
+> two places, `ci-update-workflow.md` was wrong in two more, and
+> `.github/workflows/update.yml` was wrong a third way — "five", including the
+> demoted `devenv-test` — so read the ruleset back rather than trusting any
+> prose count, this one included. (2) Copilot review can now fail in a way that
+> READS AS CLEAN: when the requesting account is out of quota it still submits a
+> review object on the head SHA with `state: COMMENTED`, an empty
+> `requested_reviewers`, and ZERO threads. Every mechanical signal the loop
+> gates on says "reviewed, nothing found". The only tell is the BODY — "Copilot
+> was unable to review this pull request because the user who requested the
+> review has reached their quota limit." A zero-finding round is clean ONLY if
+> the body says the review ran; re-requesting cannot help, since the quota
+> belongs to the requesting user). Prior: 2026-08-05 (commit pending — the
+> Copilot TRIGGER MODEL was wrong and is corrected: the automatic review fires
+> once, on the PR becoming ready for review, and a push NEVER triggers one.
+> "Becomes ready" covers a PR opened non-draft as well as a draft flipped later
+> — measured on PR #801, which was opened non-draft and got a queued reviewer
+> run within seconds, so the narrower "draft → ready transition" spelling is
+> deliberately avoided as it reads as excluding never-drafted PRs. The old "only
+> ONCE in 5 pushes" datum was not a flaky trigger — it was #644's ready
+> transition landing on the same push, with #640's four misses being correct
+> behavior — so the advice to treat re-requesting as the expected next step is
+> dropped, along with any reason to wait on a run that is never coming. Every
+> review after the first is a paid manual request, which is now stated where the
+> round cap is. Also adds agent memory to the shared-across-worktrees list:
+> concurrent sessions share the memory directory, neither sees the other's
+> write, and a duplicate under a different name is invisible to the wikilink
+> graph). Prior: 2026-08-05 (commit pending — "change" now EXPLICITLY includes
+> untracked drafts and working docs: authoring any repo-destined file in the
+> primary checkout is a violation, with a pre-flight `git rev-parse` check added
+> to the worktree section. Driven by a reference doc drafted in the primary
+> checkout whose lint findings failed the shared stop/commit hooks in every
+> parallel session sharing that cwd). Prior: 2026-08-05 (commit pending —
+> `devenv-test` is NO LONGER a required check; the ruleset now lists FOUR,
+> verified by reading it back rather than by trusting this file. It was made
+> required on 2026-08-03 and demoted two days later as a merge-blocking
+> liability, risk accepted. The entry below that announced the promotion is kept
+> so the reversal is legible rather than looking like drift). Prior: 2026-08-05
+> (commit pending — two corrections, both from operating the loop on PR #766 and
+> both making it silently unreliable when unknown. The suppressed-block heading
+> is NOT stable, so the documented `sed -n '/low confidence/,$p'` matched
+> nothing against a `Suppressed comments (1)` block and nearly reported a real
+> finding as a clean round; the command now prints the whole body. And
 > `gh api …/requested_reviewers` silently no-ops for Copilot — 200 with an empty
 > list, no check run, with nothing in flight — so re-requests go through the
 > github-mcp tool). Prior: 2026-08-04 (commit pending — records that
@@ -447,9 +461,12 @@ the repo before committing.
 > isn't updated in the same commit, stop and fix it.
 
 `main` is the trunk. Its branch-protection ruleset requires a pull request, no
-force-push, no deletion, and four required status checks —
+force-push, no deletion, and six required status checks —
 `build (x86_64-linux, ubuntu-latest)`, `build (aarch64-darwin, macos-latest)`,
-`test`, and `gitleaks`. It requires **zero approving reviews** but it DOES
+`kiro-patched (x86_64-linux, ubuntu-latest)`,
+`kiro-patched (aarch64-darwin, macos-latest)`, `test`, and `gitleaks`. Both
+`kiro-patched` contexts were promoted 2026-08-13 with PR #895; this file said
+"four" until 2026-08-14. It requires **zero approving reviews** but it DOES
 require **every review thread to be resolved**
 (`required_review_thread_resolution`, enabled 2026-07-29).
 
@@ -861,8 +878,8 @@ silently resolves one level too deep, into
 `.github/workflows/update.yml` sweeps dependencies 4x/day (00:00, 06:00, 12:00,
 18:00 UTC) and opens one PR per dependency that actually moved. Each is armed
 with GitHub-native **auto-merge (squash)** as it is created, and re-armed on
-every later sweep, so it merges itself once the four required checks go green.
-Safe precisely because the ruleset requires no approving review, all four status
+every later sweep, so it merges itself once the six required checks go green.
+Safe precisely because the ruleset requires no approving review, all six status
 checks must pass, and an unresolved Copilot thread still holds the merge through
 the separate review-thread rule.
 

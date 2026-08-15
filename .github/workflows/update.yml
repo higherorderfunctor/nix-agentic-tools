@@ -250,10 +250,20 @@ jobs:
           #     REQUESTS a review. It is not a required approval or status
           #     check, but an inline finding gates indirectly through the
           #     review-thread rule.
-          #   - What auto-merge actually waits on is the five required
-          #     status checks — build (x86_64-linux, ubuntu-latest),
-          #     build (aarch64-darwin, macos-latest), devenv-test, test, and
+          #   - What auto-merge actually waits on is the six required status
+          #     checks — build (x86_64-linux, ubuntu-latest),
+          #     build (aarch64-darwin, macos-latest),
+          #     kiro-patched (x86_64-linux, ubuntu-latest),
+          #     kiro-patched (aarch64-darwin, macos-latest), test, and
           #     gitleaks. A red check leaves the PR sitting armed and unmerged.
+          #     `devenv-test` is NOT among them: it was required 2026-08-03 and
+          #     demoted 2026-08-05, so it runs and reports but never gates.
+          #     Read the ruleset before trusting this list — it is the safety
+          #     rationale for unattended auto-merge, so a wrong count here is
+          #     the one that actually matters:
+          #       gh api repos/OWNER/REPO/rulesets/<id> --jq '.rules[]
+          #         | select(.type=="required_status_checks")
+          #         | [.parameters.required_status_checks[].context]'
           #   - A merge conflict DISABLES auto-merge on GitHub, so a
           #     conflicted update PR drops out of the queue rather than
           #     merging something unresolved. The `gh pr edit` path below
