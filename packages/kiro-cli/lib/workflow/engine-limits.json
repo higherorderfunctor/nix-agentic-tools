@@ -13,7 +13,16 @@
     "  [ \"${#kasdirs[@]}\" -eq 1 ] || { echo refuse; exit 1; }",
     "  b=\"${kasdirs[0]}node_modules/@kiro/agent/dist/server/acp-server.js\"",
     "  command grep -boF 'DEFAULT_MAX_STEP_NODES' \"$b\"",
-    "The bundle is ~21 MB. Never cat it; use byte-offset windows only."
+    "The bundle is ~21 MB. Never cat it; use byte-offset windows only.",
+    "",
+    "REGEX ANCHORING: watch.crIdPattern is stored UNANCHORED on purpose, because",
+    "the two consumers anchor differently and neither spelling is portable.",
+    "Nix `builtins.match` is whole-string by definition, so it uses the pattern",
+    "verbatim; the TypeScript side must wrap it as `^...$` before testing. Do",
+    "NOT add ^ or $ here — Nix would then require a literal caret in the value.",
+    "Character classes are written [0-9] rather than \\d so both languages read",
+    "the same thing (JS \\d without the u flag is [0-9], but that is a fact you",
+    "would have to know rather than see)."
   ],
 
   "verifiedAgainst": {
@@ -47,7 +56,8 @@
 
   "watch": {
     "defaultPollIntervalSec": 60,
-    "minPollIntervalSec": 30
+    "minPollIntervalSec": 30,
+    "crIdPattern": "CR-[0-9]+"
   },
 
   "file": {
