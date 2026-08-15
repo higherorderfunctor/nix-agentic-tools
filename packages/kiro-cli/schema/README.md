@@ -30,8 +30,11 @@ constants on a version bump.
 | `src/analyze.ts`    | what only the whole tree proves, plus policy lints      |
 | `src/type-level.ts` | the subset of tree rules that fit at **compile** time   |
 
-`src/analyze.ts` is a deliberate twin of `../lib/workflow/analyze.nix`: same
-diagnostic codes, same `basis` taxonomy, same walk order.
+`src/analyze.ts` is a deliberate twin of `../lib/workflow/analyze.nix` for graph
+shapes both ports represent: shared diagnostic codes, the same `basis` taxonomy,
+and the same walk order. TypeScript has two additional assembled-wire `stopWhen`
+diagnostics for strings the authored Nix type rejects before analysis; the
+suites are parallel but no cross-language runner compares them.
 
 ## Usage
 

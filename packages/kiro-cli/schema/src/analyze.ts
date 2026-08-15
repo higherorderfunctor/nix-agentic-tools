@@ -2,9 +2,13 @@
  * Whole-tree analysis — the TypeScript twin of
  * packages/kiro-cli/lib/workflow/analyze.nix.
  *
- * Same diagnostic CODES, same `basis` taxonomy, same walk order, so a
- * definition can be checked from either language and produce the same answer.
- * That equivalence is a test, not an aspiration: see analyze.test.ts.
+ * For graph shapes both ports can represent, they intentionally share
+ * diagnostic codes, the `basis` taxonomy, and depth-first walk order. The
+ * sibling suites exercise those contracts independently; there is currently no
+ * cross-language comparison runner. TypeScript additionally diagnoses two
+ * malformed assembled `stopWhen` strings (`E-STOP-WHEN-SYNTAX` and
+ * `W-STOP-WHEN-TEMPLATE-BRACES`) that the authored Nix type rejects before
+ * analysis, so literal whole-code-set equality is neither claimed nor possible.
  *
  * `basis` (adopted from fixtures/kiro-primitives/workflows/contract.jq):
  *   engine      the engine performs an equivalent check and will refuse
