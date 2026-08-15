@@ -180,28 +180,20 @@ describe("schema: per-node rules", () => {
     ).toBe(true);
   });
 
-  test.each([".drained", "drained.", "state..drained"])(
-    "accepts the engine-normalized property walk %s",
-    (jsonPath) => {
-      const fileCheck = { path: "a.json", jsonPath, value: true };
-      expect(
-        decodes(
-          withSteps([
-            {
-              type: "step",
-              id: "a",
-              agent: "ag",
-              prompt: "p",
-              completion: { fileCheck },
-            },
-          ]),
-        ),
-      ).toBe(true);
-    },
-  );
-
-  test("rejects a property walk with no non-empty segment", () => {
-    const fileCheck = { path: "a.json", jsonPath: "..", value: true };
+  /**
+   * Deliberately stricter than the engine, which filters empty segments out
+   * and resolves all of these. See the `JsonPath` comment in src/schema.ts for
+   * why an authoring tool refuses them anyway. `state.drained` above is the
+   * positive control for this table.
+   */
+  test.each([
+    ["leading", ".drained"],
+    ["trailing", "drained."],
+    ["internal", "state..drained"],
+    ["all-empty (empty string)", ""],
+    ["all-empty (dots only)", "..."],
+  ])("rejects an empty %s jsonPath segment", (_label, jsonPath) => {
+    const fileCheck = { path: "a.json", jsonPath, value: true };
     expect(
       decodes(
         withSteps([
@@ -215,6 +207,37 @@ describe("schema: per-node rules", () => {
         ]),
       ),
     ).toBe(false);
+  });
+
+  /**
+   * The message is the product surface here: this port is where generated
+   * input lands, so a rejection has to say what was expected, not only that
+   * something was wrong.
+   */
+  test("names the expected jsonPath form when a segment is empty", () => {
+    const result = validate(
+      withSteps([
+        {
+          type: "step",
+          id: "a",
+          agent: "ag",
+          prompt: "p",
+          completion: {
+            fileCheck: {
+              path: "a.json",
+              jsonPath: "state..drained",
+              value: true,
+            },
+          },
+        },
+      ]),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok || result.reason !== "decode") {
+      throw new Error("expected a decode failure");
+    }
+    expect(result.error).toContain("empty '.'-separated segment");
+    expect(result.error).toContain('"state.done"');
   });
 
   test.each([
