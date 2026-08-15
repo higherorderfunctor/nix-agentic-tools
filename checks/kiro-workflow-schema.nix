@@ -73,12 +73,36 @@
   emits = name: wf: code: mkTest "emits-${name}" (lib.elem code (codesOf wf));
   silentOn = name: wf: code: mkTest "silent-${name}" (!(lib.elem code (codesOf wf)));
 
+  # Node constructors. Each supplies the minimum the option types demand and
+  # takes an `extra` overlay for the ONE field a fixture is about, so a
+  # positive fixture and its silent control differ in exactly that field and
+  # nothing else. `repeat` and `parallel` carry a child by default because an
+  # empty collection is itself a diagnosed condition.
   step = id: extra: {
     step =
       {
         inherit id;
         agent = "ag";
         prompt = "p";
+      }
+      // extra;
+  };
+  repeat = id: extra: {
+    repeat =
+      {
+        inherit id;
+        maxIterations = 2;
+        onMaxIterations = "abort";
+        steps = [(step "s" {})];
+      }
+      // extra;
+  };
+  parallel = id: extra: {
+    parallel =
+      {
+        inherit id;
+        joinPolicy = "allSettled";
+        branches = [(step "b" {})];
       }
       // extra;
   };
@@ -94,18 +118,12 @@
   # others' shape-matched control.
   stopWhenTemplate = template:
     wrap [
-      {
-        repeat = {
-          id = "r";
-          maxIterations = 2;
-          onMaxIterations = "abort";
-          stop.when.contains = {
-            inherit template;
-            text = "DONE";
-          };
-          steps = [(step "s" {})];
+      (repeat "r" {
+        stop.when.contains = {
+          inherit template;
+          text = "DONE";
         };
-      }
+      })
     ];
 
   # A template the option type refuses, paired with the wire string `render.nix`
@@ -136,6 +154,49 @@
         };
       })
     ];
+
+  # The same idea once more for the two fileCheck lints: `path` and `value` are
+  # each the only variable in their family, so every positive below is its own
+  # control's twin.
+  fileCheckPath = path:
+    wrap [
+      (step "a" {
+        completion.fileCheck = {
+          inherit path;
+          jsonPath = ["done"];
+          value = true;
+        };
+      })
+    ];
+  fileCheckValue = value:
+    wrap [
+      (step "a" {
+        completion.fileCheck = {
+          path = "state.json";
+          jsonPath = ["done"];
+          inherit value;
+        };
+      })
+    ];
+
+  # One artifact reference, moved across the declaring step. `artifactBefore`
+  # is the shape-matched silent control for BOTH artifact lints: the name is
+  # declared (so not `UNKNOWN`) and the declarer runs first (so not
+  # `NOT-PRECEDING`).
+  artifactBefore = wrap [
+    (step "p" {artifacts.report = "r.json";})
+    (step "a" {prompt = "see {{artifacts.report}}";})
+  ];
+  artifactAfter = wrap [
+    (step "a" {prompt = "see {{artifacts.report}}";})
+    (step "p" {artifacts.report = "r.json";})
+  ];
+
+  # Shared by the `accept-empty-*` controls and the `emits-empty-*` fixtures:
+  # the same definition must both FORCE and be flagged, and writing it twice
+  # would let the two drift apart.
+  emptyParallel = wrap [(parallel "p" {branches = [];})];
+  emptyRepeat = wrap [(repeat "r" {steps = [];})];
 
   unicodeWhitespaceWatchId = builtins.fromJSON "\"wait\\u00a0for\\u00a0it\"";
 
@@ -174,29 +235,8 @@ in
     # Variant controls for reject fixtures that intentionally use empty child
     # collections. A non-empty vendor recipe cannot prove these shapes remain
     # valid.
-    kiro-workflow-accept-empty-parallel =
-      accept "empty-parallel"
-      (wrap [
-        {
-          parallel = {
-            id = "p";
-            branches = [];
-            joinPolicy = "allSettled";
-          };
-        }
-      ]);
-    kiro-workflow-accept-empty-repeat =
-      accept "empty-repeat"
-      (wrap [
-        {
-          repeat = {
-            id = "r";
-            maxIterations = 2;
-            onMaxIterations = "abort";
-            steps = [];
-          };
-        }
-      ]);
+    kiro-workflow-accept-empty-parallel = accept "empty-parallel" emptyParallel;
+    kiro-workflow-accept-empty-repeat = accept "empty-repeat" emptyRepeat;
 
     # ── ACCEPT: things the engine permits and a naive schema would refuse ───
     #
@@ -945,4 +985,197 @@ in
         }
         (step "fold" {prompt = "see {{l.output}} and {{r.output}}";})
       ]) "E-TEMPLATE-REF-NOT-PRECEDING";
+
+    # ── Emission coverage for the remaining diagnostic codes ───────────────
+    #
+    # Every code `analyze.nix` can emit needs a fixture that provokes exactly
+    # it, because a rule with no fixture can be DELETED with the gate staying
+    # green — which was measured, not feared: three whole rule blocks were
+    # removed and all assertions still passed.
+    #
+    # A positive alone is not enough either. It cannot tell "the rule fires on
+    # this" from "the rule fires on everything", so each family below pairs its
+    # positive with a `silent-` control that differs in the one field the rule
+    # reads. Where a rule is a disjunction (`unsafePath`) or has several
+    # emission sites (`W-CONTAINER-EMPTY`), each arm gets its own positive:
+    # one arm can be dropped without the others noticing.
+
+    # {{previous.output}} in a PROMPT. The two errors are mutually exclusive by
+    # construction — the analyzer branches on the enclosing container's kind —
+    # so `silent-previous-ordered` doubles as the control for both.
+    kiro-workflow-emits-previous-in-parallel =
+      emits "previous-in-parallel"
+      (wrap [(parallel "p" {branches = [(step "l" {}) (step "r" {prompt = "{{previous.output}}";})];})])
+      "E-TEMPLATE-PREVIOUS-IN-PARALLEL";
+    kiro-workflow-emits-previous-no-producer =
+      emits "previous-no-producer"
+      (wrap [(step "a" {prompt = "{{previous.output}}";})])
+      "E-TEMPLATE-PREVIOUS-NO-PRODUCER";
+    # An earlier sibling is not enough — it has to PRODUCE. This is the only
+    # fixture that forces the sibling-producer predicate, which reads the
+    # bare sibling attrset rather than a flattened entry.
+    kiro-workflow-emits-previous-prior-sibling-not-producer =
+      emits "previous-prior-sibling-not-producer"
+      (wrap [(step "l" {captureOutput = false;}) (step "r" {prompt = "{{previous.output}}";})])
+      "E-TEMPLATE-PREVIOUS-NO-PRODUCER";
+    kiro-workflow-silent-previous-ordered =
+      silentOn "previous-ordered"
+      (wrap [(step "l" {}) (step "r" {prompt = "{{previous.output}}";})])
+      "E-TEMPLATE-PREVIOUS-NO-PRODUCER";
+    kiro-workflow-silent-previous-ordered-not-in-parallel =
+      silentOn "previous-ordered-not-in-parallel"
+      (wrap [(step "l" {}) (step "r" {prompt = "{{previous.output}}";})])
+      "E-TEMPLATE-PREVIOUS-IN-PARALLEL";
+
+    # Artifact references from a PROMPT. `artifactBefore` is the control for
+    # both, so a rule that fired unconditionally would break it.
+    kiro-workflow-emits-artifact-ref-unknown =
+      emits "artifact-ref-unknown"
+      (wrap [(step "a" {prompt = "see {{artifacts.ghost}}";})])
+      "E-ARTIFACT-REF-UNKNOWN";
+    kiro-workflow-silent-artifact-ref-declared =
+      silentOn "artifact-ref-declared" artifactBefore "E-ARTIFACT-REF-UNKNOWN";
+    kiro-workflow-emits-artifact-ref-not-preceding =
+      emits "artifact-ref-not-preceding" artifactAfter "E-ARTIFACT-REF-NOT-PRECEDING";
+    kiro-workflow-silent-artifact-ref-preceding =
+      silentOn "artifact-ref-preceding" artifactBefore "E-ARTIFACT-REF-NOT-PRECEDING";
+
+    # Stop-context references. Every fixture here is `stopWhenTemplate` or a
+    # one-field variant of it, so the family is its own control set.
+    #
+    # `stop-context-previous` is the case the analyzer's own comment calls
+    # "never legal there" and the one the mutation probe found unguarded.
+    kiro-workflow-emits-stop-context-previous =
+      emits "stop-context-previous" (stopWhenTemplate "previous.output") "E-STOP-CONTEXT-PREVIOUS";
+    kiro-workflow-silent-stop-context-non-previous =
+      silentOn "stop-context-non-previous" (stopWhenTemplate "s.output") "E-STOP-CONTEXT-PREVIOUS";
+    kiro-workflow-emits-stop-context-ref-unknown =
+      emits "stop-context-ref-unknown" (stopWhenTemplate "ghost.output") "E-STOP-CONTEXT-REF-UNKNOWN";
+    kiro-workflow-silent-stop-context-ref-known =
+      silentOn "stop-context-ref-known" (stopWhenTemplate "s.output") "E-STOP-CONTEXT-REF-UNKNOWN";
+    kiro-workflow-emits-stop-context-ref-not-producer =
+      emits "stop-context-ref-not-producer"
+      (wrap [
+        (repeat "r" {
+          steps = [(step "s" {captureOutput = false;})];
+          stop.when.contains = {
+            template = "s.output";
+            text = "DONE";
+          };
+        })
+      ])
+      "E-STOP-CONTEXT-REF-NOT-PRODUCER";
+    kiro-workflow-silent-stop-context-ref-producer =
+      silentOn "stop-context-ref-producer" (stopWhenTemplate "s.output") "E-STOP-CONTEXT-REF-NOT-PRODUCER";
+    # A repeat reaches its OWN body and anything earlier, but not a later
+    # sibling of the repeat itself. The two fixtures differ only in which side
+    # of the repeat the referenced step sits on.
+    kiro-workflow-emits-stop-context-ref-not-visible =
+      emits "stop-context-ref-not-visible"
+      (wrap [
+        (repeat "r" {
+          stop.when.contains = {
+            template = "other.output";
+            text = "DONE";
+          };
+        })
+        (step "other" {})
+      ])
+      "E-STOP-CONTEXT-REF-NOT-VISIBLE";
+    kiro-workflow-silent-stop-context-ref-earlier =
+      silentOn "stop-context-ref-earlier"
+      (wrap [
+        (step "other" {})
+        (repeat "r" {
+          stop.when.contains = {
+            template = "other.output";
+            text = "DONE";
+          };
+        })
+      ])
+      "E-STOP-CONTEXT-REF-NOT-VISIBLE";
+    kiro-workflow-silent-stop-context-ref-inside-body =
+      silentOn "stop-context-ref-inside-body" (stopWhenTemplate "s.output") "E-STOP-CONTEXT-REF-NOT-VISIBLE";
+
+    # W-CONTAINER-EMPTY has three emission sites, one per container kind, and
+    # dropping one of them is invisible to the other two.
+    kiro-workflow-emits-empty-repeat = emits "empty-repeat" emptyRepeat "W-CONTAINER-EMPTY";
+    kiro-workflow-emits-empty-parallel = emits "empty-parallel" emptyParallel "W-CONTAINER-EMPTY";
+    kiro-workflow-emits-empty-sequence =
+      emits "empty-sequence"
+      (wrap [
+        {
+          sequence = {
+            id = "q";
+            steps = [];
+          };
+        }
+      ])
+      "W-CONTAINER-EMPTY";
+    # One control for all three sites: every container kind, each populated.
+    kiro-workflow-silent-populated-containers =
+      silentOn "populated-containers"
+      (wrap [
+        {
+          sequence = {
+            id = "q";
+            steps = [(step "a" {}) (parallel "p" {}) (repeat "r" {})];
+          };
+        }
+      ])
+      "W-CONTAINER-EMPTY";
+
+    # The joinPolicy and onMaxIterations lints. Each fires on ONE enum member,
+    # so its control is the same node carrying the neighbouring member.
+    kiro-workflow-emits-join-policy-any =
+      emits "join-policy-any" (wrap [(parallel "p" {joinPolicy = "any";})]) "W-JOIN-POLICY-ANY";
+    kiro-workflow-emits-join-policy-all =
+      emits "join-policy-all" (wrap [(parallel "p" {joinPolicy = "all";})]) "W-JOIN-POLICY-ALL";
+    kiro-workflow-silent-join-policy-all-settled-any =
+      silentOn "join-policy-all-settled-any" (wrap [(parallel "p" {})]) "W-JOIN-POLICY-ANY";
+    kiro-workflow-silent-join-policy-all-settled-all =
+      silentOn "join-policy-all-settled-all" (wrap [(parallel "p" {})]) "W-JOIN-POLICY-ALL";
+    kiro-workflow-emits-on-max-iterations-continue =
+      emits "on-max-iterations-continue"
+      (wrap [(repeat "r" {onMaxIterations = "continue";})])
+      "W-ON-MAX-ITERATIONS-CONTINUE";
+    kiro-workflow-emits-on-max-iterations-pause =
+      emits "on-max-iterations-pause"
+      (wrap [(repeat "r" {onMaxIterations = "pause";})])
+      "W-ON-MAX-ITERATIONS-PAUSE";
+    kiro-workflow-silent-on-max-iterations-abort-continue =
+      silentOn "on-max-iterations-abort-continue"
+      (wrap [(repeat "r" {})])
+      "W-ON-MAX-ITERATIONS-CONTINUE";
+    kiro-workflow-silent-on-max-iterations-abort-pause =
+      silentOn "on-max-iterations-abort-pause"
+      (wrap [(repeat "r" {})])
+      "W-ON-MAX-ITERATIONS-PAUSE";
+
+    # The stop-form lint. `accept-repeat-no-stop-form` above already pins that
+    # this definition EVALUATES — the engine runs it, and the vendor's own
+    # `autoresearch` recipe ships it — which is a different claim from the
+    # warning being emitted.
+    kiro-workflow-emits-repeat-no-stop-form =
+      emits "repeat-no-stop-form" (wrap [(repeat "r" {})]) "W-REPEAT-NO-STOP-FORM";
+    kiro-workflow-silent-repeat-with-stop-form =
+      silentOn "repeat-with-stop-form" (stopWhenTemplate "DONE") "W-REPEAT-NO-STOP-FORM";
+
+    # `unsafePath` is a four-way disjunction and each arm is separately
+    # deletable, so each gets its own positive. The plain relative path is the
+    # control for all four.
+    kiro-workflow-emits-file-check-path-templated =
+      emits "file-check-path-templated" (fileCheckPath "{{out}}/state.json") "W-FILE-CHECK-PATH-UNSAFE";
+    kiro-workflow-emits-file-check-path-absolute =
+      emits "file-check-path-absolute" (fileCheckPath "/tmp/state.json") "W-FILE-CHECK-PATH-UNSAFE";
+    kiro-workflow-emits-file-check-path-tilde =
+      emits "file-check-path-tilde" (fileCheckPath "~/state.json") "W-FILE-CHECK-PATH-UNSAFE";
+    kiro-workflow-emits-file-check-path-escaping =
+      emits "file-check-path-escaping" (fileCheckPath "../state.json") "W-FILE-CHECK-PATH-UNSAFE";
+    kiro-workflow-silent-file-check-path-relative =
+      silentOn "file-check-path-relative" (fileCheckPath "state.json") "W-FILE-CHECK-PATH-UNSAFE";
+    kiro-workflow-emits-file-check-value-array =
+      emits "file-check-value-array" (fileCheckValue [true]) "W-FILE-CHECK-VALUE-ARRAY";
+    kiro-workflow-silent-file-check-value-scalar =
+      silentOn "file-check-value-scalar" (fileCheckValue true) "W-FILE-CHECK-VALUE-ARRAY";
   }
