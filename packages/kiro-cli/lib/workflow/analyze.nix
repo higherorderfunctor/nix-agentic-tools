@@ -198,14 +198,37 @@ in rec {
           + "${toString limits.maxNestingDepth}")
     ) (filter (e: length e.lineage > limits.maxNestingDepth) entries);
 
-    dupDiags = let
-      ids = map (e: e.id) entries;
-      duplicated = lib.unique (filter (i: length (filter (x: x == i) ids) > 1) ids);
-    in
-      map (i:
-        err "E-NODE-DUPLICATE-ID" "workflow"
-        "duplicate node id '${i}'; ids must be unique across the WHOLE tree, not just among siblings")
-      duplicated;
+    # The engine emits when it reaches an id's SECOND occurrence, once per id.
+    # This is observably different from grouping duplicates by first occurrence
+    # for interleaved ids such as [a b b a].
+    dupDiags =
+      (lib.foldl' (
+          acc: e:
+            if lib.elem e.id acc.seen
+            then
+              if lib.elem e.id acc.reported
+              then acc
+              else {
+                inherit (acc) seen;
+                reported = acc.reported ++ [e.id];
+                diagnostics =
+                  acc.diagnostics
+                  ++ [
+                    (err "E-NODE-DUPLICATE-ID" "workflow"
+                      "duplicate node id '${e.id}'; ids must be unique across the WHOLE tree, not just among siblings")
+                  ];
+              }
+            else {
+              inherit (acc) diagnostics reported;
+              seen = acc.seen ++ [e.id];
+            }
+        ) {
+          diagnostics = [];
+          reported = [];
+          seen = [];
+        }
+        entries)
+      .diagnostics;
 
     # ── engine-basis: the one node-orientation rule ───────────────────────
     #
