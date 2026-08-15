@@ -69,8 +69,8 @@ const JsonPath = NonEmptyString.pipe(
         !s.includes("[") &&
         !s.includes("]") &&
         !s.includes("*") &&
-        !s.split(".").some((seg) => seg === "")) ||
-      `jsonPath ${JSON.stringify(s)} is not JSONPath — it is a '.'-separated property walk. Drop '$', brackets and wildcards.`,
+        s.split(".").some((segment) => segment.length > 0)) ||
+      `jsonPath ${JSON.stringify(s)} is not JSONPath — it needs a non-empty property segment and supports only a '.'-separated property walk. Drop '$', brackets and wildcards.`,
   ),
 ).annotations({ identifier: "JsonPath" });
 
@@ -208,7 +208,16 @@ const GithubPrConfig = Schema.Struct({
 const CruxCrConfig = Schema.Struct({
   ...WatchBase,
   crRef: Schema.optional(NonEmptyString),
-  crId: Schema.optional(Schema.String.pipe(Schema.pattern(/^CR-\d+$/))),
+  crId: Schema.optional(
+    Schema.String.pipe(
+      Schema.filter(
+        (s) =>
+          s.length === 0 ||
+          /^CR-\d+$/.test(s) ||
+          "a non-empty crId must match ^CR-[0-9]+$",
+      ),
+    ),
+  ),
 }).pipe(
   Schema.filter(
     (c) =>
@@ -335,7 +344,7 @@ export interface Workflow {
 
 export const WorkflowSchema: Schema.Schema<Workflow> = Schema.Struct({
   name: NonEmptyString,
-  description: Schema.optional(NonEmptyString),
+  description: Schema.optional(Schema.String),
   /**
    * A DECLARATION map, name -> free-form type hint. The engine never merges
    * these in as defaults; they are only the allow-list for its
