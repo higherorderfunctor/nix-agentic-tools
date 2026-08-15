@@ -34,12 +34,12 @@
     rustc = rust;
   };
 
-  rev = "1460bff156130ee246d3e786dd343cce6fca949e";
+  rev = "120ffccfab9647ce89d7b06581104402be48412b";
   src = fetchFromGitHub {
     owner = "agent-sh";
     repo = "agnix";
     inherit rev;
-    hash = "sha256-ixo3/uKRyYYiiymtmKrpuFG4KQC1GhnpitkLr9pJGNI=";
+    hash = "sha256-AvkycBQmErKl0nZpcebgQYSEFkG9FTbJy0oCpu+SpmM=";
   };
 in
   rustPlatform.buildRustPackage {
@@ -50,7 +50,7 @@ in
       inherit rev;
     };
     inherit src;
-    cargoHash = "sha256-CtpV7uRcqbqIfsqbyjT8bEiE56N9kVBMyhHok8AvzKw=";
+    cargoHash = "sha256-CsttVksAbdHCaiwh+Jc8bMUjCWYJmZmROSGMFIGxJpg=";
 
     nativeBuildInputs = [ourPkgs.pkg-config];
     buildInputs = ourPkgs.lib.optionals ourPkgs.stdenv.hostPlatform.isDarwin [
