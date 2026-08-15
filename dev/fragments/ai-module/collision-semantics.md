@@ -1,17 +1,23 @@
 ## ai.\* Collision Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — collision checks follow each
-> app record's `supportedPools`, while normalized `ai.settings` is a
-> scalar-field exception: each nullable field resolves independently, with a
-> non-null per-runtime value overriding the root and null inheriting it). Prior:
-> 2026-08-14 (commit pending — records where a MODULE may contribute, now that
-> `lib/ai/mkSkillPackageModule.nix` writes the per-CLI pools. That looks like
-> the exact shape `shell-option.md` bans, and the discriminator — always-on
-> default versus opt-in behind an explicit enable — is written down in the new
-> section below because the ban's reasoning does not carry across it. Also
-> records the provenance guard, which makes the root-write prohibition
-> structural rather than reviewed-for). Prior: 2026-08-10 (commit pending — TWO
-> corrections. The call site was never `hmTransform.nix` +
+> **Last verified:** 2026-08-15 (commit pending — the list-shaped instructions
+> exception is gone; package guidance is keyed rules and follows the ordinary
+> collision/default rules). Prior: 2026-08-15 (commit pending — `ai.context` is
+> now an explicit content-composition exception: root content precedes runtime
+> content in one artifact, while keyed rules still collide across levels. The
+> shared repository AGENTS.md writer separately deduplicates identical same-key
+> runtime views and rejects divergent ones). Prior: 2026-08-15 (commit pending —
+> collision checks follow each app record's `supportedPools`, while normalized
+> `ai.settings` is a scalar-field exception: each nullable field resolves
+> independently, with a non-null per-runtime value overriding the root and null
+> inheriting it). Prior: 2026-08-14 (commit pending — records where a MODULE may
+> contribute, now that `lib/ai/mkSkillPackageModule.nix` writes the per-CLI
+> pools. That looks like the exact shape `shell-option.md` bans, and the
+> discriminator — always-on default versus opt-in behind an explicit enable — is
+> written down in the new section below because the ban's reasoning does not
+> carry across it. Also records the provenance guard, which makes the root-write
+> prohibition structural rather than reviewed-for). Prior: 2026-08-10 (commit
+> pending — TWO corrections. The call site was never `hmTransform.nix` +
 > `devenvTransform.nix`; both are 16-line re-exports of
 > `mkBackendTransform.nix`, which is where the merge AND the per-CLI baseline
 > option surface actually live, so step 2 of the checklist pointed at files that
@@ -73,10 +79,6 @@ documented interface, not an ambush. `lib/ai/mkSkillPackageModule.nix` states
 that override key in its header; if you move a module's writes per-CLI, state it
 in yours too.
 
-`ai.instructions` is asymmetric here and it matters: it is a LIST that
-concatenates with no collision check, while `skills` is an attrset that is
-collision-checked. Two writes on adjacent lines can carry different risk.
-
 ### Covered pools
 
 Applies to every attrset-shaped shared pool in `ai.*`:
@@ -88,8 +90,9 @@ Applies to every attrset-shaped shared pool in `ai.*`:
 - `ai.environmentVariables` / `ai.<cli>.environmentVariables`
 - `ai.agents` / `ai.<cli>.agents`
 
-`ai.instructions` is a list, not an attrset, so list concat stays as-is.
-`ai.context` is single-valued.
+`ai.context` is single-valued per level but composes across levels: root content
+is concatenated first, followed by runtime content. This preserves both halves
+rather than applying pool-entry replacement or collision semantics.
 
 `ai.shell` and the fields in normalized `ai.settings` are deliberate SCALAR
 exceptions and resolve the other way — per-runtime silently overrides the root,

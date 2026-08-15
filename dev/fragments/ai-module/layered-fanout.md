@@ -1,15 +1,20 @@
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-08-15 (commit pending — L2 root pools now cross into
-> L3 only for runtimes whose app record lists that pool in `supportedPools`;
-> unsupported root fanout degrades and the L2b/L3 options are absent. The closed
-> normalized `settings` schema is deliberately listed by all five runtimes even
-> when a particular field lowers only for a subset). Prior: 2026-08-01 (commit
-> pending — records the portable hooks exception: per-event matcher-group lists
-> append instead of key-colliding, and agents may carry a typed semantic
-> record). Prior: 2026-04-21 (commit pending — refactor of ai-factory-collision
-> plan §4). If you add a new Dir option or change how per-file Dir expansion
-> fans through the layers, update this fragment in the same commit.
+> **Last verified:** 2026-08-15 (commit pending — typed context is the
+> composition exception: root and runtime content concatenate root-first into
+> one runtime-named artifact. Keyed rules retain collision semantics and lower
+> their normalized matcher at L4; repository-local AGENTS.md consumers share a
+> keyed, byte-deduplicating writer). Prior: 2026-08-15 (commit pending — L2 root
+> pools now cross into L3 only for runtimes whose app record lists that pool in
+> `supportedPools`; unsupported root fanout degrades and the L2b/L3 options are
+> absent. The closed normalized `settings` schema is deliberately listed by all
+> five runtimes even when a particular field lowers only for a subset). Prior:
+> 2026-08-01 (commit pending — records the portable hooks exception: per-event
+> matcher-group lists append instead of key-colliding, and agents may carry a
+> typed semantic record). Prior: 2026-04-21 (commit pending — refactor of
+> ai-factory-collision plan §4). If you add a new Dir option or change how
+> per-file Dir expansion fans through the layers, update this fragment in the
+> same commit.
 
 ### Canonical 4-layer shape
 
@@ -63,6 +68,13 @@
   before `ai.<cli>.hooks.<Event>` groups. This is intentional composition, not
   an attrset-entry collision; only the exact portable Claude/Codex event
   vocabulary is accepted at L2.
+- **Context content concatenates.** `ai.context` and `ai.<cli>.context` are
+  typed `text`-XOR-`source` records, not pool entries. Their content composes
+  root-first into the runtime's `context.filename`.
+- **Rule matchers lower only at L4.** `matcher = null` is always-on; a non-empty
+  glob list becomes native routing metadata where one exists and explicit prose
+  for flat AGENTS.md consumers. The shared devenv AGENTS.md writer admits only
+  unscoped units and deduplicates byte-identical same-key contributions.
 - **Normalized settings are a uniform scalar-field surface.** Every runtime
   declares the same closed `settings` submodule. Each field resolves root versus
   per-runtime with `resolveOverride`; native lowering remains per-runtime and

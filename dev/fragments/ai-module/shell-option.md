@@ -1,18 +1,20 @@
 ## Per-runtime pool capability and nullable overrides
 
-> **Last verified:** 2026-08-15 (commit pending — `supportedPools` now gates all
-> normalized pool declarations and fanout, while the new normalized `settings`
-> surface is deliberately present on every runtime and resolves nullable fields
-> per runtime through the same override rule as `ai.shell`). Prior: 2026-08-14
-> (commit pending — the escape hatch at the end of the Copilot section was
-> half-wrong: at 1.0.80 the plain `@github/copilot` npm tarball is a 24K loader
-> shim, not readable JS. The readable app code is in the per-platform dep — and,
-> better, the SEA self-extracts a byte-identical copy on first run, so no
-> download is needed at all. The Copilot `ai.shell` gap itself is UNCHANGED and
-> still open). Prior: 2026-08-10 (commit pending — first landing of `ai.shell`.
-> If you add another nullable-scalar `ai.*` option, change which runtimes
-> consume this one, or touch `resolveOverride`, update this fragment in the same
-> commit.)
+> **Last verified:** 2026-08-15 (commit pending — package guidance now uses
+> keyed per-runtime rules; the pool census no longer includes the retired
+> instructions list). Prior: 2026-08-15 (commit pending — `supportedPools` now
+> gates all normalized pool declarations and fanout, while the new normalized
+> `settings` surface is deliberately present on every runtime and resolves
+> nullable fields per runtime through the same override rule as `ai.shell`).
+> Prior: 2026-08-14 (commit pending — the escape hatch at the end of the Copilot
+> section was half-wrong: at 1.0.80 the plain `@github/copilot` npm tarball is a
+> 24K loader shim, not readable JS. The readable app code is in the per-platform
+> dep — and, better, the SEA self-extracts a byte-identical copy on first run,
+> so no download is needed at all. The Copilot `ai.shell` gap itself is
+> UNCHANGED and still open). Prior: 2026-08-10 (commit pending — first landing
+> of `ai.shell`. If you add another nullable-scalar `ai.*` option, change which
+> runtimes consume this one, or touch `resolveOverride`, update this fragment in
+> the same commit.)
 
 ### One record is the capability source
 
@@ -187,8 +189,8 @@ three runtimes demonstrably do not perform.
   load-bearing.** The rule used to read "a module must NEVER contribute into
   `ai.<cli>.environmentVariables`", and generalizing that wording to every
   collision-checked pool would now be wrong: `lib/ai/mkSkillPackageModule.nix`
-  deliberately writes `ai.<runtime>.skills` and `ai.<runtime>.instructions`,
-  because writing the ROOT pool instead is what the provenance guard in
+  deliberately writes `ai.<runtime>.skills` and `ai.<runtime>.rules`, because
+  writing the ROOT pool instead is what the provenance guard in
   `checks/module-eval.nix` bans. What makes that safe and this unsafe is not the
   pool, it is whether the consumer asked: `gitSshConfigWorkaround` reaches every
   consumer unasked, while a skill package contributes only after an explicit

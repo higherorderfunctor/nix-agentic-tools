@@ -2,8 +2,8 @@
 #
 # The skills + skill-routing fanout is delegated to the shared skill-packaging
 # factory (lib/ai/mkSkillPackageModule), imported below: `stacked-workflows.enable
-# = true` fans the unprefixed stack-* skills and the skill-routing instruction
-# into the PER-RUNTIME `ai.<runtime>.{skills,instructions}` pools of every
+# = true` fans the unprefixed stack-* skills and the skill-routing rule
+# into the PER-RUNTIME `ai.<runtime>.{skills,rules}` pools of every
 # runtime present in the evaluation, so each enabled ecosystem installs them
 # user-global (~/.claude/skills, ~/.kiro/skills, ~/.claude/CLAUDE.md,
 # ~/.kiro/steering/, ...). NOT the root `ai.skills` pool — a root write is
@@ -42,7 +42,7 @@ in {
       name = "stacked-workflows";
       enableDescription = "stacked workflow skills, skill-routing rule, and git-config presets (user-global)";
       skills = {pkgs, ...}: pkgs.stacked-workflows-content.passthru.skills;
-      instructions = {
+      rules = {
         lib,
         pkgs,
         ...

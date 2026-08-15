@@ -2,9 +2,9 @@ let
   baseDescription = "Code search agent for exploring any codebase. Use for finding code by intent, locating implementations, understanding how something works, or discovering related code.";
   description = "${baseDescription} Prefer over Grep/Glob/Read for any semantic or exploratory question.";
   instructions = ../agent-instructions.md;
-  instruction = {text = instructions;};
+  rule = {source = instructions;};
 in {
-  inherit instruction;
+  inherit rule;
 
   # A TYPED `ai.kiro.agents` record (see `kiroAgentRecord` in
   # packages/kiro-cli/lib/mkKiro.nix) — no longer pre-rendered JSON.
@@ -25,8 +25,6 @@ in {
     prompt = instructions;
     tools = ["shell" "read"];
   };
-
-  kiroInstruction = instruction // {name = "semble";};
 
   semanticAgent = {
     inherit description instructions;

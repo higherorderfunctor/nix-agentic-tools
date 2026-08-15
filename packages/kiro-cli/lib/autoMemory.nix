@@ -231,7 +231,6 @@ in
   "kiroAutoMemory: OM_PG_PASSWORD must not be in env/omEnv (it would bake into the store); use omPgPasswordFile for the runtime secret."; {
     hooks."kiro-memory" = builtins.toJSON hookEnvelope;
     rules."kiro-auto-memory" = {
-      paths = null; # null → kiro `inclusion: always`
       description = "How this project's auto-maintained memory works.";
       text = anchorText;
     };

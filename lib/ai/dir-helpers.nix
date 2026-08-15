@@ -42,9 +42,8 @@ in rec {
   # bug the original readDir-based consumer had).
   #
   # Returns: attrsOf ruleModule-compatible attrs. Each value is
-  # `{ text = <path to file> }` — the per-CLI rule emission
-  # path already accepts a path for `text` and readFile's it
-  # at eval time with transformer frontmatter injected.
+  # `{ source = <path to file> }`; emitters read it only when they must inject
+  # frontmatter and otherwise preserve the home.file-shaped source record.
   rulesFromDir = arg: let
     cfg = resolveDirArg (name: lib.hasSuffix ".md" name) arg;
     entries = builtins.readDir cfg.path;
@@ -57,7 +56,7 @@ in rec {
     lib.mapAttrs' (
       name: _:
         lib.nameValuePair (stripMd name) {
-          text = cfg.path + "/${name}";
+          source = cfg.path + "/${name}";
         }
     )
     matches;

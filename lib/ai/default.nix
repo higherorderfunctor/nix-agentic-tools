@@ -6,10 +6,6 @@ in {
   app = import ./app {inherit lib;};
   apps = import ./apps {inherit lib;};
   hooks = import ./hooks.nix {inherit lib;};
-  # Compose an app's single always-on instructions file = context baseline +
-  # unnamed instructions (named live in their own per-name files). Consumed by
-  # the Claude + Copilot per-app factories; see composeInstructionsFile.nix.
-  composeInstructionsFile = import ./composeInstructionsFile.nix {inherit lib;};
   # Strategy-driven file materializer (steering surfaces): symlink
   # entries keep the legacy declarative shapes; copy entries become
   # REAL files via generated HM activation / devenv task writers.

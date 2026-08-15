@@ -6,6 +6,7 @@
   ...
 }: let
   agent = import ../../../lib/ai/agent.nix {inherit lib;};
+  aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
   sharedHooks = import ../../../lib/ai/hooks.nix {inherit lib;};
   codexExtracted = builtins.fromJSON (builtins.readFile ../../../overlays/chatgpt-codex-extracted.json);
   helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
@@ -470,33 +471,18 @@
     "projects"
   ];
 
-  resolveText = value:
-    if builtins.isPath value
-    then builtins.readFile value
-    else value;
-
-  renderScope = paths:
-    lib.optionalString (paths != null && paths != []) (
+  renderScope = matcher:
+    lib.optionalString (matcher != null) (
       "_Apply this guidance only when working with files matching: "
-      + lib.concatMapStringsSep ", " (path: "`${path}`") paths
+      + lib.concatMapStringsSep ", " (path: "`${path}`") matcher
       + "_\n\n"
     );
 
-  shouldRender = _name: fragment:
-    (fragment.paths or null) == null || !(fragment.skipIfUnsupported or false);
-
-  renderFragment = fragment:
-    renderScope (fragment.paths or null)
-    + lib.ai.transformers.agentsmd.render (fragment
-      // {text = resolveText fragment.text;});
-
-  mkInstructionChunk = instruction:
-    lib.optionalString (instruction ? name) "<!-- instruction: ${instruction.name} -->\n"
-    + renderFragment instruction;
-
-  mkRuleChunk = name: rule:
-    "<!-- rule: ${name} -->\n"
-    + renderFragment rule;
+  mkRuleBody = _name: rule:
+    renderScope rule.matcher
+    + lib.ai.transformers.agentsmd.render {
+      text = aiCommon.readContent rule;
+    };
 
   isExecpolicyPathLike = content:
     builtins.isPath content
@@ -784,89 +770,47 @@
     hooks;
 
   mkAgentsMd = {
-    cfg,
-    mergedInstructions,
+    mergedContext,
     mergedRules,
-    topContext,
-  }: let
-    effectiveContext =
-      if cfg.context != null
-      then cfg.context
-      else topContext;
-    contextText =
-      if effectiveContext == null
-      then ""
-      else resolveText effectiveContext;
-    instructionChunks =
-      map mkInstructionChunk
-      (builtins.filter (shouldRender null) mergedInstructions);
-    ruleChunks =
-      lib.mapAttrsToList mkRuleChunk
-      (lib.filterAttrs shouldRender mergedRules);
-    chunks =
-      lib.optional (contextText != "") contextText
-      ++ instructionChunks
-      ++ ruleChunks;
-  in
-    builtins.concatStringsSep "\n\n" chunks;
+  }:
+    lib.ai.transformers.agentsmd.renderKeyed {
+      context = aiCommon.readContent mergedContext;
+      rules = lib.mapAttrs mkRuleBody mergedRules;
+    };
 
   mkSizeAssertion = {
     agentsMd,
     cfg,
-    mergedInstructions,
     mergedRules,
-    topContext,
+    mergedContext,
   }: let
-    effectiveContext =
-      if cfg.context != null
-      then cfg.context
-      else topContext;
-    size = text: builtins.stringLength (resolveText text);
     contextContribution =
-      lib.optional (effectiveContext != null && resolveText effectiveContext != "")
-      "context=${toString (size effectiveContext)} bytes";
-    instructionContributions =
-      lib.imap0 (index: instruction: "instruction:${instruction.name or (toString index)}=${toString (builtins.stringLength (mkInstructionChunk instruction))} bytes")
-      (builtins.filter (shouldRender null) mergedInstructions);
+      lib.optional (mergedContext != null)
+      "context=${toString (builtins.stringLength (aiCommon.readContent mergedContext))} bytes";
     ruleContributions =
-      lib.mapAttrsToList (name: rule: "rule:${name}=${toString (builtins.stringLength (mkRuleChunk name rule))} bytes")
-      (lib.filterAttrs shouldRender mergedRules);
+      lib.mapAttrsToList (name: rule: "rule:${name}=${toString (builtins.stringLength (mkRuleBody name rule))} bytes")
+      mergedRules;
     renderedBytes = builtins.stringLength agentsMd;
   in {
     assertion = renderedBytes <= cfg.projectDocMaxBytes;
     message = ''
       Codex AGENTS.md renders to ${toString renderedBytes} bytes, exceeding
       ai.codex.projectDocMaxBytes (${toString cfg.projectDocMaxBytes} bytes).
-      Contributions: ${lib.concatStringsSep ", " (contextContribution ++ instructionContributions ++ ruleContributions)}.
+      Contributions: ${lib.concatStringsSep ", " (contextContribution ++ ruleContributions)}.
       Trim the contributing content or raise ai.codex.projectDocMaxBytes.
     '';
   };
-
-  mkPathAssertions = {
-    mergedInstructions,
-    mergedRules,
-  }:
-    lib.imap0 (index: instruction: {
-      assertion = (instruction.paths or null) != [];
-      message = "ai.codex.instructions[${toString index}].paths must be null or a non-empty list";
-    })
-    mergedInstructions
-    ++ lib.mapAttrsToList (name: rule: {
-      assertion = rule.paths != [];
-      message = "ai.codex.rules.${name}.paths must be null or a non-empty list";
-    })
-    mergedRules;
 in
   lib.ai.app.mkAiApp {
     # Carried as DATA, not a module argument — see mkAiApp.nix.
     inherit pkgs;
     name = "codex";
+    contextFilename = "AGENTS.md";
     supportedPools = [
       "agents"
       "context"
       "environmentVariables"
       "hooks"
-      "instructions"
       "mcpServers"
       "rules"
       "settings"
@@ -899,15 +843,6 @@ in
           global AGENTS.md here; devenv uses project-root AGENTS.md instead.
         '';
       };
-      context = lib.mkOption {
-        type = lib.types.nullOr (lib.types.either lib.types.lines lib.types.path);
-        default = null;
-        description = ''
-          Codex-specific global context. When null, falls back to top-level
-          `ai.context`.
-        '';
-        example = lib.literalExpression "./codex-context.md";
-      };
       agents = lib.mkOption {
         type = lib.types.attrsOf codexAgentType;
         default = {};
@@ -925,7 +860,7 @@ in
         description = ''
           Codex command-execution policy written as Starlark `.rules` files.
           This is separate from Markdown `ai.rules`, which contributes durable
-          instructions to AGENTS.md.
+          guidance to AGENTS.md.
         '';
         example = lib.literalExpression ''
           {
@@ -994,7 +929,6 @@ in
     hm.config = {
       config,
       cfg,
-      mergedInstructions,
       mergedRules,
       mergedServers,
       mergedSkills,
@@ -1002,12 +936,12 @@ in
       mergedEnvironmentVariables,
       moduleEnvironmentVariables,
       resolvedShell,
-      topContext,
+      mergedContext,
       topHooks,
       resolvedSettings,
       ...
     }: let
-      agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
+      agentsMd = mkAgentsMd {inherit mergedContext mergedRules;};
       configFile = "${cfg.configDir}/config.toml";
       hasNativeMcpServers = cfg.nativeSettings ? mcp_servers;
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
@@ -1022,13 +956,12 @@ in
         model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
       };
       assertions =
-        mkPathAssertions {inherit mergedInstructions mergedRules;}
-        ++ mkAgentAssertions mergedAgents
+        mkAgentAssertions mergedAgents
         ++ mkExecpolicyAssertions cfg.execpolicyRules
         ++ mkProfileAssertions cfg.profiles
         ++ mkBetaPermissionLockout "ai.codex.nativeSettings" cfg.nativeSettings
         ++ [
-          (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
+          (mkSizeAssertion {inherit agentsMd cfg mergedContext mergedRules;})
           {
             assertion = mergedServers == {} || !hasNativeMcpServers;
             message = "ai.codex.nativeSettings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
@@ -1066,7 +999,7 @@ in
         });
         file = lib.mkMerge [
           (lib.mkIf (agentsMd != "") {
-            "${cfg.configDir}/AGENTS.md".text = agentsMd;
+            "${cfg.configDir}/${cfg.context.filename}".text = agentsMd;
           })
           (helpers.mkSkillEntries ".agents" mergedSkills)
           (mkAgentEntries cfg.configDir mergedAgents)
@@ -1088,7 +1021,6 @@ in
     devenv.config = {
       config,
       cfg,
-      mergedInstructions,
       mergedRules,
       mergedServers,
       mergedSkills,
@@ -1096,12 +1028,11 @@ in
       mergedEnvironmentVariables,
       moduleEnvironmentVariables,
       resolvedShell,
-      topContext,
+      mergedContext,
       topHooks,
       resolvedSettings,
       ...
     }: let
-      agentsMd = mkAgentsMd {inherit cfg mergedInstructions mergedRules topContext;};
       hasNativeMcpServers = cfg.nativeSettings ? mcp_servers;
       effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
       settings = helpers.filterNulls ((applyIntegrationRoots cfg.nativeSettings cfg.internal._integration_writable_roots)
@@ -1120,22 +1051,31 @@ in
         else if environmentHome != ""
         then "${environmentHome}/.cache/nix"
         else null;
+      agentsMdRules = lib.mapAttrs mkRuleBody mergedRules;
     in {
-      ai.codex.internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter (
-        ["${config.devenv.root}/.git"]
-        ++ lib.optional (nixCacheRoot != null) nixCacheRoot
-      ));
-      ai.codex.nativeSettings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
-        model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
+      ai = {
+        codex.internal._integration_writable_roots = lib.mkIf cfg.enable (lib.mkAfter (
+          ["${config.devenv.root}/.git"]
+          ++ lib.optional (nixCacheRoot != null) nixCacheRoot
+        ));
+        codex.nativeSettings = lib.mkIf (resolvedSettings.reasoningEffort != null) {
+          model_reasoning_effort = lib.mkDefault resolvedSettings.reasoningEffort;
+        };
+        internal.agentsMd.${cfg.context.filename} =
+          {
+            maxBytes = cfg.projectDocMaxBytes;
+            rules = agentsMdRules;
+          }
+          // lib.optionalAttrs (mergedContext != null) {
+            context = aiCommon.readContent mergedContext;
+          };
       };
       assertions =
-        mkPathAssertions {inherit mergedInstructions mergedRules;}
-        ++ mkAgentAssertions mergedAgents
+        mkAgentAssertions mergedAgents
         ++ mkExecpolicyAssertions cfg.execpolicyRules
         ++ mkProfileAssertions cfg.profiles
         ++ mkBetaPermissionLockout "ai.codex.nativeSettings" cfg.nativeSettings
         ++ [
-          (mkSizeAssertion {inherit agentsMd cfg mergedInstructions mergedRules topContext;})
           {
             assertion = mergedServers == {} || !hasNativeMcpServers;
             message = "ai.codex.nativeSettings.mcp_servers cannot be combined with ai.mcpServers/ai.codex.mcpServers; declare native extensions under each server's codex block";
@@ -1157,9 +1097,6 @@ in
           }
         ];
       files = lib.mkMerge [
-        (lib.mkIf (agentsMd != "") {
-          "AGENTS.md".text = agentsMd;
-        })
         (helpers.mkDevenvSkillEntries ".agents" mergedSkills)
         (mkAgentEntries ".codex" mergedAgents)
         (mkExecpolicyEntries ".codex" cfg.execpolicyRules)

@@ -21,7 +21,7 @@ The actual transformation surface includes at least:
 | Shared settings → ecosystem keys            | `ai.settings.model` → `programs.kiro-cli.settings.chat.defaultModel` (**Rejected:** models are ecosystem-specific; no normalized ai.settings was implemented (see WS5).) | data → data                    |
 | Shared LSP servers → ecosystem schema       | `ai.lspServers.*` → `mkCopilotLspConfig` vs `mkLspConfig`                                                                                                                | data → data (different shapes) |
 | Shared env vars → ecosystem options or skip | `ai.environmentVariables` → `programs.copilot-cli.environmentVariables` (Claude skips)                                                                                   | data → data (or noop)          |
-| Shared instructions → markdown bytes        | `ai.instructions` → `<frontmatter>` + body with link rewriting                                                                                                           | data → bytes                   |
+| Shared rules → markdown bytes               | `ai.rules` → `<frontmatter>` + body with link rewriting                                                                                                                  | data → bytes                   |
 | Markdown bytes → on-disk file               | rendered string → `~/.claude/rules/foo.md`                                                                                                                               | bytes → file (per backend)     |
 | Shared skills → on-disk dir layout          | `ai.skills.foo = ./path` → `~/.claude/skills/foo/` (HM) vs `<project>/.claude/skills/foo/` (devenv)                                                                      | path → file (per backend)      |
 
@@ -919,9 +919,9 @@ Useful for personal/quick ecosystems where building a full record is overkill.
 
             # Shared across all enabled ecosystems
             skills.stack-fix = ./skills/stack-fix;
-            instructions.standards = {
+            rules.standards = {
               text = "Use strict mode everywhere";
-              paths = [ "src/**" ];
+              matcher = [ "src/**" ];
             };
             mcpServers.git-mcp = { command = "git-mcp-server"; };
 
@@ -1424,10 +1424,9 @@ Out of scope, documented so we don't forget what was deliberately left out:
   `services.mcp-servers` module with its credential machinery and per-server
   typed settings. The two coexist (see open question 8). Migration or
   unification is a separate, larger discussion.
-- **Memory / instruction file consolidation**: `ai.claude` has `memory.text`
-  exposure that's separate from `ai.instructions`. Cleanup is an open backlog
-  item but separate from this refactor. Once memory becomes a shared option
-  category, it drops into the same layered-pool pattern automatically.
+- **Context/rule consolidation**: the shipped typed `ai.context` record and
+  keyed `ai.rules` pool now own normalized Markdown guidance. Runtime-native
+  memory surfaces remain separate where a product exposes them.
 - **Plugin system**: nothing in this proposal touches the Claude Code
   plugin/skill installation paths. Those are delegated through
   `programs.claude-code.skills` and stay unchanged. If plugins eventually become

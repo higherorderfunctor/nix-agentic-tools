@@ -9,7 +9,7 @@
 #
 # Keeping them as two copies meant every change to the shared option
 # surface had to be made twice, and the two had already drifted — the
-# devenv copy's `mcpServers`, `instructions`, `skills` and `skillsDir`
+# devenv copy's `mcpServers`, `rules`, `skills` and `skillsDir`
 # descriptions had lost the merge semantics the HM copy documented,
 # even though both run the SAME merge code. Unifying on the fuller
 # text makes the devenv option docs correct rather than terse.
@@ -21,11 +21,13 @@
 #     defaults ? {package};
 #     options ? {};            # shared across backends
 #     supportedPools ? [];      # normalized ai.* pools this runtime consumes
+#     contextDescription ? null;
+#     rulesDescription ? null;
 #     <backend> ? {
 #       options ? {};          # backend-only option additions
 #       defaults ? {};         # backend-only default overrides
 #       config ? _: {};        # consumer callback:
-#                              #   {cfg, config, merged*, topContext, topHooks,
+#                              #   {cfg, config, merged*, mergedContext, topHooks,
 #                              #    resolvedSettings}
 #                              #   → module attrs
 #     };
@@ -257,18 +259,14 @@
     GIT_SSH_COMMAND = sandboxSshCommand;
   };
 
-  mergedInstructions =
-    if supportsPool "instructions"
-    then config.ai.instructions ++ cfg.instructions
-    else [];
   mergedSkills = skillsMerge.merged;
   mergedRules = rulesMerge.merged;
   mergedLspServers = lspMerge.merged;
   mergedEnvironmentVariables = envMerge.merged;
   mergedAgents = agentsMerge.merged;
-  topContext =
+  mergedContext =
     if supportsPool "context"
-    then config.ai.context
+    then aiCommon.composeContent [config.ai.context cfg.context]
     else null;
   topHooks =
     if supportsPool "hooks"
@@ -287,7 +285,7 @@
   # options — e.g. the devenv materializer's conditional `devenv:files`
   # task edge needs `config.files != {}`.
   customConfig = backendConfigFn {
-    inherit cfg config mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables moduleEnvironmentVariables mergedAgents resolvedSettings resolvedShell topContext topHooks;
+    inherit cfg config mergedServers mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables moduleEnvironmentVariables mergedAgents mergedContext resolvedSettings resolvedShell topHooks;
   };
 in {
   options.ai.${appRecord.name} =
@@ -337,18 +335,26 @@ in {
         '';
       };
     }
-    // lib.optionalAttrs (supportsPool "instructions") {
-      instructions = lib.mkOption {
-        type = lib.types.listOf aiCommon.instructionModule;
-        default = [];
-        description = "${appRecord.name}-specific instructions (appended to top-level ai.instructions; Kiro supports an explicit inclusion mode).";
+    // lib.optionalAttrs (supportsPool "context") {
+      context = lib.mkOption {
+        type = aiCommon.runtimeContextModule (appRecord.contextFilename or (throw "${appRecord.name}: supportedPools includes context but the app record has no contextFilename"));
+        default = {};
+        apply = aiCommon.validateOptionalContent;
+        description =
+          appRecord.contextDescription or ''
+            ${appRecord.name}-specific context appended after `ai.context` in
+            the runtime's single always-on `${appRecord.contextFilename}` file.
+            Set exactly one of `text` or `source`; `filename` controls the native
+            artifact name.
+          '';
       };
     }
     // lib.optionalAttrs (supportsPool "rules") {
       rules = lib.mkOption {
-        type = lib.types.attrsOf aiCommon.ruleModule;
+        type = lib.types.attrsOf (appRecord.ruleModule or aiCommon.ruleModule);
         default = {};
-        description = "${appRecord.name}-specific rules (merged with top-level ai.rules; collisions fail).";
+        apply = aiCommon.validateRules;
+        description = appRecord.rulesDescription or "${appRecord.name}-specific rules (merged with top-level ai.rules; collisions fail).";
       };
       rulesDir = lib.mkOption {
         type = lib.types.nullOr aiCommon.dirOptionType;

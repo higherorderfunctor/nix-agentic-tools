@@ -3,14 +3,16 @@
 # The old mdbook/NuschtOS site was deliberately removed, but
 # lib/options-doc.nix remains the canonical evaluator for consumer-facing HM
 # and devenv option references. Building both renderings here gives that code a
-# live owner and catches three easy-to-miss regressions:
+# live owner and catches four easy-to-miss regressions:
 #
 #   1. either backend adds, removes, or retypes any `ai.*` option without the
 #      matching change in the other backend;
 #   2. Codex loses one of the reviewed top-level surfaces completed by the
 #      configuration-parity roadmap; and
-#   3. a shared-pool description says "every app" while silently forgetting
-#      either Codex support or an intentional Codex exclusion.
+#   3. a shared-pool description silently forgets either Codex support or a
+#      deliberate runtime exclusion; and
+#   4. the retired normalized `instructions` surface reappears while preserving
+#      otherwise exact HM/devenv parity.
 #
 # Exact option-tree parity is appropriate here even where runtime behavior
 # differs. Backend-specific boundaries such as Home Manager-only profile
@@ -39,7 +41,6 @@
       "ai.codex.environmentVariables"
       "ai.codex.execpolicyRules"
       "ai.codex.hooks"
-      "ai.codex.instructions"
       "ai.codex.mcpServers"
       "ai.codex.nativeSettings"
       "ai.codex.package"
@@ -60,7 +61,6 @@
     "ai.context"
     "ai.environmentVariables"
     "ai.hooks"
-    "ai.instructions"
     "ai.lspServers"
     "ai.mcpServers"
     "ai.rules"
@@ -71,6 +71,14 @@
     "ai.shell"
     "ai.skills"
     "ai.skillsDir"
+  ];
+  sharedDescriptionsThatMustDiscussKimchi = [
+    "ai.context"
+    "ai.rules"
+  ];
+  copilotDescriptionsThatMustDiscussHmNoop = [
+    "ai.copilot.context"
+    "ai.copilot.rules"
   ];
 in {
   options-doc-ai-parity = pkgs.runCommand "options-doc-ai-parity" {} ''
@@ -112,6 +120,15 @@ in {
     ' "${hmJson}" | "$sort" -u > actual-codex-option-roots
     "$diff" -u "${expectedCodexRoots}" actual-codex-option-roots
 
+    # Semantic-agent `.instructions` fields and the separate
+    # `semble.instructions` feature remain valid. Only the normalized root and
+    # per-runtime guidance surface was retired.
+    ${lib.concatMapStringsSep "\n" (name: ''
+        ! "$jq" --exit-status --arg name "${name}" 'has($name)' "${hmJson}" >/dev/null
+        ! "$jq" --exit-status --arg name "${name}" 'has($name)' "${devenvJson}" >/dev/null
+      '')
+      (["ai.instructions"] ++ map (runtime: "ai.${runtime}.instructions") runtimes)}
+
     # Internal module-to-runtime channels must remain absent from both
     # consumer-facing references even though they are declared symmetrically.
     ! "$grep" -Fq '_integration_writable_roots' "${hmJson}"
@@ -135,6 +152,22 @@ in {
           '.[$name].description | contains("Codex")' "${devenvJson}" >/dev/null
       '')
       sharedDescriptionsThatMustDiscussCodex}
+
+    ${lib.concatMapStringsSep "\n" (name: ''
+        "$jq" --exit-status --arg name "${name}" \
+          '.[$name].description | contains("Kimchi")' "${hmJson}" >/dev/null
+        "$jq" --exit-status --arg name "${name}" \
+          '.[$name].description | contains("Kimchi")' "${devenvJson}" >/dev/null
+      '')
+      sharedDescriptionsThatMustDiscussKimchi}
+
+    ${lib.concatMapStringsSep "\n" (name: ''
+        "$jq" --exit-status --arg name "${name}" \
+          '.[$name].description | contains("Home Manager") and contains("no-op")' "${hmJson}" >/dev/null
+        "$jq" --exit-status --arg name "${name}" \
+          '.[$name].description | contains("Home Manager") and contains("no-op")' "${devenvJson}" >/dev/null
+      '')
+      copilotDescriptionsThatMustDiscussHmNoop}
 
     # The successful check output is also the requested machine-readable parity
     # report: one complete, sorted contract shared by both backends.

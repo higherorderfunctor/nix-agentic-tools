@@ -20,40 +20,15 @@
   mcpLib = import ../../../lib/mcp.nix {inherit lib;};
 
   # Shared per-backend data prep. hm.config and devenv.config derive the
-  # same settings/env/instruction values from the merged inputs the
+  # same settings/env/context values from the merged inputs the
   # transform injects — compute them once here instead of duplicating.
   mkPrep = {
     cfg,
-    mergedInstructions,
     mergedEnvironmentVariables,
     moduleEnvironmentVariables ? {},
-    topContext,
+    mergedContext,
   }: let
-    effectiveContext =
-      if cfg.context != null
-      then cfg.context
-      else topContext;
-    hasContext = effectiveContext != null && effectiveContext != "";
-
-    contextText =
-      if hasContext
-      then
-        if builtins.isPath effectiveContext
-        then builtins.readFile effectiveContext
-        else toString effectiveContext
-      else "";
-
-    instructionTexts =
-      map (
-        frag:
-          if frag ? text
-          then
-            if builtins.isPath frag.text
-            then builtins.readFile frag.text
-            else toString frag.text
-          else ""
-      )
-      mergedInstructions;
+    contextEntry = aiCommon.contentFileEntry mergedContext;
 
     # Non-secret env vars — baked into the wrapper via `--set`.
     kimchiEnvVars =
@@ -95,9 +70,9 @@
       '';
     };
   in {
+    inherit contextEntry;
     filteredSettings = aiCommon.filterNulls cfg.nativeSettings;
     filteredHarnessSettings = aiCommon.filterNulls cfg.harnessSettings;
-    allAgencyTexts = lib.filter (s: s != "") ([contextText] ++ instructionTexts);
     package =
       if wrapArgs != []
       then wrappedPackage
@@ -108,10 +83,10 @@ in
     # Carried as DATA, not a module argument — see mkAiApp.nix.
     inherit pkgs;
     name = "kimchi";
+    contextFilename = "AGENTS.md";
     supportedPools = [
       "context"
       "environmentVariables"
-      "instructions"
       "mcpServers"
       "settings"
       "skills"
@@ -122,15 +97,6 @@ in
       outputPath = null;
     };
     options = {
-      context = lib.mkOption {
-        type = lib.types.nullOr (lib.types.either lib.types.lines lib.types.path);
-        default = null;
-        description = ''
-          Kimchi-scope global context. Inline string or path to a file.
-          Written to <configDir>/harness/AGENTS.md with no frontmatter.
-          When null, falls back to top-level ai.context.
-        '';
-      };
       configDir = lib.mkOption {
         type = lib.types.str;
         default = ".config/kimchi";
@@ -251,15 +217,14 @@ in
       config = {
         cfg,
         mergedServers,
-        mergedInstructions,
         mergedSkills,
         mergedEnvironmentVariables,
         moduleEnvironmentVariables,
-        topContext,
+        mergedContext,
         ...
       }: let
-        prep = mkPrep {inherit cfg mergedInstructions mergedEnvironmentVariables moduleEnvironmentVariables topContext;};
-        inherit (prep) filteredSettings filteredHarnessSettings allAgencyTexts;
+        prep = mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;};
+        inherit (prep) contextEntry filteredSettings filteredHarnessSettings;
       in
         lib.mkMerge [
           # Package installation — wrapped to inject env + the runtime secret.
@@ -293,9 +258,9 @@ in
             };
           })
 
-          # harness/AGENTS.md — orientation context (instructions + top-level context).
-          (lib.mkIf (allAgencyTexts != []) {
-            home.file."${cfg.configDir}/harness/AGENTS.md".text = lib.concatStringsSep "\n\n" allAgencyTexts;
+          # harness/AGENTS.md — orientation context.
+          (lib.mkIf (contextEntry != null) {
+            home.file."${cfg.configDir}/harness/${cfg.context.filename}" = contextEntry;
           })
 
           # harness/skills/ — Layout B via mkSkillEntries.
@@ -310,15 +275,14 @@ in
       config = {
         cfg,
         mergedServers,
-        mergedInstructions,
         mergedSkills,
         mergedEnvironmentVariables,
         moduleEnvironmentVariables,
-        topContext,
+        mergedContext,
         ...
       }: let
-        prep = mkPrep {inherit cfg mergedInstructions mergedEnvironmentVariables moduleEnvironmentVariables topContext;};
-        inherit (prep) filteredSettings filteredHarnessSettings allAgencyTexts;
+        prep = mkPrep {inherit cfg mergedContext mergedEnvironmentVariables moduleEnvironmentVariables;};
+        inherit (prep) contextEntry filteredSettings filteredHarnessSettings;
       in
         lib.mkMerge [
           # Package installation — wrapped to inject env + the runtime
@@ -343,8 +307,8 @@ in
           })
 
           # harness/AGENTS.md.
-          (lib.mkIf (allAgencyTexts != []) {
-            files."${cfg.configDir}/harness/AGENTS.md".text = lib.concatStringsSep "\n\n" allAgencyTexts;
+          (lib.mkIf (contextEntry != null) {
+            files."${cfg.configDir}/harness/${cfg.context.filename}" = contextEntry;
           })
 
           # harness/skills/ — devenv recursive walk.

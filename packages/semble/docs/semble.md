@@ -96,10 +96,10 @@ Shebang-based inference is deliberately out of scope. Extensionless scripts must
 be listed through `pathMappings`; the integration does not read file contents to
 guess their language.
 
-Any active integration installs `semble.package`. Named MCP and subagent entries
-use `mkDefault`, so consumers can refine their generated values. Claude and
-Codex compose the guidance into their single always-loaded `CLAUDE.md` and
-`AGENTS.md` files. Kiro receives a named instruction and writes it to
+Any active integration installs `semble.package`. Named MCP, subagent, and rule
+entries use `mkDefault`, so consumers can refine their generated values. Claude
+and Codex compose the guidance into their single always-loaded `CLAUDE.md` and
+`AGENTS.md` files. Kiro receives the same named rule and writes it to
 `.kiro/steering/semble.md`.
 
 Home Manager fixes the global cache at `${config.xdg.cacheHome}/semble`, even on
@@ -166,12 +166,12 @@ in {
       content = "docs";
     };
     agents.semble-search = nat.lib.ai.semble.semanticAgent;
-    instructions = [nat.lib.ai.semble.instruction];
+    rules.semble = nat.lib.ai.semble.rule;
   };
 
   ai.kiro = {
     agents.semble-search = nat.lib.ai.semble.kiroAgent;
-    instructions = [nat.lib.ai.semble.kiroInstruction];
+    rules.semble = nat.lib.ai.semble.rule;
   };
 }
 ```

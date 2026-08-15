@@ -4,7 +4,8 @@
 # - paths: null   → applyTo = "**" (always-loaded)
 # - paths: list   → applyTo = comma-joined glob string
 # - paths: string → applyTo = raw string (pre-quoted)
-# - description is intentionally ignored — Copilot frontmatter is just applyTo.
+# - description is retained in the normalized record but intentionally omitted
+#   from Copilot frontmatter to preserve the existing devenv output bytes.
 {lib}: let
   fragments = import ../../fragments.nix {inherit lib;};
 in rec {

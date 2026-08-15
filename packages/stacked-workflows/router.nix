@@ -1,9 +1,8 @@
-# Stacked-workflow router: the skill-routing instruction contributed to
-# `ai.instructions` (→ Claude CLAUDE.md, Kiro steering, Copilot instructions).
+# Stacked-workflow router: the always-on rule contributed to `ai.rules`.
 # Shared by the HM (user-global) and devenv (project) modules so the router
 # content stays single-source.
 #
-# This instruction is ALWAYS-LOADED in every ecosystem (`paths = null` → Kiro
+# This rule is ALWAYS-LOADED in every ecosystem (`matcher = null` → Kiro
 # `inclusion: always`, Claude no `paths:` key), so its size is a per-turn tax on
 # every session in every consumer. It is therefore deliberately kept to the ONE
 # thing a skill description cannot express, and holds neither of these:
@@ -41,7 +40,7 @@
   description = "Requires checking stack-* skill coverage before hand-running git-branchless, git-absorb, or git-revise";
   composed = fragments.compose {
     # Named EXPLICITLY, not `attrValues passthru.fragments`. This composes an
-    # ALWAYS-LOADED instruction, so a blanket attrValues would silently enrol
+    # ALWAYS-LOADED rule, so a blanket attrValues would silently enrol
     # any fragment later added to stacked-workflows-content into every session's
     # per-turn cost — re-inflating exactly what the header comment explains was
     # cut. Opting a new fragment in has to be a deliberate edit here, and the
@@ -49,10 +48,9 @@
     fragments = [swsContent.passthru.fragments.skill-routing];
     inherit description;
   };
-in [
-  {
-    name = "stacked-workflows";
+in {
+  stacked-workflows-router = {
     inherit (composed) text;
     inherit description;
-  }
-]
+  };
+}

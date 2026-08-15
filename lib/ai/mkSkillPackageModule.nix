@@ -1,7 +1,7 @@
 # Factory for a skill-packaging module.
 #
 # Declares `<name>.enable` and, when enabled, contributes skills (and optionally
-# a router instruction) to the PER-RUNTIME `ai.<runtime>.*` pools of every
+# a router rule) to the PER-RUNTIME `ai.<runtime>.*` pools of every
 # runtime present in the evaluation — never to the root `ai.*` pools. See
 # "Contributions land PER RUNTIME" below for why that distinction is load-
 # bearing rather than stylistic.
@@ -29,8 +29,8 @@
 #                       ai.skills fanout helpers (upstream `mkSkillEntry`, our
 #                       `mkSkillEntries` / `mkDevenvSkillEntries`) materialize
 #                       both as recursive directories.
-#   instructions      : moduleArgs -> listOf attrs. OPTIONAL router entries for
-#                       ai.instructions. These are ALWAYS-LOADED in every
+#   rules             : moduleArgs -> attrsOf rule. OPTIONAL router entries for
+#                       ai.rules. These are ALWAYS-LOADED in every
 #                       ecosystem, so they are a per-turn tax on every session
 #                       and the bar is high: provide one only for a rule that
 #                       must hold BEFORE the model considers a skill at all,
@@ -46,8 +46,9 @@
 # ── Contributions land PER RUNTIME, never on the root pool ──
 #
 # Each skill value is wrapped in `lib.mkDefault`, so a consumer can override an
-# individual key at normal priority. The key to override is
-# `ai.<runtime>.skills.<name>` — NOT `ai.skills.<name>`, which is a hard
+# individual key at normal priority. Override skills through
+# `ai.<runtime>.skills.<name>` and router rules through
+# `ai.<runtime>.rules.<name>` — NOT the corresponding root key, which is a hard
 # evaluation error rather than an override. That is worth stating plainly
 # because the failure is counter-intuitive: `mergeWithCollisionCheck`
 # (lib/ai/ai-common.nix) decides collisions with `builtins.intersectAttrs`,
@@ -65,15 +66,7 @@
 #
 # ── Two consequences of the move, both deliberate ──
 #
-# 1. ALWAYS-LOADED INSTRUCTION ORDER FLIPS. `mkBackendTransform.nix` composes
-#    `config.ai.instructions ++ cfg.instructions`, so a contribution that used
-#    to sit in the left operand now sits in the right one: this package's
-#    router instruction now renders AFTER a consumer's own root instructions
-#    rather than before them. Accepted — a routing rule's position inside the
-#    always-loaded block carries no semantics, and no ordering contract is
-#    stated anywhere for that pool.
-#
-# 2. THE WRITE IS GATED ON OPTION PRESENCE. A per-runtime write requires that
+# 1. THE WRITE IS GATED ON OPTION PRESENCE. A per-runtime write requires that
 #    runtime's module to be in the SAME evaluation, and nothing guarantees it:
 #    `flake.nix` collects every facet so the published module set has all five,
 #    but a consumer importing modules individually may have fewer, and the
@@ -91,7 +84,7 @@ spec: {
   moduleArgs = {inherit config lib pkgs;};
 
   skillEntries = lib.mapAttrs (_: lib.mkDefault) (spec.skills moduleArgs);
-  instructionEntries = lib.optionals (spec ? instructions) (spec.instructions moduleArgs);
+  ruleEntries = lib.mapAttrs (_: lib.mkDefault) ((spec.rules or (_: {})) moduleArgs);
 
   # Runtimes whose per-runtime pools exist in THIS evaluation. Probing
   # `options` rather than a hardcoded list keeps the module honest about what
@@ -99,20 +92,24 @@ spec: {
   # `lib/ai/sharedOptions.nix` to detect Home Manager's Git surface.
   #
   # Safe against the `_module.args` recursion that this repo has hit before:
-  # the per-runtime `skills` / `instructions` options come from the shared
+  # the per-runtime `skills` / `rules` options come from the shared
   # baseline in `lib/ai/app/mkBackendTransform.nix`, which derives its option
   # surface from the app RECORD at build time and never reads `config`.
-  presentRuntimes =
+  presentSkillRuntimes =
     lib.filter
     (runtime: lib.hasAttrByPath ["ai" runtime "skills"] options)
+    (import ./runtimes.nix);
+  presentRuleRuntimes =
+    lib.filter
+    (runtime: lib.hasAttrByPath ["ai" runtime "rules"] options)
     (import ./runtimes.nix);
 in {
   options.${spec.name}.enable = lib.mkEnableOption spec.enableDescription;
 
   config = lib.mkIf cfg.enable {
-    ai = lib.genAttrs presentRuntimes (_runtime: {
-      skills = skillEntries;
-      instructions = instructionEntries;
-    });
+    ai = lib.mkMerge [
+      (lib.genAttrs presentSkillRuntimes (_runtime: {skills = skillEntries;}))
+      (lib.genAttrs presentRuleRuntimes (_runtime: {rules = ruleEntries;}))
+    ];
   };
 }

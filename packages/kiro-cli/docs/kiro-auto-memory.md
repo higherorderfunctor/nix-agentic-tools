@@ -1,8 +1,11 @@
 # Kiro-CLI auto-memory
 
-> **Last verified:** 2026-08-05 (commit pending — every destructive materializer
-> phase now holds one backend state-directory advisory lock. Devenv holds it
-> across sweep→prune→write; HM reacquires it for its separated phases. Hooks and
+> **Last verified:** 2026-08-15 (commit pending — auto-memory's always-on
+> steering rule now uses the normalized keyed-rule shape: an absent matcher
+> lowers to `inclusion: always`; the retired `paths = null` field is gone).
+> Prior: 2026-08-05 (commit pending — every destructive materializer phase now
+> holds one backend state-directory advisory lock. Devenv holds it across
+> sweep→prune→write; HM reacquires it for its separated phases. Hooks and
 > steering run in parallel under devenv; without the lock, PR #794's hooks task
 > swept steering's live manifest temp between `mktemp` and `mv`. The lock is
 > deliberately cross-surface and process-owned, so it also guards duplicate
@@ -364,7 +367,7 @@ or this hook.
     loads neither, and the retired whole-dir prune never removed either.
 - `ai.kiro.rules` — attrs-shape ai-common ruleModule → an entry in the derived
   `ai.kiro.steeringFiles` attrset (key `<name>.md`, rendered with
-  `inclusion:`/`fileMatchPattern:` frontmatter; `paths=null` →
+  `inclusion:`/`fileMatchPattern:` frontmatter; no matcher →
   `inclusion: always`), BOTH backends. The shared strategy-driven materializer
   (`lib/ai/materialize.nix`) delivers it as a read-only REAL file under
   `<configDir>/steering/` (copy strategy default;

@@ -1,21 +1,23 @@
 # Unified Instructions Surface — Research, Design & Status
 
-> **Status:** context + rules ship across Claude / Codex / Copilot / Kiro with
-> Home Manager and devenv backends. Codex lowers flat AGENTS.md content with
-> explicit scope degradation and a byte-size guard. Research captured
-> 2026-04-17; original implementation commits 8f0c16b, 7dad0b8, 419010a
-> (2026-04-21); Codex implementation landed in PRs #657, #658, and #668
-> (2026-08-01).
+> **Status:** typed context ships across Claude / Codex / Copilot / Kimchi /
+> Kiro with Home Manager and devenv option parity; Copilot Home Manager is a
+> deliberate no-op. Keyed rules ship for Claude / Codex / Copilot / Kiro; Kimchi
+> has no rules pool. Codex lowers flat AGENTS.md content with explicit scope
+> degradation and a byte-size guard. Research captured 2026-04-17; original
+> implementation commits 8f0c16b, 7dad0b8, 419010a (2026-04-21); Codex
+> implementation landed in PRs #657, #658, and #668 (2026-08-01). The
+> typed-content/keyed-rule redesign landed in 2026-08: the list-shaped
+> `instructions` surface is retired rather than aliased.
 >
-> **Goal:** add a unified `ai.<cli>.{context,rules}` surface to the factory that
-> fans out personal/global instruction content to every enabled ecosystem,
-> respecting each ecosystem's native conventions and degrading gracefully where
-> features differ.
+> **Goal:** provide a unified `ai.<cli>.{context,rules}` surface that fans out
+> personal/global guidance to every capable enabled ecosystem, respecting each
+> ecosystem's native conventions and documenting deliberate exclusions.
 
 ## Motivation
 
-The factory currently exposes `ai.kiro.instructions` (list-shaped) as a stub.
-Consumers still hand-roll steering via `mkOutOfStoreSymlink`. The problem isn't
+The original factory exposed `ai.kiro.instructions` (list-shaped) as a stub, and
+consumers hand-rolled steering via `mkOutOfStoreSymlink`. The problem wasn't
 Kiro-specific — Claude, Copilot, and Codex each have their own filename
 conventions, directory layouts, and frontmatter dialects for personal
 instructions. A unified surface lets a consumer write one config and have it
@@ -24,11 +26,11 @@ know each vendor's idiosyncrasies.
 
 ## Generalized transformer pattern
 
-This document describes the **instructions** instance of a broader architectural
-pattern that applies to every cross-ecosystem concern in the factory. Apply the
-same shape to:
+This document describes the **context and rules** instance of a broader
+architectural pattern that applies to every cross-ecosystem concern in the
+factory. Apply the same shape to:
 
-- **Instructions** (`ai.context` + `ai.rules`) — this document.
+- **Guidance** (`ai.context` + `ai.rules`) — this document.
 - **MCP servers** (`ai.mcpServers` + `ai.<cli>.mcpServers`) — typed schema at
   `lib/ai/mcpServer/commonSchema.nix`; per-ecosystem `renderServer` translates
   typed shape → native on-disk form (Claude's `programs.claude-code.mcpServers`,
@@ -215,12 +217,12 @@ Symmetric top-level and per-ecosystem shape:
 
 ```nix
 # Top-level (fans to every enabled ecosystem)
-ai.context     = str | path;                         # optional
-ai.rules.<name> = { text; paths?; description?; inclusion?; }; # optional
+ai.context = { text = "..."; }; # exactly one of text/source
+ai.rules.<name> = { text = "..."; matcher = ["src/**"]; };
 
 # Per-ecosystem (additive; wins on name collision)
-ai.<cli>.context     = str | path;                   # optional
-ai.<cli>.rules.<name> = { text; paths?; description?; };
+ai.<cli>.context = { source = ./CONTEXT.md; filename = "AGENTS.md"; };
+ai.<cli>.rules.<name> = { source = ./rule.md; matcher = null; };
 ```
 
 **Type of each rule entry:**
@@ -229,10 +231,16 @@ ai.<cli>.rules.<name> = { text; paths?; description?; };
 rules.<name> = lib.types.submodule {
   options = {
     text = lib.mkOption {
-      type = lib.types.either lib.types.str lib.types.path;
-      description = "Inline content or path to a .md file.";
+      type = lib.types.nullOr lib.types.lines;
+      default = null;
+      description = "Inline Markdown content; mutually exclusive with source.";
     };
-    paths = lib.mkOption {
+    source = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Markdown file source; mutually exclusive with text.";
+    };
+    matcher = lib.mkOption {
       type = lib.types.nullOr (lib.types.listOf lib.types.str);
       default = null;
       description = ''
@@ -245,22 +253,14 @@ rules.<name> = lib.types.submodule {
       default = "";
       description = "Short description (used by Kiro frontmatter).";
     };
-    skipIfUnsupported = lib.mkOption {
-      type = lib.types.bool;
-      default = false;
-      description = ''
-        If true, silently drop this entry when fanning to ecosystems that
-        don't support path scoping natively. Default false degrades the scope
-        to explicit prose when the target supports that lowering.
-      '';
-    };
   };
 };
 ```
 
-**Effective value per ecosystem:** per-CLI `context` overrides top-level
-`context` when set. Top-level and per-CLI `rules` are additive only for distinct
-names; duplicate names fail the shared collision check.
+**Effective value per ecosystem:** root and per-runtime context concatenate
+root-first into one runtime-named artifact. Top-level and per-CLI `rules` are
+additive only for distinct names; duplicate names fail the shared collision
+check.
 
 ### Kiro context filename override
 
@@ -268,23 +268,19 @@ Kiro has no dominant single-file convention globally. The factory defaults to
 AGENTS.md (Kiro reads it natively from `~/.kiro/steering/`) but allows override:
 
 ```nix
-ai.kiro.contextFilename = lib.mkOption {
-  type = lib.types.str;
-  default = "AGENTS.md";
-  description = "Filename for ai.kiro.context inside ~/.kiro/steering/.";
-};
+ai.kiro.context.filename = "AGENTS.md";
 ```
 
 ## Fanout semantics per ecosystem
 
-|             | `context` →                                              | `rules.<name>` →                                                                 |
-| ----------- | -------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| **Claude**  | `~/.claude/CLAUDE.md`                                    | `~/.claude/rules/<name>.md` with `paths:` frontmatter if set                     |
-| **Kiro**    | `~/.kiro/steering/<contextFilename>` (default AGENTS.md) | `~/.kiro/steering/<name>.md` with `inclusion:` + `fileMatchPattern:` frontmatter |
-| **Copilot** | `~/.copilot/copilot-instructions.md`                     | **concat** into `copilot-instructions.md` after `context` (no global dir)        |
-| **Codex**   | `~/.codex/AGENTS.md`                                     | **concat** into `AGENTS.md` after `context` (no dir, no scoping)                 |
+|             | `context` →                                                               | `rules.<name>` →                                                                 |
+| ----------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| **Claude**  | `~/.claude/CLAUDE.md`                                                     | `~/.claude/rules/<name>.md` with `paths:` frontmatter when matched               |
+| **Kiro**    | HM `~/.kiro/steering/AGENTS.md`; devenv repo-root `AGENTS.md`             | `~/.kiro/steering/<name>.md` with `inclusion:` + `fileMatchPattern:` frontmatter |
+| **Copilot** | devenv `.github/copilot-instructions.md`; Home Manager deliberately no-op | devenv `.github/instructions/<name>.instructions.md`; Home Manager no-op         |
+| **Codex**   | HM `~/.codex/AGENTS.md`; devenv repo-root `AGENTS.md`                     | **concat** into the same AGENTS.md after context                                 |
 
-### Concat format (Copilot-global, Codex)
+### Concat format (Codex and shared repo-root AGENTS.md)
 
 Rules ordered alphabetically by attribute name (aligns with numeric-prefix
 conventions like `00-`, `01-`, …). Each chunk prefixed with an HTML comment
@@ -302,10 +298,10 @@ marker for traceability:
 double-heading degrades readability. HTML comments are searchable,
 model-visible, and non-mangling.
 
-### Path-scope degradation (non-native ecosystems)
+### Matcher degradation (flat AGENTS.md ecosystems)
 
-When a rule has `paths != null` and fans to Codex or Copilot-global (neither
-supports path scoping), **bake the scope into the prose**:
+When a rule has `matcher != null` and fans to Codex, **bake the scope into the
+prose**:
 
 ```markdown
 <!-- rule: git-ops -->
@@ -321,9 +317,8 @@ This degrades gracefully — native ecosystems emit real frontmatter, non-native
 ones get readable prose the model will follow. Content isn't silently dropped;
 intent is preserved.
 
-**Opt-out:** `skipIfUnsupported = true` — rule is omitted from non-scoping
-ecosystems entirely. Default is to include-with-prose so bugs don't ship
-silently.
+The shared repo-root AGENTS.md admits only unscoped rule units. Kiro emits its
+scoped rules separately with native `fileMatch` metadata.
 
 ## Codex size guard
 
@@ -354,20 +349,16 @@ override file.
    - **Claude:** context delegates to `programs.claude-code.context`; rules emit
      to `.claude/rules/<name>.md` via `claudeTransformer`. Shipped 8f0c16b,
      7dad0b8.
-   - **Kiro:** context → `<configDir>/steering/<contextFilename>` (AGENTS.md
-     default); rules → `<configDir>/steering/<name>.md` via `kiroTransformer`.
-     Shipped 8f0c16b, 7dad0b8.
-   - **Copilot:** context → `<configDir>/<contextFilename>`
-     (copilot-instructions.md default); rules →
-     `<configDir>/instructions/<name>.instructions.md` on Home Manager and
-     `<projectDir>/instructions/<name>.instructions.md` on devenv, via
-     `copilotTransformer`. Shipped 7dad0b8, 419010a; the Home Manager arm was a
-     hardcoded `.github/instructions/` until #920 — under HM that resolved to
-     `$HOME/.github/`, which copilot-cli never reads.
-   - **Codex:** shared/per-app context, instructions, and rules lower into
-     `~/.codex/AGENTS.md` for Home Manager and project-root `AGENTS.md` for
-     devenv. Scoped content degrades to explicit prose unless
-     `skipIfUnsupported = true` omits it.
+   - **Kiro:** context → HM `<configDir>/steering/AGENTS.md` or devenv repo-root
+     `AGENTS.md`; rules → `<configDir>/steering/<name>.md` via
+     `kiroTransformer`.
+   - **Copilot:** devenv context → `<projectDir>/<context.filename>` and rules →
+     `<projectDir>/instructions/<name>.instructions.md` via
+     `copilotTransformer`. Home Manager keeps the identical typed options for
+     schema parity but deliberately emits neither surface.
+   - **Codex:** shared/per-app context and rules lower into `~/.codex/AGENTS.md`
+     for Home Manager and project-root `AGENTS.md` for devenv. Scoped content
+     degrades to explicit prose.
 4. **Codex size guard** — shipped as an eval-time byte assertion against
    `ai.codex.projectDocMaxBytes` (32 KiB by default), with rendered and
    per-contribution size diagnostics.
@@ -376,14 +367,8 @@ override file.
    `ai.kiro.rules = builtins.mapAttrs (…) (builtins.readDir …)` on their own
    steering directory.
 
-### Not yet shipped
-
-- **Copilot-global concat** — Copilot rules emit one file per rule with native
-  `applyTo:`, under `projectDir` at project scope and under `configDir` at user
-  scope. There is no global concat target requiring Codex-style prose
-  degradation.
-- **Deprecation of legacy `ai.instructions` list-shape** — `instructions` and
-  `rules` coexist today. Deprecation warning and migration guide not yet added.
+The legacy `ai.instructions` list shape is retired without an alias. Package
+guidance now contributes named per-runtime rules at `mkDefault` priority.
 
 ## Original scope and adjacent-surface status
 
@@ -399,7 +384,7 @@ forced through Markdown. Their current disposition is:
   Claude, Codex, and Copilot; Codex renders standalone TOML. Legacy Markdown
   remains Claude/Copilot-only, and Kiro's incompatible JSON agent model remains
   native-only.
-- **Project-scope instructions — shipped through devenv.** The same option names
+- **Project-scope guidance — shipped through devenv.** The same option names
   route to project-native paths such as root `AGENTS.md`, `.kiro/steering/`, and
   `.github/instructions/` rather than Home Manager's user-global paths.
 - **Claude `CLAUDE.local.md`** — gitignored append-after-CLAUDE.md file. Could
