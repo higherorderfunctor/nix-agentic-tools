@@ -47,19 +47,23 @@
   };
   sandboxSafeSshCommand = lib.getExe sandboxSafeSsh;
 in {
+  imports = [./app/sharedAgentsMd.nix];
+
   options.ai = {
     context = lib.mkOption {
-      type = lib.types.nullOr (lib.types.either lib.types.lines lib.types.path);
-      default = null;
+      # An empty record is the unset value. Wrapping the checked submodule in
+      # `nullOr` would bypass its outer XOR check during nested merging.
+      type = aiCommon.optionalContentModule;
+      default = {};
+      apply = aiCommon.validateOptionalContent;
       description = ''
-        Cross-app global context (single always-on file) fanned out to every
-        enabled AI app. Each ecosystem emits it at its native location:
-        Claude → ~/.claude/CLAUDE.md, Kiro → ~/.kiro/steering/<contextFilename>
-        (default AGENTS.md), Codex → ~/.codex/AGENTS.md (Home Manager) or
-        project-root AGENTS.md (devenv). Per-app overrides
-        (ai.<name>.context) win when set.
+        Cross-app context fanned out to Claude, Codex, Kiro, Kimchi, and the
+        Copilot devenv backend; Copilot Home Manager intentionally degrades.
+        Set exactly one of `text` or `source`. Runtime-specific context appends
+        after this root content in the runtime's single always-on file; its
+        `filename` controls that native artifact.
       '';
-      example = lib.literalExpression "./ai-context.md";
+      example = lib.literalExpression ''{ source = ./ai-context.md; }'';
     };
 
     mcpServers = lib.mkOption {
@@ -92,6 +96,7 @@ in {
     rules = lib.mkOption {
       type = lib.types.attrsOf aiCommon.ruleModule;
       default = {};
+      apply = aiCommon.validateRules;
       description = ''
         Cross-app modular rule files fanned out to every enabled AI app.
         Each attribute becomes one file in the ecosystem's native rules
@@ -100,20 +105,19 @@ in {
         `instructions/<name>.instructions.md` under `ai.copilot.configDir`
         in Home Manager and under `ai.copilot.projectDir` in devenv, because
         Copilot CLI reads its own home while github.com's code review reads
-        the committed project tree). Codex instead appends
-        rules alphabetically to its single AGENTS.md, degrading path scopes to
-        explicit prose unless `skipIfUnsupported` requests omission. Per-app
-        overrides (ai.<name>.rules) merge on top; collisions are a failure.
-        `inclusion` overrides only Kiro's steering load strategy; the other
-        ecosystems continue translating `paths`. Codex rejects empty path lists
-        as ambiguous.
+        the committed project tree). Codex instead appends rules in key order
+        to its single AGENTS.md, translating `matcher` to a prose scope note.
+        Per-app entries merge with the root pool; duplicate keys across those
+        levels are a failure. Set exactly one of `text` or `source` for each
+        rule. Kiro's native `inclusion` override exists only on
+        `ai.kiro.rules`.
       '';
       example = lib.literalExpression ''
         {
           code-style = { text = "Use consistent formatting."; };
           testing = {
-            text = ./rules/testing.md;
-            paths = [ "**/*.test.*" ];
+            source = ./rules/testing.md;
+            matcher = [ "**/*.test.*" ];
             description = "Testing conventions";
           };
         }

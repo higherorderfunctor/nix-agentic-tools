@@ -7,8 +7,13 @@ applyTo: "checks/module-eval.nix,lib/ai/agent.nix,lib/ai/ai-common.nix,lib/ai/ap
 
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — every normalized pool crosses
-> into a runtime only when its app record lists it in `supportedPools`; all five
+> **Last verified:** 2026-08-15 (commit pending — context is a typed
+> `text`-XOR-`source` record that composes root-first with runtime context and
+> names its native artifact per runtime. Rules carry a normalized `matcher`;
+> Claude, Kiro, Copilot, and Codex lower it to native metadata or explicit
+> prose, and devenv AGENTS.md consumers share one keyed deduplicating writer).
+> Prior: 2026-08-15 (commit pending — every normalized pool crosses into a
+> runtime only when its app record lists it in `supportedPools`; all five
 > runtimes now list the closed normalized `settings` submodule, runtime-native
 > passthrough moved to `nativeSettings`, per-runtime fields resolve against the
 > root independently, and Codex integration roots travel through a hidden
@@ -358,17 +363,21 @@ enabled ecosystem whose native model preserves the option's semantics):
   `always`/`fileMatch` from paths when inclusion is null; an explicit
   `always`/`auto`/`fileMatch`/`manual` value overrides only Kiro's load
   strategy, while the other ecosystems continue translating paths normally.
-- `ai.context` — a single global baseline. Codex lowers it to
-  `~/.codex/AGENTS.md` in Home Manager and project-root `AGENTS.md` in devenv;
-  `ai.codex.context` takes precedence when set.
+- `ai.context` — a typed `text`-XOR-`source` global baseline. Each runtime has
+  the same content record plus `filename`; root content precedes runtime content
+  when both are present. Claude defaults to `CLAUDE.md`; Codex, Kiro, and Kimchi
+  default to `AGENTS.md`; Copilot defaults to `copilot-instructions.md`. Copilot
+  emits normalized context only on devenv because its live surface is the
+  repository consumed by github.com, not copilot-cli's user home.
 - `ai.rules` — named Markdown rules. Codex appends these alphabetically to its
-  AGENTS.md with trace comments. Kiro consumes the same typed `inclusion`
-  override as instructions. Scoped Codex rules preserve their intent as an
-  explicit prose prefix unless `skipIfUnsupported = true` omits them. The
-  complete rendered file must fit `ai.codex.projectDocMaxBytes` (32 KiB by
-  default), or evaluation fails with per-contribution byte diagnostics. Codex
-  also rejects `paths = []` as ambiguous; use `null` for always-on content or a
-  non-empty list for scoped content.
+  AGENTS.md after context with trace comments. `matcher = null` means always-on;
+  non-empty glob lists lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot
+  `applyTo`, and a Codex prose scope preamble. Kiro alone retains native
+  `manual`/`auto` inclusion overrides. The complete rendered file must fit
+  `ai.codex.projectDocMaxBytes` (32 KiB by default), or evaluation fails with
+  per-contribution byte diagnostics. Codex also rejects `matcher = []` as
+  ambiguous; use `null` for always-on content or a non-empty list for scoped
+  content.
 - `ai.mcpServers` — typed MCP definitions merged with
   `ai.<ecosystem>.mcpServers`. Codex lowers the merged pool to native
   `[mcp_servers.<name>]` TOML tables in both backends. It reuses the common MCP
@@ -585,18 +594,22 @@ after a consumer's own root instructions rather than before them.
 
 ## ai.\* Collision Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — collision checks follow each
-> app record's `supportedPools`, while normalized `ai.settings` is a
-> scalar-field exception: each nullable field resolves independently, with a
-> non-null per-runtime value overriding the root and null inheriting it). Prior:
-> 2026-08-14 (commit pending — records where a MODULE may contribute, now that
-> `lib/ai/mkSkillPackageModule.nix` writes the per-CLI pools. That looks like
-> the exact shape `shell-option.md` bans, and the discriminator — always-on
-> default versus opt-in behind an explicit enable — is written down in the new
-> section below because the ban's reasoning does not carry across it. Also
-> records the provenance guard, which makes the root-write prohibition
-> structural rather than reviewed-for). Prior: 2026-08-10 (commit pending — TWO
-> corrections. The call site was never `hmTransform.nix` +
+> **Last verified:** 2026-08-15 (commit pending — `ai.context` is now an
+> explicit content-composition exception: root content precedes runtime content
+> in one artifact, while keyed rules still collide across levels. The shared
+> repository AGENTS.md writer separately deduplicates identical same-key runtime
+> views and rejects divergent ones). Prior: 2026-08-15 (commit pending —
+> collision checks follow each app record's `supportedPools`, while normalized
+> `ai.settings` is a scalar-field exception: each nullable field resolves
+> independently, with a non-null per-runtime value overriding the root and null
+> inheriting it). Prior: 2026-08-14 (commit pending — records where a MODULE may
+> contribute, now that `lib/ai/mkSkillPackageModule.nix` writes the per-CLI
+> pools. That looks like the exact shape `shell-option.md` bans, and the
+> discriminator — always-on default versus opt-in behind an explicit enable — is
+> written down in the new section below because the ban's reasoning does not
+> carry across it. Also records the provenance guard, which makes the root-write
+> prohibition structural rather than reviewed-for). Prior: 2026-08-10 (commit
+> pending — TWO corrections. The call site was never `hmTransform.nix` +
 > `devenvTransform.nix`; both are 16-line re-exports of
 > `mkBackendTransform.nix`, which is where the merge AND the per-CLI baseline
 > option surface actually live, so step 2 of the checklist pointed at files that
@@ -673,8 +686,10 @@ Applies to every attrset-shaped shared pool in `ai.*`:
 - `ai.environmentVariables` / `ai.<cli>.environmentVariables`
 - `ai.agents` / `ai.<cli>.agents`
 
-`ai.instructions` is a list, not an attrset, so list concat stays as-is.
-`ai.context` is single-valued.
+`ai.instructions` remains a transitional list until its deletion commit.
+`ai.context` is single-valued per level but composes across levels: root content
+is concatenated first, followed by runtime content. This preserves both halves
+rather than applying pool-entry replacement or collision semantics.
 
 `ai.shell` and the fields in normalized `ai.settings` are deliberate SCALAR
 exceptions and resolve the other way — per-runtime silently overrides the root,
@@ -864,16 +879,21 @@ path types".
 
 ## ai.\* Layered Fanout Pattern
 
-> **Last verified:** 2026-08-15 (commit pending — L2 root pools now cross into
-> L3 only for runtimes whose app record lists that pool in `supportedPools`;
-> unsupported root fanout degrades and the L2b/L3 options are absent. The closed
-> normalized `settings` schema is deliberately listed by all five runtimes even
-> when a particular field lowers only for a subset). Prior: 2026-08-01 (commit
-> pending — records the portable hooks exception: per-event matcher-group lists
-> append instead of key-colliding, and agents may carry a typed semantic
-> record). Prior: 2026-04-21 (commit pending — refactor of ai-factory-collision
-> plan §4). If you add a new Dir option or change how per-file Dir expansion
-> fans through the layers, update this fragment in the same commit.
+> **Last verified:** 2026-08-15 (commit pending — typed context is the
+> composition exception: root and runtime content concatenate root-first into
+> one runtime-named artifact. Keyed rules retain collision semantics and lower
+> their normalized matcher at L4; repository-local AGENTS.md consumers share a
+> keyed, byte-deduplicating writer). Prior: 2026-08-15 (commit pending — L2 root
+> pools now cross into L3 only for runtimes whose app record lists that pool in
+> `supportedPools`; unsupported root fanout degrades and the L2b/L3 options are
+> absent. The closed normalized `settings` schema is deliberately listed by all
+> five runtimes even when a particular field lowers only for a subset). Prior:
+> 2026-08-01 (commit pending — records the portable hooks exception: per-event
+> matcher-group lists append instead of key-colliding, and agents may carry a
+> typed semantic record). Prior: 2026-04-21 (commit pending — refactor of
+> ai-factory-collision plan §4). If you add a new Dir option or change how
+> per-file Dir expansion fans through the layers, update this fragment in the
+> same commit.
 
 ### Canonical 4-layer shape
 
@@ -927,6 +947,13 @@ path types".
   before `ai.<cli>.hooks.<Event>` groups. This is intentional composition, not
   an attrset-entry collision; only the exact portable Claude/Codex event
   vocabulary is accepted at L2.
+- **Context content concatenates.** `ai.context` and `ai.<cli>.context` are
+  typed `text`-XOR-`source` records, not pool entries. Their content composes
+  root-first into the runtime's `context.filename`.
+- **Rule matchers lower only at L4.** `matcher = null` is always-on; a non-empty
+  glob list becomes native routing metadata where one exists and explicit prose
+  for flat AGENTS.md consumers. The shared devenv AGENTS.md writer admits only
+  unscoped units and deduplicates byte-identical same-key contributions.
 - **Normalized settings are a uniform scalar-field surface.** Every runtime
   declares the same closed `settings` submodule. Each field resolves root versus
   per-runtime with `resolveOverride`; native lowering remains per-runtime and

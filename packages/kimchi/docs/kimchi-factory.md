@@ -1,8 +1,11 @@
 # Kimchi factory (mkKimchi)
 
-> **Last verified:** 2026-08-15 (commit pending — records Kimchi's normalized
-> pool capability census and deliberate absence of rules; native JSON
-> passthrough moved to `ai.kimchi.nativeSettings`, while the uniform closed
+> **Last verified:** 2026-08-15 (commit pending — Kimchi's typed context now
+> composes root-first with runtime context into the existing
+> `harness/AGENTS.md`; rules continue to degrade because Kimchi has no rules
+> pool). Prior: 2026-08-15 (commit pending — records Kimchi's normalized pool
+> capability census and deliberate absence of rules; native JSON passthrough
+> moved to `ai.kimchi.nativeSettings`, while the uniform closed
 > `ai.kimchi.settings` surface does not change the two-file native lifecycle).
 > Prior: 2026-06-23 (commit pending). If you touch
 > `packages/kimchi/lib/mkKimchi.nix`, `packages/kimchi/modules/**`, or the
@@ -34,7 +37,10 @@ The `harness/` tree is **mutable at runtime** — Kimchi rewrites `settings.json
 `config.json` and `harness/settings.json` go through
 `helpers.mkSettingsActivationScript` (jq `.[0] * .[1]` merge) on HM and a static
 write on devenv — never a raw symlink-to-store. The immutable parts (`mcp.json`,
-`AGENTS.md`, `skills/`) are static `home.file` / `files.*`.
+`AGENTS.md`, `skills/`) are static `home.file` / `files.*`. `AGENTS.md` receives
+the typed normalized context record. When both root and Kimchi-specific context
+are configured, their bodies concatenate root-first;
+`ai.kimchi.context.filename` controls the artifact name.
 
 ## Normalized pool capability boundary
 

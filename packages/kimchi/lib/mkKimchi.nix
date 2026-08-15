@@ -27,21 +27,9 @@
     mergedInstructions,
     mergedEnvironmentVariables,
     moduleEnvironmentVariables ? {},
-    topContext,
+    mergedContext,
   }: let
-    effectiveContext =
-      if cfg.context != null
-      then cfg.context
-      else topContext;
-    hasContext = effectiveContext != null && effectiveContext != "";
-
-    contextText =
-      if hasContext
-      then
-        if builtins.isPath effectiveContext
-        then builtins.readFile effectiveContext
-        else toString effectiveContext
-      else "";
+    contextText = aiCommon.readContent mergedContext;
 
     instructionTexts =
       map (
@@ -108,6 +96,7 @@ in
     # Carried as DATA, not a module argument — see mkAiApp.nix.
     inherit pkgs;
     name = "kimchi";
+    contextFilename = "AGENTS.md";
     supportedPools = [
       "context"
       "environmentVariables"
@@ -122,15 +111,6 @@ in
       outputPath = null;
     };
     options = {
-      context = lib.mkOption {
-        type = lib.types.nullOr (lib.types.either lib.types.lines lib.types.path);
-        default = null;
-        description = ''
-          Kimchi-scope global context. Inline string or path to a file.
-          Written to <configDir>/harness/AGENTS.md with no frontmatter.
-          When null, falls back to top-level ai.context.
-        '';
-      };
       configDir = lib.mkOption {
         type = lib.types.str;
         default = ".config/kimchi";
@@ -255,10 +235,10 @@ in
         mergedSkills,
         mergedEnvironmentVariables,
         moduleEnvironmentVariables,
-        topContext,
+        mergedContext,
         ...
       }: let
-        prep = mkPrep {inherit cfg mergedInstructions mergedEnvironmentVariables moduleEnvironmentVariables topContext;};
+        prep = mkPrep {inherit cfg mergedContext mergedInstructions mergedEnvironmentVariables moduleEnvironmentVariables;};
         inherit (prep) filteredSettings filteredHarnessSettings allAgencyTexts;
       in
         lib.mkMerge [
@@ -295,7 +275,7 @@ in
 
           # harness/AGENTS.md — orientation context (instructions + top-level context).
           (lib.mkIf (allAgencyTexts != []) {
-            home.file."${cfg.configDir}/harness/AGENTS.md".text = lib.concatStringsSep "\n\n" allAgencyTexts;
+            home.file."${cfg.configDir}/harness/${cfg.context.filename}".text = lib.concatStringsSep "\n\n" allAgencyTexts;
           })
 
           # harness/skills/ — Layout B via mkSkillEntries.
@@ -314,10 +294,10 @@ in
         mergedSkills,
         mergedEnvironmentVariables,
         moduleEnvironmentVariables,
-        topContext,
+        mergedContext,
         ...
       }: let
-        prep = mkPrep {inherit cfg mergedInstructions mergedEnvironmentVariables moduleEnvironmentVariables topContext;};
+        prep = mkPrep {inherit cfg mergedContext mergedInstructions mergedEnvironmentVariables moduleEnvironmentVariables;};
         inherit (prep) filteredSettings filteredHarnessSettings allAgencyTexts;
       in
         lib.mkMerge [
@@ -344,7 +324,7 @@ in
 
           # harness/AGENTS.md.
           (lib.mkIf (allAgencyTexts != []) {
-            files."${cfg.configDir}/harness/AGENTS.md".text = lib.concatStringsSep "\n\n" allAgencyTexts;
+            files."${cfg.configDir}/harness/${cfg.context.filename}".text = lib.concatStringsSep "\n\n" allAgencyTexts;
           })
 
           # harness/skills/ — devenv recursive walk.

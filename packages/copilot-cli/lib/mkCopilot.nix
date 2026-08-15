@@ -46,6 +46,7 @@ lib.ai.app.mkAiApp {
   # Carried as DATA, not a module argument — see mkAiApp.nix.
   inherit pkgs;
   name = "copilot";
+  contextFilename = "copilot-instructions.md";
   supportedPools = [
     "agents"
     "context"
@@ -62,27 +63,6 @@ lib.ai.app.mkAiApp {
     package = pkgs.ai.copilot-cli;
   };
   options = {
-    # Copilot-scope global context. When set, takes precedence over
-    # top-level `ai.context`. Written without frontmatter to
-    # `<configDir>/<contextFilename>` — Copilot's native global-scope
-    # single-file convention.
-    context = lib.mkOption {
-      type = lib.types.nullOr (lib.types.either lib.types.lines lib.types.path);
-      default = null;
-      description = ''
-        Copilot-scope global context. Inline string or path to a file.
-        Written to `<configDir>/<contextFilename>` with no frontmatter.
-        When null, falls back to top-level `ai.context`.
-      '';
-      example = lib.literalExpression "./copilot-context.md";
-    };
-    # Filename under `<configDir>/` for the context file. Defaults to
-    # `copilot-instructions.md` to match Copilot CLI's native convention.
-    contextFilename = lib.mkOption {
-      type = lib.types.str;
-      default = "copilot-instructions.md";
-      description = "Filename for the context file inside `<configDir>/`.";
-    };
     # Keep the option visible in both backends even though only a project-local
     # devenv has a meaningful project root. Home Manager rejects non-default
     # overrides below instead of omitting the option: omission made the two
@@ -171,22 +151,14 @@ lib.ai.app.mkAiApp {
       mergedServers,
       mergedInstructions,
       mergedSkills,
-      mergedRules,
       mergedLspServers,
       mergedEnvironmentVariables,
       moduleEnvironmentVariables,
       mergedAgents,
-      topContext,
       ...
     }: let
       aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
       helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
-      # Resolve effective context: per-CLI wins when set, else top-level.
-      effectiveContext =
-        if cfg.context != null
-        then cfg.context
-        else topContext;
-      hasContext = effectiveContext != null && effectiveContext != "";
       # Unnamed always-on instructions compose into the single native context
       # file below (the generic aggregate render was retired). Named entries
       # emit their own `<configDir>/instructions/<name>.instructions.md`.
@@ -195,10 +167,6 @@ lib.ai.app.mkAiApp {
       # Complement of `unnamedInstructions`, hoisted so the `configDir`
       # assertion and the emission block below read the same set.
       namedInstructions = builtins.filter (i: i ? name) mergedInstructions;
-      resolveRuleText = rule:
-        if builtins.isPath rule.text
-        then builtins.readFile rule.text
-        else rule.text;
       # symlinkJoin + makeWrapper wrapper that exports
       # `environmentVariables` and prepends `--additional-mcp-config
       # <path>` to every copilot invocation. Without this, the
@@ -285,7 +253,7 @@ lib.ai.app.mkAiApp {
             # emitted here while Copilot is off, so there is nothing to lose.
             {
               assertion =
-                (namedInstructions == [] && mergedRules == {} && !hasContext && !hasUnnamed)
+                (namedInstructions == [] && !hasUnnamed)
                 || cfg.configDir == ".copilot";
               message = ''
                 ai.copilot.configDir is "${cfg.configDir}", but Copilot CLI
@@ -296,14 +264,13 @@ lib.ai.app.mkAiApp {
                 ${lib.concatMapStringsSep "\n" (n: "  - ${n}") (
                   lib.sort (a: b: a < b) (
                     map (i: "${i.name}.instructions.md") namedInstructions
-                    ++ map (n: "${n}.instructions.md") (lib.attrNames mergedRules)
-                    ++ lib.optional (hasContext || hasUnnamed) cfg.contextFilename
+                    ++ lib.optional hasUnnamed cfg.context.filename
                   )
                 )}
 
                 Either leave ai.copilot.configDir at its ".copilot" default, or
-                drop the ai.context / ai.instructions / ai.rules entries above
-                from this Home Manager configuration. Project-scope instructions
+                drop the ai.instructions entries above from this Home Manager
+                configuration. Project-scope context and rules
                 go through the devenv module, which writes them under
                 ai.copilot.projectDir instead.
               '';
@@ -384,31 +351,15 @@ lib.ai.app.mkAiApp {
             })
             namedInstructions);
         })
-        # Attrs-shape ai.rules / ai.copilot.rules → instruction files.
-        # Each entry becomes
-        # `<configDir>/instructions/<name>.instructions.md` with
-        # copilotTransformer's applyTo: frontmatter.
-        (let
-          fragmentsLib = import ../../../lib/fragments.nix {inherit lib;};
-          inherit (import ../../../lib/ai/transformers/copilot.nix {inherit lib;}) copilotTransformer;
-        in {
-          home.file = lib.mapAttrs' (name: rule:
-            lib.nameValuePair "${cfg.configDir}/instructions/${name}.instructions.md" {
-              text = fragmentsLib.mkRenderer copilotTransformer {} (rule
-                // {
-                  text = resolveRuleText rule;
-                });
-            })
-          mergedRules;
-        })
-        # Global context + unnamed instructions → `<configDir>/<contextFilename>`,
-        # composed into one file (the single native context writer; the generic
-        # aggregate render was retired). A path context with no unnamed
-        # instructions stays a `source` symlink. Precedence is per-CLI > top-level.
-        (lib.mkIf (hasContext || hasUnnamed) {
-          home.file."${cfg.configDir}/${cfg.contextFilename}" = let
+        # Legacy unnamed instructions retain their CLI-global file during the
+        # additive transition. Normalized context and rules intentionally do
+        # not emit on the Copilot HM arm: only the project-local product has a
+        # consumed surface for them.
+        (lib.mkIf hasUnnamed {
+          home.file."${cfg.configDir}/${cfg.context.filename}" = let
             composed = lib.ai.composeInstructionsFile {
-              inherit effectiveContext unnamedInstructions;
+              effectiveContext = null;
+              inherit unnamedInstructions;
               render = lib.ai.transformers.copilot.render;
             };
           in
@@ -496,24 +447,21 @@ lib.ai.app.mkAiApp {
       mergedEnvironmentVariables,
       moduleEnvironmentVariables,
       mergedAgents,
-      topContext,
+      mergedContext,
       ...
     }: let
       aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
-      # Resolve effective context: per-CLI wins when set, else top-level.
       effectiveContext =
-        if cfg.context != null
-        then cfg.context
-        else topContext;
-      hasContext = effectiveContext != null && effectiveContext != "";
+        if mergedContext == null
+        then null
+        else if (mergedContext.source or null) != null
+        then mergedContext.source
+        else mergedContext.text;
+      hasContext = mergedContext != null;
       # Unnamed always-on instructions compose into the native context file
       # below (aggregate render retired); named entries emit their own files.
       unnamedInstructions = builtins.filter (i: !(i ? name)) mergedInstructions;
       hasUnnamed = unnamedInstructions != [];
-      resolveRuleText = rule:
-        if builtins.isPath rule.text
-        then builtins.readFile rule.text
-        else rule.text;
       dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
       wrapCopilotPackage = import ./wrapPackage.nix {inherit lib pkgs;};
 
@@ -641,7 +589,8 @@ lib.ai.app.mkAiApp {
             lib.nameValuePair "${cfg.projectDir}/instructions/${name}.instructions.md" {
               text = fragmentsLib.mkRenderer copilotTransformer {} (rule
                 // {
-                  text = resolveRuleText rule;
+                  paths = aiCommon.ruleMatcher rule;
+                  text = aiCommon.readContent rule;
                 });
             })
           mergedRules;
@@ -652,7 +601,7 @@ lib.ai.app.mkAiApp {
         # `.github/copilot-instructions.md`, which Copilot reads natively. A path
         # context with no unnamed instructions stays a `source` symlink.
         (lib.mkIf (hasContext || hasUnnamed) {
-          files."${cfg.projectDir}/${cfg.contextFilename}" = let
+          files."${cfg.projectDir}/${cfg.context.filename}" = let
             composed = lib.ai.composeInstructionsFile {
               inherit effectiveContext unnamedInstructions;
               render = lib.ai.transformers.copilot.render;

@@ -4,6 +4,62 @@
 # - packages/*/lib/mk*.nix (factory-built HM + devenv modules)
 # - lib/hm-helpers.nix (filterNulls re-export)
 {lib}: let
+  contentOptions = {
+    source = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Path to a Markdown source file. Mutually exclusive with `text`.";
+    };
+    text = lib.mkOption {
+      type = lib.types.nullOr (lib.types.either lib.types.lines lib.types.path);
+      default = null;
+      description = "Inline Markdown content. Mutually exclusive with `source` (path values are transitional; use `source`).";
+    };
+  };
+  hasContent = value:
+    value
+    != null
+    && ((value.text or null) != null || (value.source or null) != null);
+  contentFieldsAreValid = requireContent: value: let
+    count =
+      lib.count
+      (field: (value.${field} or null) != null)
+      ["source" "text"];
+  in
+    count <= 1 && (!requireContent || count == 1);
+  validateContent = requireContent: value:
+    if contentFieldsAreValid requireContent value
+    then value
+    else
+      throw
+      "Markdown content must set ${lib.optionalString (!requireContent) "at most "}one of `text` or `source`";
+  ruleIsValid = value:
+    contentFieldsAreValid true value
+    && !(value.matcher != null && value.paths != null);
+  mkContentModule = {defaultFilename ? null}:
+    lib.types.coercedTo
+    (lib.types.either lib.types.lines lib.types.path)
+    (value:
+      if builtins.isPath value
+      then {source = value;}
+      else {text = value;})
+    (lib.types.submodule {
+      options =
+        contentOptions
+        // lib.optionalAttrs (defaultFilename != null) {
+          filename = lib.mkOption {
+            type = lib.types.addCheck lib.types.str (value:
+              value
+              != ""
+              && builtins.baseNameOf value == value
+              && value != "."
+              && value != "..");
+            default = defaultFilename;
+            description = "Filename for this runtime's single always-on context artifact.";
+          };
+        };
+    });
+
   kiroInclusionOption = lib.mkOption {
     type = lib.types.nullOr (lib.types.enum ["always" "auto" "fileMatch" "manual"]);
     default = null;
@@ -17,7 +73,132 @@
       override.
     '';
   };
+  matcherOption = lib.mkOption {
+    # `nullOr` bypasses an element type's outer `addCheck` during nested
+    # merging, so spell this as a real sum type to reject an empty list.
+    type = lib.types.oneOf [
+      (lib.types.enum [null])
+      (lib.types.addCheck (lib.types.listOf lib.types.str) (value: value != []))
+    ];
+    default = null;
+    description = ''
+      File globs selecting where this rule applies. null means always-on.
+      Runtimes translate the normalized matcher into their native scoping
+      mechanism; flat AGENTS.md consumers preserve it as a prose scope note.
+    '';
+  };
+  mkRuleModule = {kiroNative ? false}:
+    lib.types.submodule {
+      options =
+        contentOptions
+        // {
+          description = lib.mkOption {
+            type = lib.types.str;
+            default = "";
+            description = "Short description forwarded to runtime renderers.";
+          };
+          matcher = matcherOption;
+          paths = lib.mkOption {
+            type = lib.types.nullOr (lib.types.listOf lib.types.str);
+            default = null;
+            description = "Transitional alias for `matcher`; removed with the legacy instructions surface.";
+          };
+          skipIfUnsupported = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+            description = "Transitional legacy degradation control.";
+          };
+        }
+        // lib.optionalAttrs kiroNative {
+          inclusion = kiroInclusionOption;
+        };
+    };
 in {
+  # ── Markdown content records ───────────────────────────────────────
+  # Context and rules share one home.file-shaped content record. Keeping paths
+  # as `source` data avoids writeText/IFD and preserves direct symlink emission
+  # when a single source is not being concatenated with another contribution.
+  contentModule = mkContentModule {};
+  optionalContentModule = contentModule;
+  validateOptionalContent = validateContent false;
+  validateRules = rules:
+    lib.mapAttrs (name: rule:
+      if ruleIsValid rule
+      then rule
+      else
+        throw
+        "Rule `${name}` must set exactly one of `text` or `source` and cannot combine `matcher` with the transitional `paths` alias")
+    rules;
+  runtimeContextModule = defaultFilename:
+    mkContentModule {inherit defaultFilename;};
+
+  inherit hasContent;
+
+  readContent = value:
+    if value == null
+    then ""
+    else if (value.text or null) != null
+    then
+      if builtins.isPath value.text
+      then builtins.readFile value.text
+      else value.text
+    else if (value.source or null) != null
+    then builtins.readFile value.source
+    else "";
+
+  composeContent = values: let
+    present = builtins.filter (value:
+      hasContent value
+      && (
+        if (value.text or null) != null
+        then
+          if builtins.isPath value.text
+          then builtins.readFile value.text != ""
+          else value.text != ""
+        else builtins.readFile value.source != ""
+      ))
+    values;
+  in
+    if present == []
+    then null
+    else if builtins.length present == 1
+    then let
+      value = builtins.head present;
+    in
+      if (value.text or null) != null
+      then
+        if builtins.isPath value.text
+        then {source = value.text;}
+        else {inherit (value) text;}
+      else {inherit (value) source;}
+    else {
+      text =
+        lib.concatMapStringsSep "\n\n" (
+          value:
+            if (value.text or null) != null
+            then
+              if builtins.isPath value.text
+              then builtins.readFile value.text
+              else value.text
+            else builtins.readFile value.source
+        )
+        present;
+    };
+
+  contentFileEntry = value:
+    if value == null
+    then null
+    else if (value.source or null) != null
+    then {inherit (value) source;}
+    else if builtins.isPath value.text
+    then {source = value.text;}
+    else {inherit (value) text;};
+
+  ruleMatcher = rule:
+    if rule.matcher != null
+    then rule.matcher
+    else rule.paths;
+
   # ── Activation flag scoping ────────────────────────────────────────
   # Wrap a home.activation body in a subshell so its `set`/`shopt` flags
   # cannot outlive it.
@@ -207,56 +388,12 @@ in {
     };
   };
 
-  # ── Rule submodule type ────────────────────────────────────────────
-  # Attrs-shaped analog of instructionModule. Each entry becomes one file
-  # in the per-ecosystem rules directory (.claude/rules/<name>.md,
-  # .kiro/steering/<name>.md, and for Copilot
-  # instructions/<name>.instructions.md under configDir on Home Manager or
-  # projectDir on devenv).
-  # The attribute name becomes the filename stem. `text` accepts either
-  # inline markdown lines or a path to a file.
-  #
-  # Graduated shape replacing the list-of-attrs `instructions` pattern —
-  # attrs let per-CLI overrides win on name collision and produce
-  # deterministic ordering. List shape is kept for back-compat; rules
-  # and instructions coexist in the factory emission.
-  ruleModule = lib.types.submodule {
-    options = {
-      description = lib.mkOption {
-        type = lib.types.str;
-        default = "";
-        description = "Short description (used by Claude and Kiro frontmatter).";
-      };
-      inclusion = kiroInclusionOption;
-      paths = lib.mkOption {
-        type = lib.types.nullOr (lib.types.listOf lib.types.str);
-        default = null;
-        description = ''
-          File path globs this rule applies to. null = always loaded.
-          Translated per ecosystem:
-          - Claude: paths: frontmatter
-          - Kiro: inclusion: fileMatch + fileMatchPattern:
-          - Copilot: applyTo: glob
-        '';
-      };
-      skipIfUnsupported = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-        description = ''
-          Omit this rule instead of degrading its path scope to prose when an
-          ecosystem cannot preserve the scope natively.
-        '';
-      };
-      text = lib.mkOption {
-        type = lib.types.either lib.types.lines lib.types.path;
-        description = ''
-          Rule body (inline markdown or Nix path to a `.md` file).
-          Content is baked into the nix store at eval time; transformer
-          frontmatter IS injected on emission.
-        '';
-      };
-    };
-  };
+  # ── Rule submodule types ───────────────────────────────────────────
+  # The portable record stays closed around normalized content + matcher.
+  # Kiro's per-runtime pool extends it with its native inclusion modes; those
+  # modes are intentionally unavailable at the root and on other runtimes.
+  ruleModule = mkRuleModule {};
+  kiroRuleModule = mkRuleModule {kiroNative = true;};
 
   # ── MCP server transform ───────────────────────────────────────────
   # Transform a typed MCP server submodule value into the JSON structure

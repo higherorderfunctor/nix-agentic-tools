@@ -38,17 +38,19 @@
 # That attrset is assembled in exactly one place — `customConfig` in
 # `mkBackendTransform.nix` — and read it rather than trusting a list here.
 # It currently carries `cfg`, `config`, every `merged*` pool,
-# `resolvedSettings`, `resolvedShell`, `topContext`, and `topHooks`. This comment
+# `resolvedSettings`, `resolvedShell`, `mergedContext`, and `topHooks`. This comment
 # used to enumerate four of them and had silently drifted from the real
 # call, which is the failure mode a second copy of the list invites; every
 # callback takes `...` anyway, so a stale list here misleads without ever
 # breaking a build.
-_: {
+{lib}: {
   name,
   transformers,
   defaults ? {},
   options ? {},
   supportedPools ? [],
+  contextFilename ? null,
+  ruleModule ? null,
   hm ? {},
   devenv ? {},
   # The package set the factory was built with, carried on the record so
@@ -70,6 +72,9 @@ _: {
   # Optional so a record built without it still evaluates; features that
   # need it must degrade rather than throw.
   pkgs ? null,
-}: {
+}:
+{
   inherit name transformers defaults options supportedPools hm devenv pkgs;
 }
+// lib.optionalAttrs (contextFilename != null) {inherit contextFilename;}
+// lib.optionalAttrs (ruleModule != null) {inherit ruleModule;}

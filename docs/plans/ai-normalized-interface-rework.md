@@ -513,20 +513,22 @@ Provenance: **M** measured from code or a probe · **H** human-decided with
 stated reasoning · **H?** human-picked among options without a strong basis ·
 **L** LLM-proposed, human-accepted without independent grading.
 
-| #   | Boundary                                            | Unit    | Behavior                                                                                                                         | Prov |
-| --- | --------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------- | ---- |
-| B0  | root pool → runtime lacking that pool               | pool    | silently degrades to the neutral value; the corresponding per-runtime option does not exist                                      | H    |
-| B1  | root pool ↔ per-runtime pool, SAME key              | entry   | per-runtime replaces root's entry, wholesale                                                                                     | H    |
-| B2  | root pool ↔ per-runtime pool, DIFFERENT key         | entry   | additive, both exist                                                                                                             | M    |
-| B3  | inside a pool entry (a server record's fields)      | field   | **never merges across levels — entries are atomic**                                                                              | H    |
-| B4  | `ai.programs.<pkg>` ↔ `ai.<runtime>.programs.<pkg>` | option  | `resolveOverride` — null inherits, non-null wins                                                                                 | L    |
-| B5  | `ai.settings` ↔ `ai.<runtime>.settings`             | field   | `resolveOverride` per field                                                                                                      | H    |
-| B6  | normalized → native                                 | —       | not a merge, a translation. Normalized never emits                                                                               | L    |
-| B7  | ~~module-derived native keys ↔ user native~~        | ~~key~~ | **superseded by B7″ — do not implement**                                                                                         | H?   |
-| B7″ | module-derived native value ↔ user-authored value   | file    | **no custom guard. Module renders at `mkDefault`; standard Nix option merge arbitrates.** Unit is the FILE, not the key — see A5 | H    |
-| B8  | two packages → same ROOT key                        | key     | fail                                                                                                                             | H?   |
-| B9  | two packages → same PER-RUNTIME key                 | key     | fail (same rule as B8)                                                                                                           | L    |
-| B10 | negation                                            | entry   | **`null` at the per-runtime level drops the entry**                                                                              | H    |
+| #   | Boundary                                            | Unit    | Behavior                                                                                                                          | Prov |
+| --- | --------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| B0  | root pool → runtime lacking that pool               | pool    | silently degrades to the neutral value; the corresponding per-runtime option does not exist                                       | H    |
+| B1  | root pool ↔ per-runtime pool, SAME key              | entry   | fail; keyed pool entries are atomic and duplicate identity is ambiguous                                                           | H    |
+| B2  | root pool ↔ per-runtime pool, DIFFERENT key         | entry   | additive, both exist                                                                                                              | M    |
+| B3  | inside a pool entry (a server record's fields)      | field   | **never merges across levels — entries are atomic**                                                                               | H    |
+| B4  | `ai.programs.<pkg>` ↔ `ai.<runtime>.programs.<pkg>` | option  | `resolveOverride` — null inherits, non-null wins                                                                                  | L    |
+| B5  | `ai.settings` ↔ `ai.<runtime>.settings`             | field   | `resolveOverride` per field                                                                                                       | H    |
+| B5a | `ai.context` ↔ `ai.<runtime>.context`               | content | concatenate into one runtime artifact, root first; package defaults use `mkDefault`, and ordinary Nix merge handles field writers | H    |
+| B6  | normalized → native                                 | —       | not a merge, a translation. Normalized never emits                                                                                | L    |
+| B6a | normalized rule `matcher` → native scope            | field   | null means always-on; globs lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot `applyTo`, or Codex prose                   | H    |
+| B7  | ~~module-derived native keys ↔ user native~~        | ~~key~~ | **superseded by B7″ — do not implement**                                                                                          | H?   |
+| B7″ | module-derived native value ↔ user-authored value   | file    | **no custom guard. Module renders at `mkDefault`; standard Nix option merge arbitrates.** Unit is the FILE, not the key — see A5  | H    |
+| B8  | two packages → same ROOT key                        | key     | fail                                                                                                                              | H?   |
+| B9  | two packages → same PER-RUNTIME key                 | key     | fail (same rule as B8)                                                                                                            | L    |
+| B10 | negation                                            | entry   | **`null` at the per-runtime level drops the entry**                                                                               | H    |
 
 B3 is why `//` is correct and `recursiveUpdate` is wrong: pool entries never
 field-merge across levels, so shallow replace is the intended semantic.

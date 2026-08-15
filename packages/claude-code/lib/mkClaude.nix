@@ -189,6 +189,7 @@ in
     # Carried as DATA, not a module argument — see mkAiApp.nix.
     inherit pkgs;
     name = "claude";
+    contextFilename = "CLAUDE.md";
     supportedPools = [
       "agents"
       "context"
@@ -207,17 +208,6 @@ in
     };
     # Shared options (present in both backends)
     options = {
-      context = lib.mkOption {
-        type = lib.types.either lib.types.lines lib.types.path;
-        default = "";
-        description = ''
-          Global Claude context. Inline string or path to a file.
-          Passed through to programs.claude-code.context (which writes
-          to ~/.claude/CLAUDE.md). Replaces the deprecated upstream
-          `memory.text` option.
-        '';
-        example = lib.literalExpression "./claude-memory.md";
-      };
       plugins = lib.mkOption {
         type = with lib.types; attrsOf (either package path);
         default = {};
@@ -740,20 +730,18 @@ in
         mergedAgents,
         moduleEnvironmentVariables,
         resolvedShell,
-        topContext,
+        mergedContext,
         topHooks,
         resolvedSettings,
         ...
       }: let
         aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
-        # Resolve effective context: per-CLI wins when set (non-empty);
-        # else top-level `ai.context`; else empty (upstream default).
         effectiveContext =
-          if cfg.context != ""
-          then cfg.context
-          else if topContext != null
-          then topContext
-          else "";
+          if mergedContext == null
+          then ""
+          else if (mergedContext.source or null) != null
+          then mergedContext.source
+          else mergedContext.text;
 
         # Compose the single always-on CLAUDE.md = context baseline + any
         # UNNAMED instructions, routed through upstream
@@ -768,10 +756,7 @@ in
         };
 
         # Resolve rule body: path → readFile; string → passthrough.
-        resolveRuleText = rule:
-          if builtins.isPath rule.text
-          then builtins.readFile rule.text
-          else rule.text;
+        resolveRuleText = aiCommon.readContent;
         dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
         helpers = import ../../../lib/ai/hm-helpers.nix {inherit lib;};
         effectiveHooks = sharedHooks.merge topHooks cfg.hooks;
@@ -843,7 +828,11 @@ in
               enable = lib.mkDefault true;
               package = lib.mkDefault cfg.package;
               skills = lib.mapAttrs (_: lib.mkDefault) mergedSkills;
-              context = lib.mkDefault composedContext;
+              context = lib.mkDefault (
+                if cfg.context.filename == "CLAUDE.md"
+                then composedContext
+                else ""
+              );
               # Per-ENTRY mkDefault, like `skills` above — not a whole-attrset
               # one. `filterOverrides` keeps only the highest-priority
               # definitions of an option, so a single normal-priority
@@ -892,6 +881,12 @@ in
               })
             );
           })
+          (lib.mkIf (cfg.context.filename != "CLAUDE.md" && composedContext != "") {
+            home.file.".claude/${cfg.context.filename}" =
+              if builtins.isPath composedContext
+              then {source = composedContext;}
+              else {text = composedContext;};
+          })
           # Per-instruction rule files — write .claude/rules/<name>.md
           # for each instruction entry that carries a `name` field. This
           # is a gap in upstream programs.claude-code (no per-rule file
@@ -923,6 +918,7 @@ in
                 text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
                   // {
                     text = resolveRuleText rule;
+                    paths = aiCommon.ruleMatcher rule;
                   });
               })
             mergedRules;
@@ -938,7 +934,7 @@ in
     # Devenv-specific projection
     devenv = {
       options = {};
-      # `topContext` is the top-level `ai.context` fallback. devenv Claude has
+      # `mergedContext` is the root-first composed context. devenv Claude has
       # no upstream context writer, so this projection composes context +
       # unnamed instructions into `files.".claude/CLAUDE.md"` itself — the sole
       # writer for that path. This also repairs the historical context-drop:
@@ -951,27 +947,24 @@ in
         mergedRules,
         moduleEnvironmentVariables,
         resolvedShell,
-        topContext,
+        mergedContext,
         topHooks,
         resolvedSettings,
         ...
       }: let
         aiCommon = import ../../../lib/ai/ai-common.nix {inherit lib;};
         dirHelpers = import ../../../lib/ai/dir-helpers.nix {inherit lib;};
-        resolveRuleText = rule:
-          if builtins.isPath rule.text
-          then builtins.readFile rule.text
-          else rule.text;
+        resolveRuleText = aiCommon.readContent;
 
         # Resolve effective context (per-CLI wins, else top-level) and compose
         # the single CLAUDE.md = context baseline + UNNAMED instructions. Named
         # instructions emit their own `.claude/rules/<name>.md` below.
         effectiveContext =
-          if cfg.context != ""
-          then cfg.context
-          else if topContext != null
-          then topContext
-          else "";
+          if mergedContext == null
+          then ""
+          else if (mergedContext.source or null) != null
+          then mergedContext.source
+          else mergedContext.text;
         unnamedInstructions = builtins.filter (i: !(i ? name)) mergedInstructions;
         composedContext = lib.ai.composeInstructionsFile {
           inherit effectiveContext unnamedInstructions;
@@ -1094,7 +1087,7 @@ in
           # was retired). A path context with no unnamed instructions stays a
           # `source` symlink; otherwise it is inlined and concatenated.
           (lib.mkIf hasComposedContext {
-            files.".claude/CLAUDE.md" =
+            files.".claude/${cfg.context.filename}" =
               if builtins.isPath composedContext
               then {source = composedContext;}
               else {text = composedContext;};
@@ -1124,6 +1117,7 @@ in
                 text = fragmentsLib.mkRenderer claudeTransformer {package = name;} (rule
                   // {
                     text = resolveRuleText rule;
+                    paths = aiCommon.ruleMatcher rule;
                   });
               })
             mergedRules;

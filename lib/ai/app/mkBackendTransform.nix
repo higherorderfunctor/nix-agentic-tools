@@ -25,7 +25,7 @@
 #       options ? {};          # backend-only option additions
 #       defaults ? {};         # backend-only default overrides
 #       config ? _: {};        # consumer callback:
-#                              #   {cfg, config, merged*, topContext, topHooks,
+#                              #   {cfg, config, merged*, mergedContext, topHooks,
 #                              #    resolvedSettings}
 #                              #   → module attrs
 #     };
@@ -266,9 +266,9 @@
   mergedLspServers = lspMerge.merged;
   mergedEnvironmentVariables = envMerge.merged;
   mergedAgents = agentsMerge.merged;
-  topContext =
+  mergedContext =
     if supportsPool "context"
-    then config.ai.context
+    then aiCommon.composeContent [config.ai.context cfg.context]
     else null;
   topHooks =
     if supportsPool "hooks"
@@ -287,7 +287,7 @@
   # options — e.g. the devenv materializer's conditional `devenv:files`
   # task edge needs `config.files != {}`.
   customConfig = backendConfigFn {
-    inherit cfg config mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables moduleEnvironmentVariables mergedAgents resolvedSettings resolvedShell topContext topHooks;
+    inherit cfg config mergedServers mergedInstructions mergedSkills mergedRules mergedLspServers mergedEnvironmentVariables moduleEnvironmentVariables mergedAgents mergedContext resolvedSettings resolvedShell topHooks;
   };
 in {
   options.ai.${appRecord.name} =
@@ -337,6 +337,19 @@ in {
         '';
       };
     }
+    // lib.optionalAttrs (supportsPool "context") {
+      context = lib.mkOption {
+        type = aiCommon.runtimeContextModule (appRecord.contextFilename or (throw "${appRecord.name}: supportedPools includes context but the app record has no contextFilename"));
+        default = {};
+        apply = aiCommon.validateOptionalContent;
+        description = ''
+          ${appRecord.name}-specific context appended after `ai.context` in
+          the runtime's single always-on `${appRecord.contextFilename}` file.
+          Set exactly one of `text` or `source`; `filename` controls the native
+          artifact name.
+        '';
+      };
+    }
     // lib.optionalAttrs (supportsPool "instructions") {
       instructions = lib.mkOption {
         type = lib.types.listOf aiCommon.instructionModule;
@@ -346,8 +359,9 @@ in {
     }
     // lib.optionalAttrs (supportsPool "rules") {
       rules = lib.mkOption {
-        type = lib.types.attrsOf aiCommon.ruleModule;
+        type = lib.types.attrsOf (appRecord.ruleModule or aiCommon.ruleModule);
         default = {};
+        apply = aiCommon.validateRules;
         description = "${appRecord.name}-specific rules (merged with top-level ai.rules; collisions fail).";
       };
       rulesDir = lib.mkOption {

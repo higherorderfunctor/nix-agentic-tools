@@ -1,7 +1,12 @@
 ## ai Module Fanout Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — every normalized pool crosses
-> into a runtime only when its app record lists it in `supportedPools`; all five
+> **Last verified:** 2026-08-15 (commit pending — context is a typed
+> `text`-XOR-`source` record that composes root-first with runtime context and
+> names its native artifact per runtime. Rules carry a normalized `matcher`;
+> Claude, Kiro, Copilot, and Codex lower it to native metadata or explicit
+> prose, and devenv AGENTS.md consumers share one keyed deduplicating writer).
+> Prior: 2026-08-15 (commit pending — every normalized pool crosses into a
+> runtime only when its app record lists it in `supportedPools`; all five
 > runtimes now list the closed normalized `settings` submodule, runtime-native
 > passthrough moved to `nativeSettings`, per-runtime fields resolve against the
 > root independently, and Codex integration roots travel through a hidden
@@ -351,17 +356,21 @@ enabled ecosystem whose native model preserves the option's semantics):
   `always`/`fileMatch` from paths when inclusion is null; an explicit
   `always`/`auto`/`fileMatch`/`manual` value overrides only Kiro's load
   strategy, while the other ecosystems continue translating paths normally.
-- `ai.context` — a single global baseline. Codex lowers it to
-  `~/.codex/AGENTS.md` in Home Manager and project-root `AGENTS.md` in devenv;
-  `ai.codex.context` takes precedence when set.
+- `ai.context` — a typed `text`-XOR-`source` global baseline. Each runtime has
+  the same content record plus `filename`; root content precedes runtime content
+  when both are present. Claude defaults to `CLAUDE.md`; Codex, Kiro, and Kimchi
+  default to `AGENTS.md`; Copilot defaults to `copilot-instructions.md`. Copilot
+  emits normalized context only on devenv because its live surface is the
+  repository consumed by github.com, not copilot-cli's user home.
 - `ai.rules` — named Markdown rules. Codex appends these alphabetically to its
-  AGENTS.md with trace comments. Kiro consumes the same typed `inclusion`
-  override as instructions. Scoped Codex rules preserve their intent as an
-  explicit prose prefix unless `skipIfUnsupported = true` omits them. The
-  complete rendered file must fit `ai.codex.projectDocMaxBytes` (32 KiB by
-  default), or evaluation fails with per-contribution byte diagnostics. Codex
-  also rejects `paths = []` as ambiguous; use `null` for always-on content or a
-  non-empty list for scoped content.
+  AGENTS.md after context with trace comments. `matcher = null` means always-on;
+  non-empty glob lists lower to Claude `paths`, Kiro `fileMatchPattern`, Copilot
+  `applyTo`, and a Codex prose scope preamble. Kiro alone retains native
+  `manual`/`auto` inclusion overrides. The complete rendered file must fit
+  `ai.codex.projectDocMaxBytes` (32 KiB by default), or evaluation fails with
+  per-contribution byte diagnostics. Codex also rejects `matcher = []` as
+  ambiguous; use `null` for always-on content or a non-empty list for scoped
+  content.
 - `ai.mcpServers` — typed MCP definitions merged with
   `ai.<ecosystem>.mcpServers`. Codex lowers the merged pool to native
   `[mcp_servers.<name>]` TOML tables in both backends. It reuses the common MCP

@@ -1,27 +1,30 @@
 ## Copilot config delivery — two consumers, one product name
 
-> **Last verified:** 2026-08-14 (commit pending — `configDir` is TWO different
-> things and the sentence below that called it "neither" was only true of
-> devenv's. Home Manager defaults it to `.copilot`, which IS the CLI's home;
-> devenv defaults it to `.config/github-copilot`, which nothing reads. Named
-> instructions and rules moved onto the HM `configDir` after landing in
-> `$HOME/.github/instructions/` — a directory with no user-global meaning at all
-> — and a gated assertion now pins `configDir` when there is content that would
-> go dead. Records the measured instruction-discovery list for 1.0.80, and a
-> MUCH cheaper way to read this SEA's app code than the npm tarball: it
-> self-extracts). Prior: 2026-08-05 (commit pending — the wrapper both backends
-> use now lives in ONE place, `packages/copilot-cli/lib/wrapPackage.nix`, and is
-> exercised behaviorally by `checks/copilot-wrapper-argv.nix`. It had been
-> inlined once per backend, and that duplication is why the identical pair of
-> defects — builder-expanded `$HOME`, missing `@` prefix — shipped twice, as
-> #767 and then #769. Nothing about the DISCOVERY behavior below changed).
-> Prior: 2026-08-05 (first version. Records the syscall-traced config discovery
-> of copilot-cli 1.0.78, why the devenv MCP fix is a wrapper flag rather than
-> `COPILOT_HOME`, and why `lsp-config.json` / `settings.json` stay
-> written-but-undelivered instead of asserting). If you change how
-> `packages/copilot-cli/` delivers config in either backend, or bump copilot-cli
-> across a release that moves config discovery, re-run the probe below and
-> update this in the same commit.
+> **Last verified:** 2026-08-15 (commit pending — normalized context and rules
+> intentionally emit only on devenv's project-local `.github` surface. Their
+> Home Manager options remain for schema parity but are a documented no-op;
+> legacy instruction emission remains only for the additive transition). Prior:
+> 2026-08-14 (commit pending — `configDir` is TWO different things and the
+> sentence below that called it "neither" was only true of devenv's. Home
+> Manager defaults it to `.copilot`, which IS the CLI's home; devenv defaults it
+> to `.config/github-copilot`, which nothing reads. Named instructions and rules
+> moved onto the HM `configDir` after landing in `$HOME/.github/instructions/` —
+> a directory with no user-global meaning at all — and a gated assertion now
+> pins `configDir` when there is content that would go dead. Records the
+> measured instruction-discovery list for 1.0.80, and a MUCH cheaper way to read
+> this SEA's app code than the npm tarball: it self-extracts). Prior: 2026-08-05
+> (commit pending — the wrapper both backends use now lives in ONE place,
+> `packages/copilot-cli/lib/wrapPackage.nix`, and is exercised behaviorally by
+> `checks/copilot-wrapper-argv.nix`. It had been inlined once per backend, and
+> that duplication is why the identical pair of defects — builder-expanded
+> `$HOME`, missing `@` prefix — shipped twice, as #767 and then #769. Nothing
+> about the DISCOVERY behavior below changed). Prior: 2026-08-05 (first version.
+> Records the syscall-traced config discovery of copilot-cli 1.0.78, why the
+> devenv MCP fix is a wrapper flag rather than `COPILOT_HOME`, and why
+> `lsp-config.json` / `settings.json` stay written-but-undelivered instead of
+> asserting). If you change how `packages/copilot-cli/` delivers config in
+> either backend, or bump copilot-cli across a release that moves config
+> discovery, re-run the probe below and update this in the same commit.
 
 ### The trap: "Copilot" is two different consumers here
 
@@ -58,7 +61,18 @@ exists solely as a target for CLI wrapper flags.
 Read a `configDir` cite with the backend attached, or the two collapse into a
 statement that is wrong half the time.
 
-### Home Manager named instructions and rules were written to a dead path
+### Home Manager normalized context and rules intentionally do not emit
+
+The normalized context/rules model targets repository guidance consumed by
+github.com's Copilot reviewer. Devenv writes
+`<projectDir>/copilot-instructions.md` and
+`<projectDir>/instructions/<key>.instructions.md`; matcher globs become the
+comma-joined `applyTo` field and descriptions are forwarded. Home Manager keeps
+the same typed options to preserve exact backend schema parity, but emits
+nothing for either pool because copilot-cli user-global content is a separate
+product surface. This is an intentional capability-reducing degradation.
+
+### Historical Home Manager named instructions and rules path
 
 `mkCopilot.nix` hardcoded `.github/instructions/<name>.instructions.md` on BOTH
 backends. On devenv that is right — it is the committed reviewer surface. On
