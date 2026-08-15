@@ -19,6 +19,7 @@
 {lib}: let
   inherit (builtins) hasAttr;
   inherit (lib) hasPrefix hasSuffix optionalAttrs removePrefix removeSuffix splitString;
+  syntax = import ./syntax.nix {inherit lib;};
 
   # `stopWhen` has exactly two grammars and nothing else parses. Reproduced
   # from the engine's `parseStopWhen`, including the lexical rules that no
@@ -54,7 +55,7 @@
     else let
       watchId = removeSuffix ".terminal" s;
     in
-      if watchId == "" || lib.hasInfix "." watchId || builtins.match ".*[[:space:]].*" watchId != null
+      if watchId == "" || lib.hasInfix "." watchId || syntax.hasJsWhitespace watchId
       then throw "kiro workflow: ${ctx}: stopWhen '${s}' has a watch id that is empty, dotted or contains whitespace"
       else {watchTerminal = watchId;};
 
