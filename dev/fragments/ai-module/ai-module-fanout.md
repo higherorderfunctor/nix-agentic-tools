@@ -4,15 +4,16 @@
 > `text`-XOR-`source` record that composes root-first with runtime context and
 > names its native artifact per runtime. Rules carry a normalized `matcher`;
 > Claude, Kiro, Copilot, and Codex lower it to native metadata or explicit
-> prose, and devenv AGENTS.md consumers share one keyed deduplicating writer).
-> Prior: 2026-08-15 (commit pending — every normalized pool crosses into a
-> runtime only when its app record lists it in `supportedPools`; all five
-> runtimes now list the closed normalized `settings` submodule, runtime-native
-> passthrough moved to `nativeSettings`, per-runtime fields resolve against the
-> root independently, and Codex integration roots travel through a hidden
-> internal channel before native TOML emission). Prior: 2026-08-14 (commit
-> pending — Copilot's `ai.instructions` / `ai.rules` destination is per-BACKEND
-> and this entry named only one of them. Home Manager wrote a hardcoded
+> prose, and devenv AGENTS.md consumers share one keyed deduplicating writer;
+> the list-shaped `instructions` surface is retired rather than aliased). Prior:
+> 2026-08-15 (commit pending — every normalized pool crosses into a runtime only
+> when its app record lists it in `supportedPools`; all five runtimes now list
+> the closed normalized `settings` submodule, runtime-native passthrough moved
+> to `nativeSettings`, per-runtime fields resolve against the root
+> independently, and Codex integration roots travel through a hidden internal
+> channel before native TOML emission). Prior: 2026-08-14 (commit pending —
+> Copilot's `ai.instructions` / `ai.rules` destination is per-BACKEND and this
+> entry named only one of them. Home Manager wrote a hardcoded
 > `.github/instructions/`, which resolves to `$HOME/.github/instructions/` — a
 > directory copilot-cli never reads — so every named instruction and every rule
 > was emitted and then ignored. It now routes through `ai.copilot.configDir`,
@@ -156,7 +157,7 @@ sole gate for that ecosystem's fanout:
 | Consumer sets              | What fires                                                            |
 | -------------------------- | --------------------------------------------------------------------- |
 | `ai.claude.enable = true`  | claude fanout block + `programs.claude-code.enable = mkDefault true`  |
-| `ai.codex.enable = true`   | Codex package + instructions, skills, settings, agents, hooks fanout  |
+| `ai.codex.enable = true`   | Codex package + guidance, skills, settings, agents, hooks fanout      |
 | `ai.copilot.enable = true` | copilot fanout block + `programs.copilot-cli.enable = mkDefault true` |
 | `ai.kiro.enable = true`    | kiro fanout block + `programs.kiro-cli.enable = mkDefault true`       |
 
@@ -344,18 +345,6 @@ enabled ecosystem whose native model preserves the option's semantics):
   a `meta.mainProgram` or conventional `pname` resolve to their package
   executable; bare-file derivations remain direct output paths. Kiro's v3
   trigger records remain native-only.
-- `ai.instructions` — list of instruction records (text plus optional name, path
-  scoping, description, and Kiro `inclusion`). Transformed per ecosystem via
-  `lib/ai/transformers/`: Claude gets `.claude/rules/<name>.md` with YAML
-  frontmatter; Copilot gets `instructions/<name>.instructions.md` under
-  `ai.copilot.configDir` on Home Manager and under `ai.copilot.projectDir` on
-  devenv — the two backends address different CONSUMERS, not one path; Kiro gets
-  `.kiro/steering/<name>.md` (via the CLI module); Codex concatenates entries
-  into its single AGENTS.md without frontmatter. Scoped entries become explicit
-  prose unless `skipIfUnsupported = true` omits them. Kiro derives
-  `always`/`fileMatch` from paths when inclusion is null; an explicit
-  `always`/`auto`/`fileMatch`/`manual` value overrides only Kiro's load
-  strategy, while the other ecosystems continue translating paths normally.
 - `ai.context` — a typed `text`-XOR-`source` global baseline. Each runtime has
   the same content record plus `filename`; root content precedes runtime content
   when both are present. Claude defaults to `CLAUDE.md`; Codex, Kiro, and Kimchi
@@ -416,7 +405,7 @@ therefore an unknown-option error. A ROOT pool value stays portable and degrades
 to the neutral value for an incapable runtime.
 
 Kimchi is the sharp example: it supports `context`, `environmentVariables`,
-`instructions`, `mcpServers`, and `skills`, but not `rules`. Consequently root
+`mcpServers`, `settings`, and `skills`, but not `rules`. Consequently root
 `ai.rules` remains valid when Kimchi is enabled, while `ai.kimchi.rules` and
 `ai.kimchi.rulesDir` do not exist. Capability tests pair every eval-failure
 assertion with a supported-runtime positive control so harness failure cannot
@@ -484,10 +473,10 @@ broken — fix the module, not the consumer.
 
 ### Shared-pool is per-evaluation, NOT cross-backend
 
-`lib/ai/sharedOptions.nix` declares cross-app pools (`ai.skills`,
-`ai.instructions`, `ai.rules`, `ai.mcpServers`, `ai.lspServers`,
-`ai.environmentVariables`, `ai.agents`, `ai.hooks`, `ai.context`). It's imported
-by BOTH `hmTransform.nix` and `devenvTransform.nix`.
+`lib/ai/sharedOptions.nix` declares cross-app pools (`ai.skills`, `ai.rules`,
+`ai.mcpServers`, `ai.lspServers`, `ai.environmentVariables`, `ai.agents`,
+`ai.hooks`, `ai.context`). It's imported by BOTH `hmTransform.nix` and
+`devenvTransform.nix`.
 
 **The option declarations are shared. The values are NOT.**
 
@@ -498,11 +487,11 @@ doesn't see the HM contribution.
 
 **Consequence for "plain modules"** (not `mkAiApp` participants, like
 `packages/stacked-workflows/modules/`): when a plain module contributes to
-`ai.skills` / `ai.instructions` / etc., the contribution MUST happen in the
-module's appropriate backend sibling. If the content is HM-scope (personal user
-config), put it in the HM module. If it's project-scope (devenv-only), put it in
-the devenv module. Contributing in one and expecting the other to pick it up
-will silently fail — the contribution just doesn't land in the other eval.
+`ai.skills` / `ai.rules` / etc., the contribution MUST happen in the module's
+appropriate backend sibling. If the content is HM-scope (personal user config),
+put it in the HM module. If it's project-scope (devenv-only), put it in the
+devenv module. Contributing in one and expecting the other to pick it up will
+silently fail — the contribution just doesn't land in the other eval.
 
 This is a different discipline from the AI CLI factories (`mkAiApp`), which have
 structural `hm = { config = …; }` / `devenv = { config = …; }` blocks that force
@@ -511,13 +500,12 @@ authors must decide scope consciously.
 
 Plain convenience modules may contribute directly to selected
 `ai.<runtime>.<pool>` entries at `mkDefault` priority. Semble uses this for its
-named MCP and agent defaults in both backend evaluations. Its Claude and Codex
-instruction records stay unnamed so they compose into each runtime's single
-always-loaded file, while its Kiro record is named `semble` so the
-directory-native renderer writes `semble.md` rather than collecting unrelated
-content in `instructions.md`. Selecting a runtime configures that runtime's
-integration only; the convenience module must not set `ai.<runtime>.enable`,
-because package/CLI activation remains an explicit consumer choice.
+named MCP, agent, and `semble` rule defaults in both backend evaluations. The
+rule composes into Claude and Codex's single always-loaded files and lets Kiro's
+directory-native renderer write `semble.md`. Selecting a runtime configures that
+runtime's integration only; the convenience module must not set
+`ai.<runtime>.enable`, because package/CLI activation remains an explicit
+consumer choice.
 
 Semble also treats Codex's selected sandbox mode as an integration boundary. A
 selected Codex feature plus `sandbox_mode = "workspace-write"` appends the
@@ -564,8 +552,8 @@ re-adds the HM contribution as its own explicit, user-global emission, so both
 backends now contribute (each via `lib/ai/mkSkillPackageModule`).
 
 **Both contributions land PER RUNTIME, not on the root pool** — since 2026-08-14
-the factory writes `ai.<runtime>.skills` and `ai.<runtime>.instructions` for
-every runtime whose module is present in the evaluation, filtered by
+the factory writes `ai.<runtime>.skills` and `ai.<runtime>.rules` for every
+runtime whose module is present in the evaluation, filtered by
 `lib.hasAttrByPath ["ai" name "skills"] options`. Root `ai.skills` is ADDITIVE
 and cannot be retracted per runtime, so a root write would make a consumer's
 future per-runtime negation evaluate cleanly and silently do nothing. The
@@ -575,10 +563,8 @@ inside this flake. The one exemption is `sharedOptions.nix` itself, which
 declares those options and so has nowhere else to expand its L1→L2 Dir reshape
 to.
 
-Two consequences to know before changing it. The consumer's override key is now
-`ai.<runtime>.skills.<name>` — a root `ai.skills.<same-name>` is a hard
-collision, not an override, because `intersectAttrs` is priority-blind (see
-`collision-semantics.md`). And always-loaded instruction ORDER flipped: the
-router instruction moved from the left operand of
-`config.ai.instructions ++ cfg.instructions` to the right, so it now renders
-after a consumer's own root instructions rather than before them.
+Two consequences to know before changing it. Consumer override keys are
+`ai.<runtime>.skills.<name>` and `ai.<runtime>.rules.<name>`; package entries
+use `mkDefault`, so an ordinary per-runtime consumer definition wins. A root
+entry with the same key is instead a hard cross-level collision because
+`intersectAttrs` is priority-blind (see `collision-semantics.md`).

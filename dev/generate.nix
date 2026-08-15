@@ -582,7 +582,7 @@
     | Git tool packages | Install manually | Overlay + `nix build` | Overlay + `nix build` |
     | GitLab CLI config | `glab config set` | `glab.*` | `glab.*` |
     | GitLab CLI credentials | Manual env vars | `plain`, `file` or `helper` | `plain`, `file` or `helper` |
-    | Context, instructions, rules | Copy native files | `ai.{context,instructions,rules}` (all four CLIs) | Same; project-native paths |
+    | Context and rules | Copy native files | `ai.{context,rules}` (runtime capability-gated) | Same; project-native paths |
     | Skills | Copy native directories | `ai.skills.*` (all four CLIs) | Same; project-native paths |
     | Portable reasoning effort | Per-CLI config | `ai.settings.reasoningEffort` (Claude + Codex) | Same |
     | Semantic agents | Per-CLI config | `ai.agents.*` (Claude + Codex + Copilot) | Same; project-native paths |
@@ -611,9 +611,9 @@
 
       skills.my-skill = ./skills/my-skill;
 
-      instructions.standards = {
+      rules.standards = {
         text = "Use strict mode everywhere";
-        paths = ["src/**"];
+        matcher = ["src/**"];
         description = "Project standards";
       };
 
@@ -713,15 +713,13 @@
         };
       agents.semble-search =
         inputs.nix-agentic-tools.lib.ai.semble.semanticAgent;
-      instructions = [inputs.nix-agentic-tools.lib.ai.semble.instruction];
+      rules.semble = inputs.nix-agentic-tools.lib.ai.semble.rule;
     };
 
     ai.kiro = {
       agents.semble-search =
         inputs.nix-agentic-tools.lib.ai.semble.kiroAgent;
-      instructions = [
-        inputs.nix-agentic-tools.lib.ai.semble.kiroInstruction
-      ];
+      rules.semble = inputs.nix-agentic-tools.lib.ai.semble.rule;
     };
     ```
 

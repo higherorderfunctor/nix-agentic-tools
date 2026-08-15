@@ -2,8 +2,8 @@
 #
 # Delegates to the shared skill-packaging factory (lib/ai/mkSkillPackageModule):
 # `stacked-workflows.enable = true` fans the unprefixed stack-* skills and the
-# skill-routing instruction into the PER-RUNTIME
-# `ai.<runtime>.{skills,instructions}` pools at project-local (devenv) scope —
+# skill-routing rule into the PER-RUNTIME
+# `ai.<runtime>.{skills,rules}` pools at project-local (devenv) scope —
 # NOT the root pools, which are additive and cannot be retracted per runtime.
 # Those pools are per-`evalModules`, so this contribution is independent of the
 # HM module's.
@@ -18,7 +18,7 @@ import ../../../../lib/ai/mkSkillPackageModule.nix {
   name = "stacked-workflows";
   enableDescription = "stacked workflow skills + skill-routing rule (project-local devenv scope)";
   skills = {pkgs, ...}: pkgs.stacked-workflows-content.passthru.skills;
-  instructions = {
+  rules = {
     lib,
     pkgs,
     ...

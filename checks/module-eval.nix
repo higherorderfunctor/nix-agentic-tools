@@ -846,9 +846,9 @@ in {
         modules = [
           {
             options.ai.claude = {
-              instructions = lib.mkOption {
-                type = lib.types.listOf lib.types.attrs;
-                default = [];
+              rules = lib.mkOption {
+                type = lib.types.attrsOf lib.types.attrs;
+                default = {};
               };
               skills = lib.mkOption {
                 type = lib.types.attrsOf lib.types.path;
@@ -859,6 +859,7 @@ in {
           (import ./../lib/ai/mkSkillPackageModule.nix {
             name = "probe-package";
             enableDescription = "presence-gate probe";
+            rules = _: {probe-rule.text = "Probe guidance.";};
             skills = _: {probe-skill = ./fixtures;};
           })
           {probe-package.enable = true;}
@@ -866,6 +867,7 @@ in {
       };
     in
       onlyClaude.config.ai.claude.skills ? probe-skill
+      && onlyClaude.config.ai.claude.rules ? probe-rule
   );
 
   module-ai-git-ssh-default-follows-harnesses = mkTest "ai-git-ssh-default-follows-harnesses" (
@@ -2391,7 +2393,7 @@ in {
       hm = evalHm {
         ai = {
           codex.enable = true;
-          context = "Shared context";
+          context.text = "Shared context";
         };
       };
       empty = evalHm {ai.codex.enable = true;};
@@ -2420,6 +2422,61 @@ in {
     };
   in
     builtins.deepSeq result.config.ai.codex.context true)).success);
+
+  module-content-record-competing-writers-conflict = mkTest "content-record-competing-writers-conflict" (
+    let
+      aiCommon = import ./../lib/ai/ai-common.nix {inherit lib;};
+      contextAttempt = builtins.tryEval (let
+        result = lib.evalModules {
+          modules = [
+            {
+              options.context = lib.mkOption {
+                type = aiCommon.optionalContentModule;
+                default = {};
+                apply = aiCommon.validateOptionalContent;
+              };
+            }
+            {context.text = "first writer";}
+            {context.text = "second writer";}
+          ];
+        };
+      in
+        builtins.deepSeq result.config.context true);
+      ruleAttempt = builtins.tryEval (let
+        result = lib.evalModules {
+          modules = [
+            {
+              options.rules = lib.mkOption {
+                type = lib.types.attrsOf aiCommon.ruleModule;
+                default = {};
+                apply = aiCommon.validateRules;
+              };
+            }
+            {rules.same.text = "first writer";}
+            {rules.same.text = "second writer";}
+          ];
+        };
+      in
+        builtins.deepSeq result.config.rules true);
+    in
+      !contextAttempt.success && !ruleAttempt.success
+  );
+
+  module-single-context-source-does-not-trigger-ifd = mkTest "single-context-source-does-not-trigger-ifd" (
+    let
+      source = pkgs.runCommand "context-source-must-not-build" {} ''
+        exit 1
+      '';
+      result = evalDevenv {
+        ai.copilot = {
+          context = {inherit source;};
+          enable = true;
+        };
+      };
+      entry = result.config.files.".github/copilot-instructions.md";
+    in
+      entry.source == source && !(entry ? text)
+  );
 
   module-rule-rejects-empty-matcher = mkTest "rule-rejects-empty-matcher" (!(builtins.tryEval (let
     result = evalHm {
@@ -2469,18 +2526,24 @@ in {
       !attempt.success
   );
 
-  module-codex-empty-path-context-does-not-prefix-separator = mkTest "codex-empty-path-context-does-not-prefix-separator" (
+  module-shared-agentsmd-omits-absent-runtime-context = mkTest "shared-agentsmd-omits-absent-runtime-context" (
     let
-      evaluated = evalHm {
+      result = evalDevenv {
         ai = {
-          codex.enable = true;
-          context = ./fixtures/empty;
-          instructions = [{text = "Instruction";}];
+          codex = {
+            context.text = "Codex-only context.";
+            enable = true;
+          };
+          kiro = {
+            enable = true;
+            rules.kiro-only.text = "Kiro rule.";
+          };
         };
       };
+      agents = result.config.files."AGENTS.md".text;
     in
-      evaluated.config.home.file.".codex/AGENTS.md".text
-      == "<!-- rule: __legacy-instruction-0-unnamed -->\nInstruction"
+      lib.hasInfix "Codex-only context." agents
+      && lib.hasInfix "Kiro rule." agents
   );
 
   module-codex-configdir-rejects-unsafe-paths = mkTest "codex-configdir-rejects-unsafe-paths" (
@@ -2502,103 +2565,26 @@ in {
       && !(accepts "config/../codex")
   );
 
-  module-codex-path-instruction-resolves = mkTest "codex-path-instruction-resolves" (
-    let
-      evaluated = evalHm {
-        ai = {
-          codex.enable = true;
-          instructions = [{text = ./fixtures/kiro-steering/alpha.md;}];
-        };
-      };
-    in
-      evaluated.config.home.file.".codex/AGENTS.md".text
-      == "<!-- rule: __legacy-instruction-0-unnamed -->\nAlpha steering body.\n"
-  );
-
   module-codex-scoped-content-degrades-to-prose = mkTest "codex-scoped-content-degrades-to-prose" (
     let
       config = {
         ai = {
           codex = {
             enable = true;
-            instructions = [
-              {
-                name = "nix";
-                paths = ["**/*.nix" "flake.lock"];
-                text = "Scoped instruction";
-              }
-            ];
           };
           rules.scoped = {
-            paths = ["src/**"];
+            matcher = ["src/**"];
             text = "Scoped rule";
           };
         };
       };
       hm = evalHm config;
       devenv = evalDevenv config;
-      expected = builtins.concatStringsSep "\n\n" [
-        "<!-- rule: __legacy-instruction-0-nix -->\n<!-- instruction: nix -->\n_Apply this guidance only when working with files matching: `**/*.nix`, `flake.lock`_\n\nScoped instruction"
-        "<!-- rule: scoped -->\n_Apply this guidance only when working with files matching: `src/**`_\n\nScoped rule"
-      ];
+      expected = "<!-- rule: scoped -->\n_Apply this guidance only when working with files matching: `src/**`_\n\nScoped rule";
     in
       hm.config.home.file.".codex/AGENTS.md".text
       == expected
       && devenv.config.files."AGENTS.md".text == expected
-  );
-
-  module-codex-scoped-content-can-skip = mkTest "codex-scoped-content-can-skip" (
-    let
-      evaluated = evalHm {
-        ai = {
-          codex = {
-            enable = true;
-            instructions = [
-              {
-                paths = ["**/*.nix"];
-                skipIfUnsupported = true;
-                text = "Skipped instruction";
-              }
-            ];
-          };
-          context = "Kept context";
-          rules.skipped = {
-            paths = ["src/**"];
-            skipIfUnsupported = true;
-            text = "Skipped rule";
-          };
-        };
-      };
-    in
-      evaluated.config.home.file.".codex/AGENTS.md".text == "Kept context"
-  );
-
-  module-codex-empty-scope-fails-loudly = mkTest "codex-empty-scope-fails-loudly" (
-    let
-      evaluated = evalHm {
-        ai = {
-          codex = {
-            enable = true;
-            instructions = [
-              {
-                paths = [];
-                text = "Ambiguous";
-              }
-            ];
-          };
-          rules.empty = {
-            paths = [];
-            text = "Ambiguous";
-          };
-        };
-      };
-      failedMessages = map (assertion: assertion.message) (
-        builtins.filter (assertion: !assertion.assertion) evaluated.config.assertions
-      );
-    in
-      builtins.any (lib.hasInfix "ai.codex.instructions[0].paths") failedMessages
-      && builtins.any (lib.hasInfix "ai.codex.rules.empty.paths") failedMessages
-      && builtins.all (lib.hasInfix "must be null or a non-empty list") failedMessages
   );
 
   module-codex-size-guard-byte-boundaries = mkTest "codex-size-guard-byte-boundaries" (
@@ -2606,7 +2592,7 @@ in {
       evaluate = context: projectDocMaxBytes:
         evalHm {
           ai.codex = {
-            inherit context;
+            context.text = context;
             enable = true;
             inherit projectDocMaxBytes;
           };
@@ -2619,13 +2605,8 @@ in {
         ai = {
           codex = {
             enable = true;
-            instructions = [
-              {
-                name = "named";
-                text = "i";
-              }
-            ];
             projectDocMaxBytes = 1;
+            rules.named.text = "i";
           };
           rules.oversize.text = "r";
         };
@@ -2641,13 +2622,40 @@ in {
       && lib.hasInfix "renders to 32769 bytes" aboveAssertion.message
       && lib.hasInfix "projectDocMaxBytes (32768 bytes)" aboveAssertion.message
       && diagnosticAssertion != null
-      && lib.hasInfix "instruction:named=" diagnosticAssertion.message
+      && lib.hasInfix "rule:named=" diagnosticAssertion.message
       && lib.hasInfix "rule:oversize=" diagnosticAssertion.message
       && unicodeAssertion != null
       && lib.hasInfix "renders to 2 bytes" unicodeAssertion.message
       && lib.hasInfix "projectDocMaxBytes (1 bytes)" unicodeAssertion.message
       && lib.hasInfix "context=2 bytes" unicodeAssertion.message
       && lib.hasInfix "Trim the contributing content or raise" unicodeAssertion.message
+  );
+
+  module-codex-shared-size-guard-covers-kiro-only-content = mkTest "codex-shared-size-guard-covers-kiro-only-content" (
+    let
+      oversized = evalDevenv {
+        ai = {
+          codex = {
+            enable = true;
+            projectDocMaxBytes = 16;
+          };
+          kiro = {
+            enable = true;
+            rules.kiro-only.text = lib.concatStrings (lib.replicate 32 "x");
+          };
+        };
+      };
+      empty = evalDevenv {ai.codex.enable = true;};
+      failed =
+        lib.findFirst (assertion:
+          !assertion.assertion
+          && lib.hasInfix "AGENTS.md renders" assertion.message)
+        null
+        oversized.config.assertions;
+    in
+      failed
+      != null
+      && !(empty.config.files ? "AGENTS.md")
   );
 
   module-codex-rule-collision-fails = mkTest "codex-rule-collision-fails" (
@@ -2793,8 +2801,8 @@ in {
     let
       evaluated = evalHm {semble.enable = true;};
       cfg = evaluated.config;
-      claudeInstruction = builtins.head cfg.ai.claude.instructions;
-      codexInstruction = builtins.head cfg.ai.codex.instructions;
+      claudeRule = cfg.ai.claude.rules.semble;
+      codexRule = cfg.ai.codex.rules.semble;
       # Semble's Kiro agent is a TYPED record now. Semble deliberately does not
       # set `ai.kiro.enable` (selecting a runtime configures it; activating it
       # stays the consumer's call), so nothing is EMITTED here — this test
@@ -2803,18 +2811,18 @@ in {
       # asserted end-to-end in `semble-kiro-agent-emits-name` below.
       kiroAgentName = "semble-search";
       kiroAgentRecord = cfg.ai.kiro.agents.${kiroAgentName};
-      kiroInstruction = builtins.head cfg.ai.kiro.instructions;
+      kiroRule = cfg.ai.kiro.rules.semble;
     in
       builtins.length cfg.home.packages
       == 1
       && lib.all (runtime: cfg.ai.${runtime}.mcpServers ? semble) ["claude" "codex" "kiro"]
-      && lib.all (runtime: builtins.length cfg.ai.${runtime}.instructions == 1) ["claude" "codex" "kiro"]
+      && lib.all (runtime: cfg.ai.${runtime}.rules ? semble) ["claude" "codex" "kiro"]
       && cfg.ai.claude.agents ? semble-search
       && cfg.ai.codex.agents ? semble-search
       && cfg.ai.kiro.agents ? ${kiroAgentName}
       && cfg.ai.claude.agents.semble-search.tools == ["Bash" "Read"]
-      && !(claudeInstruction ? name)
-      && !(codexInstruction ? name)
+      && claudeRule.source == ../packages/semble/agent-instructions.md
+      && codexRule.source == ../packages/semble/agent-instructions.md
       && kiroAgentRecord.name == null
       && kiroAgentRecord.description != null
       && kiroAgentRecord.tools == ["shell" "read"]
@@ -2823,10 +2831,10 @@ in {
       # instead of read.
       && !(lib.hasPrefix builtins.storeDir kiroAgentRecord.prompt)
       && lib.hasInfix "semble" kiroAgentRecord.prompt
-      && kiroInstruction.name == "semble"
+      && kiroRule.source == ../packages/semble/agent-instructions.md
       && !(cfg.ai.copilot.mcpServers ? semble)
       && !(cfg.ai.copilot.agents ? semble-search)
-      && cfg.ai.copilot.instructions == []
+      && cfg.ai.copilot.rules == {}
   );
 
   # End-to-end regression guard for the defect that motivated typing this
@@ -2867,10 +2875,10 @@ in {
       builtins.length onlyMcp.packages
       == 1
       && onlyMcp.ai.claude.mcpServers ? semble
-      && onlyMcp.ai.claude.instructions == []
+      && onlyMcp.ai.claude.rules == {}
       && !(onlyMcp.ai.claude.agents ? semble-search)
       && !(noMcp.ai.claude.mcpServers ? semble)
-      && builtins.length noMcp.ai.claude.instructions == 1
+      && noMcp.ai.claude.rules ? semble
       && noMcp.ai.claude.agents ? semble-search
   );
 
@@ -2895,13 +2903,13 @@ in {
     in
       top.ai.codex.mcpServers ? semble
       && top.ai.codex.agents ? semble-search
-      && builtins.length top.ai.codex.instructions == 1
+      && top.ai.codex.rules ? semble
       && !(top.ai.claude.mcpServers ? semble)
       && !(top.ai.kiro.agents ? semble-search)
       && perFeature.ai.kiro.mcpServers ? semble
       && !(perFeature.ai.claude.mcpServers ? semble)
-      && builtins.length perFeature.ai.claude.instructions == 1
-      && perFeature.ai.codex.instructions == []
+      && perFeature.ai.claude.rules ? semble
+      && perFeature.ai.codex.rules == {}
       && perFeature.ai.codex.agents ? semble-search
       && !(perFeature.ai.kiro.agents ? semble-search)
   );
@@ -3227,7 +3235,7 @@ in {
       && lib.hasSuffix "/bin/semble-mcp" refined.command
   );
 
-  module-semble-package-override-and-named-kiro-instruction = mkTest "semble-package-override-and-named-kiro-instruction" (
+  module-semble-package-override-and-named-kiro-rule = mkTest "semble-package-override-and-named-kiro-rule" (
     let
       evaluated = evalDevenv {
         semble = {
@@ -3236,7 +3244,7 @@ in {
           runtimes = ["kiro"];
         };
       };
-      instruction = builtins.head evaluated.config.ai.kiro.instructions;
+      rule = evaluated.config.ai.kiro.rules.semble;
     in
       # devenv relocates the cache, so semble is installed WRAPPED. The
       # wrapper is named after what it wraps, which is what keeps the
@@ -3248,11 +3256,26 @@ in {
         builtins.baseNameOf (builtins.head evaluated.config.packages)
       )
       && evaluated.config.ai.kiro.mcpServers == {}
-      && instruction.name == "semble"
-      && instruction.text == ../packages/semble/agent-instructions.md
+      && rule.source == ../packages/semble/agent-instructions.md
   );
 
-  module-semble-instructions-use-native-files = mkTest "semble-instructions-use-native-files" (
+  module-semble-rule-text-override-wins = mkTest "semble-rule-text-override-wins" (
+    let
+      evaluated = evalDevenv {
+        ai.kiro.rules.semble.text = "Consumer rule.";
+        semble = {
+          instructions.enable = true;
+          runtimes = ["kiro"];
+        };
+      };
+      rule = evaluated.config.ai.kiro.rules.semble;
+    in
+      rule.text
+      == "Consumer rule."
+      && rule.source == null
+  );
+
+  module-semble-rules-use-native-files = mkTest "semble-rules-use-native-files" (
     let
       nativeConfig = {
         ai = {
@@ -3267,17 +3290,16 @@ in {
       hmKiroSteering = hm.ai.kiro.steeringFiles;
       devenvKiroSteering = devenv.ai.kiro.steeringFiles;
       hmKiroInstruction = (hmKiroSteering."semble.md" or {}).text or "";
-      devenvKiroInstruction = (devenvKiroSteering."semble.md" or {}).text or "";
+      hmClaudeRule = (hm.home.file.".claude/rules/semble.md" or {}).text or "";
     in
-      lib.hasInfix "Use `semble search`" (hm.programs.claude-code.context or "")
+      lib.hasInfix "Use `semble search`" hmClaudeRule
       && lib.hasInfix "Use `semble search`" (hm.home.file.".codex/AGENTS.md".text or "")
       && hmKiroSteering ? "semble.md"
       && !(hmKiroSteering ? "instructions.md")
       && lib.hasInfix "name: semble" hmKiroInstruction
       && lib.hasInfix "inclusion: always" hmKiroInstruction
-      && devenvKiroSteering ? "semble.md"
-      && !(devenvKiroSteering ? "instructions.md")
-      && hmKiroInstruction == devenvKiroInstruction
+      && !(devenvKiroSteering ? "semble.md")
+      && lib.hasInfix "Use `semble search`" devenv.files."AGENTS.md".text
   );
 
   module-semble-hm-devenv-option-parity = mkTest "semble-hm-devenv-option-parity" (
@@ -3315,9 +3337,7 @@ in {
       && code.args == []
       && lib.hasSuffix "/bin/semble-mcp" code.command
       && all.args == ["--content" "all"]
-      && records.instruction.text == ../packages/semble/agent-instructions.md
-      && records.kiroInstruction.name == "semble"
-      && records.kiroInstruction.text == records.instruction.text
+      && records.rule.source == ../packages/semble/agent-instructions.md
       && records.semanticAgent.instructions == ../packages/semble/agent-instructions.md
       && records.semanticAgent.tools == ["Bash" "Read"]
       # `kiroAgent` is a typed record, not pre-rendered JSON. It deliberately
@@ -3972,14 +3992,8 @@ in {
     let
       config.ai.copilot = {
         agents.reviewer = "Review the change.";
-        context = "PROJECT-CONTEXT";
+        context.text = "PROJECT-CONTEXT";
         enable = true;
-        instructions = [
-          {
-            name = "named";
-            text = "NAMED-INSTRUCTION";
-          }
-        ];
         projectDir = ".custom-github";
         rules.security.text = "SECURITY-RULE";
         skills.example = ./fixtures/claude-skills/skill-a;
@@ -3993,15 +4007,12 @@ in {
       hm.config.assertions
       && (devenv.config.files.".custom-github/copilot-instructions.md".text or "")
       == "PROJECT-CONTEXT"
-      && lib.hasInfix "NAMED-INSTRUCTION"
-      (devenv.config.files.".custom-github/instructions/named.instructions.md".text or "")
       && lib.hasInfix "SECURITY-RULE"
       (devenv.config.files.".custom-github/instructions/security.instructions.md".text or "")
       && lib.hasInfix "Review the change."
       (devenv.config.files.".custom-github/agents/reviewer.agent.md".text or "")
       && devenv.config.files.".custom-github/skills/example/SKILL.md".source
       == ./fixtures/claude-skills/skill-a/SKILL.md
-      && !(devenv.config.files ? ".github/instructions/named.instructions.md")
       && !(devenv.config.files ? ".github/instructions/security.instructions.md")
   );
 
@@ -4050,12 +4061,8 @@ in {
     in
       result.config.files.".github/copilot-instructions.md".text
       == "Project context\n\nCopilot project context"
-      && lib.hasInfix "Validate all user input."
-      result.config.files.".github/instructions/security.instructions.md".text
-      && lib.hasInfix "description: Security guidance"
-      result.config.files.".github/instructions/security.instructions.md".text
-      && lib.hasInfix ''applyTo: "**/*.ts"''
-      result.config.files.".github/instructions/security.instructions.md".text
+      && result.config.files.".github/instructions/security.instructions.md".text
+      == "---\napplyTo: \"**/*.ts\"\n---\n\nValidate all user input."
       && lib.hasInfix "Shared project rule."
       result.config.files.".github/instructions/shared.instructions.md".text
   );
@@ -4088,39 +4095,27 @@ in {
       && devenv.config.ai.kiro.enable
   );
 
-  # ── Unnamed-instruction composition ─────────────────────────────
-  # Shared-pool UNNAMED instructions compose into the single CLAUDE.md via
-  # upstream `programs.claude-code.context` (the generic aggregate home.file
-  # writer was retired to end the ~/.claude/CLAUDE.md double-writer collision —
-  # see docs/plans/ai-instructions-context-compose-fix.md). Covers
-  # sharedOptions.ai.instructions -> mergedInstructions -> composeInstructionsFile
-  # -> programs.claude-code.context. (Formerly
-  # module-claude-instructions-rendered-to-home-file, which asserted the retired
-  # home.file aggregate.)
-  module-claude-unnamed-instructions-composed-into-context = mkTest "claude-unnamed-instructions-composed-into-context" (
+  module-claude-shared-rule-emits-native-file = mkTest "claude-shared-rule-emits-native-file" (
     let
       evaluated = evalHm {
         ai = {
           claude.enable = true;
-          instructions = [
-            {
-              text = "Always use rg instead of grep.";
-              description = "Grep replacement";
-            }
-          ];
+          rules.search = {
+            text = "Always use rg instead of grep.";
+            description = "Grep replacement";
+          };
         };
       };
-      ctx = evaluated.config.programs.claude-code.context or "";
+      rule = evaluated.config.home.file.".claude/rules/search.md".text;
     in
-      lib.hasInfix "Always use rg instead of grep." ctx
-      && lib.hasInfix "description: Grep replacement" ctx
-      && !(evaluated.config.home.file ? ".claude/CLAUDE.md")
+      lib.hasInfix "Always use rg instead of grep." rule
+      && lib.hasInfix "description: Grep replacement" rule
   );
 
-  module-claude-no-instructions-no-file = mkTest "claude-no-instructions-no-file" (
+  module-claude-no-guidance-no-file = mkTest "claude-no-guidance-no-file" (
     let
       evaluated = evalHm {ai.claude.enable = true;};
-      # With no instructions and no context merged, nothing writes the
+      # With no rules and no context merged, nothing writes the
       # `home.file` CLAUDE.md path (the generic aggregate writer is retired;
       # context flows through programs.claude-code.context instead). Regression
       # guard that the aggregate stays gone.
@@ -4128,62 +4123,43 @@ in {
       !(evaluated.config.home.file ? ".claude/CLAUDE.md")
   );
 
-  # Per-app (ai.claude.instructions) UNNAMED entries also compose into
-  # programs.claude-code.context. (Formerly
-  # module-claude-per-app-instructions-rendered, which asserted the home.file
-  # aggregate.)
-  module-claude-per-app-unnamed-composed-into-context = mkTest "claude-per-app-unnamed-composed-into-context" (
+  module-claude-per-app-rule-emits-native-file = mkTest "claude-per-app-rule-emits-native-file" (
     let
       evaluated = evalHm {
         ai.claude = {
           enable = true;
-          instructions = [
-            {
-              text = "Claude-specific rule.";
-              description = "Claude only";
-            }
-          ];
+          rules.claude-only = {
+            text = "Claude-specific rule.";
+            description = "Claude only";
+          };
         };
       };
-      ctx = evaluated.config.programs.claude-code.context or "";
+      rule = evaluated.config.home.file.".claude/rules/claude-only.md".text;
     in
-      lib.hasInfix "Claude-specific rule." ctx
-      && !(evaluated.config.home.file ? ".claude/CLAUDE.md")
+      lib.hasInfix "Claude-specific rule." rule
   );
 
-  # ── Compose fix (docs/plans/ai-instructions-context-compose-fix.md §6a) ──
-  # Claude HM: `context` + one NAMED + one UNNAMED instruction must lower to a
-  # SINGLE always-on writer — upstream `programs.claude-code.context` composed
-  # as [context baseline] + [unnamed instruction] — with the NAMED entry living
-  # ONLY in `.claude/rules/<name>.md`, never duplicated into the composed
-  # context. This fills the §4 blind spot (no fixture ever set context + an
-  # instruction together for an aggregate CLI), which is why the ~/.claude/
-  # CLAUDE.md double-writer collision shipped green.
-  #
-  # RED today: the generic aggregate (hmTransform:166) writes
-  # `home.file.".claude/CLAUDE.md"` whenever any instruction is merged (the
-  # second writer that collides with upstream context in a real HM eval), and
-  # `programs.claude-code.context` carries only the bare context — so (a) and
-  # (b) both fail. GREEN once the aggregate is retired and context composes.
-  module-claude-hm-compose-context-and-unnamed = mkTest "claude-hm-compose-context-and-unnamed" (
+  # Claude HM keeps context in the upstream context writer and emits each keyed
+  # rule once in `.claude/rules/<name>.md`. No generic aggregate may claim the
+  # same CLAUDE.md path.
+  module-claude-hm-context-and-rules = mkTest "claude-hm-context-and-rules" (
     let
       evaluated = evalHm {
         ai = {
           claude = {
             enable = true;
-            context = "CONTEXT-BASELINE-TOKEN.";
+            context.text = "CONTEXT-BASELINE-TOKEN.";
           };
-          instructions = [
-            {
-              name = "named-rule";
+          rules = {
+            named-rule = {
               text = "NAMED-RULE-BODY-TOKEN.";
-              paths = ["src/**"];
-            }
-            {
+              matcher = ["src/**"];
+            };
+            unnamed = {
               text = "UNNAMED-INSTR-TOKEN.";
               description = "unnamed always-on";
-            }
-          ];
+            };
+          };
         };
       };
       ctx = evaluated.config.programs.claude-code.context or "";
@@ -4193,194 +4169,159 @@ in {
       # (a) no generic-aggregate writer on CLAUDE.md — context owns it (upstream).
       aggregate
       == null
-      # (b) the single composed context holds BOTH baseline AND the unnamed text.
-      && lib.hasInfix "CONTEXT-BASELINE-TOKEN." ctx
-      && lib.hasInfix "UNNAMED-INSTR-TOKEN." ctx
-      # (c) the named entry lives only in its rules file, not duplicated into context.
+      && ctx == "CONTEXT-BASELINE-TOKEN."
       && ruleFile != null
       && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (ruleFile.text or "")
       && !(lib.hasInfix "NAMED-RULE-BODY-TOKEN." ctx)
+      && evaluated.config.home.file ? ".claude/rules/unnamed.md"
   );
 
-  # Claude devenv parity (§6a.2). devenv Claude has NO context writer today —
-  # its `.claude/CLAUDE.md` came only from the generic aggregate, which drops
-  # context (the §2 secondary bug, devenv side) and duplicates the named entry.
-  # RED today: the composed file must hold the context baseline (dropped today)
-  # and must NOT duplicate the named body (present in the aggregate today).
-  module-claude-devenv-compose-context-and-unnamed = mkTest "claude-devenv-compose-context-and-unnamed" (
+  # Claude devenv writes context to `.claude/CLAUDE.md` and keeps every rule in
+  # its own native file, without duplicating rule bodies into the context file.
+  module-claude-devenv-context-and-rules = mkTest "claude-devenv-context-and-rules" (
     let
       evaluated = evalDevenv {
         ai = {
           claude = {
             enable = true;
-            context = "CONTEXT-BASELINE-TOKEN.";
+            context.text = "CONTEXT-BASELINE-TOKEN.";
           };
-          instructions = [
-            {
-              name = "named-rule";
+          rules = {
+            named-rule = {
               text = "NAMED-RULE-BODY-TOKEN.";
-              paths = ["src/**"];
-            }
-            {
+              matcher = ["src/**"];
+            };
+            unnamed = {
               text = "UNNAMED-INSTR-TOKEN.";
               description = "unnamed always-on";
-            }
-          ];
+            };
+          };
         };
       };
       composed = (evaluated.config.files.".claude/CLAUDE.md" or {}).text or "";
       ruleFile = evaluated.config.files.".claude/rules/named-rule.md" or null;
     in
       lib.hasInfix "CONTEXT-BASELINE-TOKEN." composed
-      && lib.hasInfix "UNNAMED-INSTR-TOKEN." composed
+      && !(lib.hasInfix "UNNAMED-INSTR-TOKEN." composed)
       && !(lib.hasInfix "NAMED-RULE-BODY-TOKEN." composed)
       && ruleFile != null
       && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (ruleFile.text or "")
+      && evaluated.config.files ? ".claude/rules/unnamed.md"
   );
 
-  # During the additive transition, Copilot HM keeps legacy instructions but
-  # normalized context is already a documented no-op. The deletion commit
-  # removes the remaining legacy writers.
-  module-copilot-hm-compose-context-and-unnamed = mkTest "copilot-hm-compose-context-and-unnamed" (
+  module-copilot-hm-context-and-rules-are-noop = mkTest "copilot-hm-context-and-rules-are-noop" (
     let
       evaluated = evalHm {
         ai = {
           copilot = {
             enable = true;
-            context = "CONTEXT-BASELINE-TOKEN.";
-          };
-          instructions = [
-            {
-              name = "named-rule";
+            context.text = "CONTEXT-BASELINE-TOKEN.";
+            rules.named-rule = {
+              matcher = ["src/**"];
               text = "NAMED-RULE-BODY-TOKEN.";
-              paths = ["src/**"];
-            }
-            {
-              text = "UNNAMED-INSTR-TOKEN.";
-              description = "unnamed always-on";
-            }
-          ];
+            };
+          };
         };
       };
       contextFile = (evaluated.config.home.file.".copilot/copilot-instructions.md" or {}).text or "";
-      instrFile = evaluated.config.home.file.".copilot/instructions/named-rule.instructions.md" or null;
+      ruleFile = evaluated.config.home.file.".copilot/instructions/named-rule.instructions.md" or null;
     in
-      !(lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile)
-      && lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile
-      && !(evaluated.config.home.file ? ".config/github-copilot/copilot-instructions.md")
-      # `$HOME/.github/` is not a directory copilot-cli reads; the old
-      # hardcode is gone and must not come back alongside the live path.
-      && !(evaluated.config.home.file ? ".github/instructions/named-rule.instructions.md")
-      && instrFile != null
-      && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (instrFile.text or "")
+      contextFile
+      == ""
+      && ruleFile == null
   );
 
-  # Copilot devenv parity (§6a.3). Native context file is `.github/copilot-instructions.md`
-  # (projectDir = .github). Same shape: holds context + unnamed, no aggregate.
-  module-copilot-devenv-compose-context-and-unnamed = mkTest "copilot-devenv-compose-context-and-unnamed" (
+  # Copilot devenv writes context and each keyed rule to its project-native
+  # `.github/` location.
+  module-copilot-devenv-context-and-rules = mkTest "copilot-devenv-context-and-rules" (
     let
       evaluated = evalDevenv {
         ai = {
           copilot = {
             enable = true;
-            context = "CONTEXT-BASELINE-TOKEN.";
+            context.text = "CONTEXT-BASELINE-TOKEN.";
+            rules = {
+              named-rule = {
+                matcher = ["src/**"];
+                text = "NAMED-RULE-BODY-TOKEN.";
+              };
+              unnamed.text = "UNNAMED-INSTR-TOKEN.";
+            };
           };
-          instructions = [
-            {
-              name = "named-rule";
-              text = "NAMED-RULE-BODY-TOKEN.";
-              paths = ["src/**"];
-            }
-            {
-              text = "UNNAMED-INSTR-TOKEN.";
-              description = "unnamed always-on";
-            }
-          ];
         };
       };
       contextFile = (evaluated.config.files.".github/copilot-instructions.md" or {}).text or "";
-      instrFile = evaluated.config.files.".github/instructions/named-rule.instructions.md" or null;
+      ruleFile = evaluated.config.files.".github/instructions/named-rule.instructions.md" or null;
     in
       lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
-      && lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile
+      && !(lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile)
       && !(evaluated.config.files ? ".config/github-copilot/copilot-instructions.md")
-      && instrFile != null
-      && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (instrFile.text or "")
+      && ruleFile != null
+      && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (ruleFile.text or "")
+      && lib.hasInfix "UNNAMED-INSTR-TOKEN."
+      evaluated.config.files.".github/instructions/unnamed.instructions.md".text
   );
 
-  # Kiro HM parity (§6a.4). Directory-native: context stays standalone in
-  # the `AGENTS.md` steering entry (context only); named → `<name>.md`;
-  # unnamed → a DEDICATED `instructions.md`; and NO stray path-shaped
-  # key (the old trailing-slash `.config/kiro/steering/` aggregate).
+  # Kiro HM keeps context in the `AGENTS.md` steering entry and emits each keyed
+  # rule as `<name>.md`, with no stray path-shaped aggregate key.
   # Accessors read the derived ai.kiro.steeringFiles attrset (emission
   # is via the strategy-driven materializer).
-  module-kiro-hm-compose-context-and-unnamed = mkTest "kiro-hm-compose-context-and-unnamed" (
+  module-kiro-hm-context-and-rules = mkTest "kiro-hm-context-and-rules" (
     let
       evaluated = evalHm {
         ai = {
           kiro = {
             enable = true;
-            context = "CONTEXT-BASELINE-TOKEN.";
+            context.text = "CONTEXT-BASELINE-TOKEN.";
+            rules = {
+              named-rule = {
+                matcher = ["src/**"];
+                text = "NAMED-RULE-BODY-TOKEN.";
+              };
+              unnamed.text = "UNNAMED-INSTR-TOKEN.";
+            };
           };
-          instructions = [
-            {
-              name = "named-rule";
-              text = "NAMED-RULE-BODY-TOKEN.";
-              paths = ["src/**"];
-            }
-            {
-              text = "UNNAMED-INSTR-TOKEN.";
-              description = "unnamed always-on";
-            }
-          ];
         };
       };
       steering = evaluated.config.ai.kiro.steeringFiles;
       contextFile = (steering."AGENTS.md" or {}).text or "";
-      instrFile = steering."instructions.md" or null;
+      unnamedFile = steering."unnamed.md" or null;
       namedFile = steering."named-rule.md" or null;
     in
       lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
       && !(lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile)
-      && instrFile != null
-      && lib.hasInfix "UNNAMED-INSTR-TOKEN." (instrFile.text or "")
+      && unnamedFile != null
+      && lib.hasInfix "UNNAMED-INSTR-TOKEN." (unnamedFile.text or "")
       && !(lib.any (n: lib.hasInfix "/" n) (lib.attrNames steering))
       && namedFile != null
       && lib.hasInfix "NAMED-RULE-BODY-TOKEN." (namedFile.text or "")
   );
 
-  # Kiro devenv context uses the shared repository-root AGENTS.md; legacy
-  # instructions remain steering files only during the additive transition.
-  module-kiro-devenv-compose-context-and-unnamed = mkTest "kiro-devenv-compose-context-and-unnamed" (
+  # Kiro devenv shares repository-root AGENTS.md with Codex for context and
+  # always-on rules; scoped rules remain native steering files.
+  module-kiro-devenv-context-and-rules = mkTest "kiro-devenv-context-and-rules" (
     let
       evaluated = evalDevenv {
         ai = {
           kiro = {
             enable = true;
-            context = "CONTEXT-BASELINE-TOKEN.";
+            context.text = "CONTEXT-BASELINE-TOKEN.";
+            rules = {
+              named-rule = {
+                matcher = ["src/**"];
+                text = "NAMED-RULE-BODY-TOKEN.";
+              };
+              unnamed.text = "UNNAMED-INSTR-TOKEN.";
+            };
           };
-          instructions = [
-            {
-              name = "named-rule";
-              text = "NAMED-RULE-BODY-TOKEN.";
-              paths = ["src/**"];
-            }
-            {
-              text = "UNNAMED-INSTR-TOKEN.";
-              description = "unnamed always-on";
-            }
-          ];
         };
       };
       steering = evaluated.config.ai.kiro.steeringFiles;
       contextFile = (evaluated.config.files."AGENTS.md" or {}).text or "";
-      instrFile = steering."instructions.md" or null;
       namedFile = steering."named-rule.md" or null;
     in
       lib.hasInfix "CONTEXT-BASELINE-TOKEN." contextFile
-      && !(lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile)
-      && instrFile != null
-      && lib.hasInfix "UNNAMED-INSTR-TOKEN." (instrFile.text or "")
+      && lib.hasInfix "UNNAMED-INSTR-TOKEN." contextFile
       && !(steering ? "AGENTS.md")
       && !(lib.any (n: lib.hasInfix "/" n) (lib.attrNames steering))
       && namedFile != null
@@ -4632,17 +4573,14 @@ in {
       (result.config.programs.claude-code.settings.model or null) == "some-future-model"
   );
 
-  module-claude-hm-writes-instruction-rule-file = mkTest "claude-hm-writes-instruction-rule-file" (
+  module-claude-hm-writes-rule-file = mkTest "claude-hm-writes-rule-file" (
     let
       result = evalHm {
         ai.claude.enable = true;
-        ai.instructions = [
-          {
-            name = "my-rule";
-            text = "Always use strict mode.";
-            paths = ["src/**"];
-          }
-        ];
+        ai.rules.my-rule = {
+          matcher = ["src/**"];
+          text = "Always use strict mode.";
+        };
       };
       ruleFile = result.config.home.file.".claude/rules/my-rule.md" or null;
     in
@@ -5497,23 +5435,19 @@ in {
       && lib.hasInfix "test-server" (mcpFile.text or "")
   );
 
-  module-copilot-hm-writes-instruction-files = mkTest "copilot-hm-writes-instruction-files" (
+  module-copilot-hm-does-not-write-rule-files = mkTest "copilot-hm-does-not-write-rule-files" (
     let
       result = evalHm {
         ai.copilot.enable = true;
-        ai.instructions = [
-          {
-            name = "my-rule";
-            text = "Be concise.";
-            paths = ["src/**"];
-          }
-        ];
+        ai.rules.my-rule = {
+          matcher = ["src/**"];
+          text = "Be concise.";
+        };
       };
-      instrFile = result.config.home.file.".copilot/instructions/my-rule.instructions.md" or null;
+      ruleFile = result.config.home.file.".copilot/instructions/my-rule.instructions.md" or null;
     in
-      instrFile
-      != null
-      && lib.hasInfix "Be concise" (instrFile.text or "")
+      ruleFile
+      == null
       && !(result.config.home.file ? ".github/instructions/my-rule.instructions.md")
   );
 
@@ -5769,32 +5703,6 @@ in {
       && lib.hasInfix "Review code carefully" (agentFile.text or "")
   );
 
-  # Unnamed kiro instructions → a dedicated `.kiro/steering/instructions.md`
-  # steering file. Kiro is directory-native, so context stays standalone in
-  # AGENTS.md and the nameless remainder gets its own always-on file — the
-  # malformed trailing-slash `.config/kiro/steering/` aggregate stray is gone.
-  # (Formerly module-kiro-instructions-rendered, which asserted that stray.)
-  module-kiro-unnamed-instructions-to-dedicated-file = mkTest "kiro-unnamed-instructions-to-dedicated-file" (
-    let
-      evaluated = evalHm {
-        ai.kiro = {
-          enable = true;
-          instructions = [
-            {
-              text = "Kiro steering content.";
-              description = "Kiro steering";
-            }
-          ];
-        };
-      };
-      instrFile = evaluated.config.ai.kiro.steeringFiles."instructions.md" or null;
-    in
-      instrFile
-      != null
-      && lib.hasInfix "Kiro steering content." (instrFile.text or "")
-      && !(lib.any (n: lib.hasInfix "/" n) (lib.attrNames evaluated.config.ai.kiro.steeringFiles))
-  );
-
   # ── STAGE 3: kiro auto-memory wiring (lib/autoMemory.nix) ────
   # The generator produces reusable values for ai.kiro.hooks / ai.kiro.rules.
   # These assert the emitted v3 hook envelope + steering anchor and that HM and
@@ -5826,7 +5734,7 @@ in {
   );
 
   # HM: the steering anchor reaches the kiro-auto-memory.md steering
-  # entry with `inclusion: always` (paths = null) and the anchor body.
+  # entry with `inclusion: always` (no matcher) and the anchor body.
   module-kiro-auto-memory-hm-emits-steering = mkTest "kiro-auto-memory-hm-emits-steering" (
     let
       mem = kiroAutoMem {home = "/home/tester";};
@@ -6704,20 +6612,17 @@ in {
       (result.config.home.file.".kiro/settings/permissions.yaml" or null) == null
   );
 
-  # HM: per-instruction steering entries with kiro transformer frontmatter.
+  # HM: keyed rule steering entries with Kiro transformer frontmatter.
   # Verifies the kiro transformer emits `inclusion:` and `name:` fields.
   module-kiro-hm-writes-steering-files = mkTest "kiro-hm-writes-steering-files" (
     let
       result = evalHm {
         ai.kiro = {
           enable = true;
-          instructions = [
-            {
-              name = "my-steering";
-              text = "Use strict mode always.";
-              paths = ["src/**" "tests/**"];
-            }
-          ];
+          rules.my-steering = {
+            matcher = ["src/**" "tests/**"];
+            text = "Use strict mode always.";
+          };
         };
       };
       steeringFile = result.config.ai.kiro.steeringFiles."my-steering.md" or null;
@@ -6732,28 +6637,25 @@ in {
       && lib.hasInfix "fileMatchPattern: [" (steeringFile.text or "")
   );
 
-  # Explicit Kiro inclusion modes are carried by the shared instruction/rule
-  # records, so the same config must render byte-identically in HM and devenv.
-  # Paths remain available to other ecosystems but do not leak a
+  # Explicit Kiro inclusion modes are carried by runtime-native rules, so the
+  # same config must render byte-identically in HM and devenv. Matchers remain
+  # available to portable rules but do not leak a
   # fileMatchPattern into Kiro when an explicit non-fileMatch mode wins.
   module-kiro-inclusion-modes-hm-devenv-parity = mkTest "kiro-inclusion-modes-hm-devenv-parity" (
     let
       config = {
         ai = {
-          instructions = [
-            {
-              inclusion = "manual";
-              name = "on-demand";
-              paths = ["docs/**"];
-              text = "Load only when requested.";
-            }
-          ];
           kiro = {
             enable = true;
+            rules.on-demand = {
+              inclusion = "manual";
+              matcher = ["docs/**"];
+              text = "Load only when requested.";
+            };
             rules.semantic = {
               description = "Semantic project guidance";
               inclusion = "auto";
-              paths = ["src/**"];
+              matcher = ["src/**"];
               text = "Load when the description matches.";
             };
           };
@@ -6805,17 +6707,6 @@ in {
 
   module-kiro-inclusion-invalid-enum-rejected = mkTest "kiro-inclusion-invalid-enum-rejected" (
     let
-      instructionAttempt = builtins.tryEval (let
-        result = evalHm {
-          ai.instructions = [
-            {
-              inclusion = "sometimes";
-              text = "Invalid";
-            }
-          ];
-        };
-      in
-        builtins.deepSeq result.config.ai.instructions true);
       ruleAttempt = builtins.tryEval (let
         result = evalDevenv {
           ai.kiro.rules.invalid = {
@@ -6826,7 +6717,7 @@ in {
       in
         builtins.deepSeq result.config.ai.kiro.rules.invalid true);
     in
-      !instructionAttempt.success && !ruleAttempt.success
+      !ruleAttempt.success
   );
 
   # HM: per-CLI context → the `<contextFilename>` steering entry
@@ -6837,7 +6728,7 @@ in {
       result = evalHm {
         ai.kiro = {
           enable = true;
-          context = "Project conventions go here.";
+          context.text = "Project conventions go here.";
         };
       };
       contextFile = result.config.ai.kiro.steeringFiles."AGENTS.md" or null;
@@ -6854,7 +6745,7 @@ in {
     let
       result = evalHm {
         ai.kiro.enable = true;
-        ai.context = "Top-level context flows everywhere.";
+        ai.context.text = "Top-level context flows everywhere.";
       };
       contextFile = result.config.ai.kiro.steeringFiles."AGENTS.md" or null;
     in
@@ -7700,7 +7591,7 @@ in {
       result = evalDevenv {
         ai.kiro = {
           enable = true;
-          context = "Project conventions go here.";
+          context.text = "Project conventions go here.";
         };
       };
       contextFile = result.config.files."AGENTS.md" or null;
@@ -7716,7 +7607,7 @@ in {
     let
       result = evalDevenv {
         ai.kiro.enable = true;
-        ai.context = "Top-level context flows everywhere.";
+        ai.context.text = "Top-level context flows everywhere.";
       };
       contextFile = result.config.files."AGENTS.md" or null;
     in
@@ -7874,7 +7765,7 @@ in {
           ev = evalHm {
             ai.kiro = {
               enable = true;
-              context = "CONTEXT-COLLIDER.";
+              context.text = "CONTEXT-COLLIDER.";
               rules.AGENTS.text = "RULE-COLLIDER.";
             };
           };
@@ -7960,7 +7851,7 @@ in {
         ai.kiro = {
           enable = true;
           steeringStrategy = "symlink";
-          context = "SYMLINK-CTX-TOKEN.";
+          context.text = "SYMLINK-CTX-TOKEN.";
           rules.symlinked = {
             matcher = ["src/**"];
             text = "SYMLINK-RULE-TOKEN.";
@@ -8003,7 +7894,7 @@ in {
   # ── Where these contributions land ────────────────────────────────────
   #
   # The skill packages write the PER-RUNTIME pools (`ai.<runtime>.skills`,
-  # `ai.<runtime>.instructions`), never the root ones. The tests below assert
+  # `ai.<runtime>.rules`), never the root ones. The tests below assert
   # both halves of that, and the second half is the one worth having: a root
   # pool is ADDITIVE and cannot be retracted per runtime, so a regression that
   # moved these writes back to the root would still deliver every skill to
@@ -8025,18 +7916,16 @@ in {
       && !(result.config.ai.skills ? stack-fix)
   );
 
-  # Devenv scope: the router instruction landed in every runtime's pool, once
-  # each, and not in the root pool.
-  module-sws-devenv-enable-sets-ai-instructions = mkTest "sws-devenv-enable-sets-ai-instructions" (
+  # Devenv scope: the router rule lands in every supporting runtime's pool and
+  # not in the root pool.
+  module-sws-devenv-enable-sets-ai-rules = mkTest "sws-devenv-enable-sets-ai-rules" (
     let
       result = evalDevenv {stacked-workflows.enable = true;};
-      swsEntries = instructions:
-        builtins.filter (i: (i.name or "") == "stacked-workflows") instructions;
-      runtimeHasOne = runtime:
-        builtins.length (swsEntries result.config.ai.${runtime}.instructions) == 1;
+      ruleRuntimes = builtins.filter (runtime: result.options.ai.${runtime} ? rules) harnessNames;
+      runtimeHasOne = runtime: result.config.ai.${runtime}.rules ? stacked-workflows-router;
     in
-      lib.all runtimeHasOne harnessNames
-      && swsEntries result.config.ai.instructions == []
+      lib.all runtimeHasOne ruleRuntimes
+      && !(result.config.ai.rules ? stacked-workflows-router)
   );
 
   # HM (user-global) scope: enable -> every runtime's pool gets the unprefixed
@@ -8053,18 +7942,30 @@ in {
       && !(result.config.ai.skills ? stack-fix)
   );
 
-  # HM (user-global) scope: enable -> the skill-routing instruction lands in
-  # every runtime's pool (-> ~/.claude/CLAUDE.md, ~/.kiro/steering/, ...).
-  module-sws-hm-enable-sets-ai-instructions = mkTest "sws-hm-enable-sets-ai-instructions" (
+  # HM (user-global) scope: enable -> the skill-routing rule lands in every
+  # supporting runtime's pool.
+  module-sws-hm-enable-sets-ai-rules = mkTest "sws-hm-enable-sets-ai-rules" (
     let
       result = evalHm {stacked-workflows.enable = true;};
-      swsEntries = instructions:
-        builtins.filter (i: (i.name or "") == "stacked-workflows") instructions;
-      runtimeHasOne = runtime:
-        builtins.length (swsEntries result.config.ai.${runtime}.instructions) == 1;
+      ruleRuntimes = builtins.filter (runtime: result.options.ai.${runtime} ? rules) harnessNames;
+      runtimeHasOne = runtime: result.config.ai.${runtime}.rules ? stacked-workflows-router;
     in
-      lib.all runtimeHasOne harnessNames
-      && swsEntries result.config.ai.instructions == []
+      lib.all runtimeHasOne ruleRuntimes
+      && !(result.config.ai.rules ? stacked-workflows-router)
+  );
+
+  # Package rules are defaults, so a consumer can replace the router for one
+  # runtime without creating a definition conflict or affecting its siblings.
+  module-sws-consumer-rule-override-wins = mkTest "sws-consumer-rule-override-wins" (
+    let
+      result = evalHm {
+        stacked-workflows.enable = true;
+        ai.claude.rules.stacked-workflows-router.text = "Consumer router.";
+      };
+    in
+      result.config.ai.claude.rules.stacked-workflows-router.text
+      == "Consumer router."
+      && result.config.ai.codex.rules.stacked-workflows-router.text != "Consumer router."
   );
 
   # Git config applies when preset is "minimal".
@@ -8610,7 +8511,7 @@ in {
       result = evalHm {
         ai.copilot = {
           enable = true;
-          context = "Copilot-specific context.";
+          context.text = "Copilot-specific context.";
         };
       };
       contextFile =
@@ -8624,7 +8525,7 @@ in {
     let
       result = evalHm {
         ai.copilot.enable = true;
-        ai.context = "Top-level context flows everywhere.";
+        ai.context.text = "Top-level context flows everywhere.";
       };
       contextFile =
         result.config.home.file.".copilot/copilot-instructions.md" or null;
@@ -8638,7 +8539,7 @@ in {
       result = evalDevenv {
         ai.copilot = {
           enable = true;
-          context = "Copilot devenv context.";
+          context.text = "Copilot devenv context.";
         };
       };
       contextFile =
@@ -10267,14 +10168,13 @@ in {
       && lib.hasInfix "Inline content" entry.text
   );
 
-  # HM: rule.text accepting a path literal still works (resolved to
-  # baked text at eval — same shape pin).
+  # HM: rule.source is read and baked into the materialized entry.
   module-kiro-hm-rule-path-bakes = mkTest "kiro-hm-rule-path-bakes" (
     let
       result = evalHm {
         ai.kiro = {
           enable = true;
-          rules.rule-from-path.text = ./fixtures/kiro-steering/alpha.md;
+          rules.rule-from-path.source = ./fixtures/kiro-steering/alpha.md;
         };
       };
       entry = result.config.ai.kiro.steeringFiles."rule-from-path.md" or null;

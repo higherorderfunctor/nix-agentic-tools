@@ -1,15 +1,18 @@
 # `ai.*` normalized-interface rework, then semble #858 on top
 
-> **Last verified:** 2026-08-15 (commit pending — PR 3 now follows the later
-> execution brief: `supportedPools` generalizes the record capability gate,
-> Kimchi's dead rules options are removed, and boundary B0 records the
-> unsupported-root degradation contract). Prior: 2026-08-14 against `main` at
-> `0fe1f1fd`, by two verification passes (twelve agents, then seven) over the
-> preceding design session's working notes. Every `file:line` below was re-read;
-> 65 of 67 resolve exactly and the two imprecise ones are corrected in place.
-> Main moved from `c5475438` during the session, but the six intervening commits
-> touch only lockfiles and two overlay files, so no citation needed
-> re-anchoring.
+> **Last verified:** 2026-08-15 (commit pending — PR 5 retires the list-shaped
+> instructions surface, types context as text-XOR-source with root-first
+> composition, and gives keyed rules a normalized matcher; B5a/B6a and the
+> removed B10 blocker record those decisions). Prior: 2026-08-15 (commit pending
+> — PR 3 now follows the later execution brief: `supportedPools` generalizes the
+> record capability gate, Kimchi's dead rules options are removed, and boundary
+> B0 records the unsupported-root degradation contract). Prior: 2026-08-14
+> against `main` at `0fe1f1fd`, by two verification passes (twelve agents, then
+> seven) over the preceding design session's working notes. Every `file:line`
+> below was re-read; 65 of 67 resolve exactly and the two imprecise ones are
+> corrected in place. Main moved from `c5475438` during the session, but the six
+> intervening commits touch only lockfiles and two overlay files, so no citation
+> needed re-anchoring.
 >
 > **Items previously marked DECIDED or RESOLVED that were refuted: seven.** Four
 > by the first pass (R1-R4) and three by the second (R5-R7). Do not re-derive
@@ -54,7 +57,7 @@ defer the namespace move", written before that sign-off.
 | 2   | #920 Copilot HM path (2 literals + 4 assertions)                                                                                                                                                        | —        |
 | 3   | Per-pool-per-runtime capability gating through app-record `supportedPools`; **drops `ai.kimchi.rules`/`rulesDir`** because Kimchi rules support is deliberately unimplemented                           | 1        |
 | 4   | Settings split — `nativeSettings`, `_integration_*` internal                                                                                                                                            | —        |
-| 5   | Retire `instructions` → keyed `rules`, incl. level-stamping for order                                                                                                                                   | 2, 3     |
+| 5   | Retire `instructions` → typed context + keyed `rules` with normalized matchers                                                                                                                          | 2, 3     |
 | 6   | Pool negation `attrsOf (nullOr …)` + net-new package-vs-package check                                                                                                                                   | 5        |
 | 7a  | Delete semble `runtimes` (self-contained)                                                                                                                                                               | —        |
 | 7b  | `ai.programs.*` factory + semble relocation — ATOMIC with the parity-test rewrite and the `expectedCodexRoots` fixture                                                                                  | 1, 3, 7a |
@@ -63,14 +66,13 @@ defer the namespace move", written before that sign-off.
 
 Hard constraints behind the shape:
 
-- **5 cannot be split** — `checks/options-doc.nix` hard-codes option names, so
-  there is no green intermediate state.
+- **5 has one additive green commit and one unsplittable deletion commit** —
+  `checks/options-doc.nix` hard-codes option names, so retiring the old surface
+  and updating its consumers/checks happen together.
 - **5 must follow 2**, or it migrates Copilot HM content into the dead file.
-- **5 must follow 3** because **3 is what establishes kimchi's rules pool.** An
-  earlier gloss — "or kimchi loses its only always-on surface" — had the
-  causality backwards: dropping the option in 3 is what would cause that loss,
-  not prevent it. Kimchi's rules option is live-but-unemitted for exactly one
-  PR.
+- **5 must follow 3** because the capability gate makes Kimchi's absence of a
+  rules pool structural. PR 5 preserves its always-on guidance through typed
+  context and does not restore dead Kimchi rule options.
 
 ## Tree-qualification rule for citations
 
@@ -542,9 +544,9 @@ picked the wrong survivor here.
 
 **Sequencing constraints, previously unstated:**
 
-- B10 depends on A3, because `ai.instructions` is a list rather than a keyed
-  pool (`lib/ai/app/mkBackendTransform.nix:241`) and a list has no key to null
-  out.
+- A3 removed B10's structural blocker by retiring the list-shaped
+  `ai.instructions` surface in favor of keyed rules. Pool negation itself is
+  still PR 6 and remains out of scope here.
 - B7″ does **not** block on A5a (see R2). A5a only decides B7″'s GRANULARITY:
   with the follow-up deferred, B7″ holds at file granularity for every runtime
   today and needs no new work; key-granularity override is what the follow-up

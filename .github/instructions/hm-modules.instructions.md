@@ -7,19 +7,21 @@ applyTo: "packages/*/modules/homeManager/**"
 
 ## HM Module Conventions
 
-> **Last verified:** 2026-08-15 (commit pending — runtime-shaped config moved
-> from `ai.<runtime>.settings` to `nativeSettings`, the new closed `settings`
-> submodule is normalized across all runtimes, and Codex integration roots use a
-> hidden internal contribution channel). Prior: 2026-08-14 (commit pending —
-> Semble's shared module now lowers grammar and path mappings identically
-> through both facets, with one package-identity cache guard and cache-location
-> wrapper per backend; HM's XDG cache remains authoritative on Darwin too).
-> Prior: 2026-08-05 (commit pending — the Codex named-profile delivery-path
-> example is retained but `ai.codex.profiles` is now LOCKED OUT and fails
-> evaluation; the asymmetry it teaches is still correct, the option is not
-> usable). Prior: 2026-08-05 (commit pending — glab's Linux Home Manager facet
-> can queue one OS-keyring synchronization per activation through a
-> graphical-session path unit; the shared option is an explicit devenv
+> **Last verified:** 2026-08-15 (commit pending — normalized guidance is now a
+> typed context record plus keyed rules; the list-shaped instructions option and
+> shared instruction type are gone). Prior: 2026-08-15 (commit pending —
+> runtime-shaped config moved from `ai.<runtime>.settings` to `nativeSettings`,
+> the new closed `settings` submodule is normalized across all runtimes, and
+> Codex integration roots use a hidden internal contribution channel). Prior:
+> 2026-08-14 (commit pending — Semble's shared module now lowers grammar and
+> path mappings identically through both facets, with one package-identity cache
+> guard and cache-location wrapper per backend; HM's XDG cache remains
+> authoritative on Darwin too). Prior: 2026-08-05 (commit pending — the Codex
+> named-profile delivery-path example is retained but `ai.codex.profiles` is now
+> LOCKED OUT and fails evaluation; the asymmetry it teaches is still correct,
+> the option is not usable). Prior: 2026-08-05 (commit pending — glab's Linux
+> Home Manager facet can queue one OS-keyring synchronization per activation
+> through a graphical-session path unit; the shared option is an explicit devenv
 > exclusion, and the ordinary wrapper stops exporting the synchronized token).
 > Prior: 2026-08-05 (commit pending — enabled glab facets contribute their
 > effective config directory to Codex's legacy workspace-write sandbox; this
@@ -71,11 +73,11 @@ declare the real type: `types.submodule`, `types.nullOr`, `types.attrsOf`,
 `types.submodule { options = { enable; package; ... }; }`. The submodule is the
 logical grouping — do not flatten per-ecosystem options into the top level.
 
-**Flat at top level for cross-ecosystem.** `ai.skills`, `ai.instructions`,
-`ai.lspServers`, and `ai.environmentVariables` are NOT nested inside a
-per-ecosystem submodule. They fan out to whichever ecosystems are enabled at
-`mkDefault` priority. Anything that's "one option, many destinations" lives
-flat.
+**Flat at top level for cross-ecosystem.** `ai.context`, `ai.rules`,
+`ai.skills`, `ai.lspServers`, and `ai.environmentVariables` are NOT nested
+inside a per-ecosystem submodule. They fan out to whichever ecosystems are
+enabled at `mkDefault` priority. Anything that's "one option, many destinations"
+lives flat.
 
 **Keep normalized and native settings separate.** `ai.<runtime>.settings` is a
 closed normalized submodule shared by every runtime. Runtime-shaped passthrough
@@ -329,8 +331,8 @@ the store (a derivation output, a file inside the flake), this is the right
 tool.
 
 **`home.file` with `text =`** — content built at eval time from Nix data. Used
-for transformed instructions (e.g., the `fragments-ai` transforms emit strings
-that become `home.file.".claude/rules/<name>.md".text`).
+for transformed rules (e.g., the `fragments-ai` transforms emit strings that
+become `home.file.".claude/rules/<name>.md".text`).
 
 **`home.activation`** — stateful operations that need runtime info: reading sops
 files, computing fingerprints, merging runtime-mutable config files, resetting
@@ -349,9 +351,8 @@ flattened option-name and type parity across the full generated `ai.*` trees;
 module-eval tests cover backend-specific lowering and diagnostics.
 
 **Shared types live in `lib/`.** Both HM and devenv modules import types from
-`lib/ai-common.nix` (`instructionModule`, `lspServerModule`,
-`mkCopilotLspConfig`, `mkLspConfig`) so the surfaces stay in sync by
-construction.
+`lib/ai-common.nix` (`ruleModule`, `lspServerModule`, `mkCopilotLspConfig`,
+`mkLspConfig`) so the surfaces stay in sync by construction.
 
 **Stronger than shared types: one shared DECLARATION.** `packages/glab` puts its
 entire `options.glab` block in `packages/glab/modules/options.nix` and both

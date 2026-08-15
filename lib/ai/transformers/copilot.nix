@@ -4,7 +4,8 @@
 # - paths: null   → applyTo = "**" (always-loaded)
 # - paths: list   → applyTo = comma-joined glob string
 # - paths: string → applyTo = raw string (pre-quoted)
-# - description is forwarded when present.
+# - description is retained in the normalized record but intentionally omitted
+#   from Copilot frontmatter to preserve the existing devenv output bytes.
 {lib}: let
   fragments = import ../../fragments.nix {inherit lib;};
 in rec {
@@ -16,11 +17,7 @@ in rec {
         link = _ctx: node: "[${node.label or node.target}](${node.target})";
         include = _ctx: node: throw "Copilot transformer: include nodes not supported (path=${node.path}); inline the fragment instead";
       };
-    frontmatter = {
-      description ? null,
-      paths ? null,
-      ...
-    }: let
+    frontmatter = {paths ? null, ...}: let
       applyTo =
         if paths == null
         then ''"**"''
@@ -28,11 +25,7 @@ in rec {
         then ''"${lib.concatStringsSep "," paths}"''
         else paths;
     in
-      fragments.mkFrontmatter (
-        {inherit applyTo;}
-        // lib.optionalAttrs (description != null && description != "") {inherit description;}
-      )
-      + "\n";
+      fragments.mkFrontmatter {inherit applyTo;} + "\n";
     assemble = {
       frontmatter,
       body,

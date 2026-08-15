@@ -622,13 +622,12 @@
   # strategy-driven writer element does the delivery. Every emitter
   # stamps `strategy = cfg.steeringStrategy` explicitly — the shared
   # options block is inert data with no `config` access, so the
-  # submodule cannot default it. The four elements keep their mkMerge
+  # submodule cannot default it. The two elements keep their mkMerge
   # boundaries + mkIf gates; `steeringFiles.<n>.text` is `nullOr str`,
   # so two emitters producing the same key with DIFFERENT content is a
   # hard eval error and equal content dedupes.
   mkSteeringEmitters = {
     cfg,
-    mergedInstructions,
     mergedRules,
     mergedContext,
     sharedAgentsMd,
@@ -637,7 +636,7 @@
     inherit (import ../../../lib/ai/transformers/kiro.nix {inherit lib;}) kiroTransformer;
     hasContext = mergedContext != null;
     isSharedRule = rule:
-      aiCommon.ruleMatcher rule
+      rule.matcher
       == null
       && ((rule.inclusion or null) == null || rule.inclusion == "always");
     steeringRules =
@@ -648,48 +647,23 @@
       inherit text;
       strategy = cfg.steeringStrategy;
     };
-    named = builtins.filter (i: i ? name) mergedInstructions;
-    unnamed = builtins.filter (i: !(i ? name)) mergedInstructions;
   in [
-    # Per-instruction steering entries — `<name>.md` for each
-    # instruction carrying a `name`. The kiro transformer emits
-    # `inclusion:` / `fileMatchPattern:` YAML frontmatter. CRITICAL:
-    # fileMatchPattern MUST be emitted as a YAML array for
-    # multi-element paths — a comma-joined string silently matches
-    # nothing. The kiro transformer handles this correctly.
-    {
-      ai.kiro.steeringFiles = lib.listToAttrs (map (instr: {
-          name = "${instr.name}.md";
-          value = mkEntry (fragmentsLib.mkRenderer kiroTransformer {inherit (instr) name;} instr);
-        })
-        named);
-    }
-    # Unnamed always-on instructions → a dedicated `instructions.md`
-    # steering entry. Kiro is directory-native, so (unlike
-    # Claude/Copilot) context is NOT composed with instructions —
-    # context stays standalone in AGENTS.md and the nameless remainder
-    # that previously fed the retired generic aggregate lands here
-    # (paths-less → `inclusion: always`).
-    (lib.mkIf (unnamed != []) {
-      ai.kiro.steeringFiles."instructions.md" =
-        mkEntry (lib.concatMapStringsSep "\n\n" (fragmentsLib.mkRenderer kiroTransformer {}) unnamed);
-    })
     # Attrs-shape ai.rules / ai.kiro.rules → `<name>.md` entries,
     # translated through kiroTransformer (inclusion: +
-    # fileMatchPattern: frontmatter). Rule paths resolve to text at
-    # eval via resolveRuleText.
+    # fileMatchPattern: frontmatter). Source-backed rules resolve to text at
+    # eval through aiCommon.readContent.
     {
       ai.kiro.steeringFiles = lib.mapAttrs' (name: rule:
         lib.nameValuePair "${name}.md" (mkEntry (fragmentsLib.mkRenderer kiroTransformer {inherit name;} (rule
           // {
-            paths = aiCommon.ruleMatcher rule;
+            paths = rule.matcher;
             text = aiCommon.readContent rule;
           }))))
       steeringRules;
     }
     # Global context → `<contextFilename>` (default AGENTS.md — Kiro
     # reads it natively as always-included content). Written without
-    # frontmatter; per-CLI wins over top-level. Under copy strategy a
+    # frontmatter; root context precedes per-CLI context. Under copy strategy a
     # path-valued context normalizes to `text` at eval via readFile
     # (the writer heredoc-embeds content); `source` is kept only for
     # symlink strategy.
@@ -1020,7 +994,6 @@ in
     supportedPools = [
       "context"
       "environmentVariables"
-      "instructions"
       "lspServers"
       "mcpServers"
       "rules"
@@ -1154,7 +1127,7 @@ in
         default = ".kiro";
         description = "Config directory relative to HOME / devenv root.";
       };
-      # Derived steering-file set — populated by the factory's four
+      # Derived steering-file set — populated by the factory's rule and context
       # steering emitters, consumed by the shared materializer
       # (lib/ai/materialize.nix). Internal but readable by tests and
       # consumers.
@@ -1165,8 +1138,8 @@ in
         description = ''
           Derived steering-file set (`<name>` → `{ text | source,
           strategy }`), keyed by filename under `<configDir>/steering/`.
-          Populated by the factory emitters (legacy instructions, scoped rules,
-          and HM context); delivered by the shared materializer. `text`
+          Populated by the factory emitters (rules and HM context); delivered by
+          the shared materializer. `text`
           is `nullOr str`, so two emitters producing the same key with
           different content is a hard eval error (equal content
           dedupes).
@@ -1513,7 +1486,6 @@ in
       config = {
         cfg,
         mergedServers,
-        mergedInstructions,
         mergedSkills,
         mergedRules,
         mergedLspServers,
@@ -1527,7 +1499,7 @@ in
 
         steeringDir = "${cfg.configDir}/steering";
         steeringEmitters = mkSteeringEmitters {
-          inherit cfg mergedContext mergedInstructions mergedRules;
+          inherit cfg mergedContext mergedRules;
           sharedAgentsMd = false;
         };
 
@@ -1720,7 +1692,6 @@ in
         cfg,
         config,
         mergedServers,
-        mergedInstructions,
         mergedSkills,
         mergedRules,
         mergedLspServers,
@@ -1734,12 +1705,12 @@ in
 
         steeringDir = "${cfg.configDir}/steering";
         steeringEmitters = mkSteeringEmitters {
-          inherit cfg mergedContext mergedInstructions mergedRules;
+          inherit cfg mergedContext mergedRules;
           sharedAgentsMd = true;
         };
 
         sharedRules = lib.filterAttrs (_name: rule:
-          aiCommon.ruleMatcher rule
+          rule.matcher
           == null
           && ((rule.inclusion or null) == null || rule.inclusion == "always"))
         mergedRules;
@@ -1805,13 +1776,13 @@ in
             # pairs, hook-name charset, steering-entry guards.
             {assertions = mkAssertions cfg;}
             (lib.mkIf (mergedContext != null || sharedRules != {}) {
-              ai.internal.agentsMd.${cfg.context.filename} = {
-                context =
-                  if mergedContext == null
-                  then null
-                  else aiCommon.readContent mergedContext;
-                rules = lib.mapAttrs (_name: aiCommon.readContent) sharedRules;
-              };
+              ai.internal.agentsMd.${cfg.context.filename} =
+                {
+                  rules = lib.mapAttrs (_name: aiCommon.readContent) sharedRules;
+                }
+                // lib.optionalAttrs (mergedContext != null) {
+                  context = aiCommon.readContent mergedContext;
+                };
             })
             # Environment variables ride the launcher wrapper above, exactly
             # as they do under Home Manager. They used to be written into

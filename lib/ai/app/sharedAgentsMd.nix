@@ -61,14 +61,15 @@
       };
     };
   };
-  rendered = lib.mapAttrs (_filename: value:
+  allRendered = lib.mapAttrs (_filename: value:
     agentsmd.renderKeyed {
       inherit (value) context rules;
     })
   config.ai.internal.agentsMd;
+  rendered = lib.filterAttrs (_filename: text: text != "") allRendered;
   sizeAssertions =
     lib.mapAttrsToList (filename: value: let
-      text = rendered.${filename};
+      text = allRendered.${filename};
       size = builtins.stringLength text;
     in {
       assertion = value.maxBytes == null || size <= value.maxBytes;

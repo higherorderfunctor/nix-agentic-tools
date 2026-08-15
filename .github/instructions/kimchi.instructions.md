@@ -9,7 +9,8 @@ applyTo: "packages/kimchi/**"
 
 > **Last verified:** 2026-08-15 (commit pending — Kimchi's typed context now
 > composes root-first with runtime context into the existing
-> `harness/AGENTS.md`; rules continue to degrade because Kimchi has no rules
+> `harness/AGENTS.md`; the retired instructions pool is no longer part of the
+> capability census, and rules continue to degrade because Kimchi has no rules
 > pool). Prior: 2026-08-15 (commit pending — records Kimchi's normalized pool
 > capability census and deliberate absence of rules; native JSON passthrough
 > moved to `ai.kimchi.nativeSettings`, while the uniform closed
@@ -52,11 +53,11 @@ are configured, their bodies concatenate root-first;
 ## Normalized pool capability boundary
 
 The app record's `supportedPools` is exactly `context`, `environmentVariables`,
-`instructions`, `mcpServers`, `settings`, and `skills`. Kimchi has no native
-path-scoped rules, portable agents, LSP, portable hooks, or shell-selection
-landing key. Those per-runtime normalized options are absent; root values for
-them remain valid and silently degrade for Kimchi. `settings` is the uniform
-closed normalized namespace; its current field has no Kimchi-native lowering.
+`mcpServers`, `settings`, and `skills`. Kimchi has no native path-scoped rules,
+portable agents, LSP, portable hooks, or shell-selection landing key. Those
+per-runtime normalized options are absent; root values for them remain valid and
+silently degrade for Kimchi. `settings` is the uniform closed normalized
+namespace; its current field has no Kimchi-native lowering.
 
 In particular, `ai.kimchi.rules` and `ai.kimchi.rulesDir` do not exist. Do not
 restore them in anticipation of future rules support: Kimchi's rules support is

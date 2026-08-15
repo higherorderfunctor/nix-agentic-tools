@@ -1,10 +1,12 @@
 ## ai.\* Collision Semantics
 
-> **Last verified:** 2026-08-15 (commit pending — `ai.context` is now an
-> explicit content-composition exception: root content precedes runtime content
-> in one artifact, while keyed rules still collide across levels. The shared
-> repository AGENTS.md writer separately deduplicates identical same-key runtime
-> views and rejects divergent ones). Prior: 2026-08-15 (commit pending —
+> **Last verified:** 2026-08-15 (commit pending — the list-shaped instructions
+> exception is gone; package guidance is keyed rules and follows the ordinary
+> collision/default rules). Prior: 2026-08-15 (commit pending — `ai.context` is
+> now an explicit content-composition exception: root content precedes runtime
+> content in one artifact, while keyed rules still collide across levels. The
+> shared repository AGENTS.md writer separately deduplicates identical same-key
+> runtime views and rejects divergent ones). Prior: 2026-08-15 (commit pending —
 > collision checks follow each app record's `supportedPools`, while normalized
 > `ai.settings` is a scalar-field exception: each nullable field resolves
 > independently, with a non-null per-runtime value overriding the root and null
@@ -77,10 +79,6 @@ documented interface, not an ambush. `lib/ai/mkSkillPackageModule.nix` states
 that override key in its header; if you move a module's writes per-CLI, state it
 in yours too.
 
-`ai.instructions` is asymmetric here and it matters: it is a LIST that
-concatenates with no collision check, while `skills` is an attrset that is
-collision-checked. Two writes on adjacent lines can carry different risk.
-
 ### Covered pools
 
 Applies to every attrset-shaped shared pool in `ai.*`:
@@ -92,7 +90,6 @@ Applies to every attrset-shaped shared pool in `ai.*`:
 - `ai.environmentVariables` / `ai.<cli>.environmentVariables`
 - `ai.agents` / `ai.<cli>.agents`
 
-`ai.instructions` remains a transitional list until its deletion commit.
 `ai.context` is single-valued per level but composes across levels: root content
 is concatenated first, followed by runtime content. This preserves both halves
 rather than applying pool-entry replacement or collision semantics.

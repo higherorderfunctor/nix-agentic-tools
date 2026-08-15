@@ -9,8 +9,8 @@ applyTo: "checks/copilot-wrapper-argv.nix,overlays/chatgpt-codex.nix,overlays/cl
 
 > **Last verified:** 2026-08-15 (commit pending — normalized context and rules
 > intentionally emit only on devenv's project-local `.github` surface. Their
-> Home Manager options remain for schema parity but are a documented no-op;
-> legacy instruction emission remains only for the additive transition). Prior:
+> Home Manager options remain for schema parity but are a documented no-op; the
+> retired instructions surface and its intermediate HM writer are gone). Prior:
 > 2026-08-14 (commit pending — `configDir` is TWO different things and the
 > sentence below that called it "neither" was only true of devenv's. Home
 > Manager defaults it to `.copilot`, which IS the CLI's home; devenv defaults it
@@ -85,13 +85,14 @@ product surface. This is an intentional capability-reducing degradation.
 backends. On devenv that is right — it is the committed reviewer surface. On
 Home Manager the same literal resolves to `$HOME/.github/instructions/`, which
 is not a Copilot surface at all: `.github` is a repository convention, and there
-is no user-global reading of it. So every named `ai.instructions` entry and
-every `ai.rules` entry emitted a file under HM and nothing ever loaded it.
+is no user-global reading of it. So every named legacy instruction and every
+rule emitted a file under HM and nothing ever loaded it.
 
-Fixed by prefixing `cfg.configDir`, which is what every other HM artifact this
-module writes already did (`agents/`, `skills/`, `lsp-config.json`,
-`mcp-config.json`, `settings.json`). The devenv arm was already correct and is
-unchanged.
+An intermediate fix prefixed `cfg.configDir`, proving that copilot-cli can read
+that user-global directory. The normalized redesign then removed Home Manager
+context/rule emission entirely: these options describe repository guidance for
+github.com's reviewer, while CLI-global content is a different product surface.
+The devenv `.github` arm remains the live destination.
 
 **The destination is live — measured, not assumed** (2026-08-14, 1.0.80). This
 is the one thing worth checking before trusting the fix, since the defect being
@@ -149,51 +150,11 @@ The two are consistent — routing is parsed, and the unscoped bucket is inlined
 anyway — but do not restate either half without the other, and do not restate
 the second as though this fragment measured it.
 
-**What the frontmatter-inlining does NOT license.** Do not read it as an
-argument for routing always-on content through the context file instead.
-`ai.context` is a single global baseline, not a pool, and pushing rule content
-there to dodge frontmatter rebuilds the composed-single-file shape that named
-files exist to replace. The convention is named files; the transformer already
-emits `applyTo: "**"` for `paths == null` (`lib/ai/transformers/copilot.nix`),
-and that is what puts them in the injected tier at all.
-
-**The Home Manager destination is live.** Named files land under
-`<configDir>/instructions/`, which is in copilot-cli 1.0.80's own discovery
-enumeration — it was the dead `$HOME/.github/` directory until 2026-08-15. Any
-scheme that emits N always-on named files for Copilot on Home Manager therefore
-has a working destination; that was not true before, and it is the fact worth
-carrying forward from that fix.
-
-Scope note, so this is not read as endorsing a particular migration: whether
-`ai.instructions` is retired in favour of keyed `rules` is an OPEN design
-question at the time of writing, not a settled direction. This fragment records
-what Copilot does, not what the option set should become.
-
-**The fix comes with a gated assertion, and the gate is the interesting part.**
-`mcp-config.json` survives a moved `configDir` because the wrapper hands Copilot
-that exact path via `--additional-mcp-config`. There is no instructions
-equivalent of that flag, and this module deliberately does not set
-`COPILOT_HOME` (see below — that would fork auth and session state). So a
-non-default `configDir` puts instructions and rules somewhere nothing reads,
-reintroducing the same defect through a different door. The module therefore
-requires `configDir == ".copilot"` **only when there is a named instruction or a
-rule to lose**, and names the specific files in the message. A consumer using
-`configDir` purely as a wrapper-aimed MCP root is unaffected.
-
-Known cost, accepted deliberately, and it is a REAL false positive rather than a
-theoretical one: `COPILOT_HOME` was measured to relocate the instruction walk
-wholesale — with it set, `$HOME/.copilot/*` stops being read at all and
-`$COPILOT_HOME/instructions/**` is read instead. So a consumer who exports it
-themselves has a correct reason to move `configDir` to match, and the assertion
-blocks them. Nix cannot see that variable. The alternative — wiring
-`COPILOT_CUSTOM_INSTRUCTIONS_DIRS`, which was also measured working — expands
-the option surface for what is a bug fix. If that consumer appears, the escape
-is to widen the assertion, not to un-gate it.
-
-Two other HM artifact classes (`agents/`, `skills/`) go undeliverable on a moved
-`configDir` in exactly the same way and carry no assertion. That inconsistency
-is pre-existing and out of scope here; it is recorded so the next reader does
-not mistake the gap for a decision.
+**What the frontmatter-inlining does NOT license.** Do not route always-on rule
+content through the context file. `ai.context` is a single baseline, not a pool,
+and pushing rule content there discards keyed identity. On devenv the convention
+is named files; the transformer emits `applyTo: "**"` when `matcher == null`,
+which puts always-on rules in Copilot's injected tier.
 
 ### Measured discovery (copilot-cli 1.0.78)
 

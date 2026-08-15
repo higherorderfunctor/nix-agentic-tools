@@ -19,6 +19,8 @@
 #                                    # Unsupported per-runtime pool options are absent;
 #                                    # root values for them degrade instead of fanning out.
 #                                    # Same-named native options in `options` are independent.
+#     contextDescription ? null;     # runtime-specific option description override
+#     rulesDescription ? null;       # runtime-specific option description override
 #     hm = {
 #       options ? {};                # HM-only option additions
 #       defaults ? {};               # HM-only default overrides
@@ -50,7 +52,9 @@
   options ? {},
   supportedPools ? [],
   contextFilename ? null,
+  contextDescription ? null,
   ruleModule ? null,
+  rulesDescription ? null,
   hm ? {},
   devenv ? {},
   # The package set the factory was built with, carried on the record so
@@ -77,4 +81,6 @@
   inherit name transformers defaults options supportedPools hm devenv pkgs;
 }
 // lib.optionalAttrs (contextFilename != null) {inherit contextFilename;}
+// lib.optionalAttrs (contextDescription != null) {inherit contextDescription;}
 // lib.optionalAttrs (ruleModule != null) {inherit ruleModule;}
+// lib.optionalAttrs (rulesDescription != null) {inherit rulesDescription;}

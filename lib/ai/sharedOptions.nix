@@ -1,4 +1,4 @@
-# Declares cross-app options (ai.context, ai.mcpServers, ai.instructions,
+# Declares cross-app options (ai.context, ai.mcpServers,
 # ai.rules, ai.settings, ai.skills, ai.agents, ai.hooks).
 #
 # Imported by every mkAiApp module so per-app layers
@@ -79,34 +79,21 @@ in {
       '';
     };
 
-    instructions = lib.mkOption {
-      type = lib.types.listOf aiCommon.instructionModule;
-      default = [];
-      description = ''
-        Cross-app instructions fanned out to every enabled AI app. Codex
-        concatenates them into its single AGENTS.md without frontmatter,
-        degrading path scopes to explicit prose unless `skipIfUnsupported`
-        requests omission. `inclusion` overrides Kiro's steering load strategy
-        without changing how other ecosystems translate `paths`. Codex rejects
-        empty path lists as ambiguous; use null for always-on content or a
-        non-empty list for scoped content.
-      '';
-    };
-
     rules = lib.mkOption {
       type = lib.types.attrsOf aiCommon.ruleModule;
       default = {};
       apply = aiCommon.validateRules;
       description = ''
-        Cross-app modular rule files fanned out to every enabled AI app.
+        Cross-app modular rule files fanned out to every capable enabled AI app.
         Each attribute becomes one file in the ecosystem's native rules
         directory (Claude: `.claude/rules/<name>.md`, Kiro:
-        `.kiro/steering/<name>.md`, Copilot:
-        `instructions/<name>.instructions.md` under `ai.copilot.configDir`
-        in Home Manager and under `ai.copilot.projectDir` in devenv, because
-        Copilot CLI reads its own home while github.com's code review reads
-        the committed project tree). Codex instead appends rules in key order
+        `.kiro/steering/<name>.md`, Copilot devenv:
+        `instructions/<name>.instructions.md` under `ai.copilot.projectDir`;
+        Copilot Home Manager deliberately emits no normalized rules because
+        github.com's reviewer consumes only the committed project tree). Codex
+        instead appends rules in key order
         to its single AGENTS.md, translating `matcher` to a prose scope note.
+        Kimchi has no rules pool, so root rules silently degrade for it.
         Per-app entries merge with the root pool; duplicate keys across those
         levels are a failure. Set exactly one of `text` or `source` for each
         rule. Kiro's native `inclusion` override exists only on

@@ -11,9 +11,9 @@
       description = "Path to a Markdown source file. Mutually exclusive with `text`.";
     };
     text = lib.mkOption {
-      type = lib.types.nullOr (lib.types.either lib.types.lines lib.types.path);
+      type = lib.types.nullOr lib.types.str;
       default = null;
-      description = "Inline Markdown content. Mutually exclusive with `source` (path values are transitional; use `source`).";
+      description = "Inline Markdown content. Mutually exclusive with `source`.";
     };
   };
   hasContent = value:
@@ -33,17 +33,9 @@
     else
       throw
       "Markdown content must set ${lib.optionalString (!requireContent) "at most "}one of `text` or `source`";
-  ruleIsValid = value:
-    contentFieldsAreValid true value
-    && !(value.matcher != null && value.paths != null);
+  ruleIsValid = contentFieldsAreValid true;
   mkContentModule = {defaultFilename ? null}:
-    lib.types.coercedTo
-    (lib.types.either lib.types.lines lib.types.path)
-    (value:
-      if builtins.isPath value
-      then {source = value;}
-      else {text = value;})
-    (lib.types.submodule {
+    lib.types.submodule {
       options =
         contentOptions
         // lib.optionalAttrs (defaultFilename != null) {
@@ -58,7 +50,7 @@
             description = "Filename for this runtime's single always-on context artifact.";
           };
         };
-    });
+    };
 
   kiroInclusionOption = lib.mkOption {
     type = lib.types.nullOr (lib.types.enum ["always" "auto" "fileMatch" "manual"]);
@@ -66,9 +58,9 @@
     example = "auto";
     description = ''
       Kiro steering inclusion mode. null preserves the portable default:
-      `paths = null` becomes `always`, while non-null paths become `fileMatch`.
-      `fileMatch` consumes `paths`; `auto` requires a non-empty name and
-      description. Other ecosystems continue translating `paths` through
+      `matcher = null` becomes `always`, while a matcher becomes `fileMatch`.
+      `fileMatch` consumes `matcher`; `auto` requires a non-empty name and
+      description. Other ecosystems continue translating `matcher` through
       their native scoping mechanism and intentionally ignore this Kiro-only
       override.
     '';
@@ -98,16 +90,6 @@
             description = "Short description forwarded to runtime renderers.";
           };
           matcher = matcherOption;
-          paths = lib.mkOption {
-            type = lib.types.nullOr (lib.types.listOf lib.types.str);
-            default = null;
-            description = "Transitional alias for `matcher`; removed with the legacy instructions surface.";
-          };
-          skipIfUnsupported = lib.mkOption {
-            type = lib.types.bool;
-            default = false;
-            description = "Transitional legacy degradation control.";
-          };
         }
         // lib.optionalAttrs kiroNative {
           inclusion = kiroInclusionOption;
@@ -119,7 +101,7 @@ in {
   # as `source` data avoids writeText/IFD and preserves direct symlink emission
   # when a single source is not being concatenated with another contribution.
   contentModule = mkContentModule {};
-  optionalContentModule = contentModule;
+  optionalContentModule = mkContentModule {};
   validateOptionalContent = validateContent false;
   validateRules = rules:
     lib.mapAttrs (name: rule:
@@ -127,7 +109,7 @@ in {
       then rule
       else
         throw
-        "Rule `${name}` must set exactly one of `text` or `source` and cannot combine `matcher` with the transitional `paths` alias")
+        "Rule `${name}` must set exactly one of `text` or `source`")
     rules;
   runtimeContextModule = defaultFilename:
     mkContentModule {inherit defaultFilename;};
@@ -138,10 +120,7 @@ in {
     if value == null
     then ""
     else if (value.text or null) != null
-    then
-      if builtins.isPath value.text
-      then builtins.readFile value.text
-      else value.text
+    then value.text
     else if (value.source or null) != null
     then builtins.readFile value.source
     else "";
@@ -149,14 +128,7 @@ in {
   composeContent = values: let
     present = builtins.filter (value:
       hasContent value
-      && (
-        if (value.text or null) != null
-        then
-          if builtins.isPath value.text
-          then builtins.readFile value.text != ""
-          else value.text != ""
-        else builtins.readFile value.source != ""
-      ))
+      && ((value.text or null) == null || value.text != ""))
     values;
   in
     if present == []
@@ -166,38 +138,25 @@ in {
       value = builtins.head present;
     in
       if (value.text or null) != null
-      then
-        if builtins.isPath value.text
-        then {source = value.text;}
-        else {inherit (value) text;}
+      then {inherit (value) text;}
       else {inherit (value) source;}
-    else {
-      text =
-        lib.concatMapStringsSep "\n\n" (
-          value:
-            if (value.text or null) != null
-            then
-              if builtins.isPath value.text
-              then builtins.readFile value.text
-              else value.text
-            else builtins.readFile value.source
-        )
-        present;
-    };
+    else let
+      bodies = builtins.filter (body: body != "") (map (value:
+        if (value.text or null) != null
+        then value.text
+        else builtins.readFile value.source)
+      present);
+    in
+      if bodies == []
+      then null
+      else {text = lib.concatStringsSep "\n\n" bodies;};
 
   contentFileEntry = value:
     if value == null
     then null
     else if (value.source or null) != null
     then {inherit (value) source;}
-    else if builtins.isPath value.text
-    then {source = value.text;}
     else {inherit (value) text;};
-
-  ruleMatcher = rule:
-    if rule.matcher != null
-    then rule.matcher
-    else rule.paths;
 
   # ── Activation flag scoping ────────────────────────────────────────
   # Wrap a home.activation body in a subshell so its `set`/`shopt` flags
@@ -347,46 +306,6 @@ in {
     // lib.optionalAttrs (server.initializationOptions != {}) {
       inherit (server) initializationOptions;
     };
-
-  # ── Instruction submodule type ──────────────────────────────────────
-  # Shared semantic fields, translated per ecosystem by frontmatter generators.
-  instructionModule = lib.types.submodule {
-    # Instructions predate the typed record and may carry a `name` used to
-    # split them into per-file entries. Preserve that open tail while typing
-    # every shared semantic field below.
-    freeformType = lib.types.attrs;
-    options = {
-      description = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = "Short description (used by Claude and Kiro frontmatter).";
-      };
-      inclusion = kiroInclusionOption;
-      paths = lib.mkOption {
-        type = lib.types.nullOr (lib.types.listOf lib.types.str);
-        default = null;
-        description = ''
-          File path globs this instruction applies to. null = always loaded.
-          Translated per ecosystem:
-          - Claude: paths: frontmatter
-          - Kiro: inclusion: fileMatch + fileMatchPattern:
-          - Copilot: applyTo: glob
-        '';
-      };
-      skipIfUnsupported = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-        description = ''
-          Omit this instruction instead of degrading its path scope to prose
-          when an ecosystem cannot preserve the scope natively.
-        '';
-      };
-      text = lib.mkOption {
-        type = lib.types.either lib.types.lines lib.types.path;
-        description = "Instruction body (inline markdown or a Nix path to a markdown file).";
-      };
-    };
-  };
 
   # ── Rule submodule types ───────────────────────────────────────────
   # The portable record stays closed around normalized content + matcher.

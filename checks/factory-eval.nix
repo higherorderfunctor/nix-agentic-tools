@@ -119,7 +119,8 @@ in {
         text = "body";
       };
     in
-      lib.hasInfix ''applyTo: "**/*.nix,**/*.toml"'' out
+      out
+      == "---\napplyTo: \"**/*.nix,**/*.toml\"\n---\n\nbody"
   );
 
   factory-transformer-kiro-always = mkTest "transformer-kiro-always" (
@@ -423,7 +424,7 @@ in {
     in
       evaluated.config.ai.mcpServers
       == {}
-      && evaluated.config.ai.instructions == []
+      && evaluated.config.ai.rules == {}
       && evaluated.config.ai.settings.reasoningEffort == null
       && evaluated.config.ai.skills == {}
   );

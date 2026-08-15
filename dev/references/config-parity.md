@@ -17,17 +17,17 @@ methods.
 Each row is a configuration surface. All three methods should support it. Gaps
 are bugs unless marked N/A with rationale.
 
-| Surface               | lib                           | HM                                                     | devenv                                                 |
-| --------------------- | ----------------------------- | ------------------------------------------------------ | ------------------------------------------------------ |
-| Agents                | N/A                           | per-CLI `.agents` (copilot: md, kiro: typed record)    | per-CLI `.agents` (copilot: md, kiro: typed record)    |
-| Environment vars      | N/A                           | `ai.environmentVariables`, per-CLI `.environmentVars`  | `ai.environmentVariables`, per-CLI, shared `env`       |
-| Hooks                 | N/A                           | kiro `.hooks`; Claude upstream; copilot N/A (no hooks) | kiro `.hooks`; Claude upstream; copilot N/A (no hooks) |
-| Instructions/steering | N/A                           | `ai.instructions`, per-CLI                             | `ai.instructions`, per-CLI                             |
-| LSP servers           | N/A                           | `ai.lspServers`, copilot + kiro `.lspServers`          | `ai.lspServers`, copilot + kiro `.lspServers`          |
-| MCP servers           | `mkStdioEntry`, `mkHttpEntry` | per-CLI `.mcpServers` + `.enableMcpIntegration`        | per-CLI `.mcpServers` (typed submodule)                |
-| Permissions           | N/A                           | Claude upstream only; copilot/kiro N/A                 | Claude upstream only; copilot/kiro N/A                 |
-| Settings              | N/A                           | Per-CLI `.settings` (typed + freeform)                 | Per-CLI `.settings` (typed + freeform)                 |
-| Skills                | N/A                           | `ai.skills`, per-CLI `.skills`                         | `ai.skills`, per-CLI `.skills`                         |
+| Surface          | lib                           | HM                                                     | devenv                                                 |
+| ---------------- | ----------------------------- | ------------------------------------------------------ | ------------------------------------------------------ |
+| Agents           | N/A                           | per-CLI `.agents` (copilot: md, kiro: typed record)    | per-CLI `.agents` (copilot: md, kiro: typed record)    |
+| Environment vars | N/A                           | `ai.environmentVariables`, per-CLI `.environmentVars`  | `ai.environmentVariables`, per-CLI, shared `env`       |
+| Hooks            | N/A                           | kiro `.hooks`; Claude upstream; copilot N/A (no hooks) | kiro `.hooks`; Claude upstream; copilot N/A (no hooks) |
+| Context/rules    | N/A                           | `ai.context`, `ai.rules`, per-runtime                  | `ai.context`, `ai.rules`, per-runtime                  |
+| LSP servers      | N/A                           | `ai.lspServers`, copilot + kiro `.lspServers`          | `ai.lspServers`, copilot + kiro `.lspServers`          |
+| MCP servers      | `mkStdioEntry`, `mkHttpEntry` | per-CLI `.mcpServers` + `.enableMcpIntegration`        | per-CLI `.mcpServers` (typed submodule)                |
+| Permissions      | N/A                           | Claude upstream only; copilot/kiro N/A                 | Claude upstream only; copilot/kiro N/A                 |
+| Settings         | N/A                           | Per-CLI `.settings` (typed + freeform)                 | Per-CLI `.settings` (typed + freeform)                 |
+| Skills           | N/A                           | `ai.skills`, per-CLI `.skills`                         | `ai.skills`, per-CLI `.skills`                         |
 
 ### Per-Surface Notes
 
