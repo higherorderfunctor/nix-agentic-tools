@@ -1,3 +1,4 @@
+# cspell:ignore sembleignore
 {
   config,
   pkgs,
@@ -120,22 +121,10 @@
     then "${builtins.dirOf devenvRootParent}/${lib.removeSuffix "-worktrees" devenvRootParentName}"
     else devenvRoot;
   worktreesRoot = "${repositoryRoot}-worktrees";
-  # This repository does NOT enable the Semble devenv module — doing so would
-  # pull Semble's MCP server, instructions, and agent into project scope. It
-  # consumes the USER-GLOBAL index instead, so the sandbox has to grant that
-  # cache itself; the automatic `${config.devenv.state}/semble-cache` root the
-  # Semble facet contributes is for consumers that enable the module and is not
-  # the path in play here.
-  userCacheHome = let
-    homeDir = builtins.getEnv "HOME";
-    xdgCacheHome = builtins.getEnv "XDG_CACHE_HOME";
-  in
-    if xdgCacheHome != ""
-    then xdgCacheHome
-    else if homeDir != ""
-    then "${homeDir}/.cache"
-    else throw "devenv requires XDG_CACHE_HOME or HOME to locate the user-global Semble cache";
-  sembleCache = "${userCacheHome}/semble";
+  # The enabled Semble devenv facet owns this project-local cache, contributes
+  # it to Codex's writable roots, and invalidates its indexes when the effective
+  # Semble package (including extra grammars) changes.
+  sembleCache = "${config.devenv.state}/semble-cache";
 
   # ── ai.shell test vector ───────────────────────────────────────────────
   # Proves, per runtime, that the configured shell actually ARRIVES — against
@@ -227,6 +216,7 @@ in {
     ./packages/claude-code/modules/devenv
     ./packages/copilot-cli/modules/devenv
     ./packages/kiro-cli/modules/devenv
+    ./packages/semble/modules/devenv
     # NOTE: the stacked-workflows and living-workflow devenv modules are NOT
     # imported here. Enabling them would fan their skills into `ai.skills`
     # UNPREFIXED (stack-*, living-workflow) — which, once those packages are
@@ -322,10 +312,10 @@ in {
       # `nix build` in this repository could not write its own cache while the
       # identical grant was live in every other checkout.
       #
-      # `${config.devenv.root}/.git` and the effective Nix cache root are
-      # contributed automatically once Codex is enabled; hand-writing either
-      # would fight the factory rather than help it. Only the two roots the
-      # factory cannot know about are declared here.
+      # `${config.devenv.root}/.git`, the effective Nix cache root, and the
+      # project-local Semble cache are contributed automatically once their
+      # owning integrations are enabled. Only the worktree collection remains
+      # consumer policy here.
       settings = {
         approval_policy = "never";
         model = "gpt-5.6-sol";
@@ -334,8 +324,6 @@ in {
         sandbox_workspace_write = {
           network_access = true;
           writable_roots = [
-            # The user-global Semble index — see the sembleCache comment above.
-            sembleCache
             # The worktree collection, not this checkout: work routinely spans
             # sibling worktrees of one clone, and a session started in any of
             # them must be able to write the others.
@@ -426,6 +414,60 @@ in {
         index-repo-docs = traceSource.tracedPath ./dev/skills/index-repo-docs;
         repo-review = traceSource.tracedPath ./dev/skills/repo-review;
       };
+  };
+
+  # Semble stays outside the CI devenv-test closure but is pinned by this flake
+  # for every interactive shell. The extra parsers cover file types Semble
+  # recognizes but its upstream bundled grammar archive does not currently ship.
+  semble = {
+    enable = !isCI;
+    # Use this flake's pinned nixpkgs grammars directly; the Cachix nixpkgs
+    # follow already supplies their store paths. If a future grammar needs a
+    # custom derivation, also expose that grammar alone in flake packages so
+    # the authenticated package sweep publishes it. Do not expose the
+    # grammar-patched Semble derivation.
+    grammars = with pkgs.tree-sitter-grammars; [
+      tree-sitter-awk
+      tree-sitter-jq
+    ];
+    pathMappings = [
+      {
+        content = "code";
+        language = "bash";
+        patterns = [
+          ".envrc"
+          "checks/fixtures/claude-hooks/post-edit"
+          "checks/fixtures/claude-hooks/pre-edit"
+        ];
+      }
+      {
+        content = "config";
+        language = "gitignore";
+        patterns = [
+          ".gitignore"
+          ".sembleignore"
+          "docs/.gitignore"
+        ];
+      }
+      {
+        content = "config";
+        language = "json";
+        patterns = [
+          "devenv.lock"
+          "flake.lock"
+        ];
+      }
+      {
+        content = "docs";
+        language = "markdown";
+        patterns = ["*.md.fixture"];
+      }
+    ];
+    # AGENTS.md already carries the repository's Semble search workflow from
+    # the generated stacked-workflows fragment. Avoid asking devenv `files.*`
+    # to replace that tracked real file with the redundant module projection.
+    instructions.enable = false;
+    runtimes = ["codex"];
   };
 
   # ── treefmt ────────────────────────────────────────────────────────────
@@ -687,11 +729,17 @@ in {
     ${pkgs.gnugrep}/bin/grep -Fq 'sandbox_mode = "workspace-write"' "$nat_codex_config" || { echo "FAIL: Codex project config does not select the legacy workspace-write sandbox"; exit 1; }
     ! ${pkgs.gnugrep}/bin/grep -Eq '^(default_permissions|\[permissions)' "$nat_codex_config" || { echo "FAIL: Codex project config carries the locked-out beta permission model"; exit 1; }
     test ! -e "''${CODEX_HOME:-$HOME/.codex}/nix-agentic-tools.config.toml" || { echo "FAIL: a stale nix-agentic-tools Codex profile is still materialized in CODEX_HOME"; exit 1; }
-    # The module-contributed roots. `cache/nix` is the regression this
-    # convergence fixed: the former permission profile never restated it, so a
-    # sandboxed `nix build` here could not write its own cache.
+    # The module-contributed roots. Semble is interactive-only, so its scoped
+    # cache is absent from the deliberately lean CI evaluation. `cache/nix` is
+    # the regression this convergence fixed: the former permission profile
+    # never restated it, so a sandboxed `nix build` here could not write its own
+    # cache.
     nat_roots="$(${pkgs.gnugrep}/bin/grep -F 'writable_roots' "$nat_codex_config")"
-    for nat_want in ${lib.escapeShellArg worktreesRoot} ${lib.escapeShellArg sembleCache} ${lib.escapeShellArg "${devenvRoot}/.git"} cache/nix; do
+    for nat_want in ${lib.escapeShellArgs (
+      [worktreesRoot]
+      ++ lib.optional (!isCI) sembleCache
+      ++ ["${devenvRoot}/.git" "cache/nix"]
+    )}; do
       case "$nat_roots" in
         *"$nat_want"*) ;;
         *) echo "FAIL: Codex writable_roots is missing $nat_want"; exit 1 ;;

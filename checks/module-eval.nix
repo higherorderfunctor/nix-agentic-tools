@@ -1,7 +1,7 @@
 # End-to-end module eval tests. Each test evaluates the full HM module
 # (sharedOptions + every package's modules/homeManager) against a
 # synthetic config and asserts the resulting option tree + config.
-# cspell:ignore batchmode
+# cspell:ignore batchmode sembleignore
 {
   lib,
   pkgs,
@@ -2589,6 +2589,13 @@ in {
           runtimes = ["codex"];
         };
       };
+      hasWrappedSemble = packages:
+        builtins.any
+        (drv:
+          lib.hasSuffix "${lib.getName aiStubs.semble}-wrapped" (
+            builtins.baseNameOf drv
+          ))
+        packages;
       hm = (evalHm config).config;
       devenv = (evalDevenv config).config;
       readOnly =
@@ -2626,20 +2633,11 @@ in {
       && builtins.all
       (root: builtins.elem root devenv.ai.codex.settings.sandbox_workspace_write.writable_roots)
       ["/consumer-cache" "/tmp/devenv-root/.git" "/tmp/devenv-state/semble-cache"]
-      # HM leaves the cache at semble's own default, so semble needs telling
-      # nothing and the package ships unwrapped.
-      && builtins.elem aiStubs.semble hm.home.packages
-      # devenv RELOCATES it project-local, so semble is told through its
-      # launcher wrapper. Never through the project shell: that would export
-      # the value to the developer's session and everything else in it. The
-      # `env.SEMBLE_CACHE_LOCATION` override this test used to exercise is
-      # deliberately gone — devenv/Nix is the only config path.
-      && builtins.any
-      (drv:
-        lib.hasSuffix "${lib.getName aiStubs.semble}-wrapped" (
-          builtins.baseNameOf drv
-        ))
-      devenv.packages
+      # Both backends make their selected cache authoritative through the
+      # launcher wrapper. Never through the surrounding shell: that would
+      # export the value to the user's session and everything else in it.
+      && hasWrappedSemble hm.home.packages
+      && hasWrappedSemble devenv.packages
       && readOnly.ai.codex.settings.sandbox_workspace_write == null
       && noCodex.ai.codex.settings.sandbox_workspace_write == null
       && profileOnly.ai.codex.settings.sandbox_workspace_write == null
@@ -2798,6 +2796,298 @@ in {
       && !(perFeature.ai.kiro.agents ? semble-search)
   );
 
+  module-semble-extra-grammars-and-cache-hooks = mkTest "semble-extra-grammars-and-cache-hooks" (
+    let
+      grammarConfig = {
+        semble = {
+          enable = true;
+          grammars = with pkgs.tree-sitter-grammars; [
+            tree-sitter-awk
+            tree-sitter-jq
+          ];
+          pathMappings = [
+            {
+              content = "config";
+              language = "json";
+              patterns = ["flake.lock"];
+            }
+          ];
+          runtimes = ["codex"];
+        };
+      };
+      hm = (evalHm grammarConfig).config;
+      devenv = (evalDevenv grammarConfig).config;
+      hmPackage = builtins.head hm.home.packages;
+    in
+      hmPackage.sembleExtraGrammarLanguages
+      == ["awk" "jq"]
+      && hmPackage.semblePathMappings == grammarConfig.semble.pathMappings
+      && hmPackage.passthru.updateFlakeInput == "llm-agents"
+      && hm.home.activation ? sembleCacheGuard
+      && lib.hasInfix "semble-cache-guard" hm.home.activation.sembleCacheGuard.text
+      && lib.hasInfix "semble-cache-guard" devenv.enterShell
+      && lib.hasSuffix "/bin/semble-mcp" devenv.ai.codex.mcpServers.semble.command
+  );
+
+  module-semble-path-mapping-validation = mkTest "semble-path-mapping-validation" (
+    let
+      empty =
+        (evalDevenv {
+          semble = {
+            enable = true;
+            pathMappings = [
+              {
+                content = "code";
+                language = "";
+                patterns = [];
+              }
+            ];
+          };
+        }).config;
+      duplicate =
+        (evalHm {
+          semble = {
+            enable = true;
+            pathMappings = [
+              {
+                content = "code";
+                language = "bash";
+                patterns = [".envrc"];
+              }
+              {
+                content = "config";
+                language = "json";
+                patterns = [".envrc"];
+              }
+            ];
+          };
+        }).config;
+    in
+      builtins.any (assertion: !assertion.assertion && lib.hasInfix "non-empty language" assertion.message) empty.assertions
+      && builtins.any (assertion: !assertion.assertion && lib.hasInfix "patterns must be unique" assertion.message) duplicate.assertions
+  );
+
+  module-semble-extra-grammars-load = let
+    customizePackage = import ../packages/semble/lib/withGrammars.nix {inherit lib pkgs;};
+    pathMappings = [
+      {
+        content = "code";
+        language = "bash";
+        patterns = [".envrc" "checks/hooks/pre-edit"];
+      }
+      {
+        content = "config";
+        language = "gitignore";
+        patterns = [".gitignore" ".sembleignore"];
+      }
+      {
+        content = "config";
+        language = "json";
+        patterns = ["flake.lock"];
+      }
+      {
+        content = "docs";
+        language = "markdown";
+        patterns = ["*.fixture.py" "*.md.fixture"];
+      }
+    ];
+    sembleWithGrammars =
+      customizePackage pkgs.ai.semble (with pkgs.tree-sitter-grammars; [
+        tree-sitter-awk
+        tree-sitter-jq
+      ])
+      pathMappings;
+  in
+    assert sembleWithGrammars.passthru.updateFlakeInput == "llm-agents";
+      pkgs.runCommand "module-test-semble-extra-grammars-load" {} ''
+        set -euETo pipefail
+        shopt -s inherit_errexit 2>/dev/null || :
+
+        # Reuse the wrapped entry point's interpreter and complete Python path,
+        # replacing only its CLI dispatch tail with this parser smoke test.
+        ${pkgs.coreutils}/bin/mkdir -p repo/checks/hooks repo/docs
+        ${pkgs.coreutils}/bin/touch \
+          repo/.envrc \
+          repo/.gitignore \
+          repo/.sembleignore \
+          repo/checks/hooks/pre-edit \
+          repo/docs/example.fixture.py \
+          repo/docs/example.md.fixture \
+          repo/flake.lock
+        ${pkgs.coreutils}/bin/head -n 3 ${sembleWithGrammars}/bin/.semble-wrapped > test-grammars.py
+        ${pkgs.coreutils}/bin/cat >> test-grammars.py <<'PY'
+        import json
+        from pathlib import Path
+        from types import SimpleNamespace
+
+        from semble.cache import _metadata_matches
+        from semble.chunking.core import _cached_get_parser
+        from semble.index.file_walker import walk_files
+        from semble.index.files import detect_language, get_extensions
+        from semble.index.index import SembleIndex
+        from semble.path_mappings import CUSTOMIZATION_FINGERPRINT
+        from semble.types import ContentType
+
+        samples = {
+            "awk": b"BEGIN { print 1 }",
+            "jq": b".foo | length",
+        }
+        for language, source in samples.items():
+            parser = _cached_get_parser(language)
+            assert parser is not None, language
+            assert parser.parse(source).root_node.type == "program", language
+
+        root = Path("repo").resolve()
+        expected = {
+            ".envrc": "bash",
+            ".gitignore": "gitignore",
+            ".sembleignore": "gitignore",
+            "checks/hooks/pre-edit": "bash",
+            "docs/example.fixture.py": "markdown",
+            "docs/example.md.fixture": "markdown",
+            "flake.lock": "json",
+        }
+        for relative, language in expected.items():
+            assert detect_language(root / relative, root) == language, relative
+        assert detect_language(root / "ordinary.py", root) == "python"
+
+        def walked(content: str) -> set[str]:
+            content_type = ContentType(content)
+            return {
+                path.relative_to(root).as_posix()
+                for path in walk_files(
+                    root,
+                    get_extensions((content_type,)),
+                    content=(content,),
+                )
+            }
+
+        assert walked("code") == {".envrc", "checks/hooks/pre-edit"}
+        assert walked("docs") == {"docs/example.fixture.py", "docs/example.md.fixture"}
+        assert walked("config") == {".gitignore", ".sembleignore", "flake.lock"}
+        assert {
+            path.relative_to(root).as_posix()
+            for path in walk_files(root, [".py"])
+        } == {"docs/example.fixture.py"}
+
+        class EmptyIndex:
+            def save(self, path: Path) -> None:
+                path.write_bytes(b"")
+
+        persisted = Path("persisted")
+        fake_index = SimpleNamespace(
+            _bm25_index=EmptyIndex(),
+            _semantic_index=EmptyIndex(),
+            _root=root,
+            _model_path="test-model",
+            _content=(ContentType.CODE,),
+            _manifest={},
+            chunks=[],
+        )
+        SembleIndex.save(fake_index, persisted)
+        metadata = json.loads((persisted / "metadata.json").read_text())
+        assert metadata["nix_customization"] == CUSTOMIZATION_FINGERPRINT
+        assert _metadata_matches(metadata, "test-model", (ContentType.CODE,))
+        metadata["nix_customization"] = "different-package"
+        assert not _metadata_matches(metadata, "test-model", (ContentType.CODE,))
+        PY
+        ${pkgs.coreutils}/bin/chmod +x test-grammars.py
+        ./test-grammars.py
+        ${pkgs.coreutils}/bin/touch "$out"
+      '';
+
+  module-semble-cache-hooks-inert-when-disabled = mkTest "semble-cache-hooks-inert-when-disabled" (
+    let
+      hm = (evalHm {}).config;
+      devenv = (evalDevenv {}).config;
+    in
+      !(hm.home.activation ? sembleCacheGuard)
+      && devenv.enterShell == ""
+  );
+
+  module-semble-hm-cache-wrapper = let
+    package =
+      builtins.head
+      (evalHm {
+        semble = {
+          enable = true;
+          package = pkgs.writeShellScriptBin "semble" ''
+            set -euETo pipefail
+            shopt -s inherit_errexit 2>/dev/null || :
+            exec true
+          '';
+          runtimes = ["codex"];
+        };
+      }).config.home.packages;
+  in
+    mkWrapperGrepTest {
+      name = "semble-hm-cache-wrapper";
+      inherit package;
+      bin = "semble";
+      needles = [
+        "SEMBLE_CACHE_LOCATION"
+        "/home/test/.cache/semble"
+      ];
+    };
+
+  module-semble-cache-guard-runtime = let
+    cacheHome = "/build/semble-cache-guard-test";
+    sembleStub = pkgs.writeShellApplication {
+      name = "semble";
+      bashOptions = ["errexit" "errtrace" "functrace" "nounset" "pipefail"];
+      text = ''
+        shopt -s inherit_errexit 2>/dev/null || :
+        case "$*" in
+          "clear index") printf 'clear\n' >> "''${SEMBLE_CACHE_LOCATION:?}/clear-calls" ;;
+          *) printf 'unexpected arguments: %s\n' "$*" >&2; exit 1 ;;
+        esac
+      '';
+    };
+    activation =
+      (evalHm {
+        semble = {
+          enable = true;
+          package = sembleStub;
+          runtimes = ["codex"];
+        };
+        xdg.cacheHome = cacheHome;
+      }).config.home.activation.sembleCacheGuard.text;
+  in
+    pkgs.runCommand "module-test-semble-cache-guard-runtime" {} ''
+      set -euETo pipefail
+      shopt -s inherit_errexit 2>/dev/null || :
+
+      ${activation}
+      test "$(${pkgs.coreutils}/bin/wc -l < ${cacheHome}/semble/clear-calls)" -eq 1
+      ${pkgs.gnugrep}/bin/grep -Fx ${lib.escapeShellArg "${sembleStub}"} ${cacheHome}/semble/.nix-package
+
+      ${activation}
+      test "$(${pkgs.coreutils}/bin/wc -l < ${cacheHome}/semble/clear-calls)" -eq 1
+      ${pkgs.coreutils}/bin/touch "$out"
+    '';
+
+  module-semble-grammar-validation = mkTest "semble-grammar-validation" (
+    let
+      missingLanguage = evalHm {
+        semble = {
+          enable = true;
+          grammars = [pkgs.hello];
+        };
+      };
+      duplicateLanguage = evalDevenv {
+        semble = {
+          enable = true;
+          grammars = with pkgs.tree-sitter-grammars; [
+            tree-sitter-awk
+            tree-sitter-awk
+          ];
+        };
+      };
+      failed = evaluated: builtins.any (assertion: !assertion.assertion) evaluated.config.assertions;
+    in
+      failed missingLanguage && failed duplicateLanguage
+  );
+
   module-semble-mcp-content-and-default-refinement = mkTest "semble-mcp-content-and-default-refinement" (
     let
       code = (evalHm {semble.mcp.enable = true;}).config.ai.claude.mcpServers.semble;
@@ -2885,6 +3175,7 @@ in {
       optionType = option: option.type.description;
       optionShape = evaluated: {
         enable = optionType evaluated.options.semble.enable;
+        grammars = optionType evaluated.options.semble.grammars;
         package = optionType evaluated.options.semble.package;
         runtimes = optionType evaluated.options.semble.runtimes;
         instructions = lib.mapAttrs (_: optionType) evaluated.options.semble.instructions;

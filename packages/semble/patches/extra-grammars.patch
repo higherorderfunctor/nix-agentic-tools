@@ -1,0 +1,117 @@
+diff --git a/src/semble/chunking/core.py b/src/semble/chunking/core.py
+index 6f4e122..16584ef 100644
+--- a/src/semble/chunking/core.py
++++ b/src/semble/chunking/core.py
+@@ -7,2 +7,3 @@
+ from semble_grammars import LanguageNotFoundError, UnsupportedPlatformError, get_parser
++from semble.extra_grammars import get_parser as get_extra_parser
+ from tree_sitter import Node, Parser
+@@ -27,7 +28,12 @@ def _cached_get_parser(language: str) -> Parser | None:
+     try:
+         return get_parser(language)
+     except LanguageNotFoundError:
+-        logger.warning("Language %s not found, falling back to line chunking", language)
++        try:
++            return get_extra_parser(language)
++        except LanguageNotFoundError:
++            logger.warning("Language %s not found, falling back to line chunking", language)
++        except Exception:
++            logger.error("Uncaught exception in extra grammar parser", exc_info=True)
+     except UnsupportedPlatformError:
+         logger.warning("No bundled grammars for this platform, falling back to line chunking")
+     except Exception:
+diff --git a/src/semble/index/files.py b/src/semble/index/files.py
+--- a/src/semble/index/files.py
++++ b/src/semble/index/files.py
+@@ -6 +6,2 @@
++from semble.path_mappings import get_mapped_language
+ from semble.types import ContentType
+@@ -462,3 +463,3 @@
+-def detect_language(file_name: Path) -> str | None:
++def detect_language(file_name: Path, root: Path | None = None) -> str | None:
+     """Detects the language of a file."""
+-    return _EXTENSION_TO_LANGUAGE.get(file_name.suffix.lower())
++    return get_mapped_language(file_name, root) or _EXTENSION_TO_LANGUAGE.get(file_name.suffix.lower())
+diff --git a/src/semble/index/file_walker.py b/src/semble/index/file_walker.py
+--- a/src/semble/index/file_walker.py
++++ b/src/semble/index/file_walker.py
+@@ -5 +5,2 @@
+-from pathspec import GitIgnoreSpec
++from pathspec import GitIgnoreSpec
++from semble.path_mappings import get_mapped_content
+@@ -52 +53,6 @@
+-def walk_files(root: Path, extensions: Sequence[str], ignore: Sequence[str] | None = None) -> Iterator[Path]:
++def walk_files(
++    root: Path,
++    extensions: Sequence[str],
++    ignore: Sequence[str] | None = None,
++    content: Sequence[str] | None = None,
++) -> Iterator[Path]:
+@@ -68 +74,2 @@
+-    yield from _walk(root, [s], extensions_set)
++    resolved_content = None if content is None else tuple(content)
++    yield from _walk(root, [s], extensions_set, root, resolved_content)
+@@ -110,2 +116,4 @@
+     extensions: frozenset[str],
++    root: Path,
++    content: tuple[str, ...] | None,
+ ) -> Iterator[Path]:
+@@ -129,3 +137,9 @@
+-            yield from _walk(item, inherited_specs, extensions)
+-        elif item.is_file() and (found or item.suffix.lower() in extensions):
+-            yield item
++            yield from _walk(item, inherited_specs, extensions, root, content)
++        elif item.is_file():
++            mapped_content = get_mapped_content(item, root)
++            if mapped_content is not None and content is not None:
++                include = mapped_content in content
++            else:
++                include = found or item.suffix.lower() in extensions
++            if include:
++                yield item
+diff --git a/src/semble/index/create.py b/src/semble/index/create.py
+--- a/src/semble/index/create.py
++++ b/src/semble/index/create.py
+@@ -74 +74,2 @@
+-    resolved_extensions = get_extensions(normalized)
++    resolved_extensions = get_extensions(normalized)
++    resolved_content = tuple(item.value for item in normalized)
+@@ -82,2 +83,2 @@
+-    for file_path in walk_files(path, resolved_extensions):
+-        language = detect_language(file_path)
++    for file_path in walk_files(path, resolved_extensions, content=resolved_content):
++        language = detect_language(file_path, path)
+diff --git a/src/semble/cache.py b/src/semble/cache.py
+--- a/src/semble/cache.py
++++ b/src/semble/cache.py
+@@ -112,4 +112,11 @@
+         version_ok = metadata.get("cache_version") == CACHE_FORMAT_VERSION
++        customization_ok = metadata.get("nix_customization") == __import__(
++            "semble.path_mappings", fromlist=["CUSTOMIZATION_FINGERPRINT"]
++        ).CUSTOMIZATION_FINGERPRINT
+         return (
+-            metadata["model_path"] == model_path and set(content_type) == set(content) and chunk_size_ok and version_ok
++            metadata["model_path"] == model_path
++            and set(content_type) == set(content)
++            and chunk_size_ok
++            and version_ok
++            and customization_ok
+         )
+@@ -146 +153,5 @@
+-    for file_path in walk_files(path_as_path, extensions=extensions):
++    for file_path in walk_files(
++        path_as_path,
++        extensions=extensions,
++        content=tuple(item.value for item in content),
++    ):
+diff --git a/src/semble/index/index.py b/src/semble/index/index.py
+--- a/src/semble/index/index.py
++++ b/src/semble/index/index.py
+@@ -387,4 +387,7 @@
+             "content_type": list(x.value for x in self._content),
+             "chunk_size": _DESIRED_CHUNK_LENGTH_CHARS,
++            "nix_customization": __import__(
++                "semble.path_mappings", fromlist=["CUSTOMIZATION_FINGERPRINT"]
++            ).CUSTOMIZATION_FINGERPRINT,
+             "cache_version": CACHE_FORMAT_VERSION,
+             "files": self._manifest,

@@ -29,6 +29,27 @@ The same `semble.*` option tree is available through
 ```nix
 semble = {
   enable = true;
+  grammars = with pkgs.tree-sitter-grammars; [
+    tree-sitter-awk
+    tree-sitter-jq
+  ];
+  pathMappings = [
+    {
+      content = "code";
+      language = "bash";
+      patterns = [".envrc" "checks/hooks/pre-edit"];
+    }
+    {
+      content = "config";
+      language = "json";
+      patterns = ["flake.lock" "devenv.lock"];
+    }
+    {
+      content = "docs";
+      language = "markdown";
+      patterns = ["*.md.fixture"];
+    }
+  ];
   package = pkgs.ai.semble;
   runtimes = ["claude" "codex"];
 
@@ -47,20 +68,56 @@ feature's nullable `runtimes` overrides `semble.runtimes`; null inherits the
 top-level list. The MCP content values are `code`, `docs`, `config`, and `all`.
 `code` uses Semble's default and emits no command-line argument.
 
+`semble.grammars` extends Semble with nixpkgs Tree-sitter grammar packages. Each
+package must expose its canonical `language` attribute and the compiled library
+at `${grammar}/parser`, which is the shape produced by
+`pkgs.tree-sitter.buildGrammar` and exported through
+`pkgs.tree-sitter-grammars`. The module patches the selected Semble Python
+package to try these store-backed parsers after its bundled grammar lookup. This
+keeps the upstream bundle intact and avoids its mutable extraction cache.
+
+`semble.pathMappings` assigns files with non-standard names to an existing or
+extra grammar and to one of Semble's `code`, `config`, or `docs` indexes. A
+pattern without `/` matches a basename at any depth; a pattern containing `/`
+matches the path relative to the indexed repository root. Entries are ordered
+and the first match wins. Path matching uses `fnmatch` semantics, where `*` can
+span `/`; use an exact relative path when directory depth matters. A match
+overrides both suffix-based language detection and content categorization.
+Mappings participate in file discovery, parser selection, and cache validation,
+so mapped files are indexed and changes to them invalidate the relevant index
+normally.
+
+The customized package writes a fingerprint of its grammar and mapping set into
+index metadata and rejects caches created by a different customization. The HM
+and devenv modules additionally clear their owned cache root when the effective
+package changes.
+
+Shebang-based inference is deliberately out of scope. Extensionless scripts must
+be listed through `pathMappings`; the integration does not read file contents to
+guess their language.
+
 Any active integration installs `semble.package`. Named MCP and subagent entries
 use `mkDefault`, so consumers can refine their generated values. Claude and
 Codex compose the guidance into their single always-loaded `CLAUDE.md` and
 `AGENTS.md` files. Kiro receives a named instruction and writes it to
 `.kiro/steering/semble.md`.
 
-Home Manager leaves the cache where Semble puts it by default,
-`${config.xdg.cacheHome}/semble`, so nothing needs telling and the package ships
-unwrapped. A devenv integration relocates it to
-`${config.devenv.state}/semble-cache` and tells Semble by baking
-`SEMBLE_CACHE_LOCATION` into every entry point of a launcher wrapper — so
-`semble` and `semble-mcp` cannot disagree, and the value never enters the
-project shell. Consumer override of the variable through `env` is deliberately
-gone: devenv/Nix is the only config path.
+Home Manager fixes the global cache at `${config.xdg.cacheHome}/semble`, even on
+Darwin where Semble's platform default would otherwise be `~/Library/Caches`.
+The devenv integration uses `${config.devenv.state}/semble-cache`. Both bake
+`SEMBLE_CACHE_LOCATION` into every entry point of a launcher wrapper, so
+`semble`, `semble-mcp`, and their invalidation guards cannot disagree, and the
+value never enters the surrounding user or project shell. Consumer override of
+the variable through `env` is deliberately gone: devenv/Nix is the only config
+path.
+
+Both backends record the effective Semble package store path in their cache
+root. Home Manager activation checks the user-global cache; devenv shell entry
+checks only that project's relocated cache. A missing or changed stamp clears
+all indexes in that root before recording the new identity. Extra grammars and
+path mappings both change the effective package path, so changing either uses
+the same invalidation path as a Semble version update. Savings data and the
+separate upstream bundled-grammar extraction cache are left alone.
 
 The devenv relocation is unconditional: a project-local index is the point, and
 nothing about it is Codex-specific. Until 2026-08-10 it read otherwise, because
@@ -118,6 +175,11 @@ in {
   };
 }
 ```
+
+For package-only composition,
+`lib.ai.semble.customizePackage { inherit lib pkgs; } package grammars pathMappings`
+applies both customization lists. `lib.ai.semble.withGrammars` remains the
+grammar-only shorthand.
 
 The package roles are `pkgs.ai.semble` and `pkgs.ai.mcpServers.semble-mcp`. They
 share one derivation; the latter changes only the evaluation-time
