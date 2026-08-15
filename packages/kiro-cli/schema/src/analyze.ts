@@ -598,6 +598,26 @@ export const analyze = (workflow: Workflow): Analysis => {
         `'${e.id}' uses an ARRAY fileCheck.value, which the engine reads as "any of these candidates" (value.some(deepEqual)), not as "match this array"`,
       );
     }
+    /**
+     * The message says what this analyzer KNOWS, not what the engine will do,
+     * because it cannot know that. `containmentErrorsForPaths` pushes
+     * `WorkflowFileCheckPathOutsideWorkspaceError` only when the RESOLVED path
+     * lands outside the allowed roots — and resolution first substitutes
+     * declared input VALUES, then joins against the workspace roots plus
+     * `additionalDirectories`, then resolves symlinks. None of those three
+     * inputs exist here. Reaching the check is not a failure: a path starting
+     * with `{{` is skipped outright, and a tilde path is not absolute, so it
+     * joins under the primary root and stays inside it.
+     *
+     * MEASURED: this lint fires on 4 of 4 fileCheck paths in the vendor
+     * corpus — every one of them templated — i.e. a 100% false-positive rate
+     * on the only real corpus available. Whether the right answer is to
+     * narrow the trigger, or to keep it broad at policy/warning, or to move
+     * it to engine/error, is KWS-023/KWS-041: an OPEN OPERATOR DECISION that
+     * needs analyzer context (roots, inputs) which does not exist yet. Until
+     * it is settled, only the message is corrected — the basis, the severity
+     * and the four triggering shapes are deliberately unchanged.
+     */
     if (
       fc !== undefined &&
       (fc.path.includes("{{") ||
@@ -608,7 +628,7 @@ export const analyze = (workflow: Workflow): Analysis => {
       pol(
         "W-FILE-CHECK-PATH-UNSAFE",
         e.id,
-        `'${e.id}' fileCheck.path '${fc.path}' is templated, absolute, tilde-prefixed or escaping. A path the containment check reaches fails the run at LAUNCH; one that SKIPS it evaluates false forever with no error. Keep it a plain relative path.`,
+        `'${e.id}' fileCheck.path '${fc.path}' is templated, absolute, tilde-prefixed or escaping. Where it resolves is not decidable here: the engine substitutes declared input VALUES, joins against the workspace roots plus additionalDirectories, and resolves symlinks, and this analyzer has none of those. It refuses the run only when the resolved path lands OUTSIDE the allowed roots. Treat this as a shape worth a human look, not as a predicted failure.`,
       );
     }
   }
